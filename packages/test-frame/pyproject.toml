@@ -1,0 +1,21 @@
+[project]
+name = "testframe"
+version = "0.1.0"
+description = "General-purpose automated bug discovery framework built from mature tools"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.0",
+    "pyyaml>=6.0",
+    "requests>=2.28",
+]
+
+[project.optional-dependencies]
+android = ["airtest", "pocoui"]
+allure = ["allure-pytest"]
+all = ["airtest", "pocoui", "allure-pytest"]
+
+[project.scripts]
+tf = "cli.main:cli"
+
+[tool.setuptools.packages.find]
+exclude = ["tests", "backup", "reports", "docs"]

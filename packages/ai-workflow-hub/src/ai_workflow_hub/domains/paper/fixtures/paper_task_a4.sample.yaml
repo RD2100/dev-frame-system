@@ -1,0 +1,21 @@
+# A4 Task Spec - Methodology chapter task for testing source integration
+# Uses mini_vault + BibTeX fixture
+
+task_id: "paper-task-a4-source-integration"
+project_id: "edu-policy-research-2026"
+paper_id: "paper-001"
+paper_type: "empirical"
+target_journal: "CSSCI"
+chapter: "methodology"
+section: "3.1 Retrieval Pipeline Architecture"
+task_type: "draft"
+input_policy: "context_pack_only"
+constraints:
+  - "不得使用未在 literature_notes 中出现的文献"
+  - "引用来源需在 zotero_references 或 BibTeX 中"
+acceptance_criteria:
+  - "段落功能匹配度 >= 70%"
+  - "引用来源均在 sources 中"
+human_required_rules:
+  - "涉及真实调研数据时需人工确认"
+confidentiality: "private"

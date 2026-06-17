@@ -1,0 +1,167 @@
+# Workflow Closure Contracts
+# Authority: agent-acceptance
+# Version: 1.0.0
+# Fixes: SD-01 (summary-only pack), SD-02 (ready_for_review as closed), SD-03 (self-referential failure)
+
+# ===========================================================================
+# EVIDENCE_PACK_COMPLETENESS_CONTRACT (SD-01)
+# ===========================================================================
+- contract_id: EVIDENCE_PACK_COMPLETENESS_CONTRACT
+  contract_version: "1.0.0"
+  scope: >
+    所有 GPT closure evidence pack 的完整性规范。
+    阻断 summary-only pack — agent summary 不是 evidence。
+  summary_only_files:
+    - GPT_REVIEW_PROMPT.md
+    - CLOSURE_REPORT.md
+    - CLOSURE_REPORT.yaml
+    - SAFETY_ATTESTATION.md
+    - PACK_MANIFEST.md
+  actual_deliverable_patterns:
+    - contracts/**
+    - schemas/**
+    - docs/**
+    - templates/**
+    - scripts/**
+    - tests/**
+    - pipelines/**
+    - examples/**
+    - review/**
+    - input/**
+    - closure/FLOW_OUTCOME.json
+    - submission/SUBMISSION_RESULT.json
+    - diff.patch
+  required_checks:
+    - PACK_MANIFEST.md 必须存在
+    - ZIP 内容与 manifest 双向一致
+    - 至少存在一个 actual deliverable 文件
+    - summary_only_files 不计入 actual deliverables
+    - 声称 tests pass 必须有 TEST_OUTPUT.txt
+    - 声称 bypass check pass 必须有 BYPASS_CHECK_OUTPUT.txt 或 GATE_OUTPUT.txt
+  blocked_conditions:
+    - summary_only_pack
+    - missing_actual_deliverables
+    - manifest_zip_mismatch
+    - missing_test_output_when_tests_claimed
+    - missing_gate_output_when_gate_claimed
+    - missing_bypass_output_when_bypass_claimed
+  fail_closed_on:
+    - summary_only_pack_detected
+    - manifest_zip_mismatch
+    - no_actual_deliverables
+  safety_notes: >
+    CLOSURE_REPORT / SAFETY_ATTESTATION / GPT_REVIEW_PROMPT / PACK_MANIFEST
+    是证据包的元数据文件，不是实际产物。它们不能替代被审查的交付物。
+
+# ===========================================================================
+# WORKFLOW_STATE_CONTRACT (SD-02)
+# ===========================================================================
+- contract_id: WORKFLOW_STATE_CONTRACT
+  contract_version: "1.0.0"
+  scope: >
+    定义工作流状态语义及转移规则。
+    ready_for_review ≠ closed。closed 必须有 GPT accepted。
+  allowed_states:
+    - planned
+    - executed
+    - self_verified
+    - ready_for_review
+    - review_unverified
+    - blocked
+    - accepted
+    - closed
+  state_definitions:
+    planned: "任务已定义，尚未执行"
+    executed: "任务已执行，尚未完成自检"
+    self_verified: "本地测试、gate 或 validator 已通过"
+    ready_for_review: "证据包已备好，等待 GPT 审查，尚未 accepted"
+    review_unverified: "GPT 无法基于证据确认，需补证据"
+    blocked: "GPT 或本地 gate 发现阻断问题"
+    accepted: "GPT 基于 evidence pack 给出 accepted 判决"
+    closed: "accepted 结果已写入 workflow ledger / state / closure record"
+  transition_rules:
+    - from: ready_for_review
+      to: accepted
+      requires:
+        - gpt_review_result 存在
+        - overall_judgment 为 accepted
+    - from: accepted
+      to: closed
+      requires:
+        - workflow_ledger_entry 存在
+        - accepted_review_run_id 可追溯
+        - evidence_pack_sha256 已记录
+  blocked_conditions:
+    - ready_for_review_counted_as_closed
+    - accepted_without_gpt_review_result
+    - closed_without_gpt_accepted
+    - closed_without_workflow_ledger_entry
+  fail_closed_on:
+    - closed_without_gpt_accepted
+    - accepted_without_gpt_review_result
+    - ready_for_review_counted_as_closed
+  safety_notes: >
+    agent 不能自行将任务标记为 closed。closed 只能由框架在 GPT accepted +
+    ledger 记录完成后设置。
+
+# ===========================================================================
+# GOVERNANCE_TASK_REVIEW_CONTRACT (SD-03)
+# ===========================================================================
+- contract_id: GOVERNANCE_TASK_REVIEW_CONTRACT
+  contract_version: "1.0.0"
+  scope: >
+    治理类任务（修改 contracts/schemas/templates/validators/governance docs）
+    不得自我闭合。必须有外部 GPT closure review。
+  governance_task_patterns:
+    - contracts/**
+    - policies/**
+    - schemas/**
+    - templates/GPT_REVIEW_PROMPT_TEMPLATE.md
+    - scripts/validate_*
+    - scripts/check_*
+    - docs/*governance*
+    - docs/*workflow*
+    - docs/*memory*
+  required_for_governance_tasks:
+    - external_gpt_review_required（必须提交 GPT 审查）
+    - gpt_review_result_required（必须有 GPT_REVIEW_RESULT）
+    - cannot_self_close（不得自我闭合）
+  blocked_conditions:
+    - governance_task_self_closed
+    - governance_contract_changed_without_gpt_review
+    - review_template_changed_without_gpt_review
+    - validator_changed_without_gpt_review
+  fail_closed_on:
+    - governance_task_self_closed
+    - governance_contract_modified_without_gpt_review
+    - validator_modified_without_gpt_review
+  safety_notes: >
+    治理任务的"完成"不能由执行 agent 自行判断。必须由独立 GPT 审查确认。
+
+# ===========================================================================
+# RETROACTIVE_REVIEW_CONTRACT (SD-03)
+# ===========================================================================
+- contract_id: RETROACTIVE_REVIEW_CONTRACT
+  contract_version: "1.0.0"
+  scope: >
+    事后补审的规范。允许对历史任务补 GPT 审查，
+    但必须显式记录补审状态，不得伪装为原始当时已闭合。
+  allowed: true
+  required_fields:
+    - retroactive_review（标记为事后补审）
+    - prior_status（补审前的状态）
+    - corrected_status（补审后的状态）
+    - reason_for_retroactive_review（补审原因）
+    - original_missing_review_acknowledged（承认原始缺失）
+    - gpt_review_result（补审的 GPT 判决）
+  blocked_conditions:
+    - retroactive_review_hides_prior_missing_review
+    - retroactive_review_claims_original_closure_without_evidence
+    - retroactive_review_without_prior_status
+    - retroactive_review_without_corrected_status
+  fail_closed_on:
+    - retroactive_review_hides_prior_missing_review
+    - retroactive_review_without_prior_status
+    - retroactive_review_without_corrected_status
+  safety_notes: >
+    补审是纠正历史缺陷，不是掩盖。不得把事后补审伪装成当时已正常闭合。

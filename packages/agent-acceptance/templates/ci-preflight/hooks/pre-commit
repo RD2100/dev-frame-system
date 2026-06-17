@@ -1,0 +1,5 @@
+#!/bin/bash
+# Git pre-commit hook — delegates to governance gate.
+# Activated via: git config core.hooksPath hooks
+powershell -ExecutionPolicy Bypass -File "$(dirname "$0")/pre-commit.governance.ps1"
+exit $?

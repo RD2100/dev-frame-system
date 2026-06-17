@@ -1,0 +1,21 @@
+{
+  "name": "testframe",
+  "version": "0.1.0",
+  "description": "TestFrame - general-purpose automated bug discovery framework",
+  "private": true,
+  "scripts": {
+    "test:h5": "npx playwright test tests/h5/ --config=playwright.config.js",
+    "test:h5:smoke": "npx playwright test tests/h5/smoke.spec.js --project=chromium --config=playwright.config.js",
+    "test:unit:js": "node tests/h5/support/__tests__/oracles.test.js",
+    "test:miniapp": "npx jest --config=jest.config.js",
+    "report:allure": "allure generate reports/allure-results/ -o reports/allure-report/ --clean"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@weapp-vite/miniprogram-automator": "^1.2.2",
+    "allure-commandline": "^2.41.0",
+    "jest": "^29.7.0",
+    "jest-json-reporter": "^1.2.2",
+    "miniprogram-automator": "^0.12.1"
+  }
+}

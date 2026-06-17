@@ -1,0 +1,1 @@
+"""Bundled DevFrame project templates."""

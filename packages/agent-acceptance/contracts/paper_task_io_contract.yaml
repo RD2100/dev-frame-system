@@ -1,0 +1,19 @@
+# Paper Task IO Contract
+- contract_id: PAPER_TASK_INPUT_CONTRACT
+  contract_version: "1.0.0-draft"
+  required_fields: [task_id, task_type, paper_data_classification, user_authorization, input_materials, privacy_constraints, memory_policy, expected_outputs]
+  data_classifications: [synthetic, redacted, user_authorized_excerpt, real_paper_full_text]
+  blocked_conditions:
+    - real_paper_full_text_input
+    - missing_user_authorization_for_excerpt
+    - raw_paper_text_in_input
+  fail_closed_on: [real_paper_full_text_input, missing_user_authorization, raw_paper_text]
+
+- contract_id: PAPER_TASK_OUTPUT_CONTRACT
+  contract_version: "1.0.0-draft"
+  required_fields: [task_id, task_type, output_summary, findings, evidence_basis, privacy_redaction_status, manual_review_required, limitations]
+  blocked_conditions:
+    - output_contains_real_paper_full_text
+    - output_contains_unredacted_excerpt
+    - output_claims_accepted_or_closed
+  fail_closed_on: [real_paper_text_in_output, claims_accepted, unredacted_content]

@@ -1,0 +1,240 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TestFrameProjectIntake",
+  "description": "Minimal /rdtest project intake contract for external project agents.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project_id",
+    "project_root",
+    "app_type",
+    "profile",
+    "artifacts",
+    "runtime_authorization",
+    "governance"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "string",
+      "enum": ["0.1"]
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"
+    },
+    "project_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "app_type": {
+      "type": "string",
+      "enum": ["h5", "api", "paper", "miniapp", "android", "cloud", "generic"]
+    },
+    "profile": {
+      "type": "object",
+      "required": ["profile_id", "mode", "adapter_profile"],
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["synthetic", "dry-run", "local-e2e", "live-e2e"]
+        },
+        "adapter_profile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required_capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/command"
+      },
+      "default": []
+    },
+    "artifacts": {
+      "type": "object",
+      "required": ["evidence_dir", "report_dir"],
+      "properties": {
+        "evidence_dir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "report_dir": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "runtime_authorization": {
+      "type": "object",
+      "required": [
+        "required_for_live_e2e",
+        "required_for_external_resources",
+        "authorization_ref"
+      ],
+      "properties": {
+        "required_for_live_e2e": {
+          "type": "boolean"
+        },
+        "required_for_external_resources": {
+          "type": "boolean"
+        },
+        "authorization_ref": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "governance": {
+      "type": "object",
+      "required": [
+        "final_acceptance_allowed",
+        "production_ready_allowed",
+        "allowed_result_statuses"
+      ],
+      "properties": {
+        "final_acceptance_allowed": {
+          "const": false
+        },
+        "production_ready_allowed": {
+          "const": false
+        },
+        "allowed_result_statuses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "PASSED_AS_VERIFICATION_EVIDENCE",
+              "FAILED",
+              "BLOCKED",
+              "RUNTIME_AUTHORIZATION_REQUIRED"
+            ]
+          },
+          "minItems": 4,
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "profile": {
+            "properties": {
+              "mode": {
+                "const": "live-e2e"
+              }
+            },
+            "required": ["mode"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "runtime_authorization": {
+            "properties": {
+              "required_for_live_e2e": {
+                "const": true
+              },
+              "authorization_ref": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["required_for_live_e2e", "authorization_ref"]
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "command": {
+      "type": "object",
+      "required": ["command_id", "command"],
+      "properties": {
+        "command_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "anyOf": [
+              {
+                "pattern": "[;&|`]"
+              },
+              {
+                "pattern": "\\$\\("
+              },
+              {
+                "pattern": "([Ii]nvoke-[Ee]xpression|\\biex\\b|\\beval\\b|rm\\s+-rf|[Rr]emove-[Ii]tem|del\\s+/s|curl\\s+.*\\|)"
+              }
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "examples": [
+    {
+      "schema_version": "0.1",
+      "project_id": "order-dish",
+      "project_root": "../example-projects/order-dish",
+      "app_type": "h5",
+      "profile": {
+        "profile_id": "h5-e2e",
+        "mode": "dry-run",
+        "adapter_profile": "h5.playwright.local",
+        "required_capabilities": ["playwright.cli"]
+      },
+      "commands": [
+        {
+          "command_id": "run-h5-dry",
+          "command": "python -m cli.main run --project order-dish --profile h5-e2e --dry-run"
+        }
+      ],
+      "artifacts": {
+        "evidence_dir": "artifacts/rdtest/evidence",
+        "report_dir": "artifacts/rdtest/reports"
+      },
+      "runtime_authorization": {
+        "required_for_live_e2e": false,
+        "required_for_external_resources": false,
+        "authorization_ref": null
+      },
+      "governance": {
+        "final_acceptance_allowed": false,
+        "production_ready_allowed": false,
+        "allowed_result_statuses": [
+          "PASSED_AS_VERIFICATION_EVIDENCE",
+          "FAILED",
+          "BLOCKED",
+          "RUNTIME_AUTHORIZATION_REQUIRED"
+        ]
+      }
+    }
+  ]
+}

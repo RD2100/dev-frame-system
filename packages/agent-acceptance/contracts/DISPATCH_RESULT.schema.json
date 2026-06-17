@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-acceptance/schemas/DISPATCH_RESULT.schema.json",
+  "title": "DISPATCH_RESULT",
+  "description": "The result of a dispatch operation. Distinguishes between ready_to_dispatch (TaskSpec ready but not yet dispatched) and dispatched (runner has been invoked).",
+  "type": "object",
+  "required": ["dispatch_status", "terminal", "should_execute_next"],
+  "properties": {
+    "dispatch_status": {
+      "type": "string",
+      "enum": [
+        "ready_to_dispatch",
+        "dispatched",
+        "taskspec_generated",
+        "manual_confirm_required",
+        "stopped",
+        "failed"
+      ],
+      "description": "Dispatch state. ready_to_dispatch means a TaskSpec exists but has not been dispatched. dispatched means the runner has been invoked. taskspec_generated means the TaskSpec was created but dispatch is pending. manual_confirm_required means human confirmation is needed. stopped means the flow has terminated. failed means dispatch failed."
+    },
+    "next_stage": {
+      "type": "string",
+      "description": "Next stage identifier. Required when dispatch_status is dispatched and should_execute_next is true."
+    },
+    "next_task_spec_path": {
+      "type": "string",
+      "description": "Path to the next TaskSpec. Required when dispatch_status is taskspec_generated or ready_to_dispatch."
+    },
+    "required_next_action": {
+      "type": "string",
+      "description": "Concrete next action. Required when dispatch_status is manual_confirm_required, stopped, or failed."
+    },
+    "resume_command": {
+      "type": "string",
+      "description": "The command to resume execution. Required when dispatch_status is stopped or manual_confirm_required, and terminal is false."
+    },
+    "terminal": {
+      "type": "boolean",
+      "description": "Is the dispatch chain terminal? If false, the automation must continue."
+    },
+    "should_execute_next": {
+      "type": "boolean",
+      "description": "Should the next stage or TaskSpec be executed? False for stopped, manual_confirm_required, or failed."
+    },
+    "reason": {
+      "type": "string",
+      "description": "Human-readable reason for the dispatch status."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "dispatch_status": { "const": "dispatched" } }
+      },
+      "then": {
+        "required": ["next_task_spec_path"],
+        "properties": {
+          "should_execute_next": { "const": true },
+          "terminal": { "const": false }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "dispatch_status": { "const": "ready_to_dispatch" } }
+      },
+      "then": {
+        "required": ["next_task_spec_path"],
+        "properties": {
+          "terminal": { "const": false }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "dispatch_status": { "const": "taskspec_generated" } }
+      },
+      "then": {
+        "required": ["next_task_spec_path"],
+        "properties": {
+          "terminal": { "const": false }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "dispatch_status": { "enum": ["stopped", "failed"] } }
+      },
+      "then": {
+        "required": ["required_next_action"],
+        "properties": {
+          "terminal": { "const": true },
+          "should_execute_next": { "const": false }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "dispatch_status": { "const": "manual_confirm_required" } }
+      },
+      "then": {
+        "required": ["required_next_action"],
+        "properties": {
+          "should_execute_next": { "const": false }
+        }
+      }
+    }
+  ]
+}

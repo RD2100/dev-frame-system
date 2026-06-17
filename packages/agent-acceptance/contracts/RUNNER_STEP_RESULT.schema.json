@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-acceptance/schemas/RUNNER_STEP_RESULT.schema.json",
+  "title": "RUNNER_STEP_RESULT",
+  "description": "Per-step execution result. Produced after each discrete action the runner performs. Distinguishes between 'step succeeded and continue', 'step succeeded and terminal', and various stop/fail states.",
+  "type": "object",
+  "required": ["step_id", "step_type", "status", "terminal"],
+  "properties": {
+    "step_id": {
+      "type": "string",
+      "description": "Unique step identifier within the runner instance."
+    },
+    "step_type": {
+      "type": "string",
+      "enum": [
+        "validate_schemas",
+        "execute_taskspec",
+        "generate_evidence_pack",
+        "submit_gpt_review",
+        "monitor_gpt_reply",
+        "parse_decision",
+        "write_outcome",
+        "dispatch_next",
+        "human_attestation_wait",
+        "reconciliation",
+        "schema_check",
+        "safety_check"
+      ],
+      "description": "Type of step that was executed."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "step_success_continue",
+        "step_success_terminal",
+        "step_blocked",
+        "step_human_required",
+        "step_failed",
+        "step_partial"
+      ],
+      "description": "Step outcome. step_success_continue: task done, continue to next. step_success_terminal: task done, flow is terminal. step_blocked: cannot proceed. step_human_required: human input needed. step_failed: technical failure. step_partial: partial success, other parts remain."
+    },
+    "transport_status": {
+      "type": "string",
+      "enum": ["success", "failed", "partial", "pending", null],
+      "description": "Layer 1: Did transport succeed? Must NOT be conflated with business_decision."
+    },
+    "business_decision": {
+      "type": "string",
+      "enum": ["accepted", "blocked", "human_required", "partial", "unknown", null],
+      "description": "Layer 2: What did the reviewer decide for this step?"
+    },
+    "dispatch_status": {
+      "type": "string",
+      "enum": ["ready_to_dispatch", "dispatched", "taskspec_generated", "manual_confirm_required", "stopped", "failed", null],
+      "description": "Layer 3: Dispatch state after this step."
+    },
+    "produced_files": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Files produced in this step."
+    },
+    "next_action": {
+      "type": "string",
+      "description": "Next action to execute. REQUIRED when status is step_success_continue."
+    },
+    "terminal": {
+      "type": "boolean",
+      "description": "Is this step terminal for the runner? If false, runner must execute next_action."
+    },
+    "errors": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Errors encountered in this step."
+    },
+    "safety": {
+      "type": "object",
+      "properties": {
+        "high_risk_action_attempted": { "type": "boolean" },
+        "human_confirmed": { "type": "boolean" },
+        "forbidden_action_blocked": { "type": "boolean" },
+        "schema_validated": { "type": "boolean" }
+      }
+    },
+    "reason": {
+      "type": "string",
+      "description": "Human-readable reason for step result."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "step_success_continue" } }
+      },
+      "then": {
+        "required": ["next_action"],
+        "properties": {
+          "terminal": { "const": false }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "step_human_required" } }
+      },
+      "then": {
+        "properties": {
+          "terminal": { "const": true }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "enum": ["step_blocked", "step_failed"] } }
+      },
+      "then": {
+        "properties": {
+          "terminal": { "const": true }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "step_partial" } }
+      },
+      "then": {
+        "properties": {
+          "terminal": { "const": false }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "safety": {
+            "properties": {
+              "high_risk_action_attempted": { "const": true }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": { "const": "step_human_required" },
+          "terminal": { "const": true },
+          "safety": {
+            "properties": {
+              "human_confirmed": { "const": false }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

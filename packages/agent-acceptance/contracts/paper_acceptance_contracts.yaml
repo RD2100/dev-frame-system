@@ -1,0 +1,483 @@
+# Paper Acceptance Contracts
+# Authority: agent-acceptance
+# Layer: normative
+# Version: 1.0.0-draft
+# REVIEW_RUN_ID: paper-a1-contract-design-v1
+# contains_real_user_paper: false
+# synthetic_only: true
+
+# ===========================================================================
+# 1. PAPER_GENERAL_ACCEPTANCE_CONTRACT
+# ===========================================================================
+- contract_id: PAPER_GENERAL_ACCEPTANCE_CONTRACT
+  contract_version: "1.0.0-draft"
+  scope: >
+    所有论文任务的基础验收规范。定义论文任务何时可被接受、
+    何时被阻断、何时需要补充证据。此 contract 被所有
+    更具体的论文 contract 继承。
+  allowed_tasks:
+    - 论文版本管理（追踪输入/输出版本 hash）
+    - 脱敏摘要生成
+    - 论文结构分析
+    - 写作风格评估
+    - 保密证言生成
+  prohibited_tasks:
+    - 将真实论文全文写入公共 accessible 文件
+    - 上传论文到外部服务
+    - 自动投稿
+    - 伪造引用
+    - 补造文献
+    - 未经授权修改核心论点
+    - 泄露作者身份信息
+  required_evidence:
+    - paper_task_id
+    - contract_id
+    - contract_version
+    - task_type
+    - authorization_scope
+    - input_version_hash
+    - output_version_hash
+    - confidentiality_attestation
+    - evidence_pack_manifest
+  acceptance_criteria:
+    - 所有 required_evidence 齐全且格式正确
+    - 未触发任何 fail_closed 条件
+    - confidentiality_attestation 明确声明未泄露
+    - authorization_scope 覆盖所有实际执行的操作
+  blocked_conditions:
+    - fabricated_claim
+    - fabricated_citation
+    - author_intent_violation
+    - private_text_without_authorization
+    - external_upload_without_authorization
+    - evidence_tampered
+    - authorization_scope_violated
+  needs_more_evidence_conditions:
+    - input_version_hash_missing
+    - output_version_hash_missing_when_modified
+    - task_type_unspecified
+    - authorization_scope_ambiguous
+    - confidentiality_attestation_vague
+  fail_closed_on:
+    - missing_authorization_scope
+    - missing_input_version_hash
+    - missing_output_version_hash
+    - private_text_without_authorization
+    - fabricated_claim
+    - fabricated_citation
+    - author_intent_violation
+    - evidence_pack_missing
+    - confidentiality_attestation_missing
+    - review_unverified
+  safety_notes: >
+    本 contract 是基础合约。所有论文任务必须首先满足此 contract，
+    再满足具体任务 contract（如 CSSCI_REVIEW_CONTRACT）。
+    agent summary 不能替代 evidence pack。
+
+# ===========================================================================
+# 2. CSSCI_REVIEW_CONTRACT
+# ===========================================================================
+- contract_id: CSSCI_REVIEW_CONTRACT
+  contract_version: "1.0.0-draft"
+  scope: >
+    CSSCI 教育学（或其他人文社科）小论文的审稿式评估。
+    评估论文在学术规范、期刊适配性、理论贡献等维度的表现。
+    不替代真实期刊审稿，不保证投稿成功。
+  allowed_tasks:
+    - 问题意识评估
+    - 理论贡献判断
+    - 文献对话分析
+    - 概念清晰度检查
+    - 结构连贯性分析
+    - 论证深度评估
+    - 期刊适配性分析
+    - 学术表达规范性评估
+    - 引用可靠性检查
+    - 修改建议生成
+  prohibited_tasks:
+    - 保证投稿成功
+    - 替代真实期刊审稿
+    - 伪造评审报告
+    - 未经授权将论文作为公共示例
+    - 自动投稿
+    - 修改论文核心论点（未经授权）
+  required_dimensions:
+    - problem_awareness
+    - theoretical_contribution
+    - literature_dialogue
+    - conceptual_precision
+    - structural_coherence
+    - argument_depth
+    - journal_fit
+    - academic_expression
+    - citation_reliability
+  required_evidence:
+    - input_version_hash
+    - review_report
+    - issue_list
+    - revision_suggestions
+    - citation_check_result
+    - journal_fit_rationale
+    - confidentiality_attestation
+    - dimension_scores（每个维度至少包含评估结论）
+  acceptance_criteria:
+    - 所有 9 个 required_dimensions 均已评估
+    - review_report 包含具体问题而非泛泛评论
+    - citation_check_result 标记所有引用为 verified / unverified / suspect
+    - 未触发任何 blocked_conditions
+  blocked_conditions:
+    - fabricated_citation
+    - unsupported_journal_claim
+    - no_problem_awareness_assessment
+    - no_literature_dialogue_assessment
+    - review_only_contains_generic_comments
+    - uses_private_paper_as_public_example
+    - fabricated_review_data
+  needs_more_evidence_conditions:
+    - citation_check_not_performed
+    - target_journal_not_specified
+    - input_version_unclear
+    - review_dimensions_incomplete
+    - some_dimensions_unevaluated
+  fail_closed_on:
+    - fabricated_citation_detected
+    - unsupported_journal_claim
+    - review_dimensions_grossly_incomplete
+    - private_paper_used_as_public_example
+    - evidence_pack_missing
+    - confidentiality_attestation_missing
+    - review_unverified
+  safety_notes: >
+    审稿评估不代表真实期刊接受。最终投稿决策必须由作者本人做出。
+    评估报告中的建议仅供参考。
+
+# ===========================================================================
+# 3. THESIS_MIDTERM_REVIEW_CONTRACT
+# ===========================================================================
+- contract_id: THESIS_MIDTERM_REVIEW_CONTRACT
+  contract_version: "1.0.0-draft"
+  scope: >
+    博士论文中期考核文本审查。评估研究进展、主题一致性、
+    问题深化程度、文献基础、章节结构、方法论清晰度、
+    创新性、下一步计划可行性与风险识别。
+  allowed_tasks:
+    - 研究进展评估
+    - 主题一致性检查
+    - 问题深化程度判断
+    - 文献基础评估
+    - 章节结构分析
+    - 方法论清晰度检查
+    - 创新性声明分析
+    - 下一步计划可行性评估
+    - 风险与缺口识别
+    - 修改计划建议
+  prohibited_tasks:
+    - 替代导师审阅
+    - 替代正式中期考核
+    - 伪造考核结果
+    - 泄露论文内容到外部
+    - 未经授权公开论文结构
+  required_dimensions:
+    - research_progress
+    - topic_consistency
+    - problem_deepening
+    - literature_foundation
+    - chapter_structure
+    - methodological_clarity
+    - innovation_claim
+    - feasibility_of_next_plan
+    - risk_and_gap_identification
+  required_evidence:
+    - input_version_hash
+    - midterm_review_report
+    - gap_list
+    - revision_plan
+    - thesis_structure_assessment
+    - progress_evidence（可脱敏）
+    - confidentiality_attestation
+    - dimension_scores（每个维度至少包含评估结论）
+  acceptance_criteria:
+    - 所有 9 个 required_dimensions 均已评估
+    - gap_list 包含至少一个可操作项
+    - 未触发任何 blocked_conditions
+  blocked_conditions:
+    - missing_core_research_question
+    - missing_progress_evidence
+    - thesis_topic_inconsistent（前后章节主题矛盾）
+    - fabricated_literature
+    - confidential_content_leakage
+    - fabricated_progress_data
+  needs_more_evidence_conditions:
+    - unclear_current_progress
+    - missing_opening_report_reference
+    - missing_chapter_plan
+    - missing_supervisor_feedback_if_claimed
+    - progress_evidence_too_vague
+  fail_closed_on:
+    - missing_core_research_question
+    - thesis_topic_inconsistent
+    - fabricated_literature
+    - confidential_content_leakage
+    - evidence_pack_missing
+    - confidentiality_attestation_missing
+    - review_unverified
+  safety_notes: >
+    博士论文内容默认高度保密。所有证据必须脱敏。
+    中期考核最终判定由导师和考核委员会做出，本评估仅供参考。
+
+# ===========================================================================
+# 4. CITATION_VERIFICATION_CONTRACT
+# ===========================================================================
+- contract_id: CITATION_VERIFICATION_CONTRACT
+  contract_version: "1.0.0-draft"
+  scope: >
+    论文引用核验。验证引用是否存在、是否准确、
+    是否有伪造或可疑条目。不替代真实文献检索，
+    不负责任意补全不完整引用。
+  allowed_tasks:
+    - 提取引用列表
+    - 标记 verified / unverified / suspect
+    - 记录核验方法
+    - 记录核验时间戳
+    - 记录无法核验的条目
+    - 标注来源注释
+  prohibited_tasks:
+    - 自行补造 DOI、作者、题名、期刊、年份
+    - 将 unverified 引用当作 confirmed
+    - 伪造核验结果
+    - 自动修改引用格式
+  required_evidence:
+    - citation_list
+    - verification_method
+    - verified_items
+    - unverified_items
+    - fabricated_or_suspect_items
+    - source_notes
+    - timestamp
+    - confidentiality_attestation
+  acceptance_criteria:
+    - 所有引用均已标记为 verified / unverified / suspect
+    - 每一条 suspect 引用附有原因说明
+    - 所有 verified 引用附有核验方法
+    - unverified 引用明确标注为需要补充证据
+  blocked_conditions:
+    - fabricated_citation_detected
+    - citation_metadata_invented
+    - source_claim_without_verification
+    - verified_labels_without_actual_check
+    - batch_labeling（所有引用统一标记而未经逐一核验）
+  needs_more_evidence_conditions:
+    - citation_list_incomplete
+    - verification_method_unspecified
+    - unverified_items_exist_without_source_notes
+    - some_citations_not_listed
+  fail_closed_on:
+    - fabricated_citation_detected
+    - citation_metadata_invented
+    - source_claim_without_verification
+    - citation_check_result_missing
+    - evidence_pack_missing
+    - confidentiality_attestation_missing
+    - review_unverified
+  safety_notes: >
+    核验能力受限于可用工具和信息。无法核验不代表引用不存在，
+    但必须标注为 unverified 而非 confirmed。
+    严禁模型自行补造引用元数据来填补空白。
+
+# ===========================================================================
+# 5. ACADEMIC_REVISION_CONTRACT
+# ===========================================================================
+- contract_id: ACADEMIC_REVISION_CONTRACT
+  contract_version: "1.0.0-draft"
+  scope: >
+    论文润色、改写、结构调整任务的验收。
+    确保修改过程不破坏作者原意、不新增未经证实的主张、
+    不伪造引用。
+  allowed_tasks:
+    - 语言表达提升
+    - 结构调整（在保持论证逻辑的前提下）
+    - 冗余压缩
+    - 格式规范化
+    - 段落重组
+  prohibited_tasks:
+    - 未经授权改变核心观点
+    - 新增未经证实的事实判断
+    - 擅自新增不存在的引用
+    - 替换作者的方法论框架（未经授权）
+    - 以改写为名重写论文
+  required_evidence:
+    - input_version_hash
+    - output_version_hash
+    - revision_diff_summary
+    - revision_rationale
+    - author_intent_preservation
+    - changed_claims_list
+    - added_claims_list
+    - deleted_claims_list
+    - confidentiality_attestation
+  acceptance_criteria:
+    - input_version_hash 与 output_version_hash 不相同（证明有修改）
+    - revision_diff_summary 清晰描述改动范围
+    - author_intent_preservation 明确声明核心论点未被修改
+    - added_claims_list 中无未经证实的事实判断
+    - deleted_claims_list 中无未经授权的删除
+  blocked_conditions:
+    - author_intent_violation
+    - unsupported_new_claim
+    - fabricated_reference_added
+    - core_argument_modified_without_authorization
+    - major_rewrite_misrepresented_as_minor_revision
+  needs_more_evidence_conditions:
+    - revision_diff_summary_too_vague
+    - revision_rationale_missing_for_major_changes
+    - author_intent_preservation_ambiguous
+    - added_claims_not_listed_individually
+  fail_closed_on:
+    - author_intent_violation
+    - unsupported_new_claim
+    - fabricated_reference_added
+    - major_revision_without_diff
+    - output_without_input_hash
+    - evidence_pack_missing
+    - confidentiality_attestation_missing
+    - review_unverified
+  safety_notes: >
+    改写任务最容易出现"看似润色实则改写"的越权行为。
+    作者原意保持声明（author_intent_preservation）是核心证言，
+    必须明确列出被改变的 claims 和被新增的 claims。
+
+# ===========================================================================
+# 6. CONFIDENTIALITY_CONTRACT
+# ===========================================================================
+- contract_id: CONFIDENTIALITY_CONTRACT
+  contract_version: "1.0.0-draft"
+  scope: >
+    保护用户论文、博士论文、未公开研究内容的保密性。
+    所有论文任务均需遵守此 contract。
+  allowed_tasks:
+    - 标记论文为 private
+    - 使用脱敏摘要替代全文
+    - 使用版本 hash 替代原文引用
+    - 在 evidence pack 中使用占位符替代敏感内容
+    - 记录 confidentiality attestation
+  prohibited_tasks:
+    - 将 private 论文用作公共示例
+    - 上传 private 论文到外部服务
+    - 未经授权公开论文摘要
+    - 在测试用例中使用真实论文内容
+    - 在 evidence 中包含作者识别信息
+    - 在日志中记录论文全文
+  required_rules:
+    - 默认将论文内容视为 private
+    - 未经授权不得作为示例
+    - 未经授权不得上传外部服务
+    - 未经授权不得公开摘要
+    - evidence pack 中尽量保存 hash 和脱敏摘要而非全文
+    - 真实论文处理必须有 explicit_authorization
+  required_evidence:
+    - confidentiality_attestation
+    - data_classification（public / private / embargoed）
+    - authorization_status（explicit / none）
+    - external_service_access_log（空或已记录）
+  acceptance_criteria:
+    - confidentiality_attestation 明确声明未发生泄密
+    - data_classification 与处理方式一致
+    - 无未授权的外部服务访问
+    - 测试和示例中无真实论文内容
+  blocked_conditions:
+    - private_paper_used_as_public_sample
+    - external_upload_without_authorization
+    - sensitive_text_in_example
+    - user_identity_leakage
+    - paper_content_in_public_log
+  needs_more_evidence_conditions:
+    - data_classification_ambiguous
+    - authorization_status_unclear
+    - confidentiality_attestation_vague_or_generic
+  fail_closed_on:
+    - private_paper_used_as_public_sample
+    - external_upload_without_authorization
+    - sensitive_text_in_example
+    - confidentiality_attestation_missing
+    - user_identity_leakage
+    - review_unverified
+  safety_notes: >
+    此 contract 是硬约束。所有论文任务合约（CSSCI_REVIEW_CONTRACT、
+    THESIS_MIDTERM_REVIEW_CONTRACT、CITATION_VERIFICATION_CONTRACT、
+    ACADEMIC_REVISION_CONTRACT）均继承此 contract 的规则。
+    违反 CONFIDENTIALITY_CONTRACT 的任何任务必须 blocked。
+
+# ===========================================================================
+# 7. PAPER_EVIDENCE_PACK_CONTRACT
+# ===========================================================================
+- contract_id: PAPER_EVIDENCE_PACK_CONTRACT
+  contract_version: "1.0.0-draft"
+  scope: >
+    论文证据包结构与完整性规范。定义论文任务证据包必须
+    和可选包含的字段，以及证据包验证规则。
+  allowed_tasks:
+    - 生成 paper evidence pack
+    - 验证 evidence pack 完整性
+    - 记录 evidence pack hash
+    - 索引 evidence pack 位置
+  prohibited_tasks:
+    - 在 evidence pack 中包含论文全文（除非显式授权）
+    - 在 evidence pack 中包含敏感个人信息
+    - 伪造 evidence pack 内容
+    - 修改已归档的 evidence pack
+  required_evidence:
+    - paper_task_id
+    - contract_id
+    - contract_version
+    - task_type
+    - authorization_scope
+    - input_version_hash
+    - output_version_hash
+    - input_summary（可脱敏）
+    - output_summary（可脱敏）
+    - revision_diff_summary（改写任务）
+    - revision_rationale（改写任务）
+    - review_report（审查任务）
+    - dimension_scores（审查任务）
+    - citation_check_result（引用核验任务）
+    - author_intent_preservation（改写任务）
+    - confidentiality_attestation
+    - decision
+    - decision_rationale
+    - created_at
+    - reviewer_identity
+    - evidence_pack_hash
+  acceptance_criteria:
+    - paper_task_id 非空
+    - contract_id 匹配已注册合约
+    - input_version_hash 格式为有效 SHA256
+    - output_version_hash 格式为有效 SHA256（如无修改则与 input 相同）
+    - confidentiality_attestation 非空且非占位符
+    - 所有 required_fields 存在
+    - 根据 task_type 对应的条件必填字段齐全
+  blocked_conditions:
+    - paper_task_id_missing
+    - contract_id_not_registered
+    - input_version_hash_invalid
+    - confidentiality_attestation_empty_or_placeholder
+    - evidence_pack_tampered
+    - fabricated_evidence
+  needs_more_evidence_conditions:
+    - output_version_hash_missing_when_modified
+    - revision_diff_summary_missing_for_revision_task
+    - citation_check_result_missing_for_citation_task
+    - dimension_scores_incomplete_for_review_task
+    - author_intent_preservation_missing_for_revision_task
+  fail_closed_on:
+    - paper_task_id_missing
+    - contract_id_not_registered
+    - input_version_hash_missing_or_invalid
+    - confidentiality_attestation_missing_empty_or_placeholder
+    - evidence_pack_missing
+    - evidence_pack_tampered
+    - review_unverified
+  safety_notes: >
+    证据包是验收判定的唯一依据。agent summary 不能替代 evidence pack。
+    证据包中的 input_summary 和 output_summary 必须可以脱敏，
+    不得强制包含论文全文。真实全文只能在显式授权后由具体任务处理，
+    本 contract 只定义证据包的规范结构。

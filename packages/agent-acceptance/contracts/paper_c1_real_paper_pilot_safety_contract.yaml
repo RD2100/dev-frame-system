@@ -1,0 +1,93 @@
+contract_id: PAPER_C1_REAL_PAPER_PILOT_SAFETY_CONTRACT
+contract_version: "1.0.0-draft"
+status: draft_for_review
+scope: protocol_only
+primary_repo: agent-acceptance
+real_paper_execution_allowed: false
+real_paper_full_text_allowed: false
+user_private_text_allowed: false
+memory_write_with_paper_content_allowed: false
+external_upload_allowed: false
+live_cdp_allowed: false
+historical_evidence_cleanup_allowed: false
+
+allowed_materials:
+  - synthetic_placeholders
+  - redacted_metadata
+  - protocol_text
+  - contract_text
+  - validation_tests
+  - closure_evidence
+
+input_classification_rules:
+  synthetic:
+    handling: allow
+    allowed_for:
+      - tests
+      - fixtures
+      - evidence_pack
+  redacted:
+    handling: allow_after_validation
+    required_evidence:
+      - PRIVACY_ATTESTATION.yaml
+      - REDACTION_REPORT.yaml
+  user_authorized_excerpt:
+    handling: block_without_explicit_task_scoped_authorization
+    required_authorization_fields:
+      - authorization_id
+      - authorized_by
+      - authorized_at_utc
+      - task_id
+      - allowed_input_classification
+      - allowed_operations
+      - expires_at_utc
+      - revocation_supported
+  real_paper_full_text:
+    handling: block
+
+fail_closed_on:
+  - real_paper_full_text_input
+  - user_private_text_detected
+  - missing_or_ambiguous_authorization
+  - stale_authorization
+  - missing_privacy_attestation
+  - missing_redaction_report
+  - evidence_pack_contains_paper_content
+  - memory_write_contains_paper_content
+  - external_upload_attempted
+  - live_cdp_attempted
+  - historical_evidence_cleanup_attempted
+  - classifier_uncertainty
+
+required_future_pilot_evidence:
+  - PAPER_TASK_INPUT.yaml
+  - PAPER_TASK_OUTPUT.yaml
+  - PRIVACY_ATTESTATION.yaml
+  - REDACTION_REPORT.yaml
+  - PACK_MANIFEST.md
+  - PAPER_TASK_VALIDATION.json
+  - NEGATIVE_PRIVACY_FAIL_CLOSED_OUTPUT.txt
+
+memory_policy:
+  allowed:
+    - none
+    - redacted_workflow_lesson_only
+  prohibited:
+    - paper_content
+    - paper_excerpt
+    - citation_original_text
+    - user_identity
+    - unpublished_argument
+    - doctoral_dissertation_draft
+
+negative_fixture_policy:
+  synthetic_placeholders_only: true
+  real_paper_content_allowed: false
+  user_private_text_allowed: false
+  required_fields:
+    - fixture_id
+    - synthetic_only
+    - scenario
+    - expected_result
+    - expected_blocking_issue
+    - payload

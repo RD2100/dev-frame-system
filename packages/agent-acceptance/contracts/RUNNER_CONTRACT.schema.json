@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-acceptance/schemas/RUNNER_CONTRACT.schema.json",
+  "title": "RUNNER_CONTRACT",
+  "description": "Top-level runner invocation contract. Defines the interface between the dispatcher and the runner. The runner reads this contract to know what to execute, what is allowed, and when to stop.",
+  "type": "object",
+  "required": ["runner_id", "task_id", "mode", "terminal", "allowed_actions", "forbidden_actions", "resume_policy", "safety_policy"],
+  "properties": {
+    "runner_id": {
+      "type": "string",
+      "description": "Unique identifier for this runner instance."
+    },
+    "task_id": {
+      "type": "string",
+      "description": "Task the runner is executing."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["run_until_terminal", "single_step", "dry_run", "resume"],
+      "description": "Runner execution mode. run_until_terminal is the default: continue until terminal=true."
+    },
+    "input_outcome_path": {
+      "type": "string",
+      "description": "Path to the FLOW_OUTCOME.json that triggered this run."
+    },
+    "input_taskspec_path": {
+      "type": "string",
+      "description": "Path to the TASKSPEC.json to execute. REQUIRED when terminal=false unless next_action is set."
+    },
+    "current_stage": {
+      "type": "string",
+      "description": "Current execution stage."
+    },
+    "terminal": {
+      "type": "boolean",
+      "description": "Is this runner invocation terminal? If false, the runner MUST continue executing next actions."
+    },
+    "next_action": {
+      "type": "string",
+      "description": "Concrete next action the runner must perform. REQUIRED when terminal=false and no input_taskspec_path."
+    },
+    "next_task_spec_path": {
+      "type": "string",
+      "description": "Path to the next TaskSpec to consume after current execution."
+    },
+    "allowed_actions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Actions the runner is allowed to perform. Must be explicit."
+    },
+    "forbidden_actions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Actions the runner MUST NOT perform. Min includes: delete, move, rename, clean_worktree, overwrite_evidence, fabricate_baseline, fabricate_attestation."
+    },
+    "max_steps": {
+      "type": "integer",
+      "default": 100,
+      "description": "Maximum steps before requiring human intervention."
+    },
+    "max_rounds": {
+      "type": "integer",
+      "default": 10,
+      "description": "Maximum review rounds before requiring human intervention."
+    },
+    "resume_policy": {
+      "type": "object",
+      "required": ["resume_enabled", "state_path"],
+      "properties": {
+        "resume_enabled": { "type": "boolean" },
+        "state_path": { "type": "string" },
+        "heartbeat_seconds": { "type": "integer", "default": 60 },
+        "max_retries": { "type": "integer", "default": 3 }
+      },
+      "description": "Resume policy: where state is stored for recovery."
+    },
+    "safety_policy": {
+      "type": "object",
+      "required": ["high_risk_triggers_human_required", "fail_closed"],
+      "properties": {
+        "high_risk_triggers_human_required": { "type": "boolean", "const": true },
+        "fail_closed": { "type": "boolean", "const": true },
+        "max_consecutive_failures": { "type": "integer", "default": 3 },
+        "require_schema_validation": { "type": "boolean", "const": true }
+      },
+      "description": "Safety constraints for this runner instance."
+    },
+    "required_outputs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Minimum output files the runner must produce. Must include FLOW_OUTCOME.json and RUNNER_STATE.json."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "terminal": { "const": false } }
+      },
+      "then": {
+        "anyOf": [
+          { "required": ["input_taskspec_path"] },
+          { "required": ["next_action"] }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": { "mode": { "const": "resume" } }
+      },
+      "then": {
+        "required": ["input_outcome_path"]
+      }
+    }
+  ]
+}

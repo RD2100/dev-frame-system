@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-acceptance/schemas/TASKSPEC.schema.json",
+  "title": "TASKSPEC",
+  "description": "Machine-readable task specification for dispatch and execution. TaskSpecs MUST NOT be Markdown-only; they must contain structured fields that automation can read.",
+  "type": "object",
+  "required": ["task_id", "stage", "goal", "allowed_actions", "forbidden_actions", "required_outputs", "terminal_conditions"],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "description": "Unique task identifier."
+    },
+    "stage": {
+      "type": "string",
+      "description": "Stage this task belongs to."
+    },
+    "goal": {
+      "type": "string",
+      "description": "Single-sentence goal of the task."
+    },
+    "description": {
+      "type": "string",
+      "description": "Extended description of the task."
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "purpose": { "type": "string" },
+          "required": { "type": "boolean" }
+        }
+      },
+      "description": "Input files and data required for this task."
+    },
+    "allowed_actions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "List of actions allowed during this task. Must be explicit."
+    },
+    "forbidden_actions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "List of actions forbidden during this task. Includes by default: delete, move, rename, clean worktree, overwrite evidence, fabricate baseline."
+    },
+    "required_outputs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "List of output files that must exist for the task to be considered complete."
+    },
+    "review_required": {
+      "type": "boolean",
+      "description": "Does this task require a review gate?",
+      "default": true
+    },
+    "review_by": {
+      "type": "string",
+      "enum": ["gpt", "human", "automated_test", "none"],
+      "description": "Who must review this task's output."
+    },
+    "next_on_accepted": {
+      "type": "string",
+      "description": "What to do if the task is accepted. E.g., stage name, task ID, or terminal."
+    },
+    "next_on_blocked": {
+      "type": "string",
+      "description": "What to do if the task is blocked."
+    },
+    "next_on_human_required": {
+      "type": "string",
+      "description": "What to do if human input is required."
+    },
+    "terminal_conditions": {
+      "type": "object",
+      "required": ["terminal"],
+      "properties": {
+        "terminal": { "type": "boolean" },
+        "reason": { "type": "string" },
+        "allowed_terminal_reasons": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Only these reasons allow terminal=true: accepted_done, human_required, blocked_unresolvable, technical_failure, max_rounds_reached, high_risk_required"
+        }
+      },
+      "description": "When terminal=false, the task MUST be consumed by a runner. true only for terminal states."
+    },
+    "high_risk": {
+      "type": "boolean",
+      "default": false,
+      "description": "If true, human_required must be triggered before execution."
+    },
+    "schema_version": {
+      "type": "string",
+      "description": "Schema version for compatibility."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "high_risk": { "const": true } }
+      },
+      "then": {
+        "properties": {
+          "review_by": { "const": "human" },
+          "terminal_conditions": {
+            "properties": {
+              "terminal": { "const": true },
+              "reason": { "const": "high_risk_required" }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

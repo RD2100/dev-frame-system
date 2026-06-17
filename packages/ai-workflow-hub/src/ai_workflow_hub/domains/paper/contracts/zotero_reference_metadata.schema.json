@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ZoteroReferenceMetadata",
+  "type": "object",
+  "required": ["citekey", "title", "authors", "year", "item_type"],
+  "properties": {
+    "citekey": {"type": "string"},
+    "title": {"type": "string"},
+    "authors": {"type": "array", "items": {"type": "string"}},
+    "year": {"type": "integer"},
+    "publication": {"type": "string"},
+    "item_type": {"type": "string", "enum": ["journal_article", "book", "book_section", "thesis", "conference_paper", "report"]},
+    "doi": {"type": "string"},
+    "url": {"type": "string", "format": "uri"},
+    "tags": {"type": "array", "items": {"type": "string"}},
+    "local_pdf_ref": {"type": "string", "description": "本地 PDF 文件路径（不入 pack）"},
+    "citation_allowed": {"type": "boolean", "default": true},
+    "confidentiality": {"type": "string", "enum": ["public", "private", "sensitive"], "default": "public"}
+  }
+}

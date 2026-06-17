@@ -1,0 +1,81 @@
+# Framework Usage Contracts
+# Authority: agent-acceptance
+# Version: 1.0.0-draft
+
+# ===========================================================================
+# FRAMEWORK_USAGE_CONTRACT
+# ===========================================================================
+- contract_id: FRAMEWORK_USAGE_CONTRACT
+  contract_version: "1.0.0-draft"
+  scope: >
+    所有正式任务的验收必须证明经由 devframe pipeline 执行。
+    禁止手写 FLOW_OUTCOME、手写 closure report、未授权 direct Playwright 提交。
+  required_evidence:
+    - pipeline_definition（使用的 pipeline YAML 路径）
+    - pipeline_run_id（唯一运行标识）
+    - runner_output（runner 的标准输出）
+    - state_machine_result（状态机验证结果）
+    - submission_adapter_result（submission adapter 的输出）
+    - pre_submission_check（提交前检查结果）
+    - flow_outcome_generated_by_framework（FLOW_OUTCOME 必须由框架生成）
+    - evidence_pack_built_by_standard_builder
+  acceptance_criteria:
+    - 所有 required_evidence 齐全
+    - FLOW_OUTCOME 非手写
+    - evidence pack manifest 与 ZIP 双向一致
+    - submission 路径可追溯到 submission_adapter 或 playwright_bridge
+  blocked_conditions:
+    - direct_playwright_submission（直接调 playwright 绕过 adapter）
+    - ad_hoc_submit_to_gpt_script（存在 submit_to_gpt.py 且非 declared exception）
+    - manually_fabricated_flow_outcome（手写 FLOW_OUTCOME 无 provenance）
+    - summary_only_evidence_pack（证据包只含摘要不含实际产物）
+    - missing_pipeline_provenance（无法追溯 pipeline 执行）
+  allowed_exceptions:
+    - historical_artifact_declared（RUN_CLASSIFICATION.yaml 声明）
+    - negative_fixture_declared（RUN_CLASSIFICATION.yaml 声明）
+    - explicit_authorized_pilot（显式授权 + 限定 scope）
+  fail_closed_on:
+    - direct_playwright_submission_detected
+    - ad_hoc_submit_script_detected
+    - fabricated_flow_outcome
+    - missing_pipeline_provenance
+    - summary_only_pack_rejected
+  safety_notes: >
+    此 contract 不禁止 Playwright 本身 — Playwright 在 playwright_bridge.py 中是合法路径。
+    此 contract 禁止的是绕过 bridge/adapter 直接使用 Playwright。
+    tests/ 和 declared fixtures 不受此限制。
+
+# ===========================================================================
+# NO_BYPASS_SUBMISSION_CONTRACT
+# ===========================================================================
+- contract_id: NO_BYPASS_SUBMISSION_CONTRACT
+  contract_version: "1.0.0-draft"
+  scope: >
+    检测并禁止未授权提交路径。所有 GPT/CDP 提交必须通过 devframe submission adapter。
+  allowed_submission_paths:
+    - control_plane/submission_adapter.py
+    - control_plane/playwright_bridge.py
+    - devframe CLI（devframe handoff transfer --live --safety-flag）
+  blocked_patterns:
+    - submit_to_gpt.py（在非 tests/ 非 declared fixture 路径中出现）
+    - live_handoff_transfer.py（逻辑已整合进 playwright_bridge.py）
+    - sync_playwright 或 async_playwright 在 evidence_packs/ 或 docs/ 下的脚本中
+    - connect_over_cdp 在非 approved adapter 文件中
+    - page.goto 直接导航到 chatgpt.com 在非 bridge 文件中
+  required_evidence:
+    - submission_path_trace（提交经由的代码路径）
+    - bypass_scan_result（check_submission_bypass 输出）
+  acceptance_criteria:
+    - submission_path_trace 指向 allowed_submission_paths 之一
+    - bypass_scan_result 无 blocked patterns
+  blocked_conditions:
+    - bypass_scan_found_blocked_pattern
+    - submission_path_not_in_allowed_list
+    - ad_hoc_script_used_for_formal_submission
+  fail_closed_on:
+    - bypass_pattern_detected
+    - submission_path_untraceable
+    - ad_hoc_script_claimed_as_formal
+  safety_notes: >
+    此 contract 应用于正式任务 closure。
+    historical artifact / negative fixture / 授权 pilot 不适用此 contract。

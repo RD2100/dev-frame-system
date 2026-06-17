@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-acceptance/schemas/RUNNER_STATE.schema.json",
+  "title": "RUNNER_STATE",
+  "description": "Runner state machine. Persisted after every step to enable recovery on crash or interruption. Must be machine-readable.",
+  "type": "object",
+  "required": ["runner_id", "task_id", "current_step", "current_round", "terminal", "heartbeat"],
+  "properties": {
+    "runner_id": {
+      "type": "string",
+      "description": "Matches the runner contract that started this instance."
+    },
+    "task_id": {
+      "type": "string",
+      "description": "Task being executed."
+    },
+    "current_step": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Current step number. Incremented after each completed step."
+    },
+    "current_round": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Current review round. Incremented after each GPT review submission."
+    },
+    "terminal": {
+      "type": "boolean",
+      "description": "Is the runner in a terminal state? If false, the runner MUST continue."
+    },
+    "last_decision": {
+      "type": "string",
+      "enum": ["accepted", "blocked", "human_required", "partial", "unknown", null],
+      "description": "Most recent business decision from GPT or gate."
+    },
+    "next_action": {
+      "type": "string",
+      "description": "Next action to execute. REQUIRED when terminal=false."
+    },
+    "next_task_spec_path": {
+      "type": "string",
+      "description": "Path to the next TaskSpec to consume. REQUIRED when last_decision=accepted and allow_next_stage=true."
+    },
+    "last_outcome_path": {
+      "type": "string",
+      "description": "Path to the most recent FLOW_OUTCOME.json."
+    },
+    "last_dispatch_result_path": {
+      "type": "string",
+      "description": "Path to the most recent DISPATCH_RESULT.json."
+    },
+    "errors": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Cumulative error messages across steps."
+    },
+    "retries": {
+      "type": "object",
+      "properties": {
+        "current_step_retries": { "type": "integer", "default": 0 },
+        "current_round_retries": { "type": "integer", "default": 0 },
+        "total_retries": { "type": "integer", "default": 0 }
+      },
+      "description": "Retry counters for the runner."
+    },
+    "heartbeat": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO8601 timestamp of last state write. Used to detect stalled runners."
+    },
+    "resume_command": {
+      "type": "string",
+      "description": "Command to resume execution. REQUIRED when terminal=true and business_decision is human_required or when stopped with a known resume path."
+    },
+    "reason": {
+      "type": "string",
+      "description": "Human-readable reason for current state."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "terminal": { "const": false } }
+      },
+      "then": {
+        "required": ["next_action"]
+      }
+    },
+    {
+      "if": {
+        "allOf": [
+          { "properties": { "last_decision": { "const": "human_required" } } },
+          { "properties": { "terminal": { "const": true } } }
+        ]
+      },
+      "then": {
+        "required": ["resume_command"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "last_decision": { "const": "accepted" } } }
+      ,
+      "then": {
+        "properties": {
+          "terminal": { "const": false }
+        }
+      }
+    }
+  ]
+}

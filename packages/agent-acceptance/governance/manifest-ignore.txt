@@ -1,0 +1,11 @@
+# Manifest ignore list — files/directories excluded from active manifest.
+# Constraint: can ONLY exclude archive/, **/future/, test fixtures, and temp output dirs.
+# Must NOT exclude rules/, hooks/, scripts/, governance/, .github/workflows/, AGENTS.md, .ai/policy.yaml.
+archive/**
+**/future/**
+scripts/tests/*.tests.ps1
+runs/**
+reports/**
+.backup/**
+__pycache__/**
+node_modules/**

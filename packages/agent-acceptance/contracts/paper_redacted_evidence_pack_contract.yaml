@@ -1,0 +1,24 @@
+# Paper Redacted Evidence Pack Contract
+- contract_id: PAPER_REDACTED_EVIDENCE_PACK_CONTRACT
+  contract_version: "1.0.0-draft"
+  required_files: [PAPER_TASK_INPUT.yaml, PAPER_TASK_OUTPUT.yaml, PRIVACY_ATTESTATION.yaml, REDACTION_REPORT.yaml, PACK_MANIFEST.md, TEST_OUTPUT.txt]
+  privacy_fields:
+    - contains_real_paper_full_text
+    - contains_user_private_text
+    - contains_raw_transcript
+    - contains_memory_write
+    - contains_external_upload
+    - redaction_applied
+    - manual_review_required
+  must_be_false: [contains_real_paper_full_text, contains_user_private_text, contains_raw_transcript, contains_external_upload]
+  memory_write_policy:
+    allowed: [none, redacted_workflow_lesson_only]
+    prohibited: [paper_content, paper_excerpt, citation_original_text, user_identity, unpublished_argument, doctoral_dissertation_draft]
+  blocked_conditions:
+    - real_paper_text_in_evidence_pack
+    - user_identity_in_evidence_pack
+    - raw_transcript_in_evidence_pack
+    - privacy_attestation_missing
+    - redaction_report_missing
+    - paper_content_in_memory
+  fail_closed_on: [real_paper_text_detected, user_identity_detected, privacy_attestation_missing, paper_content_memory_write]

@@ -1,0 +1,90 @@
+contract_id: PAPER_C2_AUTHORIZATION_REDACTION_GATE_CONTRACT
+contract_version: "1.0.0-draft"
+status: draft_for_review
+scope: synthetic_only_gate_implementation
+primary_repo: agent-acceptance
+real_paper_execution_allowed: false
+real_paper_full_text_allowed: false
+user_private_text_allowed: false
+external_upload_allowed: false
+live_cdp_allowed: false
+
+authorization_gate:
+  required_fields:
+    - authorization_id
+    - authorized_by
+    - authorized_at_utc
+    - expires_at_utc
+    - task_id
+    - allowed_input_classification
+    - allowed_operations
+    - revocation_supported
+    - status
+  required_values:
+    authorized_by: human_user
+    allowed_input_classification: user_authorized_excerpt
+    revocation_supported: true
+    status: active
+  allowed_operations:
+    - classify
+    - redact
+    - summarize_metadata
+  prohibited_operations:
+    - ingest_full_text
+    - store_paper_content
+    - write_memory_paper_content
+    - external_upload
+    - live_cdp_capture
+  fail_closed_on:
+    - missing_authorization
+    - stale_authorization
+    - ambiguous_authorization
+    - overbroad_authorization
+    - authorization_task_mismatch
+    - missing_revocation_support
+
+redaction_gate:
+  required_fields:
+    - redaction_report_present
+    - privacy_attestation_present
+    - redaction_applied
+    - redacted_material_classification
+    - contains_real_paper_full_text
+    - contains_user_private_text
+    - contains_raw_transcript
+    - contains_memory_write_with_paper_content
+    - contains_external_upload
+  required_values:
+    redaction_report_present: true
+    privacy_attestation_present: true
+    redaction_applied: true
+    contains_real_paper_full_text: false
+    contains_user_private_text: false
+    contains_raw_transcript: false
+    contains_memory_write_with_paper_content: false
+    contains_external_upload: false
+  allowed_redacted_material_classifications:
+    - redacted_metadata
+    - user_authorized_excerpt_metadata
+  fail_closed_on:
+    - missing_redaction_report
+    - missing_privacy_attestation
+    - redaction_not_applied
+    - real_paper_text_detected
+    - user_private_text_detected
+    - raw_transcript_detected
+    - paper_content_memory_write_detected
+    - external_upload_attempted
+
+fixture_policy:
+  synthetic_only: true
+  allowed_placeholder_prefix: SYNTHETIC_
+  prohibited_markers:
+    - REAL_PAPER_TEXT
+    - USER_PRIVATE_TEXT
+    - RAW_TRANSCRIPT
+    - AUTHOR_IDENTITY
+
+gate_result_values:
+  - pass
+  - fail

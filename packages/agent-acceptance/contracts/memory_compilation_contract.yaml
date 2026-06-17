@@ -1,0 +1,175 @@
+# Memory Compilation Contracts
+# Authority: agent-acceptance
+# Version: 1.0.0-draft
+# Design only — no runtime hooks, no auto-compilation
+
+# ===========================================================================
+# MEMORY_SOURCE_CONTRACT
+# ===========================================================================
+- contract_id: MEMORY_SOURCE_CONTRACT
+  contract_version: "1.0.0-draft"
+  scope: >
+    定义哪些内容可以作为 memory 的合法来源，
+    哪些内容禁止进入 memory compilation pipeline。
+  allowed_sources:
+    - GPT_REVIEW_RESULT（YAML 格式）
+    - WORKFLOW_AUDIT_LEDGER.yaml
+    - CLOSURE_REPORT.md
+    - SAFETY_ATTESTATION.md
+    - 非敏感的 docs/contracts/templates 文件
+    - PRE_SUBMISSION_CHECK.yaml
+    - FLOW_OUTCOME.json
+  prohibited_sources:
+    - raw full chat transcript（完整聊天记录）
+    - real user paper text（真实用户论文全文）
+    - private thesis draft（私密博士论文草稿）
+    - unpublished manuscript（未发表稿件）
+    - browser cookies/session/profile
+    - API keys/secrets
+    - external service uploads without authorization
+    - 任何未存档或 transient 的内容
+  source_rules:
+    - memory_entry_must_reference_source（每条 memory 必须引用来源）
+    - source_must_be_non_sensitive_or_redacted（来源必须脱敏或不含敏感信息）
+    - source_summary_not_equal_evidence（memory 中的摘要不等于 evidence）
+  acceptance_criteria:
+    - 所有 memory entry 的 source_review_run_id 可追溯到实际 GPT review
+    - 禁止来源中未出现的内容被声称来源于该来源
+    - 脱敏后的摘要不得包含原始私密文本
+  blocked_conditions:
+    - prohibited_source_used
+    - source_not_referenced
+    - source_fabricated
+    - raw_transcript_ingested
+    - private_text_in_source
+  fail_closed_on:
+    - prohibited_source_detected
+    - source_fabrication_detected
+    - private_text_detected_in_source
+  safety_notes: >
+    来源必须是非 transient 的文件，不能是"agent 声称看到过"的内容。
+    如果 GPT_REVIEW_RESULT 本身不可访问，memory entry 不能声称引用它。
+
+# ===========================================================================
+# MEMORY_ENTRY_CONTRACT
+# ===========================================================================
+- contract_id: MEMORY_ENTRY_CONTRACT
+  contract_version: "1.0.0-draft"
+  scope: >
+    定义单条 memory entry 的必须字段、允许类型、禁止条件。
+  required_fields:
+    - memory_id
+    - memory_type
+    - source_review_run_id
+    - source_task_id
+    - lesson
+    - evidence_reference
+    - privacy_classification
+    - created_at
+    - status
+  memory_types:
+    - lesson（单个可学习的教训）
+    - failure_pattern（重复出现的失败模式）
+    - design_decision（架构/设计决策及其理由）
+    - safety_rule（不可违反的安全规则）
+    - workflow_rule（建议的工作流规则）
+    - gotcha（容易踩的坑）
+    - follow_up_task（需要后续处理的发现）
+  acceptance_criteria:
+    - 所有 required_fields 存在
+    - source_review_run_id 非空且可追溯
+    - lesson 有实质内容（非空、非占位符）
+    - privacy_classification 匹配内容实际隐私级别
+    - status 为 active / superseded / deprecated 之一
+  blocked_conditions:
+    - no_source_reference
+    - contains_private_paper_text
+    - claims_accepted_without_gpt_review
+    - memory_used_as_evidence
+    - unredacted_sensitive_content
+    - fabricated_source_review
+  fail_closed_on:
+    - no_source_reference
+    - private_text_in_memory
+    - claims_accepted_without_gpt_review
+    - memory_used_as_evidence
+    - fabricated_source_review
+  safety_notes: >
+    memory entry 不是 evidence。不能因为某条 memory 说"这个任务完成了"
+    就认为任务 accepted。必须回到原始 GPT_REVIEW_RESULT 验证。
+
+# ===========================================================================
+# MEMORY_PRIVACY_CONTRACT
+# ===========================================================================
+- contract_id: MEMORY_PRIVACY_CONTRACT
+  contract_version: "1.0.0-draft"
+  scope: >
+    保护用户论文、未发表稿件、博士论文等私密内容不进入 memory。
+    所有 memory entry 默认标记为 private_by_default，
+    只有明确脱敏且不含私密内容的才能进入 public/team memory。
+  default_classification: private_by_default
+  rules:
+    - real paper content is never stored in memory
+    - user private text is never stored in memory
+    - only redacted summaries may be stored
+    - source links may point to evidence pack metadata, not private content
+    - memory entries must not expose user identity unless already public and necessary
+    - full chat transcripts are prohibited regardless of content
+  acceptance_criteria:
+    - 所有 memory entry 的 privacy_classification 不为空
+    - 无真实论文全文出现在任何 memory entry 中
+    - 无用户身份信息出现在 memory entry 中（除非已公开且必要）
+    - 脱敏摘要不包含可逆向识别的独特文本片段
+  blocked_conditions:
+    - private_text_in_memory
+    - raw_transcript_ingested
+    - external_upload_without_authorization
+    - secrets_or_tokens_detected
+    - user_identity_leakage
+  fail_closed_on:
+    - private_text_in_memory_detected
+    - raw_transcript_ingested
+    - secrets_or_tokens_detected
+    - unauthorized_external_upload
+  safety_notes: >
+    论文写作类任务的 memory 风险极高。即使 paper workflow 只处理 synthetic
+    content，memory 中也不能出现"某用户论文中写道……"这类直接引用。
+
+# ===========================================================================
+# MEMORY_LINT_CONTRACT
+# ===========================================================================
+- contract_id: MEMORY_LINT_CONTRACT
+  contract_version: "1.0.0-draft"
+  scope: >
+    定义 memory 的 lint 检查规则，确保 memory 条目一致性、可追溯性和时效性。
+  checks:
+    - broken_internal_links（内部引用断裂）
+    - orphan_memory_entries（无引用、无关联的孤立条目）
+    - repeated_failure_without_gate（同一 failure pattern 出现 2+ 次但没有 linked gate）
+    - accepted_task_without_memory_summary（任务 accepted 但无 memory entry 记录教训）
+    - contradictory_lessons（两条 memory 互相矛盾）
+    - stale_policy_reference（引用了已废弃的 policy 或 contract）
+    - lesson_without_source_review（声称 lesson 但没有 source_review_run_id）
+    - memory_claims_authority_over_evidence（memory 声称自己是权威 evidence）
+    - orphan_concept_without_backlinks
+    - deprecated_entry_still_marked_active
+  result_values:
+    - pass（全部检查通过）
+    - fail（发现阻断性错误）
+    - needs_review（发现需要人工审核的问题）
+  acceptance_criteria:
+    - 所有 fail 级别的错误已修复
+    - needs_review 级别的警告有明确处置
+    - 不存在 lesson_without_source_review 的 fail 错误
+  blocked_conditions:
+    - lint_fail_unresolved
+    - contradictory_lessons_present
+    - private_text_detected_by_lint
+  fail_closed_on:
+    - lesson_without_source_review
+    - private_text_in_memory_detected_by_lint
+    - memory_claims_authority_over_evidence
+    - contradictory_lessons_unresolved
+  safety_notes: >
+    Lint 是防御性检查，不是 memory 质量的保证。即使 lint 通过，
+    memory 仍然只是辅助参考，不能替代 evidence 或 GPT accepted。

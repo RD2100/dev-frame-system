@@ -1,0 +1,65 @@
+# WriteLab Paper Handoff Contract
+- contract_id: WRITELAB_PAPER_HANDOFF_CONTRACT
+  contract_version: "1.0.0-draft"
+  purpose: "Validate metadata-only WriteLab diagnosis packets before they enter agent-acceptance paper governance."
+  required_files:
+    - WRITELAB_HANDOFF.yaml
+    - DIAGNOSIS_RESULT.json
+    - PRIVACY_ATTESTATION.yaml
+    - PACK_MANIFEST.md
+  allowed_source_projects:
+    - writelab
+  allowed_source_artifact_types:
+    - paragraph_diagnosis
+    - expression_risk_report
+    - diagnosis_report
+  allowed_content_classifications:
+    - synthetic
+    - redacted_metadata
+  allowed_privacy_modes:
+    - synthetic_only
+    - metadata_only
+  required_target_contracts:
+    - PAPER_TASK_OUTPUT_CONTRACT
+    - PAPER_REDACTED_EVIDENCE_PACK_CONTRACT
+  must_be_false:
+    - contains_real_paper_full_text
+    - contains_user_private_text
+    - contains_raw_transcript
+    - contains_external_upload
+    - contains_original_paragraph
+    - contains_rewrite_text
+  blocked_payload_keys:
+    - raw_paper_text
+    - paper_content
+    - paper_excerpt
+    - citation_original_text
+    - user_identity
+    - author_identity
+    - author_name
+    - advisor_comment
+    - raw_transcript
+    - private_paper_text
+    - paragraph
+    - paragraph_text
+    - content
+    - text_span
+    - original_text
+    - revised_text
+    - rewrite_text
+    - full_text
+  blocked_content_markers:
+    - REAL_PAPER_TEXT
+    - USER_PRIVATE_TEXT
+    - RAW_TRANSCRIPT
+    - AUTHOR_IDENTITY
+  fail_closed_on:
+    - required_file_missing
+    - schema_violation
+    - handoff_id_mismatch
+    - blocked_content_classification
+    - missing_required_target_contract
+    - privacy_attestation_violation
+    - diagnosis_privacy_violation
+    - forbidden_payload_key
+    - forbidden_content_marker

@@ -1,0 +1,14 @@
+{
+  "citation_key": "Chen2026MetadataGrounding",
+  "title": "Metadata Grounding for Privacy-Preserving Paper Review",
+  "authors": ["Lin Chen", "Avery Smith"],
+  "year": 2026,
+  "doi": "10.0000/synthetic.metadata.2026",
+  "journal": "Synthetic Journal of Research Workflows",
+  "abstract": "Synthetic metadata fixture for testing citation grounding without accessing a real Zotero library.",
+  "tags": ["synthetic", "metadata-only", "paper-mvp"],
+  "collections": ["offline-mvp-fixtures"],
+  "item_type": "journal_article",
+  "source_id": "zotero-fixture:Chen2026MetadataGrounding",
+  "retrieved_at": "2026-06-15T00:00:00Z"
+}

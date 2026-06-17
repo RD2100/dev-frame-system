@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperContextPack",
+  "type": "object",
+  "required": ["pack_id", "task_id", "project_memory", "source_manifest", "privacy_filter_result"],
+  "properties": {
+    "pack_id": {"type": "string"},
+    "task_id": {"type": "string"},
+    "project_memory": {"type": "array", "items": {"type": "object"}},
+    "task_summary": {"type": "string"},
+    "chapter_function": {"type": "string"},
+    "writing_rules": {"type": "array", "items": {"type": "object"}},
+    "forbidden_patterns": {"type": "array", "items": {"type": "object"}},
+    "retrieved_literature": {"type": "array", "items": {"type": "object"}},
+    "retrieved_style_examples": {"type": "array", "items": {"type": "object"}},
+    "retrieved_bad_examples": {"type": "array", "items": {"type": "object"}},
+    "retrieved_revision_history": {"type": "array", "items": {"type": "object"}},
+    "privacy_filter_result": {"type": "object", "required": ["passed", "excluded_sources"], "properties": {"passed": {"type": "boolean"}, "excluded_sources": {"type": "array", "items": {"type": "string"}}}},
+    "allowed_model_inputs": {"type": "array", "items": {"type": "string"}},
+    "excluded_sensitive_sources": {"type": "array", "items": {"type": "string"}},
+    "source_manifest": {"type": "array", "items": {"type": "object", "properties": {"source_type": {"type": "string"}, "source_id": {"type": "string"}, "confidentiality": {"type": "string"}, "retrieval_score": {"type": "number"}, "retrieval_method": {"type": "string"}}}},
+    "retrieval_trace": {"type": "object", "properties": {"total_candidates": {"type": "integer"}, "total_selected": {"type": "integer"}, "total_rejected": {"type": "integer"}, "k": {"type": "integer"}, "selected_entries": {"type": "array", "items": {"type": "object"}}, "rejected_entries": {"type": "array", "items": {"type": "object"}}, "pipeline": {"type": "object"}}}
+  }
+}

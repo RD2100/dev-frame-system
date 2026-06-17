@@ -1,0 +1,162 @@
+{
+  "pack_id": "cp-20260611-paper-task-001-draft-intro",
+  "task_id": "paper-task-001-draft-intro",
+  "project_memory": [],
+  "task_summary": "1.1 研究背景",
+  "chapter_function": "引言",
+  "writing_rules": [
+    {
+      "rule_id": "rule-001-cssci-education-style",
+      "content": "## 规则名称\n\nCSSCI 教育学期刊写作风格约束\n\n## 规则内容\n\n1. 避免政策套话（\"贯彻落实\"\"深入推进\"\"全面加强\"）\n2. 减少规范性表达密度（每段不超过 1 次\"应当\"\"必须\"\"需要\"）\n3. 优先使用具体场景描述替代抽象概念\n4. 因果论述需提供证据链（因为X数据，所以Y结论）\n5. 段落功能应明确：论点段/证据段/过渡段/总结段\n\n## 适用学科\n\n教育学、社会科学\n\n## 优先级\n\nhigh"
+    }
+  ],
+  "forbidden_patterns": [
+    {
+      "pattern_id": "bad-example-001-template-expression",
+      "content": "## 坏示例原文\n\n\"教育质量的提升不仅在于课堂教学的改进，更在于整体教育生态的优化；不是单一维度的改革，而是多维协同的系统性工程。\"\n\n## 问题分析\n\n1. \"不仅……更……\" + \"不是……而是……\" 双重模板结构叠加\n2. \"教育生态\"\"系统性工程\" 为抽象名词堆叠\n3. 未提供具体场景、数据或案例支撑\n4. 属于 WriteLab expression_detector 的 W1+W2 "
+    }
+  ],
+  "retrieved_literature": [
+    {
+      "note_id": "lit-2024-zhang-policy-evaluation",
+      "summary": "## 文献观点\n\n该研究提出了一个基于多层评估框架的教育政策分析方法，强调过程性评价与结果性评价的结合。\n\n## 可支撑论点\n\n- 政策效果评估需要考虑多利益相关者视角\n- 过程性数据比结果性数据更能反映政策执行中的问题\n\n## 可使用章节\n\n文献综述、方法论\n\n## 引用方式\n\n直接引用核心框架，间接引用案例数据\n\n## 局限性\n\n样本限于东部地区，未覆盖中西部\n\n## 与本文观点的关系\n\n支撑本文\"过程性评价连续性\"的核心论点"
+    }
+  ],
+  "retrieved_style_examples": [],
+  "retrieved_bad_examples": [
+    {
+      "note_id": "bad-example-001-template-expression",
+      "summary": "## 坏示例原文\n\n\"教育质量的提升不仅在于课堂教学的改进，更在于整体教育生态的优化；不是单一维度的改革，而是多维协同的系统性工程。\"\n\n## 问题分析\n\n1. \"不仅……更……\" + \"不是……而是……\" 双重模板结构叠加\n2. \"教育生态\"\"系统性工程\" 为抽象名词堆叠\n3. 未提供具体场景、数据或案例支撑\n4. 属于 WriteLab expression_detector 的 W1+W2 复合风险\n\n## 改写方向\n\n用具体调研数据替换抽象论述，说明\"哪些课堂\"\"何种协同\"\"哪些维度\""
+    }
+  ],
+  "retrieved_revision_history": [],
+  "privacy_filter_result": {
+    "passed": true,
+    "excluded_sources": []
+  },
+  "allowed_model_inputs": [
+    "task_summary",
+    "chapter_function",
+    "writing_rules",
+    "retrieved_literature",
+    "retrieved_bad_examples"
+  ],
+  "excluded_sensitive_sources": [],
+  "source_manifest": [
+    {
+      "source_type": "obsidian_note",
+      "source_id": "rule-001-cssci-education-style",
+      "confidentiality": "public",
+      "retrieval_score": 0.358,
+      "retrieval_method": "metadata_filter+keyword_search+topk"
+    },
+    {
+      "source_type": "obsidian_note",
+      "source_id": "lit-2024-zhang-policy-evaluation",
+      "confidentiality": "private",
+      "retrieval_score": 0.212,
+      "retrieval_method": "metadata_filter+keyword_search+topk"
+    },
+    {
+      "source_type": "obsidian_note",
+      "source_id": "bad-example-001-template-expression",
+      "confidentiality": "public",
+      "retrieval_score": 0.204,
+      "retrieval_method": "metadata_filter+keyword_search+topk"
+    },
+    {
+      "source_type": "zotero_reference",
+      "source_id": "zhang2024policy",
+      "confidentiality": "public",
+      "retrieval_score": 0.238,
+      "retrieval_method": "metadata_filter+keyword_search+topk"
+    }
+  ],
+  "retrieval_trace": {
+    "total_candidates": 4,
+    "total_selected": 4,
+    "total_rejected": 0,
+    "k": 5,
+    "selected_entries": [
+      {
+        "source_id": "rule-001-cssci-education-style",
+        "source_type": "obsidian_note",
+        "final_score": 0.358,
+        "metadata_score": 0.85,
+        "keyword_score": 0.03,
+        "reason": "selected — score above threshold and within top-k"
+      },
+      {
+        "source_id": "zhang2024policy",
+        "source_type": "zotero_reference",
+        "final_score": 0.238,
+        "metadata_score": 0.58,
+        "keyword_score": 0.01,
+        "reason": "selected — score above threshold and within top-k"
+      },
+      {
+        "source_id": "lit-2024-zhang-policy-evaluation",
+        "source_type": "obsidian_note",
+        "final_score": 0.212,
+        "metadata_score": 0.5,
+        "keyword_score": 0.02,
+        "reason": "selected — score above threshold and within top-k"
+      },
+      {
+        "source_id": "bad-example-001-template-expression",
+        "source_type": "obsidian_note",
+        "final_score": 0.204,
+        "metadata_score": 0.45,
+        "keyword_score": 0.04,
+        "reason": "selected — score above threshold and within top-k"
+      }
+    ],
+    "rejected_entries": [],
+    "pipeline": {
+      "privacy_filter": {
+        "total_input_obsidian": 3,
+        "total_input_zotero": 1,
+        "allowed_obsidian": 3,
+        "allowed_zotero": 1,
+        "excluded": []
+      },
+      "metadata_filter": {
+        "total_input": 4,
+        "total_passed": 4,
+        "filtered_out": [],
+        "threshold": 0.1
+      },
+      "keyword_scoring": {
+        "keywords_extracted": [
+          "引言",
+          "不得",
+          "得使",
+          "使用",
+          "表达",
+          "不是",
+          "而是",
+          "段落",
+          "研究背景",
+          "研究",
+          "究背",
+          "背景",
+          "不得使用未在",
+          "用未",
+          "未在",
+          "中出现的文献",
+          "中出",
+          "出现",
+          "现的",
+          "的文"
+        ],
+        "total_scored": 4
+      },
+      "topk_selection": {
+        "k": 5,
+        "min_final_score": 0.05,
+        "total_selected": 4,
+        "total_rejected": 0
+      }
+    }
+  }
+}

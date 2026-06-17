@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-acceptance/schemas/FLOW_OUTCOME.schema.json",
+  "title": "FLOW_OUTCOME",
+  "description": "Three-layer flow outcome: transport status, business decision, and dispatch status. This is the single machine-readable source of truth for automation decisions.",
+  "type": "object",
+  "required": ["task_id", "stage", "transport_status", "business_decision", "dispatch_status", "overall_status", "allow_next_stage", "terminal"],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "description": "Unique task identifier (e.g., AA-1, S3-PHASE2)"
+    },
+    "stage": {
+      "type": "string",
+      "description": "Current stage (e.g., S2, S3, S4, AA-1)"
+    },
+    "transport_status": {
+      "type": "string",
+      "enum": ["success", "failed", "partial", "pending"],
+      "description": "Layer 1: Did the transport (upload, submission) succeed? Must NOT be conflated with business_decision."
+    },
+    "business_decision": {
+      "type": "string",
+      "enum": ["accepted", "blocked", "human_required", "partial", "unknown"],
+      "description": "Layer 2: What did the reviewer (GPT or human) decide?"
+    },
+    "dispatch_status": {
+      "type": "string",
+      "enum": ["ready_to_dispatch", "dispatched", "taskspec_generated", "manual_confirm_required", "stopped", "failed"],
+      "description": "Layer 3: What is the execution dispatch state? ready_to_dispatch MUST NOT be treated as dispatched."
+    },
+    "overall_status": {
+      "type": "string",
+      "enum": ["accepted", "partial", "blocked", "human_required", "unknown"],
+      "description": "Synthesized overall flow status."
+    },
+    "allow_next_stage": {
+      "type": "boolean",
+      "description": "Is the next stage allowed? True only when business_decision is accepted or partial with explicit allowance."
+    },
+    "next_stage": {
+      "type": "string",
+      "description": "Identifier of the next stage if allow_next_stage is true."
+    },
+    "next_task_spec_path": {
+      "type": "string",
+      "description": "Path to the next TaskSpec file. REQUIRED when terminal=false and dispatch_status is taskspec_generated or ready_to_dispatch."
+    },
+    "required_next_action": {
+      "type": "string",
+      "description": "Concrete next action. REQUIRED when business_decision is human_required or when terminal=false."
+    },
+    "terminal": {
+      "type": "boolean",
+      "description": "Is this flow terminal? If false, the agent MUST continue consuming next_task_spec."
+    },
+    "errors": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Error messages if any layer failed."
+    },
+    "safety": {
+      "type": "object",
+      "properties": {
+        "S3_executed": { "type": "boolean" },
+        "dev_frame_modified": { "type": "boolean" },
+        "files_deleted": { "type": "boolean" },
+        "evidence_overwritten": { "type": "boolean" },
+        "baseline_fabricated": { "type": "boolean" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "terminal": { "const": false } }
+      },
+      "then": {
+        "anyOf": [
+          { "required": ["next_task_spec_path"] },
+          { "required": ["required_next_action"] }
+        ]
+      },
+      "else": {
+        "properties": {
+          "dispatch_status": {
+            "enum": ["stopped", "failed"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "business_decision": { "const": "human_required" } }
+      },
+      "then": {
+        "required": ["required_next_action"],
+        "properties": {
+          "terminal": { "const": true },
+          "allow_next_stage": { "const": false }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "business_decision": { "const": "blocked" } }
+      },
+      "then": {
+        "required": ["required_next_action"],
+        "properties": {
+          "allow_next_stage": { "const": false }
+        }
+      }
+    },
+    {
+      "if": {
+        "allOf": [
+          { "properties": { "business_decision": { "const": "accepted" } } },
+          { "properties": { "allow_next_stage": { "const": true } } }
+        ]
+      },
+      "then": {
+        "anyOf": [
+          { "required": ["next_stage"] },
+          { "required": ["next_task_spec_path"] }
+        ]
+      }
+    }
+  ]
+}

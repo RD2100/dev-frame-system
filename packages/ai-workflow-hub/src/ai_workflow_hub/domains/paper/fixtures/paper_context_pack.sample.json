@@ -1,0 +1,35 @@
+{
+  "_comment": "Context Pack 示例 - 由 Context Pack Builder 组装，供 LLM Draft Agent 使用。所有来源均已通过隐私过滤和保密级别检查。",
+  "pack_id": "cp-20260610-intro-draft-001",
+  "task_id": "paper-task-001-draft-intro",
+  "project_memory": [
+    {"type": "decision", "content": "本文采用过程性评价视角，聚焦中小学教育政策执行"},
+    {"type": "gotcha", "content": "CSSCI 审稿人对'生态''赋能'等抽象名词敏感"}
+  ],
+  "task_summary": "为引言部分起草研究背景段落，说明过程性评价在教育政策研究中的意义",
+  "chapter_function": "引言 — 建立研究问题的现实背景和理论缺口",
+  "writing_rules": [
+    {"rule_id": "rule-001", "content": "避免政策套话，每段规范性表达不超过1次"}
+  ],
+  "forbidden_patterns": [
+    {"pattern_id": "bad-001", "content": "不是……而是……双重模板叠加"}
+  ],
+  "retrieved_literature": [
+    {"citekey": "zhang2024policy", "title": "多层评估框架下的教育政策执行效果研究", "relevance": "支撑过程性评价核心论点"}
+  ],
+  "retrieved_style_examples": [],
+  "retrieved_bad_examples": [
+    {"note_id": "bad-example-001", "summary": "双重模板结构 + 抽象名词堆叠"}
+  ],
+  "retrieved_revision_history": [],
+  "privacy_filter_result": {
+    "passed": true,
+    "excluded_sources": []
+  },
+  "allowed_model_inputs": ["project_memory", "writing_rules", "retrieved_literature", "retrieved_bad_examples", "task_summary", "chapter_function"],
+  "excluded_sensitive_sources": [],
+  "source_manifest": [
+    {"source_type": "obsidian_note", "source_id": "lit-2024-zhang-policy-evaluation", "confidentiality": "private"},
+    {"source_type": "zotero_reference", "source_id": "zhang2024policy", "confidentiality": "public"}
+  ]
+}

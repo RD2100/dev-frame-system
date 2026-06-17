@@ -1,0 +1,15 @@
+# Governance expected files — glob patterns for manifest coverage check.
+# Used by Update-GovernanceManifest.ps1 and Test-GovernanceDrift.ps1.
+# Glob patterns resolved via Get-ChildItem -Recurse, NOT shell expansion.
+rules/*.md
+hooks/*.ps1
+hooks/*.json
+.ai/policy.yaml
+.github/workflows/*.yml
+scripts/**/*.ps1
+scripts/**/*.psm1
+governance/*.txt
+schemas/agent-runtime/*.json
+docs/agent-runtime/*.md
+batches/*.json
+AGENTS.md

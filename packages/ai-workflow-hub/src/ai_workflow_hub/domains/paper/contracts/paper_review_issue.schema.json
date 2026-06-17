@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperReviewIssue",
+  "type": "object",
+  "required": ["issue_id", "issue_type", "severity", "evidence", "blocking"],
+  "properties": {
+    "issue_id": {"type": "string"},
+    "issue_type": {"type": "string", "enum": ["structure", "argument", "citation", "expression", "format", "privacy", "methodology"]},
+    "severity": {"type": "string", "enum": ["critical", "major", "minor", "info"]},
+    "location": {"type": "object", "properties": {"chapter": {"type": "string"}, "section": {"type": "string"}, "paragraph_index": {"type": "integer"}}},
+    "evidence": {"type": "string", "description": "支撑此 issue 的具体证据"},
+    "recommendation": {"type": "string"},
+    "blocking": {"type": "boolean"},
+    "human_required": {"type": "boolean", "default": false}
+  }
+}

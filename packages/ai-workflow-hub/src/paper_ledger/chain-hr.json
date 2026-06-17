@@ -1,0 +1,17 @@
+[
+  {
+    "issue_id": "a21-iss-001",
+    "issue_type": "citation",
+    "severity": "major",
+    "blocking": true,
+    "evidence": "Section 3 cites [42] but it does not appear",
+    "recommendation": "Add reference [42]",
+    "human_required": true,
+    "status": "open",
+    "source": "writelab_adapter",
+    "evidence_pack_ref": "",
+    "created_at": "2026-06-12T00:58:23.299457+00:00",
+    "updated_at": "2026-06-12T00:58:23.299457+00:00",
+    "resolution_note": ""
+  }
+]

@@ -1,0 +1,25 @@
+pipeline_id: devframe_opencode_integration
+version: 1
+description: "Control Plane pipeline for dev-frame-opencode tasks"
+
+global_invariants:
+  guard_removal_approved: false
+  evidence_cleanup_approved: false
+
+stages:
+  - id: authorization
+    type: authorization
+    requires_gpt_acceptance: true
+  - id: execution
+    type: execution_closure
+    depends_on: authorization
+    requires_gpt_acceptance: true
+  - id: audit
+    type: audit
+    depends_on: execution
+    requires_gpt_acceptance: false
+
+recovery_policy:
+  max_retries_per_stage: 3
+  cooldown_seconds: 30
+  on_exhausted: human_required

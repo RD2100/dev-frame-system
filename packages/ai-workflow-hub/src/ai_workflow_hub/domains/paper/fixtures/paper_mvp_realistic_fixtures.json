@@ -1,0 +1,41 @@
+{
+  "fixture_status": "synthetic_offline",
+  "paper_structure_fixture": {
+    "sections": ["Introduction", "Method", "Evaluation", "Discussion"],
+    "risk": "missing citation bridge between Method and Evaluation"
+  },
+  "paragraph_revision_fixture": {
+    "paragraph_function": "evidence",
+    "revision_direction": "Add source-backed transition; do not fabricate citation."
+  },
+  "citation_risk_fixture": {
+    "claim": "Prior workflow studies show improved evidence review.",
+    "source_level": "NEEDS_VERIFICATION"
+  },
+  "zotero_metadata_fixture": "zotero_metadata_sample.json",
+  "obsidian_note_fixture": "obsidian_note_sample.md",
+  "rag_retrieval_fixture": {
+    "source_id": "zotero-fixture:Chen2026MetadataGrounding",
+    "source_level": "VERIFIED_SOURCE",
+    "privacy_level": "public_metadata"
+  },
+  "unsafe_citation_fixture": {
+    "claim": "Doe 2099 proves the method.",
+    "expected_source_level": "SOURCE_NOT_AVAILABLE"
+  },
+  "privacy_boundary_fixture": {
+    "contains_real_paper_full_text": false,
+    "contains_private_note_raw": false,
+    "runtime_authorization_required": true
+  },
+  "writelab_adapter_fixture": "writelab_fixtures/mock_manifest.json",
+  "reviewer_verdict_fixture": {
+    "reviewer_pack_is_final_verdict": false,
+    "final_status": "needs_more_evidence"
+  },
+  "human_required_fixture": {
+    "real_zotero": "HUMAN_REQUIRED",
+    "real_obsidian_vault": "HUMAN_REQUIRED",
+    "live_writelab": "HUMAN_REQUIRED"
+  }
+}

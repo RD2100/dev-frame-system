@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ObsidianNoteMetadata",
+  "type": "object",
+  "required": ["note_id", "type", "project_id", "status"],
+  "properties": {
+    "note_id": {"type": "string"},
+    "type": {"type": "string", "enum": ["project_memory", "literature_note", "writing_rule", "bad_example", "style_example", "revision_history"]},
+    "project_id": {"type": "string"},
+    "paper_id": {"type": "string"},
+    "chapter": {"type": ["string", "null"], "description": "章节标识，null 表示适用于所有章节"},
+    "tags": {"type": "array", "items": {"type": "string"}},
+    "status": {"type": "string", "enum": ["active", "archived", "deprecated"]},
+    "confidentiality": {"type": "string", "enum": ["public", "private", "sensitive"], "default": "private"},
+    "citation_allowed": {"type": "boolean", "default": true},
+    "source_path": {"type": "string"},
+    "updated_at": {"type": "string", "format": "date-time"}
+  }
+}

@@ -1,0 +1,91 @@
+# Context Compression Contract
+# Version: 1.0.0
+# Defines the compression layer API and invariants.
+
+contract_version: "1.0.0"
+contract_id: "context-compression-v1"
+
+## Pipeline Stages
+pipeline:
+  - stage: segment
+    description: "Split input by task_id / review_run_id boundary."
+    input: ["PROJECT_HISTORY.md", "docs/WORKFLOW_AUDIT_LEDGER.yaml", "_reports/*/*BINDING_RECORD.yaml", "evidence_packs/*/GPT_REVIEW_RESULT*.txt"]
+    output: "List[Segment] where each segment has task_id, source, raw_text"
+  - stage: classify
+    description: "Tag each segment as decision / blocker / fix / lesson / noise / superseded."
+    output: "List[ClassifiedSegment]"
+  - stage: deduplicate
+    description: "Merge multiple review rounds for the same task_id into one lifecycle."
+    output: "List[MergedLifecycle]"
+  - stage: supersede
+    description: "When blocked superseded by accepted, keep root cause + final fix only."
+    output: "List[FinalLifecycle]"
+  - stage: privacy_filter
+    description: "Block paper full text, raw transcript, private text, secrets from output."
+    output: "List[SafeLifecycle]"
+  - stage: emit
+    description: "Write BOOT_CONTEXT.md, memory/index.md, memory/tasks/*.md, memory/knowledge/*.md."
+    output: "Generated files"
+
+## Invariants
+invariants:
+  - "BOOT_CONTEXT.md must be 3000-6000 Chinese characters."
+  - "Task memory entries must be 300-800 characters each."
+  - "Knowledge files must be 500-1200 characters each."
+  - "No paper full text in any output."
+  - "No raw transcript in any output."
+  - "No private user text in any output."
+  - "No secrets/tokens/api_keys in any output."
+  - "All outputs must pass privacy guard validation."
+
+## Privacy Guard Rules
+privacy_guard:
+  fail_closed_patterns:
+    - "real_paper_full_text"
+    - "raw_paper_text"
+    - "private_user_text"
+    - "raw_transcript"
+    - "cookie"
+    - "session"
+    - "api_key"
+    - "secret"
+    - "token"
+    - "博士论文正文"
+    - "用户论文全文"
+    - "外部上传"
+  allowed_content_patterns:
+    - "task_id"
+    - "review_run_id"
+    - "overall_judgment"
+    - "evidence_pack_sha256"
+    - "commit hash"
+    - "安全边界"
+    - "流程教训"
+
+## Output Schemas
+boot_context_sections:
+  - "项目身份"
+  - "三层架构"
+  - "当前阶段"
+  - "最近 accepted 任务"
+  - "当前开放风险"
+  - "下一步推荐任务"
+  - "绝对安全边界"
+  - "冷启动读取顺序"
+
+memory_index_fields:
+  - "topic"
+  - "related_task_ids"
+  - "source_files"
+  - "last_updated"
+  - "read_when"
+
+task_memory_fields:
+  - "task_id"
+  - "task_name"
+  - "status"
+  - "review_run_id"
+  - "key_blockers"
+  - "final_fix"
+  - "evidence_pack"
+  - "next_relevance"

@@ -1,0 +1,38 @@
+{
+  "handoff_id": "wl-handoff-20260611-001",
+  "writelab_version": "0.1.0-mock",
+  "created_at": "2026-06-11T10:00:00Z",
+  "task_id": "paper-task-a5-dryrun",
+  "privacy_attestation": {
+    "no_full_text": true,
+    "no_api_keys": true,
+    "no_personal_identity": true
+  },
+  "files": [
+    {
+      "path": "diagnosis/expression_results.json",
+      "sha256": "c7fbdc576399b3aecfd4da60886d1425e27dfe16a6fcad2b5d6fcf6df42341e3",
+      "size_bytes": 4219
+    },
+    {
+      "path": "diagnosis/paragraph_results.json",
+      "sha256": "c1be46d34cb81f4e9c8f1c5faea75bc11c48da8bccbb410edbf3b614df9efcab",
+      "size_bytes": 5144
+    },
+    {
+      "path": "evidence/statistics.json",
+      "sha256": "b14734bd9c0ab65bc825e647c9aef0ab9989fdf2bef65d138986678ddd4ef093",
+      "size_bytes": 70
+    },
+    {
+      "path": "evidence/highlighted_text.json",
+      "sha256": "ccd73c821058a69d5fb00159f22cea93c9d522706b2bce41c9695735f448bead",
+      "size_bytes": 80
+    },
+    {
+      "path": "rules/applied_rules.yaml",
+      "sha256": "a877b83f9b70484137d2d65558cef7f48d1b46bc53a05b0a48fa035ec36dbe91",
+      "size_bytes": 122
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+# Governance expected files — customize for your project.
+# Glob patterns resolved via Get-ChildItem -Recurse.
+# Add patterns for all governance-critical files in your project.
+#
+# Minimum recommended:
+rules/*.md
+AGENTS.md
+.ai/policy.yaml
+
+# Hooks and config (if using ci-preflight template):
+hooks/*.ps1
+hooks/*.json
+
+# Workflows:
+.github/workflows/*.yml
+
+# Scripts:
+scripts/**/*.ps1
+scripts/**/*.psm1
+
+# Governance data:
+governance/*.txt
+
+# Schemas (if applicable):
+schemas/**/*.json
+
+# Documentation:
+docs/**/*.md

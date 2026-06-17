@@ -1,0 +1,15 @@
+{
+  "_comment": "Zotero 参考文献条目示例 - 虚构内容，用于测试 Context Pack 构建和引用验证流程",
+  "citekey": "zhang2024policy",
+  "title": "多层评估框架下的教育政策执行效果研究",
+  "authors": ["张明华", "李晓红"],
+  "year": 2024,
+  "publication": "教育研究",
+  "item_type": "journal_article",
+  "doi": "10.xxxx/example.2024.001",
+  "url": "https://example.org/papers/zhang2024",
+  "tags": ["education-policy", "evaluation", "cssci"],
+  "local_pdf_ref": "zotero/storage/ZHANG2024/zhang2024policy.pdf",
+  "citation_allowed": true,
+  "confidentiality": "public"
+}
