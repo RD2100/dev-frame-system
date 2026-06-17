@@ -21,6 +21,7 @@
   <img alt="Focus" src="https://img.shields.io/badge/focus-code%20quality%20%2B%20direction-00a884" />
   <img alt="Agents" src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20CLI-6f42c1" />
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20PowerShell-24506b" />
+  <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-green" />
 </p>
 
 ```text
@@ -59,20 +60,6 @@ dev-frame-system gives you a portable operating layer for agent-assisted develop
 - **Evidence-based review**: use ExecutionReport, evidence indexes, review gates, and negative fixtures to prevent fake success.
 - **Reusable bootstrap**: install the same operating layer into another project with a PowerShell bootstrap.
 - **External-brain binding**: use `/bindChrome` to tie a stable browser AI session to the current project.
-
-## Why This Repo Is New
-
-The original working system used four separate source repositories as Git submodules. That was useful during exploration, but it made the public repository feel like a storage room: too many histories, too many process artifacts, and too much friction for a new reader.
-
-This repository is the cleaned distribution:
-
-- no Git submodules;
-- no copied Git histories from the old modules;
-- no evidence dumps, browser profiles, report archives, or paper delivery artifacts;
-- core reusable modules are integrated under `packages/`;
-- public docs, rules, schemas, and bootstrap templates live at the top level.
-
-See [docs/module-sources.md](docs/module-sources.md) for the curated source mapping.
 
 ## Quick Start
 
@@ -170,8 +157,6 @@ Use dev-frame-system if you already use AI coding tools but keep running into th
 - repeated mistakes disappear into chat history;
 - you want better code review pressure without adding another heavy platform.
 
-## Current Status
+## License
 
-This is the first clean public snapshot of the system. The main operating documents, schemas, rules, bootstrap template, and four reusable module surfaces are included directly in the repository.
-
-Open-source license selection is intentionally left for owner confirmation before a `LICENSE` file is added.
+Licensed under the [Apache License 2.0](LICENSE).

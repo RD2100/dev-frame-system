@@ -21,6 +21,7 @@
   <img alt="核心关注" src="https://img.shields.io/badge/focus-code%20quality%20%2B%20direction-00a884" />
   <img alt="Agents" src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20CLI-6f42c1" />
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20PowerShell-24506b" />
+  <img alt="许可证" src="https://img.shields.io/badge/license-Apache--2.0-green" />
 </p>
 
 ```text
@@ -59,20 +60,6 @@ dev-frame-system 提供一套可迁移的 agent 研发操作层：
 - **证据审查**：用 ExecutionReport、证据索引、审查门禁和负面夹具防止“假完成”。
 - **一键引导**：用 PowerShell bootstrap 把同一套操作层部署到其他项目。
 - **外置大脑绑定**：用 `/bindChrome` 把稳定的网页版 AI 会话绑定到当前项目。
-
-## 为什么新开这个仓库
-
-原来的工作系统通过四个 Git submodule 引用不同源仓库。这在探索阶段有用，但公开展示时会显得像杂物间：历史太多、过程材料太多、新用户理解成本太高。
-
-这个仓库是清理后的发行版：
-
-- 不再使用 Git submodule；
-- 不导入旧模块的 Git 历史；
-- 不包含证据包、浏览器 profile、报告归档或论文交付物；
-- 四个核心模块以精选快照集成到 `packages/`；
-- 面向用户的文档、规则、schema 和 bootstrap 模板放在顶层。
-
-模块来源见 [docs/module-sources.md](docs/module-sources.md)。
 
 ## 快速开始
 
@@ -170,8 +157,6 @@ dev-frame-system/
 - 重复踩坑沉没在聊天记录里；
 - 想要更强的代码审查压力，但不想再引入一个重平台。
 
-## 当前状态
+## 许可证
 
-这是系统的第一版干净公开快照。核心运行文档、schema、规则、bootstrap 模板和四个可复用模块已经直接集成在仓库中。
-
-开源许可证需要仓库 owner 最终确认后再添加 `LICENSE` 文件。
+本项目使用 [Apache License 2.0](LICENSE)。
