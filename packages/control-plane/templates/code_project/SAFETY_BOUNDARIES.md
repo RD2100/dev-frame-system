@@ -1,23 +1,24 @@
-# Safety Boundaries — {{PROJECT_NAME}}
+# Safety Boundaries
 
-## 禁止提交
+## Do Not Commit
 
-- `.env`, `.env.*`（环境变量）
-- `private/`, `workspace/`（私有工作区）
-- `evidence_packs/`（证据包）
-- `browser_profile/`, `sessions/`, `cookies/`（会话数据）
-- `*.docx`, `*.pdf`（文档文件）
-- `*.zip`（压缩包）
-- `*.log`（日志文件）
+- `.env` or `.env.*`
+- `private/` or local workspaces
+- `evidence_packs/`
+- `browser_profile/`, `sessions/`, or `cookies/`
+- generated archives such as `*.zip`
+- raw logs that may contain secrets or local-only state
 
-## 代码变更边界
+## Change Boundaries
 
-- 所有代码变更需要 GPT 授权
-- Guard 不可移除（guard_removal_approved: false）
-- 证据不可清理（evidence_cleanup_approved: false）
-- 生产晋升需独立授权
+- Risky implementation work needs external-brain authorization.
+- Guards must not be removed while `guard_removal_approved` is false.
+- Evidence must not be cleaned while `evidence_cleanup_approved` is false.
+- Production promotion requires separate explicit approval.
 
-## 审查要求
+## Review Requirements
 
-- 每次提交前 `git diff --cached` 检查
-- 发现违规 → 立即回滚
+- Capture the exact commands used for verification.
+- Include changed files, evidence, known gaps, and reviewer focus in the final
+  ExecutionReport.
+- If a boundary is violated, stop and restore the last safe state.

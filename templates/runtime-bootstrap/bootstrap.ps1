@@ -113,6 +113,13 @@ New-FromTemplate "AGENTS.template.md" "AGENTS.md" "Agent entry point"
 New-FromTemplate "capability-inventory.template.md" "docs/agent-runtime/capability-inventory.md" "Capability inventory"
 New-FromTemplate "tool-policy.template.md" "docs/agent-runtime/tool-policy.md" "Tool policy"
 
+if ($DryRun) {
+    Write-Output "[DRY-RUN] Generate: governance-manifest.template.md -> docs/agent-runtime/governance-manifest.md (Governance manifest (hash-locked))"
+    Write-Output "`n=== Step 3: Verification ==="
+    Write-Output "[DRY-RUN] Done."
+    exit 0
+}
+
 # --- Governance Manifest (hash-locked, generated after all files exist) ---
 $p0Hash = (Get-FileHash (Join-Path $ProjectRoot "rules\core.md") -Algorithm SHA256).Hash
 $sadpHash = (Get-FileHash (Join-Path $ProjectRoot "docs\agent-runtime\sub-agent-dispatch-protocol.md") -Algorithm SHA256).Hash
@@ -127,7 +134,6 @@ $ManifestPlaceholders = @{
 New-FromTemplate "governance-manifest.template.md" "docs/agent-runtime/governance-manifest.md" "Governance manifest (hash-locked)"
 
 Write-Output "`n=== Step 3: Verification ==="
-if ($DryRun) { Write-Output "[DRY-RUN] Done."; exit 0 }
 
 $unresolved = Select-String -Path (Join-Path $ProjectRoot "AGENTS.md") -Pattern "\{\{" -SimpleMatch 2>$null
 if ($unresolved) { Write-Error "FAIL: Unresolved placeholders in AGENTS.md" } else { Write-Output "[OK] AGENTS.md: clean" }

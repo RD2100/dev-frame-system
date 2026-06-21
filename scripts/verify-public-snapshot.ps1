@@ -25,15 +25,21 @@ $requiredPaths = @(
     "README.md",
     "README.zh-CN.md",
     "AGENTS.md",
+    ".github\workflows\release-verify.yml",
     "docs\agent-runtime",
     "docs\assets\devframe-system-banner.svg",
     "docs\module-sources.md",
+    "docs\status\release-readiness.md",
+    "docs\status\reviewer-index.md",
     "packages\agent-acceptance",
     "packages\ai-workflow-hub",
     "packages\control-plane",
     "packages\test-frame",
     "rules",
     "schemas",
+    "scripts\verify-control-plane-wheel.ps1",
+    "scripts\verify-public-snapshot.ps1",
+    "scripts\verify-release.ps1",
     "templates\runtime-bootstrap"
 )
 
@@ -50,6 +56,8 @@ $forbiddenNames = @(
     "_evidence",
     "_reports",
     "artifacts",
+    "build",
+    "dist",
     "evidence",
     "reports",
     "runs"
@@ -64,6 +72,29 @@ $forbiddenExtensions = @(
     ".pyo",
     ".bak"
 )
+
+$ignoredGeneratedDirs = @(
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".mypy_cache"
+)
+
+function Test-IsUnderIgnoredGeneratedDir {
+    param(
+        [string]$BasePath,
+        [string]$TargetPath
+    )
+
+    $relative = Get-RelativeSnapshotPath -BasePath $BasePath -TargetPath $TargetPath
+    $parts = $relative -split '[\\/]'
+    foreach ($part in $parts) {
+        if ($ignoredGeneratedDirs -contains $part) {
+            return $true
+        }
+    }
+    return $false
+}
 
 $missing = New-Object System.Collections.Generic.List[string]
 foreach ($path in $requiredPaths) {
@@ -84,6 +115,10 @@ Get-ChildItem -LiteralPath $rootPath -Recurse -Force | ForEach-Object {
     }
 
     $relative = Get-RelativeSnapshotPath -BasePath $rootPath -TargetPath $_.FullName
+
+    if (Test-IsUnderIgnoredGeneratedDir -BasePath $rootPath -TargetPath $_.FullName) {
+        return
+    }
 
     if ($forbiddenNames -contains $_.Name) {
         $violations.Add("forbidden name: $relative")
@@ -106,6 +141,10 @@ if ($violations.Count -gt 0) {
 $jsonFailures = New-Object System.Collections.Generic.List[string]
 $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
 Get-ChildItem -LiteralPath $rootPath -Recurse -Filter "*.json" -File | ForEach-Object {
+    if (Test-IsUnderIgnoredGeneratedDir -BasePath $rootPath -TargetPath $_.FullName) {
+        return
+    }
+
     try {
         $jsonText = [System.IO.File]::ReadAllText($_.FullName, $utf8)
         if ($jsonText.Length -gt 0 -and $jsonText[0] -eq [char]0xFEFF) {

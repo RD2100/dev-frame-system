@@ -5,13 +5,13 @@
 <h3 align="center">Use GPT Web, or any capable web AI, as an external brain for every software tool and coding agent you already use.</h3>
 
 <p align="center">
-  English | <a href="README.zh-CN.md">简体中文</a>
+  English | <a href="README.zh-CN.md">Simplified Chinese</a>
 </p>
 
 <p align="center">
-  <a href="#why-this-exists">Why this exists</a> ·
-  <a href="#what-it-does">What it does</a> ·
-  <a href="#quick-start">Quick start</a> ·
+  <a href="#why-this-exists">Why this exists</a> |
+  <a href="#what-it-does">What it does</a> |
+  <a href="#quick-start">Quick start</a> |
   <a href="#repository-layout">Repository layout</a>
 </p>
 
@@ -27,6 +27,7 @@
 ```text
 /rdinit                 # initialize the external-brain operating layer
 /bindChrome <url>       # bind GPT Web, DeepSeek, Doubao, or another web AI URL
+/rdgoal <project> <goal> # route a goal through the total-control loop
 ```
 
 **The core question is not "how do we build another governance framework?" Many people are already doing that. The real question is: how can we improve code quality and direction control for free, or as close to free as possible, with the simplest workflow?**
@@ -60,6 +61,7 @@ dev-frame-system gives you a portable operating layer for agent-assisted develop
 - **Evidence-based review**: use ExecutionReport, evidence indexes, review gates, and negative fixtures to prevent fake success.
 - **Reusable bootstrap**: install the same operating layer into another project with a PowerShell bootstrap.
 - **External-brain binding**: use `/bindChrome` to tie a stable browser AI session to the current project.
+- **Total-control orchestration**: use `rdgoal` to coordinate several project-local workflows while logging controller decisions, snapshots, and final review points.
 
 ## Quick Start
 
@@ -74,6 +76,13 @@ Inspect the public snapshot:
 
 ```powershell
 .\scripts\verify-public-snapshot.ps1
+```
+
+Before cutting a local release or sharing the control-plane package, run the
+release verification entrypoint:
+
+```powershell
+.\scripts\verify-release.ps1
 ```
 
 Bootstrap the operating layer into another project:
@@ -95,6 +104,18 @@ After bootstrap, bind your browser AI session from your agent environment:
 /bindChrome https://chatgpt.com/...
 ```
 
+Optionally install the control-plane CLI and route a project through `rdgoal`:
+
+```powershell
+cd .\packages\control-plane
+pip install -e .
+rdgoal "D:\my-project" "Build the MVP" --digest
+```
+
+`/rdgoal` is the human-facing slash entrypoint. In a shell, use the installed
+`rdgoal` command. `devframe rdgoal` remains available as the compatibility
+form for scripts that already use the umbrella CLI.
+
 Then run work through the external-brain loop:
 
 1. Define the goal, risk, scope, and acceptance criteria in the web AI.
@@ -104,12 +125,13 @@ Then run work through the external-brain loop:
 5. Accept only when evidence passes the review gates.
 6. Feed reusable lessons back into the project memory.
 
-## Two Skill Entrypoints
+## Three Skill Entrypoints
 
 | Skill | Purpose | Result |
 |---|---|---|
 | `/rdinit` | Initialize a repository with dev-frame-system assets | `AGENTS.md`, rules, schemas, tool policy, capability inventory, and runtime docs |
 | `/bindChrome <url>` | Bind a browser AI session to the current project | A stable external-brain session tied to local project context |
+| `/rdgoal <project> <goal>` | Route a project goal through the total-control controller | Project contract, controller decision, dispatch packet, worker report, and runtime digest |
 
 Provider note: GPT Web is the default reference path because it is widely available and good at long-form coordination. The provider is replaceable; the contract is not. If another web AI cannot preserve project context, coordinate tasks, and review evidence, use it as a secondary reviewer rather than the primary external brain.
 
@@ -128,23 +150,23 @@ These modules were integrated as a curated snapshot. Their old Git histories and
 
 ```text
 dev-frame-system/
-├── README.md
-├── README.zh-CN.md
-├── AGENTS.md
-├── docs/
-│   ├── agent-runtime/
-│   ├── assets/
-│   └── module-sources.md
-├── packages/
-│   ├── agent-acceptance/
-│   ├── ai-workflow-hub/
-│   ├── control-plane/
-│   └── test-frame/
-├── rules/
-├── schemas/
-├── scripts/
-└── templates/
-    └── runtime-bootstrap/
+|-- README.md
+|-- README.zh-CN.md
+|-- AGENTS.md
+|-- docs/
+|   |-- agent-runtime/
+|   |-- assets/
+|   `-- module-sources.md
+|-- packages/
+|   |-- agent-acceptance/
+|   |-- ai-workflow-hub/
+|   |-- control-plane/
+|   `-- test-frame/
+|-- rules/
+|-- schemas/
+|-- scripts/
+`-- templates/
+    `-- runtime-bootstrap/
 ```
 
 ## Who Should Use This

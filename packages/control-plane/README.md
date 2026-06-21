@@ -1,93 +1,100 @@
-# DevFrame Control Plane — 项目入口
+# DevFrame Control Plane
 
-> **Agent 冷启动：请按顺序读取以下文件。读完即可无缝接手，无需聊天记录。**
->
-> 1. `D:\agent-acceptance\BOOT_CONTEXT.md` — 冷启动入口（3K 字符，60 秒可读完）
-> 2. `D:\agent-acceptance\memory/index.md` — 记忆索引（按需检索）
-> 3. `PROJECT_HISTORY.md` — 控制平面完整历史
->
-> 不再使用 HANDOFF 文档。Web GPT = 审查者，Claude Code = 执行者。
-> CLI: `python devframe_cli.py status` 查看跨仓库健康状态。
+The control plane is the local CLI and Python package for dev-frame-system. It
+keeps workflow execution, handoff generation, runtime probes, and rdgoal
+orchestration in a small installable package.
 
----
+This package is distributed inside the public `RD2100/dev-frame-system`
+repository. It should not depend on private handoff logs, browser profiles,
+local runtime state, or old `devframe-control-plane` checkout paths.
 
-DevFrame Control Plane 是 DevFrame 三层工作流治理体系的**整合入口**，用声明式 pipeline、runner、state machine、evidence pack、submission/CDP adapter、CLI 和 context handoff protocol，把多阶段 Agent/GPT 工作流变成可冷启动、可迁移、可审核、可交接的 evidence-first 框架。
+## Install
 
-## 当前状态
+From the repository root:
 
-| 项目 | 值 |
-|------|-----|
-| release | v0.1.0-rc |
-| feature_complete | true |
-| context_handoff_protocol | standardized |
-| T3 handoff flow | accepted |
-| tests | 55/55 PASS |
-| doctor | 9/9 PASS |
-
-## 已完成的流水线能力
-
-- YAML pipeline spec — 声明式定义阶段、依赖、证据要求
-- runner dry-run execution — 解析流水线、验证结构、打印阶段序列
-- state machine / safety checks — 强制授权→执行→闭合不变式
-- submission adapter — 提交抽象，dry-run 模式
-- CDP adapter / Playwright bridge — 受控 CDP 接口，live 默认禁用，需显式安全标志
-- CLI — `devframe init/doctor/run/handoff` 命令组
-- context handoff generator / verifier — 生成、验证、交接上下文的标准化协议
-- `devframe handoff transfer --to` — dry-run 文件附件传输协议
-- paper_iteration 模板基础
-
-## 快速开始
-
-```bash
-git clone https://github.com/RD2100/devframe-control-plane.git
-cd devframe-control-plane
-
-# Windows
-python -m venv .venv
-.venv\Scripts\activate
-
-# Linux / macOS
-python -m venv .venv
-source .venv/bin/activate
-
-pip install -e .
-
-# 检查项目健康状态
-devframe doctor
-
-# 基于模板初始化新项目
-devframe init code_project my-project
-
-# 干运行流水线（不改变状态）
-devframe run --pipeline pipelines/minimal.yaml
-
-# 生成交接文档骨架（GPT 填充实质内容）
-devframe handoff generate
-
-# 验证交接文档
-devframe handoff validate HANDOFF.md
-
-# 干运行交接传输（文件附件协议）
-devframe handoff transfer --to https://chatgpt.com/c/<id>
+```powershell
+cd .\packages\control-plane
+python -m pip install -e .
 ```
+
+After installation, the `devframe` command is available:
+
+```powershell
+devframe doctor
+devframe init code_project D:\tmp\demo-project
+devframe run --pipeline pipelines\example_pipeline.yaml
+```
+
+The focused total-control entrypoint is also installed:
+
+```powershell
+rdgoal "D:\tmp\demo-project" "Build the MVP" --digest
+```
+
+## rdgoal
+
+`rdgoal` is the total-control orchestration entry point. It registers a project,
+creates or loads a project contract, classifies the next operation, writes a
+dispatch packet, and records controller state in the local runtime directory.
+In external-brain conversations this is the `/rdgoal <project> <goal>` slash
+entrypoint; in a shell it is the installed `rdgoal` console script.
+
+```powershell
+rdgoal "D:\my-project" "Build the MVP" --digest
+```
+
+For local destructive operations, pass explicit targets so rdgoal can snapshot
+them before dispatch:
+
+```powershell
+rdgoal "D:\my-project" "Remove the obsolete module" `
+  --operation "delete obsolete local module" `
+  --target "src\old_module.py" `
+  --digest
+```
+
+Runtime state is written outside the repository by default under
+`%USERPROFILE%\.devframe-runtime`. Set `DEVFRAME_RUNTIME_DIR` when you need a
+different local runtime location. Project contracts are written to
+`<project>\rules\project-contracts` unless `--contracts-dir` is provided.
+
+After a worker runs, inspect persisted decisions and ExecutionReports with:
+
+```powershell
+rdgoal digest
+```
+
+Worker commands return exit code `0` only for `passed` or `completed` reports.
+`blocked`, `failed`, and unknown report states return non-zero so automation
+cannot accidentally treat a held packet as success.
+
+`--apply-rdinit` can run the full bootstrap only from a source checkout that
+contains the root `rules/`, `schemas/`, and `docs/agent-runtime/` assets. Wheel
+installs still create contracts and dispatch packets, but report
+`bootstrap_unavailable` instead of failing when those full bootstrap assets are
+not packaged.
+
+## Verification
+
+From the repository root:
+
+```powershell
+python -m pytest -q
+powershell -ExecutionPolicy Bypass -File scripts\verify-public-snapshot.ps1
+```
+
+The root `pytest.ini` points pytest at this package's tests and ensures the
+in-repo `control_plane` package is imported even if another editable checkout is
+installed on the machine.
 
 ## Safety Boundaries
 
-- live CDP 默认禁用
-- live CDP / GPT submission / state mutation 需要单独授权
-- 禁止直接移除 guard
-- 禁止清理 evidence
-- 不导出 cookie / session / browser profile
-- 不确定时 fail-closed
+- Live browser/CDP submission remains opt-in.
+- Runtime state, rollback snapshots, and report summaries must stay outside the
+  public repository.
+- Secret exposure is a hard stop.
+- External irreversible effects are prepared as drafts, not executed live.
 
-## 模板
+## License
 
-| 模板 | 用途 |
-|------|------|
-| `code_project` | 软件工程项目流水线（授权 → 执行 → 证据 → 审查 → 闭合） |
-| `paper_iteration` | 论文迭代审查模板（版本追踪 → 差异对比 → 审查规范） |
-| `context_handoff` | 跨会话上下文交接模板 |
-
-## 许可证
-
-MIT
+Apache License 2.0, inherited from the repository root.

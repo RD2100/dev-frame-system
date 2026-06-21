@@ -26,6 +26,7 @@ setup(
     entry_points={
         "console_scripts": [
             "devframe=control_plane.cli:main",
+            "rdgoal=control_plane.rdgoal_cli:main",
         ],
     },
     python_requires=">=3.10",

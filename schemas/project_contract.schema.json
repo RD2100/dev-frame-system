@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rd2100.devframe/schemas/project-contract",
+  "title": "rdgoal Project Contract",
+  "description": "Project-level autonomy contract for total-control multi-project orchestration.",
+  "type": "object",
+  "required": ["project_id", "goal", "autonomy_level", "decision_policy", "prototype_bias", "stop_lines"],
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "title": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "non_goals": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "autonomy_level": {
+      "type": "string",
+      "enum": ["total_control", "supervised", "green_only"]
+    },
+    "decision_policy": {
+      "type": "object",
+      "required": [
+        "direction_choice",
+        "unclear_requirement",
+        "destructive_local_change",
+        "architecture_choice",
+        "external_side_effect"
+      ],
+      "properties": {
+        "direction_choice": {
+          "type": "string",
+          "enum": ["choose_recommended_path"]
+        },
+        "unclear_requirement": {
+          "type": "string",
+          "enum": ["infer_minimal_prototype", "draft_only"]
+        },
+        "destructive_local_change": {
+          "type": "string",
+          "enum": ["snapshot_then_execute", "draft_only"]
+        },
+        "architecture_choice": {
+          "type": "string",
+          "enum": ["prefer_existing_project_style", "infer_minimal_prototype"]
+        },
+        "external_side_effect": {
+          "type": "string",
+          "enum": ["draft_only"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "prototype_bias": {
+      "type": "object",
+      "required": ["prefer_working_mvp", "prefer_existing_stack", "leave_adjustment_notes"],
+      "properties": {
+        "prefer_working_mvp": { "type": "boolean" },
+        "prefer_existing_stack": { "type": "boolean" },
+        "leave_adjustment_notes": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "stop_lines": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "External or system boundaries that must not be executed live by the controller."
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 3
+    },
+    "owner": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 4000
+    }
+  },
+  "additionalProperties": false
+}
