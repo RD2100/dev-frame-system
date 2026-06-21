@@ -60,7 +60,7 @@ $Placeholders = @{
 # Governance manifest placeholders filled after GEN step
 $ManifestPlaceholders = @{}
 
-$SourceRoot = "D:\agent-acceptance"
+$SourceRoot = Split-Path -Parent (Split-Path -Parent $ScriptDir)
 if (-not (Test-Path $SourceRoot)) { Write-Error "Source not found: $SourceRoot"; exit 1 }
 
 function Copy-Universal($srcRel, $dstRel, $desc) {
@@ -94,7 +94,8 @@ Copy-Universal "docs/agent-runtime/runtime-invariants.md" "docs/agent-runtime/ru
 Copy-Universal "docs/agent-runtime/reviewer-playbook.md" "docs/agent-runtime/reviewer-playbook.md" "Reviewer playbook"
 Copy-Universal "docs/agent-runtime/sub-agent-dispatch-protocol.md" "docs/agent-runtime/sub-agent-dispatch-protocol.md" "SADP protocol"
 Copy-Universal "docs/agent-runtime/dispatch-model-profiles.md" "docs/agent-runtime/dispatch-model-profiles.md" "Model profiles"
-Copy-Universal "docs/agent-runtime/lessons-learned.md" "docs/agent-runtime/lessons-learned.md" "Lessons learned"Copy-Universal "docs/agent-runtime/sub-agent-dispatch-protocol.md" "docs/agent-runtime/sub-agent-dispatch-protocol.md" "Sub-agent dispatch protocol"
+Copy-Universal "docs/agent-runtime/lessons-learned.md" "docs/agent-runtime/lessons-learned.md" "Lessons learned"
+Copy-Universal "docs/agent-runtime/sub-agent-dispatch-protocol.md" "docs/agent-runtime/sub-agent-dispatch-protocol.md" "Sub-agent dispatch protocol"
 Copy-Universal "docs/agent-runtime/negative-acceptance-tests.md" "docs/agent-runtime/negative-acceptance-tests.md" "Negative tests"
 Copy-Universal "docs/agent-runtime/negative-test-fixtures" "docs/agent-runtime/negative-test-fixtures" "30 fixtures"
 # Self-copy templates for re-bootstrap (skip in dry-run)
@@ -112,6 +113,13 @@ New-FromTemplate "AGENTS.template.md" "AGENTS.md" "Agent entry point"
 New-FromTemplate "capability-inventory.template.md" "docs/agent-runtime/capability-inventory.md" "Capability inventory"
 New-FromTemplate "tool-policy.template.md" "docs/agent-runtime/tool-policy.md" "Tool policy"
 
+if ($DryRun) {
+    Write-Output "[DRY-RUN] Generate: governance-manifest.template.md -> docs/agent-runtime/governance-manifest.md (Governance manifest (hash-locked))"
+    Write-Output "`n=== Step 3: Verification ==="
+    Write-Output "[DRY-RUN] Done."
+    exit 0
+}
+
 # --- Governance Manifest (hash-locked, generated after all files exist) ---
 $p0Hash = (Get-FileHash (Join-Path $ProjectRoot "rules\core.md") -Algorithm SHA256).Hash
 $sadpHash = (Get-FileHash (Join-Path $ProjectRoot "docs\agent-runtime\sub-agent-dispatch-protocol.md") -Algorithm SHA256).Hash
@@ -126,7 +134,6 @@ $ManifestPlaceholders = @{
 New-FromTemplate "governance-manifest.template.md" "docs/agent-runtime/governance-manifest.md" "Governance manifest (hash-locked)"
 
 Write-Output "`n=== Step 3: Verification ==="
-if ($DryRun) { Write-Output "[DRY-RUN] Done."; exit 0 }
 
 $unresolved = Select-String -Path (Join-Path $ProjectRoot "AGENTS.md") -Pattern "\{\{" -SimpleMatch 2>$null
 if ($unresolved) { Write-Error "FAIL: Unresolved placeholders in AGENTS.md" } else { Write-Output "[OK] AGENTS.md: clean" }

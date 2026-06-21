@@ -1,19 +1,22 @@
-# Next Task — {{PROJECT_NAME}}
+# Next Task
 
-## 当前任务
+## Current Task
 
-{{CURRENT_TASK_DESCRIPTION}}
+Define the first bounded implementation slice for this project.
 
-## 下一步
+## Next Step
 
-{{NEXT_TASK_DESCRIPTION}}
+Ask the external-brain session to turn the project goal into a TaskSpec with
+scope, risk, acceptance criteria, and verification commands.
 
-## 交付物
+## Deliverables
 
-{{DELIVERABLES}}
+- A TaskSpec or equivalent issue/brief for the next executor.
+- An ExecutionReport after implementation.
+- Verification output that a reviewer can replay.
 
-## 禁止事项
+## Forbidden Shortcuts
 
-- 不跳过授权阶段
-- 不修改 blocked items 除非 GPT 授权
-- 不删除或移动历史证据
+- Do not skip the authorization stage for risky work.
+- Do not change blocked items unless the external brain explicitly approves it.
+- Do not delete or move historical evidence to make a run look cleaner.

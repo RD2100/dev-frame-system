@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rd2100.devframe/schemas/rdgoal-dispatch-packet",
+  "title": "rdgoal Dispatch Packet",
+  "description": "Machine-readable handoff from the total-control controller to a project-local worker.",
+  "type": "object",
+  "required": [
+    "packet_id",
+    "project_id",
+    "project_root",
+    "requirement",
+    "operation",
+    "targets",
+    "decision_mode",
+    "dispatch_ready",
+    "task_spec",
+    "objective_text",
+    "created_at"
+  ],
+  "properties": {
+    "packet_id": { "type": "string", "minLength": 1 },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "project_root": { "type": "string", "minLength": 1 },
+    "requirement": { "type": "string", "minLength": 1 },
+    "operation": { "type": "string", "minLength": 1 },
+    "targets": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "decision_mode": {
+      "type": "string",
+      "enum": [
+        "auto_execute",
+        "snapshot_execute",
+        "recommend_execute",
+        "draft_only",
+        "hard_stop"
+      ]
+    },
+    "dispatch_ready": { "type": "boolean" },
+    "task_spec": {
+      "type": "object",
+      "required": ["task_id", "title", "priority", "status", "description"],
+      "properties": {
+        "task_id": { "type": "string" },
+        "title": { "type": "string" },
+        "priority": { "type": "string" },
+        "status": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "objective_text": { "type": "string", "minLength": 1 },
+    "packet_dir": { "type": "string" },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

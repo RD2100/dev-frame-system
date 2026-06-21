@@ -5,13 +5,13 @@
 <h3 align="center">Use GPT Web, or any capable web AI, as an external brain for every software tool and coding agent you already use.</h3>
 
 <p align="center">
-  English | <a href="README.zh-CN.md">简体中文</a>
+  English | <a href="README.zh-CN.md">Simplified Chinese</a>
 </p>
 
 <p align="center">
-  <a href="#why-this-exists">Why this exists</a> ·
-  <a href="#what-it-does">What it does</a> ·
-  <a href="#quick-start">Quick start</a> ·
+  <a href="#why-this-exists">Why this exists</a> |
+  <a href="#what-it-does">What it does</a> |
+  <a href="#quick-start">Quick start</a> |
   <a href="#repository-layout">Repository layout</a>
 </p>
 
@@ -60,6 +60,7 @@ dev-frame-system gives you a portable operating layer for agent-assisted develop
 - **Evidence-based review**: use ExecutionReport, evidence indexes, review gates, and negative fixtures to prevent fake success.
 - **Reusable bootstrap**: install the same operating layer into another project with a PowerShell bootstrap.
 - **External-brain binding**: use `/bindChrome` to tie a stable browser AI session to the current project.
+- **Total-control orchestration**: use `rdgoal` to coordinate several project-local workflows while logging controller decisions, snapshots, and final review points.
 
 ## Quick Start
 
@@ -74,6 +75,13 @@ Inspect the public snapshot:
 
 ```powershell
 .\scripts\verify-public-snapshot.ps1
+```
+
+Before cutting a local release or sharing the control-plane package, run the
+release verification entrypoint:
+
+```powershell
+.\scripts\verify-release.ps1
 ```
 
 Bootstrap the operating layer into another project:
@@ -93,6 +101,14 @@ After bootstrap, bind your browser AI session from your agent environment:
 
 ```text
 /bindChrome https://chatgpt.com/...
+```
+
+Optionally install the control-plane CLI and route a project through `rdgoal`:
+
+```powershell
+cd .\packages\control-plane
+pip install -e .
+devframe rdgoal "D:\my-project" "Build the MVP" --digest
 ```
 
 Then run work through the external-brain loop:
@@ -128,23 +144,23 @@ These modules were integrated as a curated snapshot. Their old Git histories and
 
 ```text
 dev-frame-system/
-├── README.md
-├── README.zh-CN.md
-├── AGENTS.md
-├── docs/
-│   ├── agent-runtime/
-│   ├── assets/
-│   └── module-sources.md
-├── packages/
-│   ├── agent-acceptance/
-│   ├── ai-workflow-hub/
-│   ├── control-plane/
-│   └── test-frame/
-├── rules/
-├── schemas/
-├── scripts/
-└── templates/
-    └── runtime-bootstrap/
+|-- README.md
+|-- README.zh-CN.md
+|-- AGENTS.md
+|-- docs/
+|   |-- agent-runtime/
+|   |-- assets/
+|   `-- module-sources.md
+|-- packages/
+|   |-- agent-acceptance/
+|   |-- ai-workflow-hub/
+|   |-- control-plane/
+|   `-- test-frame/
+|-- rules/
+|-- schemas/
+|-- scripts/
+`-- templates/
+    `-- runtime-bootstrap/
 ```
 
 ## Who Should Use This

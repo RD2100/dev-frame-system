@@ -1,74 +1,89 @@
-# Quickstart
+# Control Plane Quickstart
 
-## 1. 获取仓库并安装
+This quickstart starts from a clone of `RD2100/dev-frame-system`.
 
-```bash
-git clone https://github.com/RD2100/devframe-control-plane.git
-cd devframe-control-plane
+## 1. Install the CLI
 
-# Windows
+```powershell
+git clone https://github.com/RD2100/dev-frame-system.git
+cd dev-frame-system
+cd .\packages\control-plane
 python -m venv .venv
-.venv\Scripts\activate
-
-# Linux / macOS
-python -m venv .venv
-source .venv/bin/activate
-
-pip install -e .
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e .
 ```
 
-## 2. Doctor 检查
+## 2. Check the package
 
-```bash
+```powershell
 devframe doctor
 ```
 
-预期输出: `Doctor: 9/9 checks passed`
+From the repository root, run the public checks:
 
-## 3. 基于模板初始化项目
-
-```bash
-devframe init code_project my-project
+```powershell
+cd ..\..
+powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
 ```
 
-生成内容：
-```
-my-project/
-  PROJECT_BOOTSTRAP.md
-  CURRENT_STATE.yaml
-  NEXT_TASK.md
-  SAFETY_BOUNDARIES.md
-  PIPELINE.yaml
-  EVIDENCE_SPEC.yaml
-  .gitignore
-  .env.example
+## 3. Initialize a local workflow project
+
+```powershell
+cd .\packages\control-plane
+devframe init code_project D:\tmp\demo-project
 ```
 
-## 4. 运行流水线（dry-run）
+This writes the starter workflow files into the target project.
 
-```bash
-cd my-project
+## 4. Run a dry pipeline
+
+```powershell
+cd D:\tmp\demo-project
 devframe run --pipeline PIPELINE.yaml
 ```
 
-当前 runner 执行 dry-run：解析流水线、验证结构、打印阶段序列，不改变状态。
+The default runner validates and prints the pipeline stages without performing
+live external effects.
 
-## 5. Context Handoff（跨会话交接）
+## 5. Route work through rdgoal
 
-```bash
-# 生成交接文档骨架（GPT/Agent 填充实质内容）
-devframe handoff generate
-
-# 验证交接文档
-devframe handoff validate HANDOFF.md
-
-# 干运行交接传输（文件附件协议，不实际发送）
-devframe handoff transfer --to https://chatgpt.com/c/<conversation-id>
-
-# 干运行新对话 bootstrap
-devframe handoff bootstrap
+```powershell
+devframe rdgoal "D:\tmp\demo-project" "Build the MVP" --digest
 ```
 
-## live CDP / GPT 提交
+`rdgoal` writes controller runtime state outside the public repository. Use
+`--runtime-dir` for an explicit local runtime location and `--contracts-dir` for
+an explicit project-contract directory. Without `--contracts-dir`, the contract
+is created under `D:\tmp\demo-project\rules\project-contracts`.
 
-live CDP 执行和 GPT 提交默认禁用。需要单独授权并显式指定安全标志后才可启用。普通 quickstart 不涉及 live CDP。
+`--apply-rdinit` requires a source checkout with the full root bootstrap assets.
+Wheel installs can still create dispatch packets, but will report
+`bootstrap_unavailable` if those assets are not present.
+
+## 6. Consume a dispatch packet
+
+Use the local dry-run worker first:
+
+```powershell
+devframe rdgoal worker "C:\Users\you\.devframe-runtime\rdgoal-outbox\demo-project\<packet-id>"
+```
+
+When a real runner is ready, use the command worker:
+
+```powershell
+devframe rdgoal worker "C:\Users\you\.devframe-runtime\rdgoal-outbox\demo-project\<packet-id>" `
+  --command python -m your_worker_module
+```
+
+The worker receives `RDGOAL_TASKSPEC_JSON`, `RDGOAL_PACKET_JSON`, and
+`RDGOAL_REPORT_PATH` environment variables and must produce an ExecutionReport.
+Worker exit code is non-zero for `blocked`, `failed`, or unknown report states.
+
+## 7. Review the runtime digest
+
+```powershell
+devframe rdgoal digest
+```
+
+The digest is rebuilt from runtime files, so it can show decisions and worker
+ExecutionReports across separate CLI invocations.
