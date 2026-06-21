@@ -1,8 +1,10 @@
 from pathlib import Path
+import json
 import shutil
 import subprocess
 import uuid
 
+from jsonschema import Draft7Validator
 import yaml
 
 
@@ -12,8 +14,11 @@ RELEASE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release-verify.yml"
 REVIEWER_INDEX_REQUIRED_PATHS = [
     ".github/workflows/release-verify.yml",
     "docs/agent-runtime/rdgoal-total-control.md",
+    "docs/agent-runtime/rdpaper-workflow.md",
+    "docs/agent-runtime/web-ai-adapter-contract.md",
     "docs/status/release-readiness.md",
     "docs/status/reviewer-index.md",
+    "packages/control-plane/templates/paper_iteration/WEB_AI_ADAPTER.yaml",
     "packages/control-plane/control_plane/agent_adapter.py",
     "packages/control-plane/control_plane/backup_guard.py",
     "packages/control-plane/control_plane/decision_engine.py",
@@ -31,8 +36,10 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "pytest.ini",
     "rules/orchestration.md",
     "rules/project-contracts/_template.md",
+    "rules/web-ai-adapters.md",
     "schemas/project_contract.schema.json",
     "schemas/rdgoal_dispatch_packet.schema.json",
+    "schemas/web_ai_adapter.schema.json",
     "scripts/verify-control-plane-wheel.ps1",
     "scripts/verify-release.ps1",
 ]
@@ -42,8 +49,11 @@ PUBLIC_MARKDOWN_DOCS = [
     REPO_ROOT / "packages" / "control-plane" / "QUICKSTART.md",
     REPO_ROOT / "packages" / "control-plane" / "README.md",
     REPO_ROOT / "docs" / "agent-runtime" / "rdgoal-total-control.md",
+    REPO_ROOT / "docs" / "agent-runtime" / "rdpaper-workflow.md",
+    REPO_ROOT / "docs" / "agent-runtime" / "web-ai-adapter-contract.md",
     REPO_ROOT / "docs" / "status" / "release-readiness.md",
     REPO_ROOT / "docs" / "status" / "reviewer-index.md",
+    REPO_ROOT / "rules" / "web-ai-adapters.md",
 ]
 
 
@@ -158,3 +168,24 @@ def test_reviewer_index_mentions_new_public_files():
     for path in REVIEWER_INDEX_REQUIRED_PATHS:
         assert (REPO_ROOT / path).exists(), path
     assert missing == []
+
+
+def test_default_web_ai_adapter_template_matches_schema():
+    schema = json.loads((REPO_ROOT / "schemas" / "web_ai_adapter.schema.json").read_text(encoding="utf-8"))
+    template = yaml.safe_load(
+        (
+            REPO_ROOT
+            / "packages"
+            / "control-plane"
+            / "templates"
+            / "paper_iteration"
+            / "WEB_AI_ADAPTER.yaml"
+        ).read_text(encoding="utf-8")
+    )
+
+    Draft7Validator.check_schema(schema)
+    Draft7Validator(schema).validate(template)
+    assert template["browser"]["provider"] == "chrome"
+    assert template["web_ai"]["provider"] == "chatgpt"
+    assert template["safety"]["allow_browser_profile_export"] is False
+    assert template["manual_fallback"]["enabled"] is True

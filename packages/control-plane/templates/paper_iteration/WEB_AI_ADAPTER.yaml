@@ -1,0 +1,53 @@
+# Web AI Adapter for /rdpaper
+# Chrome + ChatGPT is the reference path, not a hard dependency.
+# Validate this file with schemas/web_ai_adapter.schema.json before use.
+
+version: 1
+
+browser:
+  provider: chrome
+  mode: cdp
+  profile_policy: user_selected
+  endpoint: http://127.0.0.1:9222
+  notes: "Users may replace this with edge, playwright, manual, or custom."
+
+web_ai:
+  provider: chatgpt
+  url: https://chatgpt.com/
+  submit_strategy: textarea_submit
+  response_strategy: latest_assistant_message
+  selectors:
+    prompt_box: ""
+    submit_button: ""
+    latest_response: ""
+    file_input: ""
+  capabilities:
+    file_upload: optional
+    markdown_response: true
+    manual_login_required: true
+    multi_turn: true
+  known_limits:
+    - "Selectors are provider-specific and may change without notice."
+    - "Manual login is expected."
+    - "Use manual fallback when automation cannot prove response completion."
+
+safety:
+  persist_raw_transcript: false
+  allow_real_paper_full_text: false
+  allow_pdf_upload: false
+  allow_browser_profile_export: false
+  human_gate_required_for:
+    - real_paper_full_text
+    - pdf_upload
+    - external_service_call
+    - publication_submission
+    - payment
+    - browser_profile_access
+
+manual_fallback:
+  enabled: true
+  instructions:
+    - "Local agent writes a minimized prompt packet."
+    - "User pastes the packet into the chosen web AI."
+    - "User copies the latest response back into the paper run."
+    - "Local agent records only minimized evidence and next actions."

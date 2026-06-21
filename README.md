@@ -28,6 +28,7 @@
 /rdinit                 # initialize the external-brain operating layer
 /bindChrome <url>       # bind GPT Web, DeepSeek, Doubao, or another web AI URL
 /rdgoal <project> <goal> # route a goal through the total-control loop
+/rdpaper <project> <goal> # route a paper task through the paper review loop
 ```
 
 **The core question is not "how do we build another governance framework?" Many people are already doing that. The real question is: how can we improve code quality and direction control for free, or as close to free as possible, with the simplest workflow?**
@@ -62,6 +63,7 @@ dev-frame-system gives you a portable operating layer for agent-assisted develop
 - **Reusable bootstrap**: install the same operating layer into another project with a PowerShell bootstrap.
 - **External-brain binding**: use `/bindChrome` to tie a stable browser AI session to the current project.
 - **Total-control orchestration**: use `rdgoal` to coordinate several project-local workflows while logging controller decisions, snapshots, and final review points.
+- **Paper review loop**: use `/rdpaper` to combine a web AI reviewer with a local agent that prepares privacy-safe paper packets and records evidence.
 
 ## Quick Start
 
@@ -125,15 +127,16 @@ Then run work through the external-brain loop:
 5. Accept only when evidence passes the review gates.
 6. Feed reusable lessons back into the project memory.
 
-## Three Skill Entrypoints
+## Four Skill Entrypoints
 
 | Skill | Purpose | Result |
 |---|---|---|
 | `/rdinit` | Initialize a repository with dev-frame-system assets | `AGENTS.md`, rules, schemas, tool policy, capability inventory, and runtime docs |
 | `/bindChrome <url>` | Bind a browser AI session to the current project | A stable external-brain session tied to local project context |
 | `/rdgoal <project> <goal>` | Route a project goal through the total-control controller | Project contract, controller decision, dispatch packet, worker report, and runtime digest |
+| `/rdpaper <project> <goal>` | Route a paper task through the paper review controller | Paper workspace, Web AI Adapter config, privacy gate, review report, and evidence summary |
 
-Provider note: GPT Web is the default reference path because it is widely available and good at long-form coordination. The provider is replaceable; the contract is not. If another web AI cannot preserve project context, coordinate tasks, and review evidence, use it as a secondary reviewer rather than the primary external brain.
+Provider note: GPT Web is the default reference path because it is widely available and good at long-form coordination. The provider is replaceable; the contract is not. Browser-hosted providers use `docs/agent-runtime/web-ai-adapter-contract.md` and `schemas/web_ai_adapter.schema.json`; Chrome plus ChatGPT is a reference adapter, not a hard-coded boundary. If another web AI cannot preserve project context, coordinate tasks, and review evidence, use it as a secondary reviewer rather than the primary external brain.
 
 ## Integrated Modules
 

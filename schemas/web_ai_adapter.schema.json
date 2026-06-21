@@ -1,0 +1,136 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rd2100.devframe/schemas/web-ai-adapter",
+  "title": "Web AI Adapter",
+  "description": "Configuration contract for browser-hosted AI adapters used by /rdpaper and related external-brain workflows.",
+  "type": "object",
+  "required": ["version", "browser", "web_ai", "safety", "manual_fallback"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "browser": {
+      "type": "object",
+      "required": ["provider", "mode", "profile_policy"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["chrome", "edge", "playwright", "manual", "custom"]
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["cdp", "playwright", "manual", "custom"]
+        },
+        "profile_policy": {
+          "type": "string",
+          "enum": ["user_selected", "isolated", "manual_only"]
+        },
+        "endpoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "web_ai": {
+      "type": "object",
+      "required": ["provider", "url", "submit_strategy", "response_strategy", "capabilities"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "submit_strategy": {
+          "type": "string",
+          "enum": ["textarea_submit", "file_upload_then_prompt", "manual_copy", "custom"]
+        },
+        "response_strategy": {
+          "type": "string",
+          "enum": ["latest_assistant_message", "manual_copy", "custom"]
+        },
+        "selectors": {
+          "type": "object",
+          "properties": {
+            "prompt_box": { "type": "string" },
+            "submit_button": { "type": "string" },
+            "latest_response": { "type": "string" },
+            "file_input": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "capabilities": {
+          "type": "object",
+          "required": ["file_upload", "markdown_response", "manual_login_required"],
+          "properties": {
+            "file_upload": {
+              "type": "string",
+              "enum": ["none", "optional", "required"]
+            },
+            "markdown_response": { "type": "boolean" },
+            "manual_login_required": { "type": "boolean" },
+            "multi_turn": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "known_limits": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "safety": {
+      "type": "object",
+      "required": [
+        "persist_raw_transcript",
+        "allow_real_paper_full_text",
+        "allow_pdf_upload",
+        "allow_browser_profile_export",
+        "human_gate_required_for"
+      ],
+      "properties": {
+        "persist_raw_transcript": { "type": "boolean" },
+        "allow_real_paper_full_text": { "type": "boolean" },
+        "allow_pdf_upload": { "type": "boolean" },
+        "allow_browser_profile_export": { "type": "boolean" },
+        "human_gate_required_for": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "real_paper_full_text",
+              "pdf_upload",
+              "external_service_call",
+              "publication_submission",
+              "payment",
+              "browser_profile_access"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "manual_fallback": {
+      "type": "object",
+      "required": ["enabled", "instructions"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "instructions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
