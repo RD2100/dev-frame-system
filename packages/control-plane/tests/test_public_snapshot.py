@@ -124,10 +124,14 @@ def test_public_markdown_docs_are_utf8_and_do_not_contain_mojibake_or_private_pa
             assert marker not in text, f"{path} contains forbidden marker {marker!r}"
 
 
-def test_release_workflow_invokes_single_release_gate():
+def test_release_workflow_installs_deps_and_invokes_single_release_gate():
     workflow = yaml.safe_load(RELEASE_WORKFLOW.read_text(encoding="utf-8"))
     job = workflow["jobs"]["release-verify"]
     run_steps = [step["run"] for step in job["steps"] if "run" in step]
+    release_gate_steps = [
+        step for step in run_steps
+        if "scripts\\verify-release.ps1" in step
+    ]
 
     assert workflow["on"] == {
         "push": {"branches": ["main"]},
@@ -135,7 +139,8 @@ def test_release_workflow_invokes_single_release_gate():
         "workflow_dispatch": None,
     }
     assert job["runs-on"] == "windows-latest"
-    assert run_steps == [
+    assert 'python -m pip install -e ".\\packages\\control-plane[dev]"' in run_steps
+    assert release_gate_steps == [
         "powershell -ExecutionPolicy Bypass -File scripts\\verify-release.ps1",
     ]
 
