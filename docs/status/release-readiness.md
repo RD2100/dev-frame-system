@@ -26,7 +26,8 @@ pull request, and manual workflow runs.
 
 The wheel smoke test builds `packages/control-plane`, installs the wheel into a
 temporary virtual environment, then runs the installed `devframe` console script
-through `doctor`, `init`, `run`, `rdgoal`, `rdgoal worker`, and `rdgoal digest`.
+through `doctor`, `init`, and `run`, and the installed `rdgoal` console script
+through `rdgoal`, `rdgoal worker`, and `rdgoal digest`.
 
 ## Expected Public Surface
 
@@ -57,8 +58,8 @@ archives, `build`, `dist`, or package metadata directories in the public tree.
 - Confirm `scripts\verify-release.ps1` is the final gate used before sharing.
 - Confirm `scripts\verify-public-snapshot.ps1` catches forbidden generated
   output and private runtime state.
-- Confirm the wheel smoke test exercises the installed `devframe` console
-  script, not only `python -m control_plane.cli`.
+- Confirm the wheel smoke test exercises the installed `devframe` and `rdgoal`
+  console scripts, not only `python -m control_plane.*`.
 - Confirm rdgoal blocked and failed states cannot be reported as success.
 - Confirm public docs do not reference private machine paths.
 

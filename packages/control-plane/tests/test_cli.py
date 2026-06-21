@@ -4,6 +4,9 @@ from pathlib import Path
 from control_plane.cli import main as devframe_cli_main
 
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
 def test_doctor_passes_for_packaged_resources(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["devframe", "doctor"])
 
@@ -23,3 +26,10 @@ def test_init_code_project_generates_runnable_pipeline(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["devframe", "run", "--pipeline", str(pipeline_path)])
 
     assert devframe_cli_main() == 0
+
+
+def test_setup_exposes_rdgoal_console_script():
+    setup_text = (REPO_ROOT / "packages" / "control-plane" / "setup.py").read_text(encoding="utf-8")
+
+    assert '"devframe=control_plane.cli:main"' in setup_text
+    assert '"rdgoal=control_plane.rdgoal_cli:main"' in setup_text

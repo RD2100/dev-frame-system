@@ -27,6 +27,7 @@
 ```text
 /rdinit                 # initialize the external-brain operating layer
 /bindChrome <url>       # bind GPT Web, DeepSeek, Doubao, or another web AI URL
+/rdgoal <project> <goal> # route a goal through the total-control loop
 ```
 
 **The core question is not "how do we build another governance framework?" Many people are already doing that. The real question is: how can we improve code quality and direction control for free, or as close to free as possible, with the simplest workflow?**
@@ -108,8 +109,12 @@ Optionally install the control-plane CLI and route a project through `rdgoal`:
 ```powershell
 cd .\packages\control-plane
 pip install -e .
-devframe rdgoal "D:\my-project" "Build the MVP" --digest
+rdgoal "D:\my-project" "Build the MVP" --digest
 ```
+
+`/rdgoal` is the human-facing slash entrypoint. In a shell, use the installed
+`rdgoal` command. `devframe rdgoal` remains available as the compatibility
+form for scripts that already use the umbrella CLI.
 
 Then run work through the external-brain loop:
 
@@ -120,12 +125,13 @@ Then run work through the external-brain loop:
 5. Accept only when evidence passes the review gates.
 6. Feed reusable lessons back into the project memory.
 
-## Two Skill Entrypoints
+## Three Skill Entrypoints
 
 | Skill | Purpose | Result |
 |---|---|---|
 | `/rdinit` | Initialize a repository with dev-frame-system assets | `AGENTS.md`, rules, schemas, tool policy, capability inventory, and runtime docs |
 | `/bindChrome <url>` | Bind a browser AI session to the current project | A stable external-brain session tied to local project context |
+| `/rdgoal <project> <goal>` | Route a project goal through the total-control controller | Project contract, controller decision, dispatch packet, worker report, and runtime digest |
 
 Provider note: GPT Web is the default reference path because it is widely available and good at long-form coordination. The provider is replaceable; the contract is not. If another web AI cannot preserve project context, coordinate tasks, and review evidence, use it as a secondary reviewer rather than the primary external brain.
 

@@ -61,13 +61,14 @@ try {
     Invoke-Step "create smoke venv" "python" @("-m", "venv", $venvDir)
     $python = Join-Path $venvDir "Scripts\python.exe"
     $devframe = Join-Path $venvDir "Scripts\devframe.exe"
+    $rdgoal = Join-Path $venvDir "Scripts\rdgoal.exe"
 
     Invoke-Step "install wheel" $python @("-m", "pip", "install", $wheel.FullName)
     Invoke-Step "devframe doctor" $devframe @("doctor")
     Invoke-Step "devframe init" $devframe @("init", "code_project", $projectDir)
     Invoke-Step "devframe run" $devframe @("run", "--pipeline", (Join-Path $projectDir "PIPELINE.yaml"))
-    Invoke-Step "devframe rdgoal" $devframe @(
-        "rdgoal", $projectDir, "Build a working MVP prototype.", "--runtime-dir", $runtimeDir, "--apply-rdinit"
+    Invoke-Step "rdgoal" $rdgoal @(
+        $projectDir, "Build a working MVP prototype.", "--runtime-dir", $runtimeDir, "--apply-rdinit"
     )
 
     $outbox = Join-Path $runtimeDir "rdgoal-outbox\demo-project"
@@ -76,8 +77,8 @@ try {
         throw "rdgoal packet not produced in $outbox"
     }
 
-    Invoke-Step "devframe rdgoal worker" $devframe @("rdgoal", "worker", $packet.FullName, "--runtime-dir", $runtimeDir)
-    Invoke-Step "devframe rdgoal digest" $devframe @("rdgoal", "digest", "--runtime-dir", $runtimeDir)
+    Invoke-Step "rdgoal worker" $rdgoal @("worker", $packet.FullName, "--runtime-dir", $runtimeDir)
+    Invoke-Step "rdgoal digest" $rdgoal @("digest", "--runtime-dir", $runtimeDir)
 
     Write-Output "[OK] Control-plane wheel smoke passed."
 } finally {

@@ -54,21 +54,31 @@ data, or perform live deployment.
 
 ## CLI Shape
 
-```powershell
-python -m control_plane.rdgoal_cli "D:\projects\app-a" "Build the MVP" --digest
+The human-facing entrypoint is:
+
+```text
+/rdgoal <project> <goal>
 ```
 
-The same entry point is also available through the control-plane CLI:
+In a shell, use the installed console script:
+
+```powershell
+rdgoal "D:\projects\app-a" "Build the MVP" --digest
+```
+
+The same entry point remains available through the umbrella control-plane CLI
+and the Python module path for compatibility:
 
 ```powershell
 devframe rdgoal "D:\projects\app-a" "Build the MVP" --digest
+python -m control_plane.rdgoal_cli "D:\projects\app-a" "Build the MVP" --digest
 ```
 
 Use `--operation` and repeated `--target` values to route a specific next
 operation:
 
 ```powershell
-devframe rdgoal "D:\projects\app-a" "Build the MVP" `
+rdgoal "D:\projects\app-a" "Build the MVP" `
   --operation "delete obsolete local module" `
   --target "src/old_module.py" `
   --digest
@@ -125,7 +135,7 @@ that choice outside the controller.
 After a worker completes, ingest its ExecutionReport:
 
 ```powershell
-devframe rdgoal ingest "C:\Users\you\.devframe-runtime\rdgoal-outbox\app\packet-id" `
+rdgoal ingest "C:\Users\you\.devframe-runtime\rdgoal-outbox\app\packet-id" `
   "D:\projects\app\reports\ExecutionReport.md"
 ```
 
@@ -136,7 +146,7 @@ worker status.
 To inspect persisted runtime state across CLI invocations:
 
 ```powershell
-devframe rdgoal digest
+rdgoal digest
 ```
 
 ## Local Dry-Run Worker
@@ -146,7 +156,7 @@ packet, writes an `ExecutionReport.md`, and ingests that report without changing
 project files:
 
 ```powershell
-devframe rdgoal worker "C:\Users\you\.devframe-runtime\rdgoal-outbox\app\packet-id"
+rdgoal worker "C:\Users\you\.devframe-runtime\rdgoal-outbox\app\packet-id"
 ```
 
 Use it to prove the controller loop before attaching a live runner. A
@@ -158,7 +168,7 @@ dispatch-ready packet reports `pass`; a draft-only or held packet reports
 When a live runner is ready, use the command worker adapter:
 
 ```powershell
-devframe rdgoal worker "C:\Users\you\.devframe-runtime\rdgoal-outbox\app\packet-id" `
+rdgoal worker "C:\Users\you\.devframe-runtime\rdgoal-outbox\app\packet-id" `
   --command python -m your_worker_module
 ```
 
@@ -182,7 +192,7 @@ When `ai_workflow_hub` is available, rdgoal can call its existing `go` entry
 point directly:
 
 ```powershell
-devframe rdgoal worker "C:\Users\you\.devframe-runtime\rdgoal-outbox\app\packet-id" `
+rdgoal worker "C:\Users\you\.devframe-runtime\rdgoal-outbox\app\packet-id" `
   --aihub-go
 ```
 

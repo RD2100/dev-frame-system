@@ -25,21 +25,29 @@ devframe init code_project D:\tmp\demo-project
 devframe run --pipeline pipelines\example_pipeline.yaml
 ```
 
+The focused total-control entrypoint is also installed:
+
+```powershell
+rdgoal "D:\tmp\demo-project" "Build the MVP" --digest
+```
+
 ## rdgoal
 
 `rdgoal` is the total-control orchestration entry point. It registers a project,
 creates or loads a project contract, classifies the next operation, writes a
 dispatch packet, and records controller state in the local runtime directory.
+In external-brain conversations this is the `/rdgoal <project> <goal>` slash
+entrypoint; in a shell it is the installed `rdgoal` console script.
 
 ```powershell
-devframe rdgoal "D:\my-project" "Build the MVP" --digest
+rdgoal "D:\my-project" "Build the MVP" --digest
 ```
 
 For local destructive operations, pass explicit targets so rdgoal can snapshot
 them before dispatch:
 
 ```powershell
-devframe rdgoal "D:\my-project" "Remove the obsolete module" `
+rdgoal "D:\my-project" "Remove the obsolete module" `
   --operation "delete obsolete local module" `
   --target "src\old_module.py" `
   --digest
@@ -53,7 +61,7 @@ different local runtime location. Project contracts are written to
 After a worker runs, inspect persisted decisions and ExecutionReports with:
 
 ```powershell
-devframe rdgoal digest
+rdgoal digest
 ```
 
 Worker commands return exit code `0` only for `passed` or `completed` reports.

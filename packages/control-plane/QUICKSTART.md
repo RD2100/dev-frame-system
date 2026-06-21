@@ -47,8 +47,11 @@ live external effects.
 
 ## 5. Route work through rdgoal
 
+In external-brain chat, use `/rdgoal <project> <goal>`. In a shell, use the
+installed `rdgoal` command:
+
 ```powershell
-devframe rdgoal "D:\tmp\demo-project" "Build the MVP" --digest
+rdgoal "D:\tmp\demo-project" "Build the MVP" --digest
 ```
 
 `rdgoal` writes controller runtime state outside the public repository. Use
@@ -65,13 +68,13 @@ Wheel installs can still create dispatch packets, but will report
 Use the local dry-run worker first:
 
 ```powershell
-devframe rdgoal worker "C:\Users\you\.devframe-runtime\rdgoal-outbox\demo-project\<packet-id>"
+rdgoal worker "C:\Users\you\.devframe-runtime\rdgoal-outbox\demo-project\<packet-id>"
 ```
 
 When a real runner is ready, use the command worker:
 
 ```powershell
-devframe rdgoal worker "C:\Users\you\.devframe-runtime\rdgoal-outbox\demo-project\<packet-id>" `
+rdgoal worker "C:\Users\you\.devframe-runtime\rdgoal-outbox\demo-project\<packet-id>" `
   --command python -m your_worker_module
 ```
 
@@ -82,7 +85,7 @@ Worker exit code is non-zero for `blocked`, `failed`, or unknown report states.
 ## 7. Review the runtime digest
 
 ```powershell
-devframe rdgoal digest
+rdgoal digest
 ```
 
 The digest is rebuilt from runtime files, so it can show decisions and worker

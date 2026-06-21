@@ -18,6 +18,7 @@
 ```text
 /rdinit                 # 初始化外部大脑操作层
 /bindChrome <url>       # 绑定 GPT Web、DeepSeek、豆包或其他网页 AI 会话
+/rdgoal <project> <goal> # 把项目目标路由进总控闭环
 ```
 
 **核心问题不是“再做一套治理框架”。真正的问题是：如何用尽量低的成本和最简单的流程，提高代码质量，并让研发方向不漂移？**
@@ -95,15 +96,15 @@ pip install -e .
 devframe doctor
 cd ..\..
 .\scripts\verify-release.ps1
-devframe rdgoal "D:\my-project" "Build the MVP" --digest
+rdgoal "D:\my-project" "Build the MVP" --digest
 ```
 
 如果要跑完整的 dispatch -> worker -> digest 闭环：
 
 ```powershell
-devframe rdgoal "D:\my-project" "Build the MVP" --runtime-dir D:\tmp\devframe-runtime
-devframe rdgoal worker "<packet-dir>" --runtime-dir D:\tmp\devframe-runtime
-devframe rdgoal digest --runtime-dir D:\tmp\devframe-runtime
+rdgoal "D:\my-project" "Build the MVP" --runtime-dir D:\tmp\devframe-runtime
+rdgoal worker "<packet-dir>" --runtime-dir D:\tmp\devframe-runtime
+rdgoal digest --runtime-dir D:\tmp\devframe-runtime
 ```
 
 `rdgoal worker` 只有在报告状态为 `passed` 或 `completed` 时返回退出码 `0`。`blocked`、`failed` 或未知状态都会返回非零，避免自动化把未执行或失败误判为成功。
@@ -117,12 +118,13 @@ devframe rdgoal digest --runtime-dir D:\tmp\devframe-runtime
 5. 只有证据通过审查门禁，才接受这次工作。
 6. 把可复用经验沉淀回项目记忆。
 
-## 两个技能入口
+## 三个技能入口
 
 | 技能 | 用途 | 结果 |
 |---|---|---|
 | `/rdinit` | 给仓库初始化 dev-frame-system 操作层 | `AGENTS.md`、规则、schemas、工具策略、能力清单和运行时文档 |
 | `/bindChrome <url>` | 把网页 AI 会话绑定到当前项目 | 一个稳定的外部大脑会话，连接本地项目上下文 |
+| `/rdgoal <project> <goal>` | 把项目目标交给总控编排 | 项目 contract、controller 决策、dispatch packet、worker 报告和 runtime digest |
 
 提供商可以替换，契约不能替换。GPT Web 是默认参考路径，因为它容易获得，也适合长上下文协调。如果另一个网页 AI 不能稳定保存项目上下文、协调任务并审查证据，就更适合作为二级审查器，而不是主外部大脑。
 

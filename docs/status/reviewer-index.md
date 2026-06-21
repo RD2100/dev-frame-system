@@ -19,6 +19,7 @@ commands that matter most.
 - CI entrypoint:
   `.github/workflows/release-verify.yml`.
 - Control-plane rdgoal implementation:
+  `packages/control-plane/setup.py`,
   `packages/control-plane/control_plane/agent_adapter.py`,
   `packages/control-plane/control_plane/backup_guard.py`,
   `packages/control-plane/control_plane/decision_engine.py`,
@@ -48,8 +49,9 @@ commands that matter most.
 
 ## Critical Code Paths
 
-- `devframe rdgoal` routing:
-  `control_plane/cli.py` delegates to `control_plane/rdgoal_cli.py`.
+- `/rdgoal` and shell `rdgoal` routing:
+  `setup.py` exposes `rdgoal=control_plane.rdgoal_cli:main`; `devframe rdgoal`
+  remains available through `control_plane/cli.py` for compatibility.
 - Project contract creation:
   `control_plane/rdgoal.py` writes project-local contracts by default under
   `<project>/rules/project-contracts/`.
