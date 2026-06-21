@@ -11,6 +11,8 @@ commands that matter most.
   `packages/control-plane/QUICKSTART.md`.
 - Release and readiness docs:
   `docs/agent-runtime/rdgoal-total-control.md`,
+  `docs/agent-runtime/rdpaper-workflow.md`,
+  `docs/agent-runtime/web-ai-adapter-contract.md`,
   `docs/status/release-readiness.md`, `docs/status/reviewer-index.md`.
 - Verification scripts:
   `scripts/verify-public-snapshot.ps1`,
@@ -36,12 +38,15 @@ commands that matter most.
   `packages/control-plane/control_plane/pipeline_runner.py`.
 - Starter project templates:
   `packages/control-plane/templates/code_project/*`,
+  `packages/control-plane/templates/paper_iteration/*`,
   `packages/control-plane/templates/runtime-bootstrap/*`,
   `templates/runtime-bootstrap/bootstrap.ps1`.
 - Public rules and schemas:
   `rules/orchestration.md`, `rules/project-contracts/_template.md`,
+  `rules/web-ai-adapters.md`,
   `schemas/project_contract.schema.json`,
-  `schemas/rdgoal_dispatch_packet.schema.json`.
+  `schemas/rdgoal_dispatch_packet.schema.json`,
+  `schemas/web_ai_adapter.schema.json`.
 - Tests:
   `packages/control-plane/tests/test_rdgoal.py`,
   `packages/control-plane/tests/test_cli.py`,
@@ -52,6 +57,12 @@ commands that matter most.
 - `/rdgoal` and shell `rdgoal` routing:
   `setup.py` exposes `rdgoal=control_plane.rdgoal_cli:main`; `devframe rdgoal`
   remains available through `control_plane/cli.py` for compatibility.
+- `/rdpaper` adapter contract:
+  `docs/agent-runtime/rdpaper-workflow.md` defines the slash workflow, while
+  `docs/agent-runtime/web-ai-adapter-contract.md`,
+  `schemas/web_ai_adapter.schema.json`, and
+  `packages/control-plane/templates/paper_iteration/WEB_AI_ADAPTER.yaml` define
+  the browser and web AI adapter boundary.
 - Project contract creation:
   `control_plane/rdgoal.py` writes project-local contracts by default under
   `<project>/rules/project-contracts/`.
@@ -96,6 +107,8 @@ Additional targeted probes covered by tests:
 - Snapshot-backed actions reject targets outside the project root before
   creating snapshot directories.
 - Dispatch packets and project contracts validate against public schemas.
+- The default paper Web AI Adapter template validates against
+  `schemas/web_ai_adapter.schema.json`.
 
 ## Generated Artifacts
 
@@ -116,6 +129,9 @@ directories in the repository.
 - Real external AI/browser dispatch is outside this release slice; the current
   worker path proves packet handoff, local dry-run, command worker, and aihub
   adapter invocation semantics.
+- `/rdpaper` provider automation is contract-first. Chrome plus ChatGPT is a
+  reference path, while DeepSeek, Doubao, Kimi, internal web AIs, and manual
+  mode are documented extension points rather than guaranteed built-ins.
 - GitHub CI/PR state is not represented by local verification alone. Reviewers
   should run or add CI before merging if this becomes a remote release.
 
@@ -128,5 +144,9 @@ directories in the repository.
 - Confirm worker failure semantics cannot produce fake green results.
 - Confirm source checkout and wheel install paths both match the documented
   rdgoal behavior.
+- Confirm Chrome and ChatGPT are documented as defaults, not hard-coded
+  architecture boundaries.
+- Confirm browser profiles, cookies, real paper full text, PDFs, and external
+  service calls remain human-gated by the adapter contract.
 - Confirm docs are understandable for a new open-source reader without internal
   project history.

@@ -19,6 +19,7 @@
 /rdinit                 # 初始化外部大脑操作层
 /bindChrome <url>       # 绑定 GPT Web、DeepSeek、豆包或其他网页 AI 会话
 /rdgoal <project> <goal> # 把项目目标路由进总控闭环
+/rdpaper <project> <goal> # 把论文任务路由进论文审查闭环
 ```
 
 **核心问题不是“再做一套治理框架”。真正的问题是：如何用尽量低的成本和最简单的流程，提高代码质量，并让研发方向不漂移？**
@@ -53,6 +54,7 @@ dev-frame-system 提供一套可迁移的 agent 研发操作层：
 - **可复用引导**：用 PowerShell bootstrap 把同一套操作层部署到其他项目。
 - **外部大脑绑定**：用 `/bindChrome` 把稳定的网页 AI 会话绑定到当前项目。
 - **总控编排**：用 `rdgoal` 协调多个项目本地 workflow，记录 controller 决策、rollback snapshot、dispatch packet 和最终报告。
+- **论文审查闭环**：用 `/rdpaper` 让网页 AI 负责论文评审判断，本地 agent 负责脱敏任务包、证据和报告。
 
 ## 快速开始
 
@@ -118,13 +120,14 @@ rdgoal digest --runtime-dir D:\tmp\devframe-runtime
 5. 只有证据通过审查门禁，才接受这次工作。
 6. 把可复用经验沉淀回项目记忆。
 
-## 三个技能入口
+## 四个技能入口
 
 | 技能 | 用途 | 结果 |
 |---|---|---|
 | `/rdinit` | 给仓库初始化 dev-frame-system 操作层 | `AGENTS.md`、规则、schemas、工具策略、能力清单和运行时文档 |
 | `/bindChrome <url>` | 把网页 AI 会话绑定到当前项目 | 一个稳定的外部大脑会话，连接本地项目上下文 |
 | `/rdgoal <project> <goal>` | 把项目目标交给总控编排 | 项目 contract、controller 决策、dispatch packet、worker 报告和 runtime digest |
+| `/rdpaper <project> <goal>` | 把论文任务交给论文审查控制面 | 论文工作区、Web AI Adapter 配置、隐私闸门、审查报告和证据摘要 |
 
 提供商可以替换，契约不能替换。GPT Web 是默认参考路径，因为它容易获得，也适合长上下文协调。如果另一个网页 AI 不能稳定保存项目上下文、协调任务并审查证据，就更适合作为二级审查器，而不是主外部大脑。
 
