@@ -182,6 +182,12 @@ try {
         $runtimeDir,
         $paperDir
     )
+    Invoke-Step "dashboard patch rejects" $python @(
+        "-c",
+        "from control_plane.dashboard import build_dashboard_server; from threading import Thread; from urllib.request import build_opener, HTTPErrorProcessor, Request; import sys; server = build_dashboard_server(runtime_dir=sys.argv[1], paper_project_dirs=[sys.argv[2]], port=0, refresh_seconds=0); thread = Thread(target=server.serve_forever, daemon=True); thread.start(); HTTPErrorProcessor.http_response = lambda self, request, response: response; HTTPErrorProcessor.https_response = HTTPErrorProcessor.http_response; request = Request(f'http://127.0.0.1:{server.server_address[1]}/state.json', method='PATCH'); response = build_opener(HTTPErrorProcessor).open(request, timeout=5); assert response.status == 405; print(response.status); server.shutdown(); server.server_close(); thread.join(timeout=5)",
+        $runtimeDir,
+        $paperDir
+    )
 
     Write-Output "[OK] Control-plane wheel smoke passed."
 } finally {
