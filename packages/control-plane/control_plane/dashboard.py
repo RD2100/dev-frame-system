@@ -18,6 +18,7 @@ from .visual_state import (
     render_action_queue_markdown,
     render_visual_control_plane_state_html,
     render_visual_control_plane_state_json,
+    resolve_dashboard_lang,
 )
 
 
@@ -67,10 +68,14 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
             path = parsed_url.path
             if path in {"/", "/index.html"}:
                 state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=paper_project_dirs)
+                query = parse_qs(parsed_url.query)
+                raw_lang = query.get("lang", [""])[0] if query.get("lang") else None
+                lang = resolve_dashboard_lang(raw_lang)
                 body = render_visual_control_plane_state_html(
                     state,
                     refresh_seconds=refresh_seconds,
                     endpoint_links=True,
+                    lang=lang,
                 )
                 self._send_text(HTTPStatus.OK, "text/html; charset=utf-8", body)
                 return
@@ -82,6 +87,7 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                 state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=paper_project_dirs)
                 next_actions = state.get("next_actions", [])
                 query = parse_qs(parsed_url.query)
+                lang = resolve_dashboard_lang(query.get("lang", [""])[0] if query.get("lang") else None)
                 invalid_filters = _invalid_action_filters(query, next_actions)
                 if invalid_filters:
                     body = json.dumps({
@@ -103,7 +109,7 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     self._send_text(
                         HTTPStatus.OK,
                         "text/markdown; charset=utf-8",
-                        render_action_queue_markdown(actions),
+                        render_action_queue_markdown(actions, lang=lang),
                     )
                     return
                 body = json.dumps({"next_actions": actions}, indent=2, ensure_ascii=True)

@@ -16,6 +16,198 @@ ACTION_STATUSES = ("open", "blocked", "ready", "info")
 ACTION_PRIORITIES = ("high", "medium", "low")
 ACTION_SOURCE_TYPES = ("gate", "run", "decision")
 
+_DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
+    "en": {
+        "html_lang": "en",
+        "title": "DevFrame Visual Control Plane",
+        "eyebrow": "DevFrame Control Plane",
+        "h1": "Visual State Snapshot",
+        "lead": "A read-only view of projects, agents, runs, evidence gates, and controller decisions.",
+        "projects_label": "projects",
+        "runs_label": "runs",
+        "switch_label": "中文",
+        "gate_focus": "Gate Focus",
+        "no_active_gates": "No active gates.",
+        "action_queue": "Action Queue",
+        "action_queue_handoff": "Action Queue Handoff",
+        "readonly_queue_intro": "Read-only queue for manual resume, review, or Web AI handoff.",
+        "do_not_execute": "Do not execute commands until the matching gate and risk boundary are cleared.",
+        "state_json": "State JSON",
+        "action_json": "Action JSON",
+        "action_handoff": "Action Handoff",
+        "endpoint_nav_label": "Read-only dashboard endpoints",
+        "priority": "Priority",
+        "status": "Status",
+        "action": "Action",
+        "source": "Source",
+        "source_id": "Source ID",
+        "action_id": "Action ID",
+        "resume_filter": "Resume Filter",
+        "resume_filter_label": "Resume filter",
+        "detail": "Detail",
+        "command": "Command",
+        "handoff": "Handoff",
+        "markdown_link": "Markdown",
+        "no_actions": "(no actions)",
+        "provider_bindings": "Provider Bindings",
+        "binding": "Binding",
+        "provider": "Provider",
+        "mode": "Mode",
+        "health": "Health",
+        "adapter_config": "Adapter Config",
+        "manual_fallback": "Manual Fallback",
+        "notes": "Notes",
+        "projects_section": "Projects",
+        "name": "Name",
+        "id": "ID",
+        "risk": "Risk",
+        "goal": "Goal",
+        "runs_section": "Runs",
+        "run": "Run",
+        "entry": "Entry",
+        "taskspec": "TaskSpec",
+        "evidence": "Evidence",
+        "review": "Review",
+        "run_details": "Run Details",
+        "details": "Details",
+        "taskspec_json": "TaskSpec JSON",
+        "task_input": "Task Input",
+        "execution_report": "ExecutionReport",
+        "packet": "Packet",
+        "current_decision": "Current Decision",
+        "decision_next_action": "Decision Next Action",
+        "next_command": "Next command",
+        "missing": "missing",
+        "resolve_gate": "Resolve gate before execution.",
+        "agents": "Agents",
+        "role": "Role",
+        "scope": "Scope",
+        "binding_health": "Binding Health",
+        "gates": "Gates",
+        "kind": "Kind",
+        "reason": "Reason",
+        "next_action": "Next Action",
+        "decisions": "Decisions",
+        "safety_defaults": "Safety Defaults",
+        "raw_transcripts_persisted": "Raw transcripts persisted",
+        "remote_execution_default": "Remote execution default",
+        "no_records": "No records",
+        "registered_units": "registered units",
+        "agent": "Agent",
+        "gate": "Gate",
+        "decision": "Decision",
+    },
+    "zh-CN": {
+        "html_lang": "zh-CN",
+        "title": "DevFrame 可视化控制面",
+        "eyebrow": "DevFrame 控制面",
+        "h1": "可视化状态快照",
+        "lead": "项目、智能体、运行、证据门控和控制器决策的只读视图。",
+        "projects_label": "个项目",
+        "runs_label": "个运行",
+        "switch_label": "English",
+        "gate_focus": "门控聚焦",
+        "no_active_gates": "无活跃门控。",
+        "action_queue": "动作队列",
+        "action_queue_handoff": "动作队列交接",
+        "readonly_queue_intro": "用于手动恢复、审查或 Web AI 交接的只读队列。",
+        "do_not_execute": "在匹配的门控和风险边界确认清除之前，不要执行命令。",
+        "state_json": "状态 JSON",
+        "action_json": "动作 JSON",
+        "action_handoff": "动作交接",
+        "endpoint_nav_label": "只读看板端点",
+        "priority": "优先级",
+        "status": "状态",
+        "action": "动作",
+        "source": "来源",
+        "source_id": "来源 ID",
+        "action_id": "动作 ID",
+        "resume_filter": "恢复过滤器",
+        "resume_filter_label": "恢复过滤器",
+        "detail": "详情",
+        "command": "命令",
+        "handoff": "交接",
+        "markdown_link": "Markdown",
+        "no_actions": "（无动作）",
+        "provider_bindings": "提供者绑定",
+        "binding": "绑定",
+        "provider": "提供者",
+        "mode": "模式",
+        "health": "健康状态",
+        "adapter_config": "适配器配置",
+        "manual_fallback": "手动回退",
+        "notes": "备注",
+        "projects_section": "项目",
+        "name": "名称",
+        "id": "ID",
+        "risk": "风险",
+        "goal": "目标",
+        "runs_section": "运行",
+        "run": "运行",
+        "entry": "入口",
+        "taskspec": "任务规格",
+        "evidence": "证据",
+        "review": "审查",
+        "run_details": "运行详情",
+        "details": "详情",
+        "taskspec_json": "任务规格 JSON",
+        "task_input": "任务输入",
+        "execution_report": "执行报告",
+        "packet": "数据包",
+        "current_decision": "当前决策",
+        "decision_next_action": "决策下一步",
+        "next_command": "下一步命令",
+        "missing": "缺失",
+        "resolve_gate": "在执行前解决门控问题。",
+        "agents": "智能体",
+        "role": "角色",
+        "scope": "范围",
+        "binding_health": "绑定健康状态",
+        "gates": "门控",
+        "kind": "类型",
+        "reason": "原因",
+        "next_action": "下一步动作",
+        "decisions": "决策",
+        "safety_defaults": "安全默认值",
+        "raw_transcripts_persisted": "原始转录持久化",
+        "remote_execution_default": "远程执行默认",
+        "no_records": "无记录",
+        "registered_units": "条记录",
+        "agent": "智能体",
+        "gate": "门控",
+        "decision": "决策",
+    },
+}
+
+
+def resolve_dashboard_lang(raw_lang: str | None) -> str:
+    if not raw_lang:
+        return "en"
+    normalized = raw_lang.strip().lower()
+    if normalized in {"zh-cn", "zh"}:
+        return "zh-CN"
+    if normalized == "en":
+        return "en"
+    return "en"
+
+
+def dashboard_t(key: str, lang: str = "en") -> str:
+    translations = _DASHBOARD_TRANSLATIONS.get(lang, _DASHBOARD_TRANSLATIONS["en"])
+    return translations.get(key, _DASHBOARD_TRANSLATIONS["en"].get(key, key))
+
+
+def _lang_switch(lang: str) -> str:
+    target = "zh-CN" if lang == "en" else "en"
+    label = dashboard_t("switch_label", lang)
+    return f'<a class="lang-switch" href="?lang={target}">{_h(label)}</a>'
+
+
+def _action_md_href(action_id: str, lang: str) -> str:
+    href = f"/actions.md?action_id={quote(action_id)}"
+    if lang == "zh-CN":
+        href += f"&lang={lang}"
+    return href
+
 
 def build_visual_control_plane_state(
     runtime_dir: str | Path | None = None,
@@ -115,16 +307,17 @@ def render_action_queue_text(next_actions: list[dict[str, Any]]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render_action_queue_markdown(next_actions: list[dict[str, Any]]) -> str:
+def render_action_queue_markdown(next_actions: list[dict[str, Any]], lang: str = "en") -> str:
+    lang = resolve_dashboard_lang(lang)
     lines = [
-        "# Action Queue Handoff",
+        f"# {dashboard_t('action_queue_handoff', lang)}",
         "",
-        "Read-only queue for manual resume, review, or Web AI handoff.",
-        "Do not execute commands until the matching gate and risk boundary are cleared.",
+        dashboard_t("readonly_queue_intro", lang),
+        dashboard_t("do_not_execute", lang),
         "",
     ]
     if not next_actions:
-        lines.append("(no actions)")
+        lines.append(dashboard_t("no_actions", lang))
         return "\n".join(lines) + "\n"
     for index, action in enumerate(next_actions, start=1):
         priority = str(action.get("priority") or "")
@@ -138,16 +331,16 @@ def render_action_queue_markdown(next_actions: list[dict[str, Any]]) -> str:
         lines.extend([
             f"## {index}. {label or source_id}",
             "",
-            f"- Action ID: `{action_id}`",
-            f"- Priority: `{priority}`",
-            f"- Status: `{status}`",
-            f"- Source: `{source_type}` `{source_id}`",
+            f"- {dashboard_t('action_id', lang)}: `{action_id}`",
+            f"- {dashboard_t('priority', lang)}: `{priority}`",
+            f"- {dashboard_t('status', lang)}: `{status}`",
+            f"- {dashboard_t('source', lang)}: `{source_type}` `{source_id}`",
         ])
         resume_filter = _action_resume_filter(action)
         if resume_filter:
-            lines.append(f"- Resume Filter: `{resume_filter}`")
+            lines.append(f"- {dashboard_t('resume_filter', lang)}: `{resume_filter}`")
         if detail:
-            lines.append(f"- Detail: {detail}")
+            lines.append(f"- {dashboard_t('detail', lang)}: {detail}")
         if command:
             lines.extend([
                 "",
@@ -208,7 +401,9 @@ def render_visual_control_plane_state_html(
     state: dict[str, Any],
     refresh_seconds: int | None = None,
     endpoint_links: bool = False,
+    lang: str = "en",
 ) -> str:
+    lang = resolve_dashboard_lang(lang)
     projects = state.get("projects", [])
     provider_bindings = state.get("provider_bindings", [])
     runs = state.get("runs", [])
@@ -219,12 +414,12 @@ def render_visual_control_plane_state_html(
     safety = state.get("safety", {})
     return "\n".join([
         "<!doctype html>",
-        '<html lang="en">',
+        f'<html lang="{dashboard_t("html_lang", lang)}">',
         "<head>",
         '<meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
         _refresh_meta(refresh_seconds),
-        "<title>DevFrame Visual Control Plane</title>",
+        f"<title>{_h(dashboard_t('title', lang))}</title>",
         "<style>",
         _html_styles(),
         "</style>",
@@ -233,27 +428,28 @@ def render_visual_control_plane_state_html(
         '<main class="shell">',
         '<section class="masthead">',
         "<div>",
-        '<p class="eyebrow">DevFrame Control Plane</p>',
-        "<h1>Visual State Snapshot</h1>",
-        '<p class="lead">A read-only view of projects, agents, runs, evidence gates, and controller decisions.</p>',
-        _endpoint_links(endpoint_links),
+        f'<p class="eyebrow">{_h(dashboard_t("eyebrow", lang))}</p>',
+        f"<h1>{_h(dashboard_t('h1', lang))}</h1>",
+        f'<p class="lead">{_h(dashboard_t("lead", lang))}</p>',
+        _lang_switch(lang),
+        _endpoint_links(endpoint_links, lang),
         "</div>",
         '<div class="stamp">',
-        f"<span>{len(projects)} projects</span>",
-        f"<span>{len(runs)} runs</span>",
+        f"<span>{len(projects)} {dashboard_t('projects_label', lang)}</span>",
+        f"<span>{len(runs)} {dashboard_t('runs_label', lang)}</span>",
         "</div>",
         "</section>",
-        _summary_band(state),
-        _gate_focus_section(gates, next_actions, action_links=endpoint_links),
-        _next_actions_section(next_actions, action_links=endpoint_links),
-        _provider_bindings_section(provider_bindings),
-        _projects_section(projects),
-        _runs_section(runs),
-        _run_details_section(runs, decisions),
-        _agents_section(agents, provider_bindings),
-        _gates_section(gates),
-        _decisions_section(decisions),
-        _safety_section(safety),
+        _summary_band(state, lang),
+        _gate_focus_section(gates, next_actions, action_links=endpoint_links, lang=lang),
+        _next_actions_section(next_actions, action_links=endpoint_links, lang=lang),
+        _provider_bindings_section(provider_bindings, lang),
+        _projects_section(projects, lang),
+        _runs_section(runs, lang),
+        _run_details_section(runs, decisions, lang),
+        _agents_section(agents, provider_bindings, lang),
+        _gates_section(gates, lang),
+        _decisions_section(decisions, lang),
+        _safety_section(safety, lang),
         "</main>",
         "</body>",
         "</html>",
@@ -267,19 +463,19 @@ def _refresh_meta(refresh_seconds: int | None) -> str:
     return f'<meta http-equiv="refresh" content="{refresh_seconds}">'
 
 
-def _endpoint_links(enabled: bool) -> str:
+def _endpoint_links(enabled: bool, lang: str = "en") -> str:
     if not enabled:
         return ""
     links = [
-        ("State JSON", "/state.json"),
-        ("Action JSON", "/actions.json"),
-        ("Action Handoff", "/actions.md"),
+        (dashboard_t("state_json", lang), "/state.json"),
+        (dashboard_t("action_json", lang), "/actions.json"),
+        (dashboard_t("action_handoff", lang), "/actions.md" if lang != "zh-CN" else f"/actions.md?lang={lang}"),
     ]
     items = "\n".join(
         f'<a href="{_h(href)}">{_h(label)}</a>'
         for label, href in links
     )
-    return f'<nav class="endpoint-links" aria-label="Read-only dashboard endpoints">{items}</nav>'
+    return f'<nav class="endpoint-links" aria-label="{_h(dashboard_t("endpoint_nav_label", lang))}">{items}</nav>'
 
 
 def _default_provider_bindings() -> list[dict[str, Any]]:
@@ -990,16 +1186,16 @@ def _action_sort_key(action: dict[str, Any]) -> tuple[int, int, str]:
     )
 
 
-def _summary_band(state: dict[str, Any]) -> str:
+def _summary_band(state: dict[str, Any], lang: str = "en") -> str:
     projects = state.get("projects", [])
     runs = state.get("runs", [])
     gates = state.get("gates", [])
     decisions = state.get("decisions", [])
     metrics = [
-        ("Projects", str(len(projects)), "registered units"),
-        ("Runs", str(len(runs)), _count_by_status(runs)),
-        ("Gates", str(len(gates)), _count_by_status(gates)),
-        ("Decisions", str(len(decisions)), _count_by_status(decisions)),
+        (dashboard_t("projects_section", lang), str(len(projects)), dashboard_t("registered_units", lang)),
+        (dashboard_t("runs_section", lang), str(len(runs)), _count_by_status(runs)),
+        (dashboard_t("gates", lang), str(len(gates)), _count_by_status(gates)),
+        (dashboard_t("decisions", lang), str(len(decisions)), _count_by_status(decisions)),
     ]
     items = "\n".join(
         '<article class="metric">'
@@ -1016,6 +1212,7 @@ def _gate_focus_section(
     gates: list[dict[str, Any]],
     next_actions: list[dict[str, Any]],
     action_links: bool = False,
+    lang: str = "en",
 ) -> str:
     active_gates = [
         gate for gate in gates
@@ -1027,19 +1224,20 @@ def _gate_focus_section(
         if action.get("source_type") == "gate" and action.get("source_id")
     }
     if not active_gates:
-        rows = '<p class="empty">No active gates.</p>'
+        rows = f'<p class="empty">{_h(dashboard_t("no_active_gates", lang))}</p>'
     else:
         rows = "\n".join(
             _gate_focus_card_html(
                 gate,
                 actions_by_gate.get(str(gate.get("gate_id") or "")),
                 action_links,
+                lang,
             )
             for gate in active_gates
         )
     return (
         '<section class="panel gate-focus">'
-        "<h2>Gate Focus</h2>"
+        f"<h2>{_h(dashboard_t('gate_focus', lang))}</h2>"
         f'<div class="gate-focus-grid">{rows}</div>'
         "</section>"
     )
@@ -1049,6 +1247,7 @@ def _gate_focus_card_html(
     gate: dict[str, Any],
     action: dict[str, Any] | None,
     action_links: bool,
+    lang: str = "en",
 ) -> str:
     return (
         '<article class="gate-focus-card">'
@@ -1058,34 +1257,34 @@ def _gate_focus_card_html(
         f"{_badge(gate.get('kind', ''))}"
         "</div>"
         f"<p>{_h(gate.get('reason', ''))}</p>"
-        f"<p><strong>Next action</strong>{_h(gate.get('next_action', ''))}</p>"
-        f"{_gate_focus_action_html(action, action_links)}"
+        f"<p><strong>{_h(dashboard_t('next_action', lang))}</strong>{_h(gate.get('next_action', ''))}</p>"
+        f"{_gate_focus_action_html(action, action_links, lang)}"
         "</article>"
     )
 
 
-def _gate_focus_action_html(action: dict[str, Any] | None, action_links: bool) -> str:
+def _gate_focus_action_html(action: dict[str, Any] | None, action_links: bool, lang: str = "en") -> str:
     if not action:
         return ""
     action_id = str(action.get("action_id") or "")
     resume_filter = _action_resume_filter(action)
     parts = []
     if action_id:
-        parts.append(f"<p><strong>Action ID</strong><code>{_h(action_id)}</code></p>")
+        parts.append(f"<p><strong>{_h(dashboard_t('action_id', lang))}</strong><code>{_h(action_id)}</code></p>")
     if resume_filter:
         parts.append(
-            f"<p><strong>Resume filter</strong><code>{_h(resume_filter)}</code></p>"
+            f"<p><strong>{_h(dashboard_t('resume_filter_label', lang))}</strong><code>{_h(resume_filter)}</code></p>"
         )
     if action_links and action_id:
-        href = f"/actions.md?action_id={quote(action_id)}"
+        href = _action_md_href(action_id, lang)
         parts.append(
-            f'<p><strong>Handoff</strong><a class="row-link" href="{_h(href)}">'
-            "Markdown</a></p>"
+            f'<p><strong>{_h(dashboard_t("handoff", lang))}</strong><a class="row-link" href="{_h(href)}">'
+            f"{_h(dashboard_t('markdown_link', lang))}</a></p>"
         )
     return "".join(parts)
 
 
-def _next_actions_section(next_actions: list[dict[str, Any]], action_links: bool = False) -> str:
+def _next_actions_section(next_actions: list[dict[str, Any]], action_links: bool = False, lang: str = "en") -> str:
     rows = "\n".join(
         "<tr>"
         f"<td>{_badge(action.get('priority', ''))}</td>"
@@ -1096,31 +1295,40 @@ def _next_actions_section(next_actions: list[dict[str, Any]], action_links: bool
         f"<td><code>{_h(action.get('action_id', ''))}</code></td>"
         f"<td><code>{_h(_action_resume_filter(action))}</code></td>"
         f"<td><code>{_h(action.get('command', ''))}</code></td>"
-        f"{_action_handoff_cell(action, action_links)}"
+        f"{_action_handoff_cell(action, action_links, lang)}"
         "</tr>"
         for action in next_actions
     )
-    headers = ["Priority", "Status", "Action", "Source", "Source ID", "Action ID", "Resume Filter", "Command"]
+    headers = [
+        dashboard_t("priority", lang),
+        dashboard_t("status", lang),
+        dashboard_t("action", lang),
+        dashboard_t("source", lang),
+        dashboard_t("source_id", lang),
+        dashboard_t("action_id", lang),
+        dashboard_t("resume_filter", lang),
+        dashboard_t("command", lang),
+    ]
     if action_links:
-        headers.append("Handoff")
+        headers.append(dashboard_t("handoff", lang))
     return _table_section(
-        "Action Queue",
+        dashboard_t("action_queue", lang),
         headers,
         rows,
     )
 
 
-def _action_handoff_cell(action: dict[str, Any], enabled: bool) -> str:
+def _action_handoff_cell(action: dict[str, Any], enabled: bool, lang: str = "en") -> str:
     if not enabled:
         return ""
     action_id = str(action.get("action_id") or "")
     if not action_id:
         return "<td></td>"
-    href = f"/actions.md?action_id={quote(action_id)}"
-    return f'<td><a class="row-link" href="{_h(href)}">Markdown</a></td>'
+    href = _action_md_href(action_id, lang)
+    return f'<td><a class="row-link" href="{_h(href)}">{_h(dashboard_t("markdown_link", lang))}</a></td>'
 
 
-def _provider_bindings_section(provider_bindings: list[dict[str, Any]]) -> str:
+def _provider_bindings_section(provider_bindings: list[dict[str, Any]], lang: str = "en") -> str:
     rows = "\n".join(
         "<tr>"
         f"<td><code>{_h(binding.get('binding_id', ''))}</code></td>"
@@ -1134,8 +1342,16 @@ def _provider_bindings_section(provider_bindings: list[dict[str, Any]]) -> str:
         for binding in provider_bindings
     )
     return _table_section(
-        "Provider Bindings",
-        ["Binding", "Provider", "Mode", "Health", "Adapter Config", "Manual Fallback", "Notes"],
+        dashboard_t("provider_bindings", lang),
+        [
+            dashboard_t("binding", lang),
+            dashboard_t("provider", lang),
+            dashboard_t("mode", lang),
+            dashboard_t("health", lang),
+            dashboard_t("adapter_config", lang),
+            dashboard_t("manual_fallback", lang),
+            dashboard_t("notes", lang),
+        ],
         rows,
     )
 
@@ -1147,7 +1363,7 @@ def _manual_fallback_html(binding: dict[str, Any]) -> str:
     return "<br>".join(_h(str(instruction)) for instruction in instructions)
 
 
-def _projects_section(projects: list[dict[str, Any]]) -> str:
+def _projects_section(projects: list[dict[str, Any]], lang: str = "en") -> str:
     rows = "\n".join(
         "<tr>"
         f"<td>{_h(project.get('display_name', ''))}</td>"
@@ -1158,10 +1374,14 @@ def _projects_section(projects: list[dict[str, Any]]) -> str:
         "</tr>"
         for project in projects
     )
-    return _table_section("Projects", ["Name", "ID", "Status", "Risk", "Goal"], rows)
+    return _table_section(
+        dashboard_t("projects_section", lang),
+        [dashboard_t("name", lang), dashboard_t("id", lang), dashboard_t("status", lang), dashboard_t("risk", lang), dashboard_t("goal", lang)],
+        rows,
+    )
 
 
-def _runs_section(runs: list[dict[str, Any]]) -> str:
+def _runs_section(runs: list[dict[str, Any]], lang: str = "en") -> str:
     rows = "\n".join(
         "<tr>"
         f"<td><code>{_h(run.get('run_id', ''))}</code></td>"
@@ -1173,12 +1393,16 @@ def _runs_section(runs: list[dict[str, Any]]) -> str:
         "</tr>"
         for run in runs
     )
-    return _table_section("Runs", ["Run", "Entry", "Status", "TaskSpec", "Evidence", "Review"], rows)
+    return _table_section(
+        dashboard_t("runs_section", lang),
+        [dashboard_t("run", lang), dashboard_t("entry", lang), dashboard_t("status", lang), dashboard_t("taskspec", lang), dashboard_t("evidence", lang), dashboard_t("review", lang)],
+        rows,
+    )
 
 
-def _run_details_section(runs: list[dict[str, Any]], decisions: list[dict[str, Any]]) -> str:
+def _run_details_section(runs: list[dict[str, Any]], decisions: list[dict[str, Any]], lang: str = "en") -> str:
     if not runs:
-        return _table_section("Run Details", ["Run", "Details"], "")
+        return _table_section(dashboard_t("run_details", lang), [dashboard_t("run", lang), dashboard_t("details", lang)], "")
     decisions_by_run = {
         str(decision.get("run_id") or ""): decision
         for decision in decisions
@@ -1188,44 +1412,45 @@ def _run_details_section(runs: list[dict[str, Any]], decisions: list[dict[str, A
         '<article class="run-detail">'
         f"<h3>{_h(run.get('run_id', ''))}</h3>"
         '<dl class="path-list">'
-        f"<dt>TaskSpec</dt><dd><code>{_h(run.get('taskspec_path', '')) or 'missing'}</code></dd>"
-        f"<dt>TaskSpec JSON</dt><dd><code>{_h(run.get('taskspec_json_path', '')) or 'missing'}</code></dd>"
-        f"<dt>Task Input</dt><dd><code>{_h(run.get('task_input_path', '')) or 'missing'}</code></dd>"
-        f"<dt>ExecutionReport</dt><dd><code>{_h(run.get('report_path', '')) or 'missing'}</code></dd>"
-        f"<dt>Packet</dt><dd><code>{_h(run.get('packet_path', '')) or 'missing'}</code></dd>"
-        f"{_run_decision_details(decisions_by_run.get(str(run.get('run_id') or '')))}"
+        f"<dt>{_h(dashboard_t('taskspec', lang))}</dt><dd><code>{_h(run.get('taskspec_path', '')) or dashboard_t('missing', lang)}</code></dd>"
+        f"<dt>{_h(dashboard_t('taskspec_json', lang))}</dt><dd><code>{_h(run.get('taskspec_json_path', '')) or dashboard_t('missing', lang)}</code></dd>"
+        f"<dt>{_h(dashboard_t('task_input', lang))}</dt><dd><code>{_h(run.get('task_input_path', '')) or dashboard_t('missing', lang)}</code></dd>"
+        f"<dt>{_h(dashboard_t('execution_report', lang))}</dt><dd><code>{_h(run.get('report_path', '')) or dashboard_t('missing', lang)}</code></dd>"
+        f"<dt>{_h(dashboard_t('packet', lang))}</dt><dd><code>{_h(run.get('packet_path', '')) or dashboard_t('missing', lang)}</code></dd>"
+        f"{_run_decision_details(decisions_by_run.get(str(run.get('run_id') or '')), lang)}"
         "</dl>"
-        f"<p class=\"command\"><span>Next command</span><code>{_h(run.get('next_command', '')) or 'Resolve gate before execution.'}</code></p>"
+        f"<p class=\"command\"><span>{_h(dashboard_t('next_command', lang))}</span><code>{_h(run.get('next_command', '')) or dashboard_t('resolve_gate', lang)}</code></p>"
         "</article>"
         for run in runs
     )
     return (
         '<section class="panel">'
-        "<h2>Run Details</h2>"
+        f"<h2>{_h(dashboard_t('run_details', lang))}</h2>"
         f'<div class="run-details">{cards}</div>'
         "</section>"
     )
 
 
-def _run_decision_details(decision: dict[str, Any] | None) -> str:
+def _run_decision_details(decision: dict[str, Any] | None, lang: str = "en") -> str:
     if not decision:
         return (
-            "<dt>Current Decision</dt><dd><code>missing</code></dd>"
-            "<dt>Decision Next Action</dt><dd>missing</dd>"
+            f"<dt>{_h(dashboard_t('current_decision', lang))}</dt><dd><code>{_h(dashboard_t('missing', lang))}</code></dd>"
+            f"<dt>{_h(dashboard_t('decision_next_action', lang))}</dt><dd>{_h(dashboard_t('missing', lang))}</dd>"
         )
     mode = decision.get("mode", "")
     status = decision.get("status", "")
     label = " / ".join(part for part in [str(mode), str(status)] if part)
     return (
-        f"<dt>Current Decision</dt><dd><code>{_h(decision.get('decision_id', ''))}</code> "
+        f"<dt>{_h(dashboard_t('current_decision', lang))}</dt><dd><code>{_h(decision.get('decision_id', ''))}</code> "
         f"{_badge(label or 'unknown')}</dd>"
-        f"<dt>Decision Next Action</dt><dd>{_h(decision.get('next_action', '')) or 'missing'}</dd>"
+        f"<dt>{_h(dashboard_t('decision_next_action', lang))}</dt><dd>{_h(decision.get('next_action', '')) or dashboard_t('missing', lang)}</dd>"
     )
 
 
 def _agents_section(
     agents: list[dict[str, Any]],
     provider_bindings: list[dict[str, Any]],
+    lang: str = "en",
 ) -> str:
     bindings_by_id = {
         str(binding.get("binding_id") or ""): binding
@@ -1237,8 +1462,16 @@ def _agents_section(
         for agent in agents
     )
     return _table_section(
-        "Agents",
-        ["Agent", "Role", "Scope", "Provider", "Binding", "Binding Health", "Status"],
+        dashboard_t("agents", lang),
+        [
+            dashboard_t("agent", lang),
+            dashboard_t("role", lang),
+            dashboard_t("scope", lang),
+            dashboard_t("provider", lang),
+            dashboard_t("binding", lang),
+            dashboard_t("binding_health", lang),
+            dashboard_t("status", lang),
+        ],
         rows,
     )
 
@@ -1268,7 +1501,7 @@ def _agent_binding(
     return bindings_by_id.get(str(agent.get("binding_id") or ""), {})
 
 
-def _gates_section(gates: list[dict[str, Any]]) -> str:
+def _gates_section(gates: list[dict[str, Any]], lang: str = "en") -> str:
     rows = "\n".join(
         "<tr>"
         f"<td><code>{_h(gate.get('gate_id', ''))}</code></td>"
@@ -1279,10 +1512,14 @@ def _gates_section(gates: list[dict[str, Any]]) -> str:
         "</tr>"
         for gate in gates
     )
-    return _table_section("Gates", ["Gate", "Kind", "Status", "Reason", "Next Action"], rows)
+    return _table_section(
+        dashboard_t("gates", lang),
+        [dashboard_t("gate", lang), dashboard_t("kind", lang), dashboard_t("status", lang), dashboard_t("reason", lang), dashboard_t("next_action", lang)],
+        rows,
+    )
 
 
-def _decisions_section(decisions: list[dict[str, Any]]) -> str:
+def _decisions_section(decisions: list[dict[str, Any]], lang: str = "en") -> str:
     rows = "\n".join(
         "<tr>"
         f"<td><code>{_h(decision.get('decision_id', ''))}</code></td>"
@@ -1292,18 +1529,22 @@ def _decisions_section(decisions: list[dict[str, Any]]) -> str:
         "</tr>"
         for decision in decisions
     )
-    return _table_section("Decisions", ["Decision", "Mode", "Status", "Next Action"], rows)
+    return _table_section(
+        dashboard_t("decisions", lang),
+        [dashboard_t("decision", lang), dashboard_t("mode", lang), dashboard_t("status", lang), dashboard_t("next_action", lang)],
+        rows,
+    )
 
 
-def _safety_section(safety: dict[str, Any]) -> str:
+def _safety_section(safety: dict[str, Any], lang: str = "en") -> str:
     required = safety.get("human_gate_required_for", [])
     chips = "\n".join(f'<span class="chip">{_h(item)}</span>' for item in required)
     return (
         '<section class="panel safety">'
-        "<h2>Safety Defaults</h2>"
+        f"<h2>{_h(dashboard_t('safety_defaults', lang))}</h2>"
         '<div class="safety-grid">'
-        f"<p><strong>Raw transcripts persisted</strong><span>{_h(str(safety.get('raw_transcripts_persisted', '')))}</span></p>"
-        f"<p><strong>Remote execution default</strong><span>{_h(str(safety.get('remote_execution_default', '')))}</span></p>"
+        f"<p><strong>{_h(dashboard_t('raw_transcripts_persisted', lang))}</strong><span>{_h(str(safety.get('raw_transcripts_persisted', '')))}</span></p>"
+        f"<p><strong>{_h(dashboard_t('remote_execution_default', lang))}</strong><span>{_h(str(safety.get('remote_execution_default', '')))}</span></p>"
         "</div>"
         '<div class="chips">'
         f"{chips}"
@@ -1627,6 +1868,22 @@ code {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
+}
+.lang-switch {
+  margin-left: 12px;
+  color: var(--accent);
+  font-weight: 800;
+  text-decoration: none;
+  font-size: 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.52);
+  align-self: start;
+}
+.lang-switch:hover {
+  border-color: var(--accent);
+  text-decoration: underline;
 }
 @media (max-width: 820px) {
   .masthead { display: block; }

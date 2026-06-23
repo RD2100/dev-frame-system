@@ -1414,3 +1414,204 @@ def test_worker_cli_returns_nonzero_for_failed_aihub_go(tmp_path, monkeypatch):
     ])
 
     assert exit_code == 1
+
+
+def test_render_visual_control_plane_html_defaults_to_english(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    rdgoal(
+        orchestrator,
+        project_root,
+        "Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+
+    html = render_visual_control_plane_state_html(build_visual_control_plane_state(runtime_dir))
+
+    assert '<html lang="en">' in html
+    assert "<title>DevFrame Visual Control Plane</title>" in html
+    assert "Visual State Snapshot" in html
+    assert "Gate Focus" in html
+    assert "Action Queue" in html
+    assert "Run Details" in html
+    assert "Safety Defaults" in html
+    assert "中文" in html
+    assert '?lang=zh-CN' in html
+
+
+def test_render_visual_control_plane_html_renders_chinese_when_lang_zh_cn(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    rdgoal(
+        orchestrator,
+        project_root,
+        "Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+
+    html = render_visual_control_plane_state_html(
+        build_visual_control_plane_state(runtime_dir),
+        endpoint_links=True,
+        lang="zh-CN",
+    )
+
+    assert '<html lang="zh-CN">' in html
+    assert "<title>DevFrame 可视化控制面</title>" in html
+    assert "可视化状态快照" in html
+    assert "门控聚焦" in html
+    assert "动作队列" in html
+    assert "运行详情" in html
+    assert "安全默认值" in html
+    assert "动作交接" in html
+    assert "智能体" in html
+    assert "English" in html
+    assert '?lang=en' in html
+    assert "DevFrame Visual Control Plane" not in html
+    assert "Visual State Snapshot" not in html
+
+
+def test_render_visual_control_plane_html_invalid_lang_falls_back_to_english(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    rdgoal(
+        orchestrator,
+        project_root,
+        "Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+
+    html = render_visual_control_plane_state_html(
+        build_visual_control_plane_state(runtime_dir),
+        lang="fr",
+    )
+
+    assert '<html lang="en">' in html
+    assert "<title>DevFrame Visual Control Plane</title>" in html
+    assert "Visual State Snapshot" in html
+    assert '?lang=zh-CN' in html
+
+
+def test_dashboard_server_serves_chinese_html_with_lang_switch(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    rdgoal(
+        orchestrator,
+        project_root,
+        "Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+    server = build_dashboard_server(runtime_dir=runtime_dir, port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+
+    try:
+        with urlopen(f"{base_url}/?lang=zh-CN", timeout=5) as response:
+            html = response.read().decode("utf-8")
+
+        assert '<html lang="zh-CN">' in html
+        assert "<title>DevFrame 可视化控制面</title>" in html
+        assert "可视化状态快照" in html
+        assert "门控聚焦" in html
+        assert "动作队列" in html
+        assert "运行详情" in html
+        assert "English" in html
+        assert 'href="?lang=en"' in html
+        assert 'href="?lang=zh-CN"' not in html
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_dashboard_server_serves_english_by_default(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    rdgoal(
+        orchestrator,
+        project_root,
+        "Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+    server = build_dashboard_server(runtime_dir=runtime_dir, port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+
+    try:
+        with urlopen(f"{base_url}/", timeout=5) as response:
+            html = response.read().decode("utf-8")
+
+        assert '<html lang="en">' in html
+        assert "<title>DevFrame Visual Control Plane</title>" in html
+        assert "Visual State Snapshot" in html
+        assert "中文" in html
+        assert '?lang=zh-CN' in html
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_dashboard_html_preserves_lang_in_action_links(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    rdgoal(
+        orchestrator,
+        project_root,
+        "Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+
+    html = render_visual_control_plane_state_html(
+        build_visual_control_plane_state(runtime_dir),
+        endpoint_links=True,
+        lang="zh-CN",
+    )
+
+    assert 'href="/actions.md?lang=zh-CN"' in html
+    assert 'href="/actions.md?action_id=human-gate-action&amp;lang=zh-CN"' in html
+
+
+def test_dashboard_server_serves_chinese_action_markdown(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    rdgoal(
+        orchestrator,
+        project_root,
+        "Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+    server = build_dashboard_server(runtime_dir=runtime_dir, port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+
+    try:
+        with urlopen(f"{base_url}/actions.md?lang=zh-CN", timeout=5) as response:
+            markdown = response.read().decode("utf-8")
+
+        assert "# 动作队列交接" in markdown
+        assert "用于手动恢复、审查或 Web AI 交接的只读队列。" in markdown
+        assert "- 动作 ID: `human-gate-action`" in markdown
+        assert "- 优先级: `" in markdown
+        assert "- 状态: `" in markdown
+        assert "devframe actions --action-id human-gate-action --format markdown" in markdown
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
