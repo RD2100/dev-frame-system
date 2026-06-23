@@ -7,6 +7,7 @@
     command templates without creating rdgoal packets or running workers.
 .EXAMPLE
     .\tools\devframe-go.ps1 -Goal "Fix the failing tests"
+    .\tools\devframe-go.ps1 -Goal "Fix the failing tests" -Changed -Prepare -Dashboard
     .\tools\devframe-go.ps1 -Goal "Fix the failing tests" -Changed -Execute
 #>
 
@@ -22,12 +23,18 @@ param(
     [string]$Model = "stepfun/step-3.7-flash",
     [string]$OpencodeAgent = "build",
     [switch]$Changed,
+    [switch]$Prepare,
     [switch]$Execute,
     [switch]$Dashboard,
     [string[]]$Command = @()
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($Prepare -and $Execute) {
+    [Console]::Error.WriteLine("Use either -Prepare or -Execute, not both.")
+    exit 2
+}
 
 if (-not (Get-Command devframe -ErrorAction SilentlyContinue)) {
     Write-Error "devframe CLI not found. Install devframe-control-plane before using this wrapper."
@@ -63,7 +70,7 @@ if ($RuntimeDir) {
 
 if ($Execute) {
     $argsList += "--execute"
-} else {
+} elseif (-not $Prepare -and -not $Dashboard) {
     $argsList += "--preview"
 }
 

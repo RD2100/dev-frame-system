@@ -119,11 +119,14 @@ Bootstrap also generates a project-local `/go` bridge:
 
 ```powershell
 .\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed
+.\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed -Prepare -Dashboard
 .\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed -Execute
 ```
 
 The wrapper defaults to preview mode, so it shows changed-file shards and worker
-command templates before any rdgoal packets or worker runs are created.
+command templates before any rdgoal packets or worker runs are created. Use
+`-Prepare -Dashboard` to create queued packets and view them without running
+workers.
 
 Optionally install the control-plane CLI and route a project through `rdgoal`:
 

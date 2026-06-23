@@ -129,6 +129,7 @@ def test_runtime_bootstrap_generates_go_wrapper(tmp_path):
     assert '"code"' in text
     assert '"--preview"' in text
     assert '"--execute"' in text
+    assert "$Prepare -and $Execute" in text
     assert "& devframe @argsList" in text
     assert "tools/devframe-go.ps1" in agents.read_text(encoding="utf-8-sig")
 
@@ -174,6 +175,63 @@ def test_runtime_bootstrap_generates_go_wrapper(tmp_path):
     assert "--changed" in captured_args
     assert "--preview" in captured_args
     assert "--execute" not in captured_args
+
+    prepare_capture_path = tmp_path / "devframe-prepare-args.txt"
+    fake_devframe.write_text(
+        f"@echo off\r\necho %* > \"{prepare_capture_path}\"\r\nexit /b 0\r\n",
+        encoding="utf-8",
+    )
+    prepare_result = subprocess.run(
+        [
+            "powershell",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(wrapper),
+            "-Goal",
+            "Prepare dashboard dispatch.",
+            "-Changed",
+            "-Dashboard",
+        ],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+        env=env,
+    )
+
+    prepare_args = prepare_capture_path.read_text(encoding="utf-8").strip()
+
+    assert prepare_result.returncode == 0, prepare_result.stdout + prepare_result.stderr
+    assert 'code "Prepare dashboard dispatch."' in prepare_args
+    assert "--changed" in prepare_args
+    assert "--dashboard" in prepare_args
+    assert "--preview" not in prepare_args
+    assert "--execute" not in prepare_args
+
+    conflict_result = subprocess.run(
+        [
+            "powershell",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(wrapper),
+            "-Goal",
+            "Invalid mode.",
+            "-Prepare",
+            "-Execute",
+        ],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+        env=env,
+    )
+
+    assert conflict_result.returncode == 2
+    assert "Use either -Prepare or -Execute" in (conflict_result.stdout + conflict_result.stderr)
 
 
 def test_runtime_bootstrap_dry_run_lists_go_wrapper(tmp_path):

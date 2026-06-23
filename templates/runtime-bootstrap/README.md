@@ -52,3 +52,7 @@ A one-command bootstrap that initializes the RD2100 Agent Runtime governance fra
 | capability-inventory.template.md | {{PROJECT_NAME}}, {{CURRENT_DATE}}, {{PHASE}} | capability-inventory.md |
 | tool-policy.template.md | {{PROJECT_NAME}}, {{PROJECT_ROOT}}, {{PHASE}} | tool-policy.md |
 | devframe-go.template.ps1 | {{PROJECT_ROOT}} | tools/devframe-go.ps1 |
+
+`tools/devframe-go.ps1` defaults to token-safe preview. Use `-Prepare
+-Dashboard` to create queued packets and view them in the dashboard without
+running workers; use `-Execute` only when you are ready to spend worker tokens.

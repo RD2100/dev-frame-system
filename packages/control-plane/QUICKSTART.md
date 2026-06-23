@@ -110,6 +110,7 @@ you can use its project-local `/go` bridge instead:
 
 ```powershell
 .\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed
+.\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed -Prepare -Dashboard
 .\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed -Execute
 ```
 
