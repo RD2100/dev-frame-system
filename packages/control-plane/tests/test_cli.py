@@ -40,6 +40,7 @@ def test_code_help_is_available(monkeypatch, capsys):
     assert "--agents" in output
     assert "--max-agents" in output
     assert "--changed" in output
+    assert "--since" in output
     assert "--preview" in output
     assert "--dashboard" in output
 
@@ -179,6 +180,59 @@ def test_code_changed_targets_git_files(tmp_path, monkeypatch, capsys):
 
     assert exit_code == 0
     assert metadata["agents"][0]["targets"] == ["src/app.py"]
+
+
+def test_code_since_targets_git_ref_files(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    src_dir = project_root / "src"
+    src_dir.mkdir(parents=True)
+    (src_dir / "app.py").write_text("print('base')\n", encoding="utf-8")
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "add", "src/app.py"], cwd=project_root, check=True, capture_output=True, text=True)
+    subprocess.run([
+        "git",
+        "-c",
+        "user.name=DevFrame Test",
+        "-c",
+        "user.email=devframe@example.invalid",
+        "commit",
+        "-m",
+        "base",
+    ], cwd=project_root, check=True, capture_output=True, text=True)
+    (src_dir / "api.py").write_text("print('feature')\n", encoding="utf-8")
+    subprocess.run(["git", "add", "src/api.py"], cwd=project_root, check=True, capture_output=True, text=True)
+    subprocess.run([
+        "git",
+        "-c",
+        "user.name=DevFrame Test",
+        "-c",
+        "user.email=devframe@example.invalid",
+        "commit",
+        "-m",
+        "feature",
+    ], cwd=project_root, check=True, capture_output=True, text=True)
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "Review branch delta only.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--since",
+        "HEAD~1",
+        "--agents",
+        "auto",
+    ])
+
+    exit_code = devframe_cli_main()
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert len(metadata["agents"]) == 1
+    assert metadata["agents"][0]["targets"] == ["src/api.py"]
 
 
 def test_code_agents_auto_uses_changed_file_count(tmp_path, monkeypatch, capsys):
@@ -411,6 +465,7 @@ def test_go_help_is_available(monkeypatch, capsys):
     assert "--agents" in output
     assert "--max-agents" in output
     assert "--changed" in output
+    assert "--since" in output
     assert "--preview" in output
 
 

@@ -105,13 +105,15 @@ fan-out. Preview and dispatch balance targets by estimated bytes to avoid
 overloading one worker with most of the context. `--dashboard` serves the same
 runtime in the read-only visual interface; append `?lang=zh-CN` to the printed
 URL for Chinese. Use repeated `--target <path>` when you want to name a specific
-slice manually.
+slice manually. Use `--since <git-ref>` when the task should cover the branch
+delta against a base ref, for example `--since origin/main`.
 
 For longer prompts, keep the task in a file or pipe it from another tool:
 
 ```powershell
 devframe code --prompt-file .\TASK.md --changed --agents auto
 Get-Content .\TASK.md | devframe code --changed --agents auto --preview
+devframe code --prompt-file .\TASK.md --since origin/main --agents auto --preview
 ```
 
 If the project was initialized with `templates/runtime-bootstrap/bootstrap.ps1`,
@@ -139,6 +141,8 @@ commands. Add `--execute` to run the shards concurrently. Without `--command`,
 the default worker command is `opencode run -m stepfun/step-3.7-flash --agent build`;
 pass `--command <your-worker>` to use another executor that reads
 `RDGOAL_TASKSPEC_JSON` and writes `RDGOAL_REPORT_PATH`.
+Use `--since <git-ref>` or `--changed` to keep `/go` shards focused on the files
+that actually changed instead of giving every worker project-wide context.
 The dashboard reads the same runtime and shows the go-run plus each shard's
 target, estimated bytes, changed files, packet path, status, and worker command
 in a dedicated `/go Coding Agents` section. When workers finish, `devframe code`

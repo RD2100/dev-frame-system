@@ -25,6 +25,7 @@ devframe init code_project D:\tmp\demo-project
 devframe code "Build the MVP" --project D:\tmp\demo-project --target src --dashboard
 devframe code "Build the MVP" --project D:\tmp\demo-project --target src --preview
 devframe code --project D:\tmp\demo-project --prompt-file TASK.md --changed --agents auto
+devframe code --project D:\tmp\demo-project --prompt-file TASK.md --since origin/main --agents auto
 devframe run --pipeline pipelines\example_pipeline.yaml
 ```
 
@@ -38,6 +39,8 @@ keep worker prompts focused on modified, staged, or untracked git files and
 automatically choose a bounded shard count; use `--max-agents` to cap that
 fan-out or `--target <path>` for manual scoping. Dispatch and preview balance
 targets by estimated bytes so large files are spread across workers more evenly.
+Use `--since <git-ref>` to scope a branch task to files changed since a base
+ref such as `origin/main`.
 For longer task briefs, pass `--prompt-file <path>` or pipe text into
 `devframe code`; both feed the same `/go` coding-agent dispatch without putting
 the whole prompt on the command line. After `--execute`, the CLI summarizes each

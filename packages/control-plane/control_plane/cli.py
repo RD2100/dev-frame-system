@@ -27,8 +27,8 @@ HELP_TEXT = """DevFrame Control Plane CLI
 
 RUN_USAGE = "Usage: devframe run --pipeline <path> [--execute] [--project <dir>]"
 DASHBOARD_USAGE = "Usage: devframe dashboard serve [--runtime-dir <dir>] [--paper-project <dir>] [--host 127.0.0.1] [--port 8765] [--allow-remote]"
-GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2|auto] [--max-agents 4] [--target <path>] [--changed] [--preview] [--execute] [--model provider/model]"
-CODE_USAGE = "Usage: devframe code [\"<goal>\" | --prompt-file <path>] [--project <dir>] [--agents 1|auto] [--max-agents 4] [--target <path>] [--changed] [--preview] [--execute] [--dashboard]"
+GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--model provider/model]"
+CODE_USAGE = "Usage: devframe code [\"<goal>\" | --prompt-file <path>] [--project <dir>] [--agents 1|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--dashboard]"
 
 
 def _wants_help(args: list[str]) -> bool:
@@ -300,6 +300,7 @@ def cmd_go() -> int:
     parser.add_argument("--max-agents", type=int, default=4, help="Maximum shards when --agents auto is used")
     parser.add_argument("--target", action="append", default=[], help="Target file or directory. May be repeated")
     parser.add_argument("--changed", action="store_true", help="Use changed git files as token-saving targets")
+    parser.add_argument("--since", default=None, help="Use files changed since this git ref as token-saving targets")
     parser.add_argument("--preview", action="store_true", help="Print the shard plan without creating packets")
     parser.add_argument("--runtime-dir", default=None, help="Local runtime directory for go dispatch state")
     parser.add_argument("--execute", action="store_true", help="Run shard workers concurrently")
@@ -314,7 +315,7 @@ def cmd_go() -> int:
     )
     args = parser.parse_args(sys.argv[2:])
     try:
-        targets = _resolve_coding_targets(args.project_path, args.target, changed=args.changed)
+        targets = _resolve_coding_targets(args.project_path, args.target, changed=args.changed, since=args.since)
         agents = _resolve_agent_count(args.agents, targets, max_agents=args.max_agents)
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
@@ -381,6 +382,7 @@ def cmd_code() -> int:
     parser.add_argument("--max-agents", type=int, default=4, help="Maximum shards when --agents auto is used")
     parser.add_argument("--target", action="append", default=[], help="Target file or directory. May be repeated")
     parser.add_argument("--changed", action="store_true", help="Use changed git files as token-saving targets")
+    parser.add_argument("--since", default=None, help="Use files changed since this git ref as token-saving targets")
     parser.add_argument("--preview", action="store_true", help="Print the shard plan without creating packets")
     parser.add_argument("--runtime-dir", default=None, help="Local runtime directory for code session state")
     parser.add_argument("--execute", action="store_true", help="Run coding worker(s) instead of only preparing packets")
@@ -412,7 +414,7 @@ def cmd_code() -> int:
         print("ERROR: dashboard exposes local runtime paths; use --allow-remote to bind outside loopback.")
         return 1
     try:
-        targets = _resolve_coding_targets(args.project, args.target, changed=args.changed)
+        targets = _resolve_coding_targets(args.project, args.target, changed=args.changed, since=args.since)
         agents = _resolve_agent_count(args.agents, targets, max_agents=args.max_agents)
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
@@ -488,12 +490,26 @@ def _resolve_code_goal(goal: str | None, prompt_file: str | None) -> str:
     return input("Goal: ").strip()
 
 
-def _resolve_coding_targets(project_path: str | Path, targets: list[str], *, changed: bool) -> list[str]:
-    if not changed:
-        return list(targets)
-    git_targets = _git_changed_targets(project_path)
+def _resolve_coding_targets(
+    project_path: str | Path,
+    targets: list[str],
+    *,
+    changed: bool,
+    since: str | None,
+) -> list[str]:
+    git_targets: list[str] = []
+    if since:
+        git_targets.extend(_git_since_targets(project_path, since))
+    if changed:
+        git_targets.extend(_git_changed_targets(project_path))
+    if not changed and not since:
+        return _dedupe_targets(targets)
     merged = _dedupe_targets([*targets, *git_targets])
     if not merged:
+        if since and changed:
+            raise ValueError("--since/--changed found no git target files")
+        if since:
+            raise ValueError(f"--since {since} found no files changed against HEAD")
         raise ValueError("--changed found no modified, staged, or untracked git files")
     return merged
 
@@ -589,6 +605,23 @@ def _git_changed_targets(project_path: str | Path) -> list[str]:
     ):
         targets.extend(line.strip() for line in _git_output(project_root, args).splitlines() if line.strip())
     return _dedupe_targets(targets)
+
+
+def _git_since_targets(project_path: str | Path, ref: str) -> list[str]:
+    project_root = Path(project_path).resolve()
+    if not project_root.exists():
+        raise ValueError(f"project path does not exist: {project_root}")
+    inside = _git_output(project_root, ["rev-parse", "--is-inside-work-tree"])
+    if inside.strip().lower() != "true":
+        raise ValueError(f"--since requires a git work tree: {project_root}")
+    output = _git_output(project_root, [
+        "diff",
+        "--name-only",
+        "--diff-filter=ACMR",
+        f"{ref}...HEAD",
+        "--",
+    ])
+    return _dedupe_targets([line.strip() for line in output.splitlines() if line.strip()])
 
 
 def _git_output(project_root: Path, args: list[str]) -> str:
