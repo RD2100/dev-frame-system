@@ -27,8 +27,8 @@ HELP_TEXT = """DevFrame Control Plane CLI
 
 RUN_USAGE = "Usage: devframe run --pipeline <path> [--execute] [--project <dir>]"
 DASHBOARD_USAGE = "Usage: devframe dashboard serve [--runtime-dir <dir>] [--paper-project <dir>] [--host 127.0.0.1] [--port 8765] [--allow-remote]"
-GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2|auto] [--max-agents 4] [--target <path>] [--changed] [--execute] [--model provider/model]"
-CODE_USAGE = "Usage: devframe code \"<goal>\" [--project <dir>] [--agents 1|auto] [--max-agents 4] [--target <path>] [--changed] [--execute] [--dashboard]"
+GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2|auto] [--max-agents 4] [--target <path>] [--changed] [--preview] [--execute] [--model provider/model]"
+CODE_USAGE = "Usage: devframe code \"<goal>\" [--project <dir>] [--agents 1|auto] [--max-agents 4] [--target <path>] [--changed] [--preview] [--execute] [--dashboard]"
 
 
 def _wants_help(args: list[str]) -> bool:
@@ -296,6 +296,7 @@ def cmd_go() -> int:
     parser.add_argument("--max-agents", type=int, default=4, help="Maximum shards when --agents auto is used")
     parser.add_argument("--target", action="append", default=[], help="Target file or directory. May be repeated")
     parser.add_argument("--changed", action="store_true", help="Use changed git files as token-saving targets")
+    parser.add_argument("--preview", action="store_true", help="Print the shard plan without creating packets")
     parser.add_argument("--runtime-dir", default=None, help="Local runtime directory for go dispatch state")
     parser.add_argument("--execute", action="store_true", help="Run shard workers concurrently")
     parser.add_argument("--timeout", type=int, default=900, help="Per-worker timeout in seconds")
@@ -314,6 +315,16 @@ def cmd_go() -> int:
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
+    if args.preview:
+        print(_render_coding_preview(
+            entrypoint="devframe go",
+            project_path=args.project_path,
+            goal=args.requirement,
+            targets=targets,
+            agents=agents,
+            execute=args.execute,
+        ), end="")
+        return 0
 
     try:
         result = run_go_dispatch(
@@ -353,6 +364,7 @@ def cmd_code() -> int:
     parser.add_argument("--max-agents", type=int, default=4, help="Maximum shards when --agents auto is used")
     parser.add_argument("--target", action="append", default=[], help="Target file or directory. May be repeated")
     parser.add_argument("--changed", action="store_true", help="Use changed git files as token-saving targets")
+    parser.add_argument("--preview", action="store_true", help="Print the shard plan without creating packets")
     parser.add_argument("--runtime-dir", default=None, help="Local runtime directory for code session state")
     parser.add_argument("--execute", action="store_true", help="Run coding worker(s) instead of only preparing packets")
     parser.add_argument("--timeout", type=int, default=900, help="Per-worker timeout in seconds")
@@ -386,6 +398,16 @@ def cmd_code() -> int:
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
+    if args.preview:
+        print(_render_coding_preview(
+            entrypoint="devframe code",
+            project_path=args.project,
+            goal=goal,
+            targets=targets,
+            agents=agents,
+            execute=args.execute,
+        ), end="")
+        return 0
 
     try:
         result = run_go_dispatch(
@@ -448,6 +470,47 @@ def _resolve_agent_count(raw_agents: str, targets: list[str], *, max_agents: int
     if agents < 1:
         raise ValueError("--agents must be >= 1")
     return agents
+
+
+def _render_coding_preview(
+    *,
+    entrypoint: str,
+    project_path: str | Path,
+    goal: str,
+    targets: list[str],
+    agents: int,
+    execute: bool,
+) -> str:
+    shards = _split_targets_for_preview(targets, agents)
+    lines = [
+        "DevFrame coding preview",
+        f"entrypoint   : {entrypoint}",
+        f"project_root : {Path(project_path).resolve()}",
+        f"goal         : {goal}",
+        f"execute      : {execute}",
+        f"agents       : {agents}",
+        f"targets      : {len(targets)}",
+        "",
+        "Shards",
+    ]
+    for index, shard_targets in enumerate(shards, start=1):
+        lines.append(f"- coding-agent-{index} shard={index}/{agents}")
+        if shard_targets:
+            lines.extend(f"  - {target}" for target in shard_targets)
+        else:
+            lines.append("  - (project scope)")
+    lines.extend([
+        "",
+        "No packets were created. Re-run without --preview to prepare dispatch packets.",
+    ])
+    return "\n".join(lines) + "\n"
+
+
+def _split_targets_for_preview(targets: list[str], agents: int) -> list[list[str]]:
+    shards = [[] for _ in range(agents)]
+    for index, target in enumerate(targets):
+        shards[index % agents].append(target)
+    return shards
 
 
 def _git_changed_targets(project_path: str | Path) -> list[str]:

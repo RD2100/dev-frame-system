@@ -92,16 +92,18 @@ cd D:\tmp\demo-project
 devframe code "Build the MVP" `
   --target src `
   --runtime-dir C:\Users\you\.devframe-runtime `
-  --dashboard
+  --preview
 ```
 
 By default this prepares one coding-agent session and prints the worker command
-without spending agent tokens. Add `--execute` only when you want the worker to
-run. In a real git worktree, use `--changed --agents auto` to target modified,
-staged, or untracked files and choose a bounded shard count automatically; use
-`--max-agents` to cap the fan-out. `--dashboard` serves the same runtime in the
-read-only visual interface; append `?lang=zh-CN` to the printed URL for Chinese.
-Use repeated `--target <path>` when you want to name a specific slice manually.
+without spending agent tokens. Add `--preview` when you only want to inspect the
+shard plan and avoid creating runtime packets. Add `--execute` only when you
+want the worker to run. In a real git worktree, use `--changed --agents auto` to
+target modified, staged, or untracked files and choose a bounded shard count
+automatically; use `--max-agents` to cap the fan-out. `--dashboard` serves the
+same runtime in the read-only visual interface; append `?lang=zh-CN` to the
+printed URL for Chinese. Use repeated `--target <path>` when you want to name a
+specific slice manually.
 
 Use `devframe go` when you want to name the project path explicitly or prepare
 several shards directly:

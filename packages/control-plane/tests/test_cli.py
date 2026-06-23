@@ -38,6 +38,7 @@ def test_code_help_is_available(monkeypatch, capsys):
     assert "--agents" in output
     assert "--max-agents" in output
     assert "--changed" in output
+    assert "--preview" in output
     assert "--dashboard" in output
 
 
@@ -133,6 +134,43 @@ def test_code_agents_auto_uses_changed_file_count(tmp_path, monkeypatch, capsys)
         ["src/app.py"],
         ["src/ui.py"],
     ]
+
+
+def test_code_preview_shows_shards_without_creating_packets(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "Preview coding fanout.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--agents",
+        "auto",
+        "--target",
+        "src/a.py",
+        "--target",
+        "src/b.py",
+        "--preview",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "DevFrame coding preview" in output
+    assert "entrypoint   : devframe code" in output
+    assert "agents       : 2" in output
+    assert "targets      : 2" in output
+    assert "- coding-agent-1 shard=1/2" in output
+    assert "  - src/a.py" in output
+    assert "- coding-agent-2 shard=2/2" in output
+    assert "  - src/b.py" in output
+    assert "No packets were created." in output
+    assert not runtime_dir.exists()
 
 
 def test_code_agents_rejects_invalid_value(tmp_path, monkeypatch, capsys):
@@ -257,6 +295,7 @@ def test_go_help_is_available(monkeypatch, capsys):
     assert "--agents" in output
     assert "--max-agents" in output
     assert "--changed" in output
+    assert "--preview" in output
 
 
 def test_go_agents_auto_respects_max_agents(tmp_path, monkeypatch, capsys):
@@ -290,6 +329,43 @@ def test_go_agents_auto_respects_max_agents(tmp_path, monkeypatch, capsys):
     assert len(metadata["agents"]) == 2
     assert metadata["agents"][0]["targets"] == ["src/a.py", "src/c.py"]
     assert metadata["agents"][1]["targets"] == ["src/b.py"]
+
+
+def test_go_preview_respects_shard_plan_without_runtime(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "go",
+        str(project_root),
+        "Preview explicit targets.",
+        "--runtime-dir",
+        str(runtime_dir),
+        "--agents",
+        "2",
+        "--target",
+        "src/a.py",
+        "--target",
+        "src/b.py",
+        "--target",
+        "src/c.py",
+        "--preview",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "entrypoint   : devframe go" in output
+    assert "agents       : 2" in output
+    assert "targets      : 3" in output
+    assert "- coding-agent-1 shard=1/2" in output
+    assert "  - src/a.py" in output
+    assert "  - src/c.py" in output
+    assert "- coding-agent-2 shard=2/2" in output
+    assert "  - src/b.py" in output
+    assert not runtime_dir.exists()
 
 
 def test_go_prepares_parallel_coding_agent_packets(tmp_path, monkeypatch, capsys):

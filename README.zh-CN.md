@@ -28,6 +28,8 @@ devframe code "<goal>"  # 在当前仓库启动类似 Codex 的编程会话
 
 dev-frame-system 的答案是：把网页 AI 会话变成软件研发的**外部大脑**。网页 AI 负责保存产品方向、工程取舍、任务边界、证据、审查结论和经验记忆；IDE、CLI、浏览器、脚本、测试框架以及不同厂商的 coding agent 都是可替换的执行器。
 
+落到产品形态上，第一个主入口是 `devframe code`：一个面向 Codex、Claude Code、OpenCode 或其他 worker 命令的本地编程 CLI。它不替代模型，也不替代 IDE；它负责限定任务边界、准备 coding 会话、按需拆分并发 agent，并把状态写进可选的只读 Dashboard。
+
 ## 为什么需要它
 
 AI coding 工具很擅长产出代码，但它们经常不擅长三件事：记住真正的产品方向，证明代码确实变好了，以及在工作跑偏前停下来。
@@ -110,7 +112,7 @@ rdgoal "D:\my-project" "Build the MVP" --digest
 devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-dir "$env:TEMP\devframe-go"
 ```
 
-`devframe code` 是更接近 Codex/OpenCode 形态的编程入口。它默认作用于当前仓库，准备一个有边界的 coding-agent 会话，打印精确 worker 命令，并把状态写入 Dashboard 可读取的 runtime。真实 git 工作区里推荐用 `--changed --agents auto`：只把 modified、staged 或 untracked 文件作为 target，并按文件数自动拆成有上限的并发分片；`--max-agents` 可以调整自动拆分上限。准备真正消耗 worker token 时再加 `--execute`。加 `--dashboard` 会直接启动同一个 runtime 的本地只读可视化界面；在 Dashboard URL 后追加 `?lang=zh-CN` 可切换中文界面。
+`devframe code` 是更接近 Codex/OpenCode 形态的编程入口。它默认作用于当前仓库，准备一个有边界的 coding-agent 会话，打印精确 worker 命令，并把状态写入 Dashboard 可读取的 runtime。真实 git 工作区里推荐用 `--changed --agents auto`：只把 modified、staged 或 untracked 文件作为 target，并按文件数自动拆成有上限的并发分片；`--max-agents` 可以调整自动拆分上限。先用 `--preview` 可以只看分片计划，不创建 packet，也不消耗 worker token。准备真正消耗 worker token 时再加 `--execute`。加 `--dashboard` 会直接启动同一个 runtime 的本地只读可视化界面；在 Dashboard URL 后追加 `?lang=zh-CN` 可切换中文界面。
 
 `/rdgoal` 是面向用户的 slash 入口。在 shell 中使用已安装的 `rdgoal` 命令。`devframe rdgoal` 作为兼容形式仍然可用于已经使用 umbrella CLI 的脚本。
 
