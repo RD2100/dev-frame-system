@@ -10,26 +10,71 @@ commands that matter most.
   `README.md`, `README.zh-CN.md`, `packages/control-plane/README.md`,
   `packages/control-plane/QUICKSTART.md`.
 - Release and readiness docs:
-  `docs/agent-runtime/rdgoal-total-control.md`,
   `docs/agent-runtime/dispatch-model-profiles.md`,
   `docs/agent-runtime/integration-contracts.md`,
-  `docs/agent-runtime/rdpaper-workflow.md`,
+  `docs/agent-runtime/project-local-skill-bindings.md`,
   `docs/agent-runtime/runtime-invariants.md`,
   `docs/agent-runtime/visual-control-plane.md`,
-  `docs/agent-runtime/web-ai-adapter-contract.md`,
-  `docs/agent-runtime/project-local-skill-bindings.md`,
   `docs/status/release-readiness.md`, `docs/status/reviewer-index.md`.
+- Negative test fixtures:
+  `docs/agent-runtime/negative-test-fixtures/NEG-017-write-outside-scope.json`,
+  `docs/agent-runtime/negative-test-fixtures/NEG-024-path-traversal-read.json`.
 - Verification scripts:
-  `scripts/verify-public-snapshot.ps1`,
   `scripts/verify-control-plane-wheel.ps1`,
-  `scripts/verify-release.ps1`,
   `packages/agent-acceptance/templates/ci-preflight/install.ps1`.
-- CI entrypoint:
-  `.github/workflows/release-verify.yml`.
-- Control-plane rdgoal implementation:
+- Control-plane core changes:
   `packages/control-plane/setup.py`,
+  `packages/control-plane/control_plane/cli.py`,
+  `packages/control-plane/control_plane/dashboard.py`,
+  `packages/control-plane/control_plane/visual_state.py`.
+- ai-workflow-hub context adapter:
+  `packages/ai-workflow-hub/src/ai_workflow_hub/context_layer/adapters/zotero_web_metadata_pilot.py`.
+- Starter project templates:
+  `packages/control-plane/templates/paper_iteration/PAPER_PROFILE.yaml`,
+  `packages/control-plane/templates/paper_iteration/PAPER_STATE.yaml`,
+  `packages/control-plane/templates/visual_control_plane/CONTROL_PLANE_STATE.yaml`.
+- Public schemas:
+  `schemas/agent-runtime/memory-update-record.schema.json`,
+  `schemas/resource-integration/codegraph-index-record.schema.json`,
+  `schemas/resource-integration/memory-context-record.schema.json`,
+  `schemas/resource-integration/script-safety-record.schema.json`,
+  `schemas/visual_control_plane_state.schema.json`,
+  `packages/test-frame/schemas/agent-runtime/memory-update-record.schema.json`,
+  `packages/test-frame/schemas/resource-integration/codegraph-index-record.schema.json`,
+  `packages/test-frame/schemas/resource-integration/memory-context-record.schema.json`,
+  `packages/test-frame/schemas/resource-integration/script-safety-record.schema.json`.
+- Tests:
+  `packages/control-plane/tests/test_cli.py`,
+  `packages/control-plane/tests/test_public_snapshot.py`,
+  `packages/control-plane/tests/test_rdgoal.py`.
+
+## Required Public Surface Cross-check
+
+The release slice also depends on these public entry points staying visible to
+reviewers, even when a given PR only touches some of them:
+
+- Root docs and CI:
+  `README.md`, `README.zh-CN.md`, `.github/workflows/release-verify.yml`,
+  `pytest.ini`.
+- Runtime docs:
+  `docs/agent-runtime/rdgoal-total-control.md`,
+  `docs/agent-runtime/dispatch-model-profiles.md`,
+  `docs/agent-runtime/rdpaper-workflow.md`,
+  `docs/agent-runtime/visual-control-plane.md`,
+  `docs/agent-runtime/web-ai-adapter-contract.md`,
+  `docs/status/release-readiness.md`, `docs/status/reviewer-index.md`.
+- Control-plane package and templates:
+  `packages/control-plane/README.md`, `packages/control-plane/QUICKSTART.md`,
+  `packages/control-plane/setup.py`,
+  `packages/control-plane/templates/paper_iteration/PAPER_PROFILE.yaml`,
+  `packages/control-plane/templates/paper_iteration/PAPER_STATE.yaml`,
+  `packages/control-plane/templates/paper_iteration/WEB_AI_ADAPTER.yaml`,
+  `packages/control-plane/templates/visual_control_plane/CONTROL_PLANE_STATE.yaml`.
+- Control-plane implementation:
   `packages/control-plane/control_plane/agent_adapter.py`,
   `packages/control-plane/control_plane/backup_guard.py`,
+  `packages/control-plane/control_plane/cli.py`,
+  `packages/control-plane/control_plane/dashboard.py`,
   `packages/control-plane/control_plane/decision_engine.py`,
   `packages/control-plane/control_plane/dispatch_packet.py`,
   `packages/control-plane/control_plane/orchestrator.py`,
@@ -39,56 +84,23 @@ commands that matter most.
   `packages/control-plane/control_plane/runtime_digest.py`,
   `packages/control-plane/control_plane/runtime_store.py`,
   `packages/control-plane/control_plane/visual_state.py`,
-  `packages/control-plane/control_plane/worker.py`,
-  `packages/control-plane/control_plane/dashboard.py`.
-- Existing control-plane integration points:
-  `packages/control-plane/control_plane/cli.py`,
-  `packages/control-plane/control_plane/pipeline_runner.py`.
-- ai-workflow-hub context adapter:
-  `packages/ai-workflow-hub/src/ai_workflow_hub/context_layer/adapters/zotero_web_metadata_pilot.py`.
-- Starter project templates:
-  `packages/control-plane/templates/code_project/*`,
-  `packages/control-plane/templates/paper_iteration/PAPER_PROFILE.yaml`,
-  `packages/control-plane/templates/paper_iteration/PAPER_STATE.yaml`,
-  `packages/control-plane/templates/paper_iteration/*`,
-  `packages/control-plane/templates/visual_control_plane/`,
-  `packages/control-plane/templates/visual_control_plane/CONTROL_PLANE_STATE.yaml`,
-  `packages/control-plane/templates/runtime-bootstrap/*`,
-  `templates/runtime-bootstrap/bootstrap.ps1`.
-- Public rules and schemas:
+  `packages/control-plane/control_plane/worker.py`.
+- Tests, rules, schemas, and release scripts:
+  `packages/control-plane/tests/test_cli.py`,
+  `packages/control-plane/tests/test_public_snapshot.py`,
+  `packages/control-plane/tests/test_rdgoal.py`,
   `rules/orchestration.md`, `rules/project-contracts/_template.md`,
-  `rules/web-ai-adapters.md`,
-  `schemas/agent-runtime/memory-update-record.schema.json`,
-  `schemas/project_contract.schema.json`,
+  `rules/web-ai-adapters.md`, `schemas/project_contract.schema.json`,
   `schemas/rdgoal_dispatch_packet.schema.json`,
-  `schemas/resource-integration/codegraph-index-record.schema.json`,
-  `schemas/resource-integration/memory-context-record.schema.json`,
-  `schemas/resource-integration/script-safety-record.schema.json`,
   `schemas/visual_control_plane_state.schema.json`,
   `schemas/web_ai_adapter.schema.json`,
-  `packages/test-frame/schemas/agent-runtime/memory-update-record.schema.json`,
-  `packages/test-frame/schemas/resource-integration/codegraph-index-record.schema.json`,
-  `packages/test-frame/schemas/resource-integration/memory-context-record.schema.json`,
-  `packages/test-frame/schemas/resource-integration/script-safety-record.schema.json`.
-- Tests:
-  `packages/control-plane/tests/test_rdgoal.py`,
-  `packages/control-plane/tests/test_cli.py`,
-  `packages/control-plane/tests/test_public_snapshot.py`, `pytest.ini`.
-- Negative test fixtures:
-  `docs/agent-runtime/negative-test-fixtures/NEG-017-write-outside-scope.json`,
-  `docs/agent-runtime/negative-test-fixtures/NEG-024-path-traversal-read.json`.
+  `scripts/verify-control-plane-wheel.ps1`, `scripts/verify-release.ps1`.
 
 ## Critical Code Paths
 
 - `/rdgoal` and shell `rdgoal` routing:
   `setup.py` exposes `rdgoal=control_plane.rdgoal_cli:main`; `devframe rdgoal`
   remains available through `control_plane/cli.py` for compatibility.
-- `/rdpaper` adapter contract:
-  `docs/agent-runtime/rdpaper-workflow.md` defines the slash workflow, while
-  `docs/agent-runtime/web-ai-adapter-contract.md`,
-  `schemas/web_ai_adapter.schema.json`, and
-  `packages/control-plane/templates/paper_iteration/WEB_AI_ADAPTER.yaml` define
-  the browser and web AI adapter boundary.
 - Future visual client boundary:
   `docs/agent-runtime/visual-control-plane.md` defines the governance-first
   object model for projects, provider bindings, agents, runs, evidence,
@@ -98,24 +110,9 @@ commands that matter most.
   `packages/control-plane/templates/visual_control_plane/CONTROL_PLANE_STATE.yaml`
   define the first machine-readable state snapshot for a future GUI or CLI
   inspector.
-- Project contract creation:
-  `control_plane/rdgoal.py` writes project-local contracts by default under
-  `<project>/rules/project-contracts/`.
 - Bootstrap behavior:
   source checkout can run root bootstrap assets; wheel installs safely return
   `bootstrap_unavailable` while still producing a dispatch packet.
-- Dispatch packet handoff:
-  `control_plane/dispatch_packet.py` writes `packet.json`, `TASKSPEC.json`,
-  and `TASKSPEC.md` into the runtime outbox.
-- Snapshot guard:
-  `control_plane/backup_guard.py` validates targets are inside the project
-  before creating snapshot directories.
-- Worker result semantics:
-  `control_plane/worker.py` and `rdgoal_cli.py` keep `blocked`, `failed`, and
-  unknown report states non-zero.
-- Cross-process digest:
-  `control_plane/runtime_store.py` and `runtime_digest.py` rebuild status from
-  runtime files rather than process memory.
 - Visual state export:
   `control_plane/visual_state.py` converts the persisted rdgoal digest into the
   Visual Control Plane read model, and `control_plane/cli.py` exposes it as
@@ -204,7 +201,7 @@ Additional targeted probes covered by tests:
   `devframe dashboard --help` first-use entrypoints, then imports the packaged
   dashboard server, binds it to a temporary local port, checks homepage endpoint
   links, and probes both `/actions.json` and `/actions.md`, including action-id
-  filtering.
+  filtering and `PATCH` write-method rejection with `405`.
 - Negative test fixtures validate write-outside-scope and path-traversal-read
   behavior.
 - New resource-integration and agent-runtime schemas validate private-path and
@@ -233,14 +230,13 @@ directories in the repository.
   reference path, while DeepSeek, Doubao, Kimi, internal web AIs, and manual
   mode are documented extension points rather than guaranteed built-ins.
 - GitHub CI/PR state is not represented by local verification alone. Reviewers
-  should run or add CI before merging if this becomes a remote release.
+  should inspect the current PR checks before merging.
 
 ## Suggested Review Focus
 
 - Confirm no private runtime state, evidence packs, generated archives, or
   local browser/agent state were added.
 - Confirm release verification runs from a fresh checkout on Windows PowerShell.
-- Confirm `.github/workflows/release-verify.yml` invokes the same release gate.
 - Confirm worker failure semantics cannot produce fake green results.
 - Confirm source checkout and wheel install paths both match the documented
   rdgoal behavior.
