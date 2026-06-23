@@ -24,7 +24,8 @@ def test_root_help_is_available(monkeypatch, capsys):
     assert devframe_cli_main() == 0
 
     output = capsys.readouterr().out
-    assert "DevFrame Control Plane CLI" in output
+    assert "DevFrame Code CLI" in output
+    assert "Codex/Claude Code/OpenCode-style coding tool" in output
     assert "devframe code [[<goal>] | --prompt-file <path>]" in output
     assert "devframe code workers" in output
     assert "devframe code status [latest|<go-run-id>]" in output
@@ -133,9 +134,13 @@ def test_code_prepares_current_repo_coding_session(tmp_path, monkeypatch, capsys
 
     assert exit_code == 0
     assert "DevFrame Code session" in output
+    assert "Tool shape   : Codex/Claude Code/OpenCode-style local coding CLI" in output
     assert "Backend      : /go concurrent coding-agent dispatch" in output
     assert "status       : queued" in output
     assert "agents       : 1" in output
+    assert "Status   : devframe code status" in output
+    assert "Execute  : devframe code execute" in output
+    assert metadata["go_run_id"] in output
     assert "Dashboard: devframe dashboard serve --runtime-dir" in output
     assert metadata["project_root"] == str(project_root.resolve())
     assert metadata["requirement"] == "Add a small CLI feature."
@@ -334,6 +339,7 @@ def test_code_execute_reuses_prepared_go_run_packets(tmp_path, monkeypatch, caps
 
     assert exit_code == 0
     assert "DevFrame Code execute" in output
+    assert "Tool shape   : reusing prepared coding-agent packets" in output
     assert "status       : passed" in output
     assert "changed: src/app.py" in output
     assert metadata_files_after == metadata_files_before
@@ -1026,6 +1032,8 @@ def test_go_prepares_parallel_coding_agent_packets(tmp_path, monkeypatch, capsys
     assert "coding-agent-2" in output
     assert "  bytes  : 20" in output
     assert "opencode run -m stepfun/step-3.7-flash" in output
+    assert "Status   : devframe code status" in output
+    assert "Execute  : devframe code execute" in output
     assert "devframe dashboard serve --runtime-dir" in output
     assert len(metadata_files) == 1
     assert metadata["status"] == "queued"

@@ -10,7 +10,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-HELP_TEXT = """DevFrame Control Plane CLI
+HELP_TEXT = """DevFrame Code CLI
+  Primary workflow: use devframe code as a Codex/Claude Code/OpenCode-style coding tool.
+
   devframe init [template] [target]  - initialize project
   devframe doctor                    - check package health
   devframe code [[<goal>] | --prompt-file <path>] - start an interactive Codex-like coding session
@@ -476,6 +478,7 @@ def cmd_code() -> int:
         return 2
 
     print("DevFrame Code session")
+    print("Tool shape   : Codex/Claude Code/OpenCode-style local coding CLI")
     print("Backend      : /go concurrent coding-agent dispatch")
     print("Default mode : prepare packets only; add --execute to spend worker tokens")
     print("")
@@ -544,6 +547,7 @@ def cmd_code_execute(*, prog: str = "devframe code execute") -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     print("DevFrame Code execute")
+    print("Tool shape   : reusing prepared coding-agent packets")
     print("Backend      : existing /go run packets")
     print("Token mode   : reuse prepared packets; skipped passed agents unless --rerun-passed")
     print("")

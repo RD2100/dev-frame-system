@@ -418,6 +418,12 @@ def test_visual_control_plane_state_reads_go_runs(tmp_path):
     assert state["go_runs"][0]["go_run_id"] == result.go_run_id
     assert state["go_runs"][0]["status"] == "queued"
     assert state["go_runs"][0]["execute"] is False
+    assert state["go_runs"][0]["status_command"] == (
+        f'devframe code status "{result.go_run_id}" --runtime-dir "{runtime_dir}"'
+    )
+    assert state["go_runs"][0]["execute_command"] == (
+        f'devframe code execute "{result.go_run_id}" --runtime-dir "{runtime_dir}"'
+    )
     assert len(state["go_runs"][0]["agents"]) == 2
     assert state["go_runs"][0]["agents"][0]["targets"] == [
         "packages/control-plane/control_plane/cli.py"
@@ -433,6 +439,11 @@ def test_visual_control_plane_state_reads_go_runs(tmp_path):
     assert "/go 编码智能体" in html
     assert "目标字节数" in html
     assert "<code>24</code>" in html
+    assert "状态命令" in html
+    assert "执行命令" in html
+    assert "devframe code status" in html
+    assert "devframe code execute" in html
+    assert result.go_run_id in html
     assert "packages/control-plane/control_plane/go_dispatch.py" in html
     assert "opencode run -m stepfun/step-3.7-flash" in html
 

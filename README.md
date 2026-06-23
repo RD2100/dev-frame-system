@@ -2,7 +2,7 @@
   <img src="docs/assets/devframe-system-banner.svg" alt="devframe-system: web AI as an external brain" width="100%" />
 </p>
 
-<h3 align="center">Use GPT Web, or any capable web AI, as an external brain for every software tool and coding agent you already use.</h3>
+<h3 align="center">A local coding CLI for OpenCode, Codex, Claude Code, T3Code, and other worker commands, with a web AI external brain behind it.</h3>
 
 <p align="center">
   English | <a href="README.zh-CN.md">Simplified Chinese</a>
@@ -26,6 +26,9 @@
 
 ```text
 devframe code            # start a Codex-like coding session in the current repo
+devframe code workers    # check local worker CLIs before spending tokens
+devframe code status     # inspect the latest prepared coding run
+devframe code execute    # run the latest prepared coding run
 /rdinit                 # initialize the external-brain operating layer
 /bindChrome <url>       # bind GPT Web, DeepSeek, Doubao, or another web AI URL
 /go <project> <goal>    # prepare or run parallel coding-agent shards
@@ -33,7 +36,9 @@ devframe code            # start a Codex-like coding session in the current repo
 /rdpaper <project> <goal> # route a paper task through the paper review loop
 ```
 
-**The core question is not "how do we build another governance framework?" Many people are already doing that. The real question is: how can we improve code quality and direction control for free, or as close to free as possible, with the simplest workflow?**
+**The core product is `devframe code`: a Codex/Claude Code/OpenCode-style programming tool that prepares bounded coding-agent work, shows the exact worker commands, and runs them only when you choose to spend worker tokens.**
+
+The supporting question is not "how do we build another governance framework?" Many people are already doing that. The real question is: how can we improve code quality and direction control for free, or as close to free as possible, with the simplest workflow?
 
 dev-frame-system answers by turning a web AI session into an **external brain** for software development. GPT Web is the default example, but DeepSeek, Doubao, or another capable browser-accessible AI can play the same role. The external brain keeps product direction, engineering tradeoffs, task boundaries, evidence, and review memory in one place. Your IDE, CLI, browser, scripts, tests, and coding agents become replaceable executors.
 
@@ -157,7 +162,9 @@ balanced by estimated target bytes so one agent does not accidentally receive
 most of the file context. Add `--execute` only when you are ready to spend
 worker tokens. Add `--dashboard` to open the read-only local visual interface
 for the same runtime; the dashboard has an English/中文 language switch, and
-`?lang=zh-CN` still opens the Chinese view directly.
+`?lang=zh-CN` still opens the Chinese view directly. Each go-run card also
+shows the exact `devframe code status` and `devframe code execute` commands for
+that prepared run.
 After preparing a run, use `devframe code execute [latest|<go-run-id>]` to
 spend worker tokens later without creating another set of packets; passed
 agents are skipped unless `--rerun-passed` is provided.
@@ -173,7 +180,7 @@ use `--worker opencode|codex|claude` to pick a built-in worker profile, or pass
 `--command <your-worker>` to route the same TaskSpec packets through another
 executor such as T3Code. The Visual Control Plane reads the same runtime and
 shows the go-run plus each coding-agent shard, target, packet, status, and
-worker command.
+worker command, plus copyable status and execute commands for the go-run.
 Pass `--changed --agents auto` to derive shard targets from git changes instead
 of sending a project-wide task or guessing the shard count manually.
 

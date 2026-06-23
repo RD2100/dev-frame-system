@@ -1,4 +1,4 @@
-# Control Plane Quickstart
+# DevFrame Code Quickstart
 
 This quickstart starts from a clone of `RD2100/dev-frame-system`.
 
@@ -115,6 +115,11 @@ untracked files and choose a bounded shard count automatically; use
 estimated bytes to avoid overloading one worker with most of the context.
 `--dashboard` serves the same runtime in the read-only visual interface; use
 the English/中文 switch in the page, or open `?lang=zh-CN` directly for Chinese.
+Each go-run card shows copyable `devframe code status` and
+`devframe code execute` commands for the prepared run.
+The terminal output also prints those exact commands, so the first usable loop
+can stay entirely in the CLI: prepare, inspect with `status`, then execute when
+you are ready.
 Use repeated `--target <path>` when you want to name a specific slice manually.
 Use `--since <git-ref>` when the task should cover the branch delta against a
 base ref, for example `--since origin/main`.
@@ -166,9 +171,10 @@ Use `--since <git-ref>` or `--changed` to keep `/go` shards focused on the files
 that actually changed instead of giving every worker project-wide context.
 The dashboard reads the same runtime and shows the go-run plus each shard's
 target, estimated bytes, changed files, packet path, status, and worker command
-in a dedicated `/go Coding Agents` section. When workers finish, `devframe code`
-and `devframe go` also print each shard's ExecutionReport path, changed files,
-and first evidence line in the terminal.
+in a dedicated `/go Coding Agents` section. It also shows copyable status and
+execute commands for the go-run. When workers finish, `devframe code` and
+`devframe go` also print each shard's ExecutionReport path, changed files, and
+first evidence line in the terminal.
 
 ## 8. Review the runtime digest
 

@@ -38,6 +38,8 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "target_bytes": "Target Bytes",
         "changed_files": "Changed Files",
         "worker_command": "Worker Command",
+        "go_status_command": "Status Command",
+        "go_execute_command": "Execute Command",
         "metadata": "Metadata",
         "action_queue_handoff": "Action Queue Handoff",
         "readonly_queue_intro": "Read-only queue for manual resume, review, or Web AI handoff.",
@@ -129,6 +131,8 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "target_bytes": "目标字节数",
         "changed_files": "变更文件",
         "worker_command": "Worker 命令",
+        "go_status_command": "状态命令",
+        "go_execute_command": "执行命令",
         "metadata": "元数据",
         "action_queue_handoff": "动作队列交接",
         "readonly_queue_intro": "用于手动恢复、审查或 Web AI 交接的只读队列。",
@@ -648,9 +652,19 @@ def _go_run_states(runtime_dir: str | Path) -> list[dict[str, Any]]:
             "execute": bool(data.get("execute", False)),
             "created_at": str(data.get("created_at", "")),
             "metadata_path": str(data.get("metadata_path") or path),
+            "status_command": _go_run_status_command(path.parent.name, root),
+            "execute_command": _go_run_execute_command(path.parent.name, root),
             "agents": [_go_agent_state(agent) for agent in agents if isinstance(agent, dict)],
         })
     return runs
+
+
+def _go_run_status_command(go_run_id: str, runtime_dir: str | Path) -> str:
+    return f"devframe code status {_quote_arg(go_run_id)} --runtime-dir {_quote_arg(runtime_dir)}"
+
+
+def _go_run_execute_command(go_run_id: str, runtime_dir: str | Path) -> str:
+    return f"devframe code execute {_quote_arg(go_run_id)} --runtime-dir {_quote_arg(runtime_dir)}"
 
 
 def _go_agent_state(agent: dict[str, Any]) -> dict[str, Any]:
@@ -1452,6 +1466,7 @@ def _go_run_card_html(run: dict[str, Any], lang: str = "en") -> str:
         f"<dt>{_h(dashboard_t('project', lang))}</dt><dd><code>{_h(run.get('project_id', ''))}</code></dd>"
         f"<dt>{_h(dashboard_t('metadata', lang))}</dt><dd><code>{_h(run.get('metadata_path', ''))}</code></dd>"
         "</dl>"
+        f"{_go_run_command_list_html(run, lang)}"
         '<div class="table-wrap">'
         "<table>"
         f"<thead><tr>{''.join(f'<th>{_h(header)}</th>' for header in headers)}</tr></thead>"
@@ -1459,6 +1474,15 @@ def _go_run_card_html(run: dict[str, Any], lang: str = "en") -> str:
         "</table>"
         "</div>"
         "</article>"
+    )
+
+
+def _go_run_command_list_html(run: dict[str, Any], lang: str = "en") -> str:
+    return (
+        '<dl class="command-list">'
+        f"<dt>{_h(dashboard_t('go_status_command', lang))}</dt><dd><code>{_h(run.get('status_command', ''))}</code></dd>"
+        f"<dt>{_h(dashboard_t('go_execute_command', lang))}</dt><dd><code>{_h(run.get('execute_command', ''))}</code></dd>"
+        "</dl>"
     )
 
 
@@ -1981,6 +2005,28 @@ h1 {
 .path-list dd {
   margin: 0;
   min-width: 0;
+}
+.command-list {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 8px 10px;
+  margin: 12px 0 0;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.command-list dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.command-list dd {
+  margin: 0;
+  min-width: 0;
+}
+.command-list code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .run-detail code {
   white-space: pre-wrap;

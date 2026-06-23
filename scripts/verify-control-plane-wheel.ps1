@@ -70,7 +70,7 @@ try {
     Invoke-Step "install wheel" $python @("-m", "pip", "install", $wheel.FullName)
     Invoke-Step "devframe help" $python @(
         "-c",
-        "import subprocess, sys; text = subprocess.check_output([sys.argv[1], '--help'], text=True); assert 'DevFrame Control Plane CLI' in text; assert 'devframe code ' in text; assert '<goal>' in text; assert 'devframe go <project> <goal>' in text; assert 'devframe dashboard serve' in text; assert 'devframe actions' in text; print('devframe help ok')",
+        "import subprocess, sys; text = subprocess.check_output([sys.argv[1], '--help'], text=True); assert 'DevFrame Code CLI' in text; assert 'Codex/Claude Code/OpenCode-style coding tool' in text; assert 'devframe code ' in text; assert '<goal>' in text; assert 'devframe go <project> <goal>' in text; assert 'devframe dashboard serve' in text; assert 'devframe actions' in text; print('devframe help ok')",
         $devframe
     )
     Invoke-Step "devframe code help" $python @(

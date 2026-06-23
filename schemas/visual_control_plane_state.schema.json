@@ -218,6 +218,12 @@
         "metadata_path": {
           "type": "string"
         },
+        "status_command": {
+          "type": "string"
+        },
+        "execute_command": {
+          "type": "string"
+        },
         "agents": {
           "type": "array",
           "items": { "$ref": "#/definitions/go_agent" }

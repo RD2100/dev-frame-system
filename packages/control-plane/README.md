@@ -1,8 +1,14 @@
-# DevFrame Control Plane
+# DevFrame Code
 
-The control plane is the local CLI and Python package for dev-frame-system. It
-keeps workflow execution, handoff generation, runtime probes, and rdgoal
-orchestration in a small installable package.
+DevFrame Code is the local coding CLI and Python package for dev-frame-system.
+Its primary entrypoint is `devframe code`: a Codex/Claude Code/OpenCode-style
+tool that prepares bounded coding-agent work, checks local worker availability,
+and runs prepared packets through OpenCode, Codex, Claude Code, T3Code, or
+another command when you explicitly execute them.
+
+The same package also keeps workflow execution, handoff generation, runtime
+probes, dashboard state, and rdgoal orchestration in a small installable
+package.
 
 This package is distributed inside the public `RD2100/dev-frame-system`
 repository. It should not depend on private handoff logs, browser profiles,
@@ -31,6 +37,7 @@ devframe code --project D:\tmp\demo-project --prompt-file TASK.md --changed --ag
 devframe code --project D:\tmp\demo-project --prompt-file TASK.md --since origin/main --agents auto
 devframe code status --runtime-dir C:\Users\you\.devframe-runtime
 devframe code execute --runtime-dir C:\Users\you\.devframe-runtime
+devframe dashboard serve --runtime-dir C:\Users\you\.devframe-runtime
 devframe run --pipeline pipelines\example_pipeline.yaml
 ```
 
@@ -57,7 +64,11 @@ For longer task briefs, pass `--prompt-file <path>` or pipe text into
 `devframe code`; both feed the same `/go` coding-agent dispatch without putting
 the whole prompt on the command line. After `--execute`, the CLI summarizes each
 shard's worker status, ExecutionReport path, changed files, and evidence
-snippet; the dashboard keeps the scan-friendly status and changed-file view.
+snippet; the dashboard keeps the scan-friendly status and changed-file view,
+plus copyable `devframe code status` and `devframe code execute` commands for
+each go-run.
+The terminal output for every prepared run also prints those exact status and
+execute commands, so the CLI remains usable without opening the dashboard.
 Use `devframe code status` to inspect the latest or a named `go-run` from local
 runtime metadata without creating new packets or spending worker tokens.
 Use `devframe code execute` to run the latest or a named prepared `go-run`
