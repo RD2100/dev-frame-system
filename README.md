@@ -136,6 +136,7 @@ cd .\packages\control-plane
 pip install -e .
 cd D:\my-project
 devframe code "Build the MVP" --target src --runtime-dir "$env:TEMP\devframe-code" --dashboard
+devframe code workers
 devframe code "Fix the branch" --changed --agents auto --worker claude --preview
 rdgoal "D:\my-project" "Build the MVP" --digest
 devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-dir "$env:TEMP\devframe-go"
@@ -146,7 +147,9 @@ current repository and prompts for a goal when one is not supplied, prepares one
 bounded coding-agent session, prints the exact worker command, and records state
 for the dashboard. Use `--worker opencode|codex|claude` to choose a built-in
 worker template, or `--command <your-worker>` for a custom executor such as
-T3Code. Use `--changed --agents auto` to target modified, staged, or
+T3Code. Run `devframe code workers` first to see which local worker CLIs are
+available; it is status-only and does not create packets or spend worker
+tokens. Use `--changed --agents auto` to target modified, staged, or
 untracked git files and fan them out across bounded shards; `--max-agents` caps
 the automatic fan-out. Use `--preview` to print the shard plan and worker
 command template without creating packets or spending worker tokens. Shards are

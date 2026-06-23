@@ -4,6 +4,7 @@ from __future__ import annotations
 import sys
 import ipaddress
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -13,6 +14,7 @@ HELP_TEXT = """DevFrame Control Plane CLI
   devframe init [template] [target]  - initialize project
   devframe doctor                    - check package health
   devframe code [[<goal>] | --prompt-file <path>] - start an interactive Codex-like coding session
+  devframe code workers              - show available coding worker profiles
   devframe code status [latest|<go-run-id>] - inspect a previous /go coding run without spending worker tokens
   devframe code execute [latest|<go-run-id>] - execute a prepared /go run without creating packets
   devframe go <project> <goal>       - dispatch coding agents through /go
@@ -32,6 +34,7 @@ RUN_USAGE = "Usage: devframe run --pipeline <path> [--execute] [--project <dir>]
 DASHBOARD_USAGE = "Usage: devframe dashboard serve [--runtime-dir <dir>] [--paper-project <dir>] [--host 127.0.0.1] [--port 8765] [--allow-remote]"
 GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--worker opencode|codex|claude] [--model provider/model]"
 CODE_USAGE = "Usage: devframe code [[\"<goal>\"] | --prompt-file <path>] [--project <dir>] [--agents 1|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--worker opencode|codex|claude] [--dashboard]"
+CODE_WORKERS_USAGE = "Usage: devframe code workers [--format text|json]"
 CODE_STATUS_USAGE = "Usage: devframe code status [latest|<go-run-id>] [--runtime-dir <dir>] [--format text|json]"
 CODE_EXECUTE_USAGE = "Usage: devframe code execute [latest|<go-run-id>] [--runtime-dir <dir>] [--timeout <seconds>] [--rerun-passed]"
 
@@ -548,6 +551,83 @@ def cmd_code_execute(*, prog: str = "devframe code execute") -> int:
     return 0 if result.status in {"queued", "passed"} else 1
 
 
+def cmd_code_workers(*, prog: str = "devframe code workers") -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(prog=prog)
+    parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format")
+    args = parser.parse_args(sys.argv[3:])
+    workers = _coding_worker_statuses()
+    if args.format == "json":
+        print(json.dumps({"workers": workers}, indent=2, ensure_ascii=False))
+    else:
+        print(_render_coding_worker_statuses(workers))
+    return 0
+
+
+def _coding_worker_statuses() -> list[dict[str, object]]:
+    profiles = [
+        {
+            "name": "opencode",
+            "kind": "built-in",
+            "command": "opencode",
+            "usage": "--worker opencode",
+            "notes": "Default low-cost worker profile.",
+        },
+        {
+            "name": "codex",
+            "kind": "built-in",
+            "command": "codex",
+            "usage": "--worker codex",
+            "notes": "Uses codex exec; spend Codex tokens only when executing.",
+        },
+        {
+            "name": "claude",
+            "kind": "built-in",
+            "command": "claude",
+            "usage": "--worker claude",
+            "notes": "Uses Claude Code print mode.",
+        },
+        {
+            "name": "t3code",
+            "kind": "custom",
+            "command": "t3code",
+            "usage": "--command t3code <args...>",
+            "notes": "Custom command path; confirm its non-interactive syntax before --execute.",
+        },
+    ]
+    statuses: list[dict[str, object]] = []
+    for profile in profiles:
+        command = str(profile["command"])
+        path = shutil.which(command) or ""
+        statuses.append({
+            **profile,
+            "available": bool(path),
+            "path": path,
+        })
+    return statuses
+
+
+def _render_coding_worker_statuses(workers: list[dict[str, object]]) -> str:
+    lines = [
+        "DevFrame Code workers",
+        "Token mode   : status-only; no packets are created and no workers run",
+        "",
+        "Workers",
+    ]
+    for worker in workers:
+        status = "ready" if worker.get("available") else "missing"
+        path = str(worker.get("path") or "-")
+        lines.extend([
+            f"- {worker.get('name')} [{worker.get('kind')}] {status}",
+            f"  command: {worker.get('command')}",
+            f"  path   : {path}",
+            f"  use    : devframe code \"<goal>\" {worker.get('usage')} --preview",
+            f"  note   : {worker.get('notes')}",
+        ])
+    return "\n".join(lines) + "\n"
+
+
 def _resolve_code_goal(goal: str | None, prompt_file: str | None) -> str:
     if goal and prompt_file:
         raise ValueError("pass either a positional goal or --prompt-file, not both")
@@ -993,6 +1073,11 @@ def main() -> int:
         return cmd_rdgoal()
 
     if cmd == "code":
+        if len(sys.argv) > 2 and sys.argv[2] == "workers":
+            if _wants_help(sys.argv[3:]):
+                print(CODE_WORKERS_USAGE)
+                return 0
+            return cmd_code_workers(prog="devframe code workers")
         if len(sys.argv) > 2 and sys.argv[2] == "status":
             if _wants_help(sys.argv[3:]):
                 print(CODE_STATUS_USAGE)
@@ -1009,6 +1094,11 @@ def main() -> int:
         return cmd_code()
 
     if cmd == "go":
+        if len(sys.argv) > 2 and sys.argv[2] == "workers":
+            if _wants_help(sys.argv[3:]):
+                print(CODE_WORKERS_USAGE.replace("devframe code", "devframe go"))
+                return 0
+            return cmd_code_workers(prog="devframe go workers")
         if len(sys.argv) > 2 and sys.argv[2] == "status":
             if _wants_help(sys.argv[3:]):
                 print(CODE_STATUS_USAGE.replace("devframe code", "devframe go"))

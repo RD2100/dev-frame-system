@@ -83,9 +83,14 @@ try {
         "import subprocess, sys; text = subprocess.check_output([sys.argv[1], 'code', 'execute', '--help'], text=True); assert 'Usage: devframe code execute' in text; assert '--rerun-passed' in text; print('devframe code execute help ok')",
         $devframe
     )
+    Invoke-Step "devframe code workers" $python @(
+        "-c",
+        "import subprocess, sys; text = subprocess.check_output([sys.argv[1], 'code', 'workers'], text=True); assert 'DevFrame Code workers' in text; assert 'opencode' in text; assert 'codex' in text; assert 'claude' in text; assert 't3code' in text; assert 'no packets are created' in text; print('devframe code workers ok')",
+        $devframe
+    )
     Invoke-Step "devframe go help" $python @(
         "-c",
-        "import subprocess, sys; text = subprocess.check_output([sys.argv[1], 'go', '--help'], text=True); assert 'Usage: devframe go <project> <goal>' in text; assert '--changed' in text; assert '--agents' in text; assert '--max-agents' in text; assert '--preview' in text; print('devframe go help ok')",
+        "import subprocess, sys; text = subprocess.check_output([sys.argv[1], 'go', '--help'], text=True); assert 'Usage: devframe go <project> <goal>' in text; assert '--changed' in text; assert '--agents' in text; assert '--max-agents' in text; assert '--preview' in text; assert '--worker' in text; print('devframe go help ok')",
         $devframe
     )
     Invoke-Step "devframe run help" $python @(

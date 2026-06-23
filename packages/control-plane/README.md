@@ -25,6 +25,7 @@ devframe init code_project D:\tmp\demo-project
 devframe code
 devframe code "Build the MVP" --project D:\tmp\demo-project --target src --dashboard
 devframe code "Build the MVP" --project D:\tmp\demo-project --target src --preview
+devframe code workers
 devframe code "Fix the branch" --project D:\tmp\demo-project --changed --agents auto --worker codex --preview
 devframe code --project D:\tmp\demo-project --prompt-file TASK.md --changed --agents auto
 devframe code --project D:\tmp\demo-project --prompt-file TASK.md --since origin/main --agents auto
@@ -42,6 +43,8 @@ immediately, `--preview` to inspect the shard plan and worker command template
 without creating packets, `--execute` to run the worker, and
 `--worker opencode|codex|claude` to select a built-in coding CLI profile. Use
 `--command <your-worker>` for custom executors such as T3Code. Use
+`devframe code workers` to check local worker availability before executing;
+the probe is status-only and does not create packets or run workers. Use
 `--agents <n>` to split the goal into concurrent coding shards.
 Use `--changed --agents auto` to
 keep worker prompts focused on modified, staged, or untracked git files and

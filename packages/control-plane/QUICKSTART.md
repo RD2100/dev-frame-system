@@ -90,6 +90,7 @@ entrypoint in the current repository:
 ```powershell
 cd D:\tmp\demo-project
 devframe code
+devframe code workers
 devframe code "Build the MVP" `
   --target src `
   --runtime-dir C:\Users\you\.devframe-runtime `
@@ -101,7 +102,10 @@ Run `devframe code` with no goal to start from a `Goal:` prompt in the current
 repository. By default this prepares one coding-agent session and prints the
 worker command without spending agent tokens. Add `--preview` when you only
 want to inspect the shard plan plus worker command template and avoid creating
-runtime packets. Use `--worker opencode|codex|claude` to pick the built-in
+runtime packets. Run `devframe code workers` first when you want to check
+whether `opencode`, `codex`, `claude`, or a custom `t3code` command is present
+locally; it is status-only and does not create packets or run workers.
+Use `--worker opencode|codex|claude` to pick the built-in
 coding CLI that should consume each packet, or pass `--command <your-worker>`
 for another executor such as T3Code. Add `--execute` only when you want the
 worker to run. In a real

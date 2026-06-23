@@ -26,6 +26,7 @@ def test_root_help_is_available(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "DevFrame Control Plane CLI" in output
     assert "devframe code [[<goal>] | --prompt-file <path>]" in output
+    assert "devframe code workers" in output
     assert "devframe code status [latest|<go-run-id>]" in output
     assert "devframe code execute [latest|<go-run-id>]" in output
     assert "devframe go <project> <goal>" in output
@@ -57,6 +58,56 @@ def test_code_execute_help_is_available(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "Usage: devframe code execute [latest|<go-run-id>]" in output
     assert "--rerun-passed" in output
+
+
+def test_code_workers_lists_available_worker_profiles(monkeypatch, capsys):
+    paths = {
+        "opencode": "C:\\Tools\\opencode.cmd",
+        "codex": "C:\\Tools\\codex.cmd",
+        "claude": "",
+        "t3code": "",
+    }
+
+    monkeypatch.setattr("control_plane.cli.shutil.which", lambda name: paths.get(name) or None)
+    monkeypatch.setattr(sys, "argv", ["devframe", "code", "workers"])
+
+    assert devframe_cli_main() == 0
+
+    output = capsys.readouterr().out
+    assert "DevFrame Code workers" in output
+    assert "Token mode   : status-only; no packets are created and no workers run" in output
+    assert "- opencode [built-in] ready" in output
+    assert "use    : devframe code \"<goal>\" --worker opencode --preview" in output
+    assert "- codex [built-in] ready" in output
+    assert "- claude [built-in] missing" in output
+    assert "- t3code [custom] missing" in output
+    assert "--command t3code <args...>" in output
+
+
+def test_code_workers_json_output(monkeypatch, capsys):
+    monkeypatch.setattr("control_plane.cli.shutil.which", lambda name: f"C:\\Tools\\{name}.cmd")
+    monkeypatch.setattr(sys, "argv", ["devframe", "code", "workers", "--format", "json"])
+
+    assert devframe_cli_main() == 0
+
+    data = json.loads(capsys.readouterr().out)
+    names = [worker["name"] for worker in data["workers"]]
+    assert names == ["opencode", "codex", "claude", "t3code"]
+    assert all(worker["available"] for worker in data["workers"])
+    assert data["workers"][0]["usage"] == "--worker opencode"
+    assert data["workers"][3]["usage"] == "--command t3code <args...>"
+
+
+def test_go_workers_alias_uses_same_probe(monkeypatch, capsys):
+    monkeypatch.setattr("control_plane.cli.shutil.which", lambda name: None)
+    monkeypatch.setattr(sys, "argv", ["devframe", "go", "workers"])
+
+    assert devframe_cli_main() == 0
+
+    output = capsys.readouterr().out
+    assert "DevFrame Code workers" in output
+    assert "- opencode [built-in] missing" in output
+    assert "- t3code [custom] missing" in output
 
 
 def test_code_prepares_current_repo_coding_session(tmp_path, monkeypatch, capsys):
