@@ -123,6 +123,9 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
         def do_DELETE(self) -> None:
             self._method_not_allowed()
 
+        def do_PATCH(self) -> None:
+            self._method_not_allowed()
+
         def log_message(self, format: str, *args: Any) -> None:
             return
 

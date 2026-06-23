@@ -770,6 +770,12 @@ def test_dashboard_server_serves_html_and_state_json_read_only(tmp_path):
             assert error.code == 405
         else:
             raise AssertionError("dashboard accepted a write request")
+        try:
+            urlopen(Request(f"{base_url}/actions.json", method="PATCH"), timeout=5)
+        except HTTPError as error:
+            assert error.code == 405
+        else:
+            raise AssertionError("dashboard accepted a write request")
     finally:
         server.shutdown()
         server.server_close()
