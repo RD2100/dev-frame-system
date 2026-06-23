@@ -1,4 +1,4 @@
-"""CLI entry: devframe init, doctor, run, go, handoff, pack, dashboard, and rdgoal."""
+"""CLI entry: devframe init, doctor, run, code, go, handoff, pack, dashboard, and rdgoal."""
 from __future__ import annotations
 
 import sys
@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 HELP_TEXT = """DevFrame Control Plane CLI
   devframe init [template] [target]  - initialize project
   devframe doctor                    - check package health
+  devframe code "<goal>"             - start a Codex-like coding session in the current repo
   devframe go <project> <goal>       - dispatch coding agents through /go
   devframe rdgoal <project> <goal>   - route work through rdgoal
   devframe visual-state              - export Visual Control Plane state
@@ -26,6 +27,7 @@ HELP_TEXT = """DevFrame Control Plane CLI
 RUN_USAGE = "Usage: devframe run --pipeline <path> [--execute] [--project <dir>]"
 DASHBOARD_USAGE = "Usage: devframe dashboard serve [--runtime-dir <dir>] [--paper-project <dir>] [--host 127.0.0.1] [--port 8765] [--allow-remote]"
 GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2] [--target <path>] [--execute] [--model provider/model]"
+CODE_USAGE = "Usage: devframe code \"<goal>\" [--project <dir>] [--agents 1] [--target <path>] [--execute]"
 
 
 def _wants_help(args: list[str]) -> bool:
@@ -325,6 +327,66 @@ def cmd_go() -> int:
     return 0 if result.status in {"queued", "passed"} else 1
 
 
+def cmd_code() -> int:
+    import argparse
+
+    from .go_dispatch import (
+        DEFAULT_GO_MODEL,
+        DEFAULT_OPENCODE_AGENT,
+        render_go_dispatch_text,
+        run_go_dispatch,
+    )
+
+    parser = argparse.ArgumentParser(prog="devframe code")
+    parser.add_argument("goal", nargs="?", help="Coding goal for the current repository")
+    parser.add_argument("--project", default=".", help="Project/repository root. Defaults to the current directory")
+    parser.add_argument("--agents", type=int, default=1, help="Number of coding-agent shards to prepare or run")
+    parser.add_argument("--target", action="append", default=[], help="Target file or directory. May be repeated")
+    parser.add_argument("--runtime-dir", default=None, help="Local runtime directory for code session state")
+    parser.add_argument("--execute", action="store_true", help="Run coding worker(s) instead of only preparing packets")
+    parser.add_argument("--timeout", type=int, default=900, help="Per-worker timeout in seconds")
+    parser.add_argument("--model", default=DEFAULT_GO_MODEL, help="OpenCode model id for default worker command")
+    parser.add_argument("--opencode-agent", default=DEFAULT_OPENCODE_AGENT, help="OpenCode agent name")
+    parser.add_argument(
+        "--command",
+        nargs=argparse.REMAINDER,
+        default=[],
+        help="Worker command for --execute. Omit to use opencode run.",
+    )
+    args = parser.parse_args(sys.argv[2:])
+
+    goal = args.goal
+    if not goal and sys.stdin.isatty():
+        goal = input("Goal: ").strip()
+    if not goal:
+        print(CODE_USAGE)
+        return 2
+
+    try:
+        result = run_go_dispatch(
+            args.project,
+            goal,
+            runtime_dir=args.runtime_dir,
+            agents=args.agents,
+            targets=args.target,
+            execute=args.execute,
+            worker_command=args.command or None,
+            model=args.model,
+            opencode_agent=args.opencode_agent,
+            timeout_seconds=args.timeout,
+        )
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+
+    print("DevFrame Code session")
+    print("Backend      : /go concurrent coding-agent dispatch")
+    print("Default mode : prepare packets only; add --execute to spend worker tokens")
+    print("")
+    print(render_go_dispatch_text(result), end="")
+    return 0 if result.status in {"queued", "passed"} else 1
+
+
 def cmd_visual_state() -> int:
     import argparse
     import yaml
@@ -520,6 +582,12 @@ def main() -> int:
 
     if cmd == "rdgoal":
         return cmd_rdgoal()
+
+    if cmd == "code":
+        if _wants_help(sys.argv[2:]):
+            print(CODE_USAGE)
+            return 0
+        return cmd_code()
 
     if cmd == "go":
         if _wants_help(sys.argv[2:]):

@@ -22,8 +22,52 @@ def test_root_help_is_available(monkeypatch, capsys):
 
     output = capsys.readouterr().out
     assert "DevFrame Control Plane CLI" in output
+    assert "devframe code \"<goal>\"" in output
     assert "devframe go <project> <goal>" in output
     assert "devframe dashboard serve" in output
+
+
+def test_code_help_is_available(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["devframe", "code", "--help"])
+
+    assert devframe_cli_main() == 0
+
+    output = capsys.readouterr().out
+    assert "Usage: devframe code \"<goal>\"" in output
+
+
+def test_code_prepares_current_repo_coding_session(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.chdir(project_root)
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "Add a small CLI feature.",
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/cli.py",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    state = build_visual_control_plane_state(runtime_dir)
+
+    assert exit_code == 0
+    assert "DevFrame Code session" in output
+    assert "Backend      : /go concurrent coding-agent dispatch" in output
+    assert "status       : queued" in output
+    assert "agents       : 1" in output
+    assert "Dashboard: devframe dashboard serve --runtime-dir" in output
+    assert metadata["project_root"] == str(project_root.resolve())
+    assert metadata["requirement"] == "Add a small CLI feature."
+    assert metadata["agents"][0]["targets"] == ["src/cli.py"]
+    assert len(state["go_runs"]) == 1
+    assert state["go_runs"][0]["agents"][0]["agent_id"] == "coding-agent-1"
 
 
 def test_go_help_is_available(monkeypatch, capsys):
@@ -73,6 +117,9 @@ def test_go_prepares_parallel_coding_agent_packets(tmp_path, monkeypatch, capsys
     assert metadata["agents"][0]["targets"] == ["packages/control-plane/control_plane/cli.py"]
     assert metadata["agents"][1]["targets"] == ["packages/control-plane/control_plane/go_dispatch.py"]
     assert all(Path(agent["packet_dir"]).exists() for agent in metadata["agents"])
+    assert len(state["go_runs"]) == 1
+    assert state["go_runs"][0]["go_run_id"] == metadata["go_run_id"]
+    assert state["go_runs"][0]["agents"][1]["targets"] == ["packages/control-plane/control_plane/go_dispatch.py"]
     assert len(state["runs"]) == 2
     assert all(run["next_command"].startswith("rdgoal worker ") for run in state["runs"])
 

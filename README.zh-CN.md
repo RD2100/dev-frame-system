@@ -16,6 +16,7 @@
 </p>
 
 ```text
+devframe code "<goal>"  # 在当前仓库启动类似 Codex 的编程会话
 /rdinit                 # 初始化外部大脑操作层
 /bindChrome <url>       # 绑定 GPT Web、DeepSeek、豆包或其他网页 AI 会话
 /go <project> <goal>    # 准备或运行并发 coding agent 分片
@@ -103,13 +104,18 @@ cd dev-frame-system
 ```powershell
 cd .\packages\control-plane
 pip install -e .
+cd D:\my-project
+devframe code "Build the MVP" --target src --runtime-dir "$env:TEMP\devframe-code"
 rdgoal "D:\my-project" "Build the MVP" --digest
 devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-dir "$env:TEMP\devframe-go"
 ```
 
+`devframe code` 是更接近 Codex/OpenCode 形态的编程入口。它默认作用于当前仓库，准备一个有边界的 coding-agent 会话，打印精确 worker 命令，并把状态写入 Dashboard 可读取的 runtime。需要并发时加 `--agents 3`，准备真正消耗 worker token 时再加 `--execute`。
+
 `/rdgoal` 是面向用户的 slash 入口。在 shell 中使用已安装的 `rdgoal` 命令。`devframe rdgoal` 作为兼容形式仍然可用于已经使用 umbrella CLI 的脚本。
 
 `/go` 是面向编程工具形态的入口。在 shell 中，`devframe go` 默认只准备并发 coding agent dispatch packet，并打印精确 worker 命令，不会立刻消耗 agent token。加 `--execute` 后才会并发运行这些分片；不传 `--command` 时默认使用 `opencode run -m stepfun/step-3.7-flash --agent build`，也可以用 `--command <your-worker>` 接入其他执行器。
+Visual Control Plane 会读取同一个 runtime，并显示 go-run 以及每个 coding-agent 分片的目标、packet、状态和 worker 命令。
 
 然后通过外部大脑闭环运行工作：
 

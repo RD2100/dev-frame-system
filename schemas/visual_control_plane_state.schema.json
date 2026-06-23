@@ -25,6 +25,11 @@
       "items": { "$ref": "#/definitions/agent" },
       "uniqueItems": true
     },
+    "go_runs": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/go_run" },
+      "uniqueItems": true
+    },
     "runs": {
       "type": "array",
       "items": { "$ref": "#/definitions/run_summary" },
@@ -178,6 +183,87 @@
         "status": {
           "type": "string",
           "enum": ["idle", "active", "blocked", "needs_human", "disabled"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "go_run": {
+      "type": "object",
+      "required": ["go_run_id", "project_id", "requirement", "status", "execute", "agents"],
+      "properties": {
+        "go_run_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "project_root": {
+          "type": "string"
+        },
+        "requirement": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["queued", "running", "passed", "failed", "blocked"]
+        },
+        "execute": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "metadata_path": {
+          "type": "string"
+        },
+        "agents": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/go_agent" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "go_agent": {
+      "type": "object",
+      "required": ["agent_id", "shard_index", "shard_count", "status", "targets", "packet_dir", "task_spec_path", "worker_command"],
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "shard_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "shard_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "status": {
+          "type": "string",
+          "enum": ["queued", "running", "passed", "failed", "blocked"]
+        },
+        "worker_status": {
+          "type": "string"
+        },
+        "targets": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "packet_dir": {
+          "type": "string"
+        },
+        "task_spec_path": {
+          "type": "string"
+        },
+        "report_path": {
+          "type": "string"
+        },
+        "worker_command": {
+          "type": "array",
+          "items": { "type": "string" }
         }
       },
       "additionalProperties": false

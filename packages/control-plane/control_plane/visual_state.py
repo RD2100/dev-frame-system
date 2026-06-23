@@ -29,6 +29,12 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "gate_focus": "Gate Focus",
         "no_active_gates": "No active gates.",
         "action_queue": "Action Queue",
+        "go_coding_agents": "/go Coding Agents",
+        "go_run": "Go Run",
+        "shard": "Shard",
+        "targets": "Targets",
+        "worker_command": "Worker Command",
+        "metadata": "Metadata",
         "action_queue_handoff": "Action Queue Handoff",
         "readonly_queue_intro": "Read-only queue for manual resume, review, or Web AI handoff.",
         "do_not_execute": "Do not execute commands until the matching gate and risk boundary are cleared.",
@@ -58,6 +64,7 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "manual_fallback": "Manual Fallback",
         "notes": "Notes",
         "projects_section": "Projects",
+        "project": "Project",
         "name": "Name",
         "id": "ID",
         "risk": "Risk",
@@ -109,6 +116,12 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "gate_focus": "门控聚焦",
         "no_active_gates": "无活跃门控。",
         "action_queue": "动作队列",
+        "go_coding_agents": "/go 编码智能体",
+        "go_run": "Go 运行",
+        "shard": "分片",
+        "targets": "目标",
+        "worker_command": "Worker 命令",
+        "metadata": "元数据",
         "action_queue_handoff": "动作队列交接",
         "readonly_queue_intro": "用于手动恢复、审查或 Web AI 交接的只读队列。",
         "do_not_execute": "在匹配的门控和风险边界确认清除之前，不要执行命令。",
@@ -138,6 +151,7 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "manual_fallback": "手动回退",
         "notes": "备注",
         "projects_section": "项目",
+        "project": "项目",
         "name": "名称",
         "id": "ID",
         "risk": "风险",
@@ -225,6 +239,7 @@ def build_visual_control_plane_state(
         for project in digest.get("projects", [])
     ]
     dispatches = digest.get("dispatches", [])
+    go_runs = _go_run_states(digest.get("runtime_dir", ""))
     runs = [
         _run_state(dispatch, reports_by_packet.get(dispatch.get("packet_id", "")), digest.get("runtime_dir", ""))
         for dispatch in dispatches
@@ -251,6 +266,7 @@ def build_visual_control_plane_state(
         "projects": projects + paper_projects,
         "provider_bindings": _default_provider_bindings() + paper_provider_bindings,
         "agents": _default_agents(paper_provider_bindings),
+        "go_runs": go_runs,
         "runs": all_runs,
         "gates": all_gates,
         "decisions": all_decisions,
@@ -442,6 +458,7 @@ def render_visual_control_plane_state_html(
         _summary_band(state, lang),
         _gate_focus_section(gates, next_actions, action_links=endpoint_links, lang=lang),
         _next_actions_section(next_actions, action_links=endpoint_links, lang=lang),
+        _go_runs_section(state.get("go_runs", []), lang),
         _provider_bindings_section(provider_bindings, lang),
         _projects_section(projects, lang),
         _runs_section(runs, lang),
@@ -591,6 +608,68 @@ def _run_state(dispatch: dict[str, Any], report: dict[str, Any] | None,
         "task_input_path": str(Path(packet_dir) / "TASKSPEC.json") if packet_dir else "",
         "next_command": _next_command_text(dispatch, report, runtime_dir),
     }
+
+
+def _go_run_states(runtime_dir: str | Path) -> list[dict[str, Any]]:
+    if not runtime_dir:
+        return []
+    root = Path(runtime_dir)
+    base = root / "go-runs"
+    if not base.exists():
+        return []
+    runs: list[dict[str, Any]] = []
+    for path in sorted(base.glob("*/go-run.json")):
+        data = _read_json(path)
+        if not data:
+            continue
+        agents = data.get("agents", [])
+        runs.append({
+            "go_run_id": _safe_id(data.get("go_run_id", path.parent.name)),
+            "project_id": _safe_id(data.get("project_id", "")),
+            "project_root": str(data.get("project_root", "")),
+            "requirement": str(data.get("requirement", "")),
+            "status": _go_status(data.get("status", "")),
+            "execute": bool(data.get("execute", False)),
+            "created_at": str(data.get("created_at", "")),
+            "metadata_path": str(data.get("metadata_path") or path),
+            "agents": [_go_agent_state(agent) for agent in agents if isinstance(agent, dict)],
+        })
+    return runs
+
+
+def _go_agent_state(agent: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "agent_id": _safe_id(agent.get("agent_id", "")),
+        "shard_index": int(agent.get("shard_index") or 0),
+        "shard_count": int(agent.get("shard_count") or 0),
+        "status": _go_status(agent.get("status", "")),
+        "worker_status": _go_worker_status(agent.get("worker_status", "")),
+        "targets": [str(target) for target in agent.get("targets", []) if str(target)],
+        "packet_dir": str(agent.get("packet_dir", "")),
+        "task_spec_path": str(agent.get("task_spec_path", "")),
+        "report_path": str(agent.get("report_path", "")),
+        "worker_command": [str(part) for part in agent.get("worker_command", [])],
+    }
+
+
+def _go_status(value: object) -> str:
+    normalized = _safe_id(str(value or "queued"))
+    if normalized in {"queued", "running", "passed", "failed", "blocked"}:
+        return normalized
+    if normalized in {"pass", "completed"}:
+        return "passed"
+    return "queued"
+
+
+def _go_worker_status(value: object) -> str:
+    normalized = _safe_id(str(value or ""))
+    if normalized in {"", "queued", "running", "passed", "failed", "blocked"}:
+        return normalized
+    if normalized in {"pass", "completed"}:
+        return "passed"
+    if normalized == "fail":
+        return "failed"
+    return normalized
 
 
 def _paper_project_state(project_dir: str | Path) -> dict[str, Any]:
@@ -1318,6 +1397,68 @@ def _next_actions_section(next_actions: list[dict[str, Any]], action_links: bool
     )
 
 
+def _go_runs_section(go_runs: list[dict[str, Any]], lang: str = "en") -> str:
+    if not go_runs:
+        return ""
+    cards = "\n".join(_go_run_card_html(run, lang) for run in go_runs)
+    return (
+        '<section class="panel">'
+        f"<h2>{_h(dashboard_t('go_coding_agents', lang))}</h2>"
+        f'<div class="go-runs">{cards}</div>'
+        "</section>"
+    )
+
+
+def _go_run_card_html(run: dict[str, Any], lang: str = "en") -> str:
+    agents = run.get("agents", [])
+    rows = "\n".join(_go_agent_row_html(agent, lang) for agent in agents)
+    headers = [
+        dashboard_t("agent", lang),
+        dashboard_t("shard", lang),
+        dashboard_t("status", lang),
+        dashboard_t("targets", lang),
+        dashboard_t("packet", lang),
+        dashboard_t("worker_command", lang),
+    ]
+    return (
+        '<article class="go-run-card">'
+        '<div class="go-run-head">'
+        f"<div><strong>{_h(dashboard_t('go_run', lang))}</strong><code>{_h(run.get('go_run_id', ''))}</code></div>"
+        f"{_badge(run.get('status', ''))}"
+        f"{_badge('execute' if run.get('execute') else 'queued')}"
+        "</div>"
+        f"<p>{_h(run.get('requirement', ''))}</p>"
+        '<dl class="path-list">'
+        f"<dt>{_h(dashboard_t('project', lang))}</dt><dd><code>{_h(run.get('project_id', ''))}</code></dd>"
+        f"<dt>{_h(dashboard_t('metadata', lang))}</dt><dd><code>{_h(run.get('metadata_path', ''))}</code></dd>"
+        "</dl>"
+        '<div class="table-wrap">'
+        "<table>"
+        f"<thead><tr>{''.join(f'<th>{_h(header)}</th>' for header in headers)}</tr></thead>"
+        f"<tbody>{rows}</tbody>"
+        "</table>"
+        "</div>"
+        "</article>"
+    )
+
+
+def _go_agent_row_html(agent: dict[str, Any], lang: str = "en") -> str:
+    shard = f"{agent.get('shard_index', 0)}/{agent.get('shard_count', 0)}"
+    targets = agent.get("targets", [])
+    target_html = "<br>".join(f"<code>{_h(target)}</code>" for target in targets) or _h(dashboard_t("missing", lang))
+    worker_command = " ".join(str(part) for part in agent.get("worker_command", []))
+    return (
+        "<tr>"
+        f"<td><code>{_h(agent.get('agent_id', ''))}</code></td>"
+        f"<td>{_h(shard)}</td>"
+        f"<td>{_badge(agent.get('status', ''))}{_badge(agent.get('worker_status', '')) if agent.get('worker_status') else ''}</td>"
+        f"<td>{target_html}</td>"
+        f"<td><code>{_h(agent.get('packet_dir', ''))}</code></td>"
+        f"<td><code>{_h(worker_command)}</code></td>"
+        "</tr>"
+    )
+
+
 def _action_handoff_cell(action: dict[str, Any], enabled: bool, lang: str = "en") -> str:
     if not enabled:
         return ""
@@ -1767,6 +1908,29 @@ h1 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 12px;
+}
+.go-runs {
+  display: grid;
+  gap: 12px;
+}
+.go-run-card {
+  border: 1px solid var(--line);
+  padding: 14px;
+  background: #fffaf0;
+}
+.go-run-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+}
+.go-run-head strong,
+.go-run-head code {
+  display: block;
+}
+.go-run-card p {
+  margin: 12px 0;
+  color: var(--muted);
 }
 .run-detail {
   border: 1px solid var(--line);

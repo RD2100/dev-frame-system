@@ -84,8 +84,22 @@ Worker exit code is non-zero for `blocked`, `failed`, or unknown report states.
 
 ## 7. Prepare parallel coding-agent work with /go
 
-Use `devframe go` when you want a Codex/Claude Code/OpenCode-style coding
-entrypoint instead of a single controller packet:
+Use `devframe code` when you want a Codex/Claude Code/OpenCode-style coding
+entrypoint in the current repository:
+
+```powershell
+cd D:\tmp\demo-project
+devframe code "Build the MVP" `
+  --target src `
+  --runtime-dir C:\Users\you\.devframe-runtime
+```
+
+By default this prepares one coding-agent session and prints the worker command
+without spending agent tokens. Add `--execute` only when you want the worker to
+run. Add `--agents 3` when you want concurrent coding shards.
+
+Use `devframe go` when you want to name the project path explicitly or prepare
+several shards directly:
 
 ```powershell
 devframe go "D:\tmp\demo-project" "Build the MVP" `
@@ -100,6 +114,9 @@ commands. Add `--execute` to run the shards concurrently. Without `--command`,
 the default worker command is `opencode run -m stepfun/step-3.7-flash --agent build`;
 pass `--command <your-worker>` to use another executor that reads
 `RDGOAL_TASKSPEC_JSON` and writes `RDGOAL_REPORT_PATH`.
+The dashboard reads the same runtime and shows the go-run plus each shard's
+target, packet path, status, and worker command in a dedicated `/go Coding
+Agents` section.
 
 ## 8. Review the runtime digest
 

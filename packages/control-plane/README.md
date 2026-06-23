@@ -22,8 +22,14 @@ After installation, the `devframe` command is available:
 ```powershell
 devframe doctor
 devframe init code_project D:\tmp\demo-project
+devframe code "Build the MVP" --project D:\tmp\demo-project --target src
 devframe run --pipeline pipelines\example_pipeline.yaml
 ```
+
+`devframe code` is the Codex-like coding entrypoint. It defaults to preparing a
+bounded coding-agent session, prints the worker command, and records runtime
+state for `devframe dashboard serve`. Use `--execute` to run the worker and
+`--agents <n>` to split the goal into concurrent coding shards.
 
 The focused total-control entrypoint is also installed:
 

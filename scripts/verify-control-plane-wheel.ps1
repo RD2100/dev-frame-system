@@ -13,6 +13,7 @@ $projectDir = Join-Path $tempRoot "demo-project"
 $paperDir = Join-Path $tempRoot "paper-project"
 $runtimeDir = Join-Path $tempRoot "runtime"
 $goRuntimeDir = Join-Path $tempRoot "go-runtime"
+$codeRuntimeDir = Join-Path $tempRoot "code-runtime"
 
 function Invoke-Step {
     param(
@@ -68,7 +69,12 @@ try {
     Invoke-Step "install wheel" $python @("-m", "pip", "install", $wheel.FullName)
     Invoke-Step "devframe help" $python @(
         "-c",
-        "import subprocess, sys; text = subprocess.check_output([sys.argv[1], '--help'], text=True); assert 'DevFrame Control Plane CLI' in text; assert 'devframe go <project> <goal>' in text; assert 'devframe dashboard serve' in text; assert 'devframe actions' in text; print('devframe help ok')",
+        "import subprocess, sys; text = subprocess.check_output([sys.argv[1], '--help'], text=True); assert 'DevFrame Control Plane CLI' in text; assert 'devframe code ' in text; assert '<goal>' in text; assert 'devframe go <project> <goal>' in text; assert 'devframe dashboard serve' in text; assert 'devframe actions' in text; print('devframe help ok')",
+        $devframe
+    )
+    Invoke-Step "devframe code help" $python @(
+        "-c",
+        "import subprocess, sys; text = subprocess.check_output([sys.argv[1], 'code', '--help'], text=True); assert 'Usage: devframe code ' in text; assert '<goal>' in text; print('devframe code help ok')",
         $devframe
     )
     Invoke-Step "devframe go help" $python @(
@@ -89,6 +95,18 @@ try {
     Invoke-Step "devframe doctor" $devframe @("doctor")
     Invoke-Step "devframe init" $devframe @("init", "code_project", $projectDir)
     Invoke-Step "devframe init paper_iteration" $devframe @("init", "paper_iteration", $paperDir)
+    Invoke-Step "devframe code dry dispatch" $devframe @(
+        "code", "Build a Codex-like programming tool MVP.",
+        "--project", $projectDir,
+        "--runtime-dir", $codeRuntimeDir,
+        "--target", "CURRENT_STATE.yaml"
+    )
+    Invoke-Step "devframe code dry dispatch details" $python @(
+        "-c",
+        "import json, pathlib, subprocess, sys; root = pathlib.Path(sys.argv[2]); files = list((root / 'go-runs').glob('*/go-run.json')); assert len(files) == 1; data = json.loads(files[0].read_text(encoding='utf-8')); assert data['status'] == 'queued'; assert len(data['agents']) == 1; assert data['agents'][0]['targets'] == ['CURRENT_STATE.yaml']; text = subprocess.check_output([sys.argv[1], 'visual-state', '--runtime-dir', sys.argv[2]], text=True); state = json.loads(text); assert len(state['go_runs']) == 1; assert len(state['go_runs'][0]['agents']) == 1; assert len(state['runs']) == 1; print('code dispatch ok')",
+        $devframe,
+        $codeRuntimeDir
+    )
     Invoke-Step "devframe go dry dispatch" $devframe @(
         "go", $projectDir, "Build a Codex-like programming tool MVP.",
         "--runtime-dir", $goRuntimeDir,
@@ -98,7 +116,7 @@ try {
     )
     Invoke-Step "devframe go dry dispatch details" $python @(
         "-c",
-        "import json, pathlib, subprocess, sys; root = pathlib.Path(sys.argv[2]); files = list((root / 'go-runs').glob('*/go-run.json')); assert len(files) == 1; data = json.loads(files[0].read_text(encoding='utf-8')); assert data['status'] == 'queued'; assert len(data['agents']) == 2; text = subprocess.check_output([sys.argv[1], 'visual-state', '--runtime-dir', sys.argv[2]], text=True); state = json.loads(text); assert len(state['runs']) == 2; assert all(run['status'] == 'pending' for run in state['runs']); assert all(run['next_command'].startswith('rdgoal worker ') for run in state['runs']); print('go dispatch ok')",
+        "import json, pathlib, subprocess, sys; root = pathlib.Path(sys.argv[2]); files = list((root / 'go-runs').glob('*/go-run.json')); assert len(files) == 1; data = json.loads(files[0].read_text(encoding='utf-8')); assert data['status'] == 'queued'; assert len(data['agents']) == 2; text = subprocess.check_output([sys.argv[1], 'visual-state', '--runtime-dir', sys.argv[2]], text=True); state = json.loads(text); assert len(state['go_runs']) == 1; assert len(state['go_runs'][0]['agents']) == 2; assert len(state['runs']) == 2; assert all(run['status'] == 'pending' for run in state['runs']); assert all(run['next_command'].startswith('rdgoal worker ') for run in state['runs']); print('go dispatch ok')",
         $devframe,
         $goRuntimeDir
     )

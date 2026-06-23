@@ -25,6 +25,7 @@
 </p>
 
 ```text
+devframe code "<goal>"  # start a Codex-like coding session in the current repo
 /rdinit                 # initialize the external-brain operating layer
 /bindChrome <url>       # bind GPT Web, DeepSeek, Doubao, or another web AI URL
 /go <project> <goal>    # prepare or run parallel coding-agent shards
@@ -113,9 +114,17 @@ Optionally install the control-plane CLI and route a project through `rdgoal`:
 ```powershell
 cd .\packages\control-plane
 pip install -e .
+cd D:\my-project
+devframe code "Build the MVP" --target src --runtime-dir "$env:TEMP\devframe-code"
 rdgoal "D:\my-project" "Build the MVP" --digest
 devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-dir "$env:TEMP\devframe-go"
 ```
+
+`devframe code` is the product-shaped coding entrypoint. It defaults to the
+current repository, prepares one bounded coding-agent session, prints the exact
+worker command, and records state for the dashboard. Add `--agents 3` when you
+want parallel shards and `--execute` only when you are ready to spend worker
+tokens.
 
 `/rdgoal` is the human-facing slash entrypoint. In a shell, use the installed
 `rdgoal` command. `devframe rdgoal` remains available as the compatibility
@@ -126,7 +135,8 @@ coding-agent dispatch packets and shows the exact worker commands without
 spending agent tokens by default. Add `--execute` to run the shards concurrently;
 omit `--command` to use `opencode run -m stepfun/step-3.7-flash --agent build`,
 or pass `--command <your-worker>` to route the same TaskSpec packets through
-another executor.
+another executor. The Visual Control Plane reads the same runtime and shows the
+go-run plus each coding-agent shard, target, packet, status, and worker command.
 
 Then run work through the external-brain loop:
 

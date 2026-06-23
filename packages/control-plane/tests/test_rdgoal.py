@@ -18,6 +18,7 @@ from control_plane.decision_engine import DecisionEngine, DecisionMode, Operatio
 from control_plane.orchestrator import Orchestrator
 from control_plane.project_contract import load_contract, render_contract_markdown
 from control_plane.rdgoal import rdgoal
+from control_plane.go_dispatch import run_go_dispatch
 from control_plane.rdgoal_cli import main as rdgoal_cli_main
 from control_plane.runtime_digest import build_runtime_digest, render_runtime_digest_markdown
 from control_plane.visual_state import build_visual_control_plane_state, render_visual_control_plane_state_html
@@ -388,6 +389,45 @@ def test_visual_control_plane_state_reads_rdgoal_runtime(tmp_path):
     assert state["next_actions"][0]["source_id"] == "human-gate"
     assert state["next_actions"][0]["label"].startswith("Confirm human approval")
     assert state["safety"]["remote_execution_default"] is False
+
+
+def test_visual_control_plane_state_reads_go_runs(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+
+    result = run_go_dispatch(
+        project_root,
+        "Build a Codex-like programming tool MVP.",
+        runtime_dir=runtime_dir,
+        agents=2,
+        targets=[
+            "packages/control-plane/control_plane/cli.py",
+            "packages/control-plane/control_plane/go_dispatch.py",
+        ],
+    )
+    state = build_visual_control_plane_state(runtime_dir)
+    html = render_visual_control_plane_state_html(state, lang="zh-CN")
+
+    validate_schema("schemas/visual_control_plane_state.schema.json", state)
+    assert len(state["go_runs"]) == 1
+    assert state["go_runs"][0]["go_run_id"] == result.go_run_id
+    assert state["go_runs"][0]["status"] == "queued"
+    assert state["go_runs"][0]["execute"] is False
+    assert len(state["go_runs"][0]["agents"]) == 2
+    assert state["go_runs"][0]["agents"][0]["targets"] == [
+        "packages/control-plane/control_plane/cli.py"
+    ]
+    assert state["go_runs"][0]["agents"][1]["worker_command"][:4] == [
+        "opencode",
+        "run",
+        "-m",
+        "stepfun/step-3.7-flash",
+    ]
+    assert len(state["runs"]) == 2
+    assert "/go 编码智能体" in html
+    assert "packages/control-plane/control_plane/go_dispatch.py" in html
+    assert "opencode run -m stepfun/step-3.7-flash" in html
 
 
 def test_devframe_cli_exports_visual_state_json(tmp_path, monkeypatch, capsys):
