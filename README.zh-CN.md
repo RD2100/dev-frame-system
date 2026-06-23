@@ -110,11 +110,11 @@ rdgoal "D:\my-project" "Build the MVP" --digest
 devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-dir "$env:TEMP\devframe-go"
 ```
 
-`devframe code` 是更接近 Codex/OpenCode 形态的编程入口。它默认作用于当前仓库，准备一个有边界的 coding-agent 会话，打印精确 worker 命令，并把状态写入 Dashboard 可读取的 runtime。需要并发时加 `--agents 3`，准备真正消耗 worker token 时再加 `--execute`。加 `--dashboard` 会直接启动同一个 runtime 的本地只读可视化界面；在 Dashboard URL 后追加 `?lang=zh-CN` 可切换中文界面。加 `--changed` 会只把 git 中 modified、staged 或 untracked 的文件作为 target，减少 agent prompt 范围。
+`devframe code` 是更接近 Codex/OpenCode 形态的编程入口。它默认作用于当前仓库，准备一个有边界的 coding-agent 会话，打印精确 worker 命令，并把状态写入 Dashboard 可读取的 runtime。真实 git 工作区里推荐用 `--changed --agents auto`：只把 modified、staged 或 untracked 文件作为 target，并按文件数自动拆成有上限的并发分片；`--max-agents` 可以调整自动拆分上限。准备真正消耗 worker token 时再加 `--execute`。加 `--dashboard` 会直接启动同一个 runtime 的本地只读可视化界面；在 Dashboard URL 后追加 `?lang=zh-CN` 可切换中文界面。
 
 `/rdgoal` 是面向用户的 slash 入口。在 shell 中使用已安装的 `rdgoal` 命令。`devframe rdgoal` 作为兼容形式仍然可用于已经使用 umbrella CLI 的脚本。
 
-`/go` 是面向编程工具形态的入口。在 shell 中，`devframe go` 默认只准备并发 coding agent dispatch packet，并打印精确 worker 命令，不会立刻消耗 agent token。加 `--execute` 后才会并发运行这些分片；不传 `--command` 时默认使用 `opencode run -m stepfun/step-3.7-flash --agent build`，也可以用 `--command <your-worker>` 接入其他执行器。传 `--changed` 可以从 git 变更自动生成分片 target，避免项目级大上下文。
+`/go` 是面向编程工具形态的入口。在 shell 中，`devframe go` 默认只准备并发 coding agent dispatch packet，并打印精确 worker 命令，不会立刻消耗 agent token。加 `--execute` 后才会并发运行这些分片；不传 `--command` 时默认使用 `opencode run -m stepfun/step-3.7-flash --agent build`，也可以用 `--command <your-worker>` 接入其他执行器。传 `--changed --agents auto` 可以从 git 变更自动生成分片 target，并自动选择并发数，避免项目级大上下文。
 Visual Control Plane 会读取同一个 runtime，并显示 go-run 以及每个 coding-agent 分片的目标、packet、状态和 worker 命令。
 
 然后通过外部大脑闭环运行工作：

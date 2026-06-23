@@ -122,12 +122,12 @@ devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-di
 
 `devframe code` is the product-shaped coding entrypoint. It defaults to the
 current repository, prepares one bounded coding-agent session, prints the exact
-worker command, and records state for the dashboard. Add `--agents 3` when you
-want parallel shards and `--execute` only when you are ready to spend worker
-tokens. Add `--dashboard` to open the read-only local visual interface for the
-same runtime; append `?lang=zh-CN` to that URL for the Chinese dashboard. Use
-`--changed` to target only modified, staged, or untracked git files when you want
-to keep coding-agent prompts tight.
+worker command, and records state for the dashboard. Use `--changed --agents
+auto` to target modified, staged, or untracked git files and fan them out across
+bounded shards; `--max-agents` caps the automatic fan-out. Add `--execute` only
+when you are ready to spend worker tokens. Add `--dashboard` to open the
+read-only local visual interface for the same runtime; append `?lang=zh-CN` to
+that URL for the Chinese dashboard.
 
 `/rdgoal` is the human-facing slash entrypoint. In a shell, use the installed
 `rdgoal` command. `devframe rdgoal` remains available as the compatibility
@@ -140,8 +140,8 @@ omit `--command` to use `opencode run -m stepfun/step-3.7-flash --agent build`,
 or pass `--command <your-worker>` to route the same TaskSpec packets through
 another executor. The Visual Control Plane reads the same runtime and shows the
 go-run plus each coding-agent shard, target, packet, status, and worker command.
-Pass `--changed` to derive shard targets from git changes instead of sending a
-project-wide task.
+Pass `--changed --agents auto` to derive shard targets from git changes instead
+of sending a project-wide task or guessing the shard count manually.
 
 Then run work through the external-brain loop:
 

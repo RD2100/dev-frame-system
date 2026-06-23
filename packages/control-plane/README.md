@@ -30,9 +30,10 @@ devframe run --pipeline pipelines\example_pipeline.yaml
 bounded coding-agent session, prints the worker command, and records runtime
 state for `devframe dashboard serve`. Use `--dashboard` to serve that visual UI
 immediately, `--execute` to run the worker, and `--agents <n>` to split the goal
-into concurrent coding shards. Use `--changed` to keep worker prompts focused on
-modified, staged, or untracked git files; use `--target <path>` for manual
-scoping.
+into concurrent coding shards. Use `--changed --agents auto` to keep worker
+prompts focused on modified, staged, or untracked git files and automatically
+choose a bounded shard count; use `--max-agents` to cap that fan-out or
+`--target <path>` for manual scoping.
 
 The focused total-control entrypoint is also installed:
 

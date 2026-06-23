@@ -27,8 +27,8 @@ HELP_TEXT = """DevFrame Control Plane CLI
 
 RUN_USAGE = "Usage: devframe run --pipeline <path> [--execute] [--project <dir>]"
 DASHBOARD_USAGE = "Usage: devframe dashboard serve [--runtime-dir <dir>] [--paper-project <dir>] [--host 127.0.0.1] [--port 8765] [--allow-remote]"
-GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2] [--target <path>] [--changed] [--execute] [--model provider/model]"
-CODE_USAGE = "Usage: devframe code \"<goal>\" [--project <dir>] [--agents 1] [--target <path>] [--changed] [--execute] [--dashboard]"
+GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2|auto] [--max-agents 4] [--target <path>] [--changed] [--execute] [--model provider/model]"
+CODE_USAGE = "Usage: devframe code \"<goal>\" [--project <dir>] [--agents 1|auto] [--max-agents 4] [--target <path>] [--changed] [--execute] [--dashboard]"
 
 
 def _wants_help(args: list[str]) -> bool:
@@ -292,7 +292,8 @@ def cmd_go() -> int:
     parser = argparse.ArgumentParser(prog="devframe go")
     parser.add_argument("project_path")
     parser.add_argument("requirement")
-    parser.add_argument("--agents", type=int, default=2, help="Number of coding-agent shards to prepare or run")
+    parser.add_argument("--agents", default="2", help="Number of coding-agent shards, or auto")
+    parser.add_argument("--max-agents", type=int, default=4, help="Maximum shards when --agents auto is used")
     parser.add_argument("--target", action="append", default=[], help="Target file or directory. May be repeated")
     parser.add_argument("--changed", action="store_true", help="Use changed git files as token-saving targets")
     parser.add_argument("--runtime-dir", default=None, help="Local runtime directory for go dispatch state")
@@ -309,6 +310,7 @@ def cmd_go() -> int:
     args = parser.parse_args(sys.argv[2:])
     try:
         targets = _resolve_coding_targets(args.project_path, args.target, changed=args.changed)
+        agents = _resolve_agent_count(args.agents, targets, max_agents=args.max_agents)
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
@@ -318,7 +320,7 @@ def cmd_go() -> int:
             args.project_path,
             args.requirement,
             runtime_dir=args.runtime_dir,
-            agents=args.agents,
+            agents=agents,
             targets=targets,
             execute=args.execute,
             worker_command=args.command or None,
@@ -347,7 +349,8 @@ def cmd_code() -> int:
     parser = argparse.ArgumentParser(prog="devframe code")
     parser.add_argument("goal", nargs="?", help="Coding goal for the current repository")
     parser.add_argument("--project", default=".", help="Project/repository root. Defaults to the current directory")
-    parser.add_argument("--agents", type=int, default=1, help="Number of coding-agent shards to prepare or run")
+    parser.add_argument("--agents", default="1", help="Number of coding-agent shards, or auto")
+    parser.add_argument("--max-agents", type=int, default=4, help="Maximum shards when --agents auto is used")
     parser.add_argument("--target", action="append", default=[], help="Target file or directory. May be repeated")
     parser.add_argument("--changed", action="store_true", help="Use changed git files as token-saving targets")
     parser.add_argument("--runtime-dir", default=None, help="Local runtime directory for code session state")
@@ -379,6 +382,7 @@ def cmd_code() -> int:
         return 1
     try:
         targets = _resolve_coding_targets(args.project, args.target, changed=args.changed)
+        agents = _resolve_agent_count(args.agents, targets, max_agents=args.max_agents)
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
@@ -388,7 +392,7 @@ def cmd_code() -> int:
             args.project,
             goal,
             runtime_dir=args.runtime_dir,
-            agents=args.agents,
+            agents=agents,
             targets=targets,
             execute=args.execute,
             worker_command=args.command or None,
@@ -428,6 +432,22 @@ def _resolve_coding_targets(project_path: str | Path, targets: list[str], *, cha
     if not merged:
         raise ValueError("--changed found no modified, staged, or untracked git files")
     return merged
+
+
+def _resolve_agent_count(raw_agents: str, targets: list[str], *, max_agents: int) -> int:
+    if max_agents < 1:
+        raise ValueError("--max-agents must be >= 1")
+    if raw_agents.strip().lower() == "auto":
+        if not targets:
+            return 1
+        return max(1, min(len(targets), max_agents))
+    try:
+        agents = int(raw_agents)
+    except ValueError as exc:
+        raise ValueError("--agents must be a positive integer or auto") from exc
+    if agents < 1:
+        raise ValueError("--agents must be >= 1")
+    return agents
 
 
 def _git_changed_targets(project_path: str | Path) -> list[str]:

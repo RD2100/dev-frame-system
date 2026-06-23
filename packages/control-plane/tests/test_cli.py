@@ -35,6 +35,8 @@ def test_code_help_is_available(monkeypatch, capsys):
 
     output = capsys.readouterr().out
     assert "Usage: devframe code \"<goal>\"" in output
+    assert "--agents" in output
+    assert "--max-agents" in output
     assert "--changed" in output
     assert "--dashboard" in output
 
@@ -97,6 +99,64 @@ def test_code_changed_targets_git_files(tmp_path, monkeypatch, capsys):
 
     assert exit_code == 0
     assert metadata["agents"][0]["targets"] == ["src/app.py"]
+
+
+def test_code_agents_auto_uses_changed_file_count(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    src_dir = project_root / "src"
+    src_dir.mkdir(parents=True)
+    for name in ("app.py", "api.py", "ui.py"):
+        (src_dir / name).write_text(f"# {name}\n", encoding="utf-8")
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True, text=True)
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "Fan out changed files.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--changed",
+        "--agents",
+        "auto",
+    ])
+
+    exit_code = devframe_cli_main()
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert len(metadata["agents"]) == 3
+    assert [agent["targets"] for agent in metadata["agents"]] == [
+        ["src/api.py"],
+        ["src/app.py"],
+        ["src/ui.py"],
+    ]
+
+
+def test_code_agents_rejects_invalid_value(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "Invalid agents value.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--agents",
+        "many",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "--agents must be a positive integer or auto" in output.err
+    assert not runtime_dir.exists()
 
 
 def test_code_changed_requires_git_changes(tmp_path, monkeypatch, capsys):
@@ -194,7 +254,42 @@ def test_go_help_is_available(monkeypatch, capsys):
 
     output = capsys.readouterr().out
     assert "Usage: devframe go <project> <goal>" in output
+    assert "--agents" in output
+    assert "--max-agents" in output
     assert "--changed" in output
+
+
+def test_go_agents_auto_respects_max_agents(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "go",
+        str(project_root),
+        "Fan out explicit targets.",
+        "--runtime-dir",
+        str(runtime_dir),
+        "--agents",
+        "auto",
+        "--max-agents",
+        "2",
+        "--target",
+        "src/a.py",
+        "--target",
+        "src/b.py",
+        "--target",
+        "src/c.py",
+    ])
+
+    exit_code = devframe_cli_main()
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert len(metadata["agents"]) == 2
+    assert metadata["agents"][0]["targets"] == ["src/a.py", "src/c.py"]
+    assert metadata["agents"][1]["targets"] == ["src/b.py"]
 
 
 def test_go_prepares_parallel_coding_agent_packets(tmp_path, monkeypatch, capsys):
