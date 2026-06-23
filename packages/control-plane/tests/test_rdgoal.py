@@ -1262,6 +1262,65 @@ def test_command_worker_failed_command_is_not_fake_green(tmp_path):
     assert "exited 7" in Path(worker_result.report_path).read_text(encoding="utf-8")
 
 
+def test_command_worker_resolves_executable_before_running(tmp_path, monkeypatch):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    contract_path = write_contract(tmp_path)
+
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    orchestrator.register(contract_path, project_root)
+    result = orchestrator.dispatch(
+        project_id="demo-project",
+        requirement="Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+    monkeypatch.setattr(
+        "control_plane.worker.shutil.which",
+        lambda name: sys.executable if name == "python-alias" else None,
+    )
+    command = [
+        "python-alias",
+        "-c",
+        (
+            "import os, pathlib; "
+            "pathlib.Path(os.environ['RDGOAL_REPORT_PATH']).write_text("
+            "'## ExecutionReport: command\\n\\n- **Status**: pass\\n- **Evidence**: resolved executable\\n',"
+            "encoding='utf-8')"
+        ),
+    ]
+
+    worker_result = CommandWorker(runtime_dir=runtime_dir).run_packet(result.packet.packet_dir, command)
+
+    assert worker_result.summary.status == "passed"
+    assert "resolved executable" in worker_result.summary.verification
+
+
+def test_command_worker_missing_executable_is_reported(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    contract_path = write_contract(tmp_path)
+
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    orchestrator.register(contract_path, project_root)
+    result = orchestrator.dispatch(
+        project_id="demo-project",
+        requirement="Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+
+    worker_result = CommandWorker(runtime_dir=runtime_dir).run_packet(
+        result.packet.packet_dir,
+        ["definitely-missing-devframe-worker-command"],
+    )
+
+    packet_dir = Path(result.packet.packet_dir)
+    assert worker_result.summary.status == "failed"
+    assert "could not start" in Path(worker_result.report_path).read_text(encoding="utf-8")
+    assert "FAILED TO START" in (packet_dir / "worker-output.txt").read_text(encoding="utf-8")
+
+
 def test_command_worker_does_not_run_held_packet(tmp_path):
     project_root = tmp_path / "project"
     runtime_dir = tmp_path / "runtime"
