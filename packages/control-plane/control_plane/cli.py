@@ -30,8 +30,8 @@ HELP_TEXT = """DevFrame Control Plane CLI
 
 RUN_USAGE = "Usage: devframe run --pipeline <path> [--execute] [--project <dir>]"
 DASHBOARD_USAGE = "Usage: devframe dashboard serve [--runtime-dir <dir>] [--paper-project <dir>] [--host 127.0.0.1] [--port 8765] [--allow-remote]"
-GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--model provider/model]"
-CODE_USAGE = "Usage: devframe code [[\"<goal>\"] | --prompt-file <path>] [--project <dir>] [--agents 1|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--dashboard]"
+GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--worker opencode|codex|claude] [--model provider/model]"
+CODE_USAGE = "Usage: devframe code [[\"<goal>\"] | --prompt-file <path>] [--project <dir>] [--agents 1|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--worker opencode|codex|claude] [--dashboard]"
 CODE_STATUS_USAGE = "Usage: devframe code status [latest|<go-run-id>] [--runtime-dir <dir>] [--format text|json]"
 CODE_EXECUTE_USAGE = "Usage: devframe code execute [latest|<go-run-id>] [--runtime-dir <dir>] [--timeout <seconds>] [--rerun-passed]"
 
@@ -288,9 +288,11 @@ def cmd_go() -> int:
     import argparse
 
     from .go_dispatch import (
-        DEFAULT_GO_MODEL,
+        DEFAULT_GO_WORKER,
         DEFAULT_OPENCODE_AGENT,
+        GO_WORKERS,
         build_go_worker_command,
+        describe_go_worker,
         estimate_target_bytes,
         render_go_dispatch_text,
         render_command,
@@ -310,7 +312,8 @@ def cmd_go() -> int:
     parser.add_argument("--runtime-dir", default=None, help="Local runtime directory for go dispatch state")
     parser.add_argument("--execute", action="store_true", help="Run shard workers concurrently")
     parser.add_argument("--timeout", type=int, default=900, help="Per-worker timeout in seconds")
-    parser.add_argument("--model", default=DEFAULT_GO_MODEL, help="OpenCode model id for default worker command")
+    parser.add_argument("--worker", choices=GO_WORKERS, default=DEFAULT_GO_WORKER, help="Built-in coding worker profile")
+    parser.add_argument("--model", default=None, help="Model id for the selected worker; opencode defaults to stepfun/step-3.7-flash")
     parser.add_argument("--opencode-agent", default=DEFAULT_OPENCODE_AGENT, help="OpenCode agent name")
     parser.add_argument(
         "--command",
@@ -335,9 +338,11 @@ def cmd_go() -> int:
             execute=args.execute,
             runtime_dir=args.runtime_dir,
             worker_command=args.command or None,
+            worker=args.worker,
             model=args.model,
             opencode_agent=args.opencode_agent,
             build_worker_command=build_go_worker_command,
+            describe_worker=describe_go_worker,
             render_worker_command=render_command,
             split_targets=split_targets_by_size,
             estimate_target_bytes=estimate_target_bytes,
@@ -353,6 +358,7 @@ def cmd_go() -> int:
             targets=targets,
             execute=args.execute,
             worker_command=args.command or None,
+            worker=args.worker,
             model=args.model,
             opencode_agent=args.opencode_agent,
             timeout_seconds=args.timeout,
@@ -369,9 +375,11 @@ def cmd_code() -> int:
     import argparse
 
     from .go_dispatch import (
-        DEFAULT_GO_MODEL,
+        DEFAULT_GO_WORKER,
         DEFAULT_OPENCODE_AGENT,
+        GO_WORKERS,
         build_go_worker_command,
+        describe_go_worker,
         estimate_target_bytes,
         render_go_dispatch_text,
         render_command,
@@ -392,7 +400,8 @@ def cmd_code() -> int:
     parser.add_argument("--runtime-dir", default=None, help="Local runtime directory for code session state")
     parser.add_argument("--execute", action="store_true", help="Run coding worker(s) instead of only preparing packets")
     parser.add_argument("--timeout", type=int, default=900, help="Per-worker timeout in seconds")
-    parser.add_argument("--model", default=DEFAULT_GO_MODEL, help="OpenCode model id for default worker command")
+    parser.add_argument("--worker", choices=GO_WORKERS, default=DEFAULT_GO_WORKER, help="Built-in coding worker profile")
+    parser.add_argument("--model", default=None, help="Model id for the selected worker; opencode defaults to stepfun/step-3.7-flash")
     parser.add_argument("--opencode-agent", default=DEFAULT_OPENCODE_AGENT, help="OpenCode agent name")
     parser.add_argument("--dashboard", action="store_true", help="Serve the read-only dashboard after preparing the session")
     parser.add_argument("--host", default="127.0.0.1", help="Dashboard bind host when --dashboard is used")
@@ -434,9 +443,11 @@ def cmd_code() -> int:
             execute=args.execute,
             runtime_dir=args.runtime_dir,
             worker_command=args.command or None,
+            worker=args.worker,
             model=args.model,
             opencode_agent=args.opencode_agent,
             build_worker_command=build_go_worker_command,
+            describe_worker=describe_go_worker,
             render_worker_command=render_command,
             split_targets=split_targets_by_size,
             estimate_target_bytes=estimate_target_bytes,
@@ -452,6 +463,7 @@ def cmd_code() -> int:
             targets=targets,
             execute=args.execute,
             worker_command=args.command or None,
+            worker=args.worker,
             model=args.model,
             opencode_agent=args.opencode_agent,
             timeout_seconds=args.timeout,
@@ -668,9 +680,11 @@ def _render_coding_preview(
     execute: bool,
     runtime_dir: str | Path | None,
     worker_command: list[str] | None,
+    worker: str,
     model: str,
     opencode_agent: str,
     build_worker_command,
+    describe_worker,
     render_worker_command,
     split_targets,
     estimate_target_bytes,
@@ -681,7 +695,12 @@ def _render_coding_preview(
     shards = split_targets(project_root, targets, agents)
     target_sizes = {target: estimate_target_bytes(project_root, target) for target in targets}
     runtime_root = Path(runtime_dir).resolve() if runtime_dir else default_runtime_dir()
-    worker_label = "custom command" if worker_command else f"opencode model={model} agent={opencode_agent}"
+    worker_label = describe_worker(
+        worker_command=worker_command,
+        worker=worker,
+        model=model,
+        opencode_agent=opencode_agent,
+    )
     lines = [
         "DevFrame coding preview",
         f"entrypoint   : {entrypoint}",
@@ -699,6 +718,7 @@ def _render_coding_preview(
     for index, shard_targets in enumerate(shards, start=1):
         command = build_worker_command(
             worker_command=worker_command,
+            worker=worker,
             model=model,
             opencode_agent=opencode_agent,
             shard_number=index,

@@ -25,6 +25,7 @@ devframe init code_project D:\tmp\demo-project
 devframe code
 devframe code "Build the MVP" --project D:\tmp\demo-project --target src --dashboard
 devframe code "Build the MVP" --project D:\tmp\demo-project --target src --preview
+devframe code "Fix the branch" --project D:\tmp\demo-project --changed --agents auto --worker codex --preview
 devframe code --project D:\tmp\demo-project --prompt-file TASK.md --changed --agents auto
 devframe code --project D:\tmp\demo-project --prompt-file TASK.md --since origin/main --agents auto
 devframe code status --runtime-dir C:\Users\you\.devframe-runtime
@@ -38,8 +39,11 @@ command line when scripting. It defaults to preparing a bounded coding-agent
 session, prints the worker command, and records runtime state for
 `devframe dashboard serve`. Use `--dashboard` to serve that visual UI
 immediately, `--preview` to inspect the shard plan and worker command template
-without creating packets, `--execute` to run the worker, and `--agents <n>` to
-split the goal into concurrent coding shards. Use `--changed --agents auto` to
+without creating packets, `--execute` to run the worker, and
+`--worker opencode|codex|claude` to select a built-in coding CLI profile. Use
+`--command <your-worker>` for custom executors such as T3Code. Use
+`--agents <n>` to split the goal into concurrent coding shards.
+Use `--changed --agents auto` to
 keep worker prompts focused on modified, staged, or untracked git files and
 automatically choose a bounded shard count; use `--max-agents` to cap that
 fan-out or `--target <path>` for manual scoping. Dispatch and preview balance

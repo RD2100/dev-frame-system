@@ -18,6 +18,8 @@ from .worker import CommandWorker, WorkerResult
 
 DEFAULT_GO_MODEL = "stepfun/step-3.7-flash"
 DEFAULT_OPENCODE_AGENT = "build"
+DEFAULT_GO_WORKER = "opencode"
+GO_WORKERS = ("opencode", "codex", "claude")
 SUCCESS_WORKER_STATUSES = {"pass", "passed", "completed"}
 
 
@@ -61,6 +63,7 @@ def run_go_dispatch(
     targets: list[str] | None = None,
     execute: bool = False,
     worker_command: list[str] | None = None,
+    worker: str = DEFAULT_GO_WORKER,
     model: str = DEFAULT_GO_MODEL,
     opencode_agent: str = DEFAULT_OPENCODE_AGENT,
     timeout_seconds: int = 900,
@@ -102,6 +105,7 @@ def run_go_dispatch(
             continue
         command = build_go_worker_command(
             worker_command=worker_command,
+            worker=worker,
             model=model,
             opencode_agent=opencode_agent,
             shard_number=shard_number,
@@ -400,14 +404,18 @@ def _shard_requirement(requirement: str, shard_number: int, shard_count: int,
     return "\n".join(lines)
 
 
-def _opencode_command(*, model: str, opencode_agent: str,
-                      shard_number: int, shard_count: int) -> list[str]:
-    prompt = (
+def _worker_prompt(shard_number: int, shard_count: int) -> str:
+    return (
         "Read RDGOAL_TASKSPEC_JSON and RDGOAL_TASKSPEC_MD from the environment. "
         f"You are coding shard {shard_number}/{shard_count}. "
         "Make only the smallest safe project change for this shard, run the relevant verification, "
         "and write a Markdown ExecutionReport to RDGOAL_REPORT_PATH with Status, Changed Files, Evidence, Risks, and Reviewer Index."
     )
+
+
+def _opencode_command(*, model: str, opencode_agent: str,
+                      shard_number: int, shard_count: int) -> list[str]:
+    prompt = _worker_prompt(shard_number, shard_count)
     return [
         "opencode",
         "run",
@@ -421,9 +429,42 @@ def _opencode_command(*, model: str, opencode_agent: str,
     ]
 
 
+def _codex_command(*, model: str,
+                   shard_number: int, shard_count: int) -> list[str]:
+    prompt = _worker_prompt(shard_number, shard_count)
+    command = [
+        "codex",
+        "exec",
+        "--sandbox",
+        "workspace-write",
+        "--ask-for-approval",
+        "never",
+    ]
+    if model:
+        command.extend(["-m", model])
+    command.append(prompt)
+    return command
+
+
+def _claude_command(*, model: str,
+                    shard_number: int, shard_count: int) -> list[str]:
+    prompt = _worker_prompt(shard_number, shard_count)
+    command = [
+        "claude",
+        "-p",
+        "--permission-mode",
+        "acceptEdits",
+    ]
+    if model:
+        command.extend(["--model", model])
+    command.append(prompt)
+    return command
+
+
 def build_go_worker_command(
     *,
     worker_command: list[str] | None,
+    worker: str,
     model: str,
     opencode_agent: str,
     shard_number: int,
@@ -431,12 +472,42 @@ def build_go_worker_command(
 ) -> list[str]:
     if worker_command:
         return list(worker_command)
+    selected_worker = worker.strip().lower()
+    if selected_worker not in GO_WORKERS:
+        raise ValueError(f"unknown worker: {worker}")
+    resolved_model = model or (DEFAULT_GO_MODEL if selected_worker == "opencode" else "")
+    if selected_worker == "codex":
+        return _codex_command(
+            model=resolved_model,
+            shard_number=shard_number,
+            shard_count=shard_count,
+        )
+    if selected_worker == "claude":
+        return _claude_command(
+            model=resolved_model,
+            shard_number=shard_number,
+            shard_count=shard_count,
+        )
     return _opencode_command(
-        model=model,
+        model=resolved_model,
         opencode_agent=opencode_agent,
         shard_number=shard_number,
         shard_count=shard_count,
     )
+
+
+def describe_go_worker(*, worker_command: list[str] | None,
+                       worker: str, model: str,
+                       opencode_agent: str) -> str:
+    if worker_command:
+        return "custom command"
+    selected_worker = worker.strip().lower()
+    resolved_model = model or (DEFAULT_GO_MODEL if selected_worker == "opencode" else "")
+    if selected_worker == "opencode":
+        return f"opencode model={resolved_model} agent={opencode_agent}"
+    if resolved_model:
+        return f"{selected_worker} model={resolved_model}"
+    return selected_worker
 
 
 def _worker_command_preview(runtime_dir: str, agent: GoAgentDispatch) -> str:

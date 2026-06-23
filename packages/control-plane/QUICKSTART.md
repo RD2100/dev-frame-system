@@ -94,13 +94,17 @@ devframe code "Build the MVP" `
   --target src `
   --runtime-dir C:\Users\you\.devframe-runtime `
   --preview
+devframe code "Fix the branch" --changed --agents auto --worker claude --preview
 ```
 
 Run `devframe code` with no goal to start from a `Goal:` prompt in the current
 repository. By default this prepares one coding-agent session and prints the
 worker command without spending agent tokens. Add `--preview` when you only
 want to inspect the shard plan plus worker command template and avoid creating
-runtime packets. Add `--execute` only when you want the worker to run. In a real
+runtime packets. Use `--worker opencode|codex|claude` to pick the built-in
+coding CLI that should consume each packet, or pass `--command <your-worker>`
+for another executor such as T3Code. Add `--execute` only when you want the
+worker to run. In a real
 git worktree, use `--changed --agents auto` to target modified, staged, or
 untracked files and choose a bounded shard count automatically; use
 `--max-agents` to cap the fan-out. Preview and dispatch balance targets by
@@ -149,9 +153,10 @@ devframe go "D:\tmp\demo-project" "Build the MVP" `
 
 By default this is a token-safe dispatch step: it writes a `go-run.json` record,
 creates one rdgoal packet per coding-agent shard, and prints the exact worker
-commands. Add `--execute` to run the shards concurrently. Without `--command`,
-the default worker command is `opencode run -m stepfun/step-3.7-flash --agent build`;
-pass `--command <your-worker>` to use another executor that reads
+commands. Add `--execute` to run the shards concurrently. Use
+`--worker opencode|codex|claude` to choose a built-in worker profile; the
+default is `opencode run -m stepfun/step-3.7-flash --agent build`.
+Pass `--command <your-worker>` to use another executor that reads
 `RDGOAL_TASKSPEC_JSON` and writes `RDGOAL_REPORT_PATH`.
 Use `--since <git-ref>` or `--changed` to keep `/go` shards focused on the files
 that actually changed instead of giving every worker project-wide context.

@@ -45,6 +45,7 @@ def test_code_help_is_available(monkeypatch, capsys):
     assert "--changed" in output
     assert "--since" in output
     assert "--preview" in output
+    assert "--worker" in output
     assert "--dashboard" in output
 
 
@@ -223,13 +224,14 @@ def test_code_status_reports_missing_runtime(tmp_path, monkeypatch, capsys):
 def test_code_execute_reuses_prepared_go_run_packets(tmp_path, monkeypatch, capsys):
     project_root = tmp_path / "demo-project"
     runtime_dir = tmp_path / "runtime"
-    counter_path = tmp_path / "worker-count.txt"
+    marker_dir = tmp_path / "worker-markers"
     project_root.mkdir()
     report_code = (
         "from pathlib import Path; import os; "
-        f"counter = Path({str(counter_path)!r}); "
-        "count = int(counter.read_text(encoding='utf-8')) if counter.exists() else 0; "
-        "counter.write_text(str(count + 1), encoding='utf-8'); "
+        f"marker_dir = Path({str(marker_dir)!r}); "
+        "marker_dir.mkdir(parents=True, exist_ok=True); "
+        "packet_name = Path(os.environ['RDGOAL_PACKET_DIR']).name; "
+        "(marker_dir / f'{packet_name}.txt').write_text('ran', encoding='utf-8'); "
         "Path(os.environ['RDGOAL_REPORT_PATH']).write_text("
         "'## ExecutionReport\\n\\n"
         "- **Status**: pass\\n"
@@ -288,7 +290,7 @@ def test_code_execute_reuses_prepared_go_run_packets(tmp_path, monkeypatch, caps
     assert metadata_after["execute"] is True
     assert metadata_after["status"] == "passed"
     assert {agent["worker_status"] for agent in metadata_after["agents"]} == {"passed"}
-    assert counter_path.read_text(encoding="utf-8") == "2"
+    assert len(list(marker_dir.glob("*.txt"))) == 2
     assert state["go_runs"][0]["status"] == "passed"
 
 
@@ -606,6 +608,64 @@ def test_code_preview_shows_custom_worker_command(tmp_path, monkeypatch, capsys)
     assert not runtime_dir.exists()
 
 
+def test_code_preview_shows_codex_worker_profile(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "Preview Codex worker.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/app.py",
+        "--preview",
+        "--worker",
+        "codex",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "worker       : codex" in output
+    assert "command: codex exec --sandbox workspace-write --ask-for-approval never" in output
+    assert "You are coding shard 1/1." in output
+    assert not runtime_dir.exists()
+
+
+def test_code_preview_shows_claude_worker_profile(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "Preview Claude worker.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/app.py",
+        "--preview",
+        "--worker",
+        "claude",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "worker       : claude" in output
+    assert "command: claude -p --permission-mode acceptEdits" in output
+    assert "You are coding shard 1/1." in output
+    assert not runtime_dir.exists()
+
+
 def test_code_agents_rejects_invalid_value(tmp_path, monkeypatch, capsys):
     project_root = tmp_path / "demo-project"
     runtime_dir = tmp_path / "runtime"
@@ -730,6 +790,7 @@ def test_go_help_is_available(monkeypatch, capsys):
     assert "--changed" in output
     assert "--since" in output
     assert "--preview" in output
+    assert "--worker" in output
 
 
 def test_go_agents_auto_respects_max_agents(tmp_path, monkeypatch, capsys):

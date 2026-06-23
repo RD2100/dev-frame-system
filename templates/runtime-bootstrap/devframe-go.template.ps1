@@ -20,7 +20,9 @@ param(
     [string]$Agents = "auto",
     [int]$MaxAgents = 4,
     [string]$RuntimeDir = "",
-    [string]$Model = "stepfun/step-3.7-flash",
+    [ValidateSet("opencode", "codex", "claude")]
+    [string]$Worker = "opencode",
+    [string]$Model = "",
     [string]$OpencodeAgent = "build",
     [switch]$Changed,
     [switch]$Prepare,
@@ -50,8 +52,8 @@ $argsList = @(
     $Agents,
     "--max-agents",
     [string]$MaxAgents,
-    "--model",
-    $Model,
+    "--worker",
+    $Worker,
     "--opencode-agent",
     $OpencodeAgent
 )
@@ -66,6 +68,10 @@ if ($Changed) {
 
 if ($RuntimeDir) {
     $argsList += @("--runtime-dir", $RuntimeDir)
+}
+
+if ($Model) {
+    $argsList += @("--model", $Model)
 }
 
 if ($Execute) {

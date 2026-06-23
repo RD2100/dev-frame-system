@@ -38,9 +38,10 @@ devframe code            # start a Codex-like coding session in the current repo
 dev-frame-system answers by turning a web AI session into an **external brain** for software development. GPT Web is the default example, but DeepSeek, Doubao, or another capable browser-accessible AI can play the same role. The external brain keeps product direction, engineering tradeoffs, task boundaries, evidence, and review memory in one place. Your IDE, CLI, browser, scripts, tests, and coding agents become replaceable executors.
 
 Practically, the first product surface is `devframe code`: a local coding CLI
-for Codex, Claude Code, OpenCode, or another worker command you already use. Run
-it in a repository to enter a coding goal, prepare bounded coding sessions, fan
-work out across agents, and inspect the status in an optional read-only
+for OpenCode, Codex, Claude Code, or another worker command you already use. Run
+it in a repository to enter a coding goal, choose a worker profile, prepare
+bounded coding sessions, fan work out across agents, execute them when you are
+ready to spend worker tokens, and inspect the status in an optional read-only
 dashboard.
 
 ## Why This Exists
@@ -135,6 +136,7 @@ cd .\packages\control-plane
 pip install -e .
 cd D:\my-project
 devframe code "Build the MVP" --target src --runtime-dir "$env:TEMP\devframe-code" --dashboard
+devframe code "Fix the branch" --changed --agents auto --worker claude --preview
 rdgoal "D:\my-project" "Build the MVP" --digest
 devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-dir "$env:TEMP\devframe-go"
 ```
@@ -142,7 +144,9 @@ devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-di
 `devframe code` is the product-shaped coding entrypoint. It defaults to the
 current repository and prompts for a goal when one is not supplied, prepares one
 bounded coding-agent session, prints the exact worker command, and records state
-for the dashboard. Use `--changed --agents auto` to target modified, staged, or
+for the dashboard. Use `--worker opencode|codex|claude` to choose a built-in
+worker template, or `--command <your-worker>` for a custom executor such as
+T3Code. Use `--changed --agents auto` to target modified, staged, or
 untracked git files and fan them out across bounded shards; `--max-agents` caps
 the automatic fan-out. Use `--preview` to print the shard plan and worker
 command template without creating packets or spending worker tokens. Shards are
@@ -162,10 +166,11 @@ form for scripts that already use the umbrella CLI.
 `/go` is the coding-tool entrypoint. In a shell, `devframe go` prepares parallel
 coding-agent dispatch packets and shows the exact worker commands without
 spending agent tokens by default. Add `--execute` to run the shards concurrently;
-omit `--command` to use `opencode run -m stepfun/step-3.7-flash --agent build`,
-or pass `--command <your-worker>` to route the same TaskSpec packets through
-another executor. The Visual Control Plane reads the same runtime and shows the
-go-run plus each coding-agent shard, target, packet, status, and worker command.
+use `--worker opencode|codex|claude` to pick a built-in worker profile, or pass
+`--command <your-worker>` to route the same TaskSpec packets through another
+executor such as T3Code. The Visual Control Plane reads the same runtime and
+shows the go-run plus each coding-agent shard, target, packet, status, and
+worker command.
 Pass `--changed --agents auto` to derive shard targets from git changes instead
 of sending a project-wide task or guessing the shard count manually.
 

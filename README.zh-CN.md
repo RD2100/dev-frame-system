@@ -28,7 +28,7 @@ devframe code "<goal>"  # 在当前仓库启动类似 Codex 的编程会话
 
 dev-frame-system 的答案是：把网页 AI 会话变成软件研发的**外部大脑**。网页 AI 负责保存产品方向、工程取舍、任务边界、证据、审查结论和经验记忆；IDE、CLI、浏览器、脚本、测试框架以及不同厂商的 coding agent 都是可替换的执行器。
 
-落到产品形态上，第一个主入口是 `devframe code`：一个面向 Codex、Claude Code、OpenCode 或其他 worker 命令的本地编程 CLI。它不替代模型，也不替代 IDE；它负责限定任务边界、准备 coding 会话、按需拆分并发 agent，并把状态写进可选的只读 Dashboard。
+落到产品形态上，第一个主入口是 `devframe code`：一个面向 OpenCode、Codex、Claude Code 或其他 worker 命令的本地编程 CLI。它不替代模型，也不替代 IDE；它负责限定任务边界、选择 worker profile、准备 coding 会话、按需拆分并发 agent，在你确认要花 worker token 时再执行，并把状态写进可选的只读 Dashboard。
 
 ## 为什么需要它
 
@@ -122,11 +122,11 @@ rdgoal "D:\my-project" "Build the MVP" --digest
 devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-dir "$env:TEMP\devframe-go"
 ```
 
-`devframe code` 是更接近 Codex/OpenCode 形态的编程入口。它默认作用于当前仓库，准备一个有边界的 coding-agent 会话，打印精确 worker 命令，并把状态写入 Dashboard 可读取的 runtime。真实 git 工作区里推荐用 `--changed --agents auto`：只把 modified、staged 或 untracked 文件作为 target，并按文件数自动拆成有上限的并发分片；`--max-agents` 可以调整自动拆分上限。先用 `--preview` 可以看分片计划、估算 bytes 和 worker 命令模板，不创建 packet，也不消耗 worker token；实际分片会按 target 大小做均衡，避免某个 agent 吃掉大部分上下文。准备真正消耗 worker token 时再加 `--execute`，或者先 prepare，再用 `devframe code execute [latest|<go-run-id>]` 复用已有 packet 延后执行；已通过的 agent 默认会跳过，除非显式传 `--rerun-passed`。加 `--dashboard` 会直接启动同一个 runtime 的本地只读可视化界面；Dashboard 页面内有 English/中文 切换，也可以用 `?lang=zh-CN` 直接打开中文界面。
+`devframe code` 是更接近 Codex/OpenCode 形态的编程入口。它默认作用于当前仓库，准备一个有边界的 coding-agent 会话，打印精确 worker 命令，并把状态写入 Dashboard 可读取的 runtime。用 `--worker opencode|codex|claude` 可以选择内置 worker 模板；其他执行器，比如 T3Code，可以通过 `--command <your-worker>` 接入。真实 git 工作区里推荐用 `--changed --agents auto`：只把 modified、staged 或 untracked 文件作为 target，并按文件数自动拆成有上限的并发分片；`--max-agents` 可以调整自动拆分上限。先用 `--preview` 可以看分片计划、估算 bytes 和 worker 命令模板，不创建 packet，也不消耗 worker token；实际分片会按 target 大小做均衡，避免某个 agent 吃掉大部分上下文。准备真正消耗 worker token 时再加 `--execute`，或者先 prepare，再用 `devframe code execute [latest|<go-run-id>]` 复用已有 packet 延后执行；已通过的 agent 默认会跳过，除非显式传 `--rerun-passed`。加 `--dashboard` 会直接启动同一个 runtime 的本地只读可视化界面；Dashboard 页面内有 English/中文 切换，也可以用 `?lang=zh-CN` 直接打开中文界面。
 
 `/rdgoal` 是面向用户的 slash 入口。在 shell 中使用已安装的 `rdgoal` 命令。`devframe rdgoal` 作为兼容形式仍然可用于已经使用 umbrella CLI 的脚本。
 
-`/go` 是面向编程工具形态的入口。在 shell 中，`devframe go` 默认只准备并发 coding agent dispatch packet，并打印精确 worker 命令，不会立刻消耗 agent token。加 `--execute` 后才会并发运行这些分片；不传 `--command` 时默认使用 `opencode run -m stepfun/step-3.7-flash --agent build`，也可以用 `--command <your-worker>` 接入其他执行器。传 `--changed --agents auto` 可以从 git 变更自动生成分片 target，并自动选择并发数，避免项目级大上下文。
+`/go` 是面向编程工具形态的入口。在 shell 中，`devframe go` 默认只准备并发 coding agent dispatch packet，并打印精确 worker 命令，不会立刻消耗 agent token。加 `--execute` 后才会并发运行这些分片；用 `--worker opencode|codex|claude` 可以选择内置 worker profile，默认是 `opencode run -m stepfun/step-3.7-flash --agent build`，也可以用 `--command <your-worker>` 接入其他执行器。传 `--changed --agents auto` 可以从 git 变更自动生成分片 target，并自动选择并发数，避免项目级大上下文。
 Visual Control Plane 会读取同一个 runtime，并显示 go-run 以及每个 coding-agent 分片的目标、packet、状态和 worker 命令。
 
 然后通过外部大脑闭环运行工作：
