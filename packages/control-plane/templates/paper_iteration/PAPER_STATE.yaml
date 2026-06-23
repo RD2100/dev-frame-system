@@ -1,19 +1,18 @@
-# {{PAPER_TITLE}} — Paper State
+# {{PAPER_TITLE}} Paper State
 
-paper_id: {{PAPER_ID}}
+paper_id: "{{PAPER_ID}}"
 current_iteration: 1
 current_stage: drafting
 status: initialized
 
-# 迭代阶段流转
-# drafting → review_requested → review_received → revision → accepted | rejected
-
+# Stage flow:
+# drafting -> review_requested -> review_received -> revision -> accepted | rejected
 next_stage: review_requested
 
-# 审查历史
+# Review history
 reviews: []
 
-# 禁止事项
-# - 不提交包含真实论文内容的 .docx / .pdf
-# - 不提交审查过程中的 GPT 会话数据
-# - 不提交含用户身份信息的内容
+# Do not submit:
+# - .docx or .pdf files that contain real paper text
+# - GPT or web AI conversation transcripts from the review process
+# - content with user identity or private research data

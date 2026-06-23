@@ -41,7 +41,7 @@ P0 invariants cannot be downgraded by P1-P4 considerations. No exception path ex
 | **Priority** | P0 (Hard Stop) |
 | **Scope** | All phases, all agents |
 | **Rule** | No file written by an agent may reference a non-existent or drifted path in its content. Paths mentioned in documentation, contracts, and rules must resolve on-disk at the time of writing. Drifted paths (e.g., `D:\devFrame` when actual is `D:\dev-frame`) are invalid. |
-| **Violation Example** | A contract document references `D:\devFrame\ai-workflow-hub` when the actual path is `D:\dev-frame\ai-workflow-hub`. An invariant references `C:\Users\OtherUser` when the actual home is `C:\Users\RD`. |
+| **Violation Example** | A contract document references `D:\devFrame\ai-workflow-hub` when the actual path is `D:\dev-frame\ai-workflow-hub`. An invariant references `C:\Users\OtherUser` when the actual home is `C:\Users\local-user`. |
 | **Detection** | For each path mentioned in a newly written file, run `test -d` or `test -f`. Rejected if the path does not exist. |
 | **Gate Decision on Violation** | BLOCKED. Path must be corrected or documented as a known drift with resolution plan. |
 
@@ -264,7 +264,7 @@ P0 invariants cannot be downgraded by P1-P4 considerations. No exception path ex
 | **ID** | INV-018 |
 | **Priority** | P0 (Hard Stop) |
 | **Scope** | Phase 0-5 |
-| **Rule** | Agents must not write to any memory file. This includes `memory/*.md`, `MEMORY.md` index, `ACTIVE.md`, `agent-state.db`, or any file within `C:\Users\RD\.claude\`. Memory reads are permitted. Memory writes require `MemoryUpdateRecord` with status `proposed` only. |
+| **Rule** | Agents must not write to any memory file. This includes `memory/*.md`, `MEMORY.md` index, `ACTIVE.md`, `agent-state.db`, or any file within the user's local agent configuration directory (for example, `C:\Users\local-user\.claude\`). Memory reads are permitted. Memory writes require `MemoryUpdateRecord` with status `proposed` only. |
 | **Violation Example** | An agent writes a new entry to `memory/decisions.md`. An agent modifies `MEMORY.md` to add a new index entry. An agent writes to `agent-state.db` directly. |
 | **Detection** | Pre/post `git status --short` comparison for `memory/` directory. Check modification timestamps of `MEMORY.md`, `ACTIVE.md`, `agent-state.db`. |
 | **Gate Decision on Violation** | BLOCKED. Written memory must be identified and reported. |

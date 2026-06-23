@@ -19,6 +19,7 @@ setup(
             "context_handoff/*",
             "paper_iteration/*",
             "runtime-bootstrap/*",
+            "visual_control_plane/*",
         ],
     },
     install_requires=["pyyaml>=6.0", "jsonschema>=4.0"],

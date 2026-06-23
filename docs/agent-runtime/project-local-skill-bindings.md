@@ -29,7 +29,7 @@ Required paths:
 - Runtime template source: resolved from the bootstrap script location, not a
   hard-coded external checkout.
 
-`D:\agent-acceptance` is a legacy standalone root. Do not use it for this
+`<legacy-standalone-root>` is a legacy standalone root. Do not use it for this
 superproject unless the user explicitly asks to operate on that old checkout.
 
 ## `/bindChrome`

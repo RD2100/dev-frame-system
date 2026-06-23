@@ -1,0 +1,97 @@
+# Visual Control Plane state read model.
+# Validate this file with schemas/visual_control_plane_state.schema.json before use.
+
+version: 1
+
+projects:
+  - project_id: demo-project
+    display_name: Demo Project
+    goal: "Route a project goal through governed agents, evidence, review, and gates."
+    status: initialized
+    risk_state: low
+    contract_path: rules/project-contracts/demo-project.md
+
+provider_bindings:
+  - binding_id: chatgpt-web
+    provider: chatgpt
+    mode: browser_cdp
+    health: needs_login
+    adapter_config_path: WEB_AI_ADAPTER.yaml
+    manual_fallback_instructions:
+      - "Prepare a minimized prompt packet."
+      - "Paste it into the configured web AI manually."
+      - "Copy the latest response back into the governed run."
+    notes: "Reference browser-hosted AI binding. Replaceable by provider."
+
+agents:
+  - agent_id: coordinator
+    binding_id: chatgpt-web
+    role: coordinator
+    scope: project
+    permissions:
+      - plan
+      - read_context
+      - request_human_gate
+    status: idle
+  - agent_id: reviewer
+    binding_id: chatgpt-web
+    role: reviewer
+    scope: review
+    permissions:
+      - review
+      - read_context
+      - request_human_gate
+    status: idle
+
+runs:
+  - run_id: first-run
+    entrypoint: rdgoal
+    status: pending
+    taskspec_status: draft
+    evidence_status: missing
+    review_status: missing
+    report_path: ""
+    packet_path: ""
+    taskspec_path: ""
+    taskspec_json_path: ""
+    task_input_path: ""
+    next_command: "rdgoal worker <packet-dir> --runtime-dir <runtime-dir>"
+
+gates:
+  - gate_id: human-gate
+    kind: human
+    status: open
+    reason: "Required before secrets, browser profiles, external side effects, or production actions."
+    next_action: "Confirm human approval or keep the run blocked."
+    run_id: first-run
+
+decisions:
+  - decision_id: first-decision
+    mode: continue
+    status: proposed
+    next_action: "Prepare a bounded TaskSpec before execution."
+    run_id: first-run
+
+next_actions:
+  - action_id: human-gate-action
+    source_type: gate
+    source_id: human-gate
+    priority: medium
+    status: open
+    label: "Confirm human approval or keep the run blocked."
+    detail: "Required before secrets, browser profiles, external side effects, or production actions."
+
+safety:
+  raw_transcripts_persisted: false
+  remote_execution_default: false
+  human_gate_required_for:
+    - browser_profile_access
+    - credential_access
+    - external_side_effect
+    - payment
+    - production_deploy
+    - publication_submission
+    - raw_transcript_persistence
+    - real_paper_full_text
+    - remote_execution
+    - secret_exposure

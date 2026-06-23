@@ -34,7 +34,7 @@
     "phase": "R6",
     "memory_source": "RD2100-memory",
     "memory_type": "active_rules",
-    "memory_path": "C:\\Users\\RD\\.codex\\memories\\RD2100-memory\\ACTIVE.md",
+    "memory_path": "<user-home>\\.codex\\memories\\RD2100-memory\\ACTIVE.md",
     "access_mode": "read_only",
     "write_allowed": false,
     "used_as_fact": false,

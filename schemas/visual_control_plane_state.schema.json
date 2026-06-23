@@ -1,0 +1,327 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rd2100.devframe/schemas/visual-control-plane-state",
+  "title": "Visual Control Plane State",
+  "description": "Read model for the future dev-frame-system visual control plane.",
+  "type": "object",
+  "required": ["version", "projects", "provider_bindings", "agents", "runs", "gates", "decisions", "next_actions", "safety"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "projects": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/project" },
+      "uniqueItems": true
+    },
+    "provider_bindings": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/provider_binding" },
+      "uniqueItems": true
+    },
+    "agents": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/agent" },
+      "uniqueItems": true
+    },
+    "runs": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/run_summary" },
+      "uniqueItems": true
+    },
+    "gates": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/gate_summary" },
+      "uniqueItems": true
+    },
+    "decisions": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/decision_summary" },
+      "uniqueItems": true
+    },
+    "next_actions": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/action_item" },
+      "uniqueItems": true
+    },
+    "safety": {
+      "type": "object",
+      "required": [
+        "raw_transcripts_persisted",
+        "remote_execution_default",
+        "human_gate_required_for"
+      ],
+      "properties": {
+        "raw_transcripts_persisted": { "type": "boolean" },
+        "remote_execution_default": { "type": "boolean" },
+        "human_gate_required_for": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "browser_profile_access",
+              "credential_access",
+              "external_side_effect",
+              "payment",
+              "production_deploy",
+              "publication_submission",
+              "raw_transcript_persistence",
+              "real_paper_full_text",
+              "remote_execution",
+              "secret_exposure"
+            ]
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "definitions": {
+    "project": {
+      "type": "object",
+      "required": ["project_id", "display_name", "goal", "status"],
+      "properties": {
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "goal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "status": {
+          "type": "string",
+          "enum": ["initialized", "active", "blocked", "review_required", "completed"]
+        },
+        "risk_state": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "human_required"]
+        },
+        "contract_path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "provider_binding": {
+      "type": "object",
+      "required": ["binding_id", "provider", "mode", "health"],
+      "properties": {
+        "binding_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "provider": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["browser_cdp", "manual", "mcp_app", "local_mcp_bridge", "context_only", "custom"]
+        },
+        "health": {
+          "type": "string",
+          "enum": ["unknown", "ready", "needs_login", "blocked", "disabled"]
+        },
+        "adapter_config_path": {
+          "type": "string"
+        },
+        "manual_fallback_instructions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "agent": {
+      "type": "object",
+      "required": ["agent_id", "binding_id", "role", "scope", "permissions", "status"],
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "binding_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["coordinator", "reviewer", "executor", "paper_reviewer", "human_reviewer"]
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["project", "run", "review", "paper", "context_only"]
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["plan", "review", "execute", "read_context", "request_human_gate"]
+          },
+          "uniqueItems": true
+        },
+        "status": {
+          "type": "string",
+          "enum": ["idle", "active", "blocked", "needs_human", "disabled"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "run_summary": {
+      "type": "object",
+      "required": ["run_id", "entrypoint", "status", "taskspec_status", "evidence_status", "review_status"],
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "entrypoint": {
+          "type": "string",
+          "enum": ["rdgoal", "rdpaper", "manual", "custom"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "running", "blocked", "failed", "review_required", "completed"]
+        },
+        "taskspec_status": {
+          "type": "string",
+          "enum": ["missing", "draft", "ready", "in_progress", "completed"]
+        },
+        "evidence_status": {
+          "type": "string",
+          "enum": ["missing", "partial", "collected", "verified", "disputed"]
+        },
+        "review_status": {
+          "type": "string",
+          "enum": ["missing", "pending", "pass", "blocked", "fail", "escalate"]
+        },
+        "report_path": {
+          "type": "string"
+        },
+        "packet_path": {
+          "type": "string"
+        },
+        "taskspec_path": {
+          "type": "string"
+        },
+        "taskspec_json_path": {
+          "type": "string"
+        },
+        "task_input_path": {
+          "type": "string"
+        },
+        "next_command": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "gate_summary": {
+      "type": "object",
+      "required": ["gate_id", "kind", "status"],
+      "properties": {
+        "gate_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["human", "safety", "privacy", "release", "acceptance"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "pass", "blocked", "failed", "skipped"]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "next_action": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "decision_summary": {
+      "type": "object",
+      "required": ["decision_id", "mode", "status", "next_action"],
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["continue", "revise", "stop", "escalate"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["proposed", "selected", "executed", "blocked"]
+        },
+        "next_action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "run_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "action_item": {
+      "type": "object",
+      "required": ["action_id", "source_type", "source_id", "priority", "status", "label"],
+      "properties": {
+        "action_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "source_type": {
+          "type": "string",
+          "enum": ["gate", "run", "decision"]
+        },
+        "source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["high", "medium", "low"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "blocked", "ready", "info"]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "detail": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
