@@ -33,6 +33,8 @@ class GoAgentDispatch:
     status: str = "queued"
     report_path: str = ""
     worker_status: str = ""
+    changed_files: list[str] = field(default_factory=list)
+    verification: str = ""
 
 
 @dataclass
@@ -167,6 +169,10 @@ def render_go_dispatch_text(result: GoDispatchResult) -> str:
         ])
         if agent.report_path:
             lines.append(f"  report : {agent.report_path}")
+        if agent.changed_files:
+            lines.append(f"  changed: {', '.join(agent.changed_files)}")
+        if agent.verification:
+            lines.append(f"  evidence: {_summary_line(agent.verification)}")
     lines.extend([
         "",
         f"Dashboard: devframe dashboard serve --runtime-dir {_quote_arg(result.runtime_dir)}",
@@ -189,6 +195,8 @@ def _execute_parallel(result: GoDispatchResult, *, timeout_seconds: int) -> None
                 agent.status = "completed"
                 agent.worker_status = worker_result.summary.status
                 agent.report_path = worker_result.report_path
+                agent.changed_files = worker_result.summary.changed_files
+                agent.verification = worker_result.summary.verification
             except Exception as exc:  # pragma: no cover - defensive guard
                 agent.status = "failed"
                 agent.worker_status = "failed"
@@ -330,6 +338,14 @@ def _worker_command_preview(runtime_dir: str, agent: GoAgentDispatch) -> str:
 
 def render_command(command: list[str]) -> str:
     return " ".join(_quote_arg(part) for part in command)
+
+
+def _summary_line(value: str) -> str:
+    for line in value.splitlines():
+        stripped = line.strip().lstrip("- ").replace("**", "")
+        if stripped:
+            return stripped
+    return ""
 
 
 def _quote_arg(value: str) -> str:

@@ -256,6 +256,10 @@
           "type": "integer",
           "minimum": 0
         },
+        "changed_files": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
         "packet_dir": {
           "type": "string"
         },

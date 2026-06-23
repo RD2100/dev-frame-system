@@ -624,7 +624,7 @@ def test_go_execute_runs_worker_command_for_each_agent(tmp_path, monkeypatch, ca
         "- **Status**: pass\\n"
         "- **Review Status**: pass\\n"
         "- **Changed Files**:\\n"
-        "- (none)\\n"
+        "- `src/app.py`\\n"
         "- **Evidence**: fake worker command\\n"
         "- **Reviewer Index**:\\n"
         "- fake worker evidence\\n', encoding='utf-8')"
@@ -653,10 +653,15 @@ def test_go_execute_runs_worker_command_for_each_agent(tmp_path, monkeypatch, ca
 
     assert exit_code == 0
     assert "status       : passed" in output
+    assert "changed: src/app.py" in output
+    assert "evidence: Evidence: fake worker command" in output
     assert metadata["execute"] is True
     assert metadata["status"] == "passed"
     assert {agent["worker_status"] for agent in metadata["agents"]} == {"passed"}
+    assert all(agent["changed_files"] == ["src/app.py"] for agent in metadata["agents"])
+    assert all("fake worker command" in agent["verification"] for agent in metadata["agents"])
     assert all(Path(agent["report_path"]).exists() for agent in metadata["agents"])
+    assert all(agent["changed_files"] == ["src/app.py"] for agent in state["go_runs"][0]["agents"])
     assert {run["status"] for run in state["runs"]} == {"completed"}
 
 

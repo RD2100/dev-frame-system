@@ -40,7 +40,9 @@ fan-out or `--target <path>` for manual scoping. Dispatch and preview balance
 targets by estimated bytes so large files are spread across workers more evenly.
 For longer task briefs, pass `--prompt-file <path>` or pipe text into
 `devframe code`; both feed the same `/go` coding-agent dispatch without putting
-the whole prompt on the command line.
+the whole prompt on the command line. After `--execute`, the CLI summarizes each
+shard's worker status, ExecutionReport path, changed files, and evidence
+snippet; the dashboard keeps the scan-friendly status and changed-file view.
 
 The focused total-control entrypoint is also installed:
 

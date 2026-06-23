@@ -140,8 +140,10 @@ the default worker command is `opencode run -m stepfun/step-3.7-flash --agent bu
 pass `--command <your-worker>` to use another executor that reads
 `RDGOAL_TASKSPEC_JSON` and writes `RDGOAL_REPORT_PATH`.
 The dashboard reads the same runtime and shows the go-run plus each shard's
-target, packet path, status, and worker command in a dedicated `/go Coding
-Agents` section.
+target, estimated bytes, changed files, packet path, status, and worker command
+in a dedicated `/go Coding Agents` section. When workers finish, `devframe code`
+and `devframe go` also print each shard's ExecutionReport path, changed files,
+and first evidence line in the terminal.
 
 ## 8. Review the runtime digest
 
