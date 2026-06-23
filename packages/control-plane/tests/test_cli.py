@@ -1,4 +1,5 @@
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -34,6 +35,7 @@ def test_code_help_is_available(monkeypatch, capsys):
 
     output = capsys.readouterr().out
     assert "Usage: devframe code \"<goal>\"" in output
+    assert "--changed" in output
     assert "--dashboard" in output
 
 
@@ -69,6 +71,56 @@ def test_code_prepares_current_repo_coding_session(tmp_path, monkeypatch, capsys
     assert metadata["agents"][0]["targets"] == ["src/cli.py"]
     assert len(state["go_runs"]) == 1
     assert state["go_runs"][0]["agents"][0]["agent_id"] == "coding-agent-1"
+
+
+def test_code_changed_targets_git_files(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    src_dir = project_root / "src"
+    src_dir.mkdir(parents=True)
+    (src_dir / "app.py").write_text("print('hello')\n", encoding="utf-8")
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True, text=True)
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "Implement only changed files.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--changed",
+    ])
+
+    exit_code = devframe_cli_main()
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert metadata["agents"][0]["targets"] == ["src/app.py"]
+
+
+def test_code_changed_requires_git_changes(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True, text=True)
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "Implement only changed files.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--changed",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "--changed found no modified, staged, or untracked git files" in output.err
+    assert not runtime_dir.exists()
 
 
 def test_code_dashboard_serves_prepared_session(tmp_path, monkeypatch, capsys):
@@ -142,6 +194,7 @@ def test_go_help_is_available(monkeypatch, capsys):
 
     output = capsys.readouterr().out
     assert "Usage: devframe go <project> <goal>" in output
+    assert "--changed" in output
 
 
 def test_go_prepares_parallel_coding_agent_packets(tmp_path, monkeypatch, capsys):

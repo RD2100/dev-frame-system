@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 import ipaddress
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -26,8 +27,8 @@ HELP_TEXT = """DevFrame Control Plane CLI
 
 RUN_USAGE = "Usage: devframe run --pipeline <path> [--execute] [--project <dir>]"
 DASHBOARD_USAGE = "Usage: devframe dashboard serve [--runtime-dir <dir>] [--paper-project <dir>] [--host 127.0.0.1] [--port 8765] [--allow-remote]"
-GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2] [--target <path>] [--execute] [--model provider/model]"
-CODE_USAGE = "Usage: devframe code \"<goal>\" [--project <dir>] [--agents 1] [--target <path>] [--execute] [--dashboard]"
+GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2] [--target <path>] [--changed] [--execute] [--model provider/model]"
+CODE_USAGE = "Usage: devframe code \"<goal>\" [--project <dir>] [--agents 1] [--target <path>] [--changed] [--execute] [--dashboard]"
 
 
 def _wants_help(args: list[str]) -> bool:
@@ -293,6 +294,7 @@ def cmd_go() -> int:
     parser.add_argument("requirement")
     parser.add_argument("--agents", type=int, default=2, help="Number of coding-agent shards to prepare or run")
     parser.add_argument("--target", action="append", default=[], help="Target file or directory. May be repeated")
+    parser.add_argument("--changed", action="store_true", help="Use changed git files as token-saving targets")
     parser.add_argument("--runtime-dir", default=None, help="Local runtime directory for go dispatch state")
     parser.add_argument("--execute", action="store_true", help="Run shard workers concurrently")
     parser.add_argument("--timeout", type=int, default=900, help="Per-worker timeout in seconds")
@@ -305,6 +307,11 @@ def cmd_go() -> int:
         help="Worker command for --execute. Omit to use opencode run.",
     )
     args = parser.parse_args(sys.argv[2:])
+    try:
+        targets = _resolve_coding_targets(args.project_path, args.target, changed=args.changed)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
 
     try:
         result = run_go_dispatch(
@@ -312,7 +319,7 @@ def cmd_go() -> int:
             args.requirement,
             runtime_dir=args.runtime_dir,
             agents=args.agents,
-            targets=args.target,
+            targets=targets,
             execute=args.execute,
             worker_command=args.command or None,
             model=args.model,
@@ -342,6 +349,7 @@ def cmd_code() -> int:
     parser.add_argument("--project", default=".", help="Project/repository root. Defaults to the current directory")
     parser.add_argument("--agents", type=int, default=1, help="Number of coding-agent shards to prepare or run")
     parser.add_argument("--target", action="append", default=[], help="Target file or directory. May be repeated")
+    parser.add_argument("--changed", action="store_true", help="Use changed git files as token-saving targets")
     parser.add_argument("--runtime-dir", default=None, help="Local runtime directory for code session state")
     parser.add_argument("--execute", action="store_true", help="Run coding worker(s) instead of only preparing packets")
     parser.add_argument("--timeout", type=int, default=900, help="Per-worker timeout in seconds")
@@ -369,6 +377,11 @@ def cmd_code() -> int:
     if args.dashboard and not args.allow_remote and not _is_loopback_host(args.host):
         print("ERROR: dashboard exposes local runtime paths; use --allow-remote to bind outside loopback.")
         return 1
+    try:
+        targets = _resolve_coding_targets(args.project, args.target, changed=args.changed)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
 
     try:
         result = run_go_dispatch(
@@ -376,7 +389,7 @@ def cmd_code() -> int:
             goal,
             runtime_dir=args.runtime_dir,
             agents=args.agents,
-            targets=args.target,
+            targets=targets,
             execute=args.execute,
             worker_command=args.command or None,
             model=args.model,
@@ -405,6 +418,57 @@ def cmd_code() -> int:
             refresh_seconds=args.refresh_seconds,
         )
     return 0 if result.status in {"queued", "passed"} else 1
+
+
+def _resolve_coding_targets(project_path: str | Path, targets: list[str], *, changed: bool) -> list[str]:
+    if not changed:
+        return list(targets)
+    git_targets = _git_changed_targets(project_path)
+    merged = _dedupe_targets([*targets, *git_targets])
+    if not merged:
+        raise ValueError("--changed found no modified, staged, or untracked git files")
+    return merged
+
+
+def _git_changed_targets(project_path: str | Path) -> list[str]:
+    project_root = Path(project_path).resolve()
+    if not project_root.exists():
+        raise ValueError(f"project path does not exist: {project_root}")
+    inside = _git_output(project_root, ["rev-parse", "--is-inside-work-tree"])
+    if inside.strip().lower() != "true":
+        raise ValueError(f"--changed requires a git work tree: {project_root}")
+    targets: list[str] = []
+    for args in (
+        ["diff", "--name-only", "--diff-filter=ACMR"],
+        ["diff", "--cached", "--name-only", "--diff-filter=ACMR"],
+        ["ls-files", "--others", "--exclude-standard"],
+    ):
+        targets.extend(line.strip() for line in _git_output(project_root, args).splitlines() if line.strip())
+    return _dedupe_targets(targets)
+
+
+def _git_output(project_root: Path, args: list[str]) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(project_root), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise ValueError(f"git {' '.join(args)} failed: {detail}")
+    return result.stdout
+
+
+def _dedupe_targets(targets: list[str]) -> list[str]:
+    seen: set[str] = set()
+    unique: list[str] = []
+    for target in targets:
+        text = str(target).strip()
+        if text and text not in seen:
+            seen.add(text)
+            unique.append(text)
+    return unique
 
 
 def cmd_visual_state() -> int:
