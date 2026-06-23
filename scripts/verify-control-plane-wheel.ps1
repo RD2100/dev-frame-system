@@ -12,6 +12,7 @@ $venvDir = Join-Path $tempRoot "venv"
 $projectDir = Join-Path $tempRoot "demo-project"
 $paperDir = Join-Path $tempRoot "paper-project"
 $runtimeDir = Join-Path $tempRoot "runtime"
+$goRuntimeDir = Join-Path $tempRoot "go-runtime"
 
 function Invoke-Step {
     param(
@@ -67,7 +68,12 @@ try {
     Invoke-Step "install wheel" $python @("-m", "pip", "install", $wheel.FullName)
     Invoke-Step "devframe help" $python @(
         "-c",
-        "import subprocess, sys; text = subprocess.check_output([sys.argv[1], '--help'], text=True); assert 'DevFrame Control Plane CLI' in text; assert 'devframe dashboard serve' in text; assert 'devframe actions' in text; print('devframe help ok')",
+        "import subprocess, sys; text = subprocess.check_output([sys.argv[1], '--help'], text=True); assert 'DevFrame Control Plane CLI' in text; assert 'devframe go <project> <goal>' in text; assert 'devframe dashboard serve' in text; assert 'devframe actions' in text; print('devframe help ok')",
+        $devframe
+    )
+    Invoke-Step "devframe go help" $python @(
+        "-c",
+        "import subprocess, sys; text = subprocess.check_output([sys.argv[1], 'go', '--help'], text=True); assert 'Usage: devframe go <project> <goal>' in text; print('devframe go help ok')",
         $devframe
     )
     Invoke-Step "devframe run help" $python @(
@@ -83,6 +89,19 @@ try {
     Invoke-Step "devframe doctor" $devframe @("doctor")
     Invoke-Step "devframe init" $devframe @("init", "code_project", $projectDir)
     Invoke-Step "devframe init paper_iteration" $devframe @("init", "paper_iteration", $paperDir)
+    Invoke-Step "devframe go dry dispatch" $devframe @(
+        "go", $projectDir, "Build a Codex-like programming tool MVP.",
+        "--runtime-dir", $goRuntimeDir,
+        "--agents", "2",
+        "--target", "CURRENT_STATE.yaml",
+        "--target", "PIPELINE.yaml"
+    )
+    Invoke-Step "devframe go dry dispatch details" $python @(
+        "-c",
+        "import json, pathlib, subprocess, sys; root = pathlib.Path(sys.argv[2]); files = list((root / 'go-runs').glob('*/go-run.json')); assert len(files) == 1; data = json.loads(files[0].read_text(encoding='utf-8')); assert data['status'] == 'queued'; assert len(data['agents']) == 2; text = subprocess.check_output([sys.argv[1], 'visual-state', '--runtime-dir', sys.argv[2]], text=True); state = json.loads(text); assert len(state['runs']) == 2; assert all(run['status'] == 'pending' for run in state['runs']); assert all(run['next_command'].startswith('rdgoal worker ') for run in state['runs']); print('go dispatch ok')",
+        $devframe,
+        $goRuntimeDir
+    )
     Invoke-Step "devframe run" $devframe @("run", "--pipeline", (Join-Path $projectDir "PIPELINE.yaml"))
     Invoke-Step "rdgoal" $rdgoal @(
         $projectDir, "Build a working MVP prototype.", "--runtime-dir", $runtimeDir, "--apply-rdinit"

@@ -18,6 +18,7 @@
 ```text
 /rdinit                 # 初始化外部大脑操作层
 /bindChrome <url>       # 绑定 GPT Web、DeepSeek、豆包或其他网页 AI 会话
+/go <project> <goal>    # 准备或运行并发 coding agent 分片
 /rdgoal <project> <goal> # 把项目目标路由进总控闭环
 /rdpaper <project> <goal> # 把论文任务路由进论文审查闭环
 ```
@@ -50,6 +51,7 @@ dev-frame-system 提供一套可迁移的 agent 研发操作层：
 
 - **方向把控**：在写代码前，把目标、边界、风险和取舍放到同一个上下文里。
 - **任务调度**：把模糊需求变成有边界的 TaskSpec，交给 Codex、Claude Code、CLI、浏览器自动化或其他 agent。
+- **并发 coding agent 入口**：用 `/go` 或 `devframe go` 准备多个有边界的编码分片；确认要花 agent token 时，再通过 OpenCode 或其他 worker 并发执行。
 - **证据审查**：用 ExecutionReport、证据索引、审查门禁和负面夹具防止"假完成"。
 - **可复用引导**：用 PowerShell bootstrap 把同一套操作层部署到其他项目。
 - **外部大脑绑定**：用 `/bindChrome` 把稳定的网页 AI 会话绑定到当前项目。
@@ -102,9 +104,12 @@ cd dev-frame-system
 cd .\packages\control-plane
 pip install -e .
 rdgoal "D:\my-project" "Build the MVP" --digest
+devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-dir "$env:TEMP\devframe-go"
 ```
 
 `/rdgoal` 是面向用户的 slash 入口。在 shell 中使用已安装的 `rdgoal` 命令。`devframe rdgoal` 作为兼容形式仍然可用于已经使用 umbrella CLI 的脚本。
+
+`/go` 是面向编程工具形态的入口。在 shell 中，`devframe go` 默认只准备并发 coding agent dispatch packet，并打印精确 worker 命令，不会立刻消耗 agent token。加 `--execute` 后才会并发运行这些分片；不传 `--command` 时默认使用 `opencode run -m stepfun/step-3.7-flash --agent build`，也可以用 `--command <your-worker>` 接入其他执行器。
 
 然后通过外部大脑闭环运行工作：
 
@@ -121,6 +126,7 @@ rdgoal "D:\my-project" "Build the MVP" --digest
 |---|---|---|
 | `/rdinit` | 给仓库初始化 dev-frame-system 操作层 | `AGENTS.md`、规则、schemas、工具策略、能力清单和运行时文档 |
 | `/bindChrome <url>` | 把网页 AI 会话绑定到当前项目 | 一个稳定的外部大脑会话，连接本地项目上下文 |
+| `/go <project> <goal>` | 准备或运行并发 coding agent 分片 | go-run 记录、每个 agent 的 rdgoal packet、worker 命令，以及 Dashboard 可见的 runs |
 | `/rdgoal <project> <goal>` | 把项目目标交给总控编排 | 项目 contract、controller 决策、dispatch packet、worker 报告和 runtime digest |
 | `/rdpaper <project> <goal>` | 把论文任务交给论文审查控制面 | 论文工作区、Web AI Adapter 配置、隐私闸门、审查报告和证据摘要 |
 

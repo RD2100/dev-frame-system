@@ -82,7 +82,26 @@ The worker receives `RDGOAL_TASKSPEC_JSON`, `RDGOAL_PACKET_JSON`, and
 `RDGOAL_REPORT_PATH` environment variables and must produce an ExecutionReport.
 Worker exit code is non-zero for `blocked`, `failed`, or unknown report states.
 
-## 7. Review the runtime digest
+## 7. Prepare parallel coding-agent work with /go
+
+Use `devframe go` when you want a Codex/Claude Code/OpenCode-style coding
+entrypoint instead of a single controller packet:
+
+```powershell
+devframe go "D:\tmp\demo-project" "Build the MVP" `
+  --agents 3 `
+  --target src `
+  --runtime-dir C:\Users\you\.devframe-runtime
+```
+
+By default this is a token-safe dispatch step: it writes a `go-run.json` record,
+creates one rdgoal packet per coding-agent shard, and prints the exact worker
+commands. Add `--execute` to run the shards concurrently. Without `--command`,
+the default worker command is `opencode run -m stepfun/step-3.7-flash --agent build`;
+pass `--command <your-worker>` to use another executor that reads
+`RDGOAL_TASKSPEC_JSON` and writes `RDGOAL_REPORT_PATH`.
+
+## 8. Review the runtime digest
 
 ```powershell
 rdgoal digest
@@ -91,7 +110,7 @@ rdgoal digest
 The digest is rebuilt from runtime files, so it can show decisions and worker
 ExecutionReports across separate CLI invocations.
 
-## 8. Export visual state
+## 9. Export visual state
 
 ```powershell
 devframe visual-state --runtime-dir C:\Users\you\.devframe-runtime

@@ -27,6 +27,7 @@
 ```text
 /rdinit                 # initialize the external-brain operating layer
 /bindChrome <url>       # bind GPT Web, DeepSeek, Doubao, or another web AI URL
+/go <project> <goal>    # prepare or run parallel coding-agent shards
 /rdgoal <project> <goal> # route a goal through the total-control loop
 /rdpaper <project> <goal> # route a paper task through the paper review loop
 ```
@@ -59,6 +60,7 @@ dev-frame-system gives you a portable operating layer for agent-assisted develop
 
 - **Direction control**: keep the real goal, tradeoffs, and constraints visible before code changes start.
 - **Task dispatch**: turn vague requests into bounded TaskSpecs for Codex, Claude Code, CLI tools, browser automation, or other agents.
+- **Parallel coding-agent entrypoint**: use `/go` or `devframe go` to prepare several bounded coding-agent shards, then execute them through OpenCode or another worker when you are ready to spend agent tokens.
 - **Evidence-based review**: use ExecutionReport, evidence indexes, review gates, and negative fixtures to prevent fake success.
 - **Reusable bootstrap**: install the same operating layer into another project with a PowerShell bootstrap.
 - **External-brain binding**: use `/bindChrome` to tie a stable browser AI session to the current project.
@@ -112,11 +114,19 @@ Optionally install the control-plane CLI and route a project through `rdgoal`:
 cd .\packages\control-plane
 pip install -e .
 rdgoal "D:\my-project" "Build the MVP" --digest
+devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-dir "$env:TEMP\devframe-go"
 ```
 
 `/rdgoal` is the human-facing slash entrypoint. In a shell, use the installed
 `rdgoal` command. `devframe rdgoal` remains available as the compatibility
 form for scripts that already use the umbrella CLI.
+
+`/go` is the coding-tool entrypoint. In a shell, `devframe go` prepares parallel
+coding-agent dispatch packets and shows the exact worker commands without
+spending agent tokens by default. Add `--execute` to run the shards concurrently;
+omit `--command` to use `opencode run -m stepfun/step-3.7-flash --agent build`,
+or pass `--command <your-worker>` to route the same TaskSpec packets through
+another executor.
 
 Then run work through the external-brain loop:
 
@@ -133,6 +143,7 @@ Then run work through the external-brain loop:
 |---|---|---|
 | `/rdinit` | Initialize a repository with dev-frame-system assets | `AGENTS.md`, rules, schemas, tool policy, capability inventory, and runtime docs |
 | `/bindChrome <url>` | Bind a browser AI session to the current project | A stable external-brain session tied to local project context |
+| `/go <project> <goal>` | Prepare or run parallel coding-agent shards | A go-run record, per-agent rdgoal packets, worker commands, and dashboard-visible runs |
 | `/rdgoal <project> <goal>` | Route a project goal through the total-control controller | Project contract, controller decision, dispatch packet, worker report, and runtime digest |
 | `/rdpaper <project> <goal>` | Route a paper task through the paper review controller | Paper workspace, Web AI Adapter config, privacy gate, review report, and evidence summary |
 
