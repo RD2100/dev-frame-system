@@ -6,7 +6,7 @@
 # Or run from within the target project (targets current directory):
 #
 #   cd D:\my-project
-#   powershell -ExecutionPolicy Bypass -File D:\agent-acceptance\templates\ci-preflight\install.ps1
+#   powershell -ExecutionPolicy Bypass -File D:\my-project\templates\ci-preflight\install.ps1
 
 param(
     [string]$TargetProject = (Get-Location).Path,

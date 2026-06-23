@@ -26,8 +26,10 @@ pull request, and manual workflow runs.
 
 The wheel smoke test builds `packages/control-plane`, installs the wheel into a
 temporary virtual environment, then runs the installed `devframe` console script
-through `doctor`, `init`, and `run`, and the installed `rdgoal` console script
-through `rdgoal`, `rdgoal worker`, and `rdgoal digest`.
+through `devframe --help`, `devframe run --help`, `devframe dashboard --help`,
+`devframe visual-state`, `devframe actions`, `devframe dashboard serve`, and
+`--paper-project` coverage, and the installed `rdgoal` console script through
+`rdgoal`, `rdgoal worker`, and `rdgoal digest`.
 
 ## Expected Public Surface
 
@@ -52,6 +54,17 @@ archives, `build`, `dist`, or package metadata directories in the public tree.
   `completed` reports. `blocked`, `failed`, and unknown statuses are non-zero.
 - Runtime packets, reports, and snapshots are written outside the public
   repository by default.
+- Visual Control Plane read-only exports include `/`, `/state.json`,
+  `/actions.json`, and `/actions.md`. These endpoints are intended for
+  inspection only and do not accept writes.
+- Action Queue resume and filtering use `--action-id` as the focused selector.
+- Scripts use `--fail-on-match` as a read-only gate to surface blocked or
+  failed actions without mutating state.
+- Dashboard binds to non-loopback hosts only when `--allow-remote` is
+  explicitly provided.
+- `stepfun/step-3.7-flash` is documented for narrow single-file post-TaskSpec
+  execution. Its external evidence-dir write limitations are captured in
+  `dispatch-model-profiles.md`.
 
 ## Reviewer Focus
 
@@ -62,6 +75,15 @@ archives, `build`, `dist`, or package metadata directories in the public tree.
   console scripts, not only `python -m control_plane.*`.
 - Confirm rdgoal blocked and failed states cannot be reported as success.
 - Confirm public docs do not reference private machine paths.
+- Confirm the Visual Control Plane dashboard endpoints `/`, `/state.json`,
+  `/actions.json`, and `/actions.md` are documented as read-only exports.
+- Confirm `--action-id`, `--fail-on-match`, and `--allow-remote` are
+  documented and tested as the Action Queue resume/filter mechanism,
+  read-only script gate, and dashboard remote-bind safety guard
+  respectively.
+- Confirm `stepfun/step-3.7-flash` is documented only for narrow post-TaskSpec
+  execution and that its evidence-dir write limitations are traceable to
+  `dispatch-model-profiles.md`.
 
 ## Current Verdict
 

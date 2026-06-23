@@ -1,10 +1,37 @@
-"""CLI entry: devframe init, doctor, run, handoff, pack, and rdgoal."""
+"""CLI entry: devframe init, doctor, run, handoff, pack, dashboard, and rdgoal."""
 from __future__ import annotations
 
 import sys
+import ipaddress
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+HELP_TEXT = """DevFrame Control Plane CLI
+  devframe init [template] [target]  - initialize project
+  devframe doctor                    - check package health
+  devframe rdgoal <project> <goal>   - route work through rdgoal
+  devframe visual-state              - export Visual Control Plane state
+  devframe actions                   - show Visual Control Plane action queue
+  devframe dashboard serve           - serve read-only local dashboard
+  devframe run --pipeline <path>     - run pipeline
+  devframe pack validate <zip>       - validate evidence pack
+  devframe handoff generate          - generate handoff doc
+  devframe handoff validate <file>   - validate handoff
+  devframe handoff bootstrap         - dry-run bootstrap
+  devframe handoff transfer --to <url> [--live --safety-flag] - transfer handoff
+"""
+
+RUN_USAGE = "Usage: devframe run --pipeline <path> [--execute] [--project <dir>]"
+DASHBOARD_USAGE = "Usage: devframe dashboard serve [--runtime-dir <dir>] [--paper-project <dir>] [--host 127.0.0.1] [--port 8765] [--allow-remote]"
+
+
+def _wants_help(args: list[str]) -> bool:
+    return any(arg in {"-h", "--help", "help"} for arg in args)
+
+
+def _print_help() -> None:
+    print(HELP_TEXT.rstrip())
 
 
 def cmd_init(template: str = "code_project", target: str = ".") -> int:
@@ -46,6 +73,7 @@ def cmd_doctor() -> int:
         "templates/code_project": (ROOT / "templates" / "code_project").is_dir(),
         "templates/paper_iteration": (ROOT / "templates" / "paper_iteration").is_dir(),
         "templates/context_handoff": (ROOT / "templates" / "context_handoff").is_dir(),
+        "templates/visual_control_plane": (ROOT / "templates" / "visual_control_plane").is_dir(),
         "control_plane/rdgoal_cli.py": (ROOT / "control_plane" / "rdgoal_cli.py").exists(),
         ".gitignore covers .env": not gitignore_path.exists() or ".env" in gitignore_path.read_text(encoding="utf-8"),
     }
@@ -246,18 +274,178 @@ def cmd_rdgoal() -> int:
     return rdgoal_main(sys.argv[2:])
 
 
+def cmd_visual_state() -> int:
+    import argparse
+    import yaml
+
+    from .visual_state import (
+        build_visual_control_plane_state,
+        render_visual_control_plane_state_html,
+        render_visual_control_plane_state_json,
+    )
+
+    parser = argparse.ArgumentParser(prog="devframe visual-state")
+    parser.add_argument("--runtime-dir", default=None, help="Local devframe runtime directory")
+    parser.add_argument("--paper-project", action="append", default=[], help="Paper iteration project directory to include")
+    parser.add_argument("--format", choices=["json", "yaml", "html"], default="json", help="Output format")
+    parser.add_argument("--output", default=None, help="Write output to a file instead of stdout")
+    args = parser.parse_args(sys.argv[2:])
+
+    state = build_visual_control_plane_state(args.runtime_dir, paper_project_dirs=args.paper_project)
+    if args.format == "yaml":
+        rendered = yaml.safe_dump(state, sort_keys=False, allow_unicode=False)
+    elif args.format == "html":
+        rendered = render_visual_control_plane_state_html(state)
+    else:
+        rendered = render_visual_control_plane_state_json(state)
+    if args.output:
+        output_path = Path(args.output).resolve()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(rendered, encoding="utf-8")
+        print(f"Wrote {args.format} visual state to {output_path}")
+    else:
+        print(rendered, end="" if rendered.endswith("\n") else "\n")
+    return 0
+
+
+def cmd_actions() -> int:
+    import argparse
+    import json
+    import yaml
+
+    from .visual_state import (
+        ACTION_PRIORITIES,
+        ACTION_SOURCE_TYPES,
+        ACTION_STATUSES,
+        action_filter_values,
+        build_visual_control_plane_state,
+        filter_action_queue,
+        render_action_queue_markdown,
+        render_action_queue_text,
+    )
+
+    parser = argparse.ArgumentParser(prog="devframe actions")
+    parser.add_argument("--runtime-dir", default=None, help="Local devframe runtime directory")
+    parser.add_argument("--paper-project", action="append", default=[], help="Paper iteration project directory to include")
+    parser.add_argument("--format", choices=["text", "json", "yaml", "markdown"], default="text", help="Output format")
+    parser.add_argument("--status", action="append", choices=ACTION_STATUSES, help="Only include actions with this status")
+    parser.add_argument("--priority", action="append", choices=ACTION_PRIORITIES, help="Only include actions with this priority")
+    parser.add_argument("--source-type", action="append", choices=ACTION_SOURCE_TYPES, help="Only include actions from this source type")
+    parser.add_argument("--source-id", action="append", help="Only include actions with this source id")
+    parser.add_argument("--action-id", action="append", help="Only include actions with this action id")
+    parser.add_argument("--fail-on-match", action="store_true", help="Return non-zero when the filtered queue is not empty")
+    parser.add_argument("--output", default=None, help="Write output to a file instead of stdout")
+    args = parser.parse_args(sys.argv[2:])
+
+    state = build_visual_control_plane_state(args.runtime_dir, paper_project_dirs=args.paper_project)
+    next_actions = state.get("next_actions", [])
+    invalid_filters = _invalid_dynamic_action_filters(next_actions, args.source_id, args.action_id)
+    if invalid_filters:
+        print(f"Invalid action filters: {invalid_filters}", file=sys.stderr)
+        return 2
+    actions = filter_action_queue(
+        next_actions,
+        statuses=args.status,
+        priorities=args.priority,
+        source_types=args.source_type,
+        source_ids=args.source_id,
+        action_ids=args.action_id,
+    )
+    payload = {"next_actions": actions}
+    if args.format == "json":
+        rendered = json.dumps(payload, indent=2, ensure_ascii=True)
+    elif args.format == "yaml":
+        rendered = yaml.safe_dump(payload, sort_keys=False, allow_unicode=False)
+    elif args.format == "markdown":
+        rendered = render_action_queue_markdown(payload["next_actions"])
+    else:
+        rendered = render_action_queue_text(payload["next_actions"])
+    if args.output:
+        output_path = Path(args.output).resolve()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(rendered, encoding="utf-8")
+        print(f"Wrote {args.format} action queue to {output_path}")
+    else:
+        print(rendered, end="" if rendered.endswith("\n") else "\n")
+    if args.fail_on_match and actions:
+        return 1
+    return 0
+
+
+def _invalid_dynamic_action_filters(
+    actions: list[dict],
+    source_ids: list[str] | None,
+    action_ids: list[str] | None,
+) -> dict[str, list[str]]:
+    from .visual_state import action_filter_values
+
+    allowed = action_filter_values(actions)
+    invalid: dict[str, list[str]] = {}
+    _collect_unknown_filter_values(invalid, "source_id", source_ids or [], allowed["source_id"])
+    _collect_unknown_filter_values(invalid, "action_id", action_ids or [], allowed["action_id"])
+    return invalid
+
+
+def _collect_unknown_filter_values(
+    invalid: dict[str, list[str]],
+    key: str,
+    values: list[str],
+    allowed: list[str],
+) -> None:
+    allowed_values = set(allowed)
+    unknown = [value for value in values if value not in allowed_values]
+    if unknown:
+        invalid[key] = unknown
+
+
+def cmd_dashboard() -> int:
+    import argparse
+
+    if len(sys.argv) < 3 or _wants_help(sys.argv[2:3]):
+        print(DASHBOARD_USAGE)
+        return 0
+    if sys.argv[2] != "serve":
+        print(f"Unknown dashboard subcommand: {sys.argv[2]}")
+        print(DASHBOARD_USAGE)
+        return 1
+
+    from .dashboard import serve_dashboard
+
+    parser = argparse.ArgumentParser(prog="devframe dashboard serve")
+    parser.add_argument("--runtime-dir", default=None, help="Local devframe runtime directory")
+    parser.add_argument("--paper-project", action="append", default=[], help="Paper iteration project directory to include")
+    parser.add_argument("--host", default="127.0.0.1", help="Bind host")
+    parser.add_argument("--port", type=int, default=8765, help="Bind port")
+    parser.add_argument("--refresh-seconds", type=int, default=5, help="Browser refresh interval; use 0 to disable")
+    parser.add_argument("--allow-remote", action="store_true", help="Allow binding to a non-loopback host")
+    args = parser.parse_args(sys.argv[3:])
+
+    if not args.allow_remote and not _is_loopback_host(args.host):
+        print("ERROR: dashboard exposes local runtime paths; use --allow-remote to bind outside loopback.")
+        return 1
+
+    serve_dashboard(
+        runtime_dir=args.runtime_dir,
+        host=args.host,
+        port=args.port,
+        refresh_seconds=args.refresh_seconds,
+        paper_project_dirs=args.paper_project,
+    )
+    return 0
+
+
+def _is_loopback_host(host: str) -> bool:
+    if host.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def main() -> int:
-    if len(sys.argv) < 2:
-        print("DevFrame Control Plane CLI")
-        print("  devframe init [template] [target]  - initialize project")
-        print("  devframe doctor                    - check package health")
-        print("  devframe rdgoal <project> <goal>   - route work through rdgoal")
-        print("  devframe run --pipeline <path>     - run pipeline")
-        print("  devframe pack validate <zip>       - validate evidence pack")
-        print("  devframe handoff generate          - generate handoff doc")
-        print("  devframe handoff validate <file>   - validate handoff")
-        print("  devframe handoff bootstrap         - dry-run bootstrap")
-        print("  devframe handoff transfer --to <url> [--live --safety-flag] - transfer handoff")
+    if len(sys.argv) < 2 or _wants_help(sys.argv[1:2]):
+        _print_help()
         return 0
 
     cmd = sys.argv[1]
@@ -282,23 +470,47 @@ def main() -> int:
     if cmd == "rdgoal":
         return cmd_rdgoal()
 
+    if cmd == "visual-state":
+        return cmd_visual_state()
+
+    if cmd == "actions":
+        return cmd_actions()
+
+    if cmd == "dashboard":
+        return cmd_dashboard()
+
     if cmd == "doctor":
         return cmd_doctor()
 
     if cmd == "run":
+        if _wants_help(sys.argv[2:]):
+            print(RUN_USAGE)
+            return 0
         if "--pipeline" not in sys.argv:
-            print("Usage: devframe run --pipeline <path> [--execute] [--project <dir>]")
+            print(RUN_USAGE)
             return 1
         index = sys.argv.index("--pipeline")
+        if index + 1 >= len(sys.argv):
+            print(RUN_USAGE)
+            return 1
         path = sys.argv[index + 1]
         with_submission = "--with-submission" in sys.argv
         execute = "--execute" in sys.argv
+        project_dir = None
+        if "--project" in sys.argv:
+            project_index = sys.argv.index("--project")
+            if project_index + 1 >= len(sys.argv):
+                print(RUN_USAGE)
+                return 1
+            project_dir = Path(sys.argv[project_index + 1]).resolve()
 
         if execute:
             from .stage_executor import execute_full_pipeline
             print(f"Pipeline: {path}")
             print("Mode: execute (via framework stage_executor)")
-            results = execute_full_pipeline()
+            if project_dir:
+                print(f"Project: {project_dir}")
+            results = execute_full_pipeline(project_dir=project_dir)
             total = len(results)
             completed = sum(1 for result in results if result.status == "completed")
             for result in results:

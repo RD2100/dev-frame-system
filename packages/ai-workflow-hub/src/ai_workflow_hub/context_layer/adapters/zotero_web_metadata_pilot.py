@@ -27,7 +27,7 @@ EMPTY_REMOTE_LIBRARY = "EMPTY_REMOTE_LIBRARY"
 
 API_HOST = "api.zotero.org"
 MAX_METADATA_ITEMS = 500
-DEFAULT_KEY_FILE = Path(r"C:\Users\RD\key\zotero.txt")
+DEFAULT_KEY_FILE = Path.home() / ".config" / "devframe" / "zotero_api_key.txt"
 FORBIDDEN_ITEM_TYPES = {"note", "attachment"}
 REDACTED_FIELDS = {
     "abstractNote",

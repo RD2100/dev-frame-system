@@ -22,7 +22,7 @@
 /rdpaper <project> <goal> # 把论文任务路由进论文审查闭环
 ```
 
-**核心问题不是“再做一套治理框架”。真正的问题是：如何用尽量低的成本和最简单的流程，提高代码质量，并让研发方向不漂移？**
+**核心问题不是"再做一套治理框架"。真正的问题是：如何用尽量低的成本和最简单的流程，提高代码质量，并让研发方向不漂移？**
 
 dev-frame-system 的答案是：把网页 AI 会话变成软件研发的**外部大脑**。网页 AI 负责保存产品方向、工程取舍、任务边界、证据、审查结论和经验记忆；IDE、CLI、浏览器、脚本、测试框架以及不同厂商的 coding agent 都是可替换的执行器。
 
@@ -50,7 +50,7 @@ dev-frame-system 提供一套可迁移的 agent 研发操作层：
 
 - **方向把控**：在写代码前，把目标、边界、风险和取舍放到同一个上下文里。
 - **任务调度**：把模糊需求变成有边界的 TaskSpec，交给 Codex、Claude Code、CLI、浏览器自动化或其他 agent。
-- **证据审查**：用 ExecutionReport、证据索引、审查门禁和负面夹具防止“假完成”。
+- **证据审查**：用 ExecutionReport、证据索引、审查门禁和负面夹具防止"假完成"。
 - **可复用引导**：用 PowerShell bootstrap 把同一套操作层部署到其他项目。
 - **外部大脑绑定**：用 `/bindChrome` 把稳定的网页 AI 会话绑定到当前项目。
 - **总控编排**：用 `rdgoal` 协调多个项目本地 workflow，记录 controller 决策、rollback snapshot、dispatch packet 和最终报告。
@@ -71,6 +71,12 @@ cd dev-frame-system
 .\scripts\verify-public-snapshot.ps1
 ```
 
+在发布本地版本或共享 control-plane 包之前，先运行发布验证入口：
+
+```powershell
+.\scripts\verify-release.ps1
+```
+
 把外部大脑操作层引导到另一个项目：
 
 ```powershell
@@ -84,34 +90,23 @@ cd dev-frame-system
   -ProjectRoot "D:\my-project"
 ```
 
-绑定网页 AI 会话：
+引导完成后，从 agent 环境中绑定浏览器 AI 会话：
 
 ```text
 /bindChrome https://chatgpt.com/...
 ```
 
-安装 control-plane CLI，并用 `rdgoal` 路由一个项目：
+可选：安装 control-plane CLI，并用 `rdgoal` 路由一个项目：
 
 ```powershell
 cd .\packages\control-plane
 pip install -e .
-devframe doctor
-cd ..\..
-.\scripts\verify-release.ps1
 rdgoal "D:\my-project" "Build the MVP" --digest
 ```
 
-如果要跑完整的 dispatch -> worker -> digest 闭环：
+`/rdgoal` 是面向用户的 slash 入口。在 shell 中使用已安装的 `rdgoal` 命令。`devframe rdgoal` 作为兼容形式仍然可用于已经使用 umbrella CLI 的脚本。
 
-```powershell
-rdgoal "D:\my-project" "Build the MVP" --runtime-dir D:\tmp\devframe-runtime
-rdgoal worker "<packet-dir>" --runtime-dir D:\tmp\devframe-runtime
-rdgoal digest --runtime-dir D:\tmp\devframe-runtime
-```
-
-`rdgoal worker` 只有在报告状态为 `passed` 或 `completed` 时返回退出码 `0`。`blocked`、`failed` 或未知状态都会返回非零，避免自动化把未执行或失败误判为成功。
-
-## 工作流程
+然后通过外部大脑闭环运行工作：
 
 1. 在网页 AI 中明确目标、风险、范围和验收标准。
 2. 把任务转成有边界的 TaskSpec。
@@ -129,7 +124,9 @@ rdgoal digest --runtime-dir D:\tmp\devframe-runtime
 | `/rdgoal <project> <goal>` | 把项目目标交给总控编排 | 项目 contract、controller 决策、dispatch packet、worker 报告和 runtime digest |
 | `/rdpaper <project> <goal>` | 把论文任务交给论文审查控制面 | 论文工作区、Web AI Adapter 配置、隐私闸门、审查报告和证据摘要 |
 
-提供商可以替换，契约不能替换。GPT Web 是默认参考路径，因为它容易获得，也适合长上下文协调。如果另一个网页 AI 不能稳定保存项目上下文、协调任务并审查证据，就更适合作为二级审查器，而不是主外部大脑。
+提供商说明：GPT Web 是默认参考路径，因为它容易获得，也适合长上下文协调。提供商可以替换，契约不能替换。浏览器托管提供商使用 `docs/agent-runtime/web-ai-adapter-contract.md` 和 `schemas/web_ai_adapter.schema.json`；Chrome 加 ChatGPT 是参考适配器，不是硬编码边界。如果另一个网页 AI 不能稳定保存项目上下文、协调任务并审查证据，更适合作为二级审查器，而不是主外部大脑。
+
+未来产品形态可参见 [Visual Control Plane](docs/agent-runtime/visual-control-plane.md)：它定义了项目、Provider Binding、Agent、Run、Evidence、Review 和 Gate 如何组成一个治理优先的客户端模型。第一个只读状态导出入口是 `devframe visual-state --runtime-dir <dir>`；也可以用 `devframe visual-state --runtime-dir <dir> --format html --output visual-state.html` 生成本地 HTML 快照，用 `devframe dashboard serve --runtime-dir <dir>` 启动本地只读 Dashboard，或用 `devframe actions --runtime-dir <dir>` 直接查看下一步队列。Dashboard 默认只绑定 loopback；如需在非 loopback 网卡上监听，请显式传入 `--allow-remote`。加上 `--paper-project <dir>` 可以把论文迭代工作区、它的 `WEB_AI_ADAPTER.yaml` provider binding、manual fallback instructions，以及带 next action 的 provider safety gate 纳入同一个控制面视图。Dashboard 的 Agent Registry 会在同一张表里显示每个 agent 的 role、scope、provider、binding health 和 status；Run Details 卡片会显示 TaskSpec/evidence 路径、当前 controller decision 和下一条安全本地命令。Dashboard 和 actions CLI 都会把当前 gate/run/decision 指引汇总成带 action id 和可复制 `--action-id` resume filter 的只读 Action Queue；actions CLI 和 `/actions.json` dashboard endpoint 还可以按 status、priority、source type、source id 或 action id 过滤，方便脚本化 triage。需要人工接续或交给 Web AI 时，可以用 `devframe actions --format markdown --output ACTION_QUEUE.md` 或 dashboard 的 `/actions.md` endpoint 导出 Markdown handoff 包。
 
 ## 已集成模块
 
@@ -171,7 +168,7 @@ dev-frame-system/
 
 - agent 还没搞清方向就开始写代码；
 - 每个工具都有自己的上下文，但没人记得全局目标；
-- “完成”只是 agent 说完成，而不是证据证明完成；
+- "完成"只是 agent 说完成，而不是证据证明完成；
 - 重复踩坑沉没在聊天记录里；
 - 想要更强的代码审查压力，但不想再引入一个重平台。
 

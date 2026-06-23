@@ -90,3 +90,44 @@ rdgoal digest
 
 The digest is rebuilt from runtime files, so it can show decisions and worker
 ExecutionReports across separate CLI invocations.
+
+## 8. Export visual state
+
+```powershell
+devframe visual-state --runtime-dir C:\Users\you\.devframe-runtime
+devframe visual-state --runtime-dir C:\Users\you\.devframe-runtime --format html --output visual-state.html
+devframe actions --runtime-dir C:\Users\you\.devframe-runtime
+devframe actions --runtime-dir C:\Users\you\.devframe-runtime --status open --source-type gate
+devframe actions --runtime-dir C:\Users\you\.devframe-runtime --paper-project D:\papers\demo --source-id demo-paper-paper-review
+devframe actions --runtime-dir C:\Users\you\.devframe-runtime --paper-project D:\papers\demo --status ready --source-type run --format markdown --output ACTION_QUEUE.md
+devframe dashboard serve --runtime-dir C:\Users\you\.devframe-runtime
+devframe dashboard serve --runtime-dir C:\Users\you\.devframe-runtime --paper-project D:\papers\demo
+```
+
+The dashboard binds to loopback only by default; pass `--allow-remote` to expose it on non-loopback hosts.
+
+This produces the read-only Visual Control Plane state snapshot for a future GUI
+or CLI inspector. The HTML output is a local, static dashboard snapshot that can
+be opened directly in a browser; the dashboard server exposes the same model at
+`/state.json`, the filtered queue at `/actions.json`, the Markdown handoff view
+at `/actions.md`, and a refreshable read-only page at `/`. `--paper-project`
+adds a paper iteration workspace as an `rdpaper` run with its privacy gate, next
+local command, `WEB_AI_ADAPTER.yaml` provider binding, manual fallback
+instructions, and provider safety gate next action. Active gates appear in a
+front-page Gate Focus section with their action id, resume filter, and served
+Markdown handoff link. The served dashboard homepage links to the JSON and Markdown
+endpoints so they are discoverable from the browser. Current gate, run, and
+decision guidance is grouped into an Action Queue for quick triage; `devframe
+actions` prints that queue with action ids without opening the full JSON or
+dashboard, and the dashboard table shows the same ids plus resume filters beside
+each action. The Agent Registry shows each agent's provider and binding health,
+while Run Details cards show the current controller decision and its next action
+beside the TaskSpec/evidence paths. Use
+`--format markdown --output ACTION_QUEUE.md` when the queue
+needs to become a manual resume or Web AI handoff packet; the packet includes
+action ids so a single-action export remains traceable, plus a copyable
+`--action-id` resume filter for the same item. Use `--source-id` or
+`--action-id` when only one gate/run/decision should be handed off. Use
+`--status`, `--priority`, `--source-type`, and `--fail-on-match` when a script
+needs to probe for unresolved actions. The dashboard endpoints return `400` for
+invalid filter values so typos do not look like an empty queue.

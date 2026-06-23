@@ -12,12 +12,24 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 CONTROL_PLANE_TEMPLATES = REPO_ROOT / "packages" / "control-plane" / "templates"
 RELEASE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release-verify.yml"
 REVIEWER_INDEX_REQUIRED_PATHS = [
+    "README.md",
+    "README.zh-CN.md",
     ".github/workflows/release-verify.yml",
     "docs/agent-runtime/rdgoal-total-control.md",
+    "docs/agent-runtime/dispatch-model-profiles.md",
     "docs/agent-runtime/rdpaper-workflow.md",
+    "docs/agent-runtime/visual-control-plane.md",
     "docs/agent-runtime/web-ai-adapter-contract.md",
     "docs/status/release-readiness.md",
     "docs/status/reviewer-index.md",
+    "packages/control-plane/README.md",
+    "packages/control-plane/QUICKSTART.md",
+    "packages/control-plane/setup.py",
+    "packages/control-plane/control_plane/cli.py",
+    "packages/control-plane/control_plane/dashboard.py",
+    "packages/control-plane/templates/paper_iteration/PAPER_PROFILE.yaml",
+    "packages/control-plane/templates/paper_iteration/PAPER_STATE.yaml",
+    "packages/control-plane/templates/visual_control_plane/CONTROL_PLANE_STATE.yaml",
     "packages/control-plane/templates/paper_iteration/WEB_AI_ADAPTER.yaml",
     "packages/control-plane/control_plane/agent_adapter.py",
     "packages/control-plane/control_plane/backup_guard.py",
@@ -29,6 +41,7 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "packages/control-plane/control_plane/rdgoal_cli.py",
     "packages/control-plane/control_plane/runtime_digest.py",
     "packages/control-plane/control_plane/runtime_store.py",
+    "packages/control-plane/control_plane/visual_state.py",
     "packages/control-plane/control_plane/worker.py",
     "packages/control-plane/tests/test_cli.py",
     "packages/control-plane/tests/test_public_snapshot.py",
@@ -39,6 +52,7 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "rules/web-ai-adapters.md",
     "schemas/project_contract.schema.json",
     "schemas/rdgoal_dispatch_packet.schema.json",
+    "schemas/visual_control_plane_state.schema.json",
     "schemas/web_ai_adapter.schema.json",
     "scripts/verify-control-plane-wheel.ps1",
     "scripts/verify-release.ps1",
@@ -49,8 +63,12 @@ PUBLIC_MARKDOWN_DOCS = [
     REPO_ROOT / "packages" / "control-plane" / "QUICKSTART.md",
     REPO_ROOT / "packages" / "control-plane" / "README.md",
     REPO_ROOT / "docs" / "agent-runtime" / "rdgoal-total-control.md",
+    REPO_ROOT / "docs" / "agent-runtime" / "dispatch-model-profiles.md",
     REPO_ROOT / "docs" / "agent-runtime" / "rdpaper-workflow.md",
+    REPO_ROOT / "docs" / "agent-runtime" / "visual-control-plane.md",
     REPO_ROOT / "docs" / "agent-runtime" / "web-ai-adapter-contract.md",
+    REPO_ROOT / "docs" / "agent-runtime" / "runtime-invariants.md",
+    REPO_ROOT / "docs" / "agent-runtime" / "project-local-skill-bindings.md",
     REPO_ROOT / "docs" / "status" / "release-readiness.md",
     REPO_ROOT / "docs" / "status" / "reviewer-index.md",
     REPO_ROOT / "rules" / "web-ai-adapters.md",
@@ -121,17 +139,112 @@ def test_public_markdown_docs_are_utf8_and_do_not_contain_mojibake_or_private_pa
     forbidden = [
         "D:\\agent-acceptance",
         "D:/agent-acceptance",
+        "C:\\Users\\RD",
+        "C:/Users/RD",
         "锛",
+        "绠",
         "绋",
         "鍙",
         "丏eepSeek",
         "€?",
+        "һ",
+        "Ϊ",
+        "ô",
+        "Щ",
+        "ʲ",
+        "С",
+        "δ",
+        "ǰ",
+        "ʷ",
+        "¼",
+        "Դ",
+        "ʹ",
+        "ֻ",
+        "ǿ",
+        "Ҫ",
+        "Լ",
+        "֪",
+        "Ǩ",
+        "װ",
+        "˽",
+        "ִ",
+        "ָ",
+        "û",
+        "ÿ",
+        "ı",
+        "̨",
+        "ƫ",
+        "Ƭ",
+        "Ʒ",
+        "΢",
+        "ţ",
+        "ƽ",
+        "У",
+        "֤",
+        "λ",
+        "˵",
+        "С",
+        "ʧ",
+        "ʿ",
+        "֮",
+        "ʼ",
+        "ϣ",
+        "λ",
+        "¼",
+        "ղ",
+        "ܰ",
+        "д",
+        "δ",
+        "ƫ",
+        "Ư",
+        "ѡ",
+        "ͣ",
+        "ͬ",
+        "ʵ",
+        "ǰ",
+        "ܰ",
+        "λ",
+        "ֻ",
+        "ֹ",
+        "ÿ",
+        "û",
+        "ϣ",
+        "΢",
+        "т",
+        "Ǩ",
+        "֣",
+        "¡",
+        "ҳ",
+        "Ĭ",
     ]
 
     for path in PUBLIC_MARKDOWN_DOCS:
         text = path.read_text(encoding="utf-8-sig")
         for marker in forbidden:
             assert marker not in text, f"{path} contains forbidden marker {marker!r}"
+
+
+def test_public_scripts_and_adapters_exclude_private_machine_paths():
+    forbidden = [
+        "C:\\Users\\RD",
+        "C:/Users/RD",
+        "D:\\agent-acceptance",
+        "D:/agent-acceptance",
+    ]
+    paths = [
+        REPO_ROOT / "packages" / "agent-acceptance" / "templates" / "ci-preflight" / "install.ps1",
+        REPO_ROOT / "packages" / "ai-workflow-hub" / "src" / "ai_workflow_hub" / "context_layer" / "adapters" / "zotero_web_metadata_pilot.py",
+    ]
+    for path in paths:
+        text = path.read_text(encoding="utf-8-sig")
+        for pattern in forbidden:
+            assert pattern not in text, f"{path} contains private path pattern {pattern!r}"
+
+
+def test_dispatch_model_profiles_doc_is_ascii_only():
+    path = REPO_ROOT / "docs" / "agent-runtime" / "dispatch-model-profiles.md"
+    raw = path.read_bytes()
+    assert all(byte <= 127 for byte in raw), f"{path} contains non-ASCII byte"
 
 
 def test_release_workflow_installs_deps_and_invokes_single_release_gate():
@@ -189,3 +302,128 @@ def test_default_web_ai_adapter_template_matches_schema():
     assert template["web_ai"]["provider"] == "chatgpt"
     assert template["safety"]["allow_browser_profile_export"] is False
     assert template["manual_fallback"]["enabled"] is True
+
+
+def test_paper_iteration_metadata_templates_parse_as_yaml():
+    template_dir = REPO_ROOT / "packages" / "control-plane" / "templates" / "paper_iteration"
+
+    profile = yaml.safe_load((template_dir / "PAPER_PROFILE.yaml").read_text(encoding="utf-8"))
+    state = yaml.safe_load((template_dir / "PAPER_STATE.yaml").read_text(encoding="utf-8"))
+
+    assert profile["paper_id"] == "{{PAPER_ID}}"
+    assert profile["title"] == "{{PAPER_TITLE}}"
+    assert profile["versions"][0]["date"] == "{{DATE}}"
+    assert state["paper_id"] == "{{PAPER_ID}}"
+    assert state["status"] == "initialized"
+
+
+def test_default_visual_control_plane_state_template_matches_schema():
+    schema = json.loads((REPO_ROOT / "schemas" / "visual_control_plane_state.schema.json").read_text(encoding="utf-8"))
+    template = yaml.safe_load(
+        (
+            REPO_ROOT
+            / "packages"
+            / "control-plane"
+            / "templates"
+            / "visual_control_plane"
+            / "CONTROL_PLANE_STATE.yaml"
+        ).read_text(encoding="utf-8")
+    )
+
+    Draft7Validator.check_schema(schema)
+    Draft7Validator(schema).validate(template)
+    assert template["provider_bindings"][0]["provider"] == "chatgpt"
+    assert template["provider_bindings"][0]["manual_fallback_instructions"][0].startswith("Prepare")
+    assert {agent["role"] for agent in template["agents"]} == {"coordinator", "reviewer"}
+    assert template["runs"][0]["entrypoint"] == "rdgoal"
+    assert template["gates"][0]["next_action"].startswith("Confirm human approval")
+    assert template["next_actions"][0]["source_id"] == "human-gate"
+    assert template["next_actions"][0]["status"] == "open"
+    assert template["safety"]["raw_transcripts_persisted"] is False
+    assert template["safety"]["remote_execution_default"] is False
+    assert "secret_exposure" in template["safety"]["human_gate_required_for"]
+
+
+def test_public_docs_mention_release_gate_and_visual_control_plane_surfaces():
+    expected = {
+        REPO_ROOT / "README.md": [
+            ".\\scripts\\verify-release.ps1",
+            "devframe visual-state --runtime-dir <dir>",
+            "devframe dashboard serve --runtime-dir <dir>",
+            "devframe actions --runtime-dir <dir>",
+            "/actions.json",
+            "/actions.md",
+            "--action-id",
+            "--allow-remote",
+        ],
+        REPO_ROOT / "README.zh-CN.md": [
+            ".\\scripts\\verify-release.ps1",
+            "devframe visual-state --runtime-dir <dir>",
+            "devframe dashboard serve --runtime-dir <dir>",
+            "devframe actions --runtime-dir <dir>",
+            "/actions.json",
+            "/actions.md",
+            "--action-id",
+            "--allow-remote",
+        ],
+        REPO_ROOT / "packages" / "control-plane" / "QUICKSTART.md": [
+            "powershell -ExecutionPolicy Bypass -File scripts\\verify-release.ps1",
+            "devframe visual-state --runtime-dir C:\\Users\\you\\.devframe-runtime",
+            "devframe dashboard serve --runtime-dir C:\\Users\\you\\.devframe-runtime",
+            "devframe actions --runtime-dir C:\\Users\\you\\.devframe-runtime",
+            "/actions.json",
+            "/actions.md",
+            "--action-id",
+            "--fail-on-match",
+            "--allow-remote",
+        ],
+        REPO_ROOT / "packages" / "control-plane" / "README.md": [
+            "powershell -ExecutionPolicy Bypass -File scripts\\verify-release.ps1",
+            "devframe visual-state --runtime-dir C:\\Users\\you\\.devframe-runtime",
+            "devframe dashboard serve --runtime-dir C:\\Users\\you\\.devframe-runtime",
+            "devframe actions --runtime-dir C:\\Users\\you\\.devframe-runtime",
+            "/actions.json",
+            "/actions.md",
+            "--action-id",
+            "--fail-on-match",
+            "--allow-remote",
+        ],
+    }
+
+    for path, literals in expected.items():
+        text = path.read_text(encoding="utf-8-sig")
+        missing = [literal for literal in literals if literal not in text]
+        assert missing == [], f"{path} missing documented literals: {missing}"
+
+
+def test_release_readiness_mentions_action_queue_and_dashboard_safety_flags():
+    path = REPO_ROOT / "docs" / "status" / "release-readiness.md"
+    text = path.read_text(encoding="utf-8-sig")
+    for literal in ["--action-id", "--fail-on-match", "--allow-remote"]:
+        assert literal in text, f"{path} missing required literal: {literal}"
+
+
+def test_public_schemas_docs_and_fixtures_exclude_private_paths():
+    forbidden = [
+        "C:\\Users\\RD",
+        "C:/Users/RD",
+        "D:\\agent-acceptance",
+        "D:/agent-acceptance",
+    ]
+    paths = [
+        REPO_ROOT / "schemas" / "resource-integration" / "script-safety-record.schema.json",
+        REPO_ROOT / "schemas" / "resource-integration" / "memory-context-record.schema.json",
+        REPO_ROOT / "schemas" / "resource-integration" / "codegraph-index-record.schema.json",
+        REPO_ROOT / "schemas" / "agent-runtime" / "memory-update-record.schema.json",
+        REPO_ROOT / "packages" / "test-frame" / "schemas" / "resource-integration" / "script-safety-record.schema.json",
+        REPO_ROOT / "packages" / "test-frame" / "schemas" / "resource-integration" / "memory-context-record.schema.json",
+        REPO_ROOT / "packages" / "test-frame" / "schemas" / "resource-integration" / "codegraph-index-record.schema.json",
+        REPO_ROOT / "packages" / "test-frame" / "schemas" / "agent-runtime" / "memory-update-record.schema.json",
+        REPO_ROOT / "docs" / "agent-runtime" / "negative-test-fixtures" / "NEG-024-path-traversal-read.json",
+        REPO_ROOT / "docs" / "agent-runtime" / "negative-test-fixtures" / "NEG-017-write-outside-scope.json",
+        REPO_ROOT / "docs" / "agent-runtime" / "integration-contracts.md",
+    ]
+    for path in paths:
+        text = path.read_text(encoding="utf-8-sig")
+        for pattern in forbidden:
+            assert pattern not in text, f"{path} contains private path pattern {pattern!r}"

@@ -85,7 +85,7 @@ Markdown-only fields are operational instructions, not undeclared JSON extension
   "title": "Inventory agent-acceptance directory",
   "priority": "P1",
   "status": "ready",
-  "description": "Run read-only checks on D:\\agent-acceptance and report findings."
+  "description": "Run read-only checks on <legacy-agent-acceptance-root> and report findings."
 }
 ```
 
@@ -426,7 +426,7 @@ Markdown-only fields are operational instructions, not undeclared JSON extension
   "record_id": "mu-001",
   "proposed_at": "2026-05-27T10:15:00Z",
   "memory_type": "project",
-  "target_location": "C:\\Users\\RD\\.claude\\projects\\D--agent-acceptance\\memory\\",
+  "target_location": "<user-home>\\.claude\\projects\\D--agent-acceptance\\memory\\",
   "summary": "Batch A1 inventory discovered path drift D:\\devFrame vs D:\\dev-frame",
   "status": "proposed"
 }

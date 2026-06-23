@@ -35,7 +35,7 @@
     "record_id": "ssr-run-smoke-001",
     "phase": "R7",
     "script_name": "Run-Smoke.ps1",
-    "script_path": "D:\\agent-acceptance\\scripts\\Run-Smoke.ps1",
+    "script_path": "<legacy-agent-acceptance-root>\\scripts\\Run-Smoke.ps1",
     "script_type": "smoke",
     "execution_status": "not_run",
     "allowed_to_run": false,
