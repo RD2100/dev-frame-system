@@ -1,4 +1,5 @@
 import json
+import io
 import subprocess
 import sys
 from pathlib import Path
@@ -23,7 +24,7 @@ def test_root_help_is_available(monkeypatch, capsys):
 
     output = capsys.readouterr().out
     assert "DevFrame Control Plane CLI" in output
-    assert "devframe code \"<goal>\"" in output
+    assert "devframe code [\"<goal>\" | --prompt-file <path>]" in output
     assert "devframe go <project> <goal>" in output
     assert "devframe dashboard serve" in output
 
@@ -34,7 +35,8 @@ def test_code_help_is_available(monkeypatch, capsys):
     assert devframe_cli_main() == 0
 
     output = capsys.readouterr().out
-    assert "Usage: devframe code \"<goal>\"" in output
+    assert "Usage: devframe code [\"<goal>\" | --prompt-file <path>]" in output
+    assert "--prompt-file" in output
     assert "--agents" in output
     assert "--max-agents" in output
     assert "--changed" in output
@@ -74,6 +76,83 @@ def test_code_prepares_current_repo_coding_session(tmp_path, monkeypatch, capsys
     assert metadata["agents"][0]["targets"] == ["src/cli.py"]
     assert len(state["go_runs"]) == 1
     assert state["go_runs"][0]["agents"][0]["agent_id"] == "coding-agent-1"
+
+
+def test_code_reads_goal_from_prompt_file(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    prompt_file = tmp_path / "task.md"
+    project_root.mkdir()
+    prompt_file.write_text("Build a Codex-like shell.\n\nUse changed files only.\n", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--prompt-file",
+        str(prompt_file),
+        "--target",
+        "src/cli.py",
+    ])
+
+    exit_code = devframe_cli_main()
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert metadata["requirement"] == "Build a Codex-like shell.\n\nUse changed files only."
+
+
+def test_code_reads_goal_from_stdin_pipe(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "stdin", io.StringIO("Fix failing tests.\nKeep the change small.\n"))
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "tests/test_app.py",
+    ])
+
+    exit_code = devframe_cli_main()
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert metadata["requirement"] == "Fix failing tests.\nKeep the change small."
+
+
+def test_code_rejects_goal_and_prompt_file_together(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    prompt_file = tmp_path / "task.md"
+    project_root.mkdir()
+    prompt_file.write_text("Build a Codex-like shell.\n", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "Build another thing.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--prompt-file",
+        str(prompt_file),
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "pass either a positional goal or --prompt-file" in output.err
+    assert not runtime_dir.exists()
 
 
 def test_code_changed_targets_git_files(tmp_path, monkeypatch, capsys):

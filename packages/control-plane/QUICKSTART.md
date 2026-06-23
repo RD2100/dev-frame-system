@@ -107,6 +107,13 @@ runtime in the read-only visual interface; append `?lang=zh-CN` to the printed
 URL for Chinese. Use repeated `--target <path>` when you want to name a specific
 slice manually.
 
+For longer prompts, keep the task in a file or pipe it from another tool:
+
+```powershell
+devframe code --prompt-file .\TASK.md --changed --agents auto
+Get-Content .\TASK.md | devframe code --changed --agents auto --preview
+```
+
 If the project was initialized with `templates/runtime-bootstrap/bootstrap.ps1`,
 you can use its project-local `/go` bridge instead:
 

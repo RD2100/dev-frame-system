@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 HELP_TEXT = """DevFrame Control Plane CLI
   devframe init [template] [target]  - initialize project
   devframe doctor                    - check package health
-  devframe code "<goal>"             - start a Codex-like coding session in the current repo
+  devframe code ["<goal>" | --prompt-file <path>] - start a Codex-like coding session in the current repo
   devframe go <project> <goal>       - dispatch coding agents through /go
   devframe rdgoal <project> <goal>   - route work through rdgoal
   devframe visual-state              - export Visual Control Plane state
@@ -28,7 +28,7 @@ HELP_TEXT = """DevFrame Control Plane CLI
 RUN_USAGE = "Usage: devframe run --pipeline <path> [--execute] [--project <dir>]"
 DASHBOARD_USAGE = "Usage: devframe dashboard serve [--runtime-dir <dir>] [--paper-project <dir>] [--host 127.0.0.1] [--port 8765] [--allow-remote]"
 GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2|auto] [--max-agents 4] [--target <path>] [--changed] [--preview] [--execute] [--model provider/model]"
-CODE_USAGE = "Usage: devframe code \"<goal>\" [--project <dir>] [--agents 1|auto] [--max-agents 4] [--target <path>] [--changed] [--preview] [--execute] [--dashboard]"
+CODE_USAGE = "Usage: devframe code [\"<goal>\" | --prompt-file <path>] [--project <dir>] [--agents 1|auto] [--max-agents 4] [--target <path>] [--changed] [--preview] [--execute] [--dashboard]"
 
 
 def _wants_help(args: list[str]) -> bool:
@@ -375,6 +375,7 @@ def cmd_code() -> int:
 
     parser = argparse.ArgumentParser(prog="devframe code")
     parser.add_argument("goal", nargs="?", help="Coding goal for the current repository")
+    parser.add_argument("--prompt-file", default=None, help="Read a multi-line coding goal from a text file")
     parser.add_argument("--project", default=".", help="Project/repository root. Defaults to the current directory")
     parser.add_argument("--agents", default="1", help="Number of coding-agent shards, or auto")
     parser.add_argument("--max-agents", type=int, default=4, help="Maximum shards when --agents auto is used")
@@ -399,9 +400,11 @@ def cmd_code() -> int:
     )
     args = parser.parse_args(sys.argv[2:])
 
-    goal = args.goal
-    if not goal and sys.stdin.isatty():
-        goal = input("Goal: ").strip()
+    try:
+        goal = _resolve_code_goal(args.goal, args.prompt_file)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
     if not goal:
         print(CODE_USAGE)
         return 2
@@ -468,6 +471,21 @@ def cmd_code() -> int:
             refresh_seconds=args.refresh_seconds,
         )
     return 0 if result.status in {"queued", "passed"} else 1
+
+
+def _resolve_code_goal(goal: str | None, prompt_file: str | None) -> str:
+    if goal and prompt_file:
+        raise ValueError("pass either a positional goal or --prompt-file, not both")
+    if goal:
+        return goal.strip()
+    if prompt_file:
+        try:
+            return Path(prompt_file).read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise ValueError(f"unable to read --prompt-file: {exc}") from exc
+    if not sys.stdin.isatty():
+        return sys.stdin.read().strip()
+    return input("Goal: ").strip()
 
 
 def _resolve_coding_targets(project_path: str | Path, targets: list[str], *, changed: bool) -> list[str]:

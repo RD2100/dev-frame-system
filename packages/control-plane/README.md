@@ -24,6 +24,7 @@ devframe doctor
 devframe init code_project D:\tmp\demo-project
 devframe code "Build the MVP" --project D:\tmp\demo-project --target src --dashboard
 devframe code "Build the MVP" --project D:\tmp\demo-project --target src --preview
+devframe code --project D:\tmp\demo-project --prompt-file TASK.md --changed --agents auto
 devframe run --pipeline pipelines\example_pipeline.yaml
 ```
 
@@ -37,6 +38,9 @@ keep worker prompts focused on modified, staged, or untracked git files and
 automatically choose a bounded shard count; use `--max-agents` to cap that
 fan-out or `--target <path>` for manual scoping. Dispatch and preview balance
 targets by estimated bytes so large files are spread across workers more evenly.
+For longer task briefs, pass `--prompt-file <path>` or pipe text into
+`devframe code`; both feed the same `/go` coding-agent dispatch without putting
+the whole prompt on the command line.
 
 The focused total-control entrypoint is also installed:
 
