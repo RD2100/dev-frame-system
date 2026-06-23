@@ -25,7 +25,9 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "lead": "A read-only view of projects, agents, runs, evidence gates, and controller decisions.",
         "projects_label": "projects",
         "runs_label": "runs",
-        "switch_label": "中文",
+        "language_label": "Language",
+        "english_label": "English",
+        "chinese_label": "中文",
         "gate_focus": "Gate Focus",
         "no_active_gates": "No active gates.",
         "action_queue": "Action Queue",
@@ -114,7 +116,9 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "lead": "项目、智能体、运行、证据门控和控制器决策的只读视图。",
         "projects_label": "个项目",
         "runs_label": "个运行",
-        "switch_label": "English",
+        "language_label": "语言",
+        "english_label": "English",
+        "chinese_label": "中文",
         "gate_focus": "门控聚焦",
         "no_active_gates": "无活跃门控。",
         "action_queue": "动作队列",
@@ -215,9 +219,17 @@ def dashboard_t(key: str, lang: str = "en") -> str:
 
 
 def _lang_switch(lang: str) -> str:
-    target = "zh-CN" if lang == "en" else "en"
-    label = dashboard_t("switch_label", lang)
-    return f'<a class="lang-switch" href="?lang={target}">{_h(label)}</a>'
+    label = dashboard_t("language_label", lang)
+    options = [
+        ("en", dashboard_t("english_label", lang)),
+        ("zh-CN", dashboard_t("chinese_label", lang)),
+    ]
+    links = []
+    for code, text in options:
+        current = code == lang
+        attrs = ' class="active" aria-current="true"' if current else ""
+        links.append(f'<a{attrs} href="?lang={code}">{_h(text)}</a>')
+    return f'<nav class="lang-switch" aria-label="{_h(label)}"><span>{_h(label)}</span>{"".join(links)}</nav>'
 
 
 def _action_md_href(action_id: str, lang: str) -> str:
@@ -2046,20 +2058,33 @@ code {
   margin-top: 14px;
 }
 .lang-switch {
-  margin-left: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.52);
+  overflow: hidden;
+}
+.lang-switch span {
+  padding: 7px 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.lang-switch a {
   color: var(--accent);
   font-weight: 800;
   text-decoration: none;
   font-size: 14px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.52);
-  align-self: start;
+  padding: 7px 10px;
 }
-.lang-switch:hover {
-  border-color: var(--accent);
-  text-decoration: underline;
+.lang-switch a:hover,
+.lang-switch a.active {
+  color: var(--panel);
+  background: var(--accent);
 }
 @media (max-width: 820px) {
   .masthead { display: block; }

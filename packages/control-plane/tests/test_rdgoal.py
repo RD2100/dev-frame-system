@@ -1484,7 +1484,10 @@ def test_render_visual_control_plane_html_defaults_to_english(tmp_path):
     assert "Action Queue" in html
     assert "Run Details" in html
     assert "Safety Defaults" in html
+    assert 'aria-label="Language"' in html
+    assert '<a class="active" aria-current="true" href="?lang=en">English</a>' in html
     assert "中文" in html
+    assert 'href="?lang=en"' in html
     assert '?lang=zh-CN' in html
 
 
@@ -1515,8 +1518,11 @@ def test_render_visual_control_plane_html_renders_chinese_when_lang_zh_cn(tmp_pa
     assert "安全默认值" in html
     assert "动作交接" in html
     assert "智能体" in html
+    assert 'aria-label="语言"' in html
+    assert '<a class="active" aria-current="true" href="?lang=zh-CN">中文</a>' in html
     assert "English" in html
     assert '?lang=en' in html
+    assert '?lang=zh-CN' in html
     assert "DevFrame Visual Control Plane" not in html
     assert "Visual State Snapshot" not in html
 
@@ -1572,7 +1578,7 @@ def test_dashboard_server_serves_chinese_html_with_lang_switch(tmp_path):
         assert "运行详情" in html
         assert "English" in html
         assert 'href="?lang=en"' in html
-        assert 'href="?lang=zh-CN"' not in html
+        assert '<a class="active" aria-current="true" href="?lang=zh-CN">中文</a>' in html
     finally:
         server.shutdown()
         server.server_close()
@@ -1603,6 +1609,7 @@ def test_dashboard_server_serves_english_by_default(tmp_path):
         assert "<title>DevFrame Visual Control Plane</title>" in html
         assert "Visual State Snapshot" in html
         assert "中文" in html
+        assert '<a class="active" aria-current="true" href="?lang=en">English</a>' in html
         assert '?lang=zh-CN' in html
     finally:
         server.shutdown()

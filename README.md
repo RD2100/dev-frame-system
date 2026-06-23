@@ -149,8 +149,8 @@ command template without creating packets or spending worker tokens. Shards are
 balanced by estimated target bytes so one agent does not accidentally receive
 most of the file context. Add `--execute` only when you are ready to spend
 worker tokens. Add `--dashboard` to open the read-only local visual interface
-for the same runtime; append `?lang=zh-CN` to that URL for the Chinese
-dashboard.
+for the same runtime; the dashboard has an English/中文 language switch, and
+`?lang=zh-CN` still opens the Chinese view directly.
 
 `/rdgoal` is the human-facing slash entrypoint. In a shell, use the installed
 `rdgoal` command. `devframe rdgoal` remains available as the compatibility

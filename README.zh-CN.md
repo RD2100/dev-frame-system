@@ -122,7 +122,7 @@ rdgoal "D:\my-project" "Build the MVP" --digest
 devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-dir "$env:TEMP\devframe-go"
 ```
 
-`devframe code` 是更接近 Codex/OpenCode 形态的编程入口。它默认作用于当前仓库，准备一个有边界的 coding-agent 会话，打印精确 worker 命令，并把状态写入 Dashboard 可读取的 runtime。真实 git 工作区里推荐用 `--changed --agents auto`：只把 modified、staged 或 untracked 文件作为 target，并按文件数自动拆成有上限的并发分片；`--max-agents` 可以调整自动拆分上限。先用 `--preview` 可以看分片计划、估算 bytes 和 worker 命令模板，不创建 packet，也不消耗 worker token；实际分片会按 target 大小做均衡，避免某个 agent 吃掉大部分上下文。准备真正消耗 worker token 时再加 `--execute`。加 `--dashboard` 会直接启动同一个 runtime 的本地只读可视化界面；在 Dashboard URL 后追加 `?lang=zh-CN` 可切换中文界面。
+`devframe code` 是更接近 Codex/OpenCode 形态的编程入口。它默认作用于当前仓库，准备一个有边界的 coding-agent 会话，打印精确 worker 命令，并把状态写入 Dashboard 可读取的 runtime。真实 git 工作区里推荐用 `--changed --agents auto`：只把 modified、staged 或 untracked 文件作为 target，并按文件数自动拆成有上限的并发分片；`--max-agents` 可以调整自动拆分上限。先用 `--preview` 可以看分片计划、估算 bytes 和 worker 命令模板，不创建 packet，也不消耗 worker token；实际分片会按 target 大小做均衡，避免某个 agent 吃掉大部分上下文。准备真正消耗 worker token 时再加 `--execute`。加 `--dashboard` 会直接启动同一个 runtime 的本地只读可视化界面；Dashboard 页面内有 English/中文 切换，也可以用 `?lang=zh-CN` 直接打开中文界面。
 
 `/rdgoal` 是面向用户的 slash 入口。在 shell 中使用已安装的 `rdgoal` 命令。`devframe rdgoal` 作为兼容形式仍然可用于已经使用 umbrella CLI 的脚本。
 

@@ -105,11 +105,11 @@ git worktree, use `--changed --agents auto` to target modified, staged, or
 untracked files and choose a bounded shard count automatically; use
 `--max-agents` to cap the fan-out. Preview and dispatch balance targets by
 estimated bytes to avoid overloading one worker with most of the context.
-`--dashboard` serves the same runtime in the read-only visual interface; append
-`?lang=zh-CN` to the printed URL for Chinese. Use repeated `--target <path>`
-when you want to name a specific slice manually. Use `--since <git-ref>` when
-the task should cover the branch delta against a base ref, for example
-`--since origin/main`.
+`--dashboard` serves the same runtime in the read-only visual interface; use
+the English/中文 switch in the page, or open `?lang=zh-CN` directly for Chinese.
+Use repeated `--target <path>` when you want to name a specific slice manually.
+Use `--since <git-ref>` when the task should cover the branch delta against a
+base ref, for example `--since origin/main`.
 
 For longer prompts, keep the task in a file or pipe it from another tool:
 
