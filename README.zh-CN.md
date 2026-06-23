@@ -101,6 +101,15 @@ cd dev-frame-system
 /bindChrome https://chatgpt.com/...
 ```
 
+bootstrap 还会生成项目本地的 `/go` 桥接脚本：
+
+```powershell
+.\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed
+.\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed -Execute
+```
+
+这个 wrapper 默认是 preview 模式，会先显示 changed-file 分片和 worker 命令模板，不会立即创建 rdgoal packet 或运行 worker。
+
 可选：安装 control-plane CLI，并用 `rdgoal` 路由一个项目：
 
 ```powershell

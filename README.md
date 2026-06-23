@@ -115,6 +115,16 @@ After bootstrap, bind your browser AI session from your agent environment:
 /bindChrome https://chatgpt.com/...
 ```
 
+Bootstrap also generates a project-local `/go` bridge:
+
+```powershell
+.\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed
+.\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed -Execute
+```
+
+The wrapper defaults to preview mode, so it shows changed-file shards and worker
+command templates before any rdgoal packets or worker runs are created.
+
 Optionally install the control-plane CLI and route a project through `rdgoal`:
 
 ```powershell

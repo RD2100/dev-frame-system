@@ -105,6 +105,14 @@ fan-out. `--dashboard` serves the same runtime in the read-only visual
 interface; append `?lang=zh-CN` to the printed URL for Chinese. Use repeated
 `--target <path>` when you want to name a specific slice manually.
 
+If the project was initialized with `templates/runtime-bootstrap/bootstrap.ps1`,
+you can use its project-local `/go` bridge instead:
+
+```powershell
+.\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed
+.\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed -Execute
+```
+
 Use `devframe go` when you want to name the project path explicitly or prepare
 several shards directly:
 

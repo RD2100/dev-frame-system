@@ -1,0 +1,80 @@
+<#
+.SYNOPSIS
+    Project-local /go wrapper for DevFrame coding-agent fan-out.
+.DESCRIPTION
+    Previews or launches a DevFrame coding session from the project root. The
+    default mode is token-safe preview: it shows shard targets and worker
+    command templates without creating rdgoal packets or running workers.
+.EXAMPLE
+    .\tools\devframe-go.ps1 -Goal "Fix the failing tests"
+    .\tools\devframe-go.ps1 -Goal "Fix the failing tests" -Changed -Execute
+#>
+
+param(
+    [Parameter(Mandatory = $true, Position = 0)]
+    [string]$Goal,
+
+    [string]$ProjectRoot = "{{PROJECT_ROOT}}",
+    [string[]]$Target = @(),
+    [string]$Agents = "auto",
+    [int]$MaxAgents = 4,
+    [string]$RuntimeDir = "",
+    [string]$Model = "stepfun/step-3.7-flash",
+    [string]$OpencodeAgent = "build",
+    [switch]$Changed,
+    [switch]$Execute,
+    [switch]$Dashboard,
+    [string[]]$Command = @()
+)
+
+$ErrorActionPreference = "Stop"
+
+if (-not (Get-Command devframe -ErrorAction SilentlyContinue)) {
+    Write-Error "devframe CLI not found. Install devframe-control-plane before using this wrapper."
+    exit 1
+}
+
+$argsList = @(
+    "code",
+    $Goal,
+    "--project",
+    $ProjectRoot,
+    "--agents",
+    $Agents,
+    "--max-agents",
+    [string]$MaxAgents,
+    "--model",
+    $Model,
+    "--opencode-agent",
+    $OpencodeAgent
+)
+
+foreach ($item in $Target) {
+    $argsList += @("--target", $item)
+}
+
+if ($Changed) {
+    $argsList += "--changed"
+}
+
+if ($RuntimeDir) {
+    $argsList += @("--runtime-dir", $RuntimeDir)
+}
+
+if ($Execute) {
+    $argsList += "--execute"
+} else {
+    $argsList += "--preview"
+}
+
+if ($Dashboard) {
+    $argsList += "--dashboard"
+}
+
+if ($Command.Count -gt 0) {
+    $argsList += "--command"
+    $argsList += $Command
+}
+
+& devframe @argsList
+exit $LASTEXITCODE

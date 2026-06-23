@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import os
 import shutil
 import subprocess
 import uuid
@@ -92,6 +93,116 @@ def test_public_snapshot_allows_python_test_caches():
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_runtime_bootstrap_generates_go_wrapper(tmp_path):
+    project_root = tmp_path / "demo-project"
+    result = subprocess.run(
+        [
+            "powershell",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(REPO_ROOT / "templates" / "runtime-bootstrap" / "bootstrap.ps1"),
+            "-ProjectName",
+            "demo-project",
+            "-ProjectRoot",
+            str(project_root),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    wrapper = project_root / "tools" / "devframe-go.ps1"
+    agents = project_root / "AGENTS.md"
+
+    assert result.returncode == 0, output
+    assert "[GEN] tools/devframe-go.ps1" in output
+    assert wrapper.exists()
+    text = wrapper.read_text(encoding="utf-8-sig")
+    assert "{{PROJECT_ROOT}}" not in text
+    assert str(project_root) in text
+    assert '"code"' in text
+    assert '"--preview"' in text
+    assert '"--execute"' in text
+    assert "& devframe @argsList" in text
+    assert "tools/devframe-go.ps1" in agents.read_text(encoding="utf-8-sig")
+
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    capture_path = tmp_path / "devframe-args.txt"
+    fake_devframe = fake_bin / "devframe.cmd"
+    fake_devframe.write_text(
+        f"@echo off\r\necho %* > \"{capture_path}\"\r\nexit /b 0\r\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+
+    wrapper_result = subprocess.run(
+        [
+            "powershell",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(wrapper),
+            "-Goal",
+            "Preview wrapper dispatch.",
+            "-Changed",
+            "-Target",
+            "src/app.py",
+        ],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+        env=env,
+    )
+
+    captured_args = capture_path.read_text(encoding="utf-8").strip()
+
+    assert wrapper_result.returncode == 0, wrapper_result.stdout + wrapper_result.stderr
+    assert 'code "Preview wrapper dispatch."' in captured_args
+    assert f"--project {project_root}" in captured_args
+    assert "--agents auto" in captured_args
+    assert "--target src/app.py" in captured_args
+    assert "--changed" in captured_args
+    assert "--preview" in captured_args
+    assert "--execute" not in captured_args
+
+
+def test_runtime_bootstrap_dry_run_lists_go_wrapper(tmp_path):
+    project_root = tmp_path / "demo-project"
+    result = subprocess.run(
+        [
+            "powershell",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(REPO_ROOT / "templates" / "runtime-bootstrap" / "bootstrap.ps1"),
+            "-ProjectName",
+            "demo-project",
+            "-ProjectRoot",
+            str(project_root),
+            "-DryRun",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, output
+    assert "devframe-go.template.ps1 -> tools/devframe-go.ps1" in output
+    assert not project_root.exists()
 
 
 def test_public_snapshot_rejects_generated_build_dirs():
