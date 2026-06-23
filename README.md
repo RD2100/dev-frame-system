@@ -25,7 +25,7 @@
 </p>
 
 ```text
-devframe code "<goal>"  # start a Codex-like coding session in the current repo
+devframe code            # start a Codex-like coding session in the current repo
 /rdinit                 # initialize the external-brain operating layer
 /bindChrome <url>       # bind GPT Web, DeepSeek, Doubao, or another web AI URL
 /go <project> <goal>    # prepare or run parallel coding-agent shards
@@ -38,10 +38,10 @@ devframe code "<goal>"  # start a Codex-like coding session in the current repo
 dev-frame-system answers by turning a web AI session into an **external brain** for software development. GPT Web is the default example, but DeepSeek, Doubao, or another capable browser-accessible AI can play the same role. The external brain keeps product direction, engineering tradeoffs, task boundaries, evidence, and review memory in one place. Your IDE, CLI, browser, scripts, tests, and coding agents become replaceable executors.
 
 Practically, the first product surface is `devframe code`: a local coding CLI
-for Codex, Claude Code, OpenCode, or another worker command you already use. It
-does not replace the model or IDE; it scopes the task, prepares bounded coding
-sessions, can fan work out across agents, and records the status in an optional
-read-only dashboard.
+for Codex, Claude Code, OpenCode, or another worker command you already use. Run
+it in a repository to enter a coding goal, prepare bounded coding sessions, fan
+work out across agents, and inspect the status in an optional read-only
+dashboard.
 
 ## Why This Exists
 
@@ -140,16 +140,17 @@ devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-di
 ```
 
 `devframe code` is the product-shaped coding entrypoint. It defaults to the
-current repository, prepares one bounded coding-agent session, prints the exact
-worker command, and records state for the dashboard. Use `--changed --agents
-auto` to target modified, staged, or untracked git files and fan them out across
-bounded shards; `--max-agents` caps the automatic fan-out. Use `--preview` to
-print the shard plan and worker command template without creating packets or
-spending worker tokens. Shards are balanced by estimated target bytes so one
-agent does not accidentally receive most of the file context. Add `--execute`
-only when you are ready to spend worker tokens. Add `--dashboard` to open the
-read-only local visual interface for the same runtime; append `?lang=zh-CN` to
-that URL for the Chinese dashboard.
+current repository and prompts for a goal when one is not supplied, prepares one
+bounded coding-agent session, prints the exact worker command, and records state
+for the dashboard. Use `--changed --agents auto` to target modified, staged, or
+untracked git files and fan them out across bounded shards; `--max-agents` caps
+the automatic fan-out. Use `--preview` to print the shard plan and worker
+command template without creating packets or spending worker tokens. Shards are
+balanced by estimated target bytes so one agent does not accidentally receive
+most of the file context. Add `--execute` only when you are ready to spend
+worker tokens. Add `--dashboard` to open the read-only local visual interface
+for the same runtime; append `?lang=zh-CN` to that URL for the Chinese
+dashboard.
 
 `/rdgoal` is the human-facing slash entrypoint. In a shell, use the installed
 `rdgoal` command. `devframe rdgoal` remains available as the compatibility

@@ -22,16 +22,20 @@ After installation, the `devframe` command is available:
 ```powershell
 devframe doctor
 devframe init code_project D:\tmp\demo-project
+devframe code
 devframe code "Build the MVP" --project D:\tmp\demo-project --target src --dashboard
 devframe code "Build the MVP" --project D:\tmp\demo-project --target src --preview
 devframe code --project D:\tmp\demo-project --prompt-file TASK.md --changed --agents auto
 devframe code --project D:\tmp\demo-project --prompt-file TASK.md --since origin/main --agents auto
+devframe code status --runtime-dir C:\Users\you\.devframe-runtime
 devframe run --pipeline pipelines\example_pipeline.yaml
 ```
 
-`devframe code` is the Codex-like coding entrypoint. It defaults to preparing a
-bounded coding-agent session, prints the worker command, and records runtime
-state for `devframe dashboard serve`. Use `--dashboard` to serve that visual UI
+`devframe code` is the Codex-like coding entrypoint. Run it with no positional
+goal to get a `Goal:` prompt in the current repository, or pass the goal on the
+command line when scripting. It defaults to preparing a bounded coding-agent
+session, prints the worker command, and records runtime state for
+`devframe dashboard serve`. Use `--dashboard` to serve that visual UI
 immediately, `--preview` to inspect the shard plan and worker command template
 without creating packets, `--execute` to run the worker, and `--agents <n>` to
 split the goal into concurrent coding shards. Use `--changed --agents auto` to
@@ -46,6 +50,8 @@ For longer task briefs, pass `--prompt-file <path>` or pipe text into
 the whole prompt on the command line. After `--execute`, the CLI summarizes each
 shard's worker status, ExecutionReport path, changed files, and evidence
 snippet; the dashboard keeps the scan-friendly status and changed-file view.
+Use `devframe code status` to inspect the latest or a named `go-run` from local
+runtime metadata without creating new packets or spending worker tokens.
 
 The focused total-control entrypoint is also installed:
 

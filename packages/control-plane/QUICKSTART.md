@@ -89,24 +89,27 @@ entrypoint in the current repository:
 
 ```powershell
 cd D:\tmp\demo-project
+devframe code
 devframe code "Build the MVP" `
   --target src `
   --runtime-dir C:\Users\you\.devframe-runtime `
   --preview
 ```
 
-By default this prepares one coding-agent session and prints the worker command
-without spending agent tokens. Add `--preview` when you only want to inspect the
-shard plan plus worker command template and avoid creating runtime packets. Add
-`--execute` only when you want the worker to run. In a real git worktree, use
-`--changed --agents auto` to target modified, staged, or untracked files and
-choose a bounded shard count automatically; use `--max-agents` to cap the
-fan-out. Preview and dispatch balance targets by estimated bytes to avoid
-overloading one worker with most of the context. `--dashboard` serves the same
-runtime in the read-only visual interface; append `?lang=zh-CN` to the printed
-URL for Chinese. Use repeated `--target <path>` when you want to name a specific
-slice manually. Use `--since <git-ref>` when the task should cover the branch
-delta against a base ref, for example `--since origin/main`.
+Run `devframe code` with no goal to start from a `Goal:` prompt in the current
+repository. By default this prepares one coding-agent session and prints the
+worker command without spending agent tokens. Add `--preview` when you only
+want to inspect the shard plan plus worker command template and avoid creating
+runtime packets. Add `--execute` only when you want the worker to run. In a real
+git worktree, use `--changed --agents auto` to target modified, staged, or
+untracked files and choose a bounded shard count automatically; use
+`--max-agents` to cap the fan-out. Preview and dispatch balance targets by
+estimated bytes to avoid overloading one worker with most of the context.
+`--dashboard` serves the same runtime in the read-only visual interface; append
+`?lang=zh-CN` to the printed URL for Chinese. Use repeated `--target <path>`
+when you want to name a specific slice manually. Use `--since <git-ref>` when
+the task should cover the branch delta against a base ref, for example
+`--since origin/main`.
 
 For longer prompts, keep the task in a file or pipe it from another tool:
 
@@ -114,7 +117,12 @@ For longer prompts, keep the task in a file or pipe it from another tool:
 devframe code --prompt-file .\TASK.md --changed --agents auto
 Get-Content .\TASK.md | devframe code --changed --agents auto --preview
 devframe code --prompt-file .\TASK.md --since origin/main --agents auto --preview
+devframe code status --runtime-dir C:\Users\you\.devframe-runtime
 ```
+
+`devframe code status` is read-only: it loads the latest `go-run.json` by
+default, or a named go-run id when provided, and does not create packets or run
+workers.
 
 If the project was initialized with `templates/runtime-bootstrap/bootstrap.ps1`,
 you can use its project-local `/go` bridge instead:

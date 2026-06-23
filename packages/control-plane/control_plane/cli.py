@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 import ipaddress
+import json
 import subprocess
 from pathlib import Path
 
@@ -11,7 +12,8 @@ ROOT = Path(__file__).resolve().parent.parent
 HELP_TEXT = """DevFrame Control Plane CLI
   devframe init [template] [target]  - initialize project
   devframe doctor                    - check package health
-  devframe code ["<goal>" | --prompt-file <path>] - start a Codex-like coding session in the current repo
+  devframe code [[<goal>] | --prompt-file <path>] - start an interactive Codex-like coding session
+  devframe code status [latest|<go-run-id>] - inspect a previous /go coding run without spending worker tokens
   devframe go <project> <goal>       - dispatch coding agents through /go
   devframe rdgoal <project> <goal>   - route work through rdgoal
   devframe visual-state              - export Visual Control Plane state
@@ -28,7 +30,8 @@ HELP_TEXT = """DevFrame Control Plane CLI
 RUN_USAGE = "Usage: devframe run --pipeline <path> [--execute] [--project <dir>]"
 DASHBOARD_USAGE = "Usage: devframe dashboard serve [--runtime-dir <dir>] [--paper-project <dir>] [--host 127.0.0.1] [--port 8765] [--allow-remote]"
 GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--model provider/model]"
-CODE_USAGE = "Usage: devframe code [\"<goal>\" | --prompt-file <path>] [--project <dir>] [--agents 1|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--dashboard]"
+CODE_USAGE = "Usage: devframe code [[\"<goal>\"] | --prompt-file <path>] [--project <dir>] [--agents 1|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--dashboard]"
+CODE_STATUS_USAGE = "Usage: devframe code status [latest|<go-run-id>] [--runtime-dir <dir>] [--format text|json]"
 
 
 def _wants_help(args: list[str]) -> bool:
@@ -475,6 +478,30 @@ def cmd_code() -> int:
     return 0 if result.status in {"queued", "passed"} else 1
 
 
+def cmd_code_status(*, prog: str = "devframe code status") -> int:
+    import argparse
+
+    from .backup_guard import default_runtime_dir
+
+    parser = argparse.ArgumentParser(prog=prog)
+    parser.add_argument("run_id", nargs="?", default="latest", help="go-run id to inspect, or latest")
+    parser.add_argument("--runtime-dir", default=None, help="Local runtime directory for code session state")
+    parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format")
+    args = parser.parse_args(sys.argv[3:])
+
+    runtime_dir = Path(args.runtime_dir).resolve() if args.runtime_dir else default_runtime_dir()
+    try:
+        run = _load_go_run_status(runtime_dir, args.run_id)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    if args.format == "json":
+        print(json.dumps(run, indent=2, ensure_ascii=False))
+    else:
+        print(_render_go_run_status(run))
+    return 0
+
+
 def _resolve_code_goal(goal: str | None, prompt_file: str | None) -> str:
     if goal and prompt_file:
         raise ValueError("pass either a positional goal or --prompt-file, not both")
@@ -488,6 +515,73 @@ def _resolve_code_goal(goal: str | None, prompt_file: str | None) -> str:
     if not sys.stdin.isatty():
         return sys.stdin.read().strip()
     return input("Goal: ").strip()
+
+
+def _load_go_run_status(runtime_dir: Path, run_id: str) -> dict:
+    base = runtime_dir / "go-runs"
+    if not base.exists():
+        raise ValueError(f"no go runs found in {runtime_dir}")
+    if run_id == "latest":
+        runs = [_read_go_run_json(path) for path in base.glob("*/go-run.json")]
+        runs = [run for run in runs if run]
+        if not runs:
+            raise ValueError(f"no go runs found in {runtime_dir}")
+        return sorted(runs, key=lambda run: str(run.get("created_at", "")))[-1]
+    path = base / run_id / "go-run.json"
+    if not path.exists():
+        raise ValueError(f"go run not found: {run_id}")
+    run = _read_go_run_json(path)
+    if not run:
+        raise ValueError(f"go run metadata is unreadable: {path}")
+    return run
+
+
+def _read_go_run_json(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _render_go_run_status(run: dict) -> str:
+    lines = [
+        "DevFrame Code status",
+        f"go_run_id    : {run.get('go_run_id', '')}",
+        f"status       : {run.get('status', '')}",
+        f"execute      : {run.get('execute', False)}",
+        f"project_root : {run.get('project_root', '')}",
+        f"runtime_dir  : {run.get('runtime_dir', '')}",
+        f"metadata     : {run.get('metadata_path', '')}",
+        f"requirement  : {run.get('requirement', '')}",
+        "",
+        "Agents",
+    ]
+    agents = run.get("agents", [])
+    for agent in agents:
+        worker_status = agent.get("worker_status") or "pending"
+        lines.append(
+            f"- {agent.get('agent_id', '')} shard={agent.get('shard_index', 0)}/{agent.get('shard_count', 0)} "
+            f"status={agent.get('status', '')} worker={worker_status}"
+        )
+        targets = _metadata_strings(agent.get("targets"))
+        if targets:
+            lines.append(f"  targets: {', '.join(targets)}")
+        changed_files = _metadata_strings(agent.get("changed_files"))
+        if changed_files:
+            lines.append(f"  changed: {', '.join(changed_files)}")
+        if agent.get("report_path"):
+            lines.append(f"  report : {agent.get('report_path')}")
+    if not agents:
+        lines.append("- (no agents)")
+    return "\n".join(lines) + "\n"
+
+
+def _metadata_strings(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    if value:
+        return [str(value)]
+    return []
 
 
 def _resolve_coding_targets(
@@ -845,12 +939,22 @@ def main() -> int:
         return cmd_rdgoal()
 
     if cmd == "code":
+        if len(sys.argv) > 2 and sys.argv[2] == "status":
+            if _wants_help(sys.argv[3:]):
+                print(CODE_STATUS_USAGE)
+                return 0
+            return cmd_code_status(prog="devframe code status")
         if _wants_help(sys.argv[2:]):
             print(CODE_USAGE)
             return 0
         return cmd_code()
 
     if cmd == "go":
+        if len(sys.argv) > 2 and sys.argv[2] == "status":
+            if _wants_help(sys.argv[3:]):
+                print(CODE_STATUS_USAGE.replace("devframe code", "devframe go"))
+                return 0
+            return cmd_code_status(prog="devframe go status")
         if _wants_help(sys.argv[2:]):
             print(GO_USAGE)
             return 0

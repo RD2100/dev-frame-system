@@ -1,5 +1,6 @@
-import json
+import builtins
 import io
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -24,7 +25,8 @@ def test_root_help_is_available(monkeypatch, capsys):
 
     output = capsys.readouterr().out
     assert "DevFrame Control Plane CLI" in output
-    assert "devframe code [\"<goal>\" | --prompt-file <path>]" in output
+    assert "devframe code [[<goal>] | --prompt-file <path>]" in output
+    assert "devframe code status [latest|<go-run-id>]" in output
     assert "devframe go <project> <goal>" in output
     assert "devframe dashboard serve" in output
 
@@ -35,7 +37,7 @@ def test_code_help_is_available(monkeypatch, capsys):
     assert devframe_cli_main() == 0
 
     output = capsys.readouterr().out
-    assert "Usage: devframe code [\"<goal>\" | --prompt-file <path>]" in output
+    assert "Usage: devframe code [[\"<goal>\"] | --prompt-file <path>]" in output
     assert "--prompt-file" in output
     assert "--agents" in output
     assert "--max-agents" in output
@@ -77,6 +79,134 @@ def test_code_prepares_current_repo_coding_session(tmp_path, monkeypatch, capsys
     assert metadata["agents"][0]["targets"] == ["src/cli.py"]
     assert len(state["go_runs"]) == 1
     assert state["go_runs"][0]["agents"][0]["agent_id"] == "coding-agent-1"
+
+
+def test_code_prompts_for_interactive_goal(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/cli.py",
+    ])
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    prompts = []
+
+    def fake_input(prompt):
+        prompts.append(prompt)
+        return "Add an interactive coding entrypoint."
+
+    monkeypatch.setattr(builtins, "input", fake_input)
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert prompts == ["Goal: "]
+    assert "DevFrame Code session" in output
+    assert metadata["requirement"] == "Add an interactive coding entrypoint."
+    assert metadata["agents"][0]["targets"] == ["src/cli.py"]
+
+
+def test_code_status_reads_latest_go_run_without_creating_packets(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "Add a small CLI feature.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/cli.py",
+    ])
+    assert devframe_cli_main() == 0
+    metadata_files_before = list((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_files_before[0].read_text(encoding="utf-8"))
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "status",
+        "--runtime-dir",
+        str(runtime_dir),
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+    metadata_files_after = list((runtime_dir / "go-runs").glob("*/go-run.json"))
+
+    assert exit_code == 0
+    assert "DevFrame Code status" in output
+    assert metadata["go_run_id"] in output
+    assert "status       : queued" in output
+    assert "coding-agent-1" in output
+    assert metadata_files_after == metadata_files_before
+
+
+def test_code_status_reads_specific_go_run_as_json(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "Add a small CLI feature.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/cli.py",
+    ])
+    assert devframe_cli_main() == 0
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    capsys.readouterr()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "status",
+        metadata["go_run_id"],
+        "--runtime-dir",
+        str(runtime_dir),
+        "--format",
+        "json",
+    ])
+
+    exit_code = devframe_cli_main()
+    status = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert status["go_run_id"] == metadata["go_run_id"]
+    assert status["agents"][0]["targets"] == ["src/cli.py"]
+
+
+def test_code_status_reports_missing_runtime(tmp_path, monkeypatch, capsys):
+    runtime_dir = tmp_path / "runtime"
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "status",
+        "--runtime-dir",
+        str(runtime_dir),
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "no go runs found" in output.err
 
 
 def test_code_reads_goal_from_prompt_file(tmp_path, monkeypatch, capsys):
