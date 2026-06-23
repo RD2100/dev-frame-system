@@ -145,9 +145,11 @@ worker command, and records state for the dashboard. Use `--changed --agents
 auto` to target modified, staged, or untracked git files and fan them out across
 bounded shards; `--max-agents` caps the automatic fan-out. Use `--preview` to
 print the shard plan and worker command template without creating packets or
-spending worker tokens. Add `--execute` only when you are ready to spend worker
-tokens. Add `--dashboard` to open the read-only local visual interface for the
-same runtime; append `?lang=zh-CN` to that URL for the Chinese dashboard.
+spending worker tokens. Shards are balanced by estimated target bytes so one
+agent does not accidentally receive most of the file context. Add `--execute`
+only when you are ready to spend worker tokens. Add `--dashboard` to open the
+read-only local visual interface for the same runtime; append `?lang=zh-CN` to
+that URL for the Chinese dashboard.
 
 `/rdgoal` is the human-facing slash entrypoint. In a shell, use the installed
 `rdgoal` command. `devframe rdgoal` remains available as the compatibility

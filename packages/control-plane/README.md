@@ -35,7 +35,8 @@ without creating packets, `--execute` to run the worker, and `--agents <n>` to
 split the goal into concurrent coding shards. Use `--changed --agents auto` to
 keep worker prompts focused on modified, staged, or untracked git files and
 automatically choose a bounded shard count; use `--max-agents` to cap that
-fan-out or `--target <path>` for manual scoping.
+fan-out or `--target <path>` for manual scoping. Dispatch and preview balance
+targets by estimated bytes so large files are spread across workers more evenly.
 
 The focused total-control entrypoint is also installed:
 

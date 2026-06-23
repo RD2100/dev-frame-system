@@ -368,6 +368,40 @@ def test_go_agents_auto_respects_max_agents(tmp_path, monkeypatch, capsys):
     assert metadata["agents"][1]["targets"] == ["src/b.py"]
 
 
+def test_go_shards_targets_by_estimated_size(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    src_dir = project_root / "src"
+    src_dir.mkdir(parents=True)
+    (src_dir / "large.py").write_text("x" * 100, encoding="utf-8")
+    (src_dir / "medium.py").write_text("x" * 60, encoding="utf-8")
+    (src_dir / "small.py").write_text("x" * 40, encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "go",
+        str(project_root),
+        "Balance file-sized shards.",
+        "--runtime-dir",
+        str(runtime_dir),
+        "--agents",
+        "2",
+        "--target",
+        "src/small.py",
+        "--target",
+        "src/large.py",
+        "--target",
+        "src/medium.py",
+    ])
+
+    exit_code = devframe_cli_main()
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert metadata["agents"][0]["targets"] == ["src/large.py"]
+    assert metadata["agents"][1]["targets"] == ["src/medium.py", "src/small.py"]
+
+
 def test_go_preview_respects_shard_plan_without_runtime(tmp_path, monkeypatch, capsys):
     project_root = tmp_path / "demo-project"
     runtime_dir = tmp_path / "runtime"
@@ -405,6 +439,45 @@ def test_go_preview_respects_shard_plan_without_runtime(tmp_path, monkeypatch, c
     assert "- coding-agent-2 shard=2/2" in output
     assert "  - src/b.py" in output
     assert "You are coding shard 2/2." in output
+    assert not runtime_dir.exists()
+
+
+def test_go_preview_shows_size_balanced_shards(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    src_dir = project_root / "src"
+    src_dir.mkdir(parents=True)
+    (src_dir / "large.py").write_text("x" * 100, encoding="utf-8")
+    (src_dir / "medium.py").write_text("x" * 60, encoding="utf-8")
+    (src_dir / "small.py").write_text("x" * 40, encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "go",
+        str(project_root),
+        "Preview balanced targets.",
+        "--runtime-dir",
+        str(runtime_dir),
+        "--agents",
+        "2",
+        "--target",
+        "src/small.py",
+        "--target",
+        "src/large.py",
+        "--target",
+        "src/medium.py",
+        "--preview",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "target_bytes : 200" in output
+    assert "- coding-agent-1 shard=1/2 bytes=100" in output
+    assert "  - src/large.py" in output
+    assert "- coding-agent-2 shard=2/2 bytes=100" in output
+    assert "  - src/medium.py" in output
+    assert "  - src/small.py" in output
     assert not runtime_dir.exists()
 
 

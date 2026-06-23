@@ -71,7 +71,7 @@ def run_go_dispatch(
 
     runtime_root = Path(runtime_dir).resolve() if runtime_dir else default_runtime_dir()
     project_root = Path(project_path).resolve()
-    target_shards = _split_targets(targets or [], agents)
+    target_shards = split_targets_by_size(project_root, targets or [], agents)
     orchestrator = Orchestrator(runtime_dir=runtime_root)
     dispatches: list[GoAgentDispatch] = []
     project_id = ""
@@ -210,11 +210,53 @@ def _write_agent_failure(agent: GoAgentDispatch, exc: Exception) -> None:
     path.write_text(f"{type(exc).__name__}: {exc}\n", encoding="utf-8")
 
 
-def _split_targets(targets: list[str], agents: int) -> list[list[str]]:
+def split_targets_by_size(project_root: str | Path, targets: list[str], agents: int) -> list[list[str]]:
     shards = [[] for _ in range(agents)]
-    for index, target in enumerate(targets):
-        shards[index % agents].append(target)
+    if not targets:
+        return shards
+
+    shard_sizes = [0 for _ in range(agents)]
+    weighted_targets = [
+        (target, _target_size(Path(project_root).resolve(), target), index)
+        for index, target in enumerate(targets)
+    ]
+    for target, size, _index in sorted(weighted_targets, key=lambda item: (-item[1], item[2])):
+        shard_index = min(range(agents), key=lambda index: (shard_sizes[index], len(shards[index]), index))
+        shards[shard_index].append(target)
+        shard_sizes[shard_index] += size
     return shards
+
+
+def estimate_target_bytes(project_root: str | Path, target: str) -> int:
+    return _target_size(Path(project_root).resolve(), target)
+
+
+def _target_size(project_root: Path, target: str) -> int:
+    path = (project_root / target).resolve()
+    try:
+        path.relative_to(project_root)
+    except ValueError:
+        return 0
+    if path.is_file():
+        return _file_size(path)
+    if path.is_dir():
+        return sum(_file_size(child) for child in _iter_target_files(path))
+    return 0
+
+
+def _iter_target_files(path: Path):
+    for child in path.rglob("*"):
+        if ".git" in child.parts:
+            continue
+        if child.is_file():
+            yield child
+
+
+def _file_size(path: Path) -> int:
+    try:
+        return path.stat().st_size
+    except OSError:
+        return 0
 
 
 def _shard_requirement(requirement: str, shard_number: int, shard_count: int,

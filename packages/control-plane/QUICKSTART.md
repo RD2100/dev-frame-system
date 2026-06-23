@@ -101,9 +101,11 @@ shard plan plus worker command template and avoid creating runtime packets. Add
 `--execute` only when you want the worker to run. In a real git worktree, use
 `--changed --agents auto` to target modified, staged, or untracked files and
 choose a bounded shard count automatically; use `--max-agents` to cap the
-fan-out. `--dashboard` serves the same runtime in the read-only visual
-interface; append `?lang=zh-CN` to the printed URL for Chinese. Use repeated
-`--target <path>` when you want to name a specific slice manually.
+fan-out. Preview and dispatch balance targets by estimated bytes to avoid
+overloading one worker with most of the context. `--dashboard` serves the same
+runtime in the read-only visual interface; append `?lang=zh-CN` to the printed
+URL for Chinese. Use repeated `--target <path>` when you want to name a specific
+slice manually.
 
 If the project was initialized with `templates/runtime-bootstrap/bootstrap.ps1`,
 you can use its project-local `/go` bridge instead:

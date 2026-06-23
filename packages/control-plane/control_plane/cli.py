@@ -286,9 +286,11 @@ def cmd_go() -> int:
         DEFAULT_GO_MODEL,
         DEFAULT_OPENCODE_AGENT,
         build_go_worker_command,
+        estimate_target_bytes,
         render_go_dispatch_text,
         render_command,
         run_go_dispatch,
+        split_targets_by_size,
     )
 
     parser = argparse.ArgumentParser(prog="devframe go")
@@ -331,6 +333,8 @@ def cmd_go() -> int:
             opencode_agent=args.opencode_agent,
             build_worker_command=build_go_worker_command,
             render_worker_command=render_command,
+            split_targets=split_targets_by_size,
+            estimate_target_bytes=estimate_target_bytes,
         ), end="")
         return 0
 
@@ -362,9 +366,11 @@ def cmd_code() -> int:
         DEFAULT_GO_MODEL,
         DEFAULT_OPENCODE_AGENT,
         build_go_worker_command,
+        estimate_target_bytes,
         render_go_dispatch_text,
         render_command,
         run_go_dispatch,
+        split_targets_by_size,
     )
 
     parser = argparse.ArgumentParser(prog="devframe code")
@@ -422,6 +428,8 @@ def cmd_code() -> int:
             opencode_agent=args.opencode_agent,
             build_worker_command=build_go_worker_command,
             render_worker_command=render_command,
+            split_targets=split_targets_by_size,
+            estimate_target_bytes=estimate_target_bytes,
         ), end="")
         return 0
 
@@ -502,10 +510,14 @@ def _render_coding_preview(
     opencode_agent: str,
     build_worker_command,
     render_worker_command,
+    split_targets,
+    estimate_target_bytes,
 ) -> str:
     from .backup_guard import default_runtime_dir
 
-    shards = _split_targets_for_preview(targets, agents)
+    project_root = Path(project_path).resolve()
+    shards = split_targets(project_root, targets, agents)
+    target_sizes = {target: estimate_target_bytes(project_root, target) for target in targets}
     runtime_root = Path(runtime_dir).resolve() if runtime_dir else default_runtime_dir()
     worker_label = "custom command" if worker_command else f"opencode model={model} agent={opencode_agent}"
     lines = [
@@ -517,6 +529,7 @@ def _render_coding_preview(
         f"execute      : {execute}",
         f"agents       : {agents}",
         f"targets      : {len(targets)}",
+        f"target_bytes : {sum(target_sizes.values())}",
         f"worker       : {worker_label}",
         "",
         "Shards",
@@ -529,7 +542,8 @@ def _render_coding_preview(
             shard_number=index,
             shard_count=agents,
         )
-        lines.append(f"- coding-agent-{index} shard={index}/{agents}")
+        shard_bytes = sum(target_sizes.get(target, 0) for target in shard_targets)
+        lines.append(f"- coding-agent-{index} shard={index}/{agents} bytes={shard_bytes}")
         if shard_targets:
             lines.extend(f"  - {target}" for target in shard_targets)
         else:
@@ -540,13 +554,6 @@ def _render_coding_preview(
         "No packets were created. Re-run without --preview to prepare dispatch packets and rdgoal worker commands.",
     ])
     return "\n".join(lines) + "\n"
-
-
-def _split_targets_for_preview(targets: list[str], agents: int) -> list[list[str]]:
-    shards = [[] for _ in range(agents)]
-    for index, target in enumerate(targets):
-        shards[index % agents].append(target)
-    return shards
 
 
 def _git_changed_targets(project_path: str | Path) -> list[str]:

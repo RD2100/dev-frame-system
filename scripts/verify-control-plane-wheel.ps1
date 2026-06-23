@@ -98,7 +98,7 @@ try {
     Invoke-Step "devframe init paper_iteration" $devframe @("init", "paper_iteration", $paperDir)
     Invoke-Step "devframe code preview" $python @(
         "-c",
-        "import pathlib, subprocess, sys; text = subprocess.check_output([sys.argv[1], 'code', 'Preview worker template.', '--project', sys.argv[2], '--runtime-dir', sys.argv[3], '--agents', 'auto', '--target', 'CURRENT_STATE.yaml', '--target', 'PIPELINE.yaml', '--preview'], text=True); assert 'DevFrame coding preview' in text; assert 'agents       : 2' in text; assert 'worker       : opencode model=stepfun/step-3.7-flash agent=build' in text; assert 'command: opencode run -m stepfun/step-3.7-flash --agent build' in text; assert 'You are coding shard 1/2.' in text; assert 'No packets were created.' in text; assert not pathlib.Path(sys.argv[3]).exists(); print('code preview ok')",
+        "import pathlib, subprocess, sys; text = subprocess.check_output([sys.argv[1], 'code', 'Preview worker template.', '--project', sys.argv[2], '--runtime-dir', sys.argv[3], '--agents', 'auto', '--target', 'CURRENT_STATE.yaml', '--target', 'PIPELINE.yaml', '--preview'], text=True); assert 'DevFrame coding preview' in text; assert 'agents       : 2' in text; assert 'target_bytes : ' in text; assert 'bytes=' in text; assert 'worker       : opencode model=stepfun/step-3.7-flash agent=build' in text; assert 'command: opencode run -m stepfun/step-3.7-flash --agent build' in text; assert 'You are coding shard 1/2.' in text; assert 'No packets were created.' in text; assert not pathlib.Path(sys.argv[3]).exists(); print('code preview ok')",
         $devframe,
         $projectDir,
         $previewRuntimeDir
