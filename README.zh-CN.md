@@ -105,12 +105,12 @@ cd dev-frame-system
 cd .\packages\control-plane
 pip install -e .
 cd D:\my-project
-devframe code "Build the MVP" --target src --runtime-dir "$env:TEMP\devframe-code"
+devframe code "Build the MVP" --target src --runtime-dir "$env:TEMP\devframe-code" --dashboard
 rdgoal "D:\my-project" "Build the MVP" --digest
 devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-dir "$env:TEMP\devframe-go"
 ```
 
-`devframe code` 是更接近 Codex/OpenCode 形态的编程入口。它默认作用于当前仓库，准备一个有边界的 coding-agent 会话，打印精确 worker 命令，并把状态写入 Dashboard 可读取的 runtime。需要并发时加 `--agents 3`，准备真正消耗 worker token 时再加 `--execute`。
+`devframe code` 是更接近 Codex/OpenCode 形态的编程入口。它默认作用于当前仓库，准备一个有边界的 coding-agent 会话，打印精确 worker 命令，并把状态写入 Dashboard 可读取的 runtime。需要并发时加 `--agents 3`，准备真正消耗 worker token 时再加 `--execute`。加 `--dashboard` 会直接启动同一个 runtime 的本地只读可视化界面；在 Dashboard URL 后追加 `?lang=zh-CN` 可切换中文界面。
 
 `/rdgoal` 是面向用户的 slash 入口。在 shell 中使用已安装的 `rdgoal` 命令。`devframe rdgoal` 作为兼容形式仍然可用于已经使用 umbrella CLI 的脚本。
 

@@ -115,7 +115,7 @@ Optionally install the control-plane CLI and route a project through `rdgoal`:
 cd .\packages\control-plane
 pip install -e .
 cd D:\my-project
-devframe code "Build the MVP" --target src --runtime-dir "$env:TEMP\devframe-code"
+devframe code "Build the MVP" --target src --runtime-dir "$env:TEMP\devframe-code" --dashboard
 rdgoal "D:\my-project" "Build the MVP" --digest
 devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-dir "$env:TEMP\devframe-go"
 ```
@@ -124,7 +124,8 @@ devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-di
 current repository, prepares one bounded coding-agent session, prints the exact
 worker command, and records state for the dashboard. Add `--agents 3` when you
 want parallel shards and `--execute` only when you are ready to spend worker
-tokens.
+tokens. Add `--dashboard` to open the read-only local visual interface for the
+same runtime; append `?lang=zh-CN` to that URL for the Chinese dashboard.
 
 `/rdgoal` is the human-facing slash entrypoint. In a shell, use the installed
 `rdgoal` command. `devframe rdgoal` remains available as the compatibility

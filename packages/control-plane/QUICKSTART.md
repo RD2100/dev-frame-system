@@ -91,12 +91,15 @@ entrypoint in the current repository:
 cd D:\tmp\demo-project
 devframe code "Build the MVP" `
   --target src `
-  --runtime-dir C:\Users\you\.devframe-runtime
+  --runtime-dir C:\Users\you\.devframe-runtime `
+  --dashboard
 ```
 
 By default this prepares one coding-agent session and prints the worker command
 without spending agent tokens. Add `--execute` only when you want the worker to
-run. Add `--agents 3` when you want concurrent coding shards.
+run. Add `--agents 3` when you want concurrent coding shards. `--dashboard`
+serves the same runtime in the read-only visual interface; append `?lang=zh-CN`
+to the printed URL for Chinese.
 
 Use `devframe go` when you want to name the project path explicitly or prepare
 several shards directly:

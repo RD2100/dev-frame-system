@@ -74,7 +74,7 @@ try {
     )
     Invoke-Step "devframe code help" $python @(
         "-c",
-        "import subprocess, sys; text = subprocess.check_output([sys.argv[1], 'code', '--help'], text=True); assert 'Usage: devframe code ' in text; assert '<goal>' in text; print('devframe code help ok')",
+        "import subprocess, sys; text = subprocess.check_output([sys.argv[1], 'code', '--help'], text=True); assert 'Usage: devframe code ' in text; assert '<goal>' in text; assert '--dashboard' in text; print('devframe code help ok')",
         $devframe
     )
     Invoke-Step "devframe go help" $python @(

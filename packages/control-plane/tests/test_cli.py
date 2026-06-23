@@ -34,6 +34,7 @@ def test_code_help_is_available(monkeypatch, capsys):
 
     output = capsys.readouterr().out
     assert "Usage: devframe code \"<goal>\"" in output
+    assert "--dashboard" in output
 
 
 def test_code_prepares_current_repo_coding_session(tmp_path, monkeypatch, capsys):
@@ -68,6 +69,70 @@ def test_code_prepares_current_repo_coding_session(tmp_path, monkeypatch, capsys
     assert metadata["agents"][0]["targets"] == ["src/cli.py"]
     assert len(state["go_runs"]) == 1
     assert state["go_runs"][0]["agents"][0]["agent_id"] == "coding-agent-1"
+
+
+def test_code_dashboard_serves_prepared_session(tmp_path, monkeypatch, capsys):
+    from control_plane import dashboard
+
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    captured = {}
+
+    def fake_serve_dashboard(**kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(dashboard, "serve_dashboard", fake_serve_dashboard)
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "Add a visible coding dashboard.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--dashboard",
+        "--port",
+        "0",
+        "--refresh-seconds",
+        "0",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Dashboard UI : starting read-only visual interface" in output
+    assert "Chinese UI   : append ?lang=zh-CN to the dashboard URL" in output
+    assert captured["runtime_dir"] == str(runtime_dir.resolve())
+    assert captured["host"] == "127.0.0.1"
+    assert captured["port"] == 0
+    assert captured["refresh_seconds"] == 0
+
+
+def test_code_dashboard_requires_allow_remote_for_non_loopback(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "Add a visible coding dashboard.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--dashboard",
+        "--host",
+        "0.0.0.0",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "use --allow-remote" in output.out
+    assert not runtime_dir.exists()
 
 
 def test_go_help_is_available(monkeypatch, capsys):
