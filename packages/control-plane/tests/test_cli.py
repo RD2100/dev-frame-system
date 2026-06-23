@@ -27,6 +27,7 @@ def test_root_help_is_available(monkeypatch, capsys):
     assert "DevFrame Control Plane CLI" in output
     assert "devframe code [[<goal>] | --prompt-file <path>]" in output
     assert "devframe code status [latest|<go-run-id>]" in output
+    assert "devframe code execute [latest|<go-run-id>]" in output
     assert "devframe go <project> <goal>" in output
     assert "devframe dashboard serve" in output
 
@@ -45,6 +46,16 @@ def test_code_help_is_available(monkeypatch, capsys):
     assert "--since" in output
     assert "--preview" in output
     assert "--dashboard" in output
+
+
+def test_code_execute_help_is_available(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["devframe", "code", "execute", "--help"])
+
+    assert devframe_cli_main() == 0
+
+    output = capsys.readouterr().out
+    assert "Usage: devframe code execute [latest|<go-run-id>]" in output
+    assert "--rerun-passed" in output
 
 
 def test_code_prepares_current_repo_coding_session(tmp_path, monkeypatch, capsys):
@@ -207,6 +218,128 @@ def test_code_status_reports_missing_runtime(tmp_path, monkeypatch, capsys):
 
     assert exit_code == 1
     assert "no go runs found" in output.err
+
+
+def test_code_execute_reuses_prepared_go_run_packets(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    counter_path = tmp_path / "worker-count.txt"
+    project_root.mkdir()
+    report_code = (
+        "from pathlib import Path; import os; "
+        f"counter = Path({str(counter_path)!r}); "
+        "count = int(counter.read_text(encoding='utf-8')) if counter.exists() else 0; "
+        "counter.write_text(str(count + 1), encoding='utf-8'); "
+        "Path(os.environ['RDGOAL_REPORT_PATH']).write_text("
+        "'## ExecutionReport\\n\\n"
+        "- **Status**: pass\\n"
+        "- **Changed Files**:\\n"
+        "- `src/app.py`\\n"
+        "- **Evidence**: reused prepared packet\\n', encoding='utf-8')"
+    )
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "Execute prepared packets later.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--agents",
+        "2",
+        "--target",
+        "src/app.py",
+        "--target",
+        "src/lib.py",
+        "--command",
+        sys.executable,
+        "-c",
+        report_code,
+    ])
+    assert devframe_cli_main() == 0
+    metadata_files_before = list((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata_before = json.loads(metadata_files_before[0].read_text(encoding="utf-8"))
+    packet_dirs_before = {agent["packet_dir"] for agent in metadata_before["agents"]}
+    capsys.readouterr()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "execute",
+        metadata_before["go_run_id"],
+        "--runtime-dir",
+        str(runtime_dir),
+        "--timeout",
+        "30",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+    metadata_files_after = list((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata_after = json.loads(metadata_files_after[0].read_text(encoding="utf-8"))
+    packet_dirs_after = {agent["packet_dir"] for agent in metadata_after["agents"]}
+    state = build_visual_control_plane_state(runtime_dir)
+
+    assert exit_code == 0
+    assert "DevFrame Code execute" in output
+    assert "status       : passed" in output
+    assert "changed: src/app.py" in output
+    assert metadata_files_after == metadata_files_before
+    assert packet_dirs_after == packet_dirs_before
+    assert metadata_after["execute"] is True
+    assert metadata_after["status"] == "passed"
+    assert {agent["worker_status"] for agent in metadata_after["agents"]} == {"passed"}
+    assert counter_path.read_text(encoding="utf-8") == "2"
+    assert state["go_runs"][0]["status"] == "passed"
+
+
+def test_code_execute_skips_previously_passed_agents(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    counter_path = tmp_path / "worker-count.txt"
+    project_root.mkdir()
+    report_code = (
+        "from pathlib import Path; import os; "
+        f"counter = Path({str(counter_path)!r}); "
+        "count = int(counter.read_text(encoding='utf-8')) if counter.exists() else 0; "
+        "counter.write_text(str(count + 1), encoding='utf-8'); "
+        "Path(os.environ['RDGOAL_REPORT_PATH']).write_text("
+        "'## ExecutionReport\\n\\n"
+        "- **Status**: pass\\n"
+        "- **Evidence**: skip rerun evidence\\n', encoding='utf-8')"
+    )
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "Execute prepared packet once.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/app.py",
+        "--command",
+        sys.executable,
+        "-c",
+        report_code,
+    ])
+    assert devframe_cli_main() == 0
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    go_run_id = json.loads(metadata_path.read_text(encoding="utf-8"))["go_run_id"]
+    capsys.readouterr()
+    for _index in range(2):
+        monkeypatch.setattr(sys, "argv", [
+            "devframe",
+            "code",
+            "execute",
+            go_run_id,
+            "--runtime-dir",
+            str(runtime_dir),
+            "--timeout",
+            "30",
+        ])
+        assert devframe_cli_main() == 0
+
+    assert counter_path.read_text(encoding="utf-8") == "1"
 
 
 def test_code_reads_goal_from_prompt_file(tmp_path, monkeypatch, capsys):

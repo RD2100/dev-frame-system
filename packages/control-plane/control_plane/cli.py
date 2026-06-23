@@ -14,6 +14,7 @@ HELP_TEXT = """DevFrame Control Plane CLI
   devframe doctor                    - check package health
   devframe code [[<goal>] | --prompt-file <path>] - start an interactive Codex-like coding session
   devframe code status [latest|<go-run-id>] - inspect a previous /go coding run without spending worker tokens
+  devframe code execute [latest|<go-run-id>] - execute a prepared /go run without creating packets
   devframe go <project> <goal>       - dispatch coding agents through /go
   devframe rdgoal <project> <goal>   - route work through rdgoal
   devframe visual-state              - export Visual Control Plane state
@@ -32,6 +33,7 @@ DASHBOARD_USAGE = "Usage: devframe dashboard serve [--runtime-dir <dir>] [--pape
 GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--model provider/model]"
 CODE_USAGE = "Usage: devframe code [[\"<goal>\"] | --prompt-file <path>] [--project <dir>] [--agents 1|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--dashboard]"
 CODE_STATUS_USAGE = "Usage: devframe code status [latest|<go-run-id>] [--runtime-dir <dir>] [--format text|json]"
+CODE_EXECUTE_USAGE = "Usage: devframe code execute [latest|<go-run-id>] [--runtime-dir <dir>] [--timeout <seconds>] [--rerun-passed]"
 
 
 def _wants_help(args: list[str]) -> bool:
@@ -502,6 +504,38 @@ def cmd_code_status(*, prog: str = "devframe code status") -> int:
     return 0
 
 
+def cmd_code_execute(*, prog: str = "devframe code execute") -> int:
+    import argparse
+
+    from .backup_guard import default_runtime_dir
+    from .go_dispatch import execute_go_run, render_go_dispatch_text
+
+    parser = argparse.ArgumentParser(prog=prog)
+    parser.add_argument("run_id", nargs="?", default="latest", help="prepared go-run id to execute, or latest")
+    parser.add_argument("--runtime-dir", default=None, help="Local runtime directory for code session state")
+    parser.add_argument("--timeout", type=int, default=900, help="Per-worker timeout in seconds")
+    parser.add_argument("--rerun-passed", action="store_true", help="Run agents even if their previous worker status passed")
+    args = parser.parse_args(sys.argv[3:])
+
+    runtime_dir = Path(args.runtime_dir).resolve() if args.runtime_dir else default_runtime_dir()
+    try:
+        result = execute_go_run(
+            runtime_dir,
+            args.run_id,
+            timeout_seconds=args.timeout,
+            rerun_passed=args.rerun_passed,
+        )
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    print("DevFrame Code execute")
+    print("Backend      : existing /go run packets")
+    print("Token mode   : reuse prepared packets; skipped passed agents unless --rerun-passed")
+    print("")
+    print(render_go_dispatch_text(result), end="")
+    return 0 if result.status in {"queued", "passed"} else 1
+
+
 def _resolve_code_goal(goal: str | None, prompt_file: str | None) -> str:
     if goal and prompt_file:
         raise ValueError("pass either a positional goal or --prompt-file, not both")
@@ -944,6 +978,11 @@ def main() -> int:
                 print(CODE_STATUS_USAGE)
                 return 0
             return cmd_code_status(prog="devframe code status")
+        if len(sys.argv) > 2 and sys.argv[2] == "execute":
+            if _wants_help(sys.argv[3:]):
+                print(CODE_EXECUTE_USAGE)
+                return 0
+            return cmd_code_execute(prog="devframe code execute")
         if _wants_help(sys.argv[2:]):
             print(CODE_USAGE)
             return 0
@@ -955,6 +994,11 @@ def main() -> int:
                 print(CODE_STATUS_USAGE.replace("devframe code", "devframe go"))
                 return 0
             return cmd_code_status(prog="devframe go status")
+        if len(sys.argv) > 2 and sys.argv[2] == "execute":
+            if _wants_help(sys.argv[3:]):
+                print(CODE_EXECUTE_USAGE.replace("devframe code", "devframe go"))
+                return 0
+            return cmd_code_execute(prog="devframe go execute")
         if _wants_help(sys.argv[2:]):
             print(GO_USAGE)
             return 0

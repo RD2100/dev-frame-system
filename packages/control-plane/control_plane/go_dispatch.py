@@ -18,6 +18,7 @@ from .worker import CommandWorker, WorkerResult
 
 DEFAULT_GO_MODEL = "stepfun/step-3.7-flash"
 DEFAULT_OPENCODE_AGENT = "build"
+SUCCESS_WORKER_STATUSES = {"pass", "passed", "completed"}
 
 
 @dataclass
@@ -134,15 +135,42 @@ def run_go_dispatch(
 
     if not execute:
         result.status = "queued"
-    elif all(agent.worker_status in {"pass", "passed", "completed"} for agent in result.agents):
-        result.status = "passed"
-    elif any(agent.worker_status in {"failed", "fail", "blocked"} for agent in result.agents):
-        result.status = "failed"
     else:
-        result.status = "blocked"
+        result.status = _result_status(result)
 
     result.metadata_path = str(_write_metadata(result))
     return result
+
+
+def execute_go_run(
+    runtime_dir: str | Path | None = None,
+    run_id: str = "latest",
+    *,
+    timeout_seconds: int = 900,
+    rerun_passed: bool = False,
+) -> GoDispatchResult:
+    """Execute a prepared go-run without creating new rdgoal packets."""
+
+    runtime_root = Path(runtime_dir).resolve() if runtime_dir else default_runtime_dir()
+    result = load_go_run_result(runtime_root, run_id)
+    result.runtime_dir = str(runtime_root)
+    runnable_agents = [
+        agent
+        for agent in result.agents
+        if rerun_passed or agent.worker_status not in SUCCESS_WORKER_STATUSES
+    ]
+    result.execute = True
+    if runnable_agents:
+        _execute_parallel(result, timeout_seconds=timeout_seconds, agents=runnable_agents)
+    result.status = _result_status(result)
+    result.metadata_path = str(_write_metadata(result))
+    return result
+
+
+def load_go_run_result(runtime_dir: str | Path, run_id: str = "latest") -> GoDispatchResult:
+    runtime_root = Path(runtime_dir).resolve()
+    data = _read_go_run_metadata(_resolve_go_run_metadata_path(runtime_root, run_id))
+    return _go_result_from_metadata(data, fallback_runtime_dir=runtime_root)
 
 
 def render_go_dispatch_text(result: GoDispatchResult) -> str:
@@ -181,12 +209,18 @@ def render_go_dispatch_text(result: GoDispatchResult) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _execute_parallel(result: GoDispatchResult, *, timeout_seconds: int) -> None:
-    max_workers = max(1, len(result.agents))
+def _execute_parallel(
+    result: GoDispatchResult,
+    *,
+    timeout_seconds: int,
+    agents: list[GoAgentDispatch] | None = None,
+) -> None:
+    agents_to_run = agents if agents is not None else result.agents
+    max_workers = max(1, len(agents_to_run))
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {
             pool.submit(_run_one_agent, result.runtime_dir, agent, timeout_seconds): agent
-            for agent in result.agents
+            for agent in agents_to_run
         }
         for future in as_completed(futures):
             agent = futures[future]
@@ -212,12 +246,89 @@ def _run_one_agent(runtime_dir: str, agent: GoAgentDispatch, timeout_seconds: in
     )
 
 
+def _result_status(result: GoDispatchResult) -> str:
+    if not result.agents:
+        return "queued"
+    worker_statuses = [agent.worker_status for agent in result.agents]
+    if all(status in SUCCESS_WORKER_STATUSES for status in worker_statuses):
+        return "passed"
+    if any(status in {"failed", "fail"} for status in worker_statuses):
+        return "failed"
+    if any(status == "blocked" for status in worker_statuses):
+        return "blocked"
+    return "queued"
+
+
 def _write_metadata(result: GoDispatchResult) -> Path:
     runtime_root = Path(result.runtime_dir)
     path = runtime_root / "go-runs" / result.go_run_id / "go-run.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(asdict(result), indent=2, ensure_ascii=True), encoding="utf-8")
     return path
+
+
+def _resolve_go_run_metadata_path(runtime_root: Path, run_id: str) -> Path:
+    base = runtime_root / "go-runs"
+    if not base.exists():
+        raise ValueError(f"no go runs found in {runtime_root}")
+    if run_id == "latest":
+        paths = [path for path in base.glob("*/go-run.json") if path.is_file()]
+        if not paths:
+            raise ValueError(f"no go runs found in {runtime_root}")
+        runs = [(_read_go_run_metadata(path), path) for path in paths]
+        return sorted(runs, key=lambda item: str(item[0].get("created_at", "")))[-1][1]
+    path = base / run_id / "go-run.json"
+    if not path.exists():
+        raise ValueError(f"go run not found: {run_id}")
+    return path
+
+
+def _read_go_run_metadata(path: Path) -> dict[str, Any]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"go run metadata is unreadable: {path}") from exc
+
+
+def _go_result_from_metadata(data: dict[str, Any], *, fallback_runtime_dir: Path) -> GoDispatchResult:
+    agents = [
+        GoAgentDispatch(
+            agent_id=str(agent.get("agent_id", "")),
+            shard_index=int(agent.get("shard_index", 0) or 0),
+            shard_count=int(agent.get("shard_count", 0) or 0),
+            targets=_string_list(agent.get("targets", [])),
+            target_bytes=int(agent.get("target_bytes", 0) or 0),
+            packet_dir=str(agent.get("packet_dir", "")),
+            task_spec_path=str(agent.get("task_spec_path", "")),
+            worker_command=_string_list(agent.get("worker_command", [])),
+            status=str(agent.get("status", "queued") or "queued"),
+            report_path=str(agent.get("report_path", "")),
+            worker_status=str(agent.get("worker_status", "")),
+            changed_files=_string_list(agent.get("changed_files", [])),
+            verification=str(agent.get("verification", "")),
+        )
+        for agent in data.get("agents", [])
+    ]
+    return GoDispatchResult(
+        go_run_id=str(data.get("go_run_id", "")),
+        project_id=str(data.get("project_id", "")),
+        project_root=str(data.get("project_root", "")),
+        requirement=str(data.get("requirement", "")),
+        runtime_dir=str(data.get("runtime_dir") or fallback_runtime_dir),
+        status=str(data.get("status", "queued") or "queued"),
+        execute=bool(data.get("execute", False)),
+        agents=agents,
+        created_at=str(data.get("created_at", "")),
+        metadata_path=str(data.get("metadata_path", "")),
+    )
+
+
+def _string_list(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    if value:
+        return [str(value)]
+    return []
 
 
 def _write_agent_failure(agent: GoAgentDispatch, exc: Exception) -> None:

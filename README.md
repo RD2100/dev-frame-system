@@ -151,6 +151,9 @@ most of the file context. Add `--execute` only when you are ready to spend
 worker tokens. Add `--dashboard` to open the read-only local visual interface
 for the same runtime; the dashboard has an English/中文 language switch, and
 `?lang=zh-CN` still opens the Chinese view directly.
+After preparing a run, use `devframe code execute [latest|<go-run-id>]` to
+spend worker tokens later without creating another set of packets; passed
+agents are skipped unless `--rerun-passed` is provided.
 
 `/rdgoal` is the human-facing slash entrypoint. In a shell, use the installed
 `rdgoal` command. `devframe rdgoal` remains available as the compatibility

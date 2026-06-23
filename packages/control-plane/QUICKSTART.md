@@ -118,11 +118,15 @@ devframe code --prompt-file .\TASK.md --changed --agents auto
 Get-Content .\TASK.md | devframe code --changed --agents auto --preview
 devframe code --prompt-file .\TASK.md --since origin/main --agents auto --preview
 devframe code status --runtime-dir C:\Users\you\.devframe-runtime
+devframe code execute --runtime-dir C:\Users\you\.devframe-runtime
 ```
 
 `devframe code status` is read-only: it loads the latest `go-run.json` by
 default, or a named go-run id when provided, and does not create packets or run
-workers.
+workers. `devframe code execute` runs the latest or named prepared go-run later
+from the same metadata, reusing existing packet directories instead of creating
+new prompts. Agents that already passed are skipped unless `--rerun-passed` is
+provided.
 
 If the project was initialized with `templates/runtime-bootstrap/bootstrap.ps1`,
 you can use its project-local `/go` bridge instead:

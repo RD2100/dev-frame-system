@@ -28,6 +28,7 @@ devframe code "Build the MVP" --project D:\tmp\demo-project --target src --previ
 devframe code --project D:\tmp\demo-project --prompt-file TASK.md --changed --agents auto
 devframe code --project D:\tmp\demo-project --prompt-file TASK.md --since origin/main --agents auto
 devframe code status --runtime-dir C:\Users\you\.devframe-runtime
+devframe code execute --runtime-dir C:\Users\you\.devframe-runtime
 devframe run --pipeline pipelines\example_pipeline.yaml
 ```
 
@@ -52,6 +53,11 @@ shard's worker status, ExecutionReport path, changed files, and evidence
 snippet; the dashboard keeps the scan-friendly status and changed-file view.
 Use `devframe code status` to inspect the latest or a named `go-run` from local
 runtime metadata without creating new packets or spending worker tokens.
+Use `devframe code execute` to run the latest or a named prepared `go-run`
+later from the same metadata, reusing its existing packet directories instead
+of generating another set of worker prompts. Passed agents are skipped by
+default; add `--rerun-passed` only when you intentionally want to spend worker
+tokens again.
 
 The focused total-control entrypoint is also installed:
 
