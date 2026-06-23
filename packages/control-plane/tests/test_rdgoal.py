@@ -395,6 +395,10 @@ def test_visual_control_plane_state_reads_go_runs(tmp_path):
     project_root = tmp_path / "project"
     runtime_dir = tmp_path / "runtime"
     project_root.mkdir()
+    source_dir = project_root / "packages" / "control-plane" / "control_plane"
+    source_dir.mkdir(parents=True)
+    (source_dir / "cli.py").write_text("c" * 24, encoding="utf-8")
+    (source_dir / "go_dispatch.py").write_text("g" * 24, encoding="utf-8")
 
     result = run_go_dispatch(
         project_root,
@@ -418,6 +422,7 @@ def test_visual_control_plane_state_reads_go_runs(tmp_path):
     assert state["go_runs"][0]["agents"][0]["targets"] == [
         "packages/control-plane/control_plane/cli.py"
     ]
+    assert state["go_runs"][0]["agents"][0]["target_bytes"] == 24
     assert state["go_runs"][0]["agents"][1]["worker_command"][:4] == [
         "opencode",
         "run",
@@ -426,6 +431,8 @@ def test_visual_control_plane_state_reads_go_runs(tmp_path):
     ]
     assert len(state["runs"]) == 2
     assert "/go 编码智能体" in html
+    assert "目标字节数" in html
+    assert "<code>24</code>" in html
     assert "packages/control-plane/control_plane/go_dispatch.py" in html
     assert "opencode run -m stepfun/step-3.7-flash" in html
 

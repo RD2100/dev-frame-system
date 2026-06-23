@@ -26,6 +26,7 @@ class GoAgentDispatch:
     shard_index: int
     shard_count: int
     targets: list[str]
+    target_bytes: int
     packet_dir: str
     task_spec_path: str
     worker_command: list[str]
@@ -78,6 +79,10 @@ def run_go_dispatch(
 
     for index in range(agents):
         shard_targets = target_shards[index]
+        shard_bytes = sum(
+            estimate_target_bytes(project_root, target)
+            for target in shard_targets
+        )
         shard_number = index + 1
         shard_requirement = _shard_requirement(requirement, shard_number, agents, shard_targets)
         result = rdgoal(
@@ -104,6 +109,7 @@ def run_go_dispatch(
             shard_index=shard_number,
             shard_count=agents,
             targets=shard_targets,
+            target_bytes=shard_bytes,
             packet_dir=packet.packet_dir,
             task_spec_path=str(Path(packet.packet_dir) / "TASKSPEC.json"),
             worker_command=command,
@@ -153,6 +159,7 @@ def render_go_dispatch_text(result: GoDispatchResult) -> str:
     for agent in result.agents:
         lines.extend([
             f"- {agent.agent_id} shard={agent.shard_index}/{agent.shard_count} status={agent.status}",
+            f"  bytes  : {agent.target_bytes}",
             f"  packet : {agent.packet_dir}",
             f"  task   : {agent.task_spec_path}",
             f"  targets: {', '.join(agent.targets) if agent.targets else '(project scope)'}",

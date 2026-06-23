@@ -33,6 +33,7 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "go_run": "Go Run",
         "shard": "Shard",
         "targets": "Targets",
+        "target_bytes": "Target Bytes",
         "worker_command": "Worker Command",
         "metadata": "Metadata",
         "action_queue_handoff": "Action Queue Handoff",
@@ -120,6 +121,7 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "go_run": "Go 运行",
         "shard": "分片",
         "targets": "目标",
+        "target_bytes": "目标字节数",
         "worker_command": "Worker 命令",
         "metadata": "元数据",
         "action_queue_handoff": "动作队列交接",
@@ -645,6 +647,7 @@ def _go_agent_state(agent: dict[str, Any]) -> dict[str, Any]:
         "status": _go_status(agent.get("status", "")),
         "worker_status": _go_worker_status(agent.get("worker_status", "")),
         "targets": [str(target) for target in agent.get("targets", []) if str(target)],
+        "target_bytes": int(agent.get("target_bytes") or 0),
         "packet_dir": str(agent.get("packet_dir", "")),
         "task_spec_path": str(agent.get("task_spec_path", "")),
         "report_path": str(agent.get("report_path", "")),
@@ -1417,6 +1420,7 @@ def _go_run_card_html(run: dict[str, Any], lang: str = "en") -> str:
         dashboard_t("shard", lang),
         dashboard_t("status", lang),
         dashboard_t("targets", lang),
+        dashboard_t("target_bytes", lang),
         dashboard_t("packet", lang),
         dashboard_t("worker_command", lang),
     ]
@@ -1453,6 +1457,7 @@ def _go_agent_row_html(agent: dict[str, Any], lang: str = "en") -> str:
         f"<td>{_h(shard)}</td>"
         f"<td>{_badge(agent.get('status', ''))}{_badge(agent.get('worker_status', '')) if agent.get('worker_status') else ''}</td>"
         f"<td>{target_html}</td>"
+        f"<td><code>{_h(str(agent.get('target_bytes', 0)))}</code></td>"
         f"<td><code>{_h(agent.get('packet_dir', ''))}</code></td>"
         f"<td><code>{_h(worker_command)}</code></td>"
         "</tr>"

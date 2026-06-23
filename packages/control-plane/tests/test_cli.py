@@ -485,6 +485,10 @@ def test_go_prepares_parallel_coding_agent_packets(tmp_path, monkeypatch, capsys
     project_root = tmp_path / "demo-project"
     runtime_dir = tmp_path / "runtime"
     project_root.mkdir()
+    source_dir = project_root / "packages" / "control-plane" / "control_plane"
+    source_dir.mkdir(parents=True)
+    (source_dir / "cli.py").write_text("c" * 20, encoding="utf-8")
+    (source_dir / "go_dispatch.py").write_text("g" * 20, encoding="utf-8")
     monkeypatch.setattr(sys, "argv", [
         "devframe",
         "go",
@@ -511,17 +515,21 @@ def test_go_prepares_parallel_coding_agent_packets(tmp_path, monkeypatch, capsys
     assert "agents       : 2" in output
     assert "coding-agent-1" in output
     assert "coding-agent-2" in output
+    assert "  bytes  : 20" in output
     assert "opencode run -m stepfun/step-3.7-flash" in output
     assert "devframe dashboard serve --runtime-dir" in output
     assert len(metadata_files) == 1
     assert metadata["status"] == "queued"
     assert len(metadata["agents"]) == 2
     assert metadata["agents"][0]["targets"] == ["packages/control-plane/control_plane/cli.py"]
+    assert metadata["agents"][0]["target_bytes"] == 20
     assert metadata["agents"][1]["targets"] == ["packages/control-plane/control_plane/go_dispatch.py"]
+    assert metadata["agents"][1]["target_bytes"] == 20
     assert all(Path(agent["packet_dir"]).exists() for agent in metadata["agents"])
     assert len(state["go_runs"]) == 1
     assert state["go_runs"][0]["go_run_id"] == metadata["go_run_id"]
     assert state["go_runs"][0]["agents"][1]["targets"] == ["packages/control-plane/control_plane/go_dispatch.py"]
+    assert state["go_runs"][0]["agents"][1]["target_bytes"] == 20
     assert len(state["runs"]) == 2
     assert all(run["next_command"].startswith("rdgoal worker ") for run in state["runs"])
 
