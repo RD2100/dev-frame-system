@@ -92,7 +92,8 @@ def run_go_dispatch(
         packet = result.dispatch.packet
         if packet is None:
             continue
-        command = list(worker_command) if worker_command else _opencode_command(
+        command = build_go_worker_command(
+            worker_command=worker_command,
             model=model,
             opencode_agent=opencode_agent,
             shard_number=shard_number,
@@ -252,12 +253,34 @@ def _opencode_command(*, model: str, opencode_agent: str,
     ]
 
 
+def build_go_worker_command(
+    *,
+    worker_command: list[str] | None,
+    model: str,
+    opencode_agent: str,
+    shard_number: int,
+    shard_count: int,
+) -> list[str]:
+    if worker_command:
+        return list(worker_command)
+    return _opencode_command(
+        model=model,
+        opencode_agent=opencode_agent,
+        shard_number=shard_number,
+        shard_count=shard_count,
+    )
+
+
 def _worker_command_preview(runtime_dir: str, agent: GoAgentDispatch) -> str:
-    command = " ".join(_quote_arg(part) for part in agent.worker_command)
+    command = render_command(agent.worker_command)
     return (
         f"rdgoal worker {_quote_arg(agent.packet_dir)} "
         f"--runtime-dir {_quote_arg(runtime_dir)} --command {command}"
     )
+
+
+def render_command(command: list[str]) -> str:
+    return " ".join(_quote_arg(part) for part in command)
 
 
 def _quote_arg(value: str) -> str:

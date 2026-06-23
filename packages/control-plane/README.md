@@ -30,12 +30,12 @@ devframe run --pipeline pipelines\example_pipeline.yaml
 `devframe code` is the Codex-like coding entrypoint. It defaults to preparing a
 bounded coding-agent session, prints the worker command, and records runtime
 state for `devframe dashboard serve`. Use `--dashboard` to serve that visual UI
-immediately, `--preview` to inspect the shard plan without creating packets,
-`--execute` to run the worker, and `--agents <n>` to split the goal into
-concurrent coding shards. Use `--changed --agents auto` to keep worker prompts
-focused on modified, staged, or untracked git files and automatically choose a
-bounded shard count; use `--max-agents` to cap that fan-out or `--target <path>`
-for manual scoping.
+immediately, `--preview` to inspect the shard plan and worker command template
+without creating packets, `--execute` to run the worker, and `--agents <n>` to
+split the goal into concurrent coding shards. Use `--changed --agents auto` to
+keep worker prompts focused on modified, staged, or untracked git files and
+automatically choose a bounded shard count; use `--max-agents` to cap that
+fan-out or `--target <path>` for manual scoping.
 
 The focused total-control entrypoint is also installed:
 

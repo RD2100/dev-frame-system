@@ -285,7 +285,9 @@ def cmd_go() -> int:
     from .go_dispatch import (
         DEFAULT_GO_MODEL,
         DEFAULT_OPENCODE_AGENT,
+        build_go_worker_command,
         render_go_dispatch_text,
+        render_command,
         run_go_dispatch,
     )
 
@@ -323,6 +325,12 @@ def cmd_go() -> int:
             targets=targets,
             agents=agents,
             execute=args.execute,
+            runtime_dir=args.runtime_dir,
+            worker_command=args.command or None,
+            model=args.model,
+            opencode_agent=args.opencode_agent,
+            build_worker_command=build_go_worker_command,
+            render_worker_command=render_command,
         ), end="")
         return 0
 
@@ -353,7 +361,9 @@ def cmd_code() -> int:
     from .go_dispatch import (
         DEFAULT_GO_MODEL,
         DEFAULT_OPENCODE_AGENT,
+        build_go_worker_command,
         render_go_dispatch_text,
+        render_command,
         run_go_dispatch,
     )
 
@@ -406,6 +416,12 @@ def cmd_code() -> int:
             targets=targets,
             agents=agents,
             execute=args.execute,
+            runtime_dir=args.runtime_dir,
+            worker_command=args.command or None,
+            model=args.model,
+            opencode_agent=args.opencode_agent,
+            build_worker_command=build_go_worker_command,
+            render_worker_command=render_command,
         ), end="")
         return 0
 
@@ -480,28 +496,48 @@ def _render_coding_preview(
     targets: list[str],
     agents: int,
     execute: bool,
+    runtime_dir: str | Path | None,
+    worker_command: list[str] | None,
+    model: str,
+    opencode_agent: str,
+    build_worker_command,
+    render_worker_command,
 ) -> str:
+    from .backup_guard import default_runtime_dir
+
     shards = _split_targets_for_preview(targets, agents)
+    runtime_root = Path(runtime_dir).resolve() if runtime_dir else default_runtime_dir()
+    worker_label = "custom command" if worker_command else f"opencode model={model} agent={opencode_agent}"
     lines = [
         "DevFrame coding preview",
         f"entrypoint   : {entrypoint}",
         f"project_root : {Path(project_path).resolve()}",
+        f"runtime_dir  : {runtime_root}",
         f"goal         : {goal}",
         f"execute      : {execute}",
         f"agents       : {agents}",
         f"targets      : {len(targets)}",
+        f"worker       : {worker_label}",
         "",
         "Shards",
     ]
     for index, shard_targets in enumerate(shards, start=1):
+        command = build_worker_command(
+            worker_command=worker_command,
+            model=model,
+            opencode_agent=opencode_agent,
+            shard_number=index,
+            shard_count=agents,
+        )
         lines.append(f"- coding-agent-{index} shard={index}/{agents}")
         if shard_targets:
             lines.extend(f"  - {target}" for target in shard_targets)
         else:
             lines.append("  - (project scope)")
+        lines.append(f"  command: {render_worker_command(command)}")
     lines.extend([
         "",
-        "No packets were created. Re-run without --preview to prepare dispatch packets.",
+        "No packets were created. Re-run without --preview to prepare dispatch packets and rdgoal worker commands.",
     ])
     return "\n".join(lines) + "\n"
 
