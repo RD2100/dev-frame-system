@@ -2798,3 +2798,34 @@ def test_atgo_prepare_writes_methodology_to_chain_evidence(tmp_path, monkeypatch
 
     assert exit_code == 0
     assert chain_evidence.get("methodology", {}).get("skill_id") == "tdd"
+
+
+def test_methodology_dispatch_exposes_required_traits():
+    from control_plane.methodology_dispatch import METHODOLOGY_DISPATCH
+
+    tdd = METHODOLOGY_DISPATCH.get("tdd")
+    assert tdd is not None
+    assert tdd["skill_id"] == "tdd"
+    assert tdd["title"] == "tdd"
+    assert tdd["triggers"] == ["@tdd"]
+    assert tdd["require_red_green_evidence"] is True
+    assert tdd["display_label"] == "@tdd"
+
+
+def test_methodology_dispatch_resolve_strips_tdd_trigger():
+    from control_plane.methodology_dispatch import resolve_methodology
+
+    effective, methodology = resolve_methodology("@tdd Add a TDD feature.")
+    assert effective == "Add a TDD feature."
+    assert methodology is not None
+    assert methodology["skill_id"] == "tdd"
+    assert methodology["require_red_green_evidence"] is True
+    assert methodology["display_label"] == "@tdd"
+
+
+def test_methodology_dispatch_resolve_returns_none_for_non_methodology():
+    from control_plane.methodology_dispatch import resolve_methodology
+
+    effective, methodology = resolve_methodology("Add a plain feature.")
+    assert effective == "Add a plain feature."
+    assert methodology is None

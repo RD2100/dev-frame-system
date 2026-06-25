@@ -11,9 +11,9 @@ from pathlib import Path
 from typing import Any
 
 from .backup_guard import default_runtime_dir
+from .methodology_dispatch import resolve_methodology
 from .orchestrator import Orchestrator
 from .rdgoal import rdgoal
-from .skill_registry import match_methodology
 from .worker import CommandWorker, WorkerResult
 
 
@@ -55,19 +55,6 @@ class GoDispatchResult:
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     metadata_path: str = ""
     methodology: dict[str, Any] | None = None
-
-
-def resolve_methodology(requirement: str) -> tuple[str, dict[str, Any] | None]:
-    methodology = match_methodology(requirement)
-    effective = requirement
-    if methodology:
-        stripped = effective.lstrip()
-        leading = effective[: len(effective) - len(stripped)]
-        for trigger in methodology.get("triggers", []):
-            if stripped.startswith(trigger):
-                effective = leading + stripped[len(trigger):].lstrip()
-                break
-    return effective, methodology
 
 
 def run_go_dispatch(
