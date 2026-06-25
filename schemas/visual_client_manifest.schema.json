@@ -90,6 +90,11 @@
       },
       "additionalProperties": false
     },
+    "supported_methodologies": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/supported_methodology" },
+      "uniqueItems": true
+    },
     "governance": {
       "type": "object",
       "required": ["reconReceipt", "rkrRulePath", "reuseAssessment", "primaryClientDecision", "workerDecision", "webAiAdapterDecision", "nextApprovedSlice"],
@@ -186,6 +191,23 @@
           "minItems": 1
         },
         "status": { "type": "string", "enum": ["ready", "adapter-required"] }
+      },
+      "additionalProperties": false
+    },
+    "supported_methodology": {
+      "type": "object",
+      "required": ["skill_id", "title", "display_label", "triggers", "source_kind"],
+      "properties": {
+        "skill_id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "display_label": { "type": "string", "minLength": 1 },
+        "triggers": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "source_kind": { "type": "string", "minLength": 1 },
+        "require_red_green_evidence": { "type": "boolean" }
       },
       "additionalProperties": false
     }
