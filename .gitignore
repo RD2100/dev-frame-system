@@ -37,6 +37,14 @@ coverage/
 # Local web AI import demos; sanitized fixtures belong under package tests.
 chatgpt-summary.json
 
+# Generated local project contracts are runtime state. Keep only the template.
+rules/project-contracts/*.md
+!rules/project-contracts/_template.md
+
+# Local scratch diffs used during agent review/debug cycles.
+t3_adapter.diff
+test_t3_adapter.diff
+
 runs/
 reports/
 artifacts/
