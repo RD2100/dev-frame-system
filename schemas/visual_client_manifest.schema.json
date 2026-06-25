@@ -207,7 +207,24 @@
           "uniqueItems": true
         },
         "source_kind": { "type": "string", "minLength": 1 },
-        "require_red_green_evidence": { "type": "boolean" }
+        "require_red_green_evidence": { "type": "boolean" },
+        "profiles": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/methodology_profile" },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "methodology_profile": {
+      "type": "object",
+      "required": ["profile_id", "selected_trigger_label", "display_label", "read_only", "network_enabled"],
+      "properties": {
+        "profile_id": { "type": "string", "minLength": 1 },
+        "selected_trigger_label": { "type": "string", "minLength": 1 },
+        "display_label": { "type": "string", "minLength": 1 },
+        "read_only": { "type": "boolean" },
+        "network_enabled": { "type": "boolean" }
       },
       "additionalProperties": false
     }

@@ -41,11 +41,31 @@ _GO_TRIGGER_PROFILES: dict[str, dict[str, Any]] = {
 
 def _enrich_skill(skill: dict[str, Any]) -> dict[str, Any]:
     traits = _METHODOLOGY_TRAIT_OVERRIDES.get(skill.get("skill_id"), {})
+    profiles = _build_profiles(skill)
     return {
         **skill,
         "require_red_green_evidence": traits.get("require_red_green_evidence", False),
         "display_label": traits.get("display_label", skill.get("title") or skill.get("skill_id") or ""),
+        **({"profiles": profiles} if profiles else {}),
     }
+
+
+def _build_profiles(skill: dict[str, Any]) -> list[dict[str, Any]]:
+    profiles: list[dict[str, Any]] = []
+    seen_profiles: set[str] = set()
+    for trigger in skill.get("triggers", []):
+        for profile_trigger, traits in _GO_TRIGGER_PROFILES.items():
+            if profile_trigger == trigger or profile_trigger.startswith(f"{trigger} "):
+                if profile_trigger not in seen_profiles:
+                    seen_profiles.add(profile_trigger)
+                    profiles.append({
+                        "profile_id": traits.get("dispatch_profile", profile_trigger),
+                        "selected_trigger_label": profile_trigger,
+                        "display_label": profile_trigger,
+                        "read_only": traits.get("read_only", False),
+                        "network_enabled": traits.get("network_enabled", False),
+                    })
+    return profiles
 
 
 METHODOLOGY_DISPATCH: dict[str, dict[str, Any]] = {

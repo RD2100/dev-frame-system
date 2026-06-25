@@ -2812,6 +2812,23 @@ def test_methodology_dispatch_exposes_required_traits():
     assert tdd["display_label"] == "@tdd"
 
 
+def test_methodology_dispatch_exposes_go_profiles_for_agent_acceptance():
+    from control_plane.methodology_dispatch import METHODOLOGY_DISPATCH
+
+    agent = METHODOLOGY_DISPATCH.get("agent-acceptance")
+    assert agent is not None
+    assert agent.get("profiles")
+    assert len(agent["profiles"]) == 4
+    go_read = next(p for p in agent["profiles"] if p["selected_trigger_label"] == "@go read")
+    assert go_read["profile_id"] == "read-only"
+    assert go_read["read_only"] is True
+    assert go_read["network_enabled"] is False
+    go_risky = next(p for p in agent["profiles"] if p["selected_trigger_label"] == "@go risky")
+    assert go_risky["profile_id"] == "ai-risky"
+    assert go_risky["read_only"] is False
+    assert go_risky["network_enabled"] is True
+
+
 def test_methodology_dispatch_resolve_strips_tdd_trigger():
     from control_plane.methodology_dispatch import resolve_methodology
 

@@ -160,6 +160,16 @@ def build_client_launch_plan(
                 "triggers": list(dict.fromkeys(entry.get("triggers", []))),
                 "sourceKind": entry.get("source_kind", ""),
                 **({"requireRedGreenEvidence": True} if entry.get("require_red_green_evidence") else {}),
+                **({"profiles": [
+                    {
+                        "profileId": p.get("profile_id"),
+                        "selectedTriggerLabel": p.get("selected_trigger_label"),
+                        "displayLabel": p.get("display_label"),
+                        "readOnly": p.get("read_only"),
+                        "networkEnabled": p.get("network_enabled"),
+                    }
+                    for p in entry.get("profiles", [])
+                ]} if entry.get("profiles") else {}),
             }
             for entry in METHODOLOGY_DISPATCH.values()
         ],

@@ -112,6 +112,14 @@ def test_client_launch_plan_maps_t3_bridge_and_opencode_executor(tmp_path, monke
         assert "displayLabel" in entry
         assert "triggers" in entry
         assert "sourceKind" in entry
+    agent_acceptance = next(m for m in supported if m["skillId"] == "agent-acceptance")
+    assert agent_acceptance.get("profiles")
+    go_read_profile = next(p for p in agent_acceptance["profiles"] if p["selectedTriggerLabel"] == "@go read")
+    assert go_read_profile["profileId"] == "read-only"
+    assert go_read_profile["readOnly"] is True
+    assert go_read_profile["networkEnabled"] is False
+    tdd = next(m for m in supported if m["skillId"] == "tdd")
+    assert tdd.get("profiles") is None
 
 
 def test_client_dry_run_outputs_zero_config_plan(tmp_path, monkeypatch, capsys):

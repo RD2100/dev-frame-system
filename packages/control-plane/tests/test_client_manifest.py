@@ -131,6 +131,14 @@ def test_visual_client_manifest_matches_public_schema():
         assert "display_label" in entry
         assert "triggers" in entry
         assert "source_kind" in entry
+    agent_acceptance = next(m for m in supported if m["skill_id"] == "agent-acceptance")
+    assert agent_acceptance.get("profiles")
+    go_read_profile = next(p for p in agent_acceptance["profiles"] if p["selected_trigger_label"] == "@go read")
+    assert go_read_profile["profile_id"] == "read-only"
+    assert go_read_profile["read_only"] is True
+    assert go_read_profile["network_enabled"] is False
+    tdd = next(m for m in supported if m["skill_id"] == "tdd")
+    assert tdd.get("profiles") is None
 
 
 def test_dashboard_serves_client_manifest_as_read_only_contract(tmp_path):

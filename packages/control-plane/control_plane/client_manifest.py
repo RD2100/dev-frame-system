@@ -287,6 +287,7 @@ def build_visual_client_manifest() -> dict[str, Any]:
                 "triggers": list(dict.fromkeys(entry.get("triggers", []))),
                 "source_kind": entry.get("source_kind", ""),
                 **({"require_red_green_evidence": True} if entry.get("require_red_green_evidence") else {}),
+                **({"profiles": entry["profiles"]} if entry.get("profiles") else {}),
             }
             for entry in METHODOLOGY_DISPATCH.values()
         ],
