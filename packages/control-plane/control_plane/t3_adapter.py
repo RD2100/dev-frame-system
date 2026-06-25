@@ -290,8 +290,11 @@ def _project_team_agents(value: object) -> list[dict[str, Any]]:
 def _project_team_tasks(value: object) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
-    return [
-        {
+    items: list[dict[str, Any]] = []
+    for t in value:
+        if not isinstance(t, dict):
+            continue
+        entry = {
             "taskId": _text(t.get("task_id"), ""),
             "type": _text(t.get("type"), ""),
             "projectId": _text(t.get("project_id"), ""),
@@ -300,8 +303,27 @@ def _project_team_tasks(value: object) -> list[dict[str, Any]]:
             "sessionIds": _strings(t.get("session_ids")),
             "targetFiles": _strings(t.get("target_files")),
         }
-        for t in value if isinstance(t, dict)
-    ]
+        methodology = _project_methodology(t.get("methodology"))
+        if methodology:
+            entry["methodology"] = methodology
+        items.append(entry)
+    return items
+
+
+def _project_methodology(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    skill_id = _text(value.get("skill_id"), "")
+    if not skill_id:
+        return None
+    return {
+        "skillId": skill_id,
+        "title": _text(value.get("title"), skill_id),
+        "sourcePath": _text(value.get("source_path"), ""),
+        "sourceKind": _text(value.get("source_kind"), ""),
+        "triggers": _strings(value.get("triggers")),
+        "status": _text(value.get("status"), ""),
+    }
 
 
 def _project_team_messages(value: object) -> list[dict[str, Any]]:
@@ -1009,17 +1031,27 @@ def _team_workbench_summary_lines(
 
 def _team_workbench_proposed_plan(team: dict[str, Any], updated_at: str) -> str:
     agent_count = len(team.get("agent_registry") or [])
-    task_count = len(team.get("task_board") or [])
+    task_board = team.get("task_board") or []
+    task_count = len(task_board)
     message_count = len(team.get("message_bus") or [])
     evidence_count = len(team.get("evidence_store") or [])
     gate_count = len(team.get("review_gates") or [])
     conflict_count = len(team.get("conflict_control") or [])
     event_count = len(team.get("event_log") or [])
-    return "\n".join([
+    methodologies = sorted({
+        _text((task.get("methodology") or {}).get("skill_id"), "")
+        for task in task_board if isinstance(task, dict)
+        if isinstance(task.get("methodology"), dict) and _text((task.get("methodology") or {}).get("skill_id"), "")
+    })
+    lines = [
         "# DevFrame Team Workbench",
         "",
         f"- Agents: {agent_count}",
         f"- Tasks: {task_count}",
+    ]
+    if methodologies:
+        lines.append(f"- Methodologies: {', '.join(methodologies)}")
+    lines.extend([
         f"- Messages: {message_count}",
         f"- Evidence refs: {evidence_count}",
         f"- Review gates: {gate_count}",
@@ -1027,6 +1059,7 @@ def _team_workbench_proposed_plan(team: dict[str, Any], updated_at: str) -> str:
         f"- Recent events: {event_count}",
         "- Write policy: read-only from T3 until a DevFrame gate authorizes mutation.",
     ])
+    return "\n".join(lines)
 
 
 def _thread_title(session: dict[str, Any]) -> str:

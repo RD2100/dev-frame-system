@@ -676,7 +676,22 @@ def test_t3_client_shell_projects_team_model_from_state():
                 {"agent_id": "coding-agent-2", "role": "go-worker", "binding_id": "local-executor", "status": "queued", "session_ids": ["go-1-coding-agent-2-session"]},
             ],
             "task_board": [
-                {"task_id": "go-1", "type": "go-run", "project_id": "project", "status": "queued", "agent_ids": ["coding-agent-1", "coding-agent-2"], "target_files": ["cli.py", "go_dispatch.py"]},
+                {
+                    "task_id": "go-1",
+                    "type": "go-run",
+                    "project_id": "project",
+                    "status": "queued",
+                    "agent_ids": ["coding-agent-1", "coding-agent-2"],
+                    "target_files": ["cli.py", "go_dispatch.py"],
+                    "methodology": {
+                        "skill_id": "tdd",
+                        "title": "tdd",
+                        "source_path": "tools/skills/tdd/SKILL.md",
+                        "source_kind": "local_repository_asset",
+                        "triggers": ["@tdd"],
+                        "status": "registered",
+                    },
+                },
             ],
             "message_bus": [
                 {"message_id": "planner-to-coding-agent-1-go-1", "from_role": "planner", "to_role": "coding-agent-1", "kind": "handoff", "run_id": "go-1", "summary": "Shard 1 dispatched."},
@@ -714,6 +729,7 @@ def test_t3_client_shell_projects_team_model_from_state():
     assert team["taskBoard"][0]["taskId"] == "go-1"
     assert team["taskBoard"][0]["agentIds"] == ["coding-agent-1", "coding-agent-2"]
     assert "cli.py" in team["taskBoard"][0]["targetFiles"]
+    assert team["taskBoard"][0]["methodology"]["skillId"] == "tdd"
 
     assert len(team["messageBus"]) == 2
     assert team["messageBus"][0]["fromRole"] == "planner"
@@ -751,6 +767,7 @@ def test_t3_client_shell_projects_team_model_from_state():
 
     message_text = detail["messages"][0]["text"]
     assert "## Team Communication" in message_text
+    assert "Methodologies: tdd" in message_text
     assert "planner ->" in message_text and "coding-agent" in message_text
     assert "Review Gates" in message_text
     assert "go-1-status-action" in message_text

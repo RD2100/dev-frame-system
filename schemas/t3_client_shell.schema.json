@@ -397,7 +397,21 @@
         "status": { "type": "string" },
         "agentIds": { "type": "array", "items": { "type": "string" } },
         "sessionIds": { "type": "array", "items": { "type": "string" } },
-        "targetFiles": { "type": "array", "items": { "type": "string" } }
+        "targetFiles": { "type": "array", "items": { "type": "string" } },
+        "methodology": { "$ref": "#/definitions/methodology_projection" }
+      },
+      "additionalProperties": false
+    },
+    "methodology_projection": {
+      "type": "object",
+      "required": ["skillId", "title", "sourcePath", "sourceKind", "triggers", "status"],
+      "properties": {
+        "skillId": { "type": "string" },
+        "title": { "type": "string" },
+        "sourcePath": { "type": "string" },
+        "sourceKind": { "type": "string" },
+        "triggers": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string" }
       },
       "additionalProperties": false
     },
