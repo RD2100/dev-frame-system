@@ -473,6 +473,7 @@ def cmd_atgo() -> int:
         "mode": "prepare",
         "planner": None,
         "task": str(task_spec_path),
+        "methodology": methodology,
         "evidence_files": [
             "diff.patch",
             "test-output.md",

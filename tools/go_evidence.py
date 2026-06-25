@@ -62,6 +62,23 @@ def validate(evidence_dir: str):
 
     review = parse_review_yaml(os.path.join(evidence_dir, "review.yaml"))
 
+    chain_evidence = {}
+    chain_evidence_path = os.path.join(evidence_dir, "chain-evidence.json")
+    if os.path.exists(chain_evidence_path):
+        try:
+            with open(chain_evidence_path, "r", encoding="utf-8") as fh:
+                chain_evidence = json.load(fh)
+        except (json.JSONDecodeError, OSError):
+            chain_evidence = {}
+
+    methodology = chain_evidence.get("methodology") or {}
+    skill_id = str(methodology.get("skill_id", "")).lower()
+    if skill_id == "tdd":
+        tdd_required = ["test-output-red.md", "test-output-green.md"]
+        missing_tdd = [name for name in tdd_required if not os.path.exists(os.path.join(evidence_dir, name))]
+        if missing_tdd:
+            return "blocked", f"TDD evidence missing: {', '.join(missing_tdd)}", review
+
     role = review.get("reviewer_role", "")
     if not role or role.lower() in BLOCKED_ROLES:
         return "blocked", f"reviewer_role '{role}' is not allowed", review
@@ -118,7 +135,7 @@ def write_final_report(evidence_dir: str, status: str, reason: str, review: dict
     return report_path
 
 
-def init_chain_evidence(run_evidence_dir: str, run_id: str, executor_id: str, mode: str | None = None, planner: str | None = None, task: str | None = None) -> str:
+def init_chain_evidence(run_evidence_dir: str, run_id: str, executor_id: str, mode: str | None = None, planner: str | None = None, task: str | None = None, methodology: dict | None = None) -> str:
     os.makedirs(run_evidence_dir, exist_ok=True)
     evidence = {
         "run_id": run_id,
@@ -126,6 +143,7 @@ def init_chain_evidence(run_evidence_dir: str, run_id: str, executor_id: str, mo
         "mode": mode,
         "planner": planner,
         "task": task,
+        "methodology": methodology,
         "evidence_files": FULL_EVIDENCE_FILES[:],
         "timestamps": {
             "created_at": datetime.now(timezone.utc).isoformat(),

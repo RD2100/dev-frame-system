@@ -2729,3 +2729,30 @@ def test_atgo_prepare_records_tdd_methodology(tmp_path, monkeypatch, capsys):
     assert metadata["requirement"] == "Add a small TDD bridge."
     assert metadata["methodology"]["skill_id"] == "tdd"
     assert "- **Methodology**: tdd" in task_spec
+
+
+def test_atgo_prepare_writes_methodology_to_chain_evidence(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "atgo",
+        "@tdd Add a small TDD bridge.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/cli.py",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    evidence_dir = runtime_dir / "atgo-runs" / metadata["go_run_id"]
+    chain_evidence = json.loads((evidence_dir / "chain-evidence.json").read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert chain_evidence.get("methodology", {}).get("skill_id") == "tdd"

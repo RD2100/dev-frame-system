@@ -160,3 +160,29 @@ def test_complete_pass_writes_final_report(tmp_path):
         content = fh.read()
     assert "**Status**: pass" in content
     assert "**Reason**: ok" in content
+
+
+def test_tdd_finalize_blocks_without_red_green(tmp_path):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path))
+    chain_evidence_path = os.path.join(evidence_dir, "chain-evidence.json")
+    with open(chain_evidence_path, "r", encoding="utf-8") as fh:
+        chain = json.load(fh)
+    chain["methodology"] = {"skill_id": "tdd", "title": "tdd"}
+    with open(chain_evidence_path, "w", encoding="utf-8") as fh:
+        json.dump(chain, fh)
+    rc = go_evidence.main(["finalize", evidence_dir])
+    assert rc == 1
+
+
+def test_tdd_finalize_passes_with_red_green(tmp_path):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path))
+    _write(os.path.join(evidence_dir, "test-output-red.md"), "")
+    _write(os.path.join(evidence_dir, "test-output-green.md"), "")
+    chain_evidence_path = os.path.join(evidence_dir, "chain-evidence.json")
+    with open(chain_evidence_path, "r", encoding="utf-8") as fh:
+        chain = json.load(fh)
+    chain["methodology"] = {"skill_id": "tdd", "title": "tdd"}
+    with open(chain_evidence_path, "w", encoding="utf-8") as fh:
+        json.dump(chain, fh)
+    rc = go_evidence.main(["finalize", evidence_dir])
+    assert rc == 0
