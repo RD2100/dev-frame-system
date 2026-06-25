@@ -1217,6 +1217,14 @@ def test_code_session_json_output(tmp_path, monkeypatch, capsys):
     assert devframe_cli_main() == 0
     metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["methodology"] = {
+        "skill_id": "tdd",
+        "title": "tdd",
+        "source_path": "tools/skills/tdd/SKILL.md",
+        "source_kind": "local_repository_asset",
+        "triggers": ["@tdd"],
+        "status": "registered",
+    }
     metadata["agents"][0]["changed_files"] = ["src/cli.py` added `SESSION_USAGE`"]
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     capsys.readouterr()
@@ -1237,9 +1245,43 @@ def test_code_session_json_output(tmp_path, monkeypatch, capsys):
     assert len(sessions) == 1
     assert sessions[0]["run_id"] == metadata["go_run_id"]
     assert sessions[0]["provider"] == "opencode"
+    assert sessions[0]["methodology"]["skill_id"] == "tdd"
     assert sessions[0]["task_spec"] == "TASKSPEC.json"
     assert sessions[0]["targets"] == ["src/cli.py"]
     assert sessions[0]["changed_files"] == ["src/cli.py"]
+
+
+def test_code_session_text_output_shows_methodology(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "@tdd Add a small CLI feature.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/cli.py",
+    ])
+    assert devframe_cli_main() == 0
+    capsys.readouterr()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "session",
+        "--runtime-dir",
+        str(runtime_dir),
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "DevFrame Code sessions" in output
+    assert "methodology : tdd" in output
 
 
 def test_code_session_reports_missing_runtime(tmp_path, monkeypatch, capsys):

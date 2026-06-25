@@ -691,6 +691,7 @@ def cmd_code_session(*, prog: str = "devframe code session") -> int:
 
 def _public_sessions(run: dict) -> list[dict]:
     sessions: list[dict[str, object]] = []
+    methodology = run.get("methodology") if isinstance(run.get("methodology"), dict) else None
     for agent in run.get("agents", []):
         if not isinstance(agent, dict):
             continue
@@ -708,6 +709,7 @@ def _public_sessions(run: dict) -> list[dict]:
             "agent_role": "executor",
             "run_id": str(run.get("go_run_id", "")),
             "status": str(agent.get("worker_status") or agent.get("status") or "unknown"),
+            "methodology": methodology,
             "task_spec": Path(task_spec_path).name if task_spec_path else "",
             "targets": agent.get("targets") or [],
             "changed_files": _public_changed_files(agent.get("changed_files") or []),
@@ -762,16 +764,18 @@ def _render_sessions(run: dict) -> str:
     for session in sessions:
         targets = ", ".join(str(t) for t in session.get("targets", [])) or "(project scope)"
         changed = ", ".join(str(t) for t in session.get("changed_files", []))
-        lines.extend([
-            f"- {session.get('session_id', '')} provider={session.get('provider', '')} status={session.get('status', '')}",
-            f"  agent_id    : {session.get('agent_id', '')}",
-            f"  role        : {session.get('agent_role', '')}",
-            f"  task_spec   : {session.get('task_spec', '')}",
-            f"  targets     : {targets}",
-        ])
+        methodology = session.get("methodology")
+        lines.append(f"- {session.get('session_id', '')} provider={session.get('provider', '')} status={session.get('status', '')}")
+        lines.append(f"  agent_id    : {session.get('agent_id', '')}")
+        lines.append(f"  role        : {session.get('agent_role', '')}")
+        if isinstance(methodology, dict):
+            lines.append(f"  methodology : {str((methodology or {}).get('title') or (methodology or {}).get('skill_id') or '')}")
+        lines.append(f"  task_spec   : {session.get('task_spec', '')}")
+        lines.append(f"  targets     : {targets}")
         if changed:
             lines.append(f"  changed     : {changed}")
-    return "\n".join(lines) + "\n"
+    compact = [line for line in lines if line != ""]
+    return "\n".join(compact) + "\n"
 
 
 def cmd_code_execute(*, prog: str = "devframe code execute") -> int:
