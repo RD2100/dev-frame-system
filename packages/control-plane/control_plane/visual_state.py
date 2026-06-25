@@ -14,7 +14,7 @@ from .runtime_digest import build_runtime_digest
 ROOT = Path(__file__).resolve().parent.parent
 ACTION_STATUSES = ("open", "blocked", "ready", "info")
 ACTION_PRIORITIES = ("high", "medium", "low")
-ACTION_SOURCE_TYPES = ("gate", "run", "decision")
+ACTION_SOURCE_TYPES = ("gate", "go_run", "run", "decision", "session")
 
 _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
     "en": {
@@ -30,6 +30,19 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "chinese_label": "中文",
         "gate_focus": "Gate Focus",
         "no_active_gates": "No active gates.",
+        "control_workbench": "Control Plane Workbench",
+        "workbench_intro": "Current project, agents, sessions, gates, and next action in one governed view.",
+        "active_project": "Active Project",
+        "agent_registry": "Agent Registry",
+        "session_stream": "Session Stream",
+        "gate_state": "Gate State",
+        "primary_action": "Primary Action",
+        "active_run": "Active Run",
+        "no_project": "No project registered yet.",
+        "no_run": "No active run.",
+        "no_agents": "No agents registered.",
+        "no_sessions": "No sessions imported yet.",
+        "all_gates_clear": "All gates clear.",
         "action_queue": "Action Queue",
         "go_coding_agents": "/go Coding Agents",
         "go_run": "Go Run",
@@ -45,6 +58,11 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "readonly_queue_intro": "Read-only queue for manual resume, review, or Web AI handoff.",
         "do_not_execute": "Do not execute commands until the matching gate and risk boundary are cleared.",
         "state_json": "State JSON",
+        "client_plan": "Client Plan",
+        "client_manifest": "Client Manifest",
+        "t3_bridge": "T3 Bridge",
+        "t3_shell": "T3 Shell",
+        "session_json": "Session JSON",
         "action_json": "Action JSON",
         "action_handoff": "Action Handoff",
         "endpoint_nav_label": "Read-only dashboard endpoints",
@@ -93,6 +111,14 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "missing": "missing",
         "resolve_gate": "Resolve gate before execution.",
         "agents": "Agents",
+        "sessions": "Sessions",
+        "session": "Session",
+        "task_spec_id": "TaskSpec ID",
+        "messages": "Messages",
+        "tool_calls": "Tool Calls",
+        "diff_summary": "Diff Summary",
+        "cost": "Cost",
+        "tokens": "Tokens",
         "role": "Role",
         "scope": "Scope",
         "binding_health": "Binding Health",
@@ -138,6 +164,11 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "readonly_queue_intro": "用于手动恢复、审查或 Web AI 交接的只读队列。",
         "do_not_execute": "在匹配的门控和风险边界确认清除之前，不要执行命令。",
         "state_json": "状态 JSON",
+        "client_plan": "客户端计划",
+        "client_manifest": "Client Manifest",
+        "t3_bridge": "T3 Bridge",
+        "t3_shell": "T3 Shell",
+        "session_json": "会话 JSON",
         "action_json": "动作 JSON",
         "action_handoff": "动作交接",
         "endpoint_nav_label": "只读看板端点",
@@ -186,6 +217,14 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "missing": "缺失",
         "resolve_gate": "在执行前解决门控问题。",
         "agents": "智能体",
+        "sessions": "会话",
+        "session": "会话",
+        "task_spec_id": "任务规格 ID",
+        "messages": "消息",
+        "tool_calls": "工具调用",
+        "diff_summary": "差异摘要",
+        "cost": "成本",
+        "tokens": "Token",
         "role": "角色",
         "scope": "范围",
         "binding_health": "绑定健康状态",
@@ -260,6 +299,7 @@ def build_visual_control_plane_state(
     ]
     dispatches = digest.get("dispatches", [])
     go_runs = _go_run_states(digest.get("runtime_dir", ""))
+    action_runs = _read_action_runs(digest.get("runtime_dir", ""))
     runs = [
         _run_state(dispatch, reports_by_packet.get(dispatch.get("packet_id", "")), digest.get("runtime_dir", ""))
         for dispatch in dispatches
@@ -271,26 +311,60 @@ def build_visual_control_plane_state(
         _paper_provider_gate_state(root, binding)
         for root, binding in zip(paper_roots, paper_provider_bindings)
     ]
+    web_ai_sessions = _web_ai_session_states(runtime_dir)
     all_runs = runs + paper_runs
     all_gates = (
         _gate_states(dispatches, reports_by_packet)
         + [_paper_gate_state(path) for path in paper_roots]
         + paper_provider_gates
+        + _web_ai_review_gate_states(web_ai_sessions)
     )
     all_decisions = (
         [_decision_state(dispatch, reports_by_packet) for dispatch in dispatches]
         + [_paper_decision_state(path) for path in paper_roots]
     )
+    go_packet_dirs = _go_packet_dirs(go_runs)
+    all_sessions = (
+        [
+            _rdgoal_session_state(dispatch, reports_by_packet.get(dispatch.get("packet_id", "")))
+            for dispatch in dispatches
+            if str(dispatch.get("packet_dir") or "") not in go_packet_dirs
+        ]
+        + _go_session_states(go_runs)
+        + [
+            _paper_session_state(root, binding)
+            for root, binding in zip(paper_roots, paper_provider_bindings)
+        ]
+        + web_ai_sessions
+        + _atgo_reviewer_session_states(digest.get("runtime_dir", ""), projects)
+    )
+    all_agents = _default_agents(paper_provider_bindings) + _web_ai_agents(web_ai_sessions)
+    all_next_actions = _next_actions(all_runs, all_gates, all_decisions, all_sessions, go_runs)
     return {
         "version": 1,
         "projects": projects + paper_projects,
-        "provider_bindings": _default_provider_bindings() + paper_provider_bindings,
-        "agents": _default_agents(paper_provider_bindings),
+        "provider_bindings": _default_provider_bindings(web_ai_sessions) + paper_provider_bindings + _web_ai_provider_bindings(web_ai_sessions),
+        "agents": all_agents,
+        "sessions": all_sessions,
         "go_runs": go_runs,
         "runs": all_runs,
         "gates": all_gates,
         "decisions": all_decisions,
-        "next_actions": _next_actions(all_runs, all_gates, all_decisions),
+        "next_actions": all_next_actions,
+        "team": _build_team_model(
+            all_agents,
+            all_sessions,
+            go_runs,
+            dispatches,
+            all_gates,
+            all_runs,
+            all_decisions,
+            paper_roots,
+            reports_by_packet,
+            all_next_actions,
+            action_runs,
+            digest.get("runtime_dir", ""),
+        ),
         "safety": {
             "raw_transcripts_persisted": False,
             "remote_execution_default": False,
@@ -312,6 +386,54 @@ def build_visual_control_plane_state(
 
 def render_visual_control_plane_state_json(state: dict[str, Any]) -> str:
     return json.dumps(state, indent=2, ensure_ascii=True)
+
+
+def public_session_summaries(sessions: object) -> list[dict[str, Any]]:
+    if not isinstance(sessions, list):
+        return []
+    return [
+        _public_session_summary(session)
+        for session in sessions
+        if isinstance(session, dict)
+    ]
+
+
+def _public_session_summary(session: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "session_id": str(session.get("session_id") or ""),
+        "provider": str(session.get("provider") or ""),
+        "binding_id": str(session.get("binding_id") or ""),
+        "agent_id": str(session.get("agent_id") or ""),
+        "agent_role": str(session.get("agent_role") or ""),
+        "project_id": str(session.get("project_id") or ""),
+        "run_id": str(session.get("run_id") or ""),
+        "task_spec_id": _public_ref_label(session.get("task_spec_id")),
+        "status": str(session.get("status") or "unknown"),
+        "message_count": _public_count(session.get("messages")),
+        "tool_call_count": _public_count(session.get("tool_calls")),
+        "changed_files": _visible_changed_files(session.get("changed_files") or []),
+        "diff_summary": str(session.get("diff_summary") or ""),
+        "gates": [str(gate) for gate in session.get("gates", [])] if isinstance(session.get("gates"), list) else [],
+        "actions": [str(action) for action in session.get("actions", [])] if isinstance(session.get("actions"), list) else [],
+    }
+
+
+def _public_ref_label(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    parts = [part for part in text.replace("\\", "/").split("/") if part]
+    if not parts:
+        return ""
+    if len(parts) >= 2 and parts[-2] == "paper_task":
+        return "/".join(parts[-2:])
+    if len(parts) >= 2 and parts[-1] == "TASKSPEC.json":
+        return "/".join(parts[-2:])
+    return parts[-1]
+
+
+def _public_count(value: object) -> int:
+    return len(value) if isinstance(value, list) else 0
 
 
 def render_action_queue_text(next_actions: list[dict[str, Any]]) -> str:
@@ -438,10 +560,12 @@ def render_visual_control_plane_state_html(
     refresh_seconds: int | None = None,
     endpoint_links: bool = False,
     lang: str = "en",
+    focus_go_run_id: str | None = None,
 ) -> str:
     lang = resolve_dashboard_lang(lang)
     projects = state.get("projects", [])
     provider_bindings = state.get("provider_bindings", [])
+    sessions = state.get("sessions", [])
     runs = state.get("runs", [])
     gates = state.get("gates", [])
     decisions = state.get("decisions", [])
@@ -476,11 +600,13 @@ def render_visual_control_plane_state_html(
         "</div>",
         "</section>",
         _summary_band(state, lang),
+        _workbench_section(state, action_links=endpoint_links, lang=lang),
         _gate_focus_section(gates, next_actions, action_links=endpoint_links, lang=lang),
         _next_actions_section(next_actions, action_links=endpoint_links, lang=lang),
-        _go_runs_section(state.get("go_runs", []), lang),
+        _go_runs_section(state.get("go_runs", []), action_links=endpoint_links, lang=lang, focus_go_run_id=focus_go_run_id),
         _provider_bindings_section(provider_bindings, lang),
         _projects_section(projects, lang),
+        _sessions_section(sessions, lang),
         _runs_section(runs, lang),
         _run_details_section(runs, decisions, lang),
         _agents_section(agents, provider_bindings, lang),
@@ -505,8 +631,14 @@ def _endpoint_links(enabled: bool, lang: str = "en") -> str:
         return ""
     links = [
         (dashboard_t("state_json", lang), "/state.json"),
+        (dashboard_t("client_plan", lang), "/client-plan.json"),
+        (dashboard_t("client_manifest", lang), "/client-manifest.json"),
+        (dashboard_t("t3_bridge", lang), "/t3-bridge.json"),
+        (dashboard_t("t3_shell", lang), "/t3-shell.json"),
+        (dashboard_t("session_json", lang), "/sessions.json"),
         (dashboard_t("action_json", lang), "/actions.json"),
         (dashboard_t("action_handoff", lang), "/actions.md" if lang != "zh-CN" else f"/actions.md?lang={lang}"),
+        ("/go Dispatch", "/go/dispatch" if lang != "zh-CN" else f"/go/dispatch?lang={lang}"),
     ]
     items = "\n".join(
         f'<a href="{_h(href)}">{_h(label)}</a>'
@@ -515,8 +647,8 @@ def _endpoint_links(enabled: bool, lang: str = "en") -> str:
     return f'<nav class="endpoint-links" aria-label="{_h(dashboard_t("endpoint_nav_label", lang))}">{items}</nav>'
 
 
-def _default_provider_bindings() -> list[dict[str, Any]]:
-    return [
+def _default_provider_bindings(web_ai_sessions: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    bindings = [
         {
             "binding_id": "chatgpt-web",
             "provider": "chatgpt",
@@ -539,6 +671,16 @@ def _default_provider_bindings() -> list[dict[str, Any]]:
             "notes": "Local execution gateway for rdgoal workers.",
         },
     ]
+    active_providers = {
+        _safe_id(str(session.get("provider") or ""))
+        for session in web_ai_sessions or []
+        if _session_status(session.get("status")) in {"active", "completed", "idle"}
+    }
+    for binding in bindings:
+        if _safe_id(str(binding.get("provider") or "")) in active_providers:
+            binding["health"] = "ready"
+            binding["notes"] = "Reference browser-hosted AI binding; summary-only imported session is available."
+    return bindings
 
 
 def _default_agents(paper_provider_bindings: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
@@ -590,6 +732,1211 @@ def _agent_status_for_provider(binding: dict[str, Any]) -> str:
     if health == "disabled":
         return "disabled"
     return "idle"
+
+
+def _atgo_verdict_status(verdict: str) -> str:
+    normalized = _safe_id(verdict)
+    tokens = set(normalized.split("-"))
+    negative_phrases = (
+        "do-not",
+        "not-proceed",
+        "not-approve",
+        "not-approved",
+        "not-accept",
+        "not-accepted",
+        "cannot-proceed",
+        "should-not-proceed",
+    )
+    if any(phrase in normalized for phrase in negative_phrases):
+        return "blocked"
+    if tokens & {"fail", "failed", "stop", "blocked", "reject", "rejected", "deny", "denied"}:
+        return "blocked"
+    if tokens & {"pass", "passed", "proceed", "approve", "approved", "accept", "accepted"}:
+        return "pass"
+    return "open"
+
+
+def _atgo_ref_type(path: Path) -> str:
+    name = path.name.lower()
+    if name.endswith(".zip"):
+        return "package"
+    if path.is_dir() and name.startswith("web-gpt-package"):
+        return "package"
+    if name == "review.yaml":
+        return "review_metadata"
+    if name == "review.md":
+        return "review"
+    if name in {"execution-report.md", "final-report.md", "worker-report.md", "executor-report.md"}:
+        return "report"
+    if name == "safety-report.json":
+        return "safety_report"
+    if name == "chain-evidence.json":
+        return "chain_evidence"
+    if name == "diff.patch":
+        return "diff"
+    return "artifact"
+
+
+def _atgo_run_artifacts(runtime_dir: str | Path | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    if not runtime_dir:
+        return [], [], [], []
+    candidate = Path(runtime_dir)
+    if (candidate / "atgo-runs").exists():
+        atgo_root = candidate / "atgo-runs"
+    elif (candidate / ".devframe-runtime" / "atgo-runs").exists():
+        atgo_root = candidate / ".devframe-runtime" / "atgo-runs"
+    else:
+        return [], [], [], []
+    evidence: list[dict[str, Any]] = []
+    review_gates: list[dict[str, Any]] = []
+    messages: list[dict[str, Any]] = []
+    events: list[dict[str, Any]] = []
+    for run_dir in sorted(atgo_root.iterdir()):
+        if not run_dir.is_dir():
+            continue
+        run_id = _safe_id(run_dir.name)
+        review_yaml = run_dir / "review.yaml"
+        review_data = _read_yaml(review_yaml)
+        verdict = str(review_data.get("verdict", "")).strip() if review_data else ""
+        if verdict:
+            gate_status = _atgo_verdict_status(verdict)
+            reason = f"ATGO review {run_id}: {verdict}"
+        else:
+            gate_status = "blocked"
+            reason = f"ATGO review {run_id}: missing or corrupt review.yaml"
+        review_gates.append({
+            "gate_id": _safe_id(f"{run_id}-review-gate"),
+            "kind": "acceptance",
+            "status": gate_status,
+            "reason": reason,
+            "run_id": run_id,
+        })
+        review_md = run_dir / "review.md"
+        review_md_added = False
+        review_yaml_added = False
+        if review_md.exists():
+            evidence.append({
+                "evidence_id": _safe_id(f"atgo-review-md-{run_id}"),
+                "run_id": run_id,
+                "ref_type": "review",
+                "ref_path": str(review_md),
+            })
+            review_md_added = True
+        if review_yaml.exists():
+            evidence.append({
+                "evidence_id": _safe_id(f"atgo-review-yaml-{run_id}"),
+                "run_id": run_id,
+                "ref_type": "review_metadata",
+                "ref_path": str(review_yaml),
+            })
+            review_yaml_added = True
+        for entry in sorted(run_dir.iterdir()):
+            if entry.is_dir():
+                if entry.name.startswith("web-gpt-package"):
+                    evidence.append({
+                        "evidence_id": _safe_id(f"atgo-{entry.stem}-{run_id}"),
+                        "run_id": run_id,
+                        "ref_type": "package",
+                        "ref_path": str(entry),
+                    })
+                continue
+            if entry == review_md and review_md_added:
+                continue
+            if entry == review_yaml and review_yaml_added:
+                continue
+            evidence.append({
+                "evidence_id": _safe_id(f"atgo-{entry.stem}-{run_id}"),
+                "run_id": run_id,
+                "ref_type": _atgo_ref_type(entry),
+                "ref_path": str(entry),
+            })
+        messages.append({
+            "message_id": _safe_id(f"atgo-reviewer-to-team-{run_id}"),
+            "from_role": "reviewer",
+            "to_role": "team",
+            "kind": "review-status",
+            "run_id": run_id,
+            "summary": f"ATGO review {run_id}: {verdict or 'unknown'}",
+        })
+        events.append({
+            "event_id": _safe_id(f"atgo-review-{run_id}"),
+            "kind": "atgo-review",
+            "run_id": run_id,
+            "summary": f"ATGO review run {run_id}: {verdict or 'unknown status'}",
+        })
+    return evidence, review_gates, messages, events
+
+
+def _atgo_reviewer_session_states(runtime_dir: str | Path | None = None, projects: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    if not runtime_dir:
+        return []
+    candidate = Path(runtime_dir)
+    if (candidate / "atgo-runs").exists():
+        atgo_root = candidate / "atgo-runs"
+    elif (candidate / ".devframe-runtime" / "atgo-runs").exists():
+        atgo_root = candidate / ".devframe-runtime" / "atgo-runs"
+    else:
+        return []
+    run_ids: list[str] = []
+    for run_dir in sorted(atgo_root.iterdir()):
+        if run_dir.is_dir():
+            run_ids.append(_safe_id(run_dir.name))
+    if not run_ids:
+        return []
+    project_id = _safe_id(str((projects or [{}])[0].get("project_id") or "dev-frame-system"))
+    evidence_refs: list[str] = []
+    for run_id in run_ids:
+        run_dir = atgo_root / run_id
+        for entry in sorted(run_dir.iterdir()):
+            if entry.is_dir() and entry.name.startswith("web-gpt-package"):
+                evidence_refs.append(str(entry))
+            elif entry.is_file() and entry.name in {"review.md", "review.yaml"}:
+                evidence_refs.append(str(entry))
+    return [{
+        "session_id": "web-gpt-review-board-session",
+        "provider": "chatgpt",
+        "binding_id": "chatgpt-web",
+        "agent_id": "web-gpt-review-board",
+        "agent_role": "reviewer",
+        "project_id": project_id,
+        "run_id": "",
+        "task_spec_id": "",
+        "status": "idle",
+        "messages": [{
+            "message_id": "web-gpt-review-board-summary",
+            "role": "assistant",
+            "content_summary": f"ATGO/Web-GPT review board session linked to {len(run_ids)} ATGO run(s): {', '.join(run_ids)}",
+        }],
+        "tool_calls": [],
+        "changed_files": [],
+        "diff_summary": "",
+        "evidence_refs": evidence_refs,
+        "cost": {},
+        "tokens": {},
+        "gates": [],
+        "actions": [],
+        "native_refs": {
+            "related_run_ids": run_ids,
+        },
+    }]
+
+
+def _build_team_model(
+    agents: list[dict[str, Any]],
+    sessions: list[dict[str, Any]],
+    go_runs: list[dict[str, Any]],
+    dispatches: list[dict[str, Any]],
+    gates: list[dict[str, Any]],
+    runs: list[dict[str, Any]],
+    decisions: list[dict[str, Any]],
+    paper_roots: list[Path],
+    reports_by_packet: dict[str, dict[str, Any]],
+    next_actions: list[dict[str, Any]],
+    action_runs: list[dict[str, Any]] | None = None,
+    runtime_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    agent_registry = _team_agent_registry(agents, sessions, go_runs)
+    task_board = _team_task_board(go_runs, dispatches, runs, sessions)
+    message_bus = _team_message_bus(sessions, go_runs, dispatches)
+    event_log = _team_event_log(dispatches, runs, gates, decisions, go_runs, action_runs)
+    evidence_store = _team_evidence_store(go_runs, dispatches, runs, sessions, reports_by_packet)
+    review_gates = _team_review_gates(gates, go_runs, next_actions)
+    conflict_control = _team_conflict_control(go_runs, dispatches, paper_roots)
+    atgo_evidence, atgo_gates, atgo_messages, atgo_events = _atgo_run_artifacts(runtime_dir)
+    evidence_store.extend(atgo_evidence)
+    review_gates.extend(atgo_gates)
+    message_bus.extend(atgo_messages)
+    event_log.extend(atgo_events)
+    return {
+        "agent_registry": agent_registry,
+        "task_board": task_board,
+        "message_bus": message_bus,
+        "event_log": event_log,
+        "evidence_store": evidence_store,
+        "review_gates": review_gates,
+        "conflict_control": conflict_control,
+    }
+
+
+def _team_agent_registry(
+    agents: list[dict[str, Any]],
+    sessions: list[dict[str, Any]],
+    go_runs: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for agent in agents:
+        agent_id = str(agent.get("agent_id") or "")
+        if not agent_id or agent_id in seen:
+            continue
+        seen.add(agent_id)
+        agent_sessions = [
+            _safe_id(str(s.get("session_id") or ""))
+            for s in sessions
+            if str(s.get("agent_id") or "") == agent_id
+        ]
+        entries.append({
+            "agent_id": agent_id,
+            "role": str(agent.get("role") or ""),
+            "binding_id": str(agent.get("binding_id") or ""),
+            "status": str(agent.get("status") or "idle"),
+            "session_ids": agent_sessions,
+        })
+    for run in go_runs:
+        for agent in run.get("agents", []):
+            if not isinstance(agent, dict):
+                continue
+            agent_id = _safe_id(str(agent.get("agent_id") or ""))
+            if not agent_id or agent_id in seen:
+                continue
+            seen.add(agent_id)
+            go_run_id = _safe_id(str(run.get("go_run_id") or ""))
+            agent_sessions = [
+                _safe_id(str(s.get("session_id") or ""))
+                for s in sessions
+                if str(s.get("agent_id") or "") == agent_id
+            ]
+            entries.append({
+                "agent_id": agent_id,
+                "role": "go-worker",
+                "binding_id": "local-executor",
+                "status": str(agent.get("status") or agent.get("worker_status") or "idle"),
+                "session_ids": agent_sessions,
+            })
+    return entries
+
+
+def _team_task_board(
+    go_runs: list[dict[str, Any]],
+    dispatches: list[dict[str, Any]],
+    runs: list[dict[str, Any]],
+    sessions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    tasks: list[dict[str, Any]] = []
+    for run in go_runs:
+        go_run_id = _safe_id(str(run.get("go_run_id") or ""))
+        agent_ids = [
+            _safe_id(str(a.get("agent_id") or ""))
+            for a in run.get("agents", [])
+            if isinstance(a, dict)
+        ]
+        session_ids = [
+            _safe_id(str(s.get("session_id") or ""))
+            for s in sessions
+            if str(s.get("run_id") or "") == go_run_id
+        ]
+        targets: list[str] = []
+        for a in run.get("agents", []):
+            if isinstance(a, dict):
+                targets.extend(str(t) for t in a.get("targets", []) if isinstance(a.get("targets"), list))
+        tasks.append({
+            "task_id": go_run_id,
+            "type": "go-run",
+            "project_id": _safe_id(str(run.get("project_id") or "")),
+            "status": str(run.get("status") or "queued"),
+            "agent_ids": agent_ids,
+            "session_ids": session_ids,
+            "target_files": targets,
+        })
+    for dispatch in dispatches:
+        packet_id = dispatch.get("packet_id") or _fallback_id(dispatch, "run")
+        dispatch_run = next(
+            (r for r in runs if str(r.get("run_id") or "") == _safe_id(str(packet_id))),
+            None,
+        )
+        dispatch_sessions = [
+            _safe_id(str(s.get("session_id") or ""))
+            for s in sessions
+            if str(s.get("run_id") or "") == _safe_id(str(packet_id))
+        ]
+        tasks.append({
+            "task_id": _safe_id(str(packet_id)),
+            "type": "rdgoal-dispatch",
+            "project_id": _safe_id(str(dispatch.get("project_id") or "")),
+            "status": str(dispatch_run.get("status") or "pending") if dispatch_run else "pending",
+            "agent_ids": ["executor"],
+            "session_ids": dispatch_sessions,
+            "target_files": [],
+        })
+    return tasks
+
+
+def _team_message_bus(
+    sessions: list[dict[str, Any]],
+    go_runs: list[dict[str, Any]],
+    dispatches: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    messages: list[dict[str, Any]] = []
+    for run in go_runs:
+        go_run_id = _safe_id(str(run.get("go_run_id") or ""))
+        for agent in run.get("agents", []):
+            if not isinstance(agent, dict):
+                continue
+            agent_id = _safe_id(str(agent.get("agent_id") or ""))
+            messages.append({
+                "message_id": _safe_id(f"planner-to-{agent_id}-{go_run_id}"),
+                "from_role": "planner",
+                "to_role": str(agent.get("agent_id") or "worker"),
+                "kind": "handoff",
+                "run_id": go_run_id,
+                "summary": f"Shard {agent.get('shard_index', '?')}/{agent.get('shard_count', '?')}: {_safe_id(str(agent.get('agent_id', '')))} dispatched.",
+            })
+    for dispatch in dispatches:
+        packet_id = dispatch.get("packet_id") or _fallback_id(dispatch, "run")
+        status = "ready" if dispatch.get("dispatch_ready") else "pending"
+        messages.append({
+            "message_id": _safe_id(f"planner-to-executor-{packet_id}"),
+            "from_role": "planner",
+            "to_role": "executor",
+            "kind": "handoff",
+            "run_id": _safe_id(str(packet_id)),
+            "summary": f"Dispatch {status}: {str(dispatch.get('operational_intent', ''))[:80]}",
+        })
+    _add_evidence_status_messages(messages, go_runs)
+    return messages
+
+
+def _add_evidence_status_messages(
+    messages: list[dict[str, Any]],
+    go_runs: list[dict[str, Any]],
+) -> None:
+    for run in go_runs:
+        go_run_id = _safe_id(str(run.get("go_run_id") or ""))
+        run_status = str(run.get("status") or "")
+        if run_status in ("review-pass", "review-fail", "verified", "passed", "failed", "blocked"):
+            messages.append({
+                "message_id": _safe_id(f"reviewer-to-team-{go_run_id}"),
+                "from_role": "reviewer",
+                "to_role": "team",
+                "kind": "review-status",
+                "run_id": go_run_id,
+                "summary": f"Review status for /go run {go_run_id}: {run_status}",
+            })
+        for agent in run.get("agents", []):
+            if not isinstance(agent, dict):
+                continue
+            report_path = str(agent.get("report_path") or "")
+            agent_status = str(agent.get("status") or "")
+            agent_id = _safe_id(str(agent.get("agent_id") or ""))
+            if report_path and agent_status in ("completed", "verified", "review-pass", "review-fail"):
+                file_name = report_path.replace("\\", "/").rsplit("/", 1)[-1]
+                role = "reviewer" if "review" in agent_status else "verifier"
+                messages.append({
+                    "message_id": _safe_id(f"{role}-to-team-{agent_id}-{go_run_id}"),
+                    "from_role": role,
+                    "to_role": "team",
+                    "kind": "review-evidence",
+                    "run_id": go_run_id,
+                    "summary": f"Evidence for {agent_id} in /go run {go_run_id}: {file_name}",
+                })
+
+
+def _team_event_log(
+    dispatches: list[dict[str, Any]],
+    runs: list[dict[str, Any]],
+    gates: list[dict[str, Any]],
+    decisions: list[dict[str, Any]],
+    go_runs: list[dict[str, Any]],
+    action_runs: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    for dispatch in dispatches:
+        packet_id = dispatch.get("packet_id") or _fallback_id(dispatch, "run")
+        events.append({
+            "event_id": _safe_id(f"dispatch-{packet_id}"),
+            "kind": "dispatch",
+            "run_id": _safe_id(str(packet_id)),
+            "summary": f"Packet dispatched: {str(dispatch.get('operational_intent', ''))[:80]}",
+        })
+    for run in go_runs:
+        go_run_id = _safe_id(str(run.get("go_run_id") or ""))
+        events.append({
+            "event_id": _safe_id(f"go-run-created-{go_run_id}"),
+            "kind": "go-run-created",
+            "run_id": go_run_id,
+            "summary": f"/go run {go_run_id} created with {len(run.get('agents', []))} agents",
+        })
+    for gate in gates:
+        gate_id = _safe_id(str(gate.get("gate_id") or ""))
+        events.append({
+            "event_id": _safe_id(f"gate-{gate_id}"),
+            "kind": "gate-state",
+            "run_id": _safe_id(str(gate.get("run_id") or gate_id)),
+            "summary": f"Gate {gate_id}: {str(gate.get('status', 'open'))}",
+        })
+    for decision in decisions:
+        decision_id = _safe_id(str(decision.get("decision_id") or ""))
+        events.append({
+            "event_id": _safe_id(f"decision-{decision_id}"),
+            "kind": "decision",
+            "run_id": _safe_id(str(decision.get("run_id") or decision_id)),
+            "summary": f"Decision {decision_id}: {str(decision.get('mode', ''))}/{str(decision.get('status', ''))}",
+        })
+    for record in (action_runs or []):
+        action_id = _safe_id(str(record.get("action_id") or ""))
+        run_id = _safe_id(str(record.get("action_run_id") or ""))
+        go_run_id = _safe_id(str(record.get("go_run_id") or ""))
+        raw_status = str(record.get("status") or "started").strip().lower()
+        if raw_status in ("completed", "passed", "pass"):
+            kind = "action-run-completed"
+            exit_code = record.get("exit_code")
+            completed_at = str(record.get("completed_at") or "")
+            stdout_log = str(record.get("stdout_log") or "")
+            stderr_log = str(record.get("stderr_log") or "")
+            summary_parts = [f"Action {action_id} completed for /go run {go_run_id}"]
+            if exit_code is not None:
+                summary_parts.append(f"exit_code={exit_code}")
+            if completed_at:
+                summary_parts.append(f"completed_at={completed_at}")
+            if stdout_log:
+                summary_parts.append(f"stdout_log={stdout_log}")
+            if stderr_log:
+                summary_parts.append(f"stderr_log={stderr_log}")
+            summary = "; ".join(summary_parts)
+            events.append({
+                "event_id": _safe_id(f"action-run-{action_id}-{run_id}"),
+                "kind": kind,
+                "run_id": go_run_id,
+                "summary": summary,
+            })
+        elif raw_status in ("failed", "fail", "error"):
+            kind = "action-run-failed"
+            exit_code = record.get("exit_code")
+            completed_at = str(record.get("completed_at") or "")
+            stdout_log = str(record.get("stdout_log") or "")
+            stderr_log = str(record.get("stderr_log") or "")
+            summary_parts = [f"Action {action_id} failed for /go run {go_run_id}"]
+            if exit_code is not None:
+                summary_parts.append(f"exit_code={exit_code}")
+            if completed_at:
+                summary_parts.append(f"completed_at={completed_at}")
+            if stdout_log:
+                summary_parts.append(f"stdout_log={stdout_log}")
+            if stderr_log:
+                summary_parts.append(f"stderr_log={stderr_log}")
+            summary = "; ".join(summary_parts)
+            events.append({
+                "event_id": _safe_id(f"action-run-{action_id}-{run_id}"),
+                "kind": kind,
+                "run_id": go_run_id,
+                "summary": summary,
+            })
+        else:
+            kind = "action-run-started"
+            summary = f"Action {action_id} started for /go run {go_run_id}"
+            events.append({
+                "event_id": _safe_id(f"action-run-{action_id}-{run_id}"),
+                "kind": kind,
+                "run_id": go_run_id,
+                "summary": summary,
+            })
+    return events
+
+
+def _team_evidence_store(
+    go_runs: list[dict[str, Any]],
+    dispatches: list[dict[str, Any]],
+    runs: list[dict[str, Any]],
+    sessions: list[dict[str, Any]],
+    reports_by_packet: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    evidence: list[dict[str, Any]] = []
+    for run in go_runs:
+        go_run_id = _safe_id(str(run.get("go_run_id") or ""))
+        for agent in run.get("agents", []):
+            if not isinstance(agent, dict):
+                continue
+            evidence.append({
+                "evidence_id": _safe_id(f"go-{go_run_id}-{agent.get('agent_id', '')}"),
+                "run_id": go_run_id,
+                "ref_type": "packet",
+                "ref_path": str(agent.get("packet_dir") or agent.get("task_spec_path") or ""),
+            })
+            report_path = str(agent.get("report_path") or "")
+            if report_path:
+                evidence.append({
+                    "evidence_id": _safe_id(f"go-report-{go_run_id}-{agent.get('agent_id', '')}"),
+                    "run_id": go_run_id,
+                    "ref_type": "report",
+                    "ref_path": report_path,
+                })
+    for dispatch in dispatches:
+        packet_id = dispatch.get("packet_id") or _fallback_id(dispatch, "run")
+        packet_dir = str(dispatch.get("packet_dir") or "")
+        if packet_dir:
+            evidence.append({
+                "evidence_id": _safe_id(f"rdgoal-packet-{packet_id}"),
+                "run_id": _safe_id(str(packet_id)),
+                "ref_type": "packet",
+                "ref_path": str(Path(packet_dir) / "TASKSPEC.json"),
+            })
+        report = reports_by_packet.get(str(packet_id) or dispatch.get("packet_id", ""))
+        if report:
+            report_path = str(report.get("report_path") or "")
+            if report_path:
+                evidence.append({
+                    "evidence_id": _safe_id(f"rdgoal-report-{packet_id}"),
+                    "run_id": _safe_id(str(packet_id)),
+                    "ref_type": "report",
+                    "ref_path": report_path,
+                })
+    for session in sessions:
+        for ref in session.get("evidence_refs", []) if isinstance(session.get("evidence_refs"), list) else []:
+            ref_text = str(ref or "")
+            if ref_text:
+                evidence.append({
+                    "evidence_id": _safe_id(f"session-ref-{_safe_id(ref_text.rsplit('/', 1)[-1])}"),
+                    "run_id": str(session.get("run_id") or ""),
+                    "ref_type": "session_evidence",
+                    "ref_path": ref_text,
+                })
+    for run in runs:
+        report_path = str(run.get("report_path") or "")
+        if report_path:
+            evidence.append({
+                "evidence_id": _safe_id(f"run-report-{run.get('run_id', '')}"),
+                "run_id": _safe_id(str(run.get("run_id") or "")),
+                "ref_type": "report",
+                "ref_path": report_path,
+            })
+    return evidence
+
+
+def _team_review_gates(
+    gates: list[dict[str, Any]],
+    go_runs: list[dict[str, Any]],
+    next_actions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = [
+        {
+            "gate_id": _safe_id(str(g.get("gate_id") or "")),
+            "kind": str(g.get("kind") or "human"),
+            "status": str(g.get("status") or "open"),
+            "reason": str(g.get("reason") or ""),
+            "run_id": _safe_id(str(g.get("run_id") or "")),
+        }
+        for g in gates
+    ]
+    for action in next_actions:
+        if str(action.get("source_type") or "") != "go_run":
+            continue
+        go_run_id = _safe_id(str(action.get("source_id") or ""))
+        action_id = _safe_id(str(action.get("action_id") or ""))
+        if not go_run_id:
+            continue
+        entries.append({
+            "gate_id": action_id,
+            "kind": "action-gate",
+            "status": str(action.get("status") or "ready"),
+            "reason": str(action.get("label") or ""),
+            "run_id": go_run_id,
+        })
+    existing_gate_ids = {e["gate_id"] for e in entries if isinstance(e, dict)}
+    for run in go_runs:
+        go_run_id = _safe_id(str(run.get("go_run_id") or ""))
+        run_status = str(run.get("status") or "")
+        if run_status not in ("passed", "failed", "blocked"):
+            continue
+        if not go_run_id:
+            continue
+        gate_id = _safe_id(f"{go_run_id}-outcome-gate")
+        if gate_id in existing_gate_ids:
+            continue
+        if run_status == "passed":
+            gate_status = "pass"
+            reason = f"/go run {go_run_id} completed successfully."
+        elif run_status == "failed":
+            gate_status = "failed"
+            reason = f"/go run {go_run_id} failed."
+        else:
+            gate_status = "blocked"
+            reason = f"/go run {go_run_id} is blocked."
+        entries.append({
+            "gate_id": gate_id,
+            "kind": "go-run-outcome",
+            "status": gate_status,
+            "reason": reason,
+            "run_id": go_run_id,
+        })
+        existing_gate_ids.add(gate_id)
+    return entries
+
+
+def _team_conflict_control(
+    go_runs: list[dict[str, Any]],
+    dispatches: list[dict[str, Any]],
+    paper_roots: list[Path],
+) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for run in go_runs:
+        go_run_id = _safe_id(str(run.get("go_run_id") or ""))
+        for agent in run.get("agents", []):
+            if not isinstance(agent, dict):
+                continue
+            for target in agent.get("targets", []) if isinstance(agent.get("targets"), list) else []:
+                target_str = str(target or "")
+                if target_str:
+                    entries.append({
+                        "file_path": target_str,
+                        "owner_run_id": go_run_id,
+                        "owner_agent_id": _safe_id(str(agent.get("agent_id") or "")),
+                        "file_kind": "go-target",
+                    })
+    for dispatch in dispatches:
+        packet_id = dispatch.get("packet_id") or _fallback_id(dispatch, "run")
+        for target in dispatch.get("targets", []) if isinstance(dispatch.get("targets"), list) else []:
+            target_str = str(target or "")
+            if target_str:
+                entries.append({
+                    "file_path": target_str,
+                    "owner_run_id": _safe_id(str(packet_id)),
+                    "owner_agent_id": "executor",
+                    "file_kind": "rdgoal-target",
+                })
+    return entries
+
+
+def _rdgoal_session_state(dispatch: dict[str, Any], report: dict[str, Any] | None) -> dict[str, Any]:
+    packet_id = dispatch.get("packet_id") or _fallback_id(dispatch, "run")
+    packet_dir = str(dispatch.get("packet_dir") or "")
+    changed_files = _visible_changed_files((report or {}).get("changed_files") or [])
+    return {
+        "session_id": _safe_id(f"{packet_id}-local-executor-session"),
+        "provider": "local",
+        "binding_id": "local-executor",
+        "agent_id": "executor",
+        "agent_role": "executor",
+        "project_id": _safe_id(str(dispatch.get("project_id") or "unknown")),
+        "run_id": _safe_id(packet_id),
+        "task_spec_id": f"{Path(packet_dir).name}/TASKSPEC.json" if packet_dir else _safe_id(packet_id),
+        "status": _session_status(_run_status(bool(dispatch.get("dispatch_ready")), (report or {}).get("status", ""))),
+        "messages": [],
+        "tool_calls": [],
+        "changed_files": changed_files,
+        "diff_summary": _diff_summary(changed_files),
+        "evidence_refs": _existing_refs([
+            (report or {}).get("report_path", ""),
+            packet_dir,
+        ]),
+        "cost": {},
+        "tokens": {},
+        "gates": [_safe_id(f"{packet_id}-acceptance"), "human-gate"],
+        "actions": ["human-gate-action"],
+        "native_refs": {
+            "runtime": "rdgoal",
+            "packet_id": str(packet_id),
+        },
+    }
+
+
+def _go_session_states(go_runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    sessions: list[dict[str, Any]] = []
+    for run in go_runs:
+        for agent in run.get("agents", []):
+            if not isinstance(agent, dict):
+                continue
+            provider = _worker_provider(agent.get("worker_command", []))
+            agent_id = str(agent.get("agent_id") or "coding-agent")
+            session_id = _safe_id(f"{run.get('go_run_id', 'go-run')}-{agent_id}-session")
+            worker_status = str(agent.get("worker_status") or "")
+            raw_status = worker_status if worker_status and worker_status != "unknown" else str(
+                agent.get("status") or run.get("status") or "unknown"
+            )
+            status = _session_status(raw_status)
+            changed_files = _visible_changed_files(agent.get("changed_files") or [])
+            sessions.append({
+                "session_id": session_id,
+                "provider": provider,
+                "binding_id": "local-executor",
+                "agent_id": _safe_id(agent_id),
+                "agent_role": "executor",
+                "project_id": _safe_id(str(run.get("project_id") or "unknown")),
+                "run_id": _safe_id(str(run.get("go_run_id") or "go-run")),
+                "task_spec_id": Path(str(agent.get("task_spec_path") or "")).name if agent.get("task_spec_path") else "",
+                "status": status,
+                "messages": [],
+                "tool_calls": [_command_tool_call(agent)] if agent.get("worker_command") else [],
+                "changed_files": changed_files,
+                "diff_summary": _diff_summary(changed_files),
+                "evidence_refs": _existing_refs([
+                    agent.get("report_path", ""),
+                    agent.get("packet_dir", ""),
+                    run.get("metadata_path", ""),
+                ]),
+                "cost": {},
+                "tokens": {},
+                "gates": [],
+                "actions": [],
+                "native_refs": {
+                    "runtime": "devframe-code",
+                    "go_run_id": str(run.get("go_run_id") or ""),
+                },
+            })
+    return sessions
+
+
+def _go_packet_dirs(go_runs: list[dict[str, Any]]) -> set[str]:
+    return {
+        str(agent.get("packet_dir") or "")
+        for run in go_runs
+        for agent in run.get("agents", [])
+        if isinstance(agent, dict) and agent.get("packet_dir")
+    }
+
+
+def _web_ai_session_states(runtime_dir: str | Path) -> list[dict[str, Any]]:
+    if not runtime_dir:
+        return []
+    sessions_dir = Path(runtime_dir) / "web-ai-sessions"
+    if not sessions_dir.exists():
+        return []
+    sessions: list[dict[str, Any]] = []
+    for path in sorted(sessions_dir.glob("*.json")):
+        data = _read_json(path)
+        if not data:
+            continue
+        provider = _safe_id(str(data.get("provider") or "web-ai"))
+        agent_role = str(data.get("agent_role") or "custom")
+        valid_roles = {"coordinator", "reviewer", "executor", "paper_reviewer", "human_reviewer", "custom"}
+        if agent_role not in valid_roles:
+            agent_role = "custom"
+        raw_native_refs = data.get("native_refs") if isinstance(data.get("native_refs"), dict) else {}
+        source_runtime = str(raw_native_refs.get("source_runtime") or "")
+        runtime = str(raw_native_refs.get("runtime") or "")
+        is_chatgpt_web_mcp = source_runtime == "chatgpt-web-mcp" or runtime == "chatgpt-web-mcp"
+        is_mcp_live = source_runtime == "mcp-live-probe" or runtime == "mcp-live-probe"
+        is_external_mcp = (source_runtime.endswith("-web-mcp") or runtime.endswith("-web-mcp")) and not is_chatgpt_web_mcp and not is_mcp_live
+        if is_chatgpt_web_mcp:
+            binding_id = _safe_id(f"{provider}-web-mcp")
+        elif is_external_mcp:
+            binding_id = _safe_id(f"{provider}-mcp-live")
+        else:
+            binding_id = _safe_id(f"{provider}-web")
+        session: dict[str, Any] = {
+            "session_id": _safe_id(str(data.get("session_id") or path.stem)),
+            "provider": provider,
+            "binding_id": binding_id,
+            "agent_id": _safe_id(str(data.get("agent_id") or data.get("session_id") or path.stem)),
+            "agent_role": agent_role,
+            "project_id": _safe_id(str(data.get("project_id") or "unknown")),
+            "run_id": _safe_id(str(data.get("run_id") or "")),
+            "task_spec_id": str(data.get("task_spec_id") or ""),
+            "status": _session_status(data.get("status") or "idle"),
+            "messages": [_normalize_session_message(msg) for msg in data.get("messages", []) if isinstance(msg, dict)],
+            "tool_calls": [_normalize_session_tool_call(tc) for tc in data.get("tool_calls", []) if isinstance(tc, dict)],
+            "changed_files": [str(item) for item in data.get("changed_files", []) if str(item)],
+            "diff_summary": str(data.get("diff_summary") or ""),
+            "evidence_refs": [str(item) for item in data.get("evidence_refs", []) if str(item)],
+            "cost": _normalize_cost(data.get("cost")),
+            "tokens": _normalize_tokens(data.get("tokens")),
+            "gates": [str(item) for item in data.get("gates", []) if str(item)],
+            "actions": [str(item) for item in data.get("actions", []) if str(item)],
+            "native_refs": _web_ai_native_refs(path, data.get("native_refs")),
+        }
+        sessions.append(session)
+    return sessions
+
+
+def _web_ai_provider_bindings(sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not sessions:
+        return []
+    default_bindings = _default_provider_bindings()
+    existing_binding_ids = {
+        _safe_id(str(binding.get("binding_id") or ""))
+        for binding in default_bindings
+    }
+    bindings: list[dict[str, Any]] = []
+    seen_binding_ids: set[str] = set()
+    for session in sessions:
+        native_refs = session.get("native_refs") if isinstance(session.get("native_refs"), dict) else {}
+        source_runtime = str(native_refs.get("source_runtime") or "")
+        runtime = str(native_refs.get("runtime") or "")
+        is_chatgpt_web_mcp = source_runtime == "chatgpt-web-mcp" or runtime == "chatgpt-web-mcp"
+        is_mcp_live = source_runtime == "mcp-live-probe" or runtime == "mcp-live-probe"
+        is_external_mcp = (source_runtime.endswith("-web-mcp") or runtime.endswith("-web-mcp")) and not is_chatgpt_web_mcp and not is_mcp_live
+        provider = _safe_id(str(session.get("provider") or "web-ai"))
+        if is_chatgpt_web_mcp:
+            binding_id = _safe_id(f"{provider}-web-mcp")
+            mode = "mcp_web"
+            notes = "Real ChatGPT Web MCP connector invocation; read-only summary."
+        elif is_mcp_live:
+            binding_id = _safe_id(f"{provider}-web")
+            mode = "mcp_live"
+            notes = "MCP live verified; read-only summary."
+        elif is_external_mcp:
+            binding_id = _safe_id(f"{provider}-mcp-live")
+            mode = "mcp_live"
+            notes = "MCP direct diagnostic; read-only summary."
+        else:
+            binding_id = _safe_id(f"{provider}-web")
+            if binding_id in existing_binding_ids or binding_id in seen_binding_ids:
+                continue
+            mode = "context_only"
+            notes = "Imported from web-ai-sessions; read-only summary."
+        if binding_id in existing_binding_ids or binding_id in seen_binding_ids:
+            continue
+        seen_binding_ids.add(binding_id)
+        bindings.append({
+            "binding_id": binding_id,
+            "provider": provider,
+            "mode": mode,
+            "health": "ready",
+            "adapter_config_path": "",
+            "manual_fallback_instructions": [],
+            "notes": notes,
+        })
+    return bindings
+
+
+def _web_ai_review_gate_states(sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    gates: list[dict[str, Any]] = []
+    for session in sessions:
+        native_refs = session.get("native_refs")
+        if not _is_web_ai_import_native_refs(native_refs):
+            continue
+        marker = str(native_refs.get("review_marker") or "").strip()
+        verdict = str(native_refs.get("review_verdict") or "").strip()
+        if not marker or not verdict:
+            continue
+        session_id = _safe_id(str(session.get("session_id") or "web-ai-session"))
+        gates.append({
+            "gate_id": _safe_id(f"{session_id}-review-gate"),
+            "kind": "acceptance",
+            "status": _web_ai_review_gate_status(verdict),
+            "reason": f"Web AI review {marker}: {verdict}",
+            "next_action": _web_ai_review_next_action(session),
+            "run_id": _safe_id(str(session.get("run_id") or session_id)),
+        })
+    return gates
+
+
+def _web_ai_review_gate_status(verdict: str) -> str:
+    normalized = _safe_id(verdict)
+    tokens = set(normalized.split("-"))
+    negative_phrases = (
+        "do-not",
+        "not-proceed",
+        "not-approve",
+        "not-approved",
+        "not-accept",
+        "not-accepted",
+        "cannot-proceed",
+        "should-not-proceed",
+    )
+    if any(phrase in normalized for phrase in negative_phrases):
+        return "blocked"
+    if tokens & {"fail", "failed", "stop", "blocked", "reject", "rejected", "deny", "denied"}:
+        return "blocked"
+    if tokens & {"pass", "passed", "proceed", "approve", "approved", "accept", "accepted"}:
+        return "pass"
+    return "open"
+
+
+def _web_ai_review_next_action(session: dict[str, Any]) -> str:
+    actions = session.get("actions")
+    if isinstance(actions, list):
+        for action in actions:
+            text = str(action or "").strip()
+            if text:
+                return text
+    return "Use the imported Web AI review to continue the local control-plane loop."
+
+
+def _web_ai_agents(sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not sessions:
+        return []
+    default_bindings = _default_provider_bindings()
+    web_bindings = _web_ai_provider_bindings(sessions)
+    all_bindings = default_bindings + web_bindings
+    bindings_by_provider = {
+        _safe_id(str(binding.get("provider") or "")): _safe_id(str(binding.get("binding_id") or ""))
+        for binding in all_bindings
+    }
+    agents: list[dict[str, Any]] = []
+    seen_agent_ids: set[str] = set()
+    for session in sessions:
+        provider = _safe_id(str(session.get("provider") or "web-ai"))
+        binding_id = _safe_id(str(session.get("binding_id") or bindings_by_provider.get(provider, _safe_id(f"{provider}-web"))))
+        agent_id = _safe_id(str(session.get("agent_id") or session.get("session_id") or "web-ai-agent"))
+        if agent_id in seen_agent_ids:
+            continue
+        seen_agent_ids.add(agent_id)
+        native_refs = session.get("native_refs") if isinstance(session.get("native_refs"), dict) else {}
+        source_runtime = str(native_refs.get("source_runtime") or "")
+        runtime = str(native_refs.get("runtime") or "")
+        is_chatgpt_web_mcp = source_runtime == "chatgpt-web-mcp" or runtime == "chatgpt-web-mcp"
+        is_mcp_live = source_runtime == "mcp-live-probe" or runtime == "mcp-live-probe"
+        is_external_mcp = (source_runtime.endswith("-web-mcp") or runtime.endswith("-web-mcp")) and not is_chatgpt_web_mcp and not is_mcp_live
+        if is_chatgpt_web_mcp:
+            permissions = ["read_context", "request_human_gate"]
+        elif is_mcp_live or is_external_mcp:
+            permissions = ["plan", "read_context", "request_human_gate"]
+        else:
+            permissions = ["read_context"]
+        agents.append({
+            "agent_id": agent_id,
+            "binding_id": binding_id,
+            "role": _agent_role_for_session(session.get("agent_role")),
+            "scope": "project",
+            "permissions": permissions,
+            "status": _agent_status_from_session_status(session.get("status")),
+        })
+    return agents
+
+
+def validate_web_ai_session_summary(data: dict[str, Any]) -> None:
+    """Validate a web-ai session summary for import."""
+    if not isinstance(data, dict):
+        raise ValueError("session summary must be a JSON object")
+    _validate_summary_only_fields(data)
+
+
+def _validate_summary_only_fields(value: object, path: str = "$") -> None:
+    forbidden_keys = {"raw_transcript", "transcript", "conversation", "raw_messages"}
+    message_raw_keys = {"content", "text"}
+    if isinstance(value, dict):
+        for raw_key, child in value.items():
+            key = str(raw_key)
+            child_path = f"{path}.{key}"
+            if key in forbidden_keys:
+                raise ValueError(
+                    f"raw transcript field '{key}' is not allowed in summary-only imports at {child_path}"
+                )
+            if ".messages[" in path and key in message_raw_keys:
+                raise ValueError(
+                    f"raw message field '{key}' is not allowed in summary-only imports at {child_path}; use content_summary"
+                )
+            _validate_summary_only_fields(child, child_path)
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            _validate_summary_only_fields(child, f"{path}[{index}]")
+
+
+def _web_ai_native_refs(path: Path, value: object) -> dict[str, str]:
+    refs = {"runtime": "web-ai-import", "source_file": path.name}
+    if not isinstance(value, dict):
+        return refs
+    original_runtime = str(value.get("runtime") or "").strip()
+    if original_runtime and not value.get("source_runtime"):
+        refs["source_runtime"] = original_runtime
+    for key, raw_value in value.items():
+        text_key = str(key or "").strip()
+        if not text_key or text_key == "runtime":
+            continue
+        if text_key in {"raw_transcript", "transcript", "conversation", "raw_messages"}:
+            continue
+        refs[text_key] = str(raw_value)
+    return refs
+
+
+def _is_web_ai_import_native_refs(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    runtime = str(value.get("runtime") or "")
+    source_runtime = str(value.get("source_runtime") or "")
+    return runtime == "web-ai-import" or source_runtime == "mcp-live-probe" or source_runtime.endswith("-web-mcp")
+
+
+def _agent_role_for_session(value: object) -> str:
+    role = str(value or "").strip()
+    if role in {"coordinator", "reviewer", "executor", "paper_reviewer", "human_reviewer"}:
+        return role
+    return "coordinator"
+
+
+def _agent_status_from_session_status(value: object) -> str:
+    status = _session_status(value)
+    if status == "active":
+        return "active"
+    if status in {"blocked", "failed"}:
+        return "blocked"
+    if status == "needs_human":
+        return "needs_human"
+    return "idle"
+
+
+def _normalize_session_message(message: dict[str, Any]) -> dict[str, Any]:
+    role = str(message.get("role") or "unknown")
+    if role not in {"system", "user", "assistant", "tool", "agent", "human", "unknown"}:
+        role = "unknown"
+    return {
+        "message_id": _safe_id(str(message.get("message_id") or message.get("id") or "msg")),
+        "role": role,
+        "content_summary": str(message.get("content_summary") or ""),
+        "created_at": str(message.get("created_at") or ""),
+        "provider_message_id": str(message.get("provider_message_id") or message.get("id") or ""),
+        "evidence_ref": str(message.get("evidence_ref") or ""),
+    }
+
+
+def _normalize_session_tool_call(tool_call: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "tool_call_id": _safe_id(str(tool_call.get("tool_call_id") or tool_call.get("id") or "tool")),
+        "name": str(tool_call.get("name") or ""),
+        "status": _session_status(str(tool_call.get("status") or "unknown")),
+        "command": str(tool_call.get("command") or ""),
+        "evidence_ref": str(tool_call.get("evidence_ref") or ""),
+    }
+
+
+def _normalize_cost(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    amount = value.get("amount")
+    currency = value.get("currency")
+    try:
+        normalized_amount = float(amount) if amount is not None else 0.0
+    except (TypeError, ValueError):
+        normalized_amount = 0.0
+    return {
+        "amount": max(0.0, normalized_amount),
+        "currency": str(currency or ""),
+    }
+
+
+def _normalize_tokens(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    result: dict[str, Any] = {}
+    for key in ("input", "output", "total"):
+        val = value.get(key)
+        try:
+            normalized = int(val) if val is not None else 0
+        except (TypeError, ValueError):
+            normalized = 0
+        result[key] = max(0, normalized)
+    return result
+
+
+def _paper_session_state(root: Path, binding: dict[str, Any]) -> dict[str, Any]:
+    profile = _read_yaml(root / "PAPER_PROFILE.yaml")
+    paper_id = _paper_id(root, profile)
+    run_id = _safe_id(f"{paper_id}-paper-review")
+    return {
+        "session_id": _safe_id(f"{paper_id}-{binding.get('provider', 'web-ai')}-review-session"),
+        "provider": str(binding.get("provider") or "web-ai"),
+        "binding_id": str(binding.get("binding_id") or ""),
+        "agent_id": _safe_id(f"paper-reviewer-{binding.get('binding_id', '')}"),
+        "agent_role": "paper_reviewer",
+        "project_id": paper_id,
+        "run_id": run_id,
+        "task_spec_id": str(root / "paper_task" / "PAPER_TASK_INPUT.yaml"),
+        "status": _session_status(_paper_run_state(root).get("status", "pending")),
+        "messages": [],
+        "tool_calls": [],
+        "changed_files": [],
+        "diff_summary": "",
+        "evidence_refs": _existing_refs([
+            root / "review" / "REVIEW_REPORT.md",
+            root / "closure" / "CLOSURE_REPORT.md",
+            root / "evidence" / "ref-paper-review-pack.zip",
+        ]),
+        "cost": {},
+        "tokens": {},
+        "gates": [
+            _safe_id(f"{paper_id}-privacy-gate"),
+            _safe_id(f"{paper_id}-{binding.get('binding_id', 'provider')}-safety-gate"),
+        ],
+        "actions": [_safe_id(f"{run_id}-command-action")],
+        "native_refs": {
+            "runtime": "rdpaper",
+            "adapter_config_path": str(root / "WEB_AI_ADAPTER.yaml"),
+        },
+    }
+
+
+def _worker_provider(command: object) -> str:
+    if not isinstance(command, list) or not command:
+        return "local"
+    executable = str(command[0]).replace("\\", "/").rsplit("/", 1)[-1].lower()
+    if executable.endswith(".cmd"):
+        executable = executable[:-4]
+    if "." in executable:
+        executable = executable.rsplit(".", 1)[0]
+    if executable in {"opencode", "codex", "claude", "t3code"}:
+        return executable
+    return "custom"
+
+
+def _command_tool_call(agent: dict[str, Any]) -> dict[str, Any]:
+    command = [str(part) for part in agent.get("worker_command") or []]
+    status = _session_status(str(agent.get("worker_status") or agent.get("status") or "unknown"))
+    return {
+        "tool_call_id": _safe_id(f"{agent.get('agent_id', 'agent')}-worker-command"),
+        "name": "local-worker-command",
+        "status": status,
+        "command": " ".join(command),
+        "evidence_ref": str(agent.get("report_path") or agent.get("packet_dir") or ""),
+    }
+
+
+def _session_status(value: object) -> str:
+    normalized = str(value or "").lower()
+    if normalized in {"completed", "passed", "pass", "executed", "web_host_completed", "local_mcp_completed"}:
+        return "completed"
+    if normalized in {"failed", "fail", "web_host_no_result"}:
+        return "blocked"
+    if normalized == "blocked":
+        return "blocked"
+    if normalized in {"needs_human", "human_required", "review_required"}:
+        return "needs_human"
+    if normalized in {"running", "active"}:
+        return "active"
+    if normalized in {"pending", "prepared", "queued", "idle"}:
+        return "idle"
+    return "unknown"
+
+
+def _diff_summary(changed_files: object) -> str:
+    if not isinstance(changed_files, list) or not changed_files:
+        return ""
+    count = len(changed_files)
+    if count == 1:
+        return f"1 changed file: {changed_files[0]}"
+    return f"{count} changed files"
+
+
+def _visible_changed_files(changed_files: object) -> list[str]:
+    if not isinstance(changed_files, list):
+        return []
+    files: list[str] = []
+    for path in changed_files:
+        label = _visible_file_label(path)
+        if label and label.lower() not in {"(none)", "none", "(unknown)", "unknown"}:
+            files.append(label)
+    return files
+
+
+def _visible_file_label(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    parts = text.split("`")
+    if len(parts) >= 2 and _looks_like_path(parts[0]):
+        return parts[0].lstrip("- ").strip()
+    if len(parts) >= 3:
+        return parts[1].strip()
+    for separator in (" — ", " – ", " - ", " -- ", " -> ", " => "):
+        if separator in text:
+            return text.split(separator, 1)[0].strip()
+    return text
+
+
+def _looks_like_path(value: object) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    name = text.replace("\\", "/").rsplit("/", 1)[-1]
+    return "/" in text.replace("\\", "/") or "." in name
+
+
+def _existing_refs(values: list[object]) -> list[str]:
+    refs: list[str] = []
+    for value in values:
+        text = str(value or "")
+        if text:
+            refs.append(text)
+    return refs
 
 
 def _project_state(project: dict[str, Any], dispatches: list[dict[str, Any]],
@@ -686,7 +2033,7 @@ def _go_agent_state(agent: dict[str, Any]) -> dict[str, Any]:
 
 def _go_status(value: object) -> str:
     normalized = _safe_id(str(value or "queued"))
-    if normalized in {"queued", "running", "passed", "failed", "blocked"}:
+    if normalized in {"queued", "running", "passed", "failed", "blocked", "review-pass", "review-fail", "verified"}:
         return normalized
     if normalized in {"pass", "completed"}:
         return "passed"
@@ -1019,6 +2366,21 @@ def _read_yaml(path: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def _read_action_runs(runtime_dir: str) -> list[dict[str, Any]]:
+    if not runtime_dir:
+        return []
+    root = Path(runtime_dir)
+    base = root / "action-runs"
+    if not base.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    for record_path in sorted(base.glob("*/*/action-run.json")):
+        data = _read_json(record_path)
+        if data:
+            records.append(data)
+    return records
+
+
 def _read_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
@@ -1232,6 +2594,8 @@ def _next_actions(
     runs: list[dict[str, Any]],
     gates: list[dict[str, Any]],
     decisions: list[dict[str, Any]],
+    sessions: list[dict[str, Any]] | None = None,
+    go_runs: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
     for gate in gates:
@@ -1267,6 +2631,7 @@ def _next_actions(
             "detail": str(run.get("entrypoint") or ""),
             "command": command,
         })
+    actions.extend(_go_run_action_items(go_runs or []))
     for decision in decisions:
         status = str(decision.get("status") or "")
         if status not in {"proposed", "selected", "blocked"}:
@@ -1284,12 +2649,97 @@ def _next_actions(
             "label": label,
             "detail": str(decision.get("mode") or ""),
         })
+    actions.extend(_session_action_items(sessions or []))
     return sorted(actions, key=_action_sort_key)
+
+
+def _go_run_action_items(go_runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    for go_run in go_runs:
+        go_run_id = str(go_run.get("go_run_id") or "")
+        status = str(go_run.get("status") or "")
+        if not go_run_id or status not in {"queued", "running", "blocked", "failed"}:
+            continue
+        status_command = str(go_run.get("status_command") or "")
+        execute_command = str(go_run.get("execute_command") or "")
+        blocked = status in {"blocked", "failed"}
+        if status_command:
+            actions.append({
+                "action_id": _safe_id(f"{go_run_id}-status-action"),
+                "source_type": "go_run",
+                "source_id": go_run_id,
+                "priority": "high" if blocked else "low",
+                "status": "blocked" if blocked else "info",
+                "label": "Inspect this DevFrame Code go-run.",
+                "detail": status,
+                "command": status_command,
+            })
+        if execute_command and status == "queued":
+            actions.append({
+                "action_id": _safe_id(f"{go_run_id}-execute-action"),
+                "source_type": "go_run",
+                "source_id": go_run_id,
+                "priority": "medium",
+                "status": "ready",
+                "label": "Execute this go-run through DevFrame Code.",
+                "detail": status,
+                "command": execute_command,
+            })
+    return actions
+
+
+def _session_action_items(sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    for session in sessions:
+        native_refs = session.get("native_refs")
+        if not _is_web_ai_import_native_refs(native_refs):
+            continue
+        session_id = str(session.get("session_id") or "")
+        if not session_id:
+            continue
+        session_status = _session_status(session.get("status"))
+        action_status = "open" if session_status in {"idle", "active", "needs_human"} else "info"
+        priority = "medium" if session_status in {"active", "needs_human"} else "low"
+        action_label = "Review imported web AI session action."
+        if native_refs.get("outcome") == "task_intake_recorded":
+            ref_priority = str(native_refs.get("priority") or "").strip()
+            if ref_priority in ACTION_PRIORITIES:
+                priority = ref_priority
+            if native_refs.get("dispatch_go_run_id"):
+                action_status = "info"
+                priority = "low"
+                action_label = "Web GPT task intake dispatched to local agents."
+            else:
+                action_status = "ready"
+                action_label = "Execute Web GPT task intake through local agents."
+        elif native_refs.get("tool_name") == "project_summary" and native_refs.get("outcome") == "completed":
+            action_status = "open"
+            priority = "medium"
+            action_label = "Review imported project summary for next local handoff or task intake."
+        for action in session.get("actions", []):
+            action_text = str(action or "").strip()
+            if not action_text:
+                continue
+            action_item = {
+                "action_id": _safe_id(f"{session_id}-{action_text}"),
+                "source_type": "session",
+                "source_id": session_id,
+                "priority": priority,
+                "status": action_status,
+                "label": action_label,
+                "detail": action_text,
+            }
+            if native_refs.get("outcome") == "task_intake_recorded" and action_status == "ready":
+                intake_id = str(native_refs.get("intake_id") or "").strip()
+                if intake_id:
+                    action_item["command"] = f"devframe web-ai dispatch-task-intakes --intake-id {intake_id}"
+            actions.append(action_item)
+    return actions
 
 
 def _action_sort_key(action: dict[str, Any]) -> tuple[int, int, str]:
     priority_order = {"high": 0, "medium": 1, "low": 2}
-    source_order = {"gate": 0, "run": 1, "decision": 2}
+    source_order = {"gate": 0, "go_run": 1, "run": 2, "decision": 3, "session": 4}
     return (
         priority_order.get(str(action.get("priority")), 3),
         source_order.get(str(action.get("source_type")), 3),
@@ -1299,11 +2749,13 @@ def _action_sort_key(action: dict[str, Any]) -> tuple[int, int, str]:
 
 def _summary_band(state: dict[str, Any], lang: str = "en") -> str:
     projects = state.get("projects", [])
+    sessions = state.get("sessions", [])
     runs = state.get("runs", [])
     gates = state.get("gates", [])
     decisions = state.get("decisions", [])
     metrics = [
         (dashboard_t("projects_section", lang), str(len(projects)), dashboard_t("registered_units", lang)),
+        (dashboard_t("sessions", lang), str(len(sessions)), _count_by_status(sessions)),
         (dashboard_t("runs_section", lang), str(len(runs)), _count_by_status(runs)),
         (dashboard_t("gates", lang), str(len(gates)), _count_by_status(gates)),
         (dashboard_t("decisions", lang), str(len(decisions)), _count_by_status(decisions)),
@@ -1317,6 +2769,172 @@ def _summary_band(state: dict[str, Any], lang: str = "en") -> str:
         for label, value, detail in metrics
     )
     return f'<section class="metrics">{items}</section>'
+
+
+def _workbench_section(state: dict[str, Any], action_links: bool = False, lang: str = "en") -> str:
+    projects = state.get("projects", [])
+    runs = state.get("runs", [])
+    agents = state.get("agents", [])
+    sessions = state.get("sessions", [])
+    gates = state.get("gates", [])
+    next_actions = state.get("next_actions", [])
+    primary_project = _first_by_status(projects, ["active", "review_required", "initialized", "completed"])
+    primary_run = _first_by_status(runs, ["running", "pending", "blocked", "completed"])
+    primary_action = next_actions[0] if next_actions else None
+    active_gates = [
+        gate for gate in gates
+        if str(gate.get("status", "")).lower() not in {"pass", "passed", "completed"}
+    ]
+    lanes = "\n".join([
+        _workbench_project_lane(primary_project, primary_run, action_links, lang),
+        _workbench_agent_lane(agents, lang),
+        _workbench_session_lane(sessions, lang),
+        _workbench_gate_lane(active_gates, primary_action, action_links, lang),
+    ])
+    return (
+        '<section class="workbench">'
+        '<div class="workbench-head">'
+        f"<div><h2>{_h(dashboard_t('control_workbench', lang))}</h2>"
+        f"<p>{_h(dashboard_t('workbench_intro', lang))}</p></div>"
+        f"<span>{_h(str(len(next_actions)))} {_h(dashboard_t('action_queue', lang))}</span>"
+        "</div>"
+        f'<div class="workbench-grid">{lanes}</div>'
+        "</section>"
+    )
+
+
+def _first_by_status(items: list[dict[str, Any]], statuses: list[str]) -> dict[str, Any] | None:
+    status_rank = {status: index for index, status in enumerate(statuses)}
+    if not items:
+        return None
+    return sorted(
+        items,
+        key=lambda item: (status_rank.get(str(item.get("status", "")).lower(), len(status_rank)), str(item)),
+    )[0]
+
+
+def _workbench_project_lane(
+    project: dict[str, Any] | None,
+    run: dict[str, Any] | None,
+    action_links: bool,
+    lang: str,
+) -> str:
+    if not project:
+        project_body = f'<p class="empty">{_h(dashboard_t("no_project", lang))}</p>'
+    else:
+        project_body = (
+            f'<strong class="workbench-title">{_h(project.get("display_name", ""))}</strong>'
+            '<div class="workbench-badges">'
+            f'{_badge(project.get("status", ""))}{_badge(project.get("risk_state", ""))}'
+            '</div>'
+            f'<p>{_h(project.get("goal", ""))}</p>'
+            f'<code>{_h(project.get("project_id", ""))}</code>'
+        )
+    if not run:
+        run_body = f'<p class="empty">{_h(dashboard_t("no_run", lang))}</p>'
+    else:
+        run_body = (
+            '<div class="workbench-row">'
+            f'<span>{_h(dashboard_t("active_run", lang))}</span>'
+            f'<code>{_h(run.get("run_id", ""))}</code>'
+            f'{_badge(run.get("status", ""))}'
+            '</div>'
+        )
+    dispatch_link = ""
+    if action_links:
+        dispatch_href = "/go/dispatch" if lang != "zh-CN" else f"/go/dispatch?lang={lang}"
+        dispatch_link = (
+            '<div class="workbench-action">'
+            '<span>/go</span>'
+            f'<strong><a class="row-link" href="{_h(dispatch_href)}">Start dispatch</a></strong>'
+            '<code>prepare or execute coding-agent shards</code>'
+            '</div>'
+        )
+    return (
+        '<article class="workbench-lane">'
+        f'<h3>{_h(dashboard_t("active_project", lang))}</h3>'
+        f'{project_body}{run_body}{dispatch_link}'
+        '</article>'
+    )
+
+
+def _workbench_agent_lane(agents: list[dict[str, Any]], lang: str) -> str:
+    if not agents:
+        body = f'<p class="empty">{_h(dashboard_t("no_agents", lang))}</p>'
+    else:
+        body = '<ul class="workbench-list">' + "".join(
+            '<li>'
+            f'<span>{_h(agent.get("role", ""))}</span>'
+            f'<code>{_h(agent.get("agent_id", ""))}</code>'
+            f'{_badge(agent.get("status", ""))}'
+            '</li>'
+            for agent in agents[:5]
+        ) + '</ul>'
+    return (
+        '<article class="workbench-lane">'
+        f'<h3>{_h(dashboard_t("agent_registry", lang))}</h3>'
+        f'{body}'
+        '</article>'
+    )
+
+
+def _workbench_session_lane(sessions: list[dict[str, Any]], lang: str) -> str:
+    if not sessions:
+        body = f'<p class="empty">{_h(dashboard_t("no_sessions", lang))}</p>'
+    else:
+        body = '<ul class="workbench-list">' + "".join(
+            '<li>'
+            f'<span>{_h(session.get("provider", ""))} / {_h(session.get("agent_role", ""))}</span>'
+            f'<code>{_h(session.get("session_id", ""))}</code>'
+            f'{_badge(session.get("status", ""))}'
+            '</li>'
+            for session in sessions[:5]
+        ) + '</ul>'
+    return (
+        '<article class="workbench-lane">'
+        f'<h3>{_h(dashboard_t("session_stream", lang))}</h3>'
+        f'{body}'
+        '</article>'
+    )
+
+
+def _workbench_gate_lane(
+    active_gates: list[dict[str, Any]],
+    primary_action: dict[str, Any] | None,
+    action_links: bool,
+    lang: str,
+) -> str:
+    if active_gates:
+        gate_lines = '<ul class="workbench-list">' + "".join(
+            '<li>'
+            f'<span>{_h(gate.get("kind", ""))}</span>'
+            f'<code>{_h(gate.get("gate_id", ""))}</code>'
+            f'{_badge(gate.get("status", ""))}'
+            '</li>'
+            for gate in active_gates[:4]
+        ) + '</ul>'
+    else:
+        gate_lines = f'<p class="empty">{_h(dashboard_t("all_gates_clear", lang))}</p>'
+    if not primary_action:
+        action_html = ""
+    else:
+        action_id = str(primary_action.get("action_id") or "")
+        link = _action_md_href(action_id, lang) if action_links and action_id else ""
+        link_html = f'<a class="row-link" href="{_h(link)}">{_h(dashboard_t("markdown_link", lang))}</a>' if link else ""
+        action_html = (
+            '<div class="workbench-action">'
+            f'<span>{_h(dashboard_t("primary_action", lang))}</span>'
+            f'<strong>{_h(primary_action.get("label", ""))}</strong>'
+            f'<code>{_h(_action_resume_filter(primary_action))}</code>'
+            f'{link_html}'
+            '</div>'
+        )
+    return (
+        '<article class="workbench-lane">'
+        f'<h3>{_h(dashboard_t("gate_state", lang))}</h3>'
+        f'{gate_lines}{action_html}'
+        '</article>'
+    )
 
 
 def _gate_focus_section(
@@ -1429,19 +3047,19 @@ def _next_actions_section(next_actions: list[dict[str, Any]], action_links: bool
     )
 
 
-def _go_runs_section(go_runs: list[dict[str, Any]], lang: str = "en") -> str:
+def _go_runs_section(go_runs: list[dict[str, Any]], action_links: bool = False, lang: str = "en", focus_go_run_id: str | None = None) -> str:
     if not go_runs:
         return ""
-    cards = "\n".join(_go_run_card_html(run, lang) for run in go_runs)
+    cards = "\n".join(_go_run_card_html(run, action_links, lang, focus_go_run_id=focus_go_run_id) for run in go_runs)
     return (
-        '<section class="panel">'
+        '<section class="panel" id="go-runs">'
         f"<h2>{_h(dashboard_t('go_coding_agents', lang))}</h2>"
         f'<div class="go-runs">{cards}</div>'
         "</section>"
     )
 
 
-def _go_run_card_html(run: dict[str, Any], lang: str = "en") -> str:
+def _go_run_card_html(run: dict[str, Any], action_links: bool, lang: str = "en", focus_go_run_id: str | None = None) -> str:
     agents = run.get("agents", [])
     rows = "\n".join(_go_agent_row_html(agent, lang) for agent in agents)
     headers = [
@@ -1454,8 +3072,9 @@ def _go_run_card_html(run: dict[str, Any], lang: str = "en") -> str:
         dashboard_t("packet", lang),
         dashboard_t("worker_command", lang),
     ]
+    focused = str(run.get("go_run_id", "")) == focus_go_run_id
     return (
-        '<article class="go-run-card">'
+        f'<article class="go-run-card{" go-run-focused" if focused else ""}">'
         '<div class="go-run-head">'
         f"<div><strong>{_h(dashboard_t('go_run', lang))}</strong><code>{_h(run.get('go_run_id', ''))}</code></div>"
         f"{_badge(run.get('status', ''))}"
@@ -1466,7 +3085,7 @@ def _go_run_card_html(run: dict[str, Any], lang: str = "en") -> str:
         f"<dt>{_h(dashboard_t('project', lang))}</dt><dd><code>{_h(run.get('project_id', ''))}</code></dd>"
         f"<dt>{_h(dashboard_t('metadata', lang))}</dt><dd><code>{_h(run.get('metadata_path', ''))}</code></dd>"
         "</dl>"
-        f"{_go_run_command_list_html(run, lang)}"
+        f"{_go_run_command_list_html(run, action_links, lang)}"
         '<div class="table-wrap">'
         "<table>"
         f"<thead><tr>{''.join(f'<th>{_h(header)}</th>' for header in headers)}</tr></thead>"
@@ -1477,11 +3096,19 @@ def _go_run_card_html(run: dict[str, Any], lang: str = "en") -> str:
     )
 
 
-def _go_run_command_list_html(run: dict[str, Any], lang: str = "en") -> str:
+def _go_run_command_list_html(run: dict[str, Any], action_links: bool = False, lang: str = "en") -> str:
+    status_link = ""
+    execute_link = ""
+    go_run_id = str(run.get("go_run_id", ""))
+    status = str(run.get("status", ""))
+    if action_links and go_run_id and status in {"queued", "running", "blocked", "failed"}:
+        status_link = f' <a class="row-link" href="{_h(_action_open_href(f"{go_run_id}-status-action", lang))}">Open action</a>'
+    if action_links and go_run_id and status == "queued":
+        execute_link = f' <a class="row-link" href="{_h(_action_open_href(f"{go_run_id}-execute-action", lang))}">Open action</a>'
     return (
         '<dl class="command-list">'
-        f"<dt>{_h(dashboard_t('go_status_command', lang))}</dt><dd><code>{_h(run.get('status_command', ''))}</code></dd>"
-        f"<dt>{_h(dashboard_t('go_execute_command', lang))}</dt><dd><code>{_h(run.get('execute_command', ''))}</code></dd>"
+        f"<dt>{_h(dashboard_t('go_status_command', lang))}</dt><dd><code>{_h(run.get('status_command', ''))}</code>{status_link}</dd>"
+        f"<dt>{_h(dashboard_t('go_execute_command', lang))}</dt><dd><code>{_h(run.get('execute_command', ''))}</code>{execute_link}</dd>"
         "</dl>"
     )
 
@@ -1515,6 +3142,11 @@ def _action_handoff_cell(action: dict[str, Any], enabled: bool, lang: str = "en"
         return "<td></td>"
     href = _action_md_href(action_id, lang)
     return f'<td><a class="row-link" href="{_h(href)}">{_h(dashboard_t("markdown_link", lang))}</a></td>'
+
+
+def _action_open_href(action_id: str, lang: str = "en") -> str:
+    base = f"/actions/open?action_id={quote(action_id)}"
+    return base if lang != "zh-CN" else f"{base}&lang={quote(lang)}"
 
 
 def _provider_bindings_section(provider_bindings: list[dict[str, Any]], lang: str = "en") -> str:
@@ -1568,6 +3200,75 @@ def _projects_section(projects: list[dict[str, Any]], lang: str = "en") -> str:
         [dashboard_t("name", lang), dashboard_t("id", lang), dashboard_t("status", lang), dashboard_t("risk", lang), dashboard_t("goal", lang)],
         rows,
     )
+
+
+def _sessions_section(sessions: list[dict[str, Any]], lang: str = "en") -> str:
+    rows = "\n".join(
+        "<tr>"
+        f"<td><code>{_h(session.get('session_id', ''))}</code></td>"
+        f"<td>{_h(session.get('provider', ''))}</td>"
+        f"<td><code>{_h(session.get('binding_id', ''))}</code></td>"
+        f"<td>{_h(session.get('agent_role', ''))}</td>"
+        f"<td>{_badge(session.get('status', ''))}</td>"
+        f"<td><code>{_h(session.get('project_id', ''))}</code></td>"
+        f"<td><code>{_h(session.get('run_id', ''))}</code></td>"
+        f"<td><code>{_h(session.get('task_spec_id', ''))}</code></td>"
+        f"<td>{_h(_session_count_label(session.get('messages', [])))}</td>"
+        f"<td>{_h(_session_count_label(session.get('tool_calls', [])))}</td>"
+        f"<td>{_h(_session_cost_label(session.get('cost', {})))}</td>"
+        f"<td>{_h(_session_tokens_label(session.get('tokens', {})))}</td>"
+        f"<td>{_h(session.get('diff_summary', ''))}</td>"
+        "</tr>"
+        for session in sessions
+    )
+    return _table_section(
+        dashboard_t("sessions", lang),
+        [
+            dashboard_t("session", lang),
+            dashboard_t("provider", lang),
+            dashboard_t("binding", lang),
+            dashboard_t("role", lang),
+            dashboard_t("status", lang),
+            dashboard_t("project", lang),
+            dashboard_t("run", lang),
+            dashboard_t("task_spec_id", lang),
+            dashboard_t("messages", lang),
+            dashboard_t("tool_calls", lang),
+            dashboard_t("cost", lang),
+            dashboard_t("tokens", lang),
+            dashboard_t("diff_summary", lang),
+        ],
+        rows,
+    )
+
+
+def _session_count_label(value: object) -> str:
+    if not isinstance(value, list):
+        return "0"
+    return str(len(value))
+
+
+def _session_cost_label(value: object) -> str:
+    if not isinstance(value, dict):
+        return ""
+    amount = value.get("amount")
+    if amount is None:
+        return ""
+    currency = str(value.get("currency") or "").strip()
+    return f"{amount} {currency}".strip()
+
+
+def _session_tokens_label(value: object) -> str:
+    if not isinstance(value, dict):
+        return ""
+    total = value.get("total")
+    if total is not None:
+        return str(total)
+    input_tokens = value.get("input")
+    output_tokens = value.get("output")
+    if input_tokens is None and output_tokens is None:
+        return ""
+    return f"in {input_tokens or 0} / out {output_tokens or 0}"
 
 
 def _runs_section(runs: list[dict[str, Any]], lang: str = "en") -> str:
@@ -1780,23 +3481,30 @@ def _h(value: object) -> str:
 def _html_styles() -> str:
     return """
 :root {
-  --ink: #17211b;
-  --muted: #627069;
-  --paper: #f4f0e8;
-  --panel: #fffdf8;
-  --line: #d7d0c2;
-  --accent: #0f7b63;
-  --warn: #a05318;
-  --bad: #9f2727;
-  --good: #1d6b43;
-  --shadow: 0 18px 45px rgba(27, 35, 30, 0.12);
+  --ink: #111827;
+  --muted: #64748b;
+  --paper: #f7f8fb;
+  --panel: #ffffff;
+  --line: #d9e1ea;
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --accent-soft: #eaf2ff;
+  --surface-soft: #f1f5f9;
+  --warn: #b45309;
+  --bad: #b91c1c;
+  --good: #15803d;
+  --shadow: 0 14px 36px rgba(15, 23, 42, 0.08);
 }
 * { box-sizing: border-box; }
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
 body {
   margin: 0;
   background:
-    linear-gradient(135deg, rgba(15, 123, 99, 0.08), transparent 38%),
-    repeating-linear-gradient(90deg, rgba(23, 33, 27, 0.035) 0, rgba(23, 33, 27, 0.035) 1px, transparent 1px, transparent 28px),
+    linear-gradient(135deg, rgba(37, 99, 235, 0.08), transparent 40%),
+    repeating-linear-gradient(90deg, rgba(15, 23, 42, 0.035) 0, rgba(15, 23, 42, 0.035) 1px, transparent 1px, transparent 32px),
     var(--paper);
   color: var(--ink);
   font-family: "Aptos", "Segoe UI", sans-serif;
@@ -1804,16 +3512,16 @@ body {
 .shell {
   width: min(1180px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 32px 0 48px;
+  padding: 24px 0 40px;
 }
 .masthead {
-  min-height: 210px;
+  min-height: 0;
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
   border-bottom: 2px solid var(--ink);
-  padding-bottom: 22px;
+  padding-bottom: 18px;
 }
 .eyebrow {
   margin: 0 0 12px;
@@ -1827,7 +3535,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 18px;
+  margin-top: 12px;
 }
 .endpoint-links a {
   color: var(--ink);
@@ -1854,16 +3562,17 @@ body {
 h1 {
   max-width: 850px;
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(46px, 7vw, 96px);
-  line-height: 0.92;
+  font-family: "Aptos", "Segoe UI", sans-serif;
+  font-size: clamp(34px, 4vw, 56px);
+  line-height: 1;
   letter-spacing: 0;
+  font-weight: 850;
 }
 .lead {
   max-width: 720px;
-  margin: 18px 0 0;
+  margin: 12px 0 0;
   color: var(--muted);
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.5;
 }
 .stamp {
@@ -1876,24 +3585,25 @@ h1 {
 .stamp span {
   border: 2px solid var(--ink);
   padding: 10px 12px;
-  background: #e2f2ec;
+  background: var(--accent-soft);
 }
 .metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
-  margin: 22px 0;
+  margin: 16px 0;
 }
 .metric {
-  min-height: 120px;
+  min-height: 96px;
   background: var(--panel);
   border: 1px solid var(--line);
+  border-radius: 8px;
   box-shadow: var(--shadow);
-  padding: 18px;
+  padding: 16px;
 }
 .metric strong {
   display: block;
-  font-size: 38px;
+  font-size: 30px;
   line-height: 1;
 }
 .metric span {
@@ -1908,12 +3618,133 @@ h1 {
   font-style: normal;
   font-size: 13px;
 }
+.workbench {
+  margin: 22px 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.workbench-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(90deg, var(--panel), var(--accent-soft));
+}
+.workbench-head h2 {
+  margin: 0;
+  font-size: 22px;
+}
+.workbench-head p {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+.workbench-head > span {
+  align-self: start;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--accent-strong);
+  background: var(--panel);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.workbench-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.workbench-lane {
+  min-height: 230px;
+  padding: 16px;
+  border-right: 1px solid var(--line);
+}
+.workbench-lane:last-child {
+  border-right: 0;
+}
+.workbench-lane h3 {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+.workbench-title {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+.workbench-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.workbench-lane p {
+  margin: 10px 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.workbench-row {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.workbench-row span,
+.workbench-action span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.workbench-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.workbench-list li {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.workbench-list span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.workbench-list code,
+.workbench-lane code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.workbench-action {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.workbench-action strong {
+  font-size: 15px;
+}
 .panel {
   margin-top: 16px;
   background: var(--panel);
   border: 1px solid var(--line);
+  border-radius: 8px;
   box-shadow: var(--shadow);
   padding: 18px;
+  min-width: 0;
+  overflow-x: hidden;
 }
 .panel h2 {
   margin: 0 0 14px;
@@ -1927,8 +3758,10 @@ h1 {
 }
 .gate-focus-card {
   border: 1px solid var(--line);
+  border-radius: 8px;
   padding: 14px;
-  background: #fffaf0;
+  background: var(--surface-soft);
+  min-width: 0;
 }
 .gate-focus-card p {
   margin: 10px 0 0;
@@ -1963,8 +3796,15 @@ h1 {
 }
 .go-run-card {
   border: 1px solid var(--line);
+  border-radius: 8px;
   padding: 14px;
-  background: #fffaf0;
+  background: var(--surface-soft);
+  min-width: 0;
+  overflow-x: hidden;
+}
+.go-run-focused {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .go-run-head {
   display: flex;
@@ -1982,8 +3822,11 @@ h1 {
 }
 .run-detail {
   border: 1px solid var(--line);
+  border-radius: 8px;
   padding: 14px;
-  background: #fffaf0;
+  background: var(--surface-soft);
+  min-width: 0;
+  overflow-x: hidden;
 }
 .run-detail h3 {
   margin: 0 0 12px;
@@ -2045,9 +3888,16 @@ h1 {
   font-weight: 800;
   text-transform: uppercase;
 }
-.table-wrap { overflow-x: auto; }
-table {
+.table-wrap {
+  display: block;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+table {
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 14px;
 }
@@ -2107,7 +3957,7 @@ code {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-top: 18px;
+  margin-top: 12px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.52);
@@ -2136,6 +3986,15 @@ code {
   .masthead { display: block; }
   .stamp { margin-top: 18px; }
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workbench-head { display: block; }
+  .workbench-head > span { display: inline-block; margin-top: 12px; }
+  .workbench-grid { grid-template-columns: 1fr; }
+  .workbench-lane {
+    min-height: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .workbench-lane:last-child { border-bottom: 0; }
   .safety-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 520px) {

@@ -2,7 +2,7 @@
   <img src="docs/assets/devframe-system-banner.svg" alt="devframe-system: web AI as an external brain" width="100%" />
 </p>
 
-<h3 align="center">A local coding CLI for OpenCode, Codex, Claude Code, T3Code, and other worker commands, with a web AI external brain behind it.</h3>
+<h3 align="center">A Local Agent Control Plane that turns Web GPT through MCP into a local agent entrypoint. T3Code is the native client shell; OpenCode executes; DevFrame governs.</h3>
 
 <p align="center">
   English | <a href="README.zh-CN.md">Simplified Chinese</a>
@@ -19,13 +19,13 @@
   <img alt="Web AI External Brain" src="https://img.shields.io/badge/Web%20AI-External%20Brain-1f6feb" />
   <img alt="No Submodules" src="https://img.shields.io/badge/submodules-none-20c997" />
   <img alt="Focus" src="https://img.shields.io/badge/focus-code%20quality%20%2B%20direction-00a884" />
-  <img alt="Agents" src="https://img.shields.io/badge/agents-Codex%20%7C%20Claude%20Code%20%7C%20CLI-6f42c1" />
+  <img alt="Agents" src="https://img.shields.io/badge/agents-OpenCode%20%7C%20custom%20CLI-6f42c1" />
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20PowerShell-24506b" />
   <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-green" />
 </p>
 
 ```text
-devframe code            # start a Codex-like coding session in the current repo
+devframe code            # start an OpenCode-backed coding session in the current repo
 devframe code workers    # check local worker CLIs before spending tokens
 devframe code status     # inspect the latest prepared coding run
 devframe code execute    # run the latest prepared coding run
@@ -36,14 +36,14 @@ devframe code execute    # run the latest prepared coding run
 /rdpaper <project> <goal> # route a paper task through the paper review loop
 ```
 
-**The core product is `devframe code`: a Codex/Claude Code/OpenCode-style programming tool that prepares bounded coding-agent work, shows the exact worker commands, and runs them only when you choose to spend worker tokens.**
+**The core product is `devframe code`: a programming tool built on T3Code as the native client shell and OpenCode as the executor, which prepares bounded coding-agent work, shows the exact worker commands, and runs them only when you choose to spend worker tokens. The real WebGPT MCP full cycle is proven.**
 
 The supporting question is not "how do we build another governance framework?" Many people are already doing that. The real question is: how can we improve code quality and direction control for free, or as close to free as possible, with the simplest workflow?
 
-dev-frame-system answers by turning a web AI session into an **external brain** for software development. GPT Web is the default example, but DeepSeek, Doubao, or another capable browser-accessible AI can play the same role. The external brain keeps product direction, engineering tradeoffs, task boundaries, evidence, and review memory in one place. Your IDE, CLI, browser, scripts, tests, and coding agents become replaceable executors.
+dev-frame-system answers by turning a web AI session into an **external brain** for software development. Through MCP, that web AI becomes a local agent entrypoint. GPT Web is the default example, but DeepSeek, Doubao, or another capable browser-accessible AI can play the same role. The external brain keeps product direction, engineering tradeoffs, task boundaries, evidence, and review memory in one place. Your IDE, CLI, browser, scripts, tests, and coding agents become replaceable executors.
 
 Practically, the first product surface is `devframe code`: a local coding CLI
-for OpenCode, Codex, Claude Code, or another worker command you already use. Run
+for OpenCode or another worker command you already use. Run
 it in a repository to enter a coding goal, choose a worker profile, prepare
 bounded coding sessions, fan work out across agents, execute them when you are
 ready to spend worker tokens, and inspect the status in an optional read-only
@@ -72,7 +72,7 @@ The short version:
 dev-frame-system gives you a portable operating layer for agent-assisted development:
 
 - **Direction control**: keep the real goal, tradeoffs, and constraints visible before code changes start.
-- **Task dispatch**: turn vague requests into bounded TaskSpecs for Codex, Claude Code, CLI tools, browser automation, or other agents.
+- **Task dispatch**: turn vague requests into bounded TaskSpecs for OpenCode, custom CLI tools, browser automation, or other agents.
 - **Parallel coding-agent entrypoint**: use `/go` or `devframe go` to prepare several bounded coding-agent shards, then execute them through OpenCode or another worker when you are ready to spend agent tokens.
 - **Evidence-based review**: use ExecutionReport, evidence indexes, review gates, and negative fixtures to prevent fake success.
 - **Reusable bootstrap**: install the same operating layer into another project with a PowerShell bootstrap.
@@ -142,7 +142,7 @@ pip install -e .
 cd D:\my-project
 devframe code "Build the MVP" --target src --runtime-dir "$env:TEMP\devframe-code" --dashboard
 devframe code workers
-devframe code "Fix the branch" --changed --agents auto --worker claude --preview
+devframe code "Fix the branch" --changed --agents auto --worker opencode --preview
 rdgoal "D:\my-project" "Build the MVP" --digest
 devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-dir "$env:TEMP\devframe-go"
 ```
@@ -150,9 +150,10 @@ devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-di
 `devframe code` is the product-shaped coding entrypoint. It defaults to the
 current repository and prompts for a goal when one is not supplied, prepares one
 bounded coding-agent session, prints the exact worker command, and records state
-for the dashboard. Use `--worker opencode|codex|claude` to choose a built-in
-worker template, or `--command <your-worker>` for a custom executor such as
-T3Code. Run `devframe code workers` first to see which local worker CLIs are
+for the dashboard. Use `--worker opencode` to choose the built-in
+worker template, or `--command <your-worker>` for another executor command
+template (for example, `python -m your_worker_module`). Run `devframe code workers`
+first to see which local worker CLIs are
 available; it is status-only and does not create packets or spend worker
 tokens. Use `--changed --agents auto` to target modified, staged, or
 untracked git files and fan them out across bounded shards; `--max-agents` caps
@@ -176,9 +177,10 @@ form for scripts that already use the umbrella CLI.
 `/go` is the coding-tool entrypoint. In a shell, `devframe go` prepares parallel
 coding-agent dispatch packets and shows the exact worker commands without
 spending agent tokens by default. Add `--execute` to run the shards concurrently;
-use `--worker opencode|codex|claude` to pick a built-in worker profile, or pass
+use `--worker opencode` to pick the built-in worker profile, or pass
 `--command <your-worker>` to route the same TaskSpec packets through another
-executor such as T3Code. The Visual Control Plane reads the same runtime and
+executor command (for example, `python -m your_worker_module`). The Visual
+Control Plane reads the same runtime and
 shows the go-run plus each coding-agent shard, target, packet, status, and
 worker command, plus copyable status and execute commands for the go-run.
 Pass `--changed --agents auto` to derive shard targets from git changes instead
@@ -188,7 +190,7 @@ Then run work through the external-brain loop:
 
 1. Define the goal, risk, scope, and acceptance criteria in the web AI.
 2. Convert the work into a bounded TaskSpec.
-3. Dispatch to an executor such as Codex, Claude Code, a CLI script, or browser automation.
+3. Dispatch to an executor such as OpenCode, a custom CLI script, or browser automation.
 4. Collect ExecutionReport and verification output.
 5. Accept only when evidence passes the review gates.
 6. Feed reusable lessons back into the project memory.

@@ -36,6 +36,7 @@ $requiredPaths = @(
     "packages\control-plane",
     "packages\test-frame",
     "rules",
+    "rules\recon.md",
     "schemas",
     "scripts\verify-control-plane-wheel.ps1",
     "scripts\verify-public-snapshot.ps1",
@@ -47,6 +48,7 @@ $forbiddenNames = @(
     ".gitmodules",
     ".agent",
     ".ai",
+    ".ai-bridge",
     ".agents",
     ".claude",
     ".codex",
@@ -75,6 +77,8 @@ $forbiddenExtensions = @(
 
 $ignoredGeneratedDirs = @(
     "__pycache__",
+    ".codegraph",
+    ".devframe-runtime",
     ".pytest_cache",
     ".ruff_cache",
     ".mypy_cache"
@@ -96,6 +100,38 @@ function Test-IsUnderIgnoredGeneratedDir {
     return $false
 }
 
+function Get-PublicSnapshotItems {
+    param(
+        [string]$Path,
+        [string]$RootPath
+    )
+
+    Get-ChildItem -LiteralPath $Path -Force | ForEach-Object {
+        if ($_.PSIsContainer) {
+            $relative = Get-RelativeSnapshotPath -BasePath $RootPath -TargetPath $_.FullName
+
+            if ($relative -like ".git*") {
+                return
+            }
+
+            $parts = $relative -split '[\\/]'
+            $isIgnored = $false
+            foreach ($part in $parts) {
+                if ($ignoredGeneratedDirs -contains $part) {
+                    $isIgnored = $true
+                    break
+                }
+            }
+            if (-not $isIgnored) {
+                $_
+                Get-PublicSnapshotItems -Path $_.FullName -RootPath $RootPath
+            }
+        } else {
+            $_
+        }
+    }
+}
+
 $missing = New-Object System.Collections.Generic.List[string]
 foreach ($path in $requiredPaths) {
     if (-not (Test-Path -LiteralPath (Join-Path $rootPath $path))) {
@@ -108,8 +144,49 @@ if ($missing.Count -gt 0) {
     exit 1
 }
 
+$requiredTextChecks = @(
+    @{
+        Path = "AGENTS.md"
+        Text = "rules/recon.md"
+    },
+    @{
+        Path = "rules\README.md"
+        Text = "recon.md"
+    },
+    @{
+        Path = "rules\open-source-reuse.md"
+        Text = "rules/recon.md"
+    },
+    @{
+        Path = "rules\recon.md"
+        Text = "RULE recon-001: Recon Gate Before Write-Capable Work"
+    },
+    @{
+        Path = "docs\agent-runtime\negative-test-fixtures\NEG-031-missing-recon-receipt.json"
+        Text = "Missing Recon Receipt"
+    }
+)
+
+$textFailures = New-Object System.Collections.Generic.List[string]
+foreach ($check in $requiredTextChecks) {
+    $path = Join-Path $rootPath $check.Path
+    if (-not (Test-Path -LiteralPath $path)) {
+        $textFailures.Add("$($check.Path): file missing")
+        continue
+    }
+    $content = Get-Content -LiteralPath $path -Raw
+    if (-not $content.Contains($check.Text)) {
+        $textFailures.Add("$($check.Path): missing '$($check.Text)'")
+    }
+}
+
+if ($textFailures.Count -gt 0) {
+    $textFailures | ForEach-Object { Write-Output "[TEXT-FAIL] $_" }
+    exit 1
+}
+
 $violations = New-Object System.Collections.Generic.List[string]
-Get-ChildItem -LiteralPath $rootPath -Recurse -Force | ForEach-Object {
+Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | ForEach-Object {
     if ($_.FullName -like (Join-Path $rootPath ".git*")) {
         return
     }
@@ -140,7 +217,7 @@ if ($violations.Count -gt 0) {
 
 $jsonFailures = New-Object System.Collections.Generic.List[string]
 $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
-Get-ChildItem -LiteralPath $rootPath -Recurse -Filter "*.json" -File | ForEach-Object {
+Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | Where-Object { -not $_.PSIsContainer -and $_.Extension -eq ".json" } | ForEach-Object {
     if (Test-IsUnderIgnoredGeneratedDir -BasePath $rootPath -TargetPath $_.FullName) {
         return
     }
@@ -163,5 +240,6 @@ if ($jsonFailures.Count -gt 0) {
 }
 
 Write-Output "[OK] Public snapshot required paths are present."
+Write-Output "[OK] Governance rule references are present."
 Write-Output "[OK] No submodules, local agent state, evidence archives, generated packages, or oversized files found."
 Write-Output "[OK] JSON files parse as UTF-8."

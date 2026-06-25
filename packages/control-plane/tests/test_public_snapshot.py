@@ -290,6 +290,31 @@ def test_public_snapshot_rejects_generated_build_dirs():
         shutil.rmtree(probe_root, ignore_errors=True)
 
 
+def test_public_snapshot_rejects_root_ai_bridge_dir():
+    probe_dir = REPO_ROOT / ".ai-bridge"
+    probe_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        result = subprocess.run(
+            [
+                "powershell",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(REPO_ROOT / "scripts" / "verify-public-snapshot.ps1"),
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        output = result.stdout + result.stderr
+        assert result.returncode == 1, output
+        assert "forbidden name: .ai-bridge" in output
+    finally:
+        shutil.rmtree(probe_dir, ignore_errors=True)
+
+
 def test_control_plane_packaged_templates_do_not_reference_private_paths():
     forbidden = [
         "D:\\agent-acceptance",

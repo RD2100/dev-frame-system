@@ -25,11 +25,18 @@ coverage/
 # Local agent/browser state must stay out of the public distribution repo.
 .agent/
 .ai/
+.ai-bridge/
 .agents/
 .claude/
 .codex/
+.codegraph/
+.devframe-runtime/
 .gsd/
 .opencode/
+
+# Local web AI import demos; sanitized fixtures belong under package tests.
+chatgpt-summary.json
+
 runs/
 reports/
 artifacts/

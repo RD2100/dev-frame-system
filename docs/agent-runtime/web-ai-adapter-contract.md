@@ -94,6 +94,52 @@ This is only the reference adapter. Users can choose a different browser or web
 AI by supplying a config that validates against
 `schemas/web_ai_adapter.schema.json`.
 
+## Summary-only Chrome Binding Probe
+
+For a running local Chrome instance with CDP enabled, DevFrame can bind an
+already-open ChatGPT tab as a summary-only session:
+
+```powershell
+devframe web-ai bind-chrome --runtime-dir <runtime> --project <project-id> --cdp-endpoint http://127.0.0.1:9222
+```
+
+The probe reads Chrome debugger metadata and the ChatGPT tab URL. It must not
+read cookies, local storage, browser profile files, passwords, raw transcripts,
+or message text. A successful probe writes
+`<runtime>/web-ai-sessions/chatgpt-chrome-binding.json`, which appears in the
+Visual Control Plane as an active `chatgpt` session and marks the default
+`chatgpt-web` provider binding as ready.
+
+The probe is a binding check, not a task submission. Sending project context,
+paper content, files, or prompts to the provider remains a separate
+action-time decision.
+
+## MCP Task Intake Boundary
+
+When a web AI host supports MCP/tool calling, the preferred runtime path is a
+small task-intake call, not a context ZIP or full workspace handoff. The web AI
+may submit only a minimized task title, task summary, priority, suggested local
+agent, provider id, and conversation reference. The local DevFrame runtime then
+turns that intake into local agent work, evidence, review gates, and client
+state.
+
+`task_intake` is the safe default entrypoint for turning ChatGPT Web guidance
+into local work:
+
+```text
+ChatGPT Web MCP task_intake
+  -> local DevFrame task/evidence record
+  -> @go/OpenCode worker dispatch
+  -> review gate and evidence store
+  -> T3/native client team workbench projection
+```
+
+The MCP task-intake payload must not include raw transcripts, cookies, browser
+profile data, bearer tokens, full local paths, archives, private source dumps,
+or generated diff bundles. ZIP/report submission remains a fallback review
+artifact and must stay under the evidence/review layer, not the main runtime
+channel.
+
 ## Custom Provider Guidance
 
 A custom provider document should answer these questions:

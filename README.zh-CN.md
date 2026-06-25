@@ -2,7 +2,7 @@
   <img src="docs/assets/devframe-system-banner.svg" alt="dev-frame-system：把网页 AI 作为外部大脑" width="100%" />
 </p>
 
-<h3 align="center">面向 OpenCode、Codex、Claude Code、T3Code 和其他 worker 命令的本地编程 CLI，背后接入网页 AI 外部大脑。</h3>
+<h3 align="center">一个 Local Agent Control Plane，通过 MCP 把网页 AI 变成本地 agent 入口。T3Code 是原生客户端 shell；OpenCode 是执行器；DevFrame 负责治理。</h3>
 
 <p align="center">
   <a href="README.md">English</a> | 简体中文
@@ -16,9 +16,10 @@
 </p>
 
 ```text
-devframe code "<goal>"  # 在当前仓库启动类似 Codex 的编程会话
+devframe code "<goal>"  # 在当前仓库启动 OpenCode 优先的编程会话
 devframe code workers   # 执行前检查本机可用的 worker CLI，不创建 packet、不消耗 token
 devframe code status    # 查看最近一次已准备的编程运行
+devframe code session   # 只读查看最近一次编程运行的会话摘要，不暴露私有本地路径
 devframe code execute   # 执行最近一次已准备的编程运行
 /rdinit                 # 初始化外部大脑操作层
 /bindChrome <url>       # 绑定 GPT Web、DeepSeek、豆包或其他网页 AI 会话
@@ -27,13 +28,13 @@ devframe code execute   # 执行最近一次已准备的编程运行
 /rdpaper <project> <goal> # 把论文任务路由进论文审查闭环
 ```
 
-**核心产品是 `devframe code`：一个类似 Codex / Claude Code / OpenCode 的编程工具，用来准备有边界的 coding-agent 任务、显示精确 worker 命令，并且只在你确认要消耗 worker token 时执行。**
+**核心产品是 `devframe code`：一个基于 T3Code 作为原生客户端 shell、OpenCode 作为执行器的编程工具，用来准备有边界的 coding-agent 任务、显示精确 worker 命令，并且只在你确认要消耗 worker token 时执行。真实的 WebGPT MCP 完整闭环已被验证。**
 
 配套问题不是"再做一套治理框架"。真正的问题是：如何用尽量低的成本和最简单的流程，提高代码质量，并让研发方向不漂移？
 
-dev-frame-system 的答案是：把网页 AI 会话变成软件研发的**外部大脑**。网页 AI 负责保存产品方向、工程取舍、任务边界、证据、审查结论和经验记忆；IDE、CLI、浏览器、脚本、测试框架以及不同厂商的 coding agent 都是可替换的执行器。
+dev-frame-system 的答案是：通过 MCP 把网页 AI 会话变成软件研发的**外部大脑**和本地 agent 入口。网页 AI 负责保存产品方向、工程取舍、任务边界、证据、审查结论和经验记忆；IDE、CLI、浏览器、脚本、测试框架以及不同厂商的 coding agent 都是可替换的执行器。
 
-落到产品形态上，第一个主入口是 `devframe code`：一个面向 OpenCode、Codex、Claude Code 或其他 worker 命令的本地编程 CLI。它不替代模型，也不替代 IDE；它负责限定任务边界、选择 worker profile、准备 coding 会话、按需拆分并发 agent，在你确认要花 worker token 时再执行，并把状态写进可选的只读 Dashboard。
+落到产品形态上，第一个主入口是 `devframe code`：一个默认面向 OpenCode、并可接入其他 worker 命令的本地编程 CLI。它不替代模型，也不替代 IDE；它负责限定任务边界、选择 worker profile、准备 coding 会话、按需拆分并发 agent，在你确认要花 worker token 时再执行，并把状态写进可选的只读 Dashboard。
 
 ## 为什么需要它
 
@@ -58,7 +59,7 @@ dev-frame-system 在工具之上放了一层思考与协调层：
 dev-frame-system 提供一套可迁移的 agent 研发操作层：
 
 - **方向把控**：在写代码前，把目标、边界、风险和取舍放到同一个上下文里。
-- **任务调度**：把模糊需求变成有边界的 TaskSpec，交给 Codex、Claude Code、CLI、浏览器自动化或其他 agent。
+- **任务调度**：把模糊需求变成有边界的 TaskSpec，交给 OpenCode、自定义 CLI、浏览器自动化或其他 agent。
 - **并发 coding agent 入口**：用 `/go` 或 `devframe go` 准备多个有边界的编码分片；确认要花 agent token 时，再通过 OpenCode 或其他 worker 并发执行。
 - **证据审查**：用 ExecutionReport、证据索引、审查门禁和负面夹具防止"假完成"。
 - **可复用引导**：用 PowerShell bootstrap 把同一套操作层部署到其他项目。
@@ -127,18 +128,18 @@ rdgoal "D:\my-project" "Build the MVP" --digest
 devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-dir "$env:TEMP\devframe-go"
 ```
 
-`devframe code` 是更接近 Codex/OpenCode 形态的编程入口。它默认作用于当前仓库，准备一个有边界的 coding-agent 会话，打印精确 worker 命令，并把状态写入 Dashboard 可读取的 runtime。用 `--worker opencode|codex|claude` 可以选择内置 worker 模板；其他执行器，比如 T3Code，可以通过 `--command <your-worker>` 接入。执行前可以先跑 `devframe code workers` 查看本机哪些 worker CLI 可用；这个检查不会创建 packet，也不会消耗 worker token。真实 git 工作区里推荐用 `--changed --agents auto`：只把 modified、staged 或 untracked 文件作为 target，并按文件数自动拆成有上限的并发分片；`--max-agents` 可以调整自动拆分上限。先用 `--preview` 可以看分片计划、估算 bytes 和 worker 命令模板，不创建 packet，也不消耗 worker token；实际分片会按 target 大小做均衡，避免某个 agent 吃掉大部分上下文。准备真正消耗 worker token 时再加 `--execute`，或者先 prepare，再用 `devframe code execute [latest|<go-run-id>]` 复用已有 packet 延后执行；已通过的 agent 默认会跳过，除非显式传 `--rerun-passed`。加 `--dashboard` 会直接启动同一个 runtime 的本地只读可视化界面；Dashboard 页面内有 English/中文 切换，也可以用 `?lang=zh-CN` 直接打开中文界面，并在每个 go-run 卡片里显示可复制的 `devframe code status` 和 `devframe code execute` 命令。
+`devframe code` 是 OpenCode 优先的编程入口。它默认作用于当前仓库，准备一个有边界的 coding-agent 会话，打印精确 worker 命令，并把状态写入 Dashboard 可读取的 runtime。用 `--worker opencode` 可以选择内置 worker 模板；其他执行器可以通过 `--command <your-worker>` 接入，例如 `python -m your_worker_module`。执行前可以先跑 `devframe code workers` 查看本机哪些 worker CLI 可用；这个检查不会创建 packet，也不会消耗 worker token。真实 git 工作区里推荐用 `--changed --agents auto`：只把 modified、staged 或 untracked 文件作为 target，并按文件数自动拆成有上限的并发分片；`--max-agents` 可以调整自动拆分上限。先用 `--preview` 可以看分片计划、估算 bytes 和 worker 命令模板，不创建 packet，也不消耗 worker token；实际分片会按 target 大小做均衡，避免某个 agent 吃掉大部分上下文。准备真正消耗 worker token 时再加 `--execute`，或者先 prepare，再用 `devframe code execute [latest|<go-run-id>]` 复用已有 packet 延后执行；已通过的 agent 默认会跳过，除非显式传 `--rerun-passed`。加 `--dashboard` 会直接启动同一个 runtime 的本地只读可视化界面；`devframe code session [latest|<go-run-id>]` 可以在不暴露私有本地路径的前提下，只读查看当前会话的 provider、agent role、task spec 文件名和 target 列表，方便手动确认会话状态或复制 Dashboard 命令。Dashboard 页面内有 English/中文 切换，也可以用 `?lang=zh-CN` 直接打开中文界面，并在每个 go-run 卡片里显示可复制的 `devframe code status`、`devframe code session` 和 `devframe code execute` 命令。
 
 `/rdgoal` 是面向用户的 slash 入口。在 shell 中使用已安装的 `rdgoal` 命令。`devframe rdgoal` 作为兼容形式仍然可用于已经使用 umbrella CLI 的脚本。
 
-`/go` 是面向编程工具形态的入口。在 shell 中，`devframe go` 默认只准备并发 coding agent dispatch packet，并打印精确 worker 命令，不会立刻消耗 agent token。加 `--execute` 后才会并发运行这些分片；用 `--worker opencode|codex|claude` 可以选择内置 worker profile，默认是 `opencode run -m stepfun/step-3.7-flash --agent build`，也可以用 `--command <your-worker>` 接入其他执行器。传 `--changed --agents auto` 可以从 git 变更自动生成分片 target，并自动选择并发数，避免项目级大上下文。
+`/go` 是面向编程工具形态的入口。在 shell 中，`devframe go` 默认只准备并发 coding agent dispatch packet，并打印精确 worker 命令，不会立刻消耗 agent token。加 `--execute` 后才会并发运行这些分片；用 `--worker opencode` 可以选择内置 worker profile，默认是 `opencode run -m stepfun/step-3.7-flash --dangerously-skip-permissions --agent build`，也可以用 `--command <your-worker>` 接入其他执行器。传 `--changed --agents auto` 可以从 git 变更自动生成分片 target，并自动选择并发数，避免项目级大上下文。
 Visual Control Plane 会读取同一个 runtime，并显示 go-run 以及每个 coding-agent 分片的目标、packet、状态、worker 命令，以及可复制的状态查询和执行命令。
 
 然后通过外部大脑闭环运行工作：
 
 1. 在网页 AI 中明确目标、风险、范围和验收标准。
 2. 把任务转成有边界的 TaskSpec。
-3. 分发给 Codex、Claude Code、CLI 脚本或浏览器自动化执行。
+3. 分发给 OpenCode、自定义 CLI 脚本或浏览器自动化执行。
 4. 收集 ExecutionReport 和验证输出。
 5. 只有证据通过审查门禁，才接受这次工作。
 6. 把可复用经验沉淀回项目记忆。

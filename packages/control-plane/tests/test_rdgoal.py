@@ -21,6 +21,7 @@ from control_plane.rdgoal import rdgoal
 from control_plane.go_dispatch import run_go_dispatch
 from control_plane.rdgoal_cli import main as rdgoal_cli_main
 from control_plane.runtime_digest import build_runtime_digest, render_runtime_digest_markdown
+from control_plane.runtime_store import JournalEvent, RuntimeStore
 from control_plane.visual_state import build_visual_control_plane_state, render_visual_control_plane_state_html
 from control_plane.worker import AihubGoWorker, CommandWorker, LocalDryRunWorker
 
@@ -1739,3 +1740,340 @@ def test_dashboard_server_serves_chinese_action_markdown(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+def test_team_model_projects_terminal_go_run_pass_status_as_review_gate(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    source_dir = project_root / "packages" / "control-plane" / "control_plane"
+    source_dir.mkdir(parents=True)
+    (source_dir / "cli.py").write_text("c" * 24, encoding="utf-8")
+    go_run_id = "go-pass-test"
+    go_run_dir = runtime_dir / "go-runs" / go_run_id
+    go_run_dir.mkdir(parents=True)
+    (go_run_dir / "go-run.json").write_text(json.dumps({
+        "go_run_id": go_run_id,
+        "project_id": "project",
+        "project_root": str(project_root),
+        "requirement": "Test terminal passed go-run.",
+        "runtime_dir": str(runtime_dir),
+        "status": "passed",
+        "execute": True,
+        "agents": [{
+            "agent_id": "coding-agent-1",
+            "shard_index": 1,
+            "shard_count": 1,
+            "targets": ["packages/control-plane/control_plane/cli.py"],
+            "target_bytes": 24,
+            "packet_dir": str(runtime_dir / "p1"),
+            "task_spec_path": str(runtime_dir / "p1" / "TASKSPEC.json"),
+            "worker_command": ["opencode", "run"],
+            "status": "completed",
+            "worker_status": "passed",
+            "report_path": str(runtime_dir / "report.md"),
+            "changed_files": ["cli.py"],
+            "verification": "ok",
+        }],
+    }, indent=2, ensure_ascii=True), encoding="utf-8")
+
+    state = build_visual_control_plane_state(runtime_dir)
+
+    validate_schema("schemas/visual_control_plane_state.schema.json", state)
+    team = state["team"]
+
+    outcome_gates = [g for g in team["review_gates"] if g["kind"] == "go-run-outcome"]
+    assert len(outcome_gates) == 1
+    assert outcome_gates[0]["gate_id"] == f"{go_run_id}-outcome-gate"
+    assert outcome_gates[0]["status"] == "pass"
+    assert outcome_gates[0]["run_id"] == go_run_id
+    assert "completed successfully" in outcome_gates[0]["reason"]
+
+    review_messages = [m for m in team["message_bus"] if m["run_id"] == go_run_id
+                       and m["kind"] == "review-status"]
+    assert len(review_messages) >= 1
+    assert any("passed" in m["summary"] for m in review_messages)
+
+
+def test_team_model_projects_terminal_go_run_failed_status_as_review_gate(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    source_dir = project_root / "packages" / "control-plane" / "control_plane"
+    source_dir.mkdir(parents=True)
+    (source_dir / "go_dispatch.py").write_text("g" * 24, encoding="utf-8")
+    go_run_id = "go-fail-test"
+    go_run_dir = runtime_dir / "go-runs" / go_run_id
+    go_run_dir.mkdir(parents=True)
+    (go_run_dir / "go-run.json").write_text(json.dumps({
+        "go_run_id": go_run_id,
+        "project_id": "project",
+        "project_root": str(project_root),
+        "requirement": "Test terminal failed go-run.",
+        "runtime_dir": str(runtime_dir),
+        "status": "failed",
+        "execute": True,
+        "agents": [{
+            "agent_id": "coding-agent-1",
+            "shard_index": 1,
+            "shard_count": 1,
+            "targets": ["packages/control-plane/control_plane/go_dispatch.py"],
+            "target_bytes": 24,
+            "packet_dir": str(runtime_dir / "p1"),
+            "task_spec_path": str(runtime_dir / "p1" / "TASKSPEC.json"),
+            "worker_command": ["opencode", "run"],
+            "status": "failed",
+            "worker_status": "failed",
+            "changed_files": [],
+        }],
+    }, indent=2, ensure_ascii=True), encoding="utf-8")
+
+    state = build_visual_control_plane_state(runtime_dir)
+
+    validate_schema("schemas/visual_control_plane_state.schema.json", state)
+    team = state["team"]
+
+    outcome_gates = [g for g in team["review_gates"] if g["kind"] == "go-run-outcome"]
+    assert len(outcome_gates) == 1
+    assert outcome_gates[0]["gate_id"] == f"{go_run_id}-outcome-gate"
+    assert outcome_gates[0]["status"] == "failed"
+    assert outcome_gates[0]["run_id"] == go_run_id
+    assert "failed" in outcome_gates[0]["reason"]
+
+    review_messages = [m for m in team["message_bus"] if m["run_id"] == go_run_id
+                       and m["kind"] == "review-status"]
+    assert len(review_messages) >= 1
+    assert any("failed" in m["summary"] for m in review_messages)
+
+
+def test_team_model_projects_terminal_go_run_blocked_status_as_review_gate(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    go_run_id = "go-blocked-test"
+    go_run_dir = runtime_dir / "go-runs" / go_run_id
+    go_run_dir.mkdir(parents=True)
+    (go_run_dir / "go-run.json").write_text(json.dumps({
+        "go_run_id": go_run_id,
+        "project_id": "project",
+        "project_root": str(project_root),
+        "requirement": "Test terminal blocked go-run.",
+        "runtime_dir": str(runtime_dir),
+        "status": "blocked",
+        "execute": True,
+        "agents": [{
+            "agent_id": "coding-agent-1",
+            "shard_index": 1,
+            "shard_count": 1,
+            "targets": [],
+            "target_bytes": 0,
+            "packet_dir": str(runtime_dir / "p1"),
+            "task_spec_path": str(runtime_dir / "p1" / "TASKSPEC.json"),
+            "worker_command": ["opencode", "run"],
+            "status": "blocked",
+            "worker_status": "blocked",
+            "changed_files": [],
+        }],
+    }, indent=2, ensure_ascii=True), encoding="utf-8")
+
+    state = build_visual_control_plane_state(runtime_dir)
+
+    validate_schema("schemas/visual_control_plane_state.schema.json", state)
+    team = state["team"]
+
+    outcome_gates = [g for g in team["review_gates"] if g["kind"] == "go-run-outcome"]
+    assert len(outcome_gates) == 1
+    assert outcome_gates[0]["gate_id"] == f"{go_run_id}-outcome-gate"
+    assert outcome_gates[0]["status"] == "blocked"
+    assert outcome_gates[0]["run_id"] == go_run_id
+    assert "blocked" in outcome_gates[0]["reason"]
+
+    review_messages = [m for m in team["message_bus"] if m["run_id"] == go_run_id
+                       and m["kind"] == "review-status"]
+    assert len(review_messages) >= 1
+    assert any("blocked" in m["summary"] for m in review_messages)
+
+
+def test_team_model_avoids_duplicate_outcome_gates(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    go_run_id = "go-dup-test"
+    go_run_dir = runtime_dir / "go-runs" / go_run_id
+    go_run_dir.mkdir(parents=True)
+    (go_run_dir / "go-run.json").write_text(json.dumps({
+        "go_run_id": go_run_id,
+        "project_id": "project",
+        "project_root": str(project_root),
+        "requirement": "Test dedup.",
+        "runtime_dir": str(runtime_dir),
+        "status": "passed",
+        "execute": True,
+        "agents": [{
+            "agent_id": "coding-agent-1",
+            "shard_index": 1,
+            "shard_count": 1,
+            "targets": [],
+            "target_bytes": 0,
+            "packet_dir": str(runtime_dir / "p1"),
+            "task_spec_path": str(runtime_dir / "p1" / "TASKSPEC.json"),
+            "worker_command": ["opencode", "run"],
+            "status": "completed",
+            "worker_status": "passed",
+            "changed_files": [],
+        }],
+    }, indent=2, ensure_ascii=True), encoding="utf-8")
+
+    state = build_visual_control_plane_state(runtime_dir)
+
+    team = state["team"]
+    outcome_gates = [g for g in team["review_gates"] if g["kind"] == "go-run-outcome"]
+    assert len(outcome_gates) == 1
+
+
+def test_t3_shell_exposes_go_run_outcome_gate_and_message_signal(tmp_path):
+    from control_plane.t3_adapter import build_t3_client_shell
+
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    go_run_id = "go-shell-test"
+    go_run_dir = runtime_dir / "go-runs" / go_run_id
+    go_run_dir.mkdir(parents=True)
+    (go_run_dir / "go-run.json").write_text(json.dumps({
+        "go_run_id": go_run_id,
+        "project_id": "project",
+        "project_root": str(tmp_path / "project"),
+        "requirement": "Test T3 shell go-run outcome.",
+        "runtime_dir": str(runtime_dir),
+        "status": "passed",
+        "execute": True,
+        "agents": [{
+            "agent_id": "coding-agent-1",
+            "shard_index": 1,
+            "shard_count": 1,
+            "targets": [],
+            "target_bytes": 0,
+            "packet_dir": str(runtime_dir / "p1"),
+            "task_spec_path": str(runtime_dir / "p1" / "TASKSPEC.json"),
+            "worker_command": ["opencode", "run"],
+            "status": "completed",
+            "worker_status": "passed",
+            "changed_files": [],
+        }],
+    }, indent=2, ensure_ascii=True), encoding="utf-8")
+
+    shell = build_t3_client_shell(runtime_dir)
+
+    team = shell["devframe"]["team"]
+    outcome_gates = [g for g in team["reviewGates"] if g["kind"] == "go-run-outcome"]
+    assert len(outcome_gates) == 1
+    assert outcome_gates[0]["gateId"] == f"{go_run_id}-outcome-gate"
+    assert outcome_gates[0]["status"] == "pass"
+
+    review_messages = [m for m in team["messageBus"] if m["runId"] == go_run_id
+                       and m["kind"] == "review-status"]
+    assert len(review_messages) >= 1
+
+
+def test_runtime_store_read_all_tolerates_truncated_trailing_line(tmp_path):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    journal_path = runtime_dir / "rdgoal-events.jsonl"
+    valid_line = json.dumps({
+        "event_type": "project_registered",
+        "project_id": "test-project",
+        "payload": {"project_root": str(tmp_path)},
+        "timestamp": "2026-06-25T00:00:00Z",
+        "event_id": "test-project-e1",
+    })
+    journal_path.write_text(
+        valid_line + "\n" + valid_line[:30],
+        encoding="utf-8",
+    )
+
+    events = RuntimeStore(runtime_dir=runtime_dir).read_all()
+
+    assert len(events) == 1
+    assert events[0]["project_id"] == "test-project"
+
+
+def test_runtime_store_read_all_tolerates_malformed_line_in_middle(tmp_path):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    journal_path = runtime_dir / "rdgoal-events.jsonl"
+    valid_a = json.dumps({
+        "event_type": "project_registered",
+        "project_id": "project-a",
+        "payload": {},
+        "timestamp": "2026-06-25T00:00:00Z",
+        "event_id": "project-a-e1",
+    })
+    valid_b = json.dumps({
+        "event_type": "project_registered",
+        "project_id": "project-b",
+        "payload": {},
+        "timestamp": "2026-06-25T00:00:01Z",
+        "event_id": "project-b-e1",
+    })
+    journal_path.write_text(
+        valid_a + "\n" + "{malformed garbage\n" + valid_b + "\n",
+        encoding="utf-8",
+    )
+
+    events = RuntimeStore(runtime_dir=runtime_dir).read_all()
+
+    assert len(events) == 2
+    assert events[0]["project_id"] == "project-a"
+    assert events[1]["project_id"] == "project-b"
+
+
+def test_runtime_store_read_all_handles_empty_file(tmp_path):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    journal_path = runtime_dir / "rdgoal-events.jsonl"
+    journal_path.write_text("", encoding="utf-8")
+
+    events = RuntimeStore(runtime_dir=runtime_dir).read_all()
+
+    assert events == []
+
+
+def test_runtime_digest_survives_truncated_journal(tmp_path):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    journal_path = runtime_dir / "rdgoal-events.jsonl"
+    valid_event = json.dumps({
+        "event_type": "project_registered",
+        "project_id": "test-project",
+        "payload": {"project_root": str(tmp_path / "project"), "priority": "medium"},
+        "timestamp": "2026-06-25T00:00:00Z",
+        "event_id": "test-project-e1",
+    })
+    journal_path.write_text(
+        valid_event + "\n" + '{"event_type": "project_\n',
+        encoding="utf-8",
+    )
+
+    digest = build_runtime_digest(runtime_dir)
+
+    assert len(digest["projects"]) == 1
+    assert digest["projects"][0]["project_id"] == "test-project"
+
+
+def test_runtime_store_append_then_read_all_preserves_valid_events(tmp_path):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    store = RuntimeStore(runtime_dir=runtime_dir)
+    store.append(JournalEvent(
+        event_type="project_registered",
+        project_id="test-project",
+        payload={"project_root": str(tmp_path)},
+    ))
+
+    journal_path = runtime_dir / "rdgoal-events.jsonl"
+    content = journal_path.read_text(encoding="utf-8")
+    journal_path.write_text(content + '{"truncated\n', encoding="utf-8")
+
+    events = store.read_all()
+
+    assert len(events) == 1
+    assert events[0]["project_id"] == "test-project"

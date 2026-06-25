@@ -1,0 +1,15 @@
+{
+  "test_id": "NEG-031",
+  "scenario": "Agent implemented a mature client or multi-agent control-plane capability without a Recon Receipt, resource map, or reuse decision.",
+  "input_report_features": "Report claims the agent built a new desktop client task board, timeline, evidence panel, and OpenCode worker integration. The report includes a diff and tests, but it does not reference a Recon Receipt, does not include a directory-level resource map, does not compare T3Code/OpenCode/CodexPro/DevSpace reuse candidates, and does not provide an exception memo for hand-written mature capability domains.",
+  "expected_gate_decision": "blocked",
+  "expected_findings": [
+    "Missing Recon Receipt for mature capability work",
+    "No directory-level resource map before write-capable implementation",
+    "No Capability Matrix or Reuse Candidate List",
+    "No exception memo for hand-written client, timeline, evidence, or worker integration capability",
+    "P0: recon-001 and recon-003 gate violation"
+  ],
+  "related_invariant": "recon-001, recon-002, recon-003, recon-005, reuse-000",
+  "hard_stop": true
+}

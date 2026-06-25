@@ -1,0 +1,488 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rd2100.devframe/schemas/t3-client-shell",
+  "title": "T3 Client Shell",
+  "description": "T3 Code facing shell snapshot derived from DevFrame Visual Control Plane state.",
+  "type": "object",
+  "required": ["version", "source", "updatedAt", "reuse", "t3", "devframe"],
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "source": { "type": "string", "enum": ["devframe"] },
+    "updatedAt": { "type": "string" },
+    "reuse": {
+      "type": "object",
+      "required": ["client", "executor", "protocol"],
+      "properties": {
+        "client": { "type": "string", "enum": ["t3code"] },
+        "executor": { "type": "string", "enum": ["opencode"] },
+        "protocol": { "type": "string", "enum": ["devframe-governed-agent-control-plane"] }
+      },
+      "additionalProperties": false
+    },
+    "t3": {
+      "type": "object",
+      "required": ["snapshotSequence", "projects", "threads", "threadDetails", "updatedAt"],
+      "properties": {
+        "snapshotSequence": { "type": "integer", "minimum": 1 },
+        "projects": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/project_shell" }
+        },
+        "threads": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/thread_shell" }
+        },
+        "threadDetails": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/thread_detail" }
+        },
+        "updatedAt": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "devframe": {
+      "type": "object",
+      "required": ["manifest", "state", "sessions", "actions", "controlPlaneBaseUrl", "writePolicy", "gates", "actionsBySource", "team"],
+      "properties": {
+        "manifest": { "type": "string", "pattern": "^/" },
+        "state": { "type": "string", "pattern": "^/" },
+        "sessions": { "type": "string", "pattern": "^/" },
+        "actions": { "type": "string", "pattern": "^/" },
+        "controlPlaneBaseUrl": { "type": "string" },
+        "writePolicy": { "type": "string", "enum": ["read-only"] },
+        "gates": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/gate_overlay" }
+        },
+        "actionsBySource": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/action_overlay" }
+          }
+        },
+        "team": { "$ref": "#/definitions/team_projection" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "definitions": {
+    "project_shell": {
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "workspaceRoot",
+        "repositoryIdentity",
+        "defaultModelSelection",
+        "scripts",
+        "createdAt",
+        "updatedAt",
+        "devframe"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "workspaceRoot": { "type": "string" },
+        "repositoryIdentity": { "type": ["object", "null"] },
+        "defaultModelSelection": { "type": ["object", "null"] },
+        "scripts": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "devframe": {
+          "type": "object",
+          "required": ["goal", "status", "riskState", "contractPath"],
+          "properties": {
+            "goal": { "type": "string" },
+            "status": { "type": "string" },
+            "riskState": { "type": "string" },
+            "contractPath": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "thread_shell": {
+      "type": "object",
+      "required": [
+        "id",
+        "projectId",
+        "title",
+        "modelSelection",
+        "runtimeMode",
+        "interactionMode",
+        "branch",
+        "worktreePath",
+        "latestTurn",
+        "createdAt",
+        "updatedAt",
+        "archivedAt",
+        "session",
+        "latestUserMessageAt",
+        "hasPendingApprovals",
+        "hasPendingUserInput",
+        "hasActionableProposedPlan",
+        "devframe"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "projectId": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "modelSelection": {
+          "type": "object",
+          "required": ["instanceId", "model"],
+          "properties": {
+            "instanceId": { "type": "string", "minLength": 1 },
+            "model": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "runtimeMode": { "type": "string", "enum": ["approval-required", "auto-accept-edits", "full-access"] },
+        "interactionMode": { "type": "string", "enum": ["default", "plan"] },
+        "branch": { "type": ["string", "null"] },
+        "worktreePath": { "type": ["string", "null"] },
+        "latestTurn": { "type": ["object", "null"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "archivedAt": { "type": ["string", "null"] },
+        "session": { "$ref": "#/definitions/session_shell" },
+        "latestUserMessageAt": { "type": ["string", "null"] },
+        "hasPendingApprovals": { "type": "boolean" },
+        "hasPendingUserInput": { "type": "boolean" },
+        "hasActionableProposedPlan": { "type": "boolean" },
+        "devframe": {
+          "type": "object",
+          "required": [
+            "provider",
+            "agentRole",
+            "bindingId",
+            "runId",
+            "taskSpecId",
+            "messageCount",
+            "toolCallCount",
+            "changedFiles",
+            "diffSummary",
+            "relatedRunIds",
+            "gateIds",
+            "actionIds",
+            "actionDetails",
+            "evidenceRefs"
+          ],
+          "properties": {
+            "provider": { "type": "string" },
+            "agentRole": { "type": "string" },
+            "bindingId": { "type": "string" },
+            "runId": { "type": "string" },
+            "taskSpecId": { "type": "string" },
+            "messageCount": { "type": "integer", "minimum": 0 },
+            "toolCallCount": { "type": "integer", "minimum": 0 },
+            "changedFiles": { "type": "array", "items": { "type": "string" } },
+            "diffSummary": { "type": "string" },
+            "relatedRunIds": { "type": "array", "items": { "type": "string" } },
+            "gateIds": { "type": "array", "items": { "type": "string" } },
+            "actionIds": { "type": "array", "items": { "type": "string" } },
+            "actionDetails": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/action_detail" }
+            },
+            "evidenceRefs": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/evidence_ref_detail" }
+            },
+            "teamTaskIds": { "type": "array", "items": { "type": "string" } },
+            "teamMessageIds": { "type": "array", "items": { "type": "string" } },
+            "teamEvidenceIds": { "type": "array", "items": { "type": "string" } },
+            "teamReviewGateIds": { "type": "array", "items": { "type": "string" } },
+            "teamConflictFiles": { "type": "array", "items": { "type": "string" } },
+            "gateDetails": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "gateId": { "type": "string" },
+                  "kind": { "type": "string" },
+                  "status": { "type": "string" }
+                }
+              }
+            },
+            "teamDetailMessages": { "type": "array", "items": { "type": "object" } },
+            "teamDetailEvidence": { "type": "array", "items": { "type": "object" } },
+            "teamDetailGates": { "type": "array", "items": { "type": "object" } },
+            "teamDetailConflicts": { "type": "array", "items": { "type": "object" } },
+            "teamDetailEvents": { "type": "array", "items": { "type": "object" } },
+            "evidenceRefOverflow": { "type": "integer", "minimum": 0 },
+            "teamDetailMessageOverflow": { "type": "integer", "minimum": 0 },
+            "teamDetailEvidenceOverflow": { "type": "integer", "minimum": 0 },
+            "teamDetailGateOverflow": { "type": "integer", "minimum": 0 },
+            "teamDetailConflictOverflow": { "type": "integer", "minimum": 0 },
+            "teamDetailEventOverflow": { "type": "integer", "minimum": 0 },
+            "teamReviewGateStatusCounts": {
+              "type": "object",
+              "additionalProperties": { "type": "integer", "minimum": 0 }
+            },
+            "teamNextActionableGates": {
+              "type": "array",
+              "items": { "type": "object" }
+            },
+            "workbenchPriorityActions": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/action_detail" }
+            },
+            "workbenchWebAiMessages": {
+              "type": "array",
+              "items": { "type": "object" }
+            },
+            "workbenchWebAiEvidence": {
+              "type": "array",
+              "items": { "type": "object" }
+            },
+            "workbenchWebAiGates": {
+              "type": "array",
+              "items": { "type": "object" }
+            },
+            "workbenchWebAiEvents": {
+              "type": "array",
+              "items": { "type": "object" }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "thread_detail": {
+      "type": "object",
+      "required": [
+        "id",
+        "projectId",
+        "title",
+        "modelSelection",
+        "runtimeMode",
+        "interactionMode",
+        "branch",
+        "worktreePath",
+        "latestTurn",
+        "createdAt",
+        "updatedAt",
+        "archivedAt",
+        "deletedAt",
+        "messages",
+        "proposedPlans",
+        "activities",
+        "checkpoints",
+        "session"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "projectId": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "modelSelection": {
+          "type": "object",
+          "required": ["instanceId", "model"],
+          "properties": {
+            "instanceId": { "type": "string", "minLength": 1 },
+            "model": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "runtimeMode": { "type": "string", "enum": ["approval-required", "auto-accept-edits", "full-access"] },
+        "interactionMode": { "type": "string", "enum": ["default", "plan"] },
+        "branch": { "type": ["string", "null"] },
+        "worktreePath": { "type": ["string", "null"] },
+        "latestTurn": { "type": ["object", "null"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "archivedAt": { "type": ["string", "null"] },
+        "deletedAt": { "type": ["string", "null"] },
+        "messages": { "type": "array" },
+        "proposedPlans": { "type": "array" },
+        "activities": { "type": "array" },
+        "checkpoints": { "type": "array" },
+        "session": { "$ref": "#/definitions/session_shell" }
+      },
+      "additionalProperties": false
+    },
+    "session_shell": {
+      "type": "object",
+      "required": ["threadId", "status", "providerName", "runtimeMode", "activeTurnId", "lastError", "updatedAt"],
+      "properties": {
+        "threadId": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "enum": ["idle", "starting", "running", "ready", "interrupted", "stopped", "error"] },
+        "providerName": { "type": ["string", "null"] },
+        "runtimeMode": { "type": "string", "enum": ["approval-required", "auto-accept-edits", "full-access"] },
+        "activeTurnId": { "type": ["string", "null"] },
+        "lastError": { "type": ["string", "null"] },
+        "updatedAt": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "gate_overlay": {
+      "type": "object",
+      "required": ["gateId", "kind", "status", "runId", "reason", "nextAction"],
+      "properties": {
+        "gateId": { "type": "string" },
+        "kind": { "type": "string" },
+        "status": { "type": "string" },
+        "runId": { "type": "string" },
+        "reason": { "type": "string" },
+        "nextAction": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "action_overlay": {
+      "type": "object",
+      "required": ["actionId", "priority", "status", "label"],
+      "properties": {
+        "actionId": { "type": "string" },
+        "priority": { "type": "string" },
+        "status": { "type": "string" },
+        "label": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "action_detail": {
+      "type": "object",
+      "required": [
+        "actionId",
+        "sourceType",
+        "sourceId",
+        "priority",
+        "status",
+        "label",
+        "detail",
+        "command",
+        "resumeFilter",
+        "handoffPath",
+        "handoffUrl",
+        "openPath",
+        "openUrl"
+      ],
+      "properties": {
+        "actionId": { "type": "string" },
+        "sourceType": { "type": "string" },
+        "sourceId": { "type": "string" },
+        "priority": { "type": "string" },
+        "status": { "type": "string" },
+        "label": { "type": "string" },
+        "detail": { "type": "string" },
+        "command": { "type": "string" },
+        "resumeFilter": { "type": "string" },
+        "handoffPath": { "type": "string" },
+        "handoffUrl": { "type": "string" },
+        "openPath": { "type": "string" },
+        "openUrl": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "team_agent_projection": {
+      "type": "object",
+      "required": ["agentId", "role", "status", "sessionIds"],
+      "properties": {
+        "agentId": { "type": "string" },
+        "role": { "type": "string" },
+        "bindingId": { "type": "string" },
+        "status": { "type": "string" },
+        "sessionIds": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "team_task_projection": {
+      "type": "object",
+      "required": ["taskId", "type", "status", "agentIds"],
+      "properties": {
+        "taskId": { "type": "string" },
+        "type": { "type": "string" },
+        "projectId": { "type": "string" },
+        "status": { "type": "string" },
+        "agentIds": { "type": "array", "items": { "type": "string" } },
+        "sessionIds": { "type": "array", "items": { "type": "string" } },
+        "targetFiles": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "team_message_projection": {
+      "type": "object",
+      "required": ["messageId", "fromRole", "toRole", "kind", "runId", "summary"],
+      "properties": {
+        "messageId": { "type": "string" },
+        "fromRole": { "type": "string" },
+        "toRole": { "type": "string" },
+        "kind": { "type": "string" },
+        "runId": { "type": "string" },
+        "summary": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "team_event_projection": {
+      "type": "object",
+      "required": ["eventId", "kind", "runId", "summary"],
+      "properties": {
+        "eventId": { "type": "string" },
+        "kind": { "type": "string" },
+        "runId": { "type": "string" },
+        "summary": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "team_evidence_projection": {
+      "type": "object",
+      "required": ["evidenceId", "refType", "refPath"],
+      "properties": {
+        "evidenceId": { "type": "string" },
+        "runId": { "type": "string" },
+        "refType": { "type": "string" },
+        "refPath": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "team_gate_projection": {
+      "type": "object",
+      "required": ["gateId", "kind", "status"],
+      "properties": {
+        "gateId": { "type": "string" },
+        "kind": { "type": "string" },
+        "status": { "type": "string" },
+        "reason": { "type": "string" },
+        "runId": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "team_conflict_projection": {
+      "type": "object",
+      "required": ["filePath", "ownerRunId", "ownerAgentId", "fileKind"],
+      "properties": {
+        "filePath": { "type": "string" },
+        "ownerRunId": { "type": "string" },
+        "ownerAgentId": { "type": "string" },
+        "fileKind": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "evidence_ref_detail": {
+      "type": "object",
+      "required": ["refPath"],
+      "properties": {
+        "refPath": { "type": "string" },
+        "openPath": { "type": "string" },
+        "openUrl": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "team_projection": {
+      "type": "object",
+      "required": ["agentRegistry", "taskBoard", "messageBus", "eventLog", "evidenceStore", "reviewGates", "conflictControl"],
+      "properties": {
+        "agentRegistry": { "type": "array", "items": { "$ref": "#/definitions/team_agent_projection" } },
+        "taskBoard": { "type": "array", "items": { "$ref": "#/definitions/team_task_projection" } },
+        "messageBus": { "type": "array", "items": { "$ref": "#/definitions/team_message_projection" } },
+        "eventLog": { "type": "array", "items": { "$ref": "#/definitions/team_event_projection" } },
+        "evidenceStore": { "type": "array", "items": { "$ref": "#/definitions/team_evidence_projection" } },
+        "reviewGates": { "type": "array", "items": { "$ref": "#/definitions/team_gate_projection" } },
+        "conflictControl": { "type": "array", "items": { "$ref": "#/definitions/team_conflict_projection" } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

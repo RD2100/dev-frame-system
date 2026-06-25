@@ -49,5 +49,14 @@ class RuntimeStore:
     def read_all(self) -> list[dict[str, Any]]:
         if not self.path.exists():
             return []
+        events: list[dict[str, Any]] = []
         with self.path.open(encoding="utf-8") as handle:
-            return [json.loads(line) for line in handle if line.strip()]
+            for line in handle:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    events.append(json.loads(stripped))
+                except json.JSONDecodeError:
+                    continue
+        return events

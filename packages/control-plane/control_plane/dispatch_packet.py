@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -196,10 +197,19 @@ def _is_protected_target(target: str) -> bool:
 
 
 def _extract_status(text: str) -> str:
-    lowered = text.lower()
-    for status in ["pass", "passed", "completed", "blocked", "failed", "fail", "human_required"]:
-        if f"status**: {status}" in lowered or f"status: {status}" in lowered:
-            return "passed" if status in {"pass", "passed", "completed"} else status
+    capture_next = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if capture_next:
+            if not stripped:
+                continue
+            status = _normalize_report_status(stripped)
+            return status or "unknown"
+        status = _normalize_report_status(stripped)
+        if status:
+            return status
+        if _is_report_section_header(stripped, "status"):
+            capture_next = True
     return "unknown"
 
 
@@ -208,17 +218,95 @@ def _extract_changed_files(text: str) -> list[str]:
     capture = False
     for line in text.splitlines():
         stripped = line.strip()
-        if stripped.lower().startswith("- **changed files**") or stripped.lower().startswith("## changed files"):
+        if _is_report_section_header(stripped, "changed files"):
             capture = True
+            inline_value = _inline_section_value(stripped)
+            if inline_value and not _is_no_changed_files(inline_value):
+                changed.append(inline_value.strip("` "))
             continue
         if capture and (
             stripped.startswith("#")
             or (stripped.startswith("- **") and "changed files" not in stripped.lower())
         ):
             break
-        if capture and stripped.startswith("-"):
-            changed.append(stripped.lstrip("- ").strip("` "))
+        if capture and stripped:
+            for item in _changed_file_items(stripped):
+                if item and not _is_no_changed_files(item):
+                    changed.append(item)
     return changed
+
+
+def _changed_file_items(value: str) -> list[str]:
+    candidate = value.lstrip("- ").strip()
+    if _is_no_changed_files(candidate):
+        return []
+    parts = candidate.split("`")
+    if len(parts) >= 2 and _looks_like_path(parts[0]):
+        return [parts[0].strip()]
+    match = re.search(r"`([^`]+)`", candidate)
+    if match:
+        return [match.group(1).strip()]
+    candidate = candidate.strip("` ")
+    for separator in (" — ", " – ", " - ", " -> ", " => "):
+        if separator in candidate:
+            candidate = candidate.split(separator, 1)[0].strip()
+            break
+    return [candidate]
+
+
+def _looks_like_path(value: object) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    name = text.replace("\\", "/").rsplit("/", 1)[-1]
+    return "/" in text.replace("\\", "/") or "." in name
+
+
+def _normalize_report_status(value: str) -> str:
+    candidate = _inline_section_value(value) or value
+    token = candidate.strip().strip("`* ").lower().split()
+    if not token:
+        return ""
+    status = token[0].strip("`*:,.;")
+    if status in {"pass", "passed", "completed", "success", "succeeded"}:
+        return "passed"
+    if status in {"blocked", "failed", "fail", "human_required"}:
+        return status
+    return ""
+
+
+def _is_report_section_header(line: str, section: str) -> bool:
+    normalized = line.strip().lstrip("-").lstrip("#").strip()
+    normalized = normalized.replace("*", "").strip().lower()
+    section = section.lower()
+    return normalized == section or normalized.startswith(f"{section}:")
+
+
+def _inline_section_value(line: str) -> str:
+    normalized = line.strip().lstrip("-").lstrip("#").strip()
+    normalized = normalized.replace("*", "").strip()
+    if ":" not in normalized:
+        return ""
+    return normalized.split(":", 1)[1].strip()
+
+
+def _is_no_changed_files(value: str) -> bool:
+    normalized = value.strip().strip("` ").lower()
+    if normalized.startswith(("none.", "none,", "none;")):
+        return True
+    if (
+        "no project files were modified" in normalized
+        or "no project files were changed" in normalized
+        or "no files were changed" in normalized
+    ):
+        return True
+    if ":" in normalized:
+        label, detail = [part.strip().strip("` ") for part in normalized.split(":", 1)]
+        if label in {"project files", "project file changes"} and detail in {"none", "(none)", "no changes", "n/a"}:
+            return True
+        if label in {"report", "execution report", "artifact", "artifacts"}:
+            return True
+    return normalized in {"none", "(none)", "unknown", "(unknown)", "no changes", "n/a"}
 
 
 def _extract_verification(text: str) -> str:

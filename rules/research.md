@@ -57,3 +57,24 @@
 - **Rule**: Confirm at task start that research is read-only. List the tools to be used. All must be from the Permitted: Read-Only category in `docs/agent-runtime/tool-policy.md`.
 - **Verification**: Task plan includes tool list; all tools are read-only.
 - **Conflict Handling**: If task requires a restricted tool for research, flag before starting, get approval.
+
+---
+
+## RULE research-006: Markdown and Text Encoding Hygiene
+
+- **Priority**: P2 (Evidence)
+- **Trigger**: Reading an external Markdown, text report, prompt, exported
+  review, copied note, or user-provided document that contains non-ASCII text
+  or appears garbled in terminal output.
+- **Scope**: Research, review, planning, and evidence ingestion.
+- **Rule**: Treat mojibake as an I/O decoding problem until proven otherwise.
+  Check the file bytes or BOM, then re-read with an explicit encoding such as
+  UTF-8 before judging content quality, extracting requirements, or quoting the
+  document. Do not discard, summarize poorly, or downgrade evidence because a
+  shell displayed the text with the wrong code page.
+- **Verification**: Research notes or tool output show the detected byte prefix,
+  encoding assumption, or an explicit encoded read before consequential use of
+  the document.
+- **Conflict Handling**: If encoding cannot be determined, preserve the raw
+  file as evidence, record the uncertainty, and ask for a clean source instead
+  of inventing missing meaning.

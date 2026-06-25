@@ -4,7 +4,11 @@ This page records the current public-release gate for `dev-frame-system`.
 It is meant for reviewers who need to decide whether the repository is ready
 to share, package, or hand off.
 
-For a file-level review map, see `docs/status/reviewer-index.md`.
+For the current file-level review map, see `docs/status/reviewer-index.md`.
+For the client-mainline reconnaissance boundary that now governs write-capable
+work, see `docs/status/recon-receipt-local-agent-client-mainline.md`. For the
+current T3Code reuse boundary, see
+`docs/status/t3code-client-mainline-reuse-assessment.md`.
 
 ## Release Gate
 
@@ -31,10 +35,16 @@ through `devframe --help`, `devframe run --help`, `devframe dashboard --help`,
 `--paper-project` coverage, and the installed `rdgoal` console script through
 `rdgoal`, `rdgoal worker`, and `rdgoal digest`.
 
+As of June 25, 2026, this local release gate passes in the current worktree.
+That is a local verification result only. It does not imply a staged commit,
+clean publish branch, pushed branch, opened PR, GitHub review, or public
+package release.
+
 ## Expected Public Surface
 
 - Root documentation: `README.md`, `README.zh-CN.md`, `AGENTS.md`.
 - Runtime docs and status files under `docs/`.
+- Stage acceptance status under `docs/status/`.
 - Reusable modules under `packages/`.
 - Public rules and schemas under `rules/` and `schemas/`.
 - Bootstrap assets under `templates/runtime-bootstrap/`.
@@ -54,9 +64,11 @@ archives, `build`, `dist`, or package metadata directories in the public tree.
   `completed` reports. `blocked`, `failed`, and unknown statuses are non-zero.
 - Runtime packets, reports, and snapshots are written outside the public
   repository by default.
-- Visual Control Plane read-only exports include `/`, `/state.json`,
-  `/actions.json`, and `/actions.md`. These endpoints are intended for
-  inspection only and do not accept writes.
+- Visual Control Plane default-read-only exports include `/`, `/state.json`,
+  `/actions.json`, `/actions.md`, `/actions/open`, and `/go/dispatch`. These
+  endpoints are intended for inspection and review, except for the two
+  loopback-only confirmed mutation paths: `/actions/execute` for queued go-run
+  execution and `/go/dispatch` for project-level `/go` preparation/execution.
 - Action Queue resume and filtering use `--action-id` as the focused selector.
 - Scripts use `--fail-on-match` as a read-only gate to surface blocked or
   failed actions without mutating state.
@@ -65,6 +77,18 @@ archives, `build`, `dist`, or package metadata directories in the public tree.
 - `stepfun/step-3.7-flash` is documented for narrow single-file post-TaskSpec
   execution. Its external evidence-dir write limitations are captured in
   `dispatch-model-profiles.md`.
+- `devframe web-ai bind-chrome` can bind an already-open ChatGPT tab through a
+  loopback Chrome CDP endpoint as a summary-only session. It records debugger
+  metadata and the provider URL only; it does not persist raw transcripts,
+  cookies, browser profiles, local storage, or message text.
+- Imported Web AI review summaries with `native_refs.review_marker` and
+  `native_refs.review_verdict` are projected into read-only `acceptance` gates
+  in the Visual Control Plane.
+- Stage 6 local release preparation is a local worktree verdict only. It does
+  not imply that a branch was pushed, a PR was opened, CI passed, or a package
+  was published.
+- Stage 7 final pre-commit review is also local-only. It does not stage files,
+  create a commit, open a PR, push a branch, or publish a release.
 
 ## Reviewer Focus
 
@@ -76,7 +100,9 @@ archives, `build`, `dist`, or package metadata directories in the public tree.
 - Confirm rdgoal blocked and failed states cannot be reported as success.
 - Confirm public docs do not reference private machine paths.
 - Confirm the Visual Control Plane dashboard endpoints `/`, `/state.json`,
-  `/actions.json`, and `/actions.md` are documented as read-only exports.
+  `/actions.json`, `/actions.md`, `/actions/open`, and `/go/dispatch` are
+  documented consistently, and that `/actions/execute` plus `/go/dispatch`
+  are described as the only confirmed local mutation paths.
 - Confirm `--action-id`, `--fail-on-match`, and `--allow-remote` are
   documented and tested as the Action Queue resume/filter mechanism,
   read-only script gate, and dashboard remote-bind safety guard
@@ -84,8 +110,26 @@ archives, `build`, `dist`, or package metadata directories in the public tree.
 - Confirm `stepfun/step-3.7-flash` is documented only for narrow post-TaskSpec
   execution and that its evidence-dir write limitations are traceable to
   `dispatch-model-profiles.md`.
+- Confirm `devframe web-ai bind-chrome` remains loopback-only and cannot report
+  login/auth pages as successful bindings.
+- Confirm imported Web AI review gates remain read-only projections and do not
+  bypass local verification.
+- Confirm Stage 6 local release preparation is not represented as a production
+  release, deployment, push, PR, or GitHub CI result.
+- Confirm Stage 7 final pre-commit review is based on the current worktree and
+  does not imply staging, commit creation, PR creation, push, deployment, or
+  package publication.
 
 ## Current Verdict
 
-The repository should not be called release-ready unless the release gate above
-passes on the current worktree and no generated artifacts remain afterward.
+The current non-trivial path proven by this repository is a functional WebGPT MCP
+control-plane chain (binding + state/Actions loops + local wheel verification) in
+the current local context. That does **not** mean the repository is publish-ready.
+
+For a conservative publish decision, the repository remains release-blocked until
+there is a clean worktree and the full public-release workflow is completed from
+an externally reviewed state (including PR-ready branch/review outcomes and
+artifact publication steps), not only a local release-gate pass.
+
+The current worktree should therefore be treated as local-gate-green and
+chain-verified, not release-ready.
