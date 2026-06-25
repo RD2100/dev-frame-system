@@ -102,6 +102,16 @@ def test_client_launch_plan_maps_t3_bridge_and_opencode_executor(tmp_path, monke
     assert "9222" not in plan["t3RendererCdp"]["endpoint"]
     assert plan["t3RendererCdp"]["endpoint"] == "http://127.0.0.1:8315"
     assert plan["t3RendererCdp"]["rendererOrigin"] == "http://127.0.0.1:5733"
+    supported = plan.get("supportedMethodologies") or []
+    assert len(supported) >= 2
+    assert any(m["skillId"] == "agent-acceptance" for m in supported)
+    assert any(m["skillId"] == "tdd" for m in supported)
+    for entry in supported:
+        assert "skillId" in entry
+        assert "title" in entry
+        assert "displayLabel" in entry
+        assert "triggers" in entry
+        assert "sourceKind" in entry
 
 
 def test_client_dry_run_outputs_zero_config_plan(tmp_path, monkeypatch, capsys):

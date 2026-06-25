@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from .methodology_dispatch import METHODOLOGY_DISPATCH
+
 
 def build_visual_client_manifest() -> dict[str, Any]:
     """Describe the default-read-only contract the primary native client can consume."""
@@ -277,6 +279,17 @@ def build_visual_client_manifest() -> dict[str, Any]:
                 "publish_or_deploy",
             ],
         },
+        "supported_methodologies": [
+            {
+                "skill_id": entry["skill_id"],
+                "title": entry["title"],
+                "display_label": entry.get("display_label") or entry["title"],
+                "triggers": list(dict.fromkeys(entry.get("triggers", []))),
+                "source_kind": entry.get("source_kind", ""),
+                **({"require_red_green_evidence": True} if entry.get("require_red_green_evidence") else {}),
+            }
+            for entry in METHODOLOGY_DISPATCH.values()
+        ],
         "governance": {
             "reconReceipt": "docs/status/recon-receipt-local-agent-client-mainline.md",
             "rkrRulePath": "rules/recon.md",

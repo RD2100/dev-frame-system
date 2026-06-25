@@ -30,9 +30,11 @@ def _parse_frontmatter(text: str) -> dict[str, Any] | None:
 
 def _extract_triggers(description: str) -> list[str]:
     triggers: list[str] = []
+    seen: set[str] = set()
     for token in description.replace(",", " ").replace(".", " ").split():
         token = token.strip().strip("\"'")
-        if token.startswith("@"):
+        if token.startswith("@") and token not in seen:
+            seen.add(token)
             triggers.append(token)
     return triggers
 

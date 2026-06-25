@@ -121,6 +121,16 @@ def test_visual_client_manifest_matches_public_schema():
     assert "OpenCode" in manifest["governance"]["workerDecision"]
     assert "ZIP/report is fallback" in manifest["governance"]["webAiAdapterDecision"]
     assert manifest["governance"]["nextApprovedSlice"]
+    supported = manifest.get("supported_methodologies") or []
+    assert len(supported) >= 2
+    assert any(m["skill_id"] == "agent-acceptance" for m in supported)
+    assert any(m["skill_id"] == "tdd" for m in supported)
+    for entry in supported:
+        assert "skill_id" in entry
+        assert "title" in entry
+        assert "display_label" in entry
+        assert "triggers" in entry
+        assert "source_kind" in entry
 
 
 def test_dashboard_serves_client_manifest_as_read_only_contract(tmp_path):

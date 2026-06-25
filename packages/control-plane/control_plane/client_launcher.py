@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 from urllib.request import urlopen
 
 from .backup_guard import default_runtime_dir
+from .methodology_dispatch import METHODOLOGY_DISPATCH
 
 
 T3_CODE_SOURCE_URL = "https://github.com/pingdotgg/t3code"
@@ -151,6 +152,17 @@ def build_client_launch_plan(
                 "publish_or_deploy",
             ],
         },
+        "supportedMethodologies": [
+            {
+                "skillId": entry["skill_id"],
+                "title": entry["title"],
+                "displayLabel": entry.get("display_label") or entry["title"],
+                "triggers": list(dict.fromkeys(entry.get("triggers", []))),
+                "sourceKind": entry.get("source_kind", ""),
+                **({"requireRedGreenEvidence": True} if entry.get("require_red_green_evidence") else {}),
+            }
+            for entry in METHODOLOGY_DISPATCH.values()
+        ],
         "governance": {
             "reconReceipt": "docs/status/recon-receipt-local-agent-client-mainline.md",
             "rkrRulePath": "rules/recon.md",
