@@ -2829,3 +2829,114 @@ def test_methodology_dispatch_resolve_returns_none_for_non_methodology():
     effective, methodology = resolve_methodology("Add a plain feature.")
     assert effective == "Add a plain feature."
     assert methodology is None
+
+
+def test_methodology_dispatch_resolve_matches_go_read_profile():
+    from control_plane.methodology_dispatch import resolve_methodology
+
+    effective, methodology = resolve_methodology("@go read the source.")
+    assert effective == "the source."
+    assert methodology is not None
+    assert methodology["skill_id"] == "agent-acceptance"
+    assert methodology["selected_trigger"] == "@go read"
+    assert methodology["dispatch_profile"] == "read-only"
+    assert methodology["read_only"] is True
+    assert methodology["network_enabled"] is False
+
+
+def test_methodology_dispatch_resolve_matches_go_edit_profile():
+    from control_plane.methodology_dispatch import resolve_methodology
+
+    effective, methodology = resolve_methodology("@go edit the code.")
+    assert effective == "the code."
+    assert methodology is not None
+    assert methodology["selected_trigger"] == "@go edit"
+    assert methodology["dispatch_profile"] == "ai-dev"
+    assert methodology["read_only"] is False
+    assert methodology["network_enabled"] is False
+
+
+def test_methodology_dispatch_resolve_matches_go_risky_profile():
+    from control_plane.methodology_dispatch import resolve_methodology
+
+    effective, methodology = resolve_methodology("@go risky deploy.")
+    assert effective == "deploy."
+    assert methodology is not None
+    assert methodology["selected_trigger"] == "@go risky"
+    assert methodology["dispatch_profile"] == "ai-risky"
+    assert methodology["read_only"] is False
+    assert methodology["network_enabled"] is True
+
+
+def test_methodology_dispatch_resolve_matches_go_profile():
+    from control_plane.methodology_dispatch import resolve_methodology
+
+    effective, methodology = resolve_methodology("@go do the thing.")
+    assert effective == "do the thing."
+    assert methodology is not None
+    assert methodology["selected_trigger"] == "@go"
+    assert methodology["dispatch_profile"] == "ai-dev"
+    assert methodology["read_only"] is False
+    assert methodology["network_enabled"] is False
+
+
+def test_code_preview_shows_methodology_for_go_read_goal(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "@go read the source.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--agents",
+        "1",
+        "--target",
+        "src/app.py",
+        "--preview",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "DevFrame coding preview" in output
+    assert "methodology" in output
+    assert "agent-acceptance" in output
+    assert "goal         : the source." in output
+    assert not runtime_dir.exists()
+
+
+def test_code_stores_methodology_metadata_for_go_read_goal(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "@go read the source.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/app.py",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert "DevFrame Code session" in output
+    assert metadata["requirement"] == "the source."
+    assert metadata["methodology"]["skill_id"] == "agent-acceptance"
+    assert metadata["methodology"]["selected_trigger"] == "@go read"
+    assert metadata["methodology"]["dispatch_profile"] == "read-only"
+    assert metadata["methodology"]["read_only"] is True
+    assert metadata["agents"][0]["methodology"]["skill_id"] == "agent-acceptance"
+    assert metadata["agents"][0]["methodology"]["selected_trigger"] == "@go read"

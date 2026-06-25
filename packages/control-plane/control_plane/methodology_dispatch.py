@@ -10,6 +10,32 @@ _METHODOLOGY_TRAIT_OVERRIDES: dict[str, dict[str, Any]] = {
         "require_red_green_evidence": True,
         "display_label": "@tdd",
     },
+    "go": {
+        "display_label": "@go",
+    },
+}
+
+_GO_TRIGGER_PROFILES: dict[str, dict[str, Any]] = {
+    "@go read": {
+        "dispatch_profile": "read-only",
+        "read_only": True,
+        "network_enabled": False,
+    },
+    "@go edit": {
+        "dispatch_profile": "ai-dev",
+        "read_only": False,
+        "network_enabled": False,
+    },
+    "@go risky": {
+        "dispatch_profile": "ai-risky",
+        "read_only": False,
+        "network_enabled": True,
+    },
+    "@go": {
+        "dispatch_profile": "ai-dev",
+        "read_only": False,
+        "network_enabled": False,
+    },
 }
 
 
@@ -30,6 +56,7 @@ METHODOLOGY_DISPATCH: dict[str, dict[str, Any]] = {
 def resolve_methodology(requirement: str) -> tuple[str, dict[str, Any] | None]:
     methodology = None
     effective = requirement
+    selected_trigger = None
     if effective:
         stripped = effective.lstrip()
         leading = effective[: len(effective) - len(stripped)]
@@ -38,10 +65,34 @@ def resolve_methodology(requirement: str) -> tuple[str, dict[str, Any] | None]:
         for entry in METHODOLOGY_DISPATCH.values():
             for trigger in entry.get("triggers", []):
                 trigger_map[trigger] = entry
-        methodology = trigger_map.get(first_token)
-        if methodology:
-            for trigger in methodology.get("triggers", []):
-                if stripped.startswith(trigger):
-                    effective = leading + stripped[len(trigger):].lstrip()
-                    break
+
+        matched_trigger = None
+        for trigger in sorted(_GO_TRIGGER_PROFILES.keys(), key=len, reverse=True):
+            if stripped.startswith(trigger):
+                matched_trigger = trigger
+                break
+
+        if matched_trigger:
+            methodology = trigger_map.get(matched_trigger) or trigger_map.get(first_token)
+            if methodology:
+                selected_trigger = matched_trigger
+                effective = leading + stripped[len(matched_trigger):].lstrip()
+        elif first_token:
+            methodology = trigger_map.get(first_token)
+            if methodology:
+                for trigger in methodology.get("triggers", []):
+                    if stripped.startswith(trigger):
+                        effective = leading + stripped[len(trigger):].lstrip()
+                        selected_trigger = trigger
+                        break
+
+        if methodology and selected_trigger and selected_trigger in _GO_TRIGGER_PROFILES:
+            profile_traits = _GO_TRIGGER_PROFILES[selected_trigger]
+            methodology = {
+                **methodology,
+                "selected_trigger": selected_trigger,
+                "dispatch_profile": profile_traits.get("dispatch_profile"),
+                "read_only": profile_traits.get("read_only", False),
+                "network_enabled": profile_traits.get("network_enabled", False),
+            }
     return effective, methodology
