@@ -10,6 +10,7 @@ from urllib.parse import quote
 import yaml
 
 from .runtime_digest import build_runtime_digest
+from .skill_registry import list_methodology_skills
 
 ROOT = Path(__file__).resolve().parent.parent
 ACTION_STATUSES = ("open", "blocked", "ready", "info")
@@ -135,6 +136,9 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "agent": "Agent",
         "gate": "Gate",
         "decision": "Decision",
+        "methodology_skills": "Methodology Skills",
+        "skill_name": "Skill",
+        "skill_triggers": "Triggers",
     },
     "zh-CN": {
         "html_lang": "zh-CN",
@@ -241,6 +245,9 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "agent": "智能体",
         "gate": "门控",
         "decision": "决策",
+        "methodology_skills": "方法论技能",
+        "skill_name": "技能",
+        "skill_triggers": "触发词",
     },
 }
 
@@ -381,6 +388,7 @@ def build_visual_control_plane_state(
                 "secret_exposure",
             ],
         },
+        "skills": list_methodology_skills(),
     }
 
 
@@ -613,6 +621,7 @@ def render_visual_control_plane_state_html(
         _gates_section(gates, lang),
         _decisions_section(decisions, lang),
         _safety_section(safety, lang),
+        _skills_section(state.get("skills", []), lang),
         "</main>",
         "</body>",
         "</html>",
@@ -3440,6 +3449,34 @@ def _safety_section(safety: dict[str, Any], lang: str = "en") -> str:
         f"{chips}"
         "</div>"
         "</section>"
+    )
+
+
+def _skills_section(skills: list[dict[str, Any]], lang: str = "en") -> str:
+    if not skills:
+        return ""
+    rows = "\n".join(
+        "<tr>"
+        f"<td><code>{_h(skill.get('skill_id', ''))}</code></td>"
+        f"<td>{_h(skill.get('title', ''))}</td>"
+        f"<td><code>{_h(skill.get('source_path', ''))}</code></td>"
+        f"<td>{_h(skill.get('source_kind', ''))}</td>"
+        f"<td>{_h(', '.join(skill.get('triggers', []) or []))}</td>"
+        f"<td>{_badge(skill.get('status', ''))}</td>"
+        "</tr>"
+        for skill in skills
+    )
+    return _table_section(
+        dashboard_t("methodology_skills", lang),
+        [
+            dashboard_t("id", lang),
+            dashboard_t("skill_name", lang),
+            dashboard_t("source", lang),
+            dashboard_t("kind", lang),
+            dashboard_t("skill_triggers", lang),
+            dashboard_t("status", lang),
+        ],
+        rows,
     )
 
 

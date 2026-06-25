@@ -85,6 +85,14 @@
       },
       "uniqueItems": true
     },
+    "skills": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/methodology_skill"
+      },
+      "readOnly": true,
+      "uniqueItems": true
+    },
     "safety": {
       "type": "object",
       "required": [
@@ -1155,6 +1163,46 @@
         },
         "file_kind": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "methodology_skill": {
+      "type": "object",
+      "required": [
+        "skill_id",
+        "title",
+        "source_path",
+        "source_kind",
+        "triggers",
+        "status"
+      ],
+      "properties": {
+        "skill_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_path": {
+          "type": "string"
+        },
+        "source_kind": {
+          "type": "string",
+          "const": "local_repository_asset"
+        },
+        "triggers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 2
+          }
+        },
+        "status": {
+          "type": "string",
+          "const": "registered"
         }
       },
       "additionalProperties": false

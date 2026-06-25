@@ -23,6 +23,7 @@ from control_plane.rdgoal_cli import main as rdgoal_cli_main
 from control_plane.runtime_digest import build_runtime_digest, render_runtime_digest_markdown
 from control_plane.runtime_store import JournalEvent, RuntimeStore
 from control_plane.visual_state import build_visual_control_plane_state, render_visual_control_plane_state_html
+from control_plane.skill_registry import list_methodology_skills
 from control_plane.worker import AihubGoWorker, CommandWorker, LocalDryRunWorker
 
 
@@ -1994,6 +1995,64 @@ def test_runtime_store_read_all_tolerates_truncated_trailing_line(tmp_path):
 
     assert len(events) == 1
     assert events[0]["project_id"] == "test-project"
+
+
+def test_skill_registry_lists_shipped_agent_acceptance():
+    skills = list_methodology_skills()
+
+    assert any(skill.get("skill_id") == "agent-acceptance" for skill in skills)
+    shipped = next(skill for skill in skills if skill.get("skill_id") == "agent-acceptance")
+    assert shipped["title"] == "agent-acceptance"
+    assert shipped["source_kind"] == "local_repository_asset"
+    assert Path(shipped["source_path"]).parts[-3:] == ("templates", "runtime-bootstrap", "SKILL.md")
+    assert shipped["status"] == "registered"
+    assert "@go" in shipped.get("triggers", [])
+
+
+def test_skill_registry_lists_local_tools_skills_if_present(tmp_path, monkeypatch):
+    tools_skills = tmp_path / "tools" / "skills" / "tdd"
+    tools_skills.mkdir(parents=True)
+    (tools_skills / "SKILL.md").write_text(
+        "\n".join([
+            "---",
+            "name: tdd",
+            "description: Test-driven development skill triggered by @tdd.",
+            "---",
+            "",
+            "# tdd",
+        ]),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("control_plane.skill_registry.REPO_ROOT", tmp_path)
+    skills = list_methodology_skills()
+
+    assert any(skill.get("skill_id") == "tdd" for skill in skills)
+    tdd = next(skill for skill in skills if skill.get("skill_id") == "tdd")
+    assert tdd["title"] == "tdd"
+    assert "skills" in tdd["source_path"] and tdd["source_path"].endswith("SKILL.md")
+    assert tdd["status"] == "registered"
+    assert "@tdd" in tdd.get("triggers", [])
+
+
+def test_visual_state_includes_methodology_skills(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    rdgoal(
+        orchestrator,
+        project_root,
+        "Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+
+    state = build_visual_control_plane_state(runtime_dir)
+
+    assert "skills" in state
+    assert any(skill.get("skill_id") == "agent-acceptance" for skill in state["skills"])
+    html = render_visual_control_plane_state_html(state)
+    assert "Methodology Skills" in html
+    assert "agent-acceptance" in html
 
 
 def test_runtime_store_read_all_tolerates_malformed_line_in_middle(tmp_path):
