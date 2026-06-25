@@ -7,9 +7,9 @@ Design:
   - All fields default to empty/zero (LangGraph requirement)
   - Flat structure, no nested Pydantic models (keeps dict.update simple)
   - Integrates with A5-A9 components:
-    * review_issues: from writelab_adapter / writelab_client
+    * review_issues: precomputed deterministic/GPT/human issue lists
     * acceptance_result: from paper_acceptance_gate
-    * evidence_manifest: from convert_handoff_zip
+    * evidence_manifest: minimized evidence metadata
 """
 
 from __future__ import annotations
@@ -37,19 +37,12 @@ class PaperWorkflowState(BaseModel):
     paragraph_text: str = ""
     paragraph_index: int = 0
 
-    # --- WriteLab configuration ---
-    writelab_base_url: str = "http://127.0.0.1:8001"
-    writelab_token: str = ""
-    writelab_mode: str = "mock"  # "mock" | "live" | "offline"
-    handoff_zip_path: str = ""  # for offline mode
-
     # --- Diagnosis results ---
     expression_issues: list[dict[str, Any]] = Field(default_factory=list)
     paragraph_issues: list[dict[str, Any]] = Field(default_factory=list)
     all_review_issues: list[dict[str, Any]] = Field(default_factory=list)
-    diagnosis_source: str = ""  # "llm" | "rules_fallback" | "degraded" | "unavailable" | "offline"
+    diagnosis_source: str = ""  # "deterministic_gate" | "gpt" | "human" | "rules_fallback"
     diagnosis_error: str = ""
-    writelab_available: bool = True
 
     # --- Evidence manifest ---
     evidence_manifest: dict[str, Any] = Field(default_factory=dict)

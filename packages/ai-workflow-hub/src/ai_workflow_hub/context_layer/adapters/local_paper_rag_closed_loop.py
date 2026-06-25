@@ -2,16 +2,15 @@
 
 This module orchestrates a scoped local chain:
 authorized PDF folder -> generated Obsidian Markdown notes -> local FAISS
-index/retrieval smoke -> local WriteLab health/diagnosis fallback summary.
+index/retrieval smoke -> local diagnosis fallback summary.
 
 Reports intentionally persist only counts, fingerprints, and boundary flags.
 Raw PDF text, Markdown bodies, chunks, query text, local paths, vectors, and
-WriteLab payloads/responses are not written to report/evidence artifacts.
+diagnosis payloads/responses are not written to report/evidence artifacts.
 """
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import re
@@ -20,14 +19,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import httpx
-
 from .rag_faiss_obsidian_local_pilot import (
     DEFAULT_EMBEDDING_MODEL,
     Embedder,
     build_rag_faiss_obsidian_local_pilot_report,
 )
-from .writelab_client import WriteLabLiteClient
 
 
 PROFILE = "paper_local_rag_closed_loop_report"
@@ -38,7 +34,6 @@ DEFAULT_QUERIES = [
     "earthquake rescue training",
     "fire rescue simulation",
 ]
-DIAGNOSIS_SOURCES = {"rules_fallback", "writelab_local", "llm", "degraded"}
 
 PdfExtractor = Callable[[Path, int, int], str]
 
@@ -61,14 +56,6 @@ def _sha256_file(path: Path) -> str:
 
 def _normalize_text(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
-
-
-def _normalize_diagnosis_source(value: str, *, success: bool, fallback_used: bool) -> str:
-    if value in DIAGNOSIS_SOURCES:
-        return value
-    if success and not fallback_used:
-        return "writelab_local"
-    return "rules_fallback"
 
 
 def _slug_from_hash(path: Path) -> str:
@@ -127,49 +114,14 @@ def _write_markdown_note(
     return note_path
 
 
-async def _diagnose_with_writelab_or_fallback(
-    *,
-    base_url: str,
-    excerpt: str,
-) -> dict[str, Any]:
-    client = WriteLabLiteClient(base_url=base_url)
-    runtime_authorization = {
-        "preflight_status": "pass",
-        "human_gate_ref": "human-gate:local-paper-rag-closed-loop-a1",
-        "data_policy": {
-            "paper_sensitive_input": "explicit_allow",
-            "allowed_sensitive_fields": ["paragraph_text"],
-            "redaction_required": True,
-        },
+def _build_local_diagnosis_fallback(*, excerpt: str) -> dict[str, Any]:
+    issue_count = 1 if excerpt.strip() else 0
+    return {
+        "diagnosis_attempted": True,
+        "diagnosis_source": "rules_fallback",
+        "issue_count": issue_count,
+        "fallback_used": True,
     }
-    try:
-        await client.check_health()
-        result = await client.analyze_expression(
-            text=excerpt,
-            chapter="local_paper_rag_closed_loop",
-            section="retrieval_smoke",
-            paragraph_index=0,
-            runtime_authorization=runtime_authorization,
-        )
-        return {
-            "diagnosis_attempted": True,
-            "diagnosis_source": _normalize_diagnosis_source(
-                result.diagnosis_source,
-                success=result.success,
-                fallback_used=result.fallback_used,
-            ),
-            "issue_count": len(result.issues),
-            "writelab_available": result.success,
-            "fallback_used": result.fallback_used,
-        }
-    except (httpx.HTTPError, OSError):
-        return {
-            "diagnosis_attempted": True,
-            "diagnosis_source": "rules_fallback",
-            "issue_count": 1,
-            "writelab_available": False,
-            "fallback_used": True,
-        }
 
 
 def _blocked_report(
@@ -265,7 +217,6 @@ def build_local_paper_rag_closed_loop_report(
     obsidian_vault_root: str | Path,
     target_folder: str | Path,
     index_root: str | Path,
-    writelab_base_url: str = "http://127.0.0.1:8001",
     embedding_model: str = DEFAULT_EMBEDDING_MODEL,
     pdf_limit: int = 3,
     max_pages_per_pdf: int = 3,
@@ -376,11 +327,8 @@ def build_local_paper_rag_closed_loop_report(
         top_k_total_count += min(top_k, faiss_report["index_summary"]["chunk_count"])
 
     markdown_fingerprints = [_sha256_file(path) for path in generated_notes]
-    diagnosis = asyncio.run(
-        _diagnose_with_writelab_or_fallback(
-            base_url=writelab_base_url,
-            excerpt="[MINIMIZED_RETRIEVAL_SUMMARY]",
-        )
+    diagnosis = _build_local_diagnosis_fallback(
+        excerpt="[MINIMIZED_RETRIEVAL_SUMMARY]",
     )
     evidence_manifest = _evidence_manifest(
         source_fingerprints=source_fingerprints,
@@ -411,6 +359,9 @@ def build_local_paper_rag_closed_loop_report(
         "retrieval_queries_count": len(query_list),
         "retrieval_success_count": retrieval_success_count,
         "top_k_total_count": top_k_total_count,
+        "retrieved_chunk_fingerprints": list(
+            faiss_report.get("query_smoke", {}).get("retrieved_chunk_fingerprints", [])
+        ),
         "diagnosis_attempted": diagnosis["diagnosis_attempted"],
         "diagnosis_source": diagnosis["diagnosis_source"],
         "issue_count": diagnosis["issue_count"],

@@ -41,7 +41,7 @@
       }
     },
     "required_next_actions": {"type": "array", "items": {"type": "string"}},
-    "reviewer": {"type": "string", "enum": ["deterministic_gate", "gpt", "human", "writelab_adapter"]},
+    "reviewer": {"type": "string", "enum": ["deterministic_gate", "gpt", "human"]},
     "evidence_pack_ref": {"type": "string"}
   }
 }
