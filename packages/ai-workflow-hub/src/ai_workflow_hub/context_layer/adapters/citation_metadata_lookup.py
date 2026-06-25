@@ -33,6 +33,8 @@ MATCH_STATUSES = {
 }
 
 TRUSTED_METADATA_SOURCE_TYPES = {
+    "arxiv_public_metadata",
+    "openalex_public_metadata",
     "export_metadata",
     "fixture_metadata",
     "sanitized_fixture_metadata",
@@ -193,7 +195,7 @@ def _base_report(
         "profile": "paper_citation_metadata_lookup_report",
         "schema_version": "1.0",
         "task_id": "OPENCODE_PAPER_CITATION_METADATA_LOOKUP_OFFLINE_A1",
-        "project_id": "dev-frame-opencode",
+        "project_id": "dev-frame-system",
         "workflow_type": "paper",
         "generated_at": generated_at,
         "metadata_format": metadata_format,

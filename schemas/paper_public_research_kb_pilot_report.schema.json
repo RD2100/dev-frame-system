@@ -1,0 +1,244 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Paper Public Research KB Pilot Report",
+  "type": "object",
+  "required": [
+    "profile",
+    "schema_version",
+    "task_id",
+    "project_id",
+    "workflow_type",
+    "generated_at",
+    "pilot_status",
+    "reasons",
+    "source_kind",
+    "source_status",
+    "arxiv_status",
+    "obsidian_status",
+    "pdf_download_status",
+    "rag_status",
+    "citation_lookup_status",
+    "paper_count",
+    "note_count",
+    "pdf_count",
+    "note_paths",
+    "note_links",
+    "dashboard_status",
+    "dashboard_path",
+    "dashboard_uri",
+    "obsidian_rest_status",
+    "obsidian_rest_summary",
+    "paper_fingerprints",
+    "pdf_fingerprints",
+    "citation_evidence_map",
+    "privacy_boundary",
+    "artifact_minimization",
+    "evidence_manifest",
+    "known_limitations"
+  ],
+  "properties": {
+    "profile": {"type": "string", "const": "paper_public_research_kb_pilot_report"},
+    "schema_version": {"type": "string"},
+    "task_id": {"type": "string", "const": "OPENCODE_PUBLIC_RESEARCH_KB_PILOT_A1"},
+    "project_id": {"type": "string"},
+    "workflow_type": {"type": "string", "const": "paper"},
+    "generated_at": {"type": "string"},
+    "pilot_status": {"type": "string"},
+    "reasons": {"type": "array", "items": {"type": "string"}},
+    "source_kind": {"type": "string", "enum": ["arxiv_public_api", "openalex_public_api", "unsupported_public_api"]},
+    "source_status": {"type": "string", "enum": ["PASS", "NO_RESULTS", "FAILED", "NOT_RUN", "BLOCKED"]},
+    "arxiv_status": {"type": "string", "enum": ["PASS", "NO_RESULTS", "FAILED", "NOT_RUN", "BLOCKED"]},
+    "obsidian_status": {"type": "string", "enum": ["PASS", "FAILED_WRITES", "NOT_RUN"]},
+    "pdf_download_status": {"type": "string", "enum": ["PASS", "PARTIAL", "FAILED", "NOT_RUN"]},
+    "rag_status": {"type": "string", "enum": ["PASS", "BLOCKED", "DEGRADED", "FAILED_IMPORT", "FAILED_RUNTIME", "NOT_RUN"]},
+    "citation_lookup_status": {"type": "string", "enum": ["PASS", "AMBIGUOUS", "NEEDS_REVIEW", "FAILED_IMPORT", "FAILED_RUNTIME", "NOT_RUN"]},
+    "paper_count": {"type": "integer", "minimum": 0},
+    "note_count": {"type": "integer", "minimum": 0},
+    "pdf_count": {"type": "integer", "minimum": 0},
+    "note_paths": {"type": "array", "items": {"type": "string"}},
+    "note_links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["arxiv_id", "relative_path", "obsidian_uri"],
+        "properties": {
+          "arxiv_id": {"type": "string"},
+          "openalex_id": {"type": "string"},
+          "source_id": {"type": "string"},
+          "relative_path": {"type": "string"},
+          "obsidian_uri": {"type": "string"}
+        }
+      }
+    },
+    "dashboard_status": {"type": "string", "enum": ["PASS", "FAILED_WRITES", "NOT_RUN"]},
+    "dashboard_path": {"type": "string"},
+    "dashboard_uri": {"type": "string"},
+    "obsidian_rest_status": {
+      "type": "string",
+      "enum": ["PASS", "BLOCKED_MISSING_TOKEN", "FAILED_IMPORT", "FAILED_RUNTIME", "NOT_RUN"]
+    },
+    "obsidian_rest_summary": {
+      "type": "object",
+      "properties": {
+        "status": {"type": "string"},
+        "base_url": {"type": "string"},
+        "token_env": {"type": "string"},
+        "token_present": {"type": "boolean"},
+        "token_persisted": {"type": "boolean"},
+        "write_count": {"type": "integer"},
+        "open_called": {"type": "boolean"},
+        "error_count": {"type": "integer"},
+        "first_error": {"type": "string"}
+      }
+    },
+    "paper_fingerprints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["arxiv_id", "title_fingerprint", "authors_count"],
+        "properties": {
+          "arxiv_id": {"type": "string"},
+          "openalex_id": {"type": "string"},
+          "source_id": {"type": "string"},
+          "source_type": {"type": "string"},
+          "title_fingerprint": {"type": "string"},
+          "doi": {"type": "string"},
+          "authors_count": {"type": "integer"},
+          "note_path_fingerprint": {"type": "string"}
+        }
+      }
+    },
+    "pdf_fingerprints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "arxiv_id",
+          "source_id",
+          "openalex_id",
+          "source_type",
+          "pdf_url_fingerprint",
+          "pdf_sha256",
+          "pdf_size_bytes"
+        ],
+        "properties": {
+          "arxiv_id": {"type": "string"},
+          "source_id": {"type": "string"},
+          "openalex_id": {"type": "string"},
+          "source_type": {"type": "string"},
+          "pdf_url_fingerprint": {"type": "string"},
+          "pdf_sha256": {"type": "string"},
+          "pdf_size_bytes": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "pdf_download_failure_count": {"type": "integer", "minimum": 0},
+    "pdf_download_failures": {"type": "array", "items": {"type": "string"}},
+    "privacy_boundary": {
+      "type": "object",
+      "properties": {
+        "raw_pdf_text_persisted": {"type": "boolean"},
+        "raw_markdown_body_persisted": {"type": "boolean"},
+        "raw_arxiv_response_persisted": {"type": "boolean"},
+        "raw_query_persisted": {"type": "boolean"},
+        "raw_source_paths_persisted": {"type": "boolean"},
+        "secrets_persisted": {"type": "boolean"},
+        "private_zotero_accessed": {"type": "boolean"},
+        "private_obsidian_accessed": {"type": "boolean"},
+        "real_metadata_export_read": {"type": "boolean"},
+        "external_rag_called": {"type": "boolean"},
+        "cloud_called": {"type": "boolean"},
+        "obsidian_rest_api_called": {"type": "boolean"},
+        "writelab_called": {"type": "boolean"},
+        "browser_cdp_called": {"type": "boolean"},
+        "final_acceptance_claimed": {"type": "boolean"},
+        "production_ready_claimed": {"type": "boolean"}
+      }
+    },
+    "artifact_minimization": {
+      "type": "object",
+      "properties": {
+        "source_kind": {"type": "string"},
+        "paper_count": {"type": "integer"},
+        "note_count": {"type": "integer"},
+        "note_path_fingerprint_count": {"type": "integer"},
+        "citation_claim_count": {"type": "integer"}
+      }
+    },
+    "evidence_manifest": {
+      "type": "object",
+      "required": ["manifest_id", "schema_version", "task_id", "producer"],
+      "properties": {
+        "manifest_id": {"type": "string"},
+        "schema_version": {"type": "string"},
+        "task_id": {"type": "string"},
+        "producer": {"type": "string"},
+        "report_status": {"type": "string"},
+        "source_fingerprint_count": {"type": "integer"},
+        "note_count": {"type": "integer"},
+        "state_fingerprint": {"type": "string"},
+        "raw_sensitive_fields_absent": {"type": "boolean"},
+        "contains_raw_pdf_text": {"type": "boolean"},
+        "contains_raw_markdown_body": {"type": "boolean"},
+        "contains_raw_arxiv_response": {"type": "boolean"},
+        "contains_raw_query": {"type": "boolean"},
+        "contains_raw_paths": {"type": "boolean"},
+        "contains_secrets": {"type": "boolean"}
+      }
+    },
+    "known_limitations": {"type": "array", "items": {"type": "string"}},
+    "citation_lookup_results": {
+      "type": "array",
+      "items": {"type": "object"}
+    },
+    "citation_evidence_map": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "evidence_id",
+          "citation_id",
+          "source_id",
+          "openalex_id",
+          "source_type",
+          "arxiv_id",
+          "pdf_sha256",
+          "note_path_fingerprint",
+          "chunk_id",
+          "chunk_fingerprint",
+          "retrieval_hit",
+          "source_level"
+        ],
+         "properties": {
+          "evidence_id": {"type": "string"},
+          "citation_id": {"type": "string"},
+          "source_id": {"type": "string"},
+          "openalex_id": {"type": "string"},
+          "source_type": {"type": "string"},
+          "arxiv_id": {"type": "string"},
+          "pdf_sha256": {"type": "string"},
+          "note_path_fingerprint": {"type": "string"},
+          "chunk_id": {"type": "string"},
+          "chunk_fingerprint": {"type": "string"},
+          "retrieval_hit": {"type": "boolean"},
+          "source_level": {"type": "string"}
+        }
+      }
+    },
+    "rag_report_summary": {
+      "type": "object",
+      "properties": {
+        "pipeline_status": {"type": "string"},
+        "pdf_count": {"type": "integer"},
+        "markdown_note_count": {"type": "integer"},
+        "chunk_count": {"type": "integer"},
+        "retrieval_query_count": {"type": "integer"},
+        "retrieval_success_count": {"type": "integer"},
+        "retrieved_chunk_fingerprint_count": {"type": "integer"},
+        "retrieved_chunk_fingerprints": {"type": "array", "items": {"type": "string"}},
+        "index_reused": {"type": "boolean"},
+        "error": {"type": "string"}
+      }
+    }
+  }
+}
