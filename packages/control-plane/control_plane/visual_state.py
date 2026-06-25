@@ -136,6 +136,7 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "agent": "Agent",
         "gate": "Gate",
         "decision": "Decision",
+        "methodology": "Methodology",
         "methodology_skills": "Methodology Skills",
         "skill_name": "Skill",
         "skill_triggers": "Triggers",
@@ -245,6 +246,7 @@ _DASHBOARD_TRANSLATIONS: dict[str, dict[str, str]] = {
         "agent": "智能体",
         "gate": "门控",
         "decision": "决策",
+        "methodology": "方法学",
         "methodology_skills": "方法论技能",
         "skill_name": "技能",
         "skill_triggers": "触发词",
@@ -1046,6 +1048,7 @@ def _team_task_board(
             "agent_ids": agent_ids,
             "session_ids": session_ids,
             "target_files": targets,
+            "methodology": _go_methodology_state(run.get("methodology")),
         })
     for dispatch in dispatches:
         packet_id = dispatch.get("packet_id") or _fallback_id(dispatch, "run")
@@ -2004,6 +2007,7 @@ def _go_run_states(runtime_dir: str | Path) -> list[dict[str, Any]]:
             "project_id": _safe_id(data.get("project_id", "")),
             "project_root": str(data.get("project_root", "")),
             "requirement": str(data.get("requirement", "")),
+            "methodology": _go_methodology_state(data.get("methodology")),
             "status": _go_status(data.get("status", "")),
             "execute": bool(data.get("execute", False)),
             "created_at": str(data.get("created_at", "")),
@@ -2030,6 +2034,7 @@ def _go_agent_state(agent: dict[str, Any]) -> dict[str, Any]:
         "shard_count": int(agent.get("shard_count") or 0),
         "status": _go_status(agent.get("status", "")),
         "worker_status": _go_worker_status(agent.get("worker_status", "")),
+        "methodology": _go_methodology_state(agent.get("methodology")),
         "targets": [str(target) for target in agent.get("targets", []) if str(target)],
         "target_bytes": int(agent.get("target_bytes") or 0),
         "changed_files": [str(path) for path in agent.get("changed_files", []) if str(path)],
@@ -2058,6 +2063,22 @@ def _go_worker_status(value: object) -> str:
     if normalized == "fail":
         return "failed"
     return normalized
+
+
+def _go_methodology_state(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    skill_id = _safe_id(str(value.get("skill_id") or ""))
+    if not skill_id:
+        return None
+    return {
+        "skill_id": skill_id,
+        "title": str(value.get("title") or skill_id),
+        "source_path": str(value.get("source_path") or ""),
+        "source_kind": str(value.get("source_kind") or "local_repository_asset"),
+        "triggers": [str(trigger) for trigger in value.get("triggers", []) if str(trigger)],
+        "status": str(value.get("status") or "registered"),
+    }
 
 
 def _paper_project_state(project_dir: str | Path) -> dict[str, Any]:
@@ -3082,6 +3103,11 @@ def _go_run_card_html(run: dict[str, Any], action_links: bool, lang: str = "en",
         dashboard_t("worker_command", lang),
     ]
     focused = str(run.get("go_run_id", "")) == focus_go_run_id
+    methodology = run.get("methodology") if isinstance(run.get("methodology"), dict) else None
+    methodology_html = ""
+    if methodology:
+        methodology_title = str(methodology.get("title") or methodology.get("skill_id") or "")
+        methodology_html = f"<dt>{_h(dashboard_t('methodology', lang))}</dt><dd><code>{_h(methodology_title)}</code></dd>"
     return (
         f'<article class="go-run-card{" go-run-focused" if focused else ""}">'
         '<div class="go-run-head">'
@@ -3092,6 +3118,7 @@ def _go_run_card_html(run: dict[str, Any], action_links: bool, lang: str = "en",
         f"<p>{_h(run.get('requirement', ''))}</p>"
         '<dl class="path-list">'
         f"<dt>{_h(dashboard_t('project', lang))}</dt><dd><code>{_h(run.get('project_id', ''))}</code></dd>"
+        f"{methodology_html}"
         f"<dt>{_h(dashboard_t('metadata', lang))}</dt><dd><code>{_h(run.get('metadata_path', ''))}</code></dd>"
         "</dl>"
         f"{_go_run_command_list_html(run, action_links, lang)}"

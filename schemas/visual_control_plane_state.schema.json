@@ -637,6 +637,9 @@
         "metadata_path": {
           "type": "string"
         },
+        "methodology": {
+          "$ref": "#/definitions/methodology_skill"
+        },
         "status_command": {
           "type": "string"
         },
@@ -689,6 +692,9 @@
         },
         "worker_status": {
           "type": "string"
+        },
+        "methodology": {
+          "$ref": "#/definitions/methodology_skill"
         },
         "targets": {
           "type": "array",
@@ -1029,6 +1035,9 @@
           "items": {
             "type": "string"
           }
+        },
+        "methodology": {
+          "$ref": "#/definitions/methodology_skill"
         }
       },
       "additionalProperties": false

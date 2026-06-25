@@ -2067,6 +2067,65 @@ def test_visual_state_includes_methodology_skills(tmp_path):
     assert "agent-acceptance" in html
 
 
+def test_visual_state_projects_methodology_into_go_runs(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    source_dir = project_root / "src"
+    source_dir.mkdir(parents=True)
+    (source_dir / "app.py").write_text("print('ok')\n", encoding="utf-8")
+    go_root = runtime_dir / "go-runs" / "go-project-123"
+    go_root.mkdir(parents=True)
+    (go_root / "go-run.json").write_text(json.dumps({
+        "go_run_id": "go-project-123",
+        "project_id": "project",
+        "project_root": str(project_root),
+        "requirement": "Add a TDD feature.",
+        "status": "queued",
+        "execute": False,
+        "created_at": "2026-06-26T00:00:00Z",
+        "metadata_path": str(go_root / "go-run.json"),
+        "methodology": {
+            "skill_id": "tdd",
+            "title": "tdd",
+            "source_path": "tools/skills/tdd/SKILL.md",
+            "source_kind": "local_repository_asset",
+            "triggers": ["@tdd"],
+            "status": "registered",
+        },
+        "agents": [{
+            "agent_id": "coding-agent-1",
+            "shard_index": 1,
+            "shard_count": 1,
+            "status": "queued",
+            "worker_status": "",
+            "methodology": {
+                "skill_id": "tdd",
+                "title": "tdd",
+                "source_path": "tools/skills/tdd/SKILL.md",
+                "source_kind": "local_repository_asset",
+                "triggers": ["@tdd"],
+                "status": "registered",
+            },
+            "targets": ["src/app.py"],
+            "target_bytes": 12,
+            "changed_files": [],
+            "packet_dir": str(tmp_path / "packet"),
+            "task_spec_path": str(tmp_path / "packet" / "TASKSPEC.json"),
+            "report_path": "",
+            "worker_command": ["opencode", "run"],
+        }],
+    }, indent=2), encoding="utf-8")
+
+    state = build_visual_control_plane_state(runtime_dir)
+
+    validate_schema("schemas/visual_control_plane_state.schema.json", state)
+    assert state["go_runs"][0]["methodology"]["skill_id"] == "tdd"
+    assert state["go_runs"][0]["agents"][0]["methodology"]["skill_id"] == "tdd"
+    assert state["team"]["task_board"][0]["methodology"]["skill_id"] == "tdd"
+    html = render_visual_control_plane_state_html(state)
+    assert "tdd" in html
+
+
 def test_runtime_store_read_all_tolerates_malformed_line_in_middle(tmp_path):
     runtime_dir = tmp_path / "runtime"
     runtime_dir.mkdir()
