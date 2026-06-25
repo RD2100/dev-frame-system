@@ -1,0 +1,109 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.invalid/devframe/opencode-readiness-report.schema.json",
+  "title": "OpenCode Readiness Report",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "probe",
+    "mode",
+    "model",
+    "workspace",
+    "checks",
+    "paths",
+    "verdict"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "opencode-readiness-report/v1"
+    },
+    "probe": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "workspace": {
+      "type": "string"
+    },
+    "cache_key": {
+      "type": "string"
+    },
+    "timed_out": {
+      "type": "boolean"
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["status", "detail"],
+        "properties": {
+          "status": {
+            "enum": ["passed", "failed"]
+          },
+          "detail": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "paths": {
+      "type": "object",
+      "required": ["report"],
+      "properties": {
+        "report": {
+          "type": "string"
+        },
+        "events": {
+          "type": "string"
+        },
+        "stdout": {
+          "type": "string"
+        },
+        "stderr": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "permission_mode": {
+      "type": "object"
+    },
+    "events": {
+      "type": "object"
+    },
+    "blockers": {
+      "type": "object"
+    },
+    "verdict": {
+      "enum": ["passed", "partial", "failed"]
+    },
+    "partial_type": {
+      "type": "string",
+      "enum": [
+        "",
+        "only-run-not-serve",
+        "only-with-skip-permissions",
+        "needs-manual-permission-reply",
+        "question-blocked",
+        "flaky-N-retries",
+        "event-terminal-missing",
+        "serve-shutdown-nonzero",
+        "serve-no-file-landing",
+        "serve-timeout",
+        "serve-probe-failed"
+      ]
+    },
+    "failed_checks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}
