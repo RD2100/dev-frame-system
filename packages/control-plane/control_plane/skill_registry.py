@@ -37,6 +37,26 @@ def _extract_triggers(description: str) -> list[str]:
     return triggers
 
 
+def match_methodology_requirement(requirement: str) -> dict[str, Any] | None:
+    if not requirement:
+        return None
+    for skill in list_methodology_skills():
+        for trigger in skill.get("triggers", []):
+            if requirement.startswith(trigger):
+                return skill
+    return None
+
+
+def match_methodology(requirement: str) -> dict[str, Any] | None:
+    skills = list_methodology_skills()
+    trigger_map: dict[str, dict[str, Any]] = {}
+    for skill in skills:
+        for trigger in skill.get("triggers", []):
+            trigger_map[trigger] = skill
+    first_token = requirement.lstrip().split(None, 1)[0]
+    return trigger_map.get(first_token)
+
+
 def list_methodology_skills() -> list[dict[str, Any]]:
     skills: list[dict[str, Any]] = []
     seen: set[str] = set()

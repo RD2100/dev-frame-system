@@ -2577,3 +2577,155 @@ def test_web_ai_dispatch_task_intakes_skips_existing_go_run(tmp_path, monkeypatc
     assert exit_code == 0
     assert "dispatched 0" in output
     assert "already dispatched go_run_id=go-existing" in output
+
+
+def test_code_preview_shows_methodology_for_tdd_goal(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "@tdd Add a TDD feature.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--agents",
+        "1",
+        "--target",
+        "src/app.py",
+        "--preview",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "DevFrame coding preview" in output
+    assert "methodology" in output
+    assert "tdd" in output
+    assert "goal         : Add a TDD feature." in output
+    assert not runtime_dir.exists()
+
+
+def test_code_stores_methodology_metadata_for_tdd_goal(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "@tdd Add a TDD feature.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/app.py",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert "DevFrame Code session" in output
+    assert metadata["requirement"] == "Add a TDD feature."
+    assert metadata["methodology"]["skill_id"] == "tdd"
+    assert metadata["methodology"]["title"] == "tdd"
+    assert metadata["agents"][0]["methodology"]["skill_id"] == "tdd"
+
+
+def test_code_status_shows_methodology_for_tdd_goal(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "@tdd Add a TDD feature.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/app.py",
+    ])
+    assert devframe_cli_main() == 0
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    capsys.readouterr()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "status",
+        "--runtime-dir",
+        str(runtime_dir),
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "DevFrame Code status" in output
+    assert metadata["go_run_id"] in output
+    assert "methodology" in output
+    assert "tdd" in output
+
+
+def test_code_preview_strips_leading_whitespace_tdd_trigger(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "   @tdd Add a TDD feature.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/app.py",
+        "--preview",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "methodology" in output
+    assert "tdd" in output
+    assert "goal         :    Add a TDD feature." in output or "goal         : Add a TDD feature." in output
+
+
+def test_atgo_prepare_records_tdd_methodology(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "atgo",
+        "@tdd Add a small TDD bridge.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/cli.py",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    evidence_dir = runtime_dir / "atgo-runs" / metadata["go_run_id"]
+    task_spec = (evidence_dir / "task-spec.md").read_text(encoding="utf-8")
+
+    assert exit_code == 0
+    assert "DevFrame @go" in output
+    assert metadata["requirement"] == "Add a small TDD bridge."
+    assert metadata["methodology"]["skill_id"] == "tdd"
+    assert "- **Methodology**: tdd" in task_spec

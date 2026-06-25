@@ -13,6 +13,7 @@ from typing import Any
 from .backup_guard import default_runtime_dir
 from .orchestrator import Orchestrator
 from .rdgoal import rdgoal
+from .skill_registry import match_methodology
 from .worker import CommandWorker, WorkerResult
 
 
@@ -38,6 +39,7 @@ class GoAgentDispatch:
     worker_status: str = ""
     changed_files: list[str] = field(default_factory=list)
     verification: str = ""
+    methodology: dict[str, Any] | None = None
 
 
 @dataclass
@@ -52,6 +54,20 @@ class GoDispatchResult:
     agents: list[GoAgentDispatch] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     metadata_path: str = ""
+    methodology: dict[str, Any] | None = None
+
+
+def resolve_methodology(requirement: str) -> tuple[str, dict[str, Any] | None]:
+    methodology = match_methodology(requirement)
+    effective = requirement
+    if methodology:
+        stripped = effective.lstrip()
+        leading = effective[: len(effective) - len(stripped)]
+        for trigger in methodology.get("triggers", []):
+            if stripped.startswith(trigger):
+                effective = leading + stripped[len(trigger):].lstrip()
+                break
+    return effective, methodology
 
 
 def run_go_dispatch(
@@ -79,6 +95,7 @@ def run_go_dispatch(
     runtime_root = Path(runtime_dir).resolve() if runtime_dir else default_runtime_dir()
     project_root = Path(project_path).resolve()
     target_shards = split_targets_by_size(project_root, targets or [], agents)
+    effective_requirement, methodology = resolve_methodology(requirement)
     orchestrator = Orchestrator(runtime_dir=runtime_root)
     dispatches: list[GoAgentDispatch] = []
     project_id = ""
@@ -90,8 +107,8 @@ def run_go_dispatch(
             for target in shard_targets
         )
         shard_number = index + 1
-        shard_requirement = _shard_requirement(requirement, shard_number, agents, shard_targets)
-        result = rdgoal(
+        shard_requirement = _shard_requirement(effective_requirement, shard_number, agents, shard_targets, methodology)
+        dispatch_result = rdgoal(
             orchestrator,
             project_root,
             shard_requirement,
@@ -99,8 +116,8 @@ def run_go_dispatch(
             targets=shard_targets,
             apply_rdinit=apply_rdinit,
         )
-        project_id = result.project_id
-        packet = result.dispatch.packet
+        project_id = dispatch_result.project_id
+        packet = dispatch_result.dispatch.packet
         if packet is None:
             continue
         command = build_go_worker_command(
@@ -120,6 +137,7 @@ def run_go_dispatch(
             packet_dir=packet.packet_dir,
             task_spec_path=str(Path(packet.packet_dir) / "TASKSPEC.json"),
             worker_command=command,
+            methodology=methodology,
         ))
 
     go_run_id = f"go-{project_id or project_root.name}-{int(time.time() * 1000)}-{uuid.uuid4().hex[:6]}"
@@ -127,11 +145,12 @@ def run_go_dispatch(
         go_run_id=go_run_id,
         project_id=project_id,
         project_root=str(project_root),
-        requirement=requirement,
+        requirement=effective_requirement,
         runtime_dir=str(runtime_root),
         status="queued",
         execute=execute,
         agents=dispatches,
+        methodology=methodology,
     )
 
     if execute and dispatches:
@@ -187,9 +206,14 @@ def render_go_dispatch_text(result: GoDispatchResult) -> str:
         f"execute      : {result.execute}",
         f"agents       : {len(result.agents)}",
         f"metadata     : {result.metadata_path}",
+    ]
+    if result.methodology:
+        title = str(result.methodology.get("title") or result.methodology.get("skill_id") or "unknown")
+        lines.append(f"methodology   : {title}")
+    lines.extend([
         "",
         "Agents",
-    ]
+    ])
     for agent in result.agents:
         lines.extend([
             f"- {agent.agent_id} shard={agent.shard_index}/{agent.shard_count} status={agent.status}",
@@ -326,6 +350,7 @@ def _go_result_from_metadata(data: dict[str, Any], *, fallback_runtime_dir: Path
             worker_status=str(agent.get("worker_status", "")),
             changed_files=_string_list(agent.get("changed_files", [])),
             verification=str(agent.get("verification", "")),
+            methodology=agent.get("methodology"),
         )
         for agent in data.get("agents", [])
     ]
@@ -340,6 +365,7 @@ def _go_result_from_metadata(data: dict[str, Any], *, fallback_runtime_dir: Path
         agents=agents,
         created_at=str(data.get("created_at", "")),
         metadata_path=str(data.get("metadata_path", "")),
+        methodology=data.get("methodology"),
     )
 
 
@@ -406,13 +432,17 @@ def _file_size(path: Path) -> int:
 
 
 def _shard_requirement(requirement: str, shard_number: int, shard_count: int,
-                       targets: list[str]) -> str:
-    lines = [
+                       targets: list[str], methodology: dict[str, Any] | None = None) -> str:
+    lines: list[str] = []
+    if methodology:
+        title = str(methodology.get("title") or methodology.get("skill_id") or "unknown")
+        lines.extend([f"Methodology: {title}", ""])
+    lines.extend([
         requirement,
         "",
         f"Shard: {shard_number}/{shard_count}",
         "Role: coding execution agent. Implement only the assigned slice, collect verification, and write ExecutionReport.",
-    ]
+    ])
     if targets:
         lines.extend(["Assigned targets:", *[f"- {target}" for target in targets]])
     else:

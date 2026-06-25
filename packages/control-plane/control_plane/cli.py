@@ -330,6 +330,7 @@ def cmd_go() -> int:
         estimate_target_bytes,
         render_go_dispatch_text,
         render_command,
+        resolve_methodology,
         run_go_dispatch,
         split_targets_by_size,
     )
@@ -362,11 +363,12 @@ def cmd_go() -> int:
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
+    effective_requirement, methodology = resolve_methodology(args.requirement)
     if args.preview:
         print(_render_coding_preview(
             entrypoint="devframe go",
             project_path=args.project_path,
-            goal=args.requirement,
+            goal=effective_requirement,
             targets=targets,
             agents=agents,
             execute=args.execute,
@@ -380,6 +382,7 @@ def cmd_go() -> int:
             render_worker_command=render_command,
             split_targets=split_targets_by_size,
             estimate_target_bytes=estimate_target_bytes,
+            methodology=methodology,
         ), end="")
         return 0
 
@@ -409,7 +412,7 @@ def cmd_atgo() -> int:
     import argparse
 
     from .backup_guard import default_runtime_dir
-    from .go_dispatch import run_go_dispatch
+    from .go_dispatch import resolve_methodology, run_go_dispatch
 
     parser = argparse.ArgumentParser(prog="devframe atgo")
     parser.add_argument("goal", help="Coding goal for the @go evidence + coding dispatch entrypoint")
@@ -427,6 +430,7 @@ def cmd_atgo() -> int:
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
+    effective_goal, methodology = resolve_methodology(args.goal)
 
     try:
         result = run_go_dispatch(
@@ -453,8 +457,12 @@ def cmd_atgo() -> int:
             f"- **Operation**: atgo coding shard 1/1",
             f"- **Project Root**: {project_root}",
             f"- **Requirement**: {result.requirement}",
+            (
+                f"- **Methodology**: {methodology.get('title') or methodology.get('skill_id')}"
+                if methodology else ""
+            ),
             f"- **Targets**: {', '.join(targets) if targets else '(project scope)'}",
-        ]) + "\n",
+        ]).replace("\n\n- **Targets**", "\n- **Targets**") + "\n",
         encoding="utf-8",
     )
 
@@ -519,6 +527,7 @@ def cmd_code() -> int:
         estimate_target_bytes,
         render_go_dispatch_text,
         render_command,
+        resolve_methodology,
         run_go_dispatch,
         split_targets_by_size,
     )
@@ -560,6 +569,7 @@ def cmd_code() -> int:
     if not goal:
         print(CODE_USAGE)
         return 2
+    effective_goal, methodology = resolve_methodology(goal)
     if args.dashboard and not args.allow_remote and not _is_loopback_host(args.host):
         print("ERROR: dashboard exposes local runtime paths; use --allow-remote to bind outside loopback.")
         return 1
@@ -573,7 +583,7 @@ def cmd_code() -> int:
         print(_render_coding_preview(
             entrypoint="devframe code",
             project_path=args.project,
-            goal=goal,
+            goal=effective_goal,
             targets=targets,
             agents=agents,
             execute=args.execute,
@@ -587,6 +597,7 @@ def cmd_code() -> int:
             render_worker_command=render_command,
             split_targets=split_targets_by_size,
             estimate_target_bytes=estimate_target_bytes,
+            methodology=methodology,
         ), end="")
         return 0
 
@@ -909,9 +920,15 @@ def _render_go_run_status(run: dict) -> str:
         f"runtime_dir  : {run.get('runtime_dir', '')}",
         f"metadata     : {run.get('metadata_path', '')}",
         f"requirement  : {run.get('requirement', '')}",
+    ]
+    methodology = run.get("methodology")
+    if isinstance(methodology, dict):
+        title = str(methodology.get("title") or methodology.get("skill_id") or "unknown")
+        lines.append(f"methodology   : {title}")
+    lines.extend([
         "",
         "Agents",
-    ]
+    ])
     agents = run.get("agents", [])
     for agent in agents:
         worker_status = agent.get("worker_status") or "pending"
@@ -958,6 +975,7 @@ def _render_coding_preview(
     render_worker_command,
     split_targets,
     estimate_target_bytes,
+    methodology: dict | None = None,
 ) -> str:
     from .backup_guard import default_runtime_dir
 
@@ -977,6 +995,11 @@ def _render_coding_preview(
         f"project_root : {Path(project_path).resolve()}",
         f"runtime_dir  : {runtime_root}",
         f"goal         : {goal}",
+    ]
+    if methodology:
+        title = str(methodology.get("title") or methodology.get("skill_id") or "unknown")
+        lines.append(f"methodology  : {title}")
+    lines.extend([
         f"execute      : {execute}",
         f"agents       : {agents}",
         f"targets      : {len(targets)}",
@@ -984,7 +1007,7 @@ def _render_coding_preview(
         f"worker       : {worker_label}",
         "",
         "Shards",
-    ]
+    ])
     for index, shard_targets in enumerate(shards, start=1):
         command = build_worker_command(
             worker_command=worker_command,
