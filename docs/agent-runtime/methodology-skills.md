@@ -5,14 +5,21 @@ snapshot of methodology skills discovered by the control plane.
 
 ## Current surface
 
-At present, the runtime-shipped registry contains one skill from
-`templates/runtime-bootstrap/SKILL.md`:
+At present, the runtime-shipped registry contains one shipped skill and one local
+repository-local skill:
 
 - `agent-acceptance`
   - title: `agent-acceptance`
   - source_path: `templates/runtime-bootstrap/SKILL.md`
   - source_kind: `local_repository_asset`
   - triggers: from markdown frontmatter description, such as `@go`
+  - status: `registered`
+
+- `tdd`
+  - title: `tdd`
+  - source_path: `tools/skills/tdd/SKILL.md`
+  - source_kind: `local_repository_asset`
+  - triggers: from markdown frontmatter description, such as `@tdd`
   - status: `registered`
 
 No local skill registry writes are performed by the UI/runtime from this field;

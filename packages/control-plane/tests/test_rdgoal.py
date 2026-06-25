@@ -2009,6 +2009,18 @@ def test_skill_registry_lists_shipped_agent_acceptance():
     assert "@go" in shipped.get("triggers", [])
 
 
+def test_skill_registry_lists_local_tdd_skill():
+    skills = list_methodology_skills()
+
+    assert any(skill.get("skill_id") == "tdd" for skill in skills)
+    tdd = next(skill for skill in skills if skill.get("skill_id") == "tdd")
+    assert tdd["title"] == "tdd"
+    assert "skills" in tdd["source_path"] and tdd["source_path"].endswith("SKILL.md")
+    assert tdd["source_kind"] == "local_repository_asset"
+    assert tdd["status"] == "registered"
+    assert "@tdd" in tdd.get("triggers", [])
+
+
 def test_skill_registry_lists_local_tools_skills_if_present(tmp_path, monkeypatch):
     tools_skills = tmp_path / "tools" / "skills" / "tdd"
     tools_skills.mkdir(parents=True)
