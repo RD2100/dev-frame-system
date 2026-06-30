@@ -74,6 +74,15 @@ def build_visual_client_manifest() -> dict[str, Any]:
             "description": "Loopback-only read session descriptor that lets the T3 Code native client load DevFrame's read-only shell.",
         },
         {
+            "id": "t3-projects",
+            "path": "/api/t3/projects",
+            "method": "GET",
+            "contract": "t3_project_options",
+            "object_types": ["Project"],
+            "mutates": False,
+            "description": "Loopback read of registered projects for coordinator goal creation and project binding selection.",
+        },
+        {
             "id": "sessions",
             "path": "/sessions.json",
             "method": "GET",

@@ -144,6 +144,12 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                 )
                 self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
                 return
+            if path == "/api/t3/projects":
+                state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=paper_project_dirs)
+                projects = _t3_project_options(state)
+                body = json.dumps({"projects": projects}, indent=2, ensure_ascii=True)
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
+                return
             if path == "/.well-known/t3/environment":
                 self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", render_t3_environment_descriptor_json())
                 return
@@ -694,6 +700,7 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                 body = json.dumps({
                     "started": True,
                     "runId": started.get("runId"),
+                    "projectId": started.get("projectId"),
                     "target": started.get("target"),
                     "goal": started.get("goal"),
                     "projectPath": started.get("projectPath"),
@@ -1733,6 +1740,34 @@ def _go_dispatch_project_options(state: dict[str, Any]) -> list[dict[str, str]]:
             "label": f"{cwd.name} - {cwd}",
         })
     return options
+
+
+def _t3_project_options(state: dict[str, Any]) -> list[dict[str, str]]:
+    options: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for project in state.get("projects", []):
+        if not isinstance(project, dict):
+            continue
+        root = _project_root_from_contract_path(project)
+        key = str(root).casefold()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        options.append({
+            "projectId": str(project.get("project_id") or ""),
+            "projectPath": str(root),
+            "workspaceRoot": str(root),
+            "label": f"{str(project.get('display_name') or project.get('project_id') or root.name)} - {root}",
+        })
+    if options:
+        return options
+    cwd = Path.cwd().resolve()
+    return [{
+        "projectId": cwd.name,
+        "projectPath": str(cwd),
+        "workspaceRoot": str(cwd),
+        "label": f"{cwd.name} - {cwd}",
+    }]
 
 
 def _project_root_from_contract_path(project: dict[str, Any]) -> Path:

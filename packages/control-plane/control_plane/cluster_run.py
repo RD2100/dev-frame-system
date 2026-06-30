@@ -21,6 +21,9 @@ from pathlib import Path
 from typing import Any
 
 from .cluster_control import _slug, is_valid_cluster_target
+from .project_contract import slugify_project_id
+from .t3_adapter import _workspace_root
+from .visual_state import build_visual_control_plane_state
 
 
 class ClusterRunError(Exception):
@@ -50,6 +53,50 @@ def _normalize_local_path(raw: str) -> str:
 
 
 _ACTIVE_STATUSES = {"running", "started"}
+
+
+def _resolve_project_reference(
+    runtime_dir: str | Path | None,
+    project_ref: str,
+) -> tuple[str, str]:
+    """Resolve a client-supplied project reference to (workspace path, project id).
+
+    The editor should eventually send stable project ids, but for backward
+    compatibility this helper still accepts local paths. Resolution order:
+
+    1. exact project id from the current control-plane state;
+    2. exact workspace root path from the current control-plane state;
+    3. raw local path when it points at a real directory.
+    """
+    raw = str(project_ref or "").strip()
+    if not raw:
+        return "", ""
+
+    normalized = _normalize_local_path(raw)
+    normalized_dir = ""
+    if normalized:
+        candidate = Path(normalized)
+        if candidate.is_dir():
+            normalized_dir = str(candidate.resolve())
+
+    try:
+        state = build_visual_control_plane_state(runtime_dir)
+        for project in state.get("projects", []):
+            if not isinstance(project, dict):
+                continue
+            project_id = str(project.get("project_id") or "").strip()
+            workspace_root = _workspace_root(project)
+            workspace_root_text = str(Path(workspace_root).resolve()) if workspace_root else ""
+            if raw and project_id == raw and workspace_root_text:
+                return workspace_root_text, project_id
+            if normalized_dir and workspace_root_text and workspace_root_text == normalized_dir:
+                return workspace_root_text, project_id or slugify_project_id(workspace_root_text)
+    except Exception:  # noqa: BLE001 - advisory lookup only; fall back to path mode
+        pass
+
+    if normalized_dir:
+        return normalized_dir, slugify_project_id(normalized_dir)
+    return "", raw
 
 
 def _pid_alive(pid: int) -> bool:
@@ -465,7 +512,7 @@ def start_cluster_run(
     proposed_by: str = "rd-code-editor",
 ) -> dict[str, Any]:
     """Validate + start a background project-coordinator run. Returns immediately."""
-    path = _normalize_local_path(project_path)
+    path, project_id = _resolve_project_reference(runtime_dir, project_path)
     text = str(goal or "").strip()
     tid = _slug(target)
     if not path:
@@ -476,9 +523,6 @@ def start_cluster_run(
         raise ClusterRunError("goal is required")
     if not is_valid_cluster_target(runtime_dir, tid):
         raise ClusterRunError(f"unknown cluster target: {target}")
-    if not Path(path).is_dir():
-        raise ClusterRunError(f"project path is not a directory: {path}")
-
     run_id = _new_run_id()
 
     # Phase C triage: a conversational goal (e.g. "你好" / "你能做什么") is
@@ -496,6 +540,7 @@ def start_cluster_run(
             "runId": run_id,
             "target": tid,
             "goal": text,
+            "projectId": project_id,
             "projectPath": path,
             "proposedBy": str(proposed_by or "rd-code-editor"),
             "ownerPid": os.getpid(),
@@ -512,12 +557,14 @@ def start_cluster_run(
             "runId": run_id,
             "target": tid,
             "goal": text,
+            "projectId": project_id,
             "projectPath": path,
             "kind": "conversation",
             "conversationKind": conversation_kind,
             "coordinatorScope": "global" if conversation_kind == "global_coordinator" else "none",
             "projectBinding": {
                 "mode": "optional" if conversation_kind == "global_coordinator" else "none",
+                "projectId": project_id,
                 "projectPath": path,
                 "status": "bound",
             },
@@ -530,11 +577,9 @@ def start_cluster_run(
     methodology_summary: dict[str, Any] | None = None
     try:
         from .methodology_dispatch import resolve_methodology
-        from .project_contract import slugify_project_id
 
-        run_project_id = slugify_project_id(path) if path else None
         _effective, methodology = resolve_methodology(
-            text, runtime_dir=runtime_dir, project_id=run_project_id
+            text, runtime_dir=runtime_dir, project_id=project_id
         )
         if methodology:
             methodology_summary = {
@@ -551,6 +596,7 @@ def start_cluster_run(
         "runId": run_id,
         "target": tid,
         "goal": text,
+        "projectId": project_id,
         "projectPath": path,
         "proposedBy": str(proposed_by or "rd-code-editor"),
         "ownerPid": os.getpid(),
@@ -572,11 +618,13 @@ def start_cluster_run(
         "runId": run_id,
         "target": tid,
         "goal": text,
+        "projectId": project_id,
         "projectPath": path,
         "conversationKind": "goal_conversation",
         "coordinatorScope": "project",
         "projectBinding": {
             "mode": "required",
+            "projectId": project_id,
             "projectPath": path,
             "status": "bound",
         },

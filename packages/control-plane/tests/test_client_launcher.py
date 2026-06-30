@@ -68,6 +68,7 @@ def test_client_launch_plan_maps_t3_bridge_and_opencode_executor(tmp_path, monke
     assert plan["endpoints"]["manifest"] == "http://127.0.0.1:8788/client-manifest.json"
     assert plan["endpoints"]["t3Bridge"] == "http://127.0.0.1:8788/t3-bridge.json"
     assert plan["endpoints"]["t3Shell"] == "http://127.0.0.1:8788/t3-shell.json"
+    assert plan["endpoints"]["projects"] == "http://127.0.0.1:8788/api/t3/projects"
     assert plan["endpoints"]["goDispatch"] == "http://127.0.0.1:8788/go/dispatch"
     assert plan["endpoints"]["actionExecute"] == "http://127.0.0.1:8788/actions/execute"
     assert plan["endpoints"]["approvalResponse"] == "http://127.0.0.1:8788/api/t3/approval-response"

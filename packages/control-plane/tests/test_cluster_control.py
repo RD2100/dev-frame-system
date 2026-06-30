@@ -63,11 +63,13 @@ def test_start_cluster_run_validates_and_starts(tmp_path, monkeypatch):
     assert started["started"] is True
     assert started["runId"].startswith("g-")
     assert started["target"] == "coordinator"
+    assert started["projectId"] == "workspace"
     assert started["projectPath"] == str(workspace)
     assert started["conversationKind"] == "goal_conversation"
     assert started["coordinatorScope"] == "project"
     assert started["projectBinding"] == {
         "mode": "required",
+        "projectId": "workspace",
         "projectPath": str(workspace),
         "status": "bound",
     }
@@ -172,12 +174,14 @@ def test_dashboard_cluster_targets_and_run(tmp_path, monkeypatch):
         assert status == 202
         assert started["started"] is True
         assert started["runId"].startswith("g-")
+        assert started["projectId"] == "workspace"
         assert started["target"] == "coordinator"
         assert started["projectPath"] == str(workspace)
         assert started["conversationKind"] == "goal_conversation"
         assert started["coordinatorScope"] == "project"
         assert started["projectBinding"] == {
             "mode": "required",
+            "projectId": "workspace",
             "projectPath": str(workspace),
             "status": "bound",
         }
@@ -185,6 +189,43 @@ def test_dashboard_cluster_targets_and_run(tmp_path, monkeypatch):
         while time.time() < deadline and not calls:
             time.sleep(0.02)
         assert calls
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_dashboard_projects_endpoint_lists_registered_projects(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.setattr(
+        "control_plane.dashboard.build_visual_control_plane_state",
+        lambda runtime_dir, paper_project_dirs=None: {
+            "projects": [{
+                "project_id": "demo-project",
+                "display_name": "Demo Project",
+                "goal": "Ship it",
+                "status": "active",
+                "risk_state": "low",
+                "contract_path": str(workspace / "rules" / "project-contracts" / "demo-project.md"),
+            }]
+        },
+    )
+    server = build_dashboard_server(runtime_dir=runtime_dir, port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        status, body = _get_json(base_url, "/api/t3/projects")
+        assert status == 200
+        assert body["projects"] == [{
+            "projectId": "demo-project",
+            "projectPath": str(workspace),
+            "workspaceRoot": str(workspace),
+            "label": f"Demo Project - {workspace}",
+        }]
     finally:
         server.shutdown()
         server.server_close()
@@ -219,6 +260,47 @@ def test_dashboard_cluster_run_rejects_unknown_target(tmp_path, monkeypatch):
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+def test_start_cluster_run_accepts_project_id_from_runtime_state(tmp_path, monkeypatch):
+    runtime = tmp_path / "runtime"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        cluster_run_module,
+        "_run_cluster_workflow",
+        lambda rd, path, target, goal, run_id, on_prepared=None: calls.append((path, target, goal, run_id)),
+    )
+    monkeypatch.setattr(
+        cluster_run_module,
+        "build_visual_control_plane_state",
+        lambda runtime_dir: {
+            "projects": [{
+                "project_id": "demo-project",
+                "display_name": "Demo Project",
+                "goal": "g",
+                "status": "active",
+                "risk_state": "low",
+                "contract_path": str(workspace / "rules" / "project-contracts" / "demo-project.md"),
+            }]
+        },
+    )
+
+    started = start_cluster_run(runtime, "demo-project", "coordinator", "ship the feature")
+
+    assert started["projectId"] == "demo-project"
+    assert started["projectPath"] == str(workspace)
+    assert started["projectBinding"] == {
+        "mode": "required",
+        "projectId": "demo-project",
+        "projectPath": str(workspace),
+        "status": "bound",
+    }
+    deadline = time.time() + 5
+    while not calls and time.time() < deadline:
+        time.sleep(0.02)
+    assert calls and calls[0][0] == str(workspace)
 
 
 
