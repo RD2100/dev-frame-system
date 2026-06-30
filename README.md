@@ -2,7 +2,7 @@
   <img src="docs/assets/devframe-system-banner.svg" alt="devframe-system: web AI as an external brain" width="100%" />
 </p>
 
-<h3 align="center">A governed coding CLI for serious software work. `devframe code` is the product; the control plane sits behind it.</h3>
+<h3 align="center">An OpenCode-first governed coding CLI for serious software work. `devframe code` is the product; the control plane sits behind it.</h3>
 
 <p align="center">
   English | <a href="README.zh-CN.md">Simplified Chinese</a>
@@ -193,9 +193,7 @@ devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-di
 `devframe code` is the product-shaped coding entrypoint. It defaults to the
 current repository and prompts for a goal when one is not supplied, prepares one
 bounded coding-agent session, prints the exact worker command, and records state
-for the dashboard. Use `--worker opencode` to choose the built-in
-worker template, or `--command <your-worker>` for another executor command
-template (for example, `python -m your_worker_module`). Run `devframe code workers`
+for the dashboard. Use `--worker opencode` to choose the built-in OpenCode worker profile, the default local coding-agent runtime. Use `--command <your-worker>` only for explicit custom executor commands (for example, `python -m your_worker_module`). Run `devframe code workers`
 first to see which local worker CLIs are
 available; it is status-only and does not create packets or spend worker
 tokens. Use `--changed --agents auto` to target modified, staged, or

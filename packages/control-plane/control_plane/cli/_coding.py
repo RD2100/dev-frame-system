@@ -350,7 +350,7 @@ def cmd_code() -> int:
     print("Backend      : /go concurrent coding-agent dispatch")
     print("Default mode : prepare first, inspect, then execute when you choose")
     print("")
-    print(render_go_dispatch_text(result), end="")
+    print(_render_code_dispatch_text(result), end="")
     if args.dashboard:
         from ..dashboard import serve_dashboard
 
@@ -552,11 +552,76 @@ def _render_sessions(run: dict) -> str:
     return "\n".join(compact) + "\n"
 
 
+def _render_code_dispatch_text(result) -> str:
+    def _quote(value: object) -> str:
+        text = str(value)
+        if not text or any(ch.isspace() for ch in text) or any(ch in text for ch in ['"', "'", "&", "|"]):
+            return '"' + text.replace('"', '\\"') + '"'
+        return text
+
+    def _summary(value: str) -> str:
+        for line in value.splitlines():
+            stripped = line.strip().lstrip("- ").replace("**", "")
+            if stripped:
+                return stripped
+        return ""
+
+    lines = [
+        f"go_run_id    : {result.go_run_id}",
+        f"status       : {result.status}",
+        f"agents       : {len(result.agents)}",
+        f"requirement  : {result.requirement}",
+    ]
+    if result.methodology:
+        title = str(result.methodology.get("title") or result.methodology.get("skill_id") or "unknown")
+        lines.append(f"methodology   : {title}")
+    lines.extend([
+        "",
+        "Agents",
+    ])
+    for agent in result.agents:
+        worker_status = agent.worker_status or agent.status or "pending"
+        lines.append(
+            f"- {agent.agent_id} shard={agent.shard_index}/{agent.shard_count} status={worker_status}"
+        )
+        lines.append(f"  targets: {', '.join(agent.targets) if agent.targets else '(project scope)'}")
+        lines.append(f"  run    : {_render_code_worker_command(result.runtime_dir, agent)}")
+        if agent.report_path:
+            lines.append(f"  report : {agent.report_path}")
+        if agent.changed_files:
+            lines.append(f"  changed: {', '.join(agent.changed_files)}")
+        if agent.verification:
+            lines.append(f"  evidence: {_summary(agent.verification)}")
+    lines.extend([
+        "",
+        "Next",
+        f"Inspect   : devframe code status {_quote(result.go_run_id)} --runtime-dir {_quote(result.runtime_dir)}",
+        f"Resume    : devframe code execute {_quote(result.go_run_id)} --runtime-dir {_quote(result.runtime_dir)}",
+        f"Control   : devframe dashboard serve --runtime-dir {_quote(result.runtime_dir)}",
+        f"Queue     : devframe actions --runtime-dir {_quote(result.runtime_dir)}",
+    ])
+    return "\n".join(lines) + "\n"
+
+
+def _render_code_worker_command(runtime_dir: str, agent) -> str:
+    def _quote(value: object) -> str:
+        text = str(value)
+        if not text or any(ch.isspace() for ch in text) or any(ch in text for ch in ['"', "'", "&", "|"]):
+            return '"' + text.replace('"', '\\"') + '"'
+        return text
+
+    command = " ".join(_quote(part) for part in list(agent.worker_command or []))
+    return (
+        f"rdgoal worker {_quote(agent.packet_dir)} "
+        f"--runtime-dir {_quote(runtime_dir)} --command {command}"
+    )
+
+
 def cmd_code_execute(*, prog: str = "devframe code execute") -> int:
     import argparse
 
     from ..backup_guard import default_runtime_dir
-    from ..go_dispatch import execute_go_run, render_go_dispatch_text
+    from ..go_dispatch import execute_go_run
 
     parser = argparse.ArgumentParser(prog=prog)
     parser.add_argument("run_id", nargs="?", default="latest", help="prepared go-run id to execute, or latest")
@@ -581,7 +646,7 @@ def cmd_code_execute(*, prog: str = "devframe code execute") -> int:
     print("Backend      : existing /go run packets")
     print("Token mode   : resume a prepared run; skipped passed agents unless --rerun-passed")
     print("")
-    print(render_go_dispatch_text(result), end="")
+    print(_render_code_dispatch_text(result), end="")
     return 0 if result.status in {"queued", "passed"} else 1
 
 
@@ -714,10 +779,7 @@ def _render_go_run_status(run: dict) -> str:
         "DevFrame Code status",
         f"go_run_id    : {run.get('go_run_id', '')}",
         f"status       : {run.get('status', '')}",
-        f"execute      : {run.get('execute', False)}",
-        f"project_root : {run.get('project_root', '')}",
-        f"runtime_dir  : {run.get('runtime_dir', '')}",
-        f"metadata     : {run.get('metadata_path', '')}",
+        f"agents       : {len(run.get('agents', []))}",
         f"requirement  : {run.get('requirement', '')}",
     ]
     methodology = run.get("methodology")

@@ -143,3 +143,5 @@ def test_dashboard_consent_flow_end_to_end(tmp_path):
         assert "devframe-mcp" in ok["result"]["content"][0]["text"]
     finally:
         server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)

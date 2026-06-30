@@ -77,6 +77,9 @@ PUBLIC_MARKDOWN_DOCS = [
 
 
 def test_public_snapshot_allows_python_test_caches():
+    for leftover in REPO_ROOT.glob("public-snapshot-probe-*"):
+        shutil.rmtree(leftover, ignore_errors=True)
+
     result = subprocess.run(
         [
             "powershell",
