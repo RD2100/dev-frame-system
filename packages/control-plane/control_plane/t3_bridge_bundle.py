@@ -337,8 +337,18 @@ export interface DevFrameShellBridgeConfig {
   readonly pollIntervalMs?: number;
 }
 
+export interface DevFrameControlPlaneConfig {
+  readonly controlPlaneBaseUrl: string;
+  readonly shellUrl?: string;
+  readonly clientPlanUrl?: string;
+  readonly manifestUrl?: string;
+  readonly pollIntervalMs?: number;
+}
+
 interface DevFrameBridgeEnv {
   readonly VITE_DEVFRAME_T3_SHELL_URL?: string;
+  readonly VITE_DEVFRAME_CLIENT_PLAN_URL?: string;
+  readonly VITE_DEVFRAME_CLIENT_MANIFEST_URL?: string;
 }
 
 export type DevFrameShellListener = (snapshot: DevFrameT3ShellSnapshot) => void;
@@ -346,10 +356,41 @@ export type DevFrameShellErrorListener = (error: unknown) => void;
 
 const DEFAULT_POLL_INTERVAL_MS = 2000;
 
+function trimOptionalUrl(value: string | undefined): string | undefined {
+  const text = value?.trim();
+  return text ? text : undefined;
+}
+
+function deriveControlPlaneBaseUrl(
+  shellUrl?: string,
+  clientPlanUrl?: string,
+  manifestUrl?: string,
+): string | null {
+  const source = shellUrl || clientPlanUrl || manifestUrl;
+  if (!source) return null;
+  return new URL("/", source).toString();
+}
+
+export function readDevFrameControlPlaneConfig(
+  env: DevFrameBridgeEnv = import.meta.env as DevFrameBridgeEnv,
+): DevFrameControlPlaneConfig | null {
+  const shellUrl = trimOptionalUrl(env.VITE_DEVFRAME_T3_SHELL_URL);
+  const clientPlanUrl = trimOptionalUrl(env.VITE_DEVFRAME_CLIENT_PLAN_URL);
+  const manifestUrl = trimOptionalUrl(env.VITE_DEVFRAME_CLIENT_MANIFEST_URL);
+  const controlPlaneBaseUrl = deriveControlPlaneBaseUrl(shellUrl, clientPlanUrl, manifestUrl);
+  if (!controlPlaneBaseUrl) return null;
+  return {
+    controlPlaneBaseUrl,
+    ...(shellUrl ? { shellUrl } : {}),
+    ...(clientPlanUrl ? { clientPlanUrl } : {}),
+    ...(manifestUrl ? { manifestUrl } : {}),
+  };
+}
+
 export function readDevFrameShellBridgeConfig(
   env: DevFrameBridgeEnv = import.meta.env as DevFrameBridgeEnv,
 ): DevFrameShellBridgeConfig | null {
-  const shellUrl = env.VITE_DEVFRAME_T3_SHELL_URL?.trim();
+  const shellUrl = trimOptionalUrl(env.VITE_DEVFRAME_T3_SHELL_URL);
   if (!shellUrl) return null;
   return { shellUrl };
 }
@@ -385,9 +426,9 @@ export async function fetchDevFrameConversationModel(
 }
 
 export async function fetchDevFrameProjectOptions(
-  config: DevFrameShellBridgeConfig,
+  config: DevFrameControlPlaneConfig,
 ): Promise<readonly DevFrameProjectOption[]> {
-  const projectsUrl = new URL("/api/t3/projects", config.shellUrl).toString();
+  const projectsUrl = new URL("/api/t3/projects", config.controlPlaneBaseUrl).toString();
   const response = await fetch(projectsUrl, {
     method: "GET",
     cache: "no-store",
@@ -398,6 +439,81 @@ export async function fetchDevFrameProjectOptions(
   }
   const payload = (await response.json()) as { readonly projects?: readonly DevFrameProjectOption[] };
   return Array.isArray(payload.projects) ? payload.projects : [];
+}
+
+export interface DevFrameClusterTarget {
+  readonly id: string;
+  readonly kind: string;
+  readonly label: string;
+  readonly role?: string;
+}
+
+export interface DevFrameClusterTargetsResponse {
+  readonly projectId: string;
+  readonly targets: readonly DevFrameClusterTarget[];
+}
+
+export interface DevFrameCoordinatorGoalRequest {
+  readonly projectId: string;
+  readonly target: string;
+  readonly goal: string;
+  readonly proposedBy?: string;
+}
+
+export interface DevFrameCoordinatorGoalResponse {
+  readonly started: boolean;
+  readonly runId: string;
+  readonly projectId?: string;
+  readonly target: string;
+  readonly goal: string;
+  readonly projectPath?: string;
+  readonly conversationKind?: string;
+  readonly coordinatorScope?: string;
+  readonly projectBinding?: Record<string, unknown>;
+  readonly kind?: string;
+  readonly answer?: string;
+  readonly note?: string;
+}
+
+export async function fetchDevFrameClusterTargets(
+  config: DevFrameControlPlaneConfig,
+  projectId: string,
+): Promise<DevFrameClusterTargetsResponse> {
+  const targetsUrl = new URL("/api/t3/cluster-targets", config.controlPlaneBaseUrl);
+  if (projectId.trim()) targetsUrl.searchParams.set("project", projectId.trim());
+  const response = await fetch(targetsUrl.toString(), {
+    method: "GET",
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`DevFrame cluster targets request failed: ${response.status}`);
+  }
+  return (await response.json()) as DevFrameClusterTargetsResponse;
+}
+
+export async function startDevFrameCoordinatorGoal(
+  config: DevFrameControlPlaneConfig,
+  input: DevFrameCoordinatorGoalRequest,
+): Promise<DevFrameCoordinatorGoalResponse> {
+  const response = await fetch(new URL("/api/t3/cluster-run", config.controlPlaneBaseUrl).toString(), {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      projectId: input.projectId,
+      target: input.target,
+      goal: input.goal,
+      ...(input.proposedBy ? { proposedBy: input.proposedBy } : {}),
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`DevFrame coordinator goal request failed: ${response.status}`);
+  }
+  return (await response.json()) as DevFrameCoordinatorGoalResponse;
 }
 
 export function subscribeDevFrameT3Shell(
@@ -489,6 +605,10 @@ to access the full envelope including the `devframe.team` payload.
 Use `fetchDevFrameConversationModel()` for the coordinator conversation contract
 and `fetchDevFrameProjectOptions()` for the project-binding picker that powers
 new coordinator-owned goals.
+When the read-only shell overlay is off, use `readDevFrameControlPlaneConfig()`
+plus `fetchDevFrameClusterTargets()` and `startDevFrameCoordinatorGoal()` to
+drive coordinator goal creation against the loopback control plane without
+depending on `VITE_DEVFRAME_T3_SHELL_URL`.
 """
 
 
