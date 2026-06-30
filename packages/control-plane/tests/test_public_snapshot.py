@@ -459,7 +459,7 @@ def test_release_workflow_installs_deps_and_invokes_single_release_gate():
         "workflow_dispatch": None,
     }
     assert job["runs-on"] == "windows-latest"
-    assert 'python -m pip install -e ".\\packages\\control-plane[dev]"' in run_steps
+    assert 'python -m pip install -e ".\\packages\\control-plane[dev]" -e ".\\packages\\ai-workflow-hub[dev]"' in run_steps
     assert release_gate_steps == [
         "powershell -ExecutionPolicy Bypass -File scripts\\verify-release.ps1",
     ]

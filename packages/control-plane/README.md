@@ -335,6 +335,7 @@ From the repository root, run the full release gate before sharing or packaging
 this control-plane package:
 
 ```powershell
+python -m pip install -e ".\packages\control-plane[dev]" -e ".\packages\ai-workflow-hub[dev]"
 python -m pytest -q
 powershell -ExecutionPolicy Bypass -File scripts\verify-public-snapshot.ps1
 powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1

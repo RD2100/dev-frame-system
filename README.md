@@ -69,12 +69,9 @@ If you only want the product-shaped path, do this:
 ```powershell
 git clone https://github.com/RD2100/dev-frame-system.git
 cd dev-frame-system
+python -m pip install -e ".\packages\control-plane[dev]" -e ".\packages\ai-workflow-hub[dev]"
 .\scripts\verify-release.ps1
 
-cd .\packages\control-plane
-python -m pip install -e .
-
-cd ..\..
 devframe code
 devframe code workers
 devframe code status
@@ -134,6 +131,7 @@ Before cutting a local release or sharing the control-plane package, run the
 release verification entrypoint:
 
 ```powershell
+python -m pip install -e ".\packages\control-plane[dev]" -e ".\packages\ai-workflow-hub[dev]"
 .\scripts\verify-release.ps1
 ```
 

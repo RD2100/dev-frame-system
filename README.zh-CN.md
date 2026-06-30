@@ -62,12 +62,9 @@ Web AI 可以作为外部大脑提供方向和审查，
 ```powershell
 git clone https://github.com/RD2100/dev-frame-system.git
 cd dev-frame-system
+python -m pip install -e ".\packages\control-plane[dev]" -e ".\packages\ai-workflow-hub[dev]"
 .\scripts\verify-release.ps1
 
-cd .\packages\control-plane
-python -m pip install -e .
-
-cd ..\..
 devframe code
 devframe code workers
 devframe code status
@@ -140,6 +137,7 @@ devframe actions --runtime-dir <dir>
 检查公开发布面：
 
 ```powershell
+python -m pip install -e ".\packages\control-plane[dev]" -e ".\packages\ai-workflow-hub[dev]"
 .\scripts\verify-public-snapshot.ps1
 .\scripts\verify-release.ps1
 ```

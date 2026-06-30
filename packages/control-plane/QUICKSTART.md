@@ -27,6 +27,7 @@ From the repository root, run the public checks:
 
 ```powershell
 cd ..\..
+python -m pip install -e ".\packages\control-plane[dev]" -e ".\packages\ai-workflow-hub[dev]"
 powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
 ```
 
