@@ -3187,8 +3187,8 @@ def _go_run_card_html(run: dict[str, Any], action_links: bool, lang: str = "en",
         f'<article class="go-run-card{" go-run-focused" if focused else ""}">'
         '<div class="go-run-head">'
         f"<div><strong>{_h(dashboard_t('go_run', lang))}</strong><code>{_h(run.get('go_run_id', ''))}</code></div>"
-        f"{_badge(run.get('status', ''))}"
-        f"{_badge('execute' if run.get('execute') else 'queued')}"
+        f"{_status_badge(run.get('status', ''))}"
+        f"{_status_badge('execute' if run.get('execute') else 'prepared')}"
         "</div>"
         f"<p>{_h(run.get('requirement', ''))}</p>"
         '<dl class="path-list">'
@@ -3235,7 +3235,7 @@ def _go_agent_row_html(agent: dict[str, Any], lang: str = "en") -> str:
         "<tr>"
         f"<td><code>{_h(agent.get('agent_id', ''))}</code></td>"
         f"<td>{_h(shard)}</td>"
-        f"<td>{_badge(agent.get('status', ''))}{_badge(agent.get('worker_status', '')) if agent.get('worker_status') else ''}</td>"
+        f"<td>{_status_badge(agent.get('status', ''))}{_status_badge(agent.get('worker_status', '')) if agent.get('worker_status') else ''}</td>"
         f"<td>{target_html}</td>"
         f"<td><code>{_h(str(agent.get('target_bytes', 0)))}</code></td>"
         f"<td>{changed_html}</td>"
@@ -3387,10 +3387,10 @@ def _runs_section(runs: list[dict[str, Any]], lang: str = "en") -> str:
         "<tr>"
         f"<td><code>{_h(run.get('run_id', ''))}</code></td>"
         f"<td>{_h(run.get('entrypoint', ''))}</td>"
-        f"<td>{_badge(run.get('status', ''))}</td>"
-        f"<td>{_h(run.get('taskspec_status', ''))}</td>"
-        f"<td>{_h(run.get('evidence_status', ''))}</td>"
-        f"<td>{_h(run.get('review_status', ''))}</td>"
+        f"<td>{_status_badge(run.get('status', ''))}</td>"
+        f"<td>{_status_badge(run.get('taskspec_status', ''))}</td>"
+        f"<td>{_status_badge(run.get('evidence_status', ''))}</td>"
+        f"<td>{_status_badge(run.get('review_status', ''))}</td>"
         "</tr>"
         for run in runs
     )
@@ -3601,6 +3601,37 @@ def _table_section(title: str, headers: list[str], rows: str) -> str:
 def _badge(value: str) -> str:
     token = _safe_id(value)
     return f'<span class="badge badge-{_h(token)}">{_h(value)}</span>'
+
+
+def _status_badge(value: str) -> str:
+    raw = _safe_id(value)
+    label = str(value or "")
+    token = raw
+    if raw in {"queued", "pending"}:
+        label = "prepared"
+        token = "prepared"
+    elif raw in {"pass", "passed", "completed", "review-pass", "verified", "executed"}:
+        label = "complete"
+        token = "completed"
+    elif raw in {"review-fail", "fail", "failed"}:
+        label = "failed"
+        token = "failed"
+    elif raw == "collected":
+        label = "collected"
+        token = "completed"
+    elif raw == "missing":
+        label = "missing"
+        token = "blocked"
+    elif raw == "draft":
+        label = "draft"
+        token = "pending"
+    elif raw == "ready":
+        label = "ready"
+        token = "ready"
+    elif raw == "":
+        label = "unknown"
+        token = "pending"
+    return f'<span class="badge badge-{_h(token)}">{_h(label)}</span>'
 
 
 def _count_by_status(items: list[dict[str, Any]]) -> str:
@@ -4067,7 +4098,7 @@ code {
 }
 .badge-completed, .badge-pass, .badge-executed { color: var(--good); background: #e6f2ec; }
 .badge-blocked, .badge-failed, .badge-fail { color: var(--bad); background: #fae8e4; }
-.badge-open, .badge-pending, .badge-selected, .badge-medium { color: var(--warn); background: #f8ecdc; }
+.badge-open, .badge-pending, .badge-prepared, .badge-selected, .badge-medium, .badge-running, .badge-ready, .badge-draft { color: var(--warn); background: #f8ecdc; }
 .badge-low, .badge-idle { color: var(--accent); background: #e2f2ec; }
 .empty { color: var(--muted); }
 .safety-grid {
