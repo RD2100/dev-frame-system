@@ -319,6 +319,7 @@ def test_bridge_source_includes_fetch_envelope_function():
     assert "export function readDevFrameControlPlaneConfig" in source
     assert "export async function fetchDevFrameClusterTargets" in source
     assert "export async function startDevFrameCoordinatorGoal" in source
+    assert "export function sortDevFrameThreadsForDisplay" in source
 
 
 def test_bridge_source_envelope_includes_devframe_team():
@@ -355,6 +356,7 @@ def test_bridge_readme_includes_team_contract_docs():
     assert "readDevFrameControlPlaneConfig()" in readme
     assert "fetchDevFrameClusterTargets()" in readme
     assert "startDevFrameCoordinatorGoal()" in readme
+    assert "sortDevFrameThreadsForDisplay()" in readme
 
 
 def test_catalog_source_disables_websocket_connection():

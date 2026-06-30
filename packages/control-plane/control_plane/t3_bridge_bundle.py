@@ -453,6 +453,37 @@ export async function fetchDevFrameProjectOptions(
   return Array.isArray(payload.projects) ? payload.projects : [];
 }
 
+function threadSortKey(thread: DevFrameT3ThreadShell): [number, string, string] {
+  return [
+    thread.threadListPriority ?? 99,
+    thread.updatedAt ?? "",
+    thread.title,
+  ];
+}
+
+export function sortDevFrameThreadsForDisplay(
+  snapshot: DevFrameT3ShellSnapshot,
+): DevFrameT3ShellSnapshot {
+  const detailsById = new Map(
+    (snapshot.threadDetails ?? []).map((detail) => [String((detail as { id?: unknown }).id ?? ""), detail]),
+  );
+  const threads = [...snapshot.threads].sort((a, b) => {
+    const [ap, au, at] = threadSortKey(a);
+    const [bp, bu, bt] = threadSortKey(b);
+    if (ap !== bp) return ap - bp;
+    if (au !== bu) return au < bu ? 1 : -1;
+    return at.localeCompare(bt);
+  });
+  const threadDetails = threads
+    .map((thread) => detailsById.get(thread.id))
+    .filter((detail): detail is DevFrameThreadDetail => detail !== undefined);
+  return {
+    ...snapshot,
+    threads,
+    threadDetails,
+  };
+}
+
 export interface DevFrameClusterTarget {
   readonly id: string;
   readonly kind: string;
@@ -621,6 +652,8 @@ When the read-only shell overlay is off, use `readDevFrameControlPlaneConfig()`
 plus `fetchDevFrameClusterTargets()` and `startDevFrameCoordinatorGoal()` to
 drive coordinator goal creation against the loopback control plane without
 depending on `VITE_DEVFRAME_T3_SHELL_URL`.
+Use `sortDevFrameThreadsForDisplay()` to present the inbox in product order:
+global coordinator first, then goal conversations, then ordinary chats.
 """
 
 
