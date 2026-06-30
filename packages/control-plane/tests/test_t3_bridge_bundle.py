@@ -316,6 +316,7 @@ def test_bridge_source_includes_fetch_envelope_function():
 
     assert "fetchDevFrameT3ShellEnvelope" in source
     assert "export async function fetchDevFrameT3ShellEnvelope" in source
+    assert "return sortDevFrameThreadsForDisplay((await fetchDevFrameT3ShellEnvelope(config)).t3);" in source
     assert "export function readDevFrameControlPlaneConfig" in source
     assert "export async function fetchDevFrameClusterTargets" in source
     assert "export async function startDevFrameCoordinatorGoal" in source

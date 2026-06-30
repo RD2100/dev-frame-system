@@ -420,7 +420,7 @@ export async function fetchDevFrameT3ShellEnvelope(
 export async function fetchDevFrameT3Shell(
   config: DevFrameShellBridgeConfig,
 ): Promise<DevFrameT3ShellSnapshot> {
-  return (await fetchDevFrameT3ShellEnvelope(config)).t3;
+  return sortDevFrameThreadsForDisplay((await fetchDevFrameT3ShellEnvelope(config)).t3);
 }
 
 export async function fetchDevFrameConversationModel(
