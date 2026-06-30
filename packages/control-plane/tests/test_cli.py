@@ -162,10 +162,10 @@ def test_code_prepares_current_repo_coding_session(tmp_path, monkeypatch, capsys
     assert "Backend      : /go concurrent coding-agent dispatch" in output
     assert "status       : queued" in output
     assert "agents       : 1" in output
-    assert "Status   : devframe code status" in output
-    assert "Execute  : devframe code execute" in output
+    assert "Inspect   : devframe code status" in output
+    assert "Resume    : devframe code execute" in output
     assert metadata["go_run_id"] in output
-    assert "Dashboard: devframe dashboard serve --runtime-dir" in output
+    assert "Control   : devframe dashboard serve --runtime-dir" in output
     assert metadata["project_root"] == str(project_root.resolve())
     assert metadata["requirement"] == "Add a small CLI feature."
     assert metadata["agents"][0]["targets"] == ["src/cli.py"]
@@ -653,7 +653,7 @@ def test_code_preview_shows_shards_without_creating_packets(tmp_path, monkeypatc
     assert "- coding-agent-2 shard=2/2" in output
     assert "  - src/b.py" in output
     assert "You are coding shard 2/2." in output
-    assert "No packets were created." in output
+    assert "Prepare   : re-run without --preview to create a resumable coding run." in output
     assert not runtime_dir.exists()
 
 
@@ -1023,8 +1023,8 @@ def test_go_prepares_parallel_coding_agent_packets(tmp_path, monkeypatch, capsys
     assert "coding-agent-2" in output
     assert "  bytes  : 20" in output
     assert "opencode run -m stepfun/step-3.7-flash --dangerously-skip-permissions" in output
-    assert "Status   : devframe code status" in output
-    assert "Execute  : devframe code execute" in output
+    assert "Inspect   : devframe code status" in output
+    assert "Resume    : devframe code execute" in output
     assert "devframe dashboard serve --runtime-dir" in output
     assert len(metadata_files) == 1
     assert metadata["status"] == "queued"

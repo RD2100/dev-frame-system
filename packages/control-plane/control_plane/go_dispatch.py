@@ -236,6 +236,7 @@ def render_go_dispatch_text(result: GoDispatchResult) -> str:
         f"execute      : {result.execute}",
         f"agents       : {len(result.agents)}",
         f"metadata     : {result.metadata_path}",
+        f"requirement  : {result.requirement}",
     ]
     if result.methodology:
         title = str(result.methodology.get("title") or result.methodology.get("skill_id") or "unknown")
@@ -263,10 +264,11 @@ def render_go_dispatch_text(result: GoDispatchResult) -> str:
             lines.append(f"  evidence: {_summary_line(agent.verification)}")
     lines.extend([
         "",
-        f"Status   : {_go_run_status_command(result)}",
-        f"Execute  : {_go_run_execute_command(result)}",
-        f"Dashboard: devframe dashboard serve --runtime-dir {_quote_arg(result.runtime_dir)}",
-        f"Actions  : devframe actions --runtime-dir {_quote_arg(result.runtime_dir)}",
+        "Next",
+        f"Inspect   : {_go_run_status_command(result)}",
+        f"Resume    : {_go_run_execute_command(result)}",
+        f"Control   : devframe dashboard serve --runtime-dir {_quote_arg(result.runtime_dir)}",
+        f"Queue     : devframe actions --runtime-dir {_quote_arg(result.runtime_dir)}",
     ])
     return "\n".join(lines) + "\n"
 

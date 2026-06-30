@@ -204,10 +204,11 @@ def cmd_atgo() -> int:
     print(f"chain_evidence: {chain_evidence_path}")
     print(f"go_run_id    : {result.go_run_id}")
     print("")
-    print(f"Status   : devframe code status {result.go_run_id} --runtime-dir {runtime_root}")
-    print(f"Execute  : devframe code execute {result.go_run_id} --runtime-dir {runtime_root}")
-    print(f"Reviewer : devframe actions --runtime-dir {runtime_root}")
-    print(f"Finalize : tools/go_evidence.py finalize {evidence_dir}")
+    print("Next")
+    print(f"Inspect   : devframe code status {result.go_run_id} --runtime-dir {runtime_root}")
+    print(f"Resume    : devframe code execute {result.go_run_id} --runtime-dir {runtime_root}")
+    print(f"Review    : devframe actions --runtime-dir {runtime_root}")
+    print(f"Finalize  : tools/go_evidence.py finalize {evidence_dir}")
 
     if args.execute:
         from ..backup_guard import default_runtime_dir
@@ -347,7 +348,7 @@ def cmd_code() -> int:
     print("DevFrame Code session")
     print("Tool shape   : OpenCode-first local coding CLI")
     print("Backend      : /go concurrent coding-agent dispatch")
-    print("Default mode : prepare packets only; add --execute to spend worker tokens")
+    print("Default mode : prepare first, inspect, then execute when you choose")
     print("")
     print(render_go_dispatch_text(result), end="")
     if args.dashboard:
@@ -536,6 +537,17 @@ def _render_sessions(run: dict) -> str:
         lines.append(f"  targets     : {targets}")
         if changed:
             lines.append(f"  changed     : {changed}")
+    go_run_id = str(run.get("go_run_id", "")).strip()
+    runtime_dir = str(run.get("runtime_dir", "")).strip()
+    if go_run_id and runtime_dir:
+        lines.extend([
+            "",
+            "Next",
+            f"Inspect   : devframe code status {go_run_id} --runtime-dir {runtime_dir}",
+            f"Resume    : devframe code execute {go_run_id} --runtime-dir {runtime_dir}",
+            f"Control   : devframe dashboard serve --runtime-dir {runtime_dir}",
+            f"Queue     : devframe actions --runtime-dir {runtime_dir}",
+        ])
     compact = [line for line in lines if line != ""]
     return "\n".join(compact) + "\n"
 
@@ -567,7 +579,7 @@ def cmd_code_execute(*, prog: str = "devframe code execute") -> int:
     print("DevFrame Code execute")
     print("Tool shape   : reusing prepared coding-agent packets")
     print("Backend      : existing /go run packets")
-    print("Token mode   : reuse prepared packets; skipped passed agents unless --rerun-passed")
+    print("Token mode   : resume a prepared run; skipped passed agents unless --rerun-passed")
     print("")
     print(render_go_dispatch_text(result), end="")
     return 0 if result.status in {"queued", "passed"} else 1
@@ -733,6 +745,17 @@ def _render_go_run_status(run: dict) -> str:
             lines.append(f"  report : {agent.get('report_path')}")
     if not agents:
         lines.append("- (no agents)")
+    go_run_id = str(run.get("go_run_id", "")).strip()
+    runtime_dir = str(run.get("runtime_dir", "")).strip()
+    if go_run_id and runtime_dir:
+        lines.extend([
+            "",
+            "Next",
+            f"Inspect   : devframe code status {go_run_id} --runtime-dir {runtime_dir}",
+            f"Resume    : devframe code execute {go_run_id} --runtime-dir {runtime_dir}",
+            f"Control   : devframe dashboard serve --runtime-dir {runtime_dir}",
+            f"Queue     : devframe actions --runtime-dir {runtime_dir}",
+        ])
     return "\n".join(lines) + "\n"
 
 
@@ -813,7 +836,10 @@ def _render_coding_preview(
         lines.append(f"  command: {render_worker_command(command)}")
     lines.extend([
         "",
-        "No packets were created. Re-run without --preview to prepare dispatch packets and rdgoal worker commands.",
+        "Next",
+        "Prepare   : re-run without --preview to create a resumable coding run.",
+        "Inspect   : use devframe code status after prepare.",
+        "Resume    : use devframe code execute when you choose to spend worker tokens.",
     ])
     return "\n".join(lines) + "\n"
 
