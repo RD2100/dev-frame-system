@@ -3412,6 +3412,7 @@ def _run_details_section(runs: list[dict[str, Any]], decisions: list[dict[str, A
     cards = "\n".join(
         '<article class="run-detail">'
         f"<h3>{_h(run.get('run_id', ''))}</h3>"
+        f'{_run_lifecycle_strip(run, lang)}'
         '<dl class="path-list">'
         f"<dt>{_h(dashboard_t('taskspec', lang))}</dt><dd><code>{_h(run.get('taskspec_path', '')) or dashboard_t('missing', lang)}</code></dd>"
         f"<dt>{_h(dashboard_t('taskspec_json', lang))}</dt><dd><code>{_h(run.get('taskspec_json_path', '')) or dashboard_t('missing', lang)}</code></dd>"
@@ -3430,6 +3431,16 @@ def _run_details_section(runs: list[dict[str, Any]], decisions: list[dict[str, A
         f'<div class="run-details">{cards}</div>'
         "</section>"
     )
+
+
+def _run_lifecycle_strip(run: dict[str, Any], lang: str = "en") -> str:
+    badges = [
+        _labeled_status_badge(dashboard_t("status", lang), run.get("status", "")),
+        _labeled_status_badge(dashboard_t("taskspec", lang), run.get("taskspec_status", "")),
+        _labeled_status_badge(dashboard_t("evidence", lang), run.get("evidence_status", "")),
+        _labeled_status_badge(dashboard_t("review", lang), run.get("review_status", "")),
+    ]
+    return f'<div class="chips status-strip">{"".join(badges)}</div>'
 
 
 def _run_decision_details(decision: dict[str, Any] | None, lang: str = "en") -> str:
@@ -3632,6 +3643,37 @@ def _status_badge(value: str) -> str:
         label = "unknown"
         token = "pending"
     return f'<span class="badge badge-{_h(token)}">{_h(label)}</span>'
+
+
+def _labeled_status_badge(prefix: str, value: str) -> str:
+    raw = _safe_id(value)
+    label = str(value or "")
+    token = raw
+    if raw in {"queued", "pending"}:
+        label = "prepared"
+        token = "prepared"
+    elif raw in {"pass", "passed", "completed", "review-pass", "verified", "executed"}:
+        label = "complete"
+        token = "completed"
+    elif raw in {"review-fail", "fail", "failed"}:
+        label = "failed"
+        token = "failed"
+    elif raw == "collected":
+        label = "collected"
+        token = "completed"
+    elif raw == "missing":
+        label = "missing"
+        token = "blocked"
+    elif raw == "draft":
+        label = "draft"
+        token = "pending"
+    elif raw == "ready":
+        label = "ready"
+        token = "ready"
+    elif raw == "":
+        label = "unknown"
+        token = "pending"
+    return f'<span class="badge badge-{_h(token)}">{_h(prefix)}: {_h(label)}</span>'
 
 
 def _count_by_status(items: list[dict[str, Any]]) -> str:
@@ -4122,6 +4164,9 @@ code {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
+}
+.status-strip {
+  margin: 0 0 12px;
 }
 .lang-switch {
   display: inline-flex;

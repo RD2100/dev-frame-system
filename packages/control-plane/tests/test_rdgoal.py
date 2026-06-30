@@ -449,6 +449,8 @@ def test_visual_control_plane_state_reads_go_runs(tmp_path):
     assert "packages/control-plane/control_plane/go_dispatch.py" in html
     assert "opencode run -m stepfun/step-3.7-flash" in html
     assert "prepared" in html
+    assert "状态: prepared" in html
+    assert "任务规格: ready" in html
 
 
 def test_devframe_cli_exports_visual_state_json(tmp_path, monkeypatch, capsys):
