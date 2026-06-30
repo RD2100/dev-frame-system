@@ -28,6 +28,7 @@ _WEB_AI_KEYWORDS = (
 
 _TASK_INTAKE_KEYWORDS = ("task intake", "task-intake", "task_intake")
 _PROJECT_SUMMARY_KEYWORDS = ("project summary", "project-summary", "project_summary")
+_GLOBAL_COORDINATOR_THREAD_ID = "devframe-team-workbench-session"
 
 
 def _t3_shell_cache_key(
@@ -173,6 +174,11 @@ def build_t3_client_shell_from_state(state: dict[str, Any], base_url: str | None
             "actions": "/actions.json",
             "controlPlaneBaseUrl": _clean_base_url(base_url),
             "writePolicy": "read-only",
+            "conversationModel": {
+                "globalCoordinatorThreadId": _GLOBAL_COORDINATOR_THREAD_ID,
+                "goalProjectBindingRequired": True,
+                "threadKinds": ["native_chat", "goal_conversation", "global_coordinator"],
+            },
             "gates": [_gate_overlay(gate) for gate in gates if isinstance(gate, dict)],
             "actionsBySource": _public_actions_by_source(actions_by_source),
             "team": _project_team(team),
@@ -488,6 +494,8 @@ def _thread_shell(
     action_details = _action_details(actions_by_source, action_ids, base_url)
     pending_gate = any(_text(gate.get("status"), "") in {"open", "blocked", "failed"} for gate in run_gates)
     pending_action = bool(action_ids)
+    thread_kind = _thread_kind(session, related_run_ids)
+    project_binding = _project_binding(thread_kind, project_id)
     all_team_gates = _readable_team_gates(run_id, related_run_ids, team_review_gates or {}, base_url)
     team_detail_gates, team_detail_gate_overflow = _cap_with_overflow(all_team_gates, _PROJECTED_DETAIL_LIMIT)
     team_review_gate_status_counts = _count_gate_statuses(all_team_gates)
@@ -496,6 +504,9 @@ def _thread_shell(
         "id": thread_id,
         "projectId": project_id,
         "title": _thread_title(session),
+        "threadKind": thread_kind,
+        "coordinatorScope": "project" if thread_kind == "goal_conversation" else "none",
+        "projectBinding": project_binding,
         "modelSelection": {
             "instanceId": _provider_instance_id(session, bindings_by_id),
             "model": "devframe-governed-session",
@@ -587,7 +598,54 @@ def _has_team_data(team: dict[str, Any]) -> bool:
 
 
 def _is_team_workbench_session(thread_id: str) -> bool:
-    return thread_id == "devframe-team-workbench-session"
+    return thread_id == _GLOBAL_COORDINATOR_THREAD_ID
+
+
+def _thread_kind(session: dict[str, Any], related_run_ids: list[str]) -> str:
+    run_id = _text(session.get("run_id"), "")
+    task_spec_id = _text(session.get("task_spec_id"), "")
+    if run_id or task_spec_id or related_run_ids:
+        return "goal_conversation"
+    return "native_chat"
+
+
+def _project_binding(thread_kind: str, project_id: str) -> dict[str, Any]:
+    if thread_kind == "goal_conversation":
+        return {
+            "mode": "required",
+            "projectId": project_id,
+            "status": "bound" if project_id else "missing",
+        }
+    if thread_kind == "global_coordinator":
+        return {
+            "mode": "optional",
+            "projectId": project_id,
+            "status": "bound" if project_id else "not-applicable",
+        }
+    return {
+        "mode": "none",
+        "projectId": project_id,
+        "status": "bound" if project_id else "not-applicable",
+    }
+
+
+def _thread_kind_label(thread_kind: str) -> str:
+    return {
+        "native_chat": "Native chat",
+        "goal_conversation": "Goal conversation",
+        "global_coordinator": "Global coordinator",
+    }.get(thread_kind, thread_kind or "Unknown")
+
+
+def _project_binding_summary(value: object) -> str:
+    if not isinstance(value, dict):
+        return "none"
+    mode = _text(value.get("mode"), "none")
+    status = _text(value.get("status"), "not-applicable")
+    project_id = _text(value.get("projectId"), "")
+    if project_id:
+        return f"{mode} ({status}, project={project_id})"
+    return f"{mode} ({status})"
 
 
 def _is_web_ai_local_agent_item(item: dict[str, Any]) -> bool:
@@ -877,9 +935,12 @@ def _team_workbench_thread_shell(
     web_ai_events = [e for e in all_events if _is_web_ai_local_agent_item(e)][:5]
 
     return {
-        "id": "devframe-team-workbench-session",
+        "id": _GLOBAL_COORDINATOR_THREAD_ID,
         "projectId": project_id,
-        "title": "DevFrame Team Workbench",
+        "title": "DevFrame Global Coordinator",
+        "threadKind": "global_coordinator",
+        "coordinatorScope": "global",
+        "projectBinding": _project_binding("global_coordinator", project_id),
         "modelSelection": {
             "instanceId": "devframe-team-workbench",
             "model": "devframe-team-workbench",
@@ -893,7 +954,7 @@ def _team_workbench_thread_shell(
         "updatedAt": updated_at,
         "archivedAt": None,
         "session": {
-            "threadId": "devframe-team-workbench-session",
+            "threadId": _GLOBAL_COORDINATOR_THREAD_ID,
             "status": "idle",
             "providerName": "devframe",
             "runtimeMode": "approval-required",
@@ -907,7 +968,7 @@ def _team_workbench_thread_shell(
         "hasActionableProposedPlan": has_actionable_proposed_plan,
         "devframe": {
             "provider": "devframe",
-            "agentRole": "team-workbench",
+            "agentRole": "global-coordinator",
             "bindingId": "",
             "runId": "",
             "taskSpecId": "",
@@ -964,7 +1025,10 @@ def _team_workbench_summary_lines(
     next_actionable_gates = devframe.get("teamNextActionableGates", [])
 
     lines = [
-        "### DevFrame Team Workbench",
+        "### DevFrame Global Coordinator",
+        "",
+        "- This thread is the global coordinator inbox.",
+        "- New coordinator-owned goals must bind to a project before execution.",
         "",
         f"- Agents: {agent_count}",
         f"- Tasks: {task_count}",
@@ -1045,7 +1109,7 @@ def _team_workbench_proposed_plan(team: dict[str, Any], updated_at: str) -> str:
         if isinstance(task.get("methodology"), dict) and _text((task.get("methodology") or {}).get("skill_id"), "")
     })
     lines = [
-        "# DevFrame Team Workbench",
+        "# DevFrame Global Coordinator",
         "",
         f"- Agents: {agent_count}",
         f"- Tasks: {task_count}",
@@ -1664,6 +1728,9 @@ def _thread_detail(thread_shell: dict[str, Any], updated_at: str, team: dict[str
             f"- TaskSpec: `{task_spec_id or 'not linked'}`",
             f"- Status: {status}",
         ]
+    details.append(f"- Conversation kind: {_thread_kind_label(_text(thread_shell.get('threadKind'), ''))}")
+    details.append(f"- Coordinator scope: {_text(thread_shell.get('coordinatorScope'), 'none')}")
+    details.append(f"- Project binding: {_project_binding_summary(thread_shell.get('projectBinding'))}")
     if gate_ids:
         details.append("- Gates: " + ", ".join(f"`{gate_id}`" for gate_id in gate_ids))
     if action_ids:
@@ -1853,6 +1920,13 @@ def _thread_detail(thread_shell: dict[str, Any], updated_at: str, team: dict[str
         "id": thread_id,
         "projectId": thread_shell.get("projectId"),
         "title": thread_shell.get("title"),
+        "threadKind": _text(thread_shell.get("threadKind"), "native_chat"),
+        "coordinatorScope": _text(thread_shell.get("coordinatorScope"), "none"),
+        "projectBinding": (
+            thread_shell.get("projectBinding")
+            if isinstance(thread_shell.get("projectBinding"), dict)
+            else _project_binding("native_chat", _text(thread_shell.get("projectId"), ""))
+        ),
         "modelSelection": thread_shell.get("modelSelection"),
         "runtimeMode": thread_shell.get("runtimeMode"),
         "interactionMode": thread_shell.get("interactionMode"),

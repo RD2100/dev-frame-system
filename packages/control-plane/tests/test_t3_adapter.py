@@ -78,8 +78,16 @@ def test_t3_client_shell_projects_mcp_live_session():
     shell = build_t3_client_shell_from_state(state)
 
     validate_schema(load_schema(), shell)
+    assert shell["devframe"]["conversationModel"] == {
+        "globalCoordinatorThreadId": "devframe-team-workbench-session",
+        "goalProjectBindingRequired": True,
+        "threadKinds": ["native_chat", "goal_conversation", "global_coordinator"],
+    }
     thread = shell["t3"]["threads"][0]
     assert thread["id"] == "codexpro-live-session"
+    assert thread["threadKind"] == "native_chat"
+    assert thread["coordinatorScope"] == "none"
+    assert thread["projectBinding"] == {"mode": "none", "projectId": "project", "status": "bound"}
     assert thread["modelSelection"]["instanceId"] == "codexpro-web"
     assert thread["runtimeMode"] == "full-access"
     assert thread["session"]["status"] == "running"
@@ -90,6 +98,7 @@ def test_t3_client_shell_projects_mcp_live_session():
     assert thread["devframe"]["toolCallCount"] == 1
     detail = shell["t3"]["threadDetails"][0]
     assert detail["id"] == "codexpro-live-session"
+    assert detail["threadKind"] == "native_chat"
     assert "Provider: codexpro" in detail["messages"][0]["text"]
 
 
@@ -2399,7 +2408,10 @@ def test_team_workbench_created_with_team_data_and_no_sessions():
     assert len(threads) == 1
     thread = threads[0]
     assert thread["id"] == "devframe-team-workbench-session"
-    assert thread["title"] == "DevFrame Team Workbench"
+    assert thread["title"] == "DevFrame Global Coordinator"
+    assert thread["threadKind"] == "global_coordinator"
+    assert thread["coordinatorScope"] == "global"
+    assert thread["projectBinding"] == {"mode": "optional", "projectId": "p", "status": "bound"}
     assert thread["runtimeMode"] == "approval-required"
     assert thread["interactionMode"] == "plan"
     assert thread["hasPendingApprovals"] is True
@@ -2409,7 +2421,9 @@ def test_team_workbench_created_with_team_data_and_no_sessions():
 
     detail = shell["t3"]["threadDetails"][0]
     message_text = detail["messages"][0]["text"]
-    assert "### DevFrame Team Workbench" in message_text
+    assert detail["threadKind"] == "global_coordinator"
+    assert "### DevFrame Global Coordinator" in message_text
+    assert "New coordinator-owned goals must bind to a project before execution." in message_text
     assert "Agents: 1" in message_text
     assert "Tasks: 1" in message_text
     assert "Messages: 1" in message_text
@@ -2462,6 +2476,7 @@ def test_team_workbench_with_all_pass_gates_has_no_pending_flags():
 
     thread = shell["t3"]["threads"][0]
     assert thread["id"] == "devframe-team-workbench-session"
+    assert thread["threadKind"] == "global_coordinator"
     assert thread["hasPendingApprovals"] is False
     assert thread["hasPendingUserInput"] is False
     assert thread["hasActionableProposedPlan"] is False
@@ -2519,6 +2534,7 @@ def test_review_board_summary_works_alongside_team_workbench():
     threads = shell["t3"]["threads"]
     assert len(threads) == 2
     assert threads[0]["id"] == "web-gpt-review-board-session"
+    assert threads[0]["threadKind"] == "goal_conversation"
     assert threads[1]["id"] == "devframe-team-workbench-session"
 
     review_detail = shell["t3"]["threadDetails"][0]
@@ -2527,7 +2543,7 @@ def test_review_board_summary_works_alongside_team_workbench():
 
     workbench_detail = shell["t3"]["threadDetails"][1]
     workbench_text = workbench_detail["messages"][0]["text"]
-    assert "### DevFrame Team Workbench" in workbench_text
+    assert "### DevFrame Global Coordinator" in workbench_text
     assert "Agents: 1" in workbench_text
 
 

@@ -42,7 +42,7 @@
     },
     "devframe": {
       "type": "object",
-      "required": ["manifest", "state", "sessions", "actions", "controlPlaneBaseUrl", "writePolicy", "gates", "actionsBySource", "team"],
+      "required": ["manifest", "state", "sessions", "actions", "controlPlaneBaseUrl", "writePolicy", "conversationModel", "gates", "actionsBySource", "team"],
       "properties": {
         "manifest": { "type": "string", "pattern": "^/" },
         "state": { "type": "string", "pattern": "^/" },
@@ -50,6 +50,19 @@
         "actions": { "type": "string", "pattern": "^/" },
         "controlPlaneBaseUrl": { "type": "string" },
         "writePolicy": { "type": "string", "enum": ["read-only"] },
+        "conversationModel": {
+          "type": "object",
+          "required": ["globalCoordinatorThreadId", "goalProjectBindingRequired", "threadKinds"],
+          "properties": {
+            "globalCoordinatorThreadId": { "type": "string", "minLength": 1 },
+            "goalProjectBindingRequired": { "type": "boolean" },
+            "threadKinds": {
+              "type": "array",
+              "items": { "type": "string", "enum": ["native_chat", "goal_conversation", "global_coordinator"] }
+            }
+          },
+          "additionalProperties": false
+        },
         "gates": {
           "type": "array",
           "items": { "$ref": "#/definitions/gate_overlay" }
@@ -109,6 +122,9 @@
         "id",
         "projectId",
         "title",
+        "threadKind",
+        "coordinatorScope",
+        "projectBinding",
         "modelSelection",
         "runtimeMode",
         "interactionMode",
@@ -129,6 +145,9 @@
         "id": { "type": "string", "minLength": 1 },
         "projectId": { "type": "string", "minLength": 1 },
         "title": { "type": "string", "minLength": 1 },
+        "threadKind": { "type": "string", "enum": ["native_chat", "goal_conversation", "global_coordinator"] },
+        "coordinatorScope": { "type": "string", "enum": ["none", "project", "global"] },
+        "projectBinding": { "$ref": "#/definitions/project_binding" },
         "modelSelection": {
           "type": "object",
           "required": ["instanceId", "model"],
@@ -258,6 +277,9 @@
         "id",
         "projectId",
         "title",
+        "threadKind",
+        "coordinatorScope",
+        "projectBinding",
         "modelSelection",
         "runtimeMode",
         "interactionMode",
@@ -278,6 +300,9 @@
         "id": { "type": "string", "minLength": 1 },
         "projectId": { "type": "string", "minLength": 1 },
         "title": { "type": "string", "minLength": 1 },
+        "threadKind": { "type": "string", "enum": ["native_chat", "goal_conversation", "global_coordinator"] },
+        "coordinatorScope": { "type": "string", "enum": ["none", "project", "global"] },
+        "projectBinding": { "$ref": "#/definitions/project_binding" },
         "modelSelection": {
           "type": "object",
           "required": ["instanceId", "model"],
@@ -315,6 +340,16 @@
         "activeTurnId": { "type": ["string", "null"] },
         "lastError": { "type": ["string", "null"] },
         "updatedAt": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "project_binding": {
+      "type": "object",
+      "required": ["mode", "projectId", "status"],
+      "properties": {
+        "mode": { "type": "string", "enum": ["required", "optional", "none"] },
+        "projectId": { "type": "string" },
+        "status": { "type": "string", "enum": ["bound", "missing", "not-applicable"] }
       },
       "additionalProperties": false
     },
