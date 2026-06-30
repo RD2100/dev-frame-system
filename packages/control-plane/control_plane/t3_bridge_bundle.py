@@ -217,6 +217,13 @@ export interface DevFrameConversationModel {
   readonly threadKinds: readonly DevFrameThreadKind[];
 }
 
+export interface DevFrameProjectOption {
+  readonly projectId: string;
+  readonly projectPath: string;
+  readonly workspaceRoot: string;
+  readonly label: string;
+}
+
 export interface DevFrameT3ThreadShell {
   readonly id: string;
   readonly projectId: string;
@@ -371,6 +378,28 @@ export async function fetchDevFrameT3Shell(
   return (await fetchDevFrameT3ShellEnvelope(config)).t3;
 }
 
+export async function fetchDevFrameConversationModel(
+  config: DevFrameShellBridgeConfig,
+): Promise<DevFrameConversationModel> {
+  return (await fetchDevFrameT3ShellEnvelope(config)).devframe.conversationModel;
+}
+
+export async function fetchDevFrameProjectOptions(
+  config: DevFrameShellBridgeConfig,
+): Promise<readonly DevFrameProjectOption[]> {
+  const projectsUrl = new URL("/api/t3/projects", config.shellUrl).toString();
+  const response = await fetch(projectsUrl, {
+    method: "GET",
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`DevFrame project options request failed: ${response.status}`);
+  }
+  const payload = (await response.json()) as { readonly projects?: readonly DevFrameProjectOption[] };
+  return Array.isArray(payload.projects) ? payload.projects : [];
+}
+
 export function subscribeDevFrameT3Shell(
   config: DevFrameShellBridgeConfig,
   onSnapshot: DevFrameShellListener,
@@ -457,6 +486,9 @@ linked to a given session.
 
 Import the types from `devframeShellBridge` and use `fetchDevFrameT3ShellEnvelope()`
 to access the full envelope including the `devframe.team` payload.
+Use `fetchDevFrameConversationModel()` for the coordinator conversation contract
+and `fetchDevFrameProjectOptions()` for the project-binding picker that powers
+new coordinator-owned goals.
 """
 
 

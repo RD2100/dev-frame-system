@@ -83,6 +83,9 @@ def test_write_t3_bridge_bundle_creates_installable_files(tmp_path):
     assert "VITE_DEVFRAME_T3_SHELL_URL" in source
     assert 'export type DevFrameThreadKind =' in source
     assert 'readonly goalProjectBindingRequired: boolean;' in source
+    assert 'export interface DevFrameProjectOption {' in source
+    assert 'export async function fetchDevFrameConversationModel' in source
+    assert 'export async function fetchDevFrameProjectOptions' in source
     assert 'readonly threads: readonly DevFrameT3ThreadShell[];' in source
     shell_source = (tmp_path / "bundle" / "apps/web/src/state/shell.ts").read_text(encoding="utf-8")
     assert "createShellEnvironmentAtoms" in shell_source
@@ -344,6 +347,8 @@ def test_bridge_readme_includes_team_contract_docs():
     assert "conflictControl" in readme
     assert "DevFrameThreadTeamRefs" in readme
     assert "fetchDevFrameT3ShellEnvelope" in readme
+    assert "fetchDevFrameConversationModel()" in readme
+    assert "fetchDevFrameProjectOptions()" in readme
 
 
 def test_catalog_source_disables_websocket_connection():
