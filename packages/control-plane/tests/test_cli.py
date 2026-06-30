@@ -241,7 +241,7 @@ def test_code_status_reads_latest_go_run_without_creating_packets(tmp_path, monk
     assert exit_code == 0
     assert "DevFrame Code status" in output
     assert metadata["go_run_id"] in output
-    assert "status       : queued" in output
+    assert "status       : prepared" in output
     assert "coding-agent-1" in output
     assert metadata_files_after == metadata_files_before
 

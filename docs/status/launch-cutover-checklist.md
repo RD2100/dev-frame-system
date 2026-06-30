@@ -22,8 +22,26 @@ What is already true in the current branch/PR:
   - `scripts\verify-control-plane-wheel.ps1`
   - `scripts\verify-release.ps1`
 - the top-level product story has been converged around `devframe code`
-- the `devframe code` output loop has started converging around
-  inspect/resume/control/queue
+- the `devframe code` output loop now converges around
+  inspect / resume / control / queue
+- the default text path has already been tightened so `devframe code` feels
+  more like a resumable product loop and less like raw dispatch plumbing
+- the dashboard read model has started translating internal status terms into
+  more user-facing display language in the HTML surface
+
+## Automated Progress Already Landed
+
+These items are already in the branch and PR:
+
+1. top-level docs now present `devframe code` as the main product
+2. secondary and advanced surfaces are demoted rather than presented as equal
+   first-class entrypoints
+3. `devframe code` prepare/status/execute output now shares a common "Next"
+   model
+4. the launch cutover boundary is documented in this file rather than living
+   only in chat
+5. release-gate stability fixes for `public_snapshot` and `mcp_consent` test
+   lifecycle issues are in place
 
 ## Codex Can Keep Doing
 

@@ -502,12 +502,21 @@ def _looks_like_path(value: object) -> bool:
     return "/" in text.replace("\\", "/") or "." in name
 
 
+def _ui_status(value: object) -> str:
+    status = str(value or "").strip().lower()
+    if status in {"pass", "passed", "success", "completed", "complete", "executed", "review-pass", "verified"}:
+        return "complete"
+    if status in {"queued", "pending", "prepared", "running", "idle"}:
+        return "prepared"
+    return status
+
+
 def _render_sessions(run: dict) -> str:
     sessions = _public_sessions(run)
     lines = [
         "DevFrame Code sessions",
         f"go_run_id    : {run.get('go_run_id', '')}",
-        f"status       : {run.get('status', '')}",
+        f"status       : {_ui_status(run.get('status', ''))}",
         f"requirement  : {run.get('requirement', '')}",
         "",
         "Sessions",
@@ -516,7 +525,10 @@ def _render_sessions(run: dict) -> str:
         targets = ", ".join(str(t) for t in session.get("targets", [])) or "(project scope)"
         changed = ", ".join(str(t) for t in session.get("changed_files", []))
         methodology = session.get("methodology")
-        lines.append(f"- {session.get('session_id', '')} provider={session.get('provider', '')} status={session.get('status', '')}")
+        lines.append(
+            f"- {session.get('session_id', '')} provider={session.get('provider', '')} "
+            f"status={_ui_status(session.get('status', ''))}"
+        )
         lines.append(f"  agent_id    : {session.get('agent_id', '')}")
         lines.append(f"  role        : {session.get('agent_role', '')}")
         if isinstance(methodology, dict):
@@ -778,7 +790,7 @@ def _render_go_run_status(run: dict) -> str:
     lines = [
         "DevFrame Code status",
         f"go_run_id    : {run.get('go_run_id', '')}",
-        f"status       : {run.get('status', '')}",
+        f"status       : {_ui_status(run.get('status', ''))}",
         f"agents       : {len(run.get('agents', []))}",
         f"requirement  : {run.get('requirement', '')}",
     ]
@@ -792,10 +804,11 @@ def _render_go_run_status(run: dict) -> str:
     ])
     agents = run.get("agents", [])
     for agent in agents:
-        worker_status = agent.get("worker_status") or "pending"
+        worker_status = _ui_status(agent.get("worker_status") or "pending")
+        agent_status = _ui_status(agent.get("status", ""))
         lines.append(
             f"- {agent.get('agent_id', '')} shard={agent.get('shard_index', 0)}/{agent.get('shard_count', 0)} "
-            f"status={agent.get('status', '')} worker={worker_status}"
+            f"status={agent_status} worker={worker_status}"
         )
         targets = _metadata_strings(agent.get("targets"))
         if targets:
