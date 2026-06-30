@@ -75,12 +75,29 @@ def build_t3_client_shell(
         if cached is not None and now - cached[0] < _T3_SHELL_CACHE_TTL:
             return deepcopy(cached[1])
         state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=paper_project_dirs)
-        shell = build_t3_client_shell_from_state(state, base_url=base_url)
+        try:
+            from .cluster_run import list_cluster_runs
+
+            cluster_runs = list_cluster_runs(runtime_dir)
+        except Exception:  # noqa: BLE001 - best-effort projection only
+            cluster_runs = []
+        shell = build_t3_client_shell_from_state(
+            state,
+            base_url=base_url,
+            runtime_dir=runtime_dir,
+            cluster_runs=cluster_runs,
+        )
         _T3_SHELL_CACHE[cache_key] = (now, deepcopy(shell))
         return shell
 
 
-def build_t3_client_shell_from_state(state: dict[str, Any], base_url: str | None = None) -> dict[str, Any]:
+def build_t3_client_shell_from_state(
+    state: dict[str, Any],
+    base_url: str | None = None,
+    *,
+    runtime_dir: str | Path | None = None,
+    cluster_runs: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     updated_at = _now_iso()
     projects = state.get("projects", [])
     sessions = state.get("sessions", [])
@@ -131,6 +148,18 @@ def build_t3_client_shell_from_state(state: dict[str, Any], base_url: str | None
         for session in sessions
         if isinstance(session, dict)
     ]
+    projected_thread_ids = {str(thread.get("id") or "") for thread in thread_shells if isinstance(thread, dict)}
+    cluster_runs = [run for run in (cluster_runs or []) if isinstance(run, dict)]
+    thread_shells.extend(
+        _cluster_run_thread_shell(
+            run,
+            actions_by_source,
+            _clean_base_url(base_url),
+            updated_at,
+        )
+        for run in cluster_runs
+        if str(run.get("runId") or "") and str(run.get("runId") or "") not in projected_thread_ids
+    )
     first_project = next((project for project in projects if isinstance(project, dict)), {})
     project_id = _text(first_project.get("project_id"), "project")
     thread_shells.append(
@@ -143,7 +172,9 @@ def build_t3_client_shell_from_state(state: dict[str, Any], base_url: str | None
         )
     )
     thread_details = [
-        _thread_detail(
+        _cluster_run_thread_detail(thread_shell, runtime_dir, updated_at)
+        if _is_cluster_goal_thread(thread_shell)
+        else _thread_detail(
             thread_shell,
             updated_at,
             team if _is_team_workbench_session(thread_shell.get("id")) else None,
@@ -649,6 +680,123 @@ def _project_binding_summary(value: object) -> str:
     if project_id:
         return f"{mode} ({status}, project={project_id})"
     return f"{mode} ({status})"
+
+
+def _cluster_run_status_to_session_status(status: str) -> str:
+    return {
+        "answered": "stopped",
+        "completed": "stopped",
+        "failed": "error",
+        "interrupted": "error",
+        "running": "running",
+        "started": "running",
+    }.get(_text(status, "running"), "idle")
+
+
+def _cluster_run_thread_shell(
+    run: dict[str, Any],
+    actions_by_source: dict[str, list[dict[str, Any]]],
+    base_url: str,
+    updated_at: str,
+) -> dict[str, Any]:
+    run_id = _text(run.get("runId"), "")
+    goal = _text(run.get("goal"), run_id)
+    project_id = _text(run.get("projectId"), "project")
+    project_path = _text(run.get("projectPath"), "")
+    action_ids = _unique(
+        [
+            str(action.get("action_id"))
+            for action in actions_by_source.get(run_id, [])
+            if action.get("action_id")
+        ]
+        + [
+            str(action.get("action_id"))
+            for action in actions_by_source.get(f"{run_id}-decision", [])
+            if action.get("action_id")
+        ]
+    )
+    action_details = _action_details(actions_by_source, action_ids, base_url)
+    status = _text(run.get("status"), "running")
+    pending_action = bool(action_ids)
+    return {
+        "id": run_id,
+        "projectId": project_id,
+        "title": goal,
+        "threadKind": "goal_conversation",
+        "coordinatorScope": "project",
+        "projectBinding": {
+            "mode": "required",
+            "projectId": project_id,
+            "status": "bound" if project_id else "missing",
+        },
+        "modelSelection": {
+            "instanceId": "devframe-project-coordinator",
+            "model": "devframe-project-coordinator",
+        },
+        "runtimeMode": "approval-required" if pending_action or status in {"failed", "interrupted"} else "full-access",
+        "interactionMode": "plan",
+        "branch": None,
+        "worktreePath": project_path or None,
+        "latestTurn": None,
+        "createdAt": _text(run.get("startedAt"), updated_at),
+        "updatedAt": _text(run.get("finishedAt"), _text(run.get("startedAt"), updated_at)),
+        "archivedAt": None,
+        "session": {
+            "threadId": run_id,
+            "status": _cluster_run_status_to_session_status(status),
+            "providerName": "devframe",
+            "runtimeMode": "approval-required" if pending_action or status in {"failed", "interrupted"} else "full-access",
+            "activeTurnId": None,
+            "lastError": "Goal conversation failed or was interrupted." if status in {"failed", "interrupted"} else None,
+            "updatedAt": _text(run.get("finishedAt"), _text(run.get("startedAt"), updated_at)),
+        },
+        "latestUserMessageAt": None,
+        "hasPendingApprovals": bool(action_ids),
+        "hasPendingUserInput": bool(action_ids),
+        "hasActionableProposedPlan": any(_text(action.get("status"), "").lower() == "ready" for action in action_details),
+        "devframe": {
+            "provider": "devframe",
+            "agentRole": "project-coordinator",
+            "bindingId": "",
+            "runId": run_id,
+            "taskSpecId": "",
+            "messageCount": 0,
+            "toolCallCount": 0,
+            "changedFiles": [],
+            "diffSummary": _text(run.get("summary"), ""),
+            "relatedRunIds": [_text(run.get("goRunId"), "")] if _text(run.get("goRunId"), "") else [],
+            "gateIds": [],
+            "actionIds": action_ids,
+            "actionDetails": action_details,
+            "evidenceRefs": [],
+            "evidenceRefOverflow": 0,
+            "teamTaskIds": [],
+            "teamMessageIds": [],
+            "teamEvidenceIds": [],
+            "teamReviewGateIds": [],
+            "teamConflictFiles": [],
+            "teamDetailMethodologies": [],
+            "teamDetailMessages": [],
+            "teamDetailMessageOverflow": 0,
+            "teamDetailEvidence": [],
+            "teamDetailEvidenceOverflow": 0,
+            "teamDetailGates": [],
+            "teamDetailGateOverflow": 0,
+            "teamReviewGateStatusCounts": {},
+            "teamNextActionableGates": [],
+            "teamDetailConflicts": [],
+            "teamDetailConflictOverflow": 0,
+            "teamDetailEvents": [],
+            "teamDetailEventOverflow": 0,
+        },
+    }
+
+
+def _is_cluster_goal_thread(thread_shell: dict[str, Any]) -> bool:
+    return (
+        _text(thread_shell.get("threadKind"), "") == "goal_conversation"
+        and _text((thread_shell.get("devframe") or {}).get("agentRole"), "") == "project-coordinator"
+    )
 
 
 def _is_web_ai_local_agent_item(item: dict[str, Any]) -> bool:
@@ -2003,6 +2151,136 @@ def _thread_detail(thread_shell: dict[str, Any], updated_at: str, team: dict[str
             *evidence_activities,
             *gate_activities,
             *team_context_activities,
+        ],
+        "checkpoints": [],
+        "session": thread_shell.get("session"),
+    }
+
+
+def _cluster_run_thread_detail(
+    thread_shell: dict[str, Any],
+    runtime_dir: str | Path | None,
+    updated_at: str,
+) -> dict[str, Any]:
+    run_id = _text((thread_shell.get("devframe") or {}).get("runId"), "")
+    detail_data: dict[str, Any] = {}
+    if run_id:
+        try:
+            from .cluster_run import cluster_run_detail
+
+            detail_data = cluster_run_detail(runtime_dir, run_id)
+        except Exception:  # noqa: BLE001 - projection fallback only
+            detail_data = {}
+
+    status = _text(detail_data.get("status"), _text(thread_shell.get("session", {}).get("status"), "idle"))
+    summary = _text(detail_data.get("summary"), _text((thread_shell.get("devframe") or {}).get("diffSummary"), ""))
+    messages = [m for m in detail_data.get("messages", []) if isinstance(m, dict)]
+    agents = [a for a in detail_data.get("agents", []) if isinstance(a, dict)]
+    action_details = _action_detail_list((thread_shell.get("devframe") or {}).get("actionDetails"))
+    details = [
+        "### DevFrame Goal Conversation",
+        "",
+        f"- Goal: {_text(thread_shell.get('title'), run_id)}",
+        f"- Status: {status}",
+        f"- Coordinator scope: {_text(thread_shell.get('coordinatorScope'), 'project')}",
+        f"- Project binding: {_project_binding_summary(thread_shell.get('projectBinding'))}",
+    ]
+    if summary:
+        details.append(f"- Summary: {summary}")
+    if messages:
+        details.extend(["", "## Coordinator Timeline", ""])
+        for msg in messages:
+            fr = _text(msg.get("from"), "")
+            to = _text(msg.get("to"), "")
+            kind = _text(msg.get("kind"), "")
+            text = _text(msg.get("text"), "")
+            if to:
+                details.append(f"- **{fr} -> {to}** [{kind}]: {text}")
+            else:
+                details.append(f"- **{fr}** [{kind}]: {text}")
+    if agents:
+        details.extend(["", "## Agent Summary", ""])
+        for agent in agents:
+            details.append(
+                f"- `{_text(agent.get('agentId'), '')}` shard "
+                f"{agent.get('shardIndex', 0)}/{agent.get('shardCount', 0)}: "
+                f"{_text(agent.get('status'), 'queued')} "
+                f"(changed files: {agent.get('changedFileCount', 0)}, tokens: {agent.get('totalTokens', 0)})"
+            )
+    if action_details:
+        details.append("- Next actions:")
+        for action in action_details:
+            details.append(
+                f"  - `{action['actionId']}` [{action['status']}/{action['priority']}]: {_markdown_text(action['label'])}"
+            )
+            if action["command"]:
+                details.append(f"    - Command: `{action['command']}`")
+
+    message_text = "\n".join(details)
+    activity_summary = f"Goal conversation {run_id or 'unknown'} projected from cluster-run state."
+    approval_activities = _approval_activities(
+        thread_id=_text(thread_shell.get("id"), run_id or "goal"),
+        action_details=action_details,
+        updated_at=updated_at,
+    )
+    proposed_plan = "\n".join([
+        "# DevFrame Goal Conversation",
+        "",
+        f"- Goal: {_text(thread_shell.get('title'), run_id)}",
+        f"- Status: {status}",
+        f"- Summary: {summary or 'Waiting for coordinator progress.'}",
+    ])
+    return {
+        "id": thread_shell.get("id"),
+        "projectId": thread_shell.get("projectId"),
+        "title": thread_shell.get("title"),
+        "threadKind": _text(thread_shell.get("threadKind"), "goal_conversation"),
+        "coordinatorScope": _text(thread_shell.get("coordinatorScope"), "project"),
+        "projectBinding": thread_shell.get("projectBinding"),
+        "modelSelection": thread_shell.get("modelSelection"),
+        "runtimeMode": thread_shell.get("runtimeMode"),
+        "interactionMode": thread_shell.get("interactionMode"),
+        "branch": thread_shell.get("branch"),
+        "worktreePath": thread_shell.get("worktreePath"),
+        "latestTurn": thread_shell.get("latestTurn"),
+        "createdAt": thread_shell.get("createdAt"),
+        "updatedAt": thread_shell.get("updatedAt"),
+        "archivedAt": thread_shell.get("archivedAt"),
+        "deletedAt": None,
+        "messages": [{
+            "id": f"{_text(thread_shell.get('id'), run_id)}-goal-summary",
+            "role": "assistant",
+            "text": message_text,
+            "turnId": None,
+            "streaming": False,
+            "createdAt": updated_at,
+            "updatedAt": updated_at,
+        }],
+        "proposedPlans": [{
+            "id": f"{_text(thread_shell.get('id'), run_id)}-goal-plan",
+            "turnId": None,
+            "planMarkdown": proposed_plan,
+            "implementedAt": None,
+            "implementationThreadId": None,
+            "createdAt": updated_at,
+            "updatedAt": updated_at,
+        }],
+        "activities": [
+            {
+                "id": f"{_text(thread_shell.get('id'), run_id)}-goal-activity",
+                "tone": "info",
+                "kind": "devframe.goal.projected",
+                "summary": activity_summary,
+                "payload": {
+                    "runId": run_id,
+                    "status": status,
+                    "writePolicy": "read-only",
+                },
+                "turnId": None,
+                "sequence": 1,
+                "createdAt": updated_at,
+            },
+            *approval_activities,
         ],
         "checkpoints": [],
         "session": thread_shell.get("session"),

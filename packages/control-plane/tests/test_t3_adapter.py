@@ -7,6 +7,7 @@ from urllib.request import Request, urlopen
 
 from jsonschema.validators import validator_for
 
+from control_plane import cluster_run as cluster_run_module
 from control_plane import dashboard as dashboard_module
 from control_plane import t3_adapter as t3_adapter_module
 from control_plane.dashboard import build_dashboard_server
@@ -841,6 +842,60 @@ def test_global_coordinator_thread_exists_even_without_team_or_sessions():
     assert detail["threadKind"] == "global_coordinator"
     assert "### DevFrame Global Coordinator" in detail["messages"][0]["text"]
     assert "Agents: 0" in detail["messages"][0]["text"]
+
+
+def test_build_t3_client_shell_projects_cluster_runs_as_goal_conversations(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir(parents=True)
+    cluster_run_module._write_run_record(runtime_dir, {
+        "runId": "g-demo01",
+        "projectId": "demo-project",
+        "projectPath": str(workspace),
+        "target": "coordinator",
+        "goal": "Ship the feature",
+        "status": "running",
+        "summary": "Coordinator planned the goal; agents are working…",
+        "startedAt": "2026-07-01T00:00:00Z",
+    })
+    monkeypatch.setattr(
+        "control_plane.cluster_run.cluster_run_detail",
+        lambda runtime_dir, run_id: {
+            "runId": run_id,
+            "target": "coordinator",
+            "goal": "Ship the feature",
+            "status": "running",
+            "summary": "Coordinator planned the goal; agents are working…",
+            "messages": [
+                {"from": "coordinator", "to": "executor", "kind": "task-assign", "text": "Coordinator assigned shard 1/2 to executor."},
+            ],
+            "agents": [
+                {"agentId": "coding-agent-1", "shardIndex": 1, "shardCount": 2, "status": "running", "changedFileCount": 0, "totalTokens": 42},
+            ],
+        },
+    )
+
+    shell = build_t3_client_shell(runtime_dir=runtime_dir, base_url="http://127.0.0.1:8790")
+
+    validate_schema(load_schema(), shell)
+    goal_thread = next(thread for thread in shell["t3"]["threads"] if thread["id"] == "g-demo01")
+    assert goal_thread["threadKind"] == "goal_conversation"
+    assert goal_thread["coordinatorScope"] == "project"
+    assert goal_thread["projectBinding"] == {
+        "mode": "required",
+        "projectId": "demo-project",
+        "status": "bound",
+    }
+    assert goal_thread["title"] == "Ship the feature"
+
+    goal_detail = next(detail for detail in shell["t3"]["threadDetails"] if detail["id"] == "g-demo01")
+    assert goal_detail["threadKind"] == "goal_conversation"
+    text = goal_detail["messages"][0]["text"]
+    assert "### DevFrame Goal Conversation" in text
+    assert "Coordinator Timeline" in text
+    assert "Coordinator assigned shard 1/2 to executor." in text
+    assert "Agent Summary" in text
+    assert "coding-agent-1" in text
 
 
 def test_t3_shell_sanitizes_windows_absolute_evidence_paths(tmp_path):
