@@ -81,6 +81,9 @@ def test_write_t3_bridge_bundle_creates_installable_files(tmp_path):
     assert "fetchDevFrameT3Shell" in source
     assert "method: \"GET\"" in source
     assert "VITE_DEVFRAME_T3_SHELL_URL" in source
+    assert 'export type DevFrameThreadKind =' in source
+    assert 'readonly goalProjectBindingRequired: boolean;' in source
+    assert 'readonly threads: readonly DevFrameT3ThreadShell[];' in source
     shell_source = (tmp_path / "bundle" / "apps/web/src/state/shell.ts").read_text(encoding="utf-8")
     assert "createShellEnvironmentAtoms" in shell_source
     assert "loadDevFrameShellState" in shell_source

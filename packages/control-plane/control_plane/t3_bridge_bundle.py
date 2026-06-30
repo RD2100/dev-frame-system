@@ -198,15 +198,48 @@ def install_t3_bridge_bundle(t3_root: str | Path, bundle: dict[str, Any], *, for
 
 
 def render_bridge_source() -> str:
-    return """export interface DevFrameT3ShellSnapshot {
+    return """export type DevFrameThreadKind =
+  | "native_chat"
+  | "goal_conversation"
+  | "global_coordinator";
+
+export type DevFrameCoordinatorScope = "none" | "project" | "global";
+
+export interface DevFrameProjectBinding {
+  readonly mode: "required" | "optional" | "none";
+  readonly projectId: string;
+  readonly status: "bound" | "missing" | "not-applicable";
+}
+
+export interface DevFrameConversationModel {
+  readonly globalCoordinatorThreadId: string;
+  readonly goalProjectBindingRequired: boolean;
+  readonly threadKinds: readonly DevFrameThreadKind[];
+}
+
+export interface DevFrameT3ThreadShell {
+  readonly id: string;
+  readonly projectId: string;
+  readonly title: string;
+  readonly threadKind: DevFrameThreadKind;
+  readonly coordinatorScope: DevFrameCoordinatorScope;
+  readonly projectBinding: DevFrameProjectBinding;
+}
+
+export interface DevFrameT3ShellSnapshot {
   readonly snapshotSequence: number;
   readonly projects: readonly unknown[];
-  readonly threads: readonly unknown[];
+  readonly threads: readonly DevFrameT3ThreadShell[];
   readonly threadDetails?: readonly DevFrameThreadDetail[];
   readonly updatedAt: string;
 }
 
-export type DevFrameThreadDetail = Record<string, unknown> & DevFrameThreadTeamRefs;
+export type DevFrameThreadDetail = Record<string, unknown> &
+  DevFrameThreadTeamRefs & {
+    readonly threadKind?: DevFrameThreadKind;
+    readonly coordinatorScope?: DevFrameCoordinatorScope;
+    readonly projectBinding?: DevFrameProjectBinding;
+  };
 
 export interface DevFrameTeamAgent {
   readonly agentId: string;
@@ -287,6 +320,7 @@ export interface DevFrameT3ShellEnvelope {
   readonly source: "devframe";
   readonly t3: DevFrameT3ShellSnapshot;
   readonly devframe: {
+    readonly conversationModel: DevFrameConversationModel;
     readonly team: DevFrameTeamProjection;
   };
 }
