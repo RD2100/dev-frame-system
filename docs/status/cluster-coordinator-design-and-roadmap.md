@@ -4,6 +4,13 @@ Status: design locked with the product owner (2026-06-28). This is the agreed
 target for the in-editor agent cluster and the phased plan to reach it. Pairs
 with `docs/status/local-agent-cluster-roadmap.md` (engine state) and
 `docs/status/recon-receipt-cluster-control-surface.md` (recon gate).
+For the product-boundary and build-vs-buy decision that says why "总控" must
+be a first-class conversation and why orchestration should reuse LangGraph
+rather than continue hand-rolling, see
+`docs/status/recon-receipt-global-coordinator-conversation-mainline.md`.
+For the concrete shell-correction implementation brief that turns that decision
+into the next execution slices, see
+`docs/status/phase-1-global-coordinator-conversation-plan.md`.
 
 ## Target design
 
