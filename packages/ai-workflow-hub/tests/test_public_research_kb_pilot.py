@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from jsonschema import Draft7Validator
+from typer.main import get_command
 from typer.testing import CliRunner
 
 from ai_workflow_hub.cli import app
@@ -23,6 +24,19 @@ from ai_workflow_hub.context_layer.adapters.public_research_kb_pilot import (
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SCHEMA_PATH = REPO_ROOT / "schemas" / "paper_public_research_kb_pilot_report.schema.json"
+
+
+def _command_option_names(*command_path: str) -> set[str]:
+    command = get_command(app)
+    for name in command_path:
+        command = command.get_command(None, name)
+        assert command is not None, f"missing command path: {' '.join(command_path)}"
+    return {
+        opt
+        for param in command.params
+        for opt in getattr(param, "opts", [])
+        if opt.startswith("--")
+    }
 
 
 FAKE_ARXIV_XML = """<?xml version="1.0" encoding="UTF-8"?>
@@ -1030,14 +1044,17 @@ class TestCliPublicResearchKbPilot:
         )
         assert result.exit_code == 0
         assert "public-research-kb-pilot" in result.stdout
-        assert "--query" in result.stdout
-        assert "--source" in result.stdout
-        assert "--vault-root" in result.stdout
-        assert "--target-folder" in result.stdout
-        assert "--runtime-dir" in result.stdout
-        assert "--vault-uri-name" in result.stdout
-        assert "--obsidian-rest" in result.stdout
-        assert "--obsidian-rest-token-env" in result.stdout
+        options = _command_option_names("paper", "public-research-kb-pilot")
+        assert {
+            "--query",
+            "--source",
+            "--vault-root",
+            "--target-folder",
+            "--runtime-dir",
+            "--vault-uri-name",
+            "--obsidian-rest",
+            "--obsidian-rest-token-env",
+        }.issubset(options)
 
     def test_obsidian_rest_probe_help_exits_zero(self):
         result = CliRunner().invoke(
@@ -1046,8 +1063,8 @@ class TestCliPublicResearchKbPilot:
         )
         assert result.exit_code == 0
         assert "obsidian-rest-probe" in result.stdout
-        assert "--token-env" in result.stdout
-        assert "--write-probe" in result.stdout
+        options = _command_option_names("paper", "obsidian-rest-probe")
+        assert {"--token-env", "--write-probe"}.issubset(options)
 
     def test_cli_missing_required_args(self):
         result = CliRunner().invoke(
