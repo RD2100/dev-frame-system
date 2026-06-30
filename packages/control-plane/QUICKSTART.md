@@ -1,6 +1,10 @@
 # DevFrame Code Quickstart
 
-This quickstart starts from a clone of `RD2100/dev-frame-system`.
+This quickstart is intentionally biased toward the main product path.
+
+If you are evaluating DevFrame as a daily tool, start with `devframe code`.
+Do not begin with `rdgoal`, the dashboard, or the T3 bridge unless you already
+need those layers.
 
 ## 1. Install the CLI
 
@@ -13,7 +17,7 @@ python -m venv .venv
 python -m pip install -e .
 ```
 
-## 2. Check the package
+## 2. Verify the package
 
 ```powershell
 devframe doctor
@@ -26,7 +30,42 @@ cd ..\..
 powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
 ```
 
-## 3. Initialize a local workflow project
+## 3. Start the main coding loop
+
+From a real repository, the product-shaped path is:
+
+```powershell
+cd D:\tmp\demo-project
+devframe code
+devframe code workers
+devframe code status
+```
+
+The goal is to get to a prepared, inspectable run as quickly as possible.
+
+## 4. Prepare a bounded coding run
+
+```powershell
+cd D:\tmp\demo-project
+devframe code "Build the MVP" --target src --preview
+devframe code "Fix the branch" --changed --agents auto --worker opencode --preview
+devframe code status --runtime-dir C:\Users\you\.devframe-runtime
+```
+
+Use `--preview` first when you want to inspect the bounded scope and worker
+command template without creating packets or spending worker tokens.
+
+## 5. Execute or continue later
+
+```powershell
+devframe code execute --runtime-dir C:\Users\you\.devframe-runtime
+devframe dashboard serve --runtime-dir C:\Users\you\.devframe-runtime
+```
+
+`devframe code execute` is what turns a prepared run into a real execution.
+The dashboard is the optional control-plane view, not the primary path.
+
+## 6. Initialize a local workflow project
 
 ```powershell
 cd .\packages\control-plane
@@ -35,7 +74,7 @@ devframe init code_project D:\tmp\demo-project
 
 This writes the starter workflow files into the target project.
 
-## 4. Run a dry pipeline
+## 7. Run a dry pipeline
 
 ```powershell
 cd D:\tmp\demo-project
@@ -45,7 +84,7 @@ devframe run --pipeline PIPELINE.yaml
 The default runner validates and prints the pipeline stages without performing
 live external effects.
 
-## 5. Route work through rdgoal
+## 8. Route work through rdgoal (advanced)
 
 In external-brain chat, use `/rdgoal <project> <goal>`. In a shell, use the
 installed `rdgoal` command:
@@ -63,7 +102,7 @@ is created under `D:\tmp\demo-project\rules\project-contracts`.
 Wheel installs can still create dispatch packets, but will report
 `bootstrap_unavailable` if those assets are not present.
 
-## 6. Consume a dispatch packet
+## 9. Consume a dispatch packet
 
 Use the local dry-run worker first:
 
@@ -82,10 +121,12 @@ The worker receives `RDGOAL_TASKSPEC_JSON`, `RDGOAL_PACKET_JSON`, and
 `RDGOAL_REPORT_PATH` environment variables and must produce an ExecutionReport.
 Worker exit code is non-zero for `blocked`, `failed`, or unknown report states.
 
-## 7. Prepare parallel coding-agent work with /go
+## 10. Advanced coding-agent orchestration
 
-Use `devframe code` when you want an OpenCode-first coding-agent entrypoint in
-the current repository:
+Use `devframe code` first. Use the flows below only when the simple daily loop
+is no longer enough.
+
+### 10.1 `devframe code` with more control
 
 ```powershell
 cd D:\tmp\demo-project
@@ -150,6 +191,8 @@ you can use its project-local `/go` bridge instead:
 .\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed -Execute
 ```
 
+### 10.2 `devframe go`
+
 Use `devframe go` when you want to name the project path explicitly or prepare
 several shards directly:
 
@@ -176,7 +219,7 @@ execute commands for the go-run. When workers finish, `devframe code` and
 `devframe go` also print each shard's ExecutionReport path, changed files, and
 first evidence line in the terminal.
 
-## 8. Review the runtime digest
+## 11. Review the runtime digest
 
 ```powershell
 rdgoal digest
@@ -185,7 +228,7 @@ rdgoal digest
 The digest is rebuilt from runtime files, so it can show decisions and worker
 ExecutionReports across separate CLI invocations.
 
-## 9. Export visual state
+## 12. Export visual state
 
 ```powershell
 devframe visual-state --runtime-dir C:\Users\you\.devframe-runtime
@@ -256,7 +299,7 @@ action ids so a single-action export remains traceable, plus a copyable
 needs to probe for unresolved actions. The dashboard endpoints return `400` for
 invalid filter values so typos do not look like an empty queue.
 
-## 10. Import a summary-only Web AI session
+## 13. Import a summary-only Web AI session
 
 ```powershell
 devframe web-ai import .\chatgpt-summary.json --runtime-dir C:\Users\you\.devframe-runtime
@@ -279,4 +322,4 @@ summaries are normalized and written into `<runtime-dir>\web-ai-sessions\`. Afte
 in `devframe sessions` and the read-only dashboard. Raw transcripts, cookies,
 browser profile exports, and secret material must not appear in these files.
 
-## 11. Inspect sessions (including imported web AI sessions)
+## 14. Inspect sessions (including imported web AI sessions)

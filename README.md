@@ -2,7 +2,7 @@
   <img src="docs/assets/devframe-system-banner.svg" alt="devframe-system: web AI as an external brain" width="100%" />
 </p>
 
-<h3 align="center">A Local Agent Control Plane that turns Web GPT through MCP into a local agent entrypoint. T3Code is the native client shell; OpenCode executes; DevFrame governs.</h3>
+<h3 align="center">A governed coding CLI for serious software work. `devframe code` is the product; the control plane sits behind it.</h3>
 
 <p align="center">
   English | <a href="README.zh-CN.md">Simplified Chinese</a>
@@ -25,34 +25,63 @@
 </p>
 
 ```text
-devframe code            # start an OpenCode-backed coding session in the current repo
-devframe code workers    # check local worker CLIs before spending tokens
-devframe code status     # inspect the latest prepared coding run
-devframe code execute    # run the latest prepared coding run
-/rdinit                 # initialize the external-brain operating layer
-/bindChrome <url>       # bind GPT Web, DeepSeek, Doubao, or another web AI URL
-/go <project> <goal>    # prepare or run parallel coding-agent shards
-/rdgoal <project> <goal> # route a goal through the total-control loop
-/rdpaper <project> <goal> # route a paper task through the paper review loop
+devframe code "<goal>"   # main product: prepare a governed coding run
+devframe code workers    # check local worker availability
+devframe code status     # inspect a prepared run
+devframe code execute    # execute a prepared run
+devframe dashboard serve # optional control-plane view
+
+# advanced / secondary surfaces
+devframe client
+devframe go <project> <goal>
+rdgoal <project> <goal>
 ```
 
-**The core product is `devframe code`: a programming tool built on T3Code as the native client shell and OpenCode as the executor, which prepares bounded coding-agent work, shows the exact worker commands, and runs them only when you choose to spend worker tokens. The WebGPT MCP cycle has been verified end-to-end in the current local development context.**
+**DevFrame should be read first as a governed coding product. `devframe code` is the mainline daily loop. The dashboard, rdgoal, RD-Code client, MCP/ACP surfaces, and paper workflow are supporting or advanced layers around that loop.**
 
 > **Project status:** This repository is local-gate-green and chain-verified in
 > a development context, not a published, externally reviewed release. See
 > [Release readiness](docs/status/release-readiness.md) for the exact scope of
 > what has and has not been validated.
 
-The supporting question is not "how do we build another governance framework?" Many people are already doing that. The real question is: how can we improve code quality and direction control for free, or as close to free as possible, with the simplest workflow?
+The core bet is simple:
 
-dev-frame-system answers by turning a web AI session into an **external brain** for software development. Through MCP, that web AI becomes a local agent entrypoint. GPT Web is the default example, but DeepSeek, Doubao, or another capable browser-accessible AI can play the same role. The external brain keeps product direction, engineering tradeoffs, task boundaries, evidence, and review memory in one place. Your IDE, CLI, browser, scripts, tests, and coding agents become replaceable executors.
+> make one coding entrypoint feel disciplined, resumable, and reviewable
+> without forcing users to adopt a heavyweight platform first
 
-Practically, the first product surface is `devframe code`: a local coding CLI
-for OpenCode or another worker command you already use. Run
-it in a repository to enter a coding goal, choose a worker profile, prepare
-bounded coding sessions, fan work out across agents, execute them when you are
-ready to spend worker tokens, and inspect the status in an optional read-only
-dashboard.
+DevFrame uses a web AI as an external brain when that helps with direction and
+review, but the product you use every day is still a local coding tool. The
+mainline path is `devframe code`: enter a goal, prepare bounded work, inspect
+the exact worker command, execute when you choose, and continue from the same
+run later.
+
+Everything else exists to support that loop:
+
+- the dashboard is the control-plane view
+- `rdgoal` is the deeper orchestration layer
+- the T3/RD-Code bridge is a secondary client track
+- MCP/ACP, provider selection, and paper flows are advanced capability surfaces
+
+## Start Here
+
+If you only want the product-shaped path, do this:
+
+```powershell
+git clone https://github.com/RD2100/dev-frame-system.git
+cd dev-frame-system
+.\scripts\verify-release.ps1
+
+cd .\packages\control-plane
+python -m pip install -e .
+
+cd ..\..
+devframe code
+devframe code workers
+devframe code status
+```
+
+That is the mainline. Learn the rest only when the default loop is working for
+you.
 
 ## Why This Exists
 
@@ -74,16 +103,17 @@ The short version:
 
 ## What It Does
 
-dev-frame-system gives you a portable operating layer for agent-assisted development:
+DevFrame's main product behavior is:
 
-- **Direction control**: keep the real goal, tradeoffs, and constraints visible before code changes start.
-- **Task dispatch**: turn vague requests into bounded TaskSpecs for OpenCode, custom CLI tools, browser automation, or other agents.
-- **Parallel coding-agent entrypoint**: use `/go` or `devframe go` to prepare several bounded coding-agent shards, then execute them through OpenCode or another worker when you are ready to spend agent tokens.
-- **Evidence-based review**: use ExecutionReport, evidence indexes, review gates, and negative fixtures to prevent fake success.
-- **Reusable bootstrap**: install the same operating layer into another project with a PowerShell bootstrap.
-- **External-brain binding**: use `/bindChrome` to tie a stable browser AI session to the current project.
-- **Total-control orchestration**: use `rdgoal` to coordinate several project-local workflows while logging controller decisions, snapshots, and final review points.
-- **Paper review loop**: use `/rdpaper` to combine a web AI reviewer with a local agent that prepares privacy-safe paper packets and records evidence.
+- **Governed coding loop**: prepare a bounded coding run, inspect it, execute it, and resume it later through `devframe code`.
+- **Execution boundary**: make token-spending or worker-spending actions explicit instead of implicit.
+- **Evidence-first review**: keep ExecutionReport, status, changed files, and review surfaces visible enough that "done" is not just a claim.
+
+Supporting behaviors:
+
+- **Control-plane view**: inspect runs, actions, sessions, and gates in the read-only dashboard.
+- **Advanced orchestration**: use `rdgoal`, `go`, or Web AI bindings when the default coding loop is not enough.
+- **Bootstrap and reuse**: install the same operating layer into another repo.
 
 ## Quick Start
 
@@ -120,13 +150,14 @@ Bootstrap the operating layer into another project:
   -ProjectRoot "D:\my-project"
 ```
 
-After bootstrap, bind your browser AI session from your agent environment:
+After bootstrap, bind your browser AI session only if you need the external
+brain loop:
 
 ```text
 /bindChrome https://chatgpt.com/...
 ```
 
-Bootstrap also generates a project-local `/go` bridge:
+Bootstrap also generates a project-local `/go` bridge for advanced use:
 
 ```powershell
 .\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed
@@ -139,7 +170,7 @@ command templates before any rdgoal packets or worker runs are created. Use
 `-Prepare -Dashboard` to create queued packets and view them without running
 workers.
 
-Optionally install the control-plane CLI and route a project through `rdgoal`:
+Install the CLI and use the mainline coding loop first:
 
 ```powershell
 cd .\packages\control-plane
@@ -148,6 +179,13 @@ cd D:\my-project
 devframe code "Build the MVP" --target src --runtime-dir "$env:TEMP\devframe-code" --dashboard
 devframe code workers
 devframe code "Fix the branch" --changed --agents auto --worker opencode --preview
+devframe code status --runtime-dir "$env:TEMP\devframe-code"
+devframe code execute --runtime-dir "$env:TEMP\devframe-code"
+```
+
+Advanced orchestration stays available when you need it:
+
+```powershell
 rdgoal "D:\my-project" "Build the MVP" --digest
 devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-dir "$env:TEMP\devframe-go"
 ```
@@ -175,9 +213,9 @@ After preparing a run, use `devframe code execute [latest|<go-run-id>]` to
 spend worker tokens later without creating another set of packets; passed
 agents are skipped unless `--rerun-passed` is provided.
 
-`/rdgoal` is the human-facing slash entrypoint. In a shell, use the installed
-`rdgoal` command. `devframe rdgoal` remains available as the compatibility
-form for scripts that already use the umbrella CLI.
+`rdgoal`, `/go`, `devframe client`, and the broader Web AI surfaces are not the
+first thing a new daily user should learn. They are second-line tools for when
+the main `devframe code` loop is already working and you need more orchestration.
 
 `/go` is the coding-tool entrypoint. In a shell, `devframe go` prepares parallel
 coding-agent dispatch packets and shows the exact worker commands without
@@ -200,14 +238,14 @@ Then run work through the external-brain loop:
 5. Accept only when evidence passes the review gates.
 6. Feed reusable lessons back into the project memory.
 
-## Four Skill Entrypoints
+## Advanced Entrypoints
 
 | Skill | Purpose | Result |
 |---|---|---|
 | `/rdinit` | Initialize a repository with dev-frame-system assets | `AGENTS.md`, rules, schemas, tool policy, capability inventory, and runtime docs |
 | `/bindChrome <url>` | Bind a browser AI session to the current project | A stable external-brain session tied to local project context |
-| `/go <project> <goal>` | Prepare or run parallel coding-agent shards | A go-run record, per-agent rdgoal packets, worker commands, and dashboard-visible runs |
-| `/rdgoal <project> <goal>` | Route a project goal through the total-control controller | Project contract, controller decision, dispatch packet, worker report, and runtime digest |
+| `/go <project> <goal>` | Prepare or run parallel coding-agent shards when `devframe code` is not enough | A go-run record, per-agent rdgoal packets, worker commands, and dashboard-visible runs |
+| `/rdgoal <project> <goal>` | Route a project goal through the deeper control loop | Project contract, controller decision, dispatch packet, worker report, and runtime digest |
 | `/rdpaper <project> <goal>` | Route a paper task through the paper review controller | Paper workspace, Web AI Adapter config, privacy gate, review report, and evidence summary |
 
 Provider note: GPT Web is the default reference path because it is widely available and good at long-form coordination. The provider is replaceable; the contract is not. Browser-hosted providers use `docs/agent-runtime/web-ai-adapter-contract.md` and `schemas/web_ai_adapter.schema.json`; Chrome plus ChatGPT is a reference adapter, not a hard-coded boundary. If another web AI cannot preserve project context, coordinate tasks, and review evidence, use it as a secondary reviewer rather than the primary external brain.

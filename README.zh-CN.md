@@ -1,177 +1,169 @@
 <p align="center">
-  <img src="docs/assets/devframe-system-banner.svg" alt="dev-frame-system：把网页 AI 作为外部大脑" width="100%" />
+  <img src="docs/assets/devframe-system-banner.svg" alt="devframe-system：受治理的编码产品" width="100%" />
 </p>
 
-<h3 align="center">一个 Local Agent Control Plane，通过 MCP 把网页 AI 变成本地 agent 入口。T3Code 是原生客户端 shell；OpenCode 是执行器；DevFrame 负责治理。</h3>
+<h3 align="center">一个面向重度软件工程工作的受治理编码 CLI。`devframe code` 是主产品，其余控制平面能力服务于它。</h3>
 
 <p align="center">
   <a href="README.md">English</a> | 简体中文
 </p>
 
 <p align="center">
-  <a href="#为什么需要它">为什么需要它</a> |
-  <a href="#它具体做什么">它具体做什么</a> |
-  <a href="#快速开始">快速开始</a> |
-  <a href="#仓库结构">仓库结构</a>
+  <a href="#它是什么">它是什么</a> |
+  <a href="#从这里开始">从这里开始</a> |
+  <a href="#主产品路径">主产品路径</a> |
+  <a href="#二线与高级能力">二线与高级能力</a>
 </p>
 
 ```text
-devframe code "<goal>"  # 在当前仓库启动 OpenCode 优先的编程会话
-devframe code workers   # 执行前检查本机可用的 worker CLI，不创建 packet、不消耗 token
-devframe code status    # 查看最近一次已准备的编程运行
-devframe code session   # 只读查看最近一次编程运行的会话摘要，不暴露私有本地路径
-devframe code execute   # 执行最近一次已准备的编程运行
-/rdinit                 # 初始化外部大脑操作层
-/bindChrome <url>       # 绑定 GPT Web、DeepSeek、豆包或其他网页 AI 会话
-/go <project> <goal>    # 准备或运行并发 coding agent 分片
-/rdgoal <project> <goal> # 把项目目标路由进总控闭环
-/rdpaper <project> <goal> # 把论文任务路由进论文审查闭环
+devframe code "<goal>"   # 主产品：准备一次受治理的编码运行
+devframe code workers    # 检查本地 worker 是否可用
+devframe code status     # 查看已准备运行
+devframe code execute    # 执行已准备运行
+devframe dashboard serve # 可选：打开控制平面视图
+
+# 二线 / 高阶能力
+devframe client
+devframe go <project> <goal>
+rdgoal <project> <goal>
 ```
 
-**核心产品是 `devframe code`：一个基于 T3Code 作为原生客户端 shell、OpenCode 作为执行器的编程工具，用来准备有边界的 coding-agent 任务、显示精确 worker 命令，并且只在你确认要消耗 worker token 时执行。WebGPT MCP 闭环已在当前本地开发上下文中端到端验证过。**
+**请先把 DevFrame 理解为一个受治理的编码产品。`devframe code` 是日常主循环；dashboard、rdgoal、RD-Code 客户端、MCP/ACP、paper workflow 都是围绕这条主线的支撑层或高级层。**
 
-> **项目状态：** 本仓库在开发上下文中是 local-gate-green、链路已验证（chain-verified）的，
-> 但还不是经过外部评审的正式发布版本。已验证与未验证的确切边界见
-> [发布就绪状态](docs/status/release-readiness.md)。
+> **当前状态：** 本仓库在当前开发上下文中已经通过本地 release gate，
+> 但这不等于对外正式发布完成。确切边界见
+> [release-readiness.md](docs/status/release-readiness.md)。
 
-配套问题不是"再做一套治理框架"。真正的问题是：如何用尽量低的成本和最简单的流程，提高代码质量，并让研发方向不漂移？
+## 它是什么
 
-dev-frame-system 的答案是：通过 MCP 把网页 AI 会话变成软件研发的**外部大脑**和本地 agent 入口。网页 AI 负责保存产品方向、工程取舍、任务边界、证据、审查结论和经验记忆；IDE、CLI、浏览器、脚本、测试框架以及不同厂商的 coding agent 都是可替换的执行器。
+DevFrame 现在最应该被理解成：
 
-落到产品形态上，第一个主入口是 `devframe code`：一个默认面向 OpenCode、并可接入其他 worker 命令的本地编程 CLI。它不替代模型，也不替代 IDE；它负责限定任务边界、选择 worker profile、准备 coding 会话、按需拆分并发 agent，在你确认要花 worker token 时再执行，并把状态写进可选的只读 Dashboard。
+> 一个让工程师把“准备任务、检查边界、执行、恢复、审查”做得更稳的编码 CLI。
 
-## 为什么需要它
+它不是先让你学会一整套控制平面，再开始写代码。
+它也不是让你先决定 MCP、ACP、Web AI、T3 bridge 这些高级能力怎么接入。
 
-AI coding 工具很擅长产出代码，但它们经常不擅长三件事：记住真正的产品方向，证明代码确实变好了，以及在工作跑偏前停下来。
+默认路径应该很短：
 
-dev-frame-system 在工具之上放了一层思考与协调层：
+1. 进入仓库
+2. 运行 `devframe code`
+3. 准备一次有边界的编码任务
+4. 检查 worker 命令
+5. 决定是否执行
+6. 之后用 `status` / `execute` 继续
 
-| 常见做法 | dev-frame-system 做法 |
-|---|---|
-| 直接让某个 agent 修问题 | 先让绑定的网页 AI 明确范围、风险和验收标准 |
-| 相信 agent 的最终回复 | 要求证据、验证输出和可审查报告 |
-| 每个工具各自保存上下文 | 把方向和决策放在同一个外部大脑里 |
-| 再引入一个重平台 | 复用你已经在用的网页 AI 和工具 |
-| 乱了之后再补质量 | 每个任务都经过规则、schema 和证据门禁 |
+Web AI 可以作为外部大脑提供方向和审查，
+但日常主入口仍然应该是本地编码工具本身。
 
-一句话：
+## 从这里开始
 
-> 网页 AI 负责思考和协调。工具负责执行。证据决定能不能接受。
-
-## 它具体做什么
-
-dev-frame-system 提供一套可迁移的 agent 研发操作层：
-
-- **方向把控**：在写代码前，把目标、边界、风险和取舍放到同一个上下文里。
-- **任务调度**：把模糊需求变成有边界的 TaskSpec，交给 OpenCode、自定义 CLI、浏览器自动化或其他 agent。
-- **并发 coding agent 入口**：用 `/go` 或 `devframe go` 准备多个有边界的编码分片；确认要花 agent token 时，再通过 OpenCode 或其他 worker 并发执行。
-- **证据审查**：用 ExecutionReport、证据索引、审查门禁和负面夹具防止"假完成"。
-- **可复用引导**：用 PowerShell bootstrap 把同一套操作层部署到其他项目。
-- **外部大脑绑定**：用 `/bindChrome` 把稳定的网页 AI 会话绑定到当前项目。
-- **总控编排**：用 `rdgoal` 协调多个项目本地 workflow，记录 controller 决策、rollback snapshot、dispatch packet 和最终报告。
-- **论文审查闭环**：用 `/rdpaper` 让网页 AI 负责论文评审判断，本地 agent 负责脱敏任务包、证据和报告。
-
-## 快速开始
-
-克隆仓库：
+如果你只想先走主产品路径，请先这样用：
 
 ```powershell
 git clone https://github.com/RD2100/dev-frame-system.git
 cd dev-frame-system
+.\scripts\verify-release.ps1
+
+cd .\packages\control-plane
+python -m pip install -e .
+
+cd ..\..
+devframe code
+devframe code workers
+devframe code status
 ```
 
-检查公开快照：
+先把这条主循环跑通，再去学习二线能力。
+
+## 主产品路径
+
+`devframe code` 是主产品入口。
+
+它的职责是：
+
+- 接收一个编码目标
+- 生成一次有边界的运行
+- 明确显示会调用什么 worker
+- 把真正执行这一步保留为显式动作
+- 让你稍后通过 `status` / `execute` 继续，而不是每次重新开始
+
+典型用法：
+
+```powershell
+devframe code "Build the MVP"
+devframe code workers
+devframe code "Fix the branch" --changed --agents auto --preview
+devframe code status --runtime-dir "$env:TEMP\devframe-code"
+devframe code execute --runtime-dir "$env:TEMP\devframe-code"
+```
+
+如果你只记住一件事，就记住这条链路。
+
+## 二线与高级能力
+
+下面这些能力很重要，但不该先学：
+
+- `devframe dashboard serve`
+  控制平面视图，用于检查 run、action、session、gate。
+- `rdgoal`
+  更深的编排与治理层。
+- `devframe go`
+  并发 coding-agent 分片入口，适合更复杂任务。
+- `devframe client`
+  RD-Code / T3 相关的客户端与 bridge 能力。
+- `devframe web-ai ...`
+  Web AI、MCP、review、task intake 等高级能力。
+
+正确顺序是：
+
+1. 先把 `devframe code` 用顺
+2. 再引入 dashboard 做观察
+3. 需要时再启用 `go`、`rdgoal`、`client`、`web-ai`
+
+如果你已经进入控制平面层，常用的是这些入口：
+
+```powershell
+devframe visual-state --runtime-dir <dir>
+devframe dashboard serve --runtime-dir <dir>
+devframe actions --runtime-dir <dir>
+```
+
+公开只读 surface 仍然包括：
+
+- `/actions.json`
+- `/actions.md`
+- `--action-id`
+- `--allow-remote`
+
+## 快速启动
+
+检查公开发布面：
 
 ```powershell
 .\scripts\verify-public-snapshot.ps1
-```
-
-在发布本地版本或共享 control-plane 包之前，先运行发布验证入口：
-
-```powershell
 .\scripts\verify-release.ps1
 ```
 
-把外部大脑操作层引导到另一个项目：
+初始化另一个项目：
 
 ```powershell
-.\templates\runtime-bootstrap\bootstrap.ps1 `
-  -ProjectName "my-project" `
-  -ProjectRoot "D:\my-project" `
-  -DryRun
-
 .\templates\runtime-bootstrap\bootstrap.ps1 `
   -ProjectName "my-project" `
   -ProjectRoot "D:\my-project"
 ```
 
-引导完成后，从 agent 环境中绑定浏览器 AI 会话：
+绑定浏览器 AI 会话（仅当你真的需要外部大脑路径时）：
 
 ```text
 /bindChrome https://chatgpt.com/...
 ```
 
-bootstrap 还会生成项目本地的 `/go` 桥接脚本：
+高级编排入口：
 
 ```powershell
-.\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed
-.\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed -Prepare -Dashboard
-.\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed -Execute
-```
-
-这个 wrapper 默认是 preview 模式，会先显示 changed-file 分片和 worker 命令模板，不会立即创建 rdgoal packet 或运行 worker。使用 `-Prepare -Dashboard` 可以只创建排队 packet 并打开看板，不运行 worker。
-
-可选：安装 control-plane CLI，并用 `rdgoal` 路由一个项目：
-
-```powershell
-cd .\packages\control-plane
-pip install -e .
-cd D:\my-project
-devframe code "Build the MVP" --target src --runtime-dir "$env:TEMP\devframe-code" --dashboard
 rdgoal "D:\my-project" "Build the MVP" --digest
-devframe go "D:\my-project" "Build the MVP" --agents 3 --target src --runtime-dir "$env:TEMP\devframe-go"
+devframe go "D:\my-project" "Build the MVP" --agents 3 --target src
 ```
-
-`devframe code` 是 OpenCode 优先的编程入口。它默认作用于当前仓库，准备一个有边界的 coding-agent 会话，打印精确 worker 命令，并把状态写入 Dashboard 可读取的 runtime。用 `--worker opencode` 可以选择内置 worker 模板；其他执行器可以通过 `--command <your-worker>` 接入，例如 `python -m your_worker_module`。执行前可以先跑 `devframe code workers` 查看本机哪些 worker CLI 可用；这个检查不会创建 packet，也不会消耗 worker token。真实 git 工作区里推荐用 `--changed --agents auto`：只把 modified、staged 或 untracked 文件作为 target，并按文件数自动拆成有上限的并发分片；`--max-agents` 可以调整自动拆分上限。先用 `--preview` 可以看分片计划、估算 bytes 和 worker 命令模板，不创建 packet，也不消耗 worker token；实际分片会按 target 大小做均衡，避免某个 agent 吃掉大部分上下文。准备真正消耗 worker token 时再加 `--execute`，或者先 prepare，再用 `devframe code execute [latest|<go-run-id>]` 复用已有 packet 延后执行；已通过的 agent 默认会跳过，除非显式传 `--rerun-passed`。加 `--dashboard` 会直接启动同一个 runtime 的本地只读可视化界面；`devframe code session [latest|<go-run-id>]` 可以在不暴露私有本地路径的前提下，只读查看当前会话的 provider、agent role、task spec 文件名和 target 列表，方便手动确认会话状态或复制 Dashboard 命令。Dashboard 页面内有 English/中文 切换，也可以用 `?lang=zh-CN` 直接打开中文界面，并在每个 go-run 卡片里显示可复制的 `devframe code status`、`devframe code session` 和 `devframe code execute` 命令。
-
-`/rdgoal` 是面向用户的 slash 入口。在 shell 中使用已安装的 `rdgoal` 命令。`devframe rdgoal` 作为兼容形式仍然可用于已经使用 umbrella CLI 的脚本。
-
-`/go` 是面向编程工具形态的入口。在 shell 中，`devframe go` 默认只准备并发 coding agent dispatch packet，并打印精确 worker 命令，不会立刻消耗 agent token。加 `--execute` 后才会并发运行这些分片；用 `--worker opencode` 可以选择内置 worker profile，默认是 `opencode run -m stepfun/step-3.7-flash --dangerously-skip-permissions --agent build`，也可以用 `--command <your-worker>` 接入其他执行器。传 `--changed --agents auto` 可以从 git 变更自动生成分片 target，并自动选择并发数，避免项目级大上下文。
-Visual Control Plane 会读取同一个 runtime，并显示 go-run 以及每个 coding-agent 分片的目标、packet、状态、worker 命令，以及可复制的状态查询和执行命令。
-
-然后通过外部大脑闭环运行工作：
-
-1. 在网页 AI 中明确目标、风险、范围和验收标准。
-2. 把任务转成有边界的 TaskSpec。
-3. 分发给 OpenCode、自定义 CLI 脚本或浏览器自动化执行。
-4. 收集 ExecutionReport 和验证输出。
-5. 只有证据通过审查门禁，才接受这次工作。
-6. 把可复用经验沉淀回项目记忆。
-
-## 四个技能入口
-
-| 技能 | 用途 | 结果 |
-|---|---|---|
-| `/rdinit` | 给仓库初始化 dev-frame-system 操作层 | `AGENTS.md`、规则、schemas、工具策略、能力清单和运行时文档 |
-| `/bindChrome <url>` | 把网页 AI 会话绑定到当前项目 | 一个稳定的外部大脑会话，连接本地项目上下文 |
-| `/go <project> <goal>` | 准备或运行并发 coding agent 分片 | go-run 记录、每个 agent 的 rdgoal packet、worker 命令，以及 Dashboard 可见的 runs |
-| `/rdgoal <project> <goal>` | 把项目目标交给总控编排 | 项目 contract、controller 决策、dispatch packet、worker 报告和 runtime digest |
-| `/rdpaper <project> <goal>` | 把论文任务交给论文审查控制面 | 论文工作区、Web AI Adapter 配置、隐私闸门、审查报告和证据摘要 |
-
-提供商说明：GPT Web 是默认参考路径，因为它容易获得，也适合长上下文协调。提供商可以替换，契约不能替换。浏览器托管提供商使用 `docs/agent-runtime/web-ai-adapter-contract.md` 和 `schemas/web_ai_adapter.schema.json`；Chrome 加 ChatGPT 是参考适配器，不是硬编码边界。如果另一个网页 AI 不能稳定保存项目上下文、协调任务并审查证据，更适合作为二级审查器，而不是主外部大脑。
-
-未来产品形态可参见 [Visual Control Plane](docs/agent-runtime/visual-control-plane.md)：它定义了项目、Provider Binding、Agent、Run、Evidence、Review 和 Gate 如何组成一个治理优先的客户端模型。第一个只读状态导出入口是 `devframe visual-state --runtime-dir <dir>`；也可以用 `devframe visual-state --runtime-dir <dir> --format html --output visual-state.html` 生成本地 HTML 快照，用 `devframe dashboard serve --runtime-dir <dir>` 启动本地只读 Dashboard，或用 `devframe actions --runtime-dir <dir>` 直接查看下一步队列。Dashboard 默认只绑定 loopback；如需在非 loopback 网卡上监听，请显式传入 `--allow-remote`。加上 `--paper-project <dir>` 可以把论文迭代工作区、它的 `WEB_AI_ADAPTER.yaml` provider binding、manual fallback instructions，以及带 next action 的 provider safety gate 纳入同一个控制面视图。Dashboard 的 Agent Registry 会在同一张表里显示每个 agent 的 role、scope、provider、binding health 和 status；Run Details 卡片会显示 TaskSpec/evidence 路径、当前 controller decision 和下一条安全本地命令。Dashboard 和 actions CLI 都会把当前 gate/run/decision 指引汇总成带 action id 和可复制 `--action-id` resume filter 的只读 Action Queue；actions CLI 和 `/actions.json` dashboard endpoint 还可以按 status、priority、source type、source id 或 action id 过滤，方便脚本化 triage。需要人工接续或交给 Web AI 时，可以用 `devframe actions --format markdown --output ACTION_QUEUE.md` 或 dashboard 的 `/actions.md` endpoint 导出 Markdown handoff 包。
-
-## 已集成模块
-
-| 路径 | 来源 | 作用 |
-|---|---|---|
-| `packages/agent-acceptance/` | `agent-acceptance` | 验收契约、策略和 CI preflight 模板 |
-| `packages/ai-workflow-hub/` | `dev-frame-opencode/ai-workflow-hub` | 工作流编排、任务队列、证据适配器和上下文层 |
-| `packages/control-plane/` | `devframe-control-plane` | 运行时协调、pipeline spec、交接工具和状态机组件 |
-| `packages/test-frame/` | `test-frame` | 验证适配器、结果规范化、测试编排和小程序 E2E 包 |
-
-这些模块是精选快照。旧 Git 历史和内部过程材料没有导入。
 
 ## 仓库结构
 
@@ -181,31 +173,23 @@ dev-frame-system/
 |-- README.zh-CN.md
 |-- AGENTS.md
 |-- docs/
-|   |-- agent-runtime/
-|   |-- assets/
-|   `-- module-sources.md
 |-- packages/
-|   |-- agent-acceptance/
-|   |-- ai-workflow-hub/
-|   |-- control-plane/
-|   `-- test-frame/
 |-- rules/
 |-- schemas/
 |-- scripts/
 `-- templates/
-    `-- runtime-bootstrap/
 ```
 
-## 谁适合使用
+## 适合谁
 
-如果你已经在用 AI coding 工具，但经常遇到这些问题，就适合使用 dev-frame-system：
+如果你已经在高频使用 AI 编码工具，但反复遇到这些问题，这个项目才适合你：
 
-- agent 还没搞清方向就开始写代码；
-- 每个工具都有自己的上下文，但没人记得全局目标；
-- "完成"只是 agent 说完成，而不是证据证明完成；
-- 重复踩坑沉没在聊天记录里；
-- 想要更强的代码审查压力，但不想再引入一个重平台。
+- agent 很快开始写代码，但目标边界不清楚
+- 不同工具各有上下文，没有统一的运行与审查视图
+- “完成”更多是一句回答，不是一套证据
+- 任务中断之后很难继续
+- 你想保留控制权，而不是把执行权完全交出去
 
 ## 许可证
 
-本项目使用 [Apache License 2.0](LICENSE)。
+项目使用 [Apache License 2.0](LICENSE)。

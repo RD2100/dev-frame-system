@@ -1,21 +1,25 @@
 # DevFrame Code
 
-DevFrame Code is the local governance and control-plane CLI and Python package
-for dev-frame-system. Its primary entrypoint is `devframe code`: a programming
-tool built on T3Code as the native client shell and OpenCode as the executor,
-which prepares bounded coding-agent work, checks local worker availability, and
-runs prepared packets through OpenCode by default or another command when you
-explicitly override the worker. The proven WebGPT MCP full cycle lets a web AI
-session coordinate through MCP while local executors run bounded coding shards
-under DevFrame governance.
+DevFrame Code should be understood first as a **governed coding CLI**.
 
-The same package also keeps workflow execution, handoff generation, runtime
-probes, dashboard state, and rdgoal orchestration in a small installable
-package.
+If you only remember one command, remember:
 
-This package is distributed inside the public `RD2100/dev-frame-system`
-repository. It should not depend on private handoff logs, browser profiles,
-local runtime state, or old `devframe-control-plane` checkout paths.
+```powershell
+devframe code
+```
+
+That is the product-shaped daily loop. Everything else in this package exists to
+support, inspect, or extend that loop.
+
+The current role split is:
+
+- **Primary**: `devframe code`
+- **Secondary**: `devframe dashboard`, `devframe actions`, `devframe sessions`
+- **Advanced**: `devframe go`, `rdgoal`, `devframe client`, `devframe web-ai`
+
+This package lives inside the public `RD2100/dev-frame-system` repository. It
+must stay independent of private handoff logs, browser profiles, and local
+runtime state checked into source control.
 
 ## Install
 
@@ -29,60 +33,69 @@ python -m pip install -e .
 After installation, the `devframe` command is available:
 
 ```powershell
-devframe doctor
-devframe init code_project D:\tmp\demo-project
 devframe code
-devframe code "Build the MVP" --project D:\tmp\demo-project --target src --dashboard
-devframe code "Build the MVP" --project D:\tmp\demo-project --target src --preview
 devframe code workers
-devframe code "Fix the branch" --project D:\tmp\demo-project --changed --agents auto --worker opencode --preview
-devframe code --project D:\tmp\demo-project --prompt-file TASK.md --changed --agents auto
-devframe code --project D:\tmp\demo-project --prompt-file TASK.md --since origin/main --agents auto
 devframe code status --runtime-dir C:\Users\you\.devframe-runtime
 devframe code execute --runtime-dir C:\Users\you\.devframe-runtime
-devframe client --dry-run --runtime-dir C:\Users\you\.devframe-runtime
-devframe client bridge --runtime-dir C:\Users\you\.devframe-runtime --output .\devframe-t3-bridge
-devframe client serve --runtime-dir C:\Users\you\.devframe-runtime --open
+devframe code "Fix the branch" --changed --agents auto --worker opencode --preview
 devframe dashboard serve --runtime-dir C:\Users\you\.devframe-runtime
-devframe run --pipeline pipelines\example_pipeline.yaml
 ```
 
-`devframe code` is the OpenCode-backed coding entrypoint. Run it with no positional
+## Daily Loop
+
+The mainline workflow is:
+
+1. `devframe code`
+2. `devframe code workers`
+3. `devframe code status`
+4. `devframe code execute`
+
+`devframe code` is the OpenCode-backed entrypoint. Run it with no positional
 goal to get a `Goal:` prompt in the current repository, or pass the goal on the
-command line when scripting. It defaults to preparing a bounded coding-agent
-session, prints the worker command, and records runtime state for
-`devframe dashboard serve`. Use `--dashboard` to serve that visual UI
-immediately, `--preview` to inspect the shard plan and worker command template
-without creating packets, `--execute` to run the worker, and
-`--worker opencode` to select the built-in coding CLI profile. Use
-`--command <your-worker>` for custom executor commands (for example,
-`python -m your_worker_module`). Use
-`devframe code workers` to check local worker availability before executing;
-the probe is status-only and does not create packets or run workers. Use
-`--agents <n>` to split the goal into concurrent coding shards.
-Use `--changed --agents auto` to
-keep worker prompts focused on modified, staged, or untracked git files and
-automatically choose a bounded shard count; use `--max-agents` to cap that
-fan-out or `--target <path>` for manual scoping. Dispatch and preview balance
-targets by estimated bytes so large files are spread across workers more evenly.
-Use `--since <git-ref>` to scope a branch task to files changed since a base
-ref such as `origin/main`.
-For longer task briefs, pass `--prompt-file <path>` or pipe text into
-`devframe code`; both feed the same `/go` coding-agent dispatch without putting
-the whole prompt on the command line. After `--execute`, the CLI summarizes each
-shard's worker status, ExecutionReport path, changed files, and evidence
-snippet; the dashboard keeps the scan-friendly status and changed-file view,
-plus copyable `devframe code status` and `devframe code execute` commands for
-each go-run.
-The terminal output for every prepared run also prints those exact status and
-execute commands, so the CLI remains usable without opening the dashboard.
-Use `devframe code status` to inspect the latest or a named `go-run` from local
-runtime metadata without creating new packets or spending worker tokens.
-Use `devframe code execute` to run the latest or a named prepared `go-run`
-later from the same metadata, reusing its existing packet directories instead
-of generating another set of worker prompts. Passed agents are skipped by
-default; add `--rerun-passed` only when you intentionally want to spend worker
-tokens again.
+command line. It prepares a bounded run, prints the exact worker command, and
+records state for later inspection.
+
+Use:
+
+- `--preview` to inspect the plan without creating packets
+- `--execute` to spend worker tokens immediately
+- `--worker opencode` for the built-in profile
+- `--command <your-worker>` for a custom executor
+- `--changed --agents auto` to keep scope tight in a real git worktree
+- `--since <git-ref>` to scope the task to a branch delta
+- `--dashboard` when you want the control-plane view immediately
+
+`devframe code status` and `devframe code execute` are there so a run becomes a
+recoverable session rather than a one-shot command.
+
+## Secondary Surfaces
+
+These support the main coding loop but are not the first thing a new user
+should learn:
+
+- `devframe dashboard serve`
+- `devframe actions`
+- `devframe sessions`
+- `devframe client --dry-run`
+
+The dashboard is the control-plane view. It is useful, but it is not the
+primary product surface.
+
+## Advanced Surfaces
+
+These are important, but they are not the default path:
+
+- `devframe go`
+- `rdgoal`
+- `devframe client bridge|serve|t3desktop|smoke`
+- `devframe web-ai ...`
+- `devframe run --pipeline ...`
+
+Treat them as advanced or specialist surfaces layered on top of the main coding
+loop.
+
+## Advanced Notes
+
 Use `devframe client --dry-run` to print the zero-config local Agent client
 launch plan, including the browser URL, `/client-manifest.json`,
 `/client-plan.json`, `/t3-bridge.json`, `/t3-shell.json`, and the OpenCode

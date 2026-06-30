@@ -4,16 +4,30 @@ from __future__ import annotations
 HELP_TEXT = """DevFrame Code CLI
   Primary workflow: use devframe code as an OpenCode-first local coding tool.
 
-  devframe init [template] [target]  - initialize project
-  devframe doctor                    - check package health
+  Main loop
   devframe code [[<goal>] | --prompt-file <path>] - start an OpenCode-backed coding session
   devframe code workers              - show available coding worker profiles
   devframe code providers            - show selectable model providers (api/local/web-shim)
   devframe code status [latest|<go-run-id>] - inspect a previous /go coding run without spending worker tokens
   devframe code execute [latest|<go-run-id>] - execute a prepared /go run without creating packets
   devframe code session [latest|<go-run-id>] - inspect a previous /go coding run sessions
+
+  Control plane
   devframe client                    - launch the zero-config local Agent client
+  devframe dashboard serve           - serve read-only local dashboard
+  devframe actions                   - show Visual Control Plane action queue
   devframe sessions                  - show all Visual Control Plane sessions (including imported web AI sessions)
+  devframe visual-state              - export Visual Control Plane state
+
+  Advanced orchestration
+  devframe go <project> <goal>       - dispatch coding agents through /go
+  devframe atgo <goal>               - @go evidence + coding dispatch entrypoint
+  devframe rdgoal <project> <goal>   - route work through rdgoal
+  devframe run --pipeline <path>     - run pipeline
+  devframe init [template] [target]  - initialize project
+  devframe doctor                    - check package health
+
+  Web AI and specialist tools
   devframe web-ai import <source>    - import a summary-only web AI session JSON into the runtime
   devframe web-ai probe <provider>   - build an importable CodexPro/DevSpace binding probe
    devframe web-ai live-check codexpro|devspace --endpoint <url> [--token <token>] [--project <id>] [--tool server_config|handoff_to_agent|task_intake|project_summary] [--format text|json|session-json] - live-check an MCP endpoint
@@ -23,13 +37,6 @@ HELP_TEXT = """DevFrame Code CLI
   devframe web-ai record-task-intake --conversation <url> --task-title <text> --task-summary <text> [--provider chatgpt] [--project dev-frame-system] [--connector-name <name>] [--connector-app-id <id>] [--priority high|medium|low] [--suggested-agent opencode|codex|custom] [--marker <text>] [--runtime-dir <dir>] - record a safe Web GPT task intake summary
   devframe web-ai import-task-intakes --project-root <dir> [--runtime-dir <dir>] [--provider codexpro] [--project dev-frame-system] [--connector-name <name>] [--connector-app-id <id>] - import .ai-bridge/task-intakes/*.json into the runtime
   devframe web-ai dispatch-task-intakes --project-root <dir> [--runtime-dir <dir>] [--intake-id <id>] [--agents 1] [--execute] - dispatch imported Web GPT task intakes into @go/OpenCode
-  devframe go <project> <goal>       - dispatch coding agents through /go
-  devframe atgo <goal>               - @go evidence + coding dispatch entrypoint
-  devframe rdgoal <project> <goal>   - route work through rdgoal
-  devframe visual-state              - export Visual Control Plane state
-  devframe actions                   - show Visual Control Plane action queue
-  devframe dashboard serve           - serve read-only local dashboard
-  devframe run --pipeline <path>     - run pipeline
   devframe pack validate <zip>       - validate evidence pack
   devframe writeback apply --workspace <root> --path <rel> --contents-file <f> [--action-id <id>] [--runtime-dir <dir>] [--confirm] [--format text|json] - human-gated, audited single-file workspace write-back (preview without --confirm)
   devframe handoff generate          - generate handoff doc
