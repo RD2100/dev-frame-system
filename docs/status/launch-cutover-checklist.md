@@ -80,6 +80,27 @@ These are the final actions that require you:
 5. run the final real-user sanity check on the exact release candidate you
    intend to publish
 
+## Human Checklist, Reduced To Actions
+
+### Before merge
+
+1. open PR `#4`
+2. confirm you still agree with the product direction:
+   - `devframe code` is the primary product
+   - dashboard/client/protocol work is secondary or advanced
+3. skim the latest verification summary in the PR discussion or commit history
+4. merge when satisfied
+
+### After merge
+
+1. pull or confirm `main` is the release candidate you intend to publish
+2. run your final real-user smoke on that exact candidate
+3. create the release artifact you want:
+   - tag
+   - GitHub Release
+   - other external distribution step
+4. publish/announce
+
 ## Do Not Hand Off Yet
 
 The owner does **not** need to intervene yet when the remaining work is still

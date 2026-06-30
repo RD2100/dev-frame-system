@@ -454,11 +454,11 @@ def render_action_queue_text(next_actions: list[dict[str, Any]]) -> str:
         return "\n".join(lines) + "\n"
     for action in next_actions:
         priority = action.get("priority", "")
-        status = action.get("status", "")
+        status_display = _display_status_label(action.get("status", ""))
         source_type = action.get("source_type", "")
         source_id = action.get("source_id", "")
         action_id = action.get("action_id", "")
-        lines.append(f"- [{priority}/{status}] {source_type} {source_id}")
+        lines.append(f"- [{priority}/{status_display}] {source_type} {source_id}")
         if action_id:
             lines.append(f"  id: {action_id}")
         resume_filter = _action_resume_filter(action)
@@ -490,7 +490,7 @@ def render_action_queue_markdown(next_actions: list[dict[str, Any]], lang: str =
         return "\n".join(lines) + "\n"
     for index, action in enumerate(next_actions, start=1):
         priority = str(action.get("priority") or "")
-        status = str(action.get("status") or "")
+        status = _display_status_label(action.get("status", ""))
         source_type = str(action.get("source_type") or "")
         source_id = str(action.get("source_id") or "")
         action_id = str(action.get("action_id") or "")
@@ -3122,7 +3122,7 @@ def _next_actions_section(next_actions: list[dict[str, Any]], action_links: bool
     rows = "\n".join(
         "<tr>"
         f"<td>{_badge(action.get('priority', ''))}</td>"
-        f"<td>{_badge(action.get('status', ''))}</td>"
+        f"<td>{_status_badge(action.get('status', ''))}</td>"
         f"<td>{_h(action.get('label', ''))}</td>"
         f"<td>{_h(action.get('source_type', ''))}</td>"
         f"<td><code>{_h(action.get('source_id', ''))}</code></td>"
@@ -3614,65 +3614,63 @@ def _badge(value: str) -> str:
     return f'<span class="badge badge-{_h(token)}">{_h(value)}</span>'
 
 
-def _status_badge(value: str) -> str:
+def _display_status_label(value: str) -> str:
     raw = _safe_id(value)
-    label = str(value or "")
+    if raw == "queued" or raw == "pending":
+        return "Prepared"
+    if raw in {"pass", "passed", "completed", "review-pass", "verified", "executed"}:
+        return "Completed"
+    if raw in {"review-fail", "fail", "failed"}:
+        return "Failed"
+    if raw == "collected":
+        return "Collected"
+    if raw == "missing":
+        return "Missing"
+    if raw == "draft":
+        return "Draft"
+    if raw == "ready":
+        return "Ready"
+    if raw == "needs_human":
+        return "Needs human"
+    if not raw:
+        return "Unknown"
+    return raw.replace("_", " ").replace("-", " ").title()
+
+
+def _status_badge_value_map(value: str) -> tuple[str, str]:
+    raw = _safe_id(value)
+    label = _display_status_label(value)
     token = raw
     if raw in {"queued", "pending"}:
-        label = "prepared"
         token = "prepared"
     elif raw in {"pass", "passed", "completed", "review-pass", "verified", "executed"}:
-        label = "complete"
         token = "completed"
     elif raw in {"review-fail", "fail", "failed"}:
-        label = "failed"
         token = "failed"
     elif raw == "collected":
-        label = "collected"
         token = "completed"
     elif raw == "missing":
-        label = "missing"
         token = "blocked"
     elif raw == "draft":
-        label = "draft"
         token = "pending"
     elif raw == "ready":
-        label = "ready"
         token = "ready"
+    elif raw == "prepared":
+        token = "prepared"
+    elif raw == "needs_human":
+        token = "needs-human"
     elif raw == "":
-        label = "unknown"
         token = "pending"
+    return label, token
+
+
+def _status_badge(value: str) -> str:
+    label, token = _status_badge_value_map(value)
     return f'<span class="badge badge-{_h(token)}">{_h(label)}</span>'
 
 
 def _labeled_status_badge(prefix: str, value: str) -> str:
-    raw = _safe_id(value)
-    label = str(value or "")
-    token = raw
-    if raw in {"queued", "pending"}:
-        label = "prepared"
-        token = "prepared"
-    elif raw in {"pass", "passed", "completed", "review-pass", "verified", "executed"}:
-        label = "complete"
-        token = "completed"
-    elif raw in {"review-fail", "fail", "failed"}:
-        label = "failed"
-        token = "failed"
-    elif raw == "collected":
-        label = "collected"
-        token = "completed"
-    elif raw == "missing":
-        label = "missing"
-        token = "blocked"
-    elif raw == "draft":
-        label = "draft"
-        token = "pending"
-    elif raw == "ready":
-        label = "ready"
-        token = "ready"
-    elif raw == "":
-        label = "unknown"
-        token = "pending"
+    label, token = _status_badge_value_map(value)
     return f'<span class="badge badge-{_h(token)}">{_h(prefix)}: {_h(label)}</span>'
 
 
