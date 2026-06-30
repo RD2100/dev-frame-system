@@ -63,6 +63,14 @@ def test_start_cluster_run_validates_and_starts(tmp_path, monkeypatch):
     assert started["started"] is True
     assert started["runId"].startswith("g-")
     assert started["target"] == "coordinator"
+    assert started["projectPath"] == str(workspace)
+    assert started["conversationKind"] == "goal_conversation"
+    assert started["coordinatorScope"] == "project"
+    assert started["projectBinding"] == {
+        "mode": "required",
+        "projectPath": str(workspace),
+        "status": "bound",
+    }
     # The background workflow seam is invoked with the validated inputs.
     deadline = time.time() + 5
     while not calls and time.time() < deadline:
@@ -165,6 +173,14 @@ def test_dashboard_cluster_targets_and_run(tmp_path, monkeypatch):
         assert started["started"] is True
         assert started["runId"].startswith("g-")
         assert started["target"] == "coordinator"
+        assert started["projectPath"] == str(workspace)
+        assert started["conversationKind"] == "goal_conversation"
+        assert started["coordinatorScope"] == "project"
+        assert started["projectBinding"] == {
+            "mode": "required",
+            "projectPath": str(workspace),
+            "status": "bound",
+        }
         deadline = time.time() + 5
         while time.time() < deadline and not calls:
             time.sleep(0.02)

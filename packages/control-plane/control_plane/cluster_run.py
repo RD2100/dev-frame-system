@@ -490,6 +490,7 @@ def start_cluster_run(
     )
 
     if classify_goal(text) == GOAL_KIND_CONVERSATION:
+        conversation_kind = "global_coordinator" if tid == "coordinator" else "native_chat"
         reply = coordinator_conversation_reply(text)
         record = {
             "runId": run_id,
@@ -511,7 +512,15 @@ def start_cluster_run(
             "runId": run_id,
             "target": tid,
             "goal": text,
+            "projectPath": path,
             "kind": "conversation",
+            "conversationKind": conversation_kind,
+            "coordinatorScope": "global" if conversation_kind == "global_coordinator" else "none",
+            "projectBinding": {
+                "mode": "optional" if conversation_kind == "global_coordinator" else "none",
+                "projectPath": path,
+                "status": "bound",
+            },
             "answer": reply,
         }
     # Resolve the methodology (built-in @trigger or a user-created custom skill)
@@ -558,4 +567,17 @@ def start_cluster_run(
         daemon=True,
     )
     thread.start()
-    return {"started": True, "runId": run_id, "target": tid, "goal": text}
+    return {
+        "started": True,
+        "runId": run_id,
+        "target": tid,
+        "goal": text,
+        "projectPath": path,
+        "conversationKind": "goal_conversation",
+        "coordinatorScope": "project",
+        "projectBinding": {
+            "mode": "required",
+            "projectPath": path,
+            "status": "bound",
+        },
+    }
