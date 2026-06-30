@@ -3414,14 +3414,16 @@ def _run_details_section(runs: list[dict[str, Any]], decisions: list[dict[str, A
         f"<h3>{_h(run.get('run_id', ''))}</h3>"
         f'{_run_lifecycle_strip(run, lang)}'
         '<dl class="path-list">'
+        f"{_run_decision_details(decisions_by_run.get(str(run.get('run_id') or '')), lang)}"
+        "</dl>"
+        f"<p class=\"command\"><span>{_h(dashboard_t('next_command', lang))}</span><code>{_h(run.get('next_command', '')) or dashboard_t('resolve_gate', lang)}</code></p>"
+        '<dl class="path-list">'
         f"<dt>{_h(dashboard_t('taskspec', lang))}</dt><dd><code>{_h(run.get('taskspec_path', '')) or dashboard_t('missing', lang)}</code></dd>"
         f"<dt>{_h(dashboard_t('taskspec_json', lang))}</dt><dd><code>{_h(run.get('taskspec_json_path', '')) or dashboard_t('missing', lang)}</code></dd>"
         f"<dt>{_h(dashboard_t('task_input', lang))}</dt><dd><code>{_h(run.get('task_input_path', '')) or dashboard_t('missing', lang)}</code></dd>"
         f"<dt>{_h(dashboard_t('execution_report', lang))}</dt><dd><code>{_h(run.get('report_path', '')) or dashboard_t('missing', lang)}</code></dd>"
         f"<dt>{_h(dashboard_t('packet', lang))}</dt><dd><code>{_h(run.get('packet_path', '')) or dashboard_t('missing', lang)}</code></dd>"
-        f"{_run_decision_details(decisions_by_run.get(str(run.get('run_id') or '')), lang)}"
         "</dl>"
-        f"<p class=\"command\"><span>{_h(dashboard_t('next_command', lang))}</span><code>{_h(run.get('next_command', '')) or dashboard_t('resolve_gate', lang)}</code></p>"
         "</article>"
         for run in runs
     )
