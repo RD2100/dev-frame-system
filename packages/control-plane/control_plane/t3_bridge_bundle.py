@@ -20,6 +20,7 @@ BRIDGE_LOCAL_CONFIG_RELATIVE_PATH = "devframe.local.json"
 BRIDGE_ENV_RELATIVE_PATH = ".env.devframe.local"
 BRIDGE_T3_WEB_LAUNCHER_RELATIVE_PATH = "devframe.t3web.mjs"
 BRIDGE_T3_DESKTOP_LAUNCHER_RELATIVE_PATH = "devframe.t3desktop.mjs"
+BRIDGE_T3_DESKTOP_PROD_LAUNCHER_RELATIVE_PATH = "devframe.t3desktop.prod.mjs"
 
 
 def build_t3_bridge_bundle(plan: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -46,12 +47,27 @@ def build_t3_bridge_bundle(plan: dict[str, Any] | None = None) -> dict[str, Any]
         "launch": {
             "devframe": client_plan["launch"],
             "t3DesktopCommand": "pnpm dev:desktop",
+            "t3DesktopProdCommand": f"node {BRIDGE_T3_DESKTOP_PROD_LAUNCHER_RELATIVE_PATH}",
             "t3WebCommand": f"node {BRIDGE_T3_WEB_LAUNCHER_RELATIVE_PATH}",
         },
+        # NOTE: VITE_DEVFRAME_T3_SHELL_URL is intentionally NOT injected here.
+        #
+        # That variable is the single switch that puts RD-Code into the
+        # DevFrame read-only bridge mode: when present, the generated
+        # catalog/shell/threads sources replace the native writable environment
+        # with a synthetic read-only `devframe-local` view, and the provider,
+        # source-control, and archive settings render read-only bridge notices.
+        # In that mode the editor cannot add local project folders, configure
+        # provider/API-key driven LLM backends, or edit projects.
+        #
+        # RD-Code is meant to be a fully usable native editor, so the bridge
+        # overlay stays off by default and DevFrame's read model is surfaced
+        # through the dashboard and MCP orchestration surface instead. The
+        # DevFrame shell/team contract source is still generated for the
+        # dashboard and future, explicitly opt-in re-integration.
         "environment": {
             "VITE_DEVFRAME_REALTIME_MODE": "polling",
             "VITE_DEVFRAME_CLIENT_PLAN_URL": endpoints["clientPlan"],
-            "VITE_DEVFRAME_T3_SHELL_URL": endpoints["t3Shell"],
             "VITE_DEVFRAME_CLIENT_MANIFEST_URL": endpoints["manifest"],
             "VITE_HOSTED_APP_CHANNEL": "nightly",
         },
@@ -93,21 +109,27 @@ def build_t3_bridge_bundle(plan: dict[str, Any] | None = None) -> dict[str, Any]
                 "status": "ready",
             },
             {
+                "path": BRIDGE_T3_DESKTOP_PROD_LAUNCHER_RELATIVE_PATH,
+                "action": "add",
+                "role": "Production launcher that runs the prebuilt T3 Desktop (no Vite dev server or file watchers) for fast startup and low memory; builds once if no build is present.",
+                "status": "ready",
+            },
+            {
                 "path": BRIDGE_CATALOG_RELATIVE_PATH,
                 "action": "patch",
-                "role": "Registers DevFrame as a read-only T3 primary environment when the bridge is enabled.",
+                "role": "Falls back to T3's native writable environment catalog by default; only registers the read-only DevFrame environment when the (now opt-in) bridge shell URL is set.",
                 "status": "ready",
             },
             {
                 "path": BRIDGE_SHELL_STATE_RELATIVE_PATH,
                 "action": "patch",
-                "role": "Switch T3's shell state to DevFrame's read-only shell endpoint when VITE_DEVFRAME_T3_SHELL_URL is set.",
+                "role": "Uses T3's native shell state by default; switches to DevFrame's read-only shell endpoint only when VITE_DEVFRAME_T3_SHELL_URL is set.",
                 "status": "ready",
             },
             {
                 "path": BRIDGE_THREAD_STATE_RELATIVE_PATH,
                 "action": "patch",
-                "role": "Switch T3's thread detail state to DevFrame's read-only threadDetails projection.",
+                "role": "Uses T3's native thread detail state by default; switches to DevFrame's read-only threadDetails projection only when the bridge shell URL is set.",
                 "status": "ready",
             },
         ],
@@ -123,9 +145,9 @@ def build_t3_bridge_bundle(plan: dict[str, Any] | None = None) -> dict[str, Any]
             "t3Desktop": f"node {BRIDGE_T3_DESKTOP_LAUNCHER_RELATIVE_PATH}",
             "t3Web": f"node {BRIDGE_T3_WEB_LAUNCHER_RELATIVE_PATH}",
             "expected": [
-                "T3 Code reads DevFrame projects and threads from /t3-shell.json.",
+                "T3 Code (RD-Code) launches as a fully usable native editor: add local project folders, configure provider/API-key LLM backends, and edit projects.",
                 "OpenCode remains the executor surfaced by DevFrame sessions.",
-                "No write or browser-profile access is enabled without a future human-gated adapter.",
+                "DevFrame read model and orchestration are reached through the dashboard and MCP surface; the in-editor read-only overlay stays off unless VITE_DEVFRAME_T3_SHELL_URL is explicitly set.",
             ],
         },
     }
@@ -141,7 +163,7 @@ def render_t3_bridge_bundle_text(bundle: dict[str, Any]) -> str:
         "DevFrame T3 Code bridge bundle",
         f"name        : {bundle['name']}",
         f"client      : {bundle['target']['client']} ({bundle['target']['license']})",
-        f"shell       : {env['VITE_DEVFRAME_T3_SHELL_URL']}",
+        f"mode        : native editor (DevFrame read-only overlay off by default)",
         f"manifest    : {env['VITE_DEVFRAME_CLIENT_MANIFEST_URL']}",
         f"client plan : {env['VITE_DEVFRAME_CLIENT_PLAN_URL']}",
         f"strategy    : {bundle['integration']['strategy']}",
@@ -357,8 +379,11 @@ endpoint, so the T3 client runs in polling mode using HTTP snapshots only.
 
 - realtime mode: `{env["VITE_DEVFRAME_REALTIME_MODE"]}`
 - client plan: `{env["VITE_DEVFRAME_CLIENT_PLAN_URL"]}`
-- T3 shell: `{env["VITE_DEVFRAME_T3_SHELL_URL"]}`
 - manifest: `{env["VITE_DEVFRAME_CLIENT_MANIFEST_URL"]}`
+
+> The read-only DevFrame shell overlay is off by default. RD-Code runs as a
+> fully native editor. To opt into the legacy read-only bridge view, set
+> `VITE_DEVFRAME_T3_SHELL_URL` to the DevFrame `/t3-shell.json` endpoint.
 
 ## Launch
 
@@ -508,7 +533,7 @@ const args = ["--filter", "@t3tools/web", "dev"];
 const childEnv = {{ ...process.env, ...devframeEnv }};
 
 console.log("[devframe] Starting T3 Web with DevFrame local control plane.");
-console.log(`[devframe] VITE_DEVFRAME_T3_SHELL_URL=${{devframeEnv.VITE_DEVFRAME_T3_SHELL_URL}}`);
+console.log(`[devframe] DevFrame env applied (native editor mode; client plan ${{devframeEnv.VITE_DEVFRAME_CLIENT_PLAN_URL}}).`);
 
 const child = spawn(command, args, {{
   cwd: root,
@@ -654,7 +679,7 @@ if (!devElectronContent.includes(devElectronMarker)) {{
 }}
 
 console.log("[devframe] Starting T3 Desktop with DevFrame local control plane.");
-console.log(`[devframe] VITE_DEVFRAME_T3_SHELL_URL=${{devframeEnv.VITE_DEVFRAME_T3_SHELL_URL}}`);
+console.log(`[devframe] DevFrame env applied (native editor mode; client plan ${{devframeEnv.VITE_DEVFRAME_CLIENT_PLAN_URL}}).`);
 
 const child = spawn(command, args, {{
   cwd: root,
@@ -675,6 +700,97 @@ child.on("exit", (code, signal) => {{
   }}
   process.exit(code ?? 1);
 }});
+"""
+
+
+def render_t3_desktop_prod_launcher_source(bundle: dict[str, Any]) -> str:
+    """Production launcher: run the prebuilt T3 Desktop (no Vite dev server).
+
+    Dev mode (`pnpm dev:desktop`) keeps a Vite dev server plus file watchers
+    resident and recompiles the renderer on every launch, which is the root
+    cause of slow startup and high memory use for day-to-day product use. This
+    launcher instead runs the production build:
+
+    - If no build is present (or ``--build`` / ``DEVFRAME_T3_FORCE_BUILD=1`` is
+      set) it runs ``pnpm build:desktop`` once with the DevFrame Vite variables
+      set, so the client-plan/manifest URLs are inlined into the built bundle.
+    - It then runs ``pnpm start:desktop``, which launches Electron against the
+      built renderer with no dev server and no watchers.
+    """
+    env = bundle["environment"]
+    # The production renderer connects to the desktop's own spawned local
+    # server. VITE_HOSTED_APP_CHANNEL must NOT be baked into the desktop build:
+    # `isHostedStaticApp()` treats any configured hosted channel as "this is the
+    # hosted browser app" and short-circuits into the read-only onboarding
+    # surface ("Connect an environment to get started"), which hides local
+    # projects and the native editor. In dev that var is harmless because the
+    # dev server injects VITE_HTTP_URL (a configured backend) which takes
+    # precedence; the production build has no such backend URL, so the channel
+    # would otherwise force hosted-static mode.
+    prod_env = {k: v for k, v in env.items() if k != "VITE_HOSTED_APP_CHANNEL"}
+    # Give the desktop client a distinct RD-Code Windows AppUserModelID. Windows
+    # caches the taskbar icon per AppUserModelID, so the upstream default keeps
+    # resurrecting the old T3 taskbar icon from cache even after the icon assets
+    # are replaced. A separate RD-Code identity makes the OS use the current
+    # window icon (apps/desktop/resources/icon.ico). Read at runtime via the
+    # T3CODE_DESKTOP_APP_USER_MODEL_ID override, so no rebuild is required. This
+    # is injected only into the generated launcher (not the schema-validated
+    # bundle environment).
+    prod_env["T3CODE_DESKTOP_APP_USER_MODEL_ID"] = "com.rdcode.client"
+    env_json = json.dumps(prod_env, indent=2, ensure_ascii=True)
+    return f"""#!/usr/bin/env node
+import {{ spawn }} from "node:child_process";
+import {{ fileURLToPath }} from "node:url";
+import {{ dirname, join }} from "node:path";
+import {{ existsSync }} from "node:fs";
+
+const devframeEnv = {env_json};
+const root = dirname(fileURLToPath(import.meta.url));
+const isWindows = process.platform === "win32";
+// DevFrame Vite variables must be present at BUILD time because Vite inlines
+// `import.meta.env.VITE_*` into the production bundle.
+const childEnv = {{ ...process.env, ...devframeEnv }};
+
+const builtRenderer = join(root, "apps", "web", "dist", "index.html");
+const builtMain = join(root, "apps", "desktop", "dist-electron", "main.cjs");
+
+function run(args) {{
+  return new Promise((resolve, reject) => {{
+    const child = spawn("pnpm", args, {{
+      cwd: root,
+      env: childEnv,
+      stdio: "inherit",
+      shell: isWindows,
+    }});
+    child.on("error", reject);
+    child.on("exit", (code, signal) => {{
+      if (signal) {{
+        process.kill(process.pid, signal);
+        return;
+      }}
+      resolve(code ?? 0);
+    }});
+  }});
+}}
+
+const forceBuild =
+  process.argv.includes("--build") || process.env.DEVFRAME_T3_FORCE_BUILD === "1";
+const needsBuild = forceBuild || !existsSync(builtRenderer) || !existsSync(builtMain);
+
+if (needsBuild) {{
+  console.log("[devframe] Building T3 Desktop (production). This is a one-time step and can take a few minutes.");
+  const buildCode = await run(["build:desktop"]);
+  if (buildCode !== 0) {{
+    console.error(`[devframe] Production build failed with exit code ${{buildCode}}.`);
+    process.exit(buildCode);
+  }}
+}}
+
+console.log("[devframe] Starting T3 Desktop (production build; no dev server, low memory).");
+console.log(`[devframe] DevFrame env baked at build time (client plan ${{devframeEnv.VITE_DEVFRAME_CLIENT_PLAN_URL}}).`);
+
+const startCode = await run(["start:desktop"]);
+process.exit(startCode);
 """
 
 
@@ -995,6 +1111,7 @@ def _write_bridge_files(root: Path, bundle: dict[str, Any], *, require_t3_root: 
         BRIDGE_ENV_RELATIVE_PATH: _render_env_file(bundle),
         BRIDGE_T3_WEB_LAUNCHER_RELATIVE_PATH: render_t3_web_launcher_source(bundle),
         BRIDGE_T3_DESKTOP_LAUNCHER_RELATIVE_PATH: render_t3_desktop_launcher_source(bundle),
+        BRIDGE_T3_DESKTOP_PROD_LAUNCHER_RELATIVE_PATH: render_t3_desktop_prod_launcher_source(bundle),
     }
     if require_t3_root and not force:
         existing = [root / relative_path for relative_path in files if (root / relative_path).exists()]

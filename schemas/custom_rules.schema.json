@@ -1,0 +1,33 @@
+{
+  "title": "Custom Governance Rules",
+  "description": "User-created/customized governance rules as machine-readable records. Stored at <runtime>/rules.json and editable from RD-Code. Built-in rules under rules/*.md are parsed read-only; custom rules extend or override them by id.",
+  "type": "object",
+  "required": ["version", "rules"],
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "rules": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/custom_rule" },
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "custom_rule": {
+      "type": "object",
+      "required": ["id", "priority", "rule"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "title": { "type": "string" },
+        "priority": { "type": "string", "enum": ["P0", "P1", "P2", "P3", "P4"] },
+        "trigger": { "type": "string" },
+        "scope": { "type": "string" },
+        "rule": { "type": "string", "minLength": 1 },
+        "verification": { "type": "string" },
+        "domain": { "type": "string" },
+        "enabled": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -23,7 +23,7 @@ setup(
         ],
     },
     install_requires=["pyyaml>=6.0", "jsonschema>=4.0"],
-    extras_require={"dev": ["pytest>=7.0"]},
+    extras_require={"dev": ["pytest>=7.0", "hypothesis>=6.0"]},
     entry_points={
         "console_scripts": [
             "devframe=control_plane.cli:main",

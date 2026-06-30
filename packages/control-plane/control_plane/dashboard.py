@@ -270,6 +270,126 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     json.dumps({"sessions": public_session_summaries(web_ai_sessions)}, indent=2, ensure_ascii=True),
                 )
                 return
+            if path == "/api/mcp/connections":
+                if not _client_is_loopback(self.client_address[0]):
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", json.dumps({"error": "loopback_required"}, ensure_ascii=True))
+                    return
+                from . import mcp_consent
+                body = json.dumps({"connections": mcp_consent.list_connections()}, indent=2, ensure_ascii=True)
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
+                return
+            if path == "/api/t3/cluster-targets":
+                from .cluster_control import list_cluster_targets
+                project_id = ""
+                query = parse_qs(parsed_url.query or "")
+                if query.get("project"):
+                    project_id = str(query["project"][0]).strip()
+                targets = list_cluster_targets(runtime_dir, project_id)
+                body = json.dumps({"projectId": project_id, "targets": targets}, indent=2, ensure_ascii=True)
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
+                return
+            if path == "/api/t3/cluster-runs":
+                from .cluster_run import list_cluster_runs
+
+                runs = list_cluster_runs(runtime_dir)
+                body = json.dumps({"runs": runs}, indent=2, ensure_ascii=True)
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
+                return
+            if path == "/api/t3/cluster-roster":
+                query = parse_qs(parsed_url.query or "")
+                project_id = str(query["project"][0]).strip() if query.get("project") else ""
+                view = _customization_layered_view(
+                    "cluster-roster", runtime_dir, project_id or None
+                )
+                # Legacy keys (current editor reads `agents`/`source`); the
+                # canonical layered view lives in builtin/global/project/effective.
+                view["agents"] = view["global"]
+                view["source"] = "configured" if view["global"] else "default"
+                body = json.dumps(view, indent=2, ensure_ascii=True)
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
+                return
+            if path == "/api/t3/skills":
+                query = parse_qs(parsed_url.query or "")
+                project_id = str(query["project"][0]).strip() if query.get("project") else ""
+                view = _customization_layered_view(
+                    "skills", runtime_dir, project_id or None
+                )
+                view["custom"] = view["global"]  # legacy key
+                body = json.dumps(view, indent=2, ensure_ascii=True)
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
+                return
+            if path == "/api/t3/rules":
+                query = parse_qs(parsed_url.query or "")
+                project_id = str(query["project"][0]).strip() if query.get("project") else ""
+                view = _customization_layered_view(
+                    "rules", runtime_dir, project_id or None
+                )
+                view["custom"] = view["global"]  # legacy key
+                body = json.dumps(view, indent=2, ensure_ascii=True)
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
+                return
+            if path == "/api/t3/run-defaults":
+                from .run_defaults import resolve_view as _run_defaults_view
+
+                query = parse_qs(parsed_url.query or "")
+                project_id = str(query["project"][0]).strip() if query.get("project") else ""
+                body = json.dumps(
+                    _run_defaults_view(runtime_dir, project_id or None),
+                    indent=2,
+                    ensure_ascii=True,
+                )
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
+                return
+            if path == "/api/t3/memory":
+                from .memory_prefs import resolve_view as _memory_view
+
+                query = parse_qs(parsed_url.query or "")
+                project_id = str(query["project"][0]).strip() if query.get("project") else ""
+                body = json.dumps(
+                    _memory_view(runtime_dir, project_id or None),
+                    indent=2,
+                    ensure_ascii=True,
+                )
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
+                return
+            if path == "/api/t3/cluster-run-events":
+                from .cluster_run import ClusterRunError as _ClusterRunError, cluster_run_detail
+
+                query = parse_qs(parsed_url.query or "")
+                run_id = str(query["runId"][0]).strip() if query.get("runId") else ""
+                if not run_id:
+                    body = json.dumps({"error": "missing_run_id"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                try:
+                    detail = cluster_run_detail(runtime_dir, run_id)
+                except _ClusterRunError as exc:
+                    body = json.dumps({"error": "cluster_run_not_found", "detail": str(exc)}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.NOT_FOUND, "application/json; charset=utf-8", body)
+                    return
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", json.dumps(detail, indent=2, ensure_ascii=True))
+                return
+            if path == "/api/t3/cluster-run-agent":
+                from .cluster_run import (
+                    ClusterRunError as _ClusterRunError,
+                    cluster_run_agent_detail,
+                )
+
+                query = parse_qs(parsed_url.query or "")
+                run_id = str(query["runId"][0]).strip() if query.get("runId") else ""
+                agent_id = str(query["agentId"][0]).strip() if query.get("agentId") else ""
+                if not run_id or not agent_id:
+                    body = json.dumps({"error": "missing_run_or_agent_id"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                try:
+                    detail = cluster_run_agent_detail(runtime_dir, run_id, agent_id)
+                except _ClusterRunError as exc:
+                    body = json.dumps({"error": "cluster_run_agent_not_found", "detail": str(exc)}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.NOT_FOUND, "application/json; charset=utf-8", body)
+                    return
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", json.dumps(detail, indent=2, ensure_ascii=True))
+                return
             if path == "/healthz":
                 self._send_text(HTTPStatus.OK, "text/plain; charset=utf-8", "ok\n")
                 return
@@ -387,6 +507,54 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     body = json.dumps({"error": "missing_or_invalid_params", "required": ["requestId", "threadId", "decision"]}, indent=2, ensure_ascii=True)
                     self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
                     return
+                if request_id.startswith("wb-"):
+                    from .writeback import WritebackError, resolve_writeback_proposal
+
+                    try:
+                        wb = resolve_writeback_proposal(runtime_dir, request_id, decision, expected_thread_id=thread_id)
+                    except WritebackError as exc:
+                        body = json.dumps({
+                            "responded": False,
+                            "error": "writeback_rejected",
+                            "detail": str(exc),
+                            "requestId": request_id,
+                        }, indent=2, ensure_ascii=True)
+                        self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                        return
+                    result = {
+                        "responded": True,
+                        "decision": decision,
+                        "requestId": request_id,
+                        "threadId": thread_id,
+                        "executed": bool(wb.get("applied")),
+                        **wb,
+                    }
+                    self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", json.dumps(result, indent=2, ensure_ascii=True))
+                    return
+                if request_id.startswith("tk-"):
+                    from .task_proposals import TaskProposalError, resolve_task_proposal
+
+                    try:
+                        tk = resolve_task_proposal(runtime_dir, request_id, decision)
+                    except TaskProposalError as exc:
+                        body = json.dumps({
+                            "responded": False,
+                            "error": "task_proposal_rejected",
+                            "detail": str(exc),
+                            "requestId": request_id,
+                        }, indent=2, ensure_ascii=True)
+                        self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                        return
+                    result = {
+                        "responded": True,
+                        "decision": decision,
+                        "requestId": request_id,
+                        "threadId": thread_id,
+                        "executed": False,
+                        **tk,
+                    }
+                    self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", json.dumps(result, indent=2, ensure_ascii=True))
+                    return
                 action_id = _resolve_approval_action_id(runtime_dir, paper_project_dirs, request_id)
                 if not action_id:
                     body = json.dumps({"error": "request_id_not_resolved", "requestId": request_id}, indent=2, ensure_ascii=True)
@@ -428,6 +596,481 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                 result["requestId"] = request_id
                 body = json.dumps(result, indent=2, ensure_ascii=True)
                 self._send_text(HTTPStatus.ACCEPTED, "application/json; charset=utf-8", body)
+                return
+            if parsed_url.path == "/api/t3/writeback-propose":
+                if not _client_is_loopback(self.client_address[0]):
+                    body = json.dumps({"error": "loopback_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                if not _loopback_origin_allowed(self):
+                    body = json.dumps({"error": "loopback_origin_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                raw_body = self._read_body()
+                try:
+                    payload = json.loads(raw_body) if raw_body else {}
+                except json.JSONDecodeError:
+                    body = json.dumps({"error": "invalid_json_body"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                relative_path = str(payload.get("relativePath") or "").strip()
+                contents = payload.get("contents")
+                project_id = str(payload.get("projectId") or "").strip()
+                thread_id = str(payload.get("threadId") or "").strip()
+                if not relative_path or not isinstance(contents, str):
+                    body = json.dumps({"error": "missing_or_invalid_params", "required": ["relativePath", "contents"]}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                workspace_root = _resolve_writeback_workspace_root(runtime_dir, paper_project_dirs, project_id)
+                if not workspace_root:
+                    body = json.dumps({"error": "unknown_project", "projectId": project_id}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.NOT_FOUND, "application/json; charset=utf-8", body)
+                    return
+                from .writeback import WritebackError, stage_writeback_proposal
+
+                try:
+                    staged = stage_writeback_proposal(
+                        runtime_dir,
+                        workspace_root,
+                        relative_path,
+                        contents,
+                        thread_id=thread_id,
+                        project_id=project_id,
+                    )
+                except WritebackError as exc:
+                    body = json.dumps({"error": "writeback_rejected", "detail": str(exc)}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                body = json.dumps({
+                    "staged": True,
+                    "requestId": staged["request_id"],
+                    "preview": staged["preview"],
+                    "humanGate": "POST /api/t3/approval-response with this requestId and decision=approve to apply.",
+                }, indent=2, ensure_ascii=True)
+                self._send_text(HTTPStatus.ACCEPTED, "application/json; charset=utf-8", body)
+                return
+            if parsed_url.path == "/api/t3/cluster-run":
+                if not _client_is_loopback(self.client_address[0]):
+                    body = json.dumps({"error": "loopback_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                if not _loopback_origin_allowed(self):
+                    body = json.dumps({"error": "loopback_origin_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                raw_body = self._read_body()
+                try:
+                    payload = json.loads(raw_body) if raw_body else {}
+                except json.JSONDecodeError:
+                    body = json.dumps({"error": "invalid_json_body"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                project_id = str(payload.get("projectId") or "").strip()
+                target = str(payload.get("target") or "").strip()
+                goal = str(payload.get("goal") or "").strip()
+                proposed_by = str(payload.get("proposedBy") or "rd-code-editor").strip()
+                if not project_id or not target or not goal:
+                    body = json.dumps({"error": "missing_or_invalid_params", "required": ["projectId", "target", "goal"]}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                from .cluster_run import ClusterRunError, start_cluster_run
+
+                try:
+                    started = start_cluster_run(
+                        runtime_dir,
+                        project_id,
+                        target,
+                        goal,
+                        proposed_by=proposed_by,
+                    )
+                except ClusterRunError as exc:
+                    body = json.dumps({"error": "cluster_run_rejected", "detail": str(exc)}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                except Exception as exc:  # noqa: BLE001 - never reset the connection; return a readable error
+                    body = json.dumps({"error": "cluster_run_failed", "detail": str(exc)}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.INTERNAL_SERVER_ERROR, "application/json; charset=utf-8", body)
+                    return
+                body = json.dumps({
+                    "started": True,
+                    "runId": started.get("runId"),
+                    "target": started.get("target"),
+                    "goal": started.get("goal"),
+                    **({"kind": started["kind"]} if started.get("kind") else {}),
+                    **({"answer": started["answer"]} if started.get("answer") else {}),
+                    "note": "Coordinator run started. Progress streams into the conversation; the dashboard only monitors.",
+                }, indent=2, ensure_ascii=True)
+                self._send_text(HTTPStatus.ACCEPTED, "application/json; charset=utf-8", body)
+                return
+            if parsed_url.path in (
+                "/api/t3/cluster-roster",
+                "/api/t3/skills",
+                "/api/t3/rules",
+            ):
+                if not _client_is_loopback(self.client_address[0]):
+                    body = json.dumps({"error": "loopback_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                if not _loopback_origin_allowed(self):
+                    body = json.dumps({"error": "loopback_origin_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                raw_body = self._read_body()
+                try:
+                    payload = json.loads(raw_body) if raw_body else {}
+                except json.JSONDecodeError:
+                    body = json.dumps({"error": "invalid_json_body"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                if not isinstance(payload, dict):
+                    body = json.dumps({"error": "invalid_payload"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+
+                from .scope_resolver import Scope
+
+                category = parsed_url.path.rsplit("/", 1)[-1]
+
+                # Scope defaults to global for backwards compatibility.
+                scope_raw = str(payload.get("scope") or "global").strip().lower()
+                if scope_raw not in ("global", "project"):
+                    body = json.dumps(
+                        {"error": "invalid_scope", "detail": "scope must be 'global' or 'project'"},
+                        indent=2,
+                        ensure_ascii=True,
+                    )
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                scope = Scope.GLOBAL if scope_raw == "global" else Scope.PROJECT
+
+                project_id = str(payload.get("project") or "").strip()
+                if scope == Scope.PROJECT and not project_id:
+                    body = json.dumps(
+                        {"error": "project_required", "detail": "project scope requires a project id"},
+                        indent=2,
+                        ensure_ascii=True,
+                    )
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+
+                # Accept the unified `items` key, falling back to the legacy
+                # per-category key. A list (possibly empty, to clear) is required;
+                # anything else is an invalid payload and writes nothing.
+                items = payload.get("items")
+                if items is None:
+                    items = payload.get(_CUSTOMIZATION_ITEM_KEYS[category])
+                if not isinstance(items, list):
+                    body = json.dumps(
+                        {"error": "invalid_payload", "detail": "items must be a list"},
+                        indent=2,
+                        ensure_ascii=True,
+                    )
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+
+                from .cluster_control import ClusterControlError
+                from .custom_skills import CustomSkillError
+                from .rules_config import CustomRuleError
+
+                try:
+                    _customization_save_scoped(
+                        category, runtime_dir, scope, project_id or None, items
+                    )
+                except (ClusterControlError, CustomSkillError, CustomRuleError) as exc:
+                    body = json.dumps(
+                        {"error": f"{category}_rejected", "detail": str(exc)},
+                        indent=2,
+                        ensure_ascii=True,
+                    )
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                except Exception as exc:  # noqa: BLE001 - readable error, never reset
+                    body = json.dumps(
+                        {"error": f"{category}_failed", "detail": str(exc)},
+                        indent=2,
+                        ensure_ascii=True,
+                    )
+                    self._send_text(HTTPStatus.INTERNAL_SERVER_ERROR, "application/json; charset=utf-8", body)
+                    return
+
+                view = _customization_layered_view(category, runtime_dir, project_id or None)
+                if category == "cluster-roster":
+                    view["agents"] = view["global"]
+                    view["source"] = "configured" if view["global"] else "default"
+                else:
+                    view["custom"] = view["global"]
+                body = json.dumps({"saved": True, **view}, indent=2, ensure_ascii=True)
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
+                return
+            if parsed_url.path == "/api/t3/run-defaults":
+                if not _client_is_loopback(self.client_address[0]):
+                    body = json.dumps({"error": "loopback_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                if not _loopback_origin_allowed(self):
+                    body = json.dumps({"error": "loopback_origin_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                raw_body = self._read_body()
+                try:
+                    payload = json.loads(raw_body) if raw_body else {}
+                except json.JSONDecodeError:
+                    body = json.dumps({"error": "invalid_json_body"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                if not isinstance(payload, dict):
+                    body = json.dumps({"error": "invalid_payload"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+
+                from .scope_resolver import Scope
+                from .run_defaults import RunDefaultsError, resolve_view as _run_defaults_view, save_at as _save_run_defaults
+
+                scope_raw = str(payload.get("scope") or "global").strip().lower()
+                if scope_raw not in ("global", "project"):
+                    body = json.dumps({"error": "invalid_scope"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                scope = Scope.GLOBAL if scope_raw == "global" else Scope.PROJECT
+                project_id = str(payload.get("project") or "").strip()
+                if scope == Scope.PROJECT and not project_id:
+                    body = json.dumps({"error": "project_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+
+                defaults = payload.get("defaults")
+                if not isinstance(defaults, dict):
+                    defaults = {
+                        k: payload[k]
+                        for k in ("agents", "model", "methodology")
+                        if k in payload
+                    }
+                try:
+                    _save_run_defaults(runtime_dir, scope, project_id or None, defaults)
+                except RunDefaultsError as exc:
+                    body = json.dumps({"error": "run_defaults_rejected", "detail": str(exc)}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                except Exception as exc:  # noqa: BLE001 - readable error, never reset
+                    body = json.dumps({"error": "run_defaults_failed", "detail": str(exc)}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.INTERNAL_SERVER_ERROR, "application/json; charset=utf-8", body)
+                    return
+                body = json.dumps(
+                    {"saved": True, **_run_defaults_view(runtime_dir, project_id or None)},
+                    indent=2,
+                    ensure_ascii=True,
+                )
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
+                return
+            if parsed_url.path == "/api/t3/memory":
+                if not _client_is_loopback(self.client_address[0]):
+                    body = json.dumps({"error": "loopback_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                if not _loopback_origin_allowed(self):
+                    body = json.dumps({"error": "loopback_origin_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                raw_body = self._read_body()
+                try:
+                    payload = json.loads(raw_body) if raw_body else {}
+                except json.JSONDecodeError:
+                    body = json.dumps({"error": "invalid_json_body"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                if not isinstance(payload, dict):
+                    body = json.dumps({"error": "invalid_payload"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+
+                from .memory_prefs import (
+                    MemoryPrefsError,
+                    resolve_view as _memory_view,
+                    save_memory,
+                    save_preferences,
+                )
+
+                # The memory category has two distinct layers; `scope` selects
+                # which one is written: global preferences vs project memory.
+                scope_raw = str(payload.get("scope") or "global").strip().lower()
+                if scope_raw not in ("global", "project"):
+                    body = json.dumps({"error": "invalid_scope"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                project_id = str(payload.get("project") or "").strip()
+
+                # Accept `items`, falling back to the layer-specific key.
+                items = payload.get("items")
+                if items is None:
+                    items = payload.get("preferences" if scope_raw == "global" else "memory")
+                if not isinstance(items, list):
+                    body = json.dumps({"error": "invalid_payload", "detail": "items must be a list"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                if scope_raw == "project" and not project_id:
+                    body = json.dumps({"error": "project_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+
+                try:
+                    if scope_raw == "global":
+                        save_preferences(runtime_dir, items)
+                    else:
+                        save_memory(runtime_dir, project_id, items)
+                except MemoryPrefsError as exc:
+                    body = json.dumps({"error": "memory_rejected", "detail": str(exc)}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                except Exception as exc:  # noqa: BLE001 - readable error, never reset
+                    body = json.dumps({"error": "memory_failed", "detail": str(exc)}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.INTERNAL_SERVER_ERROR, "application/json; charset=utf-8", body)
+                    return
+                body = json.dumps(
+                    {"saved": True, **_memory_view(runtime_dir, project_id or None)},
+                    indent=2,
+                    ensure_ascii=True,
+                )
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
+                return
+            if parsed_url.path in ("/api/t3/cluster-run-delete", "/api/t3/cluster-run-rename"):
+                if not _client_is_loopback(self.client_address[0]):
+                    body = json.dumps({"error": "loopback_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                if not _loopback_origin_allowed(self):
+                    body = json.dumps({"error": "loopback_origin_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                raw_body = self._read_body()
+                try:
+                    payload = json.loads(raw_body) if raw_body else {}
+                except json.JSONDecodeError:
+                    body = json.dumps({"error": "invalid_json_body"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                if not isinstance(payload, dict):
+                    body = json.dumps({"error": "invalid_payload"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+
+                from .cluster_run import (
+                    ClusterRunError as _ClusterRunError,
+                    delete_cluster_run,
+                    rename_cluster_run,
+                )
+
+                run_id = str(payload.get("runId") or "").strip()
+                try:
+                    if parsed_url.path == "/api/t3/cluster-run-delete":
+                        removed = delete_cluster_run(runtime_dir, run_id)
+                        result = {"deleted": removed, "runId": run_id}
+                    else:
+                        record = rename_cluster_run(runtime_dir, run_id, payload.get("goal"))
+                        result = {
+                            "renamed": True,
+                            "runId": record.get("runId"),
+                            "goal": record.get("goal"),
+                        }
+                except _ClusterRunError as exc:
+                    body = json.dumps({"error": "cluster_run_rejected", "detail": str(exc)}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                except Exception as exc:  # noqa: BLE001 - readable error, never reset
+                    body = json.dumps({"error": "cluster_run_failed", "detail": str(exc)}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.INTERNAL_SERVER_ERROR, "application/json; charset=utf-8", body)
+                    return
+                body = json.dumps({"ok": True, **result}, indent=2, ensure_ascii=True)
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
+                return
+            if parsed_url.path == "/api/mcp/connections/decide":
+                if not _client_is_loopback(self.client_address[0]):
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", json.dumps({"error": "loopback_required"}, ensure_ascii=True))
+                    return
+                if not _loopback_origin_allowed(self):
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", json.dumps({"error": "loopback_origin_required"}, ensure_ascii=True))
+                    return
+                raw_body = self._read_body()
+                try:
+                    payload = json.loads(raw_body) if raw_body else {}
+                except json.JSONDecodeError:
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", json.dumps({"error": "invalid_json_body"}, ensure_ascii=True))
+                    return
+                connection_id = str(payload.get("connectionId") or "").strip()
+                decision = str(payload.get("decision") or "").strip()
+                from . import mcp_consent
+                try:
+                    conn = mcp_consent.decide(connection_id, decision, runtime_dir=runtime_dir)
+                except mcp_consent.ConsentError as exc:
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", json.dumps({"error": "consent_error", "detail": str(exc)}, ensure_ascii=True))
+                    return
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", json.dumps({"decided": True, "connection": conn}, indent=2, ensure_ascii=True))
+                return
+            if parsed_url.path == "/mcp":
+                if not _client_is_loopback(self.client_address[0]):
+                    body = json.dumps({"error": "loopback_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                from .mcp_server import handle_mcp_jsonrpc, resolve_mcp_token
+
+                configured_token = resolve_mcp_token(runtime_dir)
+                if configured_token is not None:
+                    query = parse_qs(parsed_url.query)
+                    provided = query.get("token", [""])[0] if query.get("token") else ""
+                    if not provided:
+                        auth_header = str(self.headers.get("Authorization") or "")
+                        if auth_header.lower().startswith("bearer "):
+                            provided = auth_header[7:].strip()
+                    if provided != configured_token:
+                        self._send_text(
+                            HTTPStatus.UNAUTHORIZED,
+                            "application/json; charset=utf-8",
+                            json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32001, "message": "unauthorized"}}, ensure_ascii=True),
+                        )
+                        return
+                raw_body = self._read_body()
+                try:
+                    payload = json.loads(raw_body) if raw_body else {}
+                except json.JSONDecodeError:
+                    self._send_text(
+                        HTTPStatus.BAD_REQUEST,
+                        "application/json; charset=utf-8",
+                        json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}}, ensure_ascii=True),
+                    )
+                    return
+                address, actual_port = self.server.server_address
+                request_session_id = self.headers.get("MCP-Session-Id") or self.headers.get("Mcp-Session-Id")
+                response, extra_headers = handle_mcp_jsonrpc(
+                    payload,
+                    runtime_dir=runtime_dir,
+                    paper_project_dirs=paper_project_dirs,
+                    base_url=f"http://{address}:{actual_port}",
+                    session_id=request_session_id,
+                )
+                if response is None:
+                    self.send_response(HTTPStatus.ACCEPTED)
+                    for header_name, header_value in extra_headers.items():
+                        self.send_header(header_name, header_value)
+                    self.send_header("Content-Length", "0")
+                    self.send_header("Cache-Control", "no-store")
+                    self._send_cors_headers()
+                    self.end_headers()
+                    return
+                wants_sse = "text/event-stream" in str(self.headers.get("Accept") or "").lower()
+                if wants_sse:
+                    data = ("event: message\ndata: " + json.dumps(response, ensure_ascii=True) + "\n\n").encode("utf-8")
+                    content_type = "text/event-stream; charset=utf-8"
+                else:
+                    data = json.dumps(response, ensure_ascii=True).encode("utf-8")
+                    content_type = "application/json; charset=utf-8"
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", content_type)
+                for header_name, header_value in extra_headers.items():
+                    self.send_header(header_name, header_value)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self._send_cors_headers()
+                self.end_headers()
+                self.wfile.write(data)
                 return
             self._method_not_allowed()
 
@@ -1188,6 +1831,15 @@ def _first_query_value(query: dict[str, list[str]], *names: str) -> str:
     return ""
 
 
+# DevFrame-owned native client (RD-Code) desktop renderer origins. The Electron
+# renderer is served from a custom protocol scheme (see ElectronProtocol.ts:
+# DESKTOP_PRODUCTION_SCHEME / DESKTOP_DEVELOPMENT_SCHEME + DESKTOP_HOST), so its
+# Origin header is e.g. "t3code://app" rather than a loopback http origin. These
+# are trusted in addition to loopback http origins; the loopback client-IP check
+# (_client_is_loopback) remains the primary security boundary.
+_DEVFRAME_DESKTOP_ORIGINS = frozenset({"t3code://app", "t3code-dev://app"})
+
+
 def _client_is_loopback(host: str) -> bool:
     if host.lower() == "localhost":
         return True
@@ -1219,6 +1871,8 @@ def _loopback_origin_allowed(handler: BaseHTTPRequestHandler) -> bool:
     origin = handler.headers.get("Origin")
     if not origin:
         return True
+    if origin in _DEVFRAME_DESKTOP_ORIGINS:
+        return True
     try:
         parsed_origin = urlparse(origin)
     except ValueError:
@@ -1229,6 +1883,83 @@ def _loopback_origin_allowed(handler: BaseHTTPRequestHandler) -> bool:
     if origin_host not in {"127.0.0.1", "localhost", "::1"}:
         return False
     return True
+
+
+# --- Customization layer (scope-aware categories) ---------------------------
+#
+# The three retrofitted categories (team roster / skills / rules) share the same
+# scope-aware GET (four-layer view) and POST (scoped write) contract. These
+# helpers centralize the per-category wiring so the request handlers stay thin.
+
+# Item-list key historically accepted in the POST body per category, kept for
+# backwards compatibility alongside the unified ``items`` key.
+_CUSTOMIZATION_ITEM_KEYS: dict[str, str] = {
+    "cluster-roster": "agents",
+    "skills": "skills",
+    "rules": "rules",
+}
+
+
+def _customization_layered_view(
+    category: str,
+    runtime_dir: str | Path | None,
+    project_id: str | None,
+) -> dict[str, Any]:
+    """Build the ``{builtin, global, project, effective}`` view for a category.
+
+    ``skills`` additionally carries ``constraints`` (deny-overrides result). When
+    ``project_id`` is falsy the project layer is empty and ``effective`` is the
+    global-only result (today's behavior).
+    """
+    if category == "cluster-roster":
+        from .cluster_control import resolve_roster
+
+        resolved = resolve_roster(runtime_dir, project_id)
+    elif category == "skills":
+        from .custom_skills import resolve_skills
+
+        resolved = resolve_skills(runtime_dir, project_id)
+    elif category == "rules":
+        from .rules_config import resolve_rules
+
+        resolved = resolve_rules(runtime_dir, project_id)
+    else:  # pragma: no cover - defensive; callers pass a known category.
+        raise ValueError(f"unknown customization category: {category!r}")
+
+    view: dict[str, Any] = {
+        "version": 1,
+        "projectId": project_id or "",
+        "builtin": resolved.builtin,
+        "global": resolved.global_,
+        "project": resolved.project,
+        "effective": resolved.effective,
+    }
+    if resolved.constraints is not None:
+        view["constraints"] = resolved.constraints
+    return view
+
+
+def _customization_save_scoped(
+    category: str,
+    runtime_dir: str | Path | None,
+    scope: "Scope",
+    project_id: str | None,
+    items: list[Any],
+) -> list[dict[str, Any]]:
+    """Dispatch a scoped save to the right category module."""
+    if category == "cluster-roster":
+        from .cluster_control import save_at
+
+        return save_at(runtime_dir, scope, project_id, items)
+    if category == "skills":
+        from .custom_skills import save_at as save_skills_at
+
+        return save_skills_at(runtime_dir, scope, project_id, items)
+    if category == "rules":
+        from .rules_config import save_at as save_rules_at
+
+        return save_rules_at(runtime_dir, scope, project_id, items)
+    raise ValueError(f"unknown customization category: {category!r}")
 
 
 def _resolve_approval_action_id(
@@ -1246,6 +1977,29 @@ def _resolve_approval_action_id(
                 payload = activity.get("payload") or {}
                 if str(payload.get("requestId") or "") == request_id:
                     return str(payload.get("actionId") or "")
+    return ""
+
+
+def _resolve_writeback_workspace_root(
+    runtime_dir: str | Path | None,
+    paper_project_dirs: list[str | Path],
+    project_id: str,
+) -> str:
+    """Server-side workspace root for a project id (never trust a client path).
+
+    Returns the project's workspace root from the current control-plane state, or
+    "" if the project is unknown. Write-back targets are confined to this root.
+    """
+    from .t3_adapter import _workspace_root
+
+    state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=paper_project_dirs)
+    wanted = str(project_id or "").strip()
+    if not wanted:
+        # Require an explicit project id; never guess a default workspace root.
+        return ""
+    for project in state.get("projects", []):
+        if isinstance(project, dict) and str(project.get("project_id") or "") == wanted:
+            return _workspace_root(project)
     return ""
 
 
@@ -1289,6 +2043,8 @@ def _render_t3_auth_session_json() -> str:
 
 
 def _is_loopback_origin(origin: str) -> bool:
+    if origin in _DEVFRAME_DESKTOP_ORIGINS:
+        return True
     try:
         parsed = urlparse(origin)
     except ValueError:

@@ -1,0 +1,28 @@
+{
+  "title": "Project Memory",
+  "description": "Per-project architecture notes, domain terms, and decisions (Claude-Code-style project memory). Stored at <runtime>/{project_id}/memory.json and editable from RD-Code. There is no built-in or global layer for project memory.",
+  "type": "object",
+  "required": ["version", "memory"],
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "memory": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/memory_entry" },
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "memory_entry": {
+      "type": "object",
+      "required": ["id", "kind", "text"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "kind": { "type": "string", "enum": ["preference", "architecture", "term", "decision", "note"] },
+        "text": { "type": "string", "minLength": 1 },
+        "enabled": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

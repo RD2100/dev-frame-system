@@ -555,6 +555,7 @@ def _thread_shell(
             "teamEvidenceIds": _team_evidence_ids_for_run(run_id, related_run_ids, team_evidence_store or {}),
             "teamReviewGateIds": _team_review_gate_ids_for_run(run_id, related_run_ids, team_review_gates or {}),
             "teamConflictFiles": _team_conflict_files_for_run(run_id, related_run_ids, team_conflict_control or {}),
+            "teamDetailMethodologies": _readable_team_methodologies(run_id, related_run_ids, team_task_board or {}),
             "teamDetailMessages": _readable_team_messages(run_id, related_run_ids, team_message_bus or {})[:_PROJECTED_DETAIL_LIMIT],
             "teamDetailMessageOverflow": max(0, len(_readable_team_messages(run_id, related_run_ids, team_message_bus or {})) - _PROJECTED_DETAIL_LIMIT),
             "teamDetailEvidence": _readable_team_evidence(run_id, related_run_ids, team_evidence_store or {}, base_url)[:_PROJECTED_DETAIL_LIMIT],
@@ -1201,6 +1202,21 @@ def _readable_team_messages(
     return items
 
 
+def _readable_team_methodologies(
+    run_id: str,
+    related_run_ids: list[str],
+    team_task_board: dict[str, dict[str, Any]],
+) -> list[str]:
+    skills: list[str] = []
+    for rid in [run_id] + related_run_ids:
+        task = team_task_board.get(rid)
+        if isinstance(task, dict) and isinstance(task.get("methodology"), dict):
+            skill_id = _text(task["methodology"].get("skill_id"), "")
+            if skill_id:
+                skills.append(skill_id)
+    return sorted(_unique(skills))
+
+
 def _readable_team_evidence(
     run_id: str,
     related_run_ids: list[str],
@@ -1686,6 +1702,9 @@ def _thread_detail(thread_shell: dict[str, Any], updated_at: str, team: dict[str
     team_event_overflow = devframe.get("teamDetailEventOverflow", 0)
     if not _is_team_workbench_session(thread_id) and (team_detail_messages or team_detail_evidence or team_detail_gates or team_detail_conflicts or team_detail_events):
             details.extend(["", "## Team Communication", ""])
+            team_detail_methodologies = devframe.get("teamDetailMethodologies", [])
+            if team_detail_methodologies:
+                details.append(f"- Methodologies: {', '.join(team_detail_methodologies)}")
             if _is_large_synthetic_reviewer_session(thread_id, devframe):
                 details.extend(_render_team_detail_digest(
                     team_detail_messages,

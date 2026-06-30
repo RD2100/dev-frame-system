@@ -42,7 +42,8 @@
       "properties": {
         "devframe": { "type": "object" },
         "t3WebCommand": { "type": "string", "minLength": 1 },
-        "t3DesktopCommand": { "type": "string", "minLength": 1 }
+        "t3DesktopCommand": { "type": "string", "minLength": 1 },
+        "t3DesktopProdCommand": { "type": "string", "minLength": 1 }
       },
       "additionalProperties": false
     },
@@ -51,7 +52,6 @@
       "required": [
         "VITE_DEVFRAME_REALTIME_MODE",
         "VITE_DEVFRAME_CLIENT_PLAN_URL",
-        "VITE_DEVFRAME_T3_SHELL_URL",
         "VITE_DEVFRAME_CLIENT_MANIFEST_URL",
         "VITE_HOSTED_APP_CHANNEL"
       ],

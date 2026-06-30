@@ -138,10 +138,12 @@ def build_client_launch_plan(
                 "/go/dispatch",
                 "/actions/execute",
                 "/api/t3/approval-response",
+                "/api/t3/writeback-propose",
             ],
             "allowedActionKinds": [
                 "queued_go_run_execute",
                 "web_gpt_task_intake_dispatch",
+                "writeback_apply_file",
             ],
             "humanGateRequiredFor": [
                 "execute_worker",
@@ -897,9 +899,12 @@ def serve_t3_desktop_client(
     force: bool = False,
     open_browser: bool = False,
     refresh_seconds: int = 5,
+    mode: str = "dev",
 ) -> int:
     from .dashboard import serve_dashboard
     from .t3_bridge_bundle import (
+        BRIDGE_T3_DESKTOP_LAUNCHER_RELATIVE_PATH,
+        BRIDGE_T3_DESKTOP_PROD_LAUNCHER_RELATIVE_PATH,
         build_t3_bridge_bundle,
         install_t3_bridge_bundle,
         render_t3_bridge_bundle_text,
@@ -976,12 +981,20 @@ def serve_t3_desktop_client(
         else:
             print("[devframe] Force cleanup: no stale T3 processes found")
 
-    launcher_path = resolved_t3_root_path / "devframe.t3desktop.mjs"
+    launcher_name = (
+        BRIDGE_T3_DESKTOP_PROD_LAUNCHER_RELATIVE_PATH
+        if mode == "prod"
+        else BRIDGE_T3_DESKTOP_LAUNCHER_RELATIVE_PATH
+    )
+    launcher_path = resolved_t3_root_path / launcher_name
     if not launcher_path.exists():
         print("ERROR: T3 desktop launcher not found; pass --t3-root to install the bridge bundle first.", file=sys.stderr)
         return 1
 
-    print(f"[devframe] Starting T3 Desktop launcher: {launcher_path}")
+    if mode == "prod":
+        print(f"[devframe] Starting T3 Desktop (production build): {launcher_path}")
+    else:
+        print(f"[devframe] Starting T3 Desktop launcher: {launcher_path}")
     try:
         completed = subprocess.run(["node", str(launcher_path)], cwd=str(resolved_t3_root_path), check=False)
     except FileNotFoundError:

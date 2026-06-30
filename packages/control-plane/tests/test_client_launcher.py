@@ -88,6 +88,7 @@ def test_client_launch_plan_maps_t3_bridge_and_opencode_executor(tmp_path, monke
         "/go/dispatch",
         "/actions/execute",
         "/api/t3/approval-response",
+        "/api/t3/writeback-propose",
     ]
     assert "web_gpt_task_intake_dispatch" in plan["writePolicy"]["allowedActionKinds"]
     assert plan["governance"]["reconReceipt"] == "docs/status/recon-receipt-local-agent-client-mainline.md"

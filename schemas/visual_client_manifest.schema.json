@@ -135,7 +135,12 @@
               "Run",
               "Gate",
               "Decision",
-              "Action"
+              "Action",
+              "Skill",
+              "Rule",
+              "RunDefaults",
+              "Preferences",
+              "ProjectMemory"
             ]
           },
           "uniqueItems": true,

@@ -32,7 +32,14 @@ coverage/
 .codegraph/
 .devframe-runtime/
 .gsd/
+.kiro/
 .opencode/
+.vscode/
+
+# Local runtime journals (also kept under .devframe-runtime/ by default). Listed
+# by name to defend against a misconfigured --runtime-dir pointing at a tracked path.
+rdgoal-events.jsonl
+team-events.jsonl
 
 # Local web AI import demos; sanitized fixtures belong under package tests.
 chatgpt-summary.json
@@ -44,6 +51,7 @@ rules/project-contracts/*.md
 # Local scratch diffs used during agent review/debug cycles.
 t3_adapter.diff
 test_t3_adapter.diff
+AGENT_HANDOFF.md
 
 runs/
 reports/

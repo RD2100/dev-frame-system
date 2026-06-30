@@ -30,17 +30,46 @@ def _post_json(
     resp = urlopen(req, timeout=timeout)
     resp_headers = {k: v for k, v in resp.getheaders()}
     body = resp.read().decode("utf-8", errors="replace")
-    content_type = resp_headers.get("Content-Type", "")
-    if content_type.startswith("text/event-stream"):
-        for line in body.splitlines():
-            if line.startswith("data: "):
-                body = line[6:]
-                break
+    # MCP Streamable HTTP replies as Server-Sent Events; the JSON-RPC message is
+    # carried in `data:` lines. Header casing is server-defined (Node servers do
+    # not match Python's title-case), so look it up case-insensitively.
+    content_type = _header_value(resp_headers, "Content-Type") or ""
+    if content_type.lower().startswith("text/event-stream"):
+        body = _extract_sse_json(body) or body
     try:
         data = json.loads(body) if body else {}
     except json.JSONDecodeError:
         data = {"_raw": body}
     return resp.status, data, resp_headers
+
+
+def _extract_sse_json(body: str) -> str | None:
+    """Return the first SSE event payload that parses as a JSON-RPC object.
+
+    SSE frames separate events with a blank line and may split one event's data
+    across several `data:` lines (joined with newlines). We collect each event's
+    data and return the first that is valid JSON, so a single Streamable-HTTP
+    JSON-RPC response is recovered regardless of framing details.
+    """
+    events: list[str] = []
+    current: list[str] = []
+    for raw_line in body.splitlines():
+        line = raw_line.rstrip("\r")
+        if line.startswith("data:"):
+            current.append(line[5:].lstrip())
+        elif line == "":
+            if current:
+                events.append("\n".join(current))
+                current = []
+    if current:
+        events.append("\n".join(current))
+    for event in events:
+        try:
+            json.loads(event)
+            return event
+        except json.JSONDecodeError:
+            continue
+    return events[0] if events else None
 
 
 def _header_value(headers: dict[str, str], name: str) -> str | None:

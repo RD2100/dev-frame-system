@@ -195,6 +195,7 @@
             "teamEvidenceIds": { "type": "array", "items": { "type": "string" } },
             "teamReviewGateIds": { "type": "array", "items": { "type": "string" } },
             "teamConflictFiles": { "type": "array", "items": { "type": "string" } },
+            "teamDetailMethodologies": { "type": "array", "items": { "type": "string" } },
             "gateDetails": {
               "type": "array",
               "items": {

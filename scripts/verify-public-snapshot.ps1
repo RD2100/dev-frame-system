@@ -79,6 +79,8 @@ $ignoredGeneratedDirs = @(
     "__pycache__",
     ".codegraph",
     ".devframe-runtime",
+    ".kiro",
+    ".vscode",
     ".pytest_cache",
     ".ruff_cache",
     ".mypy_cache"

@@ -28,7 +28,11 @@ devframe code execute   # 执行最近一次已准备的编程运行
 /rdpaper <project> <goal> # 把论文任务路由进论文审查闭环
 ```
 
-**核心产品是 `devframe code`：一个基于 T3Code 作为原生客户端 shell、OpenCode 作为执行器的编程工具，用来准备有边界的 coding-agent 任务、显示精确 worker 命令，并且只在你确认要消耗 worker token 时执行。真实的 WebGPT MCP 完整闭环已被验证。**
+**核心产品是 `devframe code`：一个基于 T3Code 作为原生客户端 shell、OpenCode 作为执行器的编程工具，用来准备有边界的 coding-agent 任务、显示精确 worker 命令，并且只在你确认要消耗 worker token 时执行。WebGPT MCP 闭环已在当前本地开发上下文中端到端验证过。**
+
+> **项目状态：** 本仓库在开发上下文中是 local-gate-green、链路已验证（chain-verified）的，
+> 但还不是经过外部评审的正式发布版本。已验证与未验证的确切边界见
+> [发布就绪状态](docs/status/release-readiness.md)。
 
 配套问题不是"再做一套治理框架"。真正的问题是：如何用尽量低的成本和最简单的流程，提高代码质量，并让研发方向不漂移？
 

@@ -26,7 +26,7 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "packages/control-plane/README.md",
     "packages/control-plane/QUICKSTART.md",
     "packages/control-plane/setup.py",
-    "packages/control-plane/control_plane/cli.py",
+    "packages/control-plane/control_plane/cli/app.py",
     "packages/control-plane/control_plane/dashboard.py",
     "packages/control-plane/templates/paper_iteration/PAPER_PROFILE.yaml",
     "packages/control-plane/templates/paper_iteration/PAPER_STATE.yaml",

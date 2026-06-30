@@ -46,14 +46,16 @@ def test_t3_bridge_bundle_matches_public_schema(tmp_path):
     assert bundle["target"]["license"] == "MIT"
     assert bundle["environment"]["VITE_DEVFRAME_REALTIME_MODE"] == "polling"
     assert bundle["environment"]["VITE_HOSTED_APP_CHANNEL"] == "nightly"
-    assert bundle["environment"]["VITE_DEVFRAME_T3_SHELL_URL"] == "http://127.0.0.1:8788/t3-shell.json"
+    assert "VITE_DEVFRAME_T3_SHELL_URL" not in bundle["environment"]
     assert bundle["launch"]["t3DesktopCommand"] == "pnpm dev:desktop"
+    assert bundle["launch"]["t3DesktopProdCommand"].endswith("devframe.t3desktop.prod.mjs")
     assert bundle["launch"]["t3WebCommand"].endswith("devframe.t3web.mjs")
     assert any(file["path"] == "apps/web/src/devframe/devframeShellBridge.ts" for file in bundle["files"])
     assert any(file["path"] == "apps/web/src/connection/catalog.ts" and file["action"] == "patch" for file in bundle["files"])
     assert any(file["path"] == "apps/web/src/state/shell.ts" and file["action"] == "patch" for file in bundle["files"])
     assert any(file["path"] == "apps/web/src/state/threads.ts" and file["action"] == "patch" for file in bundle["files"])
     assert any(file["path"] == "devframe.t3desktop.mjs" and file["action"] == "add" and file["status"] == "ready" for file in bundle["files"])
+    assert any(file["path"] == "devframe.t3desktop.prod.mjs" and file["action"] == "add" and file["status"] == "ready" for file in bundle["files"])
     assert any(file["path"] == "devframe.t3web.mjs" and file["action"] == "add" and file["status"] == "ready" for file in bundle["files"])
     assert all(file["status"] == "ready" for file in bundle["files"])
     assert bundle["integration"]["mutationPolicy"] == "read-only"
@@ -92,14 +94,23 @@ def test_write_t3_bridge_bundle_creates_installable_files(tmp_path):
     assert "VITE_HOSTED_APP_CHANNEL=nightly" in env_source
     launcher_source = (tmp_path / "bundle" / "devframe.t3web.mjs").read_text(encoding="utf-8")
     assert '"--filter", "@t3tools/web", "dev"' in launcher_source
-    assert '"VITE_DEVFRAME_T3_SHELL_URL":' in launcher_source
+    assert '"VITE_DEVFRAME_T3_SHELL_URL":' not in launcher_source
     assert '"VITE_HOSTED_APP_CHANNEL": "nightly"' in launcher_source
     assert "VITE_HTTP_URL" not in launcher_source
     desktop_launcher_source = (tmp_path / "bundle" / "devframe.t3desktop.mjs").read_text(encoding="utf-8")
     assert '"dev:desktop"' in desktop_launcher_source
-    assert '"VITE_DEVFRAME_T3_SHELL_URL":' in desktop_launcher_source
+    assert '"VITE_DEVFRAME_T3_SHELL_URL":' not in desktop_launcher_source
     assert '"VITE_HOSTED_APP_CHANNEL": "nightly"' in desktop_launcher_source
     assert "VITE_HTTP_URL" not in desktop_launcher_source
+    assert "devframe.t3desktop.prod.mjs" in written_paths
+    prod_launcher_source = (tmp_path / "bundle" / "devframe.t3desktop.prod.mjs").read_text(encoding="utf-8")
+    assert '"build:desktop"' in prod_launcher_source
+    assert '"start:desktop"' in prod_launcher_source
+    assert '"dev:desktop"' not in prod_launcher_source
+    # The hosted-app channel must NOT be baked into the desktop production build;
+    # it would force isHostedStaticApp() into the read-only onboarding surface.
+    assert "VITE_HOSTED_APP_CHANNEL" not in prod_launcher_source
+    assert "VITE_DEVFRAME_CLIENT_PLAN_URL" in prod_launcher_source
     assert 'T3CODE_DEVFRAME_DIRECT_RENDERER = "1"' in desktop_launcher_source
     assert "T3CODE_DESKTOP_REMOTE_DEBUGGING_PORT" in desktop_launcher_source
     assert "DesktopWindow.ts" in desktop_launcher_source
@@ -193,7 +204,7 @@ def test_dashboard_serves_t3_bridge_bundle_endpoint(tmp_path):
         assert bundle["name"] == "devframe-t3code-local-bridge"
         assert bundle["environment"]["VITE_DEVFRAME_REALTIME_MODE"] == "polling"
         assert bundle["environment"]["VITE_HOSTED_APP_CHANNEL"] == "nightly"
-        assert bundle["environment"]["VITE_DEVFRAME_T3_SHELL_URL"].endswith("/t3-shell.json")
+        assert "VITE_DEVFRAME_T3_SHELL_URL" not in bundle["environment"]
         assert bundle["integration"]["strategy"] == "reuse-t3-client-runtime-shell-and-thread-detail"
         assert bundle["acceptance"]["t3Desktop"].endswith("devframe.t3desktop.mjs")
         assert bundle["acceptance"]["t3Web"].endswith("devframe.t3web.mjs")
@@ -393,7 +404,7 @@ def test_environment_enables_hosted_static_mode_and_excludes_native_backend_urls
     assert "VITE_HTTP_URL" not in bundle["environment"]
     assert "VITE_WS_URL" not in bundle["environment"]
     assert bundle["environment"]["VITE_DEVFRAME_REALTIME_MODE"] == "polling"
-    assert bundle["environment"]["VITE_DEVFRAME_T3_SHELL_URL"].endswith("/t3-shell.json")
+    assert "VITE_DEVFRAME_T3_SHELL_URL" not in bundle["environment"]
 
 
 def test_environment_excludes_backend_urls():

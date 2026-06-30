@@ -101,6 +101,26 @@ class DispatchPacketStore:
         data = json.loads((Path(packet_dir) / "packet.json").read_text(encoding="utf-8"))
         return DispatchPacket(**data)
 
+    def rebase_packet(self, packet_dir: str | Path, new_project_root: str | Path) -> DispatchPacket:
+        """Repoint an existing packet at a new project root and re-render it.
+
+        Used by opt-in worktree isolation: the agent reads its project root from
+        the packet (packet.json and TASKSPEC.md), so to keep its writes inside an
+        isolated worktree the packet itself must point there, not at the shared
+        tree. Rewrites packet.json and TASKSPEC.md in place and returns the
+        updated packet. The TASKSPEC.json content is unchanged (it carries no
+        absolute root), so it is left as-is.
+        """
+        packet = self.load_packet(packet_dir)
+        packet.project_root = str(Path(new_project_root).resolve())
+        target_dir = Path(packet_dir)
+        (target_dir / "packet.json").write_text(
+            json.dumps(asdict(packet), indent=2, ensure_ascii=True),
+            encoding="utf-8",
+        )
+        (target_dir / "TASKSPEC.md").write_text(self._task_spec_markdown(packet), encoding="utf-8")
+        return packet
+
     def ingest_report(self, packet_dir: str | Path, report_path: str | Path) -> ExecutionReportSummary:
         packet = self.load_packet(packet_dir)
         report = Path(report_path)

@@ -11,6 +11,7 @@ import yaml
 
 from .runtime_digest import build_runtime_digest
 from .skill_registry import list_methodology_skills
+from .team_runtime import build_team_runtime_view
 
 ROOT = Path(__file__).resolve().parent.parent
 ACTION_STATUSES = ("open", "blocked", "ready", "info")
@@ -958,6 +959,30 @@ def _build_team_model(
     review_gates.extend(atgo_gates)
     message_bus.extend(atgo_messages)
     event_log.extend(atgo_events)
+    # Real team runtime objects: when a run recorded team events at execution
+    # time, surface those durable, recorded facts alongside the read-time
+    # projection. Empty when no run has recorded events, so default behavior is
+    # unchanged.
+    recorded = build_team_runtime_view(runtime_dir)
+    message_bus.extend(recorded.get("message_bus", []))
+    event_log.extend(recorded.get("event_log", []))
+    conflict_control.extend(recorded.get("conflict_control", []))
+    review_gates.extend(recorded.get("review_gates", []))
+    # Real Agent Registry + Task Board: add recorded participants/tasks that the
+    # read-time projection did not already surface (dedupe by id), so recorded
+    # runtime facts win without double-listing the projection.
+    _projected_agent_ids = {str(a.get("agent_id") or "") for a in agent_registry}
+    for recorded_agent in recorded.get("agent_registry", []):
+        if str(recorded_agent.get("agent_id") or "") not in _projected_agent_ids:
+            agent_registry.append(recorded_agent)
+    _projected_task_ids = {str(t.get("task_id") or "") for t in task_board}
+    for recorded_task in recorded.get("task_board", []):
+        if str(recorded_task.get("task_id") or "") not in _projected_task_ids:
+            task_board.append(recorded_task)
+    _projected_evidence_ids = {str(e.get("evidence_id") or "") for e in evidence_store}
+    for recorded_evidence in recorded.get("evidence_store", []):
+        if str(recorded_evidence.get("evidence_id") or "") not in _projected_evidence_ids:
+            evidence_store.append(recorded_evidence)
     return {
         "agent_registry": agent_registry,
         "task_board": task_board,
@@ -1040,7 +1065,7 @@ def _team_task_board(
         for a in run.get("agents", []):
             if isinstance(a, dict):
                 targets.extend(str(t) for t in a.get("targets", []) if isinstance(a.get("targets"), list))
-        tasks.append({
+        task = {
             "task_id": go_run_id,
             "type": "go-run",
             "project_id": _safe_id(str(run.get("project_id") or "")),
@@ -1048,8 +1073,11 @@ def _team_task_board(
             "agent_ids": agent_ids,
             "session_ids": session_ids,
             "target_files": targets,
-            "methodology": _go_methodology_state(run.get("methodology")),
-        })
+        }
+        methodology = _go_methodology_state(run.get("methodology"))
+        if methodology is not None:
+            task["methodology"] = methodology
+        tasks.append(task)
     for dispatch in dispatches:
         packet_id = dispatch.get("packet_id") or _fallback_id(dispatch, "run")
         dispatch_run = next(
@@ -2002,12 +2030,11 @@ def _go_run_states(runtime_dir: str | Path) -> list[dict[str, Any]]:
         if not data:
             continue
         agents = data.get("agents", [])
-        runs.append({
+        go_run = {
             "go_run_id": _safe_id(data.get("go_run_id", path.parent.name)),
             "project_id": _safe_id(data.get("project_id", "")),
             "project_root": str(data.get("project_root", "")),
             "requirement": str(data.get("requirement", "")),
-            "methodology": _go_methodology_state(data.get("methodology")),
             "status": _go_status(data.get("status", "")),
             "execute": bool(data.get("execute", False)),
             "created_at": str(data.get("created_at", "")),
@@ -2015,7 +2042,14 @@ def _go_run_states(runtime_dir: str | Path) -> list[dict[str, Any]]:
             "status_command": _go_run_status_command(path.parent.name, root),
             "execute_command": _go_run_execute_command(path.parent.name, root),
             "agents": [_go_agent_state(agent) for agent in agents if isinstance(agent, dict)],
-        })
+        }
+        methodology = _go_methodology_state(data.get("methodology"))
+        if methodology is not None:
+            go_run["methodology"] = methodology
+        model_provider = str(data.get("model_provider", "")).strip()
+        if model_provider:
+            go_run["model_provider"] = model_provider
+        runs.append(go_run)
     return runs
 
 
@@ -2028,13 +2062,12 @@ def _go_run_execute_command(go_run_id: str, runtime_dir: str | Path) -> str:
 
 
 def _go_agent_state(agent: dict[str, Any]) -> dict[str, Any]:
-    return {
+    state = {
         "agent_id": _safe_id(agent.get("agent_id", "")),
         "shard_index": int(agent.get("shard_index") or 0),
         "shard_count": int(agent.get("shard_count") or 0),
         "status": _go_status(agent.get("status", "")),
         "worker_status": _go_worker_status(agent.get("worker_status", "")),
-        "methodology": _go_methodology_state(agent.get("methodology")),
         "targets": [str(target) for target in agent.get("targets", []) if str(target)],
         "target_bytes": int(agent.get("target_bytes") or 0),
         "changed_files": [str(path) for path in agent.get("changed_files", []) if str(path)],
@@ -2043,6 +2076,48 @@ def _go_agent_state(agent: dict[str, Any]) -> dict[str, Any]:
         "report_path": str(agent.get("report_path", "")),
         "worker_command": [str(part) for part in agent.get("worker_command", [])],
     }
+    methodology = _go_methodology_state(agent.get("methodology"))
+    if methodology is not None:
+        state["methodology"] = methodology
+    session_id = str(agent.get("session_id", ""))
+    if session_id:
+        state["session_id"] = session_id
+    for key in ("input_tokens", "output_tokens", "total_tokens"):
+        value = int(agent.get(key, 0) or 0)
+        if value:
+            state[key] = value
+    cost = float(agent.get("cost", 0.0) or 0.0)
+    if cost:
+        state["cost"] = cost
+    tool_calls = _go_tool_calls(agent.get("tool_calls"))
+    if tool_calls:
+        state["tool_calls"] = tool_calls
+    model_provider = str(agent.get("model_provider", "")).strip()
+    if model_provider:
+        state["model_provider"] = model_provider
+    # Surface only the boolean. The worktree path is a private local runtime
+    # detail and must never enter the public read model (public-surface rule).
+    if bool(agent.get("isolated", False)) and str(agent.get("worktree_path", "")).strip():
+        state["isolated"] = True
+    return state
+
+
+def _go_tool_calls(value: object) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    calls: list[dict[str, str]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", "")).strip()
+        if not name:
+            continue
+        call = {"name": name}
+        target = str(item.get("target", "")).strip()
+        if target:
+            call["target"] = target
+        calls.append(call)
+    return calls
 
 
 def _go_status(value: object) -> str:

@@ -36,7 +36,12 @@ devframe code execute    # run the latest prepared coding run
 /rdpaper <project> <goal> # route a paper task through the paper review loop
 ```
 
-**The core product is `devframe code`: a programming tool built on T3Code as the native client shell and OpenCode as the executor, which prepares bounded coding-agent work, shows the exact worker commands, and runs them only when you choose to spend worker tokens. The real WebGPT MCP full cycle is proven.**
+**The core product is `devframe code`: a programming tool built on T3Code as the native client shell and OpenCode as the executor, which prepares bounded coding-agent work, shows the exact worker commands, and runs them only when you choose to spend worker tokens. The WebGPT MCP cycle has been verified end-to-end in the current local development context.**
+
+> **Project status:** This repository is local-gate-green and chain-verified in
+> a development context, not a published, externally reviewed release. See
+> [Release readiness](docs/status/release-readiness.md) for the exact scope of
+> what has and has not been validated.
 
 The supporting question is not "how do we build another governance framework?" Many people are already doing that. The real question is: how can we improve code quality and direction control for free, or as close to free as possible, with the simplest workflow?
 

@@ -66,7 +66,9 @@ class CommandWorker:
         self.store = DispatchPacketStore(runtime_dir=runtime_dir, repo_root=repo_root)
         self.timeout_seconds = timeout_seconds
 
-    def run_packet(self, packet_dir: str | Path, command: list[str]) -> WorkerResult:
+    def run_packet(self, packet_dir: str | Path, command: list[str], *,
+                   cwd: str | Path | None = None,
+                   env_overrides: dict[str, str] | None = None) -> WorkerResult:
         if not command:
             raise ValueError("CommandWorker requires a non-empty command list.")
 
@@ -86,11 +88,17 @@ class CommandWorker:
             "RDGOAL_TASKSPEC_MD": str(Path(packet.packet_dir) / "TASKSPEC.md"),
             "RDGOAL_REPORT_PATH": str(report_path),
         })
+        # Optional, backward-compatible overrides. When unset, behavior is
+        # byte-identical: cwd stays the packet project root and the environment
+        # is the inherited environment plus the RDGOAL_* keys above.
+        if env_overrides:
+            env.update({str(key): str(value) for key, value in env_overrides.items()})
+        effective_cwd = str(cwd) if cwd is not None else packet.project_root
         resolved_command = _resolve_command(command)
         try:
             completed = subprocess.run(
                 resolved_command,
-                cwd=packet.project_root,
+                cwd=effective_cwd,
                 env=env,
                 capture_output=True,
                 text=True,

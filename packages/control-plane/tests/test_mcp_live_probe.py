@@ -87,6 +87,9 @@ class _FakeMcpHandler(BaseHTTPRequestHandler):
         self._send_json(HTTPStatus.OK, response)
 
     def _send_json(self, status: HTTPStatus, payload: dict[str, Any], session_id: str | None = None) -> None:
+        if getattr(self.server, "mcp_sse", False):
+            self._send_sse(status, payload, session_id=session_id)
+            return
         data = json.dumps(payload, ensure_ascii=True).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -96,6 +99,20 @@ class _FakeMcpHandler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(data)
+
+    def _send_sse(self, status: HTTPStatus, payload: dict[str, Any], session_id: str | None = None) -> None:
+        # Reproduce a real MCP Streamable-HTTP reply: SSE framing AND a
+        # lowercase header name (Node servers do not title-case headers), to
+        # guard the case-insensitive Content-Type lookup in the probe.
+        frame = f"event: message\ndata: {json.dumps(payload, ensure_ascii=True)}\n\n".encode("utf-8")
+        self.send_response(status)
+        self.send_header("content-type", "text/event-stream; charset=utf-8")
+        self.send_header("Content-Length", str(len(frame)))
+        if session_id:
+            self.send_header("mcp-session-id", session_id)
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(frame)
 
 
 def build_fake_mcp_server(
@@ -127,6 +144,7 @@ class FakeMcpServer:
     def close(self):
         self.server.shutdown()
         self.server.server_close()
+        self.thread.join(timeout=5)
 
 
 def test_live_check_initialize_and_tools_list_succeeds():

@@ -147,16 +147,16 @@ assert env.exists()
 env_text = env.read_text(encoding='utf-8')
 assert 'VITE_DEVFRAME_REALTIME_MODE=polling' in env_text
 assert 'VITE_DEVFRAME_CLIENT_PLAN_URL=http://127.0.0.1:8788/client-plan.json' in env_text
-assert 'VITE_DEVFRAME_T3_SHELL_URL=http://127.0.0.1:8788/t3-shell.json' in env_text
 assert 'VITE_DEVFRAME_CLIENT_MANIFEST_URL=http://127.0.0.1:8788/client-manifest.json' in env_text
 assert 'VITE_HOSTED_APP_CHANNEL=nightly' in env_text
+assert 'VITE_DEVFRAME_T3_SHELL_URL' not in env_text
 assert 'VITE_HTTP_URL' not in env_text
 assert 'VITE_WS_URL' not in env_text
 launcher = root / 'devframe.t3web.mjs'
 assert launcher.exists()
 launcher_text = launcher.read_text(encoding='utf-8')
-assert 'VITE_DEVFRAME_T3_SHELL_URL' in launcher_text
 assert 'VITE_HOSTED_APP_CHANNEL' in launcher_text
+assert '"VITE_DEVFRAME_T3_SHELL_URL":' not in launcher_text
 assert 'VITE_HTTP_URL' not in launcher_text
 assert '--filter' in launcher_text
 assert '@t3tools/web' in launcher_text
@@ -165,8 +165,8 @@ desktop = root / 'devframe.t3desktop.mjs'
 assert desktop.exists()
 desktop_text = desktop.read_text(encoding='utf-8')
 assert 'dev:desktop' in desktop_text
-assert 'VITE_DEVFRAME_T3_SHELL_URL' in desktop_text
 assert 'VITE_HOSTED_APP_CHANNEL' in desktop_text
+assert '"VITE_DEVFRAME_T3_SHELL_URL":' not in desktop_text
 assert 'VITE_HTTP_URL' not in desktop_text
 source = root / 'apps/web/src/devframe/devframeShellBridge.ts'
 assert source.exists()
@@ -314,7 +314,7 @@ print('client bridge bundle ok')
     )
     Invoke-Step "dashboard t3 bridge endpoint" $python @(
         "-c",
-        "from control_plane.dashboard import build_dashboard_server; from threading import Thread; from urllib.request import urlopen; import json, sys; server = build_dashboard_server(runtime_dir=sys.argv[1], paper_project_dirs=[sys.argv[2]], port=0, refresh_seconds=0); thread = Thread(target=server.serve_forever, daemon=True); thread.start(); data = json.loads(urlopen(f'http://127.0.0.1:{server.server_address[1]}/t3-bridge.json', timeout=5).read().decode('utf-8')); assert data['name'] == 'devframe-t3code-local-bridge'; assert data['target']['client'] == 't3code'; assert data['target']['license'] == 'MIT'; assert 'VITE_HTTP_URL' not in data['environment']; assert 'VITE_WS_URL' not in data['environment']; assert data['environment']['VITE_DEVFRAME_REALTIME_MODE'] == 'polling'; assert data['environment']['VITE_DEVFRAME_T3_SHELL_URL'].endswith('/t3-shell.json'); assert data['environment']['VITE_DEVFRAME_CLIENT_PLAN_URL'].endswith('/client-plan.json'); assert data['environment']['VITE_DEVFRAME_CLIENT_MANIFEST_URL'].endswith('/client-manifest.json'); assert data['environment']['VITE_HOSTED_APP_CHANNEL'] == 'nightly'; assert any(file['path'] == 'apps/web/src/devframe/devframeShellBridge.ts' for file in data['files']); assert any(file['path'] == 'apps/web/src/connection/catalog.ts' and file['status'] == 'ready' for file in data['files']); assert any(file['path'] == 'apps/web/src/state/shell.ts' and file['status'] == 'ready' for file in data['files']); assert any(file['path'] == 'apps/web/src/state/threads.ts' and file['status'] == 'ready' for file in data['files']); assert data['integration']['strategy'] == 'reuse-t3-client-runtime-shell-and-thread-detail'; assert data['integration']['mutationPolicy'] == 'read-only'; print('t3 bridge ok'); server.shutdown(); server.server_close(); thread.join(timeout=5)",
+        "from control_plane.dashboard import build_dashboard_server; from threading import Thread; from urllib.request import urlopen; import json, sys; server = build_dashboard_server(runtime_dir=sys.argv[1], paper_project_dirs=[sys.argv[2]], port=0, refresh_seconds=0); thread = Thread(target=server.serve_forever, daemon=True); thread.start(); data = json.loads(urlopen(f'http://127.0.0.1:{server.server_address[1]}/t3-bridge.json', timeout=5).read().decode('utf-8')); assert data['name'] == 'devframe-t3code-local-bridge'; assert data['target']['client'] == 't3code'; assert data['target']['license'] == 'MIT'; assert 'VITE_HTTP_URL' not in data['environment']; assert 'VITE_WS_URL' not in data['environment']; assert 'VITE_DEVFRAME_T3_SHELL_URL' not in data['environment']; assert data['environment']['VITE_DEVFRAME_REALTIME_MODE'] == 'polling'; assert data['environment']['VITE_DEVFRAME_CLIENT_PLAN_URL'].endswith('/client-plan.json'); assert data['environment']['VITE_DEVFRAME_CLIENT_MANIFEST_URL'].endswith('/client-manifest.json'); assert data['environment']['VITE_HOSTED_APP_CHANNEL'] == 'nightly'; assert any(file['path'] == 'apps/web/src/devframe/devframeShellBridge.ts' for file in data['files']); assert any(file['path'] == 'apps/web/src/connection/catalog.ts' and file['status'] == 'ready' for file in data['files']); assert any(file['path'] == 'apps/web/src/state/shell.ts' and file['status'] == 'ready' for file in data['files']); assert any(file['path'] == 'apps/web/src/state/threads.ts' and file['status'] == 'ready' for file in data['files']); assert data['integration']['strategy'] == 'reuse-t3-client-runtime-shell-and-thread-detail'; assert data['integration']['mutationPolicy'] == 'read-only'; print('t3 bridge ok'); server.shutdown(); server.server_close(); thread.join(timeout=5)",
         $runtimeDir,
         $paperDir
     )
