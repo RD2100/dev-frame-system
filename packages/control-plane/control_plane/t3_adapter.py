@@ -530,6 +530,7 @@ def _thread_shell(
     pending_action = bool(action_ids)
     thread_kind = _thread_kind(session, related_run_ids)
     project_binding = _project_binding(thread_kind, project_id)
+    session_status = _session_status(session)
     all_team_gates = _readable_team_gates(run_id, related_run_ids, team_review_gates or {}, base_url)
     team_detail_gates, team_detail_gate_overflow = _cap_with_overflow(all_team_gates, _PROJECTED_DETAIL_LIMIT)
     team_review_gate_status_counts = _count_gate_statuses(all_team_gates)
@@ -541,6 +542,16 @@ def _thread_shell(
         "threadKind": thread_kind,
         "coordinatorScope": "project" if thread_kind == "goal_conversation" else "none",
         "projectBinding": project_binding,
+        "threadListPriority": _thread_list_priority(thread_kind),
+        "threadListSummary": _thread_list_summary(
+            thread_kind=thread_kind,
+            title=_thread_title(session),
+            project_id=project_id,
+            provider=provider,
+            role=_text(session.get("agent_role"), "custom"),
+            status=session_status,
+            summary=_text(session.get("diff_summary"), ""),
+        ),
         "modelSelection": {
             "instanceId": _provider_instance_id(session, bindings_by_id),
             "model": "devframe-governed-session",
@@ -555,7 +566,7 @@ def _thread_shell(
         "archivedAt": None,
         "session": {
             "threadId": thread_id,
-            "status": _session_status(session),
+            "status": session_status,
             "providerName": provider,
             "runtimeMode": _runtime_mode(session, pending_gate),
             "activeTurnId": None,
@@ -682,6 +693,32 @@ def _project_binding_summary(value: object) -> str:
     return f"{mode} ({status})"
 
 
+def _thread_list_priority(thread_kind: str) -> int:
+    return {
+        "global_coordinator": 0,
+        "goal_conversation": 1,
+        "native_chat": 2,
+    }.get(thread_kind, 99)
+
+
+def _thread_list_summary(
+    *,
+    thread_kind: str,
+    title: str,
+    project_id: str,
+    provider: str,
+    role: str,
+    status: str,
+    summary: str = "",
+) -> str:
+    if thread_kind == "global_coordinator":
+        return "Global coordinator inbox for starting goals, supervising work, and reviewing what needs attention."
+    if thread_kind == "goal_conversation":
+        prefix = f"{project_id}: {status}" if project_id else status
+        return f"{prefix} - {summary or title}".strip(" -")
+    return f"{provider} / {role} - {status}"
+
+
 def _cluster_run_status_to_session_status(status: str) -> str:
     return {
         "answered": "stopped",
@@ -718,6 +755,7 @@ def _cluster_run_thread_shell(
     action_details = _action_details(actions_by_source, action_ids, base_url)
     status = _text(run.get("status"), "running")
     pending_action = bool(action_ids)
+    session_status = _cluster_run_status_to_session_status(status)
     return {
         "id": run_id,
         "projectId": project_id,
@@ -729,6 +767,16 @@ def _cluster_run_thread_shell(
             "projectId": project_id,
             "status": "bound" if project_id else "missing",
         },
+        "threadListPriority": _thread_list_priority("goal_conversation"),
+        "threadListSummary": _thread_list_summary(
+            thread_kind="goal_conversation",
+            title=goal,
+            project_id=project_id,
+            provider="devframe",
+            role="project-coordinator",
+            status=session_status,
+            summary=_text(run.get("summary"), ""),
+        ),
         "modelSelection": {
             "instanceId": "devframe-project-coordinator",
             "model": "devframe-project-coordinator",
@@ -743,7 +791,7 @@ def _cluster_run_thread_shell(
         "archivedAt": None,
         "session": {
             "threadId": run_id,
-            "status": _cluster_run_status_to_session_status(status),
+            "status": session_status,
             "providerName": "devframe",
             "runtimeMode": "approval-required" if pending_action or status in {"failed", "interrupted"} else "full-access",
             "activeTurnId": None,
@@ -1092,6 +1140,15 @@ def _team_workbench_thread_shell(
         "threadKind": "global_coordinator",
         "coordinatorScope": "global",
         "projectBinding": _project_binding("global_coordinator", project_id),
+        "threadListPriority": _thread_list_priority("global_coordinator"),
+        "threadListSummary": _thread_list_summary(
+            thread_kind="global_coordinator",
+            title="DevFrame Global Coordinator",
+            project_id=project_id,
+            provider="devframe",
+            role="global-coordinator",
+            status="idle",
+        ),
         "modelSelection": {
             "instanceId": "devframe-team-workbench",
             "model": "devframe-team-workbench",
@@ -2078,6 +2135,8 @@ def _thread_detail(thread_shell: dict[str, Any], updated_at: str, team: dict[str
             if isinstance(thread_shell.get("projectBinding"), dict)
             else _project_binding("native_chat", _text(thread_shell.get("projectId"), ""))
         ),
+        "threadListPriority": int(thread_shell.get("threadListPriority", _thread_list_priority(_text(thread_shell.get("threadKind"), "native_chat")))),
+        "threadListSummary": _text(thread_shell.get("threadListSummary"), ""),
         "modelSelection": thread_shell.get("modelSelection"),
         "runtimeMode": thread_shell.get("runtimeMode"),
         "interactionMode": thread_shell.get("interactionMode"),
@@ -2237,6 +2296,8 @@ def _cluster_run_thread_detail(
         "threadKind": _text(thread_shell.get("threadKind"), "goal_conversation"),
         "coordinatorScope": _text(thread_shell.get("coordinatorScope"), "project"),
         "projectBinding": thread_shell.get("projectBinding"),
+        "threadListPriority": int(thread_shell.get("threadListPriority", _thread_list_priority("goal_conversation"))),
+        "threadListSummary": _text(thread_shell.get("threadListSummary"), ""),
         "modelSelection": thread_shell.get("modelSelection"),
         "runtimeMode": thread_shell.get("runtimeMode"),
         "interactionMode": thread_shell.get("interactionMode"),

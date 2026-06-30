@@ -1,4 +1,5 @@
 import json
+import os
 import time
 from pathlib import Path
 from threading import Thread
@@ -89,6 +90,8 @@ def test_t3_client_shell_projects_mcp_live_session():
     assert thread["threadKind"] == "native_chat"
     assert thread["coordinatorScope"] == "none"
     assert thread["projectBinding"] == {"mode": "none", "projectId": "project", "status": "bound"}
+    assert thread["threadListPriority"] == 2
+    assert thread["threadListSummary"] == "codexpro / coordinator - running"
     assert thread["modelSelection"]["instanceId"] == "codexpro-web"
     assert thread["runtimeMode"] == "full-access"
     assert thread["session"]["status"] == "running"
@@ -808,6 +811,7 @@ def test_t3_client_shell_team_projection_backward_compatible_without_team():
     assert team["conflictControl"] == []
     assert shell["t3"]["threads"][-1]["id"] == "devframe-team-workbench-session"
     assert shell["t3"]["threads"][-1]["threadKind"] == "global_coordinator"
+    assert shell["t3"]["threads"][-1]["threadListPriority"] == 0
     assert shell["t3"]["threadDetails"][-1]["threadKind"] == "global_coordinator"
 
 
@@ -854,6 +858,7 @@ def test_build_t3_client_shell_projects_cluster_runs_as_goal_conversations(tmp_p
         "projectPath": str(workspace),
         "target": "coordinator",
         "goal": "Ship the feature",
+        "ownerPid": os.getpid(),
         "status": "running",
         "summary": "Coordinator planned the goal; agents are working…",
         "startedAt": "2026-07-01T00:00:00Z",
@@ -886,6 +891,8 @@ def test_build_t3_client_shell_projects_cluster_runs_as_goal_conversations(tmp_p
         "projectId": "demo-project",
         "status": "bound",
     }
+    assert goal_thread["threadListPriority"] == 1
+    assert "demo-project: running -" in goal_thread["threadListSummary"]
     assert goal_thread["title"] == "Ship the feature"
 
     goal_detail = next(detail for detail in shell["t3"]["threadDetails"] if detail["id"] == "g-demo01")
@@ -2503,6 +2510,8 @@ def test_team_workbench_created_with_team_data_and_no_sessions():
     assert thread["threadKind"] == "global_coordinator"
     assert thread["coordinatorScope"] == "global"
     assert thread["projectBinding"] == {"mode": "optional", "projectId": "p", "status": "bound"}
+    assert thread["threadListPriority"] == 0
+    assert "Global coordinator inbox" in thread["threadListSummary"]
     assert thread["runtimeMode"] == "approval-required"
     assert thread["interactionMode"] == "plan"
     assert thread["hasPendingApprovals"] is True

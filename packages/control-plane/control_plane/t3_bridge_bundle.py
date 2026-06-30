@@ -231,6 +231,8 @@ export interface DevFrameT3ThreadShell {
   readonly threadKind: DevFrameThreadKind;
   readonly coordinatorScope: DevFrameCoordinatorScope;
   readonly projectBinding: DevFrameProjectBinding;
+  readonly threadListPriority?: number;
+  readonly threadListSummary?: string;
 }
 
 export interface DevFrameT3ShellSnapshot {
@@ -246,6 +248,8 @@ export type DevFrameThreadDetail = Record<string, unknown> &
     readonly threadKind?: DevFrameThreadKind;
     readonly coordinatorScope?: DevFrameCoordinatorScope;
     readonly projectBinding?: DevFrameProjectBinding;
+    readonly threadListPriority?: number;
+    readonly threadListSummary?: string;
   };
 
 export interface DevFrameTeamAgent {
