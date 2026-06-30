@@ -174,15 +174,19 @@ def build_t3_client_shell_from_state(state: dict[str, Any], base_url: str | None
             "actions": "/actions.json",
             "controlPlaneBaseUrl": _clean_base_url(base_url),
             "writePolicy": "read-only",
-            "conversationModel": {
-                "globalCoordinatorThreadId": _GLOBAL_COORDINATOR_THREAD_ID,
-                "goalProjectBindingRequired": True,
-                "threadKinds": ["native_chat", "goal_conversation", "global_coordinator"],
-            },
+            "conversationModel": build_devframe_conversation_model(),
             "gates": [_gate_overlay(gate) for gate in gates if isinstance(gate, dict)],
             "actionsBySource": _public_actions_by_source(actions_by_source),
             "team": _project_team(team),
         },
+    }
+
+
+def build_devframe_conversation_model() -> dict[str, Any]:
+    return {
+        "globalCoordinatorThreadId": _GLOBAL_COORDINATOR_THREAD_ID,
+        "goalProjectBindingRequired": True,
+        "threadKinds": ["native_chat", "goal_conversation", "global_coordinator"],
     }
 
 

@@ -107,6 +107,7 @@ def build_client_launch_plan(
             "manifest": f"{base_url}/client-manifest.json",
             "t3Bridge": f"{base_url}/t3-bridge.json",
             "t3Shell": f"{base_url}/t3-shell.json",
+            "conversationModel": f"{base_url}/api/t3/conversation-model",
             "projects": f"{base_url}/api/t3/projects",
             "state": f"{base_url}/state.json",
             "sessions": f"{base_url}/sessions.json",

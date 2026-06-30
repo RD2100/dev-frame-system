@@ -83,6 +83,15 @@ def build_visual_client_manifest() -> dict[str, Any]:
             "description": "Loopback read of registered projects for coordinator goal creation and project binding selection.",
         },
         {
+            "id": "t3-conversation-model",
+            "path": "/api/t3/conversation-model",
+            "method": "GET",
+            "contract": "t3_conversation_model",
+            "object_types": ["DevFrameSession", "Project"],
+            "mutates": False,
+            "description": "Loopback read of conversation kinds, the global coordinator thread id, and the goal project-binding requirement.",
+        },
+        {
             "id": "sessions",
             "path": "/sessions.json",
             "method": "GET",

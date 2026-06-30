@@ -21,6 +21,7 @@ from .coding_dispatch import resolve_agent_count, resolve_coding_targets
 from .go_dispatch import DEFAULT_OPENCODE_AGENT, run_go_dispatch
 from .t3_bridge_bundle import build_t3_bridge_bundle, render_t3_bridge_bundle_json
 from .t3_adapter import (
+    build_devframe_conversation_model,
     build_t3_client_shell,
     render_cached_t3_client_shell_compact_json,
     render_t3_client_shell_compact_json,
@@ -142,6 +143,10 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     paper_project_dirs=paper_project_dirs,
                     base_url=f"http://{address}:{actual_port}",
                 )
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
+                return
+            if path == "/api/t3/conversation-model":
+                body = json.dumps(build_devframe_conversation_model(), indent=2, ensure_ascii=True)
                 self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
                 return
             if path == "/api/t3/projects":

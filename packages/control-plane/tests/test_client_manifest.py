@@ -292,6 +292,7 @@ def test_dashboard_serves_client_manifest_as_read_only_contract(tmp_path):
         assert mappings["session-workbench"]["client_surface"] == "native-conversation-list-and-session-detail"
         assert any(endpoint["id"] == "t3-shell" for endpoint in manifest["endpoints"])
         assert any(endpoint["id"] == "t3-projects" for endpoint in manifest["endpoints"])
+        assert any(endpoint["id"] == "t3-conversation-model" for endpoint in manifest["endpoints"])
         assert any(endpoint["id"] == "t3-environment-descriptor" for endpoint in manifest["endpoints"])
         assert any(endpoint["id"] == "t3-auth-session" for endpoint in manifest["endpoints"])
         assert any(endpoint["id"] == "go-dispatch-page" for endpoint in manifest["endpoints"])

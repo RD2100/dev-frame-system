@@ -420,9 +420,17 @@ export async function fetchDevFrameT3Shell(
 }
 
 export async function fetchDevFrameConversationModel(
-  config: DevFrameShellBridgeConfig,
+  config: DevFrameControlPlaneConfig,
 ): Promise<DevFrameConversationModel> {
-  return (await fetchDevFrameT3ShellEnvelope(config)).devframe.conversationModel;
+  const response = await fetch(new URL("/api/t3/conversation-model", config.controlPlaneBaseUrl).toString(), {
+    method: "GET",
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`DevFrame conversation model request failed: ${response.status}`);
+  }
+  return (await response.json()) as DevFrameConversationModel;
 }
 
 export async function fetchDevFrameProjectOptions(

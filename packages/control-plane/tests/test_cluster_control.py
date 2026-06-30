@@ -232,6 +232,25 @@ def test_dashboard_projects_endpoint_lists_registered_projects(tmp_path, monkeyp
         thread.join(timeout=5)
 
 
+def test_dashboard_conversation_model_endpoint(tmp_path):
+    server = build_dashboard_server(runtime_dir=tmp_path / "runtime", port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        status, body = _get_json(base_url, "/api/t3/conversation-model")
+        assert status == 200
+        assert body == {
+            "globalCoordinatorThreadId": "devframe-team-workbench-session",
+            "goalProjectBindingRequired": True,
+            "threadKinds": ["native_chat", "goal_conversation", "global_coordinator"],
+        }
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
 def test_dashboard_cluster_run_rejects_unknown_target(tmp_path, monkeypatch):
     monkeypatch.setattr(cluster_run_module, "_run_cluster_workflow", lambda *a, **k: None)
     runtime_dir = tmp_path / "runtime"
