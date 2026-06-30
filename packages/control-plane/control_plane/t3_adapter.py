@@ -133,16 +133,15 @@ def build_t3_client_shell_from_state(state: dict[str, Any], base_url: str | None
     ]
     first_project = next((project for project in projects if isinstance(project, dict)), {})
     project_id = _text(first_project.get("project_id"), "project")
-    if _has_team_data(team):
-        thread_shells.append(
-            _team_workbench_thread_shell(
-                team,
-                _clean_base_url(base_url),
-                updated_at,
-                project_id=project_id,
-                actions=actions,
-            )
+    thread_shells.append(
+        _team_workbench_thread_shell(
+            team if isinstance(team, dict) else {},
+            _clean_base_url(base_url),
+            updated_at,
+            project_id=project_id,
+            actions=actions,
         )
+    )
     thread_details = [
         _thread_detail(
             thread_shell,

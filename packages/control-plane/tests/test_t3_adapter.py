@@ -805,6 +805,42 @@ def test_t3_client_shell_team_projection_backward_compatible_without_team():
     assert team["evidenceStore"] == []
     assert team["reviewGates"] == []
     assert team["conflictControl"] == []
+    assert shell["t3"]["threads"][-1]["id"] == "devframe-team-workbench-session"
+    assert shell["t3"]["threads"][-1]["threadKind"] == "global_coordinator"
+    assert shell["t3"]["threadDetails"][-1]["threadKind"] == "global_coordinator"
+
+
+def test_global_coordinator_thread_exists_even_without_team_or_sessions():
+    state = {
+        "version": 1,
+        "projects": [{
+            "project_id": "p",
+            "display_name": "P",
+            "goal": "g",
+            "status": "active",
+            "risk_state": "low",
+            "contract_path": "/x",
+        }],
+        "provider_bindings": [],
+        "sessions": [],
+        "gates": [],
+        "next_actions": [],
+    }
+
+    shell = build_t3_client_shell_from_state(state)
+
+    validate_schema(load_schema(), shell)
+    assert len(shell["t3"]["threads"]) == 1
+    thread = shell["t3"]["threads"][0]
+    assert thread["id"] == "devframe-team-workbench-session"
+    assert thread["title"] == "DevFrame Global Coordinator"
+    assert thread["threadKind"] == "global_coordinator"
+    assert thread["coordinatorScope"] == "global"
+    assert thread["projectBinding"] == {"mode": "optional", "projectId": "p", "status": "bound"}
+    detail = shell["t3"]["threadDetails"][0]
+    assert detail["threadKind"] == "global_coordinator"
+    assert "### DevFrame Global Coordinator" in detail["messages"][0]["text"]
+    assert "Agents: 0" in detail["messages"][0]["text"]
 
 
 def test_t3_shell_sanitizes_windows_absolute_evidence_paths(tmp_path):
