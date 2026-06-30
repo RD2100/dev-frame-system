@@ -69,7 +69,7 @@ def build_client_launch_plan(
                 "kind": "native-client",
                 "bridgeEndpoint": f"{base_url}/t3-bridge.json",
                 "shellEndpoint": f"{base_url}/t3-shell.json",
-                "purpose": "Primary T3 Code native client integration for project, thread, session, and gated action workflows.",
+                "purpose": "Secondary T3 Code native client integration for project, thread, session, and gated action inspection around the main devframe code workflow.",
             },
             "auxiliary": [
                 {
@@ -87,7 +87,7 @@ def build_client_launch_plan(
                 "license": "MIT",
                 "status": "bridge-ready" if t3_status.get("available") else "bridge-ready-client-runtime-missing",
                 "command": t3_status,
-                "boundary": "T3 Code owns the primary native client shell plus project/thread/session interaction patterns.",
+                "boundary": "T3 Code provides a secondary native client shell for project/thread/session inspection around the primary devframe code product.",
             },
             "executor": {
                 "candidate": "opencode",
@@ -179,7 +179,7 @@ def build_client_launch_plan(
             "reconReceipt": "docs/status/recon-receipt-local-agent-client-mainline.md",
             "rkrRulePath": "rules/recon.md",
             "reuseAssessment": "docs/status/t3code-client-mainline-reuse-assessment.md",
-            "primaryClientDecision": "T3Code: primary native-client shell; DevFrame owns governance",
+            "primaryClientDecision": "devframe code: primary product loop; T3Code: secondary native-client shell; DevFrame owns governance",
             "workerDecision": "OpenCode: local coding-agent worker runtime",
             "webAiAdapterDecision": "CodexPro/DevSpace: Web AI MCP bridge patterns; ZIP/report is fallback only",
             "nextApprovedSlice": "Expose Recon Receipt and reuse decision in client launch plan and visual client manifest",
@@ -187,7 +187,7 @@ def build_client_launch_plan(
         "acceptance": {
             "zeroConfig": True,
             "browserCheck": "Open the auxiliary launch.url and verify project, sessions, gates, actions, /go/dispatch, /client-manifest.json, and /t3-shell.json are reachable.",
-            "nextIntegrationStep": "Install the T3 Code bridge from endpoints.t3Bridge, point the primary native T3 shell at endpoints.t3Shell and endpoints.manifest, then use reviewGate for Web GPT external review before gated execution.",
+            "nextIntegrationStep": "Install the T3 Code bridge from endpoints.t3Bridge, point the secondary native T3 shell at endpoints.t3Shell and endpoints.manifest, then use reviewGate for Web GPT external review before gated execution.",
         },
     }
 

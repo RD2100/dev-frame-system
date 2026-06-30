@@ -8,7 +8,7 @@ from .methodology_dispatch import METHODOLOGY_DISPATCH
 
 
 def build_visual_client_manifest() -> dict[str, Any]:
-    """Describe the default-read-only contract the primary native client can consume."""
+    """Describe the default-read-only contract the secondary native client can consume."""
     endpoints = [
         {
             "id": "client-launch-plan",
@@ -17,7 +17,7 @@ def build_visual_client_manifest() -> dict[str, Any]:
             "contract": "local_agent_client_launch_plan",
             "object_types": ["ClientLaunch", "Project", "ProviderBinding", "Agent", "DevFrameSession", "Gate", "Action"],
             "mutates": False,
-            "description": "Zero-config native-client launch plan, reuse boundary, endpoint map, and dashboard support summary.",
+            "description": "Zero-config secondary native-client launch plan, reuse boundary, endpoint map, and dashboard support summary around the primary devframe code product.",
         },
         {
             "id": "t3-bridge-bundle",
@@ -53,7 +53,7 @@ def build_visual_client_manifest() -> dict[str, Any]:
             "contract": "t3_client_shell",
             "object_types": ["Project", "ProviderBinding", "Agent", "DevFrameSession", "Gate", "Action"],
             "mutates": False,
-            "description": "Primary T3 Code native-client project/thread shell snapshot with DevFrame gate and action overlays.",
+            "description": "Secondary T3 Code native-client project/thread shell snapshot with DevFrame gate and action overlays around the main devframe code workflow.",
         },
         {
             "id": "t3-environment-descriptor",
@@ -502,7 +502,7 @@ def build_visual_client_manifest() -> dict[str, Any]:
             "reconReceipt": "docs/status/recon-receipt-local-agent-client-mainline.md",
             "rkrRulePath": "rules/recon.md",
             "reuseAssessment": "docs/status/t3code-client-mainline-reuse-assessment.md",
-            "primaryClientDecision": "T3Code: primary native-client shell; DevFrame owns governance",
+            "primaryClientDecision": "devframe code: primary product loop; T3Code: secondary native-client shell; DevFrame owns governance",
             "workerDecision": "OpenCode: local coding-agent worker runtime",
             "webAiAdapterDecision": "CodexPro/DevSpace: Web AI MCP bridge patterns; ZIP/report is fallback only",
             "nextApprovedSlice": "Expose Recon Receipt and reuse decision in client launch plan and visual client manifest",

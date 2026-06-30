@@ -111,7 +111,7 @@ def test_visual_client_manifest_matches_public_schema():
     assert mappings["web-gpt-review-gate"]["source_endpoint"] == "/actions.md"
     assert mappings["web-gpt-review-gate"]["object_types"] == ["Action", "Gate", "DevFrameSession"]
     descriptions = {endpoint["id"]: endpoint["description"] for endpoint in manifest["endpoints"]}
-    assert "Primary T3 Code native-client" in descriptions["t3-shell"]
+    assert "Secondary T3 Code native-client" in descriptions["t3-shell"]
     assert "lightweight web dashboard" in descriptions["go-dispatch-page"]
     mutating_endpoints = [endpoint for endpoint in manifest["endpoints"] if endpoint["mutates"]]
     assert mutating_endpoints == [
@@ -243,6 +243,7 @@ def test_visual_client_manifest_matches_public_schema():
     assert manifest["governance"]["reconReceipt"] == "docs/status/recon-receipt-local-agent-client-mainline.md"
     assert manifest["governance"]["rkrRulePath"] == "rules/recon.md"
     assert manifest["governance"]["reuseAssessment"] == "docs/status/t3code-client-mainline-reuse-assessment.md"
+    assert "devframe code" in manifest["governance"]["primaryClientDecision"]
     assert "T3Code" in manifest["governance"]["primaryClientDecision"]
     assert "OpenCode" in manifest["governance"]["workerDecision"]
     assert "ZIP/report is fallback" in manifest["governance"]["webAiAdapterDecision"]

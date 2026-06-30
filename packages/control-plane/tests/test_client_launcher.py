@@ -48,7 +48,7 @@ def test_client_launch_plan_maps_t3_bridge_and_opencode_executor(tmp_path, monke
         "kind": "native-client",
         "bridgeEndpoint": "http://127.0.0.1:8788/t3-bridge.json",
         "shellEndpoint": "http://127.0.0.1:8788/t3-shell.json",
-        "purpose": "Primary T3 Code native client integration for project, thread, session, and gated action workflows.",
+        "purpose": "Secondary T3 Code native client integration for project, thread, session, and gated action inspection around the main devframe code workflow.",
     }
     assert plan["surfaces"]["auxiliary"] == [
         {
@@ -62,7 +62,7 @@ def test_client_launch_plan_maps_t3_bridge_and_opencode_executor(tmp_path, monke
     assert plan["reuse"]["visualClient"]["license"] == "MIT"
     assert plan["reuse"]["visualClient"]["status"] == "bridge-ready"
     assert plan["reuse"]["visualClient"]["command"]["name"] == "t3code"
-    assert "primary native client" in plan["reuse"]["visualClient"]["boundary"]
+    assert "secondary native client shell" in plan["reuse"]["visualClient"]["boundary"]
     assert plan["reuse"]["executor"]["candidate"] == "opencode"
     assert plan["reuse"]["executor"]["status"] == "ready"
     assert plan["endpoints"]["manifest"] == "http://127.0.0.1:8788/client-manifest.json"
@@ -94,6 +94,7 @@ def test_client_launch_plan_maps_t3_bridge_and_opencode_executor(tmp_path, monke
     assert plan["governance"]["reconReceipt"] == "docs/status/recon-receipt-local-agent-client-mainline.md"
     assert plan["governance"]["rkrRulePath"] == "rules/recon.md"
     assert plan["governance"]["reuseAssessment"] == "docs/status/t3code-client-mainline-reuse-assessment.md"
+    assert "devframe code" in plan["governance"]["primaryClientDecision"]
     assert "T3Code" in plan["governance"]["primaryClientDecision"]
     assert "OpenCode" in plan["governance"]["workerDecision"]
     assert "ZIP/report is fallback" in plan["governance"]["webAiAdapterDecision"]
