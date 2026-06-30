@@ -118,7 +118,7 @@ try {
     Invoke-Step "devframe init paper_iteration" $devframe @("init", "paper_iteration", $paperDir)
     Invoke-Step "devframe client dry run" $python @(
         "-c",
-        "import subprocess, sys; text = subprocess.check_output([sys.argv[1], 'client', '--dry-run', '--runtime-dir', sys.argv[2], '--port', '8788'], text=True); assert 'DevFrame Local Agent Client' in text; assert 'Mode         : Primary T3 Code desktop/native client + DevFrame read model + /go orchestration via OpenCode workers' in text; assert 'Dashboard    : http://127.0.0.1:8788/?lang=zh-CN (auxiliary)' in text; assert 'http://127.0.0.1:8788/?lang=zh-CN' in text; assert 't3 bridge' in text; assert 't3 shell' in text; assert '/go page' in text; assert 'Write policy : read-only' in text; print('client dry run ok')",
+        "import subprocess, sys; text = subprocess.check_output([sys.argv[1], 'client', '--dry-run', '--runtime-dir', sys.argv[2], '--port', '8788'], text=True); assert 'DevFrame Local Agent Client' in text; assert 'Primary path : devframe code (governed coding CLI)' in text; assert 'Mode         : Secondary T3 Code desktop/native client + DevFrame read model + control-plane inspection' in text; assert 'Dashboard    : http://127.0.0.1:8788/?lang=zh-CN (auxiliary)' in text; assert 'http://127.0.0.1:8788/?lang=zh-CN' in text; assert 't3 bridge' in text; assert 't3 shell' in text; assert '/go page' in text; assert 'Write policy : read-only' in text; print('client dry run ok')",
         $devframe,
         $runtimeDir
     )

@@ -201,7 +201,8 @@ def render_client_launch_plan_text(plan: dict[str, Any]) -> str:
     executor = plan["reuse"]["executor"]
     lines = [
         "DevFrame Local Agent Client",
-        "Mode         : Primary T3 Code desktop/native client + DevFrame read model + /go orchestration via OpenCode workers",
+        "Primary path : devframe code (governed coding CLI)",
+        "Mode         : Secondary T3 Code desktop/native client + DevFrame read model + control-plane inspection",
         f"T3 shell     : {plan['endpoints']['t3Shell']}",
         f"Dashboard    : {plan['launch']['url']} (auxiliary)",
         f"Runtime      : {plan['launch']['runtimeDir']}",
@@ -220,10 +221,10 @@ def render_client_launch_plan_text(plan: dict[str, Any]) -> str:
         f"- /go page  : {plan['endpoints']['goDispatch']}",
         "",
         "Reuse boundary",
-        "- T3 Code: primary native client shell and project/thread/session interaction patterns",
+        "- T3 Code: secondary native client shell for project/thread/session inspection",
         "- OpenCode: local coding-agent runtime for /go development orchestration",
         "- Web GPT: external review gate through explicit submit-review command",
-        "- DevFrame: governance, evidence, gates, decisions, /go dispatch, auxiliary dashboard, and external-brain workflow",
+        "- DevFrame: primary governed coding product, plus evidence, gates, decisions, /go dispatch, auxiliary dashboard, and external-brain workflow",
     ]
     return "\n".join(lines) + "\n"
 

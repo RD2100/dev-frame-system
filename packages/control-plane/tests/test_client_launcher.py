@@ -139,7 +139,8 @@ def test_client_dry_run_outputs_zero_config_plan(tmp_path, monkeypatch, capsys):
 
     output = capsys.readouterr().out
     assert "DevFrame Local Agent Client" in output
-    assert "Primary T3 Code desktop/native client + DevFrame read model + /go orchestration via OpenCode workers" in output
+    assert "Primary path : devframe code (governed coding CLI)" in output
+    assert "Secondary T3 Code desktop/native client + DevFrame read model + control-plane inspection" in output
     assert "Dashboard    : http://127.0.0.1:8788/?lang=zh-CN (auxiliary)" in output
     assert "http://127.0.0.1:8788/?lang=zh-CN" in output
     assert "t3 shell" in output
@@ -235,7 +236,7 @@ def test_client_t3desktop_installs_bundle_and_prints_launch_plan(tmp_path, monke
 
     output = capsys.readouterr().out
     assert "DevFrame Local Agent Client" in output
-    assert "Primary T3 Code desktop/native client" in output
+    assert "Secondary T3 Code desktop/native client" in output
     assert "DevFrame T3 Code bridge bundle" in output
     assert "Auxiliary dashboard" in output
     assert "wrote" in output
