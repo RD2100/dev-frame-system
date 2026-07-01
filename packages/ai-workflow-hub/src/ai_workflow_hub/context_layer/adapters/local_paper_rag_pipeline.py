@@ -544,6 +544,7 @@ def build_local_paper_rag_pipeline_report(
         "model_fingerprint": _sha256_text(str(closed_loop["model_name"])),
         "retrieval_query_count": int(closed_loop["retrieval_queries_count"]),
         "retrieval_success_count": int(closed_loop["retrieval_success_count"]),
+        "retrieved_chunk_fingerprints": list(closed_loop.get("retrieved_chunk_fingerprints", [])),
         "top_k_total_count": int(closed_loop["top_k_total_count"]),
         **rerank,
         **quality,

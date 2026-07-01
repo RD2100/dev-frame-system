@@ -1,0 +1,37 @@
+{
+  "title": "Custom Methodology Skills",
+  "description": "User-created/customized methodology skills as a complete machine-readable unit (identity + behavior profile). Stored at <runtime>/skills.json and editable from RD-Code. Built-in skills under tools/skills remain read-only repo assets; custom skills extend or override them by id.",
+  "type": "object",
+  "required": ["version", "skills"],
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "skills": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/custom_skill" },
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "custom_skill": {
+      "type": "object",
+      "required": ["id", "title", "triggers"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "title": { "type": "string", "minLength": 1 },
+        "triggers": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^@[a-z0-9][a-z0-9-]*$" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "description": { "type": "string" },
+        "instructions": { "type": "string" },
+        "readOnly": { "type": "boolean" },
+        "networkEnabled": { "type": "boolean" },
+        "requireRedGreenEvidence": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

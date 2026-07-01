@@ -46,9 +46,7 @@ def do_transfer(target_url: str) -> TransferResult:
     # Read handoff content
     handoff_text = HANDOFF_PATH.read_text(encoding="utf-8")
     bootstrap_prompt = (
-        "请阅读以上 HANDOFF.md 文件（作为 .md 文件附件上传），"
-        "理解项目身份、架构、已完成阶段、当前状态、安全边界和推荐下一步。"
-        "请使用英文 YAML 格式回复，确认你的理解：\n\n"
+        "Read the attached HANDOFF.md file and reply with YAML confirming your understanding of the project identity, architecture, completed phases, current state, safety boundaries, and next steps.\n\n"
         "```yaml\n"
         "overall_judgment: accepted | blocked | review_unverified\n"
         "handoff_understood: yes | no\n"

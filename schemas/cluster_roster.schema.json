@@ -1,0 +1,31 @@
+{
+  "title": "Cluster Agent Roster",
+  "description": "User-customizable agent roster for the RD-Code cluster coordinator. A machine-readable override for the hardcoded default roster: the coordinator plus the worker agents a user can address and dispatch goals to. Stored at <runtime>/cluster-roster.json and editable from the RD-Code coordinator surface.",
+  "type": "object",
+  "required": ["version", "agents"],
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "agents": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/roster_agent" },
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "roster_agent": {
+      "type": "object",
+      "required": ["id", "role", "label"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "role": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "model": { "type": "string" },
+        "provider": { "type": "string" },
+        "methodology": { "type": "string" },
+        "enabled": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

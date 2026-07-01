@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json as _json
+import logging
 import os
 import signal
 import subprocess
@@ -16,6 +17,9 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Any
+
+
+logger = logging.getLogger(__name__)
 
 
 def _ensure_env() -> None:
@@ -38,13 +42,15 @@ def _find_opencode() -> str | None:
 
     is_windows = os.name == "nt"
     candidates = [
-        r"D:\Tools\npm_pack\opencode",
+        os.environ.get("OPENCODE_BIN", ""),
         os.path.expanduser("~/.local/bin/opencode"),
         os.path.expanduser("~/bin/opencode"),
         os.path.expanduser("~/npm_pack/opencode"),
         "opencode",
     ]
     for c in candidates:
+        if not c:
+            continue
         resolved = _resolve_opencode_on_windows(c) if is_windows else c
         for use_shell in (False, True):
             try:
@@ -99,6 +105,7 @@ def _run_opencode_help(args: list[str]) -> str:
         _opencode_help_cache[cache_key] = text
         return text
     except Exception:
+        logger.debug("opencode help probe failed", exc_info=True)
         return ""
 
 
@@ -124,6 +131,7 @@ def opencode_cli_check() -> dict[str, Any]:
         result["models_cmd_ok"] = r.returncode == 0
         result["models_stdout"] = r.stdout[:500] if r.returncode == 0 else ""
     except Exception:
+        logger.debug("opencode models probe failed", exc_info=True)
         result["models_cmd_ok"] = False
         result["models_stdout"] = ""
     return result
@@ -140,6 +148,7 @@ def opencode_list_models() -> list[str]:
         return [l.strip().split()[0] for l in r.stdout.strip().split("\n")
                 if l.strip() and not l.startswith("Model") and not l.startswith("---")]
     except Exception:
+        logger.debug("opencode models list failed", exc_info=True)
         return []
 
 
@@ -165,7 +174,7 @@ def _kill_process_tree(pid: int) -> None:
             subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)],
                            capture_output=True, timeout=10)
         except Exception:
-            pass
+            logger.debug("failed to terminate opencode process tree", exc_info=True)
 
 
 # ---------------------------------------------------------------------------
@@ -239,8 +248,10 @@ def opencode_run(
             except subprocess.TimeoutExpired:
                 timed_out = True
                 _kill_process_tree(proc.pid)
-                try: proc.wait(timeout=5)
-                except Exception: pass
+                try:
+                    proc.wait(timeout=5)
+                except Exception:
+                    logger.debug("opencode process did not exit after tree kill", exc_info=True)
 
         # 读取输出
         stdout = Path(stdout_tmp).read_text(encoding="utf-8", errors="replace")
@@ -265,10 +276,14 @@ def opencode_run(
             Path(stderr_log).parent.mkdir(parents=True, exist_ok=True)
             Path(stderr_log).write_text(stderr, encoding="utf-8")
     finally:
-        try: os.unlink(stdout_tmp)
-        except Exception: pass
-        try: os.unlink(stderr_tmp)
-        except Exception: pass
+        try:
+            os.unlink(stdout_tmp)
+        except Exception:
+            logger.debug("failed to remove temporary opencode stdout log", exc_info=True)
+        try:
+            os.unlink(stderr_tmp)
+        except Exception:
+            logger.debug("failed to remove temporary opencode stderr log", exc_info=True)
 
     return {
         "exit_code": exit_code,

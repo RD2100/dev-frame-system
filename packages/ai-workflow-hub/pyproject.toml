@@ -30,6 +30,9 @@ dev = [
     "ruff>=0.4.0",
     "mypy>=1.8.0",
 ]
+paper = [
+    "pypdf>=4.0.0",
+]
 
 [project.scripts]
 aihub = "ai_workflow_hub.cli:app"

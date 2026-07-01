@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rd2100.devframe/schemas/t3-bridge-bundle",
+  "title": "T3 Code Local Bridge Bundle",
+  "description": "Installable bridge metadata for wiring T3 Code to the DevFrame local Agent Control Plane.",
+  "type": "object",
+  "required": ["version", "name", "source", "target", "launch", "environment", "files", "integration", "acceptance"],
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "name": { "type": "string", "const": "devframe-t3code-local-bridge" },
+    "source": {
+      "type": "object",
+      "required": ["owner", "contract", "devframeClientPlan"],
+      "properties": {
+        "owner": { "type": "string", "minLength": 1 },
+        "contract": { "type": "string", "const": "t3_code_local_bridge_bundle" },
+        "devframeClientPlan": { "type": "string", "pattern": "^https?://" }
+      },
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "required": ["client", "repository", "license", "packageManager", "node", "apps"],
+      "properties": {
+        "client": { "type": "string", "const": "t3code" },
+        "repository": { "type": "string", "pattern": "^https://github.com/" },
+        "license": { "type": "string", "const": "MIT" },
+        "packageManager": { "type": "string", "const": "pnpm" },
+        "node": { "type": "string", "minLength": 1 },
+        "apps": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["apps/web", "apps/desktop"] },
+          "uniqueItems": true,
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "launch": {
+      "type": "object",
+      "required": ["devframe", "t3WebCommand", "t3DesktopCommand"],
+      "properties": {
+        "devframe": { "type": "object" },
+        "t3WebCommand": { "type": "string", "minLength": 1 },
+        "t3DesktopCommand": { "type": "string", "minLength": 1 },
+        "t3DesktopProdCommand": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "environment": {
+      "type": "object",
+      "required": [
+        "VITE_DEVFRAME_REALTIME_MODE",
+        "VITE_DEVFRAME_CLIENT_PLAN_URL",
+        "VITE_DEVFRAME_CLIENT_MANIFEST_URL",
+        "VITE_HOSTED_APP_CHANNEL"
+      ],
+      "properties": {
+        "VITE_DEVFRAME_REALTIME_MODE": { "type": "string", "const": "polling" },
+        "VITE_DEVFRAME_CLIENT_PLAN_URL": { "type": "string", "pattern": "^https?://" },
+        "VITE_DEVFRAME_T3_SHELL_URL": { "type": "string", "pattern": "^https?://" },
+        "VITE_DEVFRAME_CLIENT_MANIFEST_URL": { "type": "string", "pattern": "^https?://" },
+        "VITE_HOSTED_APP_CHANNEL": { "type": "string", "const": "nightly" }
+      },
+      "additionalProperties": false
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["path", "action", "role", "status"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "action": { "type": "string", "enum": ["add", "patch"] },
+          "role": { "type": "string", "minLength": 1 },
+          "status": { "type": "string", "enum": ["ready"] }
+        },
+        "additionalProperties": false
+      },
+      "uniqueItems": true
+    },
+    "integration": {
+      "type": "object",
+      "required": ["strategy", "readModel", "pollIntervalMs", "mutationPolicy", "nextRuntimeStep"],
+      "properties": {
+        "strategy": { "type": "string", "const": "reuse-t3-client-runtime-shell-and-thread-detail" },
+        "readModel": { "type": "string", "const": "OrchestrationShellSnapshot + OrchestrationThread" },
+        "pollIntervalMs": { "type": "integer", "minimum": 500 },
+        "mutationPolicy": { "type": "string", "const": "read-only" },
+        "nextRuntimeStep": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "acceptance": {
+      "type": "object",
+      "required": ["devframeServer", "t3Desktop", "expected"],
+      "properties": {
+        "devframeServer": { "type": "string", "minLength": 1 },
+        "t3Desktop": { "type": "string", "minLength": 1 },
+        "t3Web": { "type": "string", "minLength": 1 },
+        "expected": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

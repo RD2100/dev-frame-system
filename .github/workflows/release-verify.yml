@@ -27,7 +27,7 @@ jobs:
 
       - name: Install release gate dependencies
         shell: pwsh
-        run: python -m pip install -e ".\packages\control-plane[dev]"
+        run: python -m pip install -e ".\packages\control-plane[dev]" -e ".\packages\ai-workflow-hub[dev]"
 
       - name: Run release gate
         shell: pwsh

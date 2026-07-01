@@ -1,258 +1,246 @@
-# Reviewer Index
+# Reviewer Index: Open-Source Release Batch 1
 
-This index summarizes the current rdgoal/control-plane release slice for human
-review. It is intentionally concise and points reviewers to the files and
-commands that matter most.
+## Purpose
 
-## Changed File Groups
+This is the reviewer map for the first open-source release batch. It focuses on what is currently proven and auditable in the repository: MCP/Web-AI intake, T3/native client projection, and governed visual state.
 
-- Public overview and quickstart docs:
-  `README.md`, `README.zh-CN.md`, `packages/control-plane/README.md`,
-  `packages/control-plane/QUICKSTART.md`.
-- Release and readiness docs:
-  `docs/agent-runtime/dispatch-model-profiles.md`,
-  `docs/agent-runtime/integration-contracts.md`,
-  `docs/agent-runtime/project-local-skill-bindings.md`,
-  `docs/agent-runtime/runtime-invariants.md`,
-  `docs/agent-runtime/visual-control-plane.md`,
-  `docs/status/release-readiness.md`, `docs/status/reviewer-index.md`.
-- Negative test fixtures:
-  `docs/agent-runtime/negative-test-fixtures/NEG-017-write-outside-scope.json`,
-  `docs/agent-runtime/negative-test-fixtures/NEG-024-path-traversal-read.json`.
-- Verification scripts:
-  `scripts/verify-control-plane-wheel.ps1`,
-  `packages/agent-acceptance/templates/ci-preflight/install.ps1`.
-- Control-plane core changes:
-  `packages/control-plane/setup.py`,
-  `packages/control-plane/control_plane/cli.py`,
-  `packages/control-plane/control_plane/dashboard.py`,
-  `packages/control-plane/control_plane/visual_state.py`.
-- ai-workflow-hub context adapter:
-  `packages/ai-workflow-hub/src/ai_workflow_hub/context_layer/adapters/zotero_web_metadata_pilot.py`.
-- Starter project templates:
-  `packages/control-plane/templates/paper_iteration/PAPER_PROFILE.yaml`,
-  `packages/control-plane/templates/paper_iteration/PAPER_STATE.yaml`,
-  `packages/control-plane/templates/visual_control_plane/CONTROL_PLANE_STATE.yaml`.
-- Public schemas:
-  `schemas/agent-runtime/memory-update-record.schema.json`,
-  `schemas/resource-integration/codegraph-index-record.schema.json`,
-  `schemas/resource-integration/memory-context-record.schema.json`,
-  `schemas/resource-integration/script-safety-record.schema.json`,
-  `schemas/visual_control_plane_state.schema.json`,
-  `packages/test-frame/schemas/agent-runtime/memory-update-record.schema.json`,
-  `packages/test-frame/schemas/resource-integration/codegraph-index-record.schema.json`,
-  `packages/test-frame/schemas/resource-integration/memory-context-record.schema.json`,
-  `packages/test-frame/schemas/resource-integration/script-safety-record.schema.json`.
-- Tests:
-  `packages/control-plane/tests/test_cli.py`,
-  `packages/control-plane/tests/test_public_snapshot.py`,
-  `packages/control-plane/tests/test_rdgoal.py`.
+## In-Scope Review Surface
 
-## Required Public Surface Cross-check
+- `packages/control-plane`: runtime, entrypoints, probes, and client launch surfaces.
+- `docs/agent-runtime`: interface contracts and operating model for MCP/Web-AI and visual control-plane behavior.
+- `docs/status`: latest milestone decisions and state snapshots for this batch.
+- `schemas/*`: state, bridge, and session contracts for reader-facing outputs.
+- `scripts`: release and public-snapshot verification gates.
 
-The release slice also depends on these public entry points staying visible to
-reviewers, even when a given PR only touches some of them:
+## First-Read Files
 
-- Root docs and CI:
-  `README.md`, `README.zh-CN.md`, `.github/workflows/release-verify.yml`,
-  `pytest.ini`.
-- Runtime docs:
-  `docs/agent-runtime/rdgoal-total-control.md`,
-  `docs/agent-runtime/dispatch-model-profiles.md`,
-  `docs/agent-runtime/rdpaper-workflow.md`,
-  `docs/agent-runtime/visual-control-plane.md`,
-  `docs/agent-runtime/web-ai-adapter-contract.md`,
-  `docs/status/release-readiness.md`, `docs/status/reviewer-index.md`.
-- Control-plane package and templates:
-  `packages/control-plane/README.md`, `packages/control-plane/QUICKSTART.md`,
-  `packages/control-plane/setup.py`,
-  `packages/control-plane/templates/paper_iteration/PAPER_PROFILE.yaml`,
-  `packages/control-plane/templates/paper_iteration/PAPER_STATE.yaml`,
-  `packages/control-plane/templates/paper_iteration/WEB_AI_ADAPTER.yaml`,
-  `packages/control-plane/templates/visual_control_plane/CONTROL_PLANE_STATE.yaml`.
-- Control-plane implementation:
-  `packages/control-plane/control_plane/agent_adapter.py`,
-  `packages/control-plane/control_plane/backup_guard.py`,
-  `packages/control-plane/control_plane/cli.py`,
-  `packages/control-plane/control_plane/dashboard.py`,
-  `packages/control-plane/control_plane/decision_engine.py`,
-  `packages/control-plane/control_plane/dispatch_packet.py`,
-  `packages/control-plane/control_plane/orchestrator.py`,
-  `packages/control-plane/control_plane/project_contract.py`,
-  `packages/control-plane/control_plane/rdgoal.py`,
-  `packages/control-plane/control_plane/rdgoal_cli.py`,
-  `packages/control-plane/control_plane/runtime_digest.py`,
-  `packages/control-plane/control_plane/runtime_store.py`,
-  `packages/control-plane/control_plane/visual_state.py`,
-  `packages/control-plane/control_plane/worker.py`.
-- Tests, rules, schemas, and release scripts:
-  `packages/control-plane/tests/test_cli.py`,
-  `packages/control-plane/tests/test_public_snapshot.py`,
-  `packages/control-plane/tests/test_rdgoal.py`,
-  `rules/orchestration.md`, `rules/project-contracts/_template.md`,
-  `rules/web-ai-adapters.md`, `schemas/project_contract.schema.json`,
-  `schemas/rdgoal_dispatch_packet.schema.json`,
-  `schemas/visual_control_plane_state.schema.json`,
-  `schemas/web_ai_adapter.schema.json`,
-  `scripts/verify-control-plane-wheel.ps1`, `scripts/verify-release.ps1`.
+### Runtime Entry + Contracts
+- `packages/control-plane/setup.py`
+- `packages/control-plane/control_plane/cli/app.py` (router; domain handlers in `cli/_core.py`, `cli/_coding.py`, `cli/_webai.py`, `cli/_client.py`, `cli/_visual.py`)
+- `packages/control-plane/README.md`
+- `packages/control-plane/QUICKSTART.md`
+- `docs/agent-runtime/web-ai-adapter-contract.md`
+- `docs/agent-runtime/integration-contracts.md`
 
-## Critical Code Paths
+### MCP / Web-AI Path
+- `packages/control-plane/control_plane/mcp_live_probe.py`
+- `packages/control-plane/control_plane/provider_binding_probe.py`
+- `packages/control-plane/control_plane/project_contract.py`
+- `docs/agent-runtime/web-ai-adapter-contract.md`
+- `rules/web-ai-adapters.md`
+- `packages/control-plane/tests/test_mcp_live_probe.py`
+- `packages/control-plane/tests/test_provider_binding_probe.py`
 
-- `/rdgoal` and shell `rdgoal` routing:
-  `setup.py` exposes `rdgoal=control_plane.rdgoal_cli:main`; `devframe rdgoal`
-  remains available through `control_plane/cli.py` for compatibility.
-- Future visual client boundary:
-  `docs/agent-runtime/visual-control-plane.md` defines the governance-first
-  object model for projects, provider bindings, agents, runs, evidence,
-  reviews, gates, and controller decisions.
-- Visual control-plane read model:
-  `schemas/visual_control_plane_state.schema.json` and
-  `packages/control-plane/templates/visual_control_plane/CONTROL_PLANE_STATE.yaml`
-  define the first machine-readable state snapshot for a future GUI or CLI
-  inspector.
-- Bootstrap behavior:
-  source checkout can run root bootstrap assets; wheel installs safely return
-  `bootstrap_unavailable` while still producing a dispatch packet.
-- Visual state export:
-  `control_plane/visual_state.py` converts the persisted rdgoal digest into the
-  Visual Control Plane read model, and `control_plane/cli.py` exposes it as
-  `devframe visual-state` plus the focused `devframe actions` queue view. It
-  can also render the same state as a static HTML dashboard snapshot.
-  `control_plane/dashboard.py` serves the same model through
-  a read-only local dashboard at `/`, `/state.json`, and `/actions.json`.
-  Run summaries include
-  TaskSpec paths, packet paths, report paths, and a copyable next command for
-  read-only handoff/resume. The CLI refuses non-loopback dashboard binds unless
-  `--allow-remote` is explicit. Paper iteration workspaces can be attached with
-  `--paper-project <dir>` and appear as `rdpaper` runs with a privacy gate.
+### Native / T3 Client Path
+- `packages/control-plane/control_plane/client_launcher.py`
+- `packages/control-plane/control_plane/client_manifest.py`
+- `packages/control-plane/control_plane/t3_bridge_bundle.py`
+- `packages/control-plane/control_plane/t3_adapter.py`
+- `schemas/visual_client_manifest.schema.json`
+- `schemas/t3_bridge_bundle.schema.json`
+- `schemas/t3_client_shell.schema.json`
+- `docs/agent-runtime/visual-control-plane.md`
+- `docs/status/t3code-client-mainline-reuse-assessment.md`
+- `docs/status/recon-receipt-local-agent-client-mainline.md`
 
-## Verification Evidence
+### Governance + Visual Read Model
+- `packages/control-plane/control_plane/visual_state.py`
+- `packages/control-plane/control_plane/dashboard.py`
+- `packages/control-plane/control_plane/runtime_digest.py`
+- `packages/control-plane/control_plane/orchestrator.py`
+- `packages/control-plane/control_plane/workflow_engine.py`
+- `packages/control-plane/control_plane/team_runtime.py`
+- `packages/control-plane/control_plane/execution_plan.py`
+- `schemas/visual_control_plane_state.schema.json`
+- `packages/control-plane/templates/visual_control_plane/CONTROL_PLANE_STATE.yaml`
+- `packages/control-plane/tests/test_public_snapshot.py`
+- `packages/control-plane/tests/test_rdgoal.py`
+- `packages/control-plane/tests/test_dashboard_actions.py`
+- `packages/control-plane/tests/test_workflow_engine.py`
+- `packages/control-plane/tests/test_team_runtime.py`
+- `packages/control-plane/tests/test_execution_plan.py`
+- `schemas/resource-integration/script-safety-record.schema.json`
+- `schemas/resource-integration/memory-context-record.schema.json`
 
-Primary release gate:
+### Customization / Model Provider / Cluster Surface
+- `packages/control-plane/control_plane/scoped_store.py`
+- `packages/control-plane/control_plane/scope_resolver.py`
+- `packages/control-plane/control_plane/custom_skills.py`
+- `packages/control-plane/control_plane/rules_config.py`
+- `packages/control-plane/control_plane/run_defaults.py`
+- `packages/control-plane/control_plane/memory_prefs.py`
+- `packages/control-plane/control_plane/model_providers.py`
+- `packages/control-plane/control_plane/cluster_control.py`
+- `packages/control-plane/control_plane/cluster_run.py`
+- `packages/control-plane/control_plane/task_proposals.py`
+- `packages/control-plane/control_plane/writeback.py`
+- `schemas/custom_skills.schema.json`
+- `schemas/custom_rules.schema.json`
+- `schemas/run_defaults.schema.json`
+- `schemas/preferences.schema.json`
+- `schemas/project_memory.schema.json`
+- `schemas/cluster_roster.schema.json`
+- `packages/control-plane/tests/test_scope_resolver.py`
+- `packages/control-plane/tests/test_scope_resolver_properties.py`
+- `packages/control-plane/tests/test_custom_skills.py`
+- `packages/control-plane/tests/test_rules_config.py`
+- `packages/control-plane/tests/test_run_defaults.py`
+- `packages/control-plane/tests/test_memory_prefs.py`
+- `packages/control-plane/tests/test_model_providers.py`
+- `docs/status/recon-receipt-customization-layer.md`
+- `docs/status/recon-receipt-pluggable-model-provider.md`
+- `packages/control-plane/tests/test_cluster_control.py`
+- `packages/control-plane/tests/test_cluster_run_manage.py`
+- `packages/control-plane/tests/test_task_proposals.py`
+- `packages/control-plane/tests/test_writeback.py`
+
+### MCP / ACP / OpenCode Event Surface
+- `packages/control-plane/control_plane/mcp_consent.py`
+- `packages/control-plane/control_plane/mcp_server.py`
+- `packages/control-plane/control_plane/acp_client.py`
+- `packages/control-plane/control_plane/acp_session.py`
+- `packages/control-plane/control_plane/opencode_events.py`
+- `packages/control-plane/control_plane/worktree.py`
+- `docs/status/recon-receipt-mcp-consent.md`
+- `docs/status/recon-receipt-devframe-mcp-server.md`
+- `docs/status/recon-receipt-acp-backbone.md`
+- `docs/status/recon-receipt-opencode-event-integration.md`
+- `docs/status/recon-receipt-parallel-write-isolation.md`
+- `packages/control-plane/tests/test_mcp_consent.py`
+- `packages/control-plane/tests/test_mcp_server.py`
+- `packages/control-plane/tests/test_acp_client.py`
+- `packages/control-plane/tests/test_acp_session.py`
+- `packages/control-plane/tests/test_go_acp_driver.py`
+- `packages/control-plane/tests/test_opencode_events.py`
+- `packages/control-plane/tests/test_go_opencode_events.py`
+- `packages/control-plane/tests/test_worktree.py`
+- `packages/control-plane/tests/test_go_worktree.py`
+
+### Current State Evidence Files
+- `docs/status/recon-receipt-local-agent-client-mainline.md`
+- `docs/status/t3code-client-mainline-reuse-assessment.md`
+- `docs/status/release-readiness.md`
+- `docs/status/reviewer-index.md` (this file)
+
+## Critical Paths to Verify
+
+- `devframe` bootstrap to governance surface:
+  - `setup.py` exposes `devframe` and installs `control_plane/cli/` command handlers.
+  - CLI must route MCP, T3 client, visual-state/actions, and rdgoal entrypoints through current, tested code paths.
+- MCP/Web-AI intake and provider binding:
+  - `provider_binding_probe.py` and `mcp_live_probe.py` should accept reference-safe summaries and reject unsafe session data.
+  - Tests above should cover negative cases and session summaries.
+- Native/T3 read model contract:
+  - `client_manifest.py` exposes `/client-manifest.json`, `/client-plan.json`, `/t3-bridge.json`, `/t3-shell.json`.
+  - `t3_bridge_bundle.py` builds installable bridge artifacts and launch helpers.
+  - `t3_adapter.py` maps DevFrame state to `t3_shell` snapshots with action overlays.
+- Visual control-plane outputs:
+  - `dashboard.py` and `visual_state.py` must keep mutation points constrained and endpoints read-only by default.
+  - Action queue filtering (`--status`, `--priority`, `--source-type`, `--source-id`, `--action-id`) must remain deterministic.
+- Customization and project-scoped config:
+  - `scoped_store.py` must keep runtime config writes outside the public repository.
+  - Scope resolution must remain deterministic, most-specific-wins for records, and most-restrictive-wins for capability flags.
+  - Project-level overrides must not silently weaken P0 rules or executor constraints.
+- Cluster / workflow / team runtime:
+  - `workflow_engine.py` should record plan -> execute -> review phases as durable team events.
+  - `team_runtime.py` should project real task, message, conflict, review, and evidence objects without executor self-approval.
+  - Cluster dispatch must keep dashboard monitoring separate from inline human authorization.
+- MCP / ACP / OpenCode event integration:
+  - MCP consent and server paths must stay loopback/origin gated and safe-tool constrained.
+  - ACP live-driving claims must stay bounded to the current receipt and tests; deferred behavior must not be presented as complete.
+  - OpenCode event ingestion should enrich session fields without converting missing event data into a passing claim.
+
+## Open-Source Review Checklist
+
+1. Confirm MCP/Web-AI claims are tied to local public snapshot tests, not private runtime assumptions.
+2. Confirm native-client surface is projection-based: DevFrame remains the governance source of truth.
+3. Confirm native/T3 integration paths are manifest/bridge first and schema-validated.
+4. Confirm generated/private directories are excluded by `verify-public-snapshot.ps1`.
+5. Confirm local mutation endpoints stay explicit and loopback-limited.
+6. Confirm stage-8 native reuse status is current and does not overclaim release/publish readiness.
+7. Confirm customization, writeback, cluster, workflow, MCP, ACP, and OpenCode-event additions are covered by their matching Recon Receipts and tests.
+
+## Public Surface File Index
+
+This index ensures all required public snapshot paths are explicitly referenced for reviewer traceability.
+
+- `README.md`
+- `README.zh-CN.md`
+- `.github/workflows/release-verify.yml`
+- `docs/agent-runtime/rdgoal-total-control.md`
+- `docs/agent-runtime/dispatch-model-profiles.md`
+- `docs/agent-runtime/rdpaper-workflow.md`
+- `docs/agent-runtime/visual-control-plane.md`
+- `docs/agent-runtime/web-ai-adapter-contract.md`
+- `docs/status/release-readiness.md`
+- `docs/status/reviewer-index.md`
+- `packages/control-plane/README.md`
+- `packages/control-plane/QUICKSTART.md`
+- `packages/control-plane/setup.py`
+- `packages/control-plane/control_plane/cli/app.py`
+- `packages/control-plane/control_plane/dashboard.py`
+- `packages/control-plane/control_plane/cli/_client.py`
+- `packages/control-plane/control_plane/cli/_coding.py`
+- `packages/control-plane/control_plane/cli/_core.py`
+- `packages/control-plane/control_plane/cli/_mcp.py`
+- `packages/control-plane/control_plane/cli/_visual.py`
+- `packages/control-plane/control_plane/cli/_webai.py`
+- `packages/control-plane/control_plane/cli/_writeback.py`
+- `packages/control-plane/templates/paper_iteration/PAPER_PROFILE.yaml`
+- `packages/control-plane/templates/paper_iteration/PAPER_STATE.yaml`
+- `packages/control-plane/templates/visual_control_plane/CONTROL_PLANE_STATE.yaml`
+- `packages/control-plane/templates/paper_iteration/WEB_AI_ADAPTER.yaml`
+- `packages/control-plane/control_plane/agent_adapter.py`
+- `packages/control-plane/control_plane/backup_guard.py`
+- `packages/control-plane/control_plane/decision_engine.py`
+- `packages/control-plane/control_plane/dispatch_packet.py`
+- `packages/control-plane/control_plane/orchestrator.py`
+- `packages/control-plane/control_plane/project_contract.py`
+- `packages/control-plane/control_plane/rdgoal.py`
+- `packages/control-plane/control_plane/rdgoal_cli.py`
+- `packages/control-plane/control_plane/runtime_digest.py`
+- `packages/control-plane/control_plane/runtime_store.py`
+- `packages/control-plane/control_plane/visual_state.py`
+- `packages/control-plane/control_plane/worker.py`
+- `packages/control-plane/control_plane/acp_client.py`
+- `packages/control-plane/control_plane/acp_session.py`
+- `packages/control-plane/control_plane/cluster_control.py`
+- `packages/control-plane/control_plane/cluster_run.py`
+- `packages/control-plane/control_plane/custom_skills.py`
+- `packages/control-plane/control_plane/mcp_consent.py`
+- `packages/control-plane/control_plane/mcp_server.py`
+- `packages/control-plane/control_plane/memory_prefs.py`
+- `packages/control-plane/control_plane/model_providers.py`
+- `packages/control-plane/control_plane/opencode_events.py`
+- `packages/control-plane/control_plane/rules_config.py`
+- `packages/control-plane/control_plane/run_defaults.py`
+- `packages/control-plane/control_plane/scope_resolver.py`
+- `packages/control-plane/control_plane/scoped_store.py`
+- `packages/control-plane/control_plane/task_proposals.py`
+- `packages/control-plane/control_plane/team_runtime.py`
+- `packages/control-plane/control_plane/workflow_engine.py`
+- `packages/control-plane/control_plane/worktree.py`
+- `packages/control-plane/control_plane/writeback.py`
+- `packages/control-plane/tests/test_cli.py`
+- `packages/control-plane/tests/test_public_snapshot.py`
+- `packages/control-plane/tests/test_rdgoal.py`
+- `pytest.ini`
+- `rules/orchestration.md`
+- `rules/project-contracts/_template.md`
+- `rules/web-ai-adapters.md`
+- `schemas/project_contract.schema.json`
+- `schemas/rdgoal_dispatch_packet.schema.json`
+- `schemas/visual_control_plane_state.schema.json`
+- `schemas/web_ai_adapter.schema.json`
+- `scripts/verify-control-plane-wheel.ps1`
+- `scripts/verify-release.ps1`
+
+## Required Verification
+
+At minimum, run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
+powershell -ExecutionPolicy Bypass -File scripts\verify-public-snapshot.ps1
 ```
 
-The gate must pass all of the following:
-
-- `python -m pytest -q`
-- `powershell -ExecutionPolicy Bypass -File scripts\verify-public-snapshot.ps1`
-- `powershell -ExecutionPolicy Bypass -File scripts\verify-control-plane-wheel.ps1`
-- `git diff --check`
-
-Additional targeted probes covered by tests:
-
-- Generated `build` directories are rejected by the public snapshot checker.
-- Public Markdown docs are UTF-8 readable and do not contain private path or
-  mojibake markers.
-- Blocked/failed rdgoal workers return non-zero.
-- Command workers do not run held packets.
-- Snapshot-backed actions reject targets outside the project root before
-  creating snapshot directories.
-- Dispatch packets and project contracts validate against public schemas.
-- The default paper Web AI Adapter template validates against
-  `schemas/web_ai_adapter.schema.json`.
-- The default visual control-plane state template validates against
-  `schemas/visual_control_plane_state.schema.json`.
-- `devframe visual-state --runtime-dir <dir>` exports schema-valid JSON from a
-  real rdgoal runtime directory.
-- `devframe visual-state --format html --output <file>` writes a local static
-  dashboard snapshot and escapes runtime text before rendering.
-- The dashboard server serves the same state through real HTTP requests and
-  rejects write methods with `405`.
-- The Agent Registry joins agents to provider bindings so role, scope, provider,
-  binding health, and agent status are visible in one table.
-- Visual state run details expose TaskSpec/packet/report paths and next-command
-  strings from a real rdgoal runtime.
-- Run Details cards include the current controller decision and decision next
-  action beside TaskSpec/evidence paths.
-- The dashboard includes a `Gate Focus` section that promotes active gates
-  before the full queue and tables, including the matching action id, resume
-  filter, and served Markdown handoff link.
-- `devframe visual-state --paper-project <dir>` and
-  `devframe dashboard serve --paper-project <dir>` expose paper iteration
-  workspaces as read-only `rdpaper` runs and surface their `WEB_AI_ADAPTER.yaml`
-  provider binding health and manual fallback instructions through a matching
-  provider safety gate with a next action.
-- Visual state includes a read-only `next_actions` queue derived from gates,
-  runs, and decisions. `devframe actions` prints that queue directly, and the
-  HTML dashboard renders it as `Action Queue`. The actions CLI can filter by
-  status, priority, source type, source id, and action id; `--fail-on-match` is
-  a read-only gate that returns non-zero when the filtered queue is not empty.
-  Text output, Markdown handoff packets, and the dashboard Action Queue include
-  action ids plus copyable `--action-id` resume filters so single-action exports
-  remain traceable. It can also write a Markdown handoff packet for manual
-  resume or Web AI continuation. The same filtered queue is available from the
-  read-only dashboard at `/actions.json` and as a Markdown handoff view at
-  `/actions.md`;
-  invalid filter values return `400`. The served dashboard homepage links to
-  `/state.json`, `/actions.json`, `/actions.md`, and per-action Markdown
-  handoffs, while static HTML snapshots do not claim live endpoints.
-- `devframe run --pipeline <path> --execute --project <dir>` passes the project
-  directory into the stage executor, so dashboard next-command strings point at
-  a real CLI path.
-- `devframe dashboard serve --host 0.0.0.0` is rejected unless the user passes
-  `--allow-remote`.
-- The wheel smoke test runs JSON and HTML `devframe visual-state` exports plus
-  filtered `devframe actions` JSON and Markdown handoff output after
-  `rdgoal worker` and `rdgoal digest`, checks packaged rdgoal and rdpaper run
-  details, checks the installed `devframe --help`, `devframe run --help`, and
-  `devframe dashboard --help` first-use entrypoints, then imports the packaged
-  dashboard server, binds it to a temporary local port, checks homepage endpoint
-  links, and probes both `/actions.json` and `/actions.md`, including action-id
-  filtering and `PATCH` write-method rejection with `405`.
-- Negative test fixtures validate write-outside-scope and path-traversal-read
-  behavior.
-- New resource-integration and agent-runtime schemas validate private-path and
-  script-safety records.
-
-## Generated Artifacts
-
-The release gate may temporarily create:
-
-- `packages/control-plane/build`
-- `packages/control-plane/devframe_control_plane.egg-info`
-- temporary wheel smoke directories under the OS temp directory
-
-The wheel smoke script removes these artifacts in `finally`. A clean final
-state has no `build`, `dist`, `*.egg-info`, or `public-snapshot-probe*`
-directories in the repository.
-
-## Known Gaps
-
-- The wheel distribution intentionally does not include the full repository
-  root bootstrap assets. This is documented as `bootstrap_unavailable` behavior.
-- Real external AI/browser dispatch is outside this release slice; the current
-  worker path proves packet handoff, local dry-run, command worker, and aihub
-  adapter invocation semantics.
-- `/rdpaper` provider automation is contract-first. Chrome plus ChatGPT is a
-  reference path, while DeepSeek, Doubao, Kimi, internal web AIs, and manual
-  mode are documented extension points rather than guaranteed built-ins.
-- GitHub CI/PR state is not represented by local verification alone. Reviewers
-  should inspect the current PR checks before merging.
-
-## Suggested Review Focus
-
-- Confirm no private runtime state, evidence packs, generated archives, or
-  local browser/agent state were added.
-- Confirm release verification runs from a fresh checkout on Windows PowerShell.
-- Confirm worker failure semantics cannot produce fake green results.
-- Confirm source checkout and wheel install paths both match the documented
-  rdgoal behavior.
-- Confirm Chrome and ChatGPT are documented as defaults, not hard-coded
-  architecture boundaries.
-- Confirm browser profiles, cookies, real paper full text, PDFs, and external
-  service calls remain human-gated by the adapter contract.
-- Confirm docs are understandable for a new open-source reader without internal
-  project history.
-- Confirm the new control-plane doc sharpens product boundaries instead of
-  drifting toward a generic single-model chat client.
-- Confirm the `stepfun/step-3.7-flash` profile documents its intended narrow
-  use case and the external evidence-dir permission limitation.
-- Confirm private-path sanitization is enforced by runtime invariants and covered
-  by the new negative test fixtures.
-- Confirm `integration-contracts.md` and `project-local-skill-bindings.md` keep
-  adapter and skill-binding scope explicit.
-- Confirm new resource-integration and agent-runtime schemas validate private-path
-  and script-safety records.
+For the fuller gate, align with `docs/status/release-readiness.md`.

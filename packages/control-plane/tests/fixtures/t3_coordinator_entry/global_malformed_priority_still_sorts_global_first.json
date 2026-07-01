@@ -1,0 +1,109 @@
+{
+  "label": "global_malformed_priority_still_sorts_global_first",
+  "shell": {
+    "version": 1,
+    "source": "devframe",
+    "updatedAt": "2026-07-01T00:00:00Z",
+    "t3": {
+      "snapshotSequence": 7,
+      "projects": [],
+      "threads": [
+        {
+          "id": "native-1",
+          "title": "Native Chat",
+          "threadKind": "native_chat",
+          "threadListPriority": "priority-not-a-number",
+          "updatedAt": "2026-07-01T00:02:00Z"
+        },
+        {
+          "id": "goal-1",
+          "title": "Match Project Goal",
+          "threadKind": "goal_conversation",
+          "projectId": "project-alpha",
+          "threadListPriority": 1,
+          "updatedAt": "2026-07-01T00:03:00Z"
+        },
+        {
+          "id": "goal-2",
+          "title": "Other Goal",
+          "threadKind": "goal_conversation",
+          "projectId": "project-beta",
+          "threadListPriority": 1,
+          "updatedAt": "2026-07-01T00:04:00Z"
+        },
+        {
+          "id": "devframe-team-workbench-session",
+          "title": "Global Coordinator",
+          "threadKind": "global_coordinator",
+          "threadListPriority": 99,
+          "updatedAt": "2026-07-01T00:01:00Z"
+        }
+      ],
+      "threadDetails": [
+        {
+          "id": "goal-1"
+        },
+        {
+          "id": "goal-2"
+        },
+        {
+          "id": "native-1"
+        },
+        {
+          "id": "devframe-team-workbench-session"
+        }
+      ],
+      "updatedAt": "2026-07-01T00:05:00Z"
+    },
+    "devframe": {
+      "conversationModel": {
+        "globalCoordinatorThreadId": "devframe-team-workbench-session",
+        "goalProjectBindingRequired": true,
+        "threadKinds": [
+          "native_chat",
+          "goal_conversation",
+          "global_coordinator"
+        ]
+      }
+    }
+  },
+  "projects": [
+    {
+      "projectId": "project-alpha",
+      "projectPath": "D:\\fixtures\\project-alpha",
+      "workspaceRoot": "D:\\fixtures\\project-alpha",
+      "label": "Project Alpha - D:\\fixtures\\project-alpha"
+    },
+    {
+      "projectId": "project-other",
+      "projectPath": "D:\\fixtures\\project-other",
+      "workspaceRoot": "D:\\fixtures\\project-other",
+      "label": "Project Other - D:\\fixtures\\project-other"
+    }
+  ],
+  "expected": {
+    "canStartCoordinatorGoal": true,
+    "selectedProjectId": "project-alpha",
+    "projectCoordinatorThreadId": "goal-1",
+    "goalConversationIds": [
+      "goal-2",
+      "goal-1"
+    ],
+    "shellThreadsIds": [
+      "devframe-team-workbench-session",
+      "goal-2",
+      "goal-1",
+      "native-1"
+    ],
+    "sortedShellThreadIds": [
+      "devframe-team-workbench-session",
+      "goal-2",
+      "goal-1",
+      "native-1"
+    ],
+    "projectOptionCount": 2,
+    "emptyStateReason": null,
+    "disabledReason": null,
+    "globalThreadId": "devframe-team-workbench-session"
+  }
+}

@@ -80,7 +80,7 @@ function New-FromTemplate($templateFile, $targetRel, $desc) {
     $c = Get-Content $tpl -Raw; foreach ($k in $Placeholders.Keys) { $c = $c.Replace($k, $Placeholders[$k]) }
     foreach ($k in $ManifestPlaceholders.Keys) { $c = $c.Replace($k, $ManifestPlaceholders[$k]) }
     New-Item -ItemType Directory -Force -Path (Split-Path $tgt -Parent) | Out-Null
-    Set-Content $tgt $c -NoNewline
+    Set-Content $tgt $c -NoNewline -Encoding UTF8
     Write-Output "[GEN] $targetRel"
 }
 
@@ -112,6 +112,7 @@ Write-Output "`n=== Step 2: Project-Specific Files ==="
 New-FromTemplate "AGENTS.template.md" "AGENTS.md" "Agent entry point"
 New-FromTemplate "capability-inventory.template.md" "docs/agent-runtime/capability-inventory.md" "Capability inventory"
 New-FromTemplate "tool-policy.template.md" "docs/agent-runtime/tool-policy.md" "Tool policy"
+New-FromTemplate "devframe-go.template.ps1" "tools/devframe-go.ps1" "/go coding-agent wrapper"
 
 if ($DryRun) {
     Write-Output "[DRY-RUN] Generate: governance-manifest.template.md -> docs/agent-runtime/governance-manifest.md (Governance manifest (hash-locked))"

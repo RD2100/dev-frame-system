@@ -60,6 +60,99 @@ def _emit_json(obj: Any, *, target: Console | None = None) -> None:
     _t.file.write(json.dumps(obj, indent=2, ensure_ascii=False, default=str))
     _t.file.write("\n")
 
+
+@app.command("opencode-slice0")
+def opencode_slice0(
+    model: str = typer.Option(
+        "stepfun/step-3.7-flash",
+        "--model",
+        "-m",
+        help="OpenCode model id for the probe.",
+    ),
+    output_dir: Optional[Path] = typer.Option(
+        None,
+        "--output-dir",
+        "-o",
+        help="Directory for slice0-report.json, stdout, stderr, and the temp git repo.",
+    ),
+    timeout: int = typer.Option(120, "--timeout", help="OpenCode run timeout in seconds."),
+    as_json: bool = typer.Option(False, "--json", help="Print the full report as JSON."),
+):
+    """Run the Slice 0 OpenCode readiness probe."""
+
+    from .opencode_slice0 import run_opencode_slice0_probe
+
+    report = run_opencode_slice0_probe(
+        model=model,
+        output_dir=str(output_dir) if output_dir else None,
+        timeout=timeout,
+    )
+    if as_json:
+        _emit_json(report)
+        raise typer.Exit(0 if report.get("verdict") == "passed" else 1)
+
+    verdict = report.get("verdict", "unknown")
+    color = "green" if verdict == "passed" else "red"
+    console.print(f"[bold {color}]OpenCode Slice 0: {verdict}[/bold {color}]")
+    console.print(f"Report: {report.get('paths', {}).get('report', '')}")
+    console.print(f"Workspace: {report.get('workspace', '')}")
+    failed = report.get("failed_checks", [])
+    if failed:
+        console.print("Failed checks:")
+        for name in failed:
+            detail = report.get("checks", {}).get(name, {}).get("detail", "")
+            console.print(f"  - {name}: {detail}")
+
+    raise typer.Exit(0 if verdict == "passed" else 1)
+
+
+@app.command("opencode-serve-slice1")
+def opencode_serve_slice1(
+    model: str = typer.Option(
+        "stepfun/step-3.7-flash",
+        "--model",
+        "-m",
+        help="OpenCode model id for the serve probe.",
+    ),
+    output_dir: Optional[Path] = typer.Option(
+        None,
+        "--output-dir",
+        "-o",
+        help="Directory for serve-slice1-report.json, event sample, logs, and temp git repo.",
+    ),
+    timeout: int = typer.Option(120, "--timeout", help="Serve prompt_async timeout in seconds."),
+    as_json: bool = typer.Option(False, "--json", help="Print the full report as JSON."),
+):
+    """Run the Slice 1 OpenCode serve/prompt_async readiness probe."""
+
+    from .opencode_serve_slice1 import run_opencode_serve_slice1_probe
+
+    report = run_opencode_serve_slice1_probe(
+        model=model,
+        output_dir=str(output_dir) if output_dir else None,
+        timeout=timeout,
+    )
+    if as_json:
+        _emit_json(report)
+        raise typer.Exit(0 if report.get("verdict") == "passed" else 1)
+
+    verdict = report.get("verdict", "unknown")
+    color = "green" if verdict == "passed" else ("yellow" if verdict == "partial" else "red")
+    console.print(f"[bold {color}]OpenCode Serve Slice 1: {verdict}[/bold {color}]")
+    partial_type = report.get("partial_type", "")
+    if partial_type:
+        console.print(f"Partial: {partial_type}")
+    console.print(f"Report: {report.get('paths', {}).get('report', '')}")
+    console.print(f"Workspace: {report.get('workspace', '')}")
+    failed = report.get("failed_checks", [])
+    if failed:
+        console.print("Failed checks:")
+        for name in failed:
+            detail = report.get("checks", {}).get(name, {}).get("detail", "")
+            console.print(f"  - {name}: {detail}")
+
+    raise typer.Exit(0 if verdict == "passed" else 1)
+
 # ============================================================
 # project 命令
 # ============================================================
@@ -2891,15 +2984,6 @@ _PAPER_BUSINESS_EVIDENCE_MATRIX = [
         "validation_kind": "synthetic_offline",
     },
     {
-        "capability": "writelab_adapter_client",
-        "command": "WriteLab adapter/client",
-        "evidence": [
-            "tests/test_writelab_adapter.py",
-            "tests/test_writelab_client.py::TestRuntimeAuthorization",
-        ],
-        "validation_kind": "mock_transport_or_fixture",
-    },
-    {
         "capability": "real_pilot_local_dry_run",
         "command": "paper real-pilot-dry-run",
         "evidence": ["tests/test_paper_real_pilot_local_dry_run.py"],
@@ -2958,18 +3042,6 @@ _PAPER_BUSINESS_EVIDENCE_MATRIX = [
         "validation_kind": "synthetic_offline",
     },
     {
-        "capability": "writelab_boundary_pilot",
-        "command": "paper writelab-boundary-pilot",
-        "evidence": ["tests/test_paper_writelab_boundary_pilot.py"],
-        "validation_kind": "mock_transport_or_fixture",
-    },
-    {
-        "capability": "pdf_writelab_live_pilot",
-        "command": "paper pdf-writelab-live-pilot",
-        "evidence": ["tests/test_paper_pdf_writelab_live_pilot.py"],
-        "validation_kind": "scoped_live_smoke",
-    },
-    {
         "capability": "obsidian_allowlisted_note_pilot",
         "command": "paper obsidian-allowlisted-note-pilot",
         "evidence": ["tests/test_obsidian_note_adapter.py"],
@@ -2989,7 +3061,7 @@ _PAPER_BUSINESS_SD07_GATE = {
     "gate_status": "visible_candidate_gate",
     "candidate_evidence_only": True,
     "real_paper_content_status": "blocked_until_fresh_runtime_authorization",
-    "live_writelab_status": "synthetic_live_boundary_pilot_available",
+    "live_writelab_status": "retired_non_core",
     "fresh_runtime_authorization_required": True,
     "dedicated_pilot_taskspec_required_for_live_writelab": False,
 }
@@ -3001,7 +3073,7 @@ _PAPER_MVP_STATUS = {
     "obsidian_note_adapter_status": "fixture_only_candidate",
     "rag_evidence_contract_status": "candidate_ready",
     "citation_lookup_workflow_status": "candidate_ready",
-    "writelab_diagnostic_boundary_status": "synthetic_live_boundary_candidate",
+    "writelab_diagnostic_boundary_status": "retired_non_core",
     "privacy_boundary_status": "private_sources_blocked_without_authorization",
     "human_authorization_required_for_private_sources": True,
 }
@@ -3019,10 +3091,6 @@ _PAPER_REAL_PILOT_PROGRESS = {
     "zotero_web_api_metadata_manifest_ready": True,
     "metadata_pipeline_readiness_ready": True,
     "pdf_redacted_excerpt_pilot_entrypoint_ready": True,
-    "writelab_boundary_pilot_entrypoint_ready": True,
-    "writelab_synthetic_live_boundary_pilot_ready": True,
-    "pdf_writelab_live_pilot_entrypoint_ready": True,
-    "pdf_writelab_live_smoke_evidence_ready": True,
     "obsidian_allowlisted_note_pilot_entrypoint_ready": True,
     "rag_local_fixture_pilot_entrypoint_ready": True,
     "real_private_source_access_blocked": True,
@@ -3054,38 +3122,6 @@ _PAPER_PDF_REDACTED_EXCERPT_PILOT = {
     "live_writelab_called": False,
     "candidate_evidence_only": True,
     "final_acceptance_claimed": False,
-}
-
-_PAPER_WRITELAB_BOUNDARY_PILOT = {
-    "cli_command": "paper writelab-boundary-pilot",
-    "authorization_command": "paper real-pilot-authorize-writelab-boundary",
-    "report_schema_path": "schemas/paper_writelab_boundary_pilot_report.schema.json",
-    "runtime_smoke_status": "PASS_SYNTHETIC_WRITELAB_BOUNDARY",
-    "live_writelab_required_for_business_validation": False,
-    "live_transport_boundary_available": True,
-    "real_paper_text_sent": False,
-    "raw_payload_persisted": False,
-    "token_persisted": False,
-    "candidate_evidence_only": True,
-    "final_acceptance_claimed": False,
-}
-
-_PAPER_PDF_WRITELAB_LIVE_PILOT = {
-    "cli_command": "paper pdf-writelab-live-pilot",
-    "authorization_command": "paper real-pilot-authorize-pdf-writelab",
-    "report_schema_path": "schemas/paper_pdf_writelab_live_pilot_report.schema.json",
-    "runtime_smoke_status": "PASS_PDF_EXCERPT_WRITELAB_LIVE",
-    "live_pdf_required_for_business_validation": False,
-    "live_writelab_required_for_business_validation": False,
-    "scoped_live_smoke_available": True,
-    "raw_full_text_persisted": False,
-    "raw_excerpt_persisted": False,
-    "raw_payload_persisted": False,
-    "raw_response_persisted": False,
-    "token_persisted": False,
-    "candidate_evidence_only": True,
-    "final_acceptance_claimed": False,
-    "live_ready_claimed": False,
 }
 
 _PAPER_OBSIDIAN_ALLOWLISTED_NOTE_PILOT = {
@@ -3148,8 +3184,6 @@ def _build_paper_business_validation_report(
             _PAPER_ZOTERO_WEB_API_METADATA_MANIFEST
         ),
         "pdf_redacted_excerpt_pilot": dict(_PAPER_PDF_REDACTED_EXCERPT_PILOT),
-        "writelab_boundary_pilot": dict(_PAPER_WRITELAB_BOUNDARY_PILOT),
-        "pdf_writelab_live_pilot": dict(_PAPER_PDF_WRITELAB_LIVE_PILOT),
         "obsidian_allowlisted_note_pilot": dict(
             _PAPER_OBSIDIAN_ALLOWLISTED_NOTE_PILOT
         ),
@@ -3403,31 +3437,6 @@ def _build_paper_plugin_pilot_closeout_report(
             "final_acceptance_claimed": False,
         },
         {
-            "plugin_id": "writelab_boundary_pilot",
-            "command": "paper writelab-boundary-pilot",
-            "report_schema_path": "schemas/paper_writelab_boundary_pilot_report.schema.json",
-            "entrypoint_ready": business_report["real_pilot_progress"][
-                "writelab_boundary_pilot_entrypoint_ready"
-            ],
-            "local_offline_or_mock_only": True,
-            "raw_payload_persisted": False,
-            "runtime_authorization_required_for_live": True,
-            "final_acceptance_claimed": False,
-        },
-        {
-            "plugin_id": "pdf_writelab_live_pilot",
-            "command": "paper pdf-writelab-live-pilot",
-            "report_schema_path": "schemas/paper_pdf_writelab_live_pilot_report.schema.json",
-            "entrypoint_ready": business_report["real_pilot_progress"][
-                "pdf_writelab_live_pilot_entrypoint_ready"
-            ],
-            "local_offline_or_mock_only": False,
-            "scoped_live_smoke_only": True,
-            "raw_payload_persisted": False,
-            "runtime_authorization_required_for_live": True,
-            "final_acceptance_claimed": False,
-        },
-        {
             "plugin_id": "obsidian_allowlisted_note_pilot",
             "command": "paper obsidian-allowlisted-note-pilot",
             "report_schema_path": "schemas/paper_obsidian_allowlisted_note_pilot_report.schema.json",
@@ -3464,8 +3473,6 @@ def _build_paper_plugin_pilot_closeout_report(
         "command_chain": [
             "paper business-validate",
             "paper pdf-redacted-excerpt-pilot",
-            "paper writelab-boundary-pilot",
-            "paper pdf-writelab-live-pilot",
             "paper obsidian-allowlisted-note-pilot",
             "paper rag-local-fixture-pilot",
             "paper plugin-pilot-closeout",
@@ -3488,7 +3495,7 @@ def _build_paper_plugin_pilot_closeout_report(
             "obsidian_vault_scanned": False,
             "private_rag_used": False,
             "live_writelab_called_by_closeout_report": False,
-            "scoped_pdf_writelab_live_smoke_available": True,
+            "scoped_pdf_writelab_live_smoke_available": False,
             "pdf_full_text_persisted": False,
             "raw_query_persisted": False,
             "raw_note_persisted": False,
@@ -3505,7 +3512,6 @@ def _build_paper_plugin_pilot_closeout_report(
             "live_zotero_api_not_called_by_this_report",
             "real_obsidian_vault_not_scanned",
             "private_rag_not_used",
-            "unrestricted_live_writelab_not_called_by_this_report",
             "real_pdf_full_text_not_validated",
             "final_governance_acceptance_not_claimed",
         ],
@@ -3517,7 +3523,8 @@ def _build_paper_mvp_end_to_end_closeout_report(
     """Build a compact machine-readable MVP closeout report.
 
     This report is a local aggregation of existing minimized reports. It does
-    not read Zotero keys, PDFs, Obsidian notes, RAG sources, or call WriteLab.
+    not read Zotero keys, PDFs, Obsidian notes, RAG sources, or call external
+    diagnosis services.
     """
     generated = generated_at or datetime.now(timezone.utc).isoformat()
     business_report = _build_paper_business_validation_report(generated_at=generated)
@@ -3552,14 +3559,6 @@ def _build_paper_mvp_end_to_end_closeout_report(
                 "raw_full_text_persisted": False,
                 "raw_excerpt_persisted": False,
             },
-            "pdf_writelab_live_smoke": {
-                "status": "PASS_PDF_EXCERPT_WRITELAB_LIVE",
-                "source": "pdf_writelab_live_pilot",
-                "schema_path": "schemas/paper_pdf_writelab_live_pilot_report.schema.json",
-                "scoped_live_smoke_only": True,
-                "raw_payload_persisted": False,
-                "token_persisted": False,
-            },
             "business_validation": {
                 "status": business_report["candidate_status"],
                 "schema_path": "schemas/paper_business_validation_report.schema.json",
@@ -3582,40 +3581,18 @@ def _build_paper_mvp_end_to_end_closeout_report(
         "command_chain": [
             "paper zotero-web-metadata-pilot --manifest-output",
             "paper pdf-redacted-excerpt-pilot",
-            "paper pdf-writelab-live-pilot",
             "paper business-validate",
             "paper plugin-pilot-closeout",
             "paper metadata-pipeline-readiness",
             "paper mvp-end-to-end-closeout",
         ],
-        "evidence_zip_refs": [
-            {
-                "artifact_id": "zotero_pdf_writelab_real_resource_smoke",
-                "path_hint": "D:/devframe-system/.agent/evidence/evidence-opencode-real-resource-smoke-batch-zotero-pdf-writelab-20260616-1020.zip",
-                "contains_raw_payload": False,
-            },
-            {
-                "artifact_id": "pdf_writelab_live_pilot",
-                "path_hint": "D:/devframe-system/.agent/evidence/evidence-opencode-pdf-writelab-live-pilot-a1-fc15f7b.zip",
-                "contains_raw_payload": False,
-            },
-            {
-                "artifact_id": "business_validation_pdf_writelab_binding",
-                "path_hint": "D:/devframe-system/.agent/evidence/evidence-opencode-business-validation-pdf-writelab-live-binding-a1-531337c.zip",
-                "contains_raw_payload": False,
-            },
-            {
-                "artifact_id": "plugin_closeout_pdf_writelab_binding",
-                "path_hint": "D:/devframe-system/.agent/evidence/evidence-opencode-plugin-closeout-pdf-writelab-live-binding-a1-a8b5a01.zip",
-                "contains_raw_payload": False,
-            },
-        ],
+        "evidence_zip_refs": [],
         "privacy_boundary": {
             "report_reads_live_resources": False,
             "zotero_key_file_read": False,
             "zotero_notes_or_attachments_read": False,
             "pdf_read_by_closeout_report": False,
-            "write_lab_called_by_closeout_report": False,
+            "external_diagnosis_called_by_closeout_report": False,
             "raw_full_text_persisted": False,
             "raw_excerpt_persisted": False,
             "raw_writelab_payload_persisted": False,
@@ -3634,7 +3611,6 @@ def _build_paper_mvp_end_to_end_closeout_report(
         "next_recommended_steps": [
             "bound_gpt_review_for_mvp_closeout",
             "agent_acceptance_rule_consumption_if_needed",
-            "write_lab_quality_spot_check_task_spec",
         ],
         "known_gaps": [
             "No full paper quality acceptance.",
@@ -3681,19 +3657,8 @@ def _build_paper_next_plugin_readiness_report(
             "final_acceptance_claimed": False,
         },
         {
-            "plugin_id": "writelab_local",
-            "priority": 3,
-            "recommended_action": "run_quality_spot_check_only_if_needed",
-            "current_state": "scoped_pdf_excerpt_live_smoke_available",
-            "next_gate": "human_quality_review_before_paper_quality_claim",
-            "runtime_authorization_required": True,
-            "expected_user_input": "local_writelab_base_url_and_optional_token_env",
-            "raw_payload_persisted": False,
-            "final_acceptance_claimed": False,
-        },
-        {
             "plugin_id": "obsidian_allowlisted_note",
-            "priority": 4,
+            "priority": 3,
             "recommended_action": "next_high_value_plugin_pilot",
             "current_state": "entrypoint_ready_local_fixture_only",
             "next_gate": "fresh_allowlisted_single_note_authorization",
@@ -3704,7 +3669,7 @@ def _build_paper_next_plugin_readiness_report(
         },
         {
             "plugin_id": "rag_local_or_private_retrieval",
-            "priority": 5,
+            "priority": 4,
             "recommended_action": "defer_until_obsidian_allowlist_passes",
             "current_state": "local_fixture_only",
             "next_gate": "retrieval_manifest_with_no_raw_note_or_query_payload",
@@ -3715,7 +3680,7 @@ def _build_paper_next_plugin_readiness_report(
         },
         {
             "plugin_id": "broad_pdf_full_text_or_vault_scan",
-            "priority": 6,
+            "priority": 5,
             "recommended_action": "defer_low_value_high_risk_scope",
             "current_state": "blocked_by_privacy_boundary",
             "next_gate": "separate_task_spec_and_explicit_human_authorization",
@@ -4115,188 +4080,44 @@ def paper_pdf_redacted_excerpt_pilot(
         )
     _emit_json(report)
 
-@paper_app.command("real-pilot-authorize-writelab-boundary")
-def paper_real_pilot_authorize_writelab_boundary(
-    output: Optional[Path] = typer.Option(
-        None, "--output", "-o", help="Optional path to write JSON decision",
-    ),
-    authorized_by: str = typer.Option(
-        "user_chat_authorization",
-        "--authorized-by",
-        help="Human gate identifier for this WriteLab boundary authorization",
-    ),
-):
-    """Emit RuntimeAuthorization for a synthetic WriteLab boundary pilot."""
-    init_env()
-    from ai_workflow_hub.context_layer.adapters.paper_writelab_boundary_pilot import (
-        build_writelab_boundary_runtime_authorization_decision,
-    )
 
-    decision = build_writelab_boundary_runtime_authorization_decision(
-        authorized_by=authorized_by,
-    )
-    if output is not None:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(
-            json.dumps(decision, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
-    _emit_json(decision)
-
-@paper_app.command("writelab-boundary-pilot")
-def paper_writelab_boundary_pilot(
-    authorization_decision: Optional[Path] = typer.Option(
-        None,
-        "--authorization-decision",
-        help="Path to human RuntimeAuthorization decision JSON",
-    ),
-    transport_mode: str = typer.Option(
-        "mock",
-        "--transport",
-        help="Transport mode: mock or live",
-    ),
-    base_url: str = typer.Option(
-        "http://127.0.0.1:8001",
-        "--base-url",
-        help="WriteLab base URL for live transport",
-    ),
-    token_env: str = typer.Option(
-        "WRITELAB_TOKEN",
-        "--token-env",
-        help="Environment variable containing optional WriteLab token",
-    ),
-    output: Optional[Path] = typer.Option(
-        None, "--output", "-o", help="Optional path to write JSON report",
-    ),
-    manifest_output: Optional[Path] = typer.Option(
-        None,
-        "--manifest-output",
-        help="Optional path to write minimized EvidenceManifest when the pilot passes",
-    ),
-):
-    """Run a synthetic WriteLab boundary pilot with minimized evidence."""
-    init_env()
-    from ai_workflow_hub.context_layer.adapters.paper_writelab_boundary_pilot import (
-        build_writelab_boundary_pilot_report,
-    )
-
-    decision_path = authorization_decision or (
-        Path(value) if (value := os.environ.get("PAPER_RUNTIME_AUTHORIZATION_DECISION_PATH")) else None
-    )
-    report = build_writelab_boundary_pilot_report(
-        authorization_decision_path=decision_path,
-        transport_mode=transport_mode,
-        base_url=base_url,
-        token_env=token_env,
-    )
-    if output is not None:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(
-            json.dumps(report, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
-    if manifest_output is not None and "evidence_manifest" in report:
-        manifest_output.parent.mkdir(parents=True, exist_ok=True)
-        manifest_output.write_text(
-            json.dumps(report["evidence_manifest"], indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
-    _emit_json(report)
-
-@paper_app.command("real-pilot-authorize-pdf-writelab")
-def paper_real_pilot_authorize_pdf_writelab(
+@paper_app.command("pdf-fulltext-segments")
+def paper_pdf_fulltext_segments(
     pdf_path: Path = typer.Option(
         ...,
         "--pdf-path",
-        help="Single authorized PDF path for the PDF excerpt to WriteLab pilot",
-    ),
-    base_url: str = typer.Option(
-        "http://127.0.0.1:8001",
-        "--base-url",
-        help="Local WriteLab base URL for this authorization",
-    ),
-    output: Optional[Path] = typer.Option(
-        None, "--output", "-o", help="Optional path to write JSON decision",
-    ),
-    authorized_by: str = typer.Option(
-        "user_chat_authorization",
-        "--authorized-by",
-        help="Human gate identifier for this PDF WriteLab authorization",
-    ),
-):
-    """Emit RuntimeAuthorization for one PDF excerpt to local WriteLab pilot."""
-    init_env()
-    from ai_workflow_hub.context_layer.adapters.paper_pdf_writelab_live_pilot import (
-        build_pdf_writelab_runtime_authorization_decision,
-    )
-
-    decision = build_pdf_writelab_runtime_authorization_decision(
-        pdf_path=pdf_path,
-        authorized_by=authorized_by,
-        base_url=base_url,
-    )
-    if output is not None:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(
-            json.dumps(decision, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
-    _emit_json(decision)
-
-@paper_app.command("pdf-writelab-live-pilot")
-def paper_pdf_writelab_live_pilot(
-    authorization_decision: Optional[Path] = typer.Option(
-        None,
-        "--authorization-decision",
-        help="Path to human RuntimeAuthorization decision JSON",
-    ),
-    pdf_path: Optional[Path] = typer.Option(
-        None,
-        "--pdf-path",
-        help="Path to the single authorized PDF",
-    ),
-    base_url: str = typer.Option(
-        "http://127.0.0.1:8001",
-        "--base-url",
-        help="Local WriteLab base URL",
-    ),
-    token_env: str = typer.Option(
-        "WRITELAB_TOKEN",
-        "--token-env",
-        help="Environment variable containing optional WriteLab token",
-    ),
-    max_excerpt_chars: int = typer.Option(
-        600,
-        "--max-excerpt-chars",
-        help="Maximum characters sent to WriteLab from the authorized PDF excerpt",
+        help="Path to the PDF file to segment",
     ),
     output: Optional[Path] = typer.Option(
         None, "--output", "-o", help="Optional path to write JSON report",
     ),
-    manifest_output: Optional[Path] = typer.Option(
+    output_dir: Optional[Path] = typer.Option(
         None,
-        "--manifest-output",
-        help="Optional path to write minimized EvidenceManifest when the pilot passes",
+        "--output-dir",
+        help="Optional directory to write a minimized segment index",
+    ),
+    write_segment_text: bool = typer.Option(
+        False,
+        "--write-segment-text/--no-write-segment-text",
+        help="Explicitly write raw segment text files into --output-dir",
+    ),
+    backend: str = typer.Option(
+        "pypdf",
+        "--backend",
+        help="PDF text extraction backend (default: pypdf)",
     ),
 ):
-    """Run one authorized PDF excerpt against local WriteLab with minimized evidence."""
-    init_env()
-    from ai_workflow_hub.context_layer.adapters.paper_pdf_writelab_live_pilot import (
-        build_pdf_writelab_live_pilot_report,
+    """Build a PDF full-text segmentation report with minimized evidence."""
+    from ai_workflow_hub.context_layer.adapters.paper_pdf_fulltext_segments import (
+        build_pdf_fulltext_segments_report,
     )
 
-    decision_path = authorization_decision or (
-        Path(value) if (value := os.environ.get("PAPER_RUNTIME_AUTHORIZATION_DECISION_PATH")) else None
-    )
-    selected_pdf_path = pdf_path or (
-        Path(value) if (value := os.environ.get("PAPER_PDF_WRITELAB_PATH")) else None
-    )
-    report = build_pdf_writelab_live_pilot_report(
-        authorization_decision_path=decision_path,
-        pdf_path=selected_pdf_path,
-        base_url=base_url,
-        token_env=token_env,
-        max_excerpt_chars=max_excerpt_chars,
+    init_env()
+    report = build_pdf_fulltext_segments_report(
+        pdf_path=pdf_path,
+        output_dir=str(output_dir) if output_dir else None,
+        backend=backend,
+        write_segment_text=write_segment_text,
     )
     if output is not None:
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -4304,13 +4125,182 @@ def paper_pdf_writelab_live_pilot(
             json.dumps(report, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
-    if manifest_output is not None and "evidence_manifest" in report:
-        manifest_output.parent.mkdir(parents=True, exist_ok=True)
-        manifest_output.write_text(
-            json.dumps(report["evidence_manifest"], indent=2, ensure_ascii=False),
+    _emit_json(report)
+
+
+@paper_app.command("obsidian-rest-probe")
+def paper_obsidian_rest_probe(
+    base_url: str = typer.Option(
+        "https://127.0.0.1:27124",
+        "--base-url",
+        help="Obsidian Local REST API base URL",
+    ),
+    token_env: str = typer.Option(
+        "OBSIDIAN_REST_API_KEY",
+        "--token-env",
+        help="Environment variable containing the Obsidian REST API key",
+    ),
+    verify_tls: bool = typer.Option(
+        False,
+        "--verify-tls/--no-verify-tls",
+        help="Verify TLS certificates; disabled by default for the plugin's local self-signed certificate",
+    ),
+    write_probe: bool = typer.Option(
+        False,
+        "--write-probe/--no-write-probe",
+        help="Create/update a small scoped probe note",
+    ),
+    probe_path: str = typer.Option(
+        "_devframe/obsidian-rest-probe.md",
+        "--probe-path",
+        help="Vault-relative path for the optional write probe",
+    ),
+    open_probe: bool = typer.Option(
+        False,
+        "--open-probe/--no-open-probe",
+        help="Ask Obsidian to open the probe note",
+    ),
+    output: Optional[Path] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Optional path to write JSON report",
+    ),
+):
+    """Probe Obsidian Local REST API without printing or persisting the API key."""
+    init_env()
+    from ai_workflow_hub.context_layer.adapters.obsidian_rest_api import (
+        build_obsidian_rest_probe_report,
+    )
+
+    report = build_obsidian_rest_probe_report(
+        base_url=base_url,
+        token_env=token_env,
+        verify_tls=verify_tls,
+        write_probe=write_probe,
+        probe_path=probe_path,
+        open_probe=open_probe,
+    )
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(report, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
     _emit_json(report)
+
+
+@paper_app.command("obsidian-sync-plan")
+def paper_obsidian_sync_plan(
+    local_path: Path = typer.Option(
+        ...,
+        "--local-path",
+        help="Local generated markdown file to compare",
+    ),
+    remote_path: str = typer.Option(
+        ...,
+        "--remote-path",
+        help="Vault-relative Obsidian note path to read through Local REST API",
+    ),
+    base_url: str = typer.Option(
+        "https://127.0.0.1:27124",
+        "--base-url",
+        help="Obsidian Local REST API base URL",
+    ),
+    token_env: str = typer.Option(
+        "OBSIDIAN_REST_API_KEY",
+        "--token-env",
+        help="Environment variable containing the Obsidian REST API key",
+    ),
+    verify_tls: bool = typer.Option(
+        False,
+        "--verify-tls/--no-verify-tls",
+        help="Verify TLS certificates; disabled by default for the plugin's local self-signed certificate",
+    ),
+    output: Optional[Path] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Optional path to write JSON report",
+    ),
+):
+    """Plan one Obsidian note sync without writing to the vault."""
+    init_env()
+    from ai_workflow_hub.context_layer.adapters.obsidian_rest_api import (
+        build_obsidian_rest_sync_plan_report,
+    )
+
+    report = build_obsidian_rest_sync_plan_report(
+        local_path=local_path,
+        remote_relative_path=remote_path,
+        base_url=base_url,
+        token_env=token_env,
+        verify_tls=verify_tls,
+    )
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(report, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    _emit_json(report)
+
+
+@paper_app.command("obsidian-sync-apply")
+def paper_obsidian_sync_apply(
+    local_path: Path = typer.Option(
+        ...,
+        "--local-path",
+        help="Local generated markdown file to apply",
+    ),
+    remote_path: str = typer.Option(
+        ...,
+        "--remote-path",
+        help="Vault-relative Obsidian note path to write through Local REST API",
+    ),
+    base_url: str = typer.Option(
+        "https://127.0.0.1:27124",
+        "--base-url",
+        help="Obsidian Local REST API base URL",
+    ),
+    token_env: str = typer.Option(
+        "OBSIDIAN_REST_API_KEY",
+        "--token-env",
+        help="Environment variable containing the Obsidian REST API key",
+    ),
+    verify_tls: bool = typer.Option(
+        False,
+        "--verify-tls/--no-verify-tls",
+        help="Verify TLS certificates; disabled by default for the plugin's local self-signed certificate",
+    ),
+    output: Optional[Path] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Optional path to write JSON report",
+    ),
+):
+    """Apply one Obsidian note sync: GET-before-PUT, replaces only the DevFrame managed block, preserves user content."""
+    init_env()
+    from ai_workflow_hub.context_layer.adapters.obsidian_rest_api import (
+        build_obsidian_rest_sync_apply_report,
+    )
+
+    report = build_obsidian_rest_sync_apply_report(
+        local_path=local_path,
+        remote_relative_path=remote_path,
+        base_url=base_url,
+        token_env=token_env,
+        verify_tls=verify_tls,
+    )
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(report, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    _emit_json(report)
+
 
 @paper_app.command("obsidian-allowlisted-note-pilot")
 def paper_obsidian_allowlisted_note_pilot(
@@ -4672,11 +4662,6 @@ def paper_local_rag_closed_loop(
         "--index-root",
         help="Local runtime directory for FAISS closed-loop artifacts",
     ),
-    writelab_base_url: str = typer.Option(
-        "http://127.0.0.1:8001",
-        "--writelab-base-url",
-        help="Optional local WriteLab base URL; fallback is used if unavailable",
-    ),
     embedding_model: str = typer.Option(
         "sentence-transformers/all-MiniLM-L6-v2",
         "--embedding-model",
@@ -4703,7 +4688,7 @@ def paper_local_rag_closed_loop(
         help="Optional path to write minimized EvidenceManifest",
     ),
 ):
-    """Run a scoped local PDF -> Obsidian -> FAISS -> diagnosis closed loop."""
+    """Run a scoped local PDF -> Obsidian -> FAISS -> local diagnosis closed loop."""
     init_env()
     from ai_workflow_hub.context_layer.adapters.local_paper_rag_closed_loop import (
         build_local_paper_rag_closed_loop_report,
@@ -4714,7 +4699,6 @@ def paper_local_rag_closed_loop(
         obsidian_vault_root=obsidian_vault_root,
         target_folder=target_folder,
         index_root=index_root,
-        writelab_base_url=writelab_base_url,
         embedding_model=embedding_model,
         pdf_limit=pdf_limit,
         top_k=top_k,
@@ -5073,6 +5057,124 @@ def paper_real_zotero_metadata_pilot(
         )
     _emit_json(report)
 
+@paper_app.command("public-research-kb-pilot")
+def paper_public_research_kb_pilot(
+    query: str = typer.Option(
+        ...,
+        "--query",
+        "-q",
+        help="Public scholarly source search query; raw query is not persisted in output",
+    ),
+    source: str = typer.Option(
+        "arxiv",
+        "--source",
+        help="Public scholarly metadata source: arxiv or openalex",
+    ),
+    max_results: int = typer.Option(
+        5,
+        "--max-results",
+        "-n",
+        min=1,
+        max=20,
+        help="Maximum number of public source records to fetch",
+    ),
+    vault_root: Path = typer.Option(
+        ...,
+        "--vault-root",
+        help="Obsidian vault root; target folder must be inside it",
+    ),
+    target_folder: Path = typer.Option(
+        ...,
+        "--target-folder",
+        help="Target folder within vault for Obsidian markdown notes",
+    ),
+    runtime_dir: Path = typer.Option(
+        ...,
+        "--runtime-dir",
+        help="Runtime directory for RAG pipeline artifacts",
+    ),
+    vault_uri_name: str = typer.Option(
+        "",
+        "--vault-uri-name",
+        help="Optional Obsidian vault name or ID for generated open links; defaults to vault folder name",
+    ),
+    obsidian_rest: bool = typer.Option(
+        False,
+        "--obsidian-rest/--no-obsidian-rest",
+        help="Also sync generated notes through Obsidian Local REST API",
+    ),
+    obsidian_rest_base_url: str = typer.Option(
+        "https://127.0.0.1:27124",
+        "--obsidian-rest-base-url",
+        help="Obsidian Local REST API base URL",
+    ),
+    obsidian_rest_token_env: str = typer.Option(
+        "OBSIDIAN_REST_API_KEY",
+        "--obsidian-rest-token-env",
+        help="Environment variable containing the Obsidian REST API key",
+    ),
+    obsidian_rest_open: bool = typer.Option(
+        False,
+        "--obsidian-rest-open/--no-obsidian-rest-open",
+        help="Ask Obsidian to open the generated dashboard after REST sync",
+    ),
+    obsidian_rest_verify_tls: bool = typer.Option(
+        False,
+        "--obsidian-rest-verify-tls/--no-obsidian-rest-verify-tls",
+        help="Verify TLS certificates for Obsidian REST; disabled by default for local self-signed certificates",
+    ),
+    output: Optional[Path] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Optional path to write JSON report",
+    ),
+    manifest_output: Optional[Path] = typer.Option(
+        None,
+        "--manifest-output",
+        help="Optional path to write minimized EvidenceManifest",
+    ),
+):
+    """Run the public research knowledge-base pilot.
+
+    Fetches public research metadata from arXiv/OpenAlex, writes Obsidian-compatible
+    markdown notes into the target folder, runs the local RAG pipeline where
+    possible, and produces citation lookup evidence. Only public data is read;
+    no private Zotero/Obsidian/user paper data is accessed.
+    """
+    init_env()
+    from ai_workflow_hub.context_layer.adapters.public_research_kb_pilot import (
+        build_public_research_kb_pilot_report,
+    )
+
+    report = build_public_research_kb_pilot_report(
+        query=query,
+        source=source,
+        max_results=max_results,
+        vault_root=vault_root,
+        target_folder=target_folder,
+        runtime_dir=runtime_dir,
+        vault_uri_name=vault_uri_name,
+        obsidian_rest=obsidian_rest,
+        obsidian_rest_base_url=obsidian_rest_base_url,
+        obsidian_rest_token_env=obsidian_rest_token_env,
+        obsidian_rest_open=obsidian_rest_open,
+        obsidian_rest_verify_tls=obsidian_rest_verify_tls,
+    )
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(report, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    if manifest_output is not None and "evidence_manifest" in report:
+        manifest_output.parent.mkdir(parents=True, exist_ok=True)
+        manifest_output.write_text(
+            json.dumps(report["evidence_manifest"], indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    _emit_json(report)
+
 @paper_app.command("zotero-web-metadata-pilot")
 def paper_zotero_web_metadata_pilot(
     key_file: Optional[Path] = typer.Option(
@@ -5143,7 +5245,6 @@ def paper_create(
 @paper_app.command("run")
 def paper_run(
     run_id: str = typer.Option(..., "--run-id", "-r", help="Paper run ID"),
-    zip_path: Optional[str] = typer.Option(None, "--zip", help="Offline handoff ZIP path (A18)"),
     as_json: bool = typer.Option(False, "--json", help="Output as JSON (A18)"),
 ):
     """Execute a paper review workflow."""
@@ -5157,17 +5258,8 @@ def paper_run(
     if safe_id != run_id:
         console.print(f"[yellow]run_id sanitized: {run_id} -> {safe_id}[/yellow]")
 
-    # A18: --zip sets offline mode overrides
-    overrides = {}
-    if zip_path:
-        if not Path(zip_path).exists():
-            console.print(f"[red]ZIP not found: {zip_path}[/red]")
-            raise typer.Exit(1)
-        overrides["writelab_mode"] = "offline"
-        overrides["handoff_zip_path"] = zip_path
-
     try:
-        result = rt["execute"](safe_id, state_overrides=overrides if overrides else None)
+        result = rt["execute"](safe_id)
     except (FileNotFoundError, ValueError) as e:
         console.print(f"[red]Execute failed: {e}[/red]")
         raise typer.Exit(1)
@@ -5445,7 +5537,6 @@ def _load_run_state(run_id: str) -> tuple[dict[str, Any], Path] | tuple[None, No
 def paper_go(
     task_id: str = typer.Option(..., "--task", "-t", help="Paper review task ID"),
     project_id: str = typer.Option("", "--project", "-p", help="Project ID"),
-    zip_path: Optional[str] = typer.Option(None, "--zip", help="Offline handoff ZIP path"),
     as_json: bool = typer.Option(False, "--json", help="Output as JSON"),
 ):
     """Create and execute a paper review workflow in one step (A18)."""
@@ -5462,17 +5553,8 @@ def paper_go(
     if not as_json:
         console.print(f"[green]Created: {run_id}[/green]")
 
-    # If --zip provided, set offline mode overrides
-    overrides = {}
-    if zip_path:
-        if not Path(zip_path).exists():
-            console.print(f"[red]ZIP not found: {zip_path}[/red]")
-            raise typer.Exit(1)
-        overrides["writelab_mode"] = "offline"
-        overrides["handoff_zip_path"] = zip_path
-
     try:
-        result = rt["execute"](run_id, state_overrides=overrides if overrides else None)
+        result = rt["execute"](run_id)
     except (FileNotFoundError, ValueError) as e:
         console.print(f"[red]Execute failed: {e}[/red]")
         raise typer.Exit(1)

@@ -8,7 +8,7 @@
     "recommendation": "",
     "human_required": false,
     "status": "open",
-    "source": "writelab_adapter",
+    "source": "deterministic_gate",
     "evidence_pack_ref": "ep",
     "created_at": "2026-06-11T13:18:05.911349+00:00",
     "updated_at": "2026-06-11T13:18:05.911349+00:00",
