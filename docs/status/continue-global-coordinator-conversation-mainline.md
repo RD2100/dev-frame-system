@@ -33,7 +33,7 @@ At the time of writing:
   include them in the formal handoff point
 - PR `#4` is open; merge and release remain human-owned
 - latest local release verification on the current uncommitted worktree passed:
-  `816 passed, 1 skipped`, plus public snapshot, wheel smoke, and diff
+  `820 passed, 1 skipped`, plus public snapshot, wheel smoke, and diff
   whitespace checks
 
 ## What Is Already True
@@ -79,6 +79,8 @@ Current uncommitted slice adds:
 - schema `schemas/t3_coordinator_entry.schema.json`
 - shell-readiness fixtures under
   `packages/control-plane/tests/fixtures/t3_coordinator_entry/`
+- external shell consumer guide:
+  `docs/examples/t3-coordinator-entry-consumer.md`
 
 ### Bridge / TS Helper Layer
 
@@ -119,6 +121,9 @@ Follow-up review tightened this slice further:
   project vs goal-conversation project-id mismatch
 - project coordinator thread selection is exact-match only; it no longer falls
   back to another project's goal conversation
+- drift-guard tests now assert the endpoint remains GET/read-only, manifest
+  `mutates=false`, schema required fields are closed, malformed priorities do
+  not break sorting, and global coordinator sorting stays first
 
 ## Automatic vs Human-Owned Work
 
@@ -195,7 +200,7 @@ python -m pytest packages/control-plane/tests/test_client_launcher.py packages/c
 # 196 passed
 
 powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
-# 816 passed, 1 skipped; release verification passed
+# 820 passed, 1 skipped; release verification passed
 ```
 
 ## Human-Only Tasks

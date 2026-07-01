@@ -1,5 +1,6 @@
 import json
 import os
+import copy
 import time
 from pathlib import Path
 from threading import Thread
@@ -138,6 +139,7 @@ def _load_coordinator_entry_fixture(name: str) -> dict[str, object]:
         "project_alpha_without_matching_goal_conversation",
         "can_start_coordinator_goal_false",
         "malformed_or_partial_entry_response",
+        "global_malformed_priority_still_sorts_global_first",
     ],
 )
 def test_t3_coordinator_entry_projects_shell_ready_shape_from_fixtures(fixture_name: str):
@@ -172,6 +174,51 @@ def test_t3_coordinator_entry_projects_shell_ready_shape_from_fixtures(fixture_n
         assert entry["globalCoordinatorThread"]["id"] == expected["globalThreadId"]
     assert entry["emptyStateReason"] == expected["emptyStateReason"]
     assert entry["disabledReason"] == expected["disabledReason"]
+
+
+def test_t3_coordinator_entry_schema_contract_boundaries():
+    schema = load_coordinator_entry_schema()
+    assert schema["type"] == "object"
+    assert set(schema["required"]) >= {
+        "version",
+        "source",
+        "updatedAt",
+        "conversationModel",
+        "projectOptions",
+        "selectedProject",
+        "projectCoordinatorThread",
+        "shellThreads",
+        "projects",
+        "globalCoordinatorThread",
+        "goalConversations",
+        "sortedShell",
+        "canStartCoordinatorGoal",
+        "emptyStateReason",
+        "disabledReason",
+    }
+    assert schema["additionalProperties"] is False
+
+
+def test_t3_coordinator_entry_rejects_additional_properties_and_missing_required():
+    fixture = _load_coordinator_entry_fixture("global_coordinator_only")
+    shell = fixture["shell"]
+    projects = fixture["projects"]
+
+    entry = build_t3_coordinator_entry(shell, projects)
+    validate_schema(load_coordinator_entry_schema(), entry)
+
+    schema = load_coordinator_entry_schema()
+    validator = validator_for(schema)
+
+    mutated = copy.deepcopy(entry)
+    mutated["unexpected"] = "injected-field"
+    with pytest.raises(Exception):
+        validator(schema).validate(mutated)
+
+    missing_projects = copy.deepcopy(entry)
+    missing_projects.pop("projects")
+    with pytest.raises(Exception):
+        validator(schema).validate(missing_projects)
 
 
 def test_t3_client_shell_projects_chatgpt_web_mcp_session():

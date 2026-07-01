@@ -152,6 +152,24 @@ def _get_json(base_url: str, path: str) -> tuple[int, dict]:
         return response.status, json.loads(response.read().decode("utf-8"))
 
 
+def _request_status(
+    base_url: str,
+    path: str,
+    method: str,
+    payload: dict | None = None,
+) -> tuple[int, str]:
+    headers = {"Accept": "application/json"}
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    if data is not None:
+        headers["Content-Type"] = "application/json"
+    request = Request(f"{base_url}{path}", data=data, headers=headers, method=method)
+    try:
+        with urlopen(request, timeout=5) as response:
+            return response.status, response.read().decode("utf-8")
+    except HTTPError as error:
+        return error.code, error.read().decode("utf-8")
+
+
 def _post_json(base_url: str, path: str, payload: dict) -> tuple[int, dict]:
     request = Request(
         f"{base_url}{path}",
@@ -353,6 +371,35 @@ def test_dashboard_coordinator_entry_endpoint_no_projects(tmp_path, monkeypatch)
         assert body["projectCoordinatorThread"] is None
         assert body["globalCoordinatorThread"] is not None
         assert body["globalCoordinatorThread"]["threadKind"] == "global_coordinator"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_dashboard_coordinator_entry_endpoint_rejects_write_methods(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    monkeypatch.setattr(
+        "control_plane.dashboard.build_visual_control_plane_state",
+        lambda runtime_dir, paper_project_dirs=None: {
+            "version": 1,
+            "projects": [],
+            "provider_bindings": [],
+            "sessions": [],
+            "gates": [],
+            "next_actions": [],
+            "team": {},
+        },
+    )
+    server = build_dashboard_server(runtime_dir=runtime_dir, port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        for method in ("POST", "PUT", "PATCH", "DELETE"):
+            status, _body = _request_status(base_url, "/api/t3/coordinator-entry", method, payload={"ignored": True})
+            assert status == 405, f"{method} accepted for coordinator-entry"
     finally:
         server.shutdown()
         server.server_close()

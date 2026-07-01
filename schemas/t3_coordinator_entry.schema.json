@@ -10,10 +10,16 @@
     "updatedAt",
     "conversationModel",
     "projects",
+    "projectOptions",
+    "selectedProject",
+    "projectCoordinatorThread",
+    "shellThreads",
     "globalCoordinatorThread",
     "goalConversations",
     "sortedShell",
-    "canStartCoordinatorGoal"
+    "canStartCoordinatorGoal",
+    "emptyStateReason",
+    "disabledReason"
   ],
   "properties": {
     "version": { "type": "integer", "minimum": 1 },

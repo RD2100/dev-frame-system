@@ -10,6 +10,7 @@ Read these files first:
 - docs/status/recon-receipt-global-coordinator-conversation-mainline.md
 - docs/status/phase-1-global-coordinator-conversation-plan.md
 - docs/status/cluster-coordinator-design-and-roadmap.md
+- Read the concrete read-only consumer example: docs/examples/t3-coordinator-entry-consumer.md
 
 Current truth:
 - PR #4 is the active branch PR.
@@ -24,13 +25,17 @@ Current truth:
   - generated bridge helper fetchDevFrameCoordinatorShellEntry()
   - schema schemas/t3_coordinator_entry.schema.json
   - fixtures under packages/control-plane/tests/fixtures/t3_coordinator_entry/
+  - external read-only consumer guide:
+    docs/examples/t3-coordinator-entry-consumer.md
   - read-only shell mapping fields selectedProject, projectOptions,
     projectCoordinatorThread, shellThreads, emptyStateReason, disabledReason
+  - drift guards for schema closure, read-only endpoint methods, global sorting
+    priority, malformed priority handling, and exact project/thread matching
   - client smoke cross-checks the coordinator entry against /api/t3/projects,
     /api/t3/conversation-model, and /t3-shell.json
 - Latest local release gate observed for this slice:
   powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
-  -> 816 passed, 1 skipped; release verification passed
+  -> 820 passed, 1 skipped; release verification passed
 - The repo already supports:
   - global_coordinator thread projection
   - goal_conversation thread projection from cluster runs

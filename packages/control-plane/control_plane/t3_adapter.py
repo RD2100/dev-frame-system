@@ -789,6 +789,24 @@ def _thread_list_priority(thread_kind: str) -> int:
     }.get(thread_kind, 99)
 
 
+def _safe_thread_list_priority(value: object, thread_kind: str) -> int:
+    kind = _text(thread_kind, "native_chat")
+    if kind == "global_coordinator":
+        return 0
+    if isinstance(value, bool):
+        return _thread_list_priority(kind)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return _thread_list_priority(kind)
+    if isinstance(value, float):
+        return int(value)
+    return _thread_list_priority(kind)
+
+
 def _sort_t3_shell_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     sorted_snapshot = deepcopy(snapshot) if isinstance(snapshot, dict) else {}
     if not isinstance(sorted_snapshot.get("snapshotSequence"), int):
@@ -809,10 +827,26 @@ def _sort_t3_shell_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         for detail in sorted_snapshot.get("threadDetails", [])
         if isinstance(detail, dict)
     }
+    normalized_threads: list[dict[str, Any]] = []
+    for thread in threads:
+        if not isinstance(thread, dict):
+            continue
+        thread_copy = thread.copy()
+        thread_copy["threadListPriority"] = _safe_thread_list_priority(
+            thread_copy.get("threadListPriority"),
+            _text(thread_copy.get("threadKind"), "native_chat"),
+        )
+        normalized_threads.append(thread_copy)
 
     def compare_threads(left: dict[str, Any], right: dict[str, Any]) -> int:
-        left_priority = int(left.get("threadListPriority", _thread_list_priority(_text(left.get("threadKind"), "native_chat"))))
-        right_priority = int(right.get("threadListPriority", _thread_list_priority(_text(right.get("threadKind"), "native_chat"))))
+        left_priority = _safe_thread_list_priority(
+            left.get("threadListPriority"),
+            _text(left.get("threadKind"), "native_chat"),
+        )
+        right_priority = _safe_thread_list_priority(
+            right.get("threadListPriority"),
+            _text(right.get("threadKind"), "native_chat"),
+        )
         if left_priority != right_priority:
             return left_priority - right_priority
         left_updated = _text(left.get("updatedAt"), "")
@@ -823,7 +857,7 @@ def _sort_t3_shell_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         right_title = _text(right.get("title"), "")
         return (left_title > right_title) - (left_title < right_title)
 
-    threads = sorted(threads, key=cmp_to_key(compare_threads))
+    threads = sorted(normalized_threads, key=cmp_to_key(compare_threads))
     sorted_snapshot["threads"] = threads
     sorted_snapshot["threadDetails"] = [
         details_by_id[_text(thread.get("id"), "")]
@@ -2267,7 +2301,10 @@ def _thread_detail(thread_shell: dict[str, Any], updated_at: str, team: dict[str
             if isinstance(thread_shell.get("projectBinding"), dict)
             else _project_binding("native_chat", _text(thread_shell.get("projectId"), ""))
         ),
-        "threadListPriority": int(thread_shell.get("threadListPriority", _thread_list_priority(_text(thread_shell.get("threadKind"), "native_chat")))),
+        "threadListPriority": _safe_thread_list_priority(
+            thread_shell.get("threadListPriority"),
+            _text(thread_shell.get("threadKind"), "native_chat"),
+        ),
         "threadListSummary": _text(thread_shell.get("threadListSummary"), ""),
         "modelSelection": thread_shell.get("modelSelection"),
         "runtimeMode": thread_shell.get("runtimeMode"),
@@ -2428,7 +2465,10 @@ def _cluster_run_thread_detail(
         "threadKind": _text(thread_shell.get("threadKind"), "goal_conversation"),
         "coordinatorScope": _text(thread_shell.get("coordinatorScope"), "project"),
         "projectBinding": thread_shell.get("projectBinding"),
-        "threadListPriority": int(thread_shell.get("threadListPriority", _thread_list_priority("goal_conversation"))),
+        "threadListPriority": _safe_thread_list_priority(
+            thread_shell.get("threadListPriority"),
+            "goal_conversation",
+        ),
         "threadListSummary": _text(thread_shell.get("threadListSummary"), ""),
         "modelSelection": thread_shell.get("modelSelection"),
         "runtimeMode": thread_shell.get("runtimeMode"),

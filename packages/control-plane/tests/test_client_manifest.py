@@ -114,6 +114,12 @@ def test_visual_client_manifest_matches_public_schema():
     assert "Secondary T3 Code native-client" in descriptions["t3-shell"]
     assert "Global Coordinator entry" in descriptions["t3-coordinator-entry"]
     assert "lightweight web dashboard" in descriptions["go-dispatch-page"]
+    coordinator_entry_endpoint = next(
+        endpoint for endpoint in manifest["endpoints"] if endpoint["id"] == "t3-coordinator-entry"
+    )
+    assert coordinator_entry_endpoint["method"] == "GET"
+    assert coordinator_entry_endpoint["mutates"] is False
+    assert coordinator_entry_endpoint["path"] == "/api/t3/coordinator-entry"
     mutating_endpoints = [endpoint for endpoint in manifest["endpoints"] if endpoint["mutates"]]
     assert mutating_endpoints == [
         {
