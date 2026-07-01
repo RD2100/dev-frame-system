@@ -86,6 +86,24 @@ def test_write_t3_bridge_bundle_creates_installable_files(tmp_path):
     assert 'export interface DevFrameProjectOption {' in source
     assert 'export async function fetchDevFrameConversationModel' in source
     assert 'export async function fetchDevFrameProjectOptions' in source
+    assert "export interface DevFrameCoordinatorShellEntry" in source
+    assert "const DEFAULT_CONVERSATION_MODEL" in source
+    assert "export function buildDevFrameCoordinatorShellEntry" in source
+    assert "export async function fetchDevFrameCoordinatorShellEntry" in source
+    assert 'new URL("/api/t3/coordinator-entry", config.controlPlaneBaseUrl)' in source
+    assert 'thread.threadKind === "global_coordinator"' in source
+    assert 'thread.threadKind === "goal_conversation"' in source
+    assert "projectOptions:" in source
+    assert "selectedProject:" in source
+    assert "projectCoordinatorThread:" in source
+    assert "shellThreads:" in source
+    assert "emptyStateReason:" in source
+    assert "disabledReason:" in source
+    assert (
+        'shellThreads.find((thread) => thread.projectId === selectedProjectId && thread.threadKind === "goal_conversation") ??'
+        in source
+    )
+    assert 'shellThreads.find((thread) => thread.threadKind === "goal_conversation") ??' not in source
     assert 'readonly threads: readonly DevFrameT3ThreadShell[];' in source
     shell_source = (tmp_path / "bundle" / "apps/web/src/state/shell.ts").read_text(encoding="utf-8")
     assert "createShellEnvironmentAtoms" in shell_source
@@ -321,6 +339,8 @@ def test_bridge_source_includes_fetch_envelope_function():
     assert "export async function fetchDevFrameClusterTargets" in source
     assert "export async function startDevFrameCoordinatorGoal" in source
     assert "export function sortDevFrameThreadsForDisplay" in source
+    assert "export function buildDevFrameCoordinatorShellEntry" in source
+    assert "export async function fetchDevFrameCoordinatorShellEntry" in source
 
 
 def test_bridge_source_envelope_includes_devframe_team():
@@ -358,6 +378,7 @@ def test_bridge_readme_includes_team_contract_docs():
     assert "fetchDevFrameClusterTargets()" in readme
     assert "startDevFrameCoordinatorGoal()" in readme
     assert "sortDevFrameThreadsForDisplay()" in readme
+    assert "fetchDevFrameCoordinatorShellEntry()" in readme
 
 
 def test_catalog_source_disables_websocket_connection():

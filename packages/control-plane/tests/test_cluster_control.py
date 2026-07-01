@@ -17,6 +17,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import pytest
+from jsonschema.validators import validator_for
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -27,6 +28,19 @@ from control_plane.cluster_control import (  # noqa: E402
 )
 from control_plane.cluster_run import ClusterRunError, start_cluster_run  # noqa: E402
 from control_plane.dashboard import build_dashboard_server  # noqa: E402
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _load_coordinator_entry_schema() -> dict:
+    return json.loads((REPO_ROOT / "schemas" / "t3_coordinator_entry.schema.json").read_text(encoding="utf-8"))
+
+
+def _validate_schema(schema: dict, data: dict) -> None:
+    validator_class = validator_for(schema)
+    validator_class.check_schema(schema)
+    validator_class(schema).validate(data)
 
 
 def test_targets_include_coordinator_and_default_roster(tmp_path):
@@ -245,6 +259,100 @@ def test_dashboard_conversation_model_endpoint(tmp_path):
             "goalProjectBindingRequired": True,
             "threadKinds": ["native_chat", "goal_conversation", "global_coordinator"],
         }
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_dashboard_coordinator_entry_endpoint(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.setattr(
+        "control_plane.dashboard.build_visual_control_plane_state",
+        lambda runtime_dir, paper_project_dirs=None: {
+            "version": 1,
+            "projects": [{
+                "project_id": "demo-project",
+                "display_name": "Demo Project",
+                "goal": "Ship it",
+                "status": "active",
+                "risk_state": "low",
+                "contract_path": str(workspace / "rules" / "project-contracts" / "demo-project.md"),
+            }],
+            "provider_bindings": [],
+            "sessions": [],
+            "gates": [],
+            "next_actions": [],
+            "team": {},
+        },
+    )
+    server = build_dashboard_server(runtime_dir=runtime_dir, port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        _, projects = _get_json(base_url, "/api/t3/projects")
+        _, conversation_model = _get_json(base_url, "/api/t3/conversation-model")
+        _, shell = _get_json(base_url, "/t3-shell.json")
+        status, body = _get_json(base_url, "/api/t3/coordinator-entry")
+        assert status == 200
+        _validate_schema(_load_coordinator_entry_schema(), body)
+        assert body["source"] == "devframe"
+        assert body["conversationModel"] == conversation_model
+        assert body["conversationModel"]["globalCoordinatorThreadId"] == "devframe-team-workbench-session"
+        assert body["projects"] == [{
+            "projectId": "demo-project",
+            "projectPath": str(workspace),
+            "workspaceRoot": str(workspace),
+            "label": f"Demo Project - {workspace}",
+        }]
+        assert body["projects"] == projects["projects"]
+        assert body["canStartCoordinatorGoal"] is True
+        assert body["globalCoordinatorThread"]["threadKind"] == "global_coordinator"
+        assert body["sortedShell"]["threads"][0]["id"] == "devframe-team-workbench-session"
+        assert sorted(thread["id"] for thread in body["sortedShell"]["threads"]) == sorted(
+            thread["id"] for thread in shell["t3"]["threads"]
+        )
+        assert body["goalConversations"] == []
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_dashboard_coordinator_entry_endpoint_no_projects(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    monkeypatch.setattr(
+        "control_plane.dashboard.build_visual_control_plane_state",
+        lambda runtime_dir, paper_project_dirs=None: {
+            "version": 1,
+            "projects": [],
+            "provider_bindings": [],
+            "sessions": [],
+            "gates": [],
+            "next_actions": [],
+            "team": {},
+        },
+    )
+    server = build_dashboard_server(runtime_dir=runtime_dir, port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        status, body = _get_json(base_url, "/api/t3/coordinator-entry")
+        assert status == 200
+        assert body["projects"] == []
+        assert body["canStartCoordinatorGoal"] is False
+        assert body["emptyStateReason"] == "no_projects"
+        assert body["disabledReason"] == "missing_required_project"
+        assert body["selectedProject"] is None
+        assert body["projectCoordinatorThread"] is None
+        assert body["globalCoordinatorThread"] is not None
+        assert body["globalCoordinatorThread"]["threadKind"] == "global_coordinator"
     finally:
         server.shutdown()
         server.server_close()

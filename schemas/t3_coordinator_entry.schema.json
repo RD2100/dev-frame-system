@@ -1,0 +1,137 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rd2100.devframe/schemas/t3-coordinator-entry",
+  "title": "T3 Coordinator Entry",
+  "description": "One-call read-only entry model for the RD-Code/T3 Global Coordinator surface.",
+  "type": "object",
+  "required": [
+    "version",
+    "source",
+    "updatedAt",
+    "conversationModel",
+    "projects",
+    "globalCoordinatorThread",
+    "goalConversations",
+    "sortedShell",
+    "canStartCoordinatorGoal"
+  ],
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "source": { "type": "string", "const": "devframe" },
+    "updatedAt": { "type": "string" },
+    "conversationModel": { "$ref": "#/definitions/conversation_model" },
+    "projects": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/project_option" }
+    },
+    "projectOptions": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/project_option" }
+    },
+    "selectedProject": {
+      "anyOf": [
+        { "type": "null" },
+        { "$ref": "#/definitions/project_option" }
+      ]
+    },
+    "projectCoordinatorThread": {
+      "anyOf": [
+        { "type": "null" },
+        { "$ref": "#/definitions/goal_thread" }
+      ]
+    },
+    "shellThreads": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/thread_base" }
+    },
+    "globalCoordinatorThread": {
+      "anyOf": [
+        { "type": "null" },
+        { "$ref": "#/definitions/global_thread" }
+      ]
+    },
+    "goalConversations": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/goal_thread" }
+    },
+    "sortedShell": { "$ref": "#/definitions/sorted_shell" },
+    "canStartCoordinatorGoal": { "type": "boolean" },
+    "emptyStateReason": { "type": ["string", "null"] },
+    "disabledReason": { "type": ["string", "null"] }
+  },
+  "definitions": {
+    "conversation_model": {
+      "type": "object",
+      "required": ["globalCoordinatorThreadId", "goalProjectBindingRequired", "threadKinds"],
+      "properties": {
+        "globalCoordinatorThreadId": { "type": "string", "minLength": 1 },
+        "goalProjectBindingRequired": { "type": "boolean" },
+        "threadKinds": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["native_chat", "goal_conversation", "global_coordinator"] },
+          "minItems": 3
+        }
+      },
+      "additionalProperties": false
+    },
+    "project_option": {
+      "type": "object",
+      "required": ["projectId", "projectPath", "workspaceRoot", "label"],
+      "properties": {
+        "projectId": { "type": "string" },
+        "projectPath": { "type": "string" },
+        "workspaceRoot": { "type": "string" },
+        "label": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "thread_base": {
+      "type": "object",
+      "required": ["id", "threadKind", "threadListPriority"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "threadKind": { "type": "string", "enum": ["native_chat", "goal_conversation", "global_coordinator"] },
+        "threadListPriority": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "global_thread": {
+      "allOf": [
+        { "$ref": "#/definitions/thread_base" },
+        {
+          "type": "object",
+          "properties": {
+            "threadKind": { "type": "string", "const": "global_coordinator" }
+          }
+        }
+      ]
+    },
+    "goal_thread": {
+      "allOf": [
+        { "$ref": "#/definitions/thread_base" },
+        {
+          "type": "object",
+          "properties": {
+            "threadKind": { "type": "string", "const": "goal_conversation" }
+          }
+        }
+      ]
+    },
+    "sorted_shell": {
+      "type": "object",
+      "required": ["snapshotSequence", "projects", "threads", "updatedAt"],
+      "properties": {
+        "snapshotSequence": { "type": "integer", "minimum": 1 },
+        "projects": { "type": "array" },
+        "threads": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/thread_base" }
+        },
+        "threadDetails": { "type": "array" },
+        "updatedAt": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

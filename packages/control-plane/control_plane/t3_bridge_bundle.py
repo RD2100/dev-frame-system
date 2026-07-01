@@ -358,7 +358,30 @@ interface DevFrameBridgeEnv {
 export type DevFrameShellListener = (snapshot: DevFrameT3ShellSnapshot) => void;
 export type DevFrameShellErrorListener = (error: unknown) => void;
 
+export interface DevFrameCoordinatorShellEntry {
+  readonly version: number;
+  readonly source: "devframe";
+  readonly updatedAt: string;
+  readonly conversationModel: DevFrameConversationModel;
+  readonly projects: readonly DevFrameProjectOption[];
+  readonly projectOptions: readonly DevFrameProjectOption[];
+  readonly selectedProject: DevFrameProjectOption | null;
+  readonly projectCoordinatorThread: DevFrameT3ThreadShell | null;
+  readonly shellThreads: readonly DevFrameT3ThreadShell[];
+  readonly globalCoordinatorThread: DevFrameT3ThreadShell | null;
+  readonly goalConversations: readonly DevFrameT3ThreadShell[];
+  readonly sortedShell: DevFrameT3ShellSnapshot;
+  readonly canStartCoordinatorGoal: boolean;
+  readonly emptyStateReason: string | null;
+  readonly disabledReason: string | null;
+}
+
 const DEFAULT_POLL_INTERVAL_MS = 2000;
+const DEFAULT_CONVERSATION_MODEL: DevFrameConversationModel = {
+  globalCoordinatorThreadId: "devframe-team-workbench-session",
+  goalProjectBindingRequired: true,
+  threadKinds: ["native_chat", "goal_conversation", "global_coordinator"],
+};
 
 function trimOptionalUrl(value: string | undefined): string | undefined {
   const text = value?.trim();
@@ -482,6 +505,61 @@ export function sortDevFrameThreadsForDisplay(
     threads,
     threadDetails,
   };
+}
+
+export function buildDevFrameCoordinatorShellEntry(
+  envelope: DevFrameT3ShellEnvelope,
+  projects: readonly DevFrameProjectOption[] = [],
+  conversationModel?: DevFrameConversationModel,
+): DevFrameCoordinatorShellEntry {
+  const resolvedConversationModel =
+    conversationModel ?? envelope.devframe?.conversationModel ?? DEFAULT_CONVERSATION_MODEL;
+  const sortedShell = sortDevFrameThreadsForDisplay(envelope.t3);
+  const shellThreads = sortedShell.threads;
+  const projectOptions = [...projects];
+  const selectedProject = projectOptions[0] ?? null;
+  const selectedProjectId = selectedProject?.projectId ?? "";
+  const projectCoordinatorThread =
+    shellThreads.find((thread) => thread.projectId === selectedProjectId && thread.threadKind === "goal_conversation") ??
+    null;
+  const globalCoordinatorThread =
+    sortedShell.threads.find((thread) => thread.id === resolvedConversationModel.globalCoordinatorThreadId) ??
+    sortedShell.threads.find((thread) => thread.threadKind === "global_coordinator") ??
+    null;
+  const goalConversations = sortedShell.threads.filter(
+    (thread) => thread.threadKind === "goal_conversation",
+  );
+  return {
+    version: 1,
+    source: "devframe",
+    updatedAt: sortedShell.updatedAt,
+    conversationModel: resolvedConversationModel,
+    projects,
+    projectOptions,
+    selectedProject,
+    projectCoordinatorThread,
+    shellThreads,
+    globalCoordinatorThread,
+    goalConversations,
+    sortedShell,
+    canStartCoordinatorGoal: !resolvedConversationModel.goalProjectBindingRequired || projects.length > 0,
+    emptyStateReason: shellThreads.length === 0 ? "no_threads" : null,
+    disabledReason: !resolvedConversationModel.goalProjectBindingRequired || projects.length > 0 ? null : "missing_required_project",
+  };
+}
+
+export async function fetchDevFrameCoordinatorShellEntry(
+  config: DevFrameControlPlaneConfig,
+): Promise<DevFrameCoordinatorShellEntry> {
+  const response = await fetch(new URL("/api/t3/coordinator-entry", config.controlPlaneBaseUrl).toString(), {
+    method: "GET",
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`DevFrame coordinator entry request failed: ${response.status}`);
+  }
+  return (await response.json()) as DevFrameCoordinatorShellEntry;
 }
 
 export interface DevFrameClusterTarget {
@@ -654,6 +732,10 @@ drive coordinator goal creation against the loopback control plane without
 depending on `VITE_DEVFRAME_T3_SHELL_URL`.
 Use `sortDevFrameThreadsForDisplay()` to present the inbox in product order:
 global coordinator first, then goal conversations, then ordinary chats.
+Use `fetchDevFrameCoordinatorShellEntry()` when the shell wants one directly
+consumable entry model: sorted shell snapshot, global coordinator thread, goal
+conversations, project picker options, and whether project-bound goal creation
+can start.
 """
 
 

@@ -22,6 +22,8 @@ from .go_dispatch import DEFAULT_OPENCODE_AGENT, run_go_dispatch
 from .t3_bridge_bundle import build_t3_bridge_bundle, render_t3_bridge_bundle_json
 from .t3_adapter import (
     build_devframe_conversation_model,
+    build_t3_client_shell_from_state,
+    build_t3_coordinator_entry,
     build_t3_client_shell,
     render_cached_t3_client_shell_compact_json,
     render_t3_client_shell_compact_json,
@@ -149,9 +151,31 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                 body = json.dumps(build_devframe_conversation_model(), indent=2, ensure_ascii=True)
                 self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
                 return
+            if path == "/api/t3/coordinator-entry":
+                state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=paper_project_dirs)
+                try:
+                    from .cluster_run import list_cluster_runs
+
+                    cluster_runs = list_cluster_runs(runtime_dir)
+                except Exception:  # noqa: BLE001 - read-only projection remains best effort
+                    cluster_runs = []
+                address, actual_port = self.server.server_address
+                shell = build_t3_client_shell_from_state(
+                    state,
+                    base_url=f"http://{address}:{actual_port}",
+                    runtime_dir=runtime_dir,
+                    cluster_runs=cluster_runs,
+                )
+                body = json.dumps(
+                    build_t3_coordinator_entry(shell, _t3_project_options(state, include_fallback_to_cwd=False)),
+                    separators=(",", ":"),
+                    ensure_ascii=True,
+                )
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
+                return
             if path == "/api/t3/projects":
                 state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=paper_project_dirs)
-                projects = _t3_project_options(state)
+                projects = _t3_project_options(state, include_fallback_to_cwd=False)
                 body = json.dumps({"projects": projects}, indent=2, ensure_ascii=True)
                 self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
                 return
@@ -1747,7 +1771,11 @@ def _go_dispatch_project_options(state: dict[str, Any]) -> list[dict[str, str]]:
     return options
 
 
-def _t3_project_options(state: dict[str, Any]) -> list[dict[str, str]]:
+def _t3_project_options(
+    state: dict[str, Any],
+    *,
+    include_fallback_to_cwd: bool = False,
+) -> list[dict[str, str]]:
     options: list[dict[str, str]] = []
     seen: set[str] = set()
     for project in state.get("projects", []):
@@ -1764,7 +1792,7 @@ def _t3_project_options(state: dict[str, Any]) -> list[dict[str, str]]:
             "workspaceRoot": str(root),
             "label": f"{str(project.get('display_name') or project.get('project_id') or root.name)} - {root}",
         })
-    if options:
+    if options or not include_fallback_to_cwd:
         return options
     cwd = Path.cwd().resolve()
     return [{

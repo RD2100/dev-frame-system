@@ -92,6 +92,15 @@ def build_visual_client_manifest() -> dict[str, Any]:
             "description": "Loopback read of conversation kinds, the global coordinator thread id, and the goal project-binding requirement.",
         },
         {
+            "id": "t3-coordinator-entry",
+            "path": "/api/t3/coordinator-entry",
+            "method": "GET",
+            "contract": "t3_coordinator_shell_entry",
+            "object_types": ["DevFrameSession", "Project", "Action", "Gate"],
+            "mutates": False,
+            "description": "One-call read model for the RD-Code Global Coordinator entry: sorted shell snapshot, global coordinator thread, goal conversations, project picker options, and goal-start readiness.",
+        },
+        {
             "id": "sessions",
             "path": "/sessions.json",
             "method": "GET",

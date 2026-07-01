@@ -6,6 +6,7 @@ from threading import Thread
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+import pytest
 from jsonschema.validators import validator_for
 
 from control_plane import cluster_run as cluster_run_module
@@ -15,6 +16,7 @@ from control_plane.dashboard import build_dashboard_server
 from control_plane.t3_adapter import (
     build_t3_client_shell,
     build_t3_client_shell_from_state,
+    build_t3_coordinator_entry,
     render_cached_t3_client_shell_compact_json,
 )
 
@@ -24,6 +26,10 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 def load_schema() -> dict:
     return json.loads((REPO_ROOT / "schemas" / "t3_client_shell.schema.json").read_text(encoding="utf-8"))
+
+
+def load_coordinator_entry_schema() -> dict:
+    return json.loads((REPO_ROOT / "schemas" / "t3_coordinator_entry.schema.json").read_text(encoding="utf-8"))
 
 
 def validate_schema(schema: dict, data: dict) -> None:
@@ -104,6 +110,68 @@ def test_t3_client_shell_projects_mcp_live_session():
     assert detail["id"] == "codexpro-live-session"
     assert detail["threadKind"] == "native_chat"
     assert "Provider: codexpro" in detail["messages"][0]["text"]
+
+
+def _coordinator_entry_fixture_path(name: str) -> Path:
+    return (
+        Path(__file__).resolve().parents[3]
+        / "packages"
+        / "control-plane"
+        / "tests"
+        / "fixtures"
+        / "t3_coordinator_entry"
+        / f"{name}.json"
+    )
+
+
+def _load_coordinator_entry_fixture(name: str) -> dict[str, object]:
+    return json.loads(_coordinator_entry_fixture_path(name).read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(
+    "fixture_name",
+    [
+        "no_projects",
+        "global_coordinator_only",
+        "project_with_goal_conversations",
+        "project_without_goal_conversations",
+        "project_alpha_without_matching_goal_conversation",
+        "can_start_coordinator_goal_false",
+        "malformed_or_partial_entry_response",
+    ],
+)
+def test_t3_coordinator_entry_projects_shell_ready_shape_from_fixtures(fixture_name: str):
+    fixture = _load_coordinator_entry_fixture(fixture_name)
+    shell = fixture["shell"]
+    projects = fixture["projects"]
+    expected = fixture["expected"]
+
+    entry = build_t3_coordinator_entry(shell, projects)
+
+    validate_schema(load_coordinator_entry_schema(), entry)
+    assert entry["source"] == "devframe"
+    assert entry["canStartCoordinatorGoal"] is expected["canStartCoordinatorGoal"]
+    assert entry["projects"] == projects
+    assert len(entry["projectOptions"]) == expected["projectOptionCount"]
+    assert entry["projectOptions"] == projects
+    assert [thread["id"] for thread in entry["shellThreads"]] == expected["shellThreadsIds"]
+    assert [thread["id"] for thread in entry["sortedShell"]["threads"]] == expected["sortedShellThreadIds"]
+    assert [detail["id"] for detail in entry["sortedShell"]["threadDetails"]] == expected["sortedShellThreadIds"]
+    assert [thread["id"] for thread in entry["goalConversations"]] == expected["goalConversationIds"]
+    if expected["selectedProjectId"] is None:
+        assert entry["selectedProject"] is None
+    else:
+        assert entry["selectedProject"]["projectId"] == expected["selectedProjectId"]
+    if expected["projectCoordinatorThreadId"] is None:
+        assert entry["projectCoordinatorThread"] is None
+    else:
+        assert entry["projectCoordinatorThread"]["id"] == expected["projectCoordinatorThreadId"]
+    if expected["globalThreadId"] is None:
+        assert entry["globalCoordinatorThread"] is None
+    else:
+        assert entry["globalCoordinatorThread"]["id"] == expected["globalThreadId"]
+    assert entry["emptyStateReason"] == expected["emptyStateReason"]
+    assert entry["disabledReason"] == expected["disabledReason"]
 
 
 def test_t3_client_shell_projects_chatgpt_web_mcp_session():

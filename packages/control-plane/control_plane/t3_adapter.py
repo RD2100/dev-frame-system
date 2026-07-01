@@ -8,6 +8,7 @@ import threading
 import time
 from copy import deepcopy
 from datetime import datetime, timezone
+from functools import cmp_to_key
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -217,6 +218,93 @@ def build_devframe_conversation_model() -> dict[str, Any]:
         "globalCoordinatorThreadId": _GLOBAL_COORDINATOR_THREAD_ID,
         "goalProjectBindingRequired": True,
         "threadKinds": ["native_chat", "goal_conversation", "global_coordinator"],
+    }
+
+
+def build_t3_coordinator_entry(
+    shell: dict[str, Any],
+    projects: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Build the one-call shell entry model for the Global Coordinator surface."""
+    if not isinstance(shell, dict):
+        shell = {}
+    t3_payload = shell.get("t3")
+    t3_snapshot = t3_payload if isinstance(t3_payload, dict) else {}
+    if not isinstance(t3_snapshot, dict):
+        t3_snapshot = {}
+    is_malformed_response = not isinstance(t3_payload, dict)
+
+    conversation_model = (
+        shell.get("devframe", {}).get("conversationModel")
+        if isinstance(shell.get("devframe"), dict)
+        else None
+    )
+    if not isinstance(conversation_model, dict):
+        conversation_model = build_devframe_conversation_model()
+
+    sorted_shell = _sort_t3_shell_snapshot(t3_snapshot)
+    shell_threads = [thread for thread in sorted_shell.get("threads", []) if isinstance(thread, dict)]
+    global_thread_id = _text(conversation_model.get("globalCoordinatorThreadId"), _GLOBAL_COORDINATOR_THREAD_ID)
+    global_thread = next(
+        (thread for thread in shell_threads if _text(thread.get("id"), "") == global_thread_id),
+        None,
+    )
+    if global_thread is None:
+        global_thread = next(
+            (thread for thread in shell_threads if _text(thread.get("threadKind"), "") == "global_coordinator"),
+            None,
+        )
+    goal_conversations = [
+        thread for thread in shell_threads if _text(thread.get("threadKind"), "") == "goal_conversation"
+    ]
+    project_options = [project for project in (projects or []) if isinstance(project, dict)]
+
+    selected_project = project_options[0] if project_options else None
+    selected_project_id = _text(selected_project.get("projectId"), "") if isinstance(selected_project, dict) else ""
+    project_coordinator_thread = None
+    if selected_project_id:
+        project_coordinator_thread = next(
+            (
+                thread
+                for thread in goal_conversations
+                if _text(thread.get("projectId"), "") == selected_project_id
+            ),
+            None,
+        )
+
+    empty_state_reason = None
+    disabled_reason = None
+    if not shell_threads:
+        empty_state_reason = "no_threads"
+        if is_malformed_response:
+            empty_state_reason = "malformed_entry_response"
+    elif not global_thread:
+        empty_state_reason = "missing_global_coordinator_thread"
+    elif is_malformed_response:
+        empty_state_reason = "malformed_entry_response"
+
+    goal_binding_required = bool(conversation_model.get("goalProjectBindingRequired"))
+    if goal_binding_required and not project_options:
+        disabled_reason = "missing_required_project"
+        if not empty_state_reason:
+            empty_state_reason = "no_projects"
+    can_start_coordinator_goal = (not goal_binding_required) or bool(project_options)
+    return {
+        "version": 1,
+        "source": "devframe",
+        "updatedAt": _text(shell.get("updatedAt"), _now_iso()),
+        "conversationModel": conversation_model,
+        "projects": project_options,
+        "projectOptions": project_options,
+        "selectedProject": selected_project,
+        "projectCoordinatorThread": project_coordinator_thread,
+        "shellThreads": shell_threads,
+        "globalCoordinatorThread": global_thread,
+        "goalConversations": goal_conversations,
+        "sortedShell": sorted_shell,
+        "canStartCoordinatorGoal": can_start_coordinator_goal,
+        "emptyStateReason": empty_state_reason,
+        "disabledReason": disabled_reason,
     }
 
 
@@ -699,6 +787,50 @@ def _thread_list_priority(thread_kind: str) -> int:
         "goal_conversation": 1,
         "native_chat": 2,
     }.get(thread_kind, 99)
+
+
+def _sort_t3_shell_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    sorted_snapshot = deepcopy(snapshot) if isinstance(snapshot, dict) else {}
+    if not isinstance(sorted_snapshot.get("snapshotSequence"), int):
+        sorted_snapshot["snapshotSequence"] = 1
+    if not isinstance(sorted_snapshot.get("projects"), list):
+        sorted_snapshot["projects"] = []
+    if not isinstance(sorted_snapshot.get("updatedAt"), str):
+        sorted_snapshot["updatedAt"] = _now_iso()
+    if not isinstance(sorted_snapshot.get("threadDetails"), list):
+        sorted_snapshot["threadDetails"] = []
+    threads = [
+        thread
+        for thread in sorted_snapshot.get("threads", [])
+        if isinstance(thread, dict)
+    ]
+    details_by_id = {
+        _text(detail.get("id"), ""): detail
+        for detail in sorted_snapshot.get("threadDetails", [])
+        if isinstance(detail, dict)
+    }
+
+    def compare_threads(left: dict[str, Any], right: dict[str, Any]) -> int:
+        left_priority = int(left.get("threadListPriority", _thread_list_priority(_text(left.get("threadKind"), "native_chat"))))
+        right_priority = int(right.get("threadListPriority", _thread_list_priority(_text(right.get("threadKind"), "native_chat"))))
+        if left_priority != right_priority:
+            return left_priority - right_priority
+        left_updated = _text(left.get("updatedAt"), "")
+        right_updated = _text(right.get("updatedAt"), "")
+        if left_updated != right_updated:
+            return -1 if left_updated > right_updated else 1
+        left_title = _text(left.get("title"), "")
+        right_title = _text(right.get("title"), "")
+        return (left_title > right_title) - (left_title < right_title)
+
+    threads = sorted(threads, key=cmp_to_key(compare_threads))
+    sorted_snapshot["threads"] = threads
+    sorted_snapshot["threadDetails"] = [
+        details_by_id[_text(thread.get("id"), "")]
+        for thread in threads
+        if _text(thread.get("id"), "") in details_by_id
+    ]
+    return sorted_snapshot
 
 
 def _thread_list_summary(

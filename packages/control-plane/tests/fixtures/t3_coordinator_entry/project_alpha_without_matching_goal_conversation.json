@@ -1,0 +1,77 @@
+{
+  "label": "project_alpha_without_matching_goal_conversation",
+  "shell": {
+    "version": 1,
+    "source": "devframe",
+    "updatedAt": "2026-07-01T00:00:00Z",
+    "t3": {
+      "snapshotSequence": 6,
+      "projects": [],
+      "threads": [
+        {
+          "id": "goal-beta",
+          "title": "Beta Goal",
+          "threadKind": "goal_conversation",
+          "projectId": "project-beta",
+          "threadListPriority": 1,
+          "updatedAt": "2026-07-01T00:02:00Z"
+        },
+        {
+          "id": "devframe-team-workbench-session",
+          "title": "Global Coordinator",
+          "threadKind": "global_coordinator",
+          "threadListPriority": 0,
+          "updatedAt": "2026-07-01T00:01:00Z"
+        }
+      ],
+      "threadDetails": [
+        {
+          "id": "goal-beta"
+        },
+        {
+          "id": "devframe-team-workbench-session"
+        }
+      ],
+      "updatedAt": "2026-07-01T00:02:00Z"
+    },
+    "devframe": {
+      "conversationModel": {
+        "globalCoordinatorThreadId": "devframe-team-workbench-session",
+        "goalProjectBindingRequired": true,
+        "threadKinds": [
+          "native_chat",
+          "goal_conversation",
+          "global_coordinator"
+        ]
+      }
+    }
+  },
+  "projects": [
+    {
+      "projectId": "project-alpha",
+      "projectPath": "D:\\fixtures\\project-alpha",
+      "workspaceRoot": "D:\\fixtures\\project-alpha",
+      "label": "Project Alpha - D:\\fixtures\\project-alpha"
+    }
+  ],
+  "expected": {
+    "canStartCoordinatorGoal": true,
+    "selectedProjectId": "project-alpha",
+    "projectCoordinatorThreadId": null,
+    "goalConversationIds": [
+      "goal-beta"
+    ],
+    "shellThreadsIds": [
+      "devframe-team-workbench-session",
+      "goal-beta"
+    ],
+    "sortedShellThreadIds": [
+      "devframe-team-workbench-session",
+      "goal-beta"
+    ],
+    "projectOptionCount": 1,
+    "emptyStateReason": null,
+    "disabledReason": null,
+    "globalThreadId": "devframe-team-workbench-session"
+  }
+}

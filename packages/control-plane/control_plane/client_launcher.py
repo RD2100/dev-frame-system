@@ -108,6 +108,7 @@ def build_client_launch_plan(
             "t3Bridge": f"{base_url}/t3-bridge.json",
             "t3Shell": f"{base_url}/t3-shell.json",
             "conversationModel": f"{base_url}/api/t3/conversation-model",
+            "coordinatorEntry": f"{base_url}/api/t3/coordinator-entry",
             "projects": f"{base_url}/api/t3/projects",
             "state": f"{base_url}/state.json",
             "sessions": f"{base_url}/sessions.json",
@@ -1211,6 +1212,9 @@ def smoke_local_agent_client(
             "/client-manifest.json",
             "/t3-bridge.json",
             "/t3-shell.json",
+            "/api/t3/conversation-model",
+            "/api/t3/projects",
+            "/api/t3/coordinator-entry",
             "/actions.json",
             "/sessions.json",
         ]
@@ -1275,6 +1279,43 @@ def smoke_local_agent_client(
             if not isinstance(team.get(array_name), list):
                 print(f"ERROR: t3-shell devframe.team missing {array_name}", file=sys.stderr)
                 return 1
+
+        coordinator_entry = fetched.get("/api/t3/coordinator-entry", {})
+        if coordinator_entry.get("source") != "devframe":
+            print("ERROR: coordinator entry source is not devframe", file=sys.stderr)
+            return 1
+        conversation_model = fetched.get("/api/t3/conversation-model", {})
+        if coordinator_entry.get("conversationModel") != conversation_model:
+            print("ERROR: coordinator entry conversationModel does not match /api/t3/conversation-model", file=sys.stderr)
+            return 1
+        project_options = fetched.get("/api/t3/projects", {}).get("projects")
+        if coordinator_entry.get("projects") != project_options:
+            print("ERROR: coordinator entry projects do not match /api/t3/projects", file=sys.stderr)
+            return 1
+        if not isinstance(coordinator_entry.get("sortedShell"), dict):
+            print("ERROR: coordinator entry missing sortedShell", file=sys.stderr)
+            return 1
+        if not isinstance(coordinator_entry.get("projects"), list):
+            print("ERROR: coordinator entry missing projects", file=sys.stderr)
+            return 1
+        sorted_threads = coordinator_entry["sortedShell"].get("threads")
+        if not isinstance(sorted_threads, list):
+            print("ERROR: coordinator entry sortedShell missing threads", file=sys.stderr)
+            return 1
+        if sorted(thread.get("id") for thread in sorted_threads if isinstance(thread, dict)) != sorted(thread.get("id") for thread in threads if isinstance(thread, dict)):
+            print("ERROR: coordinator entry sortedShell threads do not match /t3-shell.json", file=sys.stderr)
+            return 1
+        global_thread = coordinator_entry.get("globalCoordinatorThread")
+        if not isinstance(global_thread, dict) or global_thread.get("threadKind") != "global_coordinator":
+            print("ERROR: coordinator entry missing global coordinator thread", file=sys.stderr)
+            return 1
+        goal_conversations = coordinator_entry.get("goalConversations")
+        if not isinstance(goal_conversations, list) or any(
+            not isinstance(thread, dict) or thread.get("threadKind") != "goal_conversation"
+            for thread in goal_conversations
+        ):
+            print("ERROR: coordinator entry goalConversations contains non-goal thread", file=sys.stderr)
+            return 1
 
         bridge_checks = None
         if t3_root is not None:

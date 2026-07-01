@@ -112,6 +112,7 @@ def test_visual_client_manifest_matches_public_schema():
     assert mappings["web-gpt-review-gate"]["object_types"] == ["Action", "Gate", "DevFrameSession"]
     descriptions = {endpoint["id"]: endpoint["description"] for endpoint in manifest["endpoints"]}
     assert "Secondary T3 Code native-client" in descriptions["t3-shell"]
+    assert "Global Coordinator entry" in descriptions["t3-coordinator-entry"]
     assert "lightweight web dashboard" in descriptions["go-dispatch-page"]
     mutating_endpoints = [endpoint for endpoint in manifest["endpoints"] if endpoint["mutates"]]
     assert mutating_endpoints == [
@@ -231,6 +232,7 @@ def test_visual_client_manifest_matches_public_schema():
         "/api/auth/session",
         "/state.json",
         "/t3-shell.json",
+        "/api/t3/coordinator-entry",
         "/sessions.json",
         "/web-ai-sessions.json",
         "/actions.json",
@@ -293,6 +295,7 @@ def test_dashboard_serves_client_manifest_as_read_only_contract(tmp_path):
         assert any(endpoint["id"] == "t3-shell" for endpoint in manifest["endpoints"])
         assert any(endpoint["id"] == "t3-projects" for endpoint in manifest["endpoints"])
         assert any(endpoint["id"] == "t3-conversation-model" for endpoint in manifest["endpoints"])
+        assert any(endpoint["id"] == "t3-coordinator-entry" for endpoint in manifest["endpoints"])
         assert any(endpoint["id"] == "t3-environment-descriptor" for endpoint in manifest["endpoints"])
         assert any(endpoint["id"] == "t3-auth-session" for endpoint in manifest["endpoints"])
         assert any(endpoint["id"] == "go-dispatch-page" for endpoint in manifest["endpoints"])
