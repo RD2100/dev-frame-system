@@ -6,6 +6,10 @@ import sys
 from pathlib import Path
 
 
+def _json_output(value: object) -> str:
+    return json.dumps(value, indent=2, ensure_ascii=True, default=str)
+
+
 def cmd_web_ai_import(*, prog: str = "devframe web-ai import") -> int:
     import argparse
 
@@ -91,6 +95,115 @@ def cmd_web_ai_bind_chrome(*, prog: str = "devframe web-ai bind-chrome") -> int:
     return 0
 
 
+def cmd_web_ai_bind_conversation(*, prog: str = "devframe web-ai bind-conversation") -> int:
+    import argparse
+
+    from ..backup_guard import default_runtime_dir
+    from ..chrome_binding_probe import (
+        ChromeBindingError,
+        build_chatgpt_conversation_session_summary,
+        render_chrome_binding_text,
+    )
+    from ..conversation_binding import write_conversation_binding
+    from ..visual_state import validate_web_ai_session_summary
+
+    parser = argparse.ArgumentParser(prog=prog)
+    parser.add_argument("--conversation", required=True, help="ChatGPT conversation URL")
+    parser.add_argument("--runtime-dir", default=None, help="Local devframe runtime directory")
+    parser.add_argument("--project", default="dev-frame-system", help="DevFrame project id")
+    parser.add_argument("--project-root", default=None, help="Project root directory (default: cwd)")
+    parser.add_argument("--binding-root", default=None, help="User-level binding root (default: ~/.agents/bindings)")
+    parser.add_argument("--output-name", default=None, help="Runtime session JSON file name")
+    parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format")
+    args = parser.parse_args(sys.argv[3:])
+
+    project_root = Path(args.project_root).resolve() if args.project_root else Path.cwd().resolve()
+
+    try:
+        summary = build_chatgpt_conversation_session_summary(
+            project_id=args.project,
+            conversation_url=args.conversation,
+        )
+        validate_web_ai_session_summary(summary)
+        binding = write_conversation_binding(
+            project_id=args.project,
+            project_root=project_root,
+            chat_url=summary["native_refs"]["conversation_url"],
+            binding_root=args.binding_root,
+        )
+    except (ChromeBindingError, ValueError) as exc:
+        print(f"ERROR: unable to bind ChatGPT conversation: {exc}", file=sys.stderr)
+        return 2
+
+    runtime_dir = Path(args.runtime_dir).resolve() if args.runtime_dir else default_runtime_dir()
+    sessions_dir = runtime_dir / "web-ai-sessions"
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    output_name = Path(str(args.output_name or f"{summary['session_id']}.json")).name
+    destination = sessions_dir / output_name
+    destination.write_text(json.dumps(summary, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+
+    result = {
+        "session_path": str(destination),
+        "registry_path": binding["registry_path"],
+        "binding_path": binding["binding_path"],
+        "session": summary,
+        "binding": binding,
+    }
+    if args.format == "json":
+        print(_json_output(result))
+    else:
+        print(render_chrome_binding_text(summary), end="")
+        print(f"Imported ChatGPT conversation session: {destination}")
+        print(f"Binding registry: {binding['registry_path']}")
+        print(f"Binding file    : {binding['binding_path']}")
+    return 0
+
+
+def cmd_web_ai_ensure_browser(*, prog: str = "devframe web-ai ensure-browser") -> int:
+    import argparse
+
+    from ..backup_guard import default_runtime_dir
+    from ..web_ai_browser_launcher import (
+        BrowserLaunchError,
+        ensure_web_ai_browser,
+        render_browser_launch_text,
+    )
+
+    parser = argparse.ArgumentParser(prog=prog)
+    parser.add_argument("--runtime-dir", default=None, help="Local devframe runtime directory")
+    parser.add_argument("--config", default=None, help="Local browser launcher config JSON")
+    parser.add_argument("--browser-exe", default=None, help="Browser executable path")
+    parser.add_argument("--profile-dir", default=None, help="Dedicated persistent browser profile directory")
+    parser.add_argument("--cdp-endpoint", default=None, help="Loopback CDP endpoint")
+    parser.add_argument("--url", default=None, help="Web AI URL to open")
+    parser.add_argument("--no-open", action="store_true", help="Ensure CDP only; do not open a URL")
+    parser.add_argument("--write-config", action="store_true", help="Write the resolved local browser config")
+    parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format")
+    args = parser.parse_args(sys.argv[3:])
+
+    runtime_dir = Path(args.runtime_dir).resolve() if args.runtime_dir else default_runtime_dir()
+    try:
+        result = ensure_web_ai_browser(
+            runtime_dir=runtime_dir,
+            config_path=args.config,
+            browser_exe=args.browser_exe,
+            cdp_endpoint=args.cdp_endpoint,
+            profile_dir=args.profile_dir,
+            url=args.url,
+            open_url=not args.no_open,
+            write_config=args.write_config,
+        )
+    except (BrowserLaunchError, ValueError) as exc:
+        print(f"ERROR: unable to ensure Web AI browser: {exc}", file=sys.stderr)
+        return 2
+
+    if args.format == "json":
+        print(_json_output(result))
+    else:
+        print(render_browser_launch_text(result), end="")
+    return 0 if result["status"] in {"already_running", "started"} else 1
+
+
 def cmd_web_ai_submit_review(*, prog: str = "devframe web-ai submit-review") -> int:
     import argparse
 
@@ -148,6 +261,63 @@ def cmd_web_ai_submit_review(*, prog: str = "devframe web-ai submit-review") -> 
     print(f"Submission result: success={result.success}, mode={result.mode}")
     print(f"Detail: {result.detail}")
     return 0 if result.success else 1
+
+
+def cmd_web_ai_prepare_review_bundle(*, prog: str = "devframe web-ai prepare-review-bundle") -> int:
+    import argparse
+
+    from ..external_review_bundle import (
+        ReviewBundleError,
+        prepare_external_review_bundle,
+    )
+
+    parser = argparse.ArgumentParser(prog=prog)
+    parser.add_argument("--project-root", default=None, help="Project root directory (default: cwd)")
+    parser.add_argument("--runtime-dir", default=None, help="Local devframe runtime directory")
+    parser.add_argument("--question", required=True, help="External reviewer question")
+    parser.add_argument("--source", action="append", default=[], help="Explicit source as role=path; repeatable")
+    parser.add_argument("--required-role", action="append", default=[], help="Role that must be present for ready_for_review")
+    parser.add_argument("--profile", default="external_review", help="Context profile label")
+    parser.add_argument("--output-id", default=None, help="Stable output id for the bundle directory")
+    args = parser.parse_args(sys.argv[3:])
+
+    try:
+        sources = [_parse_review_source(item) for item in args.source]
+        result = prepare_external_review_bundle(
+            project_root=Path(args.project_root).resolve() if args.project_root else Path.cwd(),
+            runtime_dir=args.runtime_dir,
+            review_question=args.question,
+            sources=sources,
+            required_roles=args.required_role,
+            profile=args.profile,
+            output_id=args.output_id,
+        )
+    except ReviewBundleError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"Prepared external review bundle: {result['status']}")
+    print(f"  zip      : {result['zip_path']}")
+    print(f"  manifest : {result['manifest_path']}")
+    if result.get("blocking_issues"):
+        print("  issues   :")
+        for issue in result["blocking_issues"]:
+            print(f"    - {issue}")
+    return 0 if result["status"] == "ready_for_review" else 1
+
+
+def cmd_web_ai_validate_review_bundle(*, prog: str = "devframe web-ai validate-review-bundle") -> int:
+    import argparse
+
+    from ..external_review_bundle import validate_external_review_bundle
+
+    parser = argparse.ArgumentParser(prog=prog)
+    parser.add_argument("--zip", dest="zip_path", required=True, help="External review bundle ZIP")
+    args = parser.parse_args(sys.argv[3:])
+
+    result = validate_external_review_bundle(args.zip_path)
+    print(_json_output(result))
+    return 0 if result.get("valid") else 1
 
 
 def cmd_web_ai_record_mcp_result(*, prog: str = "devframe web-ai record-mcp-result") -> int:
@@ -351,6 +521,19 @@ def _load_json_summary_file(source_path: Path) -> object:
     raw = source_path.read_bytes()
     encoding = "utf-16" if raw.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8-sig"
     return json.loads(raw.decode(encoding))
+
+
+def _parse_review_source(value: str):
+    from ..external_review_bundle import ReviewSource
+
+    if "=" not in value:
+        raise SystemExit("--source must use role=path")
+    role, path = value.split("=", 1)
+    role = role.strip()
+    path = path.strip()
+    if not role or not path:
+        raise SystemExit("--source must use non-empty role=path")
+    return ReviewSource(path=path, role=role, authority="explicit", required=True)
 
 
 def cmd_web_ai_probe(*, prog: str = "devframe web-ai probe") -> int:

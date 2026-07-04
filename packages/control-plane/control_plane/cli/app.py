@@ -34,14 +34,18 @@ from ._writeback import cmd_writeback_apply
 from ._mcp import cmd_mcp_connections
 from ._webai import (
     cmd_web_ai_bind_chrome,
+    cmd_web_ai_bind_conversation,
     cmd_web_ai_dispatch_task_intakes,
+    cmd_web_ai_ensure_browser,
     cmd_web_ai_import,
     cmd_web_ai_import_task_intakes,
     cmd_web_ai_live_check,
+    cmd_web_ai_prepare_review_bundle,
     cmd_web_ai_probe,
     cmd_web_ai_record_mcp_result,
     cmd_web_ai_record_task_intake,
     cmd_web_ai_submit_review,
+    cmd_web_ai_validate_review_bundle,
 )
 
 
@@ -158,7 +162,11 @@ def main() -> int:
             print(WEB_AI_IMPORT_USAGE)
             print(WEB_AI_PROBE_USAGE)
             print(WEB_AI_LIVE_CHECK_USAGE)
+            print(WEB_AI_ENSURE_BROWSER_USAGE)
             print(WEB_AI_BIND_CHROME_USAGE)
+            print(WEB_AI_BIND_CONVERSATION_USAGE)
+            print(WEB_AI_PREPARE_REVIEW_BUNDLE_USAGE)
+            print(WEB_AI_VALIDATE_REVIEW_BUNDLE_USAGE)
             print(WEB_AI_IMPORT_TASK_INTAKES_USAGE)
             return 0
         if len(sys.argv) > 2 and sys.argv[2] == "import":
@@ -181,11 +189,31 @@ def main() -> int:
                 print(WEB_AI_BIND_CHROME_USAGE)
                 return 0
             return cmd_web_ai_bind_chrome(prog="devframe web-ai bind-chrome")
+        if len(sys.argv) > 2 and sys.argv[2] == "ensure-browser":
+            if _wants_help(sys.argv[3:]):
+                print(WEB_AI_ENSURE_BROWSER_USAGE)
+                return 0
+            return cmd_web_ai_ensure_browser(prog="devframe web-ai ensure-browser")
+        if len(sys.argv) > 2 and sys.argv[2] == "bind-conversation":
+            if _wants_help(sys.argv[3:]):
+                print(WEB_AI_BIND_CONVERSATION_USAGE)
+                return 0
+            return cmd_web_ai_bind_conversation(prog="devframe web-ai bind-conversation")
         if len(sys.argv) > 2 and sys.argv[2] == "submit-review":
             if _wants_help(sys.argv[3:]):
                 print(WEB_AI_SUBMIT_REVIEW_USAGE)
                 return 0
             return cmd_web_ai_submit_review(prog="devframe web-ai submit-review")
+        if len(sys.argv) > 2 and sys.argv[2] == "prepare-review-bundle":
+            if _wants_help(sys.argv[3:]):
+                print(WEB_AI_PREPARE_REVIEW_BUNDLE_USAGE)
+                return 0
+            return cmd_web_ai_prepare_review_bundle(prog="devframe web-ai prepare-review-bundle")
+        if len(sys.argv) > 2 and sys.argv[2] == "validate-review-bundle":
+            if _wants_help(sys.argv[3:]):
+                print(WEB_AI_VALIDATE_REVIEW_BUNDLE_USAGE)
+                return 0
+            return cmd_web_ai_validate_review_bundle(prog="devframe web-ai validate-review-bundle")
         if len(sys.argv) > 2 and sys.argv[2] == "record-mcp-result":
             if _wants_help(sys.argv[3:]):
                 print(WEB_AI_RECORD_MCP_RESULT_USAGE)

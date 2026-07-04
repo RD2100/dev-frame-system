@@ -105,6 +105,69 @@ def build_chrome_chatgpt_session_summary(
     }
 
 
+def build_chatgpt_conversation_session_summary(
+    *,
+    conversation_url: str,
+    project_id: str = "unknown",
+    session_id: str | None = None,
+    agent_id: str | None = None,
+    cdp_endpoint: str = DEFAULT_CDP_ENDPOINT,
+) -> dict[str, Any]:
+    """Build a summary-only session from an explicitly provided ChatGPT URL."""
+
+    safe_url = _safe_chatgpt_conversation_url(conversation_url)
+    resolved_session_id = _safe_id(session_id or _session_id_from_url(safe_url))
+    resolved_agent_id = _safe_id(agent_id or "chatgpt-web-coordinator")
+    resolved_project_id = _safe_id(project_id)
+    observed_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+    return {
+        "session_id": resolved_session_id,
+        "provider": "chatgpt",
+        "agent_id": resolved_agent_id,
+        "agent_role": "coordinator",
+        "project_id": resolved_project_id,
+        "run_id": "manual-chatgpt-conversation-binding",
+        "task_spec_id": "",
+        "status": "active",
+        "messages": [
+            {
+                "message_id": f"{resolved_session_id}-manual-binding-observation",
+                "role": "system",
+                "content_summary": (
+                    "A ChatGPT conversation URL was bound explicitly. "
+                    "No raw transcript, cookies, profile data, or message text was captured."
+                ),
+                "created_at": observed_at,
+            }
+        ],
+        "tool_calls": [
+            {
+                "tool_call_id": f"{resolved_session_id}-manual-url",
+                "name": "chatgpt-conversation-url-bound",
+                "status": "completed",
+            }
+        ],
+        "changed_files": [],
+        "diff_summary": "",
+        "evidence_refs": [],
+        "cost": {},
+        "tokens": {},
+        "gates": [],
+        "actions": [
+            "Use this imported session as the summary-only ChatGPT external-brain binding for the next governed run."
+        ],
+        "native_refs": {
+            "runtime": "chatgpt-conversation-binding",
+            "source_runtime": "chatgpt-conversation-binding",
+            "conversation_url": safe_url,
+            "provider_url": safe_url,
+            "cdp_endpoint": cdp_endpoint,
+            "observed_at": observed_at,
+        },
+    }
+
+
 def render_chrome_binding_text(summary: dict[str, Any]) -> str:
     refs = summary.get("native_refs", {})
     lines = [
@@ -165,6 +228,19 @@ def _safe_public_url(value: str) -> str:
     if parsed.username or parsed.password:
         raise ChromeBindingError("ChatGPT tab URL must not include credentials")
     return urlunparse((parsed.scheme, parsed.netloc, parsed.path or "/", "", "", ""))
+
+
+def _safe_chatgpt_conversation_url(value: str) -> str:
+    parsed = urlparse(str(value or "").strip())
+    if not _is_chatgpt_url(str(value or "")):
+        raise ChromeBindingError("ChatGPT conversation URL must be an https://chatgpt.com/c/<id> URL")
+    if parsed.username or parsed.password:
+        raise ChromeBindingError("ChatGPT conversation URL must not include credentials")
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) < 2 or parts[0] != "c" or not parts[1].strip():
+        raise ChromeBindingError("ChatGPT conversation URL must include /c/<conversation_id>")
+    canonical_path = f"/c/{parts[1]}"
+    return urlunparse((parsed.scheme, parsed.netloc, canonical_path, "", "", ""))
 
 
 def _session_id_from_url(value: str) -> str:

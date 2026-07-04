@@ -2024,6 +2024,31 @@ def test_skill_registry_lists_local_tdd_skill():
     assert "@tdd" in tdd.get("triggers", [])
 
 
+def test_skill_registry_lists_external_brain_flow_skills():
+    skills = {skill.get("skill_id"): skill for skill in list_methodology_skills()}
+
+    assert skills["bind-chrome"]["source_path"].replace("\\", "/") == "tools/skills/bind-chrome/SKILL.md"
+    assert "@bind-chrome" in skills["bind-chrome"].get("triggers", [])
+    assert skills["external-brain"]["source_path"].replace("\\", "/") == "tools/skills/external-brain/SKILL.md"
+    assert "@external-brain" in skills["external-brain"].get("triggers", [])
+    assert skills["context-pack-builder"]["source_path"].replace("\\", "/") == "tools/skills/context-pack-builder/SKILL.md"
+    assert "@context-pack" in skills["context-pack-builder"].get("triggers", [])
+    assert skills["intent-framing-gate"]["source_path"].replace("\\", "/") == "tools/skills/intent-framing-gate/SKILL.md"
+    assert "@intent-frame" in skills["intent-framing-gate"].get("triggers", [])
+
+
+def test_methodology_dispatch_resolves_external_brain_flow_triggers():
+    from control_plane.methodology_dispatch import resolve_methodology
+
+    effective, methodology = resolve_methodology("@bind-chrome bind https://chatgpt.com/c/test")
+    assert effective == "bind https://chatgpt.com/c/test"
+    assert methodology["skill_id"] == "bind-chrome"
+
+    effective, methodology = resolve_methodology("@intent-frame is this directory complete")
+    assert effective == "is this directory complete"
+    assert methodology["skill_id"] == "intent-framing-gate"
+
+
 def test_skill_registry_lists_local_tools_skills_if_present(tmp_path, monkeypatch):
     tools_skills = tmp_path / "tools" / "skills" / "tdd"
     tools_skills.mkdir(parents=True)

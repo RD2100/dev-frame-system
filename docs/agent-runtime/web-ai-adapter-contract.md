@@ -3,8 +3,11 @@
 This contract defines how dev-frame-system talks to browser-hosted AI products
 such as ChatGPT, DeepSeek, Doubao, Kimi, or an internal web AI.
 
-Chrome plus ChatGPT is the default reference path. It is not the architecture
-boundary. The boundary is:
+Chrome CDP plus ChatGPT is the default and only supported automation path for
+the current public runtime. This is the current stable boundary, not the
+long-term product ceiling. Future multi-browser support is deferred to the
+[Browser Automation Transport Roadmap](../status/browser-automation-transport-roadmap.md).
+The boundary is:
 
 ```text
 slash entrypoint -> local agent -> browser adapter -> web AI adapter -> report/evidence
@@ -14,8 +17,8 @@ slash entrypoint -> local agent -> browser adapter -> web AI adapter -> report/e
 
 - Keep `/rdpaper`, `/rdgoal`, and future slash entrypoints independent from a
   single browser or provider.
-- Let users choose Chrome, Edge, Playwright, manual handoff, or a future custom
-  browser bridge.
+- Remove browser-transport ambiguity by using Chrome DevTools Protocol for all
+  automated browser interaction in the current runtime.
 - Let third-party agents adapt a new web AI by following a written contract
   instead of copying hidden selectors from this repository.
 - Preserve privacy boundaries for real papers, browser sessions, cookies, and
@@ -30,13 +33,26 @@ and provides a page handle or a manual handoff target.
 
 Required fields:
 
-- `provider`: `chrome`, `edge`, `playwright`, `manual`, or `custom`.
-- `mode`: `cdp`, `playwright`, `manual`, or `custom`.
+- `provider`: `chrome`.
+- `mode`: `cdp`.
 - `profile_policy`: whether an existing profile is reused, isolated, or manual.
-- `endpoint`: optional connection URL, such as a local CDP endpoint.
+- `endpoint`: required connection URL, such as `http://127.0.0.1:9222`.
 
 The browser adapter must not export cookies, session storage, local browser
 profiles, or credential stores.
+
+The current runtime is CDP-family only. Chrome is the proven reference path.
+Edge or another Chromium-compatible browser may be considered only after it
+passes the same loopback CDP probes and browser evidence requirements. Chrome
+extension bridges, standalone Playwright browser sessions, screenshot/keyboard
+simulation, and custom browser bridges are not supported automation transports.
+They may be used only as manual troubleshooting aids when explicitly labeled as
+such, and they cannot be reported as successful browser-task evidence.
+
+Metadata-only URL import is separate from browser automation. A command may
+record a user-provided `https://chatgpt.com/c/<id>` URL without touching the
+browser, but that does not prove page reachability, prompt submission, or
+provider response. Any such proof must use CDP.
 
 ### Web AI Adapter
 
@@ -90,13 +106,24 @@ web_ai:
     manual_login_required: true
 ```
 
-This is only the reference adapter. Users can choose a different browser or web
-AI by supplying a config that validates against
-`schemas/web_ai_adapter.schema.json`.
+This is the current stable reference adapter. A different browser transport must
+first pass the deferred browser transport roadmap and the adapter config must
+validate against `schemas/web_ai_adapter.schema.json`.
 
 ## Summary-only Chrome Binding Probe
 
-For a running local Chrome instance with CDP enabled, DevFrame can bind an
+When the user already has a ChatGPT conversation URL and asks only for metadata
+binding, DevFrame can import the URL without reading Chrome:
+
+```powershell
+devframe web-ai bind-conversation --conversation https://chatgpt.com/c/<id> --project <project-id>
+```
+
+This writes a summary-only runtime session and user-level project binding files.
+It must not read the browser transcript, cookies, profile data, local storage,
+or message text. It is not a browser test.
+
+For a running local Chrome instance with CDP enabled, DevFrame can also bind an
 already-open ChatGPT tab as a summary-only session:
 
 ```powershell
@@ -112,7 +139,33 @@ Visual Control Plane as an active `chatgpt` session and marks the default
 
 The probe is a binding check, not a task submission. Sending project context,
 paper content, files, or prompts to the provider remains a separate
-action-time decision.
+action-time decision, and must use the same CDP endpoint.
+
+## External Review Bundle Fallback
+
+ZIP/report submission is a fallback review path, not the default runtime
+channel. Before any bundle is sent to a browser-hosted reviewer, DevFrame should
+prepare and validate it through the bundle gate:
+
+```powershell
+devframe web-ai prepare-review-bundle --question "<review question>" --source role=path --required-role role
+devframe web-ai validate-review-bundle --zip <bundle.zip>
+```
+
+A review bundle is suitable for normal external review only when its manifest
+status is `ready_for_review`.
+
+Bundle trust depends on the generated artifacts, not on the ZIP alone:
+
+- `PACK_MANIFEST.json` lists every bundled file with SHA256 hashes.
+- `CONTEXT_LEDGER.md` states selected sources, missing required roles, and known
+  gaps.
+- `REVIEW_PROMPT.md` requires the web AI to audit context before answering.
+- `REDACTION_REPORT.md` records privacy and sensitive-content screening.
+- `VERIFICATION.md` states the local bundle gate result.
+
+`context_incomplete` bundles may be used only to ask the web AI what context is
+missing. `blocked` bundles must not be submitted.
 
 ## MCP Task Intake Boundary
 
@@ -173,3 +226,7 @@ An adapter run is not successful unless it returns a response and the local
 agent records evidence. Login prompts, captcha, provider rate limits, missing
 selectors, incomplete generation, or privacy-boundary requests must produce
 `human_required`, `blocked`, or `failed`; they must not be reported as pass.
+
+A browser run is also not successful if it was driven through a non-CDP path.
+The evidence must show the CDP endpoint, target page URL, submit result, and
+response extraction status.

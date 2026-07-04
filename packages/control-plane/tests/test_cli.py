@@ -1442,6 +1442,203 @@ def test_web_ai_bind_chrome_help(monkeypatch, capsys):
     assert "--dry-run" in output
 
 
+def test_web_ai_ensure_browser_help(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["devframe", "web-ai", "ensure-browser", "--help"])
+
+    assert devframe_cli_main() == 0
+
+    output = capsys.readouterr().out
+    assert "Usage: devframe web-ai ensure-browser" in output
+    assert "--profile-dir" in output
+    assert "--write-config" in output
+
+
+def test_web_ai_ensure_browser_json(monkeypatch, capsys, tmp_path):
+    def fake_ensure_web_ai_browser(**kwargs):
+        return {
+            "status": "already_running",
+            "browser": "chrome",
+            "browser_exe": "C:/Chrome/chrome.exe",
+            "cdp_endpoint": "http://127.0.0.1:9222",
+            "profile_dir": str(tmp_path / "profile"),
+            "url": "https://chatgpt.com/",
+            "started": False,
+            "opened_url": True,
+            "config_written": "",
+            "reason": "",
+            "probe": {"reachable": True},
+            "first_use_note": "First use may require logging in once inside this dedicated browser profile.",
+            "kwargs": kwargs,
+        }
+
+    import control_plane.web_ai_browser_launcher as launcher_module
+
+    monkeypatch.setattr(launcher_module, "ensure_web_ai_browser", fake_ensure_web_ai_browser)
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "web-ai",
+        "ensure-browser",
+        "--runtime-dir",
+        str(tmp_path / "runtime"),
+        "--profile-dir",
+        str(tmp_path / "profile"),
+        "--format",
+        "json",
+    ])
+
+    assert devframe_cli_main() == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["status"] == "already_running"
+    assert data["profile_dir"] == str(tmp_path / "profile")
+
+
+def test_web_ai_bind_conversation_help(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["devframe", "web-ai", "bind-conversation", "--help"])
+
+    assert devframe_cli_main() == 0
+
+    output = capsys.readouterr().out
+    assert "Usage: devframe web-ai bind-conversation" in output
+
+
+def test_web_ai_bind_conversation_url_creates_session_and_user_binding(tmp_path, monkeypatch, capsys):
+    project = tmp_path / "project"
+    runtime = tmp_path / "runtime"
+    binding_root = tmp_path / "bindings"
+    project.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "web-ai",
+        "bind-conversation",
+        "--conversation",
+        "https://chatgpt.com/c/6a48be1e-af10-83ee-a211-ed224ae795bd",
+        "--project",
+        "dev-frame-system",
+        "--project-root",
+        str(project),
+        "--runtime-dir",
+        str(runtime),
+        "--binding-root",
+        str(binding_root),
+        "--output-name",
+        "bound-chatgpt.json",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Imported ChatGPT conversation session" in output
+    session_path = runtime / "web-ai-sessions" / "bound-chatgpt.json"
+    session = json.loads(session_path.read_text(encoding="utf-8"))
+    assert session["native_refs"]["conversation_url"] == "https://chatgpt.com/c/6a48be1e-af10-83ee-a211-ed224ae795bd"
+    binding_path = binding_root / "dev-frame-system" / "CONVERSATION_BINDING.json"
+    registry_path = binding_root / "dev-frame-system" / "PROJECT_REGISTRY.json"
+    assert binding_path.exists()
+    assert registry_path.exists()
+    binding = json.loads(binding_path.read_text(encoding="utf-8"))
+    assert binding["bindings"][0]["conversation_id"] == "6a48be1e-af10-83ee-a211-ed224ae795bd"
+
+
+def test_web_ai_bind_conversation_rejects_unsafe_url(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "web-ai",
+        "bind-conversation",
+        "--conversation",
+        "https://user:pass@chatgpt.com/c/abc?token=secret",
+        "--runtime-dir",
+        str(tmp_path / "runtime"),
+        "--binding-root",
+        str(tmp_path / "bindings"),
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "must not include credentials" in output.err
+
+
+def test_web_ai_prepare_review_bundle_help(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["devframe", "web-ai", "prepare-review-bundle", "--help"])
+
+    assert devframe_cli_main() == 0
+
+    output = capsys.readouterr().out
+    assert "Usage: devframe web-ai prepare-review-bundle" in output
+
+
+def test_web_ai_prepare_review_bundle_cli_creates_valid_bundle(tmp_path, monkeypatch, capsys):
+    project = tmp_path / "project"
+    runtime = tmp_path / "runtime"
+    (project / "docs").mkdir(parents=True)
+    (project / "docs" / "README.md").write_text("# Map\n", encoding="utf-8")
+    (project / "docs" / "PLAN.md").write_text("# Plan\n", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "web-ai",
+        "prepare-review-bundle",
+        "--project-root",
+        str(project),
+        "--runtime-dir",
+        str(runtime),
+        "--output-id",
+        "cli-review",
+        "--question",
+        "Can Web GPT review this plan?",
+        "--source",
+        "map=docs/README.md",
+        "--source",
+        "plan=docs/PLAN.md",
+        "--required-role",
+        "map",
+        "--required-role",
+        "plan",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Prepared external review bundle: ready_for_review" in output
+    manifest_path = runtime / "external-review-bundles" / "cli-review" / "PACK_MANIFEST.json"
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert data["status"] == "ready_for_review"
+    assert Path(data["zip_path"]).exists()
+
+
+def test_web_ai_validate_review_bundle_cli_reports_incomplete(tmp_path, monkeypatch, capsys):
+    from control_plane.external_review_bundle import ReviewSource, prepare_external_review_bundle
+
+    project = tmp_path / "project"
+    runtime = tmp_path / "runtime"
+    project.mkdir()
+    (project / "README.md").write_text("# Map\n", encoding="utf-8")
+    result = prepare_external_review_bundle(
+        project_root=project,
+        runtime_dir=runtime,
+        output_id="cli-incomplete",
+        review_question="Enough?",
+        required_roles=["map", "evidence"],
+        sources=[ReviewSource("README.md", role="map")],
+    )
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "web-ai",
+        "validate-review-bundle",
+        "--zip",
+        result["zip_path"],
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    data = json.loads(output)
+    assert data["status"] == "context_incomplete"
+
+
 def test_web_ai_import_normalizes_valid_summary(tmp_path, monkeypatch, capsys):
     runtime_dir = tmp_path / "runtime"
     source = tmp_path / "chatgpt-summary.json"
