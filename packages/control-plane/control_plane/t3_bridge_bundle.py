@@ -233,6 +233,7 @@ export interface DevFrameT3ThreadShell {
   readonly projectBinding: DevFrameProjectBinding;
   readonly threadListPriority?: number;
   readonly threadListSummary?: string;
+  readonly updatedAt?: string;
 }
 
 export interface DevFrameT3ShellSnapshot {
@@ -507,6 +508,43 @@ export function sortDevFrameThreadsForDisplay(
   };
 }
 
+function dedupeShellProjects(projects: readonly unknown[]): readonly unknown[] {
+  const seen = new Set<string>();
+  return projects.filter((project) => {
+    if (typeof project !== "object" || project === null) {
+      return true;
+    }
+    const id = (project as { readonly id?: unknown }).id;
+    if (typeof id !== "string" || id.length === 0) {
+      return true;
+    }
+    if (seen.has(id)) {
+      return false;
+    }
+    seen.add(id);
+    return true;
+  });
+}
+
+function normalizeDevFrameShellSnapshot(snapshot: DevFrameT3ShellSnapshot): DevFrameT3ShellSnapshot {
+  return sortDevFrameThreadsForDisplay({
+    ...snapshot,
+    projects: dedupeShellProjects(snapshot.projects),
+  });
+}
+
+function isSelectedProjectGoalThread(
+  thread: DevFrameT3ThreadShell | null,
+  selectedProject: DevFrameProjectOption | null,
+): thread is DevFrameT3ThreadShell {
+  return (
+    thread !== null &&
+    selectedProject !== null &&
+    thread.threadKind === "goal_conversation" &&
+    thread.projectId === selectedProject.projectId
+  );
+}
+
 export function buildDevFrameCoordinatorShellEntry(
   envelope: DevFrameT3ShellEnvelope,
   projects: readonly DevFrameProjectOption[] = [],
@@ -514,7 +552,7 @@ export function buildDevFrameCoordinatorShellEntry(
 ): DevFrameCoordinatorShellEntry {
   const resolvedConversationModel =
     conversationModel ?? envelope.devframe?.conversationModel ?? DEFAULT_CONVERSATION_MODEL;
-  const sortedShell = sortDevFrameThreadsForDisplay(envelope.t3);
+  const sortedShell = normalizeDevFrameShellSnapshot(envelope.t3);
   const shellThreads = sortedShell.threads;
   const projectOptions = [...projects];
   const selectedProject = projectOptions[0] ?? null;
@@ -548,6 +586,64 @@ export function buildDevFrameCoordinatorShellEntry(
   };
 }
 
+export function buildDevFrameCoordinatorShellEntryFromShellSnapshot(
+  snapshot: DevFrameT3ShellSnapshot,
+  projects: readonly DevFrameProjectOption[] = [],
+  conversationModel?: DevFrameConversationModel,
+): DevFrameCoordinatorShellEntry {
+  return buildDevFrameCoordinatorShellEntry(
+    {
+      version: 1,
+      source: "devframe",
+      t3: snapshot,
+      devframe: {
+        conversationModel: conversationModel ?? DEFAULT_CONVERSATION_MODEL,
+        team: {
+          agentRegistry: [],
+          taskBoard: [],
+          messageBus: [],
+          eventLog: [],
+          evidenceStore: [],
+          reviewGates: [],
+          conflictControl: [],
+        },
+      },
+    },
+    projects,
+    conversationModel,
+  );
+}
+
+function normalizeDevFrameCoordinatorShellEntry(
+  entry: DevFrameCoordinatorShellEntry,
+): DevFrameCoordinatorShellEntry {
+  const sortedShell = normalizeDevFrameShellSnapshot(entry.sortedShell);
+  const shellThreads = sortDevFrameThreadsForDisplay({
+    snapshotSequence: sortedShell.snapshotSequence,
+    projects: sortedShell.projects,
+    threads: entry.shellThreads,
+    updatedAt: sortedShell.updatedAt,
+  }).threads;
+  const projectCoordinatorThread = isSelectedProjectGoalThread(
+    entry.projectCoordinatorThread,
+    entry.selectedProject,
+  )
+    ? entry.projectCoordinatorThread
+    : shellThreads.find((thread) => isSelectedProjectGoalThread(thread, entry.selectedProject)) ?? null;
+  return {
+    ...entry,
+    sortedShell,
+    shellThreads,
+    projectCoordinatorThread,
+    globalCoordinatorThread:
+      entry.globalCoordinatorThread ??
+      shellThreads.find((thread) => thread.id === entry.conversationModel.globalCoordinatorThreadId) ??
+      shellThreads.find((thread) => thread.threadKind === "global_coordinator") ??
+      null,
+    goalConversations: shellThreads.filter((thread) => thread.threadKind === "goal_conversation"),
+  };
+}
+
 export async function fetchDevFrameCoordinatorShellEntry(
   config: DevFrameControlPlaneConfig,
 ): Promise<DevFrameCoordinatorShellEntry> {
@@ -559,7 +655,7 @@ export async function fetchDevFrameCoordinatorShellEntry(
   if (!response.ok) {
     throw new Error(`DevFrame coordinator entry request failed: ${response.status}`);
   }
-  return (await response.json()) as DevFrameCoordinatorShellEntry;
+  return normalizeDevFrameCoordinatorShellEntry((await response.json()) as DevFrameCoordinatorShellEntry);
 }
 
 export interface DevFrameClusterTarget {
@@ -789,7 +885,7 @@ const DEVFRAME_CONNECTED_STATE: SupervisorConnectionState = {{
   desired: false,
   network: "online",
   phase: "connected",
-  stage: "polling",
+  stage: "synchronizing",
   attempt: 0,
   generation: 1,
   lastFailure: null,
@@ -1121,8 +1217,11 @@ import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 
 import {
+  fetchDevFrameCoordinatorShellEntry,
   fetchDevFrameT3Shell,
+  readDevFrameControlPlaneConfig,
   readDevFrameShellBridgeConfig,
+  type DevFrameCoordinatorShellEntry,
   type DevFrameT3ShellSnapshot,
 } from "../devframe/devframeShellBridge";
 import { environmentCatalog } from "../connection/catalog";
@@ -1130,6 +1229,7 @@ import { connectionAtomRuntime } from "../connection/runtime";
 
 const nativeEnvironmentShell = createEnvironmentShellAtoms(connectionAtomRuntime);
 const devFrameConfig = readDevFrameShellBridgeConfig();
+const devFrameControlPlaneConfig = readDevFrameControlPlaneConfig();
 
 const EMPTY_DEVFRAME_SHELL_STATE: EnvironmentShellState = {
   snapshot: Option.none(),
@@ -1148,7 +1248,7 @@ function toDevFrameShellLoadError(cause: unknown): DevFrameShellLoadError {
 
 function devFrameSnapshotState(snapshot: DevFrameT3ShellSnapshot): EnvironmentShellState {
   return {
-    snapshot: Option.some(snapshot as OrchestrationShellSnapshot),
+    snapshot: Option.some(snapshot as unknown as OrchestrationShellSnapshot),
     status: "live",
     error: Option.none(),
   };
@@ -1204,9 +1304,53 @@ function createDevFrameEnvironmentShellAtoms() {
   };
 }
 
+function loadDevFrameCoordinatorShellEntry(): Effect.Effect<
+  Option.Option<DevFrameCoordinatorShellEntry>
+> {
+  if (devFrameControlPlaneConfig === null) {
+    return Effect.succeed(Option.none());
+  }
+  return Effect.tryPromise({
+    try: () => fetchDevFrameCoordinatorShellEntry(devFrameControlPlaneConfig),
+    catch: toDevFrameShellLoadError,
+  }).pipe(
+    Effect.map((entry) => Option.some(entry)),
+    Effect.orElseSucceed(() => Option.none()),
+  );
+}
+
+function createDevFrameCoordinatorShellEntryAtoms() {
+  const stateAtom = Atom.family((environmentId: EnvironmentId) =>
+    Atom.make(loadDevFrameCoordinatorShellEntry()).pipe(
+      Atom.swr({
+        staleTime: 0,
+        revalidateOnMount: true,
+      }),
+      Atom.withRefresh(2000),
+      Atom.setIdleTTL(0),
+      Atom.withLabel(`devframe-coordinator-shell-entry:${environmentId}`),
+    ),
+  );
+
+  const stateValueAtom = Atom.family((environmentId: EnvironmentId) =>
+    Atom.make((get) =>
+      Option.getOrElse(
+        AsyncResult.value(get(stateAtom(environmentId))),
+        () => Option.none<DevFrameCoordinatorShellEntry>(),
+      ),
+    ).pipe(Atom.withLabel(`devframe-coordinator-shell-entry-value:${environmentId}`)),
+  );
+
+  return {
+    stateAtom,
+    stateValueAtom,
+  };
+}
+
 export const shellEnvironment = createShellEnvironmentAtoms(connectionAtomRuntime);
 export const environmentShell =
   devFrameConfig === null ? nativeEnvironmentShell : createDevFrameEnvironmentShellAtoms();
+export const environmentCoordinatorShellEntry = createDevFrameCoordinatorShellEntryAtoms();
 export const environmentSnapshotAtom = createEnvironmentSnapshotAtom(environmentShell.stateAtom);
 export const environmentShellSummaryAtom = createEnvironmentShellSummaryAtom({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
@@ -1267,7 +1411,7 @@ function findDevFrameThreadDetail(
 ): OrchestrationThread | null {
   const projectedDetail = snapshot.threadDetails?.find((candidate) => hasThreadId(candidate, threadId));
   if (projectedDetail !== undefined) {
-    return projectedDetail as OrchestrationThread;
+    return projectedDetail as unknown as OrchestrationThread;
   }
 
   const shellThread = snapshot.threads.find((candidate) => hasThreadId(candidate, threadId));
@@ -1276,7 +1420,7 @@ function findDevFrameThreadDetail(
   }
 
   return {
-    ...(shellThread as Record<string, unknown>),
+    ...(shellThread as unknown as Record<string, unknown>),
     deletedAt: null,
     messages: [],
     proposedPlans: [],
@@ -1348,7 +1492,7 @@ const devFrameRespondToApproval = {
     (async () => {
       const config = readDevFrameShellBridgeConfig();
       if (config === null) {
-        return AsyncResult.success({ responded: false, decision: "native_unavailable" } as const);
+        return AsyncResult.success({ sequence: 0 });
       }
       const nativeDecision = value.input.decision;
       const mapped = ((["accept", "acceptForSession"] as readonly string[]).includes(nativeDecision)) ? "approve"
@@ -1370,10 +1514,11 @@ const devFrameRespondToApproval = {
           const errorBody = await response.text();
           throw new Error(`DevFrame approval response failed: ${response.status} ${errorBody}`);
         }
-        return AsyncResult.success((await response.json()) as { responded: boolean; decision: string });
+        await response.json();
+        return AsyncResult.success({ sequence: 0 });
       } catch (error) {
         console.warn("[devframe] respondToApproval failed:", error);
-        return AsyncResult.success({ responded: false, decision: "error" } as const);
+        return AsyncResult.success({ sequence: 0 });
       }
     })(),
 };

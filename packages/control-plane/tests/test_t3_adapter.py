@@ -158,7 +158,7 @@ def test_t3_coordinator_entry_projects_shell_ready_shape_from_fixtures(fixture_n
     assert entry["projectOptions"] == projects
     assert [thread["id"] for thread in entry["shellThreads"]] == expected["shellThreadsIds"]
     assert [thread["id"] for thread in entry["sortedShell"]["threads"]] == expected["sortedShellThreadIds"]
-    assert [detail["id"] for detail in entry["sortedShell"]["threadDetails"]] == expected["sortedShellThreadIds"]
+    assert entry["sortedShell"]["threadDetails"] == []
     assert [thread["id"] for thread in entry["goalConversations"]] == expected["goalConversationIds"]
     if expected["selectedProjectId"] is None:
         assert entry["selectedProject"] is None
@@ -197,6 +197,23 @@ def test_t3_coordinator_entry_schema_contract_boundaries():
         "disabledReason",
     }
     assert schema["additionalProperties"] is False
+
+
+def test_t3_coordinator_entry_keeps_thread_summaries_but_drops_details_and_heavy_devframe_data():
+    fixture = _load_coordinator_entry_fixture("project_with_goal_conversations")
+    for thread in fixture["shell"]["t3"]["threads"]:
+        thread["devframe"] = {
+            "actionDetails": [{"detail": "large action detail"}],
+            "evidenceRefs": [{"refPath": "large-evidence.json"}],
+        }
+
+    entry = build_t3_coordinator_entry(fixture["shell"], fixture["projects"])
+
+    assert "native-1" in [thread["id"] for thread in entry["sortedShell"]["threads"]]
+    assert entry["sortedShell"]["threadDetails"] == []
+    assert all("devframe" not in thread for thread in entry["shellThreads"])
+    assert all("devframe" not in thread for thread in entry["goalConversations"])
+    assert "devframe" not in entry["globalCoordinatorThread"]
 
 
 def test_t3_coordinator_entry_rejects_additional_properties_and_missing_required():

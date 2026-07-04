@@ -257,6 +257,28 @@ def build_t3_coordinator_entry(
     goal_conversations = [
         thread for thread in shell_threads if _text(thread.get("threadKind"), "") == "goal_conversation"
     ]
+    shell_thread_summaries = [
+        _coordinator_entry_thread_summary(thread)
+        for thread in shell_threads
+    ]
+    thread_summary_by_id = {
+        _text(thread.get("id"), ""): thread
+        for thread in shell_thread_summaries
+    }
+    global_thread_summary = (
+        thread_summary_by_id.get(_text(global_thread.get("id"), ""))
+        if isinstance(global_thread, dict)
+        else None
+    )
+    goal_conversation_summaries = [
+        thread_summary_by_id[_text(thread.get("id"), "")]
+        for thread in goal_conversations
+        if _text(thread.get("id"), "") in thread_summary_by_id
+    ]
+    entry_sorted_shell = _coordinator_entry_sorted_shell(
+        sorted_shell,
+        shell_thread_summaries,
+    )
     project_options = [project for project in (projects or []) if isinstance(project, dict)]
 
     selected_project = project_options[0] if project_options else None
@@ -266,7 +288,7 @@ def build_t3_coordinator_entry(
         project_coordinator_thread = next(
             (
                 thread
-                for thread in goal_conversations
+                for thread in goal_conversation_summaries
                 if _text(thread.get("projectId"), "") == selected_project_id
             ),
             None,
@@ -298,14 +320,61 @@ def build_t3_coordinator_entry(
         "projectOptions": project_options,
         "selectedProject": selected_project,
         "projectCoordinatorThread": project_coordinator_thread,
-        "shellThreads": shell_threads,
-        "globalCoordinatorThread": global_thread,
-        "goalConversations": goal_conversations,
-        "sortedShell": sorted_shell,
+        "shellThreads": shell_thread_summaries,
+        "globalCoordinatorThread": global_thread_summary,
+        "goalConversations": goal_conversation_summaries,
+        "sortedShell": entry_sorted_shell,
         "canStartCoordinatorGoal": can_start_coordinator_goal,
         "emptyStateReason": empty_state_reason,
         "disabledReason": disabled_reason,
     }
+
+
+def _coordinator_entry_thread_summary(thread: dict[str, Any]) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "id": _text(thread.get("id"), ""),
+        "projectId": _text(thread.get("projectId"), ""),
+        "title": _text(thread.get("title"), ""),
+        "threadKind": _text(thread.get("threadKind"), "native_chat"),
+        "coordinatorScope": _text(thread.get("coordinatorScope"), "none"),
+        "projectBinding": thread.get("projectBinding"),
+        "threadListPriority": _safe_thread_list_priority(
+            thread.get("threadListPriority"),
+            _text(thread.get("threadKind"), "native_chat"),
+        ),
+        "threadListSummary": _text(thread.get("threadListSummary"), ""),
+    }
+    for key in (
+        "modelSelection",
+        "runtimeMode",
+        "interactionMode",
+        "branch",
+        "worktreePath",
+        "latestTurn",
+        "createdAt",
+        "updatedAt",
+        "archivedAt",
+        "deletedAt",
+        "session",
+        "latestUserMessageAt",
+        "hasPendingApprovals",
+        "hasPendingUserInput",
+        "hasActionableProposedPlan",
+    ):
+        if key in thread:
+            summary[key] = thread.get(key)
+    return summary
+
+
+def _coordinator_entry_sorted_shell(
+    sorted_shell: dict[str, Any],
+    thread_summaries: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Keep coordinator-entry payload focused on shell navigation state."""
+    entry_shell = deepcopy(sorted_shell)
+    entry_shell["threads"] = thread_summaries
+    entry_shell["threadDetails"] = []
+    return entry_shell
 
 
 def render_t3_client_shell_json(shell: dict[str, Any] | None = None) -> str:

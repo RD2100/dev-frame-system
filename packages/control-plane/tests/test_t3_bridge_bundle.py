@@ -386,7 +386,7 @@ def test_catalog_source_disables_websocket_connection():
 
     assert "desired: false" in source
     assert "phase: \"connected\"" in source
-    assert "stage: \"polling\"" in source
+    assert "stage: \"synchronizing\"" in source
     assert "wsBaseUrl: devFrameWsBaseUrl()" in source
 
 
@@ -410,7 +410,7 @@ def test_catalog_source_uses_valid_connected_phase_in_polling_mode():
     assert "wsBaseUrl: devFrameWsBaseUrl()" in source
     assert "desired: false" in source
     assert "phase: \"connected\"" in source
-    assert "stage: \"polling\"" in source
+    assert "stage: \"synchronizing\"" in source
     assert "phase: \"disconnected\"" not in source
 
 
