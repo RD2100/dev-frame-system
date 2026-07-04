@@ -1,8 +1,109 @@
 # Continue - Global Coordinator Conversation Mainline
 
-Last updated: 2026-07-01 (Asia/Tokyo)
+Last updated: 2026-07-02 (Asia/Tokyo)
 Branch: `codex/public-mainline-batch-1`
 PR: `#4`
+
+## 2026-07-02 External T3/RD-Code Update
+
+The earlier assumption that an external T3/RD-Code checkout was unavailable is
+wrong. The checkout exists at:
+
+```text
+D:\dev-frame-system\.devframe-runtime\external\t3code
+```
+
+It is an independent checkout and must stay outside the public repo commit
+surface.
+
+Current external-checkout truth:
+
+- `apps/web` now consumes the coordinator-entry path through the real shell and
+  thread state layers.
+- Sidebar exposes `Coordinator` as a top-level entry.
+- `global_coordinator` and `goal_conversation` rows are visually distinguished.
+- selected project and project goal binding are shown read-only in the sidebar.
+- direct global/goal routes render a DevFrame read-only banner.
+- DevFrame coordinator/goal conversations render a static read-only composer
+  panel instead of send, approval, or agent-execution controls.
+- `&address agents` / cluster-dispatch composer affordances are explicitly
+  disabled for this Phase 1 read-only slice with
+  `ENABLE_DEVFRAME_CLUSTER_COMPOSER = false`.
+- Phase 2 hardening has started: when that flag is false,
+  `detectComposerTrigger()` no longer produces `cluster` triggers for `&...`,
+  the inline cluster confirm card is also flag-gated, and the confirm handler
+  returns before `startClusterRun(...)`.
+- Phase 2 also tightened selected-project binding: fetched coordinator-entry
+  payloads no longer trust a `projectCoordinatorThread` from the wrong project;
+  the UI normalization keeps it only when it exactly matches the selected
+  project id and `goal_conversation`.
+- Phase 2 now formats coordinator `emptyStateReason` / `disabledReason` into
+  user-facing sidebar copy instead of exposing internal enum strings such as
+  `no_threads` or `missing_required_project`.
+- Phase 1 readiness hardening slimmed `/api/t3/coordinator-entry`: it now keeps
+  thread summaries for navigation and strips full `threadDetails` / heavy
+  `devframe` action/evidence payloads from the one-call entry. A live isolated
+  server on port `8792` measured the entry at about `328 KB` instead of about
+  `7.25 MB`.
+- DevFrame approval response is a no-op in the T3 bridge path; it does not POST
+  an approval/write endpoint.
+
+Latest focused external-checkout verification observed:
+
+```powershell
+pnpm --filter @t3tools/web test -- composer-logic.test.ts
+# 37 passed
+
+pnpm --filter @t3tools/web test -- ChatView.logic.test.ts
+# 22 passed
+
+pnpm --filter @t3tools/web test -- devframeShellBridge.test.ts
+# 5 passed
+
+pnpm --filter @t3tools/web test -- "chatThreadRoute"
+# 6 passed
+
+pnpm --filter @t3tools/web test -- Sidebar.logic.test.ts
+# 57 passed
+
+pnpm --filter @t3tools/web typecheck
+# passed
+
+pnpm --filter @t3tools/web test -- composer-logic.test.ts ChatView.logic.test.ts devframeShellBridge.test.ts chatThreadRoute Sidebar.logic.test.ts
+# 5 files passed, 130 tests passed
+
+python -m pytest packages/control-plane/tests/test_t3_adapter.py -q
+# 70 passed
+
+python -m pytest packages/control-plane/tests/test_cluster_control.py -q
+# 36 passed
+
+powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
+# 821 passed, 1 skipped; release verification passed
+```
+
+Browser smoke evidence was written under `.devframe-runtime/logs/`, including:
+
+- `phase1-t3web-readonly-after-logic-extract.png`
+- `phase1-t3web-cluster-write-guard.png`
+- `phase1-t3web-cluster-flag-guard.png`
+- `phase1-t3web-global-direct-slim-wait-smoke.png`
+
+Latest direct-route smoke against the slim coordinator-entry path observed:
+
+- `Coordinator` enabled
+- selected project shown as `Dev Frame System - D:\dev-frame-system`
+- selected goal shown as `Goal: coordinator / chatgpt / chatgpt-web-mcp-real-call`
+- read-only composer shown
+- send button count `0`
+- cluster confirm count `0`
+- approval action text absent
+- `No active thread` absent
+- internal enum strings absent
+
+Important caveat: the external checkout has substantial pre-existing dirty
+changes, including rebrand/i18n/desktop/customization work. Do not revert them,
+and do not claim all dirty files as part of the coordinator-entry slice.
 
 ## Current State
 
@@ -33,7 +134,7 @@ At the time of writing:
   include them in the formal handoff point
 - PR `#4` is open; merge and release remain human-owned
 - latest local release verification on the current uncommitted worktree passed:
-  `820 passed, 1 skipped`, plus public snapshot, wheel smoke, and diff
+  `821 passed, 1 skipped`, plus public snapshot, wheel smoke, and diff
   whitespace checks
 
 ## What Is Already True
@@ -149,30 +250,32 @@ The user must own or explicitly authorize:
 
 ## Most Important Remaining Gap
 
-The public repo contracts are now mature enough for shell integration. The
-repo-side readiness slice is complete and locally verified.
+The public repo contracts are mature enough for shell integration, and the
+external T3/RD-Code checkout now has a first read-only shell consumption slice.
 
-The next meaningful progress is no longer to invent more backend fields. The
-next meaningful progress is to wire a real RD-Code/T3 checkout, when available
-and in scope, to consume `/api/t3/coordinator-entry` and
-`fetchDevFrameCoordinatorShellEntry()`.
+The next meaningful progress is not to invent more backend fields. It is to
+review, harden, and product-check the external checkout slice until it is ready
+for human product acceptance.
 
 Do **not** jump to LangGraph migration yet. Phase 1 is still shell-first.
 
 ## Next Action
 
-Move to actual RD-Code/T3 shell consumption when the external checkout is
-available and in scope. Keep that first shell slice read-only: render/navigate
-the global coordinator and project goal conversations from the coordinator
-entry contract.
+Continue in the external T3/RD-Code checkout only if that checkout is in scope.
+Keep the work read-only: render/navigate the global coordinator and project goal
+conversations from the coordinator entry contract, and keep write/approval/agent
+execution affordances disabled.
 
 Concretely:
 
-1. inspect the current diff and confirm the coordinator-entry shape is still the
-   right shell-facing contract
-2. keep the slice public-repo-safe
-3. run the focused tests and full release gate again if any file changes
-4. commit/push only after human approval if that is the chosen handoff point
+1. inspect both repo statuses before acting:
+   `D:\dev-frame-system` and
+   `D:\dev-frame-system\.devframe-runtime\external\t3code`
+2. preserve unrelated dirty work in the external checkout
+3. keep the T3 slice read-only; do not enable `ENABLE_DEVFRAME_CLUSTER_COMPOSER`
+   in Phase 1
+4. run focused external checkout tests and browser smoke after UI changes
+5. commit/push only after human approval if that is the chosen handoff point
 
 ## Do Not
 
@@ -200,7 +303,7 @@ python -m pytest packages/control-plane/tests/test_client_launcher.py packages/c
 # 196 passed
 
 powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
-# 820 passed, 1 skipped; release verification passed
+# 821 passed, 1 skipped; release verification passed
 ```
 
 ## Human-Only Tasks

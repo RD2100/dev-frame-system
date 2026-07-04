@@ -15,6 +15,11 @@ Read these files first:
 Current truth:
 - PR #4 is the active branch PR.
 - The worktree may be dirty; inspect git status before acting.
+- External T3/RD-Code source exists and is already in scope for this mainline:
+  `D:\dev-frame-system\.devframe-runtime\external\t3code`
+- That external checkout is independent and dirty. Do not vendor it into
+  `D:\dev-frame-system`, do not commit it in the public repo, and do not revert
+  unrelated dirty files there.
 - Current slice adds a one-call coordinator shell entry and shell-readiness
   contract pack:
   - GET /api/t3/coordinator-entry
@@ -35,7 +40,68 @@ Current truth:
     /api/t3/conversation-model, and /t3-shell.json
 - Latest local release gate observed for this slice:
   powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
-  -> 820 passed, 1 skipped; release verification passed
+  -> 821 passed, 1 skipped; release verification passed
+- The first real external T3/RD-Code read-only UI slice has also been
+  implemented locally in the external checkout:
+  - `apps/web/src/devframe/devframeShellBridge.ts`
+  - `apps/web/src/state/shell.ts`
+  - `apps/web/src/state/threads.ts`
+  - `apps/web/src/components/Sidebar.tsx`
+  - `apps/web/src/components/ChatView.tsx`
+  - `apps/web/src/components/ChatView.logic.ts`
+  - `apps/web/src/components/ChatView.logic.test.ts`
+  - `apps/web/src/components/chat/ChatComposer.tsx`
+  - `apps/web/src/composer-logic.ts`
+  - `apps/web/src/composer-logic.test.ts`
+  - route loading helpers under `apps/web/src/routes/`
+- External T3 UI behavior now observed:
+  - real apps/web consumes `/api/t3/coordinator-entry`
+  - Sidebar has a top-level `Coordinator` entry
+  - global/goal threads are visually tagged
+  - selected project and project coordinator goal binding are shown read-only
+  - global/goal thread detail routes show a DevFrame read-only banner
+  - global/goal thread detail routes render a static read-only composer panel
+    with no send, approval, or cluster-dispatch controls
+  - `ENABLE_DEVFRAME_CLUSTER_COMPOSER = false` keeps `&address agents` /
+    cluster dispatch disabled for Phase 1
+  - Phase 2 hardening has started: `detectComposerTrigger()` no longer emits
+    `cluster` triggers while that flag is false, the inline cluster confirm card
+    is flag-gated, and `confirmClusterRun` returns before `startClusterRun(...)`
+    when the flag is false
+  - fetched coordinator-entry normalization now rejects a
+    `projectCoordinatorThread` unless it exactly matches the selected project id
+    and is a `goal_conversation`
+  - Sidebar formats coordinator `emptyStateReason` / `disabledReason` into
+    user-facing copy instead of exposing internal enum strings such as
+    `no_threads` or `missing_required_project`
+  - `/api/t3/coordinator-entry` was slimmed for Phase 1 readiness: it keeps
+    thread summaries for navigation but strips full `threadDetails` and heavy
+    `devframe` action/evidence payloads from the one-call entry
+- External checkout focused verification observed:
+  - `pnpm --filter @t3tools/web test -- composer-logic.test.ts` -> 37 passed
+  - `pnpm --filter @t3tools/web test -- ChatView.logic.test.ts` -> 22 passed
+  - `pnpm --filter @t3tools/web test -- devframeShellBridge.test.ts` -> 5 passed
+  - `pnpm --filter @t3tools/web test -- "chatThreadRoute"` -> 6 passed
+  - `pnpm --filter @t3tools/web test -- Sidebar.logic.test.ts` -> 57 passed
+  - `pnpm --filter @t3tools/web test -- composer-logic.test.ts ChatView.logic.test.ts devframeShellBridge.test.ts chatThreadRoute Sidebar.logic.test.ts` -> 5 files passed, 130 tests passed
+  - `pnpm --filter @t3tools/web typecheck` -> passed
+  - `python -m pytest packages/control-plane/tests/test_t3_adapter.py -q` -> 70 passed
+  - `python -m pytest packages/control-plane/tests/test_cluster_control.py -q` -> 36 passed
+  - `git diff --check` in the external checkout -> passed with only existing
+    CRLF warnings
+- Isolated live server measurement on port `8792`:
+  - `/t3-shell.json` remained the full-detail read model, about `4.87 MB`
+  - `/api/t3/coordinator-entry` was about `328 KB`, down from about `7.25 MB`
+- Browser smoke screenshots exist under
+  `D:\dev-frame-system\.devframe-runtime\logs`, including:
+  - `phase1-t3web-readonly-after-logic-extract.png`
+  - `phase1-t3web-cluster-write-guard.png`
+  - `phase1-t3web-cluster-flag-guard.png`
+  - `phase1-t3web-global-direct-slim-wait-smoke.png`
+- Latest direct-route smoke against the slim entry showed Coordinator enabled,
+  selected project/goal visible, read-only composer visible, no send button, no
+  cluster confirm, no approval action, no `No active thread`, and no internal
+  enum leak.
 - The repo already supports:
   - global_coordinator thread projection
   - goal_conversation thread projection from cluster runs
@@ -51,7 +117,7 @@ Automatic work you may continue:
 - generated T3 bridge source / README updates
 - focused tests and release verification
 - code review, risk review, and handoff cleanup
-- small shell-consumption seams that do not require external RD-Code source
+- focused external T3/RD-Code shell hardening if the local checkout is in scope
 
 Human-owned work:
 - final product judgment that the actual RD-Code shell feels like a first-class
@@ -69,14 +135,20 @@ Your mission:
 - do NOT replace OpenCode/ACP execution paths
 
 Preferred next slice:
-- if an external RD-Code/T3 checkout is explicitly in scope, wire the shell to
-  consume /api/t3/coordinator-entry and fetchDevFrameCoordinatorShellEntry()
-- keep that first real shell slice read-only; do not start LangGraph migration
-  or agent execution yet
+- review and harden the external T3/RD-Code read-only UI slice
+- keep it read-only; do not start LangGraph migration or agent execution yet
+- do not enable `ENABLE_DEVFRAME_CLUSTER_COMPOSER` in Phase 1
+- preserve unrelated dirty external-checkout changes
 
 Keep changes narrow.
-Run focused tests first, then run:
+Run focused tests first. In the public repo, use the release gate when public
+repo files change:
 `powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1`
+
+In the external T3/RD-Code checkout, use focused web checks such as:
+`pnpm --filter @t3tools/web test -- ChatView.logic.test.ts`
+`pnpm --filter @t3tools/web test -- composer-logic.test.ts`
+`pnpm --filter @t3tools/web typecheck`
 
 When reporting progress, explain:
 1. what changed
