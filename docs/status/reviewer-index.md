@@ -117,9 +117,40 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `packages/control-plane/tests/test_go_worktree.py`
 
 ### Current State Evidence Files
+- `docs/status/status-document-inventory.md`
+- `docs/status/governance-spine-and-document-coordination.md`
+- `docs/status/unified-object-model-decision-record.md`
+- `docs/status/governance-contradiction-matrix.md`
+- `docs/status/governance-rules-spec.md`
+- `docs/status/context-noise-governance-and-automation-plan.md`
+- `docs/status/model-knowledge-gap-governance-plan.md`
+- `docs/status/project-and-cross-project-memory-harness-governance-plan.md`
+- `docs/status/goal-bound-evidence-gate-plan.md`
+- `docs/status/paper-claim-integrity-gate-to-cluster-plan.md`
+- `docs/status/human-attention-governance-and-automation-maturity-plan.md`
+- `docs/status/early-adopter-user-asset-governance-plan.md`
+- `docs/status/competitive-moat-and-user-demand-critical-review.md`
+- `docs/status/document-driven-transformation-master-plan.md`
+- `docs/status/design-coverage-gap-remediation-plan.md`
+- `docs/status/review-first-governance-kernel-contraction-plan.md`
+- `docs/status/review-first-governance-kernel-implementation-spec.md`
+- `docs/status/reuse-first-constraint-governance-implementation-plan.md`
+- `docs/status/current-coverage-audit-evidence-20260704.md`
+- `docs/status/working-tree-cleanup-inventory-20260705.md`
+- `docs/status/browser-automation-transport-roadmap.md`
+- `docs/status/paper-knowledge-base-iteration-mvp-plan.md`
+- `docs/status/graph-projection-knowledge-canvas-plan.md`
 - `docs/status/recon-receipt-local-agent-client-mainline.md`
 - `docs/status/t3code-client-mainline-reuse-assessment.md`
 - `docs/status/release-readiness.md`
+- `docs/status/workflow-consolidation-and-command-plan.md`
+- `docs/status/context-management-architecture-plan.md`
+- `docs/status/context-led-model-performance-control-plan.md`
+- `docs/status/runtime-governance-and-evidence-closure-transformation-plan.md`
+- `docs/status/evaluation-feedback-learning-governance-plan.md`
+- `docs/status/total-control-policy-engine-and-human-escalation-governance-plan.md`
+- `docs/status/documentation-management-audit-and-plan.md`
+- `docs/status/documentation-management-detailed-rollout-plan.md`
 - `docs/status/reviewer-index.md` (this file)
 
 ## Critical Paths to Verify
@@ -159,6 +190,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 5. Confirm local mutation endpoints stay explicit and loopback-limited.
 6. Confirm stage-8 native reuse status is current and does not overclaim release/publish readiness.
 7. Confirm customization, writeback, cluster, workflow, MCP, ACP, and OpenCode-event additions are covered by their matching Recon Receipts and tests.
+8. Confirm deferred module plans stay discoverable without being presented as implemented runtime behavior.
 
 ## Public Surface File Index
 
@@ -173,6 +205,34 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/agent-runtime/visual-control-plane.md`
 - `docs/agent-runtime/web-ai-adapter-contract.md`
 - `docs/status/release-readiness.md`
+- `docs/status/status-document-inventory.md`
+- `docs/status/governance-spine-and-document-coordination.md`
+- `docs/status/unified-object-model-decision-record.md`
+- `docs/status/governance-contradiction-matrix.md`
+- `docs/status/governance-rules-spec.md`
+- `docs/status/model-knowledge-gap-governance-plan.md`
+- `docs/status/goal-bound-evidence-gate-plan.md`
+- `docs/status/paper-claim-integrity-gate-to-cluster-plan.md`
+- `docs/status/human-attention-governance-and-automation-maturity-plan.md`
+- `docs/status/early-adopter-user-asset-governance-plan.md`
+- `docs/status/competitive-moat-and-user-demand-critical-review.md`
+- `docs/status/document-driven-transformation-master-plan.md`
+- `docs/status/design-coverage-gap-remediation-plan.md`
+- `docs/status/review-first-governance-kernel-contraction-plan.md`
+- `docs/status/review-first-governance-kernel-implementation-spec.md`
+- `docs/status/reuse-first-constraint-governance-implementation-plan.md`
+- `docs/status/current-coverage-audit-evidence-20260704.md`
+- `docs/status/working-tree-cleanup-inventory-20260705.md`
+- `docs/status/browser-automation-transport-roadmap.md`
+- `docs/status/paper-knowledge-base-iteration-mvp-plan.md`
+- `docs/status/graph-projection-knowledge-canvas-plan.md`
+- `docs/status/workflow-consolidation-and-command-plan.md`
+- `docs/status/context-management-architecture-plan.md`
+- `docs/status/context-led-model-performance-control-plan.md`
+- `docs/status/runtime-governance-and-evidence-closure-transformation-plan.md`
+- `docs/status/evaluation-feedback-learning-governance-plan.md`
+- `docs/status/documentation-management-audit-and-plan.md`
+- `docs/status/documentation-management-detailed-rollout-plan.md`
 - `docs/status/reviewer-index.md`
 - `packages/control-plane/README.md`
 - `packages/control-plane/QUICKSTART.md`
