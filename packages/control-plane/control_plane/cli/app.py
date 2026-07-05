@@ -29,6 +29,7 @@ from ._core import (
     cmd_rdgoal,
     cmd_run,
 )
+from ._review import cmd_rdreview
 from ._visual import cmd_actions, cmd_dashboard, cmd_sessions, cmd_visual_state
 from ._writeback import cmd_writeback_apply
 from ._mcp import cmd_mcp_connections
@@ -156,6 +157,13 @@ def main() -> int:
 
     if cmd == "client":
         return cmd_client()
+
+    if cmd == "rdreview":
+        if _wants_help(sys.argv[2:]):
+            print("Usage: devframe rdreview <work_item_id> <intent> [--project <id>] [--output <file>]")
+            print("  Prepare a sample review-governance packet (no runtime writes).")
+            return 0
+        return cmd_rdreview()
 
     if cmd == "web-ai":
         if _wants_help(sys.argv[2:3]):
