@@ -1,0 +1,52 @@
+# Review Bundle: Phase 1B Round 2
+
+## Metadata
+
+- Phase: 1B
+- Round: 2
+- Commit: f9ebcef
+- Date: 2026-07-05
+
+## Files
+
+| File | Role |
+|---|---|
+| review_governance_validator.py | Semantic validator with derive_projection |
+| review_governance_kernel.schema.json | Schema (44 constraints) |
+| test_review_governance_kernel.py | 73 contract tests |
+| success.json | Positive fixture |
+| blocked.json | Blocked fixture |
+| insufficient-evidence.json | Insufficient evidence fixture |
+| missing-context.json | Missing context fixture (fixed) |
+| document-driven-transformation-final-plan-20260705.md | Phase plan |
+
+## Change Summary (from Round 1 NO-GO)
+
+Round 1 NO-GO identified 4 findings. All fixed in commit f9ebcef:
+
+### P0: Full projection consistency validation
+
+- Before: Only checked computed_status and blocked_reason
+- After: Compare ALL projection fields (work_item_id, computed_status, blocked_reason, evidence_summary, decision_summary, allowed_actions) against derive_projection output
+- Location: review_governance_validator.py:260-275
+
+### P1: missing-context fixture fixed
+
+- Before: decision_summary was {}
+- After: decision_summary = {review_outcome:"", gate_outcome:"", latest_decision_id:""} matching derive_projection
+
+### New tests added (68 -> 73):
+
+1. test_projection_fabricated_allowed_actions_fails
+2. test_projection_fabricated_evidence_summary_fails
+3. test_projection_stale_latest_decision_id_fails
+4. test_projection_stale_gate_outcome_fails
+5. test_missing_context_fixture_matches_derive
+
+## Review Questions
+
+1. Does the full projection consistency check now prevent ALL fabricated fields?
+2. Does the missing-context fixture projection match derive_projection output?
+3. Are all 73 tests passing?
+
+Please return PASS / CONDITIONAL PASS / NO-GO.

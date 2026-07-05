@@ -1,7 +1,7 @@
 {
   "phase": "1B",
-  "round": 1,
-  "commit": "cf4a5c0",
+  "round": 2,
+  "commit": "f9ebcef",
   "files": [
     {"path": "review_governance_validator.py", "role": "validator"},
     {"path": "review_governance_kernel.schema.json", "role": "schema"},
