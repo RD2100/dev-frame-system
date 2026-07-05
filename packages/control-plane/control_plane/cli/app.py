@@ -163,7 +163,7 @@ def main() -> int:
             print("Usage: devframe rdreview <work_item_id> <intent> [--project <id>] [--output <file>]")
             print("  Prepare a sample review-governance packet (no runtime writes).")
             return 0
-        return cmd_rdreview()
+        return cmd_rdreview(sys.argv[2:])
 
     if cmd == "web-ai":
         if _wants_help(sys.argv[2:3]):

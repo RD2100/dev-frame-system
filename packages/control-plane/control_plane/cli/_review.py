@@ -6,7 +6,7 @@ import argparse
 from ..rdreview import cmd_rdreview_prepare
 
 
-def cmd_rdreview() -> int:
+def cmd_rdreview(argv: list[str] | None = None) -> int:
     """rdreview: prepare a sample review packet (read-only, no state changes)."""
     parser = argparse.ArgumentParser(
         prog="devframe rdreview",
@@ -16,7 +16,7 @@ def cmd_rdreview() -> int:
     parser.add_argument("intent", nargs="+", help="Review intent description (multi-word OK)")
     parser.add_argument("--project", default="proj-review-demo", help="Project ID")
     parser.add_argument("--output", default=None, help="Output file path (default: stdout)")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     intent = " ".join(args.intent)
     return cmd_rdreview_prepare(
         work_item_id=args.work_item_id,

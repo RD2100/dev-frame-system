@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 from control_plane.rdreview import generate_review_packet, cmd_rdreview_prepare
+from control_plane.cli._review import cmd_rdreview
 from control_plane.review_governance_validator import validate_packet, derive_projection
 
 
@@ -80,3 +81,14 @@ def test_generate_review_packet_no_runtime_side_effects(tmp_path, capsys):
     assert packet["work_item"]["status"] == "ready"
     captured = capsys.readouterr()
     assert "Review packet written to" in captured.out
+
+
+def test_cmd_rdreview_with_routed_argv(tmp_path):
+    """Regression: argv from app.py routing must not include 'rdreview'."""
+    output_file = tmp_path / "packet.json"
+    rc = cmd_rdreview(["wi-review-1", "test", "--output", str(output_file)])
+    assert rc == 0
+    assert output_file.exists()
+    packet = json.loads(output_file.read_text(encoding="utf-8"))
+    assert packet["work_item"]["id"] == "wi-review-1"
+    assert packet["work_item"]["intent"] == "test"
