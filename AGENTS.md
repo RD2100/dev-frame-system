@@ -33,6 +33,11 @@ The project is about using a web AI session, usually GPT Web, as an external bra
 
 ## Before Changing Files
 
+Follow [Agent Coding Discipline](docs/agent-runtime/agent-coding-discipline.md)
+for project-wide agent behavior rules. Cite its rule IDs in plans, handoffs, and
+review reports when a task depends on discipline such as interface truth,
+requirement alignment, reuse, verification, or scope control.
+
 1. Read the relevant files first.
 2. Check CodeGraph before broad code exploration. If `.codegraph/` is missing
    or stale, initialize or rebuild it only when the user has authorized that

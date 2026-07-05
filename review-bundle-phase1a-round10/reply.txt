@@ -1,0 +1,114 @@
+Verdict: PASS
+Evidence checked
+已检查：
+
+
+review_governance_validator.py
+
+
+test_review_governance_kernel.py
+
+
+success.json
+
+
+blocked.json
+
+
+insufficient-evidence.json
+
+
+missing-context.json
+
+
+review_governance_kernel.schema.json
+
+
+本地按测试文件预期路径重建 repo 布局后执行：
+BashPYTHONPATH=. pytest -q
+结果为：67 passed。
+对审查问题的结论
+
+
+missing-context 场景是否现在正确推导为 blocked？
+是。derive_projection() 在无 work-item 决策时不再直接落到 ready，而是检查 work_item.status。当其为 blocked 时，推导为 blocked，并在 input_context_artifact_id 缺失于 artifacts 时生成具体 blocked_reason。对应逻辑在 review_governance_validator.py:327-336。
+新增测试 test_derive_projection_missing_context_is_blocked 覆盖了该场景，断言 computed_status == "blocked"，且 allowed_actions 不包含 execute，见 test_review_governance_kernel.py:602-607。
+
+
+blocked_reason 是否从 gate payload 正确提取？
+是。blocked.json 中 gate decision 的 payload.blocked_reasons 包含具体原因：tool boundary violation: playwright_bridge wrote outside agent-runtime，见 blocked.json:101-121。
+当前 derive_projection() 反向遍历决策，最新的 gate blocked 会先被命中，并通过 _extract_blocked_reason() 从 payload.blocked_reasons[0] 提取具体原因，见 review_governance_validator.py:302-317、363-370。
+新增测试 test_derive_projection_blocked_reason_from_gate_payload 覆盖了这一点，见 test_review_governance_kernel.py:610-614。
+
+
+latest_decision_id 是否保持原始 decisions 顺序？
+是。当前实现先按 target_ref == work_item.id 过滤，但不改变原始数组顺序，然后取过滤后列表最后一个 decision 作为 latest_decision_id，见 review_governance_validator.py:275-282。这修复了 Round 9 中按 kind 拼接导致顺序失真的问题。
+新增测试覆盖了默认 fixture 中 decision-gate-1 作为最后决策的情况，见 test_review_governance_kernel.py:617-620。
+
+
+67 个测试是否全部通过？
+是。本地复现为 67 passed。
+
+
+P2 notes
+
+
+test_derive_projection_latest_decision_preserves_original_order 目前只覆盖了 fixture 的自然顺序，建议后续增加一个“gate 在前、review 在后”的人工交错 case，以更强地证明没有按 kind 重排。
+
+
+derive_projection() 对 insufficient_evidence 的 allowed_actions 与现有 fixture projection 不完全一致：函数返回 ["view", "add_evidence", "review"]，fixture 中是 ["view", "escalate", "gather_more_evidence"]。这不是本轮 P0/P1 阻塞项，但后续最好统一投影生成规则与 fixture 表达。
+
+
+Final: PASS
+
+Verdict: PASS
+Evidence checked
+已检查并本地复现：
+
+
+review_governance_validator.py
+
+
+test_review_governance_kernel.py
+
+
+success.json
+
+
+blocked.json
+
+
+insufficient-evidence.json
+
+
+missing-context.json
+
+
+review_governance_kernel.schema.json
+
+
+测试命令按测试文件预期 repo 结构重建后执行：
+BashPYTHONPATH=. pytest -q
+结果：67 passed。
+审查结论
+
+
+missing-context 场景现在正确推导为 blocked。
+derive_projection() 在无匹配 decisions 时检查 work_item.status，若为 blocked 则保持 blocked，并在缺失 input_context_artifact_id 对应 artifact 时生成具体阻塞原因。对应实现见 review_governance_validator.py:327-336，测试见 test_review_governance_kernel.py:602-607。
+
+
+blocked_reason 可以从 gate payload 正确提取。
+_extract_blocked_reason() 会读取 payload.blocked_reasons[0]；blocked.json 推导结果为：tool boundary violation: playwright_bridge wrote outside agent-runtime。对应实现见 review_governance_validator.py:310-317、363-370，测试见 test_review_governance_kernel.py:610-614。
+
+
+latest_decision_id 保持原始 decisions 顺序。
+当前逻辑先按 target_ref == work_item.id 过滤，但不按 kind 重排，直接取过滤后列表最后一个 decision。对应实现见 review_governance_validator.py:275-282，测试见 test_review_governance_kernel.py:617-620。
+
+
+67 个测试全部通过。
+本地复现为 67 passed。
+
+
+P2 note
+test_derive_projection_latest_decision_preserves_original_order 仍建议后续补一个“gate 在前、review 在后”的交错顺序用例，以证明确实不会按 kind 重排；这不是当前阻塞项。
+Final: PASS

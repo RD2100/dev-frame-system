@@ -1,0 +1,156 @@
+{
+  "schema_version": "0.1",
+  "project": {
+    "id": "proj-review-demo",
+    "display_name": "Review Governance Kernel Demo",
+    "scope": "Phase 1A kernel validation",
+    "owner_principal_id": "principal-human-1",
+    "policy_profile": "evidence_first"
+  },
+  "work_item": {
+    "id": "wi-review-1",
+    "project_id": "proj-review-demo",
+    "kind": "review",
+    "intent": "Validate review-governance kernel schema with a passing gate",
+    "status": "completed",
+    "input_context_artifact_id": "artifact-ctx-1"
+  },
+  "document_revisions": [],
+  "runs": [
+    {
+      "id": "run-1",
+      "project_id": "proj-review-demo",
+      "work_item_id": "wi-review-1",
+      "principal_id": "principal-agent-1",
+      "tool_boundary": "agent-runtime",
+      "input_context_artifact_id": "artifact-ctx-1",
+      "status": "succeeded",
+      "claimed_result": "success"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "artifact-ctx-1",
+      "project_id": "proj-review-demo",
+      "kind": "context_snapshot",
+      "producer_ref": "system",
+      "content_ref": "embedded",
+      "immutable": true,
+      "source_refs": [
+        "doc://REVIEW_SPEC",
+        "doc://CONTRACT_SCHEMA"
+      ],
+      "selected_items": [
+        "review_governance_kernel.schema.json",
+        "test_review_governance_kernel.py"
+      ],
+      "omitted_required_items": [],
+      "freshness": "2026-07-05T10:00:00Z",
+      "authority_level": "canonical",
+      "redaction_summary": "no secrets required",
+      "selection_rationale": "schema + contract tests are the minimum review surface",
+      "token_budget": 4000,
+      "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "knowledge_gap_assessment": "none",
+      "required_knowledge": [],
+      "assumption_claims": [],
+      "checked_sources": [
+        "doc://REVIEW_SPEC",
+        "doc://CONTRACT_SCHEMA"
+      ],
+      "unresolved_gaps": []
+    },
+    {
+      "id": "artifact-report-1",
+      "project_id": "proj-review-demo",
+      "kind": "review_report",
+      "producer_ref": "principal-agent-1",
+      "content_ref": "embedded"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "ev-1",
+      "project_id": "proj-review-demo",
+      "claim": "schema loads under draft-07 and validates fixture payload",
+      "supports": "supports",
+      "source_artifact_id": "artifact-report-1",
+      "scope": "schema_contract",
+      "freshness": "2026-07-05T10:05:00Z",
+      "observed_result": "pytest passed all 12 contract tests"
+    },
+    {
+      "id": "ev-2",
+      "project_id": "proj-review-demo",
+      "claim": "no repo pollution by binding files",
+      "supports": "supports",
+      "source_artifact_id": "artifact-report-1",
+      "scope": "governance_boundary",
+      "freshness": "2026-07-05T10:05:00Z",
+      "observed_result": "git status showed only tracked files modified"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "decision-review-1",
+      "project_id": "proj-review-demo",
+      "kind": "review",
+      "target_ref": "wi-review-1",
+      "decider_principal_id": "principal-human-1",
+      "outcome": "pass",
+      "evidence_ids": ["ev-1", "ev-2"],
+      "rationale": "all contract tests pass, evidence cites artifact ids"
+    },
+    {
+      "id": "decision-gate-1",
+      "project_id": "proj-review-demo",
+      "kind": "gate",
+      "target_ref": "wi-review-1",
+      "decider_principal_id": "principal-human-1",
+      "outcome": "pass",
+      "evidence_ids": ["ev-1", "ev-2"],
+      "payload": {
+        "decision_subtype": "goal_bound_continuation",
+        "continuation_decision": "policy_continue",
+        "run_id": "run-1",
+        "goal_contract_version": "0.1",
+        "evidence_refs": ["ev-1", "ev-2"],
+        "context_snapshot_ref": "artifact-ctx-1",
+        "policy_version": "0.1",
+        "blocked_reasons": []
+      },
+      "rationale": "gate pass with evidence"
+    }
+  ],
+  "principals": [
+    {
+      "id": "principal-human-1",
+      "kind": "human",
+      "display_name": "Reviewer",
+      "authority_scope": "full"
+    },
+    {
+      "id": "principal-agent-1",
+      "kind": "agent",
+      "display_name": "Executor Agent",
+      "authority_scope": "read_write_within_scope"
+    }
+  ],
+  "projection": {
+    "work_item_id": "wi-review-1",
+    "computed_status": "completed",
+    "blocked_reason": "",
+    "evidence_summary": {
+      "total_evidence_count": 2,
+      "supporting_count": 2,
+      "rejecting_count": 0,
+      "inconclusive_count": 0
+    },
+    "decision_summary": {
+      "review_outcome": "pass",
+      "gate_outcome": "pass",
+      "latest_decision_id": "decision-gate-1"
+    },
+    "allowed_actions": ["view", "archive"]
+  }
+}

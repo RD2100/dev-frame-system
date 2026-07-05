@@ -13,6 +13,12 @@ They are methodology selectors for DevFrame runs. They are not automatically
 loaded into every model conversation, and they are not stable runtime contracts
 by themselves.
 
+For shared coding-discipline behavior, methodology skills should cite
+[Agent Coding Discipline](agent-coding-discipline.md) rule IDs instead of
+copying broad discipline prose. A discipline rule remains behavior guidance and
+governance input until review-governance evidence and gate decisions validate a
+specific run.
+
 ## Current surface
 
 At present, the runtime-shipped registry contains one shipped skill and multiple
@@ -125,6 +131,8 @@ Important boundaries:
   registered `@trigger`.
 - Future route inference may use skills as metadata, but current safe behavior
   is explicit trigger or configured run default.
+- Discipline rule IDs may be cited by a skill or review report, but rule
+  citation is not acceptance evidence by itself.
 
 ## Custom skill behavior
 

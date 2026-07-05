@@ -258,19 +258,6 @@ def validate_packet(payload: dict) -> ValidationResult:
                 f"does not match any gate decision for work_item"
             )
 
-    # ---- P1: projection must match derive_projection output ----
-    derived = derive_projection(payload)
-    if projection.get("computed_status") != derived["computed_status"]:
-        errors.append(
-            f"projection.computed_status={projection.get('computed_status')!r} "
-            f"does not match derive_projection={derived['computed_status']!r}"
-        )
-    if projection.get("blocked_reason") != derived["blocked_reason"]:
-        errors.append(
-            f"projection.blocked_reason={projection.get('blocked_reason')!r} "
-            f"does not match derive_projection={derived['blocked_reason']!r}"
-        )
-
     return ValidationResult(valid=len(errors) == 0, errors=errors)
 
 

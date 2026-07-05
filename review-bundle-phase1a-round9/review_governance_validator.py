@@ -258,19 +258,6 @@ def validate_packet(payload: dict) -> ValidationResult:
                 f"does not match any gate decision for work_item"
             )
 
-    # ---- P1: projection must match derive_projection output ----
-    derived = derive_projection(payload)
-    if projection.get("computed_status") != derived["computed_status"]:
-        errors.append(
-            f"projection.computed_status={projection.get('computed_status')!r} "
-            f"does not match derive_projection={derived['computed_status']!r}"
-        )
-    if projection.get("blocked_reason") != derived["blocked_reason"]:
-        errors.append(
-            f"projection.blocked_reason={projection.get('blocked_reason')!r} "
-            f"does not match derive_projection={derived['blocked_reason']!r}"
-        )
-
     return ValidationResult(valid=len(errors) == 0, errors=errors)
 
 
@@ -284,68 +271,57 @@ def derive_projection(payload: dict) -> dict:
     wi_id = (payload.get("work_item") or {}).get("id", "")
     decisions: list[dict] = payload.get("decisions") or []
     evidence: list[dict] = payload.get("evidence") or []
+    evidence_by_id = {e["id"]: e for e in evidence if "id" in e}
 
-    # Filter decisions for this work item, preserving original array order
-    wi_decisions = [
+    # Collect decisions for this work item
+    wi_reviews = [
         d for d in decisions
-        if d.get("target_ref") == wi_id
+        if d.get("kind") == "review" and d.get("target_ref") == wi_id
+    ]
+    wi_gates = [
+        d for d in decisions
+        if d.get("kind") == "gate" and d.get("target_ref") == wi_id
     ]
 
-    # Latest decision (last in original order)
+    # Latest decision (last in array for this work item)
+    wi_decisions = wi_reviews + wi_gates
     latest_id = wi_decisions[-1]["id"] if wi_decisions else ""
 
-    # Review outcome: most recent review decision (reverse order)
+    # Review outcome
     review_outcome = ""
-    for d in reversed(wi_decisions):
-        if d.get("kind") == "review":
-            review_outcome = d.get("outcome", "")
-            break
+    for d in reversed(wi_reviews):
+        review_outcome = d.get("outcome", "")
+        break
 
-    # Gate outcome: most recent gate decision (reverse order)
+    # Gate outcome
     gate_outcome = ""
-    for d in reversed(wi_decisions):
-        if d.get("kind") == "gate":
-            gate_outcome = d.get("outcome", "")
-            break
+    for d in reversed(wi_gates):
+        gate_outcome = d.get("outcome", "")
+        break
 
-    # Computed status: use priority-based logic, latest decision wins only for tie-breaking
-    # Priority: gate pass > human_required > blocked > insufficient_evidence > review pass > ready
-    # For tie-breaking (e.g. multiple blocked), use the latest decision's reason
-    gate_pass = [d for d in wi_decisions if d.get("kind") == "gate" and d.get("outcome") == "pass"]
-    hr_decisions = [d for d in wi_decisions if d.get("outcome") == "human_required"]
-    blocked_decisions = [d for d in wi_decisions if d.get("outcome") == "blocked"]
-    ie_decisions = [d for d in wi_decisions if d.get("outcome") == "insufficient_evidence"]
-    review_pass = [d for d in wi_decisions if d.get("kind") == "review" and d.get("outcome") == "pass"]
-
-    if gate_pass:
-        computed_status = "completed"
-        blocked_reason = ""
-    elif hr_decisions:
+    # Computed status
+    if any(d.get("outcome") == "human_required" for d in wi_decisions):
         computed_status = "blocked"
-        blocked_reason = _extract_blocked_reason(hr_decisions[-1], "human_required")
-    elif blocked_decisions:
+        blocked_reason = "human_required"
+    elif any(d.get("outcome") == "blocked" for d in wi_decisions):
         computed_status = "blocked"
-        blocked_reason = _extract_blocked_reason(blocked_decisions[-1], "blocked")
-    elif ie_decisions:
+        blocked_reason = next(
+            (d.get("payload", {}).get("blocked_reasons", ["blocked"])[0]
+             if isinstance(d.get("payload"), dict) else "blocked")
+            for d in wi_decisions if d.get("outcome") == "blocked"
+        )
+    elif any(d.get("outcome") == "insufficient_evidence" for d in wi_decisions):
         computed_status = "insufficient_evidence"
         blocked_reason = "insufficient_evidence"
-    elif review_pass:
+    elif any(d.get("outcome") == "pass" and d.get("kind") == "gate" for d in wi_decisions):
+        computed_status = "completed"
+        blocked_reason = ""
+    elif any(d.get("outcome") == "pass" and d.get("kind") == "review" for d in wi_decisions):
         computed_status = "reviewing"
         blocked_reason = ""
     else:
         computed_status = "ready"
         blocked_reason = ""
-
-    # No decisions: check work_item status as a conservative signal
-    if not wi_decisions:
-        wi_status = (payload.get("work_item") or {}).get("status", "")
-        if wi_status == "blocked":
-            computed_status = "blocked"
-            ctx_id = (payload.get("work_item") or {}).get("input_context_artifact_id")
-            if ctx_id and ctx_id not in {a["id"] for a in (payload.get("artifacts") or []) if "id" in a}:
-                blocked_reason = f"input context artifact {ctx_id} not found"
-            else:
-                blocked_reason = "blocked"
 
     # Evidence summary
     total = len(evidence)
@@ -372,21 +348,11 @@ def derive_projection(payload: dict) -> dict:
     }
 
 
-def _extract_blocked_reason(decision: dict, default: str) -> str:
-    """Extract blocked_reason from decision payload, preferring gate payload."""
-    payload = decision.get("payload")
-    if isinstance(payload, dict):
-        reasons = payload.get("blocked_reasons")
-        if isinstance(reasons, list) and reasons:
-            return reasons[0]
-    return default
-
-
 def _derive_allowed_actions(computed_status: str) -> list[str]:
     mapping = {
         "completed": ["view", "archive"],
         "blocked": ["view", "escalate"],
-        "insufficient_evidence": ["view", "escalate", "gather_more_evidence"],
+        "insufficient_evidence": ["view", "add_evidence", "review"],
         "reviewing": ["view"],
         "ready": ["view", "execute", "edit"],
     }

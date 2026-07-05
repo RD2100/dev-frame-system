@@ -1511,7 +1511,7 @@ def test_web_ai_bind_conversation_url_creates_session_and_user_binding(tmp_path,
         "web-ai",
         "bind-conversation",
         "--conversation",
-        "https://chatgpt.com/c/6a48be1e-af10-83ee-a211-ed224ae795bd",
+        "https://chatgpt.com/c/6a49bdcb-5bc8-83e8-875b-44d9ed0b8e26",
         "--project",
         "dev-frame-system",
         "--project-root",
@@ -1531,13 +1531,13 @@ def test_web_ai_bind_conversation_url_creates_session_and_user_binding(tmp_path,
     assert "Imported ChatGPT conversation session" in output
     session_path = runtime / "web-ai-sessions" / "bound-chatgpt.json"
     session = json.loads(session_path.read_text(encoding="utf-8"))
-    assert session["native_refs"]["conversation_url"] == "https://chatgpt.com/c/6a48be1e-af10-83ee-a211-ed224ae795bd"
+    assert session["native_refs"]["conversation_url"] == "https://chatgpt.com/c/6a49bdcb-5bc8-83e8-875b-44d9ed0b8e26"
     binding_path = binding_root / "dev-frame-system" / "CONVERSATION_BINDING.json"
     registry_path = binding_root / "dev-frame-system" / "PROJECT_REGISTRY.json"
     assert binding_path.exists()
     assert registry_path.exists()
     binding = json.loads(binding_path.read_text(encoding="utf-8"))
-    assert binding["bindings"][0]["conversation_id"] == "6a48be1e-af10-83ee-a211-ed224ae795bd"
+    assert binding["bindings"][0]["conversation_id"] == "6a49bdcb-5bc8-83e8-875b-44d9ed0b8e26"
 
 
 def test_web_ai_bind_conversation_rejects_unsafe_url(tmp_path, monkeypatch, capsys):

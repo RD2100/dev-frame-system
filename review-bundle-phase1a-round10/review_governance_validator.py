@@ -258,19 +258,6 @@ def validate_packet(payload: dict) -> ValidationResult:
                 f"does not match any gate decision for work_item"
             )
 
-    # ---- P1: projection must match derive_projection output ----
-    derived = derive_projection(payload)
-    if projection.get("computed_status") != derived["computed_status"]:
-        errors.append(
-            f"projection.computed_status={projection.get('computed_status')!r} "
-            f"does not match derive_projection={derived['computed_status']!r}"
-        )
-    if projection.get("blocked_reason") != derived["blocked_reason"]:
-        errors.append(
-            f"projection.blocked_reason={projection.get('blocked_reason')!r} "
-            f"does not match derive_projection={derived['blocked_reason']!r}"
-        )
-
     return ValidationResult(valid=len(errors) == 0, errors=errors)
 
 
@@ -308,33 +295,34 @@ def derive_projection(payload: dict) -> dict:
             gate_outcome = d.get("outcome", "")
             break
 
-    # Computed status: use priority-based logic, latest decision wins only for tie-breaking
-    # Priority: gate pass > human_required > blocked > insufficient_evidence > review pass > ready
-    # For tie-breaking (e.g. multiple blocked), use the latest decision's reason
-    gate_pass = [d for d in wi_decisions if d.get("kind") == "gate" and d.get("outcome") == "pass"]
-    hr_decisions = [d for d in wi_decisions if d.get("outcome") == "human_required"]
-    blocked_decisions = [d for d in wi_decisions if d.get("outcome") == "blocked"]
-    ie_decisions = [d for d in wi_decisions if d.get("outcome") == "insufficient_evidence"]
-    review_pass = [d for d in wi_decisions if d.get("kind") == "review" and d.get("outcome") == "pass"]
+    # Computed status: based on latest effective decision (reverse iteration)
+    computed_status = "ready"
+    blocked_reason = ""
 
-    if gate_pass:
-        computed_status = "completed"
-        blocked_reason = ""
-    elif hr_decisions:
-        computed_status = "blocked"
-        blocked_reason = _extract_blocked_reason(hr_decisions[-1], "human_required")
-    elif blocked_decisions:
-        computed_status = "blocked"
-        blocked_reason = _extract_blocked_reason(blocked_decisions[-1], "blocked")
-    elif ie_decisions:
-        computed_status = "insufficient_evidence"
-        blocked_reason = "insufficient_evidence"
-    elif review_pass:
-        computed_status = "reviewing"
-        blocked_reason = ""
-    else:
-        computed_status = "ready"
-        blocked_reason = ""
+    for d in reversed(wi_decisions):
+        kind = d.get("kind", "")
+        outcome = d.get("outcome", "")
+
+        if kind == "gate" and outcome == "pass":
+            computed_status = "completed"
+            blocked_reason = ""
+            break
+        elif kind == "gate" and outcome == "human_required":
+            computed_status = "blocked"
+            blocked_reason = _extract_blocked_reason(d, "human_required")
+            break
+        elif outcome == "blocked":
+            computed_status = "blocked"
+            blocked_reason = _extract_blocked_reason(d, "blocked")
+            break
+        elif outcome == "insufficient_evidence":
+            computed_status = "insufficient_evidence"
+            blocked_reason = "insufficient_evidence"
+            break
+        elif kind == "review" and outcome == "pass":
+            computed_status = "reviewing"
+            blocked_reason = ""
+            break
 
     # No decisions: check work_item status as a conservative signal
     if not wi_decisions:
@@ -386,7 +374,7 @@ def _derive_allowed_actions(computed_status: str) -> list[str]:
     mapping = {
         "completed": ["view", "archive"],
         "blocked": ["view", "escalate"],
-        "insufficient_evidence": ["view", "escalate", "gather_more_evidence"],
+        "insufficient_evidence": ["view", "add_evidence", "review"],
         "reviewing": ["view"],
         "ready": ["view", "execute", "edit"],
     }

@@ -25,6 +25,7 @@ Important entry points:
 - [Runtime Invariants](agent-runtime/runtime-invariants.md)
 - [Verification Gates](agent-runtime/verification-gates.md)
 - [Tool Policy](agent-runtime/tool-policy.md)
+- [Agent Coding Discipline](agent-runtime/agent-coding-discipline.md)
 - [Dispatch Model Profiles](agent-runtime/dispatch-model-profiles.md)
 - [Web AI Adapter Contract](agent-runtime/web-ai-adapter-contract.md)
 - [Visual Control Plane](agent-runtime/visual-control-plane.md)
@@ -56,8 +57,10 @@ scope, or deferral status.
 | Methodology skills | [Methodology Skills Registry](agent-runtime/methodology-skills.md) | `skill_registry.py`, `methodology_dispatch.py`, `custom_skills.py`, `schemas/methodology-skill.schema.json`, `schemas/custom_skills.schema.json` |
 | Project-scoped customization | [Methodology Skills Registry](agent-runtime/methodology-skills.md) | `scoped_store.py`, `scope_resolver.py`, `cluster_control.py`, `custom_skills.py`, `rules_config.py`, `run_defaults.py`, `memory_prefs.py` |
 | Rules, tool policy, and runtime invariants | [Runtime Invariants](agent-runtime/runtime-invariants.md) | `rules_config.py`, `rules/`, `schemas/custom_rules.schema.json`, `agent-runtime/tool-policy.md` |
+| Agent coding discipline | [Agent Coding Discipline](agent-runtime/agent-coding-discipline.md) | `AGENTS.md`, `tools/skills/*/SKILL.md`, `docs/status/skill-asset-utilization-plan.md`, planned review-governance fixtures |
 | Evidence and acceptance | [Verification Gates](agent-runtime/verification-gates.md) | `tools/go_evidence.py`, `tools/skills/evidence-driven-acceptance/SKILL.md`, `schemas/agent-runtime/evidence-manifest.schema.json`, `schemas/agent-runtime/final-verdict.schema.json` |
 | Review-first governance kernel | [Review-First Governance Kernel Implementation Spec](status/review-first-governance-kernel-implementation-spec.md) | `tools/skills/review-governance-kernel/SKILL.md`, planned `schemas/review_governance_kernel.schema.json`, planned `test_review_governance_kernel.py` |
+| Skill asset utilization | [Skill Asset Utilization Plan](status/skill-asset-utilization-plan.md) | `tools/skills/*/SKILL.md`, `skill_registry.py`, `methodology_dispatch.py`, `custom_skills.py`, `visual_state.py` |
 | Visual control plane and dashboard | [Visual Control Plane](agent-runtime/visual-control-plane.md) | `visual_state.py`, `dashboard.py`, `execution_plan.py`, `schemas/visual_control_plane_state.schema.json` |
 | T3/RD-Code client bridge | [Visual Control Plane](agent-runtime/visual-control-plane.md) | `client_manifest.py`, `client_launcher.py`, `t3_adapter.py`, `t3_bridge_bundle.py`, `schemas/t3_client_shell.schema.json`, `schemas/t3_bridge_bundle.schema.json` |
 | Action queue and human approval | [Visual Control Plane](agent-runtime/visual-control-plane.md) | `dashboard.py`, `execution_plan.py`, `task_proposals.py`, `/api/t3/approval-response`, `/api/t3/cluster-run` |
@@ -94,10 +97,12 @@ Use these documents to guide near-term architecture work:
 - [Early Adopter User Asset Governance Plan](status/early-adopter-user-asset-governance-plan.md)
 - [Competitive Moat And User Demand Critical Review](status/competitive-moat-and-user-demand-critical-review.md)
 - [Document-Driven Transformation Master Plan](status/document-driven-transformation-master-plan.md)
+- [Document-Driven Transformation Final Plan](status/document-driven-transformation-final-plan-20260705.md)
 - [Design Coverage Gap Remediation Plan](status/design-coverage-gap-remediation-plan.md)
 - [Review-First Governance Kernel Contraction Plan](status/review-first-governance-kernel-contraction-plan.md)
 - [Review-First Governance Kernel Implementation Spec](status/review-first-governance-kernel-implementation-spec.md)
 - [Reuse-First Constraint Governance Implementation Plan](status/reuse-first-constraint-governance-implementation-plan.md)
+- [Skill Asset Utilization Plan](status/skill-asset-utilization-plan.md)
 - [Workflow Consolidation and Command Plan](status/workflow-consolidation-and-command-plan.md)
 - [Context Management Architecture Plan](status/context-management-architecture-plan.md)
 - [Context-Led Model Performance Control Plan](status/context-led-model-performance-control-plan.md)
@@ -120,6 +125,7 @@ Rules of thumb:
 - `governance-spine-and-document-coordination.md` explains how the active plans fit into one governance sequence.
 - `current-coverage-audit-evidence-20260704.md` records the bounded evidence snapshot behind the master plan's current coverage audit.
 - `working-tree-cleanup-inventory-20260705.md` classifies the current dirty tree into cleanup batches before UI/product design proceeds.
+- `asset-utilization-inventory-20260705.md` records current repository and local agent asset counts, including skills, MCP, plugins, and runtime evidence.
 - `unified-object-model-decision-record.md`, `governance-contradiction-matrix.md`, and `governance-rules-spec.md` are the current foundations for `document-driven-transformation-master-plan.md`.
 - `context-noise-governance-and-automation-plan.md` explains how automated context management filters stale, irrelevant, disposable, or misleading material for high-frequency use.
 - `model-knowledge-gap-governance-plan.md` explains how to stop model common sense from becoming unverified product or architecture judgment.
@@ -131,12 +137,14 @@ Rules of thumb:
 - `early-adopter-user-asset-governance-plan.md` explains how early users bring existing workflow assets into governed customization.
 - `competitive-moat-and-user-demand-critical-review.md` separates real early-adopter needs from generic plugin or competitor-parity distractions.
 - `document-driven-transformation-master-plan.md` coordinates implementation phases, stop lines, and proof requirements.
+- `document-driven-transformation-final-plan-20260705.md` is the coding-agent-facing final candidate that consolidates the current planning set into the next executable sequence.
 - `design-coverage-gap-remediation-plan.md` turns the cross-document gap review into a prioritized repair queue with acceptance evidence.
 - `browser-automation-transport-roadmap.md` defers multi-browser automation into a later module while keeping the current stable path on CDP-family evidence.
 - `graph-projection-knowledge-canvas-plan.md` explains how relationship graphs can later become a read-only projection and context-navigation layer for humans and AI agents.
 - `review-first-governance-kernel-contraction-plan.md` narrows the next slice to the review-first governance kernel.
 - `review-first-governance-kernel-implementation-spec.md` turns the narrowed slice into fixture, contract, and test requirements.
 - `reuse-first-constraint-governance-implementation-plan.md` decides how to borrow mature open-source patterns before hand-rolling.
+- `skill-asset-utilization-plan.md` routes existing project, local, and plugin skills into governed work types without displacing Phase 1A.
 - `reviewer-index.md` is the reviewer map for the current public snapshot.
 - `recon-receipt-*.md` records scoped pre-work and reuse assessments.
 - `local-agent-control-plane-stage-*.md` records historical stage evidence.

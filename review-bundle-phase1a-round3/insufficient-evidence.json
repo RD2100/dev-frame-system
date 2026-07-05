@@ -107,7 +107,7 @@
   "projection": {
     "work_item_id": "wi-review-3",
     "computed_status": "insufficient_evidence",
-    "blocked_reason": "insufficient_evidence",
+    "blocked_reason": "review evidence is inconclusive",
     "evidence_summary": {
       "total_evidence_count": 1,
       "supporting_count": 0,

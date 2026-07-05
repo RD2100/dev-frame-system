@@ -1,0 +1,22 @@
+请重新审查以下交付物的 P0 修复版本（Round 4）。
+
+上轮 NO_GO 的 3 个 P0 及修复：
+
+P0-1: completed 状态未要求 gate pass 语义约束
+- 修复: 新增 semantic_validator.py，校验 work_item.status=completed 时至少需要一个 Decision(kind=gate, outcome=pass)
+- 测试: test_completed_without_gate_fails_semantic — 构造 completed + 只有 review decision，语义校验拒绝
+
+P0-2: gate pass 只要求 evidence_ids 非空，不校验 ID 是否存在或 evidence 的 supports 值
+- 修复: semantic_validator.py 校验 evidence_ids 中的每个 ID 是否存在于 evidence[] 中，且 supports 必须为 supports/confirm
+- 测试: test_gate_pass_with_missing_evidence_id_fails_semantic + test_gate_pass_with_inconclusive_evidence_fails_semantic
+
+P0-3: success fixture 仍是 report-only evidence
+- 修复: success.json 增加 command_output artifact，ev-2 的 source_artifact_id 改为 artifact-output-1
+- 测试: test_success_fixture_has_output_artifact + test_success_fixture_gate_evidence_points_to_non_report
+
+新增文件:
+- packages/control-plane/control_plane/review_governance_validator.py (语义校验器，37 行)
+
+测试: 44 passed in 1.05s
+
+请验证上述 P0 是否已解决，是否还有遗漏约束。recommendation: GO / NO_GO

@@ -1,0 +1,35 @@
+Round: 8
+Commit: 44d1a0f
+
+## 变更摘要
+
+Post-GO 反馈（Round 7）中有两个非阻塞建议已在本轮实现：
+
+1. `latest_decision_id` target_ref 绑定校验
+   - 之前：只检查 latest_decision_id 是否存在于 decisions[]
+   - 现在：额外验证该 decision 的 target_ref 必须等于当前 work_item.id
+
+2. `projection.computed_status` 反向一致性检查
+   - 新增：computed_status="ready" 且 work_item.status="completed" 时拒绝
+
+## 新增测试
+
+- test_projection_latest_decision_id_must_belong_to_work_item
+- test_projection_computed_status_ready_with_completed_work_item_fails
+
+## 统计
+
+- 55 个测试全部通过
+- 12 个语义约束（从 11 个增加）
+- 4 个 fixture 不变
+
+## 审查问题
+
+请审计以下变更是否正确且无回归：
+
+1. latest_decision_id 的 target_ref 校验是否正确绑定到当前 work_item？
+2. 反向一致性检查（computed_status=ready vs work_item.status=completed）是否会产生假阳性？
+3. 两个新测试是否覆盖了正确的失败场景？
+4. 现有 55 个测试是否全部仍通过？
+
+请返回 PASS / CONDITIONAL PASS / NO-GO。

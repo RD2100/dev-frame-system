@@ -1,7 +1,19 @@
 """Semantic validator for review-governance kernel packets.
 
-Complements draft-07 schema validation with cross-object constraints that
+Complements draft-07 schema validation with 12 cross-object constraints that
 JSON Schema cannot express:
+
+1. work_item.status=completed requires gate decision outcome=pass for same work item
+2. Gate/review pass requires evidence_ids resolving to evidence with supports/supports
+3. Gate pass must cite at least one non-review_report artifact
+4. work_item.input_context_artifact_id must resolve if ready/completed
+5. evidence.source_artifact_id must resolve to existing artifacts
+6. All principal references must resolve to declared principals
+7. projection.computed_status=completed requires matching gate pass
+8. projection.computed_status=ready vs work_item.status=completed reverse check
+9. latest_decision_id must target current work_item (not just exist in decisions)
+10. Projection reference consistency: work_item_id, review_outcome, gate_outcome
+11. projection.computed_status=insufficient_evidence/blocked require matching decisions
 
 1. work_item.status=completed requires a gate decision with outcome=pass
 2. Gate/review pass requires evidence_ids that resolve to existing evidence
@@ -11,9 +23,6 @@ JSON Schema cannot express:
 5. evidence.source_artifact_id must resolve to existing artifacts
 6. projection.computed_status=ready vs work_item.status=completed reverse check
 7. latest_decision_id must belong to current work_item
-
-Also provides derive_projection() — a read-only Phase 1B helper that computes
-projection fields from packet facts without inventing authority.
 """
 
 from __future__ import annotations
@@ -258,136 +267,4 @@ def validate_packet(payload: dict) -> ValidationResult:
                 f"does not match any gate decision for work_item"
             )
 
-    # ---- P1: projection must match derive_projection output ----
-    derived = derive_projection(payload)
-    if projection.get("computed_status") != derived["computed_status"]:
-        errors.append(
-            f"projection.computed_status={projection.get('computed_status')!r} "
-            f"does not match derive_projection={derived['computed_status']!r}"
-        )
-    if projection.get("blocked_reason") != derived["blocked_reason"]:
-        errors.append(
-            f"projection.blocked_reason={projection.get('blocked_reason')!r} "
-            f"does not match derive_projection={derived['blocked_reason']!r}"
-        )
-
     return ValidationResult(valid=len(errors) == 0, errors=errors)
-
-
-def derive_projection(payload: dict) -> dict:
-    """Derive projection from packet facts (Phase 1B helper).
-
-    Computes computed_status, blocked_reason, and decision_summary
-    from the packet's decisions, work_item, and evidence. Does not
-    invent authority — it is a read-only derivation from packet facts.
-    """
-    wi_id = (payload.get("work_item") or {}).get("id", "")
-    decisions: list[dict] = payload.get("decisions") or []
-    evidence: list[dict] = payload.get("evidence") or []
-
-    # Filter decisions for this work item, preserving original array order
-    wi_decisions = [
-        d for d in decisions
-        if d.get("target_ref") == wi_id
-    ]
-
-    # Latest decision (last in original order)
-    latest_id = wi_decisions[-1]["id"] if wi_decisions else ""
-
-    # Review outcome: most recent review decision (reverse order)
-    review_outcome = ""
-    for d in reversed(wi_decisions):
-        if d.get("kind") == "review":
-            review_outcome = d.get("outcome", "")
-            break
-
-    # Gate outcome: most recent gate decision (reverse order)
-    gate_outcome = ""
-    for d in reversed(wi_decisions):
-        if d.get("kind") == "gate":
-            gate_outcome = d.get("outcome", "")
-            break
-
-    # Computed status: use priority-based logic, latest decision wins only for tie-breaking
-    # Priority: gate pass > human_required > blocked > insufficient_evidence > review pass > ready
-    # For tie-breaking (e.g. multiple blocked), use the latest decision's reason
-    gate_pass = [d for d in wi_decisions if d.get("kind") == "gate" and d.get("outcome") == "pass"]
-    hr_decisions = [d for d in wi_decisions if d.get("outcome") == "human_required"]
-    blocked_decisions = [d for d in wi_decisions if d.get("outcome") == "blocked"]
-    ie_decisions = [d for d in wi_decisions if d.get("outcome") == "insufficient_evidence"]
-    review_pass = [d for d in wi_decisions if d.get("kind") == "review" and d.get("outcome") == "pass"]
-
-    if gate_pass:
-        computed_status = "completed"
-        blocked_reason = ""
-    elif hr_decisions:
-        computed_status = "blocked"
-        blocked_reason = _extract_blocked_reason(hr_decisions[-1], "human_required")
-    elif blocked_decisions:
-        computed_status = "blocked"
-        blocked_reason = _extract_blocked_reason(blocked_decisions[-1], "blocked")
-    elif ie_decisions:
-        computed_status = "insufficient_evidence"
-        blocked_reason = "insufficient_evidence"
-    elif review_pass:
-        computed_status = "reviewing"
-        blocked_reason = ""
-    else:
-        computed_status = "ready"
-        blocked_reason = ""
-
-    # No decisions: check work_item status as a conservative signal
-    if not wi_decisions:
-        wi_status = (payload.get("work_item") or {}).get("status", "")
-        if wi_status == "blocked":
-            computed_status = "blocked"
-            ctx_id = (payload.get("work_item") or {}).get("input_context_artifact_id")
-            if ctx_id and ctx_id not in {a["id"] for a in (payload.get("artifacts") or []) if "id" in a}:
-                blocked_reason = f"input context artifact {ctx_id} not found"
-            else:
-                blocked_reason = "blocked"
-
-    # Evidence summary
-    total = len(evidence)
-    supporting = sum(1 for e in evidence if e.get("supports") in ("supports", "confirm"))
-    rejecting = sum(1 for e in evidence if e.get("supports") == "rejects")
-    inconclusive = sum(1 for e in evidence if e.get("supports") == "inconclusive")
-
-    return {
-        "work_item_id": wi_id,
-        "computed_status": computed_status,
-        "blocked_reason": blocked_reason,
-        "evidence_summary": {
-            "total_evidence_count": total,
-            "supporting_count": supporting,
-            "rejecting_count": rejecting,
-            "inconclusive_count": inconclusive,
-        },
-        "decision_summary": {
-            "review_outcome": review_outcome,
-            "gate_outcome": gate_outcome,
-            "latest_decision_id": latest_id,
-        },
-        "allowed_actions": _derive_allowed_actions(computed_status),
-    }
-
-
-def _extract_blocked_reason(decision: dict, default: str) -> str:
-    """Extract blocked_reason from decision payload, preferring gate payload."""
-    payload = decision.get("payload")
-    if isinstance(payload, dict):
-        reasons = payload.get("blocked_reasons")
-        if isinstance(reasons, list) and reasons:
-            return reasons[0]
-    return default
-
-
-def _derive_allowed_actions(computed_status: str) -> list[str]:
-    mapping = {
-        "completed": ["view", "archive"],
-        "blocked": ["view", "escalate"],
-        "insufficient_evidence": ["view", "escalate", "gather_more_evidence"],
-        "reviewing": ["view"],
-        "ready": ["view", "execute", "edit"],
-    }
-    return mapping.get(computed_status, ["view"])
