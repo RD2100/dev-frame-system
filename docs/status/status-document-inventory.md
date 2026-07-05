@@ -64,14 +64,14 @@ documents.
 | State | Files |
 |---|---|
 | `current-entry` | `status-document-inventory.md`, `governance-spine-and-document-coordination.md`, `reviewer-index.md`, `release-readiness.md` |
-| `active-plan` | `workflow-consolidation-and-command-plan.md`, `context-management-architecture-plan.md`, `context-noise-governance-and-automation-plan.md`, `context-led-model-performance-control-plan.md`, `model-knowledge-gap-governance-plan.md`, `project-and-cross-project-memory-harness-governance-plan.md`, `goal-bound-evidence-gate-plan.md`, `paper-claim-integrity-gate-to-cluster-plan.md`, `documentation-management-audit-and-plan.md`, `documentation-management-detailed-rollout-plan.md`, `runtime-governance-and-evidence-closure-transformation-plan.md`, `evaluation-feedback-learning-governance-plan.md`, `total-control-policy-engine-and-human-escalation-governance-plan.md`, `human-attention-governance-and-automation-maturity-plan.md`, `early-adopter-user-asset-governance-plan.md`, `competitive-moat-and-user-demand-critical-review.md`, `unified-object-model-decision-record.md`, `governance-contradiction-matrix.md`, `governance-rules-spec.md`, `document-driven-transformation-master-plan.md`, `design-coverage-gap-remediation-plan.md`, `review-first-governance-kernel-contraction-plan.md`, `review-first-governance-kernel-implementation-spec.md`, `reuse-first-constraint-governance-implementation-plan.md` |
+| `active-plan` | `workflow-consolidation-and-command-plan.md`, `context-management-architecture-plan.md`, `context-noise-governance-and-automation-plan.md`, `context-led-model-performance-control-plan.md`, `model-knowledge-gap-governance-plan.md`, `project-and-cross-project-memory-harness-governance-plan.md`, `goal-bound-evidence-gate-plan.md`, `paper-claim-integrity-gate-to-cluster-plan.md`, `documentation-management-audit-and-plan.md`, `documentation-management-detailed-rollout-plan.md`, `runtime-governance-and-evidence-closure-transformation-plan.md`, `evaluation-feedback-learning-governance-plan.md`, `total-control-policy-engine-and-human-escalation-governance-plan.md`, `human-attention-governance-and-automation-maturity-plan.md`, `early-adopter-user-asset-governance-plan.md`, `competitive-moat-and-user-demand-critical-review.md`, `unified-object-model-decision-record.md`, `governance-contradiction-matrix.md`, `governance-rules-spec.md`, `document-driven-transformation-master-plan.md`, `document-driven-transformation-final-plan-20260705.md`, `design-coverage-gap-remediation-plan.md`, `review-first-governance-kernel-contraction-plan.md`, `review-first-governance-kernel-implementation-spec.md`, `reuse-first-constraint-governance-implementation-plan.md`, `skill-asset-utilization-plan.md` |
 | `deferred-module-plan` | `browser-automation-transport-roadmap.md`, `paper-knowledge-base-iteration-mvp-plan.md`, `graph-projection-knowledge-canvas-plan.md` |
 | `area-plan` | `product-maturity-roadmap.md`, `local-agent-cluster-roadmap.md`, `cluster-coordinator-design-and-roadmap.md`, `phase-1-global-coordinator-conversation-plan.md`, `launch-cutover-checklist.md`, `agent-cluster-unknowns-register.md`, `global-lifecycle-gsd-superpowers-assessment.md`, `design-orchestration-mcp.md`, `design-devframe-mcp-orchestrator-surface.md` |
 | `reuse-assessment` | `t3code-client-mainline-reuse-assessment.md`, `local-agent-control-plane-stage-8-open-source-reuse-visual-mvp.md` |
 | `recon-receipt` | `recon-receipt-acp-backbone.md`, `recon-receipt-cli-decomposition.md`, `recon-receipt-cluster-control-surface.md`, `recon-receipt-customization-layer.md`, `recon-receipt-devframe-mcp-server.md`, `recon-receipt-global-coordinator-conversation-mainline.md`, `recon-receipt-local-agent-client-mainline.md`, `recon-receipt-mcp-consent.md`, `recon-receipt-mcp-live-probe-sse.md`, `recon-receipt-obsidian-stage3.md`, `recon-receipt-obsidian-stage4-sync.md`, `recon-receipt-opencode-event-integration.md`, `recon-receipt-paper-pdf-fulltext-segmentation.md`, `recon-receipt-parallel-write-isolation.md`, `recon-receipt-pluggable-model-provider.md`, `recon-receipt-rd-code-prod-launch.md`, `recon-receipt-rdcode-bridge-data.md`, `recon-receipt-rdcode-writeback.md`, `recon-receipt-t3-rebrand-i18n.md`, `recon-receipt-team-runtime.md`, `recon-receipt-workflow-engine.md` |
 | `handoff` | `continue-global-coordinator-conversation-mainline.md`, `next-agent-global-coordinator-prompt.md`, `devframe-code-opencode-handoff.md` |
 | `historical-stage` | `local-agent-control-plane-stage-2-acceptance.md`, `local-agent-control-plane-stage-2-precommit-review.md`, `local-agent-control-plane-stage-3-execution-report.md`, `local-agent-control-plane-stage-3-go-batch.md`, `local-agent-control-plane-stage-4-web-ai-binding.md`, `local-agent-control-plane-stage-5-closed-loop.md`, `local-agent-control-plane-stage-6-release-prep.md`, `local-agent-control-plane-stage-7-final-precommit-review.md` |
-| `evidence-record` | `current-coverage-audit-evidence-20260704.md`, `working-tree-cleanup-inventory-20260705.md`, `evidence-web-ai-mcp-live-roundtrip.md`, `legacy-submodule-baseline.json` |
+| `evidence-record` | `current-coverage-audit-evidence-20260704.md`, `working-tree-cleanup-inventory-20260705.md`, `asset-utilization-inventory-20260705.md`, `evidence-web-ai-mcp-live-roundtrip.md`, `legacy-submodule-baseline.json` |
 | `external-recon` | `codexpro-devspace-mcp-recon.md` |
 
 ## Active Planning Set
@@ -105,10 +105,12 @@ full active planning set.
 | `governance-contradiction-matrix.md` | Names and resolves cross-plan contradictions before integration |
 | `governance-rules-spec.md` | Turns the object model into phase-one operational rules |
 | `document-driven-transformation-master-plan.md` | Coordinates the document-driven transformation phases and stop lines |
+| `document-driven-transformation-final-plan-20260705.md` | Coding-agent-facing final candidate that consolidates the current planning set into the next executable sequence |
 | `design-coverage-gap-remediation-plan.md` | Turns cross-document coverage gaps into a prioritized remediation queue |
 | `review-first-governance-kernel-contraction-plan.md` | Narrows the next implementation discussion to the review-first governance kernel |
 | `review-first-governance-kernel-implementation-spec.md` | Defines the first fixture, contract, and test package for development |
 | `reuse-first-constraint-governance-implementation-plan.md` | Plans how to reuse open-source patterns without hand-rolling or over-adopting dependencies |
+| `skill-asset-utilization-plan.md` | Routes existing skills into governed work types and defers deeper skill telemetry until the kernel exists |
 
 ## Deferred Module Planning Set
 
@@ -125,19 +127,21 @@ reuse-first constraints if the question is about later modules.
 The next implementation planning records should be derived from:
 
 1. `document-driven-transformation-master-plan.md`
-2. `unified-object-model-decision-record.md`
-3. `governance-rules-spec.md`
-4. `review-first-governance-kernel-contraction-plan.md`
-5. `review-first-governance-kernel-implementation-spec.md`
-6. `reuse-first-constraint-governance-implementation-plan.md`
-7. `model-knowledge-gap-governance-plan.md`
-8. `context-noise-governance-and-automation-plan.md`
-9. `project-and-cross-project-memory-harness-governance-plan.md`
-10. `goal-bound-evidence-gate-plan.md`
-11. `paper-claim-integrity-gate-to-cluster-plan.md`
-12. `human-attention-governance-and-automation-maturity-plan.md`
-13. `early-adopter-user-asset-governance-plan.md`
-14. `competitive-moat-and-user-demand-critical-review.md`
+2. `document-driven-transformation-final-plan-20260705.md`
+3. `unified-object-model-decision-record.md`
+4. `governance-rules-spec.md`
+5. `review-first-governance-kernel-contraction-plan.md`
+6. `review-first-governance-kernel-implementation-spec.md`
+7. `reuse-first-constraint-governance-implementation-plan.md`
+8. `skill-asset-utilization-plan.md`
+9. `model-knowledge-gap-governance-plan.md`
+10. `context-noise-governance-and-automation-plan.md`
+11. `project-and-cross-project-memory-harness-governance-plan.md`
+12. `goal-bound-evidence-gate-plan.md`
+13. `paper-claim-integrity-gate-to-cluster-plan.md`
+14. `human-attention-governance-and-automation-maturity-plan.md`
+15. `early-adopter-user-asset-governance-plan.md`
+16. `competitive-moat-and-user-demand-critical-review.md`
 
 ## Recon Receipts
 
@@ -194,6 +198,8 @@ decision record or stable doc before implementing major new behavior.
 1. A status document is not authoritative merely because it exists.
 2. Stable runtime behavior belongs in `docs/agent-runtime/` only after a vertical
    workflow proves it.
+   `docs/agent-runtime/agent-coding-discipline.md` is explicitly an operating
+   discipline and planning sidecar, not a stable runtime behavior claim.
 3. Active plans may set direction, but they must not describe target behavior as
    implemented fact.
 4. Recon receipts are scoped and cannot override newer cross-plan decisions.

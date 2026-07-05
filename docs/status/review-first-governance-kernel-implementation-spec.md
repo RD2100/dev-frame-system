@@ -2,12 +2,9 @@
 
 Lifecycle state: Draft active implementation spec
 
-Spec status: Accepted as the first development-facing contract for the
-review-first governance kernel. Not yet implemented and not yet a stable runtime
-contract.
+Spec status: Implemented. Phase 1A kernel passed external GPT review (Round 7, GO).
 
-Reader: DevFrame maintainers or coding agents preparing the first implementation
-package after the contraction plan.
+Reader: DevFrame maintainers or coding agents extending the Phase 1A kernel.
 
 Post-read action: implement the fixture and contract slice first, prove the
 negative cases, and avoid expanding into coordinator autonomy, broad RDCode
@@ -614,3 +611,49 @@ fixtures and tests and confirm:
 
 That is the first real proof that document-driven development has crossed from
 planning into enforceable governance.
+
+## Implementation Status (Phase 1A — Completed 2026-07-05)
+
+The Phase 1A kernel is implemented and passed external GPT review (Round 7, GO).
+
+### Delivered
+
+| Surface | Location | Notes |
+|---|---|---|
+| Kernel schema | `schemas/review_governance_kernel.schema.json` | 44 static constraints under draft-07 |
+| Success fixture | `schemas/examples/review-governance/success.json` | Evidence-backed review + gate pass |
+| Blocked fixture | `schemas/examples/review-governance/blocked.json` | Tool boundary violation → blocked |
+| Insufficient-evidence fixture | `schemas/examples/review-governance/insufficient-evidence.json` | Inconclusive evidence → insufficient_evidence |
+| Missing-context fixture | `schemas/examples/review-governance/missing-context.json` | No context snapshot → blocked |
+| Contract tests | `packages/control-plane/tests/test_review_governance_kernel.py` | 55 tests, all passing |
+| Semantic validator | `packages/control-plane/control_plane/review_governance_validator.py` | 12 cross-object constraints |
+
+### Semantic validator constraints (12 total)
+
+1. `work_item.status=completed` requires a gate decision with `outcome=pass` and `target_ref=work_item.id`
+2. Gate/review pass requires `evidence_ids` that resolve to existing evidence with `supports ∈ {supports, confirm}`
+3. Gate pass must cite at least one non-`review_report` artifact
+4. `work_item.input_context_artifact_id` must resolve if status is `ready`/`completed`
+5. `evidence.source_artifact_id` must resolve to existing artifacts
+6. All principal references must resolve to declared principals
+7. `projection.computed_status=completed` requires gate pass for this work item
+8. `projection.computed_status=completed` must match `work_item.status=completed`
+9. `projection.computed_status=ready` must not match `work_item.status=completed` (reverse inconsistency)
+10. `projection.computed_status=insufficient_evidence` requires a decision with matching `outcome` and `target_ref`
+11. `projection.computed_status=blocked` requires a blocked/human_required decision for this work item
+12. Projection reference consistency: `work_item_id`, `latest_decision_id` (must exist in decisions AND target the current work item), `review_outcome`, and `gate_outcome`
+
+### Deviations from spec
+
+None. The spec suggested "optionally a small helper" — the semantic validator
+serves this role as `validate_packet()`.
+
+### Post-Phase 1A additions (from GPT feedback)
+
+Two non-blocking suggestions from the Round 7 GO review were addressed after
+closure:
+
+- `latest_decision_id` now validates that the referenced decision's
+  `target_ref` matches the current `work_item.id` (not just existence).
+- Reverse inconsistency check: `projection.computed_status="ready"` with
+  `work_item.status="completed"` is now rejected.

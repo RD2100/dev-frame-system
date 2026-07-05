@@ -52,6 +52,13 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `packages/control-plane/control_plane/team_runtime.py`
 - `packages/control-plane/control_plane/execution_plan.py`
 - `schemas/visual_control_plane_state.schema.json`
+- `schemas/review_governance_kernel.schema.json`
+- `schemas/examples/review-governance/success.json`
+- `schemas/examples/review-governance/blocked.json`
+- `schemas/examples/review-governance/insufficient-evidence.json`
+- `schemas/examples/review-governance/missing-context.json`
+- `packages/control-plane/control_plane/review_governance_validator.py`
+- `packages/control-plane/tests/test_review_governance_kernel.py`
 - `packages/control-plane/templates/visual_control_plane/CONTROL_PLANE_STATE.yaml`
 - `packages/control-plane/tests/test_public_snapshot.py`
 - `packages/control-plane/tests/test_rdgoal.py`
@@ -59,6 +66,13 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `packages/control-plane/tests/test_workflow_engine.py`
 - `packages/control-plane/tests/test_team_runtime.py`
 - `packages/control-plane/tests/test_execution_plan.py`
+- `packages/control-plane/control_plane/review_governance_validator.py`
+- `packages/control-plane/tests/test_review_governance_kernel.py`
+- `schemas/review_governance_kernel.schema.json`
+- `schemas/examples/review-governance/success.json`
+- `schemas/examples/review-governance/blocked.json`
+- `schemas/examples/review-governance/insufficient-evidence.json`
+- `schemas/examples/review-governance/missing-context.json`
 - `schemas/resource-integration/script-safety-record.schema.json`
 - `schemas/resource-integration/memory-context-record.schema.json`
 
@@ -131,12 +145,15 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/early-adopter-user-asset-governance-plan.md`
 - `docs/status/competitive-moat-and-user-demand-critical-review.md`
 - `docs/status/document-driven-transformation-master-plan.md`
+- `docs/status/document-driven-transformation-final-plan-20260705.md`
 - `docs/status/design-coverage-gap-remediation-plan.md`
 - `docs/status/review-first-governance-kernel-contraction-plan.md`
 - `docs/status/review-first-governance-kernel-implementation-spec.md`
 - `docs/status/reuse-first-constraint-governance-implementation-plan.md`
+- `docs/status/skill-asset-utilization-plan.md`
 - `docs/status/current-coverage-audit-evidence-20260704.md`
 - `docs/status/working-tree-cleanup-inventory-20260705.md`
+- `docs/status/asset-utilization-inventory-20260705.md`
 - `docs/status/browser-automation-transport-roadmap.md`
 - `docs/status/paper-knowledge-base-iteration-mvp-plan.md`
 - `docs/status/graph-projection-knowledge-canvas-plan.md`
@@ -204,6 +221,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/agent-runtime/rdpaper-workflow.md`
 - `docs/agent-runtime/visual-control-plane.md`
 - `docs/agent-runtime/web-ai-adapter-contract.md`
+- `docs/agent-runtime/agent-coding-discipline.md`
 - `docs/status/release-readiness.md`
 - `docs/status/status-document-inventory.md`
 - `docs/status/governance-spine-and-document-coordination.md`
@@ -217,12 +235,15 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/early-adopter-user-asset-governance-plan.md`
 - `docs/status/competitive-moat-and-user-demand-critical-review.md`
 - `docs/status/document-driven-transformation-master-plan.md`
+- `docs/status/document-driven-transformation-final-plan-20260705.md`
 - `docs/status/design-coverage-gap-remediation-plan.md`
 - `docs/status/review-first-governance-kernel-contraction-plan.md`
 - `docs/status/review-first-governance-kernel-implementation-spec.md`
 - `docs/status/reuse-first-constraint-governance-implementation-plan.md`
+- `docs/status/skill-asset-utilization-plan.md`
 - `docs/status/current-coverage-audit-evidence-20260704.md`
 - `docs/status/working-tree-cleanup-inventory-20260705.md`
+- `docs/status/asset-utilization-inventory-20260705.md`
 - `docs/status/browser-automation-transport-roadmap.md`
 - `docs/status/paper-knowledge-base-iteration-mvp-plan.md`
 - `docs/status/graph-projection-knowledge-canvas-plan.md`
