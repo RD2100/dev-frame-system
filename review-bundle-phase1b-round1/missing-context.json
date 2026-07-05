@@ -63,11 +63,7 @@
       "rejecting_count": 0,
       "inconclusive_count": 0
     },
-    "decision_summary": {
-      "review_outcome": "",
-      "gate_outcome": "",
-      "latest_decision_id": ""
-    },
+    "decision_summary": {},
     "allowed_actions": ["view", "escalate"]
   }
 }

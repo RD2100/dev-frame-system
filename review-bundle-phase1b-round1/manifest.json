@@ -1,0 +1,15 @@
+{
+  "phase": "1B",
+  "round": 1,
+  "commit": "cf4a5c0",
+  "files": [
+    {"path": "review_governance_validator.py", "role": "validator"},
+    {"path": "review_governance_kernel.schema.json", "role": "schema"},
+    {"path": "test_review_governance_kernel.py", "role": "test"},
+    {"path": "success.json", "role": "fixture"},
+    {"path": "blocked.json", "role": "fixture"},
+    {"path": "insufficient-evidence.json", "role": "fixture"},
+    {"path": "missing-context.json", "role": "fixture"},
+    {"path": "document-driven-transformation-final-plan-20260705.md", "role": "plan"}
+  ]
+}

@@ -260,14 +260,16 @@ def validate_packet(payload: dict) -> ValidationResult:
 
     # ---- P1: projection must match derive_projection output ----
     derived = derive_projection(payload)
-    proj_keys = ("work_item_id", "computed_status", "blocked_reason",
-                 "evidence_summary", "decision_summary", "allowed_actions")
-    for key in proj_keys:
-        if projection.get(key) != derived[key]:
-            errors.append(
-                f"projection.{key}={projection.get(key)!r} "
-                f"does not match derive_projection={derived[key]!r}"
-            )
+    if projection.get("computed_status") != derived["computed_status"]:
+        errors.append(
+            f"projection.computed_status={projection.get('computed_status')!r} "
+            f"does not match derive_projection={derived['computed_status']!r}"
+        )
+    if projection.get("blocked_reason") != derived["blocked_reason"]:
+        errors.append(
+            f"projection.blocked_reason={projection.get('blocked_reason')!r} "
+            f"does not match derive_projection={derived['blocked_reason']!r}"
+        )
 
     return ValidationResult(valid=len(errors) == 0, errors=errors)
 

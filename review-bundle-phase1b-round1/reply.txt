@@ -1,0 +1,154 @@
+Verdict: NO-GO
+
+Evidence checked
+
+已检查并本地复现：
+
+review_governance_validator.py
+
+review_governance_kernel.schema.json
+
+test_review_governance_kernel.py
+
+success.json
+
+blocked.json
+
+insufficient-evidence.json
+
+missing-context.json
+
+manifest.json
+
+question.txt
+
+本地按测试文件预期目录结构重建后执行：
+
+Bash
+PYTHONPATH=. pytest -q
+
+结果：68 passed。
+
+P0 finding
+Projection consistency 仍不能防止 fabricated projection fields
+
+当前新增的一致性校验只比较了两个字段：
+
+projection.computed_status
+
+projection.blocked_reason
+
+对应代码在 review_governance_validator.py:261-272。
+
+但 derive_projection() 实际推导的是完整 projection，包括：
+
+work_item_id
+
+computed_status
+
+blocked_reason
+
+evidence_summary
+
+decision_summary
+
+allowed_actions
+
+对应返回值在 review_governance_validator.py:356-372。
+
+因此当前仍允许多个 projection 字段被伪造。尤其是 allowed_actions 风险最高：derive_projection() 明确规定 blocked → ["view", "escalate"]，但 schema 只规定 allowed_actions 是字符串数组，没有 enum，也没有状态联动约束，见 review_governance_kernel.schema.json:849-853。
+
+我本地构造验证：
+
+JSON
+"computed_status": "blocked",
+"allowed_actions": ["view", "execute", "edit"]
+
+validate_packet() 仍返回 valid=True。这意味着 blocked packet 可以伪造出 execute/edit 动作，Phase 1B 的 projection consistency 还没有真正守住“不发明权威”。
+
+P1 findings
+evidence_summary 可被伪造
+
+我本地将 success.json 的 projection.evidence_summary 改成：
+
+JSON
+{
+  "total_evidence_count": 999,
+  "supporting_count": 999,
+  "rejecting_count": 999,
+  "inconclusive_count": 999
+}
+
+validate_packet() 仍返回 valid=True。但这些计数已经可以由 derive_projection() 从 evidence 推导出来，当前未做比对。
+
+decision_summary 可陈旧或伪造
+
+当前 decision_summary.review_outcome 和 gate_outcome 只检查“是否存在某个匹配 outcome 的 decision”，不是检查它是否等于 derive_projection() 推导出的最新 outcome，见 review_governance_validator.py:234-260。
+
+我本地构造了“原有 gate pass 后追加 gate blocked”的场景，projection 仍保留旧的 gate_outcome="pass" 和旧的 latest_decision_id，validate_packet() 仍返回 valid=True；但 derive_projection() 实际推导为：
+
+JSON
+{
+  "review_outcome": "pass",
+  "gate_outcome": "blocked",
+  "latest_decision_id": "decision-gate-later-blocked"
+}
+
+这说明 projection 仍可能陈旧。
+
+missing-context fixture 与完整 derive 输出不一致
+
+missing-context.json 中 projection.decision_summary 是 {}，见 missing-context.json:66；但 derive_projection() 会返回：
+
+JSON
+{
+  "review_outcome": "",
+  "gate_outcome": "",
+  "latest_decision_id": ""
+}
+
+如果下一轮改为完整 projection 比对，需要同步修正该 fixture。
+
+对审查问题的回答
+
+Does the projection consistency validation correctly prevent fabricated projection fields?
+**否。**目前只防住 computed_status 和 blocked_reason，没有防住 allowed_actions、evidence_summary、decision_summary。
+
+Is the insufficient-evidence fixture blocked_reason now consistent with derive_projection?
+是。insufficient-evidence.json 中 blocked_reason 已为 insufficient_evidence，与 derive_projection() 一致，见 insufficient-evidence.json:107-122。
+
+Are all 68 tests passing?
+**是。**本地复现为 68 passed，但测试没有覆盖 fabricated projection fields。
+
+Required fix
+
+将 projection 一致性校验改为完整比对：
+
+Python
+运行
+derived = derive_projection(payload)
+
+for key in (
+    "work_item_id",
+    "computed_status",
+    "blocked_reason",
+    "evidence_summary",
+    "decision_summary",
+    "allowed_actions",
+):
+    if projection.get(key) != derived[key]:
+        errors.append(...)
+
+并新增至少这些测试：
+
+fabricated allowed_actions fails
+
+fabricated evidence_summary fails
+
+stale decision_summary.latest_decision_id fails
+
+stale decision_summary.gate_outcome fails
+
+missing-context.json projection fully equals derive_projection()
+
+Final: NO-GO

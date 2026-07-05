@@ -1,0 +1,47 @@
+# Review Bundle: Phase 1B Round 1
+
+## Metadata
+
+- Phase: 1B
+- Round: 1
+- Commit: cf4a5c0
+- Date: 2026-07-05
+
+## Files
+
+| File | Role |
+|---|---|
+| review_governance_validator.py | Semantic validator with derive_projection |
+| review_governance_kernel.schema.json | Schema (44 constraints) |
+| test_review_governance_kernel.py | 68 contract tests |
+| success.json | Positive fixture |
+| blocked.json | Blocked fixture |
+| insufficient-evidence.json | Insufficient evidence fixture |
+| missing-context.json | Missing context fixture |
+| document-driven-transformation-final-plan-20260705.md | Phase plan |
+
+## Change Summary
+
+Phase 1B adds projection consistency validation to the Phase 1A kernel.
+
+### Previous State (Phase 1A, commit e3c8c9c)
+
+- 12 semantic constraints in validate_packet
+- derive_projection as read-only helper
+- 68 tests passing
+- No validation that payload.projection matches derive_projection output
+
+### Current State (Phase 1B, commit cf4a5c0)
+
+- 13 semantic constraints (added projection-consistency check)
+- derive_projection output (computed_status, blocked_reason) validated against payload.projection
+- insufficient-evidence fixture updated: blocked_reason changed from "review evidence is inconclusive" to "insufficient_evidence" to match derive output
+- 68 tests passing
+
+## Review Questions
+
+1. Does the projection consistency validation correctly prevent fabricated projection fields?
+2. Is the insufficient-evidence fixture blocked_reason now consistent with derive_projection?
+3. Are all 68 tests passing?
+
+Please return PASS / CONDITIONAL PASS / NO-GO.
