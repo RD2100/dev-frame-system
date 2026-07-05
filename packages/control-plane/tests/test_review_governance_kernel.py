@@ -525,3 +525,75 @@ def test_projection_work_item_id_mismatch_fails():
 def test_projection_computed_status_matches_gate(schema):
     payload = _load_fixture("success.json")
     assert payload["projection"]["computed_status"] == "completed"
+
+
+# ---------------------------------------------------------------------------
+# Phase 1B: derive_projection helper
+# ---------------------------------------------------------------------------
+
+from control_plane.review_governance_validator import derive_projection
+
+
+def test_derive_projection_completed_from_gate_pass():
+    payload = _load_fixture("success.json")
+    result = derive_projection(payload)
+    assert result["computed_status"] == "completed"
+    assert result["blocked_reason"] == ""
+    assert result["decision_summary"]["gate_outcome"] == "pass"
+    assert result["decision_summary"]["review_outcome"] == "pass"
+
+
+def test_derive_projection_reviewing_from_review_pass():
+    payload = _load_fixture("success.json")
+    # Remove gate pass, keep review pass
+    payload["decisions"] = [payload["decisions"][0]]
+    result = derive_projection(payload)
+    assert result["computed_status"] == "reviewing"
+
+
+def test_derive_projection_blocked_from_blocked_decision():
+    payload = _load_fixture("blocked.json")
+    result = derive_projection(payload)
+    assert result["computed_status"] == "blocked"
+
+
+def test_derive_projection_insufficient_evidence():
+    payload = _load_fixture("insufficient-evidence.json")
+    result = derive_projection(payload)
+    assert result["computed_status"] == "insufficient_evidence"
+
+
+def test_derive_projection_no_decisions_is_ready():
+    payload = _load_fixture("success.json")
+    payload["decisions"] = []
+    result = derive_projection(payload)
+    assert result["computed_status"] == "ready"
+
+
+def test_derive_projection_evidence_summary_counts():
+    payload = _load_fixture("success.json")
+    result = derive_projection(payload)
+    summary = result["evidence_summary"]
+    assert summary["total_evidence_count"] == 2
+    assert summary["supporting_count"] == 2
+    assert summary["rejecting_count"] == 0
+
+
+def test_derive_projection_latest_decision_id():
+    payload = _load_fixture("success.json")
+    result = derive_projection(payload)
+    assert result["decision_summary"]["latest_decision_id"] == "decision-gate-1"
+
+
+def test_derive_projection_work_item_id():
+    payload = _load_fixture("success.json")
+    result = derive_projection(payload)
+    assert result["work_item_id"] == "wi-review-1"
+
+
+def test_derive_projection_allowed_actions_by_status():
+    assert derive_projection({"work_item": {"id": "x"}, "decisions": [], "evidence": []})["allowed_actions"] == ["view", "execute", "edit"]
+    blocked_payload = _load_fixture("blocked.json")
+    assert "escalate" in derive_projection(blocked_payload)["allowed_actions"]
+    ie_payload = _load_fixture("insufficient-evidence.json")
+    assert "add_evidence" in derive_projection(ie_payload)["allowed_actions"]
