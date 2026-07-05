@@ -271,57 +271,69 @@ def derive_projection(payload: dict) -> dict:
     wi_id = (payload.get("work_item") or {}).get("id", "")
     decisions: list[dict] = payload.get("decisions") or []
     evidence: list[dict] = payload.get("evidence") or []
-    evidence_by_id = {e["id"]: e for e in evidence if "id" in e}
 
-    # Collect decisions for this work item
-    wi_reviews = [
+    # Filter decisions for this work item, preserving original array order
+    wi_decisions = [
         d for d in decisions
-        if d.get("kind") == "review" and d.get("target_ref") == wi_id
-    ]
-    wi_gates = [
-        d for d in decisions
-        if d.get("kind") == "gate" and d.get("target_ref") == wi_id
+        if d.get("target_ref") == wi_id
     ]
 
-    # Latest decision (last in array for this work item)
-    wi_decisions = wi_reviews + wi_gates
+    # Latest decision (last in original order)
     latest_id = wi_decisions[-1]["id"] if wi_decisions else ""
 
-    # Review outcome
+    # Review outcome: most recent review decision (reverse order)
     review_outcome = ""
-    for d in reversed(wi_reviews):
-        review_outcome = d.get("outcome", "")
-        break
+    for d in reversed(wi_decisions):
+        if d.get("kind") == "review":
+            review_outcome = d.get("outcome", "")
+            break
 
-    # Gate outcome
+    # Gate outcome: most recent gate decision (reverse order)
     gate_outcome = ""
-    for d in reversed(wi_gates):
-        gate_outcome = d.get("outcome", "")
-        break
+    for d in reversed(wi_decisions):
+        if d.get("kind") == "gate":
+            gate_outcome = d.get("outcome", "")
+            break
 
-    # Computed status
-    if any(d.get("outcome") == "human_required" for d in wi_decisions):
-        computed_status = "blocked"
-        blocked_reason = "human_required"
-    elif any(d.get("outcome") == "blocked" for d in wi_decisions):
-        computed_status = "blocked"
-        blocked_reason = next(
-            (d.get("payload", {}).get("blocked_reasons", ["blocked"])[0]
-             if isinstance(d.get("payload"), dict) else "blocked")
-            for d in wi_decisions if d.get("outcome") == "blocked"
-        )
-    elif any(d.get("outcome") == "insufficient_evidence" for d in wi_decisions):
-        computed_status = "insufficient_evidence"
-        blocked_reason = "insufficient_evidence"
-    elif any(d.get("outcome") == "pass" and d.get("kind") == "gate" for d in wi_decisions):
-        computed_status = "completed"
-        blocked_reason = ""
-    elif any(d.get("outcome") == "pass" and d.get("kind") == "review" for d in wi_decisions):
-        computed_status = "reviewing"
-        blocked_reason = ""
-    else:
-        computed_status = "ready"
-        blocked_reason = ""
+    # Computed status: based on latest effective decision (reverse iteration)
+    computed_status = "ready"
+    blocked_reason = ""
+
+    for d in reversed(wi_decisions):
+        kind = d.get("kind", "")
+        outcome = d.get("outcome", "")
+
+        if kind == "gate" and outcome == "pass":
+            computed_status = "completed"
+            blocked_reason = ""
+            break
+        elif kind == "gate" and outcome == "human_required":
+            computed_status = "blocked"
+            blocked_reason = _extract_blocked_reason(d, "human_required")
+            break
+        elif outcome == "blocked":
+            computed_status = "blocked"
+            blocked_reason = _extract_blocked_reason(d, "blocked")
+            break
+        elif outcome == "insufficient_evidence":
+            computed_status = "insufficient_evidence"
+            blocked_reason = "insufficient_evidence"
+            break
+        elif kind == "review" and outcome == "pass":
+            computed_status = "reviewing"
+            blocked_reason = ""
+            break
+
+    # No decisions: check work_item status as a conservative signal
+    if not wi_decisions:
+        wi_status = (payload.get("work_item") or {}).get("status", "")
+        if wi_status == "blocked":
+            computed_status = "blocked"
+            ctx_id = (payload.get("work_item") or {}).get("input_context_artifact_id")
+            if ctx_id and ctx_id not in {a["id"] for a in (payload.get("artifacts") or []) if "id" in a}:
+                blocked_reason = f"input context artifact {ctx_id} not found"
+            else:
+                blocked_reason = "blocked"
 
     # Evidence summary
     total = len(evidence)
@@ -346,6 +358,16 @@ def derive_projection(payload: dict) -> dict:
         },
         "allowed_actions": _derive_allowed_actions(computed_status),
     }
+
+
+def _extract_blocked_reason(decision: dict, default: str) -> str:
+    """Extract blocked_reason from decision payload, preferring gate payload."""
+    payload = decision.get("payload")
+    if isinstance(payload, dict):
+        reasons = payload.get("blocked_reasons")
+        if isinstance(reasons, list) and reasons:
+            return reasons[0]
+    return default
 
 
 def _derive_allowed_actions(computed_status: str) -> list[str]:

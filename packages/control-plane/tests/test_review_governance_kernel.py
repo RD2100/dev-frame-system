@@ -597,3 +597,24 @@ def test_derive_projection_allowed_actions_by_status():
     assert "escalate" in derive_projection(blocked_payload)["allowed_actions"]
     ie_payload = _load_fixture("insufficient-evidence.json")
     assert "add_evidence" in derive_projection(ie_payload)["allowed_actions"]
+
+
+def test_derive_projection_missing_context_is_blocked():
+    payload = _load_fixture("missing-context.json")
+    result = derive_projection(payload)
+    assert result["computed_status"] == "blocked"
+    assert "escalate" in result["allowed_actions"]
+    assert "execute" not in result["allowed_actions"]
+
+
+def test_derive_projection_blocked_reason_from_gate_payload():
+    payload = _load_fixture("blocked.json")
+    result = derive_projection(payload)
+    assert result["blocked_reason"] != "blocked"  # should be specific reason from payload
+    assert "tool boundary" in result["blocked_reason"].lower() or "playwright" in result["blocked_reason"].lower()
+
+
+def test_derive_projection_latest_decision_preserves_original_order():
+    payload = _load_fixture("success.json")
+    result = derive_projection(payload)
+    assert result["decision_summary"]["latest_decision_id"] == "decision-gate-1"
