@@ -596,7 +596,7 @@ def test_derive_projection_allowed_actions_by_status():
     blocked_payload = _load_fixture("blocked.json")
     assert "escalate" in derive_projection(blocked_payload)["allowed_actions"]
     ie_payload = _load_fixture("insufficient-evidence.json")
-    assert "add_evidence" in derive_projection(ie_payload)["allowed_actions"]
+    assert "gather_more_evidence" in derive_projection(ie_payload)["allowed_actions"]
 
 
 def test_derive_projection_missing_context_is_blocked():
@@ -618,3 +618,17 @@ def test_derive_projection_latest_decision_preserves_original_order():
     payload = _load_fixture("success.json")
     result = derive_projection(payload)
     assert result["decision_summary"]["latest_decision_id"] == "decision-gate-1"
+
+
+def test_derive_projection_interleaved_decisions_preserves_order():
+    payload = _load_fixture("success.json")
+    # Swap order: gate first, then review (interleaved / out of natural order)
+    payload["decisions"] = [
+        payload["decisions"][1],  # gate first
+        payload["decisions"][0],  # review second
+    ]
+    result = derive_projection(payload)
+    # latest_decision_id should be the last in original array order (decision-review-1)
+    assert result["decision_summary"]["latest_decision_id"] == "decision-review-1"
+    # But computed_status should still be completed because gate pass is present
+    assert result["computed_status"] == "completed"
