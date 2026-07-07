@@ -315,6 +315,25 @@ def test_complete_pass_writes_final_report(tmp_path):
     assert final_verdict["reviewer_summary"]["reviewer_id"] == "reviewer-1"
 
 
+def test_finalize_rerun_is_idempotent_for_machine_artifacts(tmp_path):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path))
+
+    first_rc = go_evidence.main(["finalize", evidence_dir])
+    first_contents = {
+        filename: (tmp_path / filename).read_text(encoding="utf-8")
+        for filename in ("evidence-manifest.json", "final-report.md", "final-verdict.json")
+    }
+    second_rc = go_evidence.main(["finalize", evidence_dir])
+    second_contents = {
+        filename: (tmp_path / filename).read_text(encoding="utf-8")
+        for filename in ("evidence-manifest.json", "final-report.md", "final-verdict.json")
+    }
+
+    assert first_rc == 0
+    assert second_rc == 0
+    assert second_contents == first_contents
+
+
 def test_finalize_can_record_team_runtime_review_and_final_verdict_events(tmp_path):
     evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
     _write_json(
@@ -341,6 +360,36 @@ def test_finalize_can_record_team_runtime_review_and_final_verdict_events(tmp_pa
     assert record["review_state"] == "review_passed"
     assert record["gate_state"] == "gate_passed"
     assert record["final_verdict_ref"]["verdict_id"] == "fv-go-evidence-finalize"
+
+
+def test_finalize_team_runtime_recording_is_idempotent_for_same_verdict(tmp_path):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
+    _write_json(
+        os.path.join(evidence_dir, "chain-evidence.json"),
+        _chain_evidence(run_id="go-evidence-rerun"),
+    )
+    runtime_dir = str(tmp_path / "runtime")
+
+    first_rc = go_evidence.main(["finalize", evidence_dir, "--team-runtime-dir", runtime_dir])
+    second_rc = go_evidence.main(["finalize", evidence_dir, "--team-runtime-dir", runtime_dir])
+
+    assert first_rc == 0
+    assert second_rc == 0
+    lines = (tmp_path / "runtime" / TEAM_EVENTS_FILE).read_text(encoding="utf-8").strip().splitlines()
+    events = [json.loads(line) for line in lines]
+    assert [event["event_type"] for event in events] == ["review_ref", "final_verdict_ref"]
+
+    view = build_team_runtime_view(runtime_dir)
+    assert [event["kind"] for event in view["event_log"]] == ["review-ref", "final-verdict-ref"]
+    assert [gate["kind"] for gate in view["review_gates"]] == [
+        "independent-review",
+        "final-verdict",
+    ]
+
+    index = build_run_index(runtime_dir)
+    record = index["runs"][0]["record"]
+    assert record["acceptance_state"] == "final_ready"
+    assert record["final_verdict_ref"]["verdict_id"] == "fv-go-evidence-rerun"
 
 
 def test_finalize_without_team_runtime_dir_does_not_record_team_runtime_events(tmp_path):

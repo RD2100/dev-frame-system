@@ -33,9 +33,9 @@ def validate(evidence_dir: str):
     return result.status, result.reason, result.review
 
 
-def write_final_report(evidence_dir: str, status: str, reason: str, review: dict, artifacts: dict | None = None) -> str:
+def write_final_report(evidence_dir: str, status: str, reason: str, review: dict, artifacts: dict | None = None, generated_at: str | None = None) -> str:
     report_path = os.path.join(evidence_dir, "final-report.md")
-    generated_at = datetime.now(timezone.utc).isoformat()
+    generated_at = generated_at or datetime.now(timezone.utc).isoformat()
     artifacts = artifacts or {}
     content = f"""# Final Report
 
@@ -65,8 +65,9 @@ def write_final_report(evidence_dir: str, status: str, reason: str, review: dict
 - final-verdict.json: {'present' if artifacts.get('final_verdict') else 'missing'}
 - failure-record.json: {'present' if artifacts.get('failure_record') else 'not applicable'}
 """
-    with open(report_path, "w", encoding="utf-8") as fh:
-        fh.write(content)
+    if not os.path.exists(report_path) or Path(report_path).read_text(encoding="utf-8") != content:
+        with open(report_path, "w", encoding="utf-8") as fh:
+            fh.write(content)
     return report_path
 
 
@@ -74,6 +75,10 @@ def write_governance_artifacts(evidence_dir: str):
     result = evaluate_evidence_dir(evidence_dir)
     generated_at = datetime.now(timezone.utc).isoformat()
     final_verdict = build_final_verdict(evidence_dir, result, generated_at)
+    previous_final_verdict = _load_json_file(os.path.join(evidence_dir, "final-verdict.json"))
+    if _same_final_verdict_except_timestamp(previous_final_verdict, final_verdict):
+        generated_at = str(previous_final_verdict["produced_at"])
+        final_verdict = build_final_verdict(evidence_dir, result, generated_at)
     artifacts = {
         "final_verdict": write_json(os.path.join(evidence_dir, "final-verdict.json"), final_verdict),
         "evidence_manifest": os.path.join(evidence_dir, "evidence-manifest.json"),
@@ -87,6 +92,7 @@ def write_governance_artifacts(evidence_dir: str):
         result.reason,
         result.review,
         artifacts,
+        generated_at,
     )
     manifest_path = os.path.join(evidence_dir, "evidence-manifest.json")
     write_json(manifest_path, build_evidence_manifest(evidence_dir, result, generated_at))
@@ -95,6 +101,24 @@ def write_governance_artifacts(evidence_dir: str):
         build_evidence_manifest(evidence_dir, result, generated_at),
     )
     return result, artifacts
+
+
+def _load_json_file(path: str) -> dict:
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _same_final_verdict_except_timestamp(previous: dict, current: dict) -> bool:
+    if not previous or not previous.get("produced_at"):
+        return False
+    previous_normalized = dict(previous)
+    current_normalized = dict(current)
+    previous_normalized.pop("produced_at", None)
+    current_normalized.pop("produced_at", None)
+    return previous_normalized == current_normalized
 
 
 def record_team_runtime_finalization(
@@ -122,6 +146,16 @@ def record_team_runtime_finalization(
     run_id = str(chain.get("run_id") or evidence_path.name or "unknown-run")
     reviewer_id = str(review.get("reviewer_id") or "missing-reviewer")
     review_id = f"review-{_safe_token(run_id)}-{_safe_token(reviewer_id)}"
+    team = TeamRuntime(runtime_dir=runtime_dir, repo_root=repo_root)
+    if _team_runtime_has_finalization_refs(
+        team,
+        run_id=run_id,
+        review_id=review_id,
+        review_ref_path=str(evidence_path / "review.yaml"),
+        verdict_id=str(final_verdict.get("verdict_id") or ""),
+        final_verdict_ref_path=str(final_verdict_path),
+    ):
+        return []
     reviewed_inputs = [
         str(item) for item in review.get("reviewed_inputs", [])
         if str(item)
@@ -131,7 +165,6 @@ def record_team_runtime_finalization(
         for name in REQUIRED_INPUTS
         if (evidence_path / name).exists()
     ]
-    team = TeamRuntime(runtime_dir=runtime_dir, repo_root=repo_root)
     event_ids = [
         team.record_review_ref(
             run_id,
@@ -177,6 +210,37 @@ def record_team_runtime_finalization(
         )
     )
     return event_ids
+
+
+def _team_runtime_has_finalization_refs(
+    team: TeamRuntime,
+    *,
+    run_id: str,
+    review_id: str,
+    review_ref_path: str,
+    verdict_id: str,
+    final_verdict_ref_path: str,
+) -> bool:
+    has_review = False
+    has_final_verdict = False
+    for event in team.read_all():
+        if not isinstance(event, dict) or str(event.get("run_id") or "") != run_id:
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        event_type = str(event.get("event_type") or "")
+        if event_type == "review_ref":
+            has_review = (
+                str(payload.get("review_id") or "") == review_id
+                and str(payload.get("ref_path") or "") == review_ref_path
+                and str(payload.get("source") or "") == "go_evidence_finalize"
+            ) or has_review
+        elif event_type == "final_verdict_ref":
+            has_final_verdict = (
+                str(payload.get("verdict_id") or "") == verdict_id
+                and str(payload.get("ref_path") or "") == final_verdict_ref_path
+                and str(payload.get("review_ref") or "") == review_id
+            ) or has_final_verdict
+    return has_review and has_final_verdict
 
 
 def init_chain_evidence(run_evidence_dir: str, run_id: str, executor_id: str, mode: str | None = None, planner: str | None = None, task: str | None = None, methodology: dict | None = None) -> str:

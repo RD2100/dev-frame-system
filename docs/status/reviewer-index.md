@@ -439,9 +439,11 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     no TeamRuntime journal.
   - Blocked or failed evidence finalization must not create TeamRuntime
     final-ready events; blocked state remains visible in machine artifacts.
+  - Same-verdict finalization reruns must not rewrite divergent machine
+    artifacts or append duplicate TeamRuntime review/final-verdict refs.
   - `tests/test_go_evidence.py` should prove opt-in event recording, RunIndex
-    `final_ready` projection from the referenced FinalVerdict artifact, and no
-    event recording for blocked evidence.
+    `final_ready` projection from the referenced FinalVerdict artifact,
+    idempotent reruns, and no event recording for blocked evidence.
   - `docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`
     records the local limitation set and preserved stop lines.
 - Runtime-governance Batch E atgo runtime finalize command:

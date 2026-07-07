@@ -368,7 +368,9 @@ def build_failure_record(
 
 def write_json(path: str | Path, payload: dict[str, Any]) -> str:
     path = Path(path)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    content = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+    if not path.exists() or path.read_text(encoding="utf-8") != content:
+        path.write_text(content, encoding="utf-8")
     return str(path)
 
 
