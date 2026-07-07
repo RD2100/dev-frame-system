@@ -1152,6 +1152,9 @@ def _team_final_verdict_ref(
                 "uri": str(supersedes.get("uri") or ""),
                 "reason": str(supersedes.get("reason") or ""),
             }
+            chain = _final_verdict_supersession_chain(artifact, Path(ref_path))
+            if chain:
+                final_ref["supersession_chain"] = chain
         return final_ref, [], [str(item) for item in artifact.get("limitations", []) if str(item)] if isinstance(artifact.get("limitations"), list) else [], gate_refs
     return None, failures, [], []
 
@@ -1210,6 +1213,67 @@ def _validate_final_verdict_artifact(path: Path, payload: dict[str, Any]) -> tup
         return {}, "final verdict artifact producer_role does not match event"
     if str(data.get("final_state") or "") != str(payload.get("final_state") or ""):
         return {}, "final verdict artifact final_state does not match event"
+    errors = sorted(
+        _schema_validator("schemas/agent-runtime/final-verdict.schema.json").iter_errors(data),
+        key=lambda error: list(error.path),
+    )
+    if errors:
+        return {}, f"final verdict artifact schema invalid: {errors[0].message}"
+    return data, ""
+
+
+def _final_verdict_supersession_chain(
+    artifact: dict[str, Any],
+    artifact_path: Path,
+    *,
+    max_depth: int = 5,
+) -> list[dict[str, Any]]:
+    chain: list[dict[str, Any]] = []
+    current = artifact
+    current_path = artifact_path
+    seen: set[str] = {
+        str(artifact_path.resolve()) if artifact_path.exists() else str(artifact_path)
+    }
+    for _ in range(max_depth):
+        supersedes = _as_dict(current.get("supersedes"))
+        if not supersedes:
+            break
+        uri = str(supersedes.get("uri") or "")
+        prior_path = _resolve_superseded_verdict_path(current_path, uri)
+        prior_key = str(prior_path.resolve()) if prior_path.exists() else str(prior_path)
+        if prior_key in seen:
+            break
+        seen.add(prior_key)
+        item = {
+            "verdict_id": str(supersedes.get("verdict_id") or ""),
+            "uri": uri,
+            "reason": str(supersedes.get("reason") or ""),
+            "resolved": False,
+        }
+        chain.append(item)
+        prior_artifact, diagnostic = _read_final_verdict_artifact_for_chain(prior_path)
+        if diagnostic:
+            break
+        if str(prior_artifact.get("verdict_id") or "") != item["verdict_id"]:
+            break
+        item["resolved"] = True
+        item["final_state"] = str(prior_artifact.get("final_state") or "")
+        current = prior_artifact
+        current_path = prior_path
+    return chain
+
+
+def _resolve_superseded_verdict_path(current_path: Path, uri: str) -> Path:
+    path = Path(uri)
+    if path.is_absolute():
+        return path
+    return current_path.parent / path
+
+
+def _read_final_verdict_artifact_for_chain(path: Path) -> tuple[dict[str, Any], str]:
+    data, diagnostic = _read_json_file(path)
+    if diagnostic:
+        return {}, diagnostic
     errors = sorted(
         _schema_validator("schemas/agent-runtime/final-verdict.schema.json").iter_errors(data),
         key=lambda error: list(error.path),

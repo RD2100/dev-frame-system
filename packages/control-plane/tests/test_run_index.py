@@ -303,7 +303,54 @@ def test_run_index_projects_team_final_verdict_to_final_ready(tmp_path):
     review_path.parent.mkdir(parents=True)
     review_path.write_text("verdict: pass\n", encoding="utf-8")
     final_path = runtime / "final" / "final-verdict.json"
+    prior_v1_path = runtime / "final" / "final-verdict-v1.json"
+    prior_v0_path = runtime / "final" / "final-verdict-v0.json"
     gate_id = "gate-go-final-independent-review"
+    _write_json(prior_v0_path, {
+        "verdict_id": "fv-go-final-v0",
+        "produced_by": "go-evidence-finalizer",
+        "produced_at": "2026-07-07T00:00:00Z",
+        "producer_role": "governance",
+        "final_state": "blocked",
+        "inputs_reviewed": [str(review_path)],
+        "gate_summary": [{
+            "gate_id": "gate-go-final-v0-independent-review",
+            "result": "blocked",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-1",
+            "verdict": "blocked",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:go-final-v0",
+    })
+    _write_json(prior_v1_path, {
+        "verdict_id": "fv-go-final-v1",
+        "produced_by": "go-evidence-finalizer",
+        "produced_at": "2026-07-07T00:01:00Z",
+        "producer_role": "governance",
+        "final_state": "accepted_with_limitation",
+        "inputs_reviewed": [str(review_path), str(prior_v0_path)],
+        "gate_summary": [{
+            "gate_id": "gate-go-final-v1-independent-review",
+            "result": "warning",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-1",
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": ["prior verdict was incomplete"],
+        "human_or_governance_reference": "go-evidence-finalize:go-final-v1",
+        "supersedes": {
+            "verdict_id": "fv-go-final-v0",
+            "uri": str(prior_v0_path),
+            "reason": "Governance review replaced the blocked draft.",
+        },
+    })
     _write_json(final_path, {
         "verdict_id": "fv-go-final",
         "produced_by": "go-evidence-finalizer",
@@ -325,7 +372,7 @@ def test_run_index_projects_team_final_verdict_to_final_ready(tmp_path):
         "human_or_governance_reference": "go-evidence-finalize:go-final",
         "supersedes": {
             "verdict_id": "fv-go-final-v1",
-            "uri": str(runtime / "final" / "final-verdict-v1.json"),
+            "uri": str(prior_v1_path),
             "reason": "New independent review evidence superseded the prior verdict.",
         },
     })
@@ -397,11 +444,34 @@ def test_run_index_projects_team_final_verdict_to_final_ready(tmp_path):
         "gate_refs": [gate_id],
         "supersedes": {
             "verdict_id": "fv-go-final-v1",
-            "uri": str(runtime / "final" / "final-verdict-v1.json"),
+            "uri": str(prior_v1_path),
             "reason": "New independent review evidence superseded the prior verdict.",
         },
+        "supersession_chain": [
+            {
+                "verdict_id": "fv-go-final-v1",
+                "uri": str(prior_v1_path),
+                "reason": "New independent review evidence superseded the prior verdict.",
+                "resolved": True,
+                "final_state": "accepted_with_limitation",
+            },
+            {
+                "verdict_id": "fv-go-final-v0",
+                "uri": str(prior_v0_path),
+                "reason": "Governance review replaced the blocked draft.",
+                "resolved": True,
+                "final_state": "blocked",
+            },
+        ],
     }
     assert {ref["kind"] for ref in record["evidence_refs"]} >= {"command_output", "review", "final_verdict"}
+    final_evidence_refs = [ref for ref in record["evidence_refs"] if ref["kind"] == "final_verdict"]
+    assert final_evidence_refs == [{
+        "evidence_id": "ev-team-final-verdict-team-final-verdict",
+        "kind": "final_verdict",
+        "uri": str(final_path),
+        "supports": "acceptance",
+    }]
 
 
 def test_run_index_blocks_invalid_final_verdict_supersedes_metadata(tmp_path):
@@ -488,6 +558,322 @@ def test_run_index_blocks_invalid_final_verdict_supersedes_metadata(tmp_path):
     assert "final_verdict_ref" not in record
     assert record["failure_refs"][0]["status"] == "blocked"
     assert record["failure_refs"][0]["uri"] == str(final_path)
+
+
+def test_run_index_keeps_missing_superseded_verdict_non_authoritative(tmp_path):
+    runtime = tmp_path / "runtime"
+    review_path = runtime / "reviews" / "review.yaml"
+    review_path.parent.mkdir(parents=True)
+    review_path.write_text("verdict: pass\n", encoding="utf-8")
+    final_path = runtime / "final" / "final-verdict.json"
+    missing_prior_path = runtime / "final" / "missing-final-verdict-v1.json"
+    gate_id = "gate-go-missing-superseded-independent-review"
+    _write_json(final_path, {
+        "verdict_id": "fv-go-missing-superseded",
+        "produced_by": "go-evidence-finalizer",
+        "produced_at": "2026-07-07T00:02:00Z",
+        "producer_role": "governance",
+        "final_state": "final_ready",
+        "inputs_reviewed": [str(review_path)],
+        "gate_summary": [{
+            "gate_id": gate_id,
+            "result": "pass",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-1",
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:go-missing-superseded",
+        "supersedes": {
+            "verdict_id": "fv-go-missing-superseded-v1",
+            "uri": str(missing_prior_path),
+            "reason": "Current governance verdict superseded a missing historical artifact.",
+        },
+    })
+    (runtime / "team-events.jsonl").write_text(
+        "\n".join([
+            json.dumps({
+                "event_type": "task_result",
+                "run_id": "go-missing-superseded",
+                "agent_id": "coding-agent-1",
+                "payload": {"status": "passed"},
+                "timestamp": "2026-07-07T00:00:00Z",
+                "event_id": "team-missing-superseded-result",
+            }),
+            json.dumps({
+                "event_type": "review_ref",
+                "run_id": "go-missing-superseded",
+                "agent_id": "reviewer-1",
+                "payload": {
+                    "review_id": "review-go-missing-superseded",
+                    "reviewer_id": "reviewer-1",
+                    "reviewer_role": "reviewer",
+                    "executor_id": "coding-agent-1",
+                    "verdict": "pass",
+                    "ref_path": str(review_path),
+                    "reviewed_evidence_refs": ["ev-team-team-missing-superseded-result"],
+                },
+                "timestamp": "2026-07-07T00:01:00Z",
+                "event_id": "team-missing-superseded-review",
+            }),
+            json.dumps({
+                "event_type": "final_verdict_ref",
+                "run_id": "go-missing-superseded",
+                "agent_id": "go-evidence-finalizer",
+                "payload": {
+                    "verdict_id": "fv-go-missing-superseded",
+                    "produced_by": "go-evidence-finalizer",
+                    "producer_role": "governance",
+                    "final_state": "final_ready",
+                    "ref_path": str(final_path),
+                    "review_ref": "review-go-missing-superseded",
+                    "gate_refs": [gate_id],
+                },
+                "timestamp": "2026-07-07T00:02:00Z",
+                "event_id": "team-missing-superseded-final",
+            }),
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    record = _records_by_adapter(build_run_index(runtime))["team_events"][0]
+
+    _run_record_validator().validate(record)
+    assert record["acceptance_state"] == "final_ready"
+    assert record["final_verdict_ref"]["supersession_chain"] == [{
+        "verdict_id": "fv-go-missing-superseded-v1",
+        "uri": str(missing_prior_path),
+        "reason": "Current governance verdict superseded a missing historical artifact.",
+        "resolved": False,
+    }]
+    assert [ref for ref in record["evidence_refs"] if ref["kind"] == "final_verdict"] == [{
+        "evidence_id": "ev-team-final-verdict-team-missing-superseded-final",
+        "kind": "final_verdict",
+        "uri": str(final_path),
+        "supports": "acceptance",
+    }]
+
+
+def test_run_index_keeps_mismatched_superseded_verdict_unresolved(tmp_path):
+    runtime = tmp_path / "runtime"
+    review_path = runtime / "reviews" / "review.yaml"
+    review_path.parent.mkdir(parents=True)
+    review_path.write_text("verdict: pass\n", encoding="utf-8")
+    final_path = runtime / "final" / "final-verdict.json"
+    prior_path = runtime / "final" / "final-verdict-v1.json"
+    gate_id = "gate-go-mismatched-superseded-independent-review"
+    _write_json(prior_path, {
+        "verdict_id": "fv-different-prior",
+        "produced_by": "go-evidence-finalizer",
+        "produced_at": "2026-07-07T00:01:00Z",
+        "producer_role": "governance",
+        "final_state": "blocked",
+        "inputs_reviewed": [str(review_path)],
+        "gate_summary": [{
+            "gate_id": "gate-different-prior",
+            "result": "blocked",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-1",
+            "verdict": "blocked",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:different-prior",
+    })
+    _write_json(final_path, {
+        "verdict_id": "fv-go-mismatched-superseded",
+        "produced_by": "go-evidence-finalizer",
+        "produced_at": "2026-07-07T00:02:00Z",
+        "producer_role": "governance",
+        "final_state": "final_ready",
+        "inputs_reviewed": [str(review_path)],
+        "gate_summary": [{
+            "gate_id": gate_id,
+            "result": "pass",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-1",
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:go-mismatched-superseded",
+        "supersedes": {
+            "verdict_id": "fv-go-mismatched-superseded-v1",
+            "uri": str(prior_path),
+            "reason": "Current governance verdict pointed at a mismatched artifact.",
+        },
+    })
+    (runtime / "team-events.jsonl").write_text(
+        "\n".join([
+            json.dumps({
+                "event_type": "task_result",
+                "run_id": "go-mismatched-superseded",
+                "agent_id": "coding-agent-1",
+                "payload": {"status": "passed"},
+                "timestamp": "2026-07-07T00:00:00Z",
+                "event_id": "team-mismatched-superseded-result",
+            }),
+            json.dumps({
+                "event_type": "review_ref",
+                "run_id": "go-mismatched-superseded",
+                "agent_id": "reviewer-1",
+                "payload": {
+                    "review_id": "review-go-mismatched-superseded",
+                    "reviewer_id": "reviewer-1",
+                    "reviewer_role": "reviewer",
+                    "executor_id": "coding-agent-1",
+                    "verdict": "pass",
+                    "ref_path": str(review_path),
+                    "reviewed_evidence_refs": ["ev-team-team-mismatched-superseded-result"],
+                },
+                "timestamp": "2026-07-07T00:01:00Z",
+                "event_id": "team-mismatched-superseded-review",
+            }),
+            json.dumps({
+                "event_type": "final_verdict_ref",
+                "run_id": "go-mismatched-superseded",
+                "agent_id": "go-evidence-finalizer",
+                "payload": {
+                    "verdict_id": "fv-go-mismatched-superseded",
+                    "produced_by": "go-evidence-finalizer",
+                    "producer_role": "governance",
+                    "final_state": "final_ready",
+                    "ref_path": str(final_path),
+                    "review_ref": "review-go-mismatched-superseded",
+                    "gate_refs": [gate_id],
+                },
+                "timestamp": "2026-07-07T00:02:00Z",
+                "event_id": "team-mismatched-superseded-final",
+            }),
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    record = _records_by_adapter(build_run_index(runtime))["team_events"][0]
+
+    _run_record_validator().validate(record)
+    assert record["acceptance_state"] == "final_ready"
+    assert record["final_verdict_ref"]["supersession_chain"] == [{
+        "verdict_id": "fv-go-mismatched-superseded-v1",
+        "uri": str(prior_path),
+        "reason": "Current governance verdict pointed at a mismatched artifact.",
+        "resolved": False,
+    }]
+
+
+def test_run_index_stops_supersession_chain_before_duplicate_cycle_entry(tmp_path):
+    runtime = tmp_path / "runtime"
+    review_path = runtime / "reviews" / "review.yaml"
+    review_path.parent.mkdir(parents=True)
+    review_path.write_text("verdict: pass\n", encoding="utf-8")
+    final_path = runtime / "final" / "final-verdict.json"
+    prior_path = runtime / "final" / "final-verdict-v1.json"
+    gate_id = "gate-go-cyclic-superseded-independent-review"
+    base_payload = {
+        "produced_by": "go-evidence-finalizer",
+        "producer_role": "governance",
+        "inputs_reviewed": [str(review_path)],
+        "gate_summary": [{
+            "gate_id": gate_id,
+            "result": "pass",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-1",
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:go-cyclic-superseded",
+    }
+    _write_json(prior_path, {
+        **base_payload,
+        "verdict_id": "fv-go-cyclic-superseded-v1",
+        "produced_at": "2026-07-07T00:01:00Z",
+        "final_state": "accepted_with_limitation",
+        "supersedes": {
+            "verdict_id": "fv-go-cyclic-superseded",
+            "uri": str(final_path),
+            "reason": "Malformed history points back to the current verdict.",
+        },
+    })
+    _write_json(final_path, {
+        **base_payload,
+        "verdict_id": "fv-go-cyclic-superseded",
+        "produced_at": "2026-07-07T00:02:00Z",
+        "final_state": "final_ready",
+        "supersedes": {
+            "verdict_id": "fv-go-cyclic-superseded-v1",
+            "uri": str(prior_path),
+            "reason": "Current verdict points to a cyclic historical artifact.",
+        },
+    })
+    (runtime / "team-events.jsonl").write_text(
+        "\n".join([
+            json.dumps({
+                "event_type": "task_result",
+                "run_id": "go-cyclic-superseded",
+                "agent_id": "coding-agent-1",
+                "payload": {"status": "passed"},
+                "timestamp": "2026-07-07T00:00:00Z",
+                "event_id": "team-cyclic-superseded-result",
+            }),
+            json.dumps({
+                "event_type": "review_ref",
+                "run_id": "go-cyclic-superseded",
+                "agent_id": "reviewer-1",
+                "payload": {
+                    "review_id": "review-go-cyclic-superseded",
+                    "reviewer_id": "reviewer-1",
+                    "reviewer_role": "reviewer",
+                    "executor_id": "coding-agent-1",
+                    "verdict": "pass",
+                    "ref_path": str(review_path),
+                    "reviewed_evidence_refs": ["ev-team-team-cyclic-superseded-result"],
+                },
+                "timestamp": "2026-07-07T00:01:00Z",
+                "event_id": "team-cyclic-superseded-review",
+            }),
+            json.dumps({
+                "event_type": "final_verdict_ref",
+                "run_id": "go-cyclic-superseded",
+                "agent_id": "go-evidence-finalizer",
+                "payload": {
+                    "verdict_id": "fv-go-cyclic-superseded",
+                    "produced_by": "go-evidence-finalizer",
+                    "producer_role": "governance",
+                    "final_state": "final_ready",
+                    "ref_path": str(final_path),
+                    "review_ref": "review-go-cyclic-superseded",
+                    "gate_refs": [gate_id],
+                },
+                "timestamp": "2026-07-07T00:02:00Z",
+                "event_id": "team-cyclic-superseded-final",
+            }),
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    record = _records_by_adapter(build_run_index(runtime))["team_events"][0]
+
+    _run_record_validator().validate(record)
+    assert record["acceptance_state"] == "final_ready"
+    assert record["final_verdict_ref"]["supersession_chain"] == [
+        {
+            "verdict_id": "fv-go-cyclic-superseded-v1",
+            "uri": str(prior_path),
+            "reason": "Current verdict points to a cyclic historical artifact.",
+            "resolved": True,
+            "final_state": "accepted_with_limitation",
+        }
+    ]
 
 
 def test_run_index_blocks_team_self_review_and_worker_final_verdict(tmp_path):

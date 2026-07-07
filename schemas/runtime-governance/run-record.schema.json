@@ -405,6 +405,38 @@
           },
           "additionalProperties": false,
           "description": "Optional append-only lifecycle link copied from a validated FinalVerdict artifact. This is read-model metadata only and does not create acceptance authority."
+        },
+        "supersession_chain": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/final_verdict_supersession_ref" },
+          "description": "Best-effort bounded read-only chain of superseded FinalVerdict links. Chain entries are lifecycle visibility only and never satisfy review, gate, evidence, or acceptance requirements."
+        }
+      },
+      "additionalProperties": false
+    },
+    "final_verdict_supersession_ref": {
+      "type": "object",
+      "required": ["verdict_id", "uri", "reason"],
+      "properties": {
+        "verdict_id": {
+          "type": "string",
+          "pattern": "^fv-[A-Za-z0-9._-]+$"
+        },
+        "uri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolved": {
+          "type": "boolean",
+          "description": "True when the referenced prior FinalVerdict artifact was readable and schema-valid."
+        },
+        "final_state": {
+          "type": "string",
+          "enum": ["final_ready", "accepted_with_limitation", "blocked", "failed", "deferred"]
         }
       },
       "additionalProperties": false

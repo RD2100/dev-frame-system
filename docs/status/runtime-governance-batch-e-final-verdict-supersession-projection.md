@@ -6,15 +6,15 @@ Reader: DevFrame maintainers reviewing read-only FinalVerdict supersession
 projection
 
 Post-read action: Verify that RunIndex exposes append-only supersession metadata
-from a validated FinalVerdict artifact without treating the metadata as
-acceptance evidence.
+and a bounded supersession chain from validated FinalVerdict artifacts without
+treating the metadata as acceptance evidence.
 
 Related docs: [Runtime Governance And Evidence Closure Transformation Plan](runtime-governance-and-evidence-closure-transformation-plan.md), [Runtime Governance Batch E: Final Verdict Lifecycle Metadata](runtime-governance-batch-e-final-verdict-lifecycle.md), [Runtime Governance Batch E: Team Review Verdict Events](runtime-governance-batch-e-team-review-verdict-events.md), [Reviewer Index](reviewer-index.md)
 
 ## Scope
 
-This Batch E slice makes FinalVerdict supersession metadata visible in the
-read-only RunIndex projection.
+This Batch E slice makes FinalVerdict supersession metadata and a bounded
+supersession chain visible in the read-only RunIndex projection.
 
 Before this slice, `schemas/agent-runtime/final-verdict.schema.json` accepted
 optional `supersedes` metadata, and RunIndex validated the referenced
@@ -31,6 +31,10 @@ After this slice:
   the already validated FinalVerdict artifact into the read model;
 - the projected supersession link carries the prior verdict id, URI, and
   governance reason;
+- when the prior verdict artifact is readable and schema-valid, RunIndex follows
+  its own `supersedes` link up to a fixed depth and marks resolved chain entries;
+- missing or invalid historical artifacts stop traversal but do not change the
+  current verdict's acceptance axes;
 - final readiness still depends on the existing independent review, passing
   gate references, and validated FinalVerdict artifact.
 
@@ -49,6 +53,7 @@ Required verification for this batch:
 
 ```powershell
 python -m pytest packages\control-plane\tests\test_run_index.py -q -k final_verdict
+python -m pytest packages\control-plane\tests\test_run_index.py -q -k superseded
 python -m pytest packages\control-plane\tests\test_public_snapshot.py -q -k runtime_governance_schema_mirrors
 python -m pytest packages\control-plane\tests\test_public_snapshot.py -q
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-public-snapshot.ps1 -FailOnTrackedForbidden
@@ -59,6 +64,9 @@ git diff --check
 
 - Supersession metadata is lifecycle visibility, not acceptance authority.
 - RunIndex remains read-only and does not create new FinalVerdict artifacts.
+- Supersession traversal is bounded and follows only explicit artifact URIs.
+- Broken or invalid historical links cannot upgrade or downgrade current
+  acceptance.
 - `final_ready` still requires a valid FinalVerdict artifact plus passing
   independent review and gate references.
 - Worker or executor output still cannot create final acceptance.
@@ -67,6 +75,8 @@ git diff --check
 
 - `go_evidence finalize` still does not automatically create superseding
   FinalVerdict records for divergent reruns.
-- RunIndex exposes only the direct superseded verdict link on the current
-  FinalVerdict reference; it does not yet resolve or traverse historical
-  supersession chains.
+- RunIndex exposes a best-effort bounded chain for reviewer visibility, not a
+  complete historical graph or migration surface.
+- Missing or invalid historical superseded artifacts are visible as unresolved
+  chain entries only; they are not promoted to failure records for the current
+  run.

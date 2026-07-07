@@ -467,16 +467,19 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     records the local limitation set and preserved stop lines.
 - Runtime-governance Batch E FinalVerdict supersession projection:
   - `schemas/runtime-governance/run-record.schema.json` should accept optional
-    `final_verdict_ref.supersedes` metadata copied from a validated
-    FinalVerdict artifact.
+    `final_verdict_ref.supersedes` metadata and a bounded
+    `final_verdict_ref.supersession_chain` copied from validated FinalVerdict
+    artifacts.
   - `packages/test-frame/schemas/runtime-governance/run-record.schema.json`
     should remain semantically identical to the root RunRecord schema.
   - `packages/control-plane/control_plane/run_index.py` should project only the
-    direct superseded verdict id, URI, and reason; it must not generate new
-    verdicts or use supersession metadata as acceptance evidence.
+    direct superseded verdict id, URI, reason, and best-effort bounded chain; it
+    must not generate new verdicts or use supersession metadata as acceptance
+    evidence.
   - `packages/control-plane/tests/test_run_index.py` and
     `packages/control-plane/tests/test_public_snapshot.py` should prove the
-    real TeamRuntime projection path and schema mirror.
+    real TeamRuntime projection path, missing historical artifact behavior, and
+    schema mirror.
   - `docs/status/runtime-governance-batch-e-final-verdict-supersession-projection.md`
     records the local limitation set and preserved stop lines.
 - Runtime-governance Batch E atgo runtime finalize command:
@@ -544,8 +547,8 @@ This is the reviewer map for the first open-source release batch. It focuses on 
   - Current remaining gaps are generic `go` automatic finalization, sealed
     ContextPacket/ContextLedger production, ai-workflow-hub and paper domain
     adapters, missing ai-workflow-hub `chain-evidence.json` with legacy trusted
-    state, automatic superseding FinalVerdict generation, and first-class
-    RunIndex supersession-chain projection.
+    state, automatic superseding FinalVerdict generation, and complete
+    supersession-chain graph resolution.
   - Reviewers should confirm this reconciliation does not change runtime
     behavior, schema contracts, adapter behavior, dashboard authority, or
     acceptance projection.
