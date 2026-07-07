@@ -1,5 +1,7 @@
 # Release Readiness
 
+Lifecycle state: Current release-state record
+
 This page records the current public-release gate for `dev-frame-system`.
 It is meant for reviewers who need to decide whether the repository is ready
 to share, package, or hand off.

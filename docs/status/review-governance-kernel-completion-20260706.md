@@ -1,5 +1,7 @@
 # Review-Governance Kernel Completion Status
 
+Lifecycle state: Evidence record, not release-ready authority
+
 > Status: 2026-07-07 (updated)
 > Author: executor-agent (Claude Code)
 > Authority: external GPT review through P3-1; local GPT-equivalent subagent

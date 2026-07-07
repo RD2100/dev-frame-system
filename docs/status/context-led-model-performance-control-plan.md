@@ -1,5 +1,7 @@
 # Context-Led Model Performance Control Plan
 
+Lifecycle state: Draft active plan
+
 ## Purpose
 
 This document turns the context-management discussion into a document-driven development plan for improving model performance inside DevFrame.

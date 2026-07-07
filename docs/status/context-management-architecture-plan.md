@@ -1,5 +1,7 @@
 # Context Management Architecture Plan
 
+Lifecycle state: Draft active plan
+
 ## Purpose
 
 This document records the plan for a DevFrame-owned context management workflow.

@@ -1,5 +1,7 @@
 # Documentation Management Audit and Plan
 
+Lifecycle state: Draft active plan
+
 ## Purpose
 
 This document records a critical review of the current `docs/` structure and proposes a document-driven management plan.

@@ -1,5 +1,7 @@
 # Workflow Consolidation and Command Plan
 
+Lifecycle state: Draft active plan
+
 ## Purpose
 
 This document records the current architectural direction for consolidating DevFrame workflows.

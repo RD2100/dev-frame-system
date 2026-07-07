@@ -1,5 +1,7 @@
 # Reviewer Index: Open-Source Release Batch 1
 
+Lifecycle state: Current public-snapshot reviewer map
+
 ## Purpose
 
 This is the reviewer map for the first open-source release batch. It focuses on what is currently proven and auditable in the repository: MCP/Web-AI intake, T3/native client projection, and governed visual state.

@@ -85,6 +85,18 @@ DOC_LINK_CHECK_MARKDOWN_DOCS = [
     REPO_ROOT / "docs" / "status" / "release-readiness.md",
     REPO_ROOT / "docs" / "status" / "review-governance-kernel-completion-20260706.md",
 ]
+LIFECYCLE_REQUIRED_STATUS_DOCS = [
+    REPO_ROOT / "docs" / "status" / "status-document-inventory.md",
+    REPO_ROOT / "docs" / "status" / "governance-spine-and-document-coordination.md",
+    REPO_ROOT / "docs" / "status" / "reviewer-index.md",
+    REPO_ROOT / "docs" / "status" / "release-readiness.md",
+    REPO_ROOT / "docs" / "status" / "workflow-consolidation-and-command-plan.md",
+    REPO_ROOT / "docs" / "status" / "context-management-architecture-plan.md",
+    REPO_ROOT / "docs" / "status" / "context-led-model-performance-control-plan.md",
+    REPO_ROOT / "docs" / "status" / "documentation-management-audit-and-plan.md",
+    REPO_ROOT / "docs" / "status" / "documentation-management-detailed-rollout-plan.md",
+    REPO_ROOT / "docs" / "status" / "review-governance-kernel-completion-20260706.md",
+]
 MARKDOWN_LINK_PATTERN = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 FENCED_CODE_BLOCK_PATTERN = re.compile(r"```.*?```", re.DOTALL)
 INLINE_CODE_PATTERN = re.compile(r"`[^`\n]*`")
@@ -558,6 +570,16 @@ def test_current_entry_markdown_links_resolve_to_repo_files():
                         resolved_label,
                     )
                 )
+
+    assert missing == []
+
+
+def test_current_status_entry_docs_have_lifecycle_state():
+    missing = [
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in LIFECYCLE_REQUIRED_STATUS_DOCS
+        if not re.search(r"(?m)^Lifecycle state:\s+\S", path.read_text(encoding="utf-8-sig"))
+    ]
 
     assert missing == []
 
