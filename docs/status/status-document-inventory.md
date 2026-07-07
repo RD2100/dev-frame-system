@@ -59,7 +59,8 @@ Use these states when reading or editing files in this folder:
 ## Observed File Classification Snapshot
 
 Observed on 2026-07-04, with review-governance completion status added on
-2026-07-06. Update this snapshot when adding or retiring status documents.
+2026-07-06 and the runtime-governance unification receipt added on 2026-07-07.
+Update this snapshot when adding or retiring status documents.
 
 | State | Files |
 |---|---|
@@ -68,7 +69,7 @@ Observed on 2026-07-04, with review-governance completion status added on
 | `deferred-module-plan` | `browser-automation-transport-roadmap.md`, `paper-knowledge-base-iteration-mvp-plan.md`, `graph-projection-knowledge-canvas-plan.md` |
 | `area-plan` | `product-maturity-roadmap.md`, `local-agent-cluster-roadmap.md`, `cluster-coordinator-design-and-roadmap.md`, `phase-1-global-coordinator-conversation-plan.md`, `launch-cutover-checklist.md`, `agent-cluster-unknowns-register.md`, `global-lifecycle-gsd-superpowers-assessment.md`, `design-orchestration-mcp.md`, `design-devframe-mcp-orchestrator-surface.md` |
 | `reuse-assessment` | `t3code-client-mainline-reuse-assessment.md`, `local-agent-control-plane-stage-8-open-source-reuse-visual-mvp.md` |
-| `recon-receipt` | `recon-receipt-acp-backbone.md`, `recon-receipt-cli-decomposition.md`, `recon-receipt-cluster-control-surface.md`, `recon-receipt-customization-layer.md`, `recon-receipt-devframe-mcp-server.md`, `recon-receipt-global-coordinator-conversation-mainline.md`, `recon-receipt-local-agent-client-mainline.md`, `recon-receipt-mcp-consent.md`, `recon-receipt-mcp-live-probe-sse.md`, `recon-receipt-obsidian-stage3.md`, `recon-receipt-obsidian-stage4-sync.md`, `recon-receipt-opencode-event-integration.md`, `recon-receipt-paper-pdf-fulltext-segmentation.md`, `recon-receipt-parallel-write-isolation.md`, `recon-receipt-pluggable-model-provider.md`, `recon-receipt-rd-code-prod-launch.md`, `recon-receipt-rdcode-bridge-data.md`, `recon-receipt-rdcode-writeback.md`, `recon-receipt-t3-rebrand-i18n.md`, `recon-receipt-team-runtime.md`, `recon-receipt-workflow-engine.md` |
+| `recon-receipt` | `recon-receipt-acp-backbone.md`, `recon-receipt-cli-decomposition.md`, `recon-receipt-cluster-control-surface.md`, `recon-receipt-customization-layer.md`, `recon-receipt-devframe-mcp-server.md`, `recon-receipt-global-coordinator-conversation-mainline.md`, `recon-receipt-local-agent-client-mainline.md`, `recon-receipt-mcp-consent.md`, `recon-receipt-mcp-live-probe-sse.md`, `recon-receipt-obsidian-stage3.md`, `recon-receipt-obsidian-stage4-sync.md`, `recon-receipt-opencode-event-integration.md`, `recon-receipt-paper-pdf-fulltext-segmentation.md`, `recon-receipt-parallel-write-isolation.md`, `recon-receipt-pluggable-model-provider.md`, `recon-receipt-rd-code-prod-launch.md`, `recon-receipt-rdcode-bridge-data.md`, `recon-receipt-rdcode-writeback.md`, `recon-receipt-runtime-governance-unification.md`, `recon-receipt-t3-rebrand-i18n.md`, `recon-receipt-team-runtime.md`, `recon-receipt-workflow-engine.md` |
 | `handoff` | `continue-global-coordinator-conversation-mainline.md`, `next-agent-global-coordinator-prompt.md`, `devframe-code-opencode-handoff.md` |
 | `historical-stage` | `local-agent-control-plane-stage-2-acceptance.md`, `local-agent-control-plane-stage-2-precommit-review.md`, `local-agent-control-plane-stage-3-execution-report.md`, `local-agent-control-plane-stage-3-go-batch.md`, `local-agent-control-plane-stage-4-web-ai-binding.md`, `local-agent-control-plane-stage-5-closed-loop.md`, `local-agent-control-plane-stage-6-release-prep.md`, `local-agent-control-plane-stage-7-final-precommit-review.md` |
 | `evidence-record` | `current-coverage-audit-evidence-20260704.md`, `working-tree-cleanup-inventory-20260705.md`, `asset-utilization-inventory-20260705.md`, `review-governance-kernel-completion-20260706.md`, `evidence-web-ai-mcp-live-roundtrip.md`, `legacy-submodule-baseline.json` |
@@ -160,6 +161,7 @@ reuse-before-building discipline for a specific area, such as:
 - parallel write isolation;
 - pluggable model provider;
 - RDCode bridge data and writeback;
+- runtime governance and evidence unification;
 - team runtime;
 - workflow engine.
 
