@@ -135,8 +135,9 @@ deferred-module stop lines.
 Current implementation progress after that audit is tracked in
 [Review-Governance Kernel Completion Status](review-governance-kernel-completion-20260706.md).
 Historical Phase 1A gap rows are not current state; the current record marks
-P3-2 local GPT-equivalent review PASS and still requires commit/release
-evidence before release-readiness claims.
+P3-2 local GPT-equivalent review PASS with commit evidence in `2725227d`, and
+still requires branch review and publication evidence before release-readiness
+claims.
 
 This audit is a current-worktree reality check for the master plan. It is not a
 clean release claim and not a replacement for implementation evidence. The
@@ -1110,8 +1111,8 @@ The historical planning order was:
 Before using this order, read
 [Review-Governance Kernel Completion Status](review-governance-kernel-completion-20260706.md)
 and skip items already marked PASS. Continue only from the current pending item;
-P3-2 is already local-review PASS and remains pending only for commit/release
-evidence.
+P3-2 is already local-review PASS and committed in `2725227d`, with only branch
+review and publication evidence still pending before release-readiness claims.
 
 1. finish and review this master plan;
 2. keep Intent Slice A as a documentation and skill-contract sidecar, not a

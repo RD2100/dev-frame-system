@@ -12,8 +12,9 @@ P3-2. Phase P1 and P2 phases all passed external GPT review. P3-1 passed.
 P3-2 is code-complete after internal audit fixes (58 tests pass) and passed a
 2026-07-07 local GPT-equivalent subagent review. A 2026-07-07 local hardening
 pass also fixed cross-validator whitespace and document-authority divergence
-issues. P3-2 is still not release-ready until the current worktree is committed
-and reviewed as a clean publish branch.
+issues. Commit `2725227d` landed P3-2 and the related public/release gate
+hardening, but the repository is still not release-ready until branch review,
+PR/CI, and publication evidence exist.
 
 ## Phase Completion Ledger
 
@@ -165,7 +166,7 @@ Additional verification:
   snapshot focused suite -> 191 passed;
 - `scripts/verify-public-snapshot.ps1` -> PASS;
 - `scripts/verify-public-snapshot.ps1 -FailOnTrackedForbidden` -> expected FAIL
-  while forbidden review artifact delete records remain uncommitted;
+  before the forbidden review artifact delete records were committed;
 - sensitive local path/session scan over public helper scripts and active docs
   -> no matches;
 - `git diff --check` -> PASS with line-ending warnings only;
@@ -253,20 +254,23 @@ Review evidence:
   `valid=False`, `authority_seeded=0`, `total_edges=0`;
 - review bundle source/test hashes match current worktree files.
 
-## P3-2 Uncommitted Files
+## P3-2 Commit Evidence
 
-- `packages/control-plane/control_plane/graph_projection_validator.py`
-- `packages/control-plane/tests/test_graph_projection_validator.py`
+- commit `2725227d`: `Complete review-governance hardening and gates`
+- included `packages/control-plane/control_plane/graph_projection_validator.py`
+  and `packages/control-plane/tests/test_graph_projection_validator.py`
+- pre-commit local release gate: `scripts\verify-release.ps1` -> `1512 passed,
+  1 skipped`, strict public snapshot PASS, control-plane wheel smoke PASS, and
+  `git diff --check` PASS
 
 ## Next Steps for Handoff Agent
 
-1. Commit the P3-2 files and associated status/test updates in a clean,
-   reviewable batch.
-2. Run the full release gate from that clean branch state.
-3. Keep release-readiness blocked until commit, branch review, and publication
+1. Review the committed batch from `2725227d` as a branch-level change.
+2. Re-run the full release gate after any follow-up status/doc updates.
+3. Keep release-readiness blocked until branch review, PR/CI, and publication
    evidence exist.
-4. After P3-2 is committed and release evidence is current:
-   design-coverage-gap-remediation-plan.md remediation order is complete.
+4. Treat `design-coverage-gap-remediation-plan.md` remediation order as
+   implementation-complete only after branch review evidence is attached.
 
 ## Branch
 

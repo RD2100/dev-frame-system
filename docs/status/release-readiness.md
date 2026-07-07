@@ -37,8 +37,10 @@ through `devframe --help`, `devframe run --help`, `devframe dashboard --help`,
 
 As of July 7, 2026, commit `15a9d78d` removed the tracked root review artifacts
 from the Git index, and both the ordinary public snapshot gate and the strict
-`-FailOnTrackedForbidden` public snapshot gate pass in the current worktree.
-The latest local full release-gate rerun also passes end to end:
+`-FailOnTrackedForbidden` public snapshot gate pass locally. Commit `2725227d`
+then landed the review-governance hardening batch, including P3-2 graph
+projection and the strict public/release gate fixes. The local full release-gate
+rerun at that state also passes end to end:
 `1512 passed, 1 skipped`, strict public snapshot PASS, control-plane wheel smoke
 PASS, and `git diff --check` PASS with line-ending warnings only.
 This is a local verification result only. It does not imply a clean worktree,
@@ -98,9 +100,9 @@ archives, `build`, `dist`, or package metadata directories in the public tree.
   public-surface review artifacts. Commit `15a9d78d` removed the previously
   tracked instances, and the strict snapshot gate now checks that they do not
   return to the Git index.
-- Review-governance P3-2 graph projection has local GPT-equivalent review PASS,
-  but remains uncommitted in the current worktree and needs commit/review
-  evidence before it can support release readiness.
+- Review-governance P3-2 graph projection has local GPT-equivalent review PASS
+  and landed in commit `2725227d`, but still needs branch review, PR/CI, and
+  publication evidence before it can support release readiness.
 - Control-plane dashboard tests bypass loopback HTTP proxies during pytest so
   local dashboard server checks do not report proxy-generated 502 responses.
 

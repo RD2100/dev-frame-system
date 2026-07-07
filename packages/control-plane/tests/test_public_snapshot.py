@@ -570,7 +570,8 @@ def test_release_readiness_documents_strict_gate_blockers():
     assert "commit `15a9d78d` removed the tracked root review artifacts" in text
     assert "ordinary public snapshot gate and the strict" in text
     assert "`-FailOnTrackedForbidden` public snapshot gate pass" in text
-    assert "pass in the current worktree" in text
+    assert "public snapshot gate pass locally" in text
+    assert "Commit `2725227d`" in text
     assert "strict snapshot gate now checks that they do not" in text
     assert "P3-2 graph projection has local GPT-equivalent review PASS" in text
 
@@ -578,7 +579,7 @@ def test_release_readiness_documents_strict_gate_blockers():
 def test_current_entry_docs_keep_p3_2_local_review_pass_non_release_ready():
     expected = {
         REPO_ROOT / "docs" / "README.md": [
-            "local GPT-equivalent review PASS, still pending commit/release evidence",
+            "local GPT-equivalent review PASS, committed in `2725227d`",
             "not a release-ready record",
         ],
         REPO_ROOT / "docs" / "status" / "reviewer-index.md": [
@@ -586,8 +587,8 @@ def test_current_entry_docs_keep_p3_2_local_review_pass_non_release_ready():
             "not treated as release-ready",
         ],
         REPO_ROOT / "docs" / "status" / "status-document-inventory.md": [
-            "projection has local GPT-equivalent review PASS but remains pending commit",
-            "release readiness evidence",
+            "projection has local GPT-equivalent review PASS and landed in commit",
+            "branch review and publication evidence",
         ],
     }
 

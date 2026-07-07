@@ -176,8 +176,9 @@ product direction.
 
 `review-governance-kernel-completion-20260706.md` is the latest bounded
 review-governance progress record: P1/P2/P3-1 are marked PASS, and P3-2 graph
-projection has local GPT-equivalent review PASS but remains pending commit and
-release evidence. Do not use that record as release readiness evidence.
+projection has local GPT-equivalent review PASS and landed in commit
+`2725227d`, but remains pending branch review and publication evidence. Do not
+use that record as release readiness evidence.
 
 Current rule:
 
