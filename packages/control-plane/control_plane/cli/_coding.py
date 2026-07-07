@@ -195,7 +195,8 @@ def cmd_atgo() -> int:
     )
 
     chain_evidence_path = evidence_dir / "chain-evidence.json"
-    finalize_command = f"tools/go_evidence.py finalize {evidence_dir} --team-runtime-dir {runtime_root}"
+    finalize_command_args = _atgo_finalize_command_args(evidence_dir, runtime_root)
+    finalize_command = _render_atgo_finalize_command(evidence_dir, runtime_root)
     chain_evidence = {
         "run_id": result.go_run_id,
         "project_id": result.project_id or project_root.name,
@@ -207,13 +208,7 @@ def cmd_atgo() -> int:
         "next_commands": {
             "finalize": {
                 "command": finalize_command,
-                "command_args": [
-                    "tools/go_evidence.py",
-                    "finalize",
-                    str(evidence_dir),
-                    "--team-runtime-dir",
-                    str(runtime_root),
-                ],
+                "command_args": finalize_command_args,
                 "cwd": str(project_root),
                 "authority": "guidance_only",
                 "creates_acceptance": False,
@@ -283,7 +278,7 @@ def _maybe_auto_finalize_atgo_evidence(
     if missing:
         print("")
         print(f"Auto-finalize: skipped; missing required review evidence: {', '.join(missing)}")
-        print(f"Finalize     : tools/go_evidence.py finalize {evidence_dir} --team-runtime-dir {runtime_root}")
+        print(f"Finalize     : {_render_atgo_finalize_command(evidence_dir, runtime_root)}")
         return None
     script = _go_evidence_script()
     if not script.exists():
@@ -305,7 +300,7 @@ def _maybe_auto_finalize_atgo_evidence(
         check=False,
     )
     print("")
-    print(f"Auto-finalize: tools/go_evidence.py finalize {evidence_dir} --team-runtime-dir {runtime_root}")
+    print(f"Auto-finalize: {_render_atgo_finalize_command(evidence_dir, runtime_root)}")
     if proc.stdout:
         print(proc.stdout, end="" if proc.stdout.endswith("\n") else "\n")
     if proc.stderr:
@@ -318,6 +313,22 @@ def _go_evidence_script() -> Path:
     if repo_candidate.exists():
         return repo_candidate
     return Path.cwd() / "tools" / "go_evidence.py"
+
+
+def _atgo_finalize_command_args(evidence_dir: Path, runtime_root: Path) -> list[str]:
+    return [
+        "tools/go_evidence.py",
+        "finalize",
+        str(evidence_dir),
+        "--team-runtime-dir",
+        str(runtime_root),
+    ]
+
+
+def _render_atgo_finalize_command(evidence_dir: Path, runtime_root: Path) -> str:
+    from ..go_dispatch import render_command
+
+    return render_command(_atgo_finalize_command_args(evidence_dir, runtime_root))
 
 
 def cmd_code() -> int:

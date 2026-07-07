@@ -2522,6 +2522,46 @@ def test_atgo_prepare_creates_evidence_dir(tmp_path, monkeypatch, capsys):
     assert metadata["agents"][0]["targets"] == ["src/cli.py"]
 
 
+def test_atgo_finalize_command_quotes_paths_with_spaces(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo project"
+    runtime_dir = tmp_path / "runtime dir"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "atgo",
+        "Add a small @go bridge.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/cli.py",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    evidence_dir = runtime_dir / "atgo-runs" / metadata["go_run_id"]
+    chain_evidence = json.loads((evidence_dir / "chain-evidence.json").read_text(encoding="utf-8"))
+    expected_command = (
+        f'tools/go_evidence.py finalize "{evidence_dir}" '
+        f'--team-runtime-dir "{runtime_dir}"'
+    )
+
+    assert exit_code == 0
+    assert f"Finalize  : {expected_command}" in output
+    finalize = chain_evidence["next_commands"]["finalize"]
+    assert finalize["command"] == expected_command
+    assert finalize["command_args"] == [
+        "tools/go_evidence.py",
+        "finalize",
+        str(evidence_dir),
+        "--team-runtime-dir",
+        str(runtime_dir),
+    ]
+
+
 def test_atgo_auto_finalize_requires_execute(tmp_path, monkeypatch, capsys):
     project_root = tmp_path / "demo-project"
     runtime_dir = tmp_path / "runtime"

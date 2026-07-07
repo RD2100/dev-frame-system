@@ -42,6 +42,7 @@ Required verification for this batch:
 
 ```powershell
 python -m pytest packages\control-plane\tests\test_cli.py -q -k atgo
+python -m pytest packages\control-plane\tests\test_cli.py::test_atgo_finalize_command_quotes_paths_with_spaces -q
 python -m pytest packages\control-plane\tests\test_cli.py::test_atgo_execute_auto_finalize_skips_without_review_evidence packages\control-plane\tests\test_cli.py::test_atgo_execute_auto_finalize_records_reviewed_evidence -q
 python -m pytest tests\test_go_evidence.py packages\control-plane\tests\test_run_index.py packages\control-plane\tests\test_team_runtime.py -q
 python -m pytest packages\control-plane\tests\test_public_snapshot.py -q
@@ -59,8 +60,11 @@ git diff --check
 - Printed finalize guidance may point to the TeamRuntime journal, but final readiness still requires the deterministic evidence gate to pass.
 - Blocked or failed evidence cannot create TeamRuntime final-ready events.
 - Runtime data remains outside the public repository.
+- Printed finalizer guidance reuses the existing CLI command rendering helper
+  for ordinary paths with spaces; `command_args` remains the structured argv
+  source of truth.
 
 ## Known Gaps
 
 - Generic go dispatch automation still does not run finalization automatically.
-- The printed command follows existing CLI path-rendering style and does not introduce a new quoting policy.
+- This slice does not introduce a full shell-specific quoting policy.

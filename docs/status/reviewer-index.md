@@ -463,6 +463,8 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     finalize command includes the runtime directory, missing review evidence is
     skipped, and reviewed evidence can produce TeamRuntime final-ready
     projection through the deterministic finalizer.
+  - Printed finalizer guidance should remain copyable for ordinary paths with
+    spaces while `command_args` remains the unquoted structured argv authority.
   - `docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md`
     records the local limitation set and preserved stop lines.
 - Runtime-governance Batch E atgo prepare finalizer metadata:
