@@ -22,7 +22,7 @@ After this slice:
 - RunIndex projects a prepare-only atgo evidence directory with `chain-evidence.json` but no `review.yaml` as a schema-valid, deferred RunRecord;
 - final-ready acceptance remains impossible without a valid FinalVerdict event and independent review/gate evidence.
 
-This slice does not validate or change the historical `chain-evidence.schema.json` contract. That schema drift remains the Batch D documented gap.
+This slice originally did not validate or change the historical `chain-evidence.schema.json` contract. The follow-up [Runtime Governance Batch E: Chain Evidence Schema Compatibility](runtime-governance-batch-e-chain-evidence-schema-compatibility.md) slice now covers current `go_evidence init` and `devframe atgo` producers while preserving `next_commands.finalize` as guidance only.
 
 ## Local Evidence
 
@@ -36,6 +36,7 @@ Required verification for this batch:
 ```powershell
 python -m pytest packages\control-plane\tests\test_cli.py -q -k atgo
 python -m pytest packages\control-plane\tests\test_run_index.py -q -k atgo
+python -m pytest packages\control-plane\tests\test_public_snapshot.py::test_agent_runtime_chain_evidence_schema_mirror_matches_semantically -q
 python -m pytest tests\test_go_evidence.py packages\control-plane\tests\test_team_runtime.py -q
 python -m pytest packages\control-plane\tests\test_public_snapshot.py -q
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-public-snapshot.ps1 -FailOnTrackedForbidden
@@ -54,4 +55,6 @@ git diff --check
 - Generic go dispatch automation still does not run finalization automatically;
   atgo execution has an explicit `--auto-finalize` follow-up that skips missing
   review evidence.
-- `chain-evidence.schema.json` still needs a later compatibility design before it can formally validate all current producers.
+- ai-workflow-hub `nodes`-style chain evidence remains a separate domain adapter
+  concern; the root schema currently targets `go_evidence init` and `devframe
+  atgo` evidence producers.
