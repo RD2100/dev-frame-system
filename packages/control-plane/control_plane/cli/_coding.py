@@ -176,13 +176,32 @@ def cmd_atgo() -> int:
     )
 
     chain_evidence_path = evidence_dir / "chain-evidence.json"
+    finalize_command = f"tools/go_evidence.py finalize {evidence_dir} --team-runtime-dir {runtime_root}"
     chain_evidence = {
         "run_id": result.go_run_id,
+        "project_id": result.project_id or project_root.name,
         "executor_id": "opencode",
         "mode": "prepare",
         "planner": None,
         "task": str(task_spec_path),
         "methodology": methodology,
+        "next_commands": {
+            "finalize": {
+                "command": finalize_command,
+                "command_args": [
+                    "tools/go_evidence.py",
+                    "finalize",
+                    str(evidence_dir),
+                    "--team-runtime-dir",
+                    str(runtime_root),
+                ],
+                "cwd": str(project_root),
+                "authority": "guidance_only",
+                "creates_acceptance": False,
+                "requires_independent_review": True,
+                "manual": True,
+            },
+        },
         "evidence_files": [
             "diff.patch",
             "test-output.md",
@@ -208,7 +227,7 @@ def cmd_atgo() -> int:
     print(f"Inspect   : devframe code status {result.go_run_id} --runtime-dir {runtime_root}")
     print(f"Resume    : devframe code execute {result.go_run_id} --runtime-dir {runtime_root}")
     print(f"Review    : devframe actions --runtime-dir {runtime_root}")
-    print(f"Finalize  : tools/go_evidence.py finalize {evidence_dir} --team-runtime-dir {runtime_root}")
+    print(f"Finalize  : {finalize_command}")
 
     if args.execute:
         from ..backup_guard import default_runtime_dir

@@ -2996,6 +2996,21 @@ def test_atgo_prepare_writes_methodology_to_chain_evidence(tmp_path, monkeypatch
 
     assert exit_code == 0
     assert chain_evidence.get("methodology", {}).get("skill_id") == "tdd"
+    finalize = chain_evidence["next_commands"]["finalize"]
+    assert finalize["command"] == (
+        f"tools/go_evidence.py finalize {evidence_dir} --team-runtime-dir {runtime_dir}"
+    )
+    assert finalize["command_args"] == [
+        "tools/go_evidence.py",
+        "finalize",
+        str(evidence_dir),
+        "--team-runtime-dir",
+        str(runtime_dir),
+    ]
+    assert finalize["authority"] == "guidance_only"
+    assert finalize["creates_acceptance"] is False
+    assert finalize["requires_independent_review"] is True
+    assert finalize["manual"] is True
 
 
 def test_methodology_dispatch_exposes_required_traits():

@@ -270,6 +270,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/runtime-governance-batch-e-team-review-verdict-events.md`
 - `docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`
 - `docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md`
+- `docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/total-control-policy-engine-and-human-escalation-governance-plan.md`
@@ -450,6 +451,18 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     finalize command includes the runtime directory.
   - `docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md`
     records the local limitation set and preserved stop lines.
+- Runtime-governance Batch E atgo prepare finalizer metadata:
+  - `devframe atgo` should write `next_commands.finalize` metadata into
+    `chain-evidence.json` with `authority: guidance_only`,
+    `creates_acceptance: false`, and `requires_independent_review: true`.
+  - RunIndex should project prepare-only atgo evidence with chain evidence but
+    no `review.yaml` as deferred/review-pending preparation, not as final-ready
+    acceptance or corrupt-record failure.
+  - `packages/control-plane/tests/test_cli.py` and
+    `packages/control-plane/tests/test_run_index.py` should prove the metadata
+    shape and prepare-only projection.
+  - `docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md`
+    records the local limitation set and preserved stop lines.
 
 ## Open-Source Review Checklist
 
@@ -518,6 +531,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/runtime-governance-batch-e-team-review-verdict-events.md`
 - `docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`
 - `docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md`
+- `docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/documentation-management-audit-and-plan.md`

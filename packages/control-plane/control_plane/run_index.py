@@ -252,8 +252,69 @@ def _atgo_entries(runtime: Path) -> list[dict[str, Any]]:
         return entries
     for run_dir in sorted(path for path in base.iterdir() if path.is_dir()):
         review_path = run_dir / "review.yaml"
-        review, diagnostic = _read_yaml_file(review_path)
         legacy_id = run_dir.name
+        if not review_path.exists():
+            chain_path = run_dir / "chain-evidence.json"
+            chain_evidence, diagnostic = _read_json_file(chain_path)
+            if diagnostic:
+                entries.append(_failure_entry(
+                    "atgo_evidence",
+                    legacy_id,
+                    review_path,
+                    f"missing review.yaml and {diagnostic}",
+                ))
+                continue
+            next_commands = _as_dict(chain_evidence.get("next_commands"))
+            finalize_command = _as_dict(next_commands.get("finalize"))
+            entries.append(_entry(
+                adapter_id="atgo_evidence",
+                source_type="atgo_prepare",
+                source_path=chain_path,
+                legacy_id=legacy_id,
+                record=_make_record(
+                    legacy_id=legacy_id,
+                    project_id=str(chain_evidence.get("project_id") or "unknown-project"),
+                    domain="review",
+                    profile="atgo",
+                    status="prepared",
+                    source_path=chain_path,
+                    adapter_id="atgo_evidence",
+                    created_at=str(
+                        _as_dict(chain_evidence.get("timestamps")).get("created_at")
+                        or _mtime_iso(chain_path)
+                    ),
+                    task_id=str(chain_evidence.get("task") or legacy_id),
+                    artifact_refs=_artifact_refs(chain_path, run_dir),
+                    evidence_refs=[
+                        _evidence_ref(
+                            f"ev-atgo-chain-{_safe_token(legacy_id)}",
+                            "other",
+                            chain_path,
+                            "limitation",
+                        )
+                    ],
+                    limitations=["independent review evidence is not recorded yet"],
+                    domain_refs={
+                        "legacy_adapter": "atgo_evidence",
+                        "go_run_id": legacy_id,
+                        "mode": str(chain_evidence.get("mode") or "prepare"),
+                        "finalizer_command": finalize_command.get("command", ""),
+                        "finalizer_command_args": finalize_command.get("command_args", []),
+                        "finalizer_authority": finalize_command.get("authority", ""),
+                        "finalizer_creates_acceptance": finalize_command.get(
+                            "creates_acceptance",
+                            None,
+                        ),
+                        "finalizer_requires_independent_review": finalize_command.get(
+                            "requires_independent_review",
+                            None,
+                        ),
+                        "finalizer_manual": finalize_command.get("manual", None),
+                    },
+                ),
+            ))
+            continue
+        review, diagnostic = _read_yaml_file(review_path)
         if diagnostic:
             entries.append(_failure_entry("atgo_evidence", legacy_id, review_path, diagnostic))
             continue

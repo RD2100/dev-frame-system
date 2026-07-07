@@ -775,6 +775,61 @@ def test_run_index_projects_corrupt_legacy_records_as_blocked_failures(tmp_path)
         assert "diagnostic" in record["domain_refs"]
 
 
+def test_run_index_projects_atgo_prepare_chain_evidence_as_review_pending(tmp_path):
+    runtime = tmp_path / "runtime"
+    evidence_dir = runtime / "atgo-runs" / "go-prepare"
+    evidence_dir.mkdir(parents=True)
+    _write_json(evidence_dir / "chain-evidence.json", {
+        "run_id": "go-prepare",
+        "project_id": "demo-project",
+        "executor_id": "opencode",
+        "mode": "prepare",
+        "task": str(evidence_dir / "task-spec.md"),
+        "next_commands": {
+            "finalize": {
+                "command": f"tools/go_evidence.py finalize {evidence_dir} --team-runtime-dir {runtime}",
+                "command_args": [
+                    "tools/go_evidence.py",
+                    "finalize",
+                    str(evidence_dir),
+                    "--team-runtime-dir",
+                    str(runtime),
+                ],
+                "authority": "guidance_only",
+                "creates_acceptance": False,
+                "requires_independent_review": True,
+                "manual": True,
+            },
+        },
+        "timestamps": {"created_at": "2026-07-07T00:00:00+00:00"},
+    })
+
+    index = build_run_index(runtime)
+
+    assert len(index["runs"]) == 1
+    entry = index["runs"][0]
+    record = entry["record"]
+    _run_record_validator().validate(record)
+    assert entry["source_type"] == "atgo_prepare"
+    assert record["phase"] == "prepared"
+    assert record["outcome"] == "unknown"
+    assert record["review_state"] == "not_reviewed"
+    assert record["gate_state"] == "not_evaluated"
+    assert record["acceptance_state"] == "deferred"
+    assert "final_verdict_ref" not in record
+    assert record["review_refs"] == []
+    assert record["gate_refs"] == []
+    assert record["failure_refs"] == []
+    assert record["domain_refs"]["finalizer_authority"] == "guidance_only"
+    assert record["domain_refs"]["finalizer_creates_acceptance"] is False
+    assert record["domain_refs"]["finalizer_requires_independent_review"] is True
+    assert record["domain_refs"]["finalizer_manual"] is True
+    assert record["domain_refs"]["finalizer_command_args"][-2:] == [
+        "--team-runtime-dir",
+        str(runtime),
+    ]
+
+
 def test_run_index_blocks_atgo_executor_self_review(tmp_path):
     runtime = tmp_path / "runtime"
     review_dir = runtime / "atgo-runs" / "self-review"
