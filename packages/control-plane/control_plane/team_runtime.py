@@ -97,7 +97,7 @@ class TeamRuntime:
 
     def record_result(self, run_id: str, agent_id: str, *, status: str,
                       report_path: str = "", isolated: bool = False) -> str:
-        return self._append(TeamEvent(
+        event_id = self._append(TeamEvent(
             event_type="task_result",
             run_id=run_id,
             agent_id=agent_id,
@@ -106,6 +106,30 @@ class TeamRuntime:
                 "report_present": bool(report_path),
                 "report_path": str(report_path or ""),
                 "isolated": bool(isolated),
+            },
+        ))
+        if report_path:
+            self.record_evidence_ref(
+                run_id,
+                agent_id,
+                ref_type="report",
+                ref_path=report_path,
+                source_event_id=event_id,
+            )
+        return event_id
+
+    def record_evidence_ref(self, run_id: str, agent_id: str, *,
+                            ref_type: str, ref_path: str,
+                            source_event_id: str = "") -> str:
+        """Record an explicit artifact/evidence reference produced by an agent."""
+        return self._append(TeamEvent(
+            event_type="evidence_ref",
+            run_id=run_id,
+            agent_id=agent_id,
+            payload={
+                "ref_type": str(ref_type or "artifact"),
+                "ref_path": str(ref_path or ""),
+                "source_event_id": str(source_event_id or ""),
             },
         ))
 
@@ -187,7 +211,16 @@ def build_team_runtime_view(runtime_dir: str | Path | None = None) -> dict[str, 
     # lifecycle, and an agent per participant with its latest recorded status.
     tasks_by_key: dict[tuple[str, str], dict[str, Any]] = {}
     agents_by_id: dict[str, dict[str, Any]] = {}
+    evidence_keys: set[tuple[str, str]] = set()
     _role_words = {"controller", "coordinator", "reviewer", "planner", "executor"}
+    explicit_evidence_keys = {
+        (
+            _slug(record.get("run_id")),
+            str((record.get("payload") if isinstance(record.get("payload"), dict) else {}).get("ref_path") or ""),
+        )
+        for record in records
+        if isinstance(record, dict) and str(record.get("event_type") or "") == "evidence_ref"
+    }
 
     def _touch_agent(agent: str, status: str) -> None:
         if not agent:
@@ -310,12 +343,32 @@ def build_team_runtime_view(runtime_dir: str | Path | None = None) -> dict[str, 
             # Real Evidence Store: a recorded evidence ref when the result
             # carried a report path.
             report_path = str(payload.get("report_path") or "")
-            if report_path:
+            if report_path and (run_id, report_path) not in explicit_evidence_keys:
+                evidence_keys.add((run_id, report_path))
                 evidence_store.append({
                     "evidence_id": f"team-evidence-{event_id}",
                     "run_id": run_id,
                     "ref_type": "report",
                     "ref_path": report_path,
+                })
+        elif event_type == "evidence_ref":
+            ref_path = str(payload.get("ref_path") or "")
+            if ref_path:
+                if (run_id, ref_path) not in evidence_keys:
+                    evidence_keys.add((run_id, ref_path))
+                    source_event_id = str(payload.get("source_event_id") or "")
+                    evidence_id = _slug(source_event_id) if source_event_id else event_id
+                    evidence_store.append({
+                        "evidence_id": f"team-evidence-{evidence_id}",
+                        "run_id": run_id,
+                        "ref_type": str(payload.get("ref_type") or "artifact"),
+                        "ref_path": ref_path,
+                    })
+                event_log.append({
+                    "event_id": f"team-{event_id}",
+                    "kind": "evidence-ref",
+                    "run_id": run_id,
+                    "summary": f"{agent_id} recorded evidence {ref_path} in run {run_id}.",
                 })
         elif event_type == "workflow_event":
             phase = str(payload.get("phase") or "phase")

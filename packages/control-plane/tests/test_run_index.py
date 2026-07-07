@@ -92,6 +92,18 @@ def test_run_index_projects_legacy_adapters_into_schema_records(tmp_path):
                 "timestamp": "2026-07-07T00:04:00Z",
                 "event_id": "team-2",
             }),
+            json.dumps({
+                "event_type": "evidence_ref",
+                "run_id": "go-demo",
+                "agent_id": "coding-agent-1",
+                "payload": {
+                    "ref_type": "report",
+                    "ref_path": str(report_path),
+                    "source_event_id": "team-2",
+                },
+                "timestamp": "2026-07-07T00:04:01Z",
+                "event_id": "team-3",
+            }),
         ]) + "\n",
         encoding="utf-8",
     )
@@ -153,11 +165,65 @@ def test_run_index_projects_legacy_adapters_into_schema_records(tmp_path):
     assert test_record["review_state"] != "review_passed"
     assert test_record["acceptance_state"] != "final_ready"
 
+    team_record = grouped["team_events"][0]
+    assert team_record["domain_refs"]["event_count"] == 3
+    assert "evidence_ref" in team_record["domain_refs"]["event_types"]
+    assert team_record["evidence_refs"] == [{
+        "evidence_id": "ev-team-team-2",
+        "kind": "command_output",
+        "uri": str(report_path),
+        "supports": "outcome",
+    }]
+
     paper_record = grouped["paper"][0]
     assert paper_record["outcome"] == "human_required"
     assert paper_record["acceptance_state"] == "blocked"
     assert paper_record["failure_refs"][0]["status"] == "blocked"
     assert paper_record["domain_refs"]["chain_trusted"] is True
+
+
+def test_run_index_projects_explicit_team_evidence_without_task_result_report(tmp_path):
+    runtime = tmp_path / "runtime"
+    report_path = runtime / "reports" / "worker-report.md"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text("worker report\n", encoding="utf-8")
+    (runtime / "team-events.jsonl").write_text(
+        "\n".join([
+            json.dumps({
+                "event_type": "task_created",
+                "run_id": "go-explicit",
+                "agent_id": "coding-agent-1",
+                "payload": {"project_id": "demo-project"},
+                "timestamp": "2026-07-07T00:00:00Z",
+                "event_id": "team-explicit-1",
+            }),
+            json.dumps({
+                "event_type": "evidence_ref",
+                "run_id": "go-explicit",
+                "agent_id": "coding-agent-1",
+                "payload": {
+                    "ref_type": "report",
+                    "ref_path": str(report_path),
+                    "source_event_id": "team-explicit-result",
+                },
+                "timestamp": "2026-07-07T00:01:00Z",
+                "event_id": "team-explicit-2",
+            }),
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    index = build_run_index(runtime)
+
+    record = _records_by_adapter(index)["team_events"][0]
+    _run_record_validator().validate(record)
+    assert record["domain_refs"]["legacy_status"] == "running"
+    assert record["evidence_refs"] == [{
+        "evidence_id": "ev-team-team-explicit-result",
+        "kind": "command_output",
+        "uri": str(report_path),
+        "supports": "outcome",
+    }]
 
 
 def test_run_index_projects_corrupt_legacy_records_as_blocked_failures(tmp_path):

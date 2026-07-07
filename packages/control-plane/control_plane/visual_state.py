@@ -980,9 +980,20 @@ def _build_team_model(
         if str(recorded_task.get("task_id") or "") not in _projected_task_ids:
             task_board.append(recorded_task)
     _projected_evidence_ids = {str(e.get("evidence_id") or "") for e in evidence_store}
+    _projected_evidence_keys = {
+        (str(e.get("run_id") or ""), str(e.get("ref_path") or ""))
+        for e in evidence_store
+    }
     for recorded_evidence in recorded.get("evidence_store", []):
-        if str(recorded_evidence.get("evidence_id") or "") not in _projected_evidence_ids:
+        evidence_id = str(recorded_evidence.get("evidence_id") or "")
+        evidence_key = (
+            str(recorded_evidence.get("run_id") or ""),
+            str(recorded_evidence.get("ref_path") or ""),
+        )
+        if evidence_id not in _projected_evidence_ids and evidence_key not in _projected_evidence_keys:
             evidence_store.append(recorded_evidence)
+            _projected_evidence_ids.add(evidence_id)
+            _projected_evidence_keys.add(evidence_key)
     return {
         "agent_registry": agent_registry,
         "task_board": task_board,

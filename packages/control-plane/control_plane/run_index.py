@@ -212,7 +212,7 @@ def _team_event_entries(runtime: Path) -> list[dict[str, Any]]:
                 updated_at=str(latest.get("timestamp") or _mtime_iso(path)),
                 task_id=run_id,
                 artifact_refs=_artifact_refs(path),
-                evidence_refs=_team_evidence_refs(result_events),
+                evidence_refs=_team_evidence_refs(events),
                 worker_results=_team_worker_results(result_events),
                 domain_refs={
                     "legacy_adapter": "team_events",
@@ -708,10 +708,33 @@ def _agent_evidence_refs(agents: list[Any]) -> list[dict[str, Any]]:
 
 def _team_evidence_refs(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     refs: list[dict[str, Any]] = []
+    seen_paths: set[str] = set()
+    explicit_paths = {
+        str(_as_dict(event.get("payload")).get("ref_path") or "")
+        for event in events
+        if event.get("event_type") == "evidence_ref"
+    }
     for event in events:
+        event_type = str(event.get("event_type") or "")
         payload = _as_dict(event.get("payload"))
+        if event_type == "evidence_ref":
+            ref_path = str(payload.get("ref_path") or "")
+            if not ref_path or ref_path in seen_paths:
+                continue
+            seen_paths.add(ref_path)
+            source_event_id = str(payload.get("source_event_id") or "")
+            refs.append(_evidence_ref(
+                f"ev-team-{_safe_token(source_event_id or event.get('event_id') or ref_path)}",
+                _team_evidence_kind(str(payload.get("ref_type") or "")),
+                Path(ref_path),
+                "outcome",
+            ))
+            continue
+        if event_type != "task_result":
+            continue
         report_path = str(payload.get("report_path") or "")
-        if report_path:
+        if report_path and report_path not in explicit_paths and report_path not in seen_paths:
+            seen_paths.add(report_path)
             refs.append(_evidence_ref(
                 f"ev-team-{_safe_token(event.get('event_id') or report_path)}",
                 "command_output",
@@ -719,6 +742,23 @@ def _team_evidence_refs(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "outcome",
             ))
     return refs
+
+
+def _team_evidence_kind(ref_type: str) -> str:
+    token = _safe_token(ref_type)
+    if token in {"report", "command_output", "command-output", "execution_report", "execution-report"}:
+        return "command_output"
+    if token in {"test", "test_output", "test-output"}:
+        return "test_output"
+    if token == "review":
+        return "review"
+    if token in {"gate", "gate_result", "gate-result"}:
+        return "gate_result"
+    if token in {"final_verdict", "final-verdict"}:
+        return "final_verdict"
+    if token in {"context_packet", "context-packet", "packet"}:
+        return "context_packet"
+    return "other"
 
 
 def _evidence_ref(evidence_id: str, kind: str, path: Path, supports: str) -> dict[str, Any]:

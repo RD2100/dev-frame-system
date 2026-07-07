@@ -10,7 +10,8 @@ from pathlib import Path
 
 from jsonschema.validators import validator_for
 
-from control_plane.go_dispatch import run_go_dispatch
+from control_plane.go_dispatch import execute_go_run, run_go_dispatch
+from control_plane.t3_adapter import build_t3_client_shell
 from control_plane.team_runtime import TEAM_EVENTS_FILE, build_team_runtime_view
 from control_plane.visual_state import build_visual_control_plane_state
 
@@ -24,6 +25,15 @@ def _validate_state(state: dict) -> None:
     validator_class = validator_for(schema)
     validator_class.check_schema(schema)
     validator_class(schema).validate(state)
+
+
+def _validate_t3_shell(shell: dict) -> None:
+    schema = json.loads(
+        (REPO_ROOT / "schemas/t3_client_shell.schema.json").read_text(encoding="utf-8-sig")
+    )
+    validator_class = validator_for(schema)
+    validator_class.check_schema(schema)
+    validator_class(schema).validate(shell)
 
 
 def _noop_report_command() -> list[str]:
@@ -59,7 +69,16 @@ def test_execution_records_team_events_and_surfaces_in_state(tmp_path):
     assert (runtime / TEAM_EVENTS_FILE).exists()
     view = build_team_runtime_view(runtime)
     kinds = {e["kind"] for e in view["event_log"]}
-    assert {"task-created", "task-claimed", "task-result"} <= kinds
+    assert {"task-created", "task-claimed", "task-result", "evidence-ref"} <= kinds
+    view_evidence = [e for e in view["evidence_store"] if e["evidence_id"].startswith("team-evidence-")]
+    assert view_evidence
+    assert {e["ref_type"] for e in view_evidence} == {"report"}
+    event_types = [
+        json.loads(line)["event_type"]
+        for line in (runtime / TEAM_EVENTS_FILE).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert "evidence_ref" in event_types
 
     # They surface in the control-plane read model's team objects.
     state = build_visual_control_plane_state(runtime_dir=runtime)
@@ -72,6 +91,21 @@ def test_execution_records_team_events_and_surfaces_in_state(tmp_path):
     recorded_msg_kinds = {m["kind"] for m in team["message_bus"]}
     assert "task-assign" in recorded_msg_kinds
     assert "result" in recorded_msg_kinds
+    report_refs = [e for e in team["evidence_store"] if e["ref_type"] == "report"]
+    report_paths = [e["ref_path"] for e in report_refs]
+    assert report_paths
+    assert not [e for e in team["evidence_store"] if e["evidence_id"].startswith("team-evidence-")]
+    shell = build_t3_client_shell(runtime_dir=runtime)
+    _validate_t3_shell(shell)
+    t3_report_refs = [
+        e for e in shell["devframe"]["team"]["evidenceStore"]
+        if e["refType"] == "report"
+    ]
+    assert {
+        Path(e["refPath"]).name for e in t3_report_refs
+    } >= {
+        Path(e["ref_path"]).name for e in view_evidence
+    }
     # Real Conflict Control: targets owned by their agents this run.
     owned_files = {c["file_path"] for c in team["conflict_control"]}
     assert {"a.py", "b.py"} <= owned_files
@@ -111,3 +145,35 @@ def test_prepare_only_records_no_team_events(tmp_path):
         "task_board": [],
         "evidence_store": [],
     }
+
+
+def test_resume_prepared_go_run_records_explicit_team_evidence(tmp_path):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "a.py").write_text("a = 1\n", encoding="utf-8")
+    runtime = tmp_path / "runtime"
+
+    prepared = run_go_dispatch(
+        project,
+        "prepare then resume",
+        runtime_dir=runtime,
+        agents=1,
+        targets=["a.py"],
+        execute=False,
+        worker_command=_noop_report_command(),
+    )
+    assert not (runtime / TEAM_EVENTS_FILE).exists()
+
+    executed = execute_go_run(runtime, prepared.go_run_id)
+
+    assert executed.status in {"passed", "queued"}
+    event_types = [
+        json.loads(line)["event_type"]
+        for line in (runtime / TEAM_EVENTS_FILE).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert "task_result" in event_types
+    assert "evidence_ref" in event_types
+    evidence = build_team_runtime_view(runtime)["evidence_store"]
+    assert len(evidence) == 1
+    assert evidence[0]["ref_type"] == "report"

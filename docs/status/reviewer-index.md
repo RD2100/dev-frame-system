@@ -265,6 +265,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/runtime-governance-batch-d-independent-gate.md`
 - `docs/status/runtime-governance-batch-e-workflow-review-pending.md`
 - `docs/status/runtime-governance-batch-e-paper-trust-fail-closed.md`
+- `docs/status/runtime-governance-batch-e-explicit-team-evidence-events.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/total-control-policy-engine-and-human-escalation-governance-plan.md`
@@ -371,6 +372,24 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     the paper run-governance vocabulary aligned with the fail-closed behavior.
   - `docs/status/runtime-governance-batch-e-paper-trust-fail-closed.md` records
     the local limitation set and preserved stop lines.
+- Runtime-governance Batch E explicit team evidence events:
+  - `packages/control-plane/control_plane/team_runtime.py` should record
+    `evidence_ref` events for worker report artifacts while preserving legacy
+    `task_result.report_path` projection.
+  - `packages/control-plane/tests/test_team_runtime.py` should prove explicit
+    evidence folding, legacy journal compatibility, and no duplicate evidence.
+  - `packages/control-plane/tests/test_go_team_runtime.py` should prove the
+    real `run_go_dispatch(... execute=True)` and prepared resume paths record
+    evidence refs, remain visual-state schema-valid, and project into T3.
+  - `packages/control-plane/control_plane/run_index.py` and
+    `packages/control-plane/tests/test_run_index.py` should prove explicit
+    team evidence refs project into RunRecord evidence without breaking legacy
+    `task_result.report_path` journals.
+  - `packages/control-plane/control_plane/visual_state.py` should avoid
+    re-adding recorded team evidence when the projected go-run report already
+    names the same run and path.
+  - `docs/status/runtime-governance-batch-e-explicit-team-evidence-events.md`
+    records the local limitation set and preserved stop lines.
 
 ## Open-Source Review Checklist
 
@@ -434,6 +453,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/runtime-governance-batch-d-independent-gate.md`
 - `docs/status/runtime-governance-batch-e-workflow-review-pending.md`
 - `docs/status/runtime-governance-batch-e-paper-trust-fail-closed.md`
+- `docs/status/runtime-governance-batch-e-explicit-team-evidence-events.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/documentation-management-audit-and-plan.md`

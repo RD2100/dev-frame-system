@@ -43,6 +43,45 @@ def test_view_derives_evidence_store(tmp_path):
     assert len(build_team_runtime_view(tmp_path)["evidence_store"]) == 1
 
 
+def test_legacy_task_result_report_path_still_projects_evidence(tmp_path):
+    path = tmp_path / TEAM_EVENTS_FILE
+    path.write_text(
+        json.dumps({
+            "event_type": "task_result",
+            "run_id": "go-run-legacy",
+            "agent_id": "a1",
+            "payload": {"status": "passed", "report_path": "reports/legacy.md"},
+            "timestamp": "2026-07-07T00:00:00+00:00",
+            "event_id": "legacy-event",
+        }) + "\n",
+        encoding="utf-8",
+    )
+
+    evidence = build_team_runtime_view(tmp_path)["evidence_store"]
+
+    assert evidence == [{
+        "evidence_id": "team-evidence-legacy-event",
+        "run_id": "go-run-legacy",
+        "ref_type": "report",
+        "ref_path": "reports/legacy.md",
+    }]
+
+
+def test_direct_evidence_ref_without_source_event_id_uses_event_id_and_dedupes_path(tmp_path):
+    team = TeamRuntime(runtime_dir=tmp_path)
+    team.record_evidence_ref("go-run-direct", "a1", ref_type="report", ref_path="reports/direct.md")
+    team.record_evidence_ref("go-run-direct", "a1", ref_type="report", ref_path="reports/direct.md")
+
+    view = build_team_runtime_view(tmp_path)
+
+    assert len(view["evidence_store"]) == 1
+    evidence = view["evidence_store"][0]
+    assert evidence["evidence_id"] != "team-evidence-x"
+    assert evidence["evidence_id"].startswith("team-evidence-go-run-direct-a1-")
+    assert evidence["ref_path"] == "reports/direct.md"
+    assert len([event for event in view["event_log"] if event["kind"] == "evidence-ref"]) == 2
+
+
 def test_view_derives_agent_registry_and_task_board(tmp_path):
     team = TeamRuntime(runtime_dir=tmp_path)
     team.record_task_created("go-run-1", "coding-agent-1", shard_index=1, shard_count=2,
@@ -135,9 +174,9 @@ def test_record_lifecycle_is_persisted(tmp_path):
     team.record_result("go-run-1", "coding-agent-1", status="passed", report_path="r.md")
 
     lines = (tmp_path / TEAM_EVENTS_FILE).read_text(encoding="utf-8").strip().splitlines()
-    assert len(lines) == 3
+    assert len(lines) == 4
     types = [json.loads(line)["event_type"] for line in lines]
-    assert types == ["task_created", "task_claimed", "task_result"]
+    assert types == ["task_created", "task_claimed", "task_result", "evidence_ref"]
 
 
 def test_view_folds_events_into_schema_shapes(tmp_path):
@@ -148,7 +187,7 @@ def test_view_folds_events_into_schema_shapes(tmp_path):
 
     view = build_team_runtime_view(tmp_path)
     event_kinds = {e["kind"] for e in view["event_log"]}
-    assert {"task-created", "task-claimed", "task-result"} <= event_kinds
+    assert {"task-created", "task-claimed", "task-result", "evidence-ref"} <= event_kinds
 
     # message_bus has a coordinator->agent assign and an agent->coordinator result
     kinds = {(m["from_role"], m["to_role"], m["kind"]) for m in view["message_bus"]}
