@@ -1,0 +1,52 @@
+{
+  "schema_version": "0.1",
+  "context_packet_id": "cp-invalid-worker-final-ready",
+  "project_id": "devframe-system",
+  "goal_id": "goal-runtime-governance-batch-a",
+  "task_id": "task-context-contracts",
+  "domain": "code",
+  "profile": "contract-only",
+  "producer_role": "worker",
+  "created_at": "2026-07-07T00:00:00Z",
+  "intent_summary": "Invalid packet attempts to let a worker claim final acceptance.",
+  "intended_use": "final_verdict_preparation",
+  "immutability": {
+    "immutable": true,
+    "content_hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "source_refs": [
+    {
+      "ref_id": "run-report",
+      "kind": "artifact",
+      "uri": "reports/run-report.md",
+      "included": true,
+      "required": true,
+      "freshness_state": "current"
+    }
+  ],
+  "omitted_required_refs": [],
+  "forbidden_refs": [],
+  "freshness": {
+    "checked_at": "2026-07-07T00:00:00Z",
+    "stale_refs": [],
+    "unknown_refs": []
+  },
+  "completeness_state": "complete",
+  "privacy_state": "redacted",
+  "seal_state": "sealed",
+  "limitations": [],
+  "constraints": {
+    "allowed_actions": [
+      "claim final_ready"
+    ],
+    "forbidden_actions": [],
+    "stop_lines": [],
+    "authority_boundary": {
+      "can_execute": true,
+      "can_review": false,
+      "can_claim_final_acceptance": true,
+      "final_verdict_required": true
+    }
+  },
+  "domain_refs": {}
+}

@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import uuid
 
-from jsonschema import Draft7Validator
+from jsonschema import Draft7Validator, Draft202012Validator
 import yaml
 
 
@@ -57,6 +57,13 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "rules/web-ai-adapters.md",
     "schemas/project_contract.schema.json",
     "schemas/rdgoal_dispatch_packet.schema.json",
+    "schemas/runtime-governance/context-packet.schema.json",
+    "schemas/runtime-governance/context-ledger.schema.json",
+    "schemas/examples/runtime-governance/context-packet-valid.json",
+    "schemas/examples/runtime-governance/context-ledger-valid.json",
+    "schemas/examples/runtime-governance/context-packet-worker-final-ready-invalid.json",
+    "schemas/examples/runtime-governance/context-packet-text-final-ready-invalid.json",
+    "schemas/examples/runtime-governance/context-ledger-mutable-invalid.json",
     "schemas/visual_control_plane_state.schema.json",
     "schemas/web_ai_adapter.schema.json",
     "scripts/verify-control-plane-wheel.ps1",
@@ -871,6 +878,70 @@ def test_default_visual_control_plane_state_template_matches_schema():
     assert "secret_exposure" in template["safety"]["human_gate_required_for"]
 
 
+def test_runtime_governance_context_schemas_validate_fixtures():
+    cases = [
+        (
+            REPO_ROOT / "schemas" / "runtime-governance" / "context-packet.schema.json",
+            [
+                REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "context-packet-valid.json",
+            ],
+            [
+                REPO_ROOT
+                / "schemas"
+                / "examples"
+                / "runtime-governance"
+                / "context-packet-worker-final-ready-invalid.json",
+                REPO_ROOT
+                / "schemas"
+                / "examples"
+                / "runtime-governance"
+                / "context-packet-text-final-ready-invalid.json",
+            ],
+        ),
+        (
+            REPO_ROOT / "schemas" / "runtime-governance" / "context-ledger.schema.json",
+            [
+                REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "context-ledger-valid.json",
+            ],
+            [
+                REPO_ROOT
+                / "schemas"
+                / "examples"
+                / "runtime-governance"
+                / "context-ledger-mutable-invalid.json",
+            ],
+        ),
+    ]
+
+    for schema_path, valid_paths, invalid_paths in cases:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        Draft202012Validator.check_schema(schema)
+        validator = Draft202012Validator(schema)
+        for fixture_path in valid_paths:
+            fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+            validator.validate(fixture)
+            if "constraints" in fixture:
+                assert fixture["constraints"]["authority_boundary"]["can_claim_final_acceptance"] is False
+            if "entries" in fixture:
+                previous_hash = None
+                for expected_index, entry in enumerate(fixture["entries"]):
+                    assert entry["entry_index"] == expected_index
+                    assert entry["previous_entry_hash"] == previous_hash
+                    previous_hash = entry["entry_hash"]
+        for fixture_path in invalid_paths:
+            fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+            errors = sorted(validator.iter_errors(fixture), key=lambda error: list(error.path))
+            assert errors, f"{fixture_path} should fail {schema_path.name}"
+        if schema_path.name == "context-packet.schema.json":
+            uppercase_bypass = json.loads(valid_paths[0].read_text(encoding="utf-8"))
+            uppercase_bypass["constraints"]["allowed_actions"] = ["CLAIM FINAL_READY"]
+            errors = sorted(
+                validator.iter_errors(uppercase_bypass),
+                key=lambda error: list(error.path),
+            )
+            assert errors, "allowed_actions must reject uppercase final acceptance claims"
+
+
 def test_public_docs_mention_release_gate_and_visual_control_plane_surfaces():
     expected = {
         REPO_ROOT / "README.md": [
@@ -946,6 +1017,21 @@ def test_public_schemas_docs_and_fixtures_exclude_private_paths():
         REPO_ROOT / "packages" / "test-frame" / "schemas" / "resource-integration" / "memory-context-record.schema.json",
         REPO_ROOT / "packages" / "test-frame" / "schemas" / "resource-integration" / "codegraph-index-record.schema.json",
         REPO_ROOT / "packages" / "test-frame" / "schemas" / "agent-runtime" / "memory-update-record.schema.json",
+        REPO_ROOT / "schemas" / "runtime-governance" / "context-packet.schema.json",
+        REPO_ROOT / "schemas" / "runtime-governance" / "context-ledger.schema.json",
+        REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "context-packet-valid.json",
+        REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "context-ledger-valid.json",
+        REPO_ROOT
+        / "schemas"
+        / "examples"
+        / "runtime-governance"
+        / "context-packet-worker-final-ready-invalid.json",
+        REPO_ROOT
+        / "schemas"
+        / "examples"
+        / "runtime-governance"
+        / "context-packet-text-final-ready-invalid.json",
+        REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "context-ledger-mutable-invalid.json",
         REPO_ROOT / "docs" / "agent-runtime" / "negative-test-fixtures" / "NEG-024-path-traversal-read.json",
         REPO_ROOT / "docs" / "agent-runtime" / "negative-test-fixtures" / "NEG-017-write-outside-scope.json",
         REPO_ROOT / "docs" / "agent-runtime" / "integration-contracts.md",
