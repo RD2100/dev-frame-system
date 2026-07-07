@@ -1234,7 +1234,8 @@ def _final_verdict_supersession_chain(
     seen: set[str] = {
         str(artifact_path.resolve()) if artifact_path.exists() else str(artifact_path)
     }
-    for _ in range(max_depth):
+    depth_limited = False
+    for depth in range(max_depth):
         supersedes = _as_dict(current.get("supersedes"))
         if not supersedes:
             break
@@ -1242,6 +1243,9 @@ def _final_verdict_supersession_chain(
         prior_path = _resolve_superseded_verdict_path(current_path, uri)
         prior_key = str(prior_path.resolve()) if prior_path.exists() else str(prior_path)
         if prior_key in seen:
+            if chain:
+                chain[-1]["resolution_state"] = "cycle"
+                chain[-1]["diagnostic"] = "supersession chain cycle detected"
             break
         seen.add(prior_key)
         item = {
@@ -1249,17 +1253,33 @@ def _final_verdict_supersession_chain(
             "uri": uri,
             "reason": str(supersedes.get("reason") or ""),
             "resolved": False,
+            "resolution_state": "missing",
+            "diagnostic": "missing superseded FinalVerdict artifact",
         }
         chain.append(item)
         prior_artifact, diagnostic = _read_final_verdict_artifact_for_chain(prior_path)
         if diagnostic:
+            item["resolution_state"] = "missing" if diagnostic.startswith("missing JSON file:") else "invalid"
+            item["diagnostic"] = (
+                "missing superseded FinalVerdict artifact"
+                if item["resolution_state"] == "missing"
+                else "invalid superseded FinalVerdict artifact"
+            )
             break
         if str(prior_artifact.get("verdict_id") or "") != item["verdict_id"]:
+            item["resolution_state"] = "id_mismatch"
+            item["diagnostic"] = "superseded verdict_id does not match artifact"
             break
         item["resolved"] = True
+        item["resolution_state"] = "resolved"
+        item.pop("diagnostic", None)
         item["final_state"] = str(prior_artifact.get("final_state") or "")
         current = prior_artifact
         current_path = prior_path
+        depth_limited = depth == max_depth - 1 and bool(_as_dict(current.get("supersedes")))
+    if depth_limited and chain:
+        chain[-1]["resolution_state"] = "depth_limited"
+        chain[-1]["diagnostic"] = "supersession chain depth limit reached"
     return chain
 
 

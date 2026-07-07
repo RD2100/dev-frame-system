@@ -453,6 +453,7 @@ def test_run_index_projects_team_final_verdict_to_final_ready(tmp_path):
                 "uri": str(prior_v1_path),
                 "reason": "New independent review evidence superseded the prior verdict.",
                 "resolved": True,
+                "resolution_state": "resolved",
                 "final_state": "accepted_with_limitation",
             },
             {
@@ -460,6 +461,7 @@ def test_run_index_projects_team_final_verdict_to_final_ready(tmp_path):
                 "uri": str(prior_v0_path),
                 "reason": "Governance review replaced the blocked draft.",
                 "resolved": True,
+                "resolution_state": "resolved",
                 "final_state": "blocked",
             },
         ],
@@ -648,6 +650,8 @@ def test_run_index_keeps_missing_superseded_verdict_non_authoritative(tmp_path):
         "uri": str(missing_prior_path),
         "reason": "Current governance verdict superseded a missing historical artifact.",
         "resolved": False,
+        "resolution_state": "missing",
+        "diagnostic": "missing superseded FinalVerdict artifact",
     }]
     assert [ref for ref in record["evidence_refs"] if ref["kind"] == "final_verdict"] == [{
         "evidence_id": "ev-team-final-verdict-team-missing-superseded-final",
@@ -765,7 +769,231 @@ def test_run_index_keeps_mismatched_superseded_verdict_unresolved(tmp_path):
         "uri": str(prior_path),
         "reason": "Current governance verdict pointed at a mismatched artifact.",
         "resolved": False,
+        "resolution_state": "id_mismatch",
+        "diagnostic": "superseded verdict_id does not match artifact",
     }]
+
+
+def test_run_index_marks_invalid_superseded_verdict_unresolved(tmp_path):
+    runtime = tmp_path / "runtime"
+    review_path = runtime / "reviews" / "review.yaml"
+    review_path.parent.mkdir(parents=True)
+    review_path.write_text("verdict: pass\n", encoding="utf-8")
+    final_path = runtime / "final" / "final-verdict.json"
+    prior_path = runtime / "final" / "invalid-final-verdict-v1.json"
+    prior_path.parent.mkdir(parents=True)
+    prior_path.write_text("{bad json\n", encoding="utf-8")
+    gate_id = "gate-go-invalid-superseded-independent-review"
+    _write_json(final_path, {
+        "verdict_id": "fv-go-invalid-superseded",
+        "produced_by": "go-evidence-finalizer",
+        "produced_at": "2026-07-07T00:02:00Z",
+        "producer_role": "governance",
+        "final_state": "final_ready",
+        "inputs_reviewed": [str(review_path)],
+        "gate_summary": [{
+            "gate_id": gate_id,
+            "result": "pass",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-1",
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:go-invalid-superseded",
+        "supersedes": {
+            "verdict_id": "fv-go-invalid-superseded-v1",
+            "uri": str(prior_path),
+            "reason": "Current governance verdict pointed at an invalid historical artifact.",
+        },
+    })
+    (runtime / "team-events.jsonl").write_text(
+        "\n".join([
+            json.dumps({
+                "event_type": "task_result",
+                "run_id": "go-invalid-superseded",
+                "agent_id": "coding-agent-1",
+                "payload": {"status": "passed"},
+                "timestamp": "2026-07-07T00:00:00Z",
+                "event_id": "team-invalid-superseded-result",
+            }),
+            json.dumps({
+                "event_type": "review_ref",
+                "run_id": "go-invalid-superseded",
+                "agent_id": "reviewer-1",
+                "payload": {
+                    "review_id": "review-go-invalid-superseded",
+                    "reviewer_id": "reviewer-1",
+                    "reviewer_role": "reviewer",
+                    "executor_id": "coding-agent-1",
+                    "verdict": "pass",
+                    "ref_path": str(review_path),
+                    "reviewed_evidence_refs": ["ev-team-team-invalid-superseded-result"],
+                },
+                "timestamp": "2026-07-07T00:01:00Z",
+                "event_id": "team-invalid-superseded-review",
+            }),
+            json.dumps({
+                "event_type": "final_verdict_ref",
+                "run_id": "go-invalid-superseded",
+                "agent_id": "go-evidence-finalizer",
+                "payload": {
+                    "verdict_id": "fv-go-invalid-superseded",
+                    "produced_by": "go-evidence-finalizer",
+                    "producer_role": "governance",
+                    "final_state": "final_ready",
+                    "ref_path": str(final_path),
+                    "review_ref": "review-go-invalid-superseded",
+                    "gate_refs": [gate_id],
+                },
+                "timestamp": "2026-07-07T00:02:00Z",
+                "event_id": "team-invalid-superseded-final",
+            }),
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    record = _records_by_adapter(build_run_index(runtime))["team_events"][0]
+
+    _run_record_validator().validate(record)
+    assert record["acceptance_state"] == "final_ready"
+    assert record["final_verdict_ref"]["supersession_chain"] == [{
+        "verdict_id": "fv-go-invalid-superseded-v1",
+        "uri": str(prior_path),
+        "reason": "Current governance verdict pointed at an invalid historical artifact.",
+        "resolved": False,
+        "resolution_state": "invalid",
+        "diagnostic": "invalid superseded FinalVerdict artifact",
+    }]
+
+
+def test_run_index_marks_supersession_chain_depth_limited(tmp_path):
+    runtime = tmp_path / "runtime"
+    review_path = runtime / "reviews" / "review.yaml"
+    review_path.parent.mkdir(parents=True)
+    review_path.write_text("verdict: pass\n", encoding="utf-8")
+    final_path = runtime / "final" / "final-verdict.json"
+    gate_id = "gate-go-depth-limited-independent-review"
+    prior_paths = {
+        index: runtime / "final" / f"final-verdict-v{index}.json"
+        for index in range(1, 7)
+    }
+    for index in range(6, 0, -1):
+        payload = {
+            "verdict_id": f"fv-go-depth-limited-v{index}",
+            "produced_by": "go-evidence-finalizer",
+            "produced_at": f"2026-07-07T00:0{index}:00Z",
+            "producer_role": "governance",
+            "final_state": "accepted_with_limitation",
+            "inputs_reviewed": [str(review_path)],
+            "gate_summary": [{
+                "gate_id": f"gate-go-depth-limited-v{index}",
+                "result": "warning",
+                "evidence_path": str(review_path),
+            }],
+            "reviewer_summary": {
+                "reviewer_id": "reviewer-1",
+                "verdict": "pass",
+                "evidence_path": str(review_path),
+            },
+            "limitations": [f"historical verdict v{index}"],
+            "human_or_governance_reference": f"go-evidence-finalize:go-depth-limited-v{index}",
+        }
+        if index < 6:
+            payload["supersedes"] = {
+                "verdict_id": f"fv-go-depth-limited-v{index + 1}",
+                "uri": str(prior_paths[index + 1]),
+                "reason": f"Historical verdict v{index} superseded v{index + 1}.",
+            }
+        _write_json(prior_paths[index], payload)
+    _write_json(final_path, {
+        "verdict_id": "fv-go-depth-limited",
+        "produced_by": "go-evidence-finalizer",
+        "produced_at": "2026-07-07T00:07:00Z",
+        "producer_role": "governance",
+        "final_state": "final_ready",
+        "inputs_reviewed": [str(review_path)],
+        "gate_summary": [{
+            "gate_id": gate_id,
+            "result": "pass",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-1",
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:go-depth-limited",
+        "supersedes": {
+            "verdict_id": "fv-go-depth-limited-v1",
+            "uri": str(prior_paths[1]),
+            "reason": "Current governance verdict superseded a long historical chain.",
+        },
+    })
+    (runtime / "team-events.jsonl").write_text(
+        "\n".join([
+            json.dumps({
+                "event_type": "task_result",
+                "run_id": "go-depth-limited",
+                "agent_id": "coding-agent-1",
+                "payload": {"status": "passed"},
+                "timestamp": "2026-07-07T00:00:00Z",
+                "event_id": "team-depth-limited-result",
+            }),
+            json.dumps({
+                "event_type": "review_ref",
+                "run_id": "go-depth-limited",
+                "agent_id": "reviewer-1",
+                "payload": {
+                    "review_id": "review-go-depth-limited",
+                    "reviewer_id": "reviewer-1",
+                    "reviewer_role": "reviewer",
+                    "executor_id": "coding-agent-1",
+                    "verdict": "pass",
+                    "ref_path": str(review_path),
+                    "reviewed_evidence_refs": ["ev-team-team-depth-limited-result"],
+                },
+                "timestamp": "2026-07-07T00:01:00Z",
+                "event_id": "team-depth-limited-review",
+            }),
+            json.dumps({
+                "event_type": "final_verdict_ref",
+                "run_id": "go-depth-limited",
+                "agent_id": "go-evidence-finalizer",
+                "payload": {
+                    "verdict_id": "fv-go-depth-limited",
+                    "produced_by": "go-evidence-finalizer",
+                    "producer_role": "governance",
+                    "final_state": "final_ready",
+                    "ref_path": str(final_path),
+                    "review_ref": "review-go-depth-limited",
+                    "gate_refs": [gate_id],
+                },
+                "timestamp": "2026-07-07T00:02:00Z",
+                "event_id": "team-depth-limited-final",
+            }),
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    record = _records_by_adapter(build_run_index(runtime))["team_events"][0]
+
+    _run_record_validator().validate(record)
+    assert record["acceptance_state"] == "final_ready"
+    chain = record["final_verdict_ref"]["supersession_chain"]
+    assert len(chain) == 5
+    assert chain[-1] == {
+        "verdict_id": "fv-go-depth-limited-v5",
+        "uri": str(prior_paths[5]),
+        "reason": "Historical verdict v4 superseded v5.",
+        "resolved": True,
+        "resolution_state": "depth_limited",
+        "diagnostic": "supersession chain depth limit reached",
+        "final_state": "accepted_with_limitation",
+    }
 
 
 def test_run_index_stops_supersession_chain_before_duplicate_cycle_entry(tmp_path):
@@ -871,6 +1099,8 @@ def test_run_index_stops_supersession_chain_before_duplicate_cycle_entry(tmp_pat
             "uri": str(prior_path),
             "reason": "Current verdict points to a cyclic historical artifact.",
             "resolved": True,
+            "resolution_state": "cycle",
+            "diagnostic": "supersession chain cycle detected",
             "final_state": "accepted_with_limitation",
         }
     ]

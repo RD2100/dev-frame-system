@@ -434,6 +434,16 @@
           "type": "boolean",
           "description": "True when the referenced prior FinalVerdict artifact was readable and schema-valid."
         },
+        "resolution_state": {
+          "type": "string",
+          "enum": ["resolved", "missing", "invalid", "id_mismatch", "cycle", "depth_limited"],
+          "description": "Best-effort read outcome for this supersession chain entry. This is diagnostic metadata only and never affects acceptance."
+        },
+        "diagnostic": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable short explanation for unresolved, cyclic, or depth-limited supersession chain entries."
+        },
         "final_state": {
           "type": "string",
           "enum": ["final_ready", "accepted_with_limitation", "blocked", "failed", "deferred"]

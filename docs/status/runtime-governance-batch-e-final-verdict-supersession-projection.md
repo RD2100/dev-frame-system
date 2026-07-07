@@ -33,8 +33,11 @@ After this slice:
   governance reason;
 - when the prior verdict artifact is readable and schema-valid, RunIndex follows
   its own `supersedes` link up to a fixed depth and marks resolved chain entries;
-- missing or invalid historical artifacts stop traversal but do not change the
-  current verdict's acceptance axes;
+- chain entries include `resolution_state` so reviewers can distinguish
+  `resolved`, `missing`, `invalid`, `id_mismatch`, `cycle`, and
+  `depth_limited` outcomes;
+- missing, invalid, mismatched, or cyclic historical artifacts stop traversal
+  but do not change the current verdict's acceptance axes;
 - final readiness still depends on the existing independent review, passing
   gate references, and validated FinalVerdict artifact.
 
@@ -65,8 +68,9 @@ git diff --check
 - Supersession metadata is lifecycle visibility, not acceptance authority.
 - RunIndex remains read-only and does not create new FinalVerdict artifacts.
 - Supersession traversal is bounded and follows only explicit artifact URIs.
-- Broken or invalid historical links cannot upgrade or downgrade current
-  acceptance.
+- Broken, invalid, mismatched, cyclic, or depth-limited historical links cannot
+  upgrade or downgrade current acceptance.
+- `resolution_state` is diagnostic read-model metadata only.
 - `final_ready` still requires a valid FinalVerdict artifact plus passing
   independent review and gate references.
 - Worker or executor output still cannot create final acceptance.
@@ -77,6 +81,6 @@ git diff --check
   FinalVerdict records for divergent reruns.
 - RunIndex exposes a best-effort bounded chain for reviewer visibility, not a
   complete historical graph or migration surface.
-- Missing or invalid historical superseded artifacts are visible as unresolved
-  chain entries only; they are not promoted to failure records for the current
-  run.
+- Missing, invalid, mismatched, cyclic, or depth-limited historical superseded
+  artifacts are visible as diagnostic chain entries only; they are not promoted
+  to failure records for the current run.

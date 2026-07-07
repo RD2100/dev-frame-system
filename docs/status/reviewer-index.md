@@ -476,10 +476,13 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     direct superseded verdict id, URI, reason, and best-effort bounded chain; it
     must not generate new verdicts or use supersession metadata as acceptance
     evidence.
+  - Supersession-chain entries should expose diagnostic `resolution_state`
+    values for resolved, missing, invalid, id-mismatch, cycle, and depth-limited
+    outcomes without changing run acceptance axes.
   - `packages/control-plane/tests/test_run_index.py` and
     `packages/control-plane/tests/test_public_snapshot.py` should prove the
-    real TeamRuntime projection path, missing historical artifact behavior, and
-    schema mirror.
+    real TeamRuntime projection path, missing/invalid/mismatched/cyclic/depth-
+    limited historical artifact behavior, and schema mirror.
   - `docs/status/runtime-governance-batch-e-final-verdict-supersession-projection.md`
     records the local limitation set and preserved stop lines.
 - Runtime-governance Batch E atgo runtime finalize command:
