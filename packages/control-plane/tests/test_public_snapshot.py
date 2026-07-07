@@ -86,10 +86,13 @@ DOC_LINK_CHECK_MARKDOWN_DOCS = [
     REPO_ROOT / "docs" / "status" / "review-governance-kernel-completion-20260706.md",
 ]
 MARKDOWN_LINK_PATTERN = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
+FENCED_CODE_BLOCK_PATTERN = re.compile(r"```.*?```", re.DOTALL)
+INLINE_CODE_PATTERN = re.compile(r"`[^`\n]*`")
 
 
-def _relative_markdown_links(path):
-    text = path.read_text(encoding="utf-8-sig")
+def _relative_markdown_links_from_text(text):
+    text = FENCED_CODE_BLOCK_PATTERN.sub("", text)
+    text = INLINE_CODE_PATTERN.sub("", text)
     for match in MARKDOWN_LINK_PATTERN.finditer(text):
         target = match.group(1).strip()
         if not target:
@@ -103,6 +106,11 @@ def _relative_markdown_links(path):
         target = target.split("#", 1)[0].strip()
         if target:
             yield target
+
+
+def _relative_markdown_links(path):
+    text = path.read_text(encoding="utf-8-sig")
+    yield from _relative_markdown_links_from_text(text)
 
 
 def test_public_snapshot_allows_python_test_caches():
@@ -552,6 +560,29 @@ def test_current_entry_markdown_links_resolve_to_repo_files():
                 )
 
     assert missing == []
+
+
+def test_markdown_link_check_ignores_non_file_link_shapes():
+    links = list(_relative_markdown_links_from_text(
+        "\n".join([
+            "![image](missing-image.png)",
+            "[external](https://example.com)",
+            "[anchor](#local-heading)",
+            "`[inline](missing-inline.md)`",
+            "```",
+            "[fenced](missing-fenced.md)",
+            "```",
+            "[local](docs/README.md#section)",
+            "[titled](docs/status/reviewer-index.md \"Reviewer Index\")",
+            "[angled](<docs/status/status-document-inventory.md>)",
+        ])
+    ))
+
+    assert links == [
+        "docs/README.md",
+        "docs/status/reviewer-index.md",
+        "docs/status/status-document-inventory.md",
+    ]
 
 
 def test_public_scripts_and_adapters_exclude_private_machine_paths():
