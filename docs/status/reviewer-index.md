@@ -52,6 +52,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `packages/control-plane/control_plane/orchestrator.py`
 - `packages/control-plane/control_plane/workflow_engine.py`
 - `packages/control-plane/control_plane/team_runtime.py`
+- `packages/control-plane/control_plane/run_index.py`
 - `packages/control-plane/control_plane/execution_plan.py`
 - `schemas/visual_control_plane_state.schema.json`
 - `schemas/review_governance_kernel.schema.json`
@@ -120,6 +121,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `packages/control-plane/tests/test_dashboard_actions.py`
 - `packages/control-plane/tests/test_workflow_engine.py`
 - `packages/control-plane/tests/test_team_runtime.py`
+- `packages/control-plane/tests/test_run_index.py`
 - `packages/control-plane/tests/test_execution_plan.py`
 - `packages/control-plane/control_plane/review_governance_validator.py`
 - `packages/control-plane/tests/test_review_governance_kernel.py`
@@ -247,6 +249,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/runtime-governance-and-evidence-closure-transformation-plan.md`
 - `docs/status/runtime-governance-status-vocabulary-inventory.md`
 - `docs/status/runtime-governance-batch-a-contract-completion.md`
+- `docs/status/runtime-governance-batch-b-read-only-run-index.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/total-control-policy-engine-and-human-escalation-governance-plan.md`
@@ -298,6 +301,14 @@ This is the reviewer map for the first open-source release batch. It focuses on 
   - `docs/status/runtime-governance-batch-a-contract-completion.md` records the
     local contract evidence and preserved stop lines.
   - The audit is not a release-ready, PR, CI, or publication claim.
+- Runtime-governance Batch B read-only RunIndex:
+  - `packages/control-plane/control_plane/run_index.py` projects legacy rdgoal,
+    go-run, team-event, @go, paper, and test-run files into RunRecord-shaped
+    records without changing legacy write authority.
+  - `packages/control-plane/tests/test_run_index.py` should prove schema
+    compatibility, unsafe-promotion blocking, and corrupt-record visibility.
+  - `docs/status/runtime-governance-batch-b-read-only-run-index.md` records the
+    local limitation set and preserved stop lines.
 
 ## Open-Source Review Checklist
 
@@ -356,6 +367,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/runtime-governance-and-evidence-closure-transformation-plan.md`
 - `docs/status/runtime-governance-status-vocabulary-inventory.md`
 - `docs/status/runtime-governance-batch-a-contract-completion.md`
+- `docs/status/runtime-governance-batch-b-read-only-run-index.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/documentation-management-audit-and-plan.md`
@@ -401,6 +413,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `packages/control-plane/control_plane/opencode_events.py`
 - `packages/control-plane/control_plane/rules_config.py`
 - `packages/control-plane/control_plane/run_defaults.py`
+- `packages/control-plane/control_plane/run_index.py`
 - `packages/control-plane/control_plane/scope_resolver.py`
 - `packages/control-plane/control_plane/scoped_store.py`
 - `packages/control-plane/control_plane/task_proposals.py`
@@ -414,6 +427,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `packages/control-plane/tests/test_public_snapshot.py`
 - `packages/control-plane/tests/test_docs_drift_validator.py`
 - `packages/control-plane/tests/test_rdgoal.py`
+- `packages/control-plane/tests/test_run_index.py`
 - `pytest.ini`
 - `rules/orchestration.md`
 - `rules/project-contracts/_template.md`
