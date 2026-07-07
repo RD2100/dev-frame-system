@@ -22,8 +22,9 @@ final draft.
 Latest implementation status note: for execution progress after this planning
 draft, read [Review-Governance Kernel Completion Status](review-governance-kernel-completion-20260706.md).
 As of 2026-07-07, P3-2 graph projection has local GPT-equivalent review PASS
-and landed in commit `2725227d`, but still needs branch review and publication
-evidence; do not treat it as release-ready.
+and landed in commit `2725227d`, with local branch-level review PASS at
+`bd73d6bc`, but still needs PR/CI and publication evidence; do not treat it as
+release-ready.
 
 ## Final Decision
 

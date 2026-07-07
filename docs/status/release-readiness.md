@@ -39,8 +39,9 @@ As of July 7, 2026, commit `15a9d78d` removed the tracked root review artifacts
 from the Git index, and both the ordinary public snapshot gate and the strict
 `-FailOnTrackedForbidden` public snapshot gate pass locally. Commit `2725227d`
 then landed the review-governance hardening batch, including P3-2 graph
-projection and the strict public/release gate fixes. The local full release-gate
-rerun at that state also passes end to end:
+projection and the strict public/release gate fixes. Follow-up status commit
+`bd73d6bc` received local GPT-equivalent branch-level review PASS, and the local
+full release-gate rerun at that checked state passed end to end:
 `1512 passed, 1 skipped`, strict public snapshot PASS, control-plane wheel smoke
 PASS, and `git diff --check` PASS with line-ending warnings only.
 This is a local verification result only. It does not imply a clean worktree,
@@ -101,8 +102,9 @@ archives, `build`, `dist`, or package metadata directories in the public tree.
   tracked instances, and the strict snapshot gate now checks that they do not
   return to the Git index.
 - Review-governance P3-2 graph projection has local GPT-equivalent review PASS
-  and landed in commit `2725227d`, but still needs branch review, PR/CI, and
-  publication evidence before it can support release readiness.
+  and landed in commit `2725227d`; the follow-up status boundary received local
+  branch-level review PASS at `bd73d6bc`, but PR/CI and publication evidence
+  are still required before it can support release readiness.
 - Control-plane dashboard tests bypass loopback HTTP proxies during pytest so
   local dashboard server checks do not report proxy-generated 502 responses.
 

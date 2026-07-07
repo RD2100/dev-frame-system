@@ -13,8 +13,10 @@ P3-2 is code-complete after internal audit fixes (58 tests pass) and passed a
 2026-07-07 local GPT-equivalent subagent review. A 2026-07-07 local hardening
 pass also fixed cross-validator whitespace and document-authority divergence
 issues. Commit `2725227d` landed P3-2 and the related public/release gate
-hardening, but the repository is still not release-ready until branch review,
-PR/CI, and publication evidence exist.
+hardening. Follow-up commit `bd73d6bc` synchronized the post-commit status and
+received local GPT-equivalent branch-level review PASS plus a full local release
+gate PASS at that checked state. The repository is still not release-ready until
+PR/CI and publication evidence exist.
 
 ## Phase Completion Ledger
 
@@ -263,14 +265,24 @@ Review evidence:
   1 skipped`, strict public snapshot PASS, control-plane wheel smoke PASS, and
   `git diff --check` PASS
 
+## Post-Commit Branch Review And Gate Evidence
+
+- commit `bd73d6bc`: `Update post-commit review-governance status`
+- delegated local GPT-equivalent branch-level review: PASS, no P0/P1/P2
+  findings; P3 recommendation was to attach the full release-gate rerun evidence
+- main-thread full release gate at the checked `bd73d6bc` state:
+  `scripts\verify-release.ps1` -> `1512 passed, 1 skipped`, strict public
+  snapshot PASS, control-plane wheel smoke PASS, and `git diff --check` PASS
+- this evidence is local-only; PR/CI and publication evidence are still missing
+
 ## Next Steps for Handoff Agent
 
-1. Review the committed batch from `2725227d` as a branch-level change.
-2. Re-run the full release gate after any follow-up status/doc updates.
-3. Keep release-readiness blocked until branch review, PR/CI, and publication
-   evidence exist.
+1. Prepare a PR/push only after explicit human approval.
+2. Re-run the full release gate on the final PR/release candidate HEAD.
+3. Keep release-readiness blocked until PR/CI and publication evidence exist.
 4. Treat `design-coverage-gap-remediation-plan.md` remediation order as
-   implementation-complete only after branch review evidence is attached.
+   locally implementation-complete, but not release-complete, until PR/CI and
+   publication evidence are attached.
 
 ## Branch
 

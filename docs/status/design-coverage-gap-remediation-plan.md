@@ -10,8 +10,9 @@ Implementation status note (2026-07-07): this document preserves the reviewed
 after implementation work began, use
 `review-governance-kernel-completion-20260706.md` as the bounded status record.
 In that newer record, P1/P2/P3-1 are marked PASS and P3-2 has local
-GPT-equivalent review PASS plus commit evidence in `2725227d`, but still lacks
-branch review and publication evidence.
+GPT-equivalent review PASS plus commit evidence in `2725227d`, with local
+branch-level review PASS at `bd73d6bc`, but still lacks PR/CI and publication
+evidence.
 
 Reader: DevFrame maintainers and coding agents who need to know what the current
 design document set covers, what it does not cover yet, and which repair slices

@@ -572,6 +572,8 @@ def test_release_readiness_documents_strict_gate_blockers():
     assert "`-FailOnTrackedForbidden` public snapshot gate pass" in text
     assert "public snapshot gate pass locally" in text
     assert "Commit `2725227d`" in text
+    assert "status commit" in text
+    assert "`bd73d6bc` received local GPT-equivalent branch-level review PASS" in text
     assert "strict snapshot gate now checks that they do not" in text
     assert "P3-2 graph projection has local GPT-equivalent review PASS" in text
 
@@ -580,6 +582,7 @@ def test_current_entry_docs_keep_p3_2_local_review_pass_non_release_ready():
     expected = {
         REPO_ROOT / "docs" / "README.md": [
             "local GPT-equivalent review PASS, committed in `2725227d`",
+            "local branch-level review PASS at `bd73d6bc`",
             "not a release-ready record",
         ],
         REPO_ROOT / "docs" / "status" / "reviewer-index.md": [
@@ -588,7 +591,8 @@ def test_current_entry_docs_keep_p3_2_local_review_pass_non_release_ready():
         ],
         REPO_ROOT / "docs" / "status" / "status-document-inventory.md": [
             "projection has local GPT-equivalent review PASS and landed in commit",
-            "branch review and publication evidence",
+            "local branch-level review PASS at `bd73d6bc`",
+            "pending PR/CI and publication evidence",
         ],
     }
 
