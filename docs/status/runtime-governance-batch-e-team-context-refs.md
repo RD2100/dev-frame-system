@@ -54,4 +54,7 @@ git diff --check
 ## Known Gaps
 
 - Sealed ContextPacket/ContextLedger production for go/workflow remains later work.
-- Independent ReviewRecord and FinalVerdict TeamRuntime events remain later integration work.
+- Independent ReviewRecord and FinalVerdict TeamRuntime events are covered by
+  the follow-up
+  [Runtime Governance Batch E: Team Review Verdict Events](runtime-governance-batch-e-team-review-verdict-events.md)
+  slice and the @go finalization slices.

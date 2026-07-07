@@ -56,4 +56,8 @@ git diff --check
 ## Known Gaps
 
 - Paper workflow still needs a full domain adapter over the canonical runtime lifecycle.
-- Independent review and final verdict ingestion remain later integration work.
+- Generic TeamRuntime review/final-verdict event ingestion is covered by the
+  follow-up
+  [Runtime Governance Batch E: Team Review Verdict Events](runtime-governance-batch-e-team-review-verdict-events.md)
+  slice and the @go finalization slices. Paper-specific ingestion still belongs
+  to the future paper domain adapter.

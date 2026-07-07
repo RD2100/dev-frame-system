@@ -61,7 +61,9 @@ git diff --check
 
 ## Known Gaps
 
-- Independent review and final verdict events are still later integration work.
+- Independent review and final verdict events are covered by the follow-up
+  [Runtime Governance Batch E: Team Review Verdict Events](runtime-governance-batch-e-team-review-verdict-events.md)
+  slice and the @go finalization slices.
 - Legacy context refs on task lifecycle events are handled in
   [Runtime Governance Batch E: Team Context Refs](runtime-governance-batch-e-team-context-refs.md);
   sealed ContextPacket production remains deferred.

@@ -26,11 +26,12 @@ tools/go_evidence.py finalize <evidence_dir> --team-runtime-dir <runtime_root>
 
 The runtime root is already known to `cmd_atgo`, and the default finalizer path remains the existing manual follow-up command.
 
-After the follow-up slice, `devframe atgo --execute --auto-finalize` may run the
-same finalizer command, but only when the atgo evidence directory already
-contains the required review/evidence files. Missing review evidence skips
-auto-finalization and keeps the manual finalize guidance visible. This does not
-change `tools/go_evidence.py finalize <evidence_dir>` compatibility.
+With the follow-up auto-finalize slice in place, `devframe atgo --execute
+--auto-finalize` may run the same finalizer command, but only when the atgo
+evidence directory already contains the required review/evidence files. Missing
+review evidence skips auto-finalization and keeps the manual finalize guidance
+visible. This does not change `tools/go_evidence.py finalize <evidence_dir>`
+compatibility.
 
 ## Local Evidence
 
