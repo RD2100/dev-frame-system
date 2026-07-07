@@ -93,6 +93,12 @@ def summarize_run_governance(run_dir: str, state: dict[str, Any] | None = None) 
     if chain_evidence_shape == "ai_workflow_hub_nodes":
         chain_status = "UNTRUSTED_NODES_STYLE"
         chain_trusted = False
+    elif chain_evidence_shape == "invalid":
+        chain_status = "INVALID_CHAIN_EVIDENCE"
+        chain_trusted = False
+    elif chain_evidence_shape == "unknown":
+        chain_status = "UNKNOWN_CHAIN_EVIDENCE"
+        chain_trusted = False
 
     return {
         "evidence_ok": evidence_ok,

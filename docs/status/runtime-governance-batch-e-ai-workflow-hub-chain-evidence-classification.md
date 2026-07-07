@@ -33,6 +33,8 @@ After this slice:
   `UNTRUSTED_NODES_STYLE` and leaves `chain_trusted=false`;
 - stale state claiming `chain_trusted=true` is overridden when the corresponding
   `chain-evidence.json` is nodes-style.
+- present but invalid or unknown-shape `chain-evidence.json` also overrides
+  stale trusted state.
 
 This slice does not change the canonical root
 `schemas/agent-runtime/chain-evidence.schema.json` contract and does not make
@@ -58,7 +60,7 @@ git diff --check
 - A `nodes`-style file is not acceptance authority.
 - Terminal run status still cannot infer chain trust.
 - `chain_trusted` remains fail-closed unless explicit state says boolean
-  `true` and the file is not nodes-style.
+  `true` and the present file is not nodes-style, invalid, or unknown-shape.
 - The root @go chain-evidence schema remains scoped to `go_evidence init` and
   `devframe atgo` producers.
 
@@ -66,4 +68,7 @@ git diff --check
 
 - ai-workflow-hub `nodes`-style chain evidence is classified, not normalized
   into the canonical @go schema.
+- Missing `chain-evidence.json` with trusted legacy state is not changed by this
+  slice; this avoids rewriting historical state semantics without a domain
+  adapter.
 - Full paper workflow and ai-workflow-hub domain adapters remain future work.

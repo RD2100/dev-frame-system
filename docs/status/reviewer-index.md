@@ -517,8 +517,9 @@ This is the reviewer map for the first open-source release batch. It focuses on 
   - The classification must not infer `chain_trusted=True` from file shape or
     terminal run status.
   - `packages/ai-workflow-hub/tests/test_run_governance.py` should prove the
-    untrusted classification path, stale trusted-state override, and
-    `_write_chain_evidence()` fail-closed path.
+    untrusted classification path, stale trusted-state override for nodes-style,
+    invalid, and unknown-shape files, and `_write_chain_evidence()` fail-closed
+    path.
   - `docs/status/runtime-governance-batch-e-ai-workflow-hub-chain-evidence-classification.md`
     records the local limitation set and preserved stop lines.
 

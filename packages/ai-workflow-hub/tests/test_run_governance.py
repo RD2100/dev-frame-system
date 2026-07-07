@@ -133,6 +133,66 @@ def test_nodes_style_chain_evidence_overrides_stale_trusted_state(tmp_path):
     assert summary["chain_trusted"] is False
 
 
+def test_invalid_chain_evidence_overrides_stale_trusted_state(tmp_path):
+    run_dir = tmp_path / "run"
+    _write_state(
+        run_dir,
+        status="passed",
+        chain_status="TRUSTED",
+        chain_trusted=True,
+        final_report_status="PASS",
+        final_report_consistent=True,
+    )
+    (run_dir / "chain-evidence.json").write_text("{not json", encoding="utf-8")
+
+    summary = summarize_run_governance(str(run_dir))
+
+    assert summary["chain_evidence_shape"] == "invalid"
+    assert summary["chain_status"] == "INVALID_CHAIN_EVIDENCE"
+    assert summary["chain_trusted"] is False
+
+
+def test_non_object_chain_evidence_overrides_stale_trusted_state(tmp_path):
+    run_dir = tmp_path / "run"
+    _write_state(
+        run_dir,
+        status="passed",
+        chain_status="TRUSTED",
+        chain_trusted=True,
+        final_report_status="PASS",
+        final_report_consistent=True,
+    )
+    (run_dir / "chain-evidence.json").write_text("[]", encoding="utf-8")
+
+    summary = summarize_run_governance(str(run_dir))
+
+    assert summary["chain_evidence_shape"] == "invalid"
+    assert summary["chain_status"] == "INVALID_CHAIN_EVIDENCE"
+    assert summary["chain_trusted"] is False
+
+
+def test_unknown_chain_evidence_overrides_stale_trusted_state(tmp_path):
+    run_dir = tmp_path / "run"
+    _write_state(
+        run_dir,
+        status="passed",
+        chain_status="TRUSTED",
+        chain_trusted=True,
+        final_report_status="PASS",
+        final_report_consistent=True,
+    )
+    (run_dir / "chain-evidence.json").write_text(
+        json.dumps({"run_id": "run-unknown", "status": "passed"}),
+        encoding="utf-8",
+    )
+
+    summary = summarize_run_governance(str(run_dir))
+
+    assert summary["chain_evidence_shape"] == "unknown"
+    assert summary["chain_status"] == "UNKNOWN_CHAIN_EVIDENCE"
+    assert summary["chain_trusted"] is False
+
+
 def test_verify_run_evidence_reports_untrusted_passed_run(tmp_path):
     run_dir = tmp_path / "runs" / "demo-project" / "run-001"
     _write_state(
