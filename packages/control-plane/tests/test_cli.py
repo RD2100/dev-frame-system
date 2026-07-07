@@ -2504,6 +2504,7 @@ def test_atgo_prepare_creates_evidence_dir(tmp_path, monkeypatch, capsys):
     assert "DevFrame @go" in output
     assert metadata["go_run_id"] in output
     assert "devframe code status" in output
+    assert f"Finalize  : tools/go_evidence.py finalize {evidence_dir} --team-runtime-dir {runtime_dir}" in output
     assert evidence_dir.exists()
     assert (evidence_dir / "task-spec.md").exists()
     assert (evidence_dir / "chain-evidence.json").exists()

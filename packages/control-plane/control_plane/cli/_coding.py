@@ -208,7 +208,7 @@ def cmd_atgo() -> int:
     print(f"Inspect   : devframe code status {result.go_run_id} --runtime-dir {runtime_root}")
     print(f"Resume    : devframe code execute {result.go_run_id} --runtime-dir {runtime_root}")
     print(f"Review    : devframe actions --runtime-dir {runtime_root}")
-    print(f"Finalize  : tools/go_evidence.py finalize {evidence_dir}")
+    print(f"Finalize  : tools/go_evidence.py finalize {evidence_dir} --team-runtime-dir {runtime_root}")
 
     if args.execute:
         from ..backup_guard import default_runtime_dir

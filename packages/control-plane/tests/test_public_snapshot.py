@@ -34,6 +34,7 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "docs/status/runtime-governance-batch-e-team-context-refs.md",
     "docs/status/runtime-governance-batch-e-team-review-verdict-events.md",
     "docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md",
+    "docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md",
     "docs/status/runtime-governance-status-vocabulary-inventory.md",
     "packages/control-plane/README.md",
     "packages/control-plane/QUICKSTART.md",

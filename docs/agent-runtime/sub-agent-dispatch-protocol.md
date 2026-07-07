@@ -98,6 +98,14 @@ The finalizer MUST run:
 python tools/go_evidence.py finalize <run-evidence-dir>
 ```
 
+When a DevFrame runtime directory is available, pass it so the deterministic
+finalizer can record TeamRuntime review and final-verdict references after a
+passing gate:
+
+```powershell
+python tools/go_evidence.py finalize <run-evidence-dir> --team-runtime-dir <runtime-dir>
+```
+
 If reviewer artifacts are missing, reviewer role is `executor`/`fixer`/`coder`, reviewed inputs are incomplete, or any P0/P1 finding remains unresolved, the final status MUST be `blocked`.
 
 The finalizer may summarize deterministic evidence, but it MUST NOT substitute for reviewer judgment.

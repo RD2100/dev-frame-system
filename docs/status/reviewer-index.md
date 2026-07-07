@@ -269,6 +269,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/runtime-governance-batch-e-team-context-refs.md`
 - `docs/status/runtime-governance-batch-e-team-review-verdict-events.md`
 - `docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`
+- `docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/total-control-policy-engine-and-human-escalation-governance-plan.md`
@@ -439,6 +440,16 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     event recording for blocked evidence.
   - `docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`
     records the local limitation set and preserved stop lines.
+- Runtime-governance Batch E atgo runtime finalize command:
+  - `devframe atgo` should print a finalizer command that includes
+    `--team-runtime-dir <runtime_root>` so the manual follow-up can record
+    TeamRuntime review/final-verdict refs after a passing evidence gate.
+  - The command remains manual guidance; `devframe atgo` prepare must not create
+    final acceptance events by itself.
+  - `packages/control-plane/tests/test_cli.py` should prove the printed atgo
+    finalize command includes the runtime directory.
+  - `docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md`
+    records the local limitation set and preserved stop lines.
 
 ## Open-Source Review Checklist
 
@@ -506,6 +517,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/runtime-governance-batch-e-team-context-refs.md`
 - `docs/status/runtime-governance-batch-e-team-review-verdict-events.md`
 - `docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`
+- `docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/documentation-management-audit-and-plan.md`

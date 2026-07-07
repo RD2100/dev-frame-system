@@ -22,7 +22,7 @@ After this slice:
 - TeamRuntime refuses to write the journal inside the public repository through the existing `repo_root` guard;
 - RunIndex can project the opt-in finalizer events into a schema-valid `final_ready` RunRecord only after validating the referenced FinalVerdict artifact.
 
-This slice does not automatically wire go dispatch execution to evidence finalization. The user or caller must opt in by passing `--team-runtime-dir`.
+This slice does not automatically run evidence finalization. The user or caller must opt in by passing `--team-runtime-dir`.
 
 ## Local Evidence
 
@@ -49,5 +49,7 @@ git diff --check
 
 ## Known Gaps
 
-- Full go dispatch automation still needs to call the finalizer with `--team-runtime-dir`.
+- `devframe atgo` prepare now prints a finalizer command with
+  `--team-runtime-dir`, but full go dispatch automation still does not run
+  finalization automatically.
 - Blocked finalization events are intentionally not journaled in this slice; blocked state remains visible through machine artifacts.

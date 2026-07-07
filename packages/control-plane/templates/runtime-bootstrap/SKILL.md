@@ -81,7 +81,8 @@ findings:
 3. Tester: run commands; write `test-output.md`.
 4. Guards: run `python tools/go_evidence.py guard <run-dir> --task .ai/tasks/<id>.yaml`; this captures `safety-report.json`.
 5. Reviewer: dispatch a separate reviewer session; write `review.md` and `review.yaml`.
-6. Finalizer: run `python tools/go_evidence.py finalize <run-dir>`.
+6. Finalizer: run `python tools/go_evidence.py finalize <run-dir> --team-runtime-dir <runtime-dir>` when a DevFrame runtime directory is available; otherwise run
+   `python tools/go_evidence.py finalize <run-dir>`.
 7. Verdict: `passed` only if guard, reviewer, and evidence validation all pass.
 
 ## Automated Dispatch
