@@ -62,6 +62,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `packages/test-frame/schemas/runtime-governance/context-ledger.schema.json`
 - `packages/test-frame/schemas/runtime-governance/run-record.schema.json`
 - `schemas/examples/runtime-governance/context-packet-valid.json`
+- `schemas/examples/runtime-governance/context-packet-stale-valid.json`
 - `schemas/examples/runtime-governance/context-ledger-valid.json`
 - `schemas/examples/runtime-governance/context-packet-worker-final-ready-invalid.json`
 - `schemas/examples/runtime-governance/context-packet-text-final-ready-invalid.json`
@@ -72,6 +73,13 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `schemas/examples/runtime-governance/run-record-executor-review-invalid.json`
 - `schemas/examples/runtime-governance/run-record-executor-final-verdict-invalid.json`
 - `schemas/examples/runtime-governance/run-record-projection-completed-invalid.json`
+- `schemas/examples/runtime-governance/run-record-projection-completed-projection-only-valid.json`
+- `schemas/examples/runtime-governance/run-record-test-frame-passed-missing-context-invalid.json`
+- `schemas/examples/runtime-governance/run-record-test-frame-code-review-pass-missing-review-invalid.json`
+- `schemas/examples/runtime-governance/run-record-final-report-pass-missing-final-verdict-invalid.json`
+- `schemas/examples/runtime-governance/run-record-paper-human-required-valid.json`
+- `schemas/examples/runtime-governance/run-record-paper-blocked-chain-trusted-valid.json`
+- `schemas/examples/runtime-governance/run-record-unknown-domain-status-valid.json`
 - `schemas/examples/review-governance/success.json`
 - `schemas/examples/review-governance/blocked.json`
 - `schemas/examples/review-governance/insufficient-evidence.json`
@@ -123,6 +131,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `packages/test-frame/schemas/runtime-governance/context-ledger.schema.json`
 - `packages/test-frame/schemas/runtime-governance/run-record.schema.json`
 - `schemas/examples/runtime-governance/context-packet-valid.json`
+- `schemas/examples/runtime-governance/context-packet-stale-valid.json`
 - `schemas/examples/runtime-governance/context-ledger-valid.json`
 - `schemas/examples/runtime-governance/context-packet-worker-final-ready-invalid.json`
 - `schemas/examples/runtime-governance/context-packet-text-final-ready-invalid.json`
@@ -133,6 +142,13 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `schemas/examples/runtime-governance/run-record-executor-review-invalid.json`
 - `schemas/examples/runtime-governance/run-record-executor-final-verdict-invalid.json`
 - `schemas/examples/runtime-governance/run-record-projection-completed-invalid.json`
+- `schemas/examples/runtime-governance/run-record-projection-completed-projection-only-valid.json`
+- `schemas/examples/runtime-governance/run-record-test-frame-passed-missing-context-invalid.json`
+- `schemas/examples/runtime-governance/run-record-test-frame-code-review-pass-missing-review-invalid.json`
+- `schemas/examples/runtime-governance/run-record-final-report-pass-missing-final-verdict-invalid.json`
+- `schemas/examples/runtime-governance/run-record-paper-human-required-valid.json`
+- `schemas/examples/runtime-governance/run-record-paper-blocked-chain-trusted-valid.json`
+- `schemas/examples/runtime-governance/run-record-unknown-domain-status-valid.json`
 - `schemas/examples/review-governance/success.json`
 - `schemas/examples/review-governance/blocked.json`
 - `schemas/examples/review-governance/insufficient-evidence.json`
@@ -405,6 +421,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `packages/test-frame/schemas/runtime-governance/context-ledger.schema.json`
 - `packages/test-frame/schemas/runtime-governance/run-record.schema.json`
 - `schemas/examples/runtime-governance/context-packet-valid.json`
+- `schemas/examples/runtime-governance/context-packet-stale-valid.json`
 - `schemas/examples/runtime-governance/context-ledger-valid.json`
 - `schemas/examples/runtime-governance/context-packet-worker-final-ready-invalid.json`
 - `schemas/examples/runtime-governance/context-packet-text-final-ready-invalid.json`
@@ -415,6 +432,13 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `schemas/examples/runtime-governance/run-record-executor-review-invalid.json`
 - `schemas/examples/runtime-governance/run-record-executor-final-verdict-invalid.json`
 - `schemas/examples/runtime-governance/run-record-projection-completed-invalid.json`
+- `schemas/examples/runtime-governance/run-record-projection-completed-projection-only-valid.json`
+- `schemas/examples/runtime-governance/run-record-test-frame-passed-missing-context-invalid.json`
+- `schemas/examples/runtime-governance/run-record-test-frame-code-review-pass-missing-review-invalid.json`
+- `schemas/examples/runtime-governance/run-record-final-report-pass-missing-final-verdict-invalid.json`
+- `schemas/examples/runtime-governance/run-record-paper-human-required-valid.json`
+- `schemas/examples/runtime-governance/run-record-paper-blocked-chain-trusted-valid.json`
+- `schemas/examples/runtime-governance/run-record-unknown-domain-status-valid.json`
 - `schemas/visual_control_plane_state.schema.json`
 - `schemas/web_ai_adapter.schema.json`
 - `scripts/verify-control-plane-wheel.ps1`

@@ -22,7 +22,7 @@
     {
       "worker_id": "worker-schema-slice",
       "worker_role": "worker",
-      "status": "completed",
+      "status": "succeeded",
       "reported_at": "2026-07-07T00:00:00Z",
       "artifact_refs": [
         "schemas/runtime-governance/run-record.schema.json"

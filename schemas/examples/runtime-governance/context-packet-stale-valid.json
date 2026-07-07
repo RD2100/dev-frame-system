@@ -1,0 +1,69 @@
+{
+  "schema_version": "0.1",
+  "context_packet_id": "cp-batch-a-stale-context",
+  "project_id": "devframe-system",
+  "goal_id": "goal-runtime-governance-batch-a",
+  "task_id": "task-fixture-coverage",
+  "domain": "code",
+  "profile": "contract-only",
+  "producer_role": "coordinator",
+  "created_at": "2026-07-07T00:00:00Z",
+  "intent_summary": "Record stale context explicitly without granting acceptance authority.",
+  "intended_use": "review",
+  "immutability": {
+    "immutable": true,
+    "content_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "source_refs": [
+    {
+      "ref_id": "stale-plan",
+      "kind": "file",
+      "uri": "docs/status/runtime-governance-and-evidence-closure-transformation-plan.md",
+      "included": true,
+      "required": true,
+      "freshness_state": "stale"
+    }
+  ],
+  "omitted_required_refs": [
+    {
+      "ref": "latest-review-artifact",
+      "omission_reason": "Independent review artifact is not available yet.",
+      "impact": "blocks_acceptance"
+    }
+  ],
+  "forbidden_refs": [],
+  "freshness": {
+    "checked_at": "2026-07-07T00:00:00Z",
+    "stale_refs": [
+      "stale-plan"
+    ],
+    "unknown_refs": []
+  },
+  "completeness_state": "insufficient_evidence",
+  "privacy_state": "redacted",
+  "seal_state": "sealed",
+  "limitations": [
+    "Stale context blocks final readiness."
+  ],
+  "constraints": {
+    "allowed_actions": [
+      "request updated context",
+      "record insufficiency"
+    ],
+    "forbidden_actions": [
+      "claim final acceptance"
+    ],
+    "stop_lines": [
+      "Do not continue to final verdict with stale context."
+    ],
+    "authority_boundary": {
+      "can_execute": false,
+      "can_review": true,
+      "can_claim_final_acceptance": false,
+      "final_verdict_required": true
+    }
+  },
+  "domain_refs": {
+    "required_negative_case": "stale-context"
+  }
+}

@@ -64,6 +64,7 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "packages/test-frame/schemas/runtime-governance/context-ledger.schema.json",
     "packages/test-frame/schemas/runtime-governance/run-record.schema.json",
     "schemas/examples/runtime-governance/context-packet-valid.json",
+    "schemas/examples/runtime-governance/context-packet-stale-valid.json",
     "schemas/examples/runtime-governance/context-ledger-valid.json",
     "schemas/examples/runtime-governance/context-packet-worker-final-ready-invalid.json",
     "schemas/examples/runtime-governance/context-packet-text-final-ready-invalid.json",
@@ -74,6 +75,13 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "schemas/examples/runtime-governance/run-record-executor-review-invalid.json",
     "schemas/examples/runtime-governance/run-record-executor-final-verdict-invalid.json",
     "schemas/examples/runtime-governance/run-record-projection-completed-invalid.json",
+    "schemas/examples/runtime-governance/run-record-projection-completed-projection-only-valid.json",
+    "schemas/examples/runtime-governance/run-record-test-frame-passed-missing-context-invalid.json",
+    "schemas/examples/runtime-governance/run-record-test-frame-code-review-pass-missing-review-invalid.json",
+    "schemas/examples/runtime-governance/run-record-final-report-pass-missing-final-verdict-invalid.json",
+    "schemas/examples/runtime-governance/run-record-paper-human-required-valid.json",
+    "schemas/examples/runtime-governance/run-record-paper-blocked-chain-trusted-valid.json",
+    "schemas/examples/runtime-governance/run-record-unknown-domain-status-valid.json",
     "schemas/visual_control_plane_state.schema.json",
     "schemas/web_ai_adapter.schema.json",
     "scripts/verify-control-plane-wheel.ps1",
@@ -898,6 +906,7 @@ def test_runtime_governance_schemas_validate_fixtures():
             REPO_ROOT / "schemas" / "runtime-governance" / "context-packet.schema.json",
             [
                 REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "context-packet-valid.json",
+                REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "context-packet-stale-valid.json",
             ],
             [
                 REPO_ROOT
@@ -933,6 +942,26 @@ def test_runtime_governance_schemas_validate_fixtures():
                 / "examples"
                 / "runtime-governance"
                 / "run-record-review-pending-valid.json",
+                REPO_ROOT
+                / "schemas"
+                / "examples"
+                / "runtime-governance"
+                / "run-record-paper-human-required-valid.json",
+                REPO_ROOT
+                / "schemas"
+                / "examples"
+                / "runtime-governance"
+                / "run-record-paper-blocked-chain-trusted-valid.json",
+                REPO_ROOT
+                / "schemas"
+                / "examples"
+                / "runtime-governance"
+                / "run-record-unknown-domain-status-valid.json",
+                REPO_ROOT
+                / "schemas"
+                / "examples"
+                / "runtime-governance"
+                / "run-record-projection-completed-projection-only-valid.json",
             ],
             [
                 REPO_ROOT
@@ -960,6 +989,21 @@ def test_runtime_governance_schemas_validate_fixtures():
                 / "examples"
                 / "runtime-governance"
                 / "run-record-projection-completed-invalid.json",
+                REPO_ROOT
+                / "schemas"
+                / "examples"
+                / "runtime-governance"
+                / "run-record-test-frame-passed-missing-context-invalid.json",
+                REPO_ROOT
+                / "schemas"
+                / "examples"
+                / "runtime-governance"
+                / "run-record-test-frame-code-review-pass-missing-review-invalid.json",
+                REPO_ROOT
+                / "schemas"
+                / "examples"
+                / "runtime-governance"
+                / "run-record-final-report-pass-missing-final-verdict-invalid.json",
             ],
         ),
     ]
@@ -981,8 +1025,9 @@ def test_runtime_governance_schemas_validate_fixtures():
                     previous_hash = entry["entry_hash"]
             if "acceptance_state" in fixture:
                 assert fixture["acceptance_state"] != "final_ready"
-                assert fixture["outcome"] == "passed"
-                assert fixture["review_state"] == "review_pending"
+                if fixture_path.name == "run-record-review-pending-valid.json":
+                    assert fixture["outcome"] == "passed"
+                    assert fixture["review_state"] == "review_pending"
         for fixture_path in invalid_paths:
             fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
             errors = sorted(validator.iter_errors(fixture), key=lambda error: list(error.path))
@@ -1037,6 +1082,90 @@ def test_runtime_governance_schemas_validate_fixtures():
                 key=lambda error: list(error.path),
             )
             assert errors, "gate_passed must require a pass gate ref"
+
+
+def test_runtime_governance_required_negative_case_fixtures_are_present():
+    fixture_dir = REPO_ROOT / "schemas" / "examples" / "runtime-governance"
+    expected = {
+        "worker succeeded with no review": (
+            "run-record-review-pending-valid.json",
+            ["succeeded", "review_pending"],
+        ),
+        "gate pass with no evidence": (
+            "run-record-gate-pass-missing-evidence-invalid.json",
+            ["gate_passed", '"evidence_refs": []'],
+        ),
+        "final report pass missing final verdict": (
+            "run-record-final-report-pass-missing-final-verdict-invalid.json",
+            ["final_report_text", "PASS"],
+        ),
+        "executor authored review": (
+            "run-record-executor-review-invalid.json",
+            ['"reviewer_role": "executor"'],
+        ),
+        "test-frame passed missing context": (
+            "run-record-test-frame-passed-missing-context-invalid.json",
+            ["aggregate_status", "passed"],
+        ),
+        "test-frame codeReview pass missing review": (
+            "run-record-test-frame-code-review-pass-missing-review-invalid.json",
+            ["codeReview", "PASS"],
+        ),
+        "paper completed human required": (
+            "run-record-paper-human-required-valid.json",
+            ["acceptance_status", "human_required"],
+        ),
+        "paper blocked chain trusted": (
+            "run-record-paper-blocked-chain-trusted-valid.json",
+            ["chain_trusted", "blocked"],
+        ),
+        "unknown domain status": (
+            "run-record-unknown-domain-status-valid.json",
+            ["legacy_status", "mystery_done"],
+        ),
+        "projection completed without source authority": (
+            "run-record-projection-completed-projection-only-valid.json",
+            ['"projection_state": "completed"', '"acceptance_state": "review_pending"'],
+        ),
+        "stale context": (
+            "context-packet-stale-valid.json",
+            ["stale_refs", "blocks_acceptance"],
+        ),
+    }
+
+    for label, (filename, literals) in expected.items():
+        path = fixture_dir / filename
+        assert path.exists(), f"missing runtime-governance fixture for {label}: {filename}"
+        text = path.read_text(encoding="utf-8-sig")
+        missing = [literal for literal in literals if literal not in text]
+        assert missing == [], f"{filename} missing coverage literals for {label}: {missing}"
+
+    parsed = {
+        filename: json.loads((fixture_dir / filename).read_text(encoding="utf-8-sig"))
+        for filename, _literals in expected.values()
+    }
+    assert parsed["run-record-review-pending-valid.json"]["worker_results"][0]["status"] == "succeeded"
+    assert parsed["run-record-review-pending-valid.json"]["acceptance_state"] == "review_pending"
+    assert "context_packet_id" not in parsed["run-record-test-frame-passed-missing-context-invalid.json"]
+    assert parsed["run-record-test-frame-code-review-pass-missing-review-invalid.json"]["review_refs"] == []
+    assert parsed["run-record-final-report-pass-missing-final-verdict-invalid.json"]["acceptance_state"] == "final_ready"
+    assert "final_verdict_ref" not in parsed["run-record-final-report-pass-missing-final-verdict-invalid.json"]
+    paper_human_required = parsed["run-record-paper-human-required-valid.json"]
+    assert paper_human_required["outcome"] == "human_required"
+    assert paper_human_required["acceptance_state"] == "blocked"
+    paper_chain_trusted = parsed["run-record-paper-blocked-chain-trusted-valid.json"]
+    assert paper_chain_trusted["domain_refs"]["chain_trusted"] is True
+    assert paper_chain_trusted["outcome"] == "blocked"
+    assert paper_chain_trusted["acceptance_state"] == "blocked"
+    unknown_status = parsed["run-record-unknown-domain-status-valid.json"]
+    assert unknown_status["outcome"] == "unknown"
+    assert unknown_status["projection_state"] == "unknown"
+    projection_only = parsed["run-record-projection-completed-projection-only-valid.json"]
+    assert projection_only["projection_state"] == "completed"
+    assert projection_only["acceptance_state"] == "review_pending"
+    stale_context = parsed["context-packet-stale-valid.json"]
+    assert stale_context["completeness_state"] == "insufficient_evidence"
+    assert stale_context["omitted_required_refs"][0]["impact"] == "blocks_acceptance"
 
 
 def test_runtime_governance_schema_mirrors_match_semantically():
@@ -1162,6 +1291,7 @@ def test_public_schemas_docs_and_fixtures_exclude_private_paths():
         REPO_ROOT / "packages" / "test-frame" / "schemas" / "runtime-governance" / "context-ledger.schema.json",
         REPO_ROOT / "packages" / "test-frame" / "schemas" / "runtime-governance" / "run-record.schema.json",
         REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "context-packet-valid.json",
+        REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "context-packet-stale-valid.json",
         REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "context-ledger-valid.json",
         REPO_ROOT
         / "schemas"
@@ -1188,6 +1318,29 @@ def test_public_schemas_docs_and_fixtures_exclude_private_paths():
         / "runtime-governance"
         / "run-record-executor-final-verdict-invalid.json",
         REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "run-record-projection-completed-invalid.json",
+        REPO_ROOT
+        / "schemas"
+        / "examples"
+        / "runtime-governance"
+        / "run-record-projection-completed-projection-only-valid.json",
+        REPO_ROOT
+        / "schemas"
+        / "examples"
+        / "runtime-governance"
+        / "run-record-test-frame-passed-missing-context-invalid.json",
+        REPO_ROOT
+        / "schemas"
+        / "examples"
+        / "runtime-governance"
+        / "run-record-test-frame-code-review-pass-missing-review-invalid.json",
+        REPO_ROOT
+        / "schemas"
+        / "examples"
+        / "runtime-governance"
+        / "run-record-final-report-pass-missing-final-verdict-invalid.json",
+        REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "run-record-paper-human-required-valid.json",
+        REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "run-record-paper-blocked-chain-trusted-valid.json",
+        REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "run-record-unknown-domain-status-valid.json",
         REPO_ROOT / "docs" / "agent-runtime" / "negative-test-fixtures" / "NEG-024-path-traversal-read.json",
         REPO_ROOT / "docs" / "agent-runtime" / "negative-test-fixtures" / "NEG-017-write-outside-scope.json",
         REPO_ROOT / "docs" / "agent-runtime" / "integration-contracts.md",

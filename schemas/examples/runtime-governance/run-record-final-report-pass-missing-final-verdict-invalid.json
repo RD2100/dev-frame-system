@@ -1,0 +1,64 @@
+{
+  "schema_version": "0.1",
+  "run_id": "run-invalid-final-report-pass-missing-final-verdict",
+  "project_id": "devframe-system",
+  "goal_id": "goal-runtime-governance-batch-a",
+  "task_id": "task-fixture-coverage",
+  "attempt_id": "attempt-1",
+  "context_packet_id": "cp-batch-a-context-v1",
+  "context_ledger_id": "cl-batch-a-context-v1",
+  "domain": "code",
+  "profile": "contract-only",
+  "producer_role": "runtime_adapter",
+  "created_at": "2026-07-07T00:00:00Z",
+  "updated_at": "2026-07-07T00:00:00Z",
+  "phase": "closed",
+  "outcome": "passed",
+  "review_state": "review_passed",
+  "gate_state": "gate_passed",
+  "acceptance_state": "final_ready",
+  "projection_state": "completed",
+  "worker_results": [],
+  "artifact_refs": [
+    {
+      "artifact_id": "a-final-report",
+      "kind": "other",
+      "uri": "reports/final-report.md"
+    }
+  ],
+  "evidence_refs": [
+    {
+      "evidence_id": "e-final-report-text",
+      "kind": "other",
+      "uri": "reports/final-report.md",
+      "supports": "acceptance"
+    }
+  ],
+  "review_refs": [
+    {
+      "review_id": "review-independent",
+      "reviewer_id": "reviewer-1",
+      "reviewer_role": "reviewer",
+      "verdict": "pass",
+      "uri": "reviews/independent-review.yaml",
+      "reviewed_evidence_refs": [
+        "e-final-report-text"
+      ]
+    }
+  ],
+  "gate_refs": [
+    {
+      "gate_id": "gate-public-snapshot",
+      "result": "pass",
+      "uri": "reports/public-snapshot.txt",
+      "evidence_refs": [
+        "e-final-report-text"
+      ]
+    }
+  ],
+  "failure_refs": [],
+  "domain_refs": {
+    "final_report_text": "PASS",
+    "required_negative_case": "final-report-pass-missing-final-verdict"
+  }
+}

@@ -234,7 +234,7 @@
         },
         "status": {
           "type": "string",
-          "enum": ["passed", "completed", "verified", "blocked", "failed", "error", "cancelled", "unknown"]
+          "enum": ["passed", "completed", "succeeded", "verified", "blocked", "failed", "error", "cancelled", "unknown"]
         },
         "reported_at": {
           "type": "string",
