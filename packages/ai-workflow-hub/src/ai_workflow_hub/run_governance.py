@@ -12,6 +12,34 @@ from typing import Any
 from .run_store import load_run_file
 
 
+def _load_chain_evidence(run_dir: Path) -> dict[str, Any] | None:
+    chain_path = run_dir / "chain-evidence.json"
+    if not chain_path.exists():
+        return None
+    try:
+        payload = json.loads(chain_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {"_invalid": "unreadable"}
+    return payload if isinstance(payload, dict) else {"_invalid": "non_object"}
+
+
+def _classify_chain_evidence(payload: dict[str, Any] | None) -> tuple[str, str]:
+    if payload is None:
+        return "missing", "chain-evidence.json is not present"
+    invalid = payload.get("_invalid")
+    if invalid:
+        return "invalid", f"chain-evidence.json is {invalid}"
+    nodes = payload.get("nodes")
+    if isinstance(nodes, dict):
+        return (
+            "ai_workflow_hub_nodes",
+            "nodes-style chain evidence is visible but not canonical acceptance evidence",
+        )
+    if "evidence_files" in payload and "timestamps" in payload:
+        return "go_evidence_v1", "go_evidence/devframe-atgo chain evidence shape"
+    return "unknown", "chain-evidence.json shape is not recognized"
+
+
 def summarize_run_governance(run_dir: str, state: dict[str, Any] | None = None) -> dict[str, Any]:
     """Summarize governance state for a run directory.
 
@@ -43,6 +71,8 @@ def summarize_run_governance(run_dir: str, state: dict[str, Any] | None = None) 
     chain_trusted = False
     final_report_status = "MISSING"
     final_report_consistent = False
+    chain_evidence = _load_chain_evidence(rd)
+    chain_evidence_shape, chain_evidence_diagnostic = _classify_chain_evidence(chain_evidence)
 
     s = state if isinstance(state, dict) else None
     state_file = rd / "state.json"
@@ -60,6 +90,9 @@ def summarize_run_governance(run_dir: str, state: dict[str, Any] | None = None) 
             final_report_consistent = s.get("final_report_consistent", False)
         except AttributeError:
             pass
+    if chain_evidence_shape == "ai_workflow_hub_nodes":
+        chain_status = "UNTRUSTED_NODES_STYLE"
+        chain_trusted = False
 
     return {
         "evidence_ok": evidence_ok,
@@ -70,7 +103,12 @@ def summarize_run_governance(run_dir: str, state: dict[str, Any] | None = None) 
         "present_files": present_files,
         "final_report_consistent": final_report_consistent,
         "final_report_status": final_report_status,
-        "governance": {},
+        "chain_evidence_shape": chain_evidence_shape,
+        "chain_evidence_diagnostic": chain_evidence_diagnostic,
+        "governance": {
+            "chain_evidence_shape": chain_evidence_shape,
+            "chain_evidence_diagnostic": chain_evidence_diagnostic,
+        },
     }
 
 
@@ -97,6 +135,9 @@ def render_full_governance_cli(governance: dict[str, Any]) -> str:
     chain_mark = "[OK]" if chain_trusted else "[WARN]"
     chain_status = governance.get("chain_status", "MISSING")
     lines.append(f"  Chain     {chain_mark}  status={chain_status}")
+    chain_shape = governance.get("chain_evidence_shape")
+    if chain_shape:
+        lines.append(f"    chain-evidence shape: {chain_shape}")
 
     # Run status
     run_status = governance.get("run_status", "unknown")
@@ -120,6 +161,10 @@ def render_full_governance_md(governance: dict[str, Any]) -> str:
         lines.append(f"  - missing: {f}")
     chain_trusted = governance.get("chain_trusted", False)
     lines.append(f"- Chain: {'[OK]' if chain_trusted else '[WARN]'} status={governance.get('chain_status', 'MISSING')}")
+    if governance.get("chain_evidence_shape"):
+        lines.append(f"  - chain-evidence shape: {governance.get('chain_evidence_shape')}")
+    if governance.get("chain_evidence_diagnostic"):
+        lines.append(f"  - diagnostic: {governance.get('chain_evidence_diagnostic')}")
     lines.append(f"- Run: status={governance.get('run_status', 'unknown')} final-report={governance.get('final_report_status', 'MISSING')}")
     lines.append("")
     return "\n".join(lines)

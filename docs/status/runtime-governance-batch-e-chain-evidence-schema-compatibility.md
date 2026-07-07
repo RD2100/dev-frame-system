@@ -25,7 +25,7 @@ After this slice:
 - tests cover real generation paths, real finalization blocking paths, and the
   mirror contract.
 
-This slice does not claim compatibility with the ai-workflow-hub paper/coding graph `nodes`-based chain evidence shape. That producer remains a separate domain adapter concern.
+This slice does not claim compatibility with the ai-workflow-hub paper/coding graph `nodes`-based chain evidence shape. The follow-up [Runtime Governance Batch E: AI Workflow Hub Chain Evidence Classification](runtime-governance-batch-e-ai-workflow-hub-chain-evidence-classification.md) slice classifies that shape on the read side while keeping it out of canonical @go acceptance.
 
 ## Local Evidence
 
@@ -60,6 +60,7 @@ git diff --check
 
 ## Known Gaps
 
-- ai-workflow-hub `nodes`-style chain evidence is not normalized by this slice.
+- ai-workflow-hub `nodes`-style chain evidence is classified by the follow-up
+  read-side slice, but is still not normalized into the canonical @go schema.
 - Schema validation proves the chain evidence shape only; it does not make
   `next_commands.finalize` an acceptance authority.

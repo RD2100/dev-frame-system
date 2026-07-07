@@ -275,6 +275,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md`
 - `docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md`
 - `docs/status/runtime-governance-batch-e-chain-evidence-schema-compatibility.md`
+- `docs/status/runtime-governance-batch-e-ai-workflow-hub-chain-evidence-classification.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/total-control-policy-engine-and-human-escalation-governance-plan.md`
@@ -372,11 +373,13 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - Runtime-governance Batch E paper trust fail-closed:
   - `packages/ai-workflow-hub/src/ai_workflow_hub/run_governance.py` must never
     infer `chain_trusted=True` from terminal `passed` or `blocked` status.
-  - `packages/ai-workflow-hub/src/ai_workflow_hub/cli.py` must keep
-    `_write_chain_evidence()` as the explicit trust producer for
-    `verify_run_evidence()` and `goal_runner`.
+  - `packages/ai-workflow-hub/src/ai_workflow_hub/cli.py` previously used
+    `_write_chain_evidence()` as the explicit trust producer; the follow-up
+    ai-workflow-hub chain evidence classification slice now keeps nodes-style
+    evidence fail-closed.
   - `packages/ai-workflow-hub/tests/test_run_governance.py` should prove
-    terminal paper status remains untrusted unless explicit chain trust exists.
+    terminal paper status remains untrusted unless explicit non-nodes chain
+    trust exists.
   - `docs/status/runtime-governance-status-vocabulary-inventory.md` should keep
     the paper run-governance vocabulary aligned with the fail-closed behavior.
   - `docs/status/runtime-governance-batch-e-paper-trust-fail-closed.md` records
@@ -507,6 +510,17 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     generated artifacts, finalizer blocking behavior, and mirror contract.
   - `docs/status/runtime-governance-batch-e-chain-evidence-schema-compatibility.md`
     records the local limitation set and preserved stop lines.
+- Runtime-governance Batch E ai-workflow-hub chain evidence classification:
+  - `packages/ai-workflow-hub/src/ai_workflow_hub/run_governance.py` should
+    classify `nodes`-style `chain-evidence.json` as visible but non-canonical
+    acceptance evidence.
+  - The classification must not infer `chain_trusted=True` from file shape or
+    terminal run status.
+  - `packages/ai-workflow-hub/tests/test_run_governance.py` should prove the
+    untrusted classification path, stale trusted-state override, and
+    `_write_chain_evidence()` fail-closed path.
+  - `docs/status/runtime-governance-batch-e-ai-workflow-hub-chain-evidence-classification.md`
+    records the local limitation set and preserved stop lines.
 
 ## Open-Source Review Checklist
 
@@ -578,6 +592,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md`
 - `docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md`
 - `docs/status/runtime-governance-batch-e-chain-evidence-schema-compatibility.md`
+- `docs/status/runtime-governance-batch-e-ai-workflow-hub-chain-evidence-classification.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/documentation-management-audit-and-plan.md`

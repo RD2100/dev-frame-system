@@ -38,6 +38,7 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md",
     "docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md",
     "docs/status/runtime-governance-batch-e-chain-evidence-schema-compatibility.md",
+    "docs/status/runtime-governance-batch-e-ai-workflow-hub-chain-evidence-classification.md",
     "docs/status/runtime-governance-status-vocabulary-inventory.md",
     "packages/control-plane/README.md",
     "packages/control-plane/QUICKSTART.md",

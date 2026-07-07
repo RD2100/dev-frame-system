@@ -18,10 +18,12 @@ After this slice:
 
 - terminal status remains an execution outcome only;
 - missing or unknown chain trust remains untrusted;
-- explicit JSON boolean `chain_trusted=true` in state is preserved;
-- `_write_chain_evidence()` writes `chain-evidence.json` and then records the
-  explicit `chain_status=TRUSTED` and `chain_trusted=true` state used by
-  `verify_run_evidence()` and `goal_runner`;
+- explicit JSON boolean `chain_trusted=true` in state is preserved unless a
+  follow-up shape classifier identifies the file as nodes-style evidence;
+- `_write_chain_evidence()` originally wrote `chain-evidence.json` and recorded
+  explicit trust state for `verify_run_evidence()` and `goal_runner`; the
+  follow-up ai-workflow-hub chain evidence classification slice keeps that
+  nodes-style file fail-closed;
 - `summarize_run_governance(..., state=...)` uses the passed state before disk
   state so finalizer reports do not render stale governance fields;
 - final reports and CLI summaries continue to render the chain status from the governance summary.
@@ -33,9 +35,10 @@ Focused tests added:
 - `packages/ai-workflow-hub/tests/test_run_governance.py`
 
 The tests cover direct `summarize_run_governance()` behavior, the real
-`verify_run_evidence()` path over `runs/<project_id>/<run_id>/state.json`,
-the explicit `_write_chain_evidence()` trust producer, and stale-disk-state
-avoidance through the `state=` argument.
+`verify_run_evidence()` path over `runs/<project_id>/<run_id>/state.json`, and
+stale-disk-state avoidance through the `state=` argument. A follow-up
+classification slice covers `_write_chain_evidence()` fail-closed behavior for
+nodes-style evidence.
 
 Required verification for this batch:
 
