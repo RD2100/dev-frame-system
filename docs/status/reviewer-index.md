@@ -453,10 +453,16 @@ This is the reviewer map for the first open-source release batch. It focuses on 
   - `devframe atgo` should print a finalizer command that includes
     `--team-runtime-dir <runtime_root>` so the manual follow-up can record
     TeamRuntime review/final-verdict refs after a passing evidence gate.
-  - The command remains manual guidance; `devframe atgo` prepare must not create
-    final acceptance events by itself.
+  - The command remains manual guidance by default; `devframe atgo` prepare and
+    plain `--execute` must not create final acceptance events by themselves.
+  - `devframe atgo --execute --auto-finalize` may run the same finalizer only
+    when required review evidence already exists; missing review evidence must
+    skip finalization rather than converting worker success into blocked or
+    final-ready artifacts.
   - `packages/control-plane/tests/test_cli.py` should prove the printed atgo
-    finalize command includes the runtime directory.
+    finalize command includes the runtime directory, missing review evidence is
+    skipped, and reviewed evidence can produce TeamRuntime final-ready
+    projection through the deterministic finalizer.
   - `docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md`
     records the local limitation set and preserved stop lines.
 - Runtime-governance Batch E atgo prepare finalizer metadata:

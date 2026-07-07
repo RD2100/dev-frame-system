@@ -9,6 +9,7 @@ from pathlib import Path
 from jsonschema.validators import validator_for
 
 from control_plane.cli import main as devframe_cli_main
+from control_plane.run_index import build_run_index
 from control_plane.visual_state import build_visual_control_plane_state
 
 
@@ -2485,6 +2486,7 @@ def test_atgo_help_is_available(monkeypatch, capsys):
     assert "--runtime-dir" in output
     assert "--target" in output
     assert "--execute" in output
+    assert "--auto-finalize" in output
 
 
 def test_atgo_prepare_creates_evidence_dir(tmp_path, monkeypatch, capsys):
@@ -2518,6 +2520,151 @@ def test_atgo_prepare_creates_evidence_dir(tmp_path, monkeypatch, capsys):
     assert (evidence_dir / "task-spec.md").exists()
     assert (evidence_dir / "chain-evidence.json").exists()
     assert metadata["agents"][0]["targets"] == ["src/cli.py"]
+
+
+def test_atgo_auto_finalize_requires_execute(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "atgo",
+        "Add a small @go bridge.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--auto-finalize",
+    ])
+
+    exit_code = devframe_cli_main()
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "--auto-finalize requires --execute" in captured.err
+    assert not runtime_dir.exists()
+
+
+def test_atgo_execute_auto_finalize_skips_without_review_evidence(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+
+    import control_plane.go_dispatch as go_dispatch_module
+
+    def fake_execute_go_run(runtime_root, run_id, **_kwargs):
+        result = go_dispatch_module.load_go_run_result(runtime_root, run_id)
+        result.execute = True
+        result.status = "passed"
+        return result
+
+    monkeypatch.setattr(go_dispatch_module, "execute_go_run", fake_execute_go_run)
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "atgo",
+        "Add a small @go bridge.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/cli.py",
+        "--execute",
+        "--auto-finalize",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    evidence_dir = runtime_dir / "atgo-runs" / metadata["go_run_id"]
+
+    assert exit_code == 0
+    assert "Auto-finalize: skipped" in output
+    assert "missing required review evidence" in output
+    assert f"Finalize     : tools/go_evidence.py finalize {evidence_dir} --team-runtime-dir {runtime_dir}" in output
+    assert not (evidence_dir / "final-verdict.json").exists()
+    assert not (runtime_dir / "team-events.jsonl").exists()
+
+    index = build_run_index(runtime_dir)
+    atgo_record = next(entry["record"] for entry in index["runs"] if entry["adapter_id"] == "atgo_evidence")
+    assert atgo_record["acceptance_state"] == "deferred"
+
+
+def test_atgo_execute_auto_finalize_records_reviewed_evidence(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+
+    import control_plane.go_dispatch as go_dispatch_module
+
+    def fake_execute_go_run(runtime_root, run_id, **_kwargs):
+        evidence_dir = Path(runtime_root) / "atgo-runs" / run_id
+        (evidence_dir / "diff.patch").write_text("", encoding="utf-8")
+        (evidence_dir / "test-output.md").write_text("1 passed\n", encoding="utf-8")
+        (evidence_dir / "safety-report.json").write_text(
+            json.dumps({
+                "generated_at": "2026-07-08T00:00:00+00:00",
+                "producer": "test",
+                "command": "pytest",
+                "exit_code": 0,
+                "stdout": "1 passed",
+            }) + "\n",
+            encoding="utf-8",
+        )
+        (evidence_dir / "review.md").write_text("Independent review passed.\n", encoding="utf-8")
+        (evidence_dir / "review.yaml").write_text(
+            "\n".join([
+                "reviewer_role: reviewer",
+                "reviewer_id: reviewer-1",
+                "executor_id: opencode",
+                "verdict: pass",
+                "reviewed_inputs:",
+                "  - diff.patch",
+                "  - test-output.md",
+                "  - safety-report.json",
+                "  - chain-evidence.json",
+                "findings: []",
+                "",
+            ]),
+            encoding="utf-8",
+        )
+        result = go_dispatch_module.load_go_run_result(runtime_root, run_id)
+        result.execute = True
+        result.status = "passed"
+        return result
+
+    monkeypatch.setattr(go_dispatch_module, "execute_go_run", fake_execute_go_run)
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "atgo",
+        "Add a reviewed @go bridge.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/cli.py",
+        "--execute",
+        "--auto-finalize",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    evidence_dir = runtime_dir / "atgo-runs" / metadata["go_run_id"]
+
+    assert exit_code == 0
+    assert "Auto-finalize: tools/go_evidence.py finalize" in output
+    assert "PASS" in output
+    assert (evidence_dir / "final-verdict.json").exists()
+    assert (runtime_dir / "team-events.jsonl").exists()
+
+    index = build_run_index(runtime_dir)
+    team_record = next(entry["record"] for entry in index["runs"] if entry["adapter_id"] == "team_events")
+    assert team_record["acceptance_state"] == "final_ready"
+    assert team_record["final_verdict_ref"]["final_state"] == "final_ready"
 
 
 def test_web_ai_import_task_intakes_help(monkeypatch, capsys):

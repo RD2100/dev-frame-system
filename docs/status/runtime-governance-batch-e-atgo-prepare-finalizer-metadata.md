@@ -51,5 +51,7 @@ git diff --check
 
 ## Known Gaps
 
-- Full go dispatch automation still does not run finalization automatically.
+- Generic go dispatch automation still does not run finalization automatically;
+  atgo execution has an explicit `--auto-finalize` follow-up that skips missing
+  review evidence.
 - `chain-evidence.schema.json` still needs a later compatibility design before it can formally validate all current producers.

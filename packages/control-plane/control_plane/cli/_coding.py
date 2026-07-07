@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,6 +11,16 @@ from pathlib import Path
 from ..coding_dispatch import resolve_agent_count, resolve_coding_targets
 from ._common import _is_loopback_host
 from ._usage import CODE_USAGE
+
+
+ATGO_FINALIZER_REQUIRED_FILES = [
+    "diff.patch",
+    "test-output.md",
+    "safety-report.json",
+    "chain-evidence.json",
+    "review.md",
+    "review.yaml",
+]
 
 
 def cmd_go() -> int:
@@ -129,7 +140,15 @@ def cmd_atgo() -> int:
     parser.add_argument("--runtime-dir", default=None, help="Local runtime directory for atgo evidence and dispatch state")
     parser.add_argument("--target", action="append", default=[], help="Target file or directory. May be repeated")
     parser.add_argument("--execute", action="store_true", help="Execute the prepared coding run after creating evidence")
+    parser.add_argument(
+        "--auto-finalize",
+        action="store_true",
+        help="After --execute, run the evidence finalizer only if required review evidence already exists",
+    )
     args = parser.parse_args(sys.argv[2:])
+    if args.auto_finalize and not args.execute:
+        print("ERROR: --auto-finalize requires --execute", file=sys.stderr)
+        return 2
 
     runtime_root = Path(args.runtime_dir).resolve() if args.runtime_dir else default_runtime_dir()
     project_root = Path(args.project).resolve()
@@ -240,9 +259,65 @@ def cmd_atgo() -> int:
         print("")
         print("DevFrame @go execute")
         print(render_go_dispatch_text(exec_result), end="")
+        finalize_rc = None
+        if args.auto_finalize:
+            finalize_rc = _maybe_auto_finalize_atgo_evidence(
+                evidence_dir=evidence_dir,
+                runtime_root=runtime_root,
+                project_root=project_root,
+            )
+        if finalize_rc is not None and finalize_rc != 0:
+            return 1
         return 0 if exec_result.status in {"queued", "passed"} else 1
 
     return 0
+
+
+def _maybe_auto_finalize_atgo_evidence(
+    *,
+    evidence_dir: Path,
+    runtime_root: Path,
+    project_root: Path,
+) -> int | None:
+    missing = [name for name in ATGO_FINALIZER_REQUIRED_FILES if not (evidence_dir / name).exists()]
+    if missing:
+        print("")
+        print(f"Auto-finalize: skipped; missing required review evidence: {', '.join(missing)}")
+        print(f"Finalize     : tools/go_evidence.py finalize {evidence_dir} --team-runtime-dir {runtime_root}")
+        return None
+    script = _go_evidence_script()
+    if not script.exists():
+        print("")
+        print(f"Auto-finalize: failed; missing finalizer script: {script}", file=sys.stderr)
+        return 1
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "finalize",
+            str(evidence_dir),
+            "--team-runtime-dir",
+            str(runtime_root),
+        ],
+        cwd=str(project_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    print("")
+    print(f"Auto-finalize: tools/go_evidence.py finalize {evidence_dir} --team-runtime-dir {runtime_root}")
+    if proc.stdout:
+        print(proc.stdout, end="" if proc.stdout.endswith("\n") else "\n")
+    if proc.stderr:
+        print(proc.stderr, end="" if proc.stderr.endswith("\n") else "\n", file=sys.stderr)
+    return proc.returncode
+
+
+def _go_evidence_script() -> Path:
+    repo_candidate = Path(__file__).resolve().parents[4] / "tools" / "go_evidence.py"
+    if repo_candidate.exists():
+        return repo_candidate
+    return Path.cwd() / "tools" / "go_evidence.py"
 
 
 def cmd_code() -> int:

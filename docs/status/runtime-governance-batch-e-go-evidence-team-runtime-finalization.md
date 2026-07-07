@@ -59,8 +59,8 @@ git diff --check
 
 ## Known Gaps
 
-- `devframe atgo` prepare now prints a finalizer command with
-  `--team-runtime-dir`, but full go dispatch automation still does not run
-  finalization automatically.
+- `devframe atgo --execute --auto-finalize` now runs the finalizer only when
+  required review evidence already exists; default atgo/code/go dispatch still
+  does not create finalization attempts automatically.
 - A separate superseding-verdict record remains deferred until the FinalVerdict
   lifecycle schema is explicitly extended.
