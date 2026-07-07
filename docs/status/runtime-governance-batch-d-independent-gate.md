@@ -97,9 +97,9 @@ Covered assertions:
   gate projections to the new artifacts.
 - This slice does not yet make finalization idempotency explicit through a
   superseding-verdict record.
-- `schemas/agent-runtime/chain-evidence.schema.json` still differs from the
-  current `go_evidence init` shape; that contract drift is deferred to a
-  separate compatibility slice.
+- Batch E updates `schemas/agent-runtime/chain-evidence.schema.json` to cover
+  the current `go_evidence init` and `devframe atgo` shapes; ai-workflow-hub
+  `nodes`-style chain evidence remains a separate domain adapter concern.
 
 ## Reviewer Focus
 

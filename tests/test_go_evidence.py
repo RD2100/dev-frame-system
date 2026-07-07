@@ -163,6 +163,7 @@ def test_init_creates_chain_evidence(tmp_path):
     assert "final-report.md" in data["evidence_files"]
     assert "timestamps" in data
     assert "created_at" in data["timestamps"]
+    _schema_validator("schemas/agent-runtime/chain-evidence.schema.json").validate(data)
 
 
 def test_guard_creates_safety_report(tmp_path):

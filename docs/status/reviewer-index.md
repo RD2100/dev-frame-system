@@ -60,10 +60,12 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `tools/go_evidence.py`
 - `schemas/visual_control_plane_state.schema.json`
 - `schemas/review_governance_kernel.schema.json`
+- `schemas/agent-runtime/chain-evidence.schema.json`
 - `schemas/agent-runtime/evidence-manifest.schema.json`
 - `schemas/agent-runtime/review.schema.json`
 - `schemas/agent-runtime/final-verdict.schema.json`
 - `schemas/agent-runtime/failure-record.schema.json`
+- `packages/test-frame/schemas/agent-runtime/chain-evidence.schema.json`
 - `schemas/runtime-governance/context-packet.schema.json`
 - `schemas/runtime-governance/context-ledger.schema.json`
 - `schemas/runtime-governance/run-record.schema.json`
@@ -271,6 +273,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`
 - `docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md`
 - `docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md`
+- `docs/status/runtime-governance-batch-e-chain-evidence-schema-compatibility.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/total-control-policy-engine-and-human-escalation-governance-plan.md`
@@ -463,6 +466,18 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     shape and prepare-only projection.
   - `docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md`
     records the local limitation set and preserved stop lines.
+- Runtime-governance Batch E chain evidence schema compatibility:
+  - `schemas/agent-runtime/chain-evidence.schema.json` should validate current
+    `go_evidence init` and `devframe atgo` chain evidence output.
+  - `packages/test-frame/schemas/agent-runtime/chain-evidence.schema.json`
+    should remain semantically identical to the root schema.
+  - `next_commands.finalize` schema fields must stay guidance-only and must not
+    imply acceptance authority.
+  - `tests/test_go_evidence.py`, `packages/control-plane/tests/test_cli.py`,
+    and `packages/control-plane/tests/test_public_snapshot.py` should prove the
+    generated artifacts and mirror contract.
+  - `docs/status/runtime-governance-batch-e-chain-evidence-schema-compatibility.md`
+    records the local limitation set and preserved stop lines.
 
 ## Open-Source Review Checklist
 
@@ -532,6 +547,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`
 - `docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md`
 - `docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md`
+- `docs/status/runtime-governance-batch-e-chain-evidence-schema-compatibility.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/documentation-management-audit-and-plan.md`

@@ -6,11 +6,20 @@ import subprocess
 import sys
 from pathlib import Path
 
+from jsonschema.validators import validator_for
+
 from control_plane.cli import main as devframe_cli_main
 from control_plane.visual_state import build_visual_control_plane_state
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _schema_validator(path: str):
+    schema = json.loads((REPO_ROOT / path).read_text(encoding="utf-8-sig"))
+    validator_class = validator_for(schema)
+    validator_class.check_schema(schema)
+    return validator_class(schema)
 
 
 def test_doctor_passes_for_packaged_resources(monkeypatch):
@@ -2995,6 +3004,7 @@ def test_atgo_prepare_writes_methodology_to_chain_evidence(tmp_path, monkeypatch
     chain_evidence = json.loads((evidence_dir / "chain-evidence.json").read_text(encoding="utf-8"))
 
     assert exit_code == 0
+    _schema_validator("schemas/agent-runtime/chain-evidence.schema.json").validate(chain_evidence)
     assert chain_evidence.get("methodology", {}).get("skill_id") == "tdd"
     finalize = chain_evidence["next_commands"]["finalize"]
     assert finalize["command"] == (

@@ -36,6 +36,7 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md",
     "docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md",
     "docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md",
+    "docs/status/runtime-governance-batch-e-chain-evidence-schema-compatibility.md",
     "docs/status/runtime-governance-status-vocabulary-inventory.md",
     "packages/control-plane/README.md",
     "packages/control-plane/QUICKSTART.md",
@@ -1228,6 +1229,57 @@ def test_runtime_governance_schema_mirrors_match_semantically():
         drift_probe = json.loads(json.dumps(mirror_semantics))
         drift_probe["title"] = f"{drift_probe.get('title', '')} drift"
         assert drift_probe != root_semantics
+
+
+def test_agent_runtime_chain_evidence_schema_mirror_matches_semantically():
+    root_path = REPO_ROOT / "schemas" / "agent-runtime" / "chain-evidence.schema.json"
+    mirror_path = (
+        REPO_ROOT
+        / "packages"
+        / "test-frame"
+        / "schemas"
+        / "agent-runtime"
+        / "chain-evidence.schema.json"
+    )
+
+    root_semantics = _json_semantics(root_path)
+    mirror_semantics = _json_semantics(mirror_path)
+    assert mirror_semantics == root_semantics
+
+
+def test_chain_evidence_schema_rejects_acceptance_creating_next_command():
+    schema = json.loads(
+        (REPO_ROOT / "schemas" / "agent-runtime" / "chain-evidence.schema.json").read_text(
+            encoding="utf-8-sig"
+        )
+    )
+    validator = Draft202012Validator(schema)
+    payload = {
+        "run_id": "run-1",
+        "executor_id": "executor-1",
+        "mode": "prepare",
+        "planner": None,
+        "task": "task-spec.md",
+        "methodology": None,
+        "evidence_files": ["chain-evidence.json"],
+        "timestamps": {"created_at": "2026-07-07T00:00:00+00:00"},
+        "next_commands": {
+            "finalize": {
+                "command_args": ["tools/go_evidence.py", "finalize", "run"],
+                "authority": "guidance_only",
+                "creates_acceptance": True,
+                "requires_independent_review": True,
+            },
+        },
+    }
+
+    errors = list(validator.iter_errors(payload))
+
+    assert errors
+    assert any(
+        list(error.path) == ["next_commands", "finalize", "creates_acceptance"]
+        for error in errors
+    )
 
 
 def test_public_docs_mention_release_gate_and_visual_control_plane_surfaces():
