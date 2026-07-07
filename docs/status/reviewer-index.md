@@ -57,11 +57,18 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `schemas/review_governance_kernel.schema.json`
 - `schemas/runtime-governance/context-packet.schema.json`
 - `schemas/runtime-governance/context-ledger.schema.json`
+- `schemas/runtime-governance/run-record.schema.json`
 - `schemas/examples/runtime-governance/context-packet-valid.json`
 - `schemas/examples/runtime-governance/context-ledger-valid.json`
 - `schemas/examples/runtime-governance/context-packet-worker-final-ready-invalid.json`
 - `schemas/examples/runtime-governance/context-packet-text-final-ready-invalid.json`
 - `schemas/examples/runtime-governance/context-ledger-mutable-invalid.json`
+- `schemas/examples/runtime-governance/run-record-review-pending-valid.json`
+- `schemas/examples/runtime-governance/run-record-worker-final-ready-invalid.json`
+- `schemas/examples/runtime-governance/run-record-gate-pass-missing-evidence-invalid.json`
+- `schemas/examples/runtime-governance/run-record-executor-review-invalid.json`
+- `schemas/examples/runtime-governance/run-record-executor-final-verdict-invalid.json`
+- `schemas/examples/runtime-governance/run-record-projection-completed-invalid.json`
 - `schemas/examples/review-governance/success.json`
 - `schemas/examples/review-governance/blocked.json`
 - `schemas/examples/review-governance/insufficient-evidence.json`
@@ -108,11 +115,18 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `schemas/review_governance_kernel.schema.json`
 - `schemas/runtime-governance/context-packet.schema.json`
 - `schemas/runtime-governance/context-ledger.schema.json`
+- `schemas/runtime-governance/run-record.schema.json`
 - `schemas/examples/runtime-governance/context-packet-valid.json`
 - `schemas/examples/runtime-governance/context-ledger-valid.json`
 - `schemas/examples/runtime-governance/context-packet-worker-final-ready-invalid.json`
 - `schemas/examples/runtime-governance/context-packet-text-final-ready-invalid.json`
 - `schemas/examples/runtime-governance/context-ledger-mutable-invalid.json`
+- `schemas/examples/runtime-governance/run-record-review-pending-valid.json`
+- `schemas/examples/runtime-governance/run-record-worker-final-ready-invalid.json`
+- `schemas/examples/runtime-governance/run-record-gate-pass-missing-evidence-invalid.json`
+- `schemas/examples/runtime-governance/run-record-executor-review-invalid.json`
+- `schemas/examples/runtime-governance/run-record-executor-final-verdict-invalid.json`
+- `schemas/examples/runtime-governance/run-record-projection-completed-invalid.json`
 - `schemas/examples/review-governance/success.json`
 - `schemas/examples/review-governance/blocked.json`
 - `schemas/examples/review-governance/insufficient-evidence.json`
@@ -246,6 +260,12 @@ This is the reviewer map for the first open-source release batch. It focuses on 
   - OpenCode event ingestion should enrich session fields without converting missing event data into a passing claim.
 - Review-governance completion status:
   - `docs/status/review-governance-kernel-completion-20260706.md` reports P3-2 graph projection as local GPT-equivalent review PASS, committed in `2725227d`, and local branch-level review PASS at `bd73d6bc`; keep it out of release-ready claims until PR/CI and publication evidence exist.
+- Runtime-governance RunRecord contract:
+  - Worker outcome is mechanical only and must not satisfy independent review.
+  - `gate_passed` requires gate evidence references.
+  - `final_ready` requires a FinalVerdict plus independent review and gate evidence.
+  - Executor/fixer/coder/worker-authored review or final verdict must fail.
+  - Projection state is display-only and cannot create acceptance authority.
 
 ## Open-Source Review Checklist
 
@@ -369,11 +389,18 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `schemas/rdgoal_dispatch_packet.schema.json`
 - `schemas/runtime-governance/context-packet.schema.json`
 - `schemas/runtime-governance/context-ledger.schema.json`
+- `schemas/runtime-governance/run-record.schema.json`
 - `schemas/examples/runtime-governance/context-packet-valid.json`
 - `schemas/examples/runtime-governance/context-ledger-valid.json`
 - `schemas/examples/runtime-governance/context-packet-worker-final-ready-invalid.json`
 - `schemas/examples/runtime-governance/context-packet-text-final-ready-invalid.json`
 - `schemas/examples/runtime-governance/context-ledger-mutable-invalid.json`
+- `schemas/examples/runtime-governance/run-record-review-pending-valid.json`
+- `schemas/examples/runtime-governance/run-record-worker-final-ready-invalid.json`
+- `schemas/examples/runtime-governance/run-record-gate-pass-missing-evidence-invalid.json`
+- `schemas/examples/runtime-governance/run-record-executor-review-invalid.json`
+- `schemas/examples/runtime-governance/run-record-executor-final-verdict-invalid.json`
+- `schemas/examples/runtime-governance/run-record-projection-completed-invalid.json`
 - `schemas/visual_control_plane_state.schema.json`
 - `schemas/web_ai_adapter.schema.json`
 - `scripts/verify-control-plane-wheel.ps1`

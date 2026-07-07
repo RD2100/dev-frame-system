@@ -1,0 +1,35 @@
+{
+  "schema_version": "0.1",
+  "run_id": "run-invalid-gate-pass-missing-evidence",
+  "project_id": "devframe-system",
+  "goal_id": "goal-runtime-governance-batch-a",
+  "task_id": "task-run-record-contract",
+  "attempt_id": "attempt-1",
+  "context_packet_id": "cp-batch-a-context-v1",
+  "context_ledger_id": "cl-batch-a-context-v1",
+  "domain": "test",
+  "profile": "contract-only",
+  "producer_role": "runtime_adapter",
+  "created_at": "2026-07-07T00:00:00Z",
+  "updated_at": "2026-07-07T00:00:00Z",
+  "phase": "verifying",
+  "outcome": "passed",
+  "review_state": "review_pending",
+  "gate_state": "gate_passed",
+  "acceptance_state": "review_pending",
+  "projection_state": "awaiting_review",
+  "worker_results": [],
+  "artifact_refs": [],
+  "evidence_refs": [],
+  "review_refs": [],
+  "gate_refs": [
+    {
+      "gate_id": "gate-public-snapshot",
+      "result": "pass",
+      "uri": "reports/public-snapshot.txt",
+      "evidence_refs": []
+    }
+  ],
+  "failure_refs": [],
+  "domain_refs": {}
+}

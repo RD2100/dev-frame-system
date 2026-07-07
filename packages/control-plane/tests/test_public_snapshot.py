@@ -59,11 +59,18 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "schemas/rdgoal_dispatch_packet.schema.json",
     "schemas/runtime-governance/context-packet.schema.json",
     "schemas/runtime-governance/context-ledger.schema.json",
+    "schemas/runtime-governance/run-record.schema.json",
     "schemas/examples/runtime-governance/context-packet-valid.json",
     "schemas/examples/runtime-governance/context-ledger-valid.json",
     "schemas/examples/runtime-governance/context-packet-worker-final-ready-invalid.json",
     "schemas/examples/runtime-governance/context-packet-text-final-ready-invalid.json",
     "schemas/examples/runtime-governance/context-ledger-mutable-invalid.json",
+    "schemas/examples/runtime-governance/run-record-review-pending-valid.json",
+    "schemas/examples/runtime-governance/run-record-worker-final-ready-invalid.json",
+    "schemas/examples/runtime-governance/run-record-gate-pass-missing-evidence-invalid.json",
+    "schemas/examples/runtime-governance/run-record-executor-review-invalid.json",
+    "schemas/examples/runtime-governance/run-record-executor-final-verdict-invalid.json",
+    "schemas/examples/runtime-governance/run-record-projection-completed-invalid.json",
     "schemas/visual_control_plane_state.schema.json",
     "schemas/web_ai_adapter.schema.json",
     "scripts/verify-control-plane-wheel.ps1",
@@ -878,7 +885,7 @@ def test_default_visual_control_plane_state_template_matches_schema():
     assert "secret_exposure" in template["safety"]["human_gate_required_for"]
 
 
-def test_runtime_governance_context_schemas_validate_fixtures():
+def test_runtime_governance_schemas_validate_fixtures():
     cases = [
         (
             REPO_ROOT / "schemas" / "runtime-governance" / "context-packet.schema.json",
@@ -911,6 +918,43 @@ def test_runtime_governance_context_schemas_validate_fixtures():
                 / "context-ledger-mutable-invalid.json",
             ],
         ),
+        (
+            REPO_ROOT / "schemas" / "runtime-governance" / "run-record.schema.json",
+            [
+                REPO_ROOT
+                / "schemas"
+                / "examples"
+                / "runtime-governance"
+                / "run-record-review-pending-valid.json",
+            ],
+            [
+                REPO_ROOT
+                / "schemas"
+                / "examples"
+                / "runtime-governance"
+                / "run-record-worker-final-ready-invalid.json",
+                REPO_ROOT
+                / "schemas"
+                / "examples"
+                / "runtime-governance"
+                / "run-record-gate-pass-missing-evidence-invalid.json",
+                REPO_ROOT
+                / "schemas"
+                / "examples"
+                / "runtime-governance"
+                / "run-record-executor-review-invalid.json",
+                REPO_ROOT
+                / "schemas"
+                / "examples"
+                / "runtime-governance"
+                / "run-record-executor-final-verdict-invalid.json",
+                REPO_ROOT
+                / "schemas"
+                / "examples"
+                / "runtime-governance"
+                / "run-record-projection-completed-invalid.json",
+            ],
+        ),
     ]
 
     for schema_path, valid_paths, invalid_paths in cases:
@@ -928,6 +972,10 @@ def test_runtime_governance_context_schemas_validate_fixtures():
                     assert entry["entry_index"] == expected_index
                     assert entry["previous_entry_hash"] == previous_hash
                     previous_hash = entry["entry_hash"]
+            if "acceptance_state" in fixture:
+                assert fixture["acceptance_state"] != "final_ready"
+                assert fixture["outcome"] == "passed"
+                assert fixture["review_state"] == "review_pending"
         for fixture_path in invalid_paths:
             fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
             errors = sorted(validator.iter_errors(fixture), key=lambda error: list(error.path))
@@ -940,6 +988,48 @@ def test_runtime_governance_context_schemas_validate_fixtures():
                 key=lambda error: list(error.path),
             )
             assert errors, "allowed_actions must reject uppercase final acceptance claims"
+        if schema_path.name == "run-record.schema.json":
+            final_ready_without_verdict = json.loads(valid_paths[0].read_text(encoding="utf-8"))
+            final_ready_without_verdict["acceptance_state"] = "final_ready"
+            final_ready_without_verdict["review_state"] = "review_passed"
+            final_ready_without_verdict["gate_state"] = "gate_passed"
+            errors = sorted(
+                validator.iter_errors(final_ready_without_verdict),
+                key=lambda error: list(error.path),
+            )
+            assert errors, "final_ready must require FinalVerdict, review, and gate evidence"
+            review_passed_with_blocked_review = json.loads(valid_paths[0].read_text(encoding="utf-8"))
+            review_passed_with_blocked_review["review_state"] = "review_passed"
+            review_passed_with_blocked_review["review_refs"] = [
+                {
+                    "review_id": "review-blocked",
+                    "reviewer_id": "reviewer-1",
+                    "reviewer_role": "reviewer",
+                    "verdict": "blocked",
+                    "uri": "reviews/blocked.yaml",
+                    "reviewed_evidence_refs": ["e-runrecord-schema"],
+                }
+            ]
+            errors = sorted(
+                validator.iter_errors(review_passed_with_blocked_review),
+                key=lambda error: list(error.path),
+            )
+            assert errors, "review_passed must require a pass review ref"
+            gate_passed_with_warning_gate = json.loads(valid_paths[0].read_text(encoding="utf-8"))
+            gate_passed_with_warning_gate["gate_state"] = "gate_passed"
+            gate_passed_with_warning_gate["gate_refs"] = [
+                {
+                    "gate_id": "gate-warning",
+                    "result": "warning",
+                    "uri": "reports/gate-warning.json",
+                    "evidence_refs": [],
+                }
+            ]
+            errors = sorted(
+                validator.iter_errors(gate_passed_with_warning_gate),
+                key=lambda error: list(error.path),
+            )
+            assert errors, "gate_passed must require a pass gate ref"
 
 
 def test_public_docs_mention_release_gate_and_visual_control_plane_surfaces():
@@ -1019,6 +1109,7 @@ def test_public_schemas_docs_and_fixtures_exclude_private_paths():
         REPO_ROOT / "packages" / "test-frame" / "schemas" / "agent-runtime" / "memory-update-record.schema.json",
         REPO_ROOT / "schemas" / "runtime-governance" / "context-packet.schema.json",
         REPO_ROOT / "schemas" / "runtime-governance" / "context-ledger.schema.json",
+        REPO_ROOT / "schemas" / "runtime-governance" / "run-record.schema.json",
         REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "context-packet-valid.json",
         REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "context-ledger-valid.json",
         REPO_ROOT
@@ -1032,6 +1123,20 @@ def test_public_schemas_docs_and_fixtures_exclude_private_paths():
         / "runtime-governance"
         / "context-packet-text-final-ready-invalid.json",
         REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "context-ledger-mutable-invalid.json",
+        REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "run-record-review-pending-valid.json",
+        REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "run-record-worker-final-ready-invalid.json",
+        REPO_ROOT
+        / "schemas"
+        / "examples"
+        / "runtime-governance"
+        / "run-record-gate-pass-missing-evidence-invalid.json",
+        REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "run-record-executor-review-invalid.json",
+        REPO_ROOT
+        / "schemas"
+        / "examples"
+        / "runtime-governance"
+        / "run-record-executor-final-verdict-invalid.json",
+        REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "run-record-projection-completed-invalid.json",
         REPO_ROOT / "docs" / "agent-runtime" / "negative-test-fixtures" / "NEG-024-path-traversal-read.json",
         REPO_ROOT / "docs" / "agent-runtime" / "negative-test-fixtures" / "NEG-017-write-outside-scope.json",
         REPO_ROOT / "docs" / "agent-runtime" / "integration-contracts.md",
