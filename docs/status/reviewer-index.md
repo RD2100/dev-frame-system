@@ -473,9 +473,13 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     should remain semantically identical to the root schema.
   - `next_commands.finalize` schema fields must stay guidance-only and must not
     imply acceptance authority.
+  - The deterministic evidence gate in `packages/control-plane/control_plane/evidence_gate.py`
+    should validate `chain-evidence.json` against the schema before final-ready
+    artifacts can be produced.
   - `tests/test_go_evidence.py`, `packages/control-plane/tests/test_cli.py`,
-    and `packages/control-plane/tests/test_public_snapshot.py` should prove the
-    generated artifacts and mirror contract.
+    `packages/control-plane/tests/test_evidence_gate.py`, and
+    `packages/control-plane/tests/test_public_snapshot.py` should prove the
+    generated artifacts, finalizer blocking behavior, and mirror contract.
   - `docs/status/runtime-governance-batch-e-chain-evidence-schema-compatibility.md`
     records the local limitation set and preserved stop lines.
 

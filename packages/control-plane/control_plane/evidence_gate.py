@@ -63,9 +63,10 @@ def _validate_schema(schema_path: str, payload: dict[str, Any]) -> None:
 
 def _load_json(path: Path) -> dict[str, Any]:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return {}
+    return payload if isinstance(payload, dict) else {}
 
 
 def parse_review_yaml(path: str | Path) -> dict[str, Any]:
@@ -109,6 +110,22 @@ def evaluate_evidence_dir(evidence_dir: str | Path) -> EvidenceGateResult:
 
     review = parse_review_yaml(evidence_path / "review.yaml")
     chain_evidence = _load_json(evidence_path / "chain-evidence.json")
+
+    chain_errors = sorted(
+        _schema_validator("schemas/agent-runtime/chain-evidence.schema.json").iter_errors(
+            chain_evidence
+        ),
+        key=lambda error: list(error.path),
+    )
+    if chain_errors:
+        return EvidenceGateResult(
+            status="blocked",
+            reason=f"chain-evidence.json schema invalid: {chain_errors[0].message}",
+            review=review,
+            chain_evidence=chain_evidence,
+            missing_files=[],
+            missing_inputs=[],
+        )
 
     review_errors = sorted(
         _schema_validator("schemas/agent-runtime/review.schema.json").iter_errors(review),
@@ -332,7 +349,7 @@ def build_failure_record(
     generated_at = generated_at or _now_iso()
     run_id = str(result.chain_evidence.get("run_id") or evidence_path.name or "unknown-run")
     source_contract = "ReviewVerdict"
-    if result.missing_files:
+    if result.missing_files or result.reason.startswith("chain-evidence.json schema invalid"):
         source_contract = "EvidenceManifest"
     failure = {
         "failure_id": f"fr-{_safe_token(run_id)}",

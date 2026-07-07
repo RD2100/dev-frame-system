@@ -51,6 +51,23 @@ def _schema_validator(path: str):
     return validator_class(schema)
 
 
+def _chain_evidence(**overrides) -> dict:
+    data = {
+        "run_id": "run-1",
+        "executor_id": "executor-1",
+        "mode": "auto_execute",
+        "planner": None,
+        "task": "task.md",
+        "methodology": None,
+        "evidence_files": go_evidence.FULL_EVIDENCE_FILES[:],
+        "timestamps": {
+            "created_at": "2026-07-07T00:00:00+00:00",
+        },
+    }
+    data.update(overrides)
+    return data
+
+
 def _setup_minimal_evidence(tmp_path: str, review_overrides: dict = None) -> str:
     review = {
         "reviewer_role": "reviewer",
@@ -66,7 +83,7 @@ def _setup_minimal_evidence(tmp_path: str, review_overrides: dict = None) -> str
     _write(os.path.join(tmp_path, "diff.patch"), "")
     _write(os.path.join(tmp_path, "test-output.md"), "")
     _write_json(os.path.join(tmp_path, "safety-report.json"), {"generated_at": "2026-06-24T00:00:00+00:00", "producer": "ai_guard.py", "command": "noop", "exit_code": 0, "stdout": ""})
-    _write_json(os.path.join(tmp_path, "chain-evidence.json"), {})
+    _write_json(os.path.join(tmp_path, "chain-evidence.json"), _chain_evidence())
     _write(os.path.join(tmp_path, "review.md"), "")
     _write_yaml(os.path.join(tmp_path, "review.yaml"), review)
     return tmp_path
@@ -134,6 +151,72 @@ def test_open_p0_finding_blocked(tmp_path):
     )
     rc = go_evidence.main(["finalize", evidence_dir])
     assert rc == 1
+
+
+def test_finalize_blocks_invalid_chain_evidence_schema(tmp_path):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path))
+    _write_json(
+        os.path.join(evidence_dir, "chain-evidence.json"),
+        {
+            "run_id": "bad-chain",
+            "executor_id": "executor-1",
+            "task": "task.md",
+        },
+    )
+
+    rc = go_evidence.main(["finalize", evidence_dir])
+
+    assert rc == 1
+    with open(os.path.join(evidence_dir, "failure-record.json"), "r", encoding="utf-8") as fh:
+        failure = json.load(fh)
+    with open(os.path.join(evidence_dir, "final-verdict.json"), "r", encoding="utf-8") as fh:
+        final_verdict = json.load(fh)
+    assert failure["source_contract"] == "EvidenceManifest"
+    assert "chain-evidence.json schema invalid" in failure["reason"]
+    assert final_verdict["final_state"] == "blocked"
+
+
+def test_finalize_blocks_non_object_chain_evidence_without_crashing(tmp_path):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path))
+    _write(os.path.join(evidence_dir, "chain-evidence.json"), "[]\n")
+
+    rc = go_evidence.main(["finalize", evidence_dir])
+
+    assert rc == 1
+    with open(os.path.join(evidence_dir, "failure-record.json"), "r", encoding="utf-8") as fh:
+        failure = json.load(fh)
+    with open(os.path.join(evidence_dir, "final-verdict.json"), "r", encoding="utf-8") as fh:
+        final_verdict = json.load(fh)
+    _schema_validator("schemas/agent-runtime/failure-record.schema.json").validate(failure)
+    _schema_validator("schemas/agent-runtime/final-verdict.schema.json").validate(final_verdict)
+    assert failure["source_contract"] == "EvidenceManifest"
+    assert "chain-evidence.json schema invalid" in failure["reason"]
+    assert final_verdict["final_state"] == "blocked"
+
+
+def test_finalize_blocks_acceptance_creating_next_command(tmp_path):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path))
+    _write_json(
+        os.path.join(evidence_dir, "chain-evidence.json"),
+        _chain_evidence(
+            next_commands={
+                "finalize": {
+                    "command_args": ["tools/go_evidence.py", "finalize", str(evidence_dir)],
+                    "authority": "guidance_only",
+                    "creates_acceptance": True,
+                    "requires_independent_review": True,
+                },
+            }
+        ),
+    )
+
+    rc = go_evidence.main(["finalize", evidence_dir])
+
+    assert rc == 1
+    with open(os.path.join(evidence_dir, "failure-record.json"), "r", encoding="utf-8") as fh:
+        failure = json.load(fh)
+    assert failure["source_contract"] == "EvidenceManifest"
+    assert "chain-evidence.json schema invalid" in failure["reason"]
 
 
 def test_init_creates_chain_evidence(tmp_path):
@@ -236,7 +319,7 @@ def test_finalize_can_record_team_runtime_review_and_final_verdict_events(tmp_pa
     evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
     _write_json(
         os.path.join(evidence_dir, "chain-evidence.json"),
-        {"run_id": "go-evidence-finalize", "executor_id": "executor-1", "task": "task.md"},
+        _chain_evidence(run_id="go-evidence-finalize"),
     )
     runtime_dir = str(tmp_path / "runtime")
 
@@ -264,7 +347,7 @@ def test_finalize_without_team_runtime_dir_does_not_record_team_runtime_events(t
     evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
     _write_json(
         os.path.join(evidence_dir, "chain-evidence.json"),
-        {"run_id": "go-legacy-finalize", "executor_id": "executor-1", "task": "task.md"},
+        _chain_evidence(run_id="go-legacy-finalize"),
     )
 
     rc = go_evidence.main(["finalize", evidence_dir])
@@ -290,7 +373,7 @@ def test_finalize_does_not_record_team_runtime_events_for_blocked_evidence(tmp_p
     evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"), {"verdict": "blocked"})
     _write_json(
         os.path.join(evidence_dir, "chain-evidence.json"),
-        {"run_id": "go-blocked-finalize", "executor_id": "executor-1", "task": "task.md"},
+        _chain_evidence(run_id="go-blocked-finalize"),
     )
     runtime_dir = str(tmp_path / "runtime")
 

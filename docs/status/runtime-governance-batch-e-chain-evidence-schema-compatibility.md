@@ -20,7 +20,10 @@ After this slice:
 - `packages/test-frame/schemas/agent-runtime/chain-evidence.schema.json` remains a semantic mirror;
 - `devframe atgo` chain evidence validates with structured finalizer guidance;
 - `next_commands.finalize` is constrained to `authority: guidance_only`, `creates_acceptance: false`, and `requires_independent_review: true`;
-- tests cover both real generation paths and the mirror contract.
+- `go_evidence finalize` validates `chain-evidence.json` against the schema as
+  part of the deterministic evidence gate;
+- tests cover real generation paths, real finalization blocking paths, and the
+  mirror contract.
 
 This slice does not claim compatibility with the ai-workflow-hub paper/coding graph `nodes`-based chain evidence shape. That producer remains a separate domain adapter concern.
 
@@ -30,15 +33,19 @@ Focused tests added or updated:
 
 - `tests/test_go_evidence.py`
 - `packages/control-plane/tests/test_cli.py`
+- `packages/control-plane/tests/test_evidence_gate.py`
 - `packages/control-plane/tests/test_public_snapshot.py`
 
 Required verification for this batch:
 
 ```powershell
 python -m pytest tests\test_go_evidence.py::test_init_creates_chain_evidence -q
+python -m pytest tests\test_go_evidence.py::test_finalize_blocks_invalid_chain_evidence_schema tests\test_go_evidence.py::test_finalize_blocks_acceptance_creating_next_command -q
 python -m pytest packages\control-plane\tests\test_cli.py::test_atgo_prepare_writes_methodology_to_chain_evidence -q
+python -m pytest packages\control-plane\tests\test_evidence_gate.py::test_evidence_gate_blocks_invalid_chain_evidence_schema -q
 python -m pytest packages\control-plane\tests\test_public_snapshot.py::test_agent_runtime_chain_evidence_schema_mirror_matches_semantically -q
 python -m pytest tests\test_go_evidence.py packages\control-plane\tests\test_cli.py -q -k "atgo or chain_evidence or init_creates_chain_evidence"
+python -m pytest tests\test_go_evidence.py packages\control-plane\tests\test_evidence_gate.py -q
 python -m pytest packages\control-plane\tests\test_public_snapshot.py -q
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-public-snapshot.ps1 -FailOnTrackedForbidden
 git diff --check
@@ -54,4 +61,5 @@ git diff --check
 ## Known Gaps
 
 - ai-workflow-hub `nodes`-style chain evidence is not normalized by this slice.
-- The finalizer still does not validate `chain-evidence.schema.json` as part of the pass/fail evidence gate.
+- Schema validation proves the chain evidence shape only; it does not make
+  `next_commands.finalize` an acceptance authority.

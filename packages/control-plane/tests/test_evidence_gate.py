@@ -23,6 +23,33 @@ def _schema_validator(path: str):
     return validator_class(schema)
 
 
+def _chain_evidence(**overrides) -> dict:
+    data = {
+        "run_id": "run-lib",
+        "executor_id": "executor-1",
+        "mode": "auto_execute",
+        "planner": None,
+        "task": "task.md",
+        "methodology": None,
+        "evidence_files": [
+            "diff.patch",
+            "test-output.md",
+            "safety-report.json",
+            "chain-evidence.json",
+            "review.md",
+            "review.yaml",
+            "evidence-manifest.json",
+            "final-report.md",
+            "final-verdict.json",
+        ],
+        "timestamps": {
+            "created_at": "2026-07-07T00:00:00+00:00",
+        },
+    }
+    data.update(overrides)
+    return data
+
+
 def _write_evidence(path: Path, review: dict) -> None:
     path.mkdir(parents=True, exist_ok=True)
     (path / "diff.patch").write_text("diff\n", encoding="utf-8")
@@ -39,11 +66,7 @@ def _write_evidence(path: Path, review: dict) -> None:
         encoding="utf-8",
     )
     (path / "chain-evidence.json").write_text(
-        json.dumps({
-            "run_id": "run-lib",
-            "executor_id": "executor-1",
-            "task": "task.md",
-        }),
+        json.dumps(_chain_evidence()),
         encoding="utf-8",
     )
     (path / "review.md").write_text("review\n", encoding="utf-8")
@@ -108,4 +131,22 @@ def test_evidence_gate_blocks_whitespace_padded_executor_role(tmp_path):
 
     assert result.status == "blocked"
     assert "reviewer_role 'executor' is not allowed" in result.reason
+    assert final_verdict["final_state"] == "blocked"
+
+
+def test_evidence_gate_blocks_invalid_chain_evidence_schema(tmp_path):
+    evidence_dir = tmp_path / "evidence"
+    _write_evidence(evidence_dir, _review())
+    (evidence_dir / "chain-evidence.json").write_text(
+        json.dumps({"run_id": "run-lib", "executor_id": "executor-1", "task": "task.md"}),
+        encoding="utf-8",
+    )
+
+    result = evaluate_evidence_dir(evidence_dir)
+    failure = build_failure_record(evidence_dir, result, "2026-07-07T00:00:00+00:00")
+    final_verdict = build_final_verdict(evidence_dir, result, "2026-07-07T00:00:00+00:00")
+
+    assert result.status == "blocked"
+    assert "chain-evidence.json schema invalid" in result.reason
+    assert failure["source_contract"] == "EvidenceManifest"
     assert final_verdict["final_state"] == "blocked"
