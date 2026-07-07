@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import os
+import re
 import shutil
 import subprocess
 import uuid
@@ -77,6 +78,31 @@ PUBLIC_MARKDOWN_DOCS = [
     REPO_ROOT / "docs" / "status" / "reviewer-index.md",
     REPO_ROOT / "rules" / "web-ai-adapters.md",
 ]
+DOC_LINK_CHECK_MARKDOWN_DOCS = [
+    REPO_ROOT / "docs" / "README.md",
+    REPO_ROOT / "docs" / "status" / "status-document-inventory.md",
+    REPO_ROOT / "docs" / "status" / "reviewer-index.md",
+    REPO_ROOT / "docs" / "status" / "release-readiness.md",
+    REPO_ROOT / "docs" / "status" / "review-governance-kernel-completion-20260706.md",
+]
+MARKDOWN_LINK_PATTERN = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
+
+
+def _relative_markdown_links(path):
+    text = path.read_text(encoding="utf-8-sig")
+    for match in MARKDOWN_LINK_PATTERN.finditer(text):
+        target = match.group(1).strip()
+        if not target:
+            continue
+        if target.startswith("<") and target.endswith(">"):
+            target = target[1:-1].strip()
+        elif " " in target:
+            target = target.split()[0]
+        if target.startswith(("http://", "https://", "mailto:", "#")):
+            continue
+        target = target.split("#", 1)[0].strip()
+        if target:
+            yield target
 
 
 def test_public_snapshot_allows_python_test_caches():
@@ -502,6 +528,30 @@ def test_public_markdown_docs_are_utf8_and_do_not_contain_mojibake_or_private_pa
         text = path.read_text(encoding="utf-8-sig")
         for marker in forbidden:
             assert marker not in text, f"{path} contains forbidden marker {marker!r}"
+
+
+def test_current_entry_markdown_links_resolve_to_repo_files():
+    missing = []
+    for path in DOC_LINK_CHECK_MARKDOWN_DOCS:
+        for target in _relative_markdown_links(path):
+            if target.startswith("/"):
+                resolved = REPO_ROOT / target.lstrip("/")
+            else:
+                resolved = path.parent / target
+            if not resolved.exists():
+                try:
+                    resolved_label = resolved.relative_to(REPO_ROOT).as_posix()
+                except ValueError:
+                    resolved_label = f"outside repo: {resolved}"
+                missing.append(
+                    (
+                        path.relative_to(REPO_ROOT).as_posix(),
+                        target,
+                        resolved_label,
+                    )
+                )
+
+    assert missing == []
 
 
 def test_public_scripts_and_adapters_exclude_private_machine_paths():

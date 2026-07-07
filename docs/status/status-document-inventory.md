@@ -245,4 +245,5 @@ The folder still needs these follow-up improvements:
 - keep `docs/README.md`, this inventory, `reviewer-index.md`, and
   `document-driven-transformation-master-plan.md` synchronized whenever a new
   public subsystem or deferred module is added;
-- add a lightweight docs-link check once the status set stabilizes.
+- maintain the lightweight current-entry docs-link check in
+  `packages/control-plane/tests/test_public_snapshot.py`.
