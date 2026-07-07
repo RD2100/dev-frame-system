@@ -24,6 +24,38 @@ governance-owned final verdict.
 This document is an implementation plan, not a claim that the target runtime
 already exists.
 
+## Current Execution Status
+
+Update date: 2026-07-08.
+
+The initial Batch A "Immediate Next Slice" in this plan has been superseded by
+later local implementation audits. Batches A through D now have public contract,
+RunIndex, prepare-only review, and independent evidence-gate records. Batch E
+has also advanced through workflow review-pending behavior, explicit team
+evidence and context references, review/final-verdict reference projection,
+manual @go finalizer guidance, chain-evidence schema compatibility, FinalVerdict
+lifecycle metadata, and fail-closed ai-workflow-hub chain evidence
+classification.
+
+The current safe next slice is not automatic runtime finalization. It is a
+post-Batch-E status reconciliation and review-focus slice: keep the current
+Batch E evidence visible, keep preserved stop lines explicit, and prevent future
+agents from treating stale Batch A planning language as the next implementation
+target.
+
+Still out of scope without a separate bounded implementation slice:
+
+- generic `go` dispatch automatic finalization;
+- sealed ContextPacket or ContextLedger production beyond current provenance
+  references;
+- paper or ai-workflow-hub domain adapters and canonical normalization;
+- automatic superseding FinalVerdict generation for divergent reruns;
+- runtime storage migration or dashboard authority changes.
+
+The preserved stop line remains: terminal status, file shape,
+`next_commands.finalize`, worker success, and projection status must not create
+acceptance authority.
+
 ## Executive Recommendation
 
 Do not build another workflow engine, another evidence format, or another
@@ -918,29 +950,30 @@ These decisions should be resolved in Phase 0 or Phase 1:
 7. Which legacy commands are public compatibility commitments versus internal
    development surfaces?
 
-## Immediate Next Slice
+## Current Next Slice
 
-The next implementation slice should be Batch A only.
+The next slice should be post-Batch-E status reconciliation only.
 
 Deliverables:
 
-1. `recon-receipt-runtime-governance-unification.md`;
-2. a status-vocabulary inventory;
-3. ContextPacket and ContextLedger schemas;
-4. a minimal RunRecord schema;
-5. positive and negative fixtures;
-6. a semantic schema-mirror verification test;
-7. an updated Reviewer Index.
+1. update this plan so the superseded Batch A immediate-next guidance is no
+   longer mistaken for current execution state;
+2. update the Reviewer Index with post-Batch-E remaining gaps and review focus;
+3. verify the public snapshot and markdown-safe diff;
+4. use a read-only reviewer subagent for final review instead of CDP review.
 
 Do not yet:
 
-- change workflow execution;
-- add slash-command routing;
-- move runtime files;
-- alter the dashboard;
-- add automatic retrieval;
-- issue any new final acceptance claim.
+- add runtime automation for generic `go` finalization;
+- change `chain_trusted` semantics for missing ai-workflow-hub
+  `chain-evidence.json` with legacy trusted state;
+- create sealed ContextPacket or ContextLedger production;
+- normalize ai-workflow-hub `nodes` evidence into the canonical @go schema;
+- add paper or ai-workflow-hub domain adapters;
+- expose FinalVerdict supersession chains as a first-class RunIndex read model;
+- move runtime files, alter dashboard authority, or issue a new final
+  acceptance claim.
 
-This slice is intentionally contract-first. It creates the stable joints needed
-to connect the project's existing, tested components without turning the next
-phase into another parallel architecture.
+The next implementation slice after this reconciliation must choose one of
+those remaining gaps explicitly, cite the relevant Batch E audit record, and
+include a real-path regression test before changing runtime behavior.

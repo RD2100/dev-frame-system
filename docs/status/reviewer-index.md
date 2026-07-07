@@ -522,6 +522,20 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     path.
   - `docs/status/runtime-governance-batch-e-ai-workflow-hub-chain-evidence-classification.md`
     records the local limitation set and preserved stop lines.
+- Runtime-governance post-Batch-E status reconciliation:
+  - `docs/status/runtime-governance-and-evidence-closure-transformation-plan.md`
+    should no longer present the original Batch A immediate-next language as
+    current execution state.
+  - Current remaining gaps are generic `go` automatic finalization, sealed
+    ContextPacket/ContextLedger production, ai-workflow-hub and paper domain
+    adapters, missing ai-workflow-hub `chain-evidence.json` with legacy trusted
+    state, automatic superseding FinalVerdict generation, and first-class
+    RunIndex supersession-chain projection.
+  - Reviewers should confirm this reconciliation does not change runtime
+    behavior, schema contracts, adapter behavior, dashboard authority, or
+    acceptance projection.
+  - Terminal status, file shape, `next_commands.finalize`, worker success, and
+    projection status must remain non-authoritative for acceptance.
 
 ## Open-Source Review Checklist
 
