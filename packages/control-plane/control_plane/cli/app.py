@@ -160,8 +160,11 @@ def main() -> int:
 
     if cmd == "rdreview":
         if _wants_help(sys.argv[2:]):
-            print("Usage: devframe rdreview <work_item_id> <intent> [--project <id>] [--output <file>]")
-            print("  Prepare a sample review-governance packet (no runtime writes).")
+            print(
+                "Usage: devframe rdreview <work_item_id> <intent> "
+                "[--project <id>] [--output <file>] [--format packet|bundle]"
+            )
+            print("  Prepare a review-governance packet or prepare-only runtime-governance bundle.")
             return 0
         return cmd_rdreview(sys.argv[2:])
 

@@ -7,14 +7,39 @@ Output goes to stdout or a user-specified file.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from datetime import datetime, timezone
+from hashlib import sha256
 from pathlib import Path
 from typing import Optional
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _safe_token(value: str) -> str:
+    token = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip())
+    token = token.strip("-._")
+    return token or "unknown"
+
+
+def _digest_json(data: object) -> str:
+    payload = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return "sha256:" + sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _review_ids(work_item_id: str) -> dict[str, str]:
+    token = _safe_token(work_item_id.removeprefix("wi-"))
+    return {
+        "goal_id": f"goal-{token}",
+        "task_id": f"task-{token}",
+        "run_id": f"run-{token}",
+        "attempt_id": "attempt-1",
+        "context_packet_id": f"cp-{token}",
+        "context_ledger_id": f"cl-{token}",
+    }
 
 
 def generate_review_packet(
@@ -123,19 +148,351 @@ def generate_review_packet(
     }
 
 
+def generate_review_prepare_bundle(
+    work_item_id: str,
+    intent: str,
+    project_id: str = "proj-review-demo",
+) -> dict:
+    """Generate a prepare-only runtime-governance review bundle.
+
+    This is a read-only contract package. It prepares context, task, run, and
+    inspection metadata for a later independent review, but does not submit to a
+    reviewer, execute code, evaluate a gate, or create a final verdict.
+    """
+    ids = _review_ids(work_item_id)
+    created_at = _now_iso()
+    review_packet = generate_review_packet(work_item_id, intent, project_id)
+    source_refs = [
+        {
+            "ref_id": "runtime-governance-plan",
+            "kind": "file",
+            "uri": "docs/status/runtime-governance-and-evidence-closure-transformation-plan.md",
+            "included": True,
+            "required": True,
+            "freshness_state": "current",
+            "producer_role": "coordinator",
+            "observed_at": created_at,
+        },
+        {
+            "ref_id": "agent-coding-discipline",
+            "kind": "file",
+            "uri": "docs/agent-runtime/agent-coding-discipline.md",
+            "included": True,
+            "required": True,
+            "freshness_state": "current",
+            "producer_role": "coordinator",
+            "observed_at": created_at,
+        },
+        {
+            "ref_id": "review-governance-packet",
+            "kind": "artifact",
+            "uri": "bundle://review_packet.json",
+            "content_hash": _digest_json(review_packet),
+            "included": True,
+            "required": True,
+            "freshness_state": "current",
+            "producer_role": "coordinator",
+            "observed_at": created_at,
+        },
+    ]
+    omitted_required_refs = [
+        {
+            "ref": "independent-review-record",
+            "omission_reason": "Batch C prepares the request but does not run an external or live reviewer.",
+            "impact": "blocks_acceptance",
+        },
+        {
+            "ref": "execution-or-test-evidence",
+            "omission_reason": "Prepare-only review packaging does not execute code or tests.",
+            "impact": "limited",
+        },
+    ]
+    forbidden_actions = [
+        "automatic context retrieval",
+        "browser or Web AI submission",
+        "live external reviewer invocation",
+        "runtime execution",
+        "governance acceptance claim",
+    ]
+    stop_lines = [
+        "No automatic retrieval in Batch C.",
+        "No browser submission in Batch C.",
+        "No live external reviewer in Batch C.",
+        "No runtime execution in Batch C.",
+        "No governance acceptance claim from prepare output.",
+    ]
+    context_packet = {
+        "schema_version": "0.1",
+        "context_packet_id": ids["context_packet_id"],
+        "project_id": project_id,
+        "goal_id": ids["goal_id"],
+        "task_id": ids["task_id"],
+        "domain": "review",
+        "profile": "rdreview-prepare-only",
+        "producer_role": "coordinator",
+        "created_at": created_at,
+        "intent_summary": intent,
+        "intended_use": "review",
+        "immutability": {
+            "immutable": True,
+            "content_hash": _digest_json(
+                {
+                    "work_item_id": work_item_id,
+                    "intent": intent,
+                    "project_id": project_id,
+                    "source_refs": source_refs,
+                    "omitted_required_refs": omitted_required_refs,
+                }
+            ),
+        },
+        "source_refs": source_refs,
+        "omitted_required_refs": omitted_required_refs,
+        "forbidden_refs": [],
+        "freshness": {
+            "checked_at": created_at,
+            "stale_refs": [],
+            "unknown_refs": [],
+        },
+        "completeness_state": "insufficient_evidence",
+        "privacy_state": "redacted",
+        "seal_state": "sealed",
+        "limitations": [
+            "Prepared context only; independent review and governance finalization are deferred.",
+            "Missing review and execution evidence limit this run to request preparation.",
+        ],
+        "constraints": {
+            "allowed_actions": [
+                "inspect prepared review context",
+                "manually share bundle with an independent reviewer",
+                "prepare a follow-up review record",
+            ],
+            "forbidden_actions": forbidden_actions,
+            "stop_lines": stop_lines,
+            "authority_boundary": {
+                "can_execute": False,
+                "can_review": True,
+                "can_claim_final_acceptance": False,
+                "final_verdict_required": True,
+            },
+        },
+        "domain_refs": {
+            "work_item_id": work_item_id,
+            "review_packet_id": review_packet["runs"][0]["id"],
+        },
+    }
+    ledger_entry_seed = {
+        "ledger_entry_id": f"cle-{ids['context_packet_id'].removeprefix('cp-')}-created",
+        "entry_index": 0,
+        "previous_entry_hash": None,
+        "occurred_at": created_at,
+        "actor_id": "rdreview-prepare",
+        "actor_role": "coordinator",
+        "event_type": "packet_created",
+        "context_packet_id": ids["context_packet_id"],
+        "summary": "Created prepare-only rdreview context packet.",
+        "source_refs": [
+            {"ref_id": ref["ref_id"], "kind": ref["kind"], "uri": ref["uri"]}
+            for ref in source_refs
+        ],
+        "domain_refs": {"profile": "rdreview-prepare-only"},
+    }
+    context_ledger = {
+        "schema_version": "0.1",
+        "context_ledger_id": ids["context_ledger_id"],
+        "project_id": project_id,
+        "goal_id": ids["goal_id"],
+        "task_id": ids["task_id"],
+        "created_at": created_at,
+        "append_only": True,
+        "entries": [
+            {
+                **ledger_entry_seed,
+                "entry_hash": _digest_json(ledger_entry_seed),
+            }
+        ],
+    }
+    task_spec = {
+        "task_id": ids["task_id"],
+        "title": f"Prepare review bundle for {work_item_id}",
+        "priority": "P2",
+        "status": "ready",
+        "description": (
+            "Prepare a bounded rdreview package for independent review without "
+            "executing code or claiming governance acceptance."
+        ),
+        "assumptions": [
+            "Batch C is prepare-only.",
+            "Independent review and finalization happen in later batches.",
+        ],
+        "risk_notes": "A prepared bundle is not evidence that a reviewer approved the work.",
+        "estimated_tools": ["devframe rdreview", "jsonschema"],
+        "gate_0": {
+            "triggered": True,
+            "trigger_reason": "Runtime governance review packaging reuses existing schemas and rdreview packet.",
+            "inventory_evidence": {
+                "queried_sources": [
+                    "schemas/runtime-governance/context-packet.schema.json",
+                    "schemas/runtime-governance/context-ledger.schema.json",
+                    "schemas/runtime-governance/run-record.schema.json",
+                    "schemas/agent-runtime/task-spec.schema.json",
+                ],
+                "matched_capabilities": [
+                    "review_governance_packet",
+                    "runtime_governance_context_packet",
+                    "runtime_governance_run_record",
+                ],
+                "compared_against_request": ["Batch C rdreview prepare-only vertical slice"],
+            },
+            "rules_checked": ["agent-discipline-001", "agent-discipline-004", "agent-discipline-005"],
+            "lessons_checked": [],
+            "sufficiency_decision": "existing_partial",
+            "decision": "build_delta",
+            "delta_justification": "A small bundle wrapper is needed to connect existing contracts.",
+        },
+        "conflict_registry": {
+            "read_set": [
+                "packages/control-plane/control_plane/rdreview.py",
+                "schemas/runtime-governance/context-packet.schema.json",
+                "schemas/runtime-governance/context-ledger.schema.json",
+                "schemas/runtime-governance/run-record.schema.json",
+            ],
+            "write_set": [],
+            "protected_files_touched": False,
+            "conflict_level": "none",
+        },
+    }
+    run_record = {
+        "schema_version": "0.1",
+        "run_id": ids["run_id"],
+        "project_id": project_id,
+        "goal_id": ids["goal_id"],
+        "task_id": ids["task_id"],
+        "attempt_id": ids["attempt_id"],
+        "context_packet_id": ids["context_packet_id"],
+        "context_ledger_id": ids["context_ledger_id"],
+        "domain": "review",
+        "profile": "rdreview-prepare-only",
+        "producer_role": "runtime_adapter",
+        "created_at": created_at,
+        "updated_at": created_at,
+        "phase": "prepared",
+        "outcome": "unknown",
+        "review_state": "review_pending",
+        "gate_state": "not_evaluated",
+        "acceptance_state": "review_pending",
+        "projection_state": "awaiting_review",
+        "worker_results": [],
+        "artifact_refs": [
+            {
+                "artifact_id": ids["context_packet_id"],
+                "kind": "context_packet",
+                "uri": "bundle://context_packet.json",
+                "content_hash": _digest_json(context_packet),
+            },
+            {
+                "artifact_id": ids["context_ledger_id"],
+                "kind": "context_ledger",
+                "uri": "bundle://context_ledger.json",
+                "content_hash": _digest_json(context_ledger),
+            },
+            {
+                "artifact_id": ids["task_id"],
+                "kind": "other",
+                "uri": "bundle://task_spec.json",
+                "content_hash": _digest_json(task_spec),
+            },
+        ],
+        "evidence_refs": [
+            {
+                "evidence_id": ids["context_packet_id"],
+                "kind": "context_packet",
+                "uri": "bundle://context_packet.json",
+                "supports": "limitation",
+                "content_hash": _digest_json(context_packet),
+            }
+        ],
+        "review_refs": [],
+        "gate_refs": [],
+        "failure_refs": [],
+        "limitations": [
+            "Awaiting independent review.",
+            "No gate or governance finalization has been evaluated.",
+        ],
+        "domain_refs": {
+            "work_item_id": work_item_id,
+            "review_packet_run_id": review_packet["runs"][0]["id"],
+            "prepare_only": True,
+        },
+    }
+    return {
+        "schema_version": "0.1",
+        "kind": "rdreview_prepare_bundle",
+        "prepared_at": created_at,
+        "project_id": project_id,
+        "work_item_id": work_item_id,
+        "intent": intent,
+        "verdict_target": "accepted_with_limitation",
+        "review_packet": review_packet,
+        "context_packet": context_packet,
+        "context_ledger": context_ledger,
+        "task_spec": task_spec,
+        "run_record": run_record,
+        "evidence_inventory": {
+            "included_refs": source_refs,
+            "omitted_required_refs": omitted_required_refs,
+            "forbidden_refs": [],
+            "readiness": "prepare_only_review_pending",
+        },
+        "review_request": {
+            "methodology": ["evidence-driven-acceptance"],
+            "reviewer_requirement": "independent reviewer required after preparation",
+            "requested_verdict": "accepted_with_limitation",
+            "can_execute": False,
+            "can_submit_externally": False,
+            "can_claim_acceptance": False,
+        },
+        "inspect_output": {
+            "mode": "read_only",
+            "run_id": ids["run_id"],
+            "context_packet_id": ids["context_packet_id"],
+            "task_id": ids["task_id"],
+            "review_state": "review_pending",
+            "missing_required_refs": [item["ref"] for item in omitted_required_refs],
+            "next_safe_action": "manual independent review",
+        },
+        "resume_output": {
+            "mode": "manual_only",
+            "instructions": [
+                "Provide this bundle to an independent reviewer.",
+                "Record the review separately before any governance finalization.",
+            ],
+            "blocked_actions": forbidden_actions,
+        },
+        "stop_lines": stop_lines,
+    }
+
+
 def cmd_rdreview_prepare(
     work_item_id: str,
     intent: str,
     output: Optional[str] = None,
     project_id: str = "proj-review-demo",
+    output_format: str = "packet",
 ) -> int:
     """Prepare a sample review packet. Writes to stdout or file."""
-    packet = generate_review_packet(work_item_id, intent, project_id)
-    payload = json.dumps(packet, indent=2, ensure_ascii=False)
+    if output_format == "packet":
+        result = generate_review_packet(work_item_id, intent, project_id)
+        label = "Review packet"
+    elif output_format == "bundle":
+        result = generate_review_prepare_bundle(work_item_id, intent, project_id)
+        label = "Review prepare bundle"
+    else:
+        raise ValueError(f"Unsupported rdreview output format: {output_format}")
+    payload = json.dumps(result, indent=2, ensure_ascii=False)
 
     if output:
         Path(output).write_text(payload, encoding="utf-8")
-        print(f"Review packet written to {output}")
+        print(f"{label} written to {output}")
     else:
         print(payload)
     return 0

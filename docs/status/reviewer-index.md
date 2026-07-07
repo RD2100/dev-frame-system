@@ -53,6 +53,8 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `packages/control-plane/control_plane/workflow_engine.py`
 - `packages/control-plane/control_plane/team_runtime.py`
 - `packages/control-plane/control_plane/run_index.py`
+- `packages/control-plane/control_plane/rdreview.py`
+- `packages/control-plane/control_plane/cli/_review.py`
 - `packages/control-plane/control_plane/execution_plan.py`
 - `schemas/visual_control_plane_state.schema.json`
 - `schemas/review_governance_kernel.schema.json`
@@ -122,6 +124,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `packages/control-plane/tests/test_workflow_engine.py`
 - `packages/control-plane/tests/test_team_runtime.py`
 - `packages/control-plane/tests/test_run_index.py`
+- `packages/control-plane/tests/test_rdreview.py`
 - `packages/control-plane/tests/test_execution_plan.py`
 - `packages/control-plane/control_plane/review_governance_validator.py`
 - `packages/control-plane/tests/test_review_governance_kernel.py`
@@ -250,6 +253,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/runtime-governance-status-vocabulary-inventory.md`
 - `docs/status/runtime-governance-batch-a-contract-completion.md`
 - `docs/status/runtime-governance-batch-b-read-only-run-index.md`
+- `docs/status/runtime-governance-batch-c-rdreview-prepare-only.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/total-control-policy-engine-and-human-escalation-governance-plan.md`
@@ -309,6 +313,15 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     compatibility, unsafe-promotion blocking, and corrupt-record visibility.
   - `docs/status/runtime-governance-batch-b-read-only-run-index.md` records the
     local limitation set and preserved stop lines.
+- Runtime-governance Batch C rdreview prepare-only bundle:
+  - `packages/control-plane/control_plane/rdreview.py` preserves the legacy
+    packet default while adding `--format bundle` through
+    `packages/control-plane/control_plane/cli/_review.py`.
+  - `packages/control-plane/tests/test_rdreview.py` should prove the bundle is
+    schema-valid, review-pending, gate-not-evaluated, manual-only, and blocked
+    from final acceptance authority.
+  - `docs/status/runtime-governance-batch-c-rdreview-prepare-only.md` records
+    the local limitation set and preserved stop lines.
 
 ## Open-Source Review Checklist
 
@@ -368,6 +381,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/runtime-governance-status-vocabulary-inventory.md`
 - `docs/status/runtime-governance-batch-a-contract-completion.md`
 - `docs/status/runtime-governance-batch-b-read-only-run-index.md`
+- `docs/status/runtime-governance-batch-c-rdreview-prepare-only.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/documentation-management-audit-and-plan.md`
@@ -414,6 +428,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `packages/control-plane/control_plane/rules_config.py`
 - `packages/control-plane/control_plane/run_defaults.py`
 - `packages/control-plane/control_plane/run_index.py`
+- `packages/control-plane/control_plane/rdreview.py`
 - `packages/control-plane/control_plane/scope_resolver.py`
 - `packages/control-plane/control_plane/scoped_store.py`
 - `packages/control-plane/control_plane/task_proposals.py`
@@ -428,6 +443,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `packages/control-plane/tests/test_docs_drift_validator.py`
 - `packages/control-plane/tests/test_rdgoal.py`
 - `packages/control-plane/tests/test_run_index.py`
+- `packages/control-plane/tests/test_rdreview.py`
 - `pytest.ini`
 - `rules/orchestration.md`
 - `rules/project-contracts/_template.md`

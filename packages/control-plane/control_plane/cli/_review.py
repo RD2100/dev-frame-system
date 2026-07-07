@@ -16,6 +16,12 @@ def cmd_rdreview(argv: list[str] | None = None) -> int:
     parser.add_argument("intent", nargs="+", help="Review intent description (multi-word OK)")
     parser.add_argument("--project", default="proj-review-demo", help="Project ID")
     parser.add_argument("--output", default=None, help="Output file path (default: stdout)")
+    parser.add_argument(
+        "--format",
+        choices=["packet", "bundle"],
+        default="packet",
+        help="Output shape: legacy review packet or prepare-only runtime-governance bundle",
+    )
     args = parser.parse_args(argv)
     intent = " ".join(args.intent)
     return cmd_rdreview_prepare(
@@ -23,4 +29,5 @@ def cmd_rdreview(argv: list[str] | None = None) -> int:
         intent=intent,
         output=args.output,
         project_id=args.project,
+        output_format=args.format,
     )
