@@ -194,10 +194,10 @@ Current boundary:
 - it is a parallel run model rather than a domain adapter over a shared run
   envelope;
 - status and acceptance terms differ from the control-plane terms;
-- `summarize_run_governance` currently treats a `passed` or `blocked` workflow
-  status as sufficient to set `chain_trusted` when it was not already trusted;
-- that inference is fail-open and conflicts with the repository's evidence-first
-  rules;
+- `summarize_run_governance` previously treated a `passed` or `blocked`
+  workflow status as sufficient to set `chain_trusted` when it was not already
+  trusted; Batch E removed that fail-open inference and now requires explicit
+  boolean chain trust;
 - the paper finalizer and the generic evidence finalizer do not share one final
   verdict contract.
 

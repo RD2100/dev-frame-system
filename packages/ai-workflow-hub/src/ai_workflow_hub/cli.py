@@ -2624,8 +2624,12 @@ def _write_chain_evidence(run_dir: str, state: dict) -> None:
             "human_required": plan_audit_result == "human_required",
         }
 
+    Path(run_dir).mkdir(parents=True, exist_ok=True)
     Path(run_dir, "chain-evidence.json").write_text(
         _j.dumps(evidence, indent=2, ensure_ascii=False), encoding="utf-8")
+    state["chain_status"] = "TRUSTED"
+    state["chain_trusted"] = True
+    save_run_json(run_dir, "state.json", state)
 
 
 # ============================================================

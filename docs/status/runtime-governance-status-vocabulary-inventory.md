@@ -73,7 +73,7 @@ already separates these axes:
 | Web AI review projection | `packages/control-plane/control_plane/visual_state.py` | positive tokens -> `pass`; negative tokens -> `blocked`; otherwise `open` | Imported Web AI review read model | Review import can open next action, not final local acceptance |
 | Session projection | `packages/control-plane/control_plane/visual_state.py` | `completed`, `blocked`, `needs_human`, `active`, `idle`, `unknown` | UI/session display status | Session completion is not final verdict |
 | Paper workflow state | `packages/ai-workflow-hub/src/ai_workflow_hub/workflows/paper_workflow_state.py` and `paper_graph.py` | acceptance status examples `accepted`, `accepted_with_limitation`, `blocked`, `human_required`; chain trust booleans | Paper-domain acceptance and governance summary | Domain adapter must preserve human/privacy gates |
-| Paper run governance summary | `packages/ai-workflow-hub/src/ai_workflow_hub/run_governance.py` | run status `passed`, `blocked`, `unknown`; `chain_trusted` boolean | Legacy paper evidence summary and CLI/Markdown display | Current fallback treats `passed` or `blocked` as trusted chain; Batch A must treat that as fail-open legacy behavior, not governance truth |
+| Paper run governance summary | `packages/ai-workflow-hub/src/ai_workflow_hub/run_governance.py` | run status `passed`, `blocked`, `unknown`; `chain_trusted` boolean | Legacy paper evidence summary and CLI/Markdown display | Batch E removed terminal-status trust fallback; only explicit JSON boolean `chain_trusted=true` is trusted |
 | Paper runtime adapter | `packages/ai-workflow-hub/src/ai_workflow_hub/context_layer/adapters/paper_runtime.py` | final status `completed`, `blocked`, `error`; task queue maps to `passed`, `blocked`, `failed` | Paper runtime bridge into task queue | `completed` maps to mechanical task pass, not general acceptance |
 | Test-frame canonical status | `packages/test-frame/orchestrator/stage.py` and `packages/test-frame/orchestrator/gate.py` | `passed`, `failed`, `skipped`, `blocked`, `error`, `cancelled` | Test tool and stage result vocabulary | `passed` supports `outcome`, while `blocked/error/cancelled` must not be hidden |
 | Test-frame aggregate status | `packages/test-frame/aggregator/report.py` | overall `passed`, `failed`, `blocked`; quality gate `passed` boolean; verdict `codeReview=PASS` default | Test aggregation summary and generated report verdicts | Passing aggregate or default code-review verdict is not a final verdict without evidence and review links |
@@ -103,6 +103,9 @@ These mappings are forbidden in the next schema slice:
 - visual heuristic `approved`, `accepted`, or `proceed` -> `pass` or
   `final_ready`;
 - unknown or unmapped statuses -> `pass`, `completed`, or `final_ready`.
+
+The removed paper terminal-status chain trust fallback remains the reference
+example of fail-open legacy behavior for future negative tests.
 
 ## Safe Mapping Direction
 
@@ -135,7 +138,7 @@ The first ContextPacket/ContextLedger/RunRecord fixtures should include:
 5. test-frame aggregate `passed` with missing context packet -> insufficient evidence;
 6. test-frame generated `codeReview=PASS` with no independent review record -> not reviewed;
 7. paper workflow `completed` with `acceptance_status=human_required` -> human required;
-8. paper run status `blocked` with fallback `chain_trusted=True` -> blocked, not trusted;
+8. paper run status `blocked` without explicit boolean `chain_trusted=true` -> blocked, not trusted;
 9. unknown domain adapter status -> explicit unknown mapping, no pass;
 10. projection `completed` without source run/evidence links -> projection-only.
 

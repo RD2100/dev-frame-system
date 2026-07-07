@@ -63,4 +63,5 @@ git diff --check
 
 - Independent review and final verdict events are still later integration work.
 - Context packet references on task lifecycle events remain deferred.
-- Paper workflow trust inference is still a separate Batch E follow-up slice.
+- Paper workflow trust inference is handled in
+  [Runtime Governance Batch E: Paper Trust Fail Closed](runtime-governance-batch-e-paper-trust-fail-closed.md).

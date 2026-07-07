@@ -264,6 +264,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/runtime-governance-batch-c-rdreview-prepare-only.md`
 - `docs/status/runtime-governance-batch-d-independent-gate.md`
 - `docs/status/runtime-governance-batch-e-workflow-review-pending.md`
+- `docs/status/runtime-governance-batch-e-paper-trust-fail-closed.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/total-control-policy-engine-and-human-escalation-governance-plan.md`
@@ -358,6 +359,18 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     former self-approval path now stays review-pending.
   - `docs/status/runtime-governance-batch-e-workflow-review-pending.md` records
     the local limitation set and preserved stop lines.
+- Runtime-governance Batch E paper trust fail-closed:
+  - `packages/ai-workflow-hub/src/ai_workflow_hub/run_governance.py` must never
+    infer `chain_trusted=True` from terminal `passed` or `blocked` status.
+  - `packages/ai-workflow-hub/src/ai_workflow_hub/cli.py` must keep
+    `_write_chain_evidence()` as the explicit trust producer for
+    `verify_run_evidence()` and `goal_runner`.
+  - `packages/ai-workflow-hub/tests/test_run_governance.py` should prove
+    terminal paper status remains untrusted unless explicit chain trust exists.
+  - `docs/status/runtime-governance-status-vocabulary-inventory.md` should keep
+    the paper run-governance vocabulary aligned with the fail-closed behavior.
+  - `docs/status/runtime-governance-batch-e-paper-trust-fail-closed.md` records
+    the local limitation set and preserved stop lines.
 
 ## Open-Source Review Checklist
 
@@ -420,6 +433,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/runtime-governance-batch-c-rdreview-prepare-only.md`
 - `docs/status/runtime-governance-batch-d-independent-gate.md`
 - `docs/status/runtime-governance-batch-e-workflow-review-pending.md`
+- `docs/status/runtime-governance-batch-e-paper-trust-fail-closed.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/documentation-management-audit-and-plan.md`

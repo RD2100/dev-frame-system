@@ -44,20 +44,22 @@ def summarize_run_governance(run_dir: str, state: dict[str, Any] | None = None) 
     final_report_status = "MISSING"
     final_report_consistent = False
 
+    s = state if isinstance(state, dict) else None
     state_file = rd / "state.json"
-    if state_file.exists():
+    if s is None and state_file.exists():
         try:
             s = json.loads(state_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            s = None
+    if s is not None:
+        try:
             run_status = s.get("status", "unknown")
             chain_status = s.get("chain_status", "UNKNOWN")
-            chain_trusted = s.get("chain_trusted", False)
+            chain_trusted = s.get("chain_trusted") is True
             final_report_status = s.get("final_report_status", "MISSING")
             final_report_consistent = s.get("final_report_consistent", False)
-        except (json.JSONDecodeError, OSError):
+        except AttributeError:
             pass
-
-    if not chain_trusted and run_status in ("passed", "blocked"):
-        chain_trusted = True  # gentle: if workflow completed, trust chain
 
     return {
         "evidence_ok": evidence_ok,
