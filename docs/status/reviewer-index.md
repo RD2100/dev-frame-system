@@ -547,16 +547,22 @@ This is the reviewer map for the first open-source release batch. It focuses on 
   - `docs/status/runtime-governance-and-evidence-closure-transformation-plan.md`
     should no longer present the original Batch A immediate-next language as
     current execution state.
+  - Subsequent public-snapshot slices now project direct FinalVerdict
+    supersession metadata, a bounded supersession chain, and diagnostic
+    `resolution_state` values for resolved, missing, invalid, id-mismatch,
+    cycle, and depth-limited links.
   - Current remaining gaps are generic `go` automatic finalization, sealed
     ContextPacket/ContextLedger production, ai-workflow-hub and paper domain
     adapters, missing ai-workflow-hub `chain-evidence.json` with legacy trusted
     state, automatic superseding FinalVerdict generation, and complete
-    supersession-chain graph resolution.
+    supersession-chain graph or migration resolution.
   - Reviewers should confirm this reconciliation does not change runtime
     behavior, schema contracts, adapter behavior, dashboard authority, or
-    acceptance projection.
+    acceptance projection beyond the already audited read-only supersession
+    projection.
   - Terminal status, file shape, `next_commands.finalize`, worker success, and
-    projection status must remain non-authoritative for acceptance.
+    projection or supersession-diagnostic status must remain non-authoritative
+    for acceptance.
 
 ## Open-Source Review Checklist
 

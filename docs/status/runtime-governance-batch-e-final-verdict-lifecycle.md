@@ -62,5 +62,7 @@ git diff --check
 
 - `go_evidence finalize` does not yet create superseding FinalVerdict records
   for divergent reruns.
-- RunIndex currently validates and projects the referenced FinalVerdict artifact
-  but does not yet expose supersession chains as a first-class read model.
+- A later supersession-projection slice now exposes direct supersession metadata
+  and a bounded diagnostic chain in RunIndex; a complete supersession graph,
+  migration surface, and automatic superseding verdict generation remain out of
+  scope.

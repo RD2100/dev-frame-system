@@ -37,11 +37,13 @@ manual @go finalizer guidance, chain-evidence schema compatibility, FinalVerdict
 lifecycle metadata, and fail-closed ai-workflow-hub chain evidence
 classification.
 
-The current safe next slice is not automatic runtime finalization. It is a
-post-Batch-E status reconciliation and review-focus slice: keep the current
-Batch E evidence visible, keep preserved stop lines explicit, and prevent future
-agents from treating stale Batch A planning language as the next implementation
-target.
+Recent completed public-snapshot slices have kept the Batch E evidence visible,
+kept preserved stop lines explicit, and prevented future agents from treating
+stale Batch A planning language as the next implementation target. That
+reconciliation has now been followed by read-only FinalVerdict supersession
+projection, bounded supersession-chain projection, and chain resolution
+diagnostics. The next implementation slice must choose one of the remaining gaps
+explicitly; it is still not automatic runtime finalization by default.
 
 Still out of scope without a separate bounded implementation slice:
 
@@ -952,17 +954,25 @@ These decisions should be resolved in Phase 0 or Phase 1:
 
 ## Current Next Slice
 
-The next slice should be post-Batch-E status reconciliation only.
+The post-Batch-E status reconciliation and the read-only FinalVerdict
+supersession read-model slices are complete at the public snapshot level:
 
-Deliverables:
+1. this plan no longer treats the original Batch A immediate-next guidance as
+   current execution state;
+2. the Reviewer Index records the post-Batch-E gaps and review focus;
+3. RunIndex projects optional `final_verdict_ref.supersedes` metadata from a
+   validated FinalVerdict artifact;
+4. RunIndex projects a bounded `final_verdict_ref.supersession_chain` with
+   diagnostic `resolution_state` values for resolved, missing, invalid,
+   id-mismatch, cycle, and depth-limited historical links;
+5. the public snapshot and markdown-safe diff must remain the verification gate
+   for follow-up public-surface changes.
 
-1. update this plan so the superseded Batch A immediate-next guidance is no
-   longer mistaken for current execution state;
-2. update the Reviewer Index with post-Batch-E remaining gaps and review focus;
-3. verify the public snapshot and markdown-safe diff;
-4. use a read-only reviewer subagent for final review instead of CDP review.
+The next implementation slice must choose one of the remaining gaps explicitly,
+cite the relevant Batch E audit record, and include a real-path regression test
+before changing runtime behavior.
 
-Do not yet:
+Still do not:
 
 - add runtime automation for generic `go` finalization;
 - change `chain_trusted` semantics for missing ai-workflow-hub
@@ -970,10 +980,10 @@ Do not yet:
 - create sealed ContextPacket or ContextLedger production;
 - normalize ai-workflow-hub `nodes` evidence into the canonical @go schema;
 - add paper or ai-workflow-hub domain adapters;
-- expose FinalVerdict supersession chains as a first-class RunIndex read model;
+- generate superseding FinalVerdict records automatically;
+- treat bounded FinalVerdict supersession chains or their diagnostics as
+  acceptance authority;
+- expand bounded supersession-chain projection into a complete graph,
+  migration surface, or dashboard authority source;
 - move runtime files, alter dashboard authority, or issue a new final
   acceptance claim.
-
-The next implementation slice after this reconciliation must choose one of
-those remaining gaps explicitly, cite the relevant Batch E audit record, and
-include a real-path regression test before changing runtime behavior.
