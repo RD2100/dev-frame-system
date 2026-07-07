@@ -27,6 +27,12 @@ from control_plane.evidence_gate import (  # noqa: E402
 )
 from control_plane.team_runtime import TeamRuntime  # noqa: E402
 
+FINALIZATION_ARTIFACT_FILES = [
+    ("evidence_manifest", "evidence-manifest.json"),
+    ("final_verdict", "final-verdict.json"),
+    ("failure_record", "failure-record.json"),
+]
+
 
 def validate(evidence_dir: str):
     result = evaluate_evidence_dir(evidence_dir)
@@ -134,9 +140,13 @@ def record_team_runtime_finalization(
     source of truth; TeamRuntime only receives references to the review and final
     verdict artifacts after the evidence gate has passed.
     """
-    if result.status != "pass":
-        return []
     evidence_path = Path(evidence_dir)
+    team = TeamRuntime(runtime_dir=runtime_dir, repo_root=repo_root)
+    event_ids: list[str] = []
+    if result.status != "pass":
+        event_ids.extend(_record_blocked_finalization_evidence_refs(team, evidence_path, result, artifacts))
+        if not _can_record_non_pass_final_verdict_ref(result):
+            return event_ids
     final_verdict_path = Path(
         str(artifacts.get("final_verdict") or evidence_path / "final-verdict.json")
     )
@@ -146,7 +156,6 @@ def record_team_runtime_finalization(
     run_id = str(chain.get("run_id") or evidence_path.name or "unknown-run")
     reviewer_id = str(review.get("reviewer_id") or "missing-reviewer")
     review_id = f"review-{_safe_token(run_id)}-{_safe_token(reviewer_id)}"
-    team = TeamRuntime(runtime_dir=runtime_dir, repo_root=repo_root)
     if _team_runtime_has_finalization_refs(
         team,
         run_id=run_id,
@@ -155,7 +164,7 @@ def record_team_runtime_finalization(
         verdict_id=str(final_verdict.get("verdict_id") or ""),
         final_verdict_ref_path=str(final_verdict_path),
     ):
-        return []
+        return event_ids
     reviewed_inputs = [
         str(item) for item in review.get("reviewed_inputs", [])
         if str(item)
@@ -165,7 +174,7 @@ def record_team_runtime_finalization(
         for name in REQUIRED_INPUTS
         if (evidence_path / name).exists()
     ]
-    event_ids = [
+    event_ids.append(
         team.record_review_ref(
             run_id,
             reviewer_id,
@@ -180,7 +189,7 @@ def record_team_runtime_finalization(
             reviewed_inputs=reviewed_inputs,
             source="go_evidence_finalize",
         )
-    ]
+    )
     gate_refs = [
         str(item.get("gate_id") or "")
         for item in final_verdict.get("gate_summary", [])
@@ -210,6 +219,66 @@ def record_team_runtime_finalization(
         )
     )
     return event_ids
+
+
+def _record_blocked_finalization_evidence_refs(
+    team: TeamRuntime,
+    evidence_path: Path,
+    result,
+    artifacts: dict,
+) -> list[str]:
+    chain = result.chain_evidence
+    run_id = str(chain.get("run_id") or evidence_path.name or "unknown-run")
+    event_ids: list[str] = []
+    for ref_type, filename in FINALIZATION_ARTIFACT_FILES:
+        path = Path(str(artifacts.get(ref_type) or evidence_path / filename))
+        if not path.exists():
+            continue
+        if _team_runtime_has_evidence_ref(team, run_id, ref_type, str(path)):
+            continue
+        event_ids.append(
+            team.record_evidence_ref(
+                run_id,
+                "go-evidence-finalizer",
+                ref_type=ref_type,
+                ref_path=str(path),
+            )
+        )
+    return event_ids
+
+
+def _can_record_non_pass_final_verdict_ref(result) -> bool:
+    if result.status not in {"blocked", "fail"}:
+        return False
+    reason = str(result.reason or "")
+    if reason.startswith("chain-evidence.json schema invalid"):
+        return False
+    if reason.startswith("review.yaml schema invalid"):
+        return False
+    if reason.startswith("reviewer_role"):
+        return False
+    if reason == "reviewer_id must differ from executor_id":
+        return False
+    return str(result.review.get("verdict") or "") in {"blocked", "fail", "escalate"}
+
+
+def _team_runtime_has_evidence_ref(
+    team: TeamRuntime,
+    run_id: str,
+    ref_type: str,
+    ref_path: str,
+) -> bool:
+    for event in team.read_all():
+        if not isinstance(event, dict) or str(event.get("run_id") or "") != run_id:
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        if (
+            str(event.get("event_type") or "") == "evidence_ref"
+            and str(payload.get("ref_type") or "") == ref_type
+            and str(payload.get("ref_path") or "") == ref_path
+        ):
+            return True
+    return False
 
 
 def _team_runtime_has_finalization_refs(

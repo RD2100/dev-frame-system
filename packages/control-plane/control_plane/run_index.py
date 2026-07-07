@@ -606,6 +606,10 @@ def _axes(
         and _has_pass_gate(gate_refs)
     ):
         return _axis("closed", "passed", "review_passed", "gate_passed", "final_ready", "completed")
+    if final_verdict_ref and final_verdict_ref.get("final_state") == "blocked":
+        return _axis("closed", "blocked", "review_blocked", "gate_blocked", "blocked", "blocked")
+    if final_verdict_ref and final_verdict_ref.get("final_state") == "failed":
+        return _axis("closed", "failed", "review_failed", "gate_failed", "failed", "failed")
     if failure_refs and adapter_id == "team_events":
         return _axis("closed", "blocked", "not_reviewed", "gate_blocked", "blocked", "blocked")
     if normalized in {"queued", "prepared", "ready", "deferred", "draft", ""}:
@@ -1072,6 +1076,11 @@ def _team_final_verdict_ref(
         for ref in review_refs
         if ref.get("verdict") == "pass"
     }
+    valid_review_ids = {
+        str(ref.get("review_id") or "")
+        for ref in review_refs
+        if str(ref.get("review_id") or "")
+    }
     review_evidence_ids = _team_review_evidence_ids(events)
     for event in events:
         if event.get("event_type") != "final_verdict_ref":
@@ -1099,6 +1108,7 @@ def _team_final_verdict_ref(
             produced_by=produced_by,
             blocked_producer_ids=blocked_producer_ids,
             pass_review_ids=pass_review_ids,
+            valid_review_ids=valid_review_ids,
         )
         if diagnostic:
             failures.append(_event_failure_ref("team-final-verdict", event, diagnostic, ref_path))
@@ -1150,6 +1160,7 @@ def _unsafe_team_final_verdict(
     produced_by: str,
     blocked_producer_ids: set[str],
     pass_review_ids: set[str],
+    valid_review_ids: set[str],
 ) -> str:
     role_token = _safe_token(producer_role)
     if not verdict_id:
@@ -1170,8 +1181,10 @@ def _unsafe_team_final_verdict(
         return "final_state is not allowed"
     if not ref_path:
         return "final verdict ref_path is missing"
-    if review_ref not in pass_review_ids:
+    if final_state == "final_ready" and review_ref not in pass_review_ids:
         return "final verdict review_ref does not name a passing independent review"
+    if final_state != "final_ready" and review_ref not in valid_review_ids:
+        return "final verdict review_ref does not name an independent review"
     if not gate_refs:
         return "final verdict gate_refs is missing"
     return ""

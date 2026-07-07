@@ -418,7 +418,7 @@ def test_finalize_rejects_team_runtime_dir_inside_repo(tmp_path, monkeypatch):
     assert not (runtime_dir / TEAM_EVENTS_FILE).exists()
 
 
-def test_finalize_does_not_record_team_runtime_events_for_blocked_evidence(tmp_path):
+def test_finalize_records_blocked_team_runtime_refs_without_final_ready(tmp_path):
     evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"), {"verdict": "blocked"})
     _write_json(
         os.path.join(evidence_dir, "chain-evidence.json"),
@@ -426,10 +426,105 @@ def test_finalize_does_not_record_team_runtime_events_for_blocked_evidence(tmp_p
     )
     runtime_dir = str(tmp_path / "runtime")
 
-    rc = go_evidence.main(["finalize", evidence_dir, "--team-runtime-dir", runtime_dir])
+    first_rc = go_evidence.main(["finalize", evidence_dir, "--team-runtime-dir", runtime_dir])
+    second_rc = go_evidence.main(["finalize", evidence_dir, "--team-runtime-dir", runtime_dir])
 
-    assert rc == 1
-    assert not (tmp_path / "runtime" / TEAM_EVENTS_FILE).exists()
+    assert first_rc == 1
+    assert second_rc == 1
+    lines = (tmp_path / "runtime" / TEAM_EVENTS_FILE).read_text(encoding="utf-8").strip().splitlines()
+    events = [json.loads(line) for line in lines]
+    assert [event["event_type"] for event in events] == [
+        "evidence_ref",
+        "evidence_ref",
+        "evidence_ref",
+        "review_ref",
+        "final_verdict_ref",
+    ]
+
+    view = build_team_runtime_view(runtime_dir)
+    assert [gate["status"] for gate in view["review_gates"]] == ["blocked", "blocked"]
+    assert {item["ref_type"] for item in view["evidence_store"]} == {
+        "evidence_manifest",
+        "failure_record",
+        "final_verdict",
+        "review",
+    }
+
+    index = build_run_index(runtime_dir)
+    record = index["runs"][0]["record"]
+    assert record["acceptance_state"] == "blocked"
+    assert record["final_verdict_ref"]["final_state"] == "blocked"
+    assert record["domain_refs"]["final_verdict_ref_present"] is True
+
+
+def test_finalize_records_only_evidence_refs_for_self_review_blocker(tmp_path):
+    evidence_dir = _setup_minimal_evidence(
+        str(tmp_path / "evidence"),
+        {"reviewer_id": "executor-1", "executor_id": "executor-1"},
+    )
+    _write_json(
+        os.path.join(evidence_dir, "chain-evidence.json"),
+        _chain_evidence(run_id="go-self-review-blocked"),
+    )
+    runtime_dir = str(tmp_path / "runtime")
+
+    first_rc = go_evidence.main(["finalize", evidence_dir, "--team-runtime-dir", runtime_dir])
+    second_rc = go_evidence.main(["finalize", evidence_dir, "--team-runtime-dir", runtime_dir])
+
+    assert first_rc == 1
+    assert second_rc == 1
+    lines = (tmp_path / "runtime" / TEAM_EVENTS_FILE).read_text(encoding="utf-8").strip().splitlines()
+    events = [json.loads(line) for line in lines]
+    assert [event["event_type"] for event in events] == [
+        "evidence_ref",
+        "evidence_ref",
+        "evidence_ref",
+    ]
+
+    index = build_run_index(runtime_dir)
+    record = index["runs"][0]["record"]
+    assert record["acceptance_state"] == "review_pending"
+    assert "final_verdict_ref" not in record
+    assert record["domain_refs"]["final_verdict_ref_present"] is False
+    assert {ref["kind"] for ref in record["evidence_refs"]} == {"final_verdict", "other"}
+
+
+@pytest.mark.parametrize("blocker", [
+    "invalid_chain_schema",
+    "invalid_review_schema",
+    "worker_reviewer_role",
+])
+def test_finalize_records_only_evidence_refs_for_invalid_non_pass_blockers(tmp_path, blocker):
+    review_overrides = {}
+    if blocker == "invalid_review_schema":
+        review_overrides["reviewer_id"] = ""
+    if blocker == "worker_reviewer_role":
+        review_overrides["reviewer_role"] = "worker"
+    evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"), review_overrides)
+    if blocker == "invalid_chain_schema":
+        chain = _chain_evidence(run_id="go-invalid-chain-blocked")
+        chain.pop("run_id")
+        _write_json(os.path.join(evidence_dir, "chain-evidence.json"), chain)
+    runtime_dir = str(tmp_path / "runtime")
+
+    first_rc = go_evidence.main(["finalize", evidence_dir, "--team-runtime-dir", runtime_dir])
+    second_rc = go_evidence.main(["finalize", evidence_dir, "--team-runtime-dir", runtime_dir])
+
+    assert first_rc == 1
+    assert second_rc == 1
+    lines = (tmp_path / "runtime" / TEAM_EVENTS_FILE).read_text(encoding="utf-8").strip().splitlines()
+    events = [json.loads(line) for line in lines]
+    assert [event["event_type"] for event in events] == [
+        "evidence_ref",
+        "evidence_ref",
+        "evidence_ref",
+    ]
+
+    index = build_run_index(runtime_dir)
+    record = index["runs"][0]["record"]
+    assert record["acceptance_state"] == "review_pending"
+    assert "final_verdict_ref" not in record
+    assert record["domain_refs"]["final_verdict_ref_present"] is False
 
 
 @pytest.mark.parametrize("verdict,expected_state", [

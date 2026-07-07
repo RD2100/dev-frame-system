@@ -18,7 +18,9 @@ After this slice:
 
 - `tools/go_evidence.py finalize --team-runtime-dir <dir>` records `review_ref` and `final_verdict_ref` events after a passing evidence gate;
 - default `finalize <evidence_dir>` behavior remains unchanged and writes no TeamRuntime journal;
-- blocked or failed evidence finalization still writes machine artifacts but does not record TeamRuntime acceptance events;
+- blocked or failed evidence finalization still writes machine artifacts and, when
+  `--team-runtime-dir` is provided, records non-final-ready TeamRuntime
+  visibility; invalid or self-review blockers record artifact evidence refs only;
 - TeamRuntime refuses to write the journal inside the public repository through the existing `repo_root` guard;
 - same-verdict finalization reruns reuse the existing machine artifact
   timestamp and do not append duplicate TeamRuntime final-ready references;
@@ -36,6 +38,7 @@ Required verification for this batch:
 
 ```powershell
 python -m pytest tests\test_go_evidence.py::test_finalize_rerun_is_idempotent_for_machine_artifacts tests\test_go_evidence.py::test_finalize_team_runtime_recording_is_idempotent_for_same_verdict -q
+python -m pytest tests\test_go_evidence.py::test_finalize_records_blocked_team_runtime_refs_without_final_ready tests\test_go_evidence.py::test_finalize_records_only_evidence_refs_for_self_review_blocker -q
 python -m pytest tests\test_go_evidence.py packages\control-plane\tests\test_run_index.py packages\control-plane\tests\test_team_runtime.py -q
 python -m pytest packages\control-plane\tests\test_public_snapshot.py -q
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-public-snapshot.ps1 -FailOnTrackedForbidden
@@ -48,6 +51,8 @@ git diff --check
 - Worker/executor authored reviews remain blocked by the evidence gate and RunIndex.
 - FinalVerdict JSON remains the gate fact source for RunIndex projection.
 - Blocked or failed evidence cannot create TeamRuntime final-ready events.
+- Invalid, corrupt, or self-review finalization blockers must not create
+  authoritative `review_ref` or `final_verdict_ref` events.
 - Markdown `final-report.md` remains a deterministic summary, not acceptance
   authority.
 - Runtime data remains outside the public repository.
@@ -57,6 +62,5 @@ git diff --check
 - `devframe atgo` prepare now prints a finalizer command with
   `--team-runtime-dir`, but full go dispatch automation still does not run
   finalization automatically.
-- Blocked finalization events are intentionally not journaled in this slice; blocked state remains visible through machine artifacts.
 - A separate superseding-verdict record remains deferred until the FinalVerdict
   lifecycle schema is explicitly extended.
