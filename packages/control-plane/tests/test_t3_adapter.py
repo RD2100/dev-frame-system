@@ -844,14 +844,20 @@ def test_t3_client_shell_projects_team_model_from_state():
             ],
             "event_log": [
                 {"event_id": "go-run-created-go-1", "kind": "go-run-created", "run_id": "go-1", "summary": "go run created."},
+                {"event_id": "team-review-go-1", "kind": "review-ref", "run_id": "go-1", "summary": "Independent review passed."},
+                {"event_id": "team-final-go-1", "kind": "final-verdict-ref", "run_id": "go-1", "summary": "Final verdict ready."},
             ],
             "evidence_store": [
                 {"evidence_id": "go-go-1-coding-agent-1", "run_id": "go-1", "ref_type": "packet", "ref_path": "/tmp/p1/TASKSPEC.json"},
                 {"evidence_id": "go-go-1-coding-agent-2", "run_id": "go-1", "ref_type": "packet", "ref_path": "/tmp/p2/TASKSPEC.json"},
+                {"evidence_id": "team-review-go-1", "run_id": "go-1", "ref_type": "review", "ref_path": "/tmp/review.yaml"},
+                {"evidence_id": "team-final-go-1", "run_id": "go-1", "ref_type": "final_verdict", "ref_path": "/tmp/final-verdict.json"},
             ],
             "review_gates": [
                 {"gate_id": "go-1-status-action", "kind": "action-gate", "status": "info", "run_id": "go-1", "reason": "Inspect go-run."},
                 {"gate_id": "go-1-execute-action", "kind": "action-gate", "status": "ready", "run_id": "go-1", "reason": "Execute go-run."},
+                {"gate_id": "team-review-go-1", "kind": "independent-review", "status": "pass", "run_id": "go-1", "reason": "Independent review passed."},
+                {"gate_id": "team-final-go-1", "kind": "final-verdict", "status": "pass", "run_id": "go-1", "reason": "Governance final verdict ready."},
             ],
             "conflict_control": [
                 {"file_path": "cli.py", "owner_run_id": "go-1", "owner_agent_id": "coding-agent-1", "file_kind": "go-target"},
@@ -880,15 +886,18 @@ def test_t3_client_shell_projects_team_model_from_state():
     assert team["messageBus"][0]["fromRole"] == "planner"
     assert team["messageBus"][0]["kind"] == "handoff"
 
-    assert len(team["eventLog"]) == 1
+    assert len(team["eventLog"]) == 3
     assert team["eventLog"][0]["kind"] == "go-run-created"
+    assert {event["kind"] for event in team["eventLog"]} >= {"review-ref", "final-verdict-ref"}
 
-    assert len(team["evidenceStore"]) == 2
+    assert len(team["evidenceStore"]) == 4
     assert team["evidenceStore"][0]["refType"] == "packet"
+    assert {evidence["refType"] for evidence in team["evidenceStore"]} >= {"review", "final_verdict"}
 
-    assert len(team["reviewGates"]) == 2
+    assert len(team["reviewGates"]) == 4
     assert team["reviewGates"][0]["kind"] == "action-gate"
     assert team["reviewGates"][1]["runId"] == "go-1"
+    assert {gate["kind"] for gate in team["reviewGates"]} >= {"independent-review", "final-verdict"}
 
     assert len(team["conflictControl"]) == 2
     assert team["conflictControl"][0]["fileKind"] == "go-target"
@@ -897,8 +906,13 @@ def test_t3_client_shell_projects_team_model_from_state():
     thread = shell["t3"]["threads"][0]
     assert thread["devframe"]["teamTaskIds"] == ["go-1"]
     assert len(thread["devframe"]["teamMessageIds"]) == 2
-    assert len(thread["devframe"]["teamEvidenceIds"]) == 2
-    assert set(thread["devframe"]["teamReviewGateIds"]) == {"go-1-status-action", "go-1-execute-action"}
+    assert len(thread["devframe"]["teamEvidenceIds"]) == 4
+    assert set(thread["devframe"]["teamReviewGateIds"]) == {
+        "go-1-status-action",
+        "go-1-execute-action",
+        "team-review-go-1",
+        "team-final-go-1",
+    }
     assert set(thread["devframe"]["teamConflictFiles"]) == {"cli.py", "go_dispatch.py"}
 
     detail = shell["t3"]["threadDetails"][0]
@@ -907,7 +921,12 @@ def test_t3_client_shell_projects_team_model_from_state():
     assert "Team:" in team_activities[0]["summary"]
     assert "gate" in team_activities[0]["summary"]
     assert "conflict" in team_activities[0]["summary"]
-    assert set(team_activities[0]["payload"]["teamReviewGateIds"]) == {"go-1-status-action", "go-1-execute-action"}
+    assert set(team_activities[0]["payload"]["teamReviewGateIds"]) == {
+        "go-1-status-action",
+        "go-1-execute-action",
+        "team-review-go-1",
+        "team-final-go-1",
+    }
     assert set(team_activities[0]["payload"]["teamConflictFiles"]) == {"cli.py", "go_dispatch.py"}
 
     message_text = detail["messages"][0]["text"]
@@ -916,6 +935,7 @@ def test_t3_client_shell_projects_team_model_from_state():
     assert "planner ->" in message_text and "coding-agent" in message_text
     assert "Review Gates" in message_text
     assert "go-1-status-action" in message_text
+    assert "team-final-go-1" in message_text
     assert "Conflicts" in message_text
     assert "cli.py" in message_text
 

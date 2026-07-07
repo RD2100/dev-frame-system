@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from jsonschema.validators import validator_for
 
 from .backup_guard import default_runtime_dir
 from .team_runtime import TEAM_EVENTS_FILE
@@ -195,6 +196,14 @@ def _team_event_entries(runtime: Path) -> list[dict[str, Any]]:
         latest = events[-1]
         result_events = [event for event in events if event.get("event_type") == "task_result"]
         context_refs = _team_context_refs(events)
+        worker_agent_ids = _team_worker_agent_ids(result_events)
+        review_refs, review_failures = _team_review_refs(events, worker_agent_ids)
+        final_verdict_ref, final_failures, limitations, gate_refs = _team_final_verdict_ref(
+            events,
+            review_refs,
+            worker_agent_ids,
+        )
+        failure_refs = review_failures + final_failures
         status = _aggregate_team_status(result_events)
         entries.append(_entry(
             adapter_id="team_events",
@@ -214,6 +223,11 @@ def _team_event_entries(runtime: Path) -> list[dict[str, Any]]:
                 task_id=run_id,
                 artifact_refs=_artifact_refs(path) + _team_context_artifact_refs(context_refs),
                 evidence_refs=_team_context_evidence_refs(context_refs) + _team_evidence_refs(events),
+                review_refs=review_refs,
+                gate_refs=gate_refs,
+                final_verdict_ref=final_verdict_ref,
+                failure_refs=failure_refs,
+                limitations=limitations,
                 worker_results=_team_worker_results(result_events),
                 domain_refs={
                     "legacy_adapter": "team_events",
@@ -222,6 +236,9 @@ def _team_event_entries(runtime: Path) -> list[dict[str, Any]]:
                     "event_types": sorted({str(event.get("event_type") or "") for event in events}),
                     "legacy_context_ref_count": len(context_refs),
                     "legacy_context_ref_types": sorted({ref["ref_type"] for ref in context_refs}),
+                    "review_ref_count": len(review_refs),
+                    "gate_ref_count": len(gate_refs),
+                    "final_verdict_ref_present": bool(final_verdict_ref),
                 },
             ),
         ))
@@ -454,12 +471,21 @@ def _make_record(
     evidence_refs: list[dict[str, Any]] | None = None,
     review_refs: list[dict[str, Any]] | None = None,
     gate_refs: list[dict[str, Any]] | None = None,
+    final_verdict_ref: dict[str, Any] | None = None,
+    limitations: list[str] | None = None,
     worker_results: list[dict[str, Any]] | None = None,
     failure_refs: list[dict[str, Any]] | None = None,
     domain_refs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     run_token = _safe_token(legacy_id)
-    axes = _axes(status, adapter_id=adapter_id, review_refs=review_refs or [], failure_refs=failure_refs or [])
+    axes = _axes(
+        status,
+        adapter_id=adapter_id,
+        review_refs=review_refs or [],
+        gate_refs=gate_refs or [],
+        final_verdict_ref=final_verdict_ref,
+        failure_refs=failure_refs or [],
+    )
     refs = {
         "adapter_version": ADAPTER_VERSION,
         "source_path": str(source_path),
@@ -467,7 +493,7 @@ def _make_record(
     }
     refs.update(domain_refs or {})
     refs = {key: value for key, value in refs.items() if value is not None}
-    return {
+    record = {
         "schema_version": SCHEMA_VERSION,
         "run_id": f"run-{run_token}",
         "project_id": project_id or "unknown-project",
@@ -495,6 +521,11 @@ def _make_record(
         "failure_refs": failure_refs or [],
         "domain_refs": refs,
     }
+    if final_verdict_ref:
+        record["final_verdict_ref"] = final_verdict_ref
+    if limitations:
+        record["limitations"] = limitations
+    return record
 
 
 def _axes(
@@ -502,9 +533,20 @@ def _axes(
     *,
     adapter_id: str,
     review_refs: list[dict[str, Any]],
+    gate_refs: list[dict[str, Any]],
+    final_verdict_ref: dict[str, Any] | None,
     failure_refs: list[dict[str, Any]],
 ) -> dict[str, str]:
     normalized = _safe_token(status).replace("_", "-")
+    if (
+        final_verdict_ref
+        and final_verdict_ref.get("final_state") == "final_ready"
+        and _has_pass_review(review_refs)
+        and _has_pass_gate(gate_refs)
+    ):
+        return _axis("closed", "passed", "review_passed", "gate_passed", "final_ready", "completed")
+    if failure_refs and adapter_id == "team_events":
+        return _axis("closed", "blocked", "not_reviewed", "gate_blocked", "blocked", "blocked")
     if normalized in {"queued", "prepared", "ready", "deferred", "draft", ""}:
         return _axis("prepared", "unknown", "not_reviewed", "not_evaluated", "deferred", "queued")
     if normalized in {"running", "reviewing"}:
@@ -520,8 +562,6 @@ def _axes(
     if normalized in {"fail", "failed", "failure", "error", "cancelled"}:
         outcome = "cancelled" if normalized == "cancelled" else "failed"
         return _axis("closed", outcome, "review_failed", "gate_failed", "failed", "failed")
-    if failure_refs:
-        return _axis("closed", "blocked", "not_reviewed", "gate_blocked", "blocked", "blocked")
     return _axis("closed", "unknown", "not_reviewed", "not_evaluated", "deferred", "unknown")
 
 
@@ -781,6 +821,30 @@ def _team_evidence_refs(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "outcome",
             ))
             continue
+        if event_type == "review_ref":
+            ref_path = str(payload.get("ref_path") or "")
+            if not ref_path or ref_path in seen_paths:
+                continue
+            seen_paths.add(ref_path)
+            refs.append(_evidence_ref(
+                f"ev-team-review-{_safe_token(event.get('event_id') or ref_path)}",
+                "review",
+                Path(ref_path),
+                "review",
+            ))
+            continue
+        if event_type == "final_verdict_ref":
+            ref_path = str(payload.get("ref_path") or "")
+            if not ref_path or ref_path in seen_paths:
+                continue
+            seen_paths.add(ref_path)
+            refs.append(_evidence_ref(
+                f"ev-team-final-verdict-{_safe_token(event.get('event_id') or ref_path)}",
+                "final_verdict",
+                Path(ref_path),
+                "acceptance",
+            ))
+            continue
         if event_type != "task_result":
             continue
         report_path = str(payload.get("report_path") or "")
@@ -810,6 +874,302 @@ def _team_evidence_kind(ref_type: str) -> str:
     if token in {"context_packet", "context-packet", "packet"}:
         return "context_packet"
     return "other"
+
+
+def _team_review_refs(
+    events: list[dict[str, Any]],
+    blocked_reviewer_ids: set[str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    refs: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for event in events:
+        if event.get("event_type") != "review_ref":
+            continue
+        payload = _as_dict(event.get("payload"))
+        review_id = str(payload.get("review_id") or "")
+        reviewer_id = str(payload.get("reviewer_id") or event.get("agent_id") or "")
+        reviewer_role = str(payload.get("reviewer_role") or "")
+        executor_id = str(payload.get("executor_id") or "")
+        verdict = _review_verdict(str(payload.get("verdict") or ""))
+        ref_path = str(payload.get("ref_path") or "")
+        reviewed_evidence_refs = [
+            str(ref) for ref in payload.get("reviewed_evidence_refs", [])
+            if str(ref)
+        ] if isinstance(payload.get("reviewed_evidence_refs"), list) else []
+        diagnostic = _unsafe_team_review(
+            review_id=review_id,
+            reviewer_id=reviewer_id,
+            reviewer_role=reviewer_role,
+            executor_id=executor_id,
+            verdict=verdict,
+            ref_path=ref_path,
+            reviewed_evidence_refs=reviewed_evidence_refs,
+            blocked_reviewer_ids=blocked_reviewer_ids,
+        )
+        if diagnostic:
+            failures.append(_event_failure_ref("team-review", event, diagnostic, ref_path))
+            continue
+        if review_id in seen:
+            continue
+        seen.add(review_id)
+        refs.append({
+            "review_id": review_id,
+            "reviewer_id": reviewer_id,
+            "reviewer_role": reviewer_role,
+            "verdict": verdict,
+            "uri": ref_path,
+            "reviewed_evidence_refs": reviewed_evidence_refs,
+        })
+    return refs, failures
+
+
+def _unsafe_team_review(
+    *,
+    review_id: str,
+    reviewer_id: str,
+    reviewer_role: str,
+    executor_id: str,
+    verdict: str,
+    ref_path: str,
+    reviewed_evidence_refs: list[str],
+    blocked_reviewer_ids: set[str],
+) -> str:
+    role_token = _safe_token(reviewer_role)
+    if not review_id:
+        return "review_id is missing"
+    if not reviewer_id:
+        return "reviewer_id is missing"
+    if not reviewer_role:
+        return "reviewer_role is missing"
+    if role_token in {"executor", "fixer", "coder", "worker"}:
+        return f"reviewer role is not independent: {role_token}"
+    if reviewer_id in blocked_reviewer_ids:
+        return "reviewer_id matches a worker in the same run"
+    if reviewer_id and executor_id and reviewer_id == executor_id:
+        return "reviewer_id matches executor_id"
+    if verdict not in {"pass", "blocked", "fail", "escalate"}:
+        return "review verdict is not allowed"
+    if not ref_path:
+        return "review ref_path is missing"
+    if not reviewed_evidence_refs:
+        return "reviewed_evidence_refs is missing"
+    return ""
+
+
+def _gate_refs_from_final_verdict_artifact(
+    artifact: dict[str, Any],
+    declared_gate_refs: list[str],
+    review_ref: str,
+    review_evidence_ids: dict[str, str],
+) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    declared = {str(ref) for ref in declared_gate_refs if str(ref)}
+    gate_summary = artifact.get("gate_summary") if isinstance(artifact.get("gate_summary"), list) else []
+    for item in gate_summary:
+        if not isinstance(item, dict):
+            continue
+        gate_id = str(item.get("gate_id") or "")
+        result = _gate_result(str(item.get("result") or ""))
+        evidence_path = str(item.get("evidence_path") or artifact.get("verdict_id") or "")
+        if not gate_id or gate_id not in declared or not result or not evidence_path or gate_id in seen:
+            continue
+        if result == "pass" and review_ref not in review_evidence_ids:
+            continue
+        seen.add(gate_id)
+        evidence_refs = [review_evidence_ids[review_ref]] if result == "pass" and review_ref in review_evidence_ids else []
+        refs.append({
+            "gate_id": gate_id,
+            "result": result,
+            "uri": evidence_path,
+            "evidence_refs": evidence_refs,
+        })
+    return refs
+
+
+def _team_review_evidence_ids(events: list[dict[str, Any]]) -> dict[str, str]:
+    ids: dict[str, str] = {}
+    for event in events:
+        if event.get("event_type") != "review_ref":
+            continue
+        payload = _as_dict(event.get("payload"))
+        review_id = str(payload.get("review_id") or "")
+        if review_id and review_id not in ids:
+            ids[review_id] = f"ev-team-review-{_safe_token(event.get('event_id') or payload.get('ref_path') or review_id)}"
+    return ids
+
+
+def _team_final_verdict_ref(
+    events: list[dict[str, Any]],
+    review_refs: list[dict[str, Any]],
+    blocked_producer_ids: set[str],
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]], list[str], list[dict[str, Any]]]:
+    failures: list[dict[str, Any]] = []
+    pass_review_ids = {
+        str(ref.get("review_id") or "")
+        for ref in review_refs
+        if ref.get("verdict") == "pass"
+    }
+    review_evidence_ids = _team_review_evidence_ids(events)
+    for event in events:
+        if event.get("event_type") != "final_verdict_ref":
+            continue
+        payload = _as_dict(event.get("payload"))
+        verdict_id = str(payload.get("verdict_id") or "")
+        producer_id = str(event.get("agent_id") or "")
+        produced_by = str(payload.get("produced_by") or producer_id)
+        producer_role = str(payload.get("producer_role") or "")
+        final_state = str(payload.get("final_state") or "")
+        ref_path = str(payload.get("ref_path") or "")
+        review_ref = str(payload.get("review_ref") or "")
+        gate_refs_text = [
+            str(ref) for ref in payload.get("gate_refs", [])
+            if str(ref)
+        ] if isinstance(payload.get("gate_refs"), list) else []
+        diagnostic = _unsafe_team_final_verdict(
+            verdict_id=verdict_id,
+            producer_role=producer_role,
+            final_state=final_state,
+            ref_path=ref_path,
+            review_ref=review_ref,
+            gate_refs=gate_refs_text,
+            producer_id=producer_id,
+            produced_by=produced_by,
+            blocked_producer_ids=blocked_producer_ids,
+            pass_review_ids=pass_review_ids,
+        )
+        if diagnostic:
+            failures.append(_event_failure_ref("team-final-verdict", event, diagnostic, ref_path))
+            continue
+        artifact, artifact_diagnostic = _validate_final_verdict_artifact(Path(ref_path), payload)
+        if artifact_diagnostic:
+            failures.append(_event_failure_ref("team-final-verdict", event, artifact_diagnostic, ref_path))
+            continue
+        gate_refs = _gate_refs_from_final_verdict_artifact(
+            artifact,
+            gate_refs_text,
+            review_ref,
+            review_evidence_ids,
+        )
+        pass_gate_ids = {
+            str(ref.get("gate_id") or "")
+            for ref in gate_refs
+            if ref.get("result") == "pass"
+        }
+        missing_gates = sorted(ref for ref in gate_refs_text if ref not in pass_gate_ids)
+        if final_state == "final_ready" and missing_gates:
+            failures.append(_event_failure_ref(
+                "team-final-verdict",
+                event,
+                f"final verdict gate_refs are not passing in artifact: {', '.join(missing_gates)}",
+                ref_path,
+            ))
+            continue
+        return {
+            "verdict_id": verdict_id,
+            "producer_role": producer_role,
+            "final_state": final_state,
+            "uri": ref_path,
+            "review_ref": review_ref,
+            "gate_refs": gate_refs_text,
+        }, [], [str(item) for item in artifact.get("limitations", []) if str(item)] if isinstance(artifact.get("limitations"), list) else [], gate_refs
+    return None, failures, [], []
+
+
+def _unsafe_team_final_verdict(
+    *,
+    verdict_id: str,
+    producer_role: str,
+    final_state: str,
+    ref_path: str,
+    review_ref: str,
+    gate_refs: list[str],
+    producer_id: str,
+    produced_by: str,
+    blocked_producer_ids: set[str],
+    pass_review_ids: set[str],
+) -> str:
+    role_token = _safe_token(producer_role)
+    if not verdict_id:
+        return "verdict_id is missing"
+    if not verdict_id.startswith("fv-"):
+        return "verdict_id must start with fv-"
+    if not producer_role:
+        return "producer_role is missing"
+    if role_token in {"executor", "fixer", "coder", "worker"}:
+        return f"producer role is not governance-owned: {role_token}"
+    if not produced_by:
+        return "produced_by is missing"
+    if producer_id in blocked_producer_ids:
+        return "final verdict producer matches a worker in the same run"
+    if produced_by in blocked_producer_ids:
+        return "final verdict produced_by matches a worker in the same run"
+    if final_state not in {"final_ready", "accepted_with_limitation", "blocked", "failed", "deferred"}:
+        return "final_state is not allowed"
+    if not ref_path:
+        return "final verdict ref_path is missing"
+    if review_ref not in pass_review_ids:
+        return "final verdict review_ref does not name a passing independent review"
+    if not gate_refs:
+        return "final verdict gate_refs is missing"
+    return ""
+
+
+def _validate_final_verdict_artifact(path: Path, payload: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    data, diagnostic = _read_json_file(path)
+    if diagnostic:
+        return {}, diagnostic
+    if str(data.get("verdict_id") or "") != str(payload.get("verdict_id") or ""):
+        return {}, "final verdict artifact verdict_id does not match event"
+    if str(data.get("produced_by") or "") != str(payload.get("produced_by") or ""):
+        return {}, "final verdict artifact produced_by does not match event"
+    if str(data.get("producer_role") or "") != str(payload.get("producer_role") or ""):
+        return {}, "final verdict artifact producer_role does not match event"
+    if str(data.get("final_state") or "") != str(payload.get("final_state") or ""):
+        return {}, "final verdict artifact final_state does not match event"
+    errors = sorted(
+        _schema_validator("schemas/agent-runtime/final-verdict.schema.json").iter_errors(data),
+        key=lambda error: list(error.path),
+    )
+    if errors:
+        return {}, f"final verdict artifact schema invalid: {errors[0].message}"
+    return data, ""
+
+
+def _schema_validator(schema_path: str):
+    schema = json.loads((_repo_root() / schema_path).read_text(encoding="utf-8-sig"))
+    validator_class = validator_for(schema)
+    validator_class.check_schema(schema)
+    return validator_class(schema)
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def _gate_result(result: str) -> str:
+    token = _safe_token(result)
+    if token in {"pass", "fail", "blocked", "warning", "skipped"}:
+        return token
+    return ""
+
+
+def _has_pass_review(review_refs: list[dict[str, Any]]) -> bool:
+    return any(ref.get("verdict") == "pass" for ref in review_refs)
+
+
+def _has_pass_gate(gate_refs: list[dict[str, Any]]) -> bool:
+    return any(ref.get("result") == "pass" for ref in gate_refs)
+
+
+def _event_failure_ref(prefix: str, event: dict[str, Any], diagnostic: str, uri: str = "") -> dict[str, Any]:
+    token = _safe_token(event.get("event_id") or event.get("run_id") or prefix)
+    return {
+        "failure_id": f"failure-{prefix}-{token}",
+        "status": "blocked",
+        "uri": uri or str(event.get("event_id") or prefix),
+    }
 
 
 def _evidence_ref(evidence_id: str, kind: str, path: Path, supports: str) -> dict[str, Any]:
@@ -885,6 +1245,14 @@ def _team_worker_results(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
             str(event.get("timestamp") or ""),
         ))
     return results
+
+
+def _team_worker_agent_ids(events: list[dict[str, Any]]) -> set[str]:
+    return {
+        str(event.get("agent_id") or "")
+        for event in events
+        if str(event.get("agent_id") or "")
+    }
 
 
 def _worker_result(

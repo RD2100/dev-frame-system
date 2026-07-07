@@ -267,6 +267,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/runtime-governance-batch-e-paper-trust-fail-closed.md`
 - `docs/status/runtime-governance-batch-e-explicit-team-evidence-events.md`
 - `docs/status/runtime-governance-batch-e-team-context-refs.md`
+- `docs/status/runtime-governance-batch-e-team-review-verdict-events.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/total-control-policy-engine-and-human-escalation-governance-plan.md`
@@ -407,6 +408,23 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     real-path recording, schema validity, and no acceptance promotion.
   - `docs/status/runtime-governance-batch-e-team-context-refs.md` records the
     local limitation set and preserved stop lines.
+- Runtime-governance Batch E team review verdict events:
+  - `packages/control-plane/control_plane/team_runtime.py` should record
+    `review_ref` and `final_verdict_ref` as explicit events with distinct
+    message, evidence, gate, and event-log projections.
+  - `packages/control-plane/control_plane/run_index.py` should project only
+    valid independent reviews and governance final verdicts into RunRecord
+    `review_refs`, `gate_refs`, and `final_verdict_ref`.
+  - Worker task results should remain execution outcomes only; review-only
+    runs remain `review_pending`, and `final_ready` requires a valid FinalVerdict
+    artifact plus passing review and gate references.
+  - `packages/control-plane/tests/test_team_runtime.py`,
+    `packages/control-plane/tests/test_run_index.py`, and
+    `packages/control-plane/tests/test_t3_adapter.py` should prove distinct
+    event visibility, schema-valid final readiness, and fail-closed self-review
+    or worker-final-verdict behavior.
+  - `docs/status/runtime-governance-batch-e-team-review-verdict-events.md`
+    records the local limitation set and preserved stop lines.
 
 ## Open-Source Review Checklist
 
@@ -472,6 +490,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/runtime-governance-batch-e-paper-trust-fail-closed.md`
 - `docs/status/runtime-governance-batch-e-explicit-team-evidence-events.md`
 - `docs/status/runtime-governance-batch-e-team-context-refs.md`
+- `docs/status/runtime-governance-batch-e-team-review-verdict-events.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/documentation-management-audit-and-plan.md`

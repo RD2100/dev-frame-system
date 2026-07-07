@@ -136,6 +136,56 @@ class TeamRuntime:
             },
         ))
 
+    def record_review_ref(self, run_id: str, reviewer_id: str, *,
+                          review_id: str, reviewer_role: str, verdict: str,
+                          ref_path: str, reviewed_evidence_refs: list[str],
+                          executor_id: str = "",
+                          reviewed_inputs: list[str] | None = None,
+                          source: str = "") -> str:
+        """Record an independent review artifact reference."""
+        return self._append(TeamEvent(
+            event_type="review_ref",
+            run_id=run_id,
+            agent_id=reviewer_id,
+            payload={
+                "review_id": str(review_id or ""),
+                "reviewer_id": str(reviewer_id or ""),
+                "reviewer_role": str(reviewer_role or ""),
+                "executor_id": str(executor_id or ""),
+                "verdict": str(verdict or ""),
+                "ref_path": str(ref_path or ""),
+                "reviewed_evidence_refs": [str(ref) for ref in reviewed_evidence_refs if str(ref)],
+                "reviewed_inputs": [str(item) for item in reviewed_inputs or [] if str(item)],
+                "source": str(source or ""),
+            },
+        ))
+
+    def record_final_verdict_ref(self, run_id: str, producer_id: str, *,
+                                 verdict_id: str, producer_role: str,
+                                 final_state: str, ref_path: str,
+                                 review_ref: str, gate_refs: list[str],
+                                 gate_summary: list[dict[str, Any]] | None = None,
+                                 limitations: list[str] | None = None,
+                                 human_or_governance_reference: str = "") -> str:
+        """Record a governance final verdict artifact reference."""
+        return self._append(TeamEvent(
+            event_type="final_verdict_ref",
+            run_id=run_id,
+            agent_id=producer_id,
+            payload={
+                "verdict_id": str(verdict_id or ""),
+                "produced_by": str(producer_id or ""),
+                "producer_role": str(producer_role or ""),
+                "final_state": str(final_state or ""),
+                "ref_path": str(ref_path or ""),
+                "review_ref": str(review_ref or ""),
+                "gate_refs": [str(ref) for ref in gate_refs if str(ref)],
+                "gate_summary": _normalize_gate_summary(gate_summary),
+                "limitations": [str(item) for item in limitations or [] if str(item)],
+                "human_or_governance_reference": str(human_or_governance_reference or ""),
+            },
+        ))
+
     def record_workflow_event(self, run_id: str, *, phase: str, status: str,
                               role: str = "coordinator", summary: str = "") -> str:
         """Record a workflow phase transition or controller decision.
@@ -200,6 +250,23 @@ def _normalize_context_refs(value: list[dict[str, Any]] | None) -> list[dict[str
             "context_id": str(item.get("context_id") or ""),
         })
     return refs
+
+
+def _normalize_gate_summary(value: list[dict[str, Any]] | None) -> list[dict[str, str]]:
+    summary: list[dict[str, str]] = []
+    for item in value or []:
+        if not isinstance(item, dict):
+            continue
+        gate_id = str(item.get("gate_id") or "")
+        result = str(item.get("result") or "")
+        if not gate_id or not result:
+            continue
+        summary.append({
+            "gate_id": gate_id,
+            "result": result,
+            "evidence_path": str(item.get("evidence_path") or ""),
+        })
+    return summary
 
 
 def build_team_runtime_view(runtime_dir: str | Path | None = None) -> dict[str, list[dict[str, Any]]]:
@@ -408,6 +475,72 @@ def build_team_runtime_view(runtime_dir: str | Path | None = None) -> dict[str, 
                     "run_id": run_id,
                     "summary": f"{agent_id} recorded evidence {ref_path} in run {run_id}.",
                 })
+        elif event_type == "review_ref":
+            review_id = _slug(payload.get("review_id") or event_id)
+            verdict = str(payload.get("verdict") or "unknown")
+            ref_path = str(payload.get("ref_path") or "")
+            event_log.append({
+                "event_id": f"team-{event_id}",
+                "kind": "review-ref",
+                "run_id": run_id,
+                "summary": f"{agent_id} recorded independent review {review_id}: {verdict}.",
+            })
+            message_bus.append({
+                "message_id": f"team-{event_id}",
+                "from_role": agent_id or "reviewer",
+                "to_role": "coordinator",
+                "kind": "review-verdict",
+                "run_id": run_id,
+                "summary": f"{agent_id} -> coordinator: review {verdict}.",
+            })
+            if ref_path and (run_id, ref_path) not in evidence_keys:
+                evidence_keys.add((run_id, ref_path))
+                evidence_store.append({
+                    "evidence_id": f"team-review-{event_id}",
+                    "run_id": run_id,
+                    "ref_type": "review",
+                    "ref_path": ref_path,
+                })
+            review_gates.append({
+                "gate_id": f"team-review-{review_id}",
+                "kind": "independent-review",
+                "status": _review_gate_status(verdict),
+                "reason": f"Independent review {review_id} reported {verdict}.",
+                "run_id": run_id,
+            })
+        elif event_type == "final_verdict_ref":
+            verdict_id = _slug(payload.get("verdict_id") or event_id)
+            final_state = str(payload.get("final_state") or "deferred")
+            ref_path = str(payload.get("ref_path") or "")
+            event_log.append({
+                "event_id": f"team-{event_id}",
+                "kind": "final-verdict-ref",
+                "run_id": run_id,
+                "summary": f"{agent_id} recorded final verdict {verdict_id}: {final_state}.",
+            })
+            message_bus.append({
+                "message_id": f"team-{event_id}",
+                "from_role": agent_id or "governance",
+                "to_role": "team",
+                "kind": "final-verdict",
+                "run_id": run_id,
+                "summary": f"{agent_id} -> team: final verdict {final_state}.",
+            })
+            if ref_path and (run_id, ref_path) not in evidence_keys:
+                evidence_keys.add((run_id, ref_path))
+                evidence_store.append({
+                    "evidence_id": f"team-final-verdict-{event_id}",
+                    "run_id": run_id,
+                    "ref_type": "final_verdict",
+                    "ref_path": ref_path,
+                })
+            review_gates.append({
+                "gate_id": f"team-final-verdict-{verdict_id}",
+                "kind": "final-verdict",
+                "status": _final_verdict_gate_status(final_state),
+                "reason": f"Governance final verdict {verdict_id} reported {final_state}.",
+                "run_id": run_id,
+            })
         elif event_type == "workflow_event":
             phase = str(payload.get("phase") or "phase")
             status = str(payload.get("status") or "")
@@ -459,6 +592,28 @@ def _review_status(status: str) -> str:
     if normalized in {"fail", "failed", "error"}:
         return "failed"
     if normalized in {"blocked"}:
+        return "blocked"
+    return "open"
+
+
+def _review_gate_status(verdict: str) -> str:
+    normalized = str(verdict or "").strip().lower()
+    if normalized == "pass":
+        return "pass"
+    if normalized == "fail":
+        return "failed"
+    if normalized in {"blocked", "escalate"}:
+        return "blocked"
+    return "open"
+
+
+def _final_verdict_gate_status(final_state: str) -> str:
+    normalized = str(final_state or "").strip().lower()
+    if normalized == "final_ready":
+        return "pass"
+    if normalized == "failed":
+        return "failed"
+    if normalized == "blocked":
         return "blocked"
     return "open"
 

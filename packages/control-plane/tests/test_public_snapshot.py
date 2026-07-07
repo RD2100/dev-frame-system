@@ -32,6 +32,7 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "docs/status/runtime-governance-batch-e-paper-trust-fail-closed.md",
     "docs/status/runtime-governance-batch-e-explicit-team-evidence-events.md",
     "docs/status/runtime-governance-batch-e-team-context-refs.md",
+    "docs/status/runtime-governance-batch-e-team-review-verdict-events.md",
     "docs/status/runtime-governance-status-vocabulary-inventory.md",
     "packages/control-plane/README.md",
     "packages/control-plane/QUICKSTART.md",

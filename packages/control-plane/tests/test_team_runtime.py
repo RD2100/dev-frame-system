@@ -175,6 +175,53 @@ def test_worker_success_without_review_never_passes_acceptance_gate(tmp_path):
     assert statuses == {"open"}
 
 
+def test_review_and_final_verdict_events_project_as_distinct_team_objects(tmp_path):
+    team = TeamRuntime(runtime_dir=tmp_path)
+    team.record_result("go-run-review", "coding-agent-1", status="passed", report_path="reports/worker.md")
+    team.record_review_ref(
+        "go-run-review",
+        "reviewer-1",
+        review_id="review-go-run-review-1",
+        reviewer_role="reviewer",
+        executor_id="coding-agent-1",
+        verdict="pass",
+        ref_path="reviews/review.yaml",
+        reviewed_evidence_refs=["ev-team-worker-report"],
+        reviewed_inputs=["diff.patch", "test-output.md", "safety-report.json", "chain-evidence.json"],
+        source="evidence_gate",
+    )
+    team.record_final_verdict_ref(
+        "go-run-review",
+        "go-evidence-finalizer",
+        verdict_id="fv-go-run-review-1",
+        producer_role="governance",
+        final_state="final_ready",
+        ref_path="final/final-verdict.json",
+        review_ref="review-go-run-review-1",
+        gate_refs=["gate-go-run-review-independent-review"],
+        gate_summary=[{
+            "gate_id": "gate-go-run-review-independent-review",
+            "result": "pass",
+            "evidence_path": "reviews/review.yaml",
+        }],
+        human_or_governance_reference="go-evidence-finalize:go-run-review",
+    )
+
+    view = build_team_runtime_view(tmp_path)
+
+    assert {"task-result", "evidence-ref", "review-ref", "final-verdict-ref"} <= {
+        event["kind"] for event in view["event_log"]
+    }
+    assert {"result", "review-verdict", "final-verdict"} <= {
+        message["kind"] for message in view["message_bus"]
+    }
+    assert {item["ref_type"] for item in view["evidence_store"]} == {"report", "review", "final_verdict"}
+    gates = {(gate["kind"], gate["status"]) for gate in view["review_gates"]}
+    assert ("acceptance", "open") in gates
+    assert ("independent-review", "pass") in gates
+    assert ("final-verdict", "pass") in gates
+
+
 def test_review_status_mapping(tmp_path):
     team = TeamRuntime(runtime_dir=tmp_path)
     team.record_result("go-run-1", "a1", status="failed")

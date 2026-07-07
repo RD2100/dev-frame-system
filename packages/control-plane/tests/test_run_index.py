@@ -250,6 +250,495 @@ def test_run_index_projects_explicit_team_evidence_without_task_result_report(tm
     }]
 
 
+def test_run_index_keeps_team_review_without_final_verdict_review_pending(tmp_path):
+    runtime = tmp_path / "runtime"
+    review_path = runtime / "reviews" / "review.yaml"
+    review_path.parent.mkdir(parents=True)
+    review_path.write_text("verdict: pass\n", encoding="utf-8")
+    (runtime / "team-events.jsonl").write_text(
+        "\n".join([
+            json.dumps({
+                "event_type": "task_result",
+                "run_id": "go-review-only",
+                "agent_id": "coding-agent-1",
+                "payload": {"status": "passed", "report_path": str(runtime / "reports" / "worker.md")},
+                "timestamp": "2026-07-07T00:00:00Z",
+                "event_id": "team-review-only-result",
+            }),
+            json.dumps({
+                "event_type": "review_ref",
+                "run_id": "go-review-only",
+                "agent_id": "reviewer-1",
+                "payload": {
+                    "review_id": "review-go-review-only",
+                    "reviewer_id": "reviewer-1",
+                    "reviewer_role": "reviewer",
+                    "executor_id": "coding-agent-1",
+                    "verdict": "pass",
+                    "ref_path": str(review_path),
+                    "reviewed_evidence_refs": ["ev-team-team-review-only-result"],
+                },
+                "timestamp": "2026-07-07T00:01:00Z",
+                "event_id": "team-review-only-review",
+            }),
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    record = _records_by_adapter(build_run_index(runtime))["team_events"][0]
+
+    _run_record_validator().validate(record)
+    assert record["review_state"] == "review_passed"
+    assert record["gate_state"] == "not_evaluated"
+    assert record["acceptance_state"] == "review_pending"
+    assert "final_verdict_ref" not in record
+
+
+def test_run_index_projects_team_final_verdict_to_final_ready(tmp_path):
+    runtime = tmp_path / "runtime"
+    report_path = runtime / "reports" / "worker.md"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text("worker report\n", encoding="utf-8")
+    review_path = runtime / "reviews" / "review.yaml"
+    review_path.parent.mkdir(parents=True)
+    review_path.write_text("verdict: pass\n", encoding="utf-8")
+    final_path = runtime / "final" / "final-verdict.json"
+    gate_id = "gate-go-final-independent-review"
+    _write_json(final_path, {
+        "verdict_id": "fv-go-final",
+        "produced_by": "go-evidence-finalizer",
+        "produced_at": "2026-07-07T00:02:00Z",
+        "producer_role": "governance",
+        "final_state": "final_ready",
+        "inputs_reviewed": [str(report_path), str(review_path)],
+        "gate_summary": [{
+            "gate_id": gate_id,
+            "result": "pass",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-1",
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:go-final",
+    })
+    (runtime / "team-events.jsonl").write_text(
+        "\n".join([
+            json.dumps({
+                "event_type": "task_result",
+                "run_id": "go-final",
+                "agent_id": "coding-agent-1",
+                "payload": {"status": "passed", "report_path": str(report_path)},
+                "timestamp": "2026-07-07T00:00:00Z",
+                "event_id": "team-final-result",
+            }),
+            json.dumps({
+                "event_type": "review_ref",
+                "run_id": "go-final",
+                "agent_id": "reviewer-1",
+                "payload": {
+                    "review_id": "review-go-final",
+                    "reviewer_id": "reviewer-1",
+                    "reviewer_role": "reviewer",
+                    "executor_id": "coding-agent-1",
+                    "verdict": "pass",
+                    "ref_path": str(review_path),
+                    "reviewed_evidence_refs": ["ev-team-team-final-result"],
+                },
+                "timestamp": "2026-07-07T00:01:00Z",
+                "event_id": "team-final-review",
+            }),
+            json.dumps({
+                "event_type": "final_verdict_ref",
+                "run_id": "go-final",
+                "agent_id": "go-evidence-finalizer",
+                "payload": {
+                    "verdict_id": "fv-go-final",
+                    "produced_by": "go-evidence-finalizer",
+                    "producer_role": "governance",
+                    "final_state": "final_ready",
+                    "ref_path": str(final_path),
+                    "review_ref": "review-go-final",
+                    "gate_refs": [gate_id],
+                    "gate_summary": [{
+                        "gate_id": gate_id,
+                        "result": "pass",
+                        "evidence_path": str(review_path),
+                    }],
+                    "limitations": [],
+                    "human_or_governance_reference": "go-evidence-finalize:go-final",
+                },
+                "timestamp": "2026-07-07T00:02:00Z",
+                "event_id": "team-final-verdict",
+            }),
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    record = _records_by_adapter(build_run_index(runtime))["team_events"][0]
+
+    _run_record_validator().validate(record)
+    assert record["review_state"] == "review_passed"
+    assert record["gate_state"] == "gate_passed"
+    assert record["acceptance_state"] == "final_ready"
+    assert record["final_verdict_ref"] == {
+        "verdict_id": "fv-go-final",
+        "producer_role": "governance",
+        "final_state": "final_ready",
+        "uri": str(final_path),
+        "review_ref": "review-go-final",
+        "gate_refs": [gate_id],
+    }
+    assert {ref["kind"] for ref in record["evidence_refs"]} >= {"command_output", "review", "final_verdict"}
+
+
+def test_run_index_blocks_team_self_review_and_worker_final_verdict(tmp_path):
+    runtime = tmp_path / "runtime"
+    review_path = runtime / "reviews" / "review.yaml"
+    review_path.parent.mkdir(parents=True)
+    review_path.write_text("verdict: pass\n", encoding="utf-8")
+    final_path = runtime / "final" / "final-verdict.json"
+    _write_json(final_path, {
+        "verdict_id": "fv-go-unsafe",
+        "produced_by": "coding-agent-1",
+        "produced_at": "2026-07-07T00:02:00Z",
+        "producer_role": "worker",
+        "final_state": "final_ready",
+        "inputs_reviewed": [str(review_path)],
+        "gate_summary": [{
+            "gate_id": "gate-go-unsafe-independent-review",
+            "result": "pass",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-1",
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:go-unsafe",
+    })
+    (runtime / "team-events.jsonl").write_text(
+        "\n".join([
+            json.dumps({
+                "event_type": "task_result",
+                "run_id": "go-unsafe",
+                "agent_id": "coding-agent-1",
+                "payload": {"status": "passed"},
+                "timestamp": "2026-07-07T00:00:00Z",
+                "event_id": "team-unsafe-result",
+            }),
+            json.dumps({
+                "event_type": "review_ref",
+                "run_id": "go-unsafe",
+                "agent_id": "coding-agent-1",
+                "payload": {
+                    "review_id": "review-go-unsafe",
+                    "reviewer_id": "coding-agent-1",
+                    "reviewer_role": "worker",
+                    "executor_id": "coding-agent-1",
+                    "verdict": "pass",
+                    "ref_path": str(review_path),
+                    "reviewed_evidence_refs": ["ev-team-team-unsafe-result"],
+                },
+                "timestamp": "2026-07-07T00:01:00Z",
+                "event_id": "team-unsafe-review",
+            }),
+            json.dumps({
+                "event_type": "final_verdict_ref",
+                "run_id": "go-unsafe",
+                "agent_id": "coding-agent-1",
+                "payload": {
+                    "verdict_id": "fv-go-unsafe",
+                    "produced_by": "coding-agent-1",
+                    "producer_role": "worker",
+                    "final_state": "final_ready",
+                    "ref_path": str(final_path),
+                    "review_ref": "review-go-unsafe",
+                    "gate_refs": ["gate-go-unsafe-independent-review"],
+                    "gate_summary": [{
+                        "gate_id": "gate-go-unsafe-independent-review",
+                        "result": "pass",
+                        "evidence_path": str(review_path),
+                    }],
+                },
+                "timestamp": "2026-07-07T00:02:00Z",
+                "event_id": "team-unsafe-final",
+            }),
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    record = _records_by_adapter(build_run_index(runtime))["team_events"][0]
+
+    _run_record_validator().validate(record)
+    assert record["outcome"] == "blocked"
+    assert record["acceptance_state"] == "blocked"
+    assert record["review_refs"] == []
+    assert "final_verdict_ref" not in record
+    assert len(record["failure_refs"]) >= 1
+
+
+def test_run_index_blocks_team_worker_review_when_executor_id_is_omitted(tmp_path):
+    runtime = tmp_path / "runtime"
+    review_path = runtime / "reviews" / "review.yaml"
+    review_path.parent.mkdir(parents=True)
+    review_path.write_text("verdict: pass\n", encoding="utf-8")
+    final_path = runtime / "final" / "final-verdict.json"
+    gate_id = "gate-go-omitted-executor-independent-review"
+    _write_json(final_path, {
+        "verdict_id": "fv-go-omitted-executor",
+        "produced_by": "go-evidence-finalizer",
+        "produced_at": "2026-07-07T00:02:00Z",
+        "producer_role": "governance",
+        "final_state": "final_ready",
+        "inputs_reviewed": [str(review_path)],
+        "gate_summary": [{
+            "gate_id": gate_id,
+            "result": "pass",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "coding-agent-1",
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:go-omitted-executor",
+    })
+    (runtime / "team-events.jsonl").write_text(
+        "\n".join([
+            json.dumps({
+                "event_type": "task_result",
+                "run_id": "go-omitted-executor",
+                "agent_id": "coding-agent-1",
+                "payload": {"status": "passed"},
+                "timestamp": "2026-07-07T00:00:00Z",
+                "event_id": "team-omitted-executor-result",
+            }),
+            json.dumps({
+                "event_type": "review_ref",
+                "run_id": "go-omitted-executor",
+                "agent_id": "coding-agent-1",
+                "payload": {
+                    "review_id": "review-go-omitted-executor",
+                    "reviewer_id": "coding-agent-1",
+                    "reviewer_role": "reviewer",
+                    "verdict": "pass",
+                    "ref_path": str(review_path),
+                    "reviewed_evidence_refs": ["ev-team-team-omitted-executor-result"],
+                },
+                "timestamp": "2026-07-07T00:01:00Z",
+                "event_id": "team-omitted-executor-review",
+            }),
+            json.dumps({
+                "event_type": "final_verdict_ref",
+                "run_id": "go-omitted-executor",
+                "agent_id": "go-evidence-finalizer",
+                "payload": {
+                    "verdict_id": "fv-go-omitted-executor",
+                    "produced_by": "go-evidence-finalizer",
+                    "producer_role": "governance",
+                    "final_state": "final_ready",
+                    "ref_path": str(final_path),
+                    "review_ref": "review-go-omitted-executor",
+                    "gate_refs": [gate_id],
+                    "gate_summary": [{
+                        "gate_id": gate_id,
+                        "result": "pass",
+                        "evidence_path": str(review_path),
+                    }],
+                },
+                "timestamp": "2026-07-07T00:02:00Z",
+                "event_id": "team-omitted-executor-final",
+            }),
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    record = _records_by_adapter(build_run_index(runtime))["team_events"][0]
+
+    _run_record_validator().validate(record)
+    assert record["outcome"] == "blocked"
+    assert record["acceptance_state"] == "blocked"
+    assert record["review_refs"] == []
+    assert "final_verdict_ref" not in record
+
+
+def test_run_index_blocks_worker_produced_final_verdict_with_governance_role(tmp_path):
+    runtime = tmp_path / "runtime"
+    review_path = runtime / "reviews" / "review.yaml"
+    review_path.parent.mkdir(parents=True)
+    review_path.write_text("verdict: pass\n", encoding="utf-8")
+    final_path = runtime / "final" / "final-verdict.json"
+    gate_id = "gate-go-spoof-independent-review"
+    _write_json(final_path, {
+        "verdict_id": "fv-go-spoof",
+        "produced_by": "coding-agent-1",
+        "produced_at": "2026-07-07T00:02:00Z",
+        "producer_role": "governance",
+        "final_state": "final_ready",
+        "inputs_reviewed": [str(review_path)],
+        "gate_summary": [{
+            "gate_id": gate_id,
+            "result": "pass",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-1",
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:go-spoof",
+    })
+    (runtime / "team-events.jsonl").write_text(
+        "\n".join([
+            json.dumps({
+                "event_type": "task_result",
+                "run_id": "go-spoof",
+                "agent_id": "coding-agent-1",
+                "payload": {"status": "passed"},
+                "timestamp": "2026-07-07T00:00:00Z",
+                "event_id": "team-spoof-result",
+            }),
+            json.dumps({
+                "event_type": "review_ref",
+                "run_id": "go-spoof",
+                "agent_id": "reviewer-1",
+                "payload": {
+                    "review_id": "review-go-spoof",
+                    "reviewer_id": "reviewer-1",
+                    "reviewer_role": "reviewer",
+                    "executor_id": "coding-agent-1",
+                    "verdict": "pass",
+                    "ref_path": str(review_path),
+                    "reviewed_evidence_refs": ["ev-team-team-spoof-result"],
+                },
+                "timestamp": "2026-07-07T00:01:00Z",
+                "event_id": "team-spoof-review",
+            }),
+            json.dumps({
+                "event_type": "final_verdict_ref",
+                "run_id": "go-spoof",
+                "agent_id": "coding-agent-1",
+                "payload": {
+                    "verdict_id": "fv-go-spoof",
+                    "produced_by": "coding-agent-1",
+                    "producer_role": "governance",
+                    "final_state": "final_ready",
+                    "ref_path": str(final_path),
+                    "review_ref": "review-go-spoof",
+                    "gate_refs": [gate_id],
+                    "gate_summary": [{
+                        "gate_id": gate_id,
+                        "result": "pass",
+                        "evidence_path": str(review_path),
+                    }],
+                },
+                "timestamp": "2026-07-07T00:02:00Z",
+                "event_id": "team-spoof-final",
+            }),
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    record = _records_by_adapter(build_run_index(runtime))["team_events"][0]
+
+    _run_record_validator().validate(record)
+    assert record["outcome"] == "blocked"
+    assert record["acceptance_state"] == "blocked"
+    assert "final_verdict_ref" not in record
+
+
+def test_run_index_blocks_final_verdict_event_gate_mismatch_with_artifact(tmp_path):
+    runtime = tmp_path / "runtime"
+    review_path = runtime / "reviews" / "review.yaml"
+    review_path.parent.mkdir(parents=True)
+    review_path.write_text("verdict: pass\n", encoding="utf-8")
+    final_path = runtime / "final" / "final-verdict.json"
+    gate_id = "gate-go-gate-mismatch-independent-review"
+    _write_json(final_path, {
+        "verdict_id": "fv-go-gate-mismatch",
+        "produced_by": "go-evidence-finalizer",
+        "produced_at": "2026-07-07T00:02:00Z",
+        "producer_role": "governance",
+        "final_state": "final_ready",
+        "inputs_reviewed": [str(review_path)],
+        "gate_summary": [{
+            "gate_id": gate_id,
+            "result": "fail",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-1",
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:go-gate-mismatch",
+    })
+    (runtime / "team-events.jsonl").write_text(
+        "\n".join([
+            json.dumps({
+                "event_type": "task_result",
+                "run_id": "go-gate-mismatch",
+                "agent_id": "coding-agent-1",
+                "payload": {"status": "passed"},
+                "timestamp": "2026-07-07T00:00:00Z",
+                "event_id": "team-gate-mismatch-result",
+            }),
+            json.dumps({
+                "event_type": "review_ref",
+                "run_id": "go-gate-mismatch",
+                "agent_id": "reviewer-1",
+                "payload": {
+                    "review_id": "review-go-gate-mismatch",
+                    "reviewer_id": "reviewer-1",
+                    "reviewer_role": "reviewer",
+                    "executor_id": "coding-agent-1",
+                    "verdict": "pass",
+                    "ref_path": str(review_path),
+                    "reviewed_evidence_refs": ["ev-team-team-gate-mismatch-result"],
+                },
+                "timestamp": "2026-07-07T00:01:00Z",
+                "event_id": "team-gate-mismatch-review",
+            }),
+            json.dumps({
+                "event_type": "final_verdict_ref",
+                "run_id": "go-gate-mismatch",
+                "agent_id": "go-evidence-finalizer",
+                "payload": {
+                    "verdict_id": "fv-go-gate-mismatch",
+                    "produced_by": "go-evidence-finalizer",
+                    "producer_role": "governance",
+                    "final_state": "final_ready",
+                    "ref_path": str(final_path),
+                    "review_ref": "review-go-gate-mismatch",
+                    "gate_refs": [gate_id],
+                    "gate_summary": [{
+                        "gate_id": gate_id,
+                        "result": "pass",
+                        "evidence_path": str(review_path),
+                    }],
+                },
+                "timestamp": "2026-07-07T00:02:00Z",
+                "event_id": "team-gate-mismatch-final",
+            }),
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    record = _records_by_adapter(build_run_index(runtime))["team_events"][0]
+
+    _run_record_validator().validate(record)
+    assert record["outcome"] == "blocked"
+    assert record["acceptance_state"] == "blocked"
+    assert "final_verdict_ref" not in record
+
+
 def test_run_index_projects_corrupt_legacy_records_as_blocked_failures(tmp_path):
     runtime = tmp_path / "runtime"
     (runtime / "go-runs" / "bad-go").mkdir(parents=True)
