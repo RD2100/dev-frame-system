@@ -361,6 +361,8 @@ def test_runtime_digest_cli_reports_worker_status(tmp_path, capsys):
 
 
 def test_visual_control_plane_state_reads_rdgoal_runtime(tmp_path):
+    from control_plane.t3_adapter import build_t3_client_shell_from_state
+
     project_root = tmp_path / "project"
     runtime_dir = tmp_path / "runtime"
     project_root.mkdir()
@@ -380,6 +382,7 @@ def test_visual_control_plane_state_reads_rdgoal_runtime(tmp_path):
     assert state["projects"][0]["status"] == "completed"
     assert state["runs"][0]["entrypoint"] == "rdgoal"
     assert state["runs"][0]["status"] == "completed"
+    assert state["runs"][0]["review_status"] == "pending"
     assert state["runs"][0]["packet_path"] == result.dispatch.packet.packet_dir
     assert state["runs"][0]["taskspec_path"].endswith("TASKSPEC.md")
     assert state["runs"][0]["taskspec_json_path"].endswith("TASKSPEC.json")
@@ -387,7 +390,11 @@ def test_visual_control_plane_state_reads_rdgoal_runtime(tmp_path):
     assert state["decisions"][0]["status"] == "executed"
     assert state["gates"][0]["next_action"].startswith("Confirm human approval")
     acceptance_gate = next(gate for gate in state["gates"] if gate["kind"] == "acceptance")
-    assert acceptance_gate["next_action"].startswith("Review ExecutionReport status: passed")
+    assert acceptance_gate["status"] == "open"
+    assert acceptance_gate["next_action"].startswith("Independent review required")
+    shell = build_t3_client_shell_from_state(state)
+    t3_acceptance_gate = next(gate for gate in shell["devframe"]["gates"] if gate["kind"] == "acceptance")
+    assert t3_acceptance_gate["status"] == "open"
     assert state["next_actions"][0]["source_id"] == "human-gate"
     assert state["next_actions"][0]["label"].startswith("Confirm human approval")
     assert state["safety"]["remote_execution_default"] is False
@@ -1788,14 +1795,14 @@ def test_team_model_projects_terminal_go_run_pass_status_as_review_gate(tmp_path
     outcome_gates = [g for g in team["review_gates"] if g["kind"] == "go-run-outcome"]
     assert len(outcome_gates) == 1
     assert outcome_gates[0]["gate_id"] == f"{go_run_id}-outcome-gate"
-    assert outcome_gates[0]["status"] == "pass"
+    assert outcome_gates[0]["status"] == "open"
     assert outcome_gates[0]["run_id"] == go_run_id
-    assert "completed successfully" in outcome_gates[0]["reason"]
+    assert "independent review is still required" in outcome_gates[0]["reason"]
 
-    review_messages = [m for m in team["message_bus"] if m["run_id"] == go_run_id
-                       and m["kind"] == "review-status"]
-    assert len(review_messages) >= 1
-    assert any("passed" in m["summary"] for m in review_messages)
+    execution_messages = [m for m in team["message_bus"] if m["run_id"] == go_run_id
+                          and m["kind"] == "execution-status"]
+    assert len(execution_messages) >= 1
+    assert any("independent review is still required" in m["summary"] for m in execution_messages)
 
 
 def test_team_model_projects_terminal_go_run_failed_status_as_review_gate(tmp_path):
@@ -1971,11 +1978,11 @@ def test_t3_shell_exposes_go_run_outcome_gate_and_message_signal(tmp_path):
     outcome_gates = [g for g in team["reviewGates"] if g["kind"] == "go-run-outcome"]
     assert len(outcome_gates) == 1
     assert outcome_gates[0]["gateId"] == f"{go_run_id}-outcome-gate"
-    assert outcome_gates[0]["status"] == "pass"
+    assert outcome_gates[0]["status"] == "open"
 
-    review_messages = [m for m in team["messageBus"] if m["runId"] == go_run_id
-                       and m["kind"] == "review-status"]
-    assert len(review_messages) >= 1
+    execution_messages = [m for m in team["messageBus"] if m["runId"] == go_run_id
+                          and m["kind"] == "execution-status"]
+    assert len(execution_messages) >= 1
 
 
 def test_runtime_store_read_all_tolerates_truncated_trailing_line(tmp_path):

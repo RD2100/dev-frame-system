@@ -28,6 +28,7 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "docs/status/runtime-governance-batch-b-read-only-run-index.md",
     "docs/status/runtime-governance-batch-c-rdreview-prepare-only.md",
     "docs/status/runtime-governance-batch-d-independent-gate.md",
+    "docs/status/runtime-governance-batch-e-workflow-review-pending.md",
     "docs/status/runtime-governance-status-vocabulary-inventory.md",
     "packages/control-plane/README.md",
     "packages/control-plane/QUICKSTART.md",

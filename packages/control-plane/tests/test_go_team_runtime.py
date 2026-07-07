@@ -75,9 +75,15 @@ def test_execution_records_team_events_and_surfaces_in_state(tmp_path):
     # Real Conflict Control: targets owned by their agents this run.
     owned_files = {c["file_path"] for c in team["conflict_control"]}
     assert {"a.py", "b.py"} <= owned_files
-    # Real Review Gate: recorded acceptance facts surfaced.
-    recorded_gate_kinds = {g["gate_id"] for g in team["review_gates"] if g["gate_id"].startswith("team-acceptance-")}
-    assert recorded_gate_kinds, "recorded acceptance gates should appear in the read model"
+    # Real Review Gate: worker success is surfaced as review pending, not pass.
+    recorded_gates = [g for g in team["review_gates"] if g["gate_id"].startswith("team-acceptance-")]
+    assert recorded_gates, "recorded acceptance gates should appear in the read model"
+    assert {g["status"] for g in recorded_gates} == {"open"}
+    assert all("independent review is still required" in g["reason"] for g in recorded_gates)
+
+    outcome_gates = [g for g in team["review_gates"] if g["kind"] == "go-run-outcome"]
+    assert outcome_gates
+    assert {g["status"] for g in outcome_gates} == {"open"}
 
 
 def test_prepare_only_records_no_team_events(tmp_path):

@@ -26,10 +26,12 @@ from .backup_guard import default_runtime_dir
 from .go_dispatch import execute_go_run, run_go_dispatch
 from .team_runtime import TeamRuntime
 
-# Controller verdict vocabulary, aligned with decision_engine.DecisionMode.
+# Controller verdict vocabulary. continue/revise/stop remain legacy next-action
+# advice; awaiting_review is fail-closed until an independent review arrives.
 VERDICT_CONTINUE = "continue"
 VERDICT_REVISE = "revise"
 VERDICT_STOP = "stop"
+VERDICT_AWAITING_REVIEW = "awaiting_review"
 
 _SUCCESS = {"pass", "passed", "completed", "verified"}
 
@@ -147,17 +149,24 @@ class WorkflowEngine:
         )
         phases.append(WorkflowPhase("execute", "executor", "completed", exec_summary))
 
-        # Phase 3: review (reviewer) — controller verdict from recorded results.
+        # Phase 3: review gate state. Worker results are execution outcomes only;
+        # they cannot create an independent review verdict.
         verdict = _verdict_for(executed.agents)
-        review_summary = (
-            f"Reviewer verdict for run {go_run_id}: {verdict} "
-            f"({passed} passed, {failed} failed of {len(executed.agents)})."
-        )
+        if verdict == VERDICT_AWAITING_REVIEW:
+            review_summary = (
+                f"Worker execution passed for run {go_run_id}; independent review is required "
+                f"before acceptance ({passed} passed, {failed} failed of {len(executed.agents)})."
+            )
+        else:
+            review_summary = (
+                f"Controller next action for run {go_run_id}: {verdict} "
+                f"({passed} passed, {failed} failed of {len(executed.agents)})."
+            )
         team.record_workflow_event(
-            go_run_id, phase="review", status=verdict, role="reviewer",
+            go_run_id, phase="review", status=verdict, role="controller",
             summary=review_summary,
         )
-        phases.append(WorkflowPhase("review", "reviewer", verdict, review_summary))
+        phases.append(WorkflowPhase("review", "controller", verdict, review_summary))
 
         return WorkflowResult(
             go_run_id=go_run_id,
@@ -177,7 +186,7 @@ def _verdict_for(agents: list[Any]) -> str:
     if not statuses:
         return VERDICT_STOP
     if all(status in _SUCCESS for status in statuses):
-        return VERDICT_CONTINUE
+        return VERDICT_AWAITING_REVIEW
     if any(status in {"failed", "fail", "error"} for status in statuses):
         return VERDICT_REVISE
     return VERDICT_REVISE

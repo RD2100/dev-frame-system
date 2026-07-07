@@ -16,7 +16,7 @@ from jsonschema.validators import validator_for
 from control_plane.team_runtime import TEAM_EVENTS_FILE, build_team_runtime_view
 from control_plane.visual_state import build_visual_control_plane_state
 from control_plane.workflow_engine import (
-    VERDICT_CONTINUE,
+    VERDICT_AWAITING_REVIEW,
     VERDICT_REVISE,
     WorkflowEngine,
 )
@@ -56,7 +56,7 @@ def _project(tmp_path: Path) -> Path:
     return project
 
 
-def test_workflow_runs_phases_and_continues_on_all_pass(tmp_path):
+def test_workflow_runs_phases_and_awaits_review_on_all_pass(tmp_path):
     runtime = tmp_path / "runtime"
     engine = WorkflowEngine(runtime_dir=runtime)
     result = engine.run_coding_workflow(
@@ -69,9 +69,11 @@ def test_workflow_runs_phases_and_continues_on_all_pass(tmp_path):
 
     phase_names = [p.name for p in result.phases]
     assert phase_names == ["plan", "execute", "review"]
-    assert result.verdict == VERDICT_CONTINUE
+    assert result.verdict == VERDICT_AWAITING_REVIEW
     assert result.passed_agents == 2
     assert result.failed_agents == 0
+    assert result.phases[-1].role == "controller"
+    assert "independent review is required" in result.phases[-1].summary
 
     # Phases recorded as real team events.
     view = build_team_runtime_view(runtime)
@@ -80,6 +82,8 @@ def test_workflow_runs_phases_and_continues_on_all_pass(tmp_path):
     # The verdict is broadcast to the team.
     verdict_msgs = [m for m in view["message_bus"] if m["kind"] == "workflow-verdict"]
     assert verdict_msgs
+    assert verdict_msgs[-1]["from_role"] == "controller"
+    assert "independent review is required" in verdict_msgs[-1]["summary"]
 
 
 def test_workflow_revises_on_failure(tmp_path):

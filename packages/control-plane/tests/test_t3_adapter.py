@@ -2919,16 +2919,16 @@ def test_t3_client_shell_exposes_go_run_outcome_gates():
             "agent_registry": [],
             "task_board": [],
             "message_bus": [
-                {"message_id": "reviewer-to-team-go-1", "from_role": "reviewer", "to_role": "team",
-                 "kind": "review-status", "run_id": "go-1", "summary": "Review status for /go run go-1: passed"},
+                {"message_id": "controller-to-team-go-1", "from_role": "controller", "to_role": "team",
+                 "kind": "execution-status", "run_id": "go-1", "summary": "Execution status for /go run go-1: passed; independent review is still required"},
                 {"message_id": "reviewer-to-team-go-2", "from_role": "reviewer", "to_role": "team",
                  "kind": "review-status", "run_id": "go-2", "summary": "Review status for /go run go-2: failed"},
             ],
             "event_log": [],
             "evidence_store": [],
             "review_gates": [
-                {"gate_id": "go-1-outcome-gate", "kind": "go-run-outcome", "status": "pass",
-                 "reason": "/go run go-1 completed successfully.", "run_id": "go-1"},
+                {"gate_id": "go-1-outcome-gate", "kind": "go-run-outcome", "status": "open",
+                 "reason": "/go run go-1 execution passed; independent review is still required.", "run_id": "go-1"},
                 {"gate_id": "go-2-outcome-gate", "kind": "go-run-outcome", "status": "failed",
                  "reason": "/go run go-2 failed.", "run_id": "go-2"},
             ],
@@ -2943,14 +2943,14 @@ def test_t3_client_shell_exposes_go_run_outcome_gates():
     assert len(team["reviewGates"]) == 2
     assert team["reviewGates"][0]["gateId"] == "go-1-outcome-gate"
     assert team["reviewGates"][0]["kind"] == "go-run-outcome"
-    assert team["reviewGates"][0]["status"] == "pass"
+    assert team["reviewGates"][0]["status"] == "open"
     assert team["reviewGates"][1]["gateId"] == "go-2-outcome-gate"
     assert team["reviewGates"][1]["kind"] == "go-run-outcome"
     assert team["reviewGates"][1]["status"] == "failed"
 
     assert len(team["messageBus"]) == 2
-    assert team["messageBus"][0]["kind"] == "review-status"
-    assert "passed" in team["messageBus"][0]["summary"]
+    assert team["messageBus"][0]["kind"] == "execution-status"
+    assert "independent review is still required" in team["messageBus"][0]["summary"]
     assert team["messageBus"][1]["kind"] == "review-status"
     assert "failed" in team["messageBus"][1]["summary"]
 

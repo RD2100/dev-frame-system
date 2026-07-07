@@ -263,6 +263,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/runtime-governance-batch-b-read-only-run-index.md`
 - `docs/status/runtime-governance-batch-c-rdreview-prepare-only.md`
 - `docs/status/runtime-governance-batch-d-independent-gate.md`
+- `docs/status/runtime-governance-batch-e-workflow-review-pending.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/total-control-policy-engine-and-human-escalation-governance-plan.md`
@@ -343,6 +344,20 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     consistency.
   - `docs/status/runtime-governance-batch-d-independent-gate.md` records the
     local limitation set and preserved stop lines.
+- Runtime-governance Batch E workflow review-pending:
+  - `packages/control-plane/control_plane/workflow_engine.py` must treat worker
+    success as `awaiting_review`, not a reviewer pass or final-ready signal.
+  - `packages/control-plane/control_plane/team_runtime.py` must map successful
+    worker task results to open review gates until independent review exists.
+  - `packages/control-plane/control_plane/visual_state.py` must keep passed
+    go-run outcome gates open, with reason text that separates execution
+    success from review pass.
+  - `packages/control-plane/tests/test_workflow_engine.py`,
+    `packages/control-plane/tests/test_team_runtime.py`, and
+    `packages/control-plane/tests/test_go_team_runtime.py` should prove the
+    former self-approval path now stays review-pending.
+  - `docs/status/runtime-governance-batch-e-workflow-review-pending.md` records
+    the local limitation set and preserved stop lines.
 
 ## Open-Source Review Checklist
 
@@ -404,6 +419,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/runtime-governance-batch-b-read-only-run-index.md`
 - `docs/status/runtime-governance-batch-c-rdreview-prepare-only.md`
 - `docs/status/runtime-governance-batch-d-independent-gate.md`
+- `docs/status/runtime-governance-batch-e-workflow-review-pending.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/documentation-management-audit-and-plan.md`

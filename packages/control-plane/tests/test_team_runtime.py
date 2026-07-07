@@ -94,12 +94,22 @@ def test_view_derives_conflict_and_review_objects(tmp_path):
         assert c["owner_run_id"] == "go-run-1"
         assert c["file_kind"] == "target"
 
-    # Review Gate: one recorded acceptance fact per task result, mapped to pass.
+    # Review Gate: worker success opens the gate but cannot pass review.
     assert len(view["review_gates"]) == 1
     gate = view["review_gates"][0]
     assert gate["kind"] == "acceptance"
-    assert gate["status"] == "pass"
+    assert gate["status"] == "open"
     assert gate["run_id"] == "go-run-1"
+    assert "independent review is still required" in gate["reason"]
+
+
+def test_worker_success_without_review_never_passes_acceptance_gate(tmp_path):
+    team = TeamRuntime(runtime_dir=tmp_path)
+    for status in ["pass", "passed", "completed", "verified"]:
+        team.record_result("go-run-1", f"agent-{status}", status=status)
+
+    statuses = {g["status"] for g in build_team_runtime_view(tmp_path)["review_gates"]}
+    assert statuses == {"open"}
 
 
 def test_review_status_mapping(tmp_path):

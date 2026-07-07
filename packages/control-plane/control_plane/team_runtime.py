@@ -187,7 +187,7 @@ def build_team_runtime_view(runtime_dir: str | Path | None = None) -> dict[str, 
     # lifecycle, and an agent per participant with its latest recorded status.
     tasks_by_key: dict[tuple[str, str], dict[str, Any]] = {}
     agents_by_id: dict[str, dict[str, Any]] = {}
-    _role_words = {"coordinator", "reviewer", "planner", "executor"}
+    _role_words = {"controller", "coordinator", "reviewer", "planner", "executor"}
 
     def _touch_agent(agent: str, status: str) -> None:
         if not agent:
@@ -298,12 +298,13 @@ def build_team_runtime_view(runtime_dir: str | Path | None = None) -> dict[str, 
                 "run_id": run_id,
                 "summary": f"{agent_id} -> coordinator: {status}.",
             })
-            # Real Review Gate: a recorded acceptance fact per task result.
+            # Worker task results are execution outcomes only. A successful
+            # worker result opens the review gate but cannot pass it.
             review_gates.append({
                 "gate_id": f"team-acceptance-{event_id}",
                 "kind": "acceptance",
                 "status": _review_status(status),
-                "reason": f"Recorded result for {agent_id} in run {run_id}: {status}.",
+                "reason": _review_reason(agent_id, run_id, status),
                 "run_id": run_id,
             })
             # Real Evidence Store: a recorded evidence ref when the result
@@ -332,7 +333,7 @@ def build_team_runtime_view(runtime_dir: str | Path | None = None) -> dict[str, 
             if _slug(phase) in {"review", "decide", "verdict"}:
                 message_bus.append({
                     "message_id": f"team-{event_id}",
-                    "from_role": "reviewer",
+                    "from_role": role,
                     "to_role": "team",
                     "kind": "workflow-verdict",
                     "run_id": run_id,
@@ -363,9 +364,19 @@ def _task_status(status: str) -> str:
 def _review_status(status: str) -> str:
     normalized = str(status or "").strip().lower()
     if normalized in {"pass", "passed", "completed", "verified"}:
-        return "pass"
+        return "open"
     if normalized in {"fail", "failed", "error"}:
         return "failed"
     if normalized in {"blocked"}:
         return "blocked"
     return "open"
+
+
+def _review_reason(agent_id: str, run_id: str, status: str) -> str:
+    normalized = str(status or "").strip().lower()
+    if normalized in {"pass", "passed", "completed", "verified"}:
+        return (
+            f"Recorded worker result for {agent_id} in run {run_id}: {status}; "
+            "independent review is still required."
+        )
+    return f"Recorded result for {agent_id} in run {run_id}: {status}."

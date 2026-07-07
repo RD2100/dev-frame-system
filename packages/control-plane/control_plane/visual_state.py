@@ -1144,13 +1144,23 @@ def _add_evidence_status_messages(
         go_run_id = _safe_id(str(run.get("go_run_id") or ""))
         run_status = str(run.get("status") or "")
         if run_status in ("review-pass", "review-fail", "verified", "passed", "failed", "blocked"):
+            if run_status == "passed":
+                from_role = "controller"
+                kind = "execution-status"
+                message_id = _safe_id(f"controller-to-team-{go_run_id}")
+                summary = f"Execution status for /go run {go_run_id}: passed; independent review is still required"
+            else:
+                from_role = "reviewer"
+                kind = "review-status"
+                message_id = _safe_id(f"reviewer-to-team-{go_run_id}")
+                summary = f"Review status for /go run {go_run_id}: {run_status}"
             messages.append({
-                "message_id": _safe_id(f"reviewer-to-team-{go_run_id}"),
-                "from_role": "reviewer",
+                "message_id": message_id,
+                "from_role": from_role,
                 "to_role": "team",
-                "kind": "review-status",
+                "kind": kind,
                 "run_id": go_run_id,
-                "summary": f"Review status for /go run {go_run_id}: {run_status}",
+                "summary": summary,
             })
         for agent in run.get("agents", []):
             if not isinstance(agent, dict):
@@ -1383,8 +1393,8 @@ def _team_review_gates(
         if gate_id in existing_gate_ids:
             continue
         if run_status == "passed":
-            gate_status = "pass"
-            reason = f"/go run {go_run_id} completed successfully."
+            gate_status = "open"
+            reason = f"/go run {go_run_id} execution passed; independent review is still required."
         elif run_status == "failed":
             gate_status = "failed"
             reason = f"/go run {go_run_id} failed."
@@ -2527,6 +2537,8 @@ def _gate_states(dispatches: list[dict[str, Any]],
 
 def _gate_next_action(dispatch: dict[str, Any], report: dict[str, Any] | None) -> str:
     if report:
+        if report.get("status") == "passed":
+            return "Independent review required before acceptance; worker ExecutionReport status: passed."
         return f"Review ExecutionReport status: {report.get('status', 'unknown')}."
     if dispatch.get("dispatch_ready"):
         packet_dir = dispatch.get("packet_dir", "")
@@ -2614,7 +2626,7 @@ def _run_status(dispatch_ready: bool, report_status: str) -> str:
 
 def _review_status(report_status: str) -> str:
     if report_status == "passed":
-        return "pass"
+        return "pending"
     if report_status == "blocked":
         return "blocked"
     if report_status in {"failed", "fail"}:
@@ -2628,7 +2640,7 @@ def _gate_status(dispatch: dict[str, Any], report: dict[str, Any] | None) -> str
     if not report:
         return "open"
     if report.get("status") == "passed":
-        return "pass"
+        return "open"
     if report.get("status") == "blocked":
         return "blocked"
     return "failed"
