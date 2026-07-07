@@ -246,6 +246,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/context-led-model-performance-control-plan.md`
 - `docs/status/runtime-governance-and-evidence-closure-transformation-plan.md`
 - `docs/status/runtime-governance-status-vocabulary-inventory.md`
+- `docs/status/runtime-governance-batch-a-contract-completion.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/total-control-policy-engine-and-human-escalation-governance-plan.md`
@@ -293,6 +294,10 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     mirror of `schemas/runtime-governance/*`.
   - Mirror checks should ignore encoding, line-ending, and key-order noise while
     failing on JSON semantic drift.
+- Runtime-governance Batch A completion audit:
+  - `docs/status/runtime-governance-batch-a-contract-completion.md` records the
+    local contract evidence and preserved stop lines.
+  - The audit is not a release-ready, PR, CI, or publication claim.
 
 ## Open-Source Review Checklist
 
@@ -350,6 +355,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/context-led-model-performance-control-plan.md`
 - `docs/status/runtime-governance-and-evidence-closure-transformation-plan.md`
 - `docs/status/runtime-governance-status-vocabulary-inventory.md`
+- `docs/status/runtime-governance-batch-a-contract-completion.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/documentation-management-audit-and-plan.md`

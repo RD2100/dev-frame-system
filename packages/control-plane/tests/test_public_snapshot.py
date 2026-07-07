@@ -24,6 +24,7 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "docs/agent-runtime/web-ai-adapter-contract.md",
     "docs/status/release-readiness.md",
     "docs/status/reviewer-index.md",
+    "docs/status/runtime-governance-batch-a-contract-completion.md",
     "docs/status/runtime-governance-status-vocabulary-inventory.md",
     "packages/control-plane/README.md",
     "packages/control-plane/QUICKSTART.md",
@@ -102,6 +103,7 @@ PUBLIC_MARKDOWN_DOCS = [
     REPO_ROOT / "docs" / "agent-runtime" / "project-local-skill-bindings.md",
     REPO_ROOT / "docs" / "status" / "release-readiness.md",
     REPO_ROOT / "docs" / "status" / "reviewer-index.md",
+    REPO_ROOT / "docs" / "status" / "runtime-governance-batch-a-contract-completion.md",
     REPO_ROOT / "docs" / "status" / "runtime-governance-status-vocabulary-inventory.md",
     REPO_ROOT / "rules" / "web-ai-adapters.md",
 ]
@@ -111,6 +113,7 @@ DOC_LINK_CHECK_MARKDOWN_DOCS = [
     REPO_ROOT / "docs" / "status" / "reviewer-index.md",
     REPO_ROOT / "docs" / "status" / "release-readiness.md",
     REPO_ROOT / "docs" / "status" / "review-governance-kernel-completion-20260706.md",
+    REPO_ROOT / "docs" / "status" / "runtime-governance-batch-a-contract-completion.md",
     REPO_ROOT / "docs" / "status" / "runtime-governance-status-vocabulary-inventory.md",
 ]
 LIFECYCLE_REQUIRED_STATUS_DOCS = [
@@ -121,6 +124,7 @@ LIFECYCLE_REQUIRED_STATUS_DOCS = [
     REPO_ROOT / "docs" / "status" / "workflow-consolidation-and-command-plan.md",
     REPO_ROOT / "docs" / "status" / "context-management-architecture-plan.md",
     REPO_ROOT / "docs" / "status" / "context-led-model-performance-control-plan.md",
+    REPO_ROOT / "docs" / "status" / "runtime-governance-batch-a-contract-completion.md",
     REPO_ROOT / "docs" / "status" / "runtime-governance-status-vocabulary-inventory.md",
     REPO_ROOT / "docs" / "status" / "documentation-management-audit-and-plan.md",
     REPO_ROOT / "docs" / "status" / "documentation-management-detailed-rollout-plan.md",

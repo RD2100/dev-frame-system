@@ -59,7 +59,8 @@ Use these states when reading or editing files in this folder:
 ## Observed File Classification Snapshot
 
 Observed on 2026-07-04, with review-governance completion status added on
-2026-07-06 and runtime-governance Batch A planning records added on 2026-07-07.
+2026-07-06 and runtime-governance Batch A planning and contract evidence added
+on 2026-07-07.
 Update this snapshot when adding or retiring status documents.
 
 | State | Files |
@@ -72,7 +73,7 @@ Update this snapshot when adding or retiring status documents.
 | `recon-receipt` | `recon-receipt-acp-backbone.md`, `recon-receipt-cli-decomposition.md`, `recon-receipt-cluster-control-surface.md`, `recon-receipt-customization-layer.md`, `recon-receipt-devframe-mcp-server.md`, `recon-receipt-global-coordinator-conversation-mainline.md`, `recon-receipt-local-agent-client-mainline.md`, `recon-receipt-mcp-consent.md`, `recon-receipt-mcp-live-probe-sse.md`, `recon-receipt-obsidian-stage3.md`, `recon-receipt-obsidian-stage4-sync.md`, `recon-receipt-opencode-event-integration.md`, `recon-receipt-paper-pdf-fulltext-segmentation.md`, `recon-receipt-parallel-write-isolation.md`, `recon-receipt-pluggable-model-provider.md`, `recon-receipt-rd-code-prod-launch.md`, `recon-receipt-rdcode-bridge-data.md`, `recon-receipt-rdcode-writeback.md`, `recon-receipt-runtime-governance-unification.md`, `recon-receipt-t3-rebrand-i18n.md`, `recon-receipt-team-runtime.md`, `recon-receipt-workflow-engine.md` |
 | `handoff` | `continue-global-coordinator-conversation-mainline.md`, `next-agent-global-coordinator-prompt.md`, `devframe-code-opencode-handoff.md` |
 | `historical-stage` | `local-agent-control-plane-stage-2-acceptance.md`, `local-agent-control-plane-stage-2-precommit-review.md`, `local-agent-control-plane-stage-3-execution-report.md`, `local-agent-control-plane-stage-3-go-batch.md`, `local-agent-control-plane-stage-4-web-ai-binding.md`, `local-agent-control-plane-stage-5-closed-loop.md`, `local-agent-control-plane-stage-6-release-prep.md`, `local-agent-control-plane-stage-7-final-precommit-review.md` |
-| `evidence-record` | `current-coverage-audit-evidence-20260704.md`, `working-tree-cleanup-inventory-20260705.md`, `asset-utilization-inventory-20260705.md`, `review-governance-kernel-completion-20260706.md`, `evidence-web-ai-mcp-live-roundtrip.md`, `legacy-submodule-baseline.json` |
+| `evidence-record` | `current-coverage-audit-evidence-20260704.md`, `working-tree-cleanup-inventory-20260705.md`, `asset-utilization-inventory-20260705.md`, `review-governance-kernel-completion-20260706.md`, `runtime-governance-batch-a-contract-completion.md`, `evidence-web-ai-mcp-live-roundtrip.md`, `legacy-submodule-baseline.json` |
 | `external-recon` | `codexpro-devspace-mcp-recon.md` |
 
 ## Active Planning Set
@@ -98,6 +99,7 @@ full active planning set.
 | `documentation-management-detailed-rollout-plan.md` | Turns documentation governance into rollout phases |
 | `runtime-governance-and-evidence-closure-transformation-plan.md` | Defines the target runtime and evidence lifecycle |
 | `runtime-governance-status-vocabulary-inventory.md` | Records current status families before Batch A schemas map them into separate lifecycle axes |
+| `runtime-governance-batch-a-contract-completion.md` | Records local Batch A contract evidence without claiming release readiness |
 | `evaluation-feedback-learning-governance-plan.md` | Defines evaluation, feedback, learning, and promotion boundaries |
 | `total-control-policy-engine-and-human-escalation-governance-plan.md` | Defines policy decisions, escalation, and authority limits |
 | `human-attention-governance-and-automation-maturity-plan.md` | Defines human attention as a governed resource and classifies automation maturity |
