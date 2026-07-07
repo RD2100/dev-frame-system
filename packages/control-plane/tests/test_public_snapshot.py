@@ -24,6 +24,7 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "docs/agent-runtime/web-ai-adapter-contract.md",
     "docs/status/release-readiness.md",
     "docs/status/reviewer-index.md",
+    "docs/status/runtime-governance-status-vocabulary-inventory.md",
     "packages/control-plane/README.md",
     "packages/control-plane/QUICKSTART.md",
     "packages/control-plane/setup.py",
@@ -76,6 +77,7 @@ PUBLIC_MARKDOWN_DOCS = [
     REPO_ROOT / "docs" / "agent-runtime" / "project-local-skill-bindings.md",
     REPO_ROOT / "docs" / "status" / "release-readiness.md",
     REPO_ROOT / "docs" / "status" / "reviewer-index.md",
+    REPO_ROOT / "docs" / "status" / "runtime-governance-status-vocabulary-inventory.md",
     REPO_ROOT / "rules" / "web-ai-adapters.md",
 ]
 DOC_LINK_CHECK_MARKDOWN_DOCS = [
@@ -84,6 +86,7 @@ DOC_LINK_CHECK_MARKDOWN_DOCS = [
     REPO_ROOT / "docs" / "status" / "reviewer-index.md",
     REPO_ROOT / "docs" / "status" / "release-readiness.md",
     REPO_ROOT / "docs" / "status" / "review-governance-kernel-completion-20260706.md",
+    REPO_ROOT / "docs" / "status" / "runtime-governance-status-vocabulary-inventory.md",
 ]
 LIFECYCLE_REQUIRED_STATUS_DOCS = [
     REPO_ROOT / "docs" / "status" / "status-document-inventory.md",
@@ -93,6 +96,7 @@ LIFECYCLE_REQUIRED_STATUS_DOCS = [
     REPO_ROOT / "docs" / "status" / "workflow-consolidation-and-command-plan.md",
     REPO_ROOT / "docs" / "status" / "context-management-architecture-plan.md",
     REPO_ROOT / "docs" / "status" / "context-led-model-performance-control-plan.md",
+    REPO_ROOT / "docs" / "status" / "runtime-governance-status-vocabulary-inventory.md",
     REPO_ROOT / "docs" / "status" / "documentation-management-audit-and-plan.md",
     REPO_ROOT / "docs" / "status" / "documentation-management-detailed-rollout-plan.md",
     REPO_ROOT / "docs" / "status" / "review-governance-kernel-completion-20260706.md",
@@ -582,6 +586,61 @@ def test_current_status_entry_docs_have_lifecycle_state():
     ]
 
     assert missing == []
+
+
+def test_runtime_governance_status_inventory_records_unsafe_promotions():
+    path = REPO_ROOT / "docs" / "status" / "runtime-governance-status-vocabulary-inventory.md"
+    text = path.read_text(encoding="utf-8-sig")
+    required_terms = [
+        "queued",
+        "pending",
+        "prepared",
+        "ready",
+        "draft",
+        "started",
+        "running",
+        "active",
+        "leased",
+        "dispatched",
+        "completed",
+        "passed",
+        "verified",
+        "executed",
+        "skipped",
+        "warning",
+        "open",
+        "info",
+        "missing",
+        "unknown",
+        "unreadable",
+        "insufficient_evidence",
+        "human_required",
+        "waiting_for_you",
+        "needs_human",
+        "blocked",
+        "failed",
+        "fail",
+        "error",
+        "cancelled",
+        "continue",
+        "revise",
+        "stop",
+        "approved",
+        "accepted",
+        "proceed",
+    ]
+    required_phrases = [
+        "final_ready",
+        "chain_trusted",
+        "fail-open legacy behavior",
+        "codeReview=PASS",
+        "independent review pass",
+    ]
+
+    for term in required_terms:
+        assert re.search(rf"`?{re.escape(term)}`?", text), f"missing status term: {term}"
+    for phrase in required_phrases:
+        assert phrase in text
 
 
 def test_markdown_link_check_ignores_non_file_link_shapes():

@@ -195,6 +195,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/context-management-architecture-plan.md`
 - `docs/status/context-led-model-performance-control-plan.md`
 - `docs/status/runtime-governance-and-evidence-closure-transformation-plan.md`
+- `docs/status/runtime-governance-status-vocabulary-inventory.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/total-control-policy-engine-and-human-escalation-governance-plan.md`
@@ -287,6 +288,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/context-management-architecture-plan.md`
 - `docs/status/context-led-model-performance-control-plan.md`
 - `docs/status/runtime-governance-and-evidence-closure-transformation-plan.md`
+- `docs/status/runtime-governance-status-vocabulary-inventory.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/documentation-management-audit-and-plan.md`

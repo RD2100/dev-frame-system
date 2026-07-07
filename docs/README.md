@@ -108,6 +108,7 @@ Use these documents to guide near-term architecture work:
 - [Context-Led Model Performance Control Plan](status/context-led-model-performance-control-plan.md)
 - [Graph Projection And Knowledge Canvas Plan](status/graph-projection-knowledge-canvas-plan.md)
 - [Runtime Governance and Evidence Closure Transformation Plan](status/runtime-governance-and-evidence-closure-transformation-plan.md)
+- [Runtime Governance Status Vocabulary Inventory](status/runtime-governance-status-vocabulary-inventory.md)
 - [Evaluation, Feedback, and Learning Governance Plan](status/evaluation-feedback-learning-governance-plan.md)
 - [Total-Control Policy Engine and Human Escalation Governance Plan](status/total-control-policy-engine-and-human-escalation-governance-plan.md)
 - [Browser Automation Transport Roadmap](status/browser-automation-transport-roadmap.md)
@@ -139,6 +140,7 @@ Rules of thumb:
 - `document-driven-transformation-master-plan.md` coordinates implementation phases, stop lines, and proof requirements.
 - `document-driven-transformation-final-plan-20260705.md` is the coding-agent-facing final candidate that consolidates the current planning set into the next executable sequence.
 - `review-governance-kernel-completion-20260706.md` records latest review-governance kernel progress through P3-2 local GPT-equivalent review PASS; P3-2 landed in `2725227d` and has local branch-level review PASS at `bd73d6bc`, but is still pending PR/CI and publication evidence, so it is not a release-ready record.
+- `runtime-governance-status-vocabulary-inventory.md` records current status families before Batch A schemas map them into separate lifecycle axes.
 - `design-coverage-gap-remediation-plan.md` turns the cross-document gap review into a prioritized repair queue with acceptance evidence.
 - `browser-automation-transport-roadmap.md` defers multi-browser automation into a later module while keeping the current stable path on CDP-family evidence.
 - `graph-projection-knowledge-canvas-plan.md` explains how relationship graphs can later become a read-only projection and context-navigation layer for humans and AI agents.
