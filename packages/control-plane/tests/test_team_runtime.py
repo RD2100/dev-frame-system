@@ -82,6 +82,30 @@ def test_direct_evidence_ref_without_source_event_id_uses_event_id_and_dedupes_p
     assert len([event for event in view["event_log"] if event["kind"] == "evidence-ref"]) == 2
 
 
+def test_task_lifecycle_records_legacy_context_refs_as_provenance(tmp_path):
+    team = TeamRuntime(runtime_dir=tmp_path)
+    context_refs = [
+        {"ref_type": "legacy_context", "ref_path": "packets/p1", "context_id": "p1"},
+        {"ref_type": "legacy_task_spec", "ref_path": "packets/p1/TASKSPEC.json", "context_id": "p1"},
+    ]
+
+    team.record_task_created("go-run-context", "a1", context_refs=context_refs)
+    team.record_task_claimed("go-run-context", "a1", context_refs=context_refs)
+
+    lines = (tmp_path / TEAM_EVENTS_FILE).read_text(encoding="utf-8").strip().splitlines()
+    payloads = [json.loads(line)["payload"] for line in lines]
+    assert payloads[0]["context_refs"] == context_refs
+    assert payloads[1]["context_refs"] == context_refs
+
+    evidence = build_team_runtime_view(tmp_path)["evidence_store"]
+
+    assert len(evidence) == 2
+    assert {item["run_id"] for item in evidence} == {"go-run-context"}
+    assert {item["ref_type"] for item in evidence} == {"legacy_context", "legacy_task_spec"}
+    assert {item["ref_path"] for item in evidence} == {"packets/p1", "packets/p1/TASKSPEC.json"}
+    assert all(item["evidence_id"].startswith("team-context-go-run-context-a1-") for item in evidence)
+
+
 def test_view_derives_agent_registry_and_task_board(tmp_path):
     team = TeamRuntime(runtime_dir=tmp_path)
     team.record_task_created("go-run-1", "coding-agent-1", shard_index=1, shard_count=2,

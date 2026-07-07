@@ -266,6 +266,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/runtime-governance-batch-e-workflow-review-pending.md`
 - `docs/status/runtime-governance-batch-e-paper-trust-fail-closed.md`
 - `docs/status/runtime-governance-batch-e-explicit-team-evidence-events.md`
+- `docs/status/runtime-governance-batch-e-team-context-refs.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/total-control-policy-engine-and-human-escalation-governance-plan.md`
@@ -390,6 +391,22 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     names the same run and path.
   - `docs/status/runtime-governance-batch-e-explicit-team-evidence-events.md`
     records the local limitation set and preserved stop lines.
+- Runtime-governance Batch E team context refs:
+  - `packages/control-plane/control_plane/team_runtime.py` should keep
+    `context_refs` optional on task lifecycle events and project them only as
+    provenance evidence, not acceptance authority.
+  - `packages/control-plane/control_plane/go_dispatch.py` should pass legacy
+    packet and `TASKSPEC.json` refs during execute and resume paths without
+    creating a sealed ContextPacket claim.
+  - `packages/control-plane/control_plane/run_index.py` should project team
+    context refs as limitation-supporting context evidence and keep review/final
+    readiness unchanged.
+  - `packages/control-plane/tests/test_team_runtime.py`,
+    `packages/control-plane/tests/test_go_team_runtime.py`, and
+    `packages/control-plane/tests/test_run_index.py` should prove compatibility,
+    real-path recording, schema validity, and no acceptance promotion.
+  - `docs/status/runtime-governance-batch-e-team-context-refs.md` records the
+    local limitation set and preserved stop lines.
 
 ## Open-Source Review Checklist
 
@@ -454,6 +471,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/runtime-governance-batch-e-workflow-review-pending.md`
 - `docs/status/runtime-governance-batch-e-paper-trust-fail-closed.md`
 - `docs/status/runtime-governance-batch-e-explicit-team-evidence-events.md`
+- `docs/status/runtime-governance-batch-e-team-context-refs.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/documentation-management-audit-and-plan.md`

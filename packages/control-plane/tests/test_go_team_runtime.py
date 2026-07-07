@@ -73,12 +73,21 @@ def test_execution_records_team_events_and_surfaces_in_state(tmp_path):
     view_evidence = [e for e in view["evidence_store"] if e["evidence_id"].startswith("team-evidence-")]
     assert view_evidence
     assert {e["ref_type"] for e in view_evidence} == {"report"}
+    context_evidence = [e for e in view["evidence_store"] if e["evidence_id"].startswith("team-context-")]
+    assert {e["ref_type"] for e in context_evidence} == {"legacy_context", "legacy_task_spec"}
     event_types = [
         json.loads(line)["event_type"]
         for line in (runtime / TEAM_EVENTS_FILE).read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
     assert "evidence_ref" in event_types
+    task_payloads = [
+        json.loads(line)["payload"]
+        for line in (runtime / TEAM_EVENTS_FILE).read_text(encoding="utf-8").splitlines()
+        if line.strip() and json.loads(line)["event_type"] in {"task_created", "task_claimed"}
+    ]
+    assert task_payloads
+    assert all(payload["context_refs"] for payload in task_payloads)
 
     # They surface in the control-plane read model's team objects.
     state = build_visual_control_plane_state(runtime_dir=runtime)
@@ -175,5 +184,5 @@ def test_resume_prepared_go_run_records_explicit_team_evidence(tmp_path):
     assert "task_result" in event_types
     assert "evidence_ref" in event_types
     evidence = build_team_runtime_view(runtime)["evidence_store"]
-    assert len(evidence) == 1
-    assert evidence[0]["ref_type"] == "report"
+    assert len([item for item in evidence if item["ref_type"] == "report"]) == 1
+    assert {item["ref_type"] for item in evidence} == {"legacy_context", "legacy_task_spec", "report"}

@@ -80,7 +80,22 @@ def test_run_index_projects_legacy_adapters_into_schema_records(tmp_path):
                 "event_type": "task_created",
                 "run_id": "go-demo",
                 "agent_id": "coding-agent-1",
-                "payload": {"project_id": "demo-project", "targets": ["src/app.py"]},
+                "payload": {
+                    "project_id": "demo-project",
+                    "targets": ["src/app.py"],
+                    "context_refs": [
+                        {
+                            "ref_type": "legacy_context",
+                            "ref_path": str(report_path.parent),
+                            "context_id": "packet-1",
+                        },
+                        {
+                            "ref_type": "legacy_task_spec",
+                            "ref_path": str(report_path.parent / "TASKSPEC.json"),
+                            "context_id": "packet-1",
+                        },
+                    ],
+                },
                 "timestamp": "2026-07-07T00:03:00Z",
                 "event_id": "team-1",
             }),
@@ -168,7 +183,16 @@ def test_run_index_projects_legacy_adapters_into_schema_records(tmp_path):
     team_record = grouped["team_events"][0]
     assert team_record["domain_refs"]["event_count"] == 3
     assert "evidence_ref" in team_record["domain_refs"]["event_types"]
-    assert team_record["evidence_refs"] == [{
+    assert team_record["domain_refs"]["legacy_context_ref_count"] == 2
+    assert team_record["domain_refs"]["legacy_context_ref_types"] == ["legacy_context", "legacy_task_spec"]
+    context_refs = [ref for ref in team_record["evidence_refs"] if ref["kind"] == "context_packet"]
+    assert len(context_refs) == 2
+    assert {ref["supports"] for ref in context_refs} == {"limitation"}
+    assert {ref["uri"] for ref in context_refs} == {str(report_path.parent), str(report_path.parent / "TASKSPEC.json")}
+    assert {
+        artifact["uri"] for artifact in team_record["artifact_refs"] if artifact["artifact_id"].startswith("artifact-team-context-")
+    } == {str(report_path.parent), str(report_path.parent / "TASKSPEC.json")}
+    assert [ref for ref in team_record["evidence_refs"] if ref["kind"] == "command_output"] == [{
         "evidence_id": "ev-team-team-2",
         "kind": "command_output",
         "uri": str(report_path),

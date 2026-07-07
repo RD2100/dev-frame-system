@@ -74,7 +74,8 @@ class TeamRuntime:
 
     def record_task_created(self, run_id: str, agent_id: str, *,
                             project_id: str = "", shard_index: int = 0,
-                            shard_count: int = 0, targets: list[str] | None = None) -> str:
+                            shard_count: int = 0, targets: list[str] | None = None,
+                            context_refs: list[dict[str, Any]] | None = None) -> str:
         return self._append(TeamEvent(
             event_type="task_created",
             run_id=run_id,
@@ -84,15 +85,17 @@ class TeamRuntime:
                 "shard_index": shard_index,
                 "shard_count": shard_count,
                 "targets": list(targets or []),
+                "context_refs": _normalize_context_refs(context_refs),
             },
         ))
 
-    def record_task_claimed(self, run_id: str, agent_id: str) -> str:
+    def record_task_claimed(self, run_id: str, agent_id: str,
+                            *, context_refs: list[dict[str, Any]] | None = None) -> str:
         return self._append(TeamEvent(
             event_type="task_claimed",
             run_id=run_id,
             agent_id=agent_id,
-            payload={},
+            payload={"context_refs": _normalize_context_refs(context_refs)},
         ))
 
     def record_result(self, run_id: str, agent_id: str, *, status: str,
@@ -183,6 +186,22 @@ def _slug(value: object) -> str:
     return text or "x"
 
 
+def _normalize_context_refs(value: list[dict[str, Any]] | None) -> list[dict[str, str]]:
+    refs: list[dict[str, str]] = []
+    for item in value or []:
+        if not isinstance(item, dict):
+            continue
+        ref_path = str(item.get("ref_path") or "")
+        if not ref_path:
+            continue
+        refs.append({
+            "ref_type": str(item.get("ref_type") or "legacy_context"),
+            "ref_path": ref_path,
+            "context_id": str(item.get("context_id") or ""),
+        })
+    return refs
+
+
 def build_team_runtime_view(runtime_dir: str | Path | None = None) -> dict[str, list[dict[str, Any]]]:
     """Fold recorded team events into schema-shaped team objects.
 
@@ -221,6 +240,23 @@ def build_team_runtime_view(runtime_dir: str | Path | None = None) -> dict[str, 
         for record in records
         if isinstance(record, dict) and str(record.get("event_type") or "") == "evidence_ref"
     }
+
+    def _record_context_refs(event_id: str, run_id: str, payload: dict[str, Any]) -> None:
+        refs = payload.get("context_refs") if isinstance(payload.get("context_refs"), list) else []
+        for ref in refs:
+            if not isinstance(ref, dict):
+                continue
+            ref_path = str(ref.get("ref_path") or "")
+            if not ref_path or (run_id, ref_path) in evidence_keys:
+                continue
+            evidence_keys.add((run_id, ref_path))
+            ref_type = str(ref.get("ref_type") or "legacy_context")
+            evidence_store.append({
+                "evidence_id": f"team-context-{event_id}-{_slug(ref_type)}-{_slug(ref_path)}",
+                "run_id": run_id,
+                "ref_type": ref_type,
+                "ref_path": ref_path,
+            })
 
     def _touch_agent(agent: str, status: str) -> None:
         if not agent:
@@ -292,6 +328,7 @@ def build_team_runtime_view(runtime_dir: str | Path | None = None) -> dict[str, 
                     "owner_agent_id": agent_id,
                     "file_kind": "target",
                 })
+            _record_context_refs(event_id, run_id, payload)
         elif event_type == "task_claimed":
             task = tasks_by_key.get((run_id, agent_id))
             if task is not None:
@@ -311,6 +348,7 @@ def build_team_runtime_view(runtime_dir: str | Path | None = None) -> dict[str, 
                 "run_id": run_id,
                 "summary": f"{agent_id} -> coordinator: claimed task, working…",
             })
+            _record_context_refs(event_id, run_id, payload)
         elif event_type == "task_result":
             status = str(payload.get("status") or "unknown")
             task = tasks_by_key.get((run_id, agent_id))

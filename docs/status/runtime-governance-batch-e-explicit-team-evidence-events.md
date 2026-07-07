@@ -24,7 +24,7 @@ After this slice:
 - visual/T3 state avoids appending recorded team evidence when a projected go-run report already points at the same run and path;
 - `run_go_dispatch(... execute=True)` and prepared go-run resume both record evidence refs on the real execution path.
 
-This slice does not implement independent ReviewRecord ingestion, FinalVerdict ingestion, or context packet references on task events.
+This slice does not implement independent ReviewRecord ingestion, FinalVerdict ingestion, or sealed ContextPacket production for go/workflow task events.
 
 ## Local Evidence
 
@@ -57,4 +57,4 @@ git diff --check
 ## Known Gaps
 
 - Independent review and final verdict events remain later integration work.
-- Context packet references on task lifecycle events remain deferred.
+- Sealed ContextPacket production for go/workflow task lifecycle events remains deferred.

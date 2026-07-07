@@ -194,6 +194,7 @@ def _team_event_entries(runtime: Path) -> list[dict[str, Any]]:
     for run_id, events in sorted(events_by_run.items()):
         latest = events[-1]
         result_events = [event for event in events if event.get("event_type") == "task_result"]
+        context_refs = _team_context_refs(events)
         status = _aggregate_team_status(result_events)
         entries.append(_entry(
             adapter_id="team_events",
@@ -211,14 +212,16 @@ def _team_event_entries(runtime: Path) -> list[dict[str, Any]]:
                 created_at=str(events[0].get("timestamp") or _mtime_iso(path)),
                 updated_at=str(latest.get("timestamp") or _mtime_iso(path)),
                 task_id=run_id,
-                artifact_refs=_artifact_refs(path),
-                evidence_refs=_team_evidence_refs(events),
+                artifact_refs=_artifact_refs(path) + _team_context_artifact_refs(context_refs),
+                evidence_refs=_team_context_evidence_refs(context_refs) + _team_evidence_refs(events),
                 worker_results=_team_worker_results(result_events),
                 domain_refs={
                     "legacy_adapter": "team_events",
                     "source_run_id": run_id,
                     "event_count": len(events),
                     "event_types": sorted({str(event.get("event_type") or "") for event in events}),
+                    "legacy_context_ref_count": len(context_refs),
+                    "legacy_context_ref_types": sorted({ref["ref_type"] for ref in context_refs}),
                 },
             ),
         ))
@@ -704,6 +707,54 @@ def _agent_evidence_refs(agents: list[Any]) -> list[dict[str, Any]]:
                 "outcome",
             ))
     return refs
+
+
+def _team_context_refs(events: list[dict[str, Any]]) -> list[dict[str, str]]:
+    refs: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for event in events:
+        event_type = str(event.get("event_type") or "")
+        if event_type not in {"task_created", "task_claimed"}:
+            continue
+        payload = _as_dict(event.get("payload"))
+        context_refs = payload.get("context_refs") if isinstance(payload.get("context_refs"), list) else []
+        for item in context_refs:
+            if not isinstance(item, dict):
+                continue
+            ref_path = str(item.get("ref_path") or "")
+            ref_type = str(item.get("ref_type") or "legacy_context")
+            if not ref_path or (ref_type, ref_path) in seen:
+                continue
+            seen.add((ref_type, ref_path))
+            refs.append({
+                "ref_type": ref_type,
+                "ref_path": ref_path,
+                "event_id": str(event.get("event_id") or ""),
+            })
+    return refs
+
+
+def _team_context_artifact_refs(refs: list[dict[str, str]]) -> list[dict[str, Any]]:
+    return [{
+        "artifact_id": f"artifact-team-context-{_safe_token(ref['ref_type'])}-{_safe_token(ref['ref_path'])}",
+        "kind": "other",
+        "uri": ref["ref_path"],
+    } for ref in refs]
+
+
+def _team_context_evidence_refs(refs: list[dict[str, str]]) -> list[dict[str, Any]]:
+    return [
+        _evidence_ref(
+            (
+                f"ev-team-context-{_safe_token(ref['event_id'] or ref['ref_path'])}-"
+                f"{_safe_token(ref['ref_type'])}-{_safe_token(ref['ref_path'])}"
+            ),
+            "context_packet",
+            Path(ref["ref_path"]),
+            "limitation",
+        )
+        for ref in refs
+    ]
 
 
 def _team_evidence_refs(events: list[dict[str, Any]]) -> list[dict[str, Any]]:

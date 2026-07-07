@@ -331,12 +331,14 @@ def _run_agent_in_place(runtime_dir: str, project_root: str, go_run_id: str,
                         team: TeamRuntime | None = None, driver: str = "command",
                         acp_command: list[str] | None = None) -> None:
     if team is not None:
+        context_refs = _agent_context_refs(agent)
         team.record_task_created(
             go_run_id, agent.agent_id,
             shard_index=agent.shard_index, shard_count=agent.shard_count,
             targets=agent.targets,
+            context_refs=context_refs,
         )
-        team.record_task_claimed(go_run_id, agent.agent_id)
+        team.record_task_claimed(go_run_id, agent.agent_id, context_refs=context_refs)
     try:
         cwd, env_overrides = _resolve_isolation(runtime_dir, project_root, go_run_id, agent)
         if driver == "acp":
@@ -449,6 +451,25 @@ def _run_one_agent(runtime_dir: str, agent: GoAgentDispatch, timeout_seconds: in
         cwd=cwd,
         env_overrides=env_overrides,
     )
+
+
+def _agent_context_refs(agent: GoAgentDispatch) -> list[dict[str, str]]:
+    refs: list[dict[str, str]] = []
+    packet_dir = str(agent.packet_dir or "")
+    if packet_dir:
+        refs.append({
+            "ref_type": "legacy_context",
+            "ref_path": packet_dir,
+            "context_id": Path(packet_dir).name,
+        })
+    task_spec_path = str(agent.task_spec_path or "")
+    if task_spec_path:
+        refs.append({
+            "ref_type": "legacy_task_spec",
+            "ref_path": task_spec_path,
+            "context_id": Path(task_spec_path).parent.name,
+        })
+    return refs
 
 
 def _run_one_agent_acp(runtime_dir: str, agent: GoAgentDispatch, timeout_seconds: int, *,

@@ -62,6 +62,8 @@ git diff --check
 ## Known Gaps
 
 - Independent review and final verdict events are still later integration work.
-- Context packet references on task lifecycle events remain deferred.
+- Legacy context refs on task lifecycle events are handled in
+  [Runtime Governance Batch E: Team Context Refs](runtime-governance-batch-e-team-context-refs.md);
+  sealed ContextPacket production remains deferred.
 - Paper workflow trust inference is handled in
   [Runtime Governance Batch E: Paper Trust Fail Closed](runtime-governance-batch-e-paper-trust-fail-closed.md).
