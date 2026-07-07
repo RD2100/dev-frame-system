@@ -2631,6 +2631,51 @@ def test_atgo_execute_auto_finalize_skips_without_review_evidence(tmp_path, monk
     assert atgo_record["acceptance_state"] == "deferred"
 
 
+def test_atgo_auto_finalize_skip_quotes_paths_with_spaces(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo project"
+    runtime_dir = tmp_path / "runtime dir"
+    project_root.mkdir()
+
+    import control_plane.go_dispatch as go_dispatch_module
+
+    def fake_execute_go_run(runtime_root, run_id, **_kwargs):
+        result = go_dispatch_module.load_go_run_result(runtime_root, run_id)
+        result.execute = True
+        result.status = "passed"
+        return result
+
+    monkeypatch.setattr(go_dispatch_module, "execute_go_run", fake_execute_go_run)
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "atgo",
+        "Add a small @go bridge.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/cli.py",
+        "--execute",
+        "--auto-finalize",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    evidence_dir = runtime_dir / "atgo-runs" / metadata["go_run_id"]
+    expected_command = (
+        f'tools/go_evidence.py finalize "{evidence_dir}" '
+        f'--team-runtime-dir "{runtime_dir}"'
+    )
+
+    assert exit_code == 0
+    assert "Auto-finalize: skipped" in output
+    assert f"Finalize     : {expected_command}" in output
+    assert not (evidence_dir / "final-verdict.json").exists()
+    assert not (runtime_dir / "team-events.jsonl").exists()
+
+
 def test_atgo_execute_auto_finalize_records_reviewed_evidence(tmp_path, monkeypatch, capsys):
     project_root = tmp_path / "demo-project"
     runtime_dir = tmp_path / "runtime"
