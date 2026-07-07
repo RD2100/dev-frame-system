@@ -1,12 +1,16 @@
 import json
 import os
+import subprocess
 import sys
 
 import pytest
+from jsonschema.validators import validator_for
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
 
 import go_evidence
+
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 
 def _write(path: str, content: str) -> None:
@@ -37,6 +41,14 @@ def _write_json(path: str, data: dict) -> None:
     _write(path, json.dumps(data, indent=2) + "\n")
 
 
+def _schema_validator(path: str):
+    with open(os.path.join(REPO_ROOT, path), "r", encoding="utf-8-sig") as fh:
+        schema = json.load(fh)
+    validator_class = validator_for(schema)
+    validator_class.check_schema(schema)
+    return validator_class(schema)
+
+
 def _setup_minimal_evidence(tmp_path: str, review_overrides: dict = None) -> str:
     review = {
         "reviewer_role": "reviewer",
@@ -63,12 +75,51 @@ def test_missing_artifacts_blocked(tmp_path):
     os.makedirs(evidence_dir, exist_ok=True)
     rc = go_evidence.main(["finalize", evidence_dir])
     assert rc == 1
+    with open(os.path.join(evidence_dir, "failure-record.json"), "r", encoding="utf-8") as fh:
+        failure = json.load(fh)
+    with open(os.path.join(evidence_dir, "final-verdict.json"), "r", encoding="utf-8") as fh:
+        final_verdict = json.load(fh)
+    _schema_validator("schemas/agent-runtime/failure-record.schema.json").validate(failure)
+    _schema_validator("schemas/agent-runtime/final-verdict.schema.json").validate(final_verdict)
+    assert failure["source_contract"] == "EvidenceManifest"
+    assert final_verdict["final_state"] == "blocked"
 
 
 def test_executor_self_review_blocked(tmp_path):
     evidence_dir = _setup_minimal_evidence(str(tmp_path), {"reviewer_role": "executor"})
     rc = go_evidence.main(["finalize", evidence_dir])
     assert rc == 1
+
+
+def test_same_reviewer_and_executor_id_blocked(tmp_path):
+    evidence_dir = _setup_minimal_evidence(
+        str(tmp_path),
+        {"reviewer_id": "executor-1", "executor_id": "executor-1"},
+    )
+    rc = go_evidence.main(["finalize", evidence_dir])
+    assert rc == 1
+    failure_record = os.path.join(evidence_dir, "failure-record.json")
+    final_verdict = os.path.join(evidence_dir, "final-verdict.json")
+    assert os.path.exists(failure_record)
+    assert os.path.exists(final_verdict)
+    with open(failure_record, "r", encoding="utf-8") as fh:
+        failure = json.load(fh)
+    _schema_validator("schemas/agent-runtime/failure-record.schema.json").validate(failure)
+    assert failure["status"] == "blocked"
+    assert "reviewer_id must differ from executor_id" in failure["reason"]
+    with open(final_verdict, "r", encoding="utf-8") as fh:
+        verdict = json.load(fh)
+    assert verdict["final_state"] == "blocked"
+
+
+@pytest.mark.parametrize("reviewer_role", ["executor ", " worker ", "Coder ", "fixer ", "FIXER"])
+def test_reviewer_role_whitespace_and_case_self_review_blocked(tmp_path, reviewer_role):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path), {"reviewer_role": reviewer_role})
+    rc = go_evidence.main(["finalize", evidence_dir])
+    assert rc == 1
+    with open(os.path.join(evidence_dir, "final-verdict.json"), "r", encoding="utf-8") as fh:
+        final_verdict = json.load(fh)
+    assert final_verdict["final_state"] == "blocked"
 
 
 def test_open_p0_finding_blocked(tmp_path):
@@ -160,6 +211,63 @@ def test_complete_pass_writes_final_report(tmp_path):
         content = fh.read()
     assert "**Status**: pass" in content
     assert "**Reason**: ok" in content
+    assert "evidence-manifest.json: present" in content
+    assert "final-verdict.json: present" in content
+
+    with open(os.path.join(evidence_dir, "evidence-manifest.json"), "r", encoding="utf-8") as fh:
+        manifest = json.load(fh)
+    with open(os.path.join(evidence_dir, "final-verdict.json"), "r", encoding="utf-8") as fh:
+        final_verdict = json.load(fh)
+    _schema_validator("schemas/agent-runtime/evidence-manifest.schema.json").validate(manifest)
+    _schema_validator("schemas/agent-runtime/final-verdict.schema.json").validate(final_verdict)
+    assert manifest["verdict_eligibility"]["status"] == "eligible_clean"
+    assert "evidence-manifest.json" in manifest["files_present"]
+    assert "final-report.md" in manifest["files_present"]
+    assert "final-verdict.json" in manifest["files_present"]
+    assert final_verdict["final_state"] == "final_ready"
+    assert final_verdict["producer_role"] == "governance"
+    assert final_verdict["reviewer_summary"]["reviewer_id"] == "reviewer-1"
+
+
+@pytest.mark.parametrize("verdict,expected_state", [
+    ("blocked", "blocked"),
+    ("fail", "failed"),
+    ("escalate", "blocked"),
+])
+def test_non_pass_review_verdict_never_final_ready(tmp_path, verdict, expected_state):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path), {"verdict": verdict})
+    rc = go_evidence.main(["finalize", evidence_dir])
+    assert rc == 1
+    with open(os.path.join(evidence_dir, "final-verdict.json"), "r", encoding="utf-8") as fh:
+        final_verdict = json.load(fh)
+    with open(os.path.join(evidence_dir, "failure-record.json"), "r", encoding="utf-8") as fh:
+        failure = json.load(fh)
+    assert final_verdict["final_state"] == expected_state
+    assert final_verdict["final_state"] != "final_ready"
+    assert failure["status"] in {"blocked", "failed"}
+    with open(os.path.join(evidence_dir, "evidence-manifest.json"), "r", encoding="utf-8") as fh:
+        manifest = json.load(fh)
+    assert "evidence-manifest.json" in manifest["files_present"]
+    assert "failure-record.json" in manifest["files_present"]
+    assert "final-report.md" in manifest["files_present"]
+    assert "final-verdict.json" in manifest["files_present"]
+
+
+def test_finalize_subprocess_entrypoint_writes_machine_artifacts(tmp_path):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path))
+    script = os.path.join(REPO_ROOT, "tools", "go_evidence.py")
+    proc = subprocess.run(
+        [sys.executable, script, "finalize", evidence_dir],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "PASS" in proc.stdout
+    for filename in ("evidence-manifest.json", "final-report.md", "final-verdict.json"):
+        assert os.path.exists(os.path.join(evidence_dir, filename))
 
 
 def test_tdd_finalize_blocks_without_red_green(tmp_path):

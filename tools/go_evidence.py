@@ -5,109 +5,36 @@ import os
 import subprocess
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CONTROL_PLANE_PATH = REPO_ROOT / "packages" / "control-plane"
+if str(CONTROL_PLANE_PATH) not in sys.path:
+    sys.path.insert(0, str(CONTROL_PLANE_PATH))
 
-REQUIRED_FILES = [
-    "diff.patch",
-    "test-output.md",
-    "safety-report.json",
-    "chain-evidence.json",
-    "review.md",
-    "review.yaml",
-]
-REQUIRED_INPUTS = [
-    "diff.patch",
-    "test-output.md",
-    "safety-report.json",
-    "chain-evidence.json",
-]
-FULL_EVIDENCE_FILES = REQUIRED_FILES + ["final-report.md"]
-BLOCKED_ROLES = {"executor", "fixer", "coder"}
-ALLOWED_VERDICTS = {"pass", "blocked", "fail", "escalate"}
-
-
-def parse_review_yaml(path: str) -> dict:
-    try:
-        import yaml
-    except ImportError:
-        yaml = None
-
-    if yaml is not None:
-        with open(path, "r", encoding="utf-8") as fh:
-            return yaml.safe_load(fh) or {}
-
-    # Minimal fallback parser
-    with open(path, "r", encoding="utf-8") as fh:
-        text = fh.read()
-
-    data = {}
-    for line in text.splitlines():
-        line = line.strip()
-        if ":" not in line:
-            continue
-        key, _, value = line.partition(":")
-        key = key.strip()
-        value = value.strip().strip('"').strip("'")
-        if key in ("reviewer_role", "reviewer_id", "executor_id", "verdict"):
-            data[key] = value
-        elif key == "reviewed_inputs":
-            data[key] = [item.strip().strip("- ").strip('"').strip("'") for item in value.split(",")]
-    return data
-
+from control_plane.evidence_gate import (  # noqa: E402
+    FULL_EVIDENCE_FILES,
+    REQUIRED_FILES,
+    REQUIRED_INPUTS,
+    ALLOWED_VERDICTS,
+    BLOCKED_ROLES,
+    build_evidence_manifest,
+    build_failure_record,
+    build_final_verdict,
+    evaluate_evidence_dir,
+    parse_review_yaml,
+    write_json,
+)
 
 def validate(evidence_dir: str):
-    missing = [name for name in REQUIRED_FILES if not os.path.exists(os.path.join(evidence_dir, name))]
-    if missing:
-        return "blocked", f"missing required files: {', '.join(missing)}", {}
-
-    review = parse_review_yaml(os.path.join(evidence_dir, "review.yaml"))
-
-    chain_evidence = {}
-    chain_evidence_path = os.path.join(evidence_dir, "chain-evidence.json")
-    if os.path.exists(chain_evidence_path):
-        try:
-            with open(chain_evidence_path, "r", encoding="utf-8") as fh:
-                chain_evidence = json.load(fh)
-        except (json.JSONDecodeError, OSError):
-            chain_evidence = {}
-
-    methodology = chain_evidence.get("methodology") or {}
-    skill_id = str(methodology.get("skill_id", "")).lower()
-    if skill_id == "tdd":
-        tdd_required = ["test-output-red.md", "test-output-green.md"]
-        missing_tdd = [name for name in tdd_required if not os.path.exists(os.path.join(evidence_dir, name))]
-        if missing_tdd:
-            return "blocked", f"TDD evidence missing: {', '.join(missing_tdd)}", review
-
-    role = review.get("reviewer_role", "")
-    if not role or role.lower() in BLOCKED_ROLES:
-        return "blocked", f"reviewer_role '{role}' is not allowed", review
-
-    reviewed = [item.strip() for item in review.get("reviewed_inputs", [])]
-    missing_inputs = [name for name in REQUIRED_INPUTS if name not in reviewed]
-    if missing_inputs:
-        return "blocked", f"reviewed_inputs missing: {', '.join(missing_inputs)}", review
-
-    verdict = review.get("verdict", "")
-    if verdict not in ALLOWED_VERDICTS:
-        return "blocked", f"verdict '{verdict}' is not allowed", review
-
-    findings = review.get("findings", []) or []
-    for finding in findings:
-        severity = str(finding.get("severity", "")).upper()
-        status = str(finding.get("status", "")).lower()
-        if severity in {"P0", "P1"} and status == "open":
-            return "blocked", f"open {severity} finding: {finding.get('id', 'unknown')}", review
-
-    if verdict != "pass":
-        return "fail" if verdict == "fail" else "blocked", f"verdict is '{verdict}'", review
-
-    return "pass", "ok", review
+    result = evaluate_evidence_dir(evidence_dir)
+    return result.status, result.reason, result.review
 
 
-def write_final_report(evidence_dir: str, status: str, reason: str, review: dict) -> str:
+def write_final_report(evidence_dir: str, status: str, reason: str, review: dict, artifacts: dict | None = None) -> str:
     report_path = os.path.join(evidence_dir, "final-report.md")
     generated_at = datetime.now(timezone.utc).isoformat()
+    artifacts = artifacts or {}
     content = f"""# Final Report
 
 - **Generated At**: {generated_at}
@@ -129,10 +56,43 @@ def write_final_report(evidence_dir: str, status: str, reason: str, review: dict
 - chain-evidence.json: {'present' if os.path.exists(os.path.join(evidence_dir, 'chain-evidence.json')) else 'missing'}
 - review.md: {'present' if os.path.exists(os.path.join(evidence_dir, 'review.md')) else 'missing'}
 - review.yaml: {'present' if os.path.exists(os.path.join(evidence_dir, 'review.yaml')) else 'missing'}
+
+## Machine Artifacts
+
+- evidence-manifest.json: {'present' if artifacts.get('evidence_manifest') else 'missing'}
+- final-verdict.json: {'present' if artifacts.get('final_verdict') else 'missing'}
+- failure-record.json: {'present' if artifacts.get('failure_record') else 'not applicable'}
 """
     with open(report_path, "w", encoding="utf-8") as fh:
         fh.write(content)
     return report_path
+
+
+def write_governance_artifacts(evidence_dir: str):
+    result = evaluate_evidence_dir(evidence_dir)
+    generated_at = datetime.now(timezone.utc).isoformat()
+    final_verdict = build_final_verdict(evidence_dir, result, generated_at)
+    artifacts = {
+        "final_verdict": write_json(os.path.join(evidence_dir, "final-verdict.json"), final_verdict),
+        "evidence_manifest": os.path.join(evidence_dir, "evidence-manifest.json"),
+    }
+    if result.status != "pass":
+        failure_record = build_failure_record(evidence_dir, result, generated_at)
+        artifacts["failure_record"] = write_json(os.path.join(evidence_dir, "failure-record.json"), failure_record)
+    write_final_report(
+        evidence_dir,
+        result.status,
+        result.reason,
+        result.review,
+        artifacts,
+    )
+    manifest_path = os.path.join(evidence_dir, "evidence-manifest.json")
+    write_json(manifest_path, build_evidence_manifest(evidence_dir, result, generated_at))
+    artifacts["evidence_manifest"] = write_json(
+        manifest_path,
+        build_evidence_manifest(evidence_dir, result, generated_at),
+    )
+    return result, artifacts
 
 
 def init_chain_evidence(run_evidence_dir: str, run_id: str, executor_id: str, mode: str | None = None, planner: str | None = None, task: str | None = None, methodology: dict | None = None) -> str:
@@ -219,12 +179,11 @@ def main(argv=None) -> int:
             print(f"evidence directory not found: {args.run_evidence_dir}", file=sys.stderr)
             return 2
 
-        status, reason, review = validate(args.run_evidence_dir)
-        write_final_report(args.run_evidence_dir, status, reason, review)
+        result, _artifacts = write_governance_artifacts(args.run_evidence_dir)
 
-        print(status.upper())
-        if status != "pass":
-            print(reason, file=sys.stderr)
+        print(result.status.upper())
+        if result.status != "pass":
+            print(result.reason, file=sys.stderr)
             return 1
         return 0
 

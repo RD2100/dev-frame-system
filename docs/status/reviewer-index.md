@@ -54,10 +54,16 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `packages/control-plane/control_plane/team_runtime.py`
 - `packages/control-plane/control_plane/run_index.py`
 - `packages/control-plane/control_plane/rdreview.py`
+- `packages/control-plane/control_plane/evidence_gate.py`
 - `packages/control-plane/control_plane/cli/_review.py`
 - `packages/control-plane/control_plane/execution_plan.py`
+- `tools/go_evidence.py`
 - `schemas/visual_control_plane_state.schema.json`
 - `schemas/review_governance_kernel.schema.json`
+- `schemas/agent-runtime/evidence-manifest.schema.json`
+- `schemas/agent-runtime/review.schema.json`
+- `schemas/agent-runtime/final-verdict.schema.json`
+- `schemas/agent-runtime/failure-record.schema.json`
 - `schemas/runtime-governance/context-packet.schema.json`
 - `schemas/runtime-governance/context-ledger.schema.json`
 - `schemas/runtime-governance/run-record.schema.json`
@@ -125,6 +131,8 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `packages/control-plane/tests/test_team_runtime.py`
 - `packages/control-plane/tests/test_run_index.py`
 - `packages/control-plane/tests/test_rdreview.py`
+- `packages/control-plane/tests/test_evidence_gate.py`
+- `tests/test_go_evidence.py`
 - `packages/control-plane/tests/test_execution_plan.py`
 - `packages/control-plane/control_plane/review_governance_validator.py`
 - `packages/control-plane/tests/test_review_governance_kernel.py`
@@ -254,6 +262,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/runtime-governance-batch-a-contract-completion.md`
 - `docs/status/runtime-governance-batch-b-read-only-run-index.md`
 - `docs/status/runtime-governance-batch-c-rdreview-prepare-only.md`
+- `docs/status/runtime-governance-batch-d-independent-gate.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/total-control-policy-engine-and-human-escalation-governance-plan.md`
@@ -322,6 +331,18 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     from final acceptance authority.
   - `docs/status/runtime-governance-batch-c-rdreview-prepare-only.md` records
     the local limitation set and preserved stop lines.
+- Runtime-governance Batch D independent gate:
+  - `packages/control-plane/control_plane/evidence_gate.py` extracts reusable
+    evidence validation and artifact generation behind a library interface.
+  - `tools/go_evidence.py` keeps the existing CLI behavior while writing
+    schema-valid `evidence-manifest.json`, `final-verdict.json`, and blocked
+    `failure-record.json`.
+  - `tests/test_go_evidence.py` and
+    `packages/control-plane/tests/test_evidence_gate.py` should prove
+    self-approval blocking, schema-valid machine artifacts, and final report
+    consistency.
+  - `docs/status/runtime-governance-batch-d-independent-gate.md` records the
+    local limitation set and preserved stop lines.
 
 ## Open-Source Review Checklist
 
@@ -382,6 +403,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/runtime-governance-batch-a-contract-completion.md`
 - `docs/status/runtime-governance-batch-b-read-only-run-index.md`
 - `docs/status/runtime-governance-batch-c-rdreview-prepare-only.md`
+- `docs/status/runtime-governance-batch-d-independent-gate.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/documentation-management-audit-and-plan.md`
@@ -429,6 +451,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `packages/control-plane/control_plane/run_defaults.py`
 - `packages/control-plane/control_plane/run_index.py`
 - `packages/control-plane/control_plane/rdreview.py`
+- `packages/control-plane/control_plane/evidence_gate.py`
 - `packages/control-plane/control_plane/scope_resolver.py`
 - `packages/control-plane/control_plane/scoped_store.py`
 - `packages/control-plane/control_plane/task_proposals.py`
@@ -444,6 +467,9 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `packages/control-plane/tests/test_rdgoal.py`
 - `packages/control-plane/tests/test_run_index.py`
 - `packages/control-plane/tests/test_rdreview.py`
+- `packages/control-plane/tests/test_evidence_gate.py`
+- `tests/test_go_evidence.py`
+- `tools/go_evidence.py`
 - `pytest.ini`
 - `rules/orchestration.md`
 - `rules/project-contracts/_template.md`
