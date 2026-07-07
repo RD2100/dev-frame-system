@@ -323,6 +323,11 @@ def test_run_index_projects_team_final_verdict_to_final_ready(tmp_path):
         },
         "limitations": [],
         "human_or_governance_reference": "go-evidence-finalize:go-final",
+        "supersedes": {
+            "verdict_id": "fv-go-final-v1",
+            "uri": str(runtime / "final" / "final-verdict-v1.json"),
+            "reason": "New independent review evidence superseded the prior verdict.",
+        },
     })
     (runtime / "team-events.jsonl").write_text(
         "\n".join([
@@ -390,8 +395,99 @@ def test_run_index_projects_team_final_verdict_to_final_ready(tmp_path):
         "uri": str(final_path),
         "review_ref": "review-go-final",
         "gate_refs": [gate_id],
+        "supersedes": {
+            "verdict_id": "fv-go-final-v1",
+            "uri": str(runtime / "final" / "final-verdict-v1.json"),
+            "reason": "New independent review evidence superseded the prior verdict.",
+        },
     }
     assert {ref["kind"] for ref in record["evidence_refs"]} >= {"command_output", "review", "final_verdict"}
+
+
+def test_run_index_blocks_invalid_final_verdict_supersedes_metadata(tmp_path):
+    runtime = tmp_path / "runtime"
+    review_path = runtime / "reviews" / "review.yaml"
+    review_path.parent.mkdir(parents=True)
+    review_path.write_text("verdict: pass\n", encoding="utf-8")
+    final_path = runtime / "final" / "final-verdict.json"
+    gate_id = "gate-go-invalid-supersedes-independent-review"
+    _write_json(final_path, {
+        "verdict_id": "fv-go-invalid-supersedes",
+        "produced_by": "go-evidence-finalizer",
+        "produced_at": "2026-07-07T00:02:00Z",
+        "producer_role": "governance",
+        "final_state": "final_ready",
+        "inputs_reviewed": [str(review_path)],
+        "gate_summary": [{
+            "gate_id": gate_id,
+            "result": "pass",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-1",
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:go-invalid-supersedes",
+        "supersedes": {
+            "verdict_id": "fv-go-invalid-supersedes-v1",
+            "uri": str(runtime / "final" / "final-verdict-v1.json"),
+        },
+    })
+    (runtime / "team-events.jsonl").write_text(
+        "\n".join([
+            json.dumps({
+                "event_type": "task_result",
+                "run_id": "go-invalid-supersedes",
+                "agent_id": "coding-agent-1",
+                "payload": {"status": "passed"},
+                "timestamp": "2026-07-07T00:00:00Z",
+                "event_id": "team-invalid-supersedes-result",
+            }),
+            json.dumps({
+                "event_type": "review_ref",
+                "run_id": "go-invalid-supersedes",
+                "agent_id": "reviewer-1",
+                "payload": {
+                    "review_id": "review-go-invalid-supersedes",
+                    "reviewer_id": "reviewer-1",
+                    "reviewer_role": "reviewer",
+                    "executor_id": "coding-agent-1",
+                    "verdict": "pass",
+                    "ref_path": str(review_path),
+                    "reviewed_evidence_refs": ["ev-team-team-invalid-supersedes-result"],
+                },
+                "timestamp": "2026-07-07T00:01:00Z",
+                "event_id": "team-invalid-supersedes-review",
+            }),
+            json.dumps({
+                "event_type": "final_verdict_ref",
+                "run_id": "go-invalid-supersedes",
+                "agent_id": "go-evidence-finalizer",
+                "payload": {
+                    "verdict_id": "fv-go-invalid-supersedes",
+                    "produced_by": "go-evidence-finalizer",
+                    "producer_role": "governance",
+                    "final_state": "final_ready",
+                    "ref_path": str(final_path),
+                    "review_ref": "review-go-invalid-supersedes",
+                    "gate_refs": [gate_id],
+                },
+                "timestamp": "2026-07-07T00:02:00Z",
+                "event_id": "team-invalid-supersedes-final",
+            }),
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    record = _records_by_adapter(build_run_index(runtime))["team_events"][0]
+
+    _run_record_validator().validate(record)
+    assert record["acceptance_state"] == "blocked"
+    assert "final_verdict_ref" not in record
+    assert record["failure_refs"][0]["status"] == "blocked"
+    assert record["failure_refs"][0]["uri"] == str(final_path)
 
 
 def test_run_index_blocks_team_self_review_and_worker_final_verdict(tmp_path):

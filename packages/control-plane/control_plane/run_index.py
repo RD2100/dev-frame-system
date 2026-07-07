@@ -1137,14 +1137,22 @@ def _team_final_verdict_ref(
                 ref_path,
             ))
             continue
-        return {
+        final_ref = {
             "verdict_id": verdict_id,
             "producer_role": producer_role,
             "final_state": final_state,
             "uri": ref_path,
             "review_ref": review_ref,
             "gate_refs": gate_refs_text,
-        }, [], [str(item) for item in artifact.get("limitations", []) if str(item)] if isinstance(artifact.get("limitations"), list) else [], gate_refs
+        }
+        supersedes = _as_dict(artifact.get("supersedes"))
+        if supersedes:
+            final_ref["supersedes"] = {
+                "verdict_id": str(supersedes.get("verdict_id") or ""),
+                "uri": str(supersedes.get("uri") or ""),
+                "reason": str(supersedes.get("reason") or ""),
+            }
+        return final_ref, [], [str(item) for item in artifact.get("limitations", []) if str(item)] if isinstance(artifact.get("limitations"), list) else [], gate_refs
     return None, failures, [], []
 
 

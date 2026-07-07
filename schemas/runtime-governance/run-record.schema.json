@@ -385,6 +385,26 @@
           "items": { "type": "string", "minLength": 1 },
           "minItems": 1,
           "uniqueItems": true
+        },
+        "supersedes": {
+          "type": "object",
+          "required": ["verdict_id", "uri", "reason"],
+          "properties": {
+            "verdict_id": {
+              "type": "string",
+              "pattern": "^fv-[A-Za-z0-9._-]+$"
+            },
+            "uri": {
+              "type": "string",
+              "minLength": 1
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false,
+          "description": "Optional append-only lifecycle link copied from a validated FinalVerdict artifact. This is read-model metadata only and does not create acceptance authority."
         }
       },
       "additionalProperties": false

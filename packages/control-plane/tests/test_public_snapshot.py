@@ -35,6 +35,7 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "docs/status/runtime-governance-batch-e-team-review-verdict-events.md",
     "docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md",
     "docs/status/runtime-governance-batch-e-final-verdict-lifecycle.md",
+    "docs/status/runtime-governance-batch-e-final-verdict-supersession-projection.md",
     "docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md",
     "docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md",
     "docs/status/runtime-governance-batch-e-chain-evidence-schema-compatibility.md",

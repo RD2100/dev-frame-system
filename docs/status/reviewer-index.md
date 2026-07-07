@@ -272,6 +272,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/runtime-governance-batch-e-team-review-verdict-events.md`
 - `docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`
 - `docs/status/runtime-governance-batch-e-final-verdict-lifecycle.md`
+- `docs/status/runtime-governance-batch-e-final-verdict-supersession-projection.md`
 - `docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md`
 - `docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md`
 - `docs/status/runtime-governance-batch-e-chain-evidence-schema-compatibility.md`
@@ -464,6 +465,20 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     worker-authored superseding verdicts.
   - `docs/status/runtime-governance-batch-e-final-verdict-lifecycle.md`
     records the local limitation set and preserved stop lines.
+- Runtime-governance Batch E FinalVerdict supersession projection:
+  - `schemas/runtime-governance/run-record.schema.json` should accept optional
+    `final_verdict_ref.supersedes` metadata copied from a validated
+    FinalVerdict artifact.
+  - `packages/test-frame/schemas/runtime-governance/run-record.schema.json`
+    should remain semantically identical to the root RunRecord schema.
+  - `packages/control-plane/control_plane/run_index.py` should project only the
+    direct superseded verdict id, URI, and reason; it must not generate new
+    verdicts or use supersession metadata as acceptance evidence.
+  - `packages/control-plane/tests/test_run_index.py` and
+    `packages/control-plane/tests/test_public_snapshot.py` should prove the
+    real TeamRuntime projection path and schema mirror.
+  - `docs/status/runtime-governance-batch-e-final-verdict-supersession-projection.md`
+    records the local limitation set and preserved stop lines.
 - Runtime-governance Batch E atgo runtime finalize command:
   - `devframe atgo` should print a finalizer command that includes
     `--team-runtime-dir <runtime_root>` so the manual follow-up can record
@@ -604,6 +619,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/runtime-governance-batch-e-team-review-verdict-events.md`
 - `docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`
 - `docs/status/runtime-governance-batch-e-final-verdict-lifecycle.md`
+- `docs/status/runtime-governance-batch-e-final-verdict-supersession-projection.md`
 - `docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md`
 - `docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md`
 - `docs/status/runtime-governance-batch-e-chain-evidence-schema-compatibility.md`
