@@ -34,6 +34,7 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "docs/status/runtime-governance-batch-e-team-context-refs.md",
     "docs/status/runtime-governance-batch-e-team-review-verdict-events.md",
     "docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md",
+    "docs/status/runtime-governance-batch-e-final-verdict-lifecycle.md",
     "docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md",
     "docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md",
     "docs/status/runtime-governance-batch-e-chain-evidence-schema-compatibility.md",
@@ -1280,6 +1281,94 @@ def test_chain_evidence_schema_rejects_acceptance_creating_next_command():
         list(error.path) == ["next_commands", "finalize", "creates_acceptance"]
         for error in errors
     )
+
+
+def _final_verdict_payload(**overrides):
+    payload = {
+        "verdict_id": "fv-runtime-lifecycle-v2",
+        "produced_by": "devframe-system-main-coordinator",
+        "produced_at": "2026-07-08T00:00:00Z",
+        "producer_role": "governance",
+        "final_state": "blocked",
+        "inputs_reviewed": ["evidence/final-verdict-v1.json", "review/review.yaml"],
+        "gate_summary": [
+            {
+                "gate_id": "gate-runtime-lifecycle",
+                "result": "blocked",
+                "evidence_path": "review/review.yaml",
+            }
+        ],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-1",
+            "verdict": "blocked",
+            "evidence_path": "review/review.yaml",
+        },
+        "limitations": ["supersedes earlier verdict after new evidence"],
+        "human_or_governance_reference": "governance:runtime-lifecycle-review",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_final_verdict_schema_supports_append_only_superseding_record():
+    schema = json.loads(
+        (REPO_ROOT / "schemas" / "agent-runtime" / "final-verdict.schema.json").read_text(
+            encoding="utf-8-sig"
+        )
+    )
+    validator = Draft202012Validator(schema)
+    payload = _final_verdict_payload(
+        supersedes={
+            "verdict_id": "fv-runtime-lifecycle-v1",
+            "uri": "evidence/final-verdict-v1.json",
+            "reason": "New independent review evidence invalidated the earlier verdict.",
+        }
+    )
+
+    validator.validate(payload)
+
+
+def test_final_verdict_schema_rejects_incomplete_superseding_record():
+    schema = json.loads(
+        (REPO_ROOT / "schemas" / "agent-runtime" / "final-verdict.schema.json").read_text(
+            encoding="utf-8-sig"
+        )
+    )
+    validator = Draft202012Validator(schema)
+    payload = _final_verdict_payload(
+        supersedes={
+            "verdict_id": "fv-runtime-lifecycle-v1",
+            "uri": "evidence/final-verdict-v1.json",
+        }
+    )
+
+    errors = list(validator.iter_errors(payload))
+
+    assert errors
+    assert any(list(error.path) == ["supersedes"] for error in errors)
+
+
+def test_final_verdict_schema_keeps_blocked_producer_roles_for_superseding_record():
+    schema = json.loads(
+        (REPO_ROOT / "schemas" / "agent-runtime" / "final-verdict.schema.json").read_text(
+            encoding="utf-8-sig"
+        )
+    )
+    validator = Draft202012Validator(schema)
+    for role in ["executor", "fixer", "coder", "worker"]:
+        payload = _final_verdict_payload(
+            producer_role=role,
+            supersedes={
+                "verdict_id": "fv-runtime-lifecycle-v1",
+                "uri": "evidence/final-verdict-v1.json",
+                "reason": f"{role}-authored verdict must still be rejected.",
+            },
+        )
+
+        errors = list(validator.iter_errors(payload))
+
+        assert errors
+        assert any(list(error.path) == ["producer_role"] for error in errors)
 
 
 def test_public_docs_mention_release_gate_and_visual_control_plane_surfaces():

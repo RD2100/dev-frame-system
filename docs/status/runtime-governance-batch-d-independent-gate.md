@@ -96,9 +96,10 @@ Covered assertions:
 - This slice does not yet connect TeamRuntime, workflow, dashboard, or RunIndex
   gate projections to the new artifacts.
 - Batch E makes same-verdict `go_evidence finalize` reruns idempotent for
-  machine artifacts and TeamRuntime finalization references. A separate
-  superseding-verdict record remains deferred until the FinalVerdict lifecycle
-  schema is explicitly extended.
+  machine artifacts and TeamRuntime finalization references. The follow-up
+  [Runtime Governance Batch E: Final Verdict Lifecycle Metadata](runtime-governance-batch-e-final-verdict-lifecycle.md)
+  slice extends the FinalVerdict schema with append-only superseding metadata;
+  automatic divergent-rerun supersession remains later runtime work.
 - Batch E updates `schemas/agent-runtime/chain-evidence.schema.json` to cover
   the current `go_evidence init` and `devframe atgo` shapes; ai-workflow-hub
   `nodes`-style chain evidence remains a separate domain adapter concern.

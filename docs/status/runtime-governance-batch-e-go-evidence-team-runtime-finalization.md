@@ -62,5 +62,8 @@ git diff --check
 - `devframe atgo --execute --auto-finalize` now runs the finalizer only when
   required review evidence already exists; default atgo/code/go dispatch still
   does not create finalization attempts automatically.
-- A separate superseding-verdict record remains deferred until the FinalVerdict
-  lifecycle schema is explicitly extended.
+- The follow-up
+  [Runtime Governance Batch E: Final Verdict Lifecycle Metadata](runtime-governance-batch-e-final-verdict-lifecycle.md)
+  slice extends the FinalVerdict schema with append-only superseding metadata.
+  `go_evidence finalize` still does not automatically create superseding
+  FinalVerdict records for divergent reruns.

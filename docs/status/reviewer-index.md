@@ -271,6 +271,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/runtime-governance-batch-e-team-context-refs.md`
 - `docs/status/runtime-governance-batch-e-team-review-verdict-events.md`
 - `docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`
+- `docs/status/runtime-governance-batch-e-final-verdict-lifecycle.md`
 - `docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md`
 - `docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md`
 - `docs/status/runtime-governance-batch-e-chain-evidence-schema-compatibility.md`
@@ -449,6 +450,17 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     for invalid or self-review blockers.
   - `docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`
     records the local limitation set and preserved stop lines.
+- Runtime-governance Batch E FinalVerdict lifecycle metadata:
+  - `schemas/agent-runtime/final-verdict.schema.json` should accept optional
+    append-only `supersedes` metadata with a previous verdict id, URI, and
+    governance reason.
+  - Superseding metadata must not weaken FinalVerdict producer role rules or
+    create acceptance evidence by itself.
+  - `packages/control-plane/tests/test_public_snapshot.py` should prove valid
+    superseding metadata, incomplete superseding metadata rejection, and blocked
+    worker-authored superseding verdicts.
+  - `docs/status/runtime-governance-batch-e-final-verdict-lifecycle.md`
+    records the local limitation set and preserved stop lines.
 - Runtime-governance Batch E atgo runtime finalize command:
   - `devframe atgo` should print a finalizer command that includes
     `--team-runtime-dir <runtime_root>` so the manual follow-up can record
@@ -562,6 +574,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/runtime-governance-batch-e-team-context-refs.md`
 - `docs/status/runtime-governance-batch-e-team-review-verdict-events.md`
 - `docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`
+- `docs/status/runtime-governance-batch-e-final-verdict-lifecycle.md`
 - `docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md`
 - `docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md`
 - `docs/status/runtime-governance-batch-e-chain-evidence-schema-compatibility.md`
