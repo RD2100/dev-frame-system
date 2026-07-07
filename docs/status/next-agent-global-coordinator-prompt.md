@@ -16,9 +16,9 @@ Current truth:
 - PR #4 is the active branch PR.
 - The worktree may be dirty; inspect git status before acting.
 - External T3/RD-Code source exists and is already in scope for this mainline:
-  `D:\dev-frame-system\.devframe-runtime\external\t3code`
+  `<repo-root>\.devframe-runtime\external\t3code`
 - That external checkout is independent and dirty. Do not vendor it into
-  `D:\dev-frame-system`, do not commit it in the public repo, and do not revert
+  `<repo-root>`, do not commit it in the public repo, and do not revert
   unrelated dirty files there.
 - Current slice adds a one-call coordinator shell entry and shell-readiness
   contract pack:
@@ -93,7 +93,7 @@ Current truth:
   - `/t3-shell.json` remained the full-detail read model, about `4.87 MB`
   - `/api/t3/coordinator-entry` was about `328 KB`, down from about `7.25 MB`
 - Browser smoke screenshots exist under
-  `D:\dev-frame-system\.devframe-runtime\logs`, including:
+  `<repo-root>\.devframe-runtime\logs`, including:
   - `phase1-t3web-readonly-after-logic-extract.png`
   - `phase1-t3web-cluster-write-guard.png`
   - `phase1-t3web-cluster-flag-guard.png`

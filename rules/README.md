@@ -1,7 +1,7 @@
 # Rules -- RD2100 Agent Runtime v2
 
 > Batch C1, 2026-05-27
-> Canonical root: D:\devframe-system
+> Canonical root: <repo-root>
 
 ## Priority System
 

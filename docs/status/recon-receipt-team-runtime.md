@@ -9,7 +9,7 @@
 - user_goal: A mature, T3Code-like governed agent cluster where multiple agents
   collaborate; the team must be modeled as first-class runtime objects, not
   inferred from parallel runs (recon-008).
-- target_repo_or_kb: `d:\dev-frame-system` (control-plane package).
+- target_repo_or_kb: `<repo-root>` (control-plane package).
 - current_slice_goal: Slice 1 — make the **Event Log** and **Message Bus** real,
   durable, recorded-at-runtime objects for `/go` execution, instead of values
   synthesized at read time. Other team objects stay projected (declared below).
@@ -24,7 +24,7 @@
   full automation and mandatory independent review.
 
 ## Resource Map
-- repository_roots: `d:\dev-frame-system`
+- repository_roots: `<repo-root>`
 - packages_apps_modules: `packages/control-plane/control_plane`
 - runtime_entrypoints: `cli/` (devframe code/go), `go_dispatch.py`
   (`run_go_dispatch`, `_execute_parallel` -> `_run_group` ->

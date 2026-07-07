@@ -1,5 +1,6 @@
 param(
-    [string]$Root = (Get-Location).Path
+    [string]$Root = (Get-Location).Path,
+    [switch]$FailOnTrackedForbidden
 )
 
 $ErrorActionPreference = "Stop"
@@ -73,6 +74,52 @@ $forbiddenExtensions = @(
     ".pyc",
     ".pyo",
     ".bak"
+)
+
+$forbiddenRootNames = @(
+    "chatgpt-review-reply.txt"
+)
+
+$forbiddenRootNamePatterns = @(
+    "review-bundle-*"
+)
+
+$forbiddenTextPatterns = @(
+    @{
+        Name = "private dev-frame-system checkout path"
+        Pattern = "D:\\dev-frame-system|D:/dev-frame-system|D:\\devframe-system|D:/devframe-system"
+    },
+    @{
+        Name = "private adjacent devframe root path"
+        Pattern = "D:\\dev-frame\\|D:/dev-frame/|D:\\test-frame|D:/test-frame|D:\\agent-acceptance|D:/agent-acceptance"
+    },
+    @{
+        Name = "private RD user home path"
+        Pattern = "C:\\Users\\RD|C:/Users/RD"
+    },
+    @{
+        Name = "concrete ChatGPT conversation URL"
+        Pattern = "chatgpt\.com/c/[0-9a-fA-F-]{8,}"
+    },
+    @{
+        Name = "mojibake replacement marker"
+        Pattern = "\u951F\u65A4\u62F7|\uFFFD|\u9225\?|\u922B\?|\u922E\?|\u95BF\u719F\u67BB\u93B7"
+    }
+)
+
+$textScanExtensions = @(
+    ".json",
+    ".md",
+    ".ps1",
+    ".py",
+    ".txt",
+    ".yaml",
+    ".yml"
+)
+
+$textScanAllowlist = @(
+    "packages\control-plane\tests\test_public_snapshot.py",
+    "scripts\verify-public-snapshot.ps1"
 )
 
 $ignoredGeneratedDirs = @(
@@ -187,6 +234,26 @@ if ($textFailures.Count -gt 0) {
     exit 1
 }
 
+if ($FailOnTrackedForbidden -and (Test-Path -LiteralPath (Join-Path $rootPath ".git"))) {
+    $trackedFailures = New-Object System.Collections.Generic.List[string]
+    $trackedForbidden = & git -C $rootPath ls-files -- `
+        "chatgpt-review-reply.txt" `
+        "review-bundle-*" 2>$null
+
+    foreach ($path in $trackedForbidden) {
+        if (-not [string]::IsNullOrWhiteSpace($path)) {
+            $trackedFailures.Add("tracked forbidden review artifact: $path")
+        }
+    }
+
+    if ($trackedFailures.Count -gt 0) {
+        $trackedFailures | ForEach-Object {
+            Write-Output "[PUBLIC-SNAPSHOT-FAIL] $_"
+        }
+        exit 1
+    }
+}
+
 $violations = New-Object System.Collections.Generic.List[string]
 Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | ForEach-Object {
     if ($_.FullName -like (Join-Path $rootPath ".git*")) {
@@ -197,6 +264,20 @@ Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | ForEach-Object {
 
     if (Test-IsUnderIgnoredGeneratedDir -BasePath $rootPath -TargetPath $_.FullName) {
         return
+    }
+
+    $relativeParts = $relative -split '[\\/]'
+    if ($relativeParts.Count -eq 1) {
+        if ($forbiddenRootNames -contains $_.Name) {
+            $violations.Add("forbidden root review artifact: $relative")
+        }
+
+        foreach ($pattern in $forbiddenRootNamePatterns) {
+            if ($_.Name -like $pattern) {
+                $violations.Add("forbidden root review artifact: $relative")
+                break
+            }
+        }
     }
 
     if ($forbiddenNames -contains $_.Name) {
@@ -217,8 +298,41 @@ if ($violations.Count -gt 0) {
     exit 1
 }
 
-$jsonFailures = New-Object System.Collections.Generic.List[string]
+$privateTextFailures = New-Object System.Collections.Generic.List[string]
 $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
+Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | Where-Object {
+    -not $_.PSIsContainer -and ($textScanExtensions -contains $_.Extension)
+} | ForEach-Object {
+    if (Test-IsUnderIgnoredGeneratedDir -BasePath $rootPath -TargetPath $_.FullName) {
+        return
+    }
+
+    $relative = Get-RelativeSnapshotPath -BasePath $rootPath -TargetPath $_.FullName
+    if ($textScanAllowlist -contains $relative) {
+        return
+    }
+
+    try {
+        $content = [System.IO.File]::ReadAllText($_.FullName, $utf8)
+    } catch {
+        return
+    }
+
+    foreach ($pattern in $forbiddenTextPatterns) {
+        if ($content -match $pattern.Pattern) {
+            $privateTextFailures.Add("${relative}: contains $($pattern.Name)")
+        }
+    }
+}
+
+if ($privateTextFailures.Count -gt 0) {
+    $privateTextFailures | ForEach-Object {
+        Write-Output "[PUBLIC-SNAPSHOT-FAIL] $_"
+    }
+    exit 1
+}
+
+$jsonFailures = New-Object System.Collections.Generic.List[string]
 Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | Where-Object { -not $_.PSIsContainer -and $_.Extension -eq ".json" } | ForEach-Object {
     if (Test-IsUnderIgnoredGeneratedDir -BasePath $rootPath -TargetPath $_.FullName) {
         return
@@ -243,5 +357,5 @@ if ($jsonFailures.Count -gt 0) {
 
 Write-Output "[OK] Public snapshot required paths are present."
 Write-Output "[OK] Governance rule references are present."
-Write-Output "[OK] No submodules, local agent state, evidence archives, generated packages, or oversized files found."
+Write-Output "[OK] No submodules, local agent state, evidence archives, generated packages, oversized files, or private text markers found."
 Write-Output "[OK] JSON files parse as UTF-8."

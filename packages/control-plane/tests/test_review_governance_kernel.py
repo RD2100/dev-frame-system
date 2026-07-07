@@ -254,6 +254,19 @@ def test_report_only_evidence_fails_semantic():
     assert any("review_report" in e for e in result.errors)
 
 
+def test_gate_pass_evidence_requires_source_artifact_id_semantic():
+    payload = _load_fixture("success.json")
+    review = next(d for d in payload["decisions"] if d["kind"] == "review")
+    gate = next(d for d in payload["decisions"] if d["kind"] == "gate")
+    review["evidence_ids"] = ["ev-1"]
+    gate["evidence_ids"] = ["ev-2"]
+    ev = next(e for e in payload["evidence"] if e["id"] == "ev-2")
+    del ev["source_artifact_id"]
+    result = validate_packet(payload)
+    assert not result.valid
+    assert any("source_artifact_id" in e for e in result.errors)
+
+
 def test_gate_pass_with_missing_evidence_id_fails_semantic(schema):
     payload = _load_fixture("success.json")
     gate = next(d for d in payload["decisions"] if d["kind"] == "gate")
@@ -273,6 +286,14 @@ def test_gate_pass_with_inconclusive_evidence_fails_semantic(schema):
     assert any("inconclusive" in e.lower() or "supports" in e.lower() for e in result.errors)
 
 
+def test_gate_pass_with_confirm_evidence_fails_semantic_public_path():
+    payload = _load_fixture("success.json")
+    payload["evidence"][1]["supports"] = "confirm"
+    result = validate_packet(payload)
+    assert not result.valid
+    assert any("confirm" in e.lower() or "supports" in e.lower() for e in result.errors)
+
+
 def test_gate_pass_requires_evidence_ids(schema):
     payload = _load_fixture("success.json")
     gate = next(d for d in payload["decisions"] if d["kind"] == "gate")
@@ -289,6 +310,15 @@ def test_review_decision_requires_evidence_on_pass(schema):
     payload["decisions"][0]["evidence_ids"] = []
     with pytest.raises(jsonschema.ValidationError):
         _validate(schema, payload)
+
+
+def test_review_pass_without_evidence_ids_fails_semantic_public_path():
+    payload = _load_fixture("success.json")
+    review = next(d for d in payload["decisions"] if d["kind"] == "review")
+    review["evidence_ids"] = []
+    result = validate_packet(payload)
+    assert not result.valid
+    assert any("evidence_ids" in e for e in result.errors)
 
 
 def test_gate_decision_fail_does_not_require_evidence_ids(schema):

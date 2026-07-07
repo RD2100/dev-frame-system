@@ -9,12 +9,12 @@ Reader: DevFrame maintainers who need to turn the current planning documents
 into an ordered platform transformation without losing evidence, authority
 boundaries, or public-repo clarity.
 
-Post-read action: execute only the next contracted implementation slice, starting
-with review-governance schema, fixtures, and negative tests. Reject runtime,
+Post-read action: first read [Review-Governance Kernel Completion Status](review-governance-kernel-completion-20260706.md),
+then execute only the current pending contracted slice. Reject runtime,
 coordinator, RDCode, memory, routing, or UI work that bypasses the object model,
-rules spec, or evidence gates.
+rules spec, evidence gates, or current status record.
 
-Related docs: [Status Document Inventory](status-document-inventory.md), [Governance Spine And Document Coordination](governance-spine-and-document-coordination.md), [Current Coverage Audit Evidence](current-coverage-audit-evidence-20260704.md), [Design Coverage Gap Remediation Plan](design-coverage-gap-remediation-plan.md), [Unified Object Model Decision Record](unified-object-model-decision-record.md), [Governance Contradiction Matrix](governance-contradiction-matrix.md), [Governance Rules Spec](governance-rules-spec.md), [Context Noise Governance And Automation Plan](context-noise-governance-and-automation-plan.md), [Model Knowledge Gap Governance Plan](model-knowledge-gap-governance-plan.md), [Project And Cross-Project Memory Harness Governance Plan](project-and-cross-project-memory-harness-governance-plan.md), [Goal-Bound Evidence Gate Plan](goal-bound-evidence-gate-plan.md), [Paper Claim Integrity Gate To Cluster Plan](paper-claim-integrity-gate-to-cluster-plan.md), [Human Attention Governance And Automation Maturity Plan](human-attention-governance-and-automation-maturity-plan.md), [Early Adopter User Asset Governance Plan](early-adopter-user-asset-governance-plan.md), [Competitive Moat And User Demand Critical Review](competitive-moat-and-user-demand-critical-review.md), [Review-First Governance Kernel Contraction Plan](review-first-governance-kernel-contraction-plan.md), [Review-First Governance Kernel Implementation Spec](review-first-governance-kernel-implementation-spec.md), [Reuse-First Constraint Governance Implementation Plan](reuse-first-constraint-governance-implementation-plan.md), [Runtime Governance And Evidence Closure Transformation Plan](runtime-governance-and-evidence-closure-transformation-plan.md), [Evaluation, Feedback, And Learning Governance Plan](evaluation-feedback-learning-governance-plan.md), [Total-Control Policy Engine And Human Escalation Governance Plan](total-control-policy-engine-and-human-escalation-governance-plan.md)
+Related docs: [Status Document Inventory](status-document-inventory.md), [Governance Spine And Document Coordination](governance-spine-and-document-coordination.md), [Current Coverage Audit Evidence](current-coverage-audit-evidence-20260704.md), [Design Coverage Gap Remediation Plan](design-coverage-gap-remediation-plan.md), [Review-Governance Kernel Completion Status](review-governance-kernel-completion-20260706.md), [Unified Object Model Decision Record](unified-object-model-decision-record.md), [Governance Contradiction Matrix](governance-contradiction-matrix.md), [Governance Rules Spec](governance-rules-spec.md), [Context Noise Governance And Automation Plan](context-noise-governance-and-automation-plan.md), [Model Knowledge Gap Governance Plan](model-knowledge-gap-governance-plan.md), [Project And Cross-Project Memory Harness Governance Plan](project-and-cross-project-memory-harness-governance-plan.md), [Goal-Bound Evidence Gate Plan](goal-bound-evidence-gate-plan.md), [Paper Claim Integrity Gate To Cluster Plan](paper-claim-integrity-gate-to-cluster-plan.md), [Human Attention Governance And Automation Maturity Plan](human-attention-governance-and-automation-maturity-plan.md), [Early Adopter User Asset Governance Plan](early-adopter-user-asset-governance-plan.md), [Competitive Moat And User Demand Critical Review](competitive-moat-and-user-demand-critical-review.md), [Review-First Governance Kernel Contraction Plan](review-first-governance-kernel-contraction-plan.md), [Review-First Governance Kernel Implementation Spec](review-first-governance-kernel-implementation-spec.md), [Reuse-First Constraint Governance Implementation Plan](reuse-first-constraint-governance-implementation-plan.md), [Runtime Governance And Evidence Closure Transformation Plan](runtime-governance-and-evidence-closure-transformation-plan.md), [Evaluation, Feedback, And Learning Governance Plan](evaluation-feedback-learning-governance-plan.md), [Total-Control Policy Engine And Human Escalation Governance Plan](total-control-policy-engine-and-human-escalation-governance-plan.md)
 Related deferred modules: [Browser Automation Transport Roadmap](browser-automation-transport-roadmap.md), [Paper Knowledge Base Iteration MVP Plan](paper-knowledge-base-iteration-mvp-plan.md), [Graph Projection And Knowledge Canvas Plan](graph-projection-knowledge-canvas-plan.md)
 
 ## Implementation Must-Read Pack
@@ -128,8 +128,15 @@ Gap remediation plan: [Design Coverage Gap Remediation Plan](design-coverage-gap
 
 External review status: the gap remediation plan received ChatGPT v2 `PASS`
 on 2026-07-04 for the audited source set. Remaining P0 and P1 blockers for
-accepting the remediation plan were reported as none. This is not evidence that
-Phase 1A is implemented and does not relax deferred-module stop lines.
+accepting the remediation plan were reported as none. This was not evidence, at
+that snapshot date, that Phase 1A was implemented and did not relax
+deferred-module stop lines.
+
+Current implementation progress after that audit is tracked in
+[Review-Governance Kernel Completion Status](review-governance-kernel-completion-20260706.md).
+Historical Phase 1A gap rows are not current state; the current record marks
+P3-2 local GPT-equivalent review PASS and still requires commit/release
+evidence before release-readiness claims.
 
 This audit is a current-worktree reality check for the master plan. It is not a
 clean release claim and not a replacement for implementation evidence. The
@@ -163,10 +170,10 @@ Current implemented substrate:
 Existing substrate is reusable vocabulary and code. It is not evidence that the
 review-governance lifecycle has been implemented.
 
-Current mainline gaps:
+Historical mainline gaps in the 2026-07-04 audit:
 
-- the Phase 1A review-governance kernel is not implemented. The expected schema,
-  fixtures, test file, and optional helper are all absent:
+- in that snapshot, the Phase 1A review-governance kernel was not implemented.
+  The expected schema, fixtures, test file, and optional helper were all absent:
   `schemas/review_governance_kernel.schema.json`,
   `schemas/examples/review-governance/*.json`,
   `packages/control-plane/tests/test_review_governance_kernel.py`, and
@@ -192,13 +199,13 @@ Current mainline gaps:
   discoverable as deferred module plans. They must remain behind Phase 1A and
   projection derivation.
 
-Coverage decision:
+Historical coverage decision:
 
-The next repository slice is still Phase 1A. Do not spend the next coding pass
-on graph UI, Paper KB runtime commands, multi-browser selection, model routing,
-or generalized learning. First create the review-governance kernel schema,
-fixtures, and negative tests that make every later module prove its authority
-boundary through the same lifecycle.
+In the 2026-07-04 audit, the next repository slice was Phase 1A. Current agents
+must read the completion status record first and continue from the current
+pending item. Do not spend the next coding pass on graph UI, Paper KB runtime
+commands, multi-browser selection, model routing, or generalized learning unless
+the completion status record authorizes that bounded pending item.
 
 ## Guiding Thesis
 
@@ -673,7 +680,8 @@ of expanding the first package.
 
 ### Phase 1A: Schema, Fixtures, And Negative Tests
 
-Status: next implementation target.
+Status: historical 2026-07-04/05 next implementation target. Current progress
+is tracked in [Review-Governance Kernel Completion Status](review-governance-kernel-completion-20260706.md).
 
 Goal: define and validate one fixture-level packet that proves the phase-one
 object model can prevent false completion.
@@ -1097,12 +1105,19 @@ behavior.
 
 ## Implementation Order
 
-The practical order is:
+The historical planning order was:
+
+Before using this order, read
+[Review-Governance Kernel Completion Status](review-governance-kernel-completion-20260706.md)
+and skip items already marked PASS. Continue only from the current pending item;
+P3-2 is already local-review PASS and remains pending only for commit/release
+evidence.
 
 1. finish and review this master plan;
 2. keep Intent Slice A as a documentation and skill-contract sidecar, not a
    replacement for Phase 1A;
-3. implement Phase 1A from the Next Agent Contract;
+3. use the completion status record before reopening Phase 1A work from the
+   Next Agent Contract;
 4. validate the review-governance schema and four fixtures;
 5. prove the required negative tests;
 6. run the public snapshot verification gate;

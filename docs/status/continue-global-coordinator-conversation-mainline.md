@@ -10,7 +10,7 @@ The earlier assumption that an external T3/RD-Code checkout was unavailable is
 wrong. The checkout exists at:
 
 ```text
-D:\dev-frame-system\.devframe-runtime\external\t3code
+<repo-root>\.devframe-runtime\external\t3code
 ```
 
 It is an independent checkout and must stay outside the public repo commit
@@ -92,7 +92,7 @@ Browser smoke evidence was written under `.devframe-runtime/logs/`, including:
 Latest direct-route smoke against the slim coordinator-entry path observed:
 
 - `Coordinator` enabled
-- selected project shown as `Dev Frame System - D:\dev-frame-system`
+- selected project shown as `Dev Frame System - <repo-root>`
 - selected goal shown as `Goal: coordinator / chatgpt / chatgpt-web-mcp-real-call`
 - read-only composer shown
 - send button count `0`
@@ -269,8 +269,8 @@ execution affordances disabled.
 Concretely:
 
 1. inspect both repo statuses before acting:
-   `D:\dev-frame-system` and
-   `D:\dev-frame-system\.devframe-runtime\external\t3code`
+   `<repo-root>` and
+   `<repo-root>\.devframe-runtime\external\t3code`
 2. preserve unrelated dirty work in the external checkout
 3. keep the T3 slice read-only; do not enable `ENABLE_DEVFRAME_CLUSTER_COMPOSER`
    in Phase 1

@@ -19,7 +19,6 @@ projection fields from packet facts without inventing authority.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Sequence
 
 
 @dataclass
@@ -71,50 +70,63 @@ def validate_packet(payload: dict) -> ValidationResult:
                 f"outcome=pass, target_ref={wi_id!r})"
             )
 
-    # ---- P0: evidence_ids must resolve to real supporting evidence ----
+    # ---- P0: evidence_ids must resolve to real supporting source artifacts ----
     artifact_kind_by_id = {a["id"]: a.get("kind") for a in artifacts if "id" in a}
     for decision in decisions:
         if decision.get("kind") in ("review", "gate") and decision.get("outcome") == "pass":
-            gate_evidence_ids = decision.get("evidence_ids", [])
-            for eid in gate_evidence_ids:
+            decision_id = decision.get("id", "<missing id>")
+            evidence_ids = decision.get("evidence_ids", [])
+            resolved_source_artifact_ids: list[str] = []
+            if not isinstance(evidence_ids, list) or not evidence_ids:
+                errors.append(
+                    f"Decision {decision_id} pass requires non-empty evidence_ids"
+                )
+                continue
+            for eid in evidence_ids:
+                if not isinstance(eid, str) or not eid:
+                    errors.append(
+                        f"Decision {decision_id} pass references empty evidence_id"
+                    )
+                    continue
                 if eid not in evidence_by_id:
                     errors.append(
-                        f"Decision {decision['id']} references missing "
+                        f"Decision {decision_id} references missing "
                         f"evidence_id {eid}"
                     )
-                else:
-                    ev = evidence_by_id[eid]
-                    if ev.get("supports") not in ("supports", "confirm"):
-                        errors.append(
-                            f"Decision {decision['id']} gate pass references "
-                            f"evidence {eid} with supports={ev.get('supports')!r}, "
-                            f"expected 'supports'"
-                        )
-                    # P0: gate pass must cite at least one non-report artifact
-                    src_aid = ev.get("source_artifact_id")
-                    if src_aid and artifact_kind_by_id.get(src_aid) == "review_report":
-                        continue  # this one is report-only, check next
-                    # Found a non-report evidence source for this gate decision
-                    if decision.get("kind") == "gate" and decision.get("outcome") == "pass":
-                        # mark that this gate has non-report evidence
-                        pass  # handled via counter below
+                    continue
 
-    # Check that each gate pass has at least one non-report evidence source
-    for decision in decisions:
-        if decision.get("kind") != "gate" or decision.get("outcome") != "pass":
-            continue
-        gate_evidence_ids = decision.get("evidence_ids", [])
-        has_non_report = any(
-            artifact_kind_by_id.get(evidence_by_id[eid].get("source_artifact_id", ""), "")
-            != "review_report"
-            for eid in gate_evidence_ids
-            if eid in evidence_by_id
-        )
-        if not has_non_report:
-            errors.append(
-                f"Decision {decision['id']} gate pass must cite at least one "
-                f"non-review_report artifact as evidence source"
-            )
+                ev = evidence_by_id[eid]
+                if ev.get("supports") != "supports":
+                    errors.append(
+                        f"Decision {decision_id} pass references "
+                        f"evidence {eid} with supports={ev.get('supports')!r}, "
+                        f"expected 'supports'"
+                    )
+                src_aid = ev.get("source_artifact_id")
+                if not isinstance(src_aid, str) or not src_aid:
+                    errors.append(
+                        f"Decision {decision_id} pass references evidence {eid} "
+                        f"without source_artifact_id"
+                    )
+                    continue
+                if src_aid not in artifact_ids:
+                    errors.append(
+                        f"Decision {decision_id} pass references evidence {eid} "
+                        f"source_artifact_id={src_aid!r} not found in artifacts"
+                    )
+                    continue
+                resolved_source_artifact_ids.append(src_aid)
+
+            if decision.get("kind") == "gate":
+                has_non_report = any(
+                    artifact_kind_by_id.get(src_aid) != "review_report"
+                    for src_aid in resolved_source_artifact_ids
+                )
+                if not has_non_report:
+                    errors.append(
+                        f"Decision {decision_id} gate pass must cite at least one "
+                        f"non-review_report artifact as evidence source"
+                    )
 
     # ---- P1: input_context_artifact_id must resolve if status is ready/completed ----
     ctx_artifact_id = work_item.get("input_context_artifact_id")

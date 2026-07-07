@@ -10,7 +10,7 @@
 - user_goal: Build a real Global Coordinator ("总控") that can talk, remember,
   decide, dispatch, and escalate across projects, instead of a read-only panel
   item.
-- target_repo_or_kb: `D:\dev-frame-system`
+- target_repo_or_kb: `<repo-root>`
 - current_slice_goal: Lock the product boundary and build-vs-buy decision
   before more write-capable work lands in the cluster/control-plane/client area.
 - requested_outcome: A durable decision doc that says what "总控" is, what it is
@@ -22,7 +22,7 @@
 ## Resource Map
 
 - repository_roots:
-  - `D:\dev-frame-system`
+  - `<repo-root>`
 - top_level_tree:
   - `docs/status/`: product direction, recon receipts, reuse assessments, and
     roadmap artifacts.

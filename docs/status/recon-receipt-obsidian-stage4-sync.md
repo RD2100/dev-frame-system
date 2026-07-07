@@ -2,7 +2,7 @@
 
 ## Target
 - user_goal: Move the paper module toward the Codex + Obsidian self-growing research knowledge-base loop.
-- target_repo_or_kb: D:\dev-frame-system
+- target_repo_or_kb: <repo-root>
 - current_slice_goal: Add a safe bidirectional-sync planning slice for generated paper notes.
 - requested_outcome: Read one allowlisted Obsidian note through Local REST API, compare it with local generated Markdown, and emit a sync plan that protects user-authored content.
 - date: 2026-06-24
@@ -10,7 +10,7 @@
 
 ## Resource Map
 - repository_roots:
-  - D:\dev-frame-system
+  - <repo-root>
 - important_dirs:
   - packages/ai-workflow-hub/src/ai_workflow_hub/context_layer/adapters
   - packages/ai-workflow-hub/tests

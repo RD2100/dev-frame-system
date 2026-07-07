@@ -145,7 +145,7 @@ this repository.
 
 Minimum acceptance:
 
-1. From `D:\dev-frame-system`, run one devframe command that starts the
+1. From `<repo-root>`, run one devframe command that starts the
    read-only Local Agent Control Plane endpoints and launches the T3
    desktop/native client pointing at the devframe shell snapshot.
 2. The command prints the local URL, the source of the T3 shell snapshot, and

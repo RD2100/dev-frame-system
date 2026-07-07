@@ -129,6 +129,24 @@ class TestValidatePolicyEntryShape:
         assert not result.valid
         assert "requested_by is required" in result.errors[0]
 
+    def test_whitespace_required_policy_strings_fail(self):
+        entry = _policy_entry(
+            id="   ",
+            project_id="\t",
+            action="\n",
+            outcome=" ",
+            requested_by=" \t ",
+        )
+        result = validate_policy_escalation(
+            _payload(policy_decisions=[entry])
+        )
+        assert not result.valid
+        assert any("id is required" in e for e in result.errors)
+        assert any("project_id is required" in e for e in result.errors)
+        assert any("action is required" in e for e in result.errors)
+        assert any("outcome is required" in e for e in result.errors)
+        assert any("requested_by is required" in e for e in result.errors)
+
     def test_invalid_action_type(self):
         entry = _policy_entry(action="casual_thing")
         result = validate_policy_escalation(
@@ -159,6 +177,25 @@ class TestSelfPromotionBlocked:
         assert not result.valid
         assert "self-promotion" in result.errors[0].lower()
         assert "worker" in result.errors[0]
+
+    def test_worker_self_promotion_cannot_use_subject_whitespace_variant(self):
+        entry = _policy_entry(
+            requested_by="worker ",
+            granted_to="\tworker\n",
+            decider_principal_id="principal-1",
+            decider_type="human",
+        )
+        result = validate_policy_escalation(
+            _payload(policy_decisions=[entry])
+        )
+        assert not result.valid
+        assert any("self-promotion" in e.lower() for e in result.errors)
+
+        projection = derive_policy_escalation(
+            _payload(policy_decisions=[entry])
+        )
+        assert projection["granted"] == 0
+        assert projection["self_promotion_blocked"] == 1
 
     def test_browser_cannot_grant_itself_authority(self):
         entry = _policy_entry(requested_by="browser", granted_to="browser")
@@ -442,6 +479,28 @@ class TestHumanEscalation:
         )
         assert not result.valid
         assert "id is required" in result.errors[0]
+
+    def test_whitespace_required_escalation_strings_fail(self):
+        esc = _escalation(
+            id="   ",
+            project_id="\t",
+            work_item_id="\n",
+            decision_requested=" ",
+            why_required=" \t ",
+            consequence_if_declined="\n ",
+            context_snapshot_artifact_id="\t ",
+        )
+        result = validate_policy_escalation(
+            _payload(escalations=[esc], work_items=[_work_item()])
+        )
+        assert not result.valid
+        assert any("id is required" in e for e in result.errors)
+        assert any("project_id is required" in e for e in result.errors)
+        assert any("work_item_id is required" in e for e in result.errors)
+        assert any("decision_requested is required" in e for e in result.errors)
+        assert any("why_required is required" in e for e in result.errors)
+        assert any("consequence_if_declined is required" in e for e in result.errors)
+        assert any("context_snapshot_artifact_id is required" in e for e in result.errors)
 
     def test_human_required_names_exact_decision(self):
         """The escalation must name the exact decision requested (acceptance criterion)."""

@@ -63,10 +63,48 @@ def _has_traversal(path: str) -> bool:
     return any(part == ".." for part in normalized.split("/"))
 
 
+def _is_absolute_path(path: str) -> bool:
+    """True for POSIX, UNC, or drive-qualified absolute paths."""
+    normalized = path.replace("\\", "/").strip()
+    return (
+        posixpath.isabs(normalized)
+        or (len(normalized) >= 2 and normalized[0].isalpha() and normalized[1] == ":")
+    )
+
+
 def _normalize_path_for_boundary(path: str) -> str:
     """Normalize a path for equality comparison — resolves '.', ' .. ' aliases."""
     normalized = path.replace("\\", "/").strip()
-    return posixpath.normpath(normalized).rstrip("/")
+    normalized = posixpath.normpath(normalized)
+    if normalized != "/":
+        normalized = normalized.rstrip("/")
+    return normalized
+
+
+def _is_strict_subpath(path: str, parent: str) -> bool:
+    """True when path is normalized under parent, but not equal to parent."""
+    if path == parent:
+        return False
+    try:
+        return posixpath.commonpath([parent, path]) == parent
+    except ValueError:
+        return False
+
+
+def _is_subpath_or_same(path: str, parent: str) -> bool:
+    """True when path is normalized under parent or exactly parent."""
+    return path == parent or _is_strict_subpath(path, parent)
+
+
+def _scope_stays_within_boundary(scope: str, boundary: str) -> bool:
+    """Resolve relative scope under boundary and confirm it cannot escape."""
+    normalized_boundary = _normalize_path_for_boundary(boundary)
+    normalized_scope = _normalize_path_for_boundary(scope)
+    candidate = _normalize_path_for_boundary(
+        posixpath.join(normalized_boundary, normalized_scope)
+    )
+    return _is_subpath_or_same(candidate, normalized_boundary)
+
 
 # Operations that are only safe with explicit scope boundaries.
 SCOPED_OPERATIONS: tuple[str, ...] = (
@@ -170,6 +208,16 @@ def _check_paper_boundary_rules(
         else:
             return False, errors
 
+    # Block absolute scope paths; scopes must remain relative to the paper root.
+    if scope and _is_absolute_path(scope):
+        if collect_errors:
+            errors.append(
+                f"{prefix}: scope={scope!r} is an absolute path; "
+                f"scope must be relative to workspace_path or source_root"
+            )
+        else:
+            return False, errors
+
     # Block path traversal in workspace_path.
     if workspace_path and _has_traversal(workspace_path):
         if collect_errors:
@@ -180,14 +228,49 @@ def _check_paper_boundary_rules(
         else:
             return False, errors
 
+    # Block path traversal in source_root.
+    if source_root and _has_traversal(source_root):
+        if collect_errors:
+            errors.append(
+                f"{prefix}: source_root={source_root!r} contains path "
+                f"traversal; parent-directory segments are blocked"
+            )
+        else:
+            return False, errors
+
     # Block source-root-equals-vault-root (with path normalization).
     if source_root and workspace_path:
-        if _normalize_path_for_boundary(source_root) == _normalize_path_for_boundary(workspace_path):
+        normalized_source_root = _normalize_path_for_boundary(source_root)
+        normalized_workspace_path = _normalize_path_for_boundary(workspace_path)
+        if normalized_source_root == normalized_workspace_path:
             if collect_errors:
                 errors.append(
                     f"{prefix}: source_root equals workspace_path "
                     f"(after normalization); "
                     f"source root must be a subdirectory, not the entire vault"
+                )
+            else:
+                return False, errors
+        elif not _is_strict_subpath(normalized_source_root, normalized_workspace_path):
+            if collect_errors:
+                errors.append(
+                    f"{prefix}: source_root={source_root!r} escapes "
+                    f"workspace_path={workspace_path!r} after normalization; "
+                    f"source root must remain within workspace_path"
+                )
+            else:
+                return False, errors
+
+    # Resolve relative scope against configured roots to catch boundary escapes.
+    scope_boundaries = tuple(
+        boundary for boundary in (source_root, workspace_path) if boundary
+    )
+    for boundary in scope_boundaries:
+        if scope and not _scope_stays_within_boundary(scope, boundary):
+            if collect_errors:
+                errors.append(
+                    f"{prefix}: scope={scope!r} escapes boundary={boundary!r} "
+                    f"after normalization"
                 )
             else:
                 return False, errors

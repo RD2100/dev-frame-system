@@ -2,7 +2,7 @@
 
 ## Target
 - user_goal: Advance the paper module's Obsidian workflow through stage 3.
-- target_repo_or_kb: D:\dev-frame-system
+- target_repo_or_kb: <repo-root>
 - current_slice_goal: Add the smallest public-research KB layer that produces Obsidian-navigable paper notes and an in-vault dashboard without building a custom Obsidian plugin.
 - requested_outcome: Obsidian-compatible paper notes, idempotent managed updates, stable YAML properties for Dataview/Bases, and local open links.
 - date: 2026-06-24
@@ -10,7 +10,7 @@
 
 ## Resource Map
 - repository_roots:
-  - D:\dev-frame-system
+  - <repo-root>
 - important_dirs:
   - packages/ai-workflow-hub/src/ai_workflow_hub/context_layer/adapters
   - packages/ai-workflow-hub/tests

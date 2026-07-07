@@ -10,7 +10,7 @@
 - user_goal: Uniformly drive many coding agents (OpenCode/Gemini/Claude
   Code/Codex) over one standard protocol so the cluster has a real multi-agent
   backbone instead of one-shot CLI subprocess + JSONL parsing.
-- target_repo_or_kb: `d:\dev-frame-system` (control-plane package).
+- target_repo_or_kb: `<repo-root>` (control-plane package).
 - current_slice_goal: Slice 0 (transport seam) — a real, tested ACP transport
   client: launch an agent subprocess and speak newline-delimited JSON-RPC 2.0
   over stdio (requests/responses/notifications, streaming `session/update`).

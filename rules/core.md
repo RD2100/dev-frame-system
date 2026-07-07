@@ -78,21 +78,21 @@
 - **Rule**: Any capability must be registered in `docs/agent-runtime/capability-inventory.md` and receive reviewer approval BEFORE it is enabled. The `Platform` field in the inventory entry determines which platform(s) the capability is available on. A capability that does not appear in the inventory does not exist -- it must not be used, even if technically callable.
 - **Registration Procedure**:
   1. Propose the capability in `capability-inventory.md` with `Status: proposed`
-  2. Reviewer approves �?change to `Status: approved`
+  2. Reviewer approves 锟?change to `Status: approved`
   3. Enable the capability on the target platform
   4. Verify via `codex plugin list` (Codex) or `settings.json` (Claude)
   5. Report the registration in the batch ExecutionReport
 - **Platform Synchronization**:
-  - Platform: Both �?enable on both platforms (if applicable)
-  - Platform: Claude �?enable on Claude Code only
-  - Platform: Codex �?enable on Codex only
+  - Platform: Both 锟?enable on both platforms (if applicable)
+  - Platform: Claude 锟?enable on Claude Code only
+  - Platform: Codex 锟?enable on Codex only
   - Cross-platform capabilities (Both) registered once, enabled per-platform as needed
 - **Verification**: Compare `codex plugin list` enabled entries and Claude `settings.json` hooks/MCP against `capability-inventory.md`. Every enabled capability must have a matching approved inventory entry.
 - **Conflict Handling**: If a task requires a capability not in the inventory, stop and propose registration. Do not use it first and register later.
 
 ---
 
-## RULE core-008: Resource Sufficiency �� Prove Gap Before Any Action
+## RULE core-008: Resource Sufficiency - Prove Gap Before Any Action
 
 - **Priority**: P0 (Hard Stop)
 - **Trigger**: ANY agent action that proposes creating, adding, modifying, or introducing something new. This includes code, documents, rules, frameworks, abstractions, processes, configurations, and protocols.
@@ -105,7 +105,7 @@
 | Check | Question |
 |-------|----------|
 | **Existence** | Does something already exist that covers this need? |
-| **Coverage** | Does an existing resource partially cover it �� and can the gap be filled with a minimal change? |
+| **Coverage** | Does an existing resource partially cover it, and can the gap be filled with a minimal change? |
 | **Composition** | Can multiple existing resources be combined to satisfy the need? |
 | **Protocol** | Does an existing workflow, dispatch rule, or governance mechanism already handle this? |
 | **Precedent** | Has this situation occurred before? What did the lesson log say? |
@@ -115,31 +115,31 @@
 | Finding | Action |
 |---------|--------|
 | Exact match exists | **Stop.** Point to existing. Do nothing new. |
-| Partial coverage + gap is ��20% | **Minimal patch.** Edit existing, don't create new. |
+| Partial coverage + gap is <=20% | **Minimal patch.** Edit existing, don't create new. |
 | Composition of 2+ existing covers need | **Compose.** Write glue only if necessary. |
 | Truly novel need confirmed | **Proceed.** Document which resources were checked. |
 
 **False Positives (model must recognize these as NOT sufficient justification):**
-- "The existing resource is in a different format" �� format conversion is not a reason to recreate
-- "The existing resource is not organized how I would" �� preference is not a gap
-- "It would be cleaner as a new thing" �� aesthetics is not a gap
-- "This is a common pattern so we should have it" �� commonality is not a gap
-- "User asked for it" �� user request is a hypothesis, not proof of need
+- "The existing resource is in a different format" -> format conversion is not a reason to recreate
+- "The existing resource is not organized how I would" -> preference is not a gap
+- "It would be cleaner as a new thing" -> aesthetics is not a gap
+- "This is a common pattern so we should have it" -> commonality is not a gap
+- "User asked for it" -> user request is a hypothesis, not proof of need
 
 ### Execute Agent Veto Contract
 
 1. **Veto validity**: A veto is valid only if it cites specific capability IDs, rule IDs, and proposes an alternative execution path. A veto without executable alternative is invalid unless the task is unsafe or irreversible.
 
 2. **Veto decision types**:
-   - `accept` �?task is necessary, proceed
-   - `reject_redundant` �?existing capabilities cover this; must provide reuse plan
-   - `reject_unsafe` �?task poses security/irreversibility risk; cannot be appealed
-   - `request_revision` �?task needs clarification or scope reduction
-   - `escalate` �?cannot decide, defer to human reviewer
+   - `accept` 锟?task is necessary, proceed
+   - `reject_redundant` 锟?existing capabilities cover this; must provide reuse plan
+   - `reject_unsafe` 锟?task poses security/irreversibility risk; cannot be appealed
+   - `request_revision` 锟?task needs clarification or scope reduction
+   - `escalate` 锟?cannot decide, defer to human reviewer
 
 3. **Appeal mechanism**: Plan agent can appeal `reject_redundant` to human reviewer. `reject_unsafe` cannot be appealed.
 
-4. **Risk-based escalation**: Low-risk + reversible tasks �?execute agent veto can be final. High-risk + irreversible tasks �?must escalate to human if either agent disagrees.
+4. **Risk-based escalation**: Low-risk + reversible tasks 锟?execute agent veto can be final. High-risk + irreversible tasks 锟?must escalate to human if either agent disagrees.
 
 5. **Anti-abuse constraint**: Execute agent must not systematically reject all new construction. If >50% of TaskSpecs in a batch are rejected, the veto authority is suspended pending human review.
 

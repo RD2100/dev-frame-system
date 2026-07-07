@@ -36,6 +36,7 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "packages/control-plane/control_plane/backup_guard.py",
     "packages/control-plane/control_plane/decision_engine.py",
     "packages/control-plane/control_plane/dispatch_packet.py",
+    "packages/control-plane/control_plane/docs_drift_validator.py",
     "packages/control-plane/control_plane/orchestrator.py",
     "packages/control-plane/control_plane/project_contract.py",
     "packages/control-plane/control_plane/rdgoal.py",
@@ -45,6 +46,7 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "packages/control-plane/control_plane/visual_state.py",
     "packages/control-plane/control_plane/worker.py",
     "packages/control-plane/tests/test_cli.py",
+    "packages/control-plane/tests/test_docs_drift_validator.py",
     "packages/control-plane/tests/test_public_snapshot.py",
     "packages/control-plane/tests/test_rdgoal.py",
     "pytest.ini",
@@ -56,6 +58,7 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "schemas/visual_control_plane_state.schema.json",
     "schemas/web_ai_adapter.schema.json",
     "scripts/verify-control-plane-wheel.ps1",
+    "scripts/verify-public-snapshot.ps1",
     "scripts/verify-release.ps1",
 ]
 PUBLIC_MARKDOWN_DOCS = [
@@ -318,6 +321,84 @@ def test_public_snapshot_rejects_root_ai_bridge_dir():
         shutil.rmtree(probe_dir, ignore_errors=True)
 
 
+def test_public_snapshot_rejects_root_review_artifacts():
+    bundle_dir = REPO_ROOT / f"review-bundle-probe-{uuid.uuid4().hex}"
+    reply_file = REPO_ROOT / "chatgpt-review-reply.txt"
+    original_reply = None
+    if reply_file.exists():
+        original_reply = reply_file.read_bytes()
+    bundle_dir.mkdir(parents=True)
+    reply_file.write_text("local review reply", encoding="utf-8")
+    try:
+        result = subprocess.run(
+            [
+                "powershell",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(REPO_ROOT / "scripts" / "verify-public-snapshot.ps1"),
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        output = result.stdout + result.stderr
+        assert result.returncode == 1, output
+        assert f"forbidden root review artifact: {bundle_dir.name}" in output
+        assert "forbidden root review artifact: chatgpt-review-reply.txt" in output
+    finally:
+        shutil.rmtree(bundle_dir, ignore_errors=True)
+        if original_reply is None:
+            reply_file.unlink(missing_ok=True)
+        else:
+            reply_file.write_bytes(original_reply)
+
+
+def test_public_snapshot_rejects_private_text_markers():
+    probe_file = REPO_ROOT / f"public-snapshot-private-path-probe-{uuid.uuid4().hex}.md"
+    concrete_conversation_url = (
+        "https://chatgpt.com/c/" + "6a49bdcb-5bc8-83e8-875b-44d9ed0b8e26"
+    )
+    probe_file.write_text(
+        "\n".join([
+            "This public file leaked D:\\dev-frame-system in prose.",
+            "This public file also leaked D:\\devframe-system in prose.",
+            "This public file also leaked D:\\test-frame in prose.",
+            "It also leaked C:\\Users\\RD in prose.",
+            f"It also leaked {concrete_conversation_url}.",
+            "It also leaked mojibake: 锟斤拷.",
+        ]),
+        encoding="utf-8",
+    )
+    try:
+        result = subprocess.run(
+            [
+                "powershell",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(REPO_ROOT / "scripts" / "verify-public-snapshot.ps1"),
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        output = result.stdout + result.stderr
+        assert result.returncode == 1, output
+        assert probe_file.name in output
+        assert "private dev-frame-system checkout path" in output
+        assert "private adjacent devframe root path" in output
+        assert "private RD user home path" in output
+        assert "concrete ChatGPT conversation URL" in output
+        assert "mojibake replacement marker" in output
+    finally:
+        probe_file.unlink(missing_ok=True)
+
+
 def test_control_plane_packaged_templates_do_not_reference_private_paths():
     forbidden = [
         "D:\\agent-acceptance",
@@ -336,6 +417,8 @@ def test_public_markdown_docs_are_utf8_and_do_not_contain_mojibake_or_private_pa
     forbidden = [
         "D:\\agent-acceptance",
         "D:/agent-acceptance",
+        "D:\\dev-frame-system",
+        "D:/dev-frame-system",
         "C:\\Users\\RD",
         "C:/Users/RD",
         "锛",
@@ -425,6 +508,8 @@ def test_public_scripts_and_adapters_exclude_private_machine_paths():
     forbidden = [
         "C:\\Users\\RD",
         "C:/Users/RD",
+        "D:\\dev-frame-system",
+        "D:/dev-frame-system",
         "D:\\agent-acceptance",
         "D:/agent-acceptance",
     ]
@@ -465,6 +550,53 @@ def test_release_workflow_installs_deps_and_invokes_single_release_gate():
     ]
 
 
+def test_release_gate_enables_git_index_artifact_check():
+    release_script = (REPO_ROOT / "scripts" / "verify-release.ps1").read_text(
+        encoding="utf-8",
+    )
+    snapshot_script = (
+        REPO_ROOT / "scripts" / "verify-public-snapshot.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert "-FailOnTrackedForbidden" in release_script
+    assert "tracked forbidden review artifact" in snapshot_script
+
+
+def test_release_readiness_documents_strict_gate_blockers():
+    path = REPO_ROOT / "docs" / "status" / "release-readiness.md"
+    text = path.read_text(encoding="utf-8-sig")
+
+    assert "scripts\\verify-public-snapshot.ps1 -FailOnTrackedForbidden" in text
+    assert "commit `15a9d78d` removed the tracked root review artifacts" in text
+    assert "ordinary public snapshot gate and the strict" in text
+    assert "`-FailOnTrackedForbidden` public snapshot gate pass" in text
+    assert "pass in the current worktree" in text
+    assert "strict snapshot gate now checks that they do not" in text
+    assert "P3-2 graph projection has local GPT-equivalent review PASS" in text
+
+
+def test_current_entry_docs_keep_p3_2_local_review_pass_non_release_ready():
+    expected = {
+        REPO_ROOT / "docs" / "README.md": [
+            "local GPT-equivalent review PASS, still pending commit/release evidence",
+            "not a release-ready record",
+        ],
+        REPO_ROOT / "docs" / "status" / "reviewer-index.md": [
+            "local GPT-equivalent review PASS",
+            "not treated as release-ready",
+        ],
+        REPO_ROOT / "docs" / "status" / "status-document-inventory.md": [
+            "projection has local GPT-equivalent review PASS but remains pending commit",
+            "release readiness evidence",
+        ],
+    }
+
+    for path, literals in expected.items():
+        text = path.read_text(encoding="utf-8-sig")
+        missing = [literal for literal in literals if literal not in text]
+        assert missing == [], f"{path} missing P3-2 local-review/release-readiness literals: {missing}"
+
+
 def test_reviewer_index_mentions_new_public_files():
     reviewer_index = (REPO_ROOT / "docs" / "status" / "reviewer-index.md").read_text(
         encoding="utf-8",
@@ -477,6 +609,37 @@ def test_reviewer_index_mentions_new_public_files():
 
     for path in REVIEWER_INDEX_REQUIRED_PATHS:
         assert (REPO_ROOT / path).exists(), path
+    assert missing == []
+
+
+def test_reviewer_index_mentions_governance_validators_and_tests():
+    reviewer_index = (REPO_ROOT / "docs" / "status" / "reviewer-index.md").read_text(
+        encoding="utf-8",
+    )
+    source_dir = REPO_ROOT / "packages" / "control-plane" / "control_plane"
+    tests_dir = REPO_ROOT / "packages" / "control-plane" / "tests"
+    source_files = sorted(
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in source_dir.glob("*validator.py")
+    )
+    source_files.append(
+        "packages/control-plane/control_plane/client_governance_projection.py"
+    )
+    source_files.append("packages/control-plane/control_plane/document_authority.py")
+    test_files = sorted(
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in tests_dir.glob("test_*validator.py")
+    )
+    test_files.append(
+        "packages/control-plane/tests/test_client_governance_projection.py"
+    )
+    test_files.append("packages/control-plane/tests/test_document_authority.py")
+
+    missing = [
+        path
+        for path in sorted(set(source_files + test_files))
+        if path not in reviewer_index
+    ]
     assert missing == []
 
 

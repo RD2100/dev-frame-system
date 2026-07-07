@@ -26,7 +26,8 @@ function Invoke-Step {
 
 Invoke-Step "pytest" "python" @("-m", "pytest", "-q")
 Invoke-Step "public snapshot" "powershell" @(
-    "-ExecutionPolicy", "Bypass", "-File", (Join-Path $rootPath "scripts\verify-public-snapshot.ps1")
+    "-ExecutionPolicy", "Bypass", "-File", (Join-Path $rootPath "scripts\verify-public-snapshot.ps1"),
+    "-FailOnTrackedForbidden"
 )
 Invoke-Step "control-plane wheel smoke" "powershell" @(
     "-ExecutionPolicy", "Bypass", "-File", (Join-Path $rootPath "scripts\verify-control-plane-wheel.ps1")

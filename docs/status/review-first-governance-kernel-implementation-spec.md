@@ -625,7 +625,7 @@ The Phase 1A kernel is implemented and passed external GPT review (Round 7, GO).
 | Blocked fixture | `schemas/examples/review-governance/blocked.json` | Tool boundary violation → blocked |
 | Insufficient-evidence fixture | `schemas/examples/review-governance/insufficient-evidence.json` | Inconclusive evidence → insufficient_evidence |
 | Missing-context fixture | `schemas/examples/review-governance/missing-context.json` | No context snapshot → blocked |
-| Contract tests | `packages/control-plane/tests/test_review_governance_kernel.py` | 55 tests, all passing |
+| Contract tests | `packages/control-plane/tests/test_review_governance_kernel.py` | 73 current tests passing locally; round-7 external PASS covered the earlier 55-test baseline |
 | Semantic validator | `packages/control-plane/control_plane/review_governance_validator.py` | 12 cross-object constraints |
 
 ### Semantic validator constraints (12 total)

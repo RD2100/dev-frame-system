@@ -5,13 +5,22 @@ Lifecycle state: Accepted active remediation plan
 Plan status: External-brain review v2 PASS on 2026-07-04. This is a
 gap-driven companion to the master plan, not a stable runtime contract.
 
+Implementation status note (2026-07-07): this document preserves the reviewed
+2026-07-04 gap snapshot and remediation order. For current execution progress
+after implementation work began, use
+`review-governance-kernel-completion-20260706.md` as the bounded status record.
+In that newer record, P1/P2/P3-1 are marked PASS and P3-2 is locally
+code-complete but still pending external GPT review and commit evidence.
+
 Reader: DevFrame maintainers and coding agents who need to know what the current
 design document set covers, what it does not cover yet, and which repair slices
 should be implemented first.
 
-Post-read action: use the remediation order below before adding new runtime,
-UI, browser, paper, graph, evaluation, or automation work. Do not use this plan
-to skip the review-governance kernel Phase 1A.
+Post-read action: use the remediation order below as a historical review
+baseline, then check
+`review-governance-kernel-completion-20260706.md` before choosing the next
+pending item. Do not use this plan to reopen completed items or skip current
+review gates.
 
 Related docs: [Document-Driven Transformation Master Plan](document-driven-transformation-master-plan.md), [Current Coverage Audit Evidence](current-coverage-audit-evidence-20260704.md), [Status Document Inventory](status-document-inventory.md), [Reviewer Index](reviewer-index.md), [Review-First Governance Kernel Implementation Spec](review-first-governance-kernel-implementation-spec.md)
 
@@ -56,6 +65,10 @@ current-worktree snapshot. Full cross-document completeness is limited by the
 source documents available in the review bundle for a given review round. When a
 row is derived from inventory or master-plan summaries rather than direct source
 text, the `Basis` column must say so.
+
+The coverage matrix below is intentionally retained as the original reviewed
+gap snapshot. Do not read rows such as "Phase 1A files are absent" as the latest
+implementation status without also checking the newer completion status record.
 
 ## Coverage Matrix
 
@@ -380,6 +393,7 @@ This remediation plan is accepted when:
 3. any claim of full cross-document completeness is backed by an expanded
    review bundle or a separate full-doc coverage evidence record;
 4. each gap has a repair path and acceptance evidence;
-5. the plan keeps Phase 1A as the next coding target;
+5. the plan preserves the 2026-07-04 Phase 1A priority as historical review
+   context while pointing current readers to the completion status record;
 6. the plan is linked from the documentation map, status inventory, reviewer
    index, and master plan.

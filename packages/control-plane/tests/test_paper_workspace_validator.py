@@ -135,6 +135,18 @@ class TestPathTraversalBlocking:
         result = validate_paper_workspace(_payload([entry]))
         assert not result.valid
 
+    def test_absolute_scope_path_blocked(self):
+        entry = _entry(operation="read", scope="/etc/passwd")
+        result = validate_paper_workspace(_payload([entry]))
+        assert not result.valid
+        assert any("absolute" in error.lower() for error in result.errors)
+
+    def test_nested_parent_traversal_in_scope_blocked(self):
+        entry = _entry(operation="read", scope="sub/../../secret")
+        result = validate_paper_workspace(_payload([entry]))
+        assert not result.valid
+        assert any("traversal" in error.lower() for error in result.errors)
+
     def test_traversal_in_workspace_path_blocked(self):
         entry = _entry(workspace_path="../outside-vault/")
         result = validate_paper_workspace(_payload([entry]))
@@ -197,6 +209,24 @@ class TestSourceRootEqualsVaultRoot:
         )
         result = validate_paper_workspace(_payload([entry]))
         assert result.valid
+
+    def test_source_root_outside_workspace_path_blocked(self):
+        entry = _entry(
+            workspace_path="/vault/projects/foo",
+            source_root="/etc",
+        )
+        result = validate_paper_workspace(_payload([entry]))
+        assert not result.valid
+        assert any("source_root" in error.lower() for error in result.errors)
+
+    def test_source_root_traversal_alias_escaping_workspace_blocked(self):
+        entry = _entry(
+            workspace_path="/vault/projects/foo",
+            source_root="/vault/projects/foo/../secret",
+        )
+        result = validate_paper_workspace(_payload([entry]))
+        assert not result.valid
+        assert any("source_root" in error.lower() for error in result.errors)
 
     def test_trailing_slash_diff_ok(self):
         """Trailing slash difference is normalized — same path is still blocked."""

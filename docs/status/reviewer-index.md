@@ -58,7 +58,35 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `schemas/examples/review-governance/insufficient-evidence.json`
 - `schemas/examples/review-governance/missing-context.json`
 - `packages/control-plane/control_plane/review_governance_validator.py`
+- `packages/control-plane/control_plane/asset_utilization_validator.py`
+- `packages/control-plane/control_plane/browser_transport_validator.py`
+- `packages/control-plane/control_plane/client_governance_projection.py`
+- `packages/control-plane/control_plane/docs_drift_validator.py`
+- `packages/control-plane/control_plane/continuation_validator.py`
+- `packages/control-plane/control_plane/document_authority.py`
+- `packages/control-plane/control_plane/evaluation_integrity_validator.py`
+- `packages/control-plane/control_plane/graph_projection_validator.py`
+- `packages/control-plane/control_plane/mcp_utilization_validator.py`
+- `packages/control-plane/control_plane/paper_workspace_validator.py`
+- `packages/control-plane/control_plane/policy_escalation_validator.py`
+- `packages/control-plane/control_plane/review_feedback_validator.py`
+- `packages/control-plane/control_plane/skill_governance_validator.py`
+- `packages/control-plane/control_plane/skill_usage_validator.py`
 - `packages/control-plane/tests/test_review_governance_kernel.py`
+- `packages/control-plane/tests/test_asset_utilization_validator.py`
+- `packages/control-plane/tests/test_browser_transport_validator.py`
+- `packages/control-plane/tests/test_client_governance_projection.py`
+- `packages/control-plane/tests/test_continuation_validator.py`
+- `packages/control-plane/tests/test_docs_drift_validator.py`
+- `packages/control-plane/tests/test_document_authority.py`
+- `packages/control-plane/tests/test_evaluation_integrity_validator.py`
+- `packages/control-plane/tests/test_graph_projection_validator.py`
+- `packages/control-plane/tests/test_mcp_utilization_validator.py`
+- `packages/control-plane/tests/test_paper_workspace_validator.py`
+- `packages/control-plane/tests/test_policy_escalation_validator.py`
+- `packages/control-plane/tests/test_review_feedback_validator.py`
+- `packages/control-plane/tests/test_skill_governance_validator.py`
+- `packages/control-plane/tests/test_skill_usage_validator.py`
 - `packages/control-plane/templates/visual_control_plane/CONTROL_PLANE_STATE.yaml`
 - `packages/control-plane/tests/test_public_snapshot.py`
 - `packages/control-plane/tests/test_rdgoal.py`
@@ -146,6 +174,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/competitive-moat-and-user-demand-critical-review.md`
 - `docs/status/document-driven-transformation-master-plan.md`
 - `docs/status/document-driven-transformation-final-plan-20260705.md`
+- `docs/status/review-governance-kernel-completion-20260706.md`
 - `docs/status/design-coverage-gap-remediation-plan.md`
 - `docs/status/review-first-governance-kernel-contraction-plan.md`
 - `docs/status/review-first-governance-kernel-implementation-spec.md`
@@ -197,6 +226,8 @@ This is the reviewer map for the first open-source release batch. It focuses on 
   - MCP consent and server paths must stay loopback/origin gated and safe-tool constrained.
   - ACP live-driving claims must stay bounded to the current receipt and tests; deferred behavior must not be presented as complete.
   - OpenCode event ingestion should enrich session fields without converting missing event data into a passing claim.
+- Review-governance completion status:
+  - `docs/status/review-governance-kernel-completion-20260706.md` reports P3-2 graph projection as local GPT-equivalent review PASS; keep it out of release-ready claims until commit and branch-review evidence exist.
 
 ## Open-Source Review Checklist
 
@@ -208,6 +239,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 6. Confirm stage-8 native reuse status is current and does not overclaim release/publish readiness.
 7. Confirm customization, writeback, cluster, workflow, MCP, ACP, and OpenCode-event additions are covered by their matching Recon Receipts and tests.
 8. Confirm deferred module plans stay discoverable without being presented as implemented runtime behavior.
+9. Confirm P3-2 graph projection is not treated as release-ready while commit and branch-review evidence are still pending.
 
 ## Public Surface File Index
 
@@ -236,6 +268,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/competitive-moat-and-user-demand-critical-review.md`
 - `docs/status/document-driven-transformation-master-plan.md`
 - `docs/status/document-driven-transformation-final-plan-20260705.md`
+- `docs/status/review-governance-kernel-completion-20260706.md`
 - `docs/status/design-coverage-gap-remediation-plan.md`
 - `docs/status/review-first-governance-kernel-contraction-plan.md`
 - `docs/status/review-first-governance-kernel-implementation-spec.md`
@@ -302,8 +335,11 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `packages/control-plane/control_plane/workflow_engine.py`
 - `packages/control-plane/control_plane/worktree.py`
 - `packages/control-plane/control_plane/writeback.py`
+- `packages/control-plane/control_plane/docs_drift_validator.py`
 - `packages/control-plane/tests/test_cli.py`
+- `packages/control-plane/tests/conftest.py`
 - `packages/control-plane/tests/test_public_snapshot.py`
+- `packages/control-plane/tests/test_docs_drift_validator.py`
 - `packages/control-plane/tests/test_rdgoal.py`
 - `pytest.ini`
 - `rules/orchestration.md`
@@ -314,6 +350,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `schemas/visual_control_plane_state.schema.json`
 - `schemas/web_ai_adapter.schema.json`
 - `scripts/verify-control-plane-wheel.ps1`
+- `scripts/verify-public-snapshot.ps1`
 - `scripts/verify-release.ps1`
 
 ## Required Verification

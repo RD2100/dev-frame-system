@@ -74,6 +74,21 @@ class ValidationResult:
         return self.valid
 
 
+def _canonical_value(value: object) -> object:
+    if isinstance(value, str):
+        return value.strip()
+    return value
+
+
+def _has_required_value(value: object) -> bool:
+    value = _canonical_value(value)
+    return bool(value)
+
+
+def _session_value(session: dict, field: str) -> object:
+    return _canonical_value(session.get(field, ""))
+
+
 # ---------------------------------------------------------------------------
 # Shared helpers — validate and derive use the same functions.
 # ---------------------------------------------------------------------------
@@ -92,19 +107,19 @@ def _is_valid_session_shape(
       - mode is a recognized mode
     """
     errors: list[str] = []
-    sid = session.get("id", "")
+    sid = _session_value(session, "id")
     prefix = f"session[{sid or '<missing>'}]"
 
     for field in ("id", "adapter", "maturity", "mode", "browser"):
-        if not session.get(field):
+        if not _has_required_value(session.get(field)):
             if collect_errors:
                 errors.append(f"{prefix}: {field} is required")
             else:
                 return False, errors
 
-    adapter = session.get("adapter", "")
-    maturity = session.get("maturity", "")
-    mode = session.get("mode", "")
+    adapter = _session_value(session, "adapter")
+    maturity = _session_value(session, "maturity")
+    mode = _session_value(session, "mode")
 
     if adapter not in KNOWN_ADAPTERS:
         if collect_errors:
@@ -146,12 +161,12 @@ def _check_boundary_rules(
       - firefox is not described as CDP-compatible
     """
     errors: list[str] = []
-    sid = session.get("id", "")
+    sid = _session_value(session, "id")
     prefix = f"session[{sid or '<missing>'}]"
-    adapter = session.get("adapter", "")
-    maturity = session.get("maturity", "")
-    mode = session.get("mode", "")
-    browser = session.get("browser", "")
+    adapter = _session_value(session, "adapter")
+    maturity = _session_value(session, "maturity")
+    mode = _session_value(session, "mode")
+    browser = _session_value(session, "browser")
 
     if mode in NON_AUTOMATED_MODES:
         if collect_errors:
@@ -223,12 +238,15 @@ def validate_transport_boundary(payload: dict) -> ValidationResult:
 def derive_transport_boundary(payload: dict) -> dict:
     """Read-only projection of browser transport adapter usage.
 
-    Returns counts by maturity, browser, and adapter.
-    Invalid sessions (empty id, unknown adapter, etc.) are excluded.
+    Returns counts by maturity, browser, adapter, and valid stable evidence.
+    Shape-invalid sessions (empty id, unknown adapter, etc.) are excluded.
+    Boundary-invalid stable sessions remain visible as claimed stable usage,
+    but they are not counted as valid stable evidence.
     """
     sessions: list[dict] = payload.get("browser_sessions") or []
 
-    stable_count = 0
+    claimed_stable_count = 0
+    valid_stable_count = 0
     experimental_count = 0
     waiting_count = 0
     by_browser: dict[str, dict] = {}
@@ -238,13 +256,16 @@ def derive_transport_boundary(payload: dict) -> dict:
         shape_ok, _ = _is_valid_session_shape(session, collect_errors=False)
         if not shape_ok:
             continue
+        boundary_ok, _ = _check_boundary_rules(session, collect_errors=False)
 
-        maturity = session.get("maturity", "")
-        browser = session.get("browser", "")
-        adapter = session.get("adapter", "")
+        maturity = _session_value(session, "maturity")
+        browser = _session_value(session, "browser")
+        adapter = _session_value(session, "adapter")
 
         if maturity == "stable":
-            stable_count += 1
+            claimed_stable_count += 1
+            if boundary_ok:
+                valid_stable_count += 1
         elif maturity == "experimental":
             experimental_count += 1
         elif maturity == "waiting":
@@ -259,8 +280,10 @@ def derive_transport_boundary(payload: dict) -> dict:
         by_adapter[adapter]["count"] += 1
 
     return {
-        "total_sessions": stable_count + experimental_count + waiting_count,
-        "stable_count": stable_count,
+        "total_sessions": claimed_stable_count + experimental_count + waiting_count,
+        "stable_count": valid_stable_count,
+        "claimed_stable_count": claimed_stable_count,
+        "valid_stable_count": valid_stable_count,
         "experimental_count": experimental_count,
         "waiting_count": waiting_count,
         "by_browser": by_browser,

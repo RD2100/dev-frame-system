@@ -64,7 +64,7 @@ browser_transport:
   id: chrome-cdp
   family: cdp
   browser: chrome
-  endpoint: http://127.0.0.1:9222
+  endpoint: http://<cdp-host>:<cdp-port>
   profile_policy: user_selected
   evidence_level: stable
 ```

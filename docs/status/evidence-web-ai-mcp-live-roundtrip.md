@@ -28,12 +28,12 @@ transport, not mocked (the test suite's `FakeMcpServer` was NOT involved).
 
 ## Environment facts
 
-- `codexpro` CLI installed at `D:\Tools\npm_pack\codexpro.cmd` (package root
-  `D:\Tools\npm_pack\node_modules\codexpro`); `codexpro doctor` healthy.
+- `codexpro` CLI installed at `<local-tool-path>\codexpro.cmd` (package root
+  `<local-tool-path>\node_modules\codexpro`); `codexpro doctor` healthy.
 - `codexpro start` mode: agent, tools=standard, write=workspace, bash=safe,
   tunnel=cloudflare; local URL `http://127.0.0.1:8787/mcp`.
-- `cloudflared` at `C:\Users\RD\.codexpro\bin\cloudflared.exe`.
-- The live ChatGPT tab is reachable via Chrome CDP at `http://127.0.0.1:9222`
+- `cloudflared` at `<user-home>\.codexpro\bin\cloudflared.exe`.
+- The live ChatGPT tab is reachable via Chrome CDP at `http://<cdp-host>:<cdp-port>`
   and was bound earlier as a summary-only external-brain session
   (no transcript/cookie/profile captured).
 

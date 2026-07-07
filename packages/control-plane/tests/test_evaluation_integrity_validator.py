@@ -117,6 +117,15 @@ class TestValidateEvaluationIntegrity:
             assert not result.valid
             assert any(f"{field} is required" in err for err in result.errors)
 
+    def test_whitespace_required_strings_fail(self):
+        e = _entry(eid="   ", evaluation_id="\t", dimension="\n", outcome=" ")
+        result = validate_evaluation_integrity(_packet(evaluations=[e]))
+        assert not result.valid
+        assert any("id is required" in err for err in result.errors)
+        assert any("evaluation_id is required" in err for err in result.errors)
+        assert any("dimension is required" in err for err in result.errors)
+        assert any("outcome is required" in err for err in result.errors)
+
     def test_outcome_must_be_valid(self):
         e = _entry(outcome="SKIPPED")
         result = validate_evaluation_integrity(_packet(evaluations=[e]))

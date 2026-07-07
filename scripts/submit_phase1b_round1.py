@@ -1,11 +1,48 @@
 import asyncio
-import json
-import sys
+import argparse
+import os
+from pathlib import Path
+
 from playwright.async_api import async_playwright
 
-BUNDLE_DIR = r"D:\dev-frame-system\review-bundle-phase1b-round1"
-ZIP_PATH = r"D:\dev-frame-system\review-bundle-phase1b-round1.zip"
-CONVO_URL = "https://chatgpt.com/c/6a475842-60a0-83e8-bbc3-c60475917c2d"
+DEFAULT_BUNDLE_DIR = "review-bundle-phase1b-round1"
+DEFAULT_ZIP_PATH = "review-bundle-phase1b-round1.zip"
+BUNDLE_DIR_ENV = "SUBMIT_BUNDLE_DIR"
+ZIP_PATH_ENV = "SUBMIT_ZIP_PATH"
+CONVO_URL_ENV = "SUBMIT_CONVERSATION_URL"
+CDP_ENDPOINT_ENV = "SUBMIT_CDP_ENDPOINT"
+
+
+def parse_args():
+    env_cdp_endpoint = os.environ.get(CDP_ENDPOINT_ENV)
+    parser = argparse.ArgumentParser(
+        description="Upload a review bundle to an existing ChatGPT browser session."
+    )
+    parser.add_argument(
+        "--bundle-dir",
+        default=os.environ.get(BUNDLE_DIR_ENV, DEFAULT_BUNDLE_DIR),
+        help=f"Bundle directory. Defaults to ${BUNDLE_DIR_ENV} or {DEFAULT_BUNDLE_DIR}.",
+    )
+    parser.add_argument(
+        "--zip-path",
+        default=os.environ.get(ZIP_PATH_ENV, DEFAULT_ZIP_PATH),
+        help=f"Bundle zip path. Defaults to ${ZIP_PATH_ENV} or {DEFAULT_ZIP_PATH}.",
+    )
+    parser.add_argument(
+        "--conversation-url",
+        default=os.environ.get(CONVO_URL_ENV),
+        help=f"ChatGPT conversation URL. Defaults to ${CONVO_URL_ENV}.",
+    )
+    parser.add_argument(
+        "--cdp-endpoint",
+        default=env_cdp_endpoint,
+        required=not env_cdp_endpoint,
+        help=f"Browser CDP endpoint. Defaults to ${CDP_ENDPOINT_ENV}.",
+    )
+    args = parser.parse_args()
+    args.bundle_dir = Path(args.bundle_dir)
+    args.zip_path = Path(args.zip_path)
+    return args
 
 
 async def find_chatgpt_page(pages):
@@ -15,13 +52,12 @@ async def find_chatgpt_page(pages):
     return None
 
 
-async def upload_and_send(page):
-    with open(f"{BUNDLE_DIR}/question.txt", encoding="utf-8") as fh:
-        question = fh.read()
+async def upload_and_send(page, bundle_dir, zip_path):
+    question = (bundle_dir / "question.txt").read_text(encoding="utf-8")
 
     file_input = await page.query_selector('input[type="file"]')
     if file_input:
-        await file_input.set_input_files(ZIP_PATH)
+        await file_input.set_input_files(str(zip_path))
         print("  [OK] file uploaded")
     else:
         attach = await page.query_selector('button[aria-label="Attach files"]')
@@ -30,7 +66,7 @@ async def upload_and_send(page):
             await asyncio.sleep(1)
             file_input = await page.query_selector('input[type="file"]')
             if file_input:
-                await file_input.set_input_files(ZIP_PATH)
+                await file_input.set_input_files(str(zip_path))
                 print("  [OK] file uploaded via attach")
             else:
                 print("  [WARN] no file input after attach click")
@@ -38,10 +74,6 @@ async def upload_and_send(page):
             print("  [WARN] no file input found")
 
     await asyncio.sleep(2)
-
-    # Read question from file and inject via JS
-    with open(f"{BUNDLE_DIR}/question.txt", encoding="utf-8") as fh:
-        question = fh.read()
 
     # Use page.evaluate with a function to avoid string escaping issues
     result = await page.evaluate("""(text) => {
@@ -98,15 +130,21 @@ async def poll_for_reply(page, baseline, max_checks=36, interval=10):
 
 
 async def main():
+    args = parse_args()
     async with async_playwright() as p:
-        browser = await p.chromium.connect_over_cdp("http://localhost:9222")
+        browser = await p.chromium.connect_over_cdp(args.cdp_endpoint)
         ctx = browser.contexts[0]
         pages = ctx.pages
 
         chatgpt_page = await find_chatgpt_page(pages)
         if not chatgpt_page:
+            if not args.conversation_url:
+                raise RuntimeError(
+                    "No ChatGPT conversation page found. Pass --conversation-url "
+                    f"or set ${CONVO_URL_ENV}."
+                )
             chatgpt_page = pages[-1] if pages else await ctx.new_page()
-            await chatgpt_page.goto(CONVO_URL)
+            await chatgpt_page.goto(args.conversation_url)
 
         print(f"Page: {chatgpt_page.url}")
 
@@ -117,7 +155,7 @@ async def main():
         }""")
         print(f"Baseline assistant messages: {baseline}")
 
-        await upload_and_send(chatgpt_page)
+        await upload_and_send(chatgpt_page, args.bundle_dir, args.zip_path)
         print("Starting poll for ChatGPT reply...")
         got_reply = await poll_for_reply(chatgpt_page, baseline)
         if not got_reply:

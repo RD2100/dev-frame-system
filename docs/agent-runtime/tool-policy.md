@@ -6,8 +6,8 @@
 
 | Operation | Condition |
 |-----------|-----------|
-| Read files | Within D:\devframe-system |
-| List directories | Within D:\devframe-system |
+| Read files | Within <repo-root> |
+| List directories | Within <repo-root> |
 | Git status/log/diff | Read-only |
 | Search (rg, Grep, Select-String) | Read-only |
 | JSON validation | Read-only schema audit |

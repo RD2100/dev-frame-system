@@ -21,7 +21,7 @@ powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
 The release gate currently runs:
 
 - `python -m pytest -q`
-- `scripts\verify-public-snapshot.ps1`
+- `scripts\verify-public-snapshot.ps1 -FailOnTrackedForbidden`
 - `scripts\verify-control-plane-wheel.ps1`
 - `git diff --check`
 
@@ -35,8 +35,13 @@ through `devframe --help`, `devframe run --help`, `devframe dashboard --help`,
 `--paper-project` coverage, and the installed `rdgoal` console script through
 `rdgoal`, `rdgoal worker`, and `rdgoal digest`.
 
-As of June 25, 2026, this local release gate passes in the current worktree.
-That is a local verification result only. It does not imply a staged commit,
+As of July 7, 2026, commit `15a9d78d` removed the tracked root review artifacts
+from the Git index, and both the ordinary public snapshot gate and the strict
+`-FailOnTrackedForbidden` public snapshot gate pass in the current worktree.
+The latest local full release-gate rerun also passes end to end:
+`1512 passed, 1 skipped`, strict public snapshot PASS, control-plane wheel smoke
+PASS, and `git diff --check` PASS with line-ending warnings only.
+This is a local verification result only. It does not imply a clean worktree,
 clean publish branch, pushed branch, opened PR, GitHub review, or public
 package release.
 
@@ -89,6 +94,15 @@ archives, `build`, `dist`, or package metadata directories in the public tree.
   was published.
 - Stage 7 final pre-commit review is also local-only. It does not stage files,
   create a commit, open a PR, push a branch, or publish a release.
+- Root `review-bundle-*` paths and `chatgpt-review-reply.txt` are forbidden
+  public-surface review artifacts. Commit `15a9d78d` removed the previously
+  tracked instances, and the strict snapshot gate now checks that they do not
+  return to the Git index.
+- Review-governance P3-2 graph projection has local GPT-equivalent review PASS,
+  but remains uncommitted in the current worktree and needs commit/review
+  evidence before it can support release readiness.
+- Control-plane dashboard tests bypass loopback HTTP proxies during pytest so
+  local dashboard server checks do not report proxy-generated 502 responses.
 
 ## Reviewer Focus
 
@@ -131,5 +145,5 @@ there is a clean worktree and the full public-release workflow is completed from
 an externally reviewed state (including PR-ready branch/review outcomes and
 artifact publication steps), not only a local release-gate pass.
 
-The current worktree should therefore be treated as local-gate-green and
-chain-verified, not release-ready.
+The current worktree should therefore be treated as local-release-gate-green but
+still not release-ready.

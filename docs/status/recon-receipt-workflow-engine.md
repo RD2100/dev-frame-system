@@ -9,7 +9,7 @@
 ## Target
 - user_goal: "Trigger multiple agents into a collaborative workflow" with a
   controller deciding next moves — the literal definition of the agent cluster.
-- target_repo_or_kb: `d:\dev-frame-system` (control-plane package).
+- target_repo_or_kb: `<repo-root>` (control-plane package).
 - current_slice_goal: Slice 1 — a real phase-based workflow engine that drives a
   coding goal through recorded phases (plan -> execute -> review), records each
   phase transition and the controller's verdict as real team events (reusing the

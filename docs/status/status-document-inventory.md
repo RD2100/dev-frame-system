@@ -58,8 +58,8 @@ Use these states when reading or editing files in this folder:
 
 ## Observed File Classification Snapshot
 
-Observed on 2026-07-04. Update this snapshot when adding or retiring status
-documents.
+Observed on 2026-07-04, with review-governance completion status added on
+2026-07-06. Update this snapshot when adding or retiring status documents.
 
 | State | Files |
 |---|---|
@@ -71,7 +71,7 @@ documents.
 | `recon-receipt` | `recon-receipt-acp-backbone.md`, `recon-receipt-cli-decomposition.md`, `recon-receipt-cluster-control-surface.md`, `recon-receipt-customization-layer.md`, `recon-receipt-devframe-mcp-server.md`, `recon-receipt-global-coordinator-conversation-mainline.md`, `recon-receipt-local-agent-client-mainline.md`, `recon-receipt-mcp-consent.md`, `recon-receipt-mcp-live-probe-sse.md`, `recon-receipt-obsidian-stage3.md`, `recon-receipt-obsidian-stage4-sync.md`, `recon-receipt-opencode-event-integration.md`, `recon-receipt-paper-pdf-fulltext-segmentation.md`, `recon-receipt-parallel-write-isolation.md`, `recon-receipt-pluggable-model-provider.md`, `recon-receipt-rd-code-prod-launch.md`, `recon-receipt-rdcode-bridge-data.md`, `recon-receipt-rdcode-writeback.md`, `recon-receipt-t3-rebrand-i18n.md`, `recon-receipt-team-runtime.md`, `recon-receipt-workflow-engine.md` |
 | `handoff` | `continue-global-coordinator-conversation-mainline.md`, `next-agent-global-coordinator-prompt.md`, `devframe-code-opencode-handoff.md` |
 | `historical-stage` | `local-agent-control-plane-stage-2-acceptance.md`, `local-agent-control-plane-stage-2-precommit-review.md`, `local-agent-control-plane-stage-3-execution-report.md`, `local-agent-control-plane-stage-3-go-batch.md`, `local-agent-control-plane-stage-4-web-ai-binding.md`, `local-agent-control-plane-stage-5-closed-loop.md`, `local-agent-control-plane-stage-6-release-prep.md`, `local-agent-control-plane-stage-7-final-precommit-review.md` |
-| `evidence-record` | `current-coverage-audit-evidence-20260704.md`, `working-tree-cleanup-inventory-20260705.md`, `asset-utilization-inventory-20260705.md`, `evidence-web-ai-mcp-live-roundtrip.md`, `legacy-submodule-baseline.json` |
+| `evidence-record` | `current-coverage-audit-evidence-20260704.md`, `working-tree-cleanup-inventory-20260705.md`, `asset-utilization-inventory-20260705.md`, `review-governance-kernel-completion-20260706.md`, `evidence-web-ai-mcp-live-roundtrip.md`, `legacy-submodule-baseline.json` |
 | `external-recon` | `codexpro-devspace-mcp-recon.md` |
 
 ## Active Planning Set
@@ -173,6 +173,11 @@ The `local-agent-control-plane-stage-*.md` files, `evidence-*.md` files, and
 similar execution records are historical evidence. They are useful for proving
 how a capability matured, but they are not the first place to look for current
 product direction.
+
+`review-governance-kernel-completion-20260706.md` is the latest bounded
+review-governance progress record: P1/P2/P3-1 are marked PASS, and P3-2 graph
+projection has local GPT-equivalent review PASS but remains pending commit and
+release evidence. Do not use that record as release readiness evidence.
 
 Current rule:
 

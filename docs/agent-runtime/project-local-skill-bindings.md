@@ -1,6 +1,6 @@
 # Project-Local Skill Bindings
 
-> Scope: `D:\dev-frame-system`
+> Scope: `<repo-root>`
 > Status: active for the current public repository
 
 This file defines how project-local skills and agent conversations must resolve
@@ -10,19 +10,19 @@ paths for the current `dev-frame-system` repository.
 
 | ID | Role | Root |
 |---|---|---|
-| `dev-frame-system` | Current project root | `D:\dev-frame-system` |
+| `dev-frame-system` | Current project root | `<repo-root>` |
 | `agents-binding-root` | User-level binding metadata root | `%USERPROFILE%\.agents\bindings\dev-frame-system` |
 | `runtime-root` | User-level runtime session/evidence root | `%USERPROFILE%\.devframe-runtime` |
 
 ## `/rdinit`
 
-For this project, `/rdinit` must treat `D:\dev-frame-system` as the canonical
+For this project, `/rdinit` must treat `<repo-root>` as the canonical
 project root.
 
 Required paths:
 
-- Project root: `D:\dev-frame-system`
-- Bootstrap script: `D:\dev-frame-system\templates\runtime-bootstrap\bootstrap.ps1`
+- Project root: `<repo-root>`
+- Bootstrap script: `<repo-root>\templates\runtime-bootstrap\bootstrap.ps1`
 - Runtime template source: resolved from the bootstrap script location, not a
   hard-coded external checkout.
 
@@ -55,11 +55,11 @@ handoff text.
 Minimum TaskSpec path fields:
 
 ```yaml
-project_root: "D:\dev-frame-system"
+project_root: "<repo-root>"
 target_project_id: "dev-frame-system"
-target_project_root: "D:\dev-frame-system"
+target_project_root: "<repo-root>"
 allowed_write_roots:
-  - "D:\dev-frame-system"
+  - "<repo-root>"
 ```
 
 For any governance or review work, the allowed write roots must remain explicit.

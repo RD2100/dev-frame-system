@@ -1,4 +1,4 @@
-﻿# Runtime Bootstrap - Instantiation Guide
+# Runtime Bootstrap - Instantiation Guide
 
 ## Step 1: Run Bootstrap
 
@@ -6,7 +6,7 @@ From a source checkout of `RD2100/dev-frame-system`:
 
 ```powershell
 cd D:\your-project
-powershell -ExecutionPolicy Bypass -File D:\devframe-system\templates\runtime-bootstrap\bootstrap.ps1
+powershell -ExecutionPolicy Bypass -File <repo-root>\templates\runtime-bootstrap\bootstrap.ps1
 ```
 
 Auto-detects project name from directory or git remote. Override:

@@ -134,6 +134,15 @@ class TestFirefoxCompatibility:
         assert not result.valid
         assert "firefox" in result.errors[0].lower()
 
+    def test_firefox_with_trailing_space_cannot_use_cdp_adapter(self):
+        """Firefox with surrounding whitespace is still rejected for CDP."""
+        sess = _session(adapter="chrome_cdp", browser="firefox ")
+        result = validate_transport_boundary(_payload([sess]))
+        assert not result.valid
+        errors = " ".join(result.errors).lower()
+        assert "firefox" in errors
+        assert "cdp" in errors
+
     def test_firefox_with_non_cdp_adapter_ok(self):
         """Firefox with webdriver_bidi is OK for CDP check, but still blocked by
         experimental maturity."""
@@ -190,6 +199,17 @@ class TestRequiredFields:
         assert not result.valid
         assert "browser" in result.errors[0]
 
+    def test_whitespace_required_strings_fail(self):
+        sess = _session(id="   ", adapter="\t", maturity="\n", mode=" ", browser=" \t ")
+        result = validate_transport_boundary(_payload([sess]))
+        assert not result.valid
+        assert any("id is required" in e for e in result.errors)
+        assert any("adapter is required" in e for e in result.errors)
+        assert any("maturity is required" in e for e in result.errors)
+        assert any("mode is required" in e for e in result.errors)
+        assert any("browser is required" in e for e in result.errors)
+        assert derive_transport_boundary(_payload([sess]))["total_sessions"] == 0
+
     def test_invalid_maturity_level(self):
         sess = _session(maturity="unknown_level")
         result = validate_transport_boundary(_payload([sess]))
@@ -218,6 +238,8 @@ class TestDeriveTransportBoundary:
         result = derive_transport_boundary({})
         assert result["total_sessions"] == 0
         assert result["stable_count"] == 0
+        assert result["claimed_stable_count"] == 0
+        assert result["valid_stable_count"] == 0
         assert result["experimental_count"] == 0
 
     def test_counts_by_maturity(self):
@@ -230,6 +252,8 @@ class TestDeriveTransportBoundary:
         result = derive_transport_boundary(_payload(sessions))
         assert result["total_sessions"] == 4
         assert result["stable_count"] == 2
+        assert result["claimed_stable_count"] == 2
+        assert result["valid_stable_count"] == 2
         assert result["experimental_count"] == 1
         assert result["waiting_count"] == 1
 
@@ -237,6 +261,24 @@ class TestDeriveTransportBoundary:
         sessions = [_session(id="")]  # no id → invalid
         result = derive_transport_boundary(_payload(sessions))
         assert result["total_sessions"] == 0
+
+    def test_boundary_invalid_stable_sessions_are_not_valid_evidence(self):
+        sessions = [
+            _session(id="manual-chrome", adapter="chrome_cdp", maturity="stable",
+                     mode="manual"),
+            _session(id="playwright-stable", adapter="playwright",
+                     maturity="stable", mode="automated"),
+            _session(id="valid-chrome", adapter="chrome_cdp", maturity="stable",
+                     mode="automated"),
+        ]
+        validation = validate_transport_boundary(_payload(sessions))
+        assert not validation.valid
+
+        result = derive_transport_boundary(_payload(sessions))
+        assert result["total_sessions"] == 3
+        assert result["claimed_stable_count"] == 3
+        assert result["stable_count"] == 1
+        assert result["valid_stable_count"] == 1
 
     def test_by_browser(self):
         sessions = [
@@ -350,4 +392,6 @@ class TestStableAdapterInvariants:
 
         proj = derive_transport_boundary(_payload(sessions))
         assert proj["total_sessions"] == 2
-        assert proj["stable_count"] == 2
+        assert proj["claimed_stable_count"] == 2
+        assert proj["stable_count"] == 1
+        assert proj["valid_stable_count"] == 1

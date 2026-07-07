@@ -7,7 +7,7 @@ Status: `approved-for-next-slice`
 ## Target
 
 - user_goal: Build DevFrame as a local native/desktop Agent Control Plane where the user can see multiple agent tasks, handoffs, review, evidence, and next actions.
-- target_repo_or_kb: `D:\dev-frame-system`, with external candidates T3Code, OpenCode, CodexPro, and DevSpace.
+- target_repo_or_kb: `<repo-root>`, with external candidates T3Code, OpenCode, CodexPro, and DevSpace.
 - current_slice_goal: Preserve the client mainline direction and make future write-capable work depend on a directory-level recon and reuse decision.
 - requested_outcome: Stop blind hand-rolling, use T3Code/OpenCode/CodexPro/DevSpace as evaluated resources, and continue development through OpenCode workers under @go review.
 - planner_agent_id: `codex-controller`
@@ -15,7 +15,7 @@ Status: `approved-for-next-slice`
 ## Resource Map
 
 - repository_roots:
-  - `D:\dev-frame-system`
+  - `<repo-root>`
 - top_level_tree:
   - `AGENTS.md`: public project instructions and agent entry rules.
   - `rules/`: governance rules.
@@ -41,7 +41,7 @@ Status: `approved-for-next-slice`
   - `docs/agent-runtime/visual-control-plane.md`
   - `docs/agent-runtime/web-ai-adapter-contract.md`
   - `docs/agent-runtime/sub-agent-dispatch-protocol.md`
-  - `C:\Users\RD\Downloads\deep-research-report.md`
+  - `<user-home>\Downloads\deep-research-report.md`
 - packages_apps_modules:
   - `control_plane.client_launcher`: zero-config local client launch plan.
   - `control_plane.client_manifest`: read-only native-client manifest.

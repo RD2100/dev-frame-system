@@ -7,23 +7,33 @@ Last updated: 2026-07-05
 Reader: a coding agent or engineer taking over implementation after the planning
 cleanup.
 
-Post-read action: implement only the Phase 1A review-first governance kernel
-slice, unless a later evidence-backed decision explicitly changes the order.
+Post-read action: first read [Review-Governance Kernel Completion Status](review-governance-kernel-completion-20260706.md),
+then continue from the current pending item in that status record. Historical
+Phase 1A gap and next-target language in this plan is planning snapshot context,
+not current implementation state.
 
-Related docs: [Document-Driven Transformation Master Plan](document-driven-transformation-master-plan.md), [Review-First Governance Kernel Implementation Spec](review-first-governance-kernel-implementation-spec.md), [Skill Asset Utilization Plan](skill-asset-utilization-plan.md), [Agent Coding Discipline](../agent-runtime/agent-coding-discipline.md), [Asset Utilization Inventory](asset-utilization-inventory-20260705.md), [Status Document Inventory](status-document-inventory.md), [Reviewer Index](reviewer-index.md)
+Related docs: [Document-Driven Transformation Master Plan](document-driven-transformation-master-plan.md), [Review-First Governance Kernel Implementation Spec](review-first-governance-kernel-implementation-spec.md), [Skill Asset Utilization Plan](skill-asset-utilization-plan.md), [Agent Coding Discipline](../agent-runtime/agent-coding-discipline.md), [Asset Utilization Inventory](asset-utilization-inventory-20260705.md), [Review-Governance Kernel Completion Status](review-governance-kernel-completion-20260706.md), [Status Document Inventory](status-document-inventory.md), [Reviewer Index](reviewer-index.md)
 
 External review status: ChatGPT coding-agent review source set received `PASS`
 on 2026-07-05. A refreshed v2 review after adding coding-agent execution
 constraints also received `PASS`, with no remaining P0 or P1 blockers for this
 final draft.
 
+Latest implementation status note: for execution progress after this planning
+draft, read [Review-Governance Kernel Completion Status](review-governance-kernel-completion-20260706.md).
+As of 2026-07-07, P3-2 graph projection has local GPT-equivalent review PASS
+but still needs commit and release evidence; do not treat it as release-ready.
+
 ## Final Decision
 
-The planning work is sufficiently consolidated for coding to resume, but the
-platform is not implemented.
+The planning work was sufficiently consolidated for coding to resume from the
+2026-07-05 snapshot. Current implementation progress is tracked in
+[Review-Governance Kernel Completion Status](review-governance-kernel-completion-20260706.md);
+historical Phase 1A gap rows are not current state.
 
-The next coding slice is still the review-first governance kernel. Every other
-topic in the planning set is either:
+At the time of this planning snapshot, the next coding slice was the
+review-first governance kernel. Every other topic in the planning set was
+either:
 
 - a prerequisite discipline or routing sidecar;
 - reference context for the kernel;
@@ -77,7 +87,7 @@ into a governed platform:
 
 - [x] review-governance kernel schema (`schemas/review_governance_kernel.schema.json`) — 44 static constraints under draft-07
 - [x] 4 fixture payloads (success, blocked, insufficient-evidence, missing-context)
-- [x] 55 contract tests (`test_review_governance_kernel.py`) — all passing
+- [x] 73 current contract tests (`test_review_governance_kernel.py`) — all passing locally; the round-7 external review PASS covered the earlier 55-test baseline
 - [x] Semantic validator (`review_governance_validator.py`) — 12 cross-object constraints
 - [x] External review loop completed — ChatGPT returned GO on round 7
 - [x] Post-GO suggestions addressed (Round 7 feedback: latest_decision_id target_ref binding + reverse inconsistency check)
@@ -100,7 +110,8 @@ substrate ready for Phase 1B.
 
 ## Operating Invariants
 
-These invariants are final for the next coding slice:
+These invariants were final for the 2026-07-05 planning snapshot and remain
+boundary context for current status-recorded work:
 
 | Invariant | Meaning for coding agents |
 |---|---|
@@ -329,7 +340,8 @@ Do not claim any bounded package is complete when:
 This final plan is accepted as a planning document only when:
 
 - it is linked from the documentation map, status inventory, and reviewer index;
-- it identifies Phase 1A as the next coding target;
+- it recorded the 2026-07-05 Phase 1A priority while deferring current progress
+  to the completion status record;
 - it preserves sidecars as discipline, not runtime proof;
 - it names deferred modules and stop lines;
 - it is reviewed by external GPT with no remaining P0/P1 blockers;
@@ -342,14 +354,16 @@ exists.
 
 ## What Changes After This Plan
 
-After this final plan is accepted, planning should stop expanding horizontally.
-New work should either:
+After this final plan was accepted, planning should stop expanding
+horizontally. New work should first read the completion status record, then
+either:
 
-- implement Phase 1A;
+- continue the current pending item recorded there;
 - fix a P0/P1 blocker found by review;
 - update an index or evidence record required for traceability;
 - explicitly defer a tempting module behind the kernel.
 
 Any proposal that starts with UI, dashboard, plugin import, graph canvas, paper
 workspace runtime, multi-browser support, or model routing should be treated as
-out of order unless it directly serves the Phase 1A kernel proof.
+out of order unless the completion status record identifies it as the current
+pending item or it directly serves the bounded kernel/projection proof.

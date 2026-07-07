@@ -20,7 +20,7 @@
 - date: 2026-06-26 | planner_agent_id: kiro
 
 ## Resource Map
-- repository_roots: `d:\dev-frame-system` (public repo); the T3 fork lives in
+- repository_roots: `<repo-root>` (public repo); the T3 fork lives in
   the gitignored `.devframe-runtime/external/t3code/`.
 - bridge_service_entrypoints:
   - `packages/control-plane/control_plane/dashboard.py` — the loopback HTTP

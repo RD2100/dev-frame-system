@@ -16,7 +16,7 @@ surface and import that observation into the Visual Control Plane read model.
 
 In scope:
 
-- read local Chrome CDP metadata from `http://127.0.0.1:9222`,
+- read local Chrome CDP metadata from `http://<cdp-host>:<cdp-port>`,
 - identify an already-open `https://chatgpt.com/` page tab,
 - generate a summary-only `chatgpt` session,
 - import it into a local runtime under `%TEMP%`,
@@ -36,7 +36,7 @@ Out of scope:
 New reusable entrypoint:
 
 ```powershell
-devframe web-ai bind-chrome --runtime-dir <runtime> --project <project-id> --cdp-endpoint http://127.0.0.1:9222
+devframe web-ai bind-chrome --runtime-dir <runtime> --project <project-id> --cdp-endpoint http://<cdp-host>:<cdp-port>
 ```
 
 The command writes:
@@ -61,8 +61,8 @@ provider binding is projected as `health = ready`.
 Chrome CDP check:
 
 ```powershell
-Invoke-RestMethod -Uri 'http://localhost:9222/json/version' -TimeoutSec 3
-Invoke-RestMethod -Uri 'http://localhost:9222/json' -TimeoutSec 3
+Invoke-RestMethod -Uri 'http://<cdp-host>:<cdp-port>/json/version' -TimeoutSec 3
+Invoke-RestMethod -Uri 'http://<cdp-host>:<cdp-port>/json' -TimeoutSec 3
 ```
 
 Result summary:
@@ -75,7 +75,7 @@ Binding command:
 ```powershell
 $env:PYTHONPATH='packages/control-plane;packages/ai-workflow-hub/src'
 $runtime = Join-Path $env:TEMP 'devframe-stage4-web-ai-runtime'
-python -m control_plane.cli web-ai bind-chrome --runtime-dir $runtime --project dev-frame-system --cdp-endpoint http://127.0.0.1:9222
+python -m control_plane.cli web-ai bind-chrome --runtime-dir $runtime --project dev-frame-system --cdp-endpoint http://<cdp-host>:<cdp-port>
 ```
 
 Result summary:

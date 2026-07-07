@@ -6,10 +6,13 @@ Reader: DevFrame maintainers and coding agents checking whether the current
 coverage audit in `document-driven-transformation-master-plan.md` is grounded in
 reproducible repository evidence.
 
-Post-read action: use this as a bounded evidence snapshot. Do not treat it as a
-clean release state or as proof that Phase 1A has been implemented.
+Post-read action: use this as a bounded 2026-07-04 evidence snapshot. Current
+progress is tracked in
+[Review-Governance Kernel Completion Status](review-governance-kernel-completion-20260706.md);
+historical Phase 1A gap rows are not current state. Do not treat this snapshot
+as a clean release state.
 
-Related docs: [Document-Driven Transformation Master Plan](document-driven-transformation-master-plan.md), [Review-First Governance Kernel Implementation Spec](review-first-governance-kernel-implementation-spec.md), [Status Document Inventory](status-document-inventory.md), [Reviewer Index](reviewer-index.md)
+Related docs: [Document-Driven Transformation Master Plan](document-driven-transformation-master-plan.md), [Review-First Governance Kernel Implementation Spec](review-first-governance-kernel-implementation-spec.md), [Review-Governance Kernel Completion Status](review-governance-kernel-completion-20260706.md), [Status Document Inventory](status-document-inventory.md), [Reviewer Index](reviewer-index.md)
 
 ## Scope
 
@@ -21,8 +24,8 @@ It answers four narrow questions:
 3. Are the planned Phase 1A review-governance kernel files present?
 4. Does the known TestFrame import blocker still reproduce?
 
-It does not prove implementation readiness beyond Phase 1A schema, fixture, and
-negative-test work.
+At capture time, it did not prove implementation readiness beyond Phase 1A
+schema, fixture, and negative-test work.
 
 ## Repository State
 
@@ -98,9 +101,9 @@ MISSING packages/control-plane/tests/test_review_governance_kernel.py
 MISSING packages/control-plane/control_plane/review_governance_kernel.py
 ```
 
-Conclusion: Phase 1A is still a planned implementation target. The expected
-schema, fixtures, contract tests, and optional helper do not exist in this
-worktree snapshot.
+Conclusion: in this 2026-07-04 snapshot, Phase 1A was still a planned
+implementation target. The expected schema, fixtures, contract tests, and
+optional helper did not exist in this worktree snapshot.
 
 ## TestFrame Import Probe
 
@@ -185,9 +188,9 @@ public repository.
 
 ## Evidence Boundary
 
-This evidence supports these claims:
+This evidence supports these historical 2026-07-04 claims:
 
-- Phase 1A remains the next implementation target.
+- Phase 1A remained the next implementation target in the audited snapshot.
 - Existing external-brain, browser-launch, and custom-skill code paths are
   tested substrate.
 - TestFrame still has an importability gap that blocks later evaluation
@@ -195,7 +198,8 @@ This evidence supports these claims:
 
 This evidence does not support these claims:
 
-- Phase 1A is implemented.
+- the post-2026-07-04 implementation status of Phase 1A; check the completion
+  status record instead.
 - TestFrame is ready as a general evaluation substrate.
 - Graph projection, Paper KB iteration, or multi-browser transport should move
   ahead of the review-governance kernel.

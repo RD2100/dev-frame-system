@@ -31,6 +31,12 @@ class ValidationResult:
         return self.valid
 
 
+def _has_required_value(value: object) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
+    return bool(value)
+
+
 def _is_valid_evaluation_entry(
     entry: dict,
     collect_errors: bool = False,
@@ -49,7 +55,7 @@ def _is_valid_evaluation_entry(
     prefix = f"evaluation[{eid or '<missing>'}]"
 
     for field in ("id", "evaluation_id", "dimension", "outcome"):
-        if not entry.get(field):
+        if not _has_required_value(entry.get(field)):
             if collect_errors:
                 errors.append(f"{prefix}: {field} is required")
             else:
@@ -58,7 +64,7 @@ def _is_valid_evaluation_entry(
     outcome = entry.get("outcome", "")
     gate_ref = entry.get("gate_ref") or ""
 
-    if outcome in ("PASS", "FAIL") and not gate_ref:
+    if outcome in ("PASS", "FAIL") and not _has_required_value(gate_ref):
         if collect_errors:
             errors.append(
                 f"{prefix}: outcome={outcome!r} requires gate_ref; "
@@ -133,7 +139,7 @@ def _is_valid_evaluation_evidence(
                 continue
             return False, errors
         src = ev.get("source_artifact_id", "")
-        if not src:
+        if not _has_required_value(src):
             if collect_errors:
                 errors.append(
                     f"{prefix}: evidence {ref_id!r} has no source_artifact_id"
@@ -170,7 +176,7 @@ def _check_gate_non_override(
 
     if outcome not in ("PASS", "FAIL"):
         return True, errors
-    if not gate_ref:
+    if not _has_required_value(gate_ref):
         # Already caught by _is_valid_evaluation_entry for PASS/FAIL
         return True, errors
 
@@ -203,9 +209,15 @@ def validate_evaluation_integrity(payload: dict) -> ValidationResult:
     artifacts: list[dict] = payload.get("artifacts") or []
     gates: list[dict] = payload.get("gates") or []
 
-    evidence_by_id = {e.get("id"): e for e in evidence if e.get("id")}
-    artifact_ids = {a.get("id") for a in artifacts if a.get("id")}
-    gate_by_id = {g.get("id"): g for g in gates if g.get("id")}
+    evidence_by_id = {
+        e.get("id"): e for e in evidence if _has_required_value(e.get("id"))
+    }
+    artifact_ids = {
+        a.get("id") for a in artifacts if _has_required_value(a.get("id"))
+    }
+    gate_by_id = {
+        g.get("id"): g for g in gates if _has_required_value(g.get("id"))
+    }
 
     for entry in entries:
         base_ok, base_errors = _is_valid_evaluation_entry(entry, collect_errors=True)
@@ -233,9 +245,15 @@ def derive_evaluation_integrity(payload: dict) -> dict:
     artifacts: list[dict] = payload.get("artifacts") or []
     gates: list[dict] = payload.get("gates") or []
 
-    evidence_by_id = {e.get("id"): e for e in evidence if e.get("id")}
-    artifact_ids = {a.get("id") for a in artifacts if a.get("id")}
-    gate_by_id = {g.get("id"): g for g in gates if g.get("id")}
+    evidence_by_id = {
+        e.get("id"): e for e in evidence if _has_required_value(e.get("id"))
+    }
+    artifact_ids = {
+        a.get("id") for a in artifacts if _has_required_value(a.get("id"))
+    }
+    gate_by_id = {
+        g.get("id"): g for g in gates if _has_required_value(g.get("id"))
+    }
 
     total = len(entries)
     pass_count = 0

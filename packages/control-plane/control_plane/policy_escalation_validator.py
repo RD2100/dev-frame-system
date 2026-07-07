@@ -68,6 +68,35 @@ class ValidationResult:
         return self.valid
 
 
+def _has_required_value(value: object) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
+    return bool(value)
+
+
+def _canonical_string(value: object) -> object:
+    if isinstance(value, str):
+        return value.strip()
+    return value
+
+
+def _canonical_entry_value(entry: dict, field: str) -> object:
+    return _canonical_string(entry.get(field, ""))
+
+
+def _is_non_authority_self_promotion(
+    outcome: object,
+    requested_by: object,
+    granted_to: object,
+) -> bool:
+    return (
+        outcome in GRANT_EQUIVALENTS
+        and requested_by
+        and requested_by == granted_to
+        and requested_by in NON_AUTHORITY_SOURCES
+    )
+
+
 # ---------------------------------------------------------------------------
 # Shared helpers — validate and derive use the same functions to prevent
 # projection divergence (same pattern as P1-2, P1-4, P2-1).
@@ -92,13 +121,13 @@ def _is_valid_policy_entry(
     prefix = f"policy[{pid or '<missing>'}]"
 
     for field in ("id", "project_id", "action", "outcome", "requested_by"):
-        if not entry.get(field):
+        if not _has_required_value(entry.get(field)):
             if collect_errors:
                 errors.append(f"{prefix}: {field} is required")
             else:
                 return False, errors
 
-    action = entry.get("action", "")
+    action = _canonical_entry_value(entry, "action")
     if action not in HIGH_POWER_ACTIONS:
         if collect_errors:
             errors.append(
@@ -108,7 +137,7 @@ def _is_valid_policy_entry(
         else:
             return False, errors
 
-    outcome = entry.get("outcome", "")
+    outcome = _canonical_entry_value(entry, "outcome")
     if outcome not in VALID_POLICY_OUTCOMES:
         if collect_errors:
             errors.append(
@@ -117,20 +146,20 @@ def _is_valid_policy_entry(
         else:
             return False, errors
 
-    requested_by = entry.get("requested_by", "")
-    granted_to = entry.get("granted_to", "")
+    requested_by = _canonical_entry_value(entry, "requested_by")
+    granted_to = _canonical_entry_value(entry, "granted_to")
 
     if outcome in GRANT_EQUIVALENTS:
-        if not granted_to:
+        if not _has_required_value(granted_to):
             if collect_errors:
                 errors.append(
                     f"{prefix}: outcome='granted' requires granted_to"
                 )
             else:
                 return False, errors
-        decider_principal_id = entry.get("decider_principal_id", "")
-        decider_type = entry.get("decider_type", "")
-        if not decider_principal_id:
+        decider_principal_id = _canonical_entry_value(entry, "decider_principal_id")
+        decider_type = _canonical_entry_value(entry, "decider_type")
+        if not _has_required_value(decider_principal_id):
             if collect_errors:
                 errors.append(
                     f"{prefix}: outcome='granted' requires decider_principal_id"
@@ -146,10 +175,7 @@ def _is_valid_policy_entry(
             else:
                 return False, errors
 
-        if (
-            requested_by == granted_to
-            and requested_by in NON_AUTHORITY_SOURCES
-        ):
+        if _is_non_authority_self_promotion(outcome, requested_by, granted_to):
             if collect_errors:
                 errors.append(
                     f"{prefix}: self-promotion blocked: {requested_by!r} cannot "
@@ -182,14 +208,14 @@ def _is_valid_escalation_entry(
         "why_required", "consequence_if_declined",
         "context_snapshot_artifact_id",
     ):
-        if not entry.get(field):
+        if not _has_required_value(entry.get(field)):
             if collect_errors:
                 errors.append(f"{prefix}: {field} is required")
             else:
                 return False, errors
 
     work_item_id = entry.get("work_item_id", "")
-    if work_item_id and work_item_id not in work_item_ids:
+    if _has_required_value(work_item_id) and work_item_id not in work_item_ids:
         if collect_errors:
             errors.append(
                 f"{prefix}: work_item_id={work_item_id!r} does not resolve "
@@ -220,7 +246,9 @@ def validate_policy_escalation(payload: dict) -> ValidationResult:
     policy_decisions: list[dict] = payload.get("policy_decisions") or []
     escalations: list[dict] = payload.get("escalations") or []
     work_items: list[dict] = payload.get("work_items") or []
-    work_item_ids = {wi.get("id") for wi in work_items if wi.get("id")}
+    work_item_ids = {
+        wi.get("id") for wi in work_items if _has_required_value(wi.get("id"))
+    }
 
     for entry in policy_decisions:
         _, entry_errors = _is_valid_policy_entry(entry, collect_errors=True)
@@ -244,7 +272,9 @@ def derive_policy_escalation(payload: dict) -> dict:
     policy_decisions: list[dict] = payload.get("policy_decisions") or []
     escalations: list[dict] = payload.get("escalations") or []
     work_items: list[dict] = payload.get("work_items") or []
-    work_item_ids = {wi.get("id") for wi in work_items if wi.get("id")}
+    work_item_ids = {
+        wi.get("id") for wi in work_items if _has_required_value(wi.get("id"))
+    }
 
     granted = 0
     denied = 0
@@ -257,15 +287,10 @@ def derive_policy_escalation(payload: dict) -> dict:
 
         # Count self-promotion when outcome=granted + non-authority self-grant
         # (self-promotion is one of the reasons an entry can be invalid).
-        requested_by = entry.get("requested_by", "")
-        granted_to = entry.get("granted_to", "")
-        outcome = entry.get("outcome", "")
-        if (
-            outcome == "granted"
-            and requested_by
-            and requested_by == granted_to
-            and requested_by in NON_AUTHORITY_SOURCES
-        ):
+        requested_by = _canonical_entry_value(entry, "requested_by")
+        granted_to = _canonical_entry_value(entry, "granted_to")
+        outcome = _canonical_entry_value(entry, "outcome")
+        if _is_non_authority_self_promotion(outcome, requested_by, granted_to):
             self_promotion_blocked += 1
 
         if not base_ok:
