@@ -54,6 +54,7 @@ git diff --check
 
 ## Known Gaps
 
-- Automatic finalizer-to-TeamRuntime event emission remains later work.
+- Go evidence finalization can now opt into TeamRuntime event recording with
+  `--team-runtime-dir`, but full go dispatch automation remains later work.
 - Sealed ContextPacket/ContextLedger production for go/workflow remains later work.
 - Legacy atgo review projections remain read-only compatibility adapters rather than TeamRuntime events.

@@ -268,6 +268,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/runtime-governance-batch-e-explicit-team-evidence-events.md`
 - `docs/status/runtime-governance-batch-e-team-context-refs.md`
 - `docs/status/runtime-governance-batch-e-team-review-verdict-events.md`
+- `docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/total-control-policy-engine-and-human-escalation-governance-plan.md`
@@ -425,6 +426,19 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     or worker-final-verdict behavior.
   - `docs/status/runtime-governance-batch-e-team-review-verdict-events.md`
     records the local limitation set and preserved stop lines.
+- Runtime-governance Batch E go evidence TeamRuntime finalization:
+  - `tools/go_evidence.py finalize --team-runtime-dir <dir>` should record
+    TeamRuntime `review_ref` and `final_verdict_ref` events only after a passing
+    deterministic evidence gate.
+  - Default `finalize <evidence_dir>` behavior must remain compatible and write
+    no TeamRuntime journal.
+  - Blocked or failed evidence finalization must not create TeamRuntime
+    final-ready events; blocked state remains visible in machine artifacts.
+  - `tests/test_go_evidence.py` should prove opt-in event recording, RunIndex
+    `final_ready` projection from the referenced FinalVerdict artifact, and no
+    event recording for blocked evidence.
+  - `docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`
+    records the local limitation set and preserved stop lines.
 
 ## Open-Source Review Checklist
 
@@ -491,6 +505,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/runtime-governance-batch-e-explicit-team-evidence-events.md`
 - `docs/status/runtime-governance-batch-e-team-context-refs.md`
 - `docs/status/runtime-governance-batch-e-team-review-verdict-events.md`
+- `docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`
 - `docs/status/recon-receipt-runtime-governance-unification.md`
 - `docs/status/evaluation-feedback-learning-governance-plan.md`
 - `docs/status/documentation-management-audit-and-plan.md`

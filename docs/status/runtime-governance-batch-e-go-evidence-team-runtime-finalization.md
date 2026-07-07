@@ -1,0 +1,53 @@
+# Runtime Governance Batch E: Go Evidence TeamRuntime Finalization
+
+Lifecycle state: Local implementation audit
+
+Reader: DevFrame maintainers reviewing @go evidence finalization and TeamRuntime journal linkage
+
+Post-read action: Verify that the deterministic evidence finalizer can opt into recording TeamRuntime review and final-verdict events without changing legacy finalize behavior.
+
+Related docs: [Runtime Governance And Evidence Closure Transformation Plan](runtime-governance-and-evidence-closure-transformation-plan.md), [Reviewer Index](reviewer-index.md)
+
+## Scope
+
+This Batch E slice connects the existing @go evidence finalizer to the explicit TeamRuntime review/final-verdict events added in the previous slice.
+
+Before this slice, `tools/go_evidence.py finalize` wrote machine artifacts but did not record TeamRuntime events.
+
+After this slice:
+
+- `tools/go_evidence.py finalize --team-runtime-dir <dir>` records `review_ref` and `final_verdict_ref` events after a passing evidence gate;
+- default `finalize <evidence_dir>` behavior remains unchanged and writes no TeamRuntime journal;
+- blocked or failed evidence finalization still writes machine artifacts but does not record TeamRuntime acceptance events;
+- TeamRuntime refuses to write the journal inside the public repository through the existing `repo_root` guard;
+- RunIndex can project the opt-in finalizer events into a schema-valid `final_ready` RunRecord only after validating the referenced FinalVerdict artifact.
+
+This slice does not automatically wire go dispatch execution to evidence finalization. The user or caller must opt in by passing `--team-runtime-dir`.
+
+## Local Evidence
+
+Focused tests added or updated:
+
+- `tests/test_go_evidence.py`
+
+Required verification for this batch:
+
+```powershell
+python -m pytest tests\test_go_evidence.py packages\control-plane\tests\test_run_index.py packages\control-plane\tests\test_team_runtime.py -q
+python -m pytest packages\control-plane\tests\test_public_snapshot.py -q
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-public-snapshot.ps1 -FailOnTrackedForbidden
+git diff --check
+```
+
+## Preserved Stop Lines
+
+- Legacy `finalize <evidence_dir>` remains compatible.
+- Worker/executor authored reviews remain blocked by the evidence gate and RunIndex.
+- FinalVerdict JSON remains the gate fact source for RunIndex projection.
+- Blocked or failed evidence cannot create TeamRuntime final-ready events.
+- Runtime data remains outside the public repository.
+
+## Known Gaps
+
+- Full go dispatch automation still needs to call the finalizer with `--team-runtime-dir`.
+- Blocked finalization events are intentionally not journaled in this slice; blocked state remains visible through machine artifacts.

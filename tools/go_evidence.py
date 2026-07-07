@@ -25,6 +25,8 @@ from control_plane.evidence_gate import (  # noqa: E402
     parse_review_yaml,
     write_json,
 )
+from control_plane.team_runtime import TeamRuntime  # noqa: E402
+
 
 def validate(evidence_dir: str):
     result = evaluate_evidence_dir(evidence_dir)
@@ -95,6 +97,88 @@ def write_governance_artifacts(evidence_dir: str):
     return result, artifacts
 
 
+def record_team_runtime_finalization(
+    evidence_dir: str,
+    result,
+    artifacts: dict,
+    runtime_dir: str,
+    repo_root: str | None = None,
+) -> list[str]:
+    """Record a successful evidence finalization in the TeamRuntime journal.
+
+    This is intentionally opt-in from the CLI. The evidence artifacts remain the
+    source of truth; TeamRuntime only receives references to the review and final
+    verdict artifacts after the evidence gate has passed.
+    """
+    if result.status != "pass":
+        return []
+    evidence_path = Path(evidence_dir)
+    final_verdict_path = Path(
+        str(artifacts.get("final_verdict") or evidence_path / "final-verdict.json")
+    )
+    final_verdict = json.loads(final_verdict_path.read_text(encoding="utf-8"))
+    review = result.review
+    chain = result.chain_evidence
+    run_id = str(chain.get("run_id") or evidence_path.name or "unknown-run")
+    reviewer_id = str(review.get("reviewer_id") or "missing-reviewer")
+    review_id = f"review-{_safe_token(run_id)}-{_safe_token(reviewer_id)}"
+    reviewed_inputs = [
+        str(item) for item in review.get("reviewed_inputs", [])
+        if str(item)
+    ]
+    reviewed_evidence_refs = [
+        str(evidence_path / name)
+        for name in REQUIRED_INPUTS
+        if (evidence_path / name).exists()
+    ]
+    team = TeamRuntime(runtime_dir=runtime_dir, repo_root=repo_root)
+    event_ids = [
+        team.record_review_ref(
+            run_id,
+            reviewer_id,
+            review_id=review_id,
+            reviewer_role=str(review.get("reviewer_role") or ""),
+            executor_id=str(
+                review.get("executor_id") or chain.get("executor_id") or ""
+            ),
+            verdict=str(review.get("verdict") or ""),
+            ref_path=str(evidence_path / "review.yaml"),
+            reviewed_evidence_refs=reviewed_evidence_refs,
+            reviewed_inputs=reviewed_inputs,
+            source="go_evidence_finalize",
+        )
+    ]
+    gate_refs = [
+        str(item.get("gate_id") or "")
+        for item in final_verdict.get("gate_summary", [])
+        if isinstance(item, dict) and str(item.get("gate_id") or "")
+    ]
+    event_ids.append(
+        team.record_final_verdict_ref(
+            run_id,
+            str(final_verdict.get("produced_by") or "go-evidence-finalizer"),
+            verdict_id=str(final_verdict.get("verdict_id") or ""),
+            producer_role=str(final_verdict.get("producer_role") or ""),
+            final_state=str(final_verdict.get("final_state") or ""),
+            ref_path=str(final_verdict_path),
+            review_ref=review_id,
+            gate_refs=gate_refs,
+            gate_summary=[
+                item for item in final_verdict.get("gate_summary", [])
+                if isinstance(item, dict)
+            ],
+            limitations=[
+                str(item) for item in final_verdict.get("limitations", [])
+                if str(item)
+            ],
+            human_or_governance_reference=str(
+                final_verdict.get("human_or_governance_reference") or ""
+            ),
+        )
+    )
+    return event_ids
+
+
 def init_chain_evidence(run_evidence_dir: str, run_id: str, executor_id: str, mode: str | None = None, planner: str | None = None, task: str | None = None, methodology: dict | None = None) -> str:
     os.makedirs(run_evidence_dir, exist_ok=True)
     evidence = {
@@ -152,12 +236,26 @@ def guard(run_evidence_dir: str, command: str) -> dict:
     return report
 
 
+def _safe_token(value: object) -> str:
+    token = "".join(
+        ch if ch.isalnum() or ch in "._-" else "-"
+        for ch in str(value or "")
+    )
+    token = token.strip("-._")
+    return token or "unknown"
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="SADP evidence tool")
     subparsers = parser.add_subparsers(dest="command")
 
     finalize_parser = subparsers.add_parser("finalize", help="Finalize evidence")
     finalize_parser.add_argument("run_evidence_dir", help="Path to run evidence directory")
+    finalize_parser.add_argument(
+        "--team-runtime-dir",
+        default=None,
+        help="Optional TeamRuntime directory to record review/final verdict refs",
+    )
 
     init_parser = subparsers.add_parser("init", help="Initialize run evidence")
     init_parser.add_argument("run_evidence_dir", help="Path to run evidence directory")
@@ -179,7 +277,23 @@ def main(argv=None) -> int:
             print(f"evidence directory not found: {args.run_evidence_dir}", file=sys.stderr)
             return 2
 
-        result, _artifacts = write_governance_artifacts(args.run_evidence_dir)
+        result, artifacts = write_governance_artifacts(args.run_evidence_dir)
+        if args.team_runtime_dir:
+            try:
+                record_team_runtime_finalization(
+                    args.run_evidence_dir,
+                    result,
+                    artifacts,
+                    args.team_runtime_dir,
+                    repo_root=str(REPO_ROOT),
+                )
+            except Exception as exc:
+                print(
+                    "failed to record team runtime finalization: "
+                    f"{type(exc).__name__}: {exc}",
+                    file=sys.stderr,
+                )
+                return 2
 
         print(result.status.upper())
         if result.status != "pass":

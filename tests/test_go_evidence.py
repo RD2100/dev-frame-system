@@ -9,6 +9,8 @@ from jsonschema.validators import validator_for
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
 
 import go_evidence
+from control_plane.run_index import build_run_index
+from control_plane.team_runtime import TEAM_EVENTS_FILE, build_team_runtime_view
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -227,6 +229,74 @@ def test_complete_pass_writes_final_report(tmp_path):
     assert final_verdict["final_state"] == "final_ready"
     assert final_verdict["producer_role"] == "governance"
     assert final_verdict["reviewer_summary"]["reviewer_id"] == "reviewer-1"
+
+
+def test_finalize_can_record_team_runtime_review_and_final_verdict_events(tmp_path):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
+    _write_json(
+        os.path.join(evidence_dir, "chain-evidence.json"),
+        {"run_id": "go-evidence-finalize", "executor_id": "executor-1", "task": "task.md"},
+    )
+    runtime_dir = str(tmp_path / "runtime")
+
+    rc = go_evidence.main(["finalize", evidence_dir, "--team-runtime-dir", runtime_dir])
+
+    assert rc == 0
+    lines = (tmp_path / "runtime" / TEAM_EVENTS_FILE).read_text(encoding="utf-8").strip().splitlines()
+    event_types = [json.loads(line)["event_type"] for line in lines]
+    assert event_types == ["review_ref", "final_verdict_ref"]
+
+    view = build_team_runtime_view(runtime_dir)
+    assert {"review-ref", "final-verdict-ref"} <= {event["kind"] for event in view["event_log"]}
+    assert {item["ref_type"] for item in view["evidence_store"]} == {"review", "final_verdict"}
+
+    index = build_run_index(runtime_dir)
+    record = index["runs"][0]["record"]
+    _schema_validator("schemas/runtime-governance/run-record.schema.json").validate(record)
+    assert record["acceptance_state"] == "final_ready"
+    assert record["review_state"] == "review_passed"
+    assert record["gate_state"] == "gate_passed"
+    assert record["final_verdict_ref"]["verdict_id"] == "fv-go-evidence-finalize"
+
+
+def test_finalize_without_team_runtime_dir_does_not_record_team_runtime_events(tmp_path):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
+    _write_json(
+        os.path.join(evidence_dir, "chain-evidence.json"),
+        {"run_id": "go-legacy-finalize", "executor_id": "executor-1", "task": "task.md"},
+    )
+
+    rc = go_evidence.main(["finalize", evidence_dir])
+
+    assert rc == 0
+    assert list(tmp_path.rglob(TEAM_EVENTS_FILE)) == []
+
+
+def test_finalize_rejects_team_runtime_dir_inside_repo(tmp_path, monkeypatch):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    runtime_dir = repo_root / "runtime"
+    monkeypatch.setattr(go_evidence, "REPO_ROOT", repo_root)
+
+    rc = go_evidence.main(["finalize", evidence_dir, "--team-runtime-dir", str(runtime_dir)])
+
+    assert rc == 2
+    assert not (runtime_dir / TEAM_EVENTS_FILE).exists()
+
+
+def test_finalize_does_not_record_team_runtime_events_for_blocked_evidence(tmp_path):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"), {"verdict": "blocked"})
+    _write_json(
+        os.path.join(evidence_dir, "chain-evidence.json"),
+        {"run_id": "go-blocked-finalize", "executor_id": "executor-1", "task": "task.md"},
+    )
+    runtime_dir = str(tmp_path / "runtime")
+
+    rc = go_evidence.main(["finalize", evidence_dir, "--team-runtime-dir", runtime_dir])
+
+    assert rc == 1
+    assert not (tmp_path / "runtime" / TEAM_EVENTS_FILE).exists()
 
 
 @pytest.mark.parametrize("verdict,expected_state", [
