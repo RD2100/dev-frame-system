@@ -60,6 +60,9 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "schemas/runtime-governance/context-packet.schema.json",
     "schemas/runtime-governance/context-ledger.schema.json",
     "schemas/runtime-governance/run-record.schema.json",
+    "packages/test-frame/schemas/runtime-governance/context-packet.schema.json",
+    "packages/test-frame/schemas/runtime-governance/context-ledger.schema.json",
+    "packages/test-frame/schemas/runtime-governance/run-record.schema.json",
     "schemas/examples/runtime-governance/context-packet-valid.json",
     "schemas/examples/runtime-governance/context-ledger-valid.json",
     "schemas/examples/runtime-governance/context-packet-worker-final-ready-invalid.json",
@@ -141,6 +144,10 @@ def _relative_markdown_links_from_text(text):
 def _relative_markdown_links(path):
     text = path.read_text(encoding="utf-8-sig")
     yield from _relative_markdown_links_from_text(text)
+
+
+def _json_semantics(path):
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
 def test_public_snapshot_allows_python_test_caches():
@@ -1032,6 +1039,47 @@ def test_runtime_governance_schemas_validate_fixtures():
             assert errors, "gate_passed must require a pass gate ref"
 
 
+def test_runtime_governance_schema_mirrors_match_semantically():
+    pairs = [
+        (
+            REPO_ROOT / "schemas" / "runtime-governance" / "context-packet.schema.json",
+            REPO_ROOT
+            / "packages"
+            / "test-frame"
+            / "schemas"
+            / "runtime-governance"
+            / "context-packet.schema.json",
+        ),
+        (
+            REPO_ROOT / "schemas" / "runtime-governance" / "context-ledger.schema.json",
+            REPO_ROOT
+            / "packages"
+            / "test-frame"
+            / "schemas"
+            / "runtime-governance"
+            / "context-ledger.schema.json",
+        ),
+        (
+            REPO_ROOT / "schemas" / "runtime-governance" / "run-record.schema.json",
+            REPO_ROOT
+            / "packages"
+            / "test-frame"
+            / "schemas"
+            / "runtime-governance"
+            / "run-record.schema.json",
+        ),
+    ]
+
+    for root_path, mirror_path in pairs:
+        root_semantics = _json_semantics(root_path)
+        mirror_semantics = _json_semantics(mirror_path)
+        assert mirror_semantics == root_semantics
+
+        drift_probe = json.loads(json.dumps(mirror_semantics))
+        drift_probe["title"] = f"{drift_probe.get('title', '')} drift"
+        assert drift_probe != root_semantics
+
+
 def test_public_docs_mention_release_gate_and_visual_control_plane_surfaces():
     expected = {
         REPO_ROOT / "README.md": [
@@ -1110,6 +1158,9 @@ def test_public_schemas_docs_and_fixtures_exclude_private_paths():
         REPO_ROOT / "schemas" / "runtime-governance" / "context-packet.schema.json",
         REPO_ROOT / "schemas" / "runtime-governance" / "context-ledger.schema.json",
         REPO_ROOT / "schemas" / "runtime-governance" / "run-record.schema.json",
+        REPO_ROOT / "packages" / "test-frame" / "schemas" / "runtime-governance" / "context-packet.schema.json",
+        REPO_ROOT / "packages" / "test-frame" / "schemas" / "runtime-governance" / "context-ledger.schema.json",
+        REPO_ROOT / "packages" / "test-frame" / "schemas" / "runtime-governance" / "run-record.schema.json",
         REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "context-packet-valid.json",
         REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "context-ledger-valid.json",
         REPO_ROOT

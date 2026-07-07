@@ -58,6 +58,9 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `schemas/runtime-governance/context-packet.schema.json`
 - `schemas/runtime-governance/context-ledger.schema.json`
 - `schemas/runtime-governance/run-record.schema.json`
+- `packages/test-frame/schemas/runtime-governance/context-packet.schema.json`
+- `packages/test-frame/schemas/runtime-governance/context-ledger.schema.json`
+- `packages/test-frame/schemas/runtime-governance/run-record.schema.json`
 - `schemas/examples/runtime-governance/context-packet-valid.json`
 - `schemas/examples/runtime-governance/context-ledger-valid.json`
 - `schemas/examples/runtime-governance/context-packet-worker-final-ready-invalid.json`
@@ -116,6 +119,9 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `schemas/runtime-governance/context-packet.schema.json`
 - `schemas/runtime-governance/context-ledger.schema.json`
 - `schemas/runtime-governance/run-record.schema.json`
+- `packages/test-frame/schemas/runtime-governance/context-packet.schema.json`
+- `packages/test-frame/schemas/runtime-governance/context-ledger.schema.json`
+- `packages/test-frame/schemas/runtime-governance/run-record.schema.json`
 - `schemas/examples/runtime-governance/context-packet-valid.json`
 - `schemas/examples/runtime-governance/context-ledger-valid.json`
 - `schemas/examples/runtime-governance/context-packet-worker-final-ready-invalid.json`
@@ -266,6 +272,11 @@ This is the reviewer map for the first open-source release batch. It focuses on 
   - `final_ready` requires a FinalVerdict plus independent review and gate evidence.
   - Executor/fixer/coder/worker-authored review or final verdict must fail.
   - Projection state is display-only and cannot create acceptance authority.
+- Runtime-governance schema mirrors:
+  - `packages/test-frame/schemas/runtime-governance/*` must remain a semantic
+    mirror of `schemas/runtime-governance/*`.
+  - Mirror checks should ignore encoding, line-ending, and key-order noise while
+    failing on JSON semantic drift.
 
 ## Open-Source Review Checklist
 
@@ -390,6 +401,9 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `schemas/runtime-governance/context-packet.schema.json`
 - `schemas/runtime-governance/context-ledger.schema.json`
 - `schemas/runtime-governance/run-record.schema.json`
+- `packages/test-frame/schemas/runtime-governance/context-packet.schema.json`
+- `packages/test-frame/schemas/runtime-governance/context-ledger.schema.json`
+- `packages/test-frame/schemas/runtime-governance/run-record.schema.json`
 - `schemas/examples/runtime-governance/context-packet-valid.json`
 - `schemas/examples/runtime-governance/context-ledger-valid.json`
 - `schemas/examples/runtime-governance/context-packet-worker-final-ready-invalid.json`
