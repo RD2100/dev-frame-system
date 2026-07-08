@@ -317,7 +317,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
   - ACP live-driving claims must stay bounded to the current receipt and tests; deferred behavior must not be presented as complete.
   - OpenCode event ingestion should enrich session fields without converting missing event data into a passing claim.
 - Review-governance completion status:
-  - `docs/status/review-governance-kernel-completion-20260706.md` reports P3-2 graph projection as local GPT-equivalent review PASS, committed in `2725227d`, and local branch-level review PASS at `bd73d6bc`; keep it out of release-ready claims until PR/CI and publication evidence exist.
+  - `docs/status/review-governance-kernel-completion-20260706.md` reports P3-2 graph projection as local GPT-equivalent review PASS, committed in `2725227d`, and local branch-level review PASS at `bd73d6bc`; keep it out of public-release-ready claims until PR CI, human review or merge approval, and publication evidence all exist.
 - Runtime-governance RunRecord contract:
   - Worker outcome is mechanical only and must not satisfy independent review.
   - `gate_passed` requires gate evidence references.
@@ -632,7 +632,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 6. Confirm stage-8 native reuse status is current and does not overclaim release/publish readiness.
 7. Confirm customization, writeback, cluster, workflow, MCP, ACP, and OpenCode-event additions are covered by their matching Recon Receipts and tests.
 8. Confirm deferred module plans stay discoverable without being presented as implemented runtime behavior.
-9. Confirm P3-2 graph projection is not treated as release-ready while PR/CI and publication evidence are still pending.
+9. Confirm P3-2 graph projection is not treated as release-ready from PR CI alone; human review or merge approval and publication evidence are still required.
 
 ## Public Surface File Index
 

@@ -11,7 +11,8 @@ Date: 2026-07-08
 - snapshot_cmd: `release-closure status snapshot from repository root`
 - snapshot_id: `2026-07-08T12:50:23+00:00:5cea92a56f63:fd1244ac1f00`
 
-Verdict: **NO-GO for public release**; **LOCAL-GATE-GREEN for the current worktree**.
+Verdict: **NO-GO for public release**; **PR-ROUTE-GREEN after owner approval**;
+**LOCAL-GATE-GREEN for the current branch**.
 
 This is the current launch-control entrypoint. It replaces reading every
 runtime-governance batch note first, but it does not delete or supersede their
@@ -19,28 +20,34 @@ evidence.
 
 ## Current Decision
 
-Runtime-governance closure has locally advanced through Batch J and the
-follow-up batch-review fixes. The latest recorded full local release gate passed
-with `1616 passed, 1 skipped`, local strict public snapshot PASS, local
-control-plane wheel smoke PASS, and local `git diff --check` PASS.
+Runtime-governance closure has advanced through Batch J and the follow-up
+batch-review fixes. The reviewed dirty tree was converted into explicit batch
+commits after owner approval, the branch was pushed to PR #4, and the GitHub
+`Release verification` check passed for the PR route. The latest recorded full
+local release gate also passed with `1616 passed, 1 skipped`, local strict
+public snapshot PASS, local control-plane wheel smoke PASS, and local
+`git diff --check` PASS.
 
-That evidence is local only. It does not prove a clean worktree, clean publish
-branch, pushed branch, pull request, external review, GitHub CI, or package
-publication. Public release remains blocked until those owner-controlled steps
-are completed from a reviewed state.
+That evidence proves the local gate and PR CI route for the current branch. It
+does not prove merge approval, external human review, a published GitHub
+Release, package publication, or downstream adoption. Public release remains
+blocked until those owner-controlled steps are completed from the reviewed PR
+state.
 
 The paper-domain adapter is explicitly deferred from this closure wave. Current
 paper support has read-model and visual-state coverage, but `/rdpaper` remains a
 later Phase 6 domain-adapter slice rather than a Batch F-J release blocker.
 
-## Prepared, Not Executed
+## Executed After Owner Approval
 
 - `current-dirty-tree-batch-map-20260708.md`: the batch map exists and has now
-  been reviewed against the live dirty tree. Commit staging, PR, push, CI, and
-  publication remain owner-gated.
-- Owner-gate dry-run: the explicit staging list matches the live dirty set
-  exactly, `expected=28 actual=28 missing=0 extra=0`, snapshot
-  `fd1244ac1f00`. It is still not executable without `approve-batch-commits`.
+  been reviewed against the live dirty tree and used for explicit batch
+  commits.
+- PR route: owner approval was given after the local batch commits. The current
+  branch was pushed to PR #4, and GitHub `Release verification` passed for that
+  route.
+- Publication: not executed. Public package or release publication remains a
+  separate owner decision.
 
 ## Done Locally
 
@@ -52,6 +59,7 @@ later Phase 6 domain-adapter slice rather than a Batch F-J release blocker.
 | Runtime-governance Batch I generic go prepare evidence | done locally | [runtime-governance-batch-i-generic-go-prepare-evidence.md](runtime-governance-batch-i-generic-go-prepare-evidence.md) |
 | Runtime-governance Batch J automatic superseding FinalVerdict | done locally | [runtime-governance-batch-j-automatic-superseding-final-verdict.md](runtime-governance-batch-j-automatic-superseding-final-verdict.md) |
 | Full local release gate | done locally | [release-readiness.md](release-readiness.md) |
+| PR branch and GitHub Release verification | done for PR route | PR #4 on `RD2100/dev-frame-system` |
 | Reviewer handoff surface | done locally | [reviewer-index.md](reviewer-index.md) |
 | Dirty worktree batch map and final local review | done locally | [current-dirty-tree-batch-map-20260708.md](current-dirty-tree-batch-map-20260708.md) |
 
@@ -65,9 +73,9 @@ later Phase 6 domain-adapter slice rather than a Batch F-J release blocker.
 
 | ID | Bucket | Blocker | Owner | Next action | Pass condition |
 | --- | --- | --- | --- | --- | --- |
-| B1 | owner_required | Dirty worktree batches are reviewed, but staging/commit route has not been authorized. | Owner | Choose whether to allow staged batch commits or keep the tree as a review bundle. | Clean worktree or intentionally staged batches with gate evidence. |
-| B2 | owner_required | Public release path has not been authorized. | Owner | Choose whether to allow branch creation, PR, push, external review, and package publication. | Owner-approved release route exists. |
-| B3 | owner_required | External PR review, GitHub CI, and publication evidence are absent. | Owner, then Agent | After approval, create the PR/review bundle and collect external evidence. | External review or CI PASS plus package-release evidence if publishing. |
+| B1 | done | Dirty worktree batches have been converted into explicit batch commits. | Owner, Agent | None. | Clean current branch plus local gate evidence. |
+| B2 | done for PR route | Branch push, PR route, and GitHub Release verification have been completed for PR #4. | Owner, Agent | Keep PR #4 as the review surface. | PR branch exists and CI is green. |
+| B3 | owner_required | Human review, merge approval, release tagging, GitHub Release, and package publication are not authorized here. | Owner | Decide whether to merge, publish, or keep the PR as a review candidate. | Separate owner approval plus matching release evidence. |
 
 ## Owner Decision Packet
 
@@ -76,9 +84,9 @@ decision menu for the owner.
 
 | Decision | Meaning | Agent action after approval |
 | --- | --- | --- |
-| `approve-batch-commits` | Convert the reviewed dirty tree into staged batch commits only. | Stage only the files listed in [current-dirty-tree-batch-map-20260708.md](current-dirty-tree-batch-map-20260708.md), commit by batch, and rerun `scripts\verify-release.ps1`. |
+| `approve-batch-commits` | Convert the reviewed dirty tree into staged batch commits only. | Completed. |
 | `review-bundle-only` | Keep all changes unstaged for human or external review. | Leave the worktree dirty and use this file plus the batch map as the review surface. |
-| `approve-pr-route` | Allow branch/PR preparation after batch commits. This does not authorize publication by itself. | Create or use an approved branch, prepare a PR/review bundle, and collect external CI/review evidence. |
+| `approve-pr-route` | Allow branch/PR preparation after batch commits. This does not authorize publication by itself. | Completed for PR #4 and GitHub `Release verification`. |
 
 Public package or release publication remains a separate owner decision after
 PR, CI, and external review evidence exists.
@@ -88,11 +96,11 @@ state.
 
 ## Next 3 Actions
 
-1. Owner: decide whether this dirty tree should be staged as review batches or
-   left as an unstaged review bundle.
-2. Agent after approval: stage/commit only the approved batch files and rerun
-   the full release gate.
-3. Owner: approve the PR, push, external-review, or package-publication route.
+1. Owner/reviewer: review PR #4 and decide whether it should be merged.
+2. Owner: decide whether to authorize a public release, tag, GitHub Release, or
+   package publication.
+3. Agent after approval: collect the matching release evidence and update this
+   status entrypoint again.
 
 ## Evidence Map
 
