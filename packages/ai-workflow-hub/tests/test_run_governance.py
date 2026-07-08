@@ -25,7 +25,7 @@ def test_terminal_passed_status_does_not_infer_chain_trust(tmp_path):
     summary = summarize_run_governance(str(run_dir))
 
     assert summary["run_status"] == "passed"
-    assert summary["chain_status"] == "UNKNOWN"
+    assert summary["chain_status"] == "MISSING_CHAIN_EVIDENCE"
     assert summary["chain_trusted"] is False
 
 
@@ -36,17 +36,44 @@ def test_terminal_blocked_status_does_not_infer_chain_trust(tmp_path):
     summary = summarize_run_governance(str(run_dir))
 
     assert summary["run_status"] == "blocked"
+    assert summary["chain_status"] == "MISSING_CHAIN_EVIDENCE"
     assert summary["chain_trusted"] is False
 
 
-def test_explicit_chain_trust_is_preserved(tmp_path):
+def test_explicit_chain_trust_is_preserved_with_canonical_evidence(tmp_path):
     run_dir = tmp_path / "run"
     _write_state(run_dir, status="passed", chain_status="TRUSTED", chain_trusted=True)
+    (run_dir / "chain-evidence.json").write_text(
+        json.dumps({
+            "evidence_files": ["test-output.md"],
+            "timestamps": {"created_at": "2026-07-08T12:00:00Z"},
+        }),
+        encoding="utf-8",
+    )
 
     summary = summarize_run_governance(str(run_dir))
 
     assert summary["chain_status"] == "TRUSTED"
     assert summary["chain_trusted"] is True
+
+
+def test_missing_chain_evidence_overrides_stale_trusted_state(tmp_path):
+    run_dir = tmp_path / "run"
+    _write_state(
+        run_dir,
+        status="passed",
+        chain_status="TRUSTED",
+        chain_trusted=True,
+        final_report_status="PASS",
+        final_report_consistent=True,
+    )
+
+    summary = summarize_run_governance(str(run_dir))
+
+    assert summary["chain_evidence_shape"] == "missing"
+    assert summary["chain_status"] == "MISSING_CHAIN_EVIDENCE"
+    assert summary["chain_trusted"] is False
+    assert summary["chain_evidence_adapter"]["normalization_status"] == "blocked"
 
 
 def test_string_chain_trust_is_not_accepted(tmp_path):
@@ -60,12 +87,23 @@ def test_string_chain_trust_is_not_accepted(tmp_path):
 
 def test_nodes_style_chain_evidence_is_classified_without_inferred_trust(tmp_path):
     run_dir = tmp_path / "run"
+    stdout_log = run_dir / "planner.stdout"
+    stderr_log = run_dir / "planner.stderr"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    stdout_log.write_text("planner output", encoding="utf-8")
+    stderr_log.write_text("planner warning", encoding="utf-8")
     _write_state(
         run_dir,
         status="passed",
         chain_status="UNKNOWN",
         final_report_status="PASS",
         final_report_consistent=True,
+        created_at="2026-07-08T12:00:00Z",
+        mode="apply",
+        planner="agentic-governance",
+        task="task-hub",
+        run_id="run-state",
+        executor_id="executor-hub",
     )
     (run_dir / "chain-evidence.json").write_text(
         json.dumps({
@@ -73,7 +111,12 @@ def test_nodes_style_chain_evidence_is_classified_without_inferred_trust(tmp_pat
             "status": "passed",
             "backend": "opencode",
             "nodes": {
-                "planner": {"backend": "opencode", "exit_code": 0},
+                "planner": {
+                    "backend": "opencode",
+                    "exit_code": 0,
+                    "stdout_log": str(stdout_log),
+                    "stderr_log": str(stderr_log),
+                },
                 "executor": {"backend": "opencode", "exit_code": 0},
             },
         }),
@@ -87,6 +130,62 @@ def test_nodes_style_chain_evidence_is_classified_without_inferred_trust(tmp_pat
     assert summary["governance"]["chain_evidence_shape"] == "ai_workflow_hub_nodes"
     assert summary["chain_trusted"] is False
     assert summary["chain_status"] == "UNTRUSTED_NODES_STYLE"
+    adapter = summary["chain_evidence_adapter"]
+    assert adapter["normalized"] is True
+    assert adapter["normalization_status"] == "normalized"
+    assert adapter["acceptance_candidate"] is False
+    normalized = adapter["normalized_chain_evidence"]
+    assert normalized["run_id"] == "run-nodes"
+    assert normalized["executor_id"] == "executor-hub"
+    assert normalized["timestamps"]["created_at"] == "2026-07-08T12:00:00Z"
+    assert str(run_dir / "chain-evidence.json") in normalized["evidence_files"]
+    assert str(stdout_log) in normalized["evidence_files"]
+    assert normalized["methodology"]["worker_results"][0]["status"] == "passed"
+
+
+def test_nodes_style_chain_evidence_takes_adapter_precedence_over_go_shape(tmp_path):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    _write_state(run_dir, status="passed", chain_status="UNKNOWN")
+    (run_dir / "chain-evidence.json").write_text(
+        json.dumps({
+            "run_id": "run-mixed",
+            "nodes": {"executor": {"backend": "opencode", "exit_code": 0}},
+            "evidence_files": ["chain-evidence.json"],
+            "timestamps": {"created_at": "2026-07-08T12:00:00Z"},
+        }),
+        encoding="utf-8",
+    )
+
+    summary = summarize_run_governance(str(run_dir))
+
+    assert summary["chain_evidence_shape"] == "ai_workflow_hub_nodes"
+    assert summary["chain_evidence_adapter"]["source_shape"] == "ai_workflow_hub_nodes"
+    assert summary["chain_evidence_adapter"]["normalization_status"] == "normalized"
+    assert summary["chain_trusted"] is False
+
+
+def test_go_evidence_chain_adapter_blocks_invalid_passthrough_shape(tmp_path):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    _write_state(run_dir, status="passed", chain_status="UNKNOWN")
+    (run_dir / "chain-evidence.json").write_text(
+        json.dumps({
+            "run_id": "run-invalid-go-shape",
+            "evidence_files": "chain-evidence.json",
+            "timestamps": "bad",
+        }),
+        encoding="utf-8",
+    )
+
+    summary = summarize_run_governance(str(run_dir))
+
+    assert summary["chain_evidence_shape"] == "go_evidence_v1"
+    adapter = summary["chain_evidence_adapter"]
+    assert adapter["source_shape"] == "go_evidence_v1"
+    assert adapter["normalization_status"] == "blocked"
+    assert adapter["normalized"] is False
+    assert adapter["acceptance_candidate"] is False
 
 
 def test_write_chain_evidence_shape_is_visible_and_untrusted(tmp_path):
@@ -105,6 +204,8 @@ def test_write_chain_evidence_shape_is_visible_and_untrusted(tmp_path):
     assert summary["chain_evidence_shape"] == "ai_workflow_hub_nodes"
     assert summary["chain_trusted"] is False
     assert summary["chain_status"] == "UNTRUSTED_NODES_STYLE"
+    assert summary["chain_evidence_adapter"]["normalized"] is True
+    assert summary["chain_evidence_adapter"]["acceptance_candidate"] is False
 
 
 def test_nodes_style_chain_evidence_overrides_stale_trusted_state(tmp_path):
@@ -150,6 +251,7 @@ def test_invalid_chain_evidence_overrides_stale_trusted_state(tmp_path):
     assert summary["chain_evidence_shape"] == "invalid"
     assert summary["chain_status"] == "INVALID_CHAIN_EVIDENCE"
     assert summary["chain_trusted"] is False
+    assert summary["chain_evidence_adapter"]["normalization_status"] == "blocked"
 
 
 def test_non_object_chain_evidence_overrides_stale_trusted_state(tmp_path):
@@ -191,6 +293,7 @@ def test_unknown_chain_evidence_overrides_stale_trusted_state(tmp_path):
     assert summary["chain_evidence_shape"] == "unknown"
     assert summary["chain_status"] == "UNKNOWN_CHAIN_EVIDENCE"
     assert summary["chain_trusted"] is False
+    assert summary["chain_evidence_adapter"]["normalization_status"] == "blocked"
 
 
 def test_verify_run_evidence_reports_untrusted_passed_run(tmp_path):
@@ -207,7 +310,7 @@ def test_verify_run_evidence_reports_untrusted_passed_run(tmp_path):
 
     assert result["status"] == "passed"
     assert result["chain_trusted"] is False
-    assert "chain UNKNOWN (status=passed)" in result["reasons"]
+    assert "chain MISSING_CHAIN_EVIDENCE (status=passed)" in result["reasons"]
 
 
 def test_write_chain_evidence_remains_untrusted_for_verify_path(tmp_path):
@@ -243,6 +346,13 @@ def test_write_chain_evidence_remains_untrusted_for_verify_path(tmp_path):
 def test_state_argument_takes_precedence_over_stale_state_file(tmp_path):
     run_dir = tmp_path / "run"
     _write_state(run_dir, status="failed", chain_status="UNKNOWN", final_report_consistent=False)
+    (run_dir / "chain-evidence.json").write_text(
+        json.dumps({
+            "evidence_files": ["test-output.md"],
+            "timestamps": {"created_at": "2026-07-08T12:00:00Z"},
+        }),
+        encoding="utf-8",
+    )
 
     summary = summarize_run_governance(
         str(run_dir),
