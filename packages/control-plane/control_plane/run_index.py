@@ -1128,9 +1128,9 @@ def _final_ready_context_diagnostic(
         valid_types_by_agent.setdefault(agent_id, set()).add(ref_type)
     agents_to_check = sorted(success_agents)
     if not agents_to_check:
-        if any({"context_packet", "context_ledger"} <= types for types in valid_types_by_agent.values()):
-            return ""
-        return diagnostics[0] if diagnostics else "sealed context_packet and context_ledger refs are missing"
+        if diagnostics:
+            return diagnostics[0]
+        return "successful task_result event is missing"
     for agent_id in agents_to_check:
         missing = sorted({"context_packet", "context_ledger"} - valid_types_by_agent.get(agent_id, set()))
         if missing:

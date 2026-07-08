@@ -233,6 +233,7 @@ def record_team_runtime_finalization(
     reviewer_id = str(review.get("reviewer_id") or "missing-reviewer")
     review_id = f"review-{_safe_token(run_id)}-{_safe_token(reviewer_id)}"
     event_ids.extend(_record_go_run_context_refs(team, runtime_dir, run_id))
+    event_ids.extend(_record_go_run_task_results(team, runtime_dir, run_id, evidence_path))
     if _team_runtime_has_finalization_refs(
         team,
         run_id=run_id,
@@ -337,6 +338,32 @@ def _record_go_run_context_refs(team: TeamRuntime, runtime_dir: str, run_id: str
     return event_ids
 
 
+def _record_go_run_task_results(
+    team: TeamRuntime,
+    runtime_dir: str,
+    run_id: str,
+    evidence_path: Path,
+) -> list[str]:
+    try:
+        result = load_go_run_result(runtime_dir, run_id)
+    except Exception:  # noqa: BLE001 - finalization refs still carry the blocking evidence
+        return []
+    report_path = evidence_path / "final-report.md"
+    event_ids: list[str] = []
+    for agent in result.agents:
+        agent_id = str(agent.agent_id or "")
+        if not agent_id or _team_runtime_has_success_task_result(team, run_id, agent_id):
+            continue
+        event_ids.append(team.record_result(
+            run_id,
+            agent_id,
+            status="passed",
+            report_path=str(report_path if report_path.exists() else agent.report_path),
+            isolated=bool(agent.isolated),
+        ))
+    return event_ids
+
+
 def _context_refs_for_agent_packet(
     *,
     packet_dir: str,
@@ -386,6 +413,22 @@ def _team_runtime_has_sealed_context_refs(team: TeamRuntime, run_id: str) -> boo
             if isinstance(ref, dict)
         }
         if {"context_packet", "context_ledger"} <= ref_types:
+            return True
+    return False
+
+
+def _team_runtime_has_success_task_result(team: TeamRuntime, run_id: str, agent_id: str) -> bool:
+    success_statuses = {"pass", "passed", "completed", "success", "succeeded", "verified"}
+    for event in team.read_all():
+        if (
+            not isinstance(event, dict)
+            or str(event.get("run_id") or "") != run_id
+            or str(event.get("agent_id") or "") != agent_id
+            or str(event.get("event_type") or "") != "task_result"
+        ):
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        if _safe_token(payload.get("status")) in success_statuses:
             return True
     return False
 

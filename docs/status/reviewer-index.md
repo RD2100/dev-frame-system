@@ -600,11 +600,10 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     as blocked final verdicts, not final-ready supersessions.
   - `tests/test_go_evidence.py` should prove rerun supersession, prior archive,
     and mismatch blocking behavior.
-  - Follow-up hardening focus: `RunIndex` currently accepts a final-ready
-    verdict when pass review, pass gate, and sealed context refs are present.
-    Reviewers should decide in a later slice whether final-ready must also
-    require an observable `task_result` event for every current path, or whether
-    the existing finalizer backfill compatibility remains intentional.
+  - Follow-up hardening completed after `v0.1.0`: `RunIndex` now blocks
+    `final_ready` when no successful `task_result` is observable, and
+    `go_evidence` finalization backfills an idempotent `task_result` for
+    existing go-run metadata before recording review and FinalVerdict refs.
   - `docs/status/runtime-governance-batch-j-automatic-superseding-final-verdict.md`
     records the local limitation set and preserved stop lines.
 - Runtime-governance post-Batch-E status reconciliation:
