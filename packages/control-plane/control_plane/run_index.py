@@ -423,18 +423,11 @@ def _paper_entries(project_dir: Path) -> list[dict[str, Any]]:
     if state_diag:
         return [_failure_entry("paper", paper_id, state_path, state_diag)]
     status = str(state.get("acceptance_status") or state.get("status") or "unknown")
-    task_input = project_dir / "paper_task" / "PAPER_TASK_INPUT.yaml"
-    evidence_refs = []
-    if task_input.exists():
-        evidence_refs.append(_evidence_ref(f"ev-paper-task-{_safe_token(paper_id)}", "context_packet", task_input, "outcome"))
-    failure_refs = []
-    normalized_status = _safe_token(status).replace("_", "-")
-    if normalized_status in {"human-required", "needs-human"}:
-        failure_refs.append({
-            "failure_id": f"failure-paper-human-gate-{_safe_token(paper_id)}",
-            "status": "blocked",
-            "uri": str(state_path),
-        })
+    effective_status = _paper_effective_status(status, state)
+    evidence_refs = _paper_evidence_refs(project_dir, paper_id)
+    gate_refs = _paper_gate_refs(project_dir, paper_id, state, evidence_refs)
+    failure_refs = _paper_failure_refs(project_dir, paper_id, state, effective_status)
+    limitations = _paper_limitations(project_dir, state)
     entries = [_entry(
         adapter_id="paper",
         source_type="paper_project",
@@ -445,25 +438,136 @@ def _paper_entries(project_dir: Path) -> list[dict[str, Any]]:
             project_id=paper_id,
             domain="paper",
             profile="rdpaper",
-            status=status,
+            status=effective_status,
             source_path=profile_path,
             adapter_id="paper",
             created_at=_mtime_iso(profile_path),
             updated_at=_mtime_iso(state_path if state_path.exists() else profile_path),
             task_id=paper_id,
-            artifact_refs=_artifact_refs(profile_path, state_path, project_dir / "PAPER_LEDGER.md"),
+            artifact_refs=_artifact_refs(
+                profile_path,
+                state_path,
+                project_dir / "PAPER_LEDGER.md",
+                project_dir / "review" / "REVIEW_REPORT.md",
+                project_dir / "closure" / "CLOSURE_REPORT.md",
+                project_dir / "closure" / "FLOW_OUTCOME.json",
+                project_dir / "evidence" / "ref-paper-review-pack.zip",
+            ),
             evidence_refs=evidence_refs,
+            gate_refs=gate_refs,
             failure_refs=failure_refs,
+            limitations=limitations,
             domain_refs={
                 "legacy_adapter": "paper",
                 "paper_id": paper_id,
+                "workflow_type": state.get("workflow_type", ""),
                 "current_stage": state.get("current_stage") or profile.get("current_stage", ""),
                 "acceptance_status": state.get("acceptance_status", ""),
+                "effective_status": effective_status,
+                "manifest_status": state.get("manifest_status", ""),
+                "evidence_pack_ref": state.get("evidence_pack_ref", ""),
+                "final_acceptance": state.get("final_acceptance"),
+                "blocking_count": state.get("blocking_count"),
+                "non_blocking_count": state.get("non_blocking_count"),
+                "human_required": state.get("human_required"),
+                "human_gate_decision": state.get("human_gate_decision", ""),
+                "human_gate_triggered": state.get("human_gate_triggered"),
+                "privacy_attestation": state.get("privacy_attestation"),
+                "ledger_issue_count": state.get("ledger_issue_count"),
+                "executed_nodes": state.get("executed_nodes", []),
                 "chain_trusted": state.get("chain_trusted"),
+                "canonical_final_verdict_required": True,
             },
         ),
     )]
     return entries
+
+
+def _paper_effective_status(status: str, state: dict[str, Any]) -> str:
+    if _paper_human_gate_open(state):
+        return "human_required"
+    return status
+
+
+def _paper_evidence_refs(project_dir: Path, paper_id: str) -> list[dict[str, Any]]:
+    token = _safe_token(paper_id)
+    refs: list[dict[str, Any]] = []
+    candidates = [
+        ("task", "context_packet", project_dir / "paper_task" / "PAPER_TASK_INPUT.yaml", "outcome"),
+        ("privacy", "gate_result", project_dir / "paper_task" / "PRIVACY_ATTESTATION.yaml", "gate"),
+        ("review", "review", project_dir / "review" / "REVIEW_REPORT.md", "review"),
+        ("closure", "command_output", project_dir / "closure" / "CLOSURE_REPORT.md", "outcome"),
+        ("flow-outcome", "other", project_dir / "closure" / "FLOW_OUTCOME.json", "outcome"),
+        ("evidence-pack", "other", project_dir / "evidence" / "ref-paper-review-pack.zip", "limitation"),
+    ]
+    for suffix, kind, path, supports in candidates:
+        if path.exists():
+            refs.append(_evidence_ref(f"ev-paper-{suffix}-{token}", kind, path, supports))
+    return refs
+
+
+def _paper_gate_refs(
+    project_dir: Path,
+    paper_id: str,
+    state: dict[str, Any],
+    evidence_refs: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    token = _safe_token(paper_id)
+    refs: list[dict[str, Any]] = []
+    evidence_ids = {str(ref.get("evidence_id") or "") for ref in evidence_refs}
+    privacy_path = project_dir / "paper_task" / "PRIVACY_ATTESTATION.yaml"
+    privacy_evidence_id = f"ev-paper-privacy-{token}"
+    if privacy_path.exists() and privacy_evidence_id in evidence_ids:
+        refs.append({
+            "gate_id": f"gate-paper-privacy-{token}",
+            "result": "pass",
+            "uri": str(privacy_path),
+            "evidence_refs": [privacy_evidence_id],
+        })
+    if _paper_human_gate_open(state):
+        refs.append({
+            "gate_id": f"gate-paper-human-{token}",
+            "result": "blocked",
+            "uri": str(project_dir / "PAPER_STATE.yaml"),
+            "evidence_refs": [],
+        })
+    return refs
+
+
+def _paper_failure_refs(
+    project_dir: Path,
+    paper_id: str,
+    state: dict[str, Any],
+    effective_status: str,
+) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    normalized_status = _safe_token(effective_status).replace("_", "-")
+    if normalized_status in {"human-required", "needs-human"} or _paper_human_gate_open(state):
+        refs.append({
+            "failure_id": f"failure-paper-human-gate-{_safe_token(paper_id)}",
+            "status": "blocked",
+            "uri": str(project_dir / "PAPER_STATE.yaml"),
+        })
+    return refs
+
+
+def _paper_limitations(project_dir: Path, state: dict[str, Any]) -> list[str]:
+    limitations = [
+        "paper adapter is a read-only projection and does not create final acceptance authority",
+    ]
+    if not (project_dir / "paper_task" / "PRIVACY_ATTESTATION.yaml").exists():
+        limitations.append("paper privacy attestation is not recorded as a gate artifact")
+    if state.get("final_acceptance") is True:
+        limitations.append("paper final_acceptance requires a canonical FinalVerdict before final_ready projection")
+    if _paper_human_gate_open(state):
+        limitations.append("paper workflow is waiting for a human gate decision")
+    return limitations
+
+
+def _paper_human_gate_open(state: dict[str, Any]) -> bool:
+    decision = _safe_token(state.get("human_gate_decision")).replace("_", "-")
+    accepted_decisions = {"approved", "accepted", "pass", "passed", "resolved"}
+    return bool(state.get("human_required") or state.get("human_gate_triggered")) and decision not in accepted_decisions
 
 
 def _test_run_entries(runtime: Path) -> list[dict[str, Any]]:
