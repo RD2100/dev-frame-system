@@ -1921,6 +1921,108 @@ def test_run_index_blocks_incomplete_paper_workspace_without_state(tmp_path):
     assert "missing YAML file" in record["domain_refs"]["diagnostic"]
 
 
+def test_run_index_projects_paper_workflow_state_without_final_authority(tmp_path):
+    runtime = tmp_path / "runtime"
+    paper_root = tmp_path / "paper"
+    paper_root.mkdir()
+    (paper_root / "PAPER_PROFILE.yaml").write_text("paper_id: demo-paper\ncurrent_stage: closure\n", encoding="utf-8")
+    (paper_root / "PAPER_STATE.yaml").write_text(
+        "\n".join([
+            "paper_id: demo-paper",
+            "workflow_type: paper_review",
+            "current_stage: closure",
+            "acceptance_status: accepted",
+            "manifest_status: complete",
+            "evidence_pack_ref: evidence/ref-paper-review-pack.zip",
+            "final_acceptance: true",
+            "blocking_count: 0",
+            "non_blocking_count: 2",
+            "human_required: false",
+            "human_gate_triggered: false",
+            "privacy_attestation:",
+            "  contains_real_paper_full_text: false",
+            "ledger_issue_count: 2",
+            "executed_nodes:",
+            "  - diagnosis",
+            "  - finalizer",
+            "chain_trusted: true",
+        ]) + "\n",
+        encoding="utf-8",
+    )
+    (paper_root / "paper_task").mkdir()
+    (paper_root / "paper_task" / "PAPER_TASK_INPUT.yaml").write_text("task_type: cssci_review\n", encoding="utf-8")
+    (paper_root / "paper_task" / "PRIVACY_ATTESTATION.yaml").write_text("contains_real_paper_full_text: false\n", encoding="utf-8")
+    (paper_root / "review").mkdir()
+    (paper_root / "review" / "REVIEW_REPORT.md").write_text("# Review\n", encoding="utf-8")
+    (paper_root / "closure").mkdir()
+    (paper_root / "closure" / "CLOSURE_REPORT.md").write_text("# Closure\n", encoding="utf-8")
+    _write_json(paper_root / "closure" / "FLOW_OUTCOME.json", {"final_state": "accepted"})
+    (paper_root / "evidence").mkdir()
+    (paper_root / "evidence" / "ref-paper-review-pack.zip").write_bytes(b"fixture")
+
+    index = build_run_index(runtime, paper_project_dirs=[paper_root])
+
+    record = _records_by_adapter(index)["paper"][0]
+    _run_record_validator().validate(record)
+    assert record["outcome"] == "passed"
+    assert record["acceptance_state"] == "review_pending"
+    assert "final_verdict_ref" not in record
+    assert record["domain_refs"]["workflow_type"] == "paper_review"
+    assert record["domain_refs"]["manifest_status"] == "complete"
+    assert record["domain_refs"]["final_acceptance"] is True
+    assert record["domain_refs"]["canonical_final_verdict_required"] is True
+    assert {ref["kind"] for ref in record["evidence_refs"]} >= {
+        "context_packet",
+        "gate_result",
+        "review",
+        "command_output",
+        "other",
+    }
+    assert record["gate_refs"] == [{
+        "gate_id": "gate-paper-privacy-demo-paper",
+        "result": "pass",
+        "uri": str(paper_root / "paper_task" / "PRIVACY_ATTESTATION.yaml"),
+        "evidence_refs": ["ev-paper-privacy-demo-paper"],
+    }]
+    assert any("FinalVerdict" in item for item in record["limitations"])
+
+
+def test_run_index_blocks_paper_human_gate_from_workflow_state(tmp_path):
+    runtime = tmp_path / "runtime"
+    paper_root = tmp_path / "paper"
+    paper_root.mkdir()
+    (paper_root / "PAPER_PROFILE.yaml").write_text("paper_id: demo-paper\ncurrent_stage: closure\n", encoding="utf-8")
+    (paper_root / "PAPER_STATE.yaml").write_text(
+        "\n".join([
+            "paper_id: demo-paper",
+            "acceptance_status: accepted",
+            "human_required: true",
+            "human_gate_triggered: true",
+            "human_gate_decision: pending",
+            "chain_trusted: true",
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    index = build_run_index(runtime, paper_project_dirs=[paper_root])
+
+    record = _records_by_adapter(index)["paper"][0]
+    _run_record_validator().validate(record)
+    assert record["outcome"] == "human_required"
+    assert record["gate_state"] == "gate_blocked"
+    assert record["acceptance_state"] == "blocked"
+    assert record["projection_state"] == "waiting_for_you"
+    assert record["domain_refs"]["effective_status"] == "human_required"
+    assert record["gate_refs"] == [{
+        "gate_id": "gate-paper-human-demo-paper",
+        "result": "blocked",
+        "uri": str(paper_root / "PAPER_STATE.yaml"),
+        "evidence_refs": [],
+    }]
+    assert record["failure_refs"][0]["failure_id"] == "failure-paper-human-gate-demo-paper"
+    assert any("human gate" in item for item in record["limitations"])
+
+
 def test_run_index_blocks_passed_test_run_when_report_is_missing(tmp_path):
     runtime = tmp_path / "runtime"
     _write_json(runtime / "test-runs" / "missing-report" / "test-run.json", {
