@@ -12,9 +12,8 @@ Date: 2026-07-08
 - snapshot_id: `2026-07-08T12:50:23+00:00:5cea92a56f63:fd1244ac1f00`
 
 This snapshot records the dirty-tree state that was reviewed before owner
-approval. The current external branch state is PR #4; use the PR head and
-GitHub `Release verification` check as the authority for post-approval CI
-status.
+approval. Current release status is the GitHub Release `v0.1.0`, with
+post-release status documentation maintained on `main`.
 
 Verdict: **GITHUB RELEASED as `v0.1.0`**; **PYPI NOT PUBLISHED**;
 **PHASE 6 PAPER ADAPTER DEFERRED**.
@@ -79,20 +78,20 @@ later Phase 6 domain-adapter slice rather than a Batch F-J release blocker.
 | ID | Bucket | Blocker | Owner | Next action | Pass condition |
 | --- | --- | --- | --- | --- | --- |
 | B1 | done | Dirty worktree batches have been converted into explicit batch commits. | Owner, Agent | None. | Clean current branch plus local gate evidence. |
-| B2 | done for PR route | Branch push, PR route, and GitHub Release verification have been completed for PR #4. | Owner, Agent | Keep PR #4 as the review surface. | PR branch exists and CI is green. |
+| B2 | done for PR route | Branch push, PR route, and GitHub Release verification were completed for PR #4 before merge. | Owner, Agent | None. | PR branch existed and CI was green. |
 | B3 | done for GitHub Release | PR merge, release tagging, GitHub Release, and release-asset publication were authorized and completed. | Owner, Agent | None for GitHub Release `v0.1.0`. | Release URL and main CI evidence exist. |
 | B4 | owner_required | PyPI publication and downstream announcement are not executed by this repository's release workflow. | Owner | Decide whether a separate PyPI or downstream distribution process should exist. | Separate publish workflow, credentials, and evidence. |
 
-## Owner Decision Packet
+## Post-Release Remaining Decisions
 
-No action in this section is authorized by this document. It is a prepared
-decision menu for the owner.
+No action in this section is authorized by this document. It is the remaining
+decision menu after GitHub Release `v0.1.0`.
 
 | Decision | Meaning | Agent action after approval |
 | --- | --- | --- |
-| `approve-batch-commits` | Convert the reviewed dirty tree into staged batch commits only. | Completed. |
-| `review-bundle-only` | Keep all changes unstaged for human or external review. | Leave the worktree dirty and use this file plus the batch map as the review surface. |
-| `approve-pr-route` | Allow branch/PR preparation after batch commits. This does not authorize publication by itself. | Completed for PR #4 and GitHub `Release verification`. |
+| `approve-pypi-route` | Define and execute a separate PyPI publication path. | Add or use an approved PyPI workflow, publish with credentials, and record evidence. |
+| `approve-phase-6-paper-adapter` | Start the deferred paper-domain adapter and `/rdpaper` closure slice. | Open a new branch, implement the Phase 6 slice, verify, review, and prepare a PR. |
+| `hold-after-github-release` | Keep `v0.1.0` as the current public release. | Do not publish to PyPI or start Phase 6 automatically. |
 
 GitHub Release publication is complete for `v0.1.0`. PyPI publication remains a
 separate future decision because no PyPI publish workflow is defined here.

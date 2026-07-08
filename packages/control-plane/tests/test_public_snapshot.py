@@ -820,6 +820,24 @@ def test_current_entry_docs_keep_p3_2_local_review_pass_non_release_ready():
         assert missing == [], f"{path} missing P3-2 local-review/release-readiness literals: {missing}"
 
 
+def test_post_release_docs_do_not_reopen_pr_publication_holds():
+    launch_now = (REPO_ROOT / "docs" / "status" / "LAUNCH_NOW.md").read_text(
+        encoding="utf-8-sig",
+    )
+    batch_map = (
+        REPO_ROOT / "docs" / "status" / "current-dirty-tree-batch-map-20260708.md"
+    ).read_text(encoding="utf-8-sig")
+
+    assert "GITHUB RELEASED as `v0.1.0`" in launch_now
+    assert "Post-Release Remaining Decisions" in launch_now
+    assert "approve-pr-route" not in launch_now
+    assert "Keep PR #4 as the review surface" not in launch_now
+    assert "HOLD for merge and publication until owner approval" not in batch_map
+    assert "not authorize merge or public release" not in batch_map
+    assert "historical execution evidence" in batch_map
+    assert "GitHub Release `v0.1.0`" in batch_map
+
+
 def test_reviewer_index_mentions_new_public_files():
     reviewer_index = (REPO_ROOT / "docs" / "status" / "reviewer-index.md").read_text(
         encoding="utf-8",

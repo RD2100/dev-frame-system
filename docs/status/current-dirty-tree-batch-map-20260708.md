@@ -6,8 +6,9 @@ Lifecycle state: Executed release-state evidence record
 
 Purpose: record how the reviewed dirty worktree was split into low-coupling
 review and commit batches. This file is now historical execution evidence: the
-batch commits have been created and pushed to PR #4, but this file still does
-not authorize merge or public release.
+batch commits were created and pushed to PR #4 before the later merge and
+GitHub Release `v0.1.0`. Current release status is authoritative in
+`LAUNCH_NOW.md`.
 
 ## Summary
 
@@ -24,8 +25,9 @@ release gate separate from these review batches.
 
 ## Final Local Review Verdict
 
-Verdict: **PASS for local batch review and PR CI; HOLD for merge and
-publication until owner approval**.
+Verdict at this checkpoint: **PASS for local batch review and PR CI**. The
+later merge and GitHub Release `v0.1.0` supersede the pre-release hold state
+that originally followed this review.
 
 Reviewer index:
 
@@ -39,10 +41,11 @@ Reviewer index:
   PASS, and local `git diff --check` PASS.
 - Generated artifacts: none retained in the working tree.
 - Known gaps: paper-domain adapter and `/rdpaper` command closure remain
-  deferred Phase 6 work; PR CI evidence exists for PR #4, while merge,
-  publication, and package-release evidence remain absent.
-- Review focus: keep local-gate-green separate from public release readiness,
-  and do not treat PR CI as merge or publication approval.
+  deferred Phase 6 work. Merge and GitHub Release publication were completed
+  after this batch checkpoint; PyPI publication remains outside this
+  repository's defined release workflow.
+- Review focus: treat this file as batch execution evidence, not as the current
+  release-state authority.
 
 Final batch review notes:
 
