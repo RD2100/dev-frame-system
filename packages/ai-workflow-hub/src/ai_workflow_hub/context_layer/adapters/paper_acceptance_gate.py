@@ -20,7 +20,7 @@ Design:
 Usage:
     result = compute_acceptance(
         issues=review_issues,
-        reviewer="writelab_adapter",
+        reviewer="deterministic_gate",
         evidence_pack_ref="ep-20260611-intro-001",
     )
 """
@@ -43,7 +43,7 @@ VALID_STATUSES = {
     "human_required",
 }
 
-VALID_REVIEWERS = {"deterministic_gate", "gpt", "human", "writelab_adapter"}
+VALID_REVIEWERS = {"deterministic_gate", "gpt", "human"}
 
 VALID_ISSUE_TYPES = {
     "structure", "argument", "citation", "expression",
@@ -68,7 +68,7 @@ SEVERITY_RANK = {"critical": 4, "major": 3, "minor": 2, "info": 1}
 
 def compute_acceptance(
     issues: list[dict[str, Any]],
-    reviewer: str = "writelab_adapter",
+    reviewer: str = "deterministic_gate",
     evidence_pack_ref: str = "",
     privacy_attestation: dict[str, bool] | None = None,
     needs_more_evidence: bool = False,
@@ -77,7 +77,7 @@ def compute_acceptance(
 
     Args:
         issues: List of PaperReviewIssue dicts (from adapter, GPT, etc.)
-        reviewer: Source of the review (enum: deterministic_gate|gpt|human|writelab_adapter)
+        reviewer: Source of the review (enum: deterministic_gate|gpt|human)
         evidence_pack_ref: Reference to the evidence pack manifest_id
         privacy_attestation: Optional dict with no_full_text, no_api_keys, no_personal_identity
         needs_more_evidence: If True, forces status to needs_more_evidence (unless blocked)
@@ -196,11 +196,11 @@ def compute_acceptance(
     # --- Record degraded/unavailable warnings ---
     unavailable_issues = [
         i for i in issues
-        if i.get("issue_id", "").startswith("wl-unavailable-")
+        if i.get("issue_id", "").startswith("diagnosis-unavailable-")
     ]
     if unavailable_issues:
         reasons.append(
-            f"NOTE: {len(unavailable_issues)} WriteLab-unavailable warning(s) recorded "
+            f"NOTE: {len(unavailable_issues)} diagnosis-unavailable warning(s) recorded "
             f"(non-blocking, severity=info)"
         )
 

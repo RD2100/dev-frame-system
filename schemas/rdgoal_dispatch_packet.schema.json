@@ -54,6 +54,8 @@
       "additionalProperties": true
     },
     "objective_text": { "type": "string", "minLength": 1 },
+    "context_packet_path": { "type": "string" },
+    "context_ledger_path": { "type": "string" },
     "packet_dir": { "type": "string" },
     "created_at": { "type": "string", "format": "date-time" }
   },

@@ -42,4 +42,6 @@ This directory contains JSON Schema definitions for the core integration contrac
 - RuntimeAuthorization does not imply a quality verdict.
 - TestExecutionReport does not imply final acceptance.
 - FinalVerdict must not be produced by executor/fixer/coder/worker roles.
+- FinalVerdict superseding metadata is append-only lifecycle linkage, not
+  acceptance evidence.
 - Forbidden patterns (MCP config modification, UI-TARS/computer-use, package managers, external script execution) are documented in descriptions and NOT listed as permitted values.

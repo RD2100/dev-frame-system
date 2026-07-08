@@ -1,7 +1,7 @@
 # Negative Test Fixtures -- RD2100 Agent Runtime v2
 
 > Batch D3, 2026-05-27
-> 30 deliberately-broken test fixtures for reviewer detection capability testing.
+> 31 deliberately-broken test fixtures for reviewer detection capability testing.
 
 ## Purpose
 
@@ -15,7 +15,7 @@ Each `.json` file is a self-contained test case with these fields:
 
 | Field | Description |
 |-------|-------------|
-| `test_id` | Unique identifier (NEG-001 through NEG-030) |
+| `test_id` | Unique identifier (NEG-001 through NEG-031) |
 | `scenario` | Human-readable description of the violation being tested |
 | `input_report_features` | Description of what the fake report contains -- the violation details |
 | `expected_gate_decision` | What the reviewer should decide (must NOT be "pass") |
@@ -47,12 +47,13 @@ Each `.json` file is a self-contained test case with these fields:
 | Quality / completeness | 1 | NEG-025 |
 | Source-of-truth / architecture | 1 | NEG-003 |
 | Gate result integrity | 1 | NEG-010 |
+| Recon / reuse gate violations | 1 | NEG-031 |
 
 ## Hard Stop Distribution
 
 | Hard Stop | Count |
 |-----------|-------|
-| true (P0) | 22 |
+| true (P0) | 23 |
 | false (P1/P2/P3) | 8 |
 
 ## Relationship to Invariants

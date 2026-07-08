@@ -43,6 +43,30 @@ agents:
       - request_human_gate
     status: idle
 
+sessions:
+  - session_id: demo-project-coordinator-session
+    provider: chatgpt
+    binding_id: chatgpt-web
+    agent_id: coordinator
+    agent_role: coordinator
+    project_id: demo-project
+    run_id: first-run
+    task_spec_id: first-run-task
+    status: idle
+    messages: []
+    tool_calls: []
+    changed_files: []
+    diff_summary: ""
+    evidence_refs: []
+    cost: {}
+    tokens: {}
+    gates:
+      - human-gate
+    actions:
+      - human-gate-action
+    native_refs:
+      runtime: visual-template
+
 runs:
   - run_id: first-run
     entrypoint: rdgoal
@@ -80,6 +104,55 @@ next_actions:
     status: open
     label: "Confirm human approval or keep the run blocked."
     detail: "Required before secrets, browser profiles, external side effects, or production actions."
+
+team:
+  agent_registry:
+    - agent_id: coordinator
+      role: coordinator
+      status: idle
+      session_ids:
+        - demo-project-coordinator-session
+      binding_id: chatgpt-web
+    - agent_id: reviewer
+      role: reviewer
+      status: idle
+      session_ids: []
+      binding_id: chatgpt-web
+  task_board:
+    - task_id: first-run
+      type: rdgoal-dispatch
+      status: pending
+      agent_ids:
+        - coordinator
+        - reviewer
+      project_id: demo-project
+      session_ids:
+        - demo-project-coordinator-session
+      target_files: []
+  message_bus:
+    - message_id: first-run-plan
+      from_role: coordinator
+      to_role: reviewer
+      kind: plan
+      run_id: first-run
+      summary: "Share the first-run task spec and request review."
+  event_log:
+    - event_id: first-run-dispatched
+      kind: dispatch
+      run_id: first-run
+      summary: "First run dispatched to the team coordination bus."
+  evidence_store:
+    - evidence_id: first-run-task-spec
+      ref_type: task_spec
+      ref_path: "<runtime-dir>/rdgoal-outbox/demo-project/first-run/TASKSPEC.json"
+      run_id: first-run
+  review_gates:
+    - gate_id: team-human-gate
+      kind: human
+      status: open
+      reason: "Team coordination gate: human must approve before execution."
+      run_id: first-run
+  conflict_control: []
 
 safety:
   raw_transcripts_persisted: false

@@ -11,7 +11,7 @@ Design:
   - Follows coding_graph.py patterns: _wrap(), conditional edges, MemorySaver
   - State is PaperWorkflowState (Pydantic BaseModel)
   - Nodes are plain functions: dict → dict (partial update)
-  - diagnosis_node supports 3 modes: offline / live / mock
+  - diagnosis_node consumes precomputed review issues
   - acceptance_gate_node uses A8 compute_acceptance (pure)
   - ledger_ingest_node (A12) persists issues to paper_issue_ledger
   - human_gate_node sets triggered flag (END = pause for human)
@@ -35,10 +35,6 @@ from ..context_layer.adapters.paper_acceptance_gate import (
     compute_acceptance,
     validate_acceptance_result,
 )
-from ..context_layer.adapters.paper_evidence_pipeline import (
-    run_offline_pipeline,
-    run_live_pipeline,
-)
 from ..context_layer.adapters.paper_issue_ledger import (
     ingest_from_acceptance_result,
     ledger_summary as get_ledger_summary,
@@ -59,78 +55,25 @@ from ..context_layer.adapters.paper_decision_audit import (
 # ---------------------------------------------------------------------------
 
 def diagnosis_node(state: dict[str, Any]) -> dict[str, Any]:
-    """Run WriteLab diagnosis based on writelab_mode.
-
-    Modes:
-      - "offline": Uses run_offline_pipeline with handoff_zip_path.
-                   Populates issues, evidence_manifest, and manifest_status.
-      - "live":    Uses run_live_pipeline with call_results from state.
-      - "mock":    Combines pre-populated expression_issues + paragraph_issues.
+    """Collect precomputed paper review issues.
 
     Returns:
         Partial state update with diagnosis results.
     """
-    mode = state.get("writelab_mode", "mock")
     update: dict[str, Any] = {
         "status": "running",
         "executed_nodes": _append_node(state, "diagnosis_node"),
     }
 
     try:
-        if mode == "offline":
-            zip_path = state.get("handoff_zip_path", "")
-            if not zip_path:
-                update["diagnosis_error"] = "offline mode requires handoff_zip_path"
-                update["writelab_available"] = False
-                update["diagnosis_source"] = "unavailable"
-                return update
-            pipeline_result = run_offline_pipeline(zip_path)
-            ar = pipeline_result["acceptance_result"]
-            all_issues = ar.get("blocking_issues", []) + ar.get("non_blocking_issues", [])
-            update["all_review_issues"] = all_issues
-            update["expression_issues"] = []
-            update["paragraph_issues"] = []
-            update["evidence_manifest"] = pipeline_result["evidence_manifest"]
-            update["evidence_pack_ref"] = ar.get("evidence_pack_ref", "")
-            update["manifest_status"] = pipeline_result["evidence_manifest"].get("status", "")
-            update["diagnosis_source"] = "offline"
-            update["acceptance_result"] = ar
-            update["acceptance_status"] = ar.get("status", "")
-            update["blocking_count"] = len(ar.get("blocking_issues", []))
-            update["non_blocking_count"] = len(ar.get("non_blocking_issues", []))
-            update["privacy_attestation"] = pipeline_result["evidence_manifest"].get(
-                "privacy_attestation", {}
-            )
-
-        elif mode == "live":
-            call_results = state.get("_call_results", [])
-            pa = state.get("privacy_attestation")
-            if pa is not None and not pa:
-                pa = None
-            pipeline_result = run_live_pipeline(
-                call_results=call_results,
-                reviewer="writelab_adapter",
-                evidence_pack_ref=state.get("evidence_pack_ref", ""),
-                privacy_attestation=pa,
-            )
-            ar = pipeline_result["acceptance_result"]
-            all_issues = ar.get("blocking_issues", []) + ar.get("non_blocking_issues", [])
-            update["all_review_issues"] = all_issues
-            update["diagnosis_source"] = "live"
-            update["acceptance_result"] = ar
-            update["acceptance_status"] = ar.get("status", "")
-            update["blocking_count"] = len(ar.get("blocking_issues", []))
-            update["non_blocking_count"] = len(ar.get("non_blocking_issues", []))
-
-        else:  # mock
-            expr = list(state.get("expression_issues", []))
-            para = list(state.get("paragraph_issues", []))
-            update["all_review_issues"] = expr + para
-            update["diagnosis_source"] = "mock"
+        existing = list(state.get("all_review_issues", []))
+        expr = list(state.get("expression_issues", []))
+        para = list(state.get("paragraph_issues", []))
+        update["all_review_issues"] = existing or (expr + para)
+        update["diagnosis_source"] = state.get("diagnosis_source") or "deterministic_gate"
 
     except Exception as e:
         update["diagnosis_error"] = str(e)
-        update["writelab_available"] = False
         update["diagnosis_source"] = "unavailable"
 
     return update
@@ -161,7 +104,7 @@ def acceptance_gate_node(state: dict[str, Any]) -> dict[str, Any]:
         pa = None
     result = compute_acceptance(
         issues=issues,
-        reviewer="writelab_adapter",
+        reviewer=state.get("diagnosis_source") or "deterministic_gate",
         evidence_pack_ref=state.get("evidence_pack_ref", ""),
         privacy_attestation=pa,
     )

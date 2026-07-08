@@ -1,7 +1,7 @@
 # Operating Model -- RD2100 Agent Runtime v2
 
 > Batch B1, 2026-05-27
-> Canonical root: D:\devframe-system
+> Canonical root: <repo-root>
 
 ## Overview
 
@@ -72,7 +72,7 @@ Session End
 ## File System Layout
 
 ```
-D:\devframe-system\              <- CANONICAL_ROOT
+<repo-root>\              <- CANONICAL_ROOT
   scripts/                        <- Superproject integration checks
   agent-acceptance/
     scripts/                      <- SADP PowerShell runners (L0-L3)

@@ -1,0 +1,88 @@
+{
+  "schema_version": "0.1",
+  "context_packet_id": "cp-batch-a-context-v1",
+  "project_id": "devframe-system",
+  "goal_id": "goal-runtime-governance-batch-a",
+  "task_id": "task-context-contracts",
+  "domain": "code",
+  "profile": "contract-only",
+  "producer_role": "coordinator",
+  "created_at": "2026-07-07T00:00:00Z",
+  "intent_summary": "Prepare explicit, bounded context for Runtime Governance Batch A schema review.",
+  "intended_use": "review",
+  "immutability": {
+    "immutable": true,
+    "content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "source_refs": [
+    {
+      "ref_id": "runtime-plan",
+      "kind": "file",
+      "uri": "docs/status/runtime-governance-and-evidence-closure-transformation-plan.md",
+      "content_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "included": true,
+      "required": true,
+      "freshness_state": "current",
+      "producer_role": "planner",
+      "observed_at": "2026-07-07T00:00:00Z"
+    },
+    {
+      "ref_id": "status-inventory",
+      "kind": "file",
+      "uri": "docs/status/runtime-governance-status-vocabulary-inventory.md",
+      "content_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "included": true,
+      "required": true,
+      "freshness_state": "current",
+      "producer_role": "coordinator",
+      "observed_at": "2026-07-07T00:00:00Z"
+    }
+  ],
+  "omitted_required_refs": [],
+  "forbidden_refs": [
+    {
+      "ref": "browser-profile",
+      "reason": "Private browser profiles are forbidden public context."
+    },
+    {
+      "ref": ".devframe-runtime",
+      "reason": "Local runtime state must not be committed into public fixtures."
+    }
+  ],
+  "freshness": {
+    "checked_at": "2026-07-07T00:00:00Z",
+    "stale_refs": [],
+    "unknown_refs": []
+  },
+  "completeness_state": "complete",
+  "privacy_state": "redacted",
+  "seal_state": "sealed",
+  "limitations": [
+    "Contract fixture only.",
+    "No workflow execution or final acceptance claim."
+  ],
+  "constraints": {
+    "allowed_actions": [
+      "schema validation",
+      "independent review"
+    ],
+    "forbidden_actions": [
+      "workflow execution",
+      "dashboard authority change",
+      "claim final_ready"
+    ],
+    "stop_lines": [
+      "No runtime integration in Batch A context schema slice.",
+      "No final acceptance claim without FinalVerdict."
+    ],
+    "authority_boundary": {
+      "can_execute": false,
+      "can_review": true,
+      "can_claim_final_acceptance": false,
+      "final_verdict_required": true
+    }
+  },
+  "domain_refs": {
+    "batch": "runtime-governance-batch-a"
+  }
+}

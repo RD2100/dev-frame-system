@@ -1,0 +1,65 @@
+{
+  "label": "global_coordinator_only",
+  "shell": {
+    "version": 1,
+    "source": "devframe",
+    "updatedAt": "2026-07-01T00:00:00Z",
+    "t3": {
+      "snapshotSequence": 2,
+      "projects": [],
+      "threads": [
+        {
+          "id": "native-1",
+          "title": "Native Chat",
+          "threadKind": "native_chat",
+          "threadListPriority": 2,
+          "updatedAt": "2026-07-01T01:10:00Z"
+        },
+        {
+          "id": "devframe-team-workbench-session",
+          "title": "Global Coordinator",
+          "threadKind": "global_coordinator",
+          "threadListPriority": 0,
+          "updatedAt": "2026-07-01T01:00:00Z"
+        }
+      ],
+      "threadDetails": [
+        {
+          "id": "devframe-team-workbench-session",
+          "threadKind": "global_coordinator"
+        },
+        {
+          "id": "native-1",
+          "threadKind": "native_chat"
+        }
+      ],
+      "updatedAt": "2026-07-01T01:00:00Z"
+    }
+  },
+  "projects": [
+    {
+      "projectId": "project-1",
+      "projectPath": "D:\\fixtures\\global-demo",
+      "workspaceRoot": "D:\\fixtures\\global-demo",
+      "label": "Global Demo - D:\\fixtures\\global-demo"
+    }
+  ],
+  "expected": {
+    "canStartCoordinatorGoal": true,
+    "selectedProjectId": "project-1",
+    "projectCoordinatorThreadId": null,
+    "goalConversationIds": [],
+    "shellThreadsIds": [
+      "devframe-team-workbench-session",
+      "native-1"
+    ],
+    "sortedShellThreadIds": [
+      "devframe-team-workbench-session",
+      "native-1"
+    ],
+    "projectOptionCount": 1,
+    "emptyStateReason": null,
+    "disabledReason": null,
+    "globalThreadId": "devframe-team-workbench-session"
+  }
+}

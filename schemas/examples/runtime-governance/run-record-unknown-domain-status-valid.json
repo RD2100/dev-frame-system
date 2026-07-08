@@ -1,0 +1,35 @@
+{
+  "schema_version": "0.1",
+  "run_id": "run-unknown-domain-status",
+  "project_id": "devframe-system",
+  "goal_id": "goal-runtime-governance-batch-a",
+  "task_id": "task-fixture-coverage",
+  "attempt_id": "attempt-1",
+  "context_packet_id": "cp-batch-a-context-v1",
+  "context_ledger_id": "cl-batch-a-context-v1",
+  "domain": "general",
+  "profile": "contract-only",
+  "producer_role": "runtime_adapter",
+  "created_at": "2026-07-07T00:00:00Z",
+  "updated_at": "2026-07-07T00:00:00Z",
+  "phase": "verifying",
+  "outcome": "unknown",
+  "review_state": "review_pending",
+  "gate_state": "gate_pending",
+  "acceptance_state": "review_pending",
+  "projection_state": "unknown",
+  "worker_results": [],
+  "artifact_refs": [],
+  "evidence_refs": [],
+  "review_refs": [],
+  "gate_refs": [],
+  "failure_refs": [],
+  "limitations": [
+    "Unknown legacy status must not be promoted to pass or final_ready."
+  ],
+  "domain_refs": {
+    "source": "legacy_adapter",
+    "legacy_status": "mystery_done",
+    "required_negative_case": "unknown-domain-status"
+  }
+}

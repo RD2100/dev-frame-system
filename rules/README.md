@@ -1,7 +1,7 @@
 # Rules -- RD2100 Agent Runtime v2
 
 > Batch C1, 2026-05-27
-> Canonical root: D:\devframe-system
+> Canonical root: <repo-root>
 
 ## Priority System
 
@@ -33,11 +33,13 @@ Each rule entry:
 |------|--------|:---:|
 | `core.md` | Runtime core -- execution, gating, phase boundaries | 8 |
 | `coding.md` | Code generation -- edits, style, patterns | 7 |
-| `research.md` | Read-only exploration -- reading, searching, CodeGraph | 5 |
+| `research.md` | Read-only exploration -- reading, searching, CodeGraph, encoding hygiene | 6 |
+| `recon.md` | Directory-level reconnaissance -- RKR receipts, reuse decisions, role boundaries | 9 |
 | `security.md` | Security hard stops -- secrets, injection, traversal | 8 |
 | `review.md` | Review and evidence -- reports, gates, verification | 6 |
 | `git.md` | Git safety -- commits, pushes, destructive ops | 6 |
 | `frontend.md` | Frontend -- XSS, components, patterns | 6 |
+| `open-source-reuse.md` | Open-source reuse -- candidates, licenses, boundaries | 7 |
 
 ## Conflict Resolution
 

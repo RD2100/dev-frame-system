@@ -1,0 +1,65 @@
+{
+  "schema_version": "0.1",
+  "run_id": "run-batch-a-worker-passed-review-pending",
+  "project_id": "devframe-system",
+  "goal_id": "goal-runtime-governance-batch-a",
+  "task_id": "task-run-record-contract",
+  "attempt_id": "attempt-1",
+  "context_packet_id": "cp-batch-a-context-v1",
+  "context_ledger_id": "cl-batch-a-context-v1",
+  "domain": "code",
+  "profile": "contract-only",
+  "producer_role": "runtime_adapter",
+  "created_at": "2026-07-07T00:00:00Z",
+  "updated_at": "2026-07-07T00:00:00Z",
+  "phase": "awaiting_review",
+  "outcome": "passed",
+  "review_state": "review_pending",
+  "gate_state": "not_evaluated",
+  "acceptance_state": "review_pending",
+  "projection_state": "awaiting_review",
+  "worker_results": [
+    {
+      "worker_id": "worker-schema-slice",
+      "worker_role": "worker",
+      "status": "succeeded",
+      "reported_at": "2026-07-07T00:00:00Z",
+      "artifact_refs": [
+        "schemas/runtime-governance/run-record.schema.json"
+      ]
+    }
+  ],
+  "artifact_refs": [
+    {
+      "artifact_id": "a-context-packet",
+      "kind": "context_packet",
+      "uri": "schemas/examples/runtime-governance/context-packet-valid.json",
+      "content_hash": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+    },
+    {
+      "artifact_id": "a-context-ledger",
+      "kind": "context_ledger",
+      "uri": "schemas/examples/runtime-governance/context-ledger-valid.json",
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "evidence_refs": [
+    {
+      "evidence_id": "e-runrecord-schema",
+      "kind": "other",
+      "uri": "schemas/runtime-governance/run-record.schema.json",
+      "supports": "outcome",
+      "content_hash": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+    }
+  ],
+  "review_refs": [],
+  "gate_refs": [],
+  "failure_refs": [],
+  "limitations": [
+    "Worker completion is mechanical only.",
+    "No independent review or FinalVerdict exists in this fixture."
+  ],
+  "domain_refs": {
+    "batch": "runtime-governance-batch-a"
+  }
+}

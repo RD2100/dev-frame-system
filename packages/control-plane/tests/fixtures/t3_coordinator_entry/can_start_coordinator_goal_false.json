@@ -1,0 +1,84 @@
+{
+  "label": "can_start_coordinator_goal_false",
+  "shell": {
+    "version": 1,
+    "source": "devframe",
+    "updatedAt": "2026-07-01T00:00:00Z",
+    "t3": {
+      "snapshotSequence": 5,
+      "projects": [],
+      "threads": [
+        {
+          "id": "native-1",
+          "title": "Native Chat",
+          "threadKind": "native_chat",
+          "threadListPriority": 2,
+          "updatedAt": "2026-07-01T00:01:00Z"
+        },
+        {
+          "id": "goal-orphan",
+          "title": "Orphan Goal",
+          "threadKind": "goal_conversation",
+          "threadListPriority": 1,
+          "updatedAt": "2026-07-01T00:00:30Z"
+        },
+        {
+          "id": "devframe-workbench-mis-tagged",
+          "title": "Mis-typed coordinator thread",
+          "threadKind": "native_chat",
+          "threadListPriority": 0,
+          "updatedAt": "2026-07-01T00:00:00Z"
+        }
+      ],
+      "threadDetails": [
+        {
+          "id": "devframe-workbench-mis-tagged",
+          "threadKind": "native_chat"
+        },
+        {
+          "id": "goal-orphan",
+          "threadKind": "goal_conversation"
+        },
+        {
+          "id": "native-1",
+          "threadKind": "native_chat"
+        }
+      ],
+      "updatedAt": "2026-07-01T00:00:00Z"
+    },
+    "devframe": {
+      "conversationModel": {
+        "globalCoordinatorThreadId": "devframe-team-workbench-session",
+        "goalProjectBindingRequired": true,
+        "threadKinds": [
+          "native_chat",
+          "goal_conversation",
+          "global_coordinator"
+        ]
+      }
+    }
+  },
+  "projects": [],
+  "expected": {
+    "canStartCoordinatorGoal": false,
+    "selectedProjectId": null,
+    "projectCoordinatorThreadId": null,
+    "goalConversationIds": [
+      "goal-orphan"
+    ],
+    "shellThreadsIds": [
+      "devframe-workbench-mis-tagged",
+      "goal-orphan",
+      "native-1"
+    ],
+    "sortedShellThreadIds": [
+      "devframe-workbench-mis-tagged",
+      "goal-orphan",
+      "native-1"
+    ],
+    "projectOptionCount": 0,
+    "emptyStateReason": "missing_global_coordinator_thread",
+    "disabledReason": "missing_required_project",
+    "globalThreadId": null
+  }
+}

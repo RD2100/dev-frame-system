@@ -51,7 +51,16 @@ rules/
   README.md, core.md, coding.md, security.md, review.md, git.md, research.md, frontend.md
 
 templates/runtime-bootstrap/  <- Self-contained bootstrap (re-runnable)
+tools/devframe-go.ps1         <- Project-local /go wrapper for coding-agent fan-out
 ```
+
+## Coding-Agent Fan-Out
+
+Use `tools/devframe-go.ps1` as the project-local `/go` bridge. By default it
+runs `devframe code --preview`, so it shows changed-file shards and worker
+command templates without creating packets or spending worker tokens. Add
+`-Prepare -Dashboard` to create queued packets and inspect the local dashboard
+without running workers. Add `-Execute` only after reviewing the preview.
 
 ## Phase {{PHASE}} Boundary
 

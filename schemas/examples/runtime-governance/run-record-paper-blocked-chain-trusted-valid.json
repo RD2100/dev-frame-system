@@ -1,0 +1,42 @@
+{
+  "schema_version": "0.1",
+  "run_id": "run-paper-blocked-chain-trusted",
+  "project_id": "devframe-system",
+  "goal_id": "goal-runtime-governance-batch-a",
+  "task_id": "task-fixture-coverage",
+  "attempt_id": "attempt-1",
+  "context_packet_id": "cp-batch-a-context-v1",
+  "context_ledger_id": "cl-batch-a-context-v1",
+  "domain": "paper",
+  "profile": "contract-only",
+  "producer_role": "runtime_adapter",
+  "created_at": "2026-07-07T00:00:00Z",
+  "updated_at": "2026-07-07T00:00:00Z",
+  "phase": "closed",
+  "outcome": "blocked",
+  "review_state": "not_reviewed",
+  "gate_state": "gate_blocked",
+  "acceptance_state": "blocked",
+  "projection_state": "blocked",
+  "worker_results": [],
+  "artifact_refs": [],
+  "evidence_refs": [],
+  "review_refs": [],
+  "gate_refs": [],
+  "failure_refs": [
+    {
+      "failure_id": "paper-blocked-chain-fallback",
+      "status": "blocked",
+      "uri": "paper-run-governance.json"
+    }
+  ],
+  "limitations": [
+    "Legacy chain_trusted fallback is recorded as source data only."
+  ],
+  "domain_refs": {
+    "source": "paper_run_governance",
+    "run_status": "blocked",
+    "chain_trusted": true,
+    "required_negative_case": "paper-blocked-chain-trusted"
+  }
+}

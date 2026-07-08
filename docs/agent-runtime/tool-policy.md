@@ -6,12 +6,13 @@
 
 | Operation | Condition |
 |-----------|-----------|
-| Read files | Within D:\devframe-system |
-| List directories | Within D:\devframe-system |
+| Read files | Within <repo-root> |
+| List directories | Within <repo-root> |
 | Git status/log/diff | Read-only |
 | Search (rg, Grep, Select-String) | Read-only |
 | JSON validation | Read-only schema audit |
-| CodeGraph search/context/explore | Read-only; reindex = human gate |
+| CodeGraph status/search/context/explore | Read-only |
+| CodeGraph init/index/sync | Local index write to `.codegraph/`; requires user or project-rule authorization |
 | Generate files | Only within approved output paths |
 
 ## Approved Output Paths

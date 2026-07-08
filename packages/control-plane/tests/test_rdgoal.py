@@ -18,9 +18,12 @@ from control_plane.decision_engine import DecisionEngine, DecisionMode, Operatio
 from control_plane.orchestrator import Orchestrator
 from control_plane.project_contract import load_contract, render_contract_markdown
 from control_plane.rdgoal import rdgoal
+from control_plane.go_dispatch import run_go_dispatch
 from control_plane.rdgoal_cli import main as rdgoal_cli_main
 from control_plane.runtime_digest import build_runtime_digest, render_runtime_digest_markdown
+from control_plane.runtime_store import JournalEvent, RuntimeStore
 from control_plane.visual_state import build_visual_control_plane_state, render_visual_control_plane_state_html
+from control_plane.skill_registry import list_methodology_skills
 from control_plane.worker import AihubGoWorker, CommandWorker, LocalDryRunWorker
 
 
@@ -358,6 +361,8 @@ def test_runtime_digest_cli_reports_worker_status(tmp_path, capsys):
 
 
 def test_visual_control_plane_state_reads_rdgoal_runtime(tmp_path):
+    from control_plane.t3_adapter import build_t3_client_shell_from_state
+
     project_root = tmp_path / "project"
     runtime_dir = tmp_path / "runtime"
     project_root.mkdir()
@@ -377,6 +382,7 @@ def test_visual_control_plane_state_reads_rdgoal_runtime(tmp_path):
     assert state["projects"][0]["status"] == "completed"
     assert state["runs"][0]["entrypoint"] == "rdgoal"
     assert state["runs"][0]["status"] == "completed"
+    assert state["runs"][0]["review_status"] == "pending"
     assert state["runs"][0]["packet_path"] == result.dispatch.packet.packet_dir
     assert state["runs"][0]["taskspec_path"].endswith("TASKSPEC.md")
     assert state["runs"][0]["taskspec_json_path"].endswith("TASKSPEC.json")
@@ -384,10 +390,74 @@ def test_visual_control_plane_state_reads_rdgoal_runtime(tmp_path):
     assert state["decisions"][0]["status"] == "executed"
     assert state["gates"][0]["next_action"].startswith("Confirm human approval")
     acceptance_gate = next(gate for gate in state["gates"] if gate["kind"] == "acceptance")
-    assert acceptance_gate["next_action"].startswith("Review ExecutionReport status: passed")
+    assert acceptance_gate["status"] == "open"
+    assert acceptance_gate["next_action"].startswith("Independent review required")
+    shell = build_t3_client_shell_from_state(state)
+    t3_acceptance_gate = next(gate for gate in shell["devframe"]["gates"] if gate["kind"] == "acceptance")
+    assert t3_acceptance_gate["status"] == "open"
     assert state["next_actions"][0]["source_id"] == "human-gate"
     assert state["next_actions"][0]["label"].startswith("Confirm human approval")
     assert state["safety"]["remote_execution_default"] is False
+
+
+def test_visual_control_plane_state_reads_go_runs(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    source_dir = project_root / "packages" / "control-plane" / "control_plane"
+    source_dir.mkdir(parents=True)
+    (source_dir / "cli.py").write_text("c" * 24, encoding="utf-8")
+    (source_dir / "go_dispatch.py").write_text("g" * 24, encoding="utf-8")
+
+    result = run_go_dispatch(
+        project_root,
+        "Build a Codex-like programming tool MVP.",
+        runtime_dir=runtime_dir,
+        agents=2,
+        targets=[
+            "packages/control-plane/control_plane/cli.py",
+            "packages/control-plane/control_plane/go_dispatch.py",
+        ],
+    )
+    state = build_visual_control_plane_state(runtime_dir)
+    html = render_visual_control_plane_state_html(state, lang="zh-CN")
+
+    validate_schema("schemas/visual_control_plane_state.schema.json", state)
+    assert len(state["go_runs"]) == 1
+    assert state["go_runs"][0]["go_run_id"] == result.go_run_id
+    assert state["go_runs"][0]["status"] == "queued"
+    assert state["go_runs"][0]["execute"] is False
+    assert state["go_runs"][0]["status_command"] == (
+        f'devframe code status "{result.go_run_id}" --runtime-dir "{runtime_dir}"'
+    )
+    assert state["go_runs"][0]["execute_command"] == (
+        f'devframe code execute "{result.go_run_id}" --runtime-dir "{runtime_dir}"'
+    )
+    assert len(state["go_runs"][0]["agents"]) == 2
+    assert state["go_runs"][0]["agents"][0]["targets"] == [
+        "packages/control-plane/control_plane/cli.py"
+    ]
+    assert state["go_runs"][0]["agents"][0]["target_bytes"] == 24
+    assert state["go_runs"][0]["agents"][1]["worker_command"][:4] == [
+        "opencode",
+        "run",
+        "-m",
+        "stepfun/step-3.7-flash",
+    ]
+    assert len(state["runs"]) == 2
+    assert "/go 编码智能体" in html
+    assert "目标字节数" in html
+    assert "<code>24</code>" in html
+    assert "状态命令" in html
+    assert "执行命令" in html
+    assert "devframe code status" in html
+    assert "devframe code execute" in html
+    assert result.go_run_id in html
+    assert "packages/control-plane/control_plane/go_dispatch.py" in html
+    assert "opencode run -m stepfun/step-3.7-flash" in html
+    assert "Prepared" in html
+    assert "状态: Prepared" in html
+    assert "任务规格: Ready" in html
 
 
 def test_devframe_cli_exports_visual_state_json(tmp_path, monkeypatch, capsys):
@@ -1204,6 +1274,65 @@ def test_command_worker_failed_command_is_not_fake_green(tmp_path):
     assert "exited 7" in Path(worker_result.report_path).read_text(encoding="utf-8")
 
 
+def test_command_worker_resolves_executable_before_running(tmp_path, monkeypatch):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    contract_path = write_contract(tmp_path)
+
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    orchestrator.register(contract_path, project_root)
+    result = orchestrator.dispatch(
+        project_id="demo-project",
+        requirement="Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+    monkeypatch.setattr(
+        "control_plane.worker.shutil.which",
+        lambda name: sys.executable if name == "python-alias" else None,
+    )
+    command = [
+        "python-alias",
+        "-c",
+        (
+            "import os, pathlib; "
+            "pathlib.Path(os.environ['RDGOAL_REPORT_PATH']).write_text("
+            "'## ExecutionReport: command\\n\\n- **Status**: pass\\n- **Evidence**: resolved executable\\n',"
+            "encoding='utf-8')"
+        ),
+    ]
+
+    worker_result = CommandWorker(runtime_dir=runtime_dir).run_packet(result.packet.packet_dir, command)
+
+    assert worker_result.summary.status == "passed"
+    assert "resolved executable" in worker_result.summary.verification
+
+
+def test_command_worker_missing_executable_is_reported(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    contract_path = write_contract(tmp_path)
+
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    orchestrator.register(contract_path, project_root)
+    result = orchestrator.dispatch(
+        project_id="demo-project",
+        requirement="Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+
+    worker_result = CommandWorker(runtime_dir=runtime_dir).run_packet(
+        result.packet.packet_dir,
+        ["definitely-missing-devframe-worker-command"],
+    )
+
+    packet_dir = Path(result.packet.packet_dir)
+    assert worker_result.summary.status == "failed"
+    assert "could not start" in Path(worker_result.report_path).read_text(encoding="utf-8")
+    assert "FAILED TO START" in (packet_dir / "worker-output.txt").read_text(encoding="utf-8")
+
+
 def test_command_worker_does_not_run_held_packet(tmp_path):
     project_root = tmp_path / "project"
     runtime_dir = tmp_path / "runtime"
@@ -1414,3 +1543,702 @@ def test_worker_cli_returns_nonzero_for_failed_aihub_go(tmp_path, monkeypatch):
     ])
 
     assert exit_code == 1
+
+
+def test_render_visual_control_plane_html_defaults_to_english(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    rdgoal(
+        orchestrator,
+        project_root,
+        "Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+
+    html = render_visual_control_plane_state_html(build_visual_control_plane_state(runtime_dir))
+
+    assert '<html lang="en">' in html
+    assert "<title>DevFrame Visual Control Plane</title>" in html
+    assert "Visual State Snapshot" in html
+    assert "Gate Focus" in html
+    assert "Action Queue" in html
+    assert "Run Details" in html
+    assert "Safety Defaults" in html
+    assert 'aria-label="Language"' in html
+    assert '<a class="active" aria-current="true" href="?lang=en">English</a>' in html
+    assert "中文" in html
+    assert 'href="?lang=en"' in html
+    assert '?lang=zh-CN' in html
+
+
+def test_render_visual_control_plane_html_renders_chinese_when_lang_zh_cn(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    rdgoal(
+        orchestrator,
+        project_root,
+        "Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+
+    html = render_visual_control_plane_state_html(
+        build_visual_control_plane_state(runtime_dir),
+        endpoint_links=True,
+        lang="zh-CN",
+    )
+
+    assert '<html lang="zh-CN">' in html
+    assert "<title>DevFrame 可视化控制面</title>" in html
+    assert "可视化状态快照" in html
+    assert "门控聚焦" in html
+    assert "动作队列" in html
+    assert "运行详情" in html
+    assert "安全默认值" in html
+    assert "动作交接" in html
+    assert "智能体" in html
+    assert 'aria-label="语言"' in html
+    assert '<a class="active" aria-current="true" href="?lang=zh-CN">中文</a>' in html
+    assert "English" in html
+    assert '?lang=en' in html
+    assert '?lang=zh-CN' in html
+    assert "DevFrame Visual Control Plane" not in html
+    assert "Visual State Snapshot" not in html
+
+
+def test_render_visual_control_plane_html_invalid_lang_falls_back_to_english(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    rdgoal(
+        orchestrator,
+        project_root,
+        "Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+
+    html = render_visual_control_plane_state_html(
+        build_visual_control_plane_state(runtime_dir),
+        lang="fr",
+    )
+
+    assert '<html lang="en">' in html
+    assert "<title>DevFrame Visual Control Plane</title>" in html
+    assert "Visual State Snapshot" in html
+    assert '?lang=zh-CN' in html
+
+
+def test_dashboard_server_serves_chinese_html_with_lang_switch(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    rdgoal(
+        orchestrator,
+        project_root,
+        "Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+    server = build_dashboard_server(runtime_dir=runtime_dir, port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+
+    try:
+        with urlopen(f"{base_url}/?lang=zh-CN", timeout=5) as response:
+            html = response.read().decode("utf-8")
+
+        assert '<html lang="zh-CN">' in html
+        assert "<title>DevFrame 可视化控制面</title>" in html
+        assert "可视化状态快照" in html
+        assert "门控聚焦" in html
+        assert "动作队列" in html
+        assert "运行详情" in html
+        assert "English" in html
+        assert 'href="?lang=en"' in html
+        assert '<a class="active" aria-current="true" href="?lang=zh-CN">中文</a>' in html
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_dashboard_server_serves_english_by_default(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    rdgoal(
+        orchestrator,
+        project_root,
+        "Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+    server = build_dashboard_server(runtime_dir=runtime_dir, port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+
+    try:
+        with urlopen(f"{base_url}/", timeout=5) as response:
+            html = response.read().decode("utf-8")
+
+        assert '<html lang="en">' in html
+        assert "<title>DevFrame Visual Control Plane</title>" in html
+        assert "Visual State Snapshot" in html
+        assert "中文" in html
+        assert '<a class="active" aria-current="true" href="?lang=en">English</a>' in html
+        assert '?lang=zh-CN' in html
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_dashboard_html_preserves_lang_in_action_links(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    rdgoal(
+        orchestrator,
+        project_root,
+        "Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+
+    html = render_visual_control_plane_state_html(
+        build_visual_control_plane_state(runtime_dir),
+        endpoint_links=True,
+        lang="zh-CN",
+    )
+
+    assert 'href="/actions.md?lang=zh-CN"' in html
+    assert 'href="/actions.md?action_id=human-gate-action&amp;lang=zh-CN"' in html
+
+
+def test_dashboard_server_serves_chinese_action_markdown(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    rdgoal(
+        orchestrator,
+        project_root,
+        "Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+    server = build_dashboard_server(runtime_dir=runtime_dir, port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+
+    try:
+        with urlopen(f"{base_url}/actions.md?lang=zh-CN", timeout=5) as response:
+            markdown = response.read().decode("utf-8")
+
+        assert "# 动作队列交接" in markdown
+        assert "用于手动恢复、审查或 Web AI 交接的只读队列。" in markdown
+        assert "- 动作 ID: `human-gate-action`" in markdown
+        assert "- 优先级: `" in markdown
+        assert "- 状态: `" in markdown
+        assert "devframe actions --action-id human-gate-action --format markdown" in markdown
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+def test_team_model_projects_terminal_go_run_pass_status_as_review_gate(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    source_dir = project_root / "packages" / "control-plane" / "control_plane"
+    source_dir.mkdir(parents=True)
+    (source_dir / "cli.py").write_text("c" * 24, encoding="utf-8")
+    go_run_id = "go-pass-test"
+    go_run_dir = runtime_dir / "go-runs" / go_run_id
+    go_run_dir.mkdir(parents=True)
+    (go_run_dir / "go-run.json").write_text(json.dumps({
+        "go_run_id": go_run_id,
+        "project_id": "project",
+        "project_root": str(project_root),
+        "requirement": "Test terminal passed go-run.",
+        "runtime_dir": str(runtime_dir),
+        "status": "passed",
+        "execute": True,
+        "agents": [{
+            "agent_id": "coding-agent-1",
+            "shard_index": 1,
+            "shard_count": 1,
+            "targets": ["packages/control-plane/control_plane/cli.py"],
+            "target_bytes": 24,
+            "packet_dir": str(runtime_dir / "p1"),
+            "task_spec_path": str(runtime_dir / "p1" / "TASKSPEC.json"),
+            "worker_command": ["opencode", "run"],
+            "status": "completed",
+            "worker_status": "passed",
+            "report_path": str(runtime_dir / "report.md"),
+            "changed_files": ["cli.py"],
+            "verification": "ok",
+        }],
+    }, indent=2, ensure_ascii=True), encoding="utf-8")
+
+    state = build_visual_control_plane_state(runtime_dir)
+
+    validate_schema("schemas/visual_control_plane_state.schema.json", state)
+    team = state["team"]
+
+    outcome_gates = [g for g in team["review_gates"] if g["kind"] == "go-run-outcome"]
+    assert len(outcome_gates) == 1
+    assert outcome_gates[0]["gate_id"] == f"{go_run_id}-outcome-gate"
+    assert outcome_gates[0]["status"] == "open"
+    assert outcome_gates[0]["run_id"] == go_run_id
+    assert "independent review is still required" in outcome_gates[0]["reason"]
+
+    execution_messages = [m for m in team["message_bus"] if m["run_id"] == go_run_id
+                          and m["kind"] == "execution-status"]
+    assert len(execution_messages) >= 1
+    assert any("independent review is still required" in m["summary"] for m in execution_messages)
+
+
+def test_team_model_projects_terminal_go_run_failed_status_as_review_gate(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    source_dir = project_root / "packages" / "control-plane" / "control_plane"
+    source_dir.mkdir(parents=True)
+    (source_dir / "go_dispatch.py").write_text("g" * 24, encoding="utf-8")
+    go_run_id = "go-fail-test"
+    go_run_dir = runtime_dir / "go-runs" / go_run_id
+    go_run_dir.mkdir(parents=True)
+    (go_run_dir / "go-run.json").write_text(json.dumps({
+        "go_run_id": go_run_id,
+        "project_id": "project",
+        "project_root": str(project_root),
+        "requirement": "Test terminal failed go-run.",
+        "runtime_dir": str(runtime_dir),
+        "status": "failed",
+        "execute": True,
+        "agents": [{
+            "agent_id": "coding-agent-1",
+            "shard_index": 1,
+            "shard_count": 1,
+            "targets": ["packages/control-plane/control_plane/go_dispatch.py"],
+            "target_bytes": 24,
+            "packet_dir": str(runtime_dir / "p1"),
+            "task_spec_path": str(runtime_dir / "p1" / "TASKSPEC.json"),
+            "worker_command": ["opencode", "run"],
+            "status": "failed",
+            "worker_status": "failed",
+            "changed_files": [],
+        }],
+    }, indent=2, ensure_ascii=True), encoding="utf-8")
+
+    state = build_visual_control_plane_state(runtime_dir)
+
+    validate_schema("schemas/visual_control_plane_state.schema.json", state)
+    team = state["team"]
+
+    outcome_gates = [g for g in team["review_gates"] if g["kind"] == "go-run-outcome"]
+    assert len(outcome_gates) == 1
+    assert outcome_gates[0]["gate_id"] == f"{go_run_id}-outcome-gate"
+    assert outcome_gates[0]["status"] == "failed"
+    assert outcome_gates[0]["run_id"] == go_run_id
+    assert "failed" in outcome_gates[0]["reason"]
+
+    review_messages = [m for m in team["message_bus"] if m["run_id"] == go_run_id
+                       and m["kind"] == "review-status"]
+    assert len(review_messages) >= 1
+    assert any("failed" in m["summary"] for m in review_messages)
+
+
+def test_team_model_projects_terminal_go_run_blocked_status_as_review_gate(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    go_run_id = "go-blocked-test"
+    go_run_dir = runtime_dir / "go-runs" / go_run_id
+    go_run_dir.mkdir(parents=True)
+    (go_run_dir / "go-run.json").write_text(json.dumps({
+        "go_run_id": go_run_id,
+        "project_id": "project",
+        "project_root": str(project_root),
+        "requirement": "Test terminal blocked go-run.",
+        "runtime_dir": str(runtime_dir),
+        "status": "blocked",
+        "execute": True,
+        "agents": [{
+            "agent_id": "coding-agent-1",
+            "shard_index": 1,
+            "shard_count": 1,
+            "targets": [],
+            "target_bytes": 0,
+            "packet_dir": str(runtime_dir / "p1"),
+            "task_spec_path": str(runtime_dir / "p1" / "TASKSPEC.json"),
+            "worker_command": ["opencode", "run"],
+            "status": "blocked",
+            "worker_status": "blocked",
+            "changed_files": [],
+        }],
+    }, indent=2, ensure_ascii=True), encoding="utf-8")
+
+    state = build_visual_control_plane_state(runtime_dir)
+
+    validate_schema("schemas/visual_control_plane_state.schema.json", state)
+    team = state["team"]
+
+    outcome_gates = [g for g in team["review_gates"] if g["kind"] == "go-run-outcome"]
+    assert len(outcome_gates) == 1
+    assert outcome_gates[0]["gate_id"] == f"{go_run_id}-outcome-gate"
+    assert outcome_gates[0]["status"] == "blocked"
+    assert outcome_gates[0]["run_id"] == go_run_id
+    assert "blocked" in outcome_gates[0]["reason"]
+
+    review_messages = [m for m in team["message_bus"] if m["run_id"] == go_run_id
+                       and m["kind"] == "review-status"]
+    assert len(review_messages) >= 1
+    assert any("blocked" in m["summary"] for m in review_messages)
+
+
+def test_team_model_avoids_duplicate_outcome_gates(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    go_run_id = "go-dup-test"
+    go_run_dir = runtime_dir / "go-runs" / go_run_id
+    go_run_dir.mkdir(parents=True)
+    (go_run_dir / "go-run.json").write_text(json.dumps({
+        "go_run_id": go_run_id,
+        "project_id": "project",
+        "project_root": str(project_root),
+        "requirement": "Test dedup.",
+        "runtime_dir": str(runtime_dir),
+        "status": "passed",
+        "execute": True,
+        "agents": [{
+            "agent_id": "coding-agent-1",
+            "shard_index": 1,
+            "shard_count": 1,
+            "targets": [],
+            "target_bytes": 0,
+            "packet_dir": str(runtime_dir / "p1"),
+            "task_spec_path": str(runtime_dir / "p1" / "TASKSPEC.json"),
+            "worker_command": ["opencode", "run"],
+            "status": "completed",
+            "worker_status": "passed",
+            "changed_files": [],
+        }],
+    }, indent=2, ensure_ascii=True), encoding="utf-8")
+
+    state = build_visual_control_plane_state(runtime_dir)
+
+    team = state["team"]
+    outcome_gates = [g for g in team["review_gates"] if g["kind"] == "go-run-outcome"]
+    assert len(outcome_gates) == 1
+
+
+def test_t3_shell_exposes_go_run_outcome_gate_and_message_signal(tmp_path):
+    from control_plane.t3_adapter import build_t3_client_shell
+
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    go_run_id = "go-shell-test"
+    go_run_dir = runtime_dir / "go-runs" / go_run_id
+    go_run_dir.mkdir(parents=True)
+    (go_run_dir / "go-run.json").write_text(json.dumps({
+        "go_run_id": go_run_id,
+        "project_id": "project",
+        "project_root": str(tmp_path / "project"),
+        "requirement": "Test T3 shell go-run outcome.",
+        "runtime_dir": str(runtime_dir),
+        "status": "passed",
+        "execute": True,
+        "agents": [{
+            "agent_id": "coding-agent-1",
+            "shard_index": 1,
+            "shard_count": 1,
+            "targets": [],
+            "target_bytes": 0,
+            "packet_dir": str(runtime_dir / "p1"),
+            "task_spec_path": str(runtime_dir / "p1" / "TASKSPEC.json"),
+            "worker_command": ["opencode", "run"],
+            "status": "completed",
+            "worker_status": "passed",
+            "changed_files": [],
+        }],
+    }, indent=2, ensure_ascii=True), encoding="utf-8")
+
+    shell = build_t3_client_shell(runtime_dir)
+
+    team = shell["devframe"]["team"]
+    outcome_gates = [g for g in team["reviewGates"] if g["kind"] == "go-run-outcome"]
+    assert len(outcome_gates) == 1
+    assert outcome_gates[0]["gateId"] == f"{go_run_id}-outcome-gate"
+    assert outcome_gates[0]["status"] == "open"
+
+    execution_messages = [m for m in team["messageBus"] if m["runId"] == go_run_id
+                          and m["kind"] == "execution-status"]
+    assert len(execution_messages) >= 1
+
+
+def test_runtime_store_read_all_tolerates_truncated_trailing_line(tmp_path):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    journal_path = runtime_dir / "rdgoal-events.jsonl"
+    valid_line = json.dumps({
+        "event_type": "project_registered",
+        "project_id": "test-project",
+        "payload": {"project_root": str(tmp_path)},
+        "timestamp": "2026-06-25T00:00:00Z",
+        "event_id": "test-project-e1",
+    })
+    journal_path.write_text(
+        valid_line + "\n" + valid_line[:30],
+        encoding="utf-8",
+    )
+
+    events = RuntimeStore(runtime_dir=runtime_dir).read_all()
+
+    assert len(events) == 1
+    assert events[0]["project_id"] == "test-project"
+
+
+def test_skill_registry_lists_shipped_agent_acceptance():
+    skills = list_methodology_skills()
+
+    assert any(skill.get("skill_id") == "agent-acceptance" for skill in skills)
+    shipped = next(skill for skill in skills if skill.get("skill_id") == "agent-acceptance")
+    assert shipped["title"] == "agent-acceptance"
+    assert shipped["source_kind"] == "local_repository_asset"
+    assert Path(shipped["source_path"]).parts[-3:] == ("templates", "runtime-bootstrap", "SKILL.md")
+    assert shipped["status"] == "registered"
+    assert "@go" in shipped.get("triggers", [])
+
+
+def test_skill_registry_lists_local_tdd_skill():
+    skills = list_methodology_skills()
+
+    assert any(skill.get("skill_id") == "tdd" for skill in skills)
+    tdd = next(skill for skill in skills if skill.get("skill_id") == "tdd")
+    assert tdd["title"] == "tdd"
+    assert "skills" in tdd["source_path"] and tdd["source_path"].endswith("SKILL.md")
+    assert tdd["source_kind"] == "local_repository_asset"
+    assert tdd["status"] == "registered"
+    assert "@tdd" in tdd.get("triggers", [])
+
+
+def test_skill_registry_lists_external_brain_flow_skills():
+    skills = {skill.get("skill_id"): skill for skill in list_methodology_skills()}
+
+    assert skills["bind-chrome"]["source_path"].replace("\\", "/") == "tools/skills/bind-chrome/SKILL.md"
+    assert "@bind-chrome" in skills["bind-chrome"].get("triggers", [])
+    assert skills["external-brain"]["source_path"].replace("\\", "/") == "tools/skills/external-brain/SKILL.md"
+    assert "@external-brain" in skills["external-brain"].get("triggers", [])
+    assert skills["context-pack-builder"]["source_path"].replace("\\", "/") == "tools/skills/context-pack-builder/SKILL.md"
+    assert "@context-pack" in skills["context-pack-builder"].get("triggers", [])
+    assert skills["intent-framing-gate"]["source_path"].replace("\\", "/") == "tools/skills/intent-framing-gate/SKILL.md"
+    assert "@intent-frame" in skills["intent-framing-gate"].get("triggers", [])
+
+
+def test_methodology_dispatch_resolves_external_brain_flow_triggers():
+    from control_plane.methodology_dispatch import resolve_methodology
+
+    effective, methodology = resolve_methodology("@bind-chrome bind https://chatgpt.com/c/test")
+    assert effective == "bind https://chatgpt.com/c/test"
+    assert methodology["skill_id"] == "bind-chrome"
+
+    effective, methodology = resolve_methodology("@intent-frame is this directory complete")
+    assert effective == "is this directory complete"
+    assert methodology["skill_id"] == "intent-framing-gate"
+
+
+def test_skill_registry_lists_local_tools_skills_if_present(tmp_path, monkeypatch):
+    tools_skills = tmp_path / "tools" / "skills" / "tdd"
+    tools_skills.mkdir(parents=True)
+    (tools_skills / "SKILL.md").write_text(
+        "\n".join([
+            "---",
+            "name: tdd",
+            "description: Test-driven development skill triggered by @tdd.",
+            "---",
+            "",
+            "# tdd",
+        ]),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("control_plane.skill_registry.REPO_ROOT", tmp_path)
+    skills = list_methodology_skills()
+
+    assert any(skill.get("skill_id") == "tdd" for skill in skills)
+    tdd = next(skill for skill in skills if skill.get("skill_id") == "tdd")
+    assert tdd["title"] == "tdd"
+    assert "skills" in tdd["source_path"] and tdd["source_path"].endswith("SKILL.md")
+    assert tdd["status"] == "registered"
+    assert "@tdd" in tdd.get("triggers", [])
+
+
+def test_visual_state_includes_methodology_skills(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    rdgoal(
+        orchestrator,
+        project_root,
+        "Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+
+    state = build_visual_control_plane_state(runtime_dir)
+
+    assert "skills" in state
+    assert any(skill.get("skill_id") == "agent-acceptance" for skill in state["skills"])
+    html = render_visual_control_plane_state_html(state)
+    assert "Methodology Skills" in html
+    assert "agent-acceptance" in html
+
+
+def test_visual_state_projects_methodology_into_go_runs(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    source_dir = project_root / "src"
+    source_dir.mkdir(parents=True)
+    (source_dir / "app.py").write_text("print('ok')\n", encoding="utf-8")
+    go_root = runtime_dir / "go-runs" / "go-project-123"
+    go_root.mkdir(parents=True)
+    (go_root / "go-run.json").write_text(json.dumps({
+        "go_run_id": "go-project-123",
+        "project_id": "project",
+        "project_root": str(project_root),
+        "requirement": "Add a TDD feature.",
+        "status": "queued",
+        "execute": False,
+        "created_at": "2026-06-26T00:00:00Z",
+        "metadata_path": str(go_root / "go-run.json"),
+        "methodology": {
+            "skill_id": "tdd",
+            "title": "tdd",
+            "source_path": "tools/skills/tdd/SKILL.md",
+            "source_kind": "local_repository_asset",
+            "triggers": ["@tdd"],
+            "status": "registered",
+        },
+        "agents": [{
+            "agent_id": "coding-agent-1",
+            "shard_index": 1,
+            "shard_count": 1,
+            "status": "queued",
+            "worker_status": "",
+            "methodology": {
+                "skill_id": "tdd",
+                "title": "tdd",
+                "source_path": "tools/skills/tdd/SKILL.md",
+                "source_kind": "local_repository_asset",
+                "triggers": ["@tdd"],
+                "status": "registered",
+            },
+            "targets": ["src/app.py"],
+            "target_bytes": 12,
+            "changed_files": [],
+            "packet_dir": str(tmp_path / "packet"),
+            "task_spec_path": str(tmp_path / "packet" / "TASKSPEC.json"),
+            "report_path": "",
+            "worker_command": ["opencode", "run"],
+        }],
+    }, indent=2), encoding="utf-8")
+
+    state = build_visual_control_plane_state(runtime_dir)
+
+    validate_schema("schemas/visual_control_plane_state.schema.json", state)
+    assert state["go_runs"][0]["methodology"]["skill_id"] == "tdd"
+    assert state["go_runs"][0]["agents"][0]["methodology"]["skill_id"] == "tdd"
+    assert state["team"]["task_board"][0]["methodology"]["skill_id"] == "tdd"
+    html = render_visual_control_plane_state_html(state)
+    assert "tdd" in html
+
+
+def test_runtime_store_read_all_tolerates_malformed_line_in_middle(tmp_path):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    journal_path = runtime_dir / "rdgoal-events.jsonl"
+    valid_a = json.dumps({
+        "event_type": "project_registered",
+        "project_id": "project-a",
+        "payload": {},
+        "timestamp": "2026-06-25T00:00:00Z",
+        "event_id": "project-a-e1",
+    })
+    valid_b = json.dumps({
+        "event_type": "project_registered",
+        "project_id": "project-b",
+        "payload": {},
+        "timestamp": "2026-06-25T00:00:01Z",
+        "event_id": "project-b-e1",
+    })
+    journal_path.write_text(
+        valid_a + "\n" + "{malformed garbage\n" + valid_b + "\n",
+        encoding="utf-8",
+    )
+
+    events = RuntimeStore(runtime_dir=runtime_dir).read_all()
+
+    assert len(events) == 2
+    assert events[0]["project_id"] == "project-a"
+    assert events[1]["project_id"] == "project-b"
+
+
+def test_runtime_store_read_all_handles_empty_file(tmp_path):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    journal_path = runtime_dir / "rdgoal-events.jsonl"
+    journal_path.write_text("", encoding="utf-8")
+
+    events = RuntimeStore(runtime_dir=runtime_dir).read_all()
+
+    assert events == []
+
+
+def test_runtime_digest_survives_truncated_journal(tmp_path):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    journal_path = runtime_dir / "rdgoal-events.jsonl"
+    valid_event = json.dumps({
+        "event_type": "project_registered",
+        "project_id": "test-project",
+        "payload": {"project_root": str(tmp_path / "project"), "priority": "medium"},
+        "timestamp": "2026-06-25T00:00:00Z",
+        "event_id": "test-project-e1",
+    })
+    journal_path.write_text(
+        valid_event + "\n" + '{"event_type": "project_\n',
+        encoding="utf-8",
+    )
+
+    digest = build_runtime_digest(runtime_dir)
+
+    assert len(digest["projects"]) == 1
+    assert digest["projects"][0]["project_id"] == "test-project"
+
+
+def test_runtime_store_append_then_read_all_preserves_valid_events(tmp_path):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    store = RuntimeStore(runtime_dir=runtime_dir)
+    store.append(JournalEvent(
+        event_type="project_registered",
+        project_id="test-project",
+        payload={"project_root": str(tmp_path)},
+    ))
+
+    journal_path = runtime_dir / "rdgoal-events.jsonl"
+    content = journal_path.read_text(encoding="utf-8")
+    journal_path.write_text(content + '{"truncated\n', encoding="utf-8")
+
+    events = store.read_all()
+
+    assert len(events) == 1
+    assert events[0]["project_id"] == "test-project"

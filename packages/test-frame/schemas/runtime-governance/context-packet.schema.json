@@ -1,0 +1,327 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rd2100.devframe/schemas/runtime-governance/context-packet",
+  "title": "RuntimeGovernanceContextPacket",
+  "description": "Bounded context sent to execution, review, or verification. A context packet records what was provided and omitted; it never creates final acceptance authority.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "context_packet_id",
+    "project_id",
+    "goal_id",
+    "task_id",
+    "domain",
+    "profile",
+    "producer_role",
+    "created_at",
+    "intent_summary",
+    "intended_use",
+    "immutability",
+    "source_refs",
+    "omitted_required_refs",
+    "forbidden_refs",
+    "freshness",
+    "completeness_state",
+    "privacy_state",
+    "seal_state",
+    "limitations",
+    "constraints",
+    "domain_refs"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^0\\.1$"
+    },
+    "context_packet_id": {
+      "type": "string",
+      "pattern": "^cp-[A-Za-z0-9._-]+$"
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "goal_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "domain": {
+      "type": "string",
+      "enum": ["code", "test", "paper", "review", "release", "general"]
+    },
+    "profile": {
+      "type": "string",
+      "minLength": 1
+    },
+    "producer_role": {
+      "type": "string",
+      "not": { "enum": ["executor", "fixer", "coder", "worker"] },
+      "description": "The context packet is assembled by a planner, coordinator, reviewer, governance runtime, or human; worker self-selected context is not authoritative."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "intent_summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "intended_use": {
+      "type": "string",
+      "enum": ["execution", "review", "verification", "final_verdict_preparation"]
+    },
+    "immutability": {
+      "type": "object",
+      "required": ["immutable", "content_hash"],
+      "properties": {
+        "immutable": {
+          "type": "boolean",
+          "const": true
+        },
+        "content_hash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "source_refs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifact_ref" },
+      "minItems": 1
+    },
+    "omitted_required_refs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["ref", "omission_reason", "impact"],
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "omission_reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "impact": {
+            "type": "string",
+            "enum": ["no_impact", "limited", "blocks_acceptance", "human_required"]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "forbidden_refs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["ref", "reason"],
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "freshness": {
+      "type": "object",
+      "required": ["checked_at", "stale_refs", "unknown_refs"],
+      "properties": {
+        "checked_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "stale_refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "unknown_refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
+    },
+    "completeness_state": {
+      "type": "string",
+      "enum": ["complete", "incomplete", "insufficient_evidence"]
+    },
+    "privacy_state": {
+      "type": "string",
+      "enum": ["redacted", "contains_sensitive_summary", "blocked_sensitive_source"]
+    },
+    "seal_state": {
+      "type": "string",
+      "enum": ["draft", "sealed", "superseded_by_amendment"]
+    },
+    "limitations": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "constraints": {
+      "type": "object",
+      "required": [
+        "allowed_actions",
+        "forbidden_actions",
+        "stop_lines",
+        "authority_boundary"
+      ],
+      "properties": {
+        "allowed_actions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "not": {
+              "pattern": "([Ff][Ii][Nn][Aa][Ll][ _-][Rr][Ee][Aa][Dd][Yy]|[Ff][Ii][Nn][Aa][Ll][ _-][Aa][Cc][Cc][Ee][Pp][Tt][Aa][Nn][Cc][Ee]|[Cc][Ll][Aa][Ii][Mm][ _-][Ff][Ii][Nn][Aa][Ll])"
+            }
+          }
+        },
+        "forbidden_actions": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "stop_lines": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "authority_boundary": {
+          "type": "object",
+          "required": [
+            "can_execute",
+            "can_review",
+            "can_claim_final_acceptance",
+            "final_verdict_required"
+          ],
+          "properties": {
+            "can_execute": { "type": "boolean" },
+            "can_review": { "type": "boolean" },
+            "can_claim_final_acceptance": {
+              "type": "boolean",
+              "const": false
+            },
+            "final_verdict_required": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "domain_refs": {
+      "type": "object",
+      "description": "Legacy or domain-native identifiers retained during migration.",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "null", "array", "object"]
+      }
+    }
+  },
+  "$defs": {
+    "artifact_ref": {
+      "type": "object",
+      "required": ["ref_id", "kind", "uri", "included", "required", "freshness_state"],
+      "properties": {
+        "ref_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["file", "directory", "url", "artifact", "evidence", "review", "final_verdict", "note"]
+        },
+        "uri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content_hash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "included": {
+          "type": "boolean"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "freshness_state": {
+          "type": "string",
+          "enum": ["current", "stale", "unknown", "omitted"]
+        },
+        "producer_role": {
+          "type": "string"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "schema_version": "0.1",
+      "context_packet_id": "cp-example",
+      "project_id": "devframe-system",
+      "goal_id": "goal-runtime-governance",
+      "task_id": "task-context-packet",
+      "domain": "code",
+      "profile": "contract-only",
+      "producer_role": "coordinator",
+      "created_at": "2026-07-07T00:00:00Z",
+      "intent_summary": "Prepare bounded context for contract-only review.",
+      "intended_use": "review",
+      "immutability": {
+        "immutable": true,
+        "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "source_refs": [
+        {
+          "ref_id": "plan",
+          "kind": "file",
+          "uri": "docs/status/runtime-governance-and-evidence-closure-transformation-plan.md",
+          "included": true,
+          "required": true,
+          "freshness_state": "current"
+        }
+      ],
+      "omitted_required_refs": [],
+      "forbidden_refs": [],
+      "freshness": {
+        "checked_at": "2026-07-07T00:00:00Z",
+        "stale_refs": [],
+        "unknown_refs": []
+      },
+      "completeness_state": "complete",
+      "privacy_state": "redacted",
+      "seal_state": "sealed",
+      "limitations": ["Example only; not a final verdict."],
+      "constraints": {
+        "allowed_actions": ["review context"],
+        "forbidden_actions": ["claim final acceptance"],
+        "stop_lines": ["no runtime execution"],
+        "authority_boundary": {
+          "can_execute": false,
+          "can_review": true,
+          "can_claim_final_acceptance": false,
+          "final_verdict_required": true
+        }
+      },
+      "domain_refs": {}
+    }
+  ]
+}

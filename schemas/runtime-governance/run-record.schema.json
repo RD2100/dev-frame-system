@@ -1,0 +1,577 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rd2100.devframe/schemas/runtime-governance/run-record",
+  "title": "RuntimeGovernanceRunRecord",
+  "description": "Canonical runtime envelope linking a run to context, evidence, review, gates, and final verdict authority. Mechanical success never implies review pass or final readiness.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "project_id",
+    "goal_id",
+    "task_id",
+    "attempt_id",
+    "context_packet_id",
+    "context_ledger_id",
+    "domain",
+    "profile",
+    "producer_role",
+    "created_at",
+    "updated_at",
+    "phase",
+    "outcome",
+    "review_state",
+    "gate_state",
+    "acceptance_state",
+    "projection_state",
+    "worker_results",
+    "artifact_refs",
+    "evidence_refs",
+    "review_refs",
+    "gate_refs",
+    "failure_refs",
+    "domain_refs"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^0\\.1$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^run-[A-Za-z0-9._-]+$"
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "goal_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "attempt_id": {
+      "type": "string",
+      "pattern": "^attempt-[A-Za-z0-9._-]+$"
+    },
+    "context_packet_id": {
+      "type": "string",
+      "pattern": "^cp-[A-Za-z0-9._-]+$"
+    },
+    "context_ledger_id": {
+      "type": "string",
+      "pattern": "^cl-[A-Za-z0-9._-]+$"
+    },
+    "parent_run_id": {
+      "type": "string",
+      "pattern": "^run-[A-Za-z0-9._-]+$"
+    },
+    "domain": {
+      "type": "string",
+      "enum": ["code", "test", "paper", "review", "release", "general"]
+    },
+    "profile": {
+      "type": "string",
+      "minLength": 1
+    },
+    "producer_role": {
+      "type": "string",
+      "not": { "enum": ["executor", "fixer", "coder", "worker"] },
+      "description": "RunRecord is produced by a coordinator, runtime adapter, governance layer, or human reviewer, not by the worker whose output is being recorded."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "created",
+        "prepared",
+        "authorized",
+        "dispatched",
+        "running",
+        "verifying",
+        "awaiting_review",
+        "finalizing",
+        "closed"
+      ]
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["unknown", "passed", "blocked", "failed", "cancelled", "human_required", "skipped"]
+    },
+    "review_state": {
+      "type": "string",
+      "enum": [
+        "not_reviewed",
+        "review_pending",
+        "review_passed",
+        "review_blocked",
+        "review_failed",
+        "escalated"
+      ]
+    },
+    "gate_state": {
+      "type": "string",
+      "enum": [
+        "not_evaluated",
+        "gate_pending",
+        "gate_passed",
+        "gate_failed",
+        "gate_blocked",
+        "gate_limited",
+        "gate_skipped"
+      ]
+    },
+    "acceptance_state": {
+      "type": "string",
+      "enum": [
+        "not_evaluated",
+        "review_pending",
+        "final_ready",
+        "accepted_with_limitation",
+        "blocked",
+        "failed",
+        "deferred"
+      ]
+    },
+    "projection_state": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "running",
+        "awaiting_review",
+        "completed",
+        "blocked",
+        "failed",
+        "waiting_for_you",
+        "unknown"
+      ],
+      "description": "Derived read-model status only. It must not be used as source-of-truth acceptance."
+    },
+    "worker_results": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/worker_result" }
+    },
+    "artifact_refs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifact_ref" }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/evidence_ref" }
+    },
+    "review_refs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/review_ref" }
+    },
+    "gate_refs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/gate_ref" }
+    },
+    "failure_refs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/failure_ref" }
+    },
+    "final_verdict_ref": {
+      "$ref": "#/$defs/final_verdict_ref"
+    },
+    "limitations": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "domain_refs": {
+      "type": "object",
+      "description": "Legacy or domain-native identifiers retained during migration.",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "null", "array", "object"]
+      }
+    }
+  },
+  "$defs": {
+    "artifact_ref": {
+      "type": "object",
+      "required": ["artifact_id", "kind", "uri"],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["context_packet", "context_ledger", "command_output", "diff", "test_output", "review", "gate_result", "final_verdict", "failure_record", "other"]
+        },
+        "uri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content_hash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "worker_result": {
+      "type": "object",
+      "required": ["worker_id", "worker_role", "status", "reported_at"],
+      "properties": {
+        "worker_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "worker_role": {
+          "type": "string",
+          "enum": ["executor", "fixer", "coder", "worker", "tester", "reviewer"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["passed", "completed", "succeeded", "verified", "blocked", "failed", "error", "cancelled", "unknown"]
+        },
+        "reported_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "artifact_refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidence_ref": {
+      "type": "object",
+      "required": ["evidence_id", "kind", "uri", "supports"],
+      "properties": {
+        "evidence_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["command_output", "diff", "test_output", "review", "gate_result", "final_verdict", "failure_record", "context_packet", "other"]
+        },
+        "uri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "supports": {
+          "type": "string",
+          "enum": ["outcome", "review", "gate", "acceptance", "limitation", "failure"]
+        },
+        "content_hash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "review_ref": {
+      "type": "object",
+      "required": [
+        "review_id",
+        "reviewer_id",
+        "reviewer_role",
+        "verdict",
+        "uri",
+        "reviewed_evidence_refs"
+      ],
+      "properties": {
+        "review_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewer_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewer_role": {
+          "type": "string",
+          "not": { "enum": ["executor", "fixer", "coder", "worker"] }
+        },
+        "verdict": {
+          "type": "string",
+          "enum": ["pass", "blocked", "fail", "escalate"]
+        },
+        "uri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewed_evidence_refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "gate_ref": {
+      "type": "object",
+      "required": ["gate_id", "result", "uri", "evidence_refs"],
+      "properties": {
+        "gate_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result": {
+          "type": "string",
+          "enum": ["pass", "fail", "blocked", "warning", "skipped"]
+        },
+        "uri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "result": { "const": "pass" } },
+            "required": ["result"]
+          },
+          "then": {
+            "properties": {
+              "evidence_refs": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "minItems": 1,
+                "uniqueItems": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "final_verdict_ref": {
+      "type": "object",
+      "required": ["verdict_id", "producer_role", "final_state", "uri", "review_ref", "gate_refs"],
+      "properties": {
+        "verdict_id": {
+          "type": "string",
+          "pattern": "^fv-[A-Za-z0-9._-]+$"
+        },
+        "producer_role": {
+          "type": "string",
+          "not": { "enum": ["executor", "fixer", "coder", "worker"] }
+        },
+        "final_state": {
+          "type": "string",
+          "enum": ["final_ready", "accepted_with_limitation", "blocked", "failed", "deferred"]
+        },
+        "uri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "review_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gate_refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "supersedes": {
+          "type": "object",
+          "required": ["verdict_id", "uri", "reason"],
+          "properties": {
+            "verdict_id": {
+              "type": "string",
+              "pattern": "^fv-[A-Za-z0-9._-]+$"
+            },
+            "uri": {
+              "type": "string",
+              "minLength": 1
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false,
+          "description": "Optional append-only lifecycle link copied from a validated FinalVerdict artifact. This is read-model metadata only and does not create acceptance authority."
+        },
+        "supersession_chain": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/final_verdict_supersession_ref" },
+          "description": "Best-effort bounded read-only chain of superseded FinalVerdict links. Chain entries are lifecycle visibility only and never satisfy review, gate, evidence, or acceptance requirements."
+        }
+      },
+      "additionalProperties": false
+    },
+    "final_verdict_supersession_ref": {
+      "type": "object",
+      "required": ["verdict_id", "uri", "reason"],
+      "properties": {
+        "verdict_id": {
+          "type": "string",
+          "pattern": "^fv-[A-Za-z0-9._-]+$"
+        },
+        "uri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolved": {
+          "type": "boolean",
+          "description": "True when the referenced prior FinalVerdict artifact was readable and schema-valid."
+        },
+        "resolution_state": {
+          "type": "string",
+          "enum": ["resolved", "missing", "invalid", "id_mismatch", "cycle", "depth_limited"],
+          "description": "Best-effort read outcome for this supersession chain entry. This is diagnostic metadata only and never affects acceptance."
+        },
+        "diagnostic": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable short explanation for unresolved, cyclic, or depth-limited supersession chain entries."
+        },
+        "final_state": {
+          "type": "string",
+          "enum": ["final_ready", "accepted_with_limitation", "blocked", "failed", "deferred"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "failure_ref": {
+      "type": "object",
+      "required": ["failure_id", "status", "uri"],
+      "properties": {
+        "failure_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": ["blocked", "failed", "warning", "open", "resolved"]
+        },
+        "uri": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "review_state": { "const": "review_passed" } },
+        "required": ["review_state"]
+      },
+      "then": {
+        "properties": {
+          "review_refs": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/review_ref" },
+            "minItems": 1,
+            "contains": {
+              "type": "object",
+              "properties": { "verdict": { "const": "pass" } },
+              "required": ["verdict"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "gate_state": { "const": "gate_passed" } },
+        "required": ["gate_state"]
+      },
+      "then": {
+        "properties": {
+          "gate_refs": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/gate_ref" },
+            "minItems": 1,
+            "contains": {
+              "type": "object",
+              "properties": { "result": { "const": "pass" } },
+              "required": ["result"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "acceptance_state": { "const": "final_ready" } },
+        "required": ["acceptance_state"]
+      },
+      "then": {
+        "required": ["final_verdict_ref"],
+        "properties": {
+          "review_state": { "const": "review_passed" },
+          "gate_state": { "const": "gate_passed" },
+          "final_verdict_ref": {
+            "allOf": [
+              { "$ref": "#/$defs/final_verdict_ref" },
+              {
+                "properties": {
+                  "final_state": { "const": "final_ready" }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "schema_version": "0.1",
+      "run_id": "run-example",
+      "project_id": "devframe-system",
+      "goal_id": "goal-runtime-governance",
+      "task_id": "task-run-record",
+      "attempt_id": "attempt-1",
+      "context_packet_id": "cp-example",
+      "context_ledger_id": "cl-example",
+      "domain": "code",
+      "profile": "contract-only",
+      "producer_role": "runtime_adapter",
+      "created_at": "2026-07-07T00:00:00Z",
+      "updated_at": "2026-07-07T00:00:00Z",
+      "phase": "awaiting_review",
+      "outcome": "passed",
+      "review_state": "review_pending",
+      "gate_state": "not_evaluated",
+      "acceptance_state": "review_pending",
+      "projection_state": "awaiting_review",
+      "worker_results": [
+        {
+          "worker_id": "worker-1",
+          "worker_role": "worker",
+          "status": "completed",
+          "reported_at": "2026-07-07T00:00:00Z"
+        }
+      ],
+      "artifact_refs": [],
+      "evidence_refs": [],
+      "review_refs": [],
+      "gate_refs": [],
+      "failure_refs": [],
+      "domain_refs": {}
+    }
+  ]
+}

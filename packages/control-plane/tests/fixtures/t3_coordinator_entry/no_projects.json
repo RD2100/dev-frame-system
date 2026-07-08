@@ -1,0 +1,79 @@
+{
+  "label": "no_projects",
+  "shell": {
+    "version": 1,
+    "source": "devframe",
+    "updatedAt": "2026-07-01T00:00:00Z",
+    "t3": {
+      "snapshotSequence": 1,
+      "projects": [],
+      "threads": [
+        {
+          "id": "native-1",
+          "title": "Native",
+          "threadKind": "native_chat",
+          "threadListPriority": 2,
+          "updatedAt": "2026-07-01T00:01:00Z"
+        },
+        {
+          "id": "goal-1",
+          "title": "Goal",
+          "threadKind": "goal_conversation",
+          "threadListPriority": 1,
+          "updatedAt": "2026-07-01T00:02:00Z"
+        },
+        {
+          "id": "devframe-team-workbench-session",
+          "title": "Global Coordinator",
+          "threadKind": "global_coordinator",
+          "threadListPriority": 0,
+          "updatedAt": "2026-07-01T00:00:00Z"
+        }
+      ],
+      "threadDetails": [
+        {
+          "id": "goal-1"
+        },
+        {
+          "id": "native-1"
+        },
+        {
+          "id": "devframe-team-workbench-session"
+        }
+      ],
+      "updatedAt": "2026-07-01T00:00:00Z"
+    },
+    "devframe": {
+      "conversationModel": {
+        "globalCoordinatorThreadId": "devframe-team-workbench-session",
+        "goalProjectBindingRequired": true,
+        "threadKinds": [
+          "native_chat",
+          "goal_conversation",
+          "global_coordinator"
+        ]
+      }
+    }
+  },
+  "projects": [],
+  "expected": {
+    "canStartCoordinatorGoal": false,
+    "selectedProjectId": null,
+    "projectCoordinatorThreadId": null,
+    "goalConversationIds": ["goal-1"],
+    "shellThreadsIds": [
+      "devframe-team-workbench-session",
+      "goal-1",
+      "native-1"
+    ],
+    "sortedShellThreadIds": [
+      "devframe-team-workbench-session",
+      "goal-1",
+      "native-1"
+    ],
+    "projectOptionCount": 0,
+    "emptyStateReason": "no_projects",
+    "disabledReason": "missing_required_project",
+    "globalThreadId": "devframe-team-workbench-session"
+  }
+}

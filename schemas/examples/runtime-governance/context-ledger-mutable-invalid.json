@@ -1,0 +1,20 @@
+{
+  "schema_version": "0.1",
+  "context_ledger_id": "cl-invalid-mutable",
+  "project_id": "devframe-system",
+  "goal_id": "goal-runtime-governance-batch-a",
+  "task_id": "task-context-contracts",
+  "created_at": "2026-07-07T00:00:00Z",
+  "append_only": false,
+  "entries": [
+    {
+      "ledger_entry_id": "cle-invalid-overwrite",
+      "occurred_at": "2026-07-07T00:00:00Z",
+      "actor_id": "worker",
+      "actor_role": "worker",
+      "event_type": "final_ready",
+      "context_packet_id": "cp-batch-a-context-v1",
+      "summary": "Invalid ledger tries to overwrite context history with final acceptance."
+    }
+  ]
+}

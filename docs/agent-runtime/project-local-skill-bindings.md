@@ -1,53 +1,50 @@
 # Project-Local Skill Bindings
 
-> Scope: `D:\devframe-system`
-> Status: active for this superproject
+> Scope: `<repo-root>`
+> Status: active for the current public repository
 
 This file defines how project-local skills and agent conversations must resolve
-paths after the four modules were merged under the `devframe-system`
-superproject.
+paths for the current `dev-frame-system` repository.
 
 ## Canonical Roots
 
 | ID | Role | Root |
 |---|---|---|
-| `devframe-system` | Superproject governance and integration root | `D:\devframe-system` |
-| `agent-acceptance` | Acceptance, SADP gates, review artifacts | `D:\devframe-system\agent-acceptance` |
-| `dev-frame-opencode` | Paper workflow and ai-workflow-hub implementation | `D:\devframe-system\dev-frame-opencode` |
-| `test-frame` | TestFrame orchestration and time-goal-manager integration | `D:\devframe-system\test-frame` |
-| `devframe-control-plane` | Runtime orchestration candidate, currently frozen | `D:\devframe-system\devframe-control-plane` |
+| `dev-frame-system` | Current project root | `<repo-root>` |
+| `agents-binding-root` | User-level binding metadata root | `%USERPROFILE%\.agents\bindings\dev-frame-system` |
+| `runtime-root` | User-level runtime session/evidence root | `%USERPROFILE%\.devframe-runtime` |
 
 ## `/rdinit`
 
-For this project, `/rdinit` must treat `D:\devframe-system` as the canonical
+For this project, `/rdinit` must treat `<repo-root>` as the canonical
 project root.
 
 Required paths:
 
-- Registry: `D:\devframe-system\.agent\PROJECT_REGISTRY.json`
-- Bootstrap script: `D:\devframe-system\templates\runtime-bootstrap\bootstrap.ps1`
+- Project root: `<repo-root>`
+- Bootstrap script: `<repo-root>\templates\runtime-bootstrap\bootstrap.ps1`
 - Runtime template source: resolved from the bootstrap script location, not a
   hard-coded external checkout.
 
 `<legacy-standalone-root>` is a legacy standalone root. Do not use it for this
-superproject unless the user explicitly asks to operate on that old checkout.
+repository unless the user explicitly asks to operate on that old checkout.
 
 ## `/bindChrome`
 
-For this project, `/bindChrome` must bind conversations against the local
-registry and local module roots.
+For this project, `/bindChrome` must bind conversations against the current
+project root and the user-level binding store.
 
 Required paths:
 
-- Registry: `D:\devframe-system\.agent\PROJECT_REGISTRY.json`
-- Superproject binding: `D:\devframe-system\.agent\CONVERSATION_BINDING.json`
-- Shared Chrome profile: `D:\devframe-system\.agent\_cdp_profiles\shared`
-- Optional per-module bindings:
-  `D:\devframe-system\.agent\bindings\<project_id>\CONVERSATION_BINDING.json`
+- Registry: `%USERPROFILE%\.agents\bindings\dev-frame-system\PROJECT_REGISTRY.json`
+- Conversation binding: `%USERPROFILE%\.agents\bindings\dev-frame-system\CONVERSATION_BINDING.json`
+- Runtime session record:
+  `%USERPROFILE%\.devframe-runtime\web-ai-sessions\chatgpt-<conversation-id>-session.json`
+- Browser automation transport: existing Chrome CDP endpoint, not repo-local profile files
 
-Per-module binding files should stay under the superproject `.agent` directory
-unless a task explicitly requires writing inside a submodule. This avoids making
-submodules dirty just because a conversation URL changed.
+Do not write `.agent/` binding state into the public repository. Binding files
+must stay under the user-level `.agents` store so a conversation URL change does
+not dirty the repo.
 
 ## Dispatch Rule
 
@@ -58,13 +55,13 @@ handoff text.
 Minimum TaskSpec path fields:
 
 ```yaml
-superproject_root: "D:\devframe-system"
-target_project_id: "<project_id>"
-target_project_root: "<registry.projects[project_id].root>"
+project_root: "<repo-root>"
+target_project_id: "dev-frame-system"
+target_project_root: "<repo-root>"
 allowed_write_roots:
-  - "<target_project_root>"
+  - "<repo-root>"
 ```
 
-For cross-module governance work, the allowed write roots must be explicit. A
-module agent may read the superproject integration docs, but it must not write
-outside its assigned module unless the TaskSpec names that path.
+For any governance or review work, the allowed write roots must remain explicit.
+An agent may read user-level binding metadata when needed, but it must not write
+outside its assigned project roots unless the TaskSpec names that path.

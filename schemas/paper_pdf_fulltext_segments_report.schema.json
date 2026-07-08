@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rd2100.devframe/schemas/paper-pdf-fulltext-segments-report",
+  "title": "Paper PDF Full-Text Segments Report",
+  "description": "Minimized segmentation report for an authorized PDF. Contains fingerprints and counts, never raw text.",
+  "type": "object",
+  "required": [
+    "profile",
+    "schema_version",
+    "task_id",
+    "generated_at",
+    "status",
+    "reasons",
+    "pdf_fingerprint",
+    "pdf_path_fingerprint",
+    "pdf_page_count",
+    "segment_count",
+    "segment_index_written",
+    "segment_index_fingerprint",
+    "segment_text_store_written",
+    "segment_text_store_fingerprint",
+    "backend",
+    "backend_available",
+    "segments",
+    "privacy_boundary"
+  ],
+  "properties": {
+    "profile": {
+      "type": "string",
+      "const": "paper_pdf_fulltext_segments_report"
+    },
+    "schema_version": { "type": "string" },
+    "task_id": { "type": "string" },
+    "generated_at": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["PASS_SEGMENTED", "BLOCKED"]
+    },
+    "reasons": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "pdf_path_present": { "type": "boolean" },
+    "pdf_fingerprint": { "type": "string" },
+    "pdf_path_fingerprint": { "type": "string" },
+    "pdf_page_count": { "type": "integer", "minimum": 0 },
+    "segment_count": { "type": "integer", "minimum": 0 },
+    "segment_index_written": { "type": "boolean" },
+    "segment_index_fingerprint": { "type": "string" },
+    "segment_text_store_written": { "type": "boolean" },
+    "segment_text_store_fingerprint": { "type": "string" },
+    "backend": { "type": "string" },
+    "backend_available": { "type": "boolean" },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "segment_id",
+          "section_kind",
+          "page_range",
+          "char_count",
+          "text_fingerprint"
+        ],
+        "properties": {
+          "segment_id": { "type": "string", "minLength": 1 },
+          "section_kind": { "type": "string" },
+          "page_range": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": { "type": "integer", "minimum": 1 }
+          },
+          "char_count": { "type": "integer", "minimum": 1 },
+          "text_fingerprint": { "type": "string", "pattern": "^sha256:" },
+          "has_text_store": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "privacy_boundary": {
+      "type": "object",
+      "required": [
+        "raw_full_text_in_report",
+        "raw_segment_text_in_report",
+        "absolute_paths_in_report",
+        "raw_segment_text_persisted",
+        "cloud_called",
+        "external_parser_service_called"
+      ],
+      "properties": {
+        "raw_full_text_in_report": { "type": "boolean" },
+        "raw_segment_text_in_report": { "type": "boolean" },
+        "absolute_paths_in_report": { "type": "boolean" },
+        "raw_segment_text_persisted": { "type": "boolean" },
+        "cloud_called": { "type": "boolean" },
+        "external_parser_service_called": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

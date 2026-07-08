@@ -1,0 +1,21 @@
+{
+  "label": "malformed_or_partial_entry_response",
+  "shell": {
+    "version": 1,
+    "source": "devframe",
+    "updatedAt": "2026-07-01T00:00:00Z"
+  },
+  "projects": [],
+  "expected": {
+    "canStartCoordinatorGoal": false,
+    "selectedProjectId": null,
+    "projectCoordinatorThreadId": null,
+    "goalConversationIds": [],
+    "shellThreadsIds": [],
+    "sortedShellThreadIds": [],
+    "projectOptionCount": 0,
+    "emptyStateReason": "malformed_entry_response",
+    "disabledReason": "missing_required_project",
+    "globalThreadId": null
+  }
+}

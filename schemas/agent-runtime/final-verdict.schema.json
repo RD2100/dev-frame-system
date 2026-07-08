@@ -82,6 +82,29 @@
       "type": "string",
       "minLength": 1,
       "description": "Human approval or governance record authorizing this final verdict."
+    },
+    "supersedes": {
+      "type": "object",
+      "required": ["verdict_id", "uri", "reason"],
+      "properties": {
+        "verdict_id": {
+          "type": "string",
+          "pattern": "^fv-[A-Za-z0-9._-]+$",
+          "description": "Previous FinalVerdict identifier superseded by this append-only verdict."
+        },
+        "uri": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Artifact URI or path for the previous FinalVerdict."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Governance reason for issuing a superseding verdict."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Optional append-only lifecycle link. The superseded verdict should remain immutable; this new verdict records why it replaces the earlier one."
     }
   },
   "allOf": [

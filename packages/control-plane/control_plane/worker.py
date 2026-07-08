@@ -6,6 +6,7 @@ modifying the target project. Real workers can later replace this adapter.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -65,7 +66,9 @@ class CommandWorker:
         self.store = DispatchPacketStore(runtime_dir=runtime_dir, repo_root=repo_root)
         self.timeout_seconds = timeout_seconds
 
-    def run_packet(self, packet_dir: str | Path, command: list[str]) -> WorkerResult:
+    def run_packet(self, packet_dir: str | Path, command: list[str], *,
+                   cwd: str | Path | None = None,
+                   env_overrides: dict[str, str] | None = None) -> WorkerResult:
         if not command:
             raise ValueError("CommandWorker requires a non-empty command list.")
 
@@ -85,13 +88,22 @@ class CommandWorker:
             "RDGOAL_TASKSPEC_MD": str(Path(packet.packet_dir) / "TASKSPEC.md"),
             "RDGOAL_REPORT_PATH": str(report_path),
         })
+        # Optional, backward-compatible overrides. When unset, behavior is
+        # byte-identical: cwd stays the packet project root and the environment
+        # is the inherited environment plus the RDGOAL_* keys above.
+        if env_overrides:
+            env.update({str(key): str(value) for key, value in env_overrides.items()})
+        effective_cwd = str(cwd) if cwd is not None else packet.project_root
+        resolved_command = _resolve_command(command)
         try:
             completed = subprocess.run(
-                command,
-                cwd=packet.project_root,
+                resolved_command,
+                cwd=effective_cwd,
                 env=env,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=self.timeout_seconds,
                 check=False,
             )
@@ -112,6 +124,20 @@ class CommandWorker:
                 encoding="utf-8",
             )
             report_path.write_text(self._failed_report(packet, "worker command timed out"), encoding="utf-8")
+            summary = self.store.ingest_report(packet.packet_dir, report_path)
+            return WorkerResult(packet=packet, report_path=str(report_path), summary=summary)
+        except OSError as exc:
+            output_path.write_text(
+                "STDOUT\n\n"
+                "STDERR\n"
+                f"FAILED TO START: {type(exc).__name__}: {exc}\n"
+                f"COMMAND: {command[0]} ({max(0, len(command) - 1)} args)\n",
+                encoding="utf-8",
+            )
+            report_path.write_text(
+                self._failed_report(packet, f"worker command could not start: {exc}"),
+                encoding="utf-8",
+            )
             summary = self.store.ingest_report(packet.packet_dir, report_path)
             return WorkerResult(packet=packet, report_path=str(report_path), summary=summary)
 
@@ -152,6 +178,14 @@ class CommandWorker:
             "- **Evidence**: see worker-output.txt in the packet directory.\n"
             "- **Risks**: Runner failure must not be reported as pass.\n"
         )
+
+
+def _resolve_command(command: list[str]) -> list[str]:
+    executable = command[0]
+    resolved = shutil.which(executable)
+    if not resolved:
+        return command
+    return [resolved, *command[1:]]
 
 
 class AihubGoWorker(CommandWorker):

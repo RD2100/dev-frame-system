@@ -77,9 +77,9 @@ findings:
 ## Workflow
 
 1. Gate 0: check `AGENTS.md`, rules, mode/profile, and TaskSpec `allow_write`.
-2. Executor/fixer: dispatch with `opencode run`; initialize evidence with `python tools/go_evidence.py init <run-dir> --run-id <id> --task .ai/tasks/<id>.yaml --executor-id <session-id>`.
+2. Executor/fixer: dispatch with `opencode run`; initialize evidence with `python tools/go_evidence.py init <run-dir> --run-id <id> --task <run-dir>/task.yaml --executor-id <session-id>`. For public distribution repos, use an ignored runtime dir such as `.devframe-runtime/atgo-runs/<id>` for `<run-dir>`.
 3. Tester: run commands; write `test-output.md`.
-4. Guards: run `python tools/go_evidence.py guard <run-dir> --task .ai/tasks/<id>.yaml`; this captures `safety-report.json`.
+4. Guards: run `python tools/go_evidence.py guard <run-dir> --command "<verification-or-guard-command>"`; this captures `safety-report.json`.
 5. Reviewer: dispatch a separate reviewer session; write `review.md` and `review.yaml`.
 6. Finalizer: run `python tools/go_evidence.py finalize <run-dir>`.
 7. Verdict: `passed` only if guard, reviewer, and evidence validation all pass.
@@ -87,7 +87,7 @@ findings:
 ## Automated Dispatch
 
 ```powershell
-opencode run -m "deepseek/deepseek-v4-pro" -c "Read .ai/tasks/<id>.yaml, execute, write executor evidence to <run-dir>"
+opencode run -m "deepseek/deepseek-v4-pro" -c "Read <run-dir>/task.yaml, execute, write executor evidence to <run-dir>"
 opencode run -m "deepseek/deepseek-v4-pro" -c "Review <run-dir>; write review.md and review.yaml; do not edit code"
 opencode run -s <session_id> -c "continue instruction"
 ```
@@ -104,9 +104,19 @@ opencode run -s <session_id> -c "continue instruction"
 | 6 | No pass without independent `review.yaml` |
 | 7 | No pass with unresolved P0/P1 findings |
 
+## Bootstrap Sync
+
+A helper script is provided under `scripts/sync-agent-acceptance-skill.ps1` to copy this `SKILL.md` into local agent skill directories when they exist:
+
+- `$HOME\.codex\skills\agent-acceptance\SKILL.md`
+- `$HOME\.claude\skills\agent-acceptance\SKILL.md`
+- `$HOME\.agents\skills\agent-acceptance\SKILL.md`
+
+Run it from PowerShell after review to sync the template into local skill roots.
+
 ## Finalizer Rule
 
 The finalizer is deterministic. It may summarize and validate artifact presence, but it must not make code-quality judgments or override the reviewer. If reviewer evidence is missing or invalid, final status is `blocked`.
 
 Full protocol: `docs/agent-runtime/sub-agent-dispatch-protocol.md`
-Policy rules: `.ai/policy.yaml` enforced by `tools/ai_guard.py`
+Policy rules: project rules/docs plus deterministic `tools/ai_guard.py`. Root `.ai/policy.yaml` is optional and only applicable for private/local installs where not forbidden by repo policy.

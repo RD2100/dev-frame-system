@@ -10,21 +10,21 @@
 source_project: "RD2100 Agent Runtime v2"
 source_version: "1.0"
 bootstrap_date: "2026-06-15"
-canonical_root: "D:\devframe-system"
+canonical_root: "<repo-root>"
 ```
 
-## Protected Sections (Locked ¡ª Hash-Verified)
+## Protected Sections (Locked - Hash-Verified)
 
 These sections are **locked** in the target project. Any modification without a registered
 local override is treated as `governance_drift` and must be escalated to human review.
 
 | Section ID | File | Description | Hash |
 |------------|------|-------------|------|
-| P0_RULES | `rules/core.md` | All P0 rules (core-001 ~ core-008) | 1F9E1F84BA39C95B43CF08DA4E4660E931996ED12917447D20470F936C1A5370 |
-| GATE_0 | `docs/agent-runtime/sub-agent-dispatch-protocol.md` ¡ì0-0.2 | Gate 0 + Cumulative Trigger + Ledger | DF030AA6B53E015A5E407E99B0A19FE87FE04C3C2F3F22BC303822F3E66BC110 |
-| VETO_CONTRACT | `docs/agent-runtime/sub-agent-dispatch-protocol.md` (core-008 Veto section) | Execute agent veto rights and anti-abuse | DF030AA6B53E015A5E407E99B0A19FE87FE04C3C2F3F22BC303822F3E66BC110 |
-| PROTECTED_FILES | `AGENTS.md` (Hard Stops section) | File protection list | 98717B7AE4DDC56F42F46EE16A73FC4C0873CB1C8A0E3B526592193DBB1D3660 |
-| CUMULATIVE_TRIGGER | `docs/agent-runtime/sub-agent-dispatch-protocol.md` ¡ì0.0a | Anti-gaming cumulative trigger window | DF030AA6B53E015A5E407E99B0A19FE87FE04C3C2F3F22BC303822F3E66BC110 |
+| P0_RULES | `rules/core.md` | All P0 rules (core-001 ~ core-008) | 688329DAEE2187BE6EB10CEAC39E825F36C75B842A2523CE6024FC0D23FAB346 |
+| GATE_0 | `docs/agent-runtime/sub-agent-dispatch-protocol.md` section 0-0.2 | Gate 0 + Cumulative Trigger + Ledger | 81AD0D66AD7B5D9BA4C01928F41A13D9F2BE0E0F397CBE88EE5308858E118BB7 |
+| VETO_CONTRACT | `docs/agent-runtime/sub-agent-dispatch-protocol.md` (core-008 Veto section) | Execute agent veto rights and anti-abuse | 81AD0D66AD7B5D9BA4C01928F41A13D9F2BE0E0F397CBE88EE5308858E118BB7 |
+| PROTECTED_FILES | `AGENTS.md` (Hard Stops section) | File protection list | 08BBA604032A727E57F9E295A9D07E62ED35CCBA39072223D9FE893025FFA879 |
+| CUMULATIVE_TRIGGER | `docs/agent-runtime/sub-agent-dispatch-protocol.md` section 0.0a | Anti-gaming cumulative trigger window | 81AD0D66AD7B5D9BA4C01928F41A13D9F2BE0E0F397CBE88EE5308858E118BB7 |
 
 ## Local Override Policy
 
@@ -50,9 +50,9 @@ local_overrides:
 On every session start, the agent must:
 
 1. Compare protected section hashes against manifest
-2. If any hash differs ¡ú flag `governance_drift`
-3. Check for unregistered local overrides ¡ú flag `unauthorized_mutation`
-4. Drift found in P0_RULES or GATE_0 ¡ú **pause execution, escalate to human**
+2. If any hash differs é—‚?flag `governance_drift`
+3. Check for unregistered local overrides é—‚?flag `unauthorized_mutation`
+4. Drift found in P0_RULES or GATE_0 é—‚?**pause execution, escalate to human**
 
 ```yaml
 drift_action:
@@ -62,16 +62,16 @@ drift_action:
   non_protected_file_changed: note_only
 ```
 
-## Imported Resources ¡ª Trust Status
+## Imported Resources é—‚?Trust Status
 
 Resources imported from the source project are **not trusted by default**:
 
 | Resource | Default Status | Must Verify Before Use |
 |----------|---------------|----------------------|
-| Capabilities | unknown (all) | Yes ¡ª local verification required |
-| Lessons | watch (all) | Yes ¡ª applicability must be confirmed |
-| Rules (protected) | active (locked) | No ¡ª but drift is detected |
-| Profiles | reference_only | Yes ¡ª model/tool availability differs |
+| Capabilities | unknown (all) | Yes é—‚?local verification required |
+| Lessons | watch (all) | Yes é—‚?applicability must be confirmed |
+| Rules (protected) | active (locked) | No é—‚?but drift is detected |
+| Profiles | reference_only | Yes é—‚?model/tool availability differs |
 
 ```yaml
 imported_resource_policy:

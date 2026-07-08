@@ -1,0 +1,28 @@
+{
+  "title": "Global Preferences",
+  "description": "Cross-project working style, tone, and standing instructions (Claude-Code-style global preferences). Stored at <runtime>/preferences.json and editable from RD-Code. There is no built-in or project layer for global preferences.",
+  "type": "object",
+  "required": ["version", "preferences"],
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "preferences": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/memory_entry" },
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "memory_entry": {
+      "type": "object",
+      "required": ["id", "kind", "text"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "kind": { "type": "string", "enum": ["preference", "architecture", "term", "decision", "note"] },
+        "text": { "type": "string", "minLength": 1 },
+        "enabled": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

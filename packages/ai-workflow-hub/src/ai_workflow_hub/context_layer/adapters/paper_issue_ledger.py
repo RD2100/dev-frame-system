@@ -25,7 +25,7 @@ PaperLedgerEntry:
     "recommendation": str,
     "human_required": bool,
     "status": str,             # open|resolved|wontfix|accepted_risk|mitigated|obsolete
-    "source": str,             # reviewer name (writelab_adapter, gpt, etc.)
+    "source": str,             # reviewer name (deterministic_gate, gpt, etc.)
     "evidence_pack_ref": str,  # from acceptance result
     "created_at": str,
     "updated_at": str,
@@ -94,7 +94,7 @@ def _save(task_id: str, entries: list[dict[str, Any]], ledger_dir: str | Path | 
 def ingest_issues(
     task_id: str,
     issues: list[dict[str, Any]],
-    source: str = "writelab_adapter",
+    source: str = "deterministic_gate",
     evidence_pack_ref: str = "",
     ledger_dir: str | Path | None = None,
 ) -> int:
@@ -475,7 +475,7 @@ def ingest_from_acceptance_result(
         acceptance_result.get("blocking_issues", [])
         + acceptance_result.get("non_blocking_issues", [])
     )
-    source = acceptance_result.get("reviewer", "writelab_adapter")
+    source = acceptance_result.get("reviewer", "deterministic_gate")
     ref = acceptance_result.get("evidence_pack_ref", "")
 
     return ingest_issues(task_id, all_issues, source=source,

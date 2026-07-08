@@ -1,9 +1,12 @@
 "Playwright Bridge — optional import, safety flag, live CDP behind flag."
 from __future__ import annotations
+import hashlib
+import json
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 from pathlib import Path
+from urllib.request import urlopen
 from .submission_result import SubmissionRequest, SubmissionResult
 
 
@@ -44,19 +47,48 @@ def health_check(config: BridgeConfig) -> tuple[bool, str]:
     return True, "live_ready"
 
 
+def _read_prompt_text(path: str | Path) -> str:
+    raw = Path(path).read_bytes()
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return raw.decode("utf-16").lstrip("\ufeff")
+    return raw.decode("utf-8-sig")
+
+
+def _connect_over_cdp(playwright, cdp_url: str):
+    endpoints = []
+    try:
+        with urlopen(f"{cdp_url.rstrip('/')}/json/version", timeout=3) as response:
+            version = json.loads(response.read().decode("utf-8"))
+        websocket_url = version.get("webSocketDebuggerUrl")
+        if websocket_url:
+            endpoints.append(websocket_url)
+    except Exception:
+        pass
+    endpoints.append(cdp_url)
+
+    last_error = None
+    for endpoint in endpoints:
+        try:
+            return playwright.chromium.connect_over_cdp(endpoint)
+        except Exception as exc:
+            last_error = exc
+    raise last_error or RuntimeError(f"CDP connection failed on {cdp_url}")
+
+
+def _is_verified_reply(reply: str) -> bool:
+    reply_lower = reply.lower()
+    return any(
+        marker in reply_lower
+        for marker in ("handoff_understood", "overall_judgment", "reviewer_role", "verdict:", "marker:")
+    )
+
+
 def _do_live_transfer(request: SubmissionRequest, config: BridgeConfig) -> SubmissionResult:
     """Execute live CDP file transfer via Playwright."""
     from playwright.sync_api import sync_playwright
     import time
 
-    handoff_path = Path(request.review_run_id)  # review_run_id may not be a path
-    # Determine file to transfer: prefer handoff_path if it exists, else HANDOFF.md
-    if isinstance(request.review_run_id, str):
-        candidate = Path(request.review_run_id)
-        if candidate.exists() and candidate.suffix == ".md":
-            handoff_path = candidate
-        else:
-            handoff_path = Path("HANDOFF.md")
+    handoff_path = Path(request.zip_path) if request.zip_path else Path("HANDOFF.md")
 
     if not handoff_path.exists():
         return SubmissionResult(
@@ -71,7 +103,7 @@ def _do_live_transfer(request: SubmissionRequest, config: BridgeConfig) -> Submi
         with sync_playwright() as p:
             # Reuse existing Chrome or fail if not available
             try:
-                browser = p.chromium.connect_over_cdp(cdp_url)
+                browser = _connect_over_cdp(p, cdp_url)
             except Exception:
                 return SubmissionResult(
                     success=False,
@@ -112,9 +144,19 @@ def _do_live_transfer(request: SubmissionRequest, config: BridgeConfig) -> Submi
 
             # Type bootstrap prompt
             prompt_text = request.prompt_text or (
-                "请阅读以上 HANDOFF.md 文件（作为 .md 文件附件上传），"
-                "理解项目身份、架构、已完成阶段、当前状态、安全边界和推荐下一步。"
-                "请使用 YAML 格式回复确认你的理解。"
+                "Read the attached HANDOFF.md file and reply with YAML confirming your understanding of the project identity, architecture, completed phases, current state, safety boundaries, and next steps.\n\n"
+                "```yaml\n"
+                "overall_judgment: accepted | blocked | review_unverified\n"
+                "handoff_understood: yes | no\n"
+                "project_identity_understood: yes | no\n"
+                "architecture_understood: yes | no\n"
+                "completed_phases_understood: yes | no\n"
+                "current_state_understood: yes | no\n"
+                "safety_boundaries_understood: yes | no\n"
+                "next_steps_understood: yes | no\n"
+                "ready_for_next_authorization: yes | no\n"
+                "rationale: \"<brief explanation>\"\n"
+                "```"
             )
             prompt_box = page.locator('#prompt-textarea').first
             if prompt_box.count() == 0:
@@ -133,6 +175,8 @@ def _do_live_transfer(request: SubmissionRequest, config: BridgeConfig) -> Submi
                     detail="Prompt textarea not found on page",
                 )
 
+            baseline = page.locator('[data-message-author-role="assistant"]').count()
+
             # Click send
             send_btn = page.locator('[data-testid="send-button"]').first
             if send_btn.count() == 0:
@@ -147,20 +191,19 @@ def _do_live_transfer(request: SubmissionRequest, config: BridgeConfig) -> Submi
                     detail="Send button not found on page",
                 )
 
-            # Wait for reply
-            baseline = page.locator('[data-message-author-role="assistant"]').count()
             for _ in range(30):
                 time.sleep(10)
                 msgs = page.locator('[data-message-author-role="assistant"]')
                 if msgs.count() > baseline:
                     reply = msgs.last.text_content() or ""
-                    handoff_verified = "handoff_understood" in reply.lower() or "overall_judgment" in reply.lower()
+                    verified = _is_verified_reply(reply)
                     return SubmissionResult(
-                        success=handoff_verified,
+                        success=verified,
                         review_run_id=request.review_run_id,
                         mode="live",
-                        detail=f"Transfer complete. Reply: {len(reply)} chars. Verified: {handoff_verified}",
-                        captured_reply_sha256=None,
+                        detail=f"Transfer complete. Reply: {len(reply)} chars. Verified: {verified}",
+                        captured_reply_length=len(reply),
+                        captured_reply_sha256=hashlib.sha256(reply.encode("utf-8")).hexdigest(),
                     )
 
             return SubmissionResult(

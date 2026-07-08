@@ -1,0 +1,35 @@
+{
+  "schema_version": "0.1",
+  "run_id": "run-invalid-projection-completed",
+  "project_id": "devframe-system",
+  "goal_id": "goal-runtime-governance-batch-a",
+  "task_id": "task-run-record-contract",
+  "attempt_id": "attempt-1",
+  "context_packet_id": "cp-batch-a-context-v1",
+  "context_ledger_id": "cl-batch-a-context-v1",
+  "domain": "code",
+  "profile": "contract-only",
+  "producer_role": "runtime_adapter",
+  "created_at": "2026-07-07T00:00:00Z",
+  "updated_at": "2026-07-07T00:00:00Z",
+  "phase": "closed",
+  "outcome": "passed",
+  "review_state": "review_pending",
+  "gate_state": "not_evaluated",
+  "acceptance_state": "final_ready",
+  "projection_state": "completed",
+  "worker_results": [
+    {
+      "worker_id": "worker-schema-slice",
+      "worker_role": "worker",
+      "status": "completed",
+      "reported_at": "2026-07-07T00:00:00Z"
+    }
+  ],
+  "artifact_refs": [],
+  "evidence_refs": [],
+  "review_refs": [],
+  "gate_refs": [],
+  "failure_refs": [],
+  "domain_refs": {}
+}

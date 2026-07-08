@@ -4,7 +4,19 @@
   "title": "Visual Control Plane State",
   "description": "Read model for the future dev-frame-system visual control plane.",
   "type": "object",
-  "required": ["version", "projects", "provider_bindings", "agents", "runs", "gates", "decisions", "next_actions", "safety"],
+  "required": [
+    "version",
+    "projects",
+    "provider_bindings",
+    "agents",
+    "sessions",
+    "runs",
+    "gates",
+    "decisions",
+    "next_actions",
+    "team",
+    "safety"
+  ],
   "properties": {
     "version": {
       "type": "integer",
@@ -12,37 +24,73 @@
     },
     "projects": {
       "type": "array",
-      "items": { "$ref": "#/definitions/project" },
+      "items": {
+        "$ref": "#/definitions/project"
+      },
       "uniqueItems": true
     },
     "provider_bindings": {
       "type": "array",
-      "items": { "$ref": "#/definitions/provider_binding" },
+      "items": {
+        "$ref": "#/definitions/provider_binding"
+      },
       "uniqueItems": true
     },
     "agents": {
       "type": "array",
-      "items": { "$ref": "#/definitions/agent" },
+      "items": {
+        "$ref": "#/definitions/agent"
+      },
+      "uniqueItems": true
+    },
+    "sessions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/devframe_session"
+      },
+      "uniqueItems": true
+    },
+    "go_runs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/go_run"
+      },
       "uniqueItems": true
     },
     "runs": {
       "type": "array",
-      "items": { "$ref": "#/definitions/run_summary" },
+      "items": {
+        "$ref": "#/definitions/run_summary"
+      },
       "uniqueItems": true
     },
     "gates": {
       "type": "array",
-      "items": { "$ref": "#/definitions/gate_summary" },
+      "items": {
+        "$ref": "#/definitions/gate_summary"
+      },
       "uniqueItems": true
     },
     "decisions": {
       "type": "array",
-      "items": { "$ref": "#/definitions/decision_summary" },
+      "items": {
+        "$ref": "#/definitions/decision_summary"
+      },
       "uniqueItems": true
     },
     "next_actions": {
       "type": "array",
-      "items": { "$ref": "#/definitions/action_item" },
+      "items": {
+        "$ref": "#/definitions/action_item"
+      },
+      "uniqueItems": true
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/methodology_skill"
+      },
+      "readOnly": true,
       "uniqueItems": true
     },
     "safety": {
@@ -53,8 +101,12 @@
         "human_gate_required_for"
       ],
       "properties": {
-        "raw_transcripts_persisted": { "type": "boolean" },
-        "remote_execution_default": { "type": "boolean" },
+        "raw_transcripts_persisted": {
+          "type": "boolean"
+        },
+        "remote_execution_default": {
+          "type": "boolean"
+        },
         "human_gate_required_for": {
           "type": "array",
           "items": {
@@ -77,12 +129,74 @@
         }
       },
       "additionalProperties": false
+    },
+    "team": {
+      "type": "object",
+      "required": [
+        "agent_registry",
+        "task_board",
+        "message_bus",
+        "event_log",
+        "evidence_store",
+        "review_gates",
+        "conflict_control"
+      ],
+      "properties": {
+        "agent_registry": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/team_agent"
+          }
+        },
+        "task_board": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/team_task"
+          }
+        },
+        "message_bus": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/team_message"
+          }
+        },
+        "event_log": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/team_event"
+          }
+        },
+        "evidence_store": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/team_evidence"
+          }
+        },
+        "review_gates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/team_gate"
+          }
+        },
+        "conflict_control": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/team_conflict"
+          }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "definitions": {
     "project": {
       "type": "object",
-      "required": ["project_id", "display_name", "goal", "status"],
+      "required": [
+        "project_id",
+        "display_name",
+        "goal",
+        "status"
+      ],
       "properties": {
         "project_id": {
           "type": "string",
@@ -100,11 +214,22 @@
         },
         "status": {
           "type": "string",
-          "enum": ["initialized", "active", "blocked", "review_required", "completed"]
+          "enum": [
+            "initialized",
+            "active",
+            "blocked",
+            "review_required",
+            "completed"
+          ]
         },
         "risk_state": {
           "type": "string",
-          "enum": ["low", "medium", "high", "human_required"]
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "human_required"
+          ]
         },
         "contract_path": {
           "type": "string"
@@ -114,7 +239,12 @@
     },
     "provider_binding": {
       "type": "object",
-      "required": ["binding_id", "provider", "mode", "health"],
+      "required": [
+        "binding_id",
+        "provider",
+        "mode",
+        "health"
+      ],
       "properties": {
         "binding_id": {
           "type": "string",
@@ -126,11 +256,26 @@
         },
         "mode": {
           "type": "string",
-          "enum": ["browser_cdp", "manual", "mcp_app", "local_mcp_bridge", "context_only", "custom"]
+            "enum": [
+              "browser_cdp",
+              "manual",
+              "mcp_app",
+              "local_mcp_bridge",
+              "context_only",
+              "custom",
+              "mcp_live",
+              "mcp_web"
+            ]
         },
         "health": {
           "type": "string",
-          "enum": ["unknown", "ready", "needs_login", "blocked", "disabled"]
+          "enum": [
+            "unknown",
+            "ready",
+            "needs_login",
+            "blocked",
+            "disabled"
+          ]
         },
         "adapter_config_path": {
           "type": "string"
@@ -149,7 +294,14 @@
     },
     "agent": {
       "type": "object",
-      "required": ["agent_id", "binding_id", "role", "scope", "permissions", "status"],
+      "required": [
+        "agent_id",
+        "binding_id",
+        "role",
+        "scope",
+        "permissions",
+        "status"
+      ],
       "properties": {
         "agent_id": {
           "type": "string",
@@ -161,30 +313,480 @@
         },
         "role": {
           "type": "string",
-          "enum": ["coordinator", "reviewer", "executor", "paper_reviewer", "human_reviewer"]
+          "enum": [
+            "coordinator",
+            "reviewer",
+            "executor",
+            "paper_reviewer",
+            "human_reviewer"
+          ]
         },
         "scope": {
           "type": "string",
-          "enum": ["project", "run", "review", "paper", "context_only"]
+          "enum": [
+            "project",
+            "run",
+            "review",
+            "paper",
+            "context_only"
+          ]
         },
         "permissions": {
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["plan", "review", "execute", "read_context", "request_human_gate"]
+            "enum": [
+              "plan",
+              "review",
+              "execute",
+              "read_context",
+              "request_human_gate"
+            ]
           },
           "uniqueItems": true
         },
         "status": {
           "type": "string",
-          "enum": ["idle", "active", "blocked", "needs_human", "disabled"]
+          "enum": [
+            "idle",
+            "active",
+            "blocked",
+            "needs_human",
+            "disabled"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "devframe_session": {
+      "type": "object",
+      "required": [
+        "session_id",
+        "provider",
+        "agent_role",
+        "project_id",
+        "task_spec_id",
+        "status",
+        "messages",
+        "tool_calls",
+        "changed_files",
+        "diff_summary",
+        "evidence_refs",
+        "cost",
+        "tokens",
+        "gates",
+        "actions"
+      ],
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "provider": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "binding_id": {
+          "type": "string"
+        },
+        "agent_id": {
+          "type": "string"
+        },
+        "agent_role": {
+          "type": "string",
+          "enum": [
+            "coordinator",
+            "reviewer",
+            "executor",
+            "paper_reviewer",
+            "human_reviewer",
+            "custom"
+          ]
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "task_spec_id": {
+          "type": "string"
+        },
+        "task_spec_path": {
+          "type": "string"
+        },
+        "report_path": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "idle",
+            "active",
+            "blocked",
+            "needs_human",
+            "completed",
+            "failed"
+          ]
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/session_message"
+          }
+        },
+        "tool_calls": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/session_tool_call"
+          }
+        },
+        "changed_files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "diff_summary": {
+          "type": "string"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cost": {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "number",
+              "minimum": 0
+            },
+            "currency": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "tokens": {
+          "type": "object",
+          "properties": {
+            "input": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "output": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "gates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "native_refs": {
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "session_message": {
+      "type": "object",
+      "required": [
+        "message_id",
+        "role",
+        "content_summary"
+      ],
+      "properties": {
+        "message_id": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "system",
+            "user",
+            "assistant",
+            "tool",
+            "agent",
+            "human",
+            "unknown"
+          ]
+        },
+        "content_summary": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "provider_message_id": {
+          "type": "string"
+        },
+        "evidence_ref": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "session_tool_call": {
+      "type": "object",
+      "required": [
+        "tool_call_id",
+        "name",
+        "status"
+      ],
+      "properties": {
+        "tool_call_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "idle",
+            "active",
+            "blocked",
+            "needs_human",
+            "completed",
+            "failed"
+          ]
+        },
+        "command": {
+          "type": "string"
+        },
+        "evidence_ref": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "go_run": {
+      "type": "object",
+      "required": [
+        "go_run_id",
+        "project_id",
+        "requirement",
+        "status",
+        "execute",
+        "agents"
+      ],
+      "properties": {
+        "go_run_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "project_root": {
+          "type": "string"
+        },
+        "requirement": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "passed",
+            "failed",
+            "blocked"
+          ]
+        },
+        "execute": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "metadata_path": {
+          "type": "string"
+        },
+        "methodology": {
+          "$ref": "#/definitions/methodology_skill"
+        },
+        "model_provider": {
+          "type": "string"
+        },
+        "status_command": {
+          "type": "string"
+        },
+        "execute_command": {
+          "type": "string"
+        },
+        "agents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/go_agent"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "go_agent": {
+      "type": "object",
+      "required": [
+        "agent_id",
+        "shard_index",
+        "shard_count",
+        "status",
+        "targets",
+        "packet_dir",
+        "task_spec_path",
+        "worker_command"
+      ],
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "shard_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "shard_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "passed",
+            "failed",
+            "blocked"
+          ]
+        },
+        "worker_status": {
+          "type": "string"
+        },
+        "methodology": {
+          "$ref": "#/definitions/methodology_skill"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "target_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "changed_files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "packet_dir": {
+          "type": "string"
+        },
+        "task_spec_path": {
+          "type": "string"
+        },
+        "report_path": {
+          "type": "string"
+        },
+        "worker_command": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "input_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "output_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cost": {
+          "type": "number",
+          "minimum": 0
+        },
+        "tool_calls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "target": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "model_provider": {
+          "type": "string"
+        },
+        "isolated": {
+          "type": "boolean",
+          "description": "True when the agent ran in its own git worktree. The worktree path is runtime-only and never surfaced here."
         }
       },
       "additionalProperties": false
     },
     "run_summary": {
       "type": "object",
-      "required": ["run_id", "entrypoint", "status", "taskspec_status", "evidence_status", "review_status"],
+      "required": [
+        "run_id",
+        "entrypoint",
+        "status",
+        "taskspec_status",
+        "evidence_status",
+        "review_status"
+      ],
       "properties": {
         "run_id": {
           "type": "string",
@@ -192,23 +794,54 @@
         },
         "entrypoint": {
           "type": "string",
-          "enum": ["rdgoal", "rdpaper", "manual", "custom"]
+          "enum": [
+            "rdgoal",
+            "rdpaper",
+            "manual",
+            "custom"
+          ]
         },
         "status": {
           "type": "string",
-          "enum": ["pending", "running", "blocked", "failed", "review_required", "completed"]
+          "enum": [
+            "pending",
+            "running",
+            "blocked",
+            "failed",
+            "review_required",
+            "completed"
+          ]
         },
         "taskspec_status": {
           "type": "string",
-          "enum": ["missing", "draft", "ready", "in_progress", "completed"]
+          "enum": [
+            "missing",
+            "draft",
+            "ready",
+            "in_progress",
+            "completed"
+          ]
         },
         "evidence_status": {
           "type": "string",
-          "enum": ["missing", "partial", "collected", "verified", "disputed"]
+          "enum": [
+            "missing",
+            "partial",
+            "collected",
+            "verified",
+            "disputed"
+          ]
         },
         "review_status": {
           "type": "string",
-          "enum": ["missing", "pending", "pass", "blocked", "fail", "escalate"]
+          "enum": [
+            "missing",
+            "pending",
+            "pass",
+            "blocked",
+            "fail",
+            "escalate"
+          ]
         },
         "report_path": {
           "type": "string"
@@ -233,7 +866,11 @@
     },
     "gate_summary": {
       "type": "object",
-      "required": ["gate_id", "kind", "status"],
+      "required": [
+        "gate_id",
+        "kind",
+        "status"
+      ],
       "properties": {
         "gate_id": {
           "type": "string",
@@ -241,11 +878,23 @@
         },
         "kind": {
           "type": "string",
-          "enum": ["human", "safety", "privacy", "release", "acceptance"]
+          "enum": [
+            "human",
+            "safety",
+            "privacy",
+            "release",
+            "acceptance"
+          ]
         },
         "status": {
           "type": "string",
-          "enum": ["open", "pass", "blocked", "failed", "skipped"]
+          "enum": [
+            "open",
+            "pass",
+            "blocked",
+            "failed",
+            "skipped"
+          ]
         },
         "reason": {
           "type": "string"
@@ -261,7 +910,12 @@
     },
     "decision_summary": {
       "type": "object",
-      "required": ["decision_id", "mode", "status", "next_action"],
+      "required": [
+        "decision_id",
+        "mode",
+        "status",
+        "next_action"
+      ],
       "properties": {
         "decision_id": {
           "type": "string",
@@ -269,11 +923,21 @@
         },
         "mode": {
           "type": "string",
-          "enum": ["continue", "revise", "stop", "escalate"]
+          "enum": [
+            "continue",
+            "revise",
+            "stop",
+            "escalate"
+          ]
         },
         "status": {
           "type": "string",
-          "enum": ["proposed", "selected", "executed", "blocked"]
+          "enum": [
+            "proposed",
+            "selected",
+            "executed",
+            "blocked"
+          ]
         },
         "next_action": {
           "type": "string",
@@ -287,7 +951,14 @@
     },
     "action_item": {
       "type": "object",
-      "required": ["action_id", "source_type", "source_id", "priority", "status", "label"],
+      "required": [
+        "action_id",
+        "source_type",
+        "source_id",
+        "priority",
+        "status",
+        "label"
+      ],
       "properties": {
         "action_id": {
           "type": "string",
@@ -295,7 +966,13 @@
         },
         "source_type": {
           "type": "string",
-          "enum": ["gate", "run", "decision"]
+          "enum": [
+            "gate",
+            "go_run",
+            "run",
+            "decision",
+            "session"
+          ]
         },
         "source_id": {
           "type": "string",
@@ -303,11 +980,20 @@
         },
         "priority": {
           "type": "string",
-          "enum": ["high", "medium", "low"]
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
         },
         "status": {
           "type": "string",
-          "enum": ["open", "blocked", "ready", "info"]
+          "enum": [
+            "open",
+            "blocked",
+            "ready",
+            "info"
+          ]
         },
         "label": {
           "type": "string",
@@ -318,6 +1004,261 @@
         },
         "command": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "team_agent": {
+      "type": "object",
+      "required": [
+        "agent_id",
+        "role",
+        "status",
+        "session_ids"
+      ],
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "role": {
+          "type": "string"
+        },
+        "binding_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "session_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "team_task": {
+      "type": "object",
+      "required": [
+        "task_id",
+        "type",
+        "status",
+        "agent_ids"
+      ],
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "go-run",
+            "rdgoal-dispatch"
+          ]
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "agent_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "session_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "target_files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "methodology": {
+          "$ref": "#/definitions/methodology_skill"
+        }
+      },
+      "additionalProperties": false
+    },
+    "team_message": {
+      "type": "object",
+      "required": [
+        "message_id",
+        "from_role",
+        "to_role",
+        "kind",
+        "run_id",
+        "summary"
+      ],
+      "properties": {
+        "message_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "from_role": {
+          "type": "string"
+        },
+        "to_role": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "team_event": {
+      "type": "object",
+      "required": [
+        "event_id",
+        "kind",
+        "run_id",
+        "summary"
+      ],
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "team_evidence": {
+      "type": "object",
+      "required": [
+        "evidence_id",
+        "ref_type",
+        "ref_path"
+      ],
+      "properties": {
+        "evidence_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "ref_type": {
+          "type": "string"
+        },
+        "ref_path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "team_gate": {
+      "type": "object",
+      "required": [
+        "gate_id",
+        "kind",
+        "status"
+      ],
+      "properties": {
+        "gate_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "team_conflict": {
+      "type": "object",
+      "required": [
+        "file_path",
+        "owner_run_id",
+        "owner_agent_id",
+        "file_kind"
+      ],
+      "properties": {
+        "file_path": {
+          "type": "string"
+        },
+        "owner_run_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "owner_agent_id": {
+          "type": "string"
+        },
+        "file_kind": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "methodology_skill": {
+      "type": "object",
+      "required": [
+        "skill_id",
+        "title",
+        "source_path",
+        "source_kind",
+        "triggers",
+        "status"
+      ],
+      "properties": {
+        "skill_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_path": {
+          "type": "string"
+        },
+        "source_kind": {
+          "type": "string",
+          "const": "local_repository_asset"
+        },
+        "triggers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 2
+          }
+        },
+        "status": {
+          "type": "string",
+          "const": "registered"
         }
       },
       "additionalProperties": false

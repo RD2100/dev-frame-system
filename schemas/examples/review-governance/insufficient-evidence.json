@@ -1,0 +1,124 @@
+{
+  "schema_version": "0.1",
+  "project": {
+    "id": "proj-review-demo",
+    "display_name": "Review Governance Kernel Demo",
+    "scope": "Phase 1A kernel validation",
+    "owner_principal_id": "principal-human-1",
+    "policy_profile": "evidence_first"
+  },
+  "work_item": {
+    "id": "wi-review-3",
+    "project_id": "proj-review-demo",
+    "kind": "review",
+    "intent": "Demonstrate insufficient evidence: review found inconclusive evidence",
+    "status": "reviewing",
+    "input_context_artifact_id": "artifact-ctx-3"
+  },
+  "document_revisions": [],
+  "runs": [
+    {
+      "id": "run-3",
+      "project_id": "proj-review-demo",
+      "work_item_id": "wi-review-3",
+      "principal_id": "principal-agent-1",
+      "tool_boundary": "agent-runtime",
+      "input_context_artifact_id": "artifact-ctx-3",
+      "status": "succeeded",
+      "claimed_result": "inconclusive"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "artifact-ctx-3",
+      "project_id": "proj-review-demo",
+      "kind": "context_snapshot",
+      "producer_ref": "system",
+      "content_ref": "embedded",
+      "immutable": true,
+      "source_refs": ["doc://REVIEW_SPEC"],
+      "selected_items": ["review_governance_kernel.schema.json"],
+      "omitted_required_items": [],
+      "freshness": "2026-07-05T10:20:00Z",
+      "authority_level": "canonical",
+      "redaction_summary": "no secrets required",
+      "selection_rationale": "minimal context snapshot for insufficient-evidence case",
+      "token_budget": 2000,
+      "content_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "knowledge_gap_assessment": "none",
+      "required_knowledge": [],
+      "assumption_claims": [],
+      "checked_sources": ["doc://REVIEW_SPEC"],
+      "unresolved_gaps": []
+    },
+    {
+      "id": "artifact-report-3",
+      "project_id": "proj-review-demo",
+      "kind": "review_report",
+      "producer_ref": "principal-agent-1",
+      "content_ref": "embedded"
+    },
+    {
+      "id": "artifact-output-3",
+      "project_id": "proj-review-demo",
+      "kind": "command_output",
+      "producer_ref": "principal-agent-1",
+      "content_ref": "embedded"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "ev-4",
+      "project_id": "proj-review-demo",
+      "claim": "review found inconclusive evidence for the claim",
+      "supports": "inconclusive",
+      "source_artifact_id": "artifact-report-3",
+      "scope": "schema_contract",
+      "freshness": "2026-07-05T10:22:00Z",
+      "observed_result": "test output inconclusive"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "decision-review-3",
+      "project_id": "proj-review-demo",
+      "kind": "review",
+      "target_ref": "wi-review-3",
+      "decider_principal_id": "principal-human-1",
+      "outcome": "insufficient_evidence",
+      "evidence_ids": ["ev-4"],
+      "rationale": "evidence is inconclusive, cannot determine pass or fail"
+    }
+  ],
+  "principals": [
+    {
+      "id": "principal-human-1",
+      "kind": "human",
+      "display_name": "Reviewer",
+      "authority_scope": "full"
+    },
+    {
+      "id": "principal-agent-1",
+      "kind": "agent",
+      "display_name": "Executor Agent",
+      "authority_scope": "read_write_within_scope"
+    }
+  ],
+  "projection": {
+    "work_item_id": "wi-review-3",
+    "computed_status": "insufficient_evidence",
+    "blocked_reason": "insufficient_evidence",
+    "evidence_summary": {
+      "total_evidence_count": 1,
+      "supporting_count": 0,
+      "rejecting_count": 0,
+      "inconclusive_count": 1
+    },
+    "decision_summary": {
+      "review_outcome": "insufficient_evidence",
+      "gate_outcome": "",
+      "latest_decision_id": "decision-review-3"
+    },
+    "allowed_actions": ["view", "escalate", "gather_more_evidence"]
+  }
+}

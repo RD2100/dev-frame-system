@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rd2100.devframe/schemas/external-review-bundle",
+  "title": "External Review Bundle Manifest",
+  "description": "Prepare-only manifest for ZIP bundles sent to a browser-hosted external reviewer. The manifest proves what was included; it is not review authority.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "bundle_id",
+    "created_at",
+    "status",
+    "profile",
+    "review_question",
+    "required_roles",
+    "included_roles",
+    "missing_required_roles",
+    "blocking_issues",
+    "package_files",
+    "trust_statement"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "bundle_id": { "type": "string", "minLength": 1 },
+    "created_at": { "type": "string", "minLength": 1 },
+    "status": {
+      "type": "string",
+      "enum": ["ready_for_review", "context_incomplete", "blocked"]
+    },
+    "profile": { "type": "string", "minLength": 1 },
+    "project_root_name": { "type": "string" },
+    "review_question": { "type": "string", "minLength": 1 },
+    "required_roles": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "included_roles": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "missing_required_roles": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "blocking_issues": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "package_files": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["path", "role", "sha256", "size_bytes", "generated"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "role": { "type": "string", "minLength": 1 },
+          "authority": { "type": "string" },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "size_bytes": { "type": "integer", "minimum": 0 },
+          "generated": { "type": "boolean" },
+          "source_path": { "type": "string" },
+          "why": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "trust_statement": { "type": "string", "minLength": 1 },
+    "zip_path": { "type": "string" },
+    "manifest_path": { "type": "string" },
+    "validator": {
+      "type": "object",
+      "properties": {
+        "valid": { "type": "boolean" },
+        "status": {
+          "type": "string",
+          "enum": ["ready_for_review", "context_incomplete", "blocked"]
+        },
+        "issues": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

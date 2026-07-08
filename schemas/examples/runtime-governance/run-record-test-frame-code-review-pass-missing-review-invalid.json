@@ -1,0 +1,32 @@
+{
+  "schema_version": "0.1",
+  "run_id": "run-invalid-test-frame-code-review-pass-missing-review",
+  "project_id": "devframe-system",
+  "goal_id": "goal-runtime-governance-batch-a",
+  "task_id": "task-fixture-coverage",
+  "attempt_id": "attempt-1",
+  "context_packet_id": "cp-batch-a-context-v1",
+  "context_ledger_id": "cl-batch-a-context-v1",
+  "domain": "test",
+  "profile": "test-frame",
+  "producer_role": "runtime_adapter",
+  "created_at": "2026-07-07T00:00:00Z",
+  "updated_at": "2026-07-07T00:00:00Z",
+  "phase": "awaiting_review",
+  "outcome": "passed",
+  "review_state": "review_passed",
+  "gate_state": "not_evaluated",
+  "acceptance_state": "review_pending",
+  "projection_state": "awaiting_review",
+  "worker_results": [],
+  "artifact_refs": [],
+  "evidence_refs": [],
+  "review_refs": [],
+  "gate_refs": [],
+  "failure_refs": [],
+  "domain_refs": {
+    "source": "test-frame",
+    "codeReview": "PASS",
+    "required_negative_case": "test-frame-codeReview-pass-missing-review"
+  }
+}
