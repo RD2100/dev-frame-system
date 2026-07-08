@@ -6,6 +6,9 @@ This page records the current public-release gate for `dev-frame-system`.
 It is meant for reviewers who need to decide whether the repository is ready
 to share, package, or hand off.
 
+For the one-minute current launch decision, start with
+[LAUNCH_NOW.md](LAUNCH_NOW.md).
+
 For the current file-level review map, see `docs/status/reviewer-index.md`.
 For the client-mainline reconnaissance boundary that now governs write-capable
 work, see `docs/status/recon-receipt-local-agent-client-mainline.md`. For the
@@ -46,6 +49,19 @@ projection and the strict public/release gate fixes. Follow-up status commit
 full release-gate rerun at that checked state passed end to end:
 `1512 passed, 1 skipped`, strict public snapshot PASS, control-plane wheel smoke
 PASS, and `git diff --check` PASS with line-ending warnings only.
+
+As of July 8, 2026, the docs/status inventory drift caused by later
+runtime-governance Batch B through Batch E audit records has been reconciled in
+`status-document-inventory.md`. The Batch F sealed context artifact slice,
+Batch G generic go opt-in finalization slice, Batch H ai-workflow-hub
+chain-evidence adapter slice, Batch I generic go prepare-evidence slice, and
+Batch J automatic superseding FinalVerdict slice then landed locally. A later
+batch-review pass fixed ai-workflow-hub adapter fail-closed semantics,
+go_evidence FinalVerdict supersession idempotency, CLI finalize/prepare help,
+and a public-snapshot wording leak. The local full release-gate rerun then
+passed end to end again: `1616 passed, 1 skipped`, strict public snapshot PASS,
+control-plane wheel smoke PASS, and `git diff --check` PASS.
+
 This is a local verification result only. It does not imply a clean worktree,
 clean publish branch, pushed branch, opened PR, GitHub review, or public
 package release.

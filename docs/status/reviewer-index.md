@@ -273,6 +273,11 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`
 - `docs/status/runtime-governance-batch-e-final-verdict-lifecycle.md`
 - `docs/status/runtime-governance-batch-e-final-verdict-supersession-projection.md`
+- `docs/status/runtime-governance-batch-f-sealed-context-artifacts.md`
+- `docs/status/runtime-governance-batch-g-generic-go-opt-in-finalization.md`
+- `docs/status/runtime-governance-batch-h-ai-workflow-hub-chain-evidence-canonicalization.md`
+- `docs/status/runtime-governance-batch-i-generic-go-prepare-evidence.md`
+- `docs/status/runtime-governance-batch-j-automatic-superseding-final-verdict.md`
 - `docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md`
 - `docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md`
 - `docs/status/runtime-governance-batch-e-chain-evidence-schema-compatibility.md`
@@ -407,9 +412,9 @@ This is the reviewer map for the first open-source release batch. It focuses on 
   - `packages/control-plane/control_plane/team_runtime.py` should keep
     `context_refs` optional on task lifecycle events and project them only as
     provenance evidence, not acceptance authority.
-  - `packages/control-plane/control_plane/go_dispatch.py` should pass legacy
-    packet and `TASKSPEC.json` refs during execute and resume paths without
-    creating a sealed ContextPacket claim.
+  - `packages/control-plane/control_plane/go_dispatch.py` should pass sealed
+    `context_packet`, `context_ledger`, and legacy packet/TaskSpec refs during
+    execute and resume paths without treating context as acceptance authority.
   - `packages/control-plane/control_plane/run_index.py` should project team
     context refs as limitation-supporting context evidence and keep review/final
     readiness unchanged.
@@ -485,6 +490,27 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     limited historical artifact behavior, and schema mirror.
   - `docs/status/runtime-governance-batch-e-final-verdict-supersession-projection.md`
     records the local limitation set and preserved stop lines.
+- Runtime-governance Batch F sealed context artifacts:
+  - `packages/control-plane/control_plane/dispatch_packet.py` should create
+    schema-compatible `context-packet.json` and `context-ledger.json` beside
+    go/rdgoal worker packets.
+  - `packages/control-plane/control_plane/run_index.py` should project sealed
+    context packets as context evidence, context ledgers as artifacts, and
+    block `final_ready` when a passed worker has no valid sealed context.
+  - `tools/go_evidence.py finalize --team-runtime-dir <dir>` should backfill
+    go-run context refs before recording review/final-verdict refs.
+  - `docs/status/runtime-governance-batch-f-sealed-context-artifacts.md`
+    records the local limitation set and preserved stop lines.
+- Runtime-governance Batch G generic go opt-in finalization:
+  - `packages/control-plane/control_plane/cli/_coding.py` should require
+    `--evidence-dir` when `--auto-finalize` is passed to `devframe go execute`
+    or `devframe code execute`.
+  - The implementation should reuse `tools/go_evidence.py finalize` with
+    `--team-runtime-dir`, not duplicate FinalVerdict logic.
+  - `packages/control-plane/tests/test_cli.py` should cover the rejection path
+    and a real prepared-go-run path that reaches RunIndex `final_ready`.
+  - `docs/status/runtime-governance-batch-g-generic-go-opt-in-finalization.md`
+    records the local limitation set and preserved stop lines.
 - Runtime-governance Batch E atgo runtime finalize command:
   - `devframe atgo` should print a finalizer command that includes
     `--team-runtime-dir <runtime_root>` so the manual follow-up can record
@@ -543,6 +569,38 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     path.
   - `docs/status/runtime-governance-batch-e-ai-workflow-hub-chain-evidence-classification.md`
     records the local limitation set and preserved stop lines.
+- Runtime-governance Batch H ai-workflow-hub chain evidence adapter:
+  - `packages/ai-workflow-hub/src/ai_workflow_hub/run_governance.py` should
+    expose `chain_evidence_adapter` for `nodes`-style evidence without changing
+    `chain_trusted` or final-ready authority.
+  - The adapter must set `acceptance_candidate=False`, keep invalid/missing/
+    unknown evidence blocked, and treat normalized output as diagnostic data.
+  - `packages/ai-workflow-hub/tests/test_run_governance.py` should prove the
+    real-path nodes normalization candidate and fail-closed paths.
+  - `docs/status/runtime-governance-batch-h-ai-workflow-hub-chain-evidence-canonicalization.md`
+    records the local limitation set and preserved stop lines.
+- Runtime-governance Batch I generic go prepare evidence:
+  - `packages/control-plane/control_plane/cli/_coding.py` should accept
+    `--prepare-evidence-dir` only as a draft evidence-production option.
+  - The option must be mutually exclusive with `--auto-finalize` and
+    `--evidence-dir`, must set manifest eligibility to `needs_more_evidence`,
+    and must not create `review.yaml`, `final-verdict.json`, or final-ready
+    state.
+  - `packages/control-plane/tests/test_cli.py` should prove the real path:
+    prepare-only draft first, then explicit independent review plus
+    `--auto-finalize` can finalize the same directory.
+  - `docs/status/runtime-governance-batch-i-generic-go-prepare-evidence.md`
+    records the local limitation set and preserved stop lines.
+- Runtime-governance Batch J automatic superseding FinalVerdict:
+  - `tools/go_evidence.py` should archive prior materially different
+    `final-verdict.json` artifacts before writing a new final verdict with
+    `supersedes` metadata.
+  - Invalid or governance-reference-mismatched prior verdicts must fail closed
+    as blocked final verdicts, not final-ready supersessions.
+  - `tests/test_go_evidence.py` should prove rerun supersession, prior archive,
+    and mismatch blocking behavior.
+  - `docs/status/runtime-governance-batch-j-automatic-superseding-final-verdict.md`
+    records the local limitation set and preserved stop lines.
 - Runtime-governance post-Batch-E status reconciliation:
   - `docs/status/runtime-governance-and-evidence-closure-transformation-plan.md`
     should no longer present the original Batch A immediate-next language as
@@ -551,11 +609,11 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     supersession metadata, a bounded supersession chain, and diagnostic
     `resolution_state` values for resolved, missing, invalid, id-mismatch,
     cycle, and depth-limited links.
-  - Current remaining gaps are generic `go` automatic finalization, sealed
-    ContextPacket/ContextLedger production, ai-workflow-hub and paper domain
-    adapters, missing ai-workflow-hub `chain-evidence.json` with legacy trusted
-    state, automatic superseding FinalVerdict generation, and complete
-    supersession-chain graph or migration resolution.
+- Current remaining gaps are default generic `go` automatic finalization,
+    complete automatic independent review evidence production, paper domain
+    adapters, ai-workflow-hub canonical artifact writeback beyond the Batch H
+    diagnostic adapter, and complete supersession-chain graph or migration
+    resolution.
   - Reviewers should confirm this reconciliation does not change runtime
     behavior, schema contracts, adapter behavior, dashboard authority, or
     acceptance projection beyond the already audited read-only supersession
@@ -632,6 +690,12 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`
 - `docs/status/runtime-governance-batch-e-final-verdict-lifecycle.md`
 - `docs/status/runtime-governance-batch-e-final-verdict-supersession-projection.md`
+- `docs/status/runtime-governance-batch-f-sealed-context-artifacts.md`
+- `docs/status/runtime-governance-batch-g-generic-go-opt-in-finalization.md`
+- `docs/status/runtime-governance-batch-h-ai-workflow-hub-chain-evidence-canonicalization.md`
+- `docs/status/runtime-governance-batch-i-generic-go-prepare-evidence.md`
+- `docs/status/runtime-governance-batch-j-automatic-superseding-final-verdict.md`
+- `docs/status/current-dirty-tree-batch-map-20260708.md`
 - `docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md`
 - `docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md`
 - `docs/status/runtime-governance-batch-e-chain-evidence-schema-compatibility.md`

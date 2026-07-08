@@ -35,7 +35,18 @@ has also advanced through workflow review-pending behavior, explicit team
 evidence and context references, review/final-verdict reference projection,
 manual @go finalizer guidance, chain-evidence schema compatibility, FinalVerdict
 lifecycle metadata, and fail-closed ai-workflow-hub chain evidence
-classification.
+classification. Batch F now adds sealed go/workflow ContextPacket and
+ContextLedger production at dispatch time, with RunIndex final-ready blocking
+when passed workers lack sealed context. Batch G adds explicit opt-in
+finalization for generic `go` / `code execute` runs when the operator supplies
+an existing reviewed evidence directory. Batch H adds a fail-closed
+ai-workflow-hub `nodes` chain-evidence adapter that produces a
+non-authoritative normalized candidate without granting chain trust. Batch I
+adds prepare-only evidence draft production for generic `go` / `code execute`
+runs through `--prepare-evidence-dir`, while keeping finalization explicit and
+review-gated. Batch J adds governance-finalizer-owned automatic superseding
+FinalVerdict generation for materially different reruns while preserving prior
+verdict artifacts.
 
 Recent completed public-snapshot slices have kept the Batch E evidence visible,
 kept preserved stop lines explicit, and prevented future agents from treating
@@ -47,11 +58,13 @@ explicitly; it is still not automatic runtime finalization by default.
 
 Still out of scope without a separate bounded implementation slice:
 
-- generic `go` dispatch automatic finalization;
-- sealed ContextPacket or ContextLedger production beyond current provenance
-  references;
-- paper or ai-workflow-hub domain adapters and canonical normalization;
-- automatic superseding FinalVerdict generation for divergent reruns;
+- default generic `go` dispatch automatic finalization or complete automatic
+  review evidence production;
+- sealed ContextPacket or ContextLedger production beyond go/workflow dispatch
+  task packets;
+- paper domain adapters, and ai-workflow-hub canonical artifact writeback
+  beyond the Batch H non-authoritative adapter view;
+- complete cross-run supersession graph migration;
 - runtime storage migration or dashboard authority changes.
 
 The preserved stop line remains: terminal status, file shape,
@@ -952,7 +965,7 @@ These decisions should be resolved in Phase 0 or Phase 1:
 7. Which legacy commands are public compatibility commitments versus internal
    development surfaces?
 
-## Current Next Slice
+## Current Completed Slice And Remaining Gaps
 
 The post-Batch-E status reconciliation and the read-only FinalVerdict
 supersession read-model slices are complete at the public snapshot level:
@@ -972,15 +985,66 @@ The next implementation slice must choose one of the remaining gaps explicitly,
 cite the relevant Batch E audit record, and include a real-path regression test
 before changing runtime behavior.
 
+Completed bounded slice: sealed ContextPacket and ContextLedger production for
+`go` and workflow task dispatch. This extends the existing TeamRuntime
+context-reference work recorded in
+[Runtime Governance Batch E: Team Context Refs](runtime-governance-batch-e-team-context-refs.md)
+and the evidence-reference work recorded in
+[Runtime Governance Batch E: Explicit Team Evidence Events](runtime-governance-batch-e-explicit-team-evidence-events.md).
+The implementation is recorded in
+[Runtime Governance Batch F: Sealed Context Artifacts](runtime-governance-batch-f-sealed-context-artifacts.md).
+It stays prepare/dispatch scoped: immutable context packet and ledger artifacts
+are created for worker task inputs, their refs attach to task-created and
+task-claimed events, RunIndex projects them as context evidence/artifacts, and
+a real-path regression proves a passed worker without sealed context still
+cannot become final-ready. It does not add default generic `go` automatic
+finalization, domain adapter normalization, storage migration, or dashboard
+authority changes.
+
+Completed bounded slice: explicit opt-in finalization for prepared generic
+`go` / `code execute` runs. This extends the @go finalizer guidance recorded in
+[Runtime Governance Batch E: @go Runtime Finalize Command](runtime-governance-batch-e-atgo-runtime-finalize-command.md)
+without making finalization automatic by default. The implementation is
+recorded in
+[Runtime Governance Batch G: Generic Go Opt-In Finalization](runtime-governance-batch-g-generic-go-opt-in-finalization.md).
+It requires both `--auto-finalize` and `--evidence-dir <dir>`, reuses
+`tools/go_evidence.py finalize`, and preserves the existing evidence gate,
+TeamRuntime, RunIndex, and sealed-context authority checks.
+
+Completed bounded slice: ai-workflow-hub `nodes` chain-evidence adapter. Batch H
+extends the Batch E classification-only behavior by returning a normalized
+in-memory candidate through `chain_evidence_adapter` while preserving
+`chain_trusted=False` and `acceptance_candidate=False`. The implementation is
+recorded in
+[Runtime Governance Batch H: AI Workflow Hub Chain Evidence Adapter](runtime-governance-batch-h-ai-workflow-hub-chain-evidence-canonicalization.md).
+
+Completed bounded slice: generic `go` / `code execute` prepare-only evidence.
+Batch I adds `--prepare-evidence-dir <dir>`, which writes draft
+`chain-evidence.json` and `evidence-manifest.json` artifacts with
+`verdict_eligibility.status=needs_more_evidence`. The implementation is
+recorded in
+[Runtime Governance Batch I: Generic Go Prepare Evidence](runtime-governance-batch-i-generic-go-prepare-evidence.md).
+
+Completed bounded slice: automatic superseding FinalVerdict generation in the
+governance finalizer path. Batch J archives prior final verdict artifacts and
+adds `supersedes` metadata when a later valid finalization for the same
+governance reference materially changes the verdict. The implementation is
+recorded in
+[Runtime Governance Batch J: Automatic Superseding FinalVerdict](runtime-governance-batch-j-automatic-superseding-final-verdict.md).
+
 Still do not:
 
-- add runtime automation for generic `go` finalization;
+- add default runtime automation for generic `go` finalization or synthesize
+  missing independent review evidence;
 - change `chain_trusted` semantics for missing ai-workflow-hub
   `chain-evidence.json` with legacy trusted state;
-- create sealed ContextPacket or ContextLedger production;
-- normalize ai-workflow-hub `nodes` evidence into the canonical @go schema;
-- add paper or ai-workflow-hub domain adapters;
-- generate superseding FinalVerdict records automatically;
+- create sealed ContextPacket or ContextLedger production outside go/workflow
+  dispatch task packets;
+- treat the Batch H ai-workflow-hub adapter candidate as acceptance authority or
+  write canonical ai-workflow-hub chain-evidence JSON back to disk;
+- add paper domain adapters;
+- expand automatic superseding FinalVerdict generation into a complete
+  cross-run migration graph or dashboard authority source;
 - treat bounded FinalVerdict supersession chains or their diagnostics as
   acceptance authority;
 - expand bounded supersession-chain projection into a complete graph,

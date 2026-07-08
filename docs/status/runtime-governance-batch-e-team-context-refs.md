@@ -51,9 +51,11 @@ git diff --check
 - Missing context refs must not break legacy journals.
 - Runtime data remains outside the public repository.
 
-## Known Gaps
+## Follow-Up Status
 
-- Sealed ContextPacket/ContextLedger production for go/workflow remains later work.
+- Sealed ContextPacket/ContextLedger production for go/workflow dispatch is now
+  covered by
+  [Runtime Governance Batch F: Sealed Context Artifacts](runtime-governance-batch-f-sealed-context-artifacts.md).
 - Independent ReviewRecord and FinalVerdict TeamRuntime events are covered by
   the follow-up
   [Runtime Governance Batch E: Team Review Verdict Events](runtime-governance-batch-e-team-review-verdict-events.md)

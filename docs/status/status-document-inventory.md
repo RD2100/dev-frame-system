@@ -27,9 +27,9 @@ For current governance planning, read in this order:
 4. [Reviewer Index](../status/reviewer-index.md)
 5. The specific active plan or recon receipt that matches the task.
 
-For release review, start with [Release Readiness](../status/release-readiness.md)
-and [Reviewer Index](../status/reviewer-index.md) before reading planning
-material.
+For release review, start with [Launch Now](LAUNCH_NOW.md), then
+[Release Readiness](../status/release-readiness.md) and
+[Reviewer Index](../status/reviewer-index.md) before reading planning material.
 
 ## Document States
 
@@ -51,6 +51,7 @@ Use these states when reading or editing files in this folder:
 
 | File | Role | Notes |
 |---|---|---|
+| `LAUNCH_NOW.md` | Current launch-control entrypoint | Shortest go/no-go decision, blockers, and evidence map |
 | `status-document-inventory.md` | Current status-folder control map | This file |
 | `governance-spine-and-document-coordination.md` | Current cross-plan synthesis | Explains the governance sequence and next document writes |
 | `reviewer-index.md` | Public-snapshot reviewer map | Should list active status docs that matter to review |
@@ -59,13 +60,18 @@ Use these states when reading or editing files in this folder:
 ## Observed File Classification Snapshot
 
 Observed on 2026-07-04, with review-governance completion status added on
-2026-07-06 and runtime-governance Batch A planning and contract evidence added
-on 2026-07-07.
+2026-07-06, runtime-governance Batch A planning and contract evidence added on
+2026-07-07, Batch B through Batch E implementation audit records added on
+2026-07-08, Batch F sealed context artifact evidence added on 2026-07-08, and
+Batch G generic go opt-in finalization evidence added on 2026-07-08, Batch H
+ai-workflow-hub chain-evidence adapter evidence added on 2026-07-08, and Batch I
+generic go prepare-evidence evidence added on 2026-07-08, and Batch J automatic
+superseding FinalVerdict evidence added on 2026-07-08.
 Update this snapshot when adding or retiring status documents.
 
 | State | Files |
 |---|---|
-| `current-entry` | `status-document-inventory.md`, `governance-spine-and-document-coordination.md`, `reviewer-index.md`, `release-readiness.md` |
+| `current-entry` | `LAUNCH_NOW.md`, `status-document-inventory.md`, `governance-spine-and-document-coordination.md`, `reviewer-index.md`, `release-readiness.md` |
 | `active-plan` | `workflow-consolidation-and-command-plan.md`, `context-management-architecture-plan.md`, `context-noise-governance-and-automation-plan.md`, `context-led-model-performance-control-plan.md`, `model-knowledge-gap-governance-plan.md`, `project-and-cross-project-memory-harness-governance-plan.md`, `goal-bound-evidence-gate-plan.md`, `paper-claim-integrity-gate-to-cluster-plan.md`, `documentation-management-audit-and-plan.md`, `documentation-management-detailed-rollout-plan.md`, `runtime-governance-and-evidence-closure-transformation-plan.md`, `runtime-governance-status-vocabulary-inventory.md`, `evaluation-feedback-learning-governance-plan.md`, `total-control-policy-engine-and-human-escalation-governance-plan.md`, `human-attention-governance-and-automation-maturity-plan.md`, `early-adopter-user-asset-governance-plan.md`, `competitive-moat-and-user-demand-critical-review.md`, `unified-object-model-decision-record.md`, `governance-contradiction-matrix.md`, `governance-rules-spec.md`, `document-driven-transformation-master-plan.md`, `document-driven-transformation-final-plan-20260705.md`, `design-coverage-gap-remediation-plan.md`, `review-first-governance-kernel-contraction-plan.md`, `review-first-governance-kernel-implementation-spec.md`, `reuse-first-constraint-governance-implementation-plan.md`, `skill-asset-utilization-plan.md` |
 | `deferred-module-plan` | `browser-automation-transport-roadmap.md`, `paper-knowledge-base-iteration-mvp-plan.md`, `graph-projection-knowledge-canvas-plan.md` |
 | `area-plan` | `product-maturity-roadmap.md`, `local-agent-cluster-roadmap.md`, `cluster-coordinator-design-and-roadmap.md`, `phase-1-global-coordinator-conversation-plan.md`, `launch-cutover-checklist.md`, `agent-cluster-unknowns-register.md`, `global-lifecycle-gsd-superpowers-assessment.md`, `design-orchestration-mcp.md`, `design-devframe-mcp-orchestrator-surface.md` |
@@ -73,7 +79,7 @@ Update this snapshot when adding or retiring status documents.
 | `recon-receipt` | `recon-receipt-acp-backbone.md`, `recon-receipt-cli-decomposition.md`, `recon-receipt-cluster-control-surface.md`, `recon-receipt-customization-layer.md`, `recon-receipt-devframe-mcp-server.md`, `recon-receipt-global-coordinator-conversation-mainline.md`, `recon-receipt-local-agent-client-mainline.md`, `recon-receipt-mcp-consent.md`, `recon-receipt-mcp-live-probe-sse.md`, `recon-receipt-obsidian-stage3.md`, `recon-receipt-obsidian-stage4-sync.md`, `recon-receipt-opencode-event-integration.md`, `recon-receipt-paper-pdf-fulltext-segmentation.md`, `recon-receipt-parallel-write-isolation.md`, `recon-receipt-pluggable-model-provider.md`, `recon-receipt-rd-code-prod-launch.md`, `recon-receipt-rdcode-bridge-data.md`, `recon-receipt-rdcode-writeback.md`, `recon-receipt-runtime-governance-unification.md`, `recon-receipt-t3-rebrand-i18n.md`, `recon-receipt-team-runtime.md`, `recon-receipt-workflow-engine.md` |
 | `handoff` | `continue-global-coordinator-conversation-mainline.md`, `next-agent-global-coordinator-prompt.md`, `devframe-code-opencode-handoff.md` |
 | `historical-stage` | `local-agent-control-plane-stage-2-acceptance.md`, `local-agent-control-plane-stage-2-precommit-review.md`, `local-agent-control-plane-stage-3-execution-report.md`, `local-agent-control-plane-stage-3-go-batch.md`, `local-agent-control-plane-stage-4-web-ai-binding.md`, `local-agent-control-plane-stage-5-closed-loop.md`, `local-agent-control-plane-stage-6-release-prep.md`, `local-agent-control-plane-stage-7-final-precommit-review.md` |
-| `evidence-record` | `current-coverage-audit-evidence-20260704.md`, `working-tree-cleanup-inventory-20260705.md`, `asset-utilization-inventory-20260705.md`, `review-governance-kernel-completion-20260706.md`, `runtime-governance-batch-a-contract-completion.md`, `evidence-web-ai-mcp-live-roundtrip.md`, `legacy-submodule-baseline.json` |
+| `evidence-record` | `current-coverage-audit-evidence-20260704.md`, `working-tree-cleanup-inventory-20260705.md`, `asset-utilization-inventory-20260705.md`, `current-dirty-tree-batch-map-20260708.md`, `review-governance-kernel-completion-20260706.md`, `runtime-governance-batch-a-contract-completion.md`, `runtime-governance-batch-b-read-only-run-index.md`, `runtime-governance-batch-c-rdreview-prepare-only.md`, `runtime-governance-batch-d-independent-gate.md`, `runtime-governance-batch-e-ai-workflow-hub-chain-evidence-classification.md`, `runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md`, `runtime-governance-batch-e-atgo-runtime-finalize-command.md`, `runtime-governance-batch-e-chain-evidence-schema-compatibility.md`, `runtime-governance-batch-e-explicit-team-evidence-events.md`, `runtime-governance-batch-e-final-verdict-lifecycle.md`, `runtime-governance-batch-e-final-verdict-supersession-projection.md`, `runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`, `runtime-governance-batch-e-paper-trust-fail-closed.md`, `runtime-governance-batch-e-team-context-refs.md`, `runtime-governance-batch-e-team-review-verdict-events.md`, `runtime-governance-batch-e-workflow-review-pending.md`, `runtime-governance-batch-f-sealed-context-artifacts.md`, `runtime-governance-batch-g-generic-go-opt-in-finalization.md`, `runtime-governance-batch-h-ai-workflow-hub-chain-evidence-canonicalization.md`, `runtime-governance-batch-i-generic-go-prepare-evidence.md`, `runtime-governance-batch-j-automatic-superseding-final-verdict.md`, `evidence-web-ai-mcp-live-roundtrip.md`, `legacy-submodule-baseline.json` |
 | `external-recon` | `codexpro-devspace-mcp-recon.md` |
 
 ## Active Planning Set
@@ -100,6 +106,26 @@ full active planning set.
 | `runtime-governance-and-evidence-closure-transformation-plan.md` | Defines the target runtime and evidence lifecycle |
 | `runtime-governance-status-vocabulary-inventory.md` | Records current status families before Batch A schemas map them into separate lifecycle axes |
 | `runtime-governance-batch-a-contract-completion.md` | Records local Batch A contract evidence without claiming release readiness |
+| `runtime-governance-batch-b-read-only-run-index.md` | Records local Batch B read-only RunIndex evidence and remaining write-authority limits |
+| `runtime-governance-batch-c-rdreview-prepare-only.md` | Records local Batch C prepare-only review evidence without external reviewer or final acceptance |
+| `runtime-governance-batch-d-independent-gate.md` | Records local Batch D independent evidence-gate evidence and known runtime-journal gaps |
+| `runtime-governance-batch-e-workflow-review-pending.md` | Records Batch E workflow behavior where worker success opens review but cannot pass acceptance |
+| `runtime-governance-batch-e-paper-trust-fail-closed.md` | Records Batch E removal of terminal-status-to-chain-trust inference |
+| `runtime-governance-batch-e-explicit-team-evidence-events.md` | Records Batch E explicit TeamRuntime evidence reference events |
+| `runtime-governance-batch-e-team-context-refs.md` | Records Batch E legacy context reference visibility for TeamRuntime and RunIndex |
+| `runtime-governance-batch-e-team-review-verdict-events.md` | Records Batch E independent review and final-verdict reference projection limits |
+| `runtime-governance-batch-e-go-evidence-team-runtime-finalization.md` | Records Batch E opt-in TeamRuntime finalization references from go_evidence |
+| `runtime-governance-batch-e-atgo-runtime-finalize-command.md` | Records Batch E manual atgo finalizer command guidance with runtime directory |
+| `runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md` | Records Batch E guidance-only finalizer metadata in atgo prepare artifacts |
+| `runtime-governance-batch-e-chain-evidence-schema-compatibility.md` | Records Batch E chain-evidence schema compatibility and guidance-only next commands |
+| `runtime-governance-batch-e-ai-workflow-hub-chain-evidence-classification.md` | Records Batch E fail-closed ai-workflow-hub chain-evidence shape classification |
+| `runtime-governance-batch-e-final-verdict-lifecycle.md` | Records Batch E FinalVerdict supersedes lifecycle metadata |
+| `runtime-governance-batch-e-final-verdict-supersession-projection.md` | Records Batch E read-only FinalVerdict supersession projection and diagnostics |
+| `runtime-governance-batch-f-sealed-context-artifacts.md` | Records Batch F sealed ContextPacket/ContextLedger production for go/workflow dispatch |
+| `runtime-governance-batch-g-generic-go-opt-in-finalization.md` | Records Batch G explicit opt-in finalization for generic go/code execute runs |
+| `runtime-governance-batch-h-ai-workflow-hub-chain-evidence-canonicalization.md` | Records Batch H non-authoritative ai-workflow-hub chain-evidence adapter behavior |
+| `runtime-governance-batch-i-generic-go-prepare-evidence.md` | Records Batch I prepare-only generic go/code evidence draft behavior |
+| `runtime-governance-batch-j-automatic-superseding-final-verdict.md` | Records Batch J governance-finalizer automatic FinalVerdict superseding behavior |
 | `evaluation-feedback-learning-governance-plan.md` | Defines evaluation, feedback, learning, and promotion boundaries |
 | `total-control-policy-engine-and-human-escalation-governance-plan.md` | Defines policy decisions, escalation, and authority limits |
 | `human-attention-governance-and-automation-maturity-plan.md` | Defines human attention as a governed resource and classifies automation maturity |

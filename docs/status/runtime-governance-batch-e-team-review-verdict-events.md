@@ -56,5 +56,7 @@ git diff --check
 
 - Go evidence finalization can now opt into TeamRuntime event recording with
   `--team-runtime-dir`, but full go dispatch automation remains later work.
-- Sealed ContextPacket/ContextLedger production for go/workflow remains later work.
+- Sealed ContextPacket/ContextLedger production for go/workflow dispatch is now
+  covered by
+  [Runtime Governance Batch F: Sealed Context Artifacts](runtime-governance-batch-f-sealed-context-artifacts.md).
 - Legacy atgo review projections remain read-only compatibility adapters rather than TeamRuntime events.

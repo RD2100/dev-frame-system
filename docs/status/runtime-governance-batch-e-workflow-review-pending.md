@@ -66,6 +66,8 @@ git diff --check
   slice and the @go finalization slices.
 - Legacy context refs on task lifecycle events are handled in
   [Runtime Governance Batch E: Team Context Refs](runtime-governance-batch-e-team-context-refs.md);
-  sealed ContextPacket production remains deferred.
+  sealed ContextPacket and ContextLedger production was deferred at this slice
+  boundary and is covered by
+  [Runtime Governance Batch F: Sealed Context Artifacts](runtime-governance-batch-f-sealed-context-artifacts.md).
 - Paper workflow trust inference is handled in
   [Runtime Governance Batch E: Paper Trust Fail Closed](runtime-governance-batch-e-paper-trust-fail-closed.md).

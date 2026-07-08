@@ -27,7 +27,9 @@ After this slice:
 At this slice boundary, independent ReviewRecord ingestion, FinalVerdict
 ingestion, and sealed ContextPacket production for go/workflow task events
 remained out of scope. The follow-up TeamRuntime review/final-verdict and @go
-finalization slices cover the generic review and final verdict path.
+finalization slices cover the generic review and final verdict path; sealed
+ContextPacket and ContextLedger production is covered by
+[Runtime Governance Batch F: Sealed Context Artifacts](runtime-governance-batch-f-sealed-context-artifacts.md).
 
 ## Local Evidence
 
@@ -62,5 +64,6 @@ git diff --check
 - Independent review and final verdict events are covered by the follow-up
   [Runtime Governance Batch E: Team Review Verdict Events](runtime-governance-batch-e-team-review-verdict-events.md)
   slice and the @go finalization slices.
-- Sealed ContextPacket production for go/workflow task lifecycle events remains
-  deferred.
+- Sealed ContextPacket and ContextLedger production for go/workflow task
+  lifecycle events was deferred at this slice boundary and is covered by
+  [Runtime Governance Batch F: Sealed Context Artifacts](runtime-governance-batch-f-sealed-context-artifacts.md).
