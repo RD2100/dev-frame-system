@@ -9,6 +9,7 @@ from pathlib import Path
 from jsonschema.validators import validator_for
 
 from control_plane.cli import main as devframe_cli_main
+from control_plane.evidence_gate import FULL_EVIDENCE_FILES
 from control_plane.run_index import build_run_index
 from control_plane.visual_state import build_visual_control_plane_state
 
@@ -97,6 +98,29 @@ def test_code_execute_help_is_available(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "Usage: devframe code execute [latest|<go-run-id>]" in output
     assert "--rerun-passed" in output
+    assert "--evidence-dir" in output
+    assert "--auto-finalize" in output
+    assert "--prepare-evidence-dir <dir>" in output
+    assert "--auto-finalize | --prepare-evidence-dir <dir>" in output
+
+
+def test_go_execute_auto_finalize_requires_evidence_dir(tmp_path, monkeypatch, capsys):
+    runtime_dir = tmp_path / "runtime"
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "go",
+        "execute",
+        "--runtime-dir",
+        str(runtime_dir),
+        "--auto-finalize",
+    ])
+
+    exit_code = devframe_cli_main()
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "--auto-finalize requires --evidence-dir" in captured.err
+    assert not runtime_dir.exists()
 
 
 def test_code_workers_lists_available_worker_profiles(monkeypatch, capsys):
@@ -433,6 +457,242 @@ def test_code_execute_skips_previously_passed_agents(tmp_path, monkeypatch, caps
         assert devframe_cli_main() == 0
 
     assert counter_path.read_text(encoding="utf-8") == "1"
+
+
+def test_go_execute_auto_finalize_records_reviewed_evidence_real_path(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    evidence_dir = tmp_path / "generic-go-evidence"
+    project_root.mkdir()
+    report_code = (
+        "from pathlib import Path; import json, os; "
+        f"evidence_dir = Path({str(evidence_dir)!r}); "
+        "evidence_dir.mkdir(parents=True, exist_ok=True); "
+        "(evidence_dir / 'diff.patch').write_text('', encoding='utf-8'); "
+        "(evidence_dir / 'test-output.md').write_text('1 passed\\n', encoding='utf-8'); "
+        "(evidence_dir / 'safety-report.json').write_text("
+        "json.dumps({"
+        "'generated_at': '2026-07-08T00:00:00+00:00',"
+        "'producer': 'test',"
+        "'command': 'pytest',"
+        "'exit_code': 0,"
+        "'stdout': '1 passed'"
+        "}) + '\\n', encoding='utf-8'); "
+        "(evidence_dir / 'review.md').write_text('Independent review passed.\\n', encoding='utf-8'); "
+        "(evidence_dir / 'review.yaml').write_text("
+        "'reviewer_role: reviewer\\n'"
+        "'reviewer_id: reviewer-1\\n'"
+        "'executor_id: executor-1\\n'"
+        "'verdict: pass\\n'"
+        "'reviewed_inputs:\\n'"
+        "'  - diff.patch\\n'"
+        "'  - test-output.md\\n'"
+        "'  - safety-report.json\\n'"
+        "'  - chain-evidence.json\\n'"
+        "'findings: []\\n', encoding='utf-8'); "
+        "Path(os.environ['RDGOAL_REPORT_PATH']).write_text("
+        "'## ExecutionReport\\n\\n"
+        "- **Status**: pass\\n"
+        "- **Changed Files**:\\n"
+        "- `src/app.py`\\n"
+        "- **Evidence**: generic go auto-finalize real path\\n',"
+        "encoding='utf-8')"
+    )
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "go",
+        str(project_root),
+        "Execute reviewed evidence later.",
+        "--runtime-dir",
+        str(runtime_dir),
+        "--agents",
+        "1",
+        "--target",
+        "src/app.py",
+        "--command",
+        sys.executable,
+        "-c",
+        report_code,
+    ])
+    assert devframe_cli_main() == 0
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    go_run_id = metadata["go_run_id"]
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    (evidence_dir / "task-spec.md").write_text("generic go finalize task\n", encoding="utf-8")
+    (evidence_dir / "chain-evidence.json").write_text(
+        json.dumps({
+            "run_id": go_run_id,
+            "executor_id": "executor-1",
+            "mode": "auto_execute",
+            "planner": None,
+            "task": str(evidence_dir / "task-spec.md"),
+            "methodology": None,
+            "evidence_files": FULL_EVIDENCE_FILES[:],
+            "timestamps": {
+                "created_at": "2026-07-08T00:00:00+00:00",
+            },
+        }, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    capsys.readouterr()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "go",
+        "execute",
+        go_run_id,
+        "--runtime-dir",
+        str(runtime_dir),
+        "--timeout",
+        "30",
+        "--evidence-dir",
+        str(evidence_dir),
+        "--auto-finalize",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "DevFrame Code execute" in output
+    assert "Auto-finalize: tools/go_evidence.py finalize" in output
+    assert "PASS" in output
+    assert (evidence_dir / "final-verdict.json").exists()
+    assert (evidence_dir / "evidence-manifest.json").exists()
+    assert (evidence_dir / "final-report.md").exists()
+
+    index = build_run_index(runtime_dir)
+    team_record = next(
+        entry["record"]
+        for entry in index["runs"]
+        if entry["adapter_id"] == "team_events"
+        and entry["record"]["domain_refs"].get("source_run_id") == go_run_id
+    )
+    assert team_record["acceptance_state"] == "final_ready"
+    assert team_record["review_state"] == "review_passed"
+    assert team_record["gate_state"] == "gate_passed"
+
+
+def test_go_execute_prepare_evidence_dir_generates_draft_and_can_be_finalized_later(tmp_path, monkeypatch, capsys):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    evidence_dir = tmp_path / "prepared-evidence"
+    project_root.mkdir()
+    report_code = (
+        "from pathlib import Path; import os; "
+        "Path(os.environ['RDGOAL_REPORT_PATH']).write_text("
+        "'## ExecutionReport\\n\\n"
+        "- **Status**: pass\\n"
+        "- **Changed Files**:\\n"
+        "- `src/app.py`\\n"
+        "- **Evidence**: prepare-only evidence path\\n',"
+        "encoding='utf-8')"
+    )
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "go",
+        str(project_root),
+        "Prepare evidence without acceptance.",
+        "--runtime-dir",
+        str(runtime_dir),
+        "--agents",
+        "1",
+        "--target",
+        "src/app.py",
+        "--command",
+        sys.executable,
+        "-c",
+        report_code,
+    ])
+    assert devframe_cli_main() == 0
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    go_run_id = json.loads(metadata_path.read_text(encoding="utf-8"))["go_run_id"]
+    capsys.readouterr()
+
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "go",
+        "execute",
+        go_run_id,
+        "--runtime-dir",
+        str(runtime_dir),
+        "--timeout",
+        "30",
+        "--prepare-evidence-dir",
+        str(evidence_dir),
+    ])
+    assert devframe_cli_main() == 0
+    output = capsys.readouterr().out
+    manifest = json.loads((evidence_dir / "evidence-manifest.json").read_text(encoding="utf-8"))
+    chain = json.loads((evidence_dir / "chain-evidence.json").read_text(encoding="utf-8"))
+
+    assert "Prepare evidence:" in output
+    assert manifest["verdict_eligibility"]["status"] == "needs_more_evidence"
+    assert chain["run_id"] == go_run_id
+    assert chain["next_commands"]["finalize"]["creates_acceptance"] is False
+    assert chain["next_commands"]["finalize"]["requires_independent_review"] is True
+    assert not (evidence_dir / "review.yaml").exists()
+    assert not (evidence_dir / "final-verdict.json").exists()
+    index = build_run_index(runtime_dir)
+    team_record = next(
+        entry["record"]
+        for entry in index["runs"]
+        if entry["adapter_id"] == "team_events"
+        and entry["record"]["domain_refs"].get("source_run_id") == go_run_id
+    )
+    assert team_record["acceptance_state"] != "final_ready"
+
+    (evidence_dir / "diff.patch").write_text("", encoding="utf-8")
+    (evidence_dir / "test-output.md").write_text("1 passed\n", encoding="utf-8")
+    (evidence_dir / "safety-report.json").write_text(
+        json.dumps({
+            "generated_at": "2026-07-08T00:00:00+00:00",
+            "producer": "test",
+            "command": "pytest",
+            "exit_code": 0,
+            "stdout": "1 passed",
+        }) + "\n",
+        encoding="utf-8",
+    )
+    (evidence_dir / "review.md").write_text("Independent review passed.\n", encoding="utf-8")
+    (evidence_dir / "review.yaml").write_text(
+        "reviewer_role: reviewer\n"
+        "reviewer_id: reviewer-1\n"
+        "executor_id: devframe-go-execute\n"
+        "verdict: pass\n"
+        "reviewed_inputs:\n"
+        "  - diff.patch\n"
+        "  - test-output.md\n"
+        "  - safety-report.json\n"
+        "  - chain-evidence.json\n"
+        "findings: []\n",
+        encoding="utf-8",
+    )
+    capsys.readouterr()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "go",
+        "execute",
+        go_run_id,
+        "--runtime-dir",
+        str(runtime_dir),
+        "--timeout",
+        "30",
+        "--evidence-dir",
+        str(evidence_dir),
+        "--auto-finalize",
+    ])
+    assert devframe_cli_main() == 0
+
+    assert (evidence_dir / "final-verdict.json").exists()
+    index = build_run_index(runtime_dir)
+    team_record = next(
+        entry["record"]
+        for entry in index["runs"]
+        if entry["adapter_id"] == "team_events"
+        and entry["record"]["domain_refs"].get("source_run_id") == go_run_id
+    )
+    assert team_record["acceptance_state"] == "final_ready"
 
 
 def test_code_reads_goal_from_prompt_file(tmp_path, monkeypatch, capsys):

@@ -13,7 +13,7 @@ from ._common import _is_loopback_host
 from ._usage import CODE_USAGE
 
 
-ATGO_FINALIZER_REQUIRED_FILES = [
+FINALIZER_REQUIRED_FILES = [
     "diff.patch",
     "test-output.md",
     "safety-report.json",
@@ -195,8 +195,8 @@ def cmd_atgo() -> int:
     )
 
     chain_evidence_path = evidence_dir / "chain-evidence.json"
-    finalize_command_args = _atgo_finalize_command_args(evidence_dir, runtime_root)
-    finalize_command = _render_atgo_finalize_command(evidence_dir, runtime_root)
+    finalize_command_args = _go_finalize_command_args(evidence_dir, runtime_root)
+    finalize_command = _render_go_finalize_command(evidence_dir, runtime_root)
     chain_evidence = {
         "run_id": result.go_run_id,
         "project_id": result.project_id or project_root.name,
@@ -256,7 +256,7 @@ def cmd_atgo() -> int:
         print(render_go_dispatch_text(exec_result), end="")
         finalize_rc = None
         if args.auto_finalize:
-            finalize_rc = _maybe_auto_finalize_atgo_evidence(
+            finalize_rc = _maybe_auto_finalize_evidence_dir(
                 evidence_dir=evidence_dir,
                 runtime_root=runtime_root,
                 project_root=project_root,
@@ -268,22 +268,23 @@ def cmd_atgo() -> int:
     return 0
 
 
-def _maybe_auto_finalize_atgo_evidence(
+def _maybe_auto_finalize_evidence_dir(
     *,
     evidence_dir: Path,
     runtime_root: Path,
     project_root: Path,
+    label: str = "Auto-finalize",
 ) -> int | None:
-    missing = [name for name in ATGO_FINALIZER_REQUIRED_FILES if not (evidence_dir / name).exists()]
+    missing = [name for name in FINALIZER_REQUIRED_FILES if not (evidence_dir / name).exists()]
     if missing:
         print("")
-        print(f"Auto-finalize: skipped; missing required review evidence: {', '.join(missing)}")
-        print(f"Finalize     : {_render_atgo_finalize_command(evidence_dir, runtime_root)}")
+        print(f"{label}: skipped; missing required review evidence: {', '.join(missing)}")
+        print(f"Finalize     : {_render_go_finalize_command(evidence_dir, runtime_root)}")
         return None
     script = _go_evidence_script()
     if not script.exists():
         print("")
-        print(f"Auto-finalize: failed; missing finalizer script: {script}", file=sys.stderr)
+        print(f"{label}: failed; missing finalizer script: {script}", file=sys.stderr)
         return 1
     proc = subprocess.run(
         [
@@ -300,12 +301,82 @@ def _maybe_auto_finalize_atgo_evidence(
         check=False,
     )
     print("")
-    print(f"Auto-finalize: {_render_atgo_finalize_command(evidence_dir, runtime_root)}")
+    print(f"{label}: {_render_go_finalize_command(evidence_dir, runtime_root)}")
     if proc.stdout:
         print(proc.stdout, end="" if proc.stdout.endswith("\n") else "\n")
     if proc.stderr:
         print(proc.stderr, end="" if proc.stderr.endswith("\n") else "\n", file=sys.stderr)
     return proc.returncode
+
+
+def _write_json_file(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _unique_strings(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value and value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
+
+
+def _prepare_evidence_only(*, evidence_dir: Path, runtime_root: Path, result) -> None:
+    from ..evidence_gate import EvidenceGateResult, REQUIRED_FILES, build_evidence_manifest
+
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    task_spec_path = evidence_dir / "task-spec.md"
+    if not task_spec_path.exists():
+        task_spec_path.write_text(
+            f"# Prepare-Only Evidence Draft\n\n- go_run_id: {result.go_run_id}\n- project_id: {result.project_id}\n",
+            encoding="utf-8",
+        )
+    chain_evidence = {
+        "run_id": result.go_run_id,
+        "executor_id": "devframe-go-execute",
+        "mode": "prepare_evidence",
+        "planner": "devframe code execute",
+        "task": str(task_spec_path),
+        "methodology": result.methodology,
+        "evidence_files": _unique_strings([
+            "diff.patch",
+            "test-output.md",
+            "safety-report.json",
+            "chain-evidence.json",
+            "review.md",
+            "review.yaml",
+        ]),
+        "timestamps": {
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        },
+        "next_commands": {
+            "finalize": {
+                "command": _render_go_finalize_command(evidence_dir, runtime_root),
+                "command_args": _go_finalize_command_args(evidence_dir, runtime_root),
+                "authority": "guidance_only",
+                "manual": True,
+                "creates_acceptance": False,
+                "requires_independent_review": True,
+            }
+        },
+    }
+    _write_json_file(evidence_dir / "chain-evidence.json", chain_evidence)
+    gate_result = EvidenceGateResult(
+        status="blocked",
+        reason="prepare-only evidence draft requires independent review before finalization",
+        review={},
+        chain_evidence=chain_evidence,
+        missing_files=[name for name in REQUIRED_FILES if not (evidence_dir / name).exists()],
+        missing_inputs=[],
+    )
+    manifest = build_evidence_manifest(evidence_dir, gate_result)
+    manifest["verdict_eligibility"]["status"] = "needs_more_evidence"
+    manifest["verdict_eligibility"]["reasons"] = [gate_result.reason]
+    manifest["verdict_eligibility"]["blocking_signals"] = [gate_result.reason]
+    _write_json_file(evidence_dir / "evidence-manifest.json", manifest)
 
 
 def _go_evidence_script() -> Path:
@@ -315,7 +386,7 @@ def _go_evidence_script() -> Path:
     return Path.cwd() / "tools" / "go_evidence.py"
 
 
-def _atgo_finalize_command_args(evidence_dir: Path, runtime_root: Path) -> list[str]:
+def _go_finalize_command_args(evidence_dir: Path, runtime_root: Path) -> list[str]:
     return [
         "tools/go_evidence.py",
         "finalize",
@@ -325,10 +396,10 @@ def _atgo_finalize_command_args(evidence_dir: Path, runtime_root: Path) -> list[
     ]
 
 
-def _render_atgo_finalize_command(evidence_dir: Path, runtime_root: Path) -> str:
+def _render_go_finalize_command(evidence_dir: Path, runtime_root: Path) -> str:
     from ..go_dispatch import render_command
 
-    return render_command(_atgo_finalize_command_args(evidence_dir, runtime_root))
+    return render_command(_go_finalize_command_args(evidence_dir, runtime_root))
 
 
 def cmd_code() -> int:
@@ -745,7 +816,29 @@ def cmd_code_execute(*, prog: str = "devframe code execute") -> int:
     parser.add_argument("--runtime-dir", default=None, help="Local runtime directory for code session state")
     parser.add_argument("--timeout", type=int, default=900, help="Per-worker timeout in seconds")
     parser.add_argument("--rerun-passed", action="store_true", help="Run agents even if their previous worker status passed")
+    parser.add_argument(
+        "--evidence-dir",
+        default=None,
+        help="Evidence directory to finalize after execution when --auto-finalize is explicitly set",
+    )
+    finalize_mode = parser.add_mutually_exclusive_group()
+    finalize_mode.add_argument(
+        "--auto-finalize",
+        action="store_true",
+        help="After execute, run the existing evidence finalizer only if the provided evidence dir already has independent review inputs",
+    )
+    finalize_mode.add_argument(
+        "--prepare-evidence-dir",
+        default=None,
+        help="Write a prepare-only evidence draft after execution; does not create acceptance or final-ready state",
+    )
     args = parser.parse_args(sys.argv[3:])
+    if args.auto_finalize and not args.evidence_dir:
+        print("ERROR: --auto-finalize requires --evidence-dir", file=sys.stderr)
+        return 2
+    if args.prepare_evidence_dir and (args.auto_finalize or args.evidence_dir):
+        print("ERROR: --prepare-evidence-dir cannot be combined with --auto-finalize or --evidence-dir", file=sys.stderr)
+        return 2
 
     runtime_dir = Path(args.runtime_dir).resolve() if args.runtime_dir else default_runtime_dir()
     try:
@@ -764,6 +857,22 @@ def cmd_code_execute(*, prog: str = "devframe code execute") -> int:
     print("Token mode   : resume a prepared run; skipped passed agents unless --rerun-passed")
     print("")
     print(_render_code_dispatch_text(result), end="")
+    if args.prepare_evidence_dir:
+        evidence_dir = Path(args.prepare_evidence_dir).resolve()
+        _prepare_evidence_only(evidence_dir=evidence_dir, runtime_root=runtime_dir, result=result)
+        print("")
+        print(f"Prepare evidence: {evidence_dir}")
+        print("Status          : draft; independent review required before finalization")
+        print(f"Finalize        : {_render_go_finalize_command(evidence_dir, runtime_dir)}")
+    finalize_rc = None
+    if args.auto_finalize:
+        finalize_rc = _maybe_auto_finalize_evidence_dir(
+            evidence_dir=Path(args.evidence_dir).resolve(),
+            runtime_root=runtime_dir,
+            project_root=Path(result.project_root).resolve() if result.project_root else Path.cwd().resolve(),
+        )
+    if finalize_rc is not None and finalize_rc != 0:
+        return 1
     return 0 if result.status in {"queued", "passed"} else 1
 
 

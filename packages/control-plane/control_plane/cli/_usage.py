@@ -9,7 +9,7 @@ HELP_TEXT = """DevFrame Code CLI
   devframe code workers              - show available coding worker profiles
   devframe code providers            - show selectable model providers (api/local/web-shim)
   devframe code status [latest|<go-run-id>] - inspect a previous /go coding run without spending worker tokens
-  devframe code execute [latest|<go-run-id>] - execute a prepared /go run without creating packets
+  devframe code execute [latest|<go-run-id>] - execute a prepared /go run; optional explicit auto-finalize requires --evidence-dir
   devframe code session [latest|<go-run-id>] - inspect a previous /go coding run sessions
 
   Control plane
@@ -57,7 +57,7 @@ CODE_USAGE = "Usage: devframe code [[\"<goal>\"] | --prompt-file <path>] [--proj
 CODE_WORKERS_USAGE = "Usage: devframe code workers [--format text|json]"
 CODE_PROVIDERS_USAGE = "Usage: devframe code providers [--format text|json]"
 CODE_STATUS_USAGE = "Usage: devframe code status [latest|<go-run-id>] [--runtime-dir <dir>] [--format text|json]"
-CODE_EXECUTE_USAGE = "Usage: devframe code execute [latest|<go-run-id>] [--runtime-dir <dir>] [--timeout <seconds>] [--rerun-passed]"
+CODE_EXECUTE_USAGE = "Usage: devframe code execute [latest|<go-run-id>] [--runtime-dir <dir>] [--timeout <seconds>] [--rerun-passed] [--evidence-dir <dir>] [--auto-finalize | --prepare-evidence-dir <dir>]"
 SESSION_USAGE = "Usage: devframe code session [latest|<go-run-id>] [--runtime-dir <dir>] [--format text|json]"
 CLIENT_USAGE = "Usage: devframe client [serve|plan|bridge|t3desktop|smoke|doctor] [--runtime-dir <dir>] [--paper-project <dir>] [--host 127.0.0.1] [--port 8765] [--lang en|zh-CN] [--dry-run] [--format text|json] [--open] [--allow-remote] [--output <dir>] [--t3-root <dir>] [--force] [--prod]"
 SESSIONS_USAGE = "Usage: devframe sessions [--runtime-dir <dir>] [--format text|json]"
