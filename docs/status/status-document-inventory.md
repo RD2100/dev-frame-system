@@ -273,6 +273,8 @@ The folder still needs these follow-up improvements:
   evidence exist;
 - keep `docs/README.md`, this inventory, `reviewer-index.md`, and
   `document-driven-transformation-master-plan.md` synchronized whenever a new
-  public subsystem or deferred module is added;
-- maintain the lightweight current-entry docs-link check in
+  public subsystem or deferred module is added. This is now guarded by
+  `packages/control-plane/control_plane/docs_drift_validator.py`,
+  `packages/control-plane/tests/test_docs_drift_validator.py`, and the
+  lightweight current-entry checks in
   `packages/control-plane/tests/test_public_snapshot.py`.

@@ -211,6 +211,8 @@ class TestValidateDocsDrift:
         assert "review-governance-kernel-completion-20260706.md" in (
             payload["inventory_entries"]
         )
+        assert "LAUNCH_NOW.md" in payload["disk_files"]
+        assert "LAUNCH_NOW.md" in payload["inventory_entries"]
 
 
 # ---------------------------------------------------------------------------

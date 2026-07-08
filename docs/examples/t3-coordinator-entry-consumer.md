@@ -9,12 +9,16 @@ GET /api/t3/coordinator-entry
 
 This endpoint is a shell read model. It is not an orchestration runtime, not a
 dashboard private-state API, and not a write surface.
+Pass `?projectId=<id>` when the shell has an active project selection. Unknown
+project ids fall back to the default first project so existing clients keep
+loading instead of failing hard.
 
 ## Shell Rules
 
 The shell should:
 
-- fetch `GET /api/t3/coordinator-entry`
+- fetch `GET /api/t3/coordinator-entry`, or
+  `GET /api/t3/coordinator-entry?projectId=<id>` after project selection
 - render from the returned read-only view model
 - treat `schemas/t3_coordinator_entry.schema.json` as the contract reference
 - validate behavior against `packages/control-plane/tests/fixtures/t3_coordinator_entry/`
