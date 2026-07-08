@@ -226,6 +226,7 @@ This is the reviewer map for the first open-source release batch. It focuses on 
 - `packages/control-plane/tests/test_go_worktree.py`
 
 ### Current State Evidence Files
+- `docs/status/LAUNCH_NOW.md`
 - `docs/status/status-document-inventory.md`
 - `docs/status/governance-spine-and-document-coordination.md`
 - `docs/status/unified-object-model-decision-record.md`
@@ -599,6 +600,11 @@ This is the reviewer map for the first open-source release batch. It focuses on 
     as blocked final verdicts, not final-ready supersessions.
   - `tests/test_go_evidence.py` should prove rerun supersession, prior archive,
     and mismatch blocking behavior.
+  - Follow-up hardening focus: `RunIndex` currently accepts a final-ready
+    verdict when pass review, pass gate, and sealed context refs are present.
+    Reviewers should decide in a later slice whether final-ready must also
+    require an observable `task_result` event for every current path, or whether
+    the existing finalizer backfill compatibility remains intentional.
   - `docs/status/runtime-governance-batch-j-automatic-superseding-final-verdict.md`
     records the local limitation set and preserved stop lines.
 - Runtime-governance post-Batch-E status reconciliation:
@@ -648,6 +654,7 @@ This index ensures all required public snapshot paths are explicitly referenced 
 - `docs/agent-runtime/web-ai-adapter-contract.md`
 - `docs/agent-runtime/agent-coding-discipline.md`
 - `docs/status/release-readiness.md`
+- `docs/status/LAUNCH_NOW.md`
 - `docs/status/status-document-inventory.md`
 - `docs/status/governance-spine-and-document-coordination.md`
 - `docs/status/unified-object-model-decision-record.md`

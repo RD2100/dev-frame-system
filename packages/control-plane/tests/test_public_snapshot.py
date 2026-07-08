@@ -22,6 +22,7 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "docs/agent-runtime/rdpaper-workflow.md",
     "docs/agent-runtime/visual-control-plane.md",
     "docs/agent-runtime/web-ai-adapter-contract.md",
+    "docs/status/LAUNCH_NOW.md",
     "docs/status/release-readiness.md",
     "docs/status/reviewer-index.md",
     "docs/status/runtime-governance-batch-a-contract-completion.md",
@@ -808,7 +809,8 @@ def test_current_entry_docs_keep_p3_2_local_review_pass_non_release_ready():
         REPO_ROOT / "docs" / "status" / "status-document-inventory.md": [
             "projection has local GPT-equivalent review PASS and landed in commit",
             "local branch-level review PASS at `bd73d6bc`",
-            "pending PR/CI and publication evidence",
+            "current PR route now has CI PASS",
+            "publication evidence remains absent",
         ],
     }
 

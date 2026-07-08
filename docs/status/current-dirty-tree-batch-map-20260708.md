@@ -2,15 +2,16 @@
 
 Date: 2026-07-08
 
-Lifecycle state: Current release-state evidence record
+Lifecycle state: Executed release-state evidence record
 
-Purpose: split the current dirty worktree into low-coupling review and commit
-batches. This file is a coordination map only; it does not stage, commit, or
-authorize release.
+Purpose: record how the reviewed dirty worktree was split into low-coupling
+review and commit batches. This file is now historical execution evidence: the
+batch commits have been created and pushed to PR #4, but this file still does
+not authorize merge or public release.
 
 ## Summary
 
-The current worktree can be reviewed as five batches:
+The reviewed worktree was committed as five batches:
 
 1. Status document entrypoints and release evidence.
 2. AI Workflow Hub chain-evidence adapter.
@@ -18,17 +19,18 @@ The current worktree can be reviewed as five batches:
 4. Generic `go/code execute` explicit finalize and prepare-only CLI behavior.
 5. `go_evidence` finalization lifecycle, supersedes, and context backfill.
 
-Recommended order: Batch 1 first, then Batches 2, 3, 4, and 5. Keep the owner
-release gate separate from these local review batches.
+Executed order: Batch 1 first, then Batches 2, 3, 4, and 5. Keep the owner
+release gate separate from these review batches.
 
 ## Final Local Review Verdict
 
-Verdict: **PASS for local batch review; HOLD for staging, PR, push, CI, and
+Verdict: **PASS for local batch review and PR CI; HOLD for merge and
 publication until owner approval**.
 
 Reviewer index:
 
-- Changed files: 28 dirty paths are covered by the five batches below.
+- Changed files: the original 28 dirty paths are covered by the five batches
+  below and have been converted into explicit commits.
 - Critical code paths: AI Workflow Hub chain-evidence normalization, sealed
   go/workflow context projection, explicit CLI finalization, and go_evidence
   FinalVerdict supersession.
@@ -37,9 +39,10 @@ Reviewer index:
   PASS, and local `git diff --check` PASS.
 - Generated artifacts: none retained in the working tree.
 - Known gaps: paper-domain adapter and `/rdpaper` command closure remain
-  deferred Phase 6 work; external PR/CI/publication evidence is absent.
+  deferred Phase 6 work; PR CI evidence exists for PR #4, while merge,
+  publication, and package-release evidence remain absent.
 - Review focus: keep local-gate-green separate from public release readiness,
-  and stage only the approved batch paths if the owner authorizes commits.
+  and do not treat PR CI as merge or publication approval.
 
 Final batch review notes:
 
@@ -56,8 +59,8 @@ Final batch review notes:
   the follow-up fix for existing `supersedes` metadata.
 - Dirty-tree boundary review found all 28 dirty paths covered, with no
   generated, temporary, private, build, or local-state files in the batch set.
-- Staging list dry-run found the explicit batch file list exactly matches the
-  live dirty set: `expected=28 actual=28 missing=0 extra=0`.
+- Staging list dry-run found the explicit batch file list exactly matched the
+  live dirty set before commit: `expected=28 actual=28 missing=0 extra=0`.
 
 ## Batch 1: Status Documents
 

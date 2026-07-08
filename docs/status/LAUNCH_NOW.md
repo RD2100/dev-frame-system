@@ -2,7 +2,7 @@
 
 Date: 2026-07-08
 
-## Live Snapshot
+## Initial Owner-Gate Snapshot
 
 - timestamp_utc: `2026-07-08T12:50:23+00:00`
 - head: `5cea92a56f63270831c3213dfc93f1de8c409139`
@@ -10,6 +10,11 @@ Date: 2026-07-08
 - counts: `total=28, tracked=21, untracked=7, modified=21, added=0, deleted=0, renamed=0, copied=0, unmerged=0`
 - snapshot_cmd: `release-closure status snapshot from repository root`
 - snapshot_id: `2026-07-08T12:50:23+00:00:5cea92a56f63:fd1244ac1f00`
+
+This snapshot records the dirty-tree state that was reviewed before owner
+approval. The current external branch state is PR #4; use the PR head and
+GitHub `Release verification` check as the authority for post-approval CI
+status.
 
 Verdict: **NO-GO for public release**; **PR-ROUTE-GREEN after owner approval**;
 **LOCAL-GATE-GREEN for the current branch**.
@@ -91,8 +96,8 @@ decision menu for the owner.
 Public package or release publication remains a separate owner decision after
 PR, CI, and external review evidence exists.
 
-Default if no decision is given: keep the repository in reviewed-but-unstaged
-state.
+Default next action if no new decision is given: keep PR #4 open as the
+review surface and do not merge or publish.
 
 ## Next 3 Actions
 
