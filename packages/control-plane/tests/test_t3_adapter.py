@@ -176,6 +176,34 @@ def test_t3_coordinator_entry_projects_shell_ready_shape_from_fixtures(fixture_n
     assert entry["disabledReason"] == expected["disabledReason"]
 
 
+def test_t3_coordinator_entry_selects_requested_project():
+    fixture = _load_coordinator_entry_fixture("project_with_goal_conversations")
+
+    entry = build_t3_coordinator_entry(
+        fixture["shell"],
+        fixture["projects"],
+        selected_project_id="project-beta",
+    )
+
+    validate_schema(load_coordinator_entry_schema(), entry)
+    assert entry["selectedProject"]["projectId"] == "project-beta"
+    assert entry["projectCoordinatorThread"]["id"] == "goal-beta"
+
+
+def test_t3_coordinator_entry_falls_back_for_unknown_project():
+    fixture = _load_coordinator_entry_fixture("project_with_goal_conversations")
+
+    entry = build_t3_coordinator_entry(
+        fixture["shell"],
+        fixture["projects"],
+        selected_project_id="missing-project",
+    )
+
+    validate_schema(load_coordinator_entry_schema(), entry)
+    assert entry["selectedProject"]["projectId"] == "project-alpha"
+    assert entry["projectCoordinatorThread"]["id"] == "goal-alpha"
+
+
 def test_t3_coordinator_entry_schema_contract_boundaries():
     schema = load_coordinator_entry_schema()
     assert schema["type"] == "object"

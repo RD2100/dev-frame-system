@@ -286,22 +286,50 @@ def test_dashboard_conversation_model_endpoint(tmp_path):
 def test_dashboard_coordinator_entry_endpoint(tmp_path, monkeypatch):
     runtime_dir = tmp_path / "runtime"
     runtime_dir.mkdir()
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
+    workspace_alpha = tmp_path / "workspace-alpha"
+    workspace_alpha.mkdir()
+    workspace_beta = tmp_path / "workspace-beta"
+    workspace_beta.mkdir()
     monkeypatch.setattr(
         "control_plane.dashboard.build_visual_control_plane_state",
         lambda runtime_dir, paper_project_dirs=None: {
             "version": 1,
-            "projects": [{
-                "project_id": "demo-project",
-                "display_name": "Demo Project",
-                "goal": "Ship it",
-                "status": "active",
-                "risk_state": "low",
-                "contract_path": str(workspace / "rules" / "project-contracts" / "demo-project.md"),
-            }],
+            "projects": [
+                {
+                    "project_id": "demo-alpha",
+                    "display_name": "Demo Alpha",
+                    "goal": "Ship alpha",
+                    "status": "active",
+                    "risk_state": "low",
+                    "contract_path": str(workspace_alpha / "rules" / "project-contracts" / "demo-alpha.md"),
+                },
+                {
+                    "project_id": "demo-beta",
+                    "display_name": "Demo Beta",
+                    "goal": "Ship beta",
+                    "status": "active",
+                    "risk_state": "low",
+                    "contract_path": str(workspace_beta / "rules" / "project-contracts" / "demo-beta.md"),
+                },
+            ],
             "provider_bindings": [],
-            "sessions": [],
+            "sessions": [{
+                "session_id": "demo-beta-goal",
+                "provider": "opencode",
+                "agent_role": "coordinator",
+                "project_id": "demo-beta",
+                "run_id": "run-beta",
+                "task_spec_id": "task-beta",
+                "status": "active",
+                "messages": [],
+                "tool_calls": [],
+                "changed_files": [],
+                "diff_summary": "",
+                "evidence_refs": [],
+                "gates": [],
+                "actions": [],
+                "native_refs": {"runtime": "devframe-code"},
+            }],
             "gates": [],
             "next_actions": [],
             "team": {},
@@ -314,27 +342,46 @@ def test_dashboard_coordinator_entry_endpoint(tmp_path, monkeypatch):
     try:
         _, projects = _get_json(base_url, "/api/t3/projects")
         _, conversation_model = _get_json(base_url, "/api/t3/conversation-model")
-        _, shell = _get_json(base_url, "/t3-shell.json")
         status, body = _get_json(base_url, "/api/t3/coordinator-entry")
         assert status == 200
         _validate_schema(_load_coordinator_entry_schema(), body)
         assert body["source"] == "devframe"
         assert body["conversationModel"] == conversation_model
         assert body["conversationModel"]["globalCoordinatorThreadId"] == "devframe-team-workbench-session"
-        assert body["projects"] == [{
-            "projectId": "demo-project",
-            "projectPath": str(workspace),
-            "workspaceRoot": str(workspace),
-            "label": f"Demo Project - {workspace}",
-        }]
+        assert body["projects"] == [
+            {
+                "projectId": "demo-alpha",
+                "projectPath": str(workspace_alpha),
+                "workspaceRoot": str(workspace_alpha),
+                "label": f"Demo Alpha - {workspace_alpha}",
+            },
+            {
+                "projectId": "demo-beta",
+                "projectPath": str(workspace_beta),
+                "workspaceRoot": str(workspace_beta),
+                "label": f"Demo Beta - {workspace_beta}",
+            },
+        ]
         assert body["projects"] == projects["projects"]
+        assert body["selectedProject"]["projectId"] == "demo-alpha"
         assert body["canStartCoordinatorGoal"] is True
         assert body["globalCoordinatorThread"]["threadKind"] == "global_coordinator"
         assert body["sortedShell"]["threads"][0]["id"] == "devframe-team-workbench-session"
-        assert sorted(thread["id"] for thread in body["sortedShell"]["threads"]) == sorted(
-            thread["id"] for thread in shell["t3"]["threads"]
-        )
-        assert body["goalConversations"] == []
+        assert sorted(thread["id"] for thread in body["sortedShell"]["threads"]) == [
+            "demo-beta-goal",
+            "devframe-team-workbench-session",
+        ]
+        assert [thread["id"] for thread in body["goalConversations"]] == ["demo-beta-goal"]
+
+        status, body = _get_json(base_url, "/api/t3/coordinator-entry?projectId=demo-beta")
+        assert status == 200
+        _validate_schema(_load_coordinator_entry_schema(), body)
+        assert body["selectedProject"]["projectId"] == "demo-beta"
+        assert body["projectCoordinatorThread"]["id"] == "demo-beta-goal"
+
+        status, body = _get_json(base_url, "/api/t3/coordinator-entry?projectId=missing")
+        assert status == 200
+        assert body["selectedProject"]["projectId"] == "demo-alpha"
     finally:
         server.shutdown()
         server.server_close()

@@ -224,6 +224,7 @@ def build_devframe_conversation_model() -> dict[str, Any]:
 def build_t3_coordinator_entry(
     shell: dict[str, Any],
     projects: list[dict[str, Any]] | None = None,
+    selected_project_id: str | None = None,
 ) -> dict[str, Any]:
     """Build the one-call shell entry model for the Global Coordinator surface."""
     if not isinstance(shell, dict):
@@ -281,7 +282,20 @@ def build_t3_coordinator_entry(
     )
     project_options = [project for project in (projects or []) if isinstance(project, dict)]
 
-    selected_project = project_options[0] if project_options else None
+    requested_project_id = _text(selected_project_id, "")
+    selected_project = (
+        next(
+            (
+                project for project in project_options
+                if _text(project.get("projectId"), "") == requested_project_id
+            ),
+            None,
+        )
+        if requested_project_id
+        else None
+    )
+    if selected_project is None:
+        selected_project = project_options[0] if project_options else None
     selected_project_id = _text(selected_project.get("projectId"), "") if isinstance(selected_project, dict) else ""
     project_coordinator_thread = None
     if selected_project_id:

@@ -779,6 +779,19 @@ def test_release_gate_enables_git_index_artifact_check():
     assert "tracked forbidden review artifact" in snapshot_script
 
 
+def test_release_gate_runs_docs_drift_validator_through_pytest():
+    release_script = (REPO_ROOT / "scripts" / "verify-release.ps1").read_text(
+        encoding="utf-8",
+    )
+    docs_drift_test = (
+        REPO_ROOT / "packages" / "control-plane" / "tests" / "test_docs_drift_validator.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'Invoke-Step "pytest" "python" @("-m", "pytest", "-q")' in release_script
+    assert "build_docs_drift_payload(REPO_ROOT)" in docs_drift_test
+    assert "validate_docs_drift(payload)" in docs_drift_test
+
+
 def test_release_readiness_documents_strict_gate_blockers():
     path = REPO_ROOT / "docs" / "status" / "release-readiness.md"
     text = path.read_text(encoding="utf-8-sig")
@@ -836,6 +849,16 @@ def test_post_release_docs_do_not_reopen_pr_publication_holds():
     assert "not authorize merge or public release" not in batch_map
     assert "historical execution evidence" in batch_map
     assert "GitHub Release `v0.1.0`" in batch_map
+
+
+def test_launch_now_historical_owner_gate_head_is_explicit():
+    launch_now = (REPO_ROOT / "docs" / "status" / "LAUNCH_NOW.md").read_text(
+        encoding="utf-8-sig",
+    )
+
+    assert "Initial Owner-Gate Snapshot" in launch_now
+    assert "historical owner-gate snapshot head, not the current" in launch_now
+    assert "This is the current launch-control entrypoint" in launch_now
 
 
 def test_reviewer_index_mentions_new_public_files():

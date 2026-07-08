@@ -152,6 +152,8 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                 self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
                 return
             if path == "/api/t3/coordinator-entry":
+                query = parse_qs(parsed_url.query)
+                selected_project_id = _first_query_value(query, "projectId", "project")
                 state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=paper_project_dirs)
                 try:
                     from .cluster_run import list_cluster_runs
@@ -166,8 +168,13 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     runtime_dir=runtime_dir,
                     cluster_runs=cluster_runs,
                 )
+                projects = _t3_project_options(state, include_fallback_to_cwd=False)
                 body = json.dumps(
-                    build_t3_coordinator_entry(shell, _t3_project_options(state, include_fallback_to_cwd=False)),
+                    build_t3_coordinator_entry(
+                        shell,
+                        projects,
+                        selected_project_id=selected_project_id,
+                    ),
                     separators=(",", ":"),
                     ensure_ascii=True,
                 )
