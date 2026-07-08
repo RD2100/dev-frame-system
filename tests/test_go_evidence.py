@@ -89,6 +89,73 @@ def _setup_minimal_evidence(tmp_path: str, review_overrides: dict = None) -> str
     return tmp_path
 
 
+def _write_go_run_metadata(runtime_dir: str, run_id: str, *, agent_id: str = "coding-agent-1") -> str:
+    packet_dir = os.path.join(runtime_dir, "rdgoal-outbox", "demo-project", f"{run_id}-packet")
+    os.makedirs(packet_dir, exist_ok=True)
+    task_spec_path = os.path.join(packet_dir, "TASKSPEC.json")
+    _write_json(task_spec_path, {
+        "task_id": f"{run_id}-task",
+        "title": "go evidence test packet",
+        "status": "ready",
+    })
+    _write(os.path.join(packet_dir, "TASKSPEC.md"), "# TaskSpec\n")
+    _write_json(os.path.join(packet_dir, "packet.json"), {
+        "packet_id": f"{run_id}-packet",
+        "project_id": "demo-project",
+        "project_root": runtime_dir,
+        "requirement": "Finalize go evidence with sealed context backfill.",
+        "operation": "go coding shard 1/1",
+        "targets": ["src/demo.py"],
+        "decision_mode": "recommend_execute",
+        "dispatch_ready": True,
+        "task_spec": {
+            "task_id": f"{run_id}-task",
+            "title": "go evidence test packet",
+            "status": "ready",
+        },
+        "objective_text": "Verify go_evidence finalize backfills sealed context refs.",
+        "context_packet_path": "",
+        "context_ledger_path": "",
+        "packet_dir": packet_dir,
+        "created_at": "2026-07-08T00:00:00+00:00",
+    })
+    go_run_dir = os.path.join(runtime_dir, "go-runs", run_id)
+    os.makedirs(go_run_dir, exist_ok=True)
+    _write_json(os.path.join(go_run_dir, "go-run.json"), {
+        "go_run_id": run_id,
+        "project_id": "demo-project",
+        "project_root": runtime_dir,
+        "requirement": "Finalize go evidence with sealed context backfill.",
+        "runtime_dir": runtime_dir,
+        "status": "passed",
+        "execute": True,
+        "created_at": "2026-07-08T00:00:00+00:00",
+        "agents": [{
+            "agent_id": agent_id,
+            "shard_index": 1,
+            "shard_count": 1,
+            "targets": ["src/demo.py"],
+            "target_bytes": 1,
+            "packet_dir": packet_dir,
+            "task_spec_path": task_spec_path,
+            "worker_command": [],
+            "status": "completed",
+            "worker_status": "passed",
+            "report_path": "",
+            "changed_files": [],
+            "verification": "",
+            "model_provider": "",
+            "isolated": False,
+            "worktree_path": "",
+            "context_packet_path": "",
+            "context_ledger_path": "",
+        }],
+        "metadata_path": os.path.join(go_run_dir, "go-run.json"),
+        "driver": "command",
+    })
+    return packet_dir
+
+
 def test_missing_artifacts_blocked(tmp_path):
     evidence_dir = os.path.join(str(tmp_path), "evidence")
     os.makedirs(evidence_dir, exist_ok=True)
@@ -334,27 +401,125 @@ def test_finalize_rerun_is_idempotent_for_machine_artifacts(tmp_path):
     assert second_contents == first_contents
 
 
-def test_finalize_can_record_team_runtime_review_and_final_verdict_events(tmp_path):
+def test_finalize_rerun_archives_prior_final_verdict_with_supersedes(tmp_path):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path))
+    result, _artifacts = go_evidence.write_governance_artifacts(evidence_dir)
+    with open(os.path.join(evidence_dir, "final-verdict.json"), "r", encoding="utf-8") as fh:
+        first = json.load(fh)
+
+    _write_yaml(os.path.join(evidence_dir, "review.yaml"), {
+        "reviewer_role": "reviewer",
+        "reviewer_id": "reviewer-2",
+        "executor_id": "executor-1",
+        "verdict": "pass",
+        "reviewed_inputs": ["diff.patch", "test-output.md", "safety-report.json", "chain-evidence.json"],
+        "findings": [],
+    })
+    result, _artifacts = go_evidence.write_governance_artifacts(evidence_dir)
+    with open(os.path.join(evidence_dir, "final-verdict.json"), "r", encoding="utf-8") as fh:
+        second = json.load(fh)
+
+    assert result.status == "pass"
+    assert os.path.exists(os.path.join(evidence_dir, "final-verdict-prior.json"))
+    assert second["final_state"] == "final_ready"
+    assert second["reviewer_summary"]["reviewer_id"] == "reviewer-2"
+    assert second["supersedes"]["verdict_id"] == first["verdict_id"]
+    assert second["supersedes"]["uri"].endswith("final-verdict-prior.json")
+    _schema_validator("schemas/agent-runtime/final-verdict.schema.json").validate(second)
+
+
+def test_finalize_rerun_with_existing_supersedes_is_idempotent(tmp_path):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path))
+    go_evidence.write_governance_artifacts(evidence_dir)
+    _write_yaml(os.path.join(evidence_dir, "review.yaml"), {
+        "reviewer_role": "reviewer",
+        "reviewer_id": "reviewer-2",
+        "executor_id": "executor-1",
+        "verdict": "pass",
+        "reviewed_inputs": ["diff.patch", "test-output.md", "safety-report.json", "chain-evidence.json"],
+        "findings": [],
+    })
+    go_evidence.write_governance_artifacts(evidence_dir)
+    with open(os.path.join(evidence_dir, "final-verdict.json"), "r", encoding="utf-8") as fh:
+        second = json.load(fh)
+
+    result, _artifacts = go_evidence.write_governance_artifacts(evidence_dir)
+    with open(os.path.join(evidence_dir, "final-verdict.json"), "r", encoding="utf-8") as fh:
+        third = json.load(fh)
+
+    assert result.status == "pass"
+    assert third == second
+    assert os.path.exists(os.path.join(evidence_dir, "final-verdict-prior.json"))
+    assert not os.path.exists(os.path.join(evidence_dir, "final-verdict-prior-1.json"))
+
+
+def test_finalize_prior_final_verdict_governance_mismatch_blocks_supersede(tmp_path):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path))
+    prior = {
+        "verdict_id": "fv-run-1",
+        "produced_by": "go-evidence-finalizer",
+        "produced_at": "2026-07-08T00:00:00+00:00",
+        "producer_role": "governance",
+        "final_state": "final_ready",
+        "inputs_reviewed": [os.path.join(evidence_dir, "review.yaml")],
+        "gate_summary": [{
+            "gate_id": "gate-run-1-independent-review",
+            "result": "pass",
+            "evidence_path": os.path.join(evidence_dir, "review.yaml"),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-legacy",
+            "verdict": "pass",
+            "evidence_path": os.path.join(evidence_dir, "review.yaml"),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:other-run",
+    }
+    _write_json(os.path.join(evidence_dir, "final-verdict.json"), prior)
+
+    result, _artifacts = go_evidence.write_governance_artifacts(evidence_dir)
+    with open(os.path.join(evidence_dir, "final-verdict.json"), "r", encoding="utf-8") as fh:
+        current = json.load(fh)
+
+    assert result.status == "blocked"
+    assert "governance reference does not match" in result.reason
+    assert current["final_state"] == "blocked"
+    assert "supersedes" not in current
+    assert os.path.exists(os.path.join(evidence_dir, "final-verdict-incompatible.json"))
+    _schema_validator("schemas/agent-runtime/final-verdict.schema.json").validate(current)
+
+
+def test_finalize_backfills_go_run_context_before_team_runtime_final_ready(tmp_path):
     evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
     _write_json(
         os.path.join(evidence_dir, "chain-evidence.json"),
         _chain_evidence(run_id="go-evidence-finalize"),
     )
     runtime_dir = str(tmp_path / "runtime")
+    packet_dir = _write_go_run_metadata(runtime_dir, "go-evidence-finalize")
 
     rc = go_evidence.main(["finalize", evidence_dir, "--team-runtime-dir", runtime_dir])
 
     assert rc == 0
     lines = (tmp_path / "runtime" / TEAM_EVENTS_FILE).read_text(encoding="utf-8").strip().splitlines()
     event_types = [json.loads(line)["event_type"] for line in lines]
-    assert event_types == ["review_ref", "final_verdict_ref"]
+    assert event_types == ["task_created", "task_claimed", "review_ref", "final_verdict_ref"]
+    assert os.path.exists(os.path.join(packet_dir, "context-packet.json"))
+    assert os.path.exists(os.path.join(packet_dir, "context-ledger.json"))
 
     view = build_team_runtime_view(runtime_dir)
     assert {"review-ref", "final-verdict-ref"} <= {event["kind"] for event in view["event_log"]}
-    assert {item["ref_type"] for item in view["evidence_store"]} == {"review", "final_verdict"}
+    assert {item["ref_type"] for item in view["evidence_store"]} == {
+        "context_packet",
+        "context_ledger",
+        "legacy_context",
+        "legacy_task_spec",
+        "review",
+        "final_verdict",
+    }
 
     index = build_run_index(runtime_dir)
-    record = index["runs"][0]["record"]
+    record = next(entry["record"] for entry in index["runs"] if entry["adapter_id"] == "team_events")
     _schema_validator("schemas/runtime-governance/run-record.schema.json").validate(record)
     assert record["acceptance_state"] == "final_ready"
     assert record["review_state"] == "review_passed"
@@ -369,6 +534,7 @@ def test_finalize_team_runtime_recording_is_idempotent_for_same_verdict(tmp_path
         _chain_evidence(run_id="go-evidence-rerun"),
     )
     runtime_dir = str(tmp_path / "runtime")
+    _write_go_run_metadata(runtime_dir, "go-evidence-rerun")
 
     first_rc = go_evidence.main(["finalize", evidence_dir, "--team-runtime-dir", runtime_dir])
     second_rc = go_evidence.main(["finalize", evidence_dir, "--team-runtime-dir", runtime_dir])
@@ -377,19 +543,53 @@ def test_finalize_team_runtime_recording_is_idempotent_for_same_verdict(tmp_path
     assert second_rc == 0
     lines = (tmp_path / "runtime" / TEAM_EVENTS_FILE).read_text(encoding="utf-8").strip().splitlines()
     events = [json.loads(line) for line in lines]
-    assert [event["event_type"] for event in events] == ["review_ref", "final_verdict_ref"]
+    assert [event["event_type"] for event in events] == [
+        "task_created",
+        "task_claimed",
+        "review_ref",
+        "final_verdict_ref",
+    ]
 
     view = build_team_runtime_view(runtime_dir)
-    assert [event["kind"] for event in view["event_log"]] == ["review-ref", "final-verdict-ref"]
+    assert [event["kind"] for event in view["event_log"]] == [
+        "task-created",
+        "task-claimed",
+        "review-ref",
+        "final-verdict-ref",
+    ]
     assert [gate["kind"] for gate in view["review_gates"]] == [
         "independent-review",
         "final-verdict",
     ]
 
     index = build_run_index(runtime_dir)
-    record = index["runs"][0]["record"]
+    record = next(entry["record"] for entry in index["runs"] if entry["adapter_id"] == "team_events")
     assert record["acceptance_state"] == "final_ready"
     assert record["final_verdict_ref"]["verdict_id"] == "fv-go-evidence-rerun"
+
+
+def test_finalize_without_go_run_metadata_stays_blocked_without_sealed_context(tmp_path):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
+    _write_json(
+        os.path.join(evidence_dir, "chain-evidence.json"),
+        _chain_evidence(run_id="go-manual-finalize"),
+    )
+    runtime_dir = str(tmp_path / "runtime")
+
+    rc = go_evidence.main(["finalize", evidence_dir, "--team-runtime-dir", runtime_dir])
+
+    assert rc == 0
+    lines = (tmp_path / "runtime" / TEAM_EVENTS_FILE).read_text(encoding="utf-8").strip().splitlines()
+    events = [json.loads(line) for line in lines]
+    assert [event["event_type"] for event in events] == ["review_ref", "final_verdict_ref"]
+
+    index = build_run_index(runtime_dir)
+    record = next(entry["record"] for entry in index["runs"] if entry["adapter_id"] == "team_events")
+    _schema_validator("schemas/runtime-governance/run-record.schema.json").validate(record)
+    assert record["acceptance_state"] == "blocked"
+    assert record["outcome"] == "blocked"
+    assert "final_verdict_ref" not in record
+    assert record["domain_refs"]["final_verdict_ref_present"] is False
 
 
 def test_finalize_without_team_runtime_dir_does_not_record_team_runtime_events(tmp_path):

@@ -13,6 +13,7 @@ if str(CONTROL_PLANE_PATH) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_PATH))
 
 from control_plane.evidence_gate import (  # noqa: E402
+    EvidenceGateResult,
     FULL_EVIDENCE_FILES,
     REQUIRED_FILES,
     REQUIRED_INPUTS,
@@ -25,6 +26,8 @@ from control_plane.evidence_gate import (  # noqa: E402
     parse_review_yaml,
     write_json,
 )
+from control_plane.dispatch_packet import DispatchPacketStore  # noqa: E402
+from control_plane.go_dispatch import load_go_run_result  # noqa: E402
 from control_plane.team_runtime import TeamRuntime  # noqa: E402
 
 FINALIZATION_ARTIFACT_FILES = [
@@ -81,10 +84,28 @@ def write_governance_artifacts(evidence_dir: str):
     result = evaluate_evidence_dir(evidence_dir)
     generated_at = datetime.now(timezone.utc).isoformat()
     final_verdict = build_final_verdict(evidence_dir, result, generated_at)
-    previous_final_verdict = _load_json_file(os.path.join(evidence_dir, "final-verdict.json"))
+    final_verdict_path = Path(evidence_dir) / "final-verdict.json"
+    previous_final_verdict, previous_diagnostic = _load_prior_final_verdict(final_verdict_path)
+    if previous_diagnostic:
+        result = _blocked_supersession_result(result, previous_diagnostic)
+        final_verdict = build_final_verdict(evidence_dir, result, generated_at)
+        _archive_prior_final_verdict(final_verdict_path, suffix="invalid")
+    elif previous_final_verdict and not _same_final_verdict_except_timestamp(previous_final_verdict, final_verdict):
+        diagnostic = _prior_final_verdict_compatibility_error(previous_final_verdict, final_verdict)
+        if diagnostic:
+            result = _blocked_supersession_result(result, diagnostic)
+            final_verdict = build_final_verdict(evidence_dir, result, generated_at)
+            _archive_prior_final_verdict(final_verdict_path, suffix="incompatible")
+        else:
+            archived_path = _archive_prior_final_verdict(final_verdict_path)
+            final_verdict["supersedes"] = {
+                "verdict_id": str(previous_final_verdict.get("verdict_id") or ""),
+                "uri": str(archived_path),
+                "reason": "new governance finalization supersedes prior final verdict for the same run",
+            }
     if _same_final_verdict_except_timestamp(previous_final_verdict, final_verdict):
         generated_at = str(previous_final_verdict["produced_at"])
-        final_verdict = build_final_verdict(evidence_dir, result, generated_at)
+        final_verdict = previous_final_verdict
     artifacts = {
         "final_verdict": write_json(os.path.join(evidence_dir, "final-verdict.json"), final_verdict),
         "evidence_manifest": os.path.join(evidence_dir, "evidence-manifest.json"),
@@ -117,14 +138,69 @@ def _load_json_file(path: str) -> dict:
     return payload if isinstance(payload, dict) else {}
 
 
+def _load_prior_final_verdict(path: Path) -> tuple[dict, str]:
+    if not path.exists():
+        return {}, ""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        return {}, f"prior final-verdict.json is invalid: {exc}"
+    if not isinstance(payload, dict):
+        return {}, "prior final-verdict.json is not a JSON object"
+    return payload, ""
+
+
+def _blocked_supersession_result(result: EvidenceGateResult, reason: str) -> EvidenceGateResult:
+    return EvidenceGateResult(
+        status="blocked",
+        reason=reason,
+        review=result.review,
+        chain_evidence=result.chain_evidence,
+        missing_files=result.missing_files,
+        missing_inputs=result.missing_inputs,
+    )
+
+
+def _prior_final_verdict_compatibility_error(previous: dict, current: dict) -> str:
+    previous_id = str(previous.get("verdict_id") or "")
+    if not previous_id.startswith("fv-"):
+        return "prior final verdict is missing a valid verdict_id"
+    if str(previous.get("human_or_governance_reference") or "") != str(
+        current.get("human_or_governance_reference") or ""
+    ):
+        return "prior final verdict governance reference does not match current run"
+    return ""
+
+
+def _archive_prior_final_verdict(path: Path, *, suffix: str = "prior") -> Path:
+    if not path.exists():
+        return path
+    archive = path.with_name(f"final-verdict-{suffix}.json")
+    if archive.exists():
+        index = 1
+        while True:
+            candidate = path.with_name(f"final-verdict-{suffix}-{index}.json")
+            if not candidate.exists():
+                archive = candidate
+                break
+            index += 1
+    archive.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+    return archive
+
+
 def _same_final_verdict_except_timestamp(previous: dict, current: dict) -> bool:
     if not previous or not previous.get("produced_at"):
         return False
-    previous_normalized = dict(previous)
-    current_normalized = dict(current)
-    previous_normalized.pop("produced_at", None)
-    current_normalized.pop("produced_at", None)
+    previous_normalized = _semantic_final_verdict(previous)
+    current_normalized = _semantic_final_verdict(current)
     return previous_normalized == current_normalized
+
+
+def _semantic_final_verdict(verdict: dict) -> dict:
+    normalized = dict(verdict)
+    normalized.pop("produced_at", None)
+    normalized.pop("supersedes", None)
+    return normalized
 
 
 def record_team_runtime_finalization(
@@ -156,6 +232,7 @@ def record_team_runtime_finalization(
     run_id = str(chain.get("run_id") or evidence_path.name or "unknown-run")
     reviewer_id = str(review.get("reviewer_id") or "missing-reviewer")
     review_id = f"review-{_safe_token(run_id)}-{_safe_token(reviewer_id)}"
+    event_ids.extend(_record_go_run_context_refs(team, runtime_dir, run_id))
     if _team_runtime_has_finalization_refs(
         team,
         run_id=run_id,
@@ -219,6 +296,98 @@ def record_team_runtime_finalization(
         )
     )
     return event_ids
+
+
+def _record_go_run_context_refs(team: TeamRuntime, runtime_dir: str, run_id: str) -> list[str]:
+    if _team_runtime_has_sealed_context_refs(team, run_id):
+        return []
+    try:
+        result = load_go_run_result(runtime_dir, run_id)
+    except Exception:  # noqa: BLE001 - context refs are best-effort provenance
+        return []
+    store = DispatchPacketStore(runtime_dir=runtime_dir)
+    event_ids: list[str] = []
+    for agent in result.agents:
+        try:
+            packet = store.ensure_context_artifacts(agent.packet_dir)
+        except Exception:  # noqa: BLE001 - do not hide the actual finalization result
+            continue
+        context_refs = _context_refs_for_agent_packet(
+            packet_dir=agent.packet_dir,
+            task_spec_path=agent.task_spec_path,
+            context_packet_path=packet.context_packet_path,
+            context_ledger_path=packet.context_ledger_path,
+        )
+        if not context_refs:
+            continue
+        event_ids.append(team.record_task_created(
+            run_id,
+            agent.agent_id,
+            project_id=result.project_id,
+            shard_index=agent.shard_index,
+            shard_count=agent.shard_count,
+            targets=agent.targets,
+            context_refs=context_refs,
+        ))
+        event_ids.append(team.record_task_claimed(
+            run_id,
+            agent.agent_id,
+            context_refs=context_refs,
+        ))
+    return event_ids
+
+
+def _context_refs_for_agent_packet(
+    *,
+    packet_dir: str,
+    task_spec_path: str,
+    context_packet_path: str,
+    context_ledger_path: str,
+) -> list[dict[str, str]]:
+    refs: list[dict[str, str]] = []
+    for ref_type, ref_path in [
+        ("context_packet", context_packet_path),
+        ("context_ledger", context_ledger_path),
+        ("legacy_context", packet_dir),
+        ("legacy_task_spec", task_spec_path),
+    ]:
+        if not ref_path:
+            continue
+        refs.append({
+            "ref_type": ref_type,
+            "ref_path": str(ref_path),
+            "context_id": _context_id(ref_type, ref_path),
+        })
+    return refs
+
+
+def _context_id(ref_type: str, ref_path: str) -> str:
+    path = Path(ref_path)
+    if ref_type == "context_packet":
+        return f"cp-{path.parent.name}"
+    if ref_type == "context_ledger":
+        return f"cl-{path.parent.name}"
+    if ref_type == "legacy_task_spec":
+        return path.parent.name
+    return path.name
+
+
+def _team_runtime_has_sealed_context_refs(team: TeamRuntime, run_id: str) -> bool:
+    for event in team.read_all():
+        if str(event.get("run_id") or "") != run_id:
+            continue
+        if event.get("event_type") not in {"task_created", "task_claimed"}:
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        refs = payload.get("context_refs") if isinstance(payload.get("context_refs"), list) else []
+        ref_types = {
+            str(ref.get("ref_type") or "")
+            for ref in refs
+            if isinstance(ref, dict)
+        }
+        if {"context_packet", "context_ledger"} <= ref_types:
+            return True
+    return False
 
 
 def _record_blocked_finalization_evidence_refs(
