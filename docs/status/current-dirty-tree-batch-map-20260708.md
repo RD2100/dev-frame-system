@@ -235,14 +235,15 @@ After reviewing or changing any behavior batch, rerun:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-release.ps1
 ```
 
-Release remains blocked until the worktree is clean or intentionally staged,
-externally reviewed, and owner-approved for PR, push, CI, or publication.
+Public release remains blocked until human review or merge approval, release
+tagging, GitHub Release, and package publication are separately authorized. The
+worktree, batch commits, PR push, and PR CI route are complete for PR #4.
 
-## Owner-Approved Staging Plan
+## Executed Owner-Approved Staging Plan
 
-Do not run these commands unless the owner explicitly approves staged batch
-commits. The commands intentionally enumerate files; do not replace them with
-`git add .`.
+These commands record the explicit staging plan that was executed after owner
+approval. They intentionally enumerate files and should not be replaced with
+`git add .` in future repeats.
 
 If a batch has been staged but should not be committed, abort that batch with
 `git restore --staged -- <same explicit file list>` before continuing.
