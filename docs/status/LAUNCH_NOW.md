@@ -14,6 +14,8 @@ Date: 2026-07-08
 This snapshot records the dirty-tree state that was reviewed before owner
 approval. Current release status is the GitHub Release `v0.1.0`, with
 post-release status documentation maintained on `main`.
+The `head` above is the historical owner-gate snapshot head, not the current
+`main` HEAD.
 
 Verdict: **GITHUB RELEASED as `v0.1.0`**; **PYPI NOT PUBLISHED**;
 **PHASE 6 PAPER ADAPTER DEFERRED**.
