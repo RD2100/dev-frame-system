@@ -1,8 +1,10 @@
 # Continue - Global Coordinator Conversation Mainline
 
-Last updated: 2026-07-02 (Asia/Tokyo)
-Branch: `codex/public-mainline-batch-1`
-PR: `#4`
+Last updated: 2026-07-09 (Asia/Tokyo)
+Branch: `main`
+Current public release: `v0.1.0`
+Latest main verification observed: `28952721524` PASS on
+`83ac37bd8852ae3a03c9d05ecced1aa13f437380`
 
 ## 2026-07-02 External T3/RD-Code Update
 
@@ -111,7 +113,7 @@ The public repo side of the Global Coordinator conversation mainline has moved
 from product docs into real contracts, thread projection behavior, and a
 shell-friendly coordinator entry surface.
 
-Current pushed branch head already has these landed:
+The public repo `main` branch already has these landed:
 
 - `docs: define total control conversation mainline`
 - `feat: model global coordinator conversations in t3 shell`
@@ -125,17 +127,15 @@ Current pushed branch head already has these landed:
 - `feat: add thread list metadata for coordinator flows`
 - `feat: add display sort helper for coordinator threads`
 
-At the time of writing:
+At the time of this refresh:
 
-- local worktree is **not clean**
-- current uncommitted code slice adds a one-call coordinator shell entry
-  contract and its tests
-- these two handoff files are also untracked until the user chooses whether to
-  include them in the formal handoff point
-- PR `#4` is open; merge and release remain human-owned
-- latest local release verification on the current uncommitted worktree passed:
-  `821 passed, 1 skipped`, plus public snapshot, wheel smoke, and diff
-  whitespace checks
+- local `main` was clean before this documentation-only status refresh branch
+  was opened
+- PR `#4` has been merged and GitHub Release `v0.1.0` has been published
+- the follow-up PR `#5` hardened RunIndex `final_ready` so successful
+  `task_result` evidence is required and passed main Release Verify
+- PyPI publication and Phase 6 `/rdpaper` domain-adapter work remain separate
+  owner decisions, as recorded in `docs/status/LAUNCH_NOW.md`
 
 ## What Is Already True
 
@@ -169,7 +169,7 @@ Already implemented in the public repo:
 - `/api/t3/conversation-model`
 - cluster-run responses include project/conversation binding semantics
 
-Current uncommitted slice adds:
+The landed coordinator-entry contract includes:
 
 - `/api/t3/coordinator-entry`
 - `build_t3_coordinator_entry(...)`
@@ -275,7 +275,8 @@ Concretely:
 3. keep the T3 slice read-only; do not enable `ENABLE_DEVFRAME_CLUSTER_COMPOSER`
    in Phase 1
 4. run focused external checkout tests and browser smoke after UI changes
-5. commit/push only after human approval if that is the chosen handoff point
+5. keep external-checkout commit, push, and publication decisions separate from
+   this public repo unless the owner explicitly chooses that handoff point
 
 ## Do Not
 
@@ -296,14 +297,14 @@ python -m pytest packages/control-plane/tests/test_client_manifest.py packages/c
 powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
 ```
 
-Latest observed verification for the current uncommitted slice:
+Latest observed public-repo verification:
 
 ```powershell
 python -m pytest packages/control-plane/tests/test_client_launcher.py packages/control-plane/tests/test_cluster_control.py packages/control-plane/tests/test_t3_adapter.py packages/control-plane/tests/test_t3_bridge_bundle.py -q
-# 196 passed
+# 196 passed observed for the coordinator-entry slice
 
 powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
-# 821 passed, 1 skipped; release verification passed
+# 1618 passed, 1 skipped; release verification passed on main after PR #5
 ```
 
 ## Human-Only Tasks
@@ -312,9 +313,10 @@ The user still owns:
 
 - final product judgment that the shell now really feels like a Global
   Coordinator conversation
-- deciding whether to commit/push the current uncommitted slice and handoff docs
-- PR merge
-- release / onlining
+- deciding whether the external T3/RD-Code checkout should be committed,
+  pushed, or product-accepted
+- PyPI publication, if this project needs a PyPI distribution path
+- Phase 6 `/rdpaper` domain-adapter implementation approval
 
 Until that point, the agent can keep safely automating repo-side contracts,
-tests, integration seams, and review evidence.
+tests, integration seams, documentation drift cleanup, and review evidence.

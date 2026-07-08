@@ -3,7 +3,8 @@
 Copy/paste prompt:
 
 ```text
-You are taking over work in the dev-frame-system repository on branch codex/public-mainline-batch-1.
+You are taking over work in the dev-frame-system repository on `main` or a
+fresh `codex/` branch from `main`.
 
 Read these files first:
 - docs/status/continue-global-coordinator-conversation-mainline.md
@@ -13,15 +14,18 @@ Read these files first:
 - Read the concrete read-only consumer example: docs/examples/t3-coordinator-entry-consumer.md
 
 Current truth:
-- PR #4 is the active branch PR.
-- The worktree may be dirty; inspect git status before acting.
+- PR #4 has been merged and GitHub Release `v0.1.0` has been published.
+- PR #5 has also been merged, hardening RunIndex `final_ready` so a successful
+  `task_result` is observable before final readiness.
+- The public repo worktree should be clean at handoff start; inspect
+  `git status --short --branch` before acting.
 - External T3/RD-Code source exists and is already in scope for this mainline:
   `<repo-root>\.devframe-runtime\external\t3code`
 - That external checkout is independent and dirty. Do not vendor it into
   `<repo-root>`, do not commit it in the public repo, and do not revert
   unrelated dirty files there.
-- Current slice adds a one-call coordinator shell entry and shell-readiness
-  contract pack:
+- The public repo now includes the one-call coordinator shell entry and
+  shell-readiness contract pack:
   - GET /api/t3/coordinator-entry
   - build_t3_coordinator_entry(...)
   - manifest endpoint t3-coordinator-entry
@@ -38,9 +42,9 @@ Current truth:
     priority, malformed priority handling, and exact project/thread matching
   - client smoke cross-checks the coordinator entry against /api/t3/projects,
     /api/t3/conversation-model, and /t3-shell.json
-- Latest local release gate observed for this slice:
+- Latest public repo release gate observed:
   powershell -ExecutionPolicy Bypass -File scripts\verify-release.ps1
-  -> 821 passed, 1 skipped; release verification passed
+  -> 1618 passed, 1 skipped; release verification passed after PR #5
 - The first real external T3/RD-Code read-only UI slice has also been
   implemented locally in the external checkout:
   - `apps/web/src/devframe/devframeShellBridge.ts`
@@ -123,12 +127,14 @@ Human-owned work:
 - final product judgment that the actual RD-Code shell feels like a first-class
   Global Coordinator conversation
 - access/scope for an external RD-Code/T3 checkout
-- merge, release, deployment, or publication
-- deciding whether to push, merge, or release the current slice
+- external checkout commit/push/product acceptance
+- PyPI publication, if desired
+- Phase 6 `/rdpaper` domain-adapter approval
+- deployment or other online publication
 
 Your mission:
 - keep pushing Phase 1 total-control conversationization until only human
-  product acceptance / merge / release remain
+  product acceptance or explicit external publication decisions remain
 - do NOT reopen dashboard-first designs
 - do NOT start LangGraph migration yet
 - do NOT vendor external T3 source into this public repo
