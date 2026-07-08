@@ -16,8 +16,8 @@ approval. The current external branch state is PR #4; use the PR head and
 GitHub `Release verification` check as the authority for post-approval CI
 status.
 
-Verdict: **NO-GO for public release**; **PR-ROUTE-GREEN after owner approval**;
-**LOCAL-GATE-GREEN for the current branch**.
+Verdict: **GITHUB RELEASED as `v0.1.0`**; **PYPI NOT PUBLISHED**;
+**PHASE 6 PAPER ADAPTER DEFERRED**.
 
 This is the current launch-control entrypoint. It replaces reading every
 runtime-governance batch note first, but it does not delete or supersede their
@@ -27,17 +27,14 @@ evidence.
 
 Runtime-governance closure has advanced through Batch J and the follow-up
 batch-review fixes. The reviewed dirty tree was converted into explicit batch
-commits after owner approval, the branch was pushed to PR #4, and the GitHub
-`Release verification` check passed for the PR route. The latest recorded full
-local release gate also passed with `1616 passed, 1 skipped`, local strict
-public snapshot PASS, local control-plane wheel smoke PASS, and local
-`git diff --check` PASS.
+commits after owner approval, the branch was pushed to PR #4, the PR was merged
+to `main`, and the GitHub `Release verification` check passed on `main`.
+Release `v0.1.0` was then published as a GitHub Release with the
+`devframe_control_plane-0.1.0-py3-none-any.whl` asset.
 
-That evidence proves the local gate and PR CI route for the current branch. It
-does not prove merge approval, external human review, a published GitHub
-Release, package publication, or downstream adoption. Public release remains
-blocked until those owner-controlled steps are completed from the reviewed PR
-state.
+That evidence proves the local gate, PR route, merge route, main CI route, and
+GitHub Release publication for `v0.1.0`. It does not prove PyPI publication,
+downstream adoption, or Phase 6 paper-domain adapter closure.
 
 The paper-domain adapter is explicitly deferred from this closure wave. Current
 paper support has read-model and visual-state coverage, but `/rdpaper` remains a
@@ -51,8 +48,9 @@ later Phase 6 domain-adapter slice rather than a Batch F-J release blocker.
 - PR route: owner approval was given after the local batch commits. The current
   branch was pushed to PR #4, and GitHub `Release verification` passed for that
   route.
-- Publication: not executed. Public package or release publication remains a
-  separate owner decision.
+- Publication: GitHub Release `v0.1.0` was executed with the control-plane
+  wheel asset. PyPI publication was not executed because this repository does
+  not define a PyPI publish workflow or credential path.
 
 ## Done Locally
 
@@ -65,6 +63,8 @@ later Phase 6 domain-adapter slice rather than a Batch F-J release blocker.
 | Runtime-governance Batch J automatic superseding FinalVerdict | done locally | [runtime-governance-batch-j-automatic-superseding-final-verdict.md](runtime-governance-batch-j-automatic-superseding-final-verdict.md) |
 | Full local release gate | done locally | [release-readiness.md](release-readiness.md) |
 | PR branch and GitHub Release verification | done for PR route | PR #4 on `RD2100/dev-frame-system` |
+| Main merge and main Release verification | done for release route | merge commit `d555e3203fdf68feacd9c4f186595f8f178d51a2`, run `28949249871` |
+| GitHub Release `v0.1.0` | published | `https://github.com/RD2100/dev-frame-system/releases/tag/v0.1.0` |
 | Reviewer handoff surface | done locally | [reviewer-index.md](reviewer-index.md) |
 | Dirty worktree batch map and final local review | done locally | [current-dirty-tree-batch-map-20260708.md](current-dirty-tree-batch-map-20260708.md) |
 
@@ -80,7 +80,8 @@ later Phase 6 domain-adapter slice rather than a Batch F-J release blocker.
 | --- | --- | --- | --- | --- | --- |
 | B1 | done | Dirty worktree batches have been converted into explicit batch commits. | Owner, Agent | None. | Clean current branch plus local gate evidence. |
 | B2 | done for PR route | Branch push, PR route, and GitHub Release verification have been completed for PR #4. | Owner, Agent | Keep PR #4 as the review surface. | PR branch exists and CI is green. |
-| B3 | owner_required | Human review, merge approval, release tagging, GitHub Release, and package publication are not authorized here. | Owner | Decide whether to merge, publish, or keep the PR as a review candidate. | Separate owner approval plus matching release evidence. |
+| B3 | done for GitHub Release | PR merge, release tagging, GitHub Release, and release-asset publication were authorized and completed. | Owner, Agent | None for GitHub Release `v0.1.0`. | Release URL and main CI evidence exist. |
+| B4 | owner_required | PyPI publication and downstream announcement are not executed by this repository's release workflow. | Owner | Decide whether a separate PyPI or downstream distribution process should exist. | Separate publish workflow, credentials, and evidence. |
 
 ## Owner Decision Packet
 
@@ -93,19 +94,18 @@ decision menu for the owner.
 | `review-bundle-only` | Keep all changes unstaged for human or external review. | Leave the worktree dirty and use this file plus the batch map as the review surface. |
 | `approve-pr-route` | Allow branch/PR preparation after batch commits. This does not authorize publication by itself. | Completed for PR #4 and GitHub `Release verification`. |
 
-Public package or release publication remains a separate owner decision after
-PR, CI, and external review evidence exists.
+GitHub Release publication is complete for `v0.1.0`. PyPI publication remains a
+separate future decision because no PyPI publish workflow is defined here.
 
-Default next action if no new decision is given: keep PR #4 open as the
-review surface and do not merge or publish.
+Default next action if no new decision is given: keep `v0.1.0` as the current
+GitHub Release and do not create a PyPI release.
 
 ## Next 3 Actions
 
-1. Owner/reviewer: review PR #4 and decide whether it should be merged.
-2. Owner: decide whether to authorize a public release, tag, GitHub Release, or
-   package publication.
-3. Agent after approval: collect the matching release evidence and update this
-   status entrypoint again.
+1. Owner: decide whether PyPI publication is needed for this project.
+2. Owner: decide whether Phase 6 paper-domain adapter work should begin.
+3. Agent after approval: create the matching implementation or publication
+   evidence and update this status entrypoint again.
 
 ## Evidence Map
 

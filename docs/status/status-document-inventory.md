@@ -208,7 +208,7 @@ product direction.
 `review-governance-kernel-completion-20260706.md` is the latest bounded
 review-governance progress record: P1/P2/P3-1 are marked PASS, and P3-2 graph
 projection has local GPT-equivalent review PASS and landed in commit
-`2725227d`, with local branch-level review PASS at `bd73d6bc`. The current PR route now has CI PASS, but publication evidence remains absent. Do not use that record by itself as release readiness evidence.
+`2725227d`, with local branch-level review PASS at `bd73d6bc`. The current release route now has PR CI, main CI, merge, and GitHub Release evidence, but PyPI publication remains outside this repository's defined workflow. Do not use that record by itself as release readiness evidence.
 
 Current rule:
 

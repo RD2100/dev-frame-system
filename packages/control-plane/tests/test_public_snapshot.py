@@ -809,8 +809,8 @@ def test_current_entry_docs_keep_p3_2_local_review_pass_non_release_ready():
         REPO_ROOT / "docs" / "status" / "status-document-inventory.md": [
             "projection has local GPT-equivalent review PASS and landed in commit",
             "local branch-level review PASS at `bd73d6bc`",
-            "current PR route now has CI PASS",
-            "publication evidence remains absent",
+            "current release route now has PR CI, main CI, merge, and GitHub Release evidence",
+            "PyPI publication remains outside this repository's defined workflow",
         ],
     }
 

@@ -84,8 +84,8 @@ Changed files:
 
 Critical paths:
 
-- `LAUNCH_NOW.md` must preserve the local-gate-green but public-release-blocked
-  boundary.
+- `LAUNCH_NOW.md` must preserve the GitHub Release complete but PyPI-not-
+  published boundary.
 - `reviewer-index.md` and `status-document-inventory.md` must agree on current
   entrypoints and Batch F-J evidence records.
 
@@ -235,9 +235,9 @@ After reviewing or changing any behavior batch, rerun:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-release.ps1
 ```
 
-Public release remains blocked until human review or merge approval, release
-tagging, GitHub Release, and package publication are separately authorized. The
-worktree, batch commits, PR push, and PR CI route are complete for PR #4.
+GitHub Release `v0.1.0` has since been published after PR #4 merge and main CI
+PASS. PyPI publication remains outside this repository's defined release
+workflow.
 
 ## Executed Owner-Approved Staging Plan
 

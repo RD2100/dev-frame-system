@@ -64,9 +64,12 @@ skipped`, strict public snapshot PASS, control-plane wheel smoke PASS, and `git
 diff --check` PASS.
 
 After owner approval for the PR route, branch `codex/public-mainline-batch-1`
-was pushed to PR #4 and GitHub Actions `Release verification` passed. This
-proves the current PR verification route, but it does not imply merge approval,
-external human review approval, a GitHub Release, or public package release.
+was pushed to PR #4 and GitHub Actions `Release verification` passed. After
+owner approval for release, PR #4 was merged to `main`, main branch GitHub
+Actions `Release verification` passed in run `28949249871`, and GitHub Release
+`v0.1.0` was published with the
+`devframe_control_plane-0.1.0-py3-none-any.whl` asset. No PyPI publication was
+performed.
 
 ## Expected Public Surface
 
@@ -123,9 +126,9 @@ archives, `build`, `dist`, or package metadata directories in the public tree.
   return to the Git index.
 - Review-governance P3-2 graph projection has local GPT-equivalent review PASS
   and landed in commit `2725227d`; the follow-up status boundary received local
-  branch-level review PASS at `bd73d6bc`. The current PR route now has CI PASS,
-  but human review, merge, and publication evidence are still required before
-  it can support public release readiness.
+  branch-level review PASS at `bd73d6bc`. The current release route now has PR
+  CI, main CI, merge, and GitHub Release evidence, but PyPI publication remains
+  outside this repository's defined workflow.
 - Control-plane dashboard tests bypass loopback HTTP proxies during pytest so
   local dashboard server checks do not report proxy-generated 502 responses.
 
@@ -162,13 +165,9 @@ archives, `build`, `dist`, or package metadata directories in the public tree.
 ## Current Verdict
 
 The current non-trivial path proven by this repository is a functional WebGPT MCP
-control-plane chain (binding + state/Actions loops + local wheel verification) in
-the current local context. That does **not** mean the repository is publish-ready.
+control-plane chain (binding + state/Actions loops + local wheel verification)
+with a completed GitHub Release.
 
-For a conservative publish decision, the repository remains release-blocked
-until the full public-release workflow is completed from an externally reviewed
-state, including merge approval and artifact publication steps, not only a local
-release-gate pass or PR CI pass.
-
-The current branch should therefore be treated as local-release-gate-green and
-PR-CI-green, but still not public-release-ready.
+For a conservative publish decision, `v0.1.0` is public on GitHub Release with a
+control-plane wheel asset. PyPI publication, downstream announcements, and Phase
+6 paper-domain adapter closure are not included in this release evidence.
