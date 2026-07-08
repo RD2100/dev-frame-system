@@ -24,6 +24,112 @@ def _write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2, ensure_ascii=True), encoding="utf-8")
 
 
+def _write_sealed_context(runtime: Path, token: str) -> tuple[Path, Path]:
+    task_input = runtime / "context" / token / "TASKSPEC.json"
+    task_input.parent.mkdir(parents=True, exist_ok=True)
+    task_input.write_text('{"task": "sealed context fixture"}\n', encoding="utf-8")
+    context_packet_path = runtime / "context" / token / "context-packet.json"
+    context_ledger_path = runtime / "context" / token / "context-ledger.json"
+    context_packet_id = f"cp-{token}"
+    _write_json(context_packet_path, {
+        "schema_version": "0.1",
+        "context_packet_id": context_packet_id,
+        "project_id": "demo-project",
+        "goal_id": "goal-demo-project",
+        "task_id": f"task-{token}",
+        "domain": "code",
+        "profile": "go-dispatch-task-context",
+        "producer_role": "coordinator",
+        "created_at": "2026-07-07T00:00:00Z",
+        "intent_summary": "Fixture sealed context for final-ready projection.",
+        "intended_use": "execution",
+        "immutability": {
+            "immutable": True,
+            "content_hash": "sha256:" + "1" * 64,
+        },
+        "source_refs": [{
+            "ref_id": "taskspec-json",
+            "kind": "file",
+            "uri": str(task_input),
+            "included": True,
+            "required": True,
+            "freshness_state": "current",
+        }],
+        "omitted_required_refs": [],
+        "forbidden_refs": [],
+        "freshness": {
+            "checked_at": "2026-07-07T00:00:00Z",
+            "stale_refs": [],
+            "unknown_refs": [],
+        },
+        "completeness_state": "complete",
+        "privacy_state": "redacted",
+        "seal_state": "sealed",
+        "limitations": ["Fixture only."],
+        "constraints": {
+            "allowed_actions": ["execute assigned task"],
+            "forbidden_actions": ["claim final acceptance"],
+            "stop_lines": ["FinalVerdict is required before acceptance."],
+            "authority_boundary": {
+                "can_execute": True,
+                "can_review": False,
+                "can_claim_final_acceptance": False,
+                "final_verdict_required": True,
+            },
+        },
+        "domain_refs": {"fixture": token},
+    })
+    _write_json(context_ledger_path, {
+        "schema_version": "0.1",
+        "context_ledger_id": f"cl-{token}",
+        "project_id": "demo-project",
+        "goal_id": "goal-demo-project",
+        "task_id": f"task-{token}",
+        "created_at": "2026-07-07T00:00:00Z",
+        "append_only": True,
+        "entries": [{
+            "ledger_entry_id": f"cle-{token}-created",
+            "entry_index": 0,
+            "previous_entry_hash": None,
+            "entry_hash": "sha256:" + "2" * 64,
+            "occurred_at": "2026-07-07T00:00:00Z",
+            "actor_id": "test-coordinator",
+            "actor_role": "coordinator",
+            "event_type": "packet_created",
+            "context_packet_id": context_packet_id,
+            "summary": "Created sealed context fixture.",
+        }],
+    })
+    return context_packet_path, context_ledger_path
+
+
+def _sealed_context_created_event(runtime: Path, run_id: str, *, agent_id: str = "coding-agent-1") -> str:
+    token = f"{run_id}-context"
+    context_packet_path, context_ledger_path = _write_sealed_context(runtime, token)
+    return json.dumps({
+        "event_type": "task_created",
+        "run_id": run_id,
+        "agent_id": agent_id,
+        "payload": {
+            "project_id": "demo-project",
+            "context_refs": [
+                {
+                    "ref_type": "context_packet",
+                    "ref_path": str(context_packet_path),
+                    "context_id": f"cp-{token}",
+                },
+                {
+                    "ref_type": "context_ledger",
+                    "ref_path": str(context_ledger_path),
+                    "context_id": f"cl-{token}",
+                },
+            ],
+        },
+        "timestamp": "2026-07-07T00:00:00Z",
+        "event_id": f"team-{run_id}-context-created",
+    })
+
+
 def _records_by_adapter(index: dict) -> dict[str, list[dict]]:
     grouped: dict[str, list[dict]] = {}
     for entry in index["runs"]:
@@ -376,8 +482,31 @@ def test_run_index_projects_team_final_verdict_to_final_ready(tmp_path):
             "reason": "New independent review evidence superseded the prior verdict.",
         },
     })
+    context_packet_path, context_ledger_path = _write_sealed_context(runtime, "go-final-context")
     (runtime / "team-events.jsonl").write_text(
         "\n".join([
+            json.dumps({
+                "event_type": "task_created",
+                "run_id": "go-final",
+                "agent_id": "coding-agent-1",
+                "payload": {
+                    "project_id": "demo-project",
+                    "context_refs": [
+                        {
+                            "ref_type": "context_packet",
+                            "ref_path": str(context_packet_path),
+                            "context_id": "cp-go-final-context",
+                        },
+                        {
+                            "ref_type": "context_ledger",
+                            "ref_path": str(context_ledger_path),
+                            "context_id": "cl-go-final-context",
+                        },
+                    ],
+                },
+                "timestamp": "2026-07-07T00:00:00Z",
+                "event_id": "team-final-created",
+            }),
             json.dumps({
                 "event_type": "task_result",
                 "run_id": "go-final",
@@ -467,6 +596,8 @@ def test_run_index_projects_team_final_verdict_to_final_ready(tmp_path):
         ],
     }
     assert {ref["kind"] for ref in record["evidence_refs"]} >= {"command_output", "review", "final_verdict"}
+    assert [ref["kind"] for ref in record["evidence_refs"] if ref["kind"] == "context_packet"]
+    assert {"context_packet", "context_ledger"} <= {artifact["kind"] for artifact in record["artifact_refs"]}
     final_evidence_refs = [ref for ref in record["evidence_refs"] if ref["kind"] == "final_verdict"]
     assert final_evidence_refs == [{
         "evidence_id": "ev-team-final-verdict-team-final-verdict",
@@ -474,6 +605,96 @@ def test_run_index_projects_team_final_verdict_to_final_ready(tmp_path):
         "uri": str(final_path),
         "supports": "acceptance",
     }]
+
+
+def test_run_index_blocks_final_ready_without_sealed_context(tmp_path):
+    runtime = tmp_path / "runtime"
+    report_path = runtime / "reports" / "worker.md"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text("worker report\n", encoding="utf-8")
+    review_path = runtime / "reviews" / "review.yaml"
+    review_path.parent.mkdir(parents=True)
+    review_path.write_text("verdict: pass\n", encoding="utf-8")
+    final_path = runtime / "final" / "final-verdict.json"
+    gate_id = "gate-go-no-context-independent-review"
+    _write_json(final_path, {
+        "verdict_id": "fv-go-no-context",
+        "produced_by": "go-evidence-finalizer",
+        "produced_at": "2026-07-07T00:02:00Z",
+        "producer_role": "governance",
+        "final_state": "final_ready",
+        "inputs_reviewed": [str(report_path), str(review_path)],
+        "gate_summary": [{
+            "gate_id": gate_id,
+            "result": "pass",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-1",
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:go-no-context",
+    })
+    (runtime / "team-events.jsonl").write_text(
+        "\n".join([
+            json.dumps({
+                "event_type": "task_result",
+                "run_id": "go-no-context",
+                "agent_id": "coding-agent-1",
+                "payload": {"status": "passed", "report_path": str(report_path)},
+                "timestamp": "2026-07-07T00:00:00Z",
+                "event_id": "team-no-context-result",
+            }),
+            json.dumps({
+                "event_type": "review_ref",
+                "run_id": "go-no-context",
+                "agent_id": "reviewer-1",
+                "payload": {
+                    "review_id": "review-go-no-context",
+                    "reviewer_id": "reviewer-1",
+                    "reviewer_role": "reviewer",
+                    "executor_id": "coding-agent-1",
+                    "verdict": "pass",
+                    "ref_path": str(review_path),
+                    "reviewed_evidence_refs": ["ev-team-team-no-context-result"],
+                },
+                "timestamp": "2026-07-07T00:01:00Z",
+                "event_id": "team-no-context-review",
+            }),
+            json.dumps({
+                "event_type": "final_verdict_ref",
+                "run_id": "go-no-context",
+                "agent_id": "go-evidence-finalizer",
+                "payload": {
+                    "verdict_id": "fv-go-no-context",
+                    "produced_by": "go-evidence-finalizer",
+                    "producer_role": "governance",
+                    "final_state": "final_ready",
+                    "ref_path": str(final_path),
+                    "review_ref": "review-go-no-context",
+                    "gate_refs": [gate_id],
+                    "gate_summary": [{
+                        "gate_id": gate_id,
+                        "result": "pass",
+                        "evidence_path": str(review_path),
+                    }],
+                },
+                "timestamp": "2026-07-07T00:02:00Z",
+                "event_id": "team-no-context-final",
+            }),
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    record = _records_by_adapter(build_run_index(runtime))["team_events"][0]
+
+    _run_record_validator().validate(record)
+    assert record["outcome"] == "blocked"
+    assert record["acceptance_state"] == "blocked"
+    assert "final_verdict_ref" not in record
+    assert record["failure_refs"][0]["status"] == "blocked"
 
 
 def test_run_index_blocks_invalid_final_verdict_supersedes_metadata(tmp_path):
@@ -597,6 +818,7 @@ def test_run_index_keeps_missing_superseded_verdict_non_authoritative(tmp_path):
     })
     (runtime / "team-events.jsonl").write_text(
         "\n".join([
+            _sealed_context_created_event(runtime, "go-missing-superseded"),
             json.dumps({
                 "event_type": "task_result",
                 "run_id": "go-missing-superseded",
@@ -716,6 +938,7 @@ def test_run_index_keeps_mismatched_superseded_verdict_unresolved(tmp_path):
     })
     (runtime / "team-events.jsonl").write_text(
         "\n".join([
+            _sealed_context_created_event(runtime, "go-mismatched-superseded"),
             json.dumps({
                 "event_type": "task_result",
                 "run_id": "go-mismatched-superseded",
@@ -811,6 +1034,7 @@ def test_run_index_marks_invalid_superseded_verdict_unresolved(tmp_path):
     })
     (runtime / "team-events.jsonl").write_text(
         "\n".join([
+            _sealed_context_created_event(runtime, "go-invalid-superseded"),
             json.dumps({
                 "event_type": "task_result",
                 "run_id": "go-invalid-superseded",
@@ -935,6 +1159,7 @@ def test_run_index_marks_supersession_chain_depth_limited(tmp_path):
     })
     (runtime / "team-events.jsonl").write_text(
         "\n".join([
+            _sealed_context_created_event(runtime, "go-depth-limited"),
             json.dumps({
                 "event_type": "task_result",
                 "run_id": "go-depth-limited",
@@ -1045,6 +1270,7 @@ def test_run_index_stops_supersession_chain_before_duplicate_cycle_entry(tmp_pat
     })
     (runtime / "team-events.jsonl").write_text(
         "\n".join([
+            _sealed_context_created_event(runtime, "go-cyclic-superseded"),
             json.dumps({
                 "event_type": "task_result",
                 "run_id": "go-cyclic-superseded",

@@ -56,6 +56,8 @@ class GoAgentDispatch:
     model_provider: str = ""
     isolated: bool = False
     worktree_path: str = ""
+    context_packet_path: str = ""
+    context_ledger_path: str = ""
 
 
 @dataclass
@@ -166,6 +168,8 @@ def run_go_dispatch(
             methodology=methodology,
             model_provider=provider.provider_id,
             isolated=isolate,
+            context_packet_path=packet.context_packet_path,
+            context_ledger_path=packet.context_ledger_path,
         ))
 
     go_run_id = f"go-{project_id or project_root.name}-{int(time.time() * 1000)}-{uuid.uuid4().hex[:6]}"
@@ -330,17 +334,18 @@ def _run_agent_in_place(runtime_dir: str, project_root: str, go_run_id: str,
                         agent: GoAgentDispatch, timeout_seconds: int,
                         team: TeamRuntime | None = None, driver: str = "command",
                         acp_command: list[str] | None = None) -> None:
-    if team is not None:
-        context_refs = _agent_context_refs(agent)
-        team.record_task_created(
-            go_run_id, agent.agent_id,
-            shard_index=agent.shard_index, shard_count=agent.shard_count,
-            targets=agent.targets,
-            context_refs=context_refs,
-        )
-        team.record_task_claimed(go_run_id, agent.agent_id, context_refs=context_refs)
     try:
         cwd, env_overrides = _resolve_isolation(runtime_dir, project_root, go_run_id, agent)
+        _ensure_agent_context_artifacts(runtime_dir, agent)
+        if team is not None:
+            context_refs = _agent_context_refs(agent)
+            team.record_task_created(
+                go_run_id, agent.agent_id,
+                shard_index=agent.shard_index, shard_count=agent.shard_count,
+                targets=agent.targets,
+                context_refs=context_refs,
+            )
+            team.record_task_claimed(go_run_id, agent.agent_id, context_refs=context_refs)
         if driver == "acp":
             worker_result = _run_one_agent_acp(
                 runtime_dir, agent, timeout_seconds,
@@ -411,6 +416,12 @@ def _resolve_isolation(runtime_dir: str, project_root: str, go_run_id: str,
     return handle.path, env_overrides
 
 
+def _ensure_agent_context_artifacts(runtime_dir: str, agent: GoAgentDispatch) -> None:
+    packet = DispatchPacketStore(runtime_dir=runtime_dir).ensure_context_artifacts(agent.packet_dir)
+    agent.context_packet_path = packet.context_packet_path
+    agent.context_ledger_path = packet.context_ledger_path
+
+
 def _apply_opencode_events(agent: GoAgentDispatch) -> None:
     """Fill structured OpenCode execution data from the worker JSONL output.
 
@@ -455,6 +466,24 @@ def _run_one_agent(runtime_dir: str, agent: GoAgentDispatch, timeout_seconds: in
 
 def _agent_context_refs(agent: GoAgentDispatch) -> list[dict[str, str]]:
     refs: list[dict[str, str]] = []
+    context_packet_path = str(
+        agent.context_packet_path or Path(agent.packet_dir) / "context-packet.json"
+    )
+    if context_packet_path and Path(context_packet_path).exists():
+        refs.append({
+            "ref_type": "context_packet",
+            "ref_path": context_packet_path,
+            "context_id": Path(context_packet_path).stem,
+        })
+    context_ledger_path = str(
+        agent.context_ledger_path or Path(agent.packet_dir) / "context-ledger.json"
+    )
+    if context_ledger_path and Path(context_ledger_path).exists():
+        refs.append({
+            "ref_type": "context_ledger",
+            "ref_path": context_ledger_path,
+            "context_id": Path(context_ledger_path).stem,
+        })
     packet_dir = str(agent.packet_dir or "")
     if packet_dir:
         refs.append({
@@ -623,6 +652,8 @@ def _go_result_from_metadata(data: dict[str, Any], *, fallback_runtime_dir: Path
             model_provider=str(agent.get("model_provider", "")),
             isolated=bool(agent.get("isolated", False)),
             worktree_path=str(agent.get("worktree_path", "")),
+            context_packet_path=str(agent.get("context_packet_path", "")),
+            context_ledger_path=str(agent.get("context_ledger_path", "")),
         )
         for agent in data.get("agents", [])
     ]

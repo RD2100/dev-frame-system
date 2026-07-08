@@ -202,6 +202,7 @@ def _team_event_entries(runtime: Path) -> list[dict[str, Any]]:
             events,
             review_refs,
             worker_agent_ids,
+            context_refs,
         )
         failure_refs = review_failures + final_failures
         status = _aggregate_team_status(result_events)
@@ -236,6 +237,12 @@ def _team_event_entries(runtime: Path) -> list[dict[str, Any]]:
                     "event_types": sorted({str(event.get("event_type") or "") for event in events}),
                     "legacy_context_ref_count": len(context_refs),
                     "legacy_context_ref_types": sorted({ref["ref_type"] for ref in context_refs}),
+                    "sealed_context_packet_ref_count": len([
+                        ref for ref in context_refs if ref["ref_type"] == "context_packet"
+                    ]),
+                    "context_ledger_ref_count": len([
+                        ref for ref in context_refs if ref["ref_type"] == "context_ledger"
+                    ]),
                     "review_ref_count": len(review_refs),
                     "gate_ref_count": len(gate_refs),
                     "final_verdict_ref_present": bool(final_verdict_ref),
@@ -834,17 +841,35 @@ def _team_context_refs(events: list[dict[str, Any]]) -> list[dict[str, str]]:
             refs.append({
                 "ref_type": ref_type,
                 "ref_path": ref_path,
+                "context_id": str(item.get("context_id") or ""),
+                "agent_id": str(event.get("agent_id") or ""),
                 "event_id": str(event.get("event_id") or ""),
             })
     return refs
 
 
 def _team_context_artifact_refs(refs: list[dict[str, str]]) -> list[dict[str, Any]]:
-    return [{
-        "artifact_id": f"artifact-team-context-{_safe_token(ref['ref_type'])}-{_safe_token(ref['ref_path'])}",
-        "kind": "other",
-        "uri": ref["ref_path"],
-    } for ref in refs]
+    artifacts: list[dict[str, Any]] = []
+    for ref in refs:
+        artifact = {
+            "artifact_id": f"artifact-team-context-{_safe_token(ref['ref_type'])}-{_safe_token(ref['ref_path'])}",
+            "kind": _team_context_artifact_kind(ref["ref_type"]),
+            "uri": ref["ref_path"],
+        }
+        content_hash = _source_hash(Path(ref["ref_path"]))
+        if content_hash:
+            artifact["content_hash"] = content_hash
+        artifacts.append(artifact)
+    return artifacts
+
+
+def _team_context_artifact_kind(ref_type: str) -> str:
+    token = _safe_token(ref_type)
+    if token in {"context_packet", "context-packet"}:
+        return "context_packet"
+    if token in {"context_ledger", "context-ledger"}:
+        return "context_ledger"
+    return "other"
 
 
 def _team_context_evidence_refs(refs: list[dict[str, str]]) -> list[dict[str, Any]]:
@@ -859,6 +884,7 @@ def _team_context_evidence_refs(refs: list[dict[str, str]]) -> list[dict[str, An
             "limitation",
         )
         for ref in refs
+        if _safe_token(ref["ref_type"]) != "context_ledger"
     ]
 
 
@@ -1065,10 +1091,86 @@ def _team_review_evidence_ids(events: list[dict[str, Any]]) -> dict[str, str]:
     return ids
 
 
+def _final_ready_context_diagnostic(
+    events: list[dict[str, Any]],
+    context_refs: list[dict[str, str]],
+) -> str:
+    success_agents = {
+        str(event.get("agent_id") or "")
+        for event in events
+        if event.get("event_type") == "task_result"
+        and _safe_token(_as_dict(event.get("payload")).get("status")) in {
+            "pass",
+            "passed",
+            "completed",
+            "success",
+            "succeeded",
+            "verified",
+        }
+        and str(event.get("agent_id") or "")
+    }
+    valid_types_by_agent: dict[str, set[str]] = {}
+    diagnostics: list[str] = []
+    for ref in context_refs:
+        ref_type = _safe_token(ref.get("ref_type"))
+        if ref_type not in {"context_packet", "context_ledger"}:
+            continue
+        agent_id = str(ref.get("agent_id") or "")
+        ref_path = Path(str(ref.get("ref_path") or ""))
+        diagnostic = (
+            _context_packet_diagnostic(ref_path)
+            if ref_type == "context_packet"
+            else _context_ledger_diagnostic(ref_path)
+        )
+        if diagnostic:
+            diagnostics.append(f"{ref_type} for {agent_id or 'unknown-agent'} is invalid: {diagnostic}")
+            continue
+        valid_types_by_agent.setdefault(agent_id, set()).add(ref_type)
+    agents_to_check = sorted(success_agents)
+    if not agents_to_check:
+        if any({"context_packet", "context_ledger"} <= types for types in valid_types_by_agent.values()):
+            return ""
+        return diagnostics[0] if diagnostics else "sealed context_packet and context_ledger refs are missing"
+    for agent_id in agents_to_check:
+        missing = sorted({"context_packet", "context_ledger"} - valid_types_by_agent.get(agent_id, set()))
+        if missing:
+            return f"sealed context refs missing for {agent_id}: {', '.join(missing)}"
+    return ""
+
+
+def _context_packet_diagnostic(path: Path) -> str:
+    data, diagnostic = _read_json_file(path)
+    if diagnostic:
+        return diagnostic
+    errors = sorted(
+        _schema_validator("schemas/runtime-governance/context-packet.schema.json").iter_errors(data),
+        key=lambda error: list(error.path),
+    )
+    if errors:
+        return f"context packet schema invalid: {errors[0].message}"
+    if str(data.get("seal_state") or "") != "sealed":
+        return "context packet is not sealed"
+    return ""
+
+
+def _context_ledger_diagnostic(path: Path) -> str:
+    data, diagnostic = _read_json_file(path)
+    if diagnostic:
+        return diagnostic
+    errors = sorted(
+        _schema_validator("schemas/runtime-governance/context-ledger.schema.json").iter_errors(data),
+        key=lambda error: list(error.path),
+    )
+    if errors:
+        return f"context ledger schema invalid: {errors[0].message}"
+    return ""
+
+
 def _team_final_verdict_ref(
     events: list[dict[str, Any]],
     review_refs: list[dict[str, Any]],
     blocked_producer_ids: set[str],
+    context_refs: list[dict[str, str]],
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]], list[str], list[dict[str, Any]]]:
     failures: list[dict[str, Any]] = []
     pass_review_ids = {
@@ -1116,6 +1218,19 @@ def _team_final_verdict_ref(
         artifact, artifact_diagnostic = _validate_final_verdict_artifact(Path(ref_path), payload)
         if artifact_diagnostic:
             failures.append(_event_failure_ref("team-final-verdict", event, artifact_diagnostic, ref_path))
+            continue
+        context_diagnostic = (
+            _final_ready_context_diagnostic(events, context_refs)
+            if final_state == "final_ready"
+            else ""
+        )
+        if context_diagnostic:
+            failures.append(_event_failure_ref(
+                "team-final-verdict",
+                event,
+                context_diagnostic,
+                ref_path,
+            ))
             continue
         gate_refs = _gate_refs_from_final_verdict_artifact(
             artifact,

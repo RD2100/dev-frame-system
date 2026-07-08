@@ -36,6 +36,23 @@ def _validate_t3_shell(shell: dict) -> None:
     validator_class(schema).validate(shell)
 
 
+def _validate_runtime_context_artifacts(packet_dir: Path) -> None:
+    context_packet = json.loads((packet_dir / "context-packet.json").read_text(encoding="utf-8"))
+    context_ledger = json.loads((packet_dir / "context-ledger.json").read_text(encoding="utf-8"))
+    for schema_name, payload in [
+        ("context-packet.schema.json", context_packet),
+        ("context-ledger.schema.json", context_ledger),
+    ]:
+        schema = json.loads(
+            (REPO_ROOT / "schemas" / "runtime-governance" / schema_name).read_text(encoding="utf-8-sig")
+        )
+        validator_class = validator_for(schema)
+        validator_class.check_schema(schema)
+        validator_class(schema).validate(payload)
+    assert context_packet["seal_state"] == "sealed"
+    assert context_ledger["append_only"] is True
+
+
 def _noop_report_command() -> list[str]:
     # Writes a passing ExecutionReport to the path the worker provides via env.
     script = (
@@ -74,7 +91,17 @@ def test_execution_records_team_events_and_surfaces_in_state(tmp_path):
     assert view_evidence
     assert {e["ref_type"] for e in view_evidence} == {"report"}
     context_evidence = [e for e in view["evidence_store"] if e["evidence_id"].startswith("team-context-")]
-    assert {e["ref_type"] for e in context_evidence} == {"legacy_context", "legacy_task_spec"}
+    assert {e["ref_type"] for e in context_evidence} == {
+        "context_packet",
+        "context_ledger",
+        "legacy_context",
+        "legacy_task_spec",
+    }
+    for agent in result.agents:
+        packet_dir = Path(agent.packet_dir)
+        _validate_runtime_context_artifacts(packet_dir)
+        assert agent.context_packet_path == str(packet_dir / "context-packet.json")
+        assert agent.context_ledger_path == str(packet_dir / "context-ledger.json")
     event_types = [
         json.loads(line)["event_type"]
         for line in (runtime / TEAM_EVENTS_FILE).read_text(encoding="utf-8").splitlines()
@@ -88,6 +115,10 @@ def test_execution_records_team_events_and_surfaces_in_state(tmp_path):
     ]
     assert task_payloads
     assert all(payload["context_refs"] for payload in task_payloads)
+    assert all(
+        {"context_packet", "context_ledger"} <= {ref["ref_type"] for ref in payload["context_refs"]}
+        for payload in task_payloads
+    )
 
     # They surface in the control-plane read model's team objects.
     state = build_visual_control_plane_state(runtime_dir=runtime)
@@ -185,4 +216,11 @@ def test_resume_prepared_go_run_records_explicit_team_evidence(tmp_path):
     assert "evidence_ref" in event_types
     evidence = build_team_runtime_view(runtime)["evidence_store"]
     assert len([item for item in evidence if item["ref_type"] == "report"]) == 1
-    assert {item["ref_type"] for item in evidence} == {"legacy_context", "legacy_task_spec", "report"}
+    assert {item["ref_type"] for item in evidence} == {
+        "context_packet",
+        "context_ledger",
+        "legacy_context",
+        "legacy_task_spec",
+        "report",
+    }
+    _validate_runtime_context_artifacts(Path(executed.agents[0].packet_dir))
