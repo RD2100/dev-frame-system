@@ -697,6 +697,81 @@ def test_run_index_blocks_final_ready_without_sealed_context(tmp_path):
     assert record["failure_refs"][0]["status"] == "blocked"
 
 
+def test_run_index_blocks_final_ready_without_task_result(tmp_path):
+    runtime = tmp_path / "runtime"
+    review_path = runtime / "reviews" / "review.yaml"
+    review_path.parent.mkdir(parents=True)
+    review_path.write_text("verdict: pass\n", encoding="utf-8")
+    final_path = runtime / "final" / "final-verdict.json"
+    gate_id = "gate-go-no-task-result-independent-review"
+    _write_json(final_path, {
+        "verdict_id": "fv-go-no-task-result",
+        "produced_by": "go-evidence-finalizer",
+        "produced_at": "2026-07-07T00:02:00Z",
+        "producer_role": "governance",
+        "final_state": "final_ready",
+        "inputs_reviewed": [str(review_path)],
+        "gate_summary": [{
+            "gate_id": gate_id,
+            "result": "pass",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-1",
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:go-no-task-result",
+    })
+    (runtime / "team-events.jsonl").write_text(
+        "\n".join([
+            _sealed_context_created_event(runtime, "go-no-task-result"),
+            json.dumps({
+                "event_type": "review_ref",
+                "run_id": "go-no-task-result",
+                "agent_id": "reviewer-1",
+                "payload": {
+                    "review_id": "review-go-no-task-result",
+                    "reviewer_id": "reviewer-1",
+                    "reviewer_role": "reviewer",
+                    "executor_id": "coding-agent-1",
+                    "verdict": "pass",
+                    "ref_path": str(review_path),
+                    "reviewed_evidence_refs": ["ev-team-missing-task-result"],
+                },
+                "timestamp": "2026-07-07T00:01:00Z",
+                "event_id": "team-no-task-result-review",
+            }),
+            json.dumps({
+                "event_type": "final_verdict_ref",
+                "run_id": "go-no-task-result",
+                "agent_id": "go-evidence-finalizer",
+                "payload": {
+                    "verdict_id": "fv-go-no-task-result",
+                    "produced_by": "go-evidence-finalizer",
+                    "producer_role": "governance",
+                    "final_state": "final_ready",
+                    "ref_path": str(final_path),
+                    "review_ref": "review-go-no-task-result",
+                    "gate_refs": [gate_id],
+                },
+                "timestamp": "2026-07-07T00:02:00Z",
+                "event_id": "team-no-task-result-final",
+            }),
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    record = _records_by_adapter(build_run_index(runtime))["team_events"][0]
+
+    _run_record_validator().validate(record)
+    assert record["outcome"] == "blocked"
+    assert record["acceptance_state"] == "blocked"
+    assert "final_verdict_ref" not in record
+    assert record["failure_refs"][0]["status"] == "blocked"
+
+
 def test_run_index_blocks_invalid_final_verdict_supersedes_metadata(tmp_path):
     runtime = tmp_path / "runtime"
     review_path = runtime / "reviews" / "review.yaml"

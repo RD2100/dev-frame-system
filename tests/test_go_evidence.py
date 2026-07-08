@@ -503,7 +503,14 @@ def test_finalize_backfills_go_run_context_before_team_runtime_final_ready(tmp_p
     assert rc == 0
     lines = (tmp_path / "runtime" / TEAM_EVENTS_FILE).read_text(encoding="utf-8").strip().splitlines()
     event_types = [json.loads(line)["event_type"] for line in lines]
-    assert event_types == ["task_created", "task_claimed", "review_ref", "final_verdict_ref"]
+    assert event_types == [
+        "task_created",
+        "task_claimed",
+        "task_result",
+        "evidence_ref",
+        "review_ref",
+        "final_verdict_ref",
+    ]
     assert os.path.exists(os.path.join(packet_dir, "context-packet.json"))
     assert os.path.exists(os.path.join(packet_dir, "context-ledger.json"))
 
@@ -514,6 +521,7 @@ def test_finalize_backfills_go_run_context_before_team_runtime_final_ready(tmp_p
         "context_ledger",
         "legacy_context",
         "legacy_task_spec",
+        "report",
         "review",
         "final_verdict",
     }
@@ -546,6 +554,8 @@ def test_finalize_team_runtime_recording_is_idempotent_for_same_verdict(tmp_path
     assert [event["event_type"] for event in events] == [
         "task_created",
         "task_claimed",
+        "task_result",
+        "evidence_ref",
         "review_ref",
         "final_verdict_ref",
     ]
@@ -554,13 +564,14 @@ def test_finalize_team_runtime_recording_is_idempotent_for_same_verdict(tmp_path
     assert [event["kind"] for event in view["event_log"]] == [
         "task-created",
         "task-claimed",
+        "task-result",
+        "evidence-ref",
         "review-ref",
         "final-verdict-ref",
     ]
-    assert [gate["kind"] for gate in view["review_gates"]] == [
-        "independent-review",
-        "final-verdict",
-    ]
+    assert {"acceptance", "independent-review", "final-verdict"} <= {
+        gate["kind"] for gate in view["review_gates"]
+    }
 
     index = build_run_index(runtime_dir)
     record = next(entry["record"] for entry in index["runs"] if entry["adapter_id"] == "team_events")
