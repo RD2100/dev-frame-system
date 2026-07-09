@@ -106,6 +106,7 @@ stages:
         - PAPER_TASK_VALIDATION.zip.json
         - SUBMISSION_RESULT.json
         - FLOW_OUTCOME.json
+        - FINAL_VERDICT.json
         - TEST_OUTPUT.txt
         - SAFETY_ATTESTATION.md
 

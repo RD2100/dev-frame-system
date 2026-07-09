@@ -80,6 +80,82 @@ def run_paper_task_validator(source: Path, output_path: Path) -> tuple[bool, str
     return (result.returncode == 0, None if result.returncode == 0 else "paper_task_validator_failed")
 
 
+def paper_final_verdict_state(verifier_failures: list[str]) -> str:
+    return "failed" if verifier_failures else "accepted_with_limitation"
+
+
+def paper_final_verdict_limitations(privacy_path: Path) -> list[str]:
+    limitations = [
+        "dry-run only paper workflow; no real paper final acceptance claimed",
+        "synthetic offline candidate; real user paper content was not processed",
+        "external provider not executed; submission mode remained dry_run",
+    ]
+    if not privacy_path.exists():
+        limitations.append("privacy attestation missing at closure time")
+    return limitations
+
+
+def paper_final_verdict_gate_summary(
+    privacy_path: Path,
+    flow_path: Path,
+    verifier_failures: list[str],
+) -> list[dict[str, str]]:
+    gate_summary = [{
+        "gate_id": f"gate-{PIPELINE_RUN_ID}-closure-verifiers",
+        "result": "fail" if verifier_failures else "pass",
+        "evidence_path": str(flow_path),
+    }, {
+        "gate_id": f"gate-{PIPELINE_RUN_ID}-synthetic-boundary",
+        "result": "warning",
+        "evidence_path": str(flow_path),
+    }]
+    if privacy_path.exists():
+        gate_summary.insert(0, {
+            "gate_id": f"gate-{PIPELINE_RUN_ID}-privacy",
+            "result": "pass",
+            "evidence_path": str(privacy_path),
+        })
+    return gate_summary
+
+
+def write_paper_final_verdict(
+    target: Path,
+    flow_path: Path,
+    closure_report_path: Path,
+    verifier_failures: list[str],
+    generated_at: str,
+) -> Path:
+    review_path = target / "review" / "REVIEW_REPORT.md"
+    privacy_path = paper_task_dir(target) / "PRIVACY_ATTESTATION.yaml"
+    evidence_pack_path = target / "evidence" / "ref-paper-review-pack.zip"
+    final_state = paper_final_verdict_state(verifier_failures)
+    review_evidence_path = review_path if review_path.exists() else flow_path
+    inputs_reviewed = [
+        str(path)
+        for path in [review_path, privacy_path, flow_path, closure_report_path, evidence_pack_path]
+        if path.exists()
+    ]
+    verdict = {
+        "verdict_id": f"fv-paper-{PIPELINE_RUN_ID}",
+        "produced_by": "devframe-paper-governance-finalizer",
+        "produced_at": generated_at,
+        "producer_role": "governance",
+        "final_state": final_state,
+        "inputs_reviewed": inputs_reviewed or [str(flow_path)],
+        "gate_summary": paper_final_verdict_gate_summary(privacy_path, flow_path, verifier_failures),
+        "reviewer_summary": {
+            "reviewer_id": "devframe-paper-reviewer",
+            "verdict": "fail" if verifier_failures else "pass",
+            "evidence_path": str(review_evidence_path),
+        },
+        "limitations": paper_final_verdict_limitations(privacy_path),
+        "human_or_governance_reference": PIPELINE_RUN_ID,
+    }
+    verdict_path = target / "closure" / "FINAL_VERDICT.json"
+    verdict_path.write_text(json.dumps(verdict, indent=2, ensure_ascii=False), encoding="utf-8")
+    return verdict_path
+
+
 def execute_project_init(project_dir: Path = None) -> StageResult:
     """Stage 0: Initialize paper_iteration project."""
     result = StageResult(stage_id="project_init")
@@ -767,6 +843,8 @@ def execute_closure(project_dir: Path = None) -> StageResult:
         flow_outcome["stages"]["closure"] = "failed"
         flow_outcome["verifier_failures"] = verifier_failures
     flow_outcome["verifiers"] = verifier_results
+    flow_outcome["final_verdict_state"] = paper_final_verdict_state(verifier_failures)
+    flow_outcome["final_verdict_path"] = str(target / "closure" / "FINAL_VERDICT.json")
 
     flow_path = target / "closure" / "FLOW_OUTCOME.json"
     flow_path.write_text(json.dumps(flow_outcome, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -831,12 +909,21 @@ def execute_closure(project_dir: Path = None) -> StageResult:
 - submission/SUBMISSION_RESULT.json — submission_adapter dry-run result
 - closure/FLOW_OUTCOME.json — framework-generated flow outcome
 - closure/CLOSURE_REPORT.md — this report
+- closure/FINAL_VERDICT.json — canonical limited FinalVerdict
 """
-    (target / "closure" / "CLOSURE_REPORT.md").write_text(closure_report, encoding="utf-8")
+    closure_report_path = target / "closure" / "CLOSURE_REPORT.md"
+    closure_report_path.write_text(closure_report, encoding="utf-8")
+    final_verdict_path = write_paper_final_verdict(
+        target,
+        flow_path,
+        closure_report_path,
+        verifier_failures,
+        now,
+    )
 
     result.status = "failed" if verifier_failures else "completed"
     result.errors = verifier_failures
-    result.outputs = [str(flow_path), str(target / "closure" / "CLOSURE_REPORT.md")]
+    result.outputs = [str(flow_path), str(closure_report_path), str(final_verdict_path)]
     return result
 
 
