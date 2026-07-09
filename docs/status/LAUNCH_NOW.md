@@ -1,6 +1,6 @@
 # Launch Now
 
-Date: 2026-07-08
+Date: 2026-07-09
 
 ## Initial Owner-Gate Snapshot
 
@@ -18,7 +18,7 @@ The `head` above is the historical owner-gate snapshot head, not the current
 `main` HEAD.
 
 Verdict: **GITHUB RELEASED as `v0.1.0`**; **PYPI NOT PUBLISHED**;
-**PHASE 6 PAPER ADAPTER STARTED**.
+**PHASE 6 PAPER ADAPTER IN PROGRESS**.
 
 This is the current launch-control entrypoint. It replaces reading every
 runtime-governance batch note first, but it does not delete or supersede their
@@ -38,10 +38,10 @@ GitHub Release publication for `v0.1.0`. It does not prove PyPI publication,
 downstream adoption, or complete Phase 6 paper-domain adapter closure.
 
 The paper-domain adapter is no longer deferred: Phase 6 has started after the
-GitHub Release. Current paper support has read-model, visual-state, and
-controlled local action-execution coverage, but `/rdpaper` still needs further
-paper-specific final-verdict and external-provider closure before it can be
-called complete.
+GitHub Release. Current paper support has read-model, visual-state, controlled
+local action-execution coverage, and paper FinalVerdict projection into the
+run index. `/rdpaper` still needs paper-specific FinalVerdict generation and
+external-provider closure before it can be called complete.
 
 ## Executed After Owner Approval
 
@@ -72,12 +72,13 @@ called complete.
 | Dirty worktree batch map and final local review | done locally | [current-dirty-tree-batch-map-20260708.md](current-dirty-tree-batch-map-20260708.md) |
 | Phase 6 paper read-model adapter start | done locally and merged | PR #8 on `RD2100/dev-frame-system` |
 | Phase 6 controlled paper action execution | done locally | `dashboard.py`, `visual_state.py`, and `visual_control_plane_state.schema.json` |
+| Phase 6 paper FinalVerdict run-index projection | done locally | `run_index.py` projects canonical paper `closure/FINAL_VERDICT.json` into `final_verdict_ref`, `review_refs`, `gate_refs`, and fail-closed invalid verdicts. |
 
 ## Deferred From This Release
 
 | Area | Bucket | Reason | Evidence |
 | --- | --- | --- | --- |
-| Remaining paper-domain adapter and `/rdpaper` closure | phase-6-in-progress | Current repo support covers paper read-model, visual-state projection, and controlled local command execution; full domain-adapter authority still needs paper-specific final-verdict and external-provider closure. | [runtime-governance-and-evidence-closure-transformation-plan.md](runtime-governance-and-evidence-closure-transformation-plan.md), [runtime-governance-batch-e-paper-trust-fail-closed.md](runtime-governance-batch-e-paper-trust-fail-closed.md), [runtime-governance-batch-j-automatic-superseding-final-verdict.md](runtime-governance-batch-j-automatic-superseding-final-verdict.md) |
+| Remaining paper-domain adapter and `/rdpaper` closure | phase-6-in-progress | Current repo support covers paper read-model, visual-state projection, controlled local command execution, and paper FinalVerdict projection; full domain-adapter authority still needs paper-specific FinalVerdict generation and external-provider closure. | [runtime-governance-and-evidence-closure-transformation-plan.md](runtime-governance-and-evidence-closure-transformation-plan.md), [runtime-governance-batch-e-paper-trust-fail-closed.md](runtime-governance-batch-e-paper-trust-fail-closed.md), [runtime-governance-batch-j-automatic-superseding-final-verdict.md](runtime-governance-batch-j-automatic-superseding-final-verdict.md) |
 
 ## Remaining Blockers
 

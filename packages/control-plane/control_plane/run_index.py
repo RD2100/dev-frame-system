@@ -423,11 +423,19 @@ def _paper_entries(project_dir: Path) -> list[dict[str, Any]]:
     if state_diag:
         return [_failure_entry("paper", paper_id, state_path, state_diag)]
     status = str(state.get("acceptance_status") or state.get("status") or "unknown")
-    effective_status = _paper_effective_status(status, state)
     evidence_refs = _paper_evidence_refs(project_dir, paper_id)
-    gate_refs = _paper_gate_refs(project_dir, paper_id, state, evidence_refs)
+    (
+        final_verdict_ref,
+        final_verdict_failures,
+        final_verdict_limitations,
+        review_refs,
+        final_verdict_gate_refs,
+    ) = _paper_final_verdict_projection(project_dir, paper_id, evidence_refs)
+    effective_status = _paper_effective_status(status, state, final_verdict_failures)
+    gate_refs = _paper_gate_refs(project_dir, paper_id, state, evidence_refs) + final_verdict_gate_refs
     failure_refs = _paper_failure_refs(project_dir, paper_id, state, effective_status)
-    limitations = _paper_limitations(project_dir, state)
+    failure_refs.extend(final_verdict_failures)
+    limitations = _paper_limitations(project_dir, state, bool(final_verdict_ref)) + final_verdict_limitations
     entries = [_entry(
         adapter_id="paper",
         source_type="paper_project",
@@ -451,10 +459,13 @@ def _paper_entries(project_dir: Path) -> list[dict[str, Any]]:
                 project_dir / "review" / "REVIEW_REPORT.md",
                 project_dir / "closure" / "CLOSURE_REPORT.md",
                 project_dir / "closure" / "FLOW_OUTCOME.json",
+                _paper_final_verdict_path(project_dir) or "",
                 project_dir / "evidence" / "ref-paper-review-pack.zip",
             ),
             evidence_refs=evidence_refs,
+            review_refs=review_refs,
             gate_refs=gate_refs,
+            final_verdict_ref=final_verdict_ref,
             failure_refs=failure_refs,
             limitations=limitations,
             domain_refs={
@@ -483,7 +494,13 @@ def _paper_entries(project_dir: Path) -> list[dict[str, Any]]:
     return entries
 
 
-def _paper_effective_status(status: str, state: dict[str, Any]) -> str:
+def _paper_effective_status(
+    status: str,
+    state: dict[str, Any],
+    final_verdict_failures: list[dict[str, Any]],
+) -> str:
+    if final_verdict_failures:
+        return "blocked"
     if _paper_human_gate_open(state):
         return "human_required"
     return status
@@ -500,10 +517,218 @@ def _paper_evidence_refs(project_dir: Path, paper_id: str) -> list[dict[str, Any
         ("flow-outcome", "other", project_dir / "closure" / "FLOW_OUTCOME.json", "outcome"),
         ("evidence-pack", "other", project_dir / "evidence" / "ref-paper-review-pack.zip", "limitation"),
     ]
+    final_verdict_path = _paper_final_verdict_path(project_dir)
+    if final_verdict_path:
+        candidates.append(("final-verdict", "final_verdict", final_verdict_path, "acceptance"))
     for suffix, kind, path, supports in candidates:
         if path.exists():
             refs.append(_evidence_ref(f"ev-paper-{suffix}-{token}", kind, path, supports))
     return refs
+
+
+def _paper_final_verdict_projection(
+    project_dir: Path,
+    paper_id: str,
+    evidence_refs: list[dict[str, Any]],
+) -> tuple[
+    dict[str, Any] | None,
+    list[dict[str, Any]],
+    list[str],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
+    verdict_path = _paper_final_verdict_path(project_dir)
+    if not verdict_path:
+        return None, [], [], [], []
+    token = _safe_token(paper_id)
+    artifact, diagnostic = _read_final_verdict_artifact_for_chain(verdict_path)
+    if diagnostic:
+        return None, [_paper_final_verdict_failure(token, verdict_path, diagnostic)], [], [], []
+
+    final_state = str(artifact.get("final_state") or "")
+    review_refs, review_failure = _paper_final_verdict_review_refs(
+        artifact,
+        final_state,
+        token,
+        verdict_path,
+        evidence_refs,
+        project_dir,
+    )
+    if review_failure:
+        return None, [review_failure], [], [], []
+    gate_refs, gate_failure = _paper_final_verdict_gate_refs(
+        artifact,
+        token,
+        verdict_path,
+        evidence_refs,
+        project_dir,
+    )
+    if gate_failure:
+        return None, [gate_failure], [], [], []
+    if final_state == "final_ready" and not any(ref.get("result") == "pass" for ref in gate_refs):
+        return None, [_paper_final_verdict_failure(
+            token,
+            verdict_path,
+            "paper FinalVerdict final_ready requires at least one passing gate",
+        )], [], [], []
+
+    final_ref = _paper_final_verdict_ref(artifact, final_state, verdict_path, review_refs, gate_refs)
+    limitations = [str(item) for item in artifact.get("limitations", []) if str(item)] if isinstance(artifact.get("limitations"), list) else []
+    return final_ref, [], limitations, review_refs, gate_refs
+
+
+def _paper_final_verdict_review_refs(
+    artifact: dict[str, Any],
+    final_state: str,
+    token: str,
+    verdict_path: Path,
+    evidence_refs: list[dict[str, Any]],
+    project_dir: Path,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    reviewer = _as_dict(artifact.get("reviewer_summary"))
+    reviewer_verdict = _review_verdict(str(reviewer.get("verdict") or ""))
+    review_path = str(reviewer.get("evidence_path") or "")
+    if final_state == "final_ready" and reviewer_verdict != "pass":
+        return [], _paper_final_verdict_failure(
+            token,
+            verdict_path,
+            "paper FinalVerdict final_ready requires a passing independent review",
+        )
+    if not reviewer_verdict or not review_path:
+        return [], _paper_final_verdict_failure(
+            token,
+            verdict_path,
+            "paper FinalVerdict reviewer_summary is incomplete",
+        )
+
+    review_id = f"review-paper-final-{token}"
+    reviewed_evidence_refs = _paper_gate_evidence_refs(review_path, evidence_refs, project_dir)
+    if not reviewed_evidence_refs:
+        return [], _paper_final_verdict_failure(
+            token,
+            verdict_path,
+            "paper FinalVerdict reviewer_summary evidence_path lacks known evidence",
+        )
+    return [{
+        "review_id": review_id,
+        "reviewer_id": str(reviewer.get("reviewer_id") or ""),
+        "reviewer_role": "reviewer",
+        "verdict": reviewer_verdict,
+        "uri": review_path,
+        "reviewed_evidence_refs": reviewed_evidence_refs,
+    }], None
+
+
+def _paper_final_verdict_gate_refs(
+    artifact: dict[str, Any],
+    token: str,
+    verdict_path: Path,
+    evidence_refs: list[dict[str, Any]],
+    project_dir: Path,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    gate_refs: list[dict[str, Any]] = []
+    for item in artifact.get("gate_summary", []):
+        if not isinstance(item, dict):
+            continue
+        gate_id = str(item.get("gate_id") or "")
+        result = _gate_result(str(item.get("result") or ""))
+        evidence_path = str(item.get("evidence_path") or verdict_path)
+        if not gate_id or not result:
+            continue
+        evidence_ref_ids = _paper_gate_evidence_refs(evidence_path, evidence_refs, project_dir)
+        if result == "pass" and not evidence_ref_ids:
+            return [], _paper_final_verdict_failure(
+                token,
+                verdict_path,
+                f"paper FinalVerdict passing gate lacks known evidence: {gate_id}",
+            )
+        gate_refs.append({
+            "gate_id": gate_id,
+            "result": result,
+            "uri": evidence_path,
+            "evidence_refs": evidence_ref_ids,
+        })
+    if not gate_refs:
+        return [], _paper_final_verdict_failure(
+            token,
+            verdict_path,
+            "paper FinalVerdict gate_summary is incomplete",
+        )
+    return gate_refs, None
+
+
+def _paper_final_verdict_ref(
+    artifact: dict[str, Any],
+    final_state: str,
+    verdict_path: Path,
+    review_refs: list[dict[str, Any]],
+    gate_refs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    final_ref = {
+        "verdict_id": str(artifact.get("verdict_id") or ""),
+        "producer_role": str(artifact.get("producer_role") or ""),
+        "final_state": final_state,
+        "uri": str(verdict_path),
+        "review_ref": str(review_refs[0].get("review_id") or ""),
+        "gate_refs": [str(ref.get("gate_id") or "") for ref in gate_refs],
+    }
+    supersedes = _as_dict(artifact.get("supersedes"))
+    if supersedes:
+        final_ref["supersedes"] = {
+            "verdict_id": str(supersedes.get("verdict_id") or ""),
+            "uri": str(supersedes.get("uri") or ""),
+            "reason": str(supersedes.get("reason") or ""),
+        }
+        chain = _final_verdict_supersession_chain(artifact, verdict_path)
+        if chain:
+            final_ref["supersession_chain"] = chain
+    return final_ref
+
+
+def _paper_final_verdict_path(project_dir: Path) -> Path | None:
+    for candidate in [
+        project_dir / "closure" / "FINAL_VERDICT.json",
+        project_dir / "closure" / "final-verdict.json",
+    ]:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _paper_final_verdict_failure(token: str, verdict_path: Path, diagnostic: str) -> dict[str, Any]:
+    del diagnostic
+    return {
+        "failure_id": f"failure-paper-final-verdict-{token}",
+        "status": "blocked",
+        "uri": str(verdict_path),
+    }
+
+
+def _paper_gate_evidence_refs(
+    evidence_path: str,
+    evidence_refs: list[dict[str, Any]],
+    project_dir: Path,
+) -> list[str]:
+    if not evidence_path:
+        return []
+    candidate = Path(evidence_path)
+    if not candidate.is_absolute():
+        candidate = project_dir / candidate
+    candidate_key = _paper_evidence_path_key(candidate)
+    refs: list[str] = []
+    for ref in evidence_refs:
+        uri = str(ref.get("uri") or "")
+        evidence_id = str(ref.get("evidence_id") or "")
+        if uri and evidence_id and _paper_evidence_path_key(Path(uri)) == candidate_key:
+            refs.append(evidence_id)
+    return refs
+
+
+def _paper_evidence_path_key(path: Path) -> str:
+    try:
+        return str(path.resolve(strict=False)).casefold()
+    except OSError:
+        return str(path.absolute()).casefold()
 
 
 def _paper_gate_refs(
@@ -551,13 +776,17 @@ def _paper_failure_refs(
     return refs
 
 
-def _paper_limitations(project_dir: Path, state: dict[str, Any]) -> list[str]:
+def _paper_limitations(
+    project_dir: Path,
+    state: dict[str, Any],
+    has_final_verdict: bool,
+) -> list[str]:
     limitations = [
         "paper adapter is a read-only projection and does not create final acceptance authority",
     ]
     if not (project_dir / "paper_task" / "PRIVACY_ATTESTATION.yaml").exists():
         limitations.append("paper privacy attestation is not recorded as a gate artifact")
-    if state.get("final_acceptance") is True:
+    if state.get("final_acceptance") is True and not has_final_verdict:
         limitations.append("paper final_acceptance requires a canonical FinalVerdict before final_ready projection")
     if _paper_human_gate_open(state):
         limitations.append("paper workflow is waiting for a human gate decision")
@@ -717,6 +946,21 @@ def _axes(
         and _has_pass_gate(gate_refs)
     ):
         return _axis("closed", "passed", "review_passed", "gate_passed", "final_ready", "completed")
+    if (
+        final_verdict_ref
+        and final_verdict_ref.get("final_state") == "accepted_with_limitation"
+        and _has_pass_review(review_refs)
+        and gate_refs
+    ):
+        gate_state = "gate_limited" if any(ref.get("result") == "warning" for ref in gate_refs) else "gate_passed"
+        return _axis(
+            "closed",
+            "passed",
+            "review_passed",
+            gate_state,
+            "accepted_with_limitation",
+            "completed",
+        )
     if final_verdict_ref and final_verdict_ref.get("final_state") == "blocked":
         return _axis("closed", "blocked", "review_blocked", "gate_blocked", "blocked", "blocked")
     if final_verdict_ref and final_verdict_ref.get("final_state") == "failed":
