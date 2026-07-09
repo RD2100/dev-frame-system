@@ -1987,6 +1987,174 @@ def test_run_index_projects_paper_workflow_state_without_final_authority(tmp_pat
     assert any("FinalVerdict" in item for item in record["limitations"])
 
 
+def test_run_index_projects_paper_final_verdict_to_final_ready(tmp_path):
+    runtime = tmp_path / "runtime"
+    paper_root = tmp_path / "paper"
+    paper_root.mkdir()
+    (paper_root / "PAPER_PROFILE.yaml").write_text("paper_id: demo-paper\ncurrent_stage: closure\n", encoding="utf-8")
+    (paper_root / "PAPER_STATE.yaml").write_text(
+        "\n".join([
+            "paper_id: demo-paper",
+            "workflow_type: paper_review",
+            "current_stage: closure",
+            "acceptance_status: accepted",
+            "manifest_status: complete",
+            "evidence_pack_ref: evidence/ref-paper-review-pack.zip",
+            "final_acceptance: true",
+            "blocking_count: 0",
+            "human_required: false",
+            "human_gate_triggered: false",
+            "chain_trusted: true",
+        ]) + "\n",
+        encoding="utf-8",
+    )
+    (paper_root / "paper_task").mkdir()
+    (paper_root / "paper_task" / "PAPER_TASK_INPUT.yaml").write_text("task_type: cssci_review\n", encoding="utf-8")
+    privacy_path = paper_root / "paper_task" / "PRIVACY_ATTESTATION.yaml"
+    privacy_path.write_text("contains_real_paper_full_text: false\n", encoding="utf-8")
+    (paper_root / "review").mkdir()
+    review_path = paper_root / "review" / "REVIEW_REPORT.md"
+    review_path.write_text("# Review\n", encoding="utf-8")
+    (paper_root / "closure").mkdir()
+    _write_json(paper_root / "closure" / "FINAL_VERDICT.json", {
+        "verdict_id": "fv-paper-demo-final",
+        "produced_by": "paper-governance-finalizer",
+        "produced_at": "2026-07-09T00:00:00Z",
+        "producer_role": "governance",
+        "final_state": "final_ready",
+        "inputs_reviewed": [str(review_path), str(privacy_path)],
+        "gate_summary": [{
+            "gate_id": "gate-paper-demo-privacy-final",
+            "result": "pass",
+            "evidence_path": str(privacy_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "paper-reviewer-1",
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "paper-final-verdict-fixture",
+    })
+
+    index = build_run_index(runtime, paper_project_dirs=[paper_root])
+
+    record = _records_by_adapter(index)["paper"][0]
+    _run_record_validator().validate(record)
+    assert record["phase"] == "closed"
+    assert record["outcome"] == "passed"
+    assert record["review_state"] == "review_passed"
+    assert record["gate_state"] == "gate_passed"
+    assert record["acceptance_state"] == "final_ready"
+    assert record["projection_state"] == "completed"
+    assert record["final_verdict_ref"]["verdict_id"] == "fv-paper-demo-final"
+    assert record["final_verdict_ref"]["review_ref"] == "review-paper-final-demo-paper"
+    assert record["review_refs"][0]["reviewer_id"] == "paper-reviewer-1"
+    assert record["review_refs"][0]["reviewed_evidence_refs"] == ["ev-paper-review-demo-paper"]
+    assert record["gate_refs"][-1]["evidence_refs"] == ["ev-paper-privacy-demo-paper"]
+    assert "paper final_acceptance requires a canonical FinalVerdict before final_ready projection" not in record["limitations"]
+
+
+def test_run_index_blocks_invalid_paper_final_verdict(tmp_path):
+    runtime = tmp_path / "runtime"
+    paper_root = tmp_path / "paper"
+    paper_root.mkdir()
+    (paper_root / "PAPER_PROFILE.yaml").write_text("paper_id: demo-paper\ncurrent_stage: closure\n", encoding="utf-8")
+    (paper_root / "PAPER_STATE.yaml").write_text(
+        "paper_id: demo-paper\nacceptance_status: accepted\nfinal_acceptance: true\n",
+        encoding="utf-8",
+    )
+    (paper_root / "paper_task").mkdir()
+    privacy_path = paper_root / "paper_task" / "PRIVACY_ATTESTATION.yaml"
+    privacy_path.write_text("contains_real_paper_full_text: false\n", encoding="utf-8")
+    (paper_root / "review").mkdir()
+    review_path = paper_root / "review" / "REVIEW_REPORT.md"
+    review_path.write_text("# Review\n", encoding="utf-8")
+    (paper_root / "closure").mkdir()
+    _write_json(paper_root / "closure" / "FINAL_VERDICT.json", {
+        "verdict_id": "fv-paper-demo-invalid",
+        "produced_by": "paper-governance-finalizer",
+        "produced_at": "2026-07-09T00:00:00Z",
+        "producer_role": "governance",
+        "final_state": "final_ready",
+        "inputs_reviewed": [str(review_path), str(privacy_path)],
+        "gate_summary": [{
+            "gate_id": "gate-paper-demo-privacy-final",
+            "result": "pass",
+            "evidence_path": str(privacy_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "paper-reviewer-1",
+            "verdict": "fail",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "paper-final-verdict-fixture",
+    })
+
+    index = build_run_index(runtime, paper_project_dirs=[paper_root])
+
+    record = _records_by_adapter(index)["paper"][0]
+    _run_record_validator().validate(record)
+    assert record["outcome"] == "blocked"
+    assert record["acceptance_state"] == "blocked"
+    assert "final_verdict_ref" not in record
+    assert record["failure_refs"][0]["failure_id"] == "failure-paper-final-verdict-demo-paper"
+
+
+def test_run_index_blocks_paper_final_verdict_with_external_gate_evidence(tmp_path):
+    runtime = tmp_path / "runtime"
+    paper_root = tmp_path / "paper"
+    paper_root.mkdir()
+    (paper_root / "PAPER_PROFILE.yaml").write_text("paper_id: demo-paper\ncurrent_stage: closure\n", encoding="utf-8")
+    (paper_root / "PAPER_STATE.yaml").write_text(
+        "paper_id: demo-paper\nacceptance_status: accepted\nfinal_acceptance: true\n",
+        encoding="utf-8",
+    )
+    (paper_root / "paper_task").mkdir()
+    (paper_root / "paper_task" / "PRIVACY_ATTESTATION.yaml").write_text(
+        "contains_real_paper_full_text: false\n",
+        encoding="utf-8",
+    )
+    (paper_root / "review").mkdir()
+    review_path = paper_root / "review" / "REVIEW_REPORT.md"
+    review_path.write_text("# Review\n", encoding="utf-8")
+    external_dir = tmp_path / "outside"
+    external_dir.mkdir()
+    external_privacy_path = external_dir / "PRIVACY_ATTESTATION.yaml"
+    external_privacy_path.write_text("contains_real_paper_full_text: unknown\n", encoding="utf-8")
+    (paper_root / "closure").mkdir()
+    _write_json(paper_root / "closure" / "FINAL_VERDICT.json", {
+        "verdict_id": "fv-paper-demo-external-evidence",
+        "produced_by": "paper-governance-finalizer",
+        "produced_at": "2026-07-09T00:00:00Z",
+        "producer_role": "governance",
+        "final_state": "final_ready",
+        "inputs_reviewed": [str(review_path), str(external_privacy_path)],
+        "gate_summary": [{
+            "gate_id": "gate-paper-demo-privacy-final",
+            "result": "pass",
+            "evidence_path": str(external_privacy_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "paper-reviewer-1",
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "paper-final-verdict-fixture",
+    })
+
+    index = build_run_index(runtime, paper_project_dirs=[paper_root])
+
+    record = _records_by_adapter(index)["paper"][0]
+    _run_record_validator().validate(record)
+    assert record["outcome"] == "blocked"
+    assert record["acceptance_state"] == "blocked"
+    assert "final_verdict_ref" not in record
+    assert record["failure_refs"][0]["failure_id"] == "failure-paper-final-verdict-demo-paper"
+
+
 def test_run_index_blocks_paper_human_gate_from_workflow_state(tmp_path):
     runtime = tmp_path / "runtime"
     paper_root = tmp_path / "paper"
