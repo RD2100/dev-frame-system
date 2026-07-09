@@ -506,7 +506,7 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     body = json.dumps({
                         "error": "unsupported_action",
                         "action_id": action_id,
-                        "reason": "Only queued go_run execute actions can be started from the local action endpoint.",
+                        "reason": "Only queued go_run execute actions and ready rdpaper run commands can be started from the local action endpoint.",
                     }, indent=2, ensure_ascii=True)
                     self._send_text(HTTPStatus.CONFLICT, "application/json; charset=utf-8", body)
                     return
@@ -1529,6 +1529,47 @@ def _execution_plan_for_action(action: dict[str, Any], runtime_dir: str | Path |
             "intake_id": intake_id,
             "command": f"dispatch-task-intakes --intake-id {intake_id} --runtime-dir {runtime_root}",
         }
+    if source_type == "run":
+        if status != "ready" or str(action.get("detail") or "") != "rdpaper" or not source_id:
+            return None
+        command_args = action.get("command_args")
+        if not isinstance(command_args, list):
+            return None
+        paper_args = _paper_command_args(command_args)
+        if paper_args is None:
+            return None
+        runtime_root = _runtime_root(runtime_dir)
+        argv = [sys.executable, "-m", "control_plane.cli", *paper_args]
+        return {
+            "kind": "paper_run_command",
+            "go_run_id": source_id,
+            "run_id": source_id,
+            "runtime_dir": str(runtime_root),
+            "argv": argv,
+            "command": str(action.get("command") or " ".join(_quote_command_arg(part) for part in argv)),
+        }
+    return None
+
+
+def _paper_command_args(command_args: list[Any]) -> list[str] | None:
+    if not all(isinstance(part, str) and part for part in command_args):
+        return None
+    args = [str(part) for part in command_args]
+    if (
+        args[:2] == ["pack", "validate"]
+        and len(args) == 3
+        and Path(args[2]).name == "ref-paper-review-pack.zip"
+    ):
+        return args
+    if (
+        len(args) == 6
+        and args[0] == "run"
+        and args[1] == "--pipeline"
+        and Path(args[2]).name == "reference_paper_review.yaml"
+        and args[3] == "--execute"
+        and args[4] == "--project"
+    ):
+        return args
     return None
 
 
@@ -1672,6 +1713,7 @@ def _start_subprocess_execution(action_id: str, plan: dict[str, Any]) -> dict[st
                 "action_id": action_id,
                 "action_run_id": str(existing.get("action_run_id") or ""),
                 "go_run_id": plan["go_run_id"],
+                "run_id": str(plan.get("run_id") or plan["go_run_id"]),
                 "kind": plan["kind"],
                 "command": plan["command"],
                 "stdout_log": str(existing.get("stdout_log") or ""),
@@ -1705,6 +1747,7 @@ def _start_subprocess_execution(action_id: str, plan: dict[str, Any]) -> dict[st
         "status": "started",
         "pid": process.pid,
         "go_run_id": plan["go_run_id"],
+        "run_id": str(plan.get("run_id") or plan["go_run_id"]),
         "kind": plan["kind"],
         "command": plan["command"],
         "stdout_log": str(stdout_path),
@@ -1735,6 +1778,7 @@ def _start_subprocess_execution(action_id: str, plan: dict[str, Any]) -> dict[st
         "action_run_id": stamp,
         "kind": plan["kind"],
         "go_run_id": plan["go_run_id"],
+        "run_id": str(plan.get("run_id") or plan["go_run_id"]),
         "command": plan["command"],
         "stdout_log": str(stdout_path),
         "stderr_log": str(stderr_path),

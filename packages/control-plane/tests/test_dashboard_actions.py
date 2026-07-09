@@ -56,6 +56,35 @@ def _write_go_run(runtime_dir, go_run_id):
     }, indent=2, ensure_ascii=True), encoding="utf-8")
 
 
+def _write_paper_project(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "PAPER_PROFILE.yaml").write_text(
+        "\n".join([
+            "paper_id: demo-paper",
+            "title: Demo Paper",
+            "current_stage: drafting",
+        ]),
+        encoding="utf-8",
+    )
+    (root / "PAPER_STATE.yaml").write_text(
+        "\n".join([
+            "paper_id: demo-paper",
+            "current_stage: drafting",
+            "status: initialized",
+        ]),
+        encoding="utf-8",
+    )
+    (root / "PAPER_LEDGER.md").write_text("# Paper Ledger\n", encoding="utf-8")
+    paper_task = root / "paper_task"
+    paper_task.mkdir()
+    (paper_task / "PAPER_TASK_INPUT.yaml").write_text("task_type: cssci_review\n", encoding="utf-8")
+    (paper_task / "PRIVACY_ATTESTATION.yaml").write_text(
+        "contains_real_paper_full_text: false\n",
+        encoding="utf-8",
+    )
+    return root
+
+
 class _FakeProcess:
     pid = 99999
 
@@ -354,6 +383,115 @@ def test_duplicate_execute_action_returns_existing_run(tmp_path, monkeypatch):
         assert second_record_path.exists()
         assert second_record_path == record_path
         assert second_payload["record_path"] == first_payload["record_path"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_paper_action_requires_confirm_before_execution(tmp_path):
+    runtime_dir = tmp_path / "runtime"
+    paper_root = _write_paper_project(tmp_path / "paper-project")
+    action_id = "demo-paper-paper-review-command-action"
+
+    server = build_dashboard_server(
+        runtime_dir=runtime_dir,
+        paper_project_dirs=[paper_root],
+        port=0,
+        refresh_seconds=0,
+    )
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+
+    try:
+        request = Request(
+            f"{base_url}/actions/execute?action_id={action_id}",
+            data=b"",
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Origin": base_url,
+            },
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=5):
+                pass
+            raise AssertionError("expected 409 Conflict")
+        except HTTPError as error:
+            assert error.code == 409
+            payload = json.loads(error.read().decode("utf-8"))
+
+        assert payload["error"] == "human_required"
+        assert payload["action_id"] == action_id
+        assert "confirm=execute" in payload["confirm"]
+        assert "devframe run --pipeline" in payload["command"]
+        assert "rdpaper" in payload["context"]
+        assert not (runtime_dir / "action-runs").exists()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_paper_action_executes_controlled_local_command(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime"
+    paper_root = _write_paper_project(tmp_path / "paper-project")
+    action_id = "demo-paper-paper-review-command-action"
+    popen_calls = []
+
+    def fake_popen(*args, **kwargs):
+        popen_calls.append((args, kwargs))
+        return _FakeProcess()
+
+    monkeypatch.setattr(dashboard_module.subprocess, "Popen", fake_popen)
+
+    server = build_dashboard_server(
+        runtime_dir=runtime_dir,
+        paper_project_dirs=[paper_root],
+        port=0,
+        refresh_seconds=0,
+    )
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+
+    try:
+        request = Request(
+            f"{base_url}/actions/execute?action_id={action_id}",
+            data=b"confirm=execute",
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Origin": base_url,
+            },
+            method="POST",
+        )
+        with urlopen(request, timeout=5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+
+        assert response.status == 202
+        assert payload["started"] is True
+        assert payload["kind"] == "paper_run_command"
+        assert payload["run_id"] == "demo-paper-paper-review"
+        assert payload["go_run_id"] == "demo-paper-paper-review"
+        assert "devframe run --pipeline" in payload["command"]
+
+        assert len(popen_calls) == 1
+        argv = popen_calls[0][0][0]
+        assert argv[:4] == [argv[0], "-m", "control_plane.cli", "run"]
+        assert "--pipeline" in argv
+        assert "--execute" in argv
+        assert argv[-2:] == ["--project", str(paper_root.resolve())]
+        assert popen_calls[0][1]["stdin"] == dashboard_module.subprocess.DEVNULL
+
+        record_path = Path(payload["record_path"])
+        record = _wait_for_record_completion(record_path)
+        assert record["status"] == "completed"
+        assert record["kind"] == "paper_run_command"
+        assert record["run_id"] == "demo-paper-paper-review"
+        assert record["exit_code"] == 0
+        assert Path(record["stdout_log"]).exists()
+        assert Path(record["stderr_log"]).exists()
     finally:
         server.shutdown()
         server.server_close()

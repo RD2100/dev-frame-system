@@ -860,6 +860,13 @@
         },
         "next_command": {
           "type": "string"
+        },
+        "next_command_args": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       },
       "additionalProperties": false
@@ -1004,6 +1011,13 @@
         },
         "command": {
           "type": "string"
+        },
+        "command_args": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       },
       "additionalProperties": false
