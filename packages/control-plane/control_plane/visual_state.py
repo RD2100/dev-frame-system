@@ -2305,6 +2305,7 @@ def _paper_run_state(project_dir: str | Path) -> dict[str, Any]:
         "taskspec_json_path": str(task_input) if task_input.exists() else "",
         "task_input_path": str(task_input) if task_input.exists() else "",
         "next_command": _paper_next_command(root, evidence_pack),
+        "next_command_args": _paper_next_command_args(root, evidence_pack),
     }
 
 
@@ -2480,6 +2481,13 @@ def _paper_next_command(root: Path, evidence_pack: Path) -> str:
         return f"devframe pack validate {_quote_arg(evidence_pack)}"
     pipeline = ROOT / "pipelines" / "reference_paper_review.yaml"
     return f"devframe run --pipeline {_quote_arg(pipeline)} --execute --project {_quote_arg(root)}"
+
+
+def _paper_next_command_args(root: Path, evidence_pack: Path) -> list[str]:
+    if evidence_pack.exists():
+        return ["pack", "validate", str(evidence_pack)]
+    pipeline = ROOT / "pipelines" / "reference_paper_review.yaml"
+    return ["run", "--pipeline", str(pipeline), "--execute", "--project", str(root)]
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:
@@ -2749,7 +2757,7 @@ def _next_actions(
         if status not in {"pending", "running", "blocked", "failed"} or not command:
             continue
         run_id = str(run.get("run_id") or "run")
-        actions.append({
+        action = {
             "action_id": _safe_id(f"{run_id}-command-action"),
             "source_type": "run",
             "source_id": run_id,
@@ -2758,7 +2766,11 @@ def _next_actions(
             "label": "Run or inspect the next local command.",
             "detail": str(run.get("entrypoint") or ""),
             "command": command,
-        })
+        }
+        command_args = run.get("next_command_args")
+        if isinstance(command_args, list) and all(isinstance(part, str) and part for part in command_args):
+            action["command_args"] = command_args
+        actions.append(action)
     actions.extend(_go_run_action_items(go_runs or []))
     for decision in decisions:
         status = str(decision.get("status") or "")

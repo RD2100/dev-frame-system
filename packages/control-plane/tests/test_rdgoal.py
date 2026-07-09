@@ -982,6 +982,7 @@ def test_visual_state_includes_paper_project_workspace(tmp_path):
     assert state["runs"][0]["entrypoint"] == "rdpaper"
     assert state["runs"][0]["task_input_path"].endswith("PAPER_TASK_INPUT.yaml")
     assert state["runs"][0]["next_command"].startswith("devframe run --pipeline")
+    assert state["runs"][0]["next_command_args"][-2:] == ["--project", str(paper_root.resolve())]
     assert any(agent["role"] == "paper_reviewer" for agent in state["agents"])
     paper_binding = next(binding for binding in state["provider_bindings"] if binding["provider"] == "deepseek")
     assert paper_binding["binding_id"] == "demo-paper-deepseek-web"
@@ -1158,6 +1159,7 @@ def test_dashboard_server_serves_paper_project_details(tmp_path):
         assert len(actions_payload["next_actions"]) == 1
         assert actions_payload["next_actions"][0]["source_id"] == "demo-paper-paper-review"
         assert actions_payload["next_actions"][0]["source_type"] == "run"
+        assert actions_payload["next_actions"][0]["command_args"][-2:] == ["--project", str(paper_root.resolve())]
         assert len(single_action_payload["next_actions"]) == 1
         assert single_action_payload["next_actions"][0]["action_id"] == "demo-paper-paper-review-command-action"
         assert "# Action Queue Handoff" in actions_markdown

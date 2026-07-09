@@ -18,7 +18,7 @@ The `head` above is the historical owner-gate snapshot head, not the current
 `main` HEAD.
 
 Verdict: **GITHUB RELEASED as `v0.1.0`**; **PYPI NOT PUBLISHED**;
-**PHASE 6 PAPER ADAPTER DEFERRED**.
+**PHASE 6 PAPER ADAPTER STARTED**.
 
 This is the current launch-control entrypoint. It replaces reading every
 runtime-governance batch note first, but it does not delete or supersede their
@@ -35,11 +35,13 @@ Release `v0.1.0` was then published as a GitHub Release with the
 
 That evidence proves the local gate, PR route, merge route, main CI route, and
 GitHub Release publication for `v0.1.0`. It does not prove PyPI publication,
-downstream adoption, or Phase 6 paper-domain adapter closure.
+downstream adoption, or complete Phase 6 paper-domain adapter closure.
 
-The paper-domain adapter is explicitly deferred from this closure wave. Current
-paper support has read-model and visual-state coverage, but `/rdpaper` remains a
-later Phase 6 domain-adapter slice rather than a Batch F-J release blocker.
+The paper-domain adapter is no longer deferred: Phase 6 has started after the
+GitHub Release. Current paper support has read-model, visual-state, and
+controlled local action-execution coverage, but `/rdpaper` still needs further
+paper-specific final-verdict and external-provider closure before it can be
+called complete.
 
 ## Executed After Owner Approval
 
@@ -68,12 +70,14 @@ later Phase 6 domain-adapter slice rather than a Batch F-J release blocker.
 | GitHub Release `v0.1.0` | published | `https://github.com/RD2100/dev-frame-system/releases/tag/v0.1.0` |
 | Reviewer handoff surface | done locally | [reviewer-index.md](reviewer-index.md) |
 | Dirty worktree batch map and final local review | done locally | [current-dirty-tree-batch-map-20260708.md](current-dirty-tree-batch-map-20260708.md) |
+| Phase 6 paper read-model adapter start | done locally and merged | PR #8 on `RD2100/dev-frame-system` |
+| Phase 6 controlled paper action execution | done locally | `dashboard.py`, `visual_state.py`, and `visual_control_plane_state.schema.json` |
 
 ## Deferred From This Release
 
 | Area | Bucket | Reason | Evidence |
 | --- | --- | --- | --- |
-| Paper-domain adapter and `/rdpaper` command closure | superseded/deferred | Current repo support covers paper read-model and visual-state projection, but full domain-adapter authority is a later Phase 6 slice. | [runtime-governance-and-evidence-closure-transformation-plan.md](runtime-governance-and-evidence-closure-transformation-plan.md), [runtime-governance-batch-e-paper-trust-fail-closed.md](runtime-governance-batch-e-paper-trust-fail-closed.md), [runtime-governance-batch-j-automatic-superseding-final-verdict.md](runtime-governance-batch-j-automatic-superseding-final-verdict.md) |
+| Remaining paper-domain adapter and `/rdpaper` closure | phase-6-in-progress | Current repo support covers paper read-model, visual-state projection, and controlled local command execution; full domain-adapter authority still needs paper-specific final-verdict and external-provider closure. | [runtime-governance-and-evidence-closure-transformation-plan.md](runtime-governance-and-evidence-closure-transformation-plan.md), [runtime-governance-batch-e-paper-trust-fail-closed.md](runtime-governance-batch-e-paper-trust-fail-closed.md), [runtime-governance-batch-j-automatic-superseding-final-verdict.md](runtime-governance-batch-j-automatic-superseding-final-verdict.md) |
 
 ## Remaining Blockers
 
@@ -92,7 +96,7 @@ decision menu after GitHub Release `v0.1.0`.
 | Decision | Meaning | Agent action after approval |
 | --- | --- | --- |
 | `approve-pypi-route` | Define and execute a separate PyPI publication path. | Add or use an approved PyPI workflow, publish with credentials, and record evidence. |
-| `approve-phase-6-paper-adapter` | Start the deferred paper-domain adapter and `/rdpaper` closure slice. | Open a new branch, implement the Phase 6 slice, verify, review, and prepare a PR. |
+| `continue-phase-6-paper-adapter` | Continue the started paper-domain adapter and `/rdpaper` closure slices. | Implement the next Phase 6 slice, verify, review, and prepare a PR. |
 | `hold-after-github-release` | Keep `v0.1.0` as the current public release. | Do not publish to PyPI or start Phase 6 automatically. |
 
 GitHub Release publication is complete for `v0.1.0`. PyPI publication remains a
@@ -104,7 +108,7 @@ GitHub Release and do not create a PyPI release.
 ## Next 3 Actions
 
 1. Owner: decide whether PyPI publication is needed for this project.
-2. Owner: decide whether Phase 6 paper-domain adapter work should begin.
+2. Agent: continue Phase 6 paper-domain adapter closure in small verified slices.
 3. Agent after approval: create the matching implementation or publication
    evidence and update this status entrypoint again.
 
