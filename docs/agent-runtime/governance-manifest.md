@@ -20,11 +20,11 @@ local override is treated as `governance_drift` and must be escalated to human r
 
 | Section ID | File | Description | Hash |
 |------------|------|-------------|------|
-| P0_RULES | `rules/core.md` | All P0 rules (core-001 ~ core-008) | 688329DAEE2187BE6EB10CEAC39E825F36C75B842A2523CE6024FC0D23FAB346 |
-| GATE_0 | `docs/agent-runtime/sub-agent-dispatch-protocol.md` section 0-0.2 | Gate 0 + Cumulative Trigger + Ledger | 81AD0D66AD7B5D9BA4C01928F41A13D9F2BE0E0F397CBE88EE5308858E118BB7 |
-| VETO_CONTRACT | `docs/agent-runtime/sub-agent-dispatch-protocol.md` (core-008 Veto section) | Execute agent veto rights and anti-abuse | 81AD0D66AD7B5D9BA4C01928F41A13D9F2BE0E0F397CBE88EE5308858E118BB7 |
-| PROTECTED_FILES | `AGENTS.md` (Hard Stops section) | File protection list | 08BBA604032A727E57F9E295A9D07E62ED35CCBA39072223D9FE893025FFA879 |
-| CUMULATIVE_TRIGGER | `docs/agent-runtime/sub-agent-dispatch-protocol.md` section 0.0a | Anti-gaming cumulative trigger window | 81AD0D66AD7B5D9BA4C01928F41A13D9F2BE0E0F397CBE88EE5308858E118BB7 |
+| P0_RULES | `rules/core.md` | All P0 rules (core-001 ~ core-008) | 5A00A788659575D404BE42882C4C1FCE8D8B9954CCBA8DB4ABBD572B652953F3 |
+| GATE_0 | `docs/agent-runtime/sub-agent-dispatch-protocol.md` section 0-0.2 | Gate 0 + Cumulative Trigger + Ledger | 329E067B97303CCEBA05D658EA1A0B280B9726493A7DC10373BA86593BE5DD92 |
+| VETO_CONTRACT | `docs/agent-runtime/sub-agent-dispatch-protocol.md` (core-008 Veto section) | Execute agent veto rights and anti-abuse | 329E067B97303CCEBA05D658EA1A0B280B9726493A7DC10373BA86593BE5DD92 |
+| PROTECTED_FILES | `AGENTS.md` (Hard Stops section) | File protection list | 4F3B8D05A68FD9201BF4C9D668EB402B2128C9E3B4F8EEAE373EE699B4010AE0 |
+| CUMULATIVE_TRIGGER | `docs/agent-runtime/sub-agent-dispatch-protocol.md` section 0.0a | Anti-gaming cumulative trigger window | 329E067B97303CCEBA05D658EA1A0B280B9726493A7DC10373BA86593BE5DD92 |
 
 ## Local Override Policy
 

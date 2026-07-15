@@ -53,6 +53,21 @@ rules/
 templates/runtime-bootstrap/  <- Self-contained bootstrap (re-runnable)
 ```
 
+## Accepted Slice Git Lifecycle
+
+- Coding workers may edit, test, and report, but must not stage, commit, or set
+  `root_accepted`.
+- Only the root coordinator may set `root_accepted`, after independent review,
+  required evidence, and actual-diff reconciliation pass.
+- Every `root_accepted` slice receives exactly one local logical commit. The
+  root coordinator stages only accepted paths and verifies the cached path set
+  and content exactly match the slice. Failed, blocked, rejected, or unreviewed
+  slices are not committed.
+- Broad staging, broad restore, stash, reset, and clean are not part of this
+  lifecycle. Push, pull request creation, merge, release, history rewrite, hook
+  registration, and global Git or agent configuration require an explicit
+  human gate. Force-push to `main` or `master` remains forbidden.
+
 ## Phase {{PHASE}} Boundary
 
 NOT active in Phase {{PHASE}}:
@@ -60,7 +75,7 @@ NOT active in Phase {{PHASE}}:
 - Memory writes: read-only
 - Package install: forbidden
 - MCP config changes: forbidden
-- Git mutations: no commit/push/reset/clean/stash
+- Git mutations: workers do not stage or commit; only the root coordinator performs the exact-path local commit required after `root_accepted`
 - Capability registration: all new capabilities must be registered and reviewer-approved before enablement
 
 See [tool-policy.md](docs/agent-runtime/tool-policy.md).

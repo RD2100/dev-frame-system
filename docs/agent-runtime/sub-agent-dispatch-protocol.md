@@ -26,11 +26,18 @@ SADP defines the default pattern for multi-agent development:
 ```
 
 **Roles:**
-- **Codex Goal Agent** (planning tier): Decomposes goals, dispatches tasks, evaluates reports, maintains plan state. Uses `update_plan` and `create_goal` tools.
-- **Claude Code Agent** (execution tier): Receives TaskSpec, executes implementation, collects evidence, returns ExecutionReport. Uses filesystem, git, test runners.
+- **Codex Goal Agent / root coordinator** (planning tier): Decomposes goals, dispatches tasks, reconciles actual changes, obtains independent review, evaluates evidence, and maintains plan state. It is the only role that may set `root_accepted`.
+- **Claude Code Agent / coding worker** (execution tier): Receives TaskSpec, executes implementation, collects evidence, and returns an ExecutionReport. It must not stage, commit, or set `root_accepted`.
 - **Human Reviewer** (oversight tier): Reviews ExecutionReports for P0/P1 tasks, approves gate decisions, signs off on capability registrations.
 
 **Key Principle**: TaskSpec is a self-contained contract. The sub-agent receives ALL context it needs in the dispatch -- it does not re-derive the goal.
+
+**Git lifecycle**: Worker success is advisory. After a separate reviewer passes
+the actual diff and required evidence, the root coordinator may record
+`root_accepted`. Each `root_accepted` slice receives exactly one local logical
+commit created by the root coordinator from an exact accepted path set. Push,
+pull request creation, merge, release, history rewrite, hook registration, and
+global Git or agent configuration remain explicit human gates.
 
 ---
 
@@ -109,6 +116,11 @@ python tools/go_evidence.py finalize <run-evidence-dir> --team-runtime-dir <runt
 If reviewer artifacts are missing, reviewer role is `executor`/`fixer`/`coder`, reviewed inputs are incomplete, or any P0/P1 finding remains unresolved, the final status MUST be `blocked`.
 
 The finalizer may summarize deterministic evidence, but it MUST NOT substitute for reviewer judgment.
+
+A passing reviewer or finalizer is a prerequisite, not acceptance by itself.
+Only the root coordinator may set `root_accepted`, after reconciling the actual
+diff, required evidence, and accepted path set. No worker or worker-authored
+ExecutionReport may set that state.
 
 ---
 
@@ -381,7 +393,7 @@ Every task completion returns this format:
 ## ExecutionReport: [task-id]
 
 - **Status**: pass | fail | blocked | escalate
-- **Review Status**: draft | submitted | reviewed | accepted | rejected
+- **Review Status**: draft | submitted (executor values only)
 - **Summary**: [1-3 sentences: what was done, what was found]
 - **Changed Files**:
   - `path/to/file.ts` (+N lines, -M lines) -- [what changed]
@@ -403,13 +415,18 @@ Every task completion returns this format:
   - [capability name] -- [Status: approved]
 ```
 
+The executor may emit only `draft` or `submitted`. A separate reviewer records
+its verdict in reviewer evidence. The root coordinator records
+`root_accepted` outside the worker-authored ExecutionReport only after that
+review and all required evidence pass.
+
 ### Example
 
 ```markdown
 ## ExecutionReport: task-a1b2c3d4
 
 - **Status**: pass
-- **Review Status**: accepted
+- **Review Status**: submitted
 - **Summary**: Added rate-limiting middleware (100 req/min per IP). All tests pass, no regression.
 - **Changed Files**:
   - `src/middleware/rateLimiter.ts` (+45 lines, -0 lines) -- new middleware
@@ -446,10 +463,17 @@ Every task completion returns this format:
 3. **Executes** the task: reads, edits, tests
 4. **Collects evidence**: test output, build results, git diff stats
 5. **Returns** ExecutionReport to the goal agent session
+6. **Does not** stage files, create a commit, or set `root_accepted`
 
 ### 3.3 Goal Agent (Evaluate -> Next)
 
-
+1. Reconciles the worker report against the actual changed paths and content.
+2. Obtains the required independent reviewer verdict and verifies all evidence.
+3. Sets `root_accepted` only when the actual diff, scope, review, and gates pass.
+4. For each `root_accepted` slice, stages only the accepted paths, verifies the
+   cached path set and content, and creates exactly one local logical commit.
+5. Does not commit failed, blocked, rejected, or unreviewed work. External Git
+   effects remain behind the explicit human gate.
 
 ### 3.3a Plan Auditor (Independent Compliance Check)
 
@@ -496,7 +520,7 @@ Before accepting any session that produces file changes, an independent Plan Aud
 | Auditor uncertain, governance files touched | **escalate** |
 | Auditor uncertain, low-risk non-governance | **pass** (with warn) |
 
-**Hard Rule**: Any session that produces file changes must produce an Audit Record before finalization, commit, merge, or handoff. Plan Agent cannot audit or approve its own compliance.
+**Hard Rule**: Any session that produces file changes must produce an Audit Record before finalization, `root_accepted`, local commit, merge, or handoff. Plan Agent cannot audit or approve its own compliance.
 
 **Anti-Bypass**: Audit trigger is based on session diff and changed_files, not Plan Agent self-report. If changed_files is non-empty and no Audit Record exists, the session is blocked by default.
 
@@ -532,7 +556,7 @@ plan_agent_review:
       actual_change: [what actually changed]
       unexpected_modifications: [files changed but not in TaskSpec allowed_files]
 
-  decision: accept | reject | request_revision
+  decision: root_accepted | rejected | request_revision
 ```
 
 **Regression Test Triggers:**
@@ -540,19 +564,17 @@ plan_agent_review:
 - `targeted` -- after tasks that modify only application code (check only affected modules)
 
 **Decision Rules:**
-- All gates PASS + regression PASS -> `accept`, dispatch next task
+- All gates PASS + regression PASS + independent reviewer PASS -> root coordinator records `root_accepted`
 - Gate FAIL -> `request_revision` back to execute agent with specific gate failure
-- Regression FAIL -> `reject`, halt batch, flag for human review
-- Unexpected file modifications -> `reject`, potential scope violation
+- Regression FAIL -> `rejected`, halt batch, flag for human review
+- Unexpected file modifications -> `rejected`, potential scope violation
 
 
-1. **Receives** ExecutionReport
-2. **Evaluates** against acceptance gates:
-   - All gates PASS -> mark task complete, dispatch next if any remain
-   - Any gate FAIL -> analyze, possibly revise TaskSpec and re-dispatch
-   - BLOCKED -> escalate to human reviewer
-3. **Updates** `update_plan` with new status
-4. **Dispatches** next task or marks goal complete
+1. **Receives** ExecutionReport and treats it as an untrusted claim.
+2. **Reconciles** the report with the actual diff and independent reviewer evidence.
+3. **Evaluates** acceptance gates; only the root coordinator may record `root_accepted`.
+4. **Creates** one exact-path local logical commit for the `root_accepted` slice.
+5. **Updates** plan state and dispatches the next task only after that commit succeeds.
 
 ---
 
@@ -679,7 +701,10 @@ The Codex goal agent plans and dispatches; the Claude Code agent executes and re
 
 - TaskSpec dispatch does NOT violate Phase 0-5 boundaries:
   - No package install unless explicitly authorized in Forbidden section (default: forbidden)
-  - No git mutations unless explicitly authorized (default: no commit without human gate)
+  - Coding workers do not stage, commit, or set `root_accepted`
+  - Only the root coordinator may stage exact accepted paths and create one local commit after independent review, required evidence, and `root_accepted`
+  - Broad staging (`git add -A`, `git add .`, `git commit -a`), broad restore, stash, reset, and clean are not part of the slice lifecycle
+  - Push, pull request creation, merge, release, history rewrite, hook registration, and global Git or agent configuration require an explicit human gate
   - No capability use without inventory registration (core-007)
 - ExecutionReport preserves audit trail for human review
 - All evidence is verifiable: test commands with output, file paths with line counts
@@ -692,9 +717,10 @@ To verify the protocol works end-to-end:
 
 1. Codex goal agent creates a TaskSpec for a trivial task (e.g., "add a comment to README.md")
 2. Claude Code agent receives, executes, returns ExecutionReport
-3. Goal agent evaluates, marks complete
+3. Independent reviewer evaluates the actual diff and evidence
+4. Root coordinator records `root_accepted`, stages the exact accepted paths, verifies the cached diff, and creates one local logical commit
 
-Expected: full cycle completes within one goal turn, all gates PASS.
+Expected: full cycle completes with all gates PASS and one commit containing only the accepted slice.
 
 ---
 
@@ -711,7 +737,10 @@ Reviewer: RD. The following Phase 0-5 constraints are lifted for SADP operation:
 | Scripts | not_run | source_inspection | Read source, no execution |
 | SADP | protocol_only | full_dispatch | TaskSpec -> ExecutionReport cycle |
 
-Test execution, package install, git mutations, and MCP changes remain forbidden without separate human gate.
+Test execution, package install, external Git effects, destructive Git mutations,
+hook or global configuration changes, and MCP changes remain forbidden without a
+separate human gate. The only lifecycle Git mutation is the root coordinator's
+exact-path stage and single local commit after `root_accepted` under RULE git-006.
 
 
 **Version**: 1.0 | **Status**: approved | **Replaces**: ad-hoc goal-mode handoffs
