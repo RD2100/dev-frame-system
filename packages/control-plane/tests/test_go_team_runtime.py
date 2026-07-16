@@ -10,7 +10,11 @@ from pathlib import Path
 
 from jsonschema.validators import validator_for
 
-from control_plane.go_dispatch import execute_go_run, run_go_dispatch
+from control_plane.go_dispatch import (
+    SUCCESS_WORKER_STATUSES,
+    execute_go_run,
+    run_go_dispatch,
+)
 from control_plane.t3_adapter import build_t3_client_shell
 from control_plane.team_runtime import TEAM_EVENTS_FILE, build_team_runtime_view
 from control_plane.visual_state import build_visual_control_plane_state
@@ -224,3 +228,62 @@ def test_resume_prepared_go_run_records_explicit_team_evidence(tmp_path):
         "report",
     }
     _validate_runtime_context_artifacts(Path(executed.agents[0].packet_dir))
+
+
+def test_overlapping_claim_in_real_execute_fails_second_agent(tmp_path):
+    # Real-path regression: execute_go_run -> _execute_parallel ->
+    # plan_write_set_groups -> _run_group -> _run_agent_in_place.
+    # When agent 2's metadata is mutated to overlap agent 1's target,
+    # the TeamRuntime claim guard rejects the second claim before append,
+    # _run_agent_in_place catches the ValueError, marks the agent failed,
+    # writes go-agent-error.txt, and records a failed task result without
+    # invoking the worker.
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "a.py").write_text("a = 1\n", encoding="utf-8")
+    (project / "b.py").write_text("b = 2\n", encoding="utf-8")
+    runtime = tmp_path / "runtime"
+
+    prepared = run_go_dispatch(
+        project,
+        "claim-propagation regression",
+        runtime_dir=runtime,
+        agents=2,
+        targets=["a.py", "b.py"],
+        execute=False,
+        worker_command=_noop_report_command(),
+    )
+    assert not (runtime / TEAM_EVENTS_FILE).exists()
+
+    # Drift agent 2's target to overlap agent 1's in the temporary metadata.
+    metadata_path = Path(prepared.metadata_path)
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["agents"][1]["targets"] = list(metadata["agents"][0]["targets"])
+    metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=True), encoding="utf-8")
+
+    executed = execute_go_run(runtime, prepared.go_run_id)
+
+    agent1, agent2 = executed.agents
+    assert agent1.worker_status in SUCCESS_WORKER_STATUSES
+    assert agent1.status == "completed"
+    assert agent2.worker_status == "failed"
+    assert agent2.status == "failed"
+
+    events = [
+        json.loads(line)
+        for line in (runtime / TEAM_EVENTS_FILE).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    claim_events = [e for e in events if e["event_type"] == "task_claimed"]
+    assert len(claim_events) == 1
+    assert claim_events[0]["agent_id"] == agent1.agent_id
+
+    result_events = [e for e in events if e["event_type"] == "task_result"]
+    assert len(result_events) == 2
+    results_by_agent = {e["agent_id"]: e["payload"]["status"] for e in result_events}
+    assert results_by_agent[agent1.agent_id] in SUCCESS_WORKER_STATUSES
+    assert results_by_agent[agent2.agent_id] == "failed"
+
+    error_text = (Path(agent2.packet_dir) / "go-agent-error.txt").read_text(encoding="utf-8")
+    assert "already claimed" in error_text
+    assert agent1.targets[0] in error_text
