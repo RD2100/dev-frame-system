@@ -131,6 +131,7 @@ $ignoredGeneratedDirs = @(
     ".pytest_cache",
     ".ruff_cache",
     ".mypy_cache"
+    "node_modules"
 )
 
 function Test-IsUnderIgnoredGeneratedDir {
