@@ -64,13 +64,16 @@ class TeamRuntime:
         self._lock = threading.Lock()
 
     def _append(self, event: TeamEvent) -> str:
+        with self._lock:
+            self._append_locked(event)
+        return event.event_id
+
+    def _append_locked(self, event: TeamEvent) -> None:
         if self.repo_root and is_inside(self.runtime_dir, self.repo_root):
             raise ValueError("Team runtime journal must not be inside the public repository.")
-        with self._lock:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            with self.path.open("a", encoding="utf-8") as handle:
-                handle.write(json.dumps(asdict(event), ensure_ascii=True) + "\n")
-        return event.event_id
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(asdict(event), ensure_ascii=True) + "\n")
 
     def record_task_created(self, run_id: str, agent_id: str, *,
                             project_id: str = "", shard_index: int = 0,
@@ -91,12 +94,39 @@ class TeamRuntime:
 
     def record_task_claimed(self, run_id: str, agent_id: str,
                             *, context_refs: list[dict[str, Any]] | None = None) -> str:
-        return self._append(TeamEvent(
+        event = TeamEvent(
             event_type="task_claimed",
             run_id=run_id,
             agent_id=agent_id,
             payload={"context_refs": _normalize_context_refs(context_refs)},
-        ))
+        )
+        with self._lock:
+            targets_by_agent: dict[str, set[str]] = {}
+            claimed_agents: set[str] = set()
+            for record in _read_team_events(self.path):
+                if str(record.get("run_id") or "") != run_id:
+                    continue
+                recorded_agent_id = str(record.get("agent_id") or "")
+                event_type = str(record.get("event_type") or "")
+                if event_type == "task_created":
+                    payload = record.get("payload")
+                    targets = payload.get("targets") if isinstance(payload, dict) else []
+                    if isinstance(targets, list):
+                        targets_by_agent.setdefault(recorded_agent_id, set()).update(
+                            str(target) for target in targets if str(target)
+                        )
+                elif event_type == "task_claimed":
+                    claimed_agents.add(recorded_agent_id)
+
+            targets = targets_by_agent.get(agent_id, set())
+            for claimed_agent_id in claimed_agents - {agent_id}:
+                overlap = targets & targets_by_agent.get(claimed_agent_id, set())
+                if overlap:
+                    raise ValueError(
+                        f"Targets already claimed in run {run_id}: {', '.join(sorted(overlap))}."
+                    )
+            self._append_locked(event)
+        return event.event_id
 
     def record_result(self, run_id: str, agent_id: str, *, status: str,
                       report_path: str = "", isolated: bool = False) -> str:

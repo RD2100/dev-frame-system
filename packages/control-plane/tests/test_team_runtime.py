@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from control_plane.team_runtime import (
     TEAM_EVENTS_FILE,
     TeamRuntime,
@@ -236,6 +238,37 @@ def test_conflict_dedup_across_repeated_targets(tmp_path):
     team.record_task_created("go-run-1", "coding-agent-1", targets=["a.py"])  # re-run
     conflicts = build_team_runtime_view(tmp_path)["conflict_control"]
     assert len([c for c in conflicts if c["file_path"] == "a.py"]) == 1
+
+
+def test_duplicate_target_claim_is_rejected_without_journal_mutation(tmp_path):
+    team = TeamRuntime(runtime_dir=tmp_path)
+    team.record_task_created("go-run-claims", "agent-a", targets=["shared.py"])
+    team.record_task_created("go-run-claims", "agent-b", targets=["shared.py"])
+    team.record_task_claimed("go-run-claims", "agent-a")
+    team.record_task_claimed("go-run-claims", "agent-a")
+    journal = tmp_path / TEAM_EVENTS_FILE
+    line_count = len(journal.read_text(encoding="utf-8").splitlines())
+
+    with pytest.raises(ValueError, match="shared.py"):
+        team.record_task_claimed("go-run-claims", "agent-b")
+
+    assert len(journal.read_text(encoding="utf-8").splitlines()) == line_count
+    conflicts = build_team_runtime_view(tmp_path)["conflict_control"]
+    assert [(item["file_path"], item["owner_agent_id"]) for item in conflicts] == [
+        ("shared.py", "agent-a"),
+    ]
+
+
+def test_distinct_targets_can_be_claimed_in_the_same_run(tmp_path):
+    team = TeamRuntime(runtime_dir=tmp_path)
+    team.record_task_created("go-run-claims", "agent-a", targets=["a.py"])
+    team.record_task_created("go-run-claims", "agent-b", targets=["b.py"])
+
+    team.record_task_claimed("go-run-claims", "agent-a")
+    team.record_task_claimed("go-run-claims", "agent-b")
+
+    task_board = build_team_runtime_view(tmp_path)["task_board"]
+    assert {task["status"] for task in task_board} == {"claimed"}
 
 
 def test_record_lifecycle_is_persisted(tmp_path):
