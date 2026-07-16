@@ -71,7 +71,9 @@ Use:
 recoverable session rather than a one-shot command. The text status view gives
 a path-free, read-only next-step summary: prepared work is ready to run;
 paused, blocked, and failed work needs attention; completed work is ready for
-result review.
+result review. When one or more agents need attention, the text view names
+only their agent IDs and normalized states, without exposing report or runtime
+paths.
 
 ## Secondary Surfaces
 
