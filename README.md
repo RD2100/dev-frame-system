@@ -25,10 +25,10 @@
 </p>
 
 ```text
-devframe code "<goal>"   # main product: prepare a governed coding run
-devframe code workers    # check local worker availability
-devframe code status     # inspect a prepared run
-devframe code execute    # execute a prepared run
+devframe code "<goal>"   # 1. prepare a governed coding run
+devframe code status     # 2. inspect its status
+devframe code execute    # 3. execute when you choose
+devframe code workers    # optional: check local worker availability
 devframe dashboard serve # optional control-plane view
 
 # advanced / secondary surfaces

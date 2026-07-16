@@ -4,12 +4,14 @@ from __future__ import annotations
 HELP_TEXT = """DevFrame Code CLI
   Primary workflow: use devframe code as an OpenCode-first local coding tool.
 
-  Main loop
-  devframe code [[<goal>] | --prompt-file <path>] - start an OpenCode-backed coding session
+  Daily coding loop
+  1. Prepare : devframe code [[<goal>] | --prompt-file <path>]
+  2. Status  : devframe code status [latest|<go-run-id>]
+  3. Execute : devframe code execute [latest|<go-run-id>]
+
+  Optional setup
   devframe code workers              - show available coding worker profiles
   devframe code providers            - show selectable model providers (api/local/web-shim)
-  devframe code status [latest|<go-run-id>] - inspect a previous /go coding run without spending worker tokens
-  devframe code execute [latest|<go-run-id>] - execute a prepared /go run; optional explicit auto-finalize requires --evidence-dir
   devframe code session [latest|<go-run-id>] - inspect a previous /go coding run sessions
 
   Control plane

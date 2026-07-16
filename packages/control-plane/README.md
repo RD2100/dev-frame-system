@@ -46,9 +46,11 @@ devframe dashboard serve --runtime-dir C:\Users\you\.devframe-runtime
 The mainline workflow is:
 
 1. `devframe code`
-2. `devframe code workers`
-3. `devframe code status`
-4. `devframe code execute`
+2. `devframe code status`
+3. `devframe code execute`
+
+`devframe code workers` and `devframe code providers` are optional setup
+commands when you need to inspect local capability or choose a provider.
 
 `devframe code` is the OpenCode-backed entrypoint. Run it with no positional
 goal to get a `Goal:` prompt in the current repository, or pass the goal on the
