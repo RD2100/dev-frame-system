@@ -1,6 +1,6 @@
 # RD2100 Agent Runtime -- Bootstrap Template
 
-> Version: 1.0 | Requires: PowerShell 5.1+, git
+> Version: 1.1 | Requires: PowerShell 5.1+, git
 > Target: Any project needing Agent Runtime governance (Claude Code / Codex / Both)
 
 ## What This Is
@@ -9,15 +9,16 @@ A one-command bootstrap that initializes the RD2100 Agent Runtime governance fra
 
 ## What You Get
 
-| Asset | Type | Count |
+| Asset | Type | Scope |
 |-------|------|:---:|
-| Rules | Copied (universal) | 8 files, 44 rules |
+| Rules | Copied (universal) | Versioned public rule catalog |
 | Schemas | Copied (universal) | 18 JSON Schema files |
 | AGENTS.md | Generated | 1 file |
 | Capability Inventory | Generated | 10 universal + N project-specific |
 | Tool Policy | Generated | 1 file |
 | `/go` wrapper | Generated | `tools/devframe-go.ps1` |
 | Reviewer Docs | Copied (universal) | 5 files |
+| Outcome-First Delivery | Copied (universal) | Milestones, risk profiles, quiet gates |
 | Negative Test Fixtures | Copied (universal) | 30 fixtures |
 
 ## Quick Start

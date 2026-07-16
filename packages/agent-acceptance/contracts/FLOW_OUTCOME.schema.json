@@ -52,7 +52,7 @@
     },
     "terminal": {
       "type": "boolean",
-      "description": "Is this flow terminal? If false, the agent MUST continue consuming next_task_spec."
+      "description": "Is this explicit bounded flow terminal? If false, the agent MUST continue its declared next action or next TaskSpec. This does not activate a later project milestone."
     },
     "errors": {
       "type": "array",

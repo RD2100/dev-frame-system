@@ -9,6 +9,7 @@
 1. [Operating Model](docs/agent-runtime/operating-model.md)
 2. [Integration Contracts](docs/agent-runtime/integration-contracts.md)
 3. [Verification Gates](docs/agent-runtime/verification-gates.md)
+4. [Outcome-First Delivery](docs/agent-runtime/outcome-first-delivery.md)
 
 ## Default Development Process: Sub-Agent Dispatch
 
@@ -17,6 +18,31 @@ This project uses the [Sub-Agent Dispatch Protocol](docs/agent-runtime/sub-agent
 - **Codex Goal Agent** (planning tier): Decomposes goals, dispatches [TaskSpecs](docs/agent-runtime/sub-agent-dispatch-protocol.md#1-taskspec-format), evaluates [ExecutionReports](docs/agent-runtime/sub-agent-dispatch-protocol.md#2-executionreport-format), updates plans.
 - **Claude Code Agent** (execution tier): Receives self-contained TaskSpec, implements, collects evidence, returns ExecutionReport.
 - All capabilities used must be registered in [capability-inventory.md](docs/agent-runtime/capability-inventory.md) (core-007).
+
+## Outcome-First Delivery
+
+- The project-local finite Delivery Goal, authoritative HANDOFF, and active
+  milestone record are business truth. Goal and dashboard state are scheduling
+  projections.
+- The project root coordinator freezes the in-scope candidate set, chooses and
+  executes natural milestones, and continues across milestone boundaries while
+  safe local goal work remains. It does not wait for a global controller to
+  design ordinary batches.
+- Check committed `HEAD` and existing tests before declaring a capability gap
+  or dispatching remediation.
+- Match verification to risk. Use focused checks for low-risk batches and run
+  broad checks at the milestone, PR, or high-risk boundary.
+- Group related low-risk changes into one coherent batch. Keep one PR to one
+  product or risk theme.
+- Formal high-risk acceptance keeps real-path evidence and independent review.
+- Close a natural milestone with `accepted_done`; if the parent Delivery Goal
+  remains active, select the next eligible candidate. Do not create work outside
+  the finite candidate set solely to avoid idle.
+- Await long-running commands to exit, timeout, or an explicit external wait
+  state in the session that started them.
+
+See `rules/orchestration.md` orch-006 through orch-012 and
+`rules/review.md` review-007 through review-009.
 
 ## Hard Stops (P0)
 
@@ -39,6 +65,7 @@ docs/agent-runtime/
   tool-policy.md              <- Phase-aware tool policy (generated)
   capability-inventory.md     <- Cross-platform capability inventory
   runtime-invariants.md       <- Runtime invariants
+  outcome-first-delivery.md   <- Risk-proportional milestones and quiet gates
   reviewer-playbook.md        <- Reviewer guide + decision tree
   negative-acceptance-tests.md <- 30 negative test definitions
   negative-test-fixtures/     <- 30 JSON

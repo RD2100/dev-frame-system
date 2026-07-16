@@ -2,16 +2,23 @@
 
 > Authority: agent-acceptance
 > Consumers: dev-frame-opencode (oracle_flow_runner.py)
-> Version: 1.0.0
+> Version: 1.1.0
 > Depends on: TERMINAL_STATE_POLICY.md, RUNNER_STATE.schema.json
 
 ---
 
 ## Core Rule
 
-The runner's default mode is **run-until-terminal**: it continues executing steps as long as `terminal=false`. It only stops when `terminal=true` for a valid terminal reason.
+The runner's default mode is **run-until-terminal** for the explicit bounded
+chain it was given: it continues executing steps as long as `terminal=false`.
+It only stops when `terminal=true` for a valid terminal reason.
 
 **terminal=false NEVER means "stop."** It ALWAYS means "continue."
+
+This rule does not make the entire project one endless runner chain. The runner
+must not synthesize a new TaskSpec or RED case outside the finite Delivery Goal
+after a milestone completes. Project-level continuation and project-root-owned
+milestone activation are governed by `OUTCOME_FIRST_DELIVERY_POLICY.md`.
 
 ---
 
@@ -43,6 +50,9 @@ The runner MUST continue when:
 | `status=step_partial` | Continue with remaining partial actions |
 | `dispatch_status=ready_to_dispatch` | Execute dispatch to transition to `dispatched` |
 | `dispatch_status=taskspec_generated` | Dispatch the generated TaskSpec for execution |
+
+The table applies only when the referenced next action or TaskSpec already
+belongs to the active bounded chain.
 
 ---
 
@@ -82,6 +92,29 @@ Generating a next-stage TaskSpec is a `step_success_continue`, not `step_success
 
 ---
 
+## Long-Running Step Closure
+
+When a step starts a test, build, hook, push, or other long-running command, the
+runner should wait in the same execution session until the command exits,
+times out, or enters a recorded external wait state. Routine PID or case
+progress may be logged without ending the run.
+
+Starting a command, returning a final answer, and relying on later watchdog
+turns for ordinary polling is not run-until-terminal behavior.
+
+---
+
+## Natural Milestone Completion
+
+When the bounded milestone has no explicit stage left and its required evidence
+passes, use `terminal=true` with `reason=accepted_done`. Preserve a resumable
+pointer as metadata if useful. If the parent finite Delivery Goal remains
+active and an eligible candidate remains, the project root coordinator
+deliberately starts the next milestone; the global controller does not choose
+or prescribe that ordinary TaskSpec.
+
+---
+
 ## Anti-Patterns
 
 | Anti-Pattern | Why Wrong | Correct |
@@ -91,3 +124,6 @@ Generating a next-stage TaskSpec is a `step_success_continue`, not `step_success
 | Runner treats TaskSpec generation as done | Leaves generated TaskSpec unconsumed | Continue to dispatch |
 | Runner continues when terminal=true | Ignores stop signal | Stop and produce final report |
 | Runner invents terminal reasons | Not in the 6 allowed reasons | Only use defined terminal reasons |
+| Runner creates an out-of-scope batch only to remain active | Expands the finite Delivery Goal | Close with `accepted_done` and leave the discovery in backlog |
+| Global controller prescribes the next ordinary runner batch | Converts project root into a one-shot executor | Let the project root activate the next eligible milestone |
+| Runner ends a turn while its ordinary command is still running | Converts execution into repeated polling | Await exit, timeout, failure, or a recorded external wait state |

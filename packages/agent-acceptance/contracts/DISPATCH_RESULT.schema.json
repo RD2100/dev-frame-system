@@ -36,7 +36,7 @@
     },
     "terminal": {
       "type": "boolean",
-      "description": "Is the dispatch chain terminal? If false, the automation must continue."
+      "description": "Is this explicit bounded dispatch chain terminal? If false, the automation must continue the declared chain; it must not invent a later project milestone."
     },
     "should_execute_next": {
       "type": "boolean",

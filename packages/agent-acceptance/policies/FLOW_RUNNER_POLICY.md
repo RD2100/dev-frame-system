@@ -2,7 +2,7 @@
 
 > Authority: agent-acceptance
 > Consumers: dev-frame-opencode (oracle_flow_runner.py)
-> Version: 1.0.0
+> Version: 1.1.0
 > Depends on: FLOW_OUTCOME.schema.json, TASKSPEC.schema.json, DISPATCH_RESULT.schema.json, RUNNER_CONTRACT.schema.json, RUNNER_STATE.schema.json
 
 ---
@@ -10,6 +10,10 @@
 ## Core Rule
 
 The Flow Runner is a dev-frame-opencode execution component whose **sole normative authority** is agent-acceptance. The runner must not invent its own rules — it reads contracts, policies, and schemas from agent-acceptance.
+
+Run-until-terminal applies to the explicit bounded chain supplied to the
+runner. The runner must not convert later project backlog into a new TaskSpec
+merely to remain active. See `OUTCOME_FIRST_DELIVERY_POLICY.md`.
 
 ---
 
@@ -28,6 +32,10 @@ The Flow Runner is a dev-frame-opencode execution component whose **sole normati
 6. **Write FLOW_OUTCOME after each GPT round**: After each GPT review cycle, the runner must write FLOW_OUTCOME.json.
 
 7. **Machine-readable only**: The runner must not use Markdown reports as automation decision input. Only JSON schemas and machine-readable state files.
+
+8. **Close long-running steps in-session**: Tests, builds, hooks, pushes, and
+   equivalent commands are awaited until exit, timeout, or a recorded external
+   wait state; ordinary progress polling does not require a new runner turn.
 
 ---
 
@@ -63,6 +71,8 @@ The Flow Runner is a dev-frame-opencode execution component whose **sole normati
 | Runner reads Markdown for decisions | Not machine-readable | Read JSON schemas only |
 | Runner skips schema validation | Invalid inputs → wrong behavior | Validate all inputs first |
 | Runner doesn't persist state | Cannot resume after crash | Write RUNNER_STATE after every step |
+| Runner creates a new milestone to avoid idle | Exceeds the authority of the supplied chain | Stop at accepted_done and return scheduling control |
+| Runner returns while an ordinary command is still running | Splits one step into repeated watchdog polls | Await exit, timeout, or a recorded external wait state |
 
 ---
 

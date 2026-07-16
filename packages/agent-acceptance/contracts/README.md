@@ -6,7 +6,7 @@ Normative JSON schemas consumed by dev-frame-opencode and any automation agent.
 
 | Schema | Purpose | Key Rules |
 |--------|---------|-----------|
-| `FLOW_OUTCOME.schema.json` | Three-layer flow state (transport/business/dispatch) | `terminal=false` requires `next_task_spec_path` or `required_next_action`; `ready_to_dispatch` ≠ `dispatched` |
+| `FLOW_OUTCOME.schema.json` | Three-layer bounded-flow state (transport/business/dispatch) | `terminal=false` requires `next_task_spec_path` or `required_next_action`; `ready_to_dispatch` ≠ `dispatched`; later project milestones are out of scope |
 | `TASKSPEC.schema.json` | Machine-readable task specification | Must be JSON, not Markdown-only; `high_risk=true` triggers `human_required` |
 | `DISPATCH_RESULT.schema.json` | Dispatch operation result | Distinguishes 6 dispatch states; `ready_to_dispatch` and `taskspec_generated` are non-terminal |
 
@@ -34,6 +34,9 @@ Added by AA-2: Flow Runner / TaskSpec Runner contracts. These extend AA-1 schema
 
 - `RUNNER_CONTRACT` references `FLOW_OUTCOME` (via `input_outcome_path`) and `TASKSPEC` (via `input_taskspec_path`)
 - `RUNNER_STATE` inherits terminal semantics from `FLOW_OUTCOME` and `DISPATCH_RESULT`
+- Terminal semantics are local to the explicit bounded chain. A coordinator
+  may close a milestone with `accepted_done` and retain a resumable backlog
+  pointer without creating a new `next_task_spec_path`.
 - `RUNNER_STEP_RESULT` reuses the three-layer model (transport/business/dispatch) from `FLOW_OUTCOME`
 
 Runner schemas are the execution layer on top of AA-1's normative layer. AA-1 defines WHAT state looks like; AA-2 defines HOW a runner must behave against that state.

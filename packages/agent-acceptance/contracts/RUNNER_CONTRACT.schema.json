@@ -33,7 +33,7 @@
     },
     "terminal": {
       "type": "boolean",
-      "description": "Is this runner invocation terminal? If false, the runner MUST continue executing next actions."
+      "description": "Is this bounded runner invocation terminal? If false, the runner MUST continue executing its declared next actions."
     },
     "next_action": {
       "type": "string",

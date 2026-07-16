@@ -26,7 +26,7 @@
     },
     "terminal": {
       "type": "boolean",
-      "description": "Is the runner in a terminal state? If false, the runner MUST continue."
+      "description": "Is this bounded runner chain in a terminal state? If false, the runner MUST continue its declared next action."
     },
     "last_decision": {
       "type": "string",
