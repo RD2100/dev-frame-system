@@ -127,6 +127,7 @@ $textScanExtensions = @(
 
 $textScanAllowlist = @(
     "packages\control-plane\tests\test_public_snapshot.py",
+    "scripts\import-tutti-snapshot.py",
     "scripts\verify-public-snapshot.ps1"
 )
 
