@@ -219,7 +219,7 @@ function Get-PublicSnapshotItems {
 $script:ignoredTuttiLocalPaths = @()
 if (Test-Path -LiteralPath (Join-Path $rootPath ".git")) {
     $script:ignoredTuttiLocalPaths = @(
-        & git -C $rootPath ls-files --others --ignored --exclude-standard --directory --no-empty-directory -- products/tutti 2>$null |
+        & git -C $rootPath ls-files --others --ignored --exclude-standard --directory -- products/tutti 2>$null |
             ForEach-Object {
                 $path = ($_.TrimEnd('/') -replace "\\", "/")
                 if (-not [string]::IsNullOrWhiteSpace($path)) {
