@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import fnmatch
+import hashlib
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -167,6 +168,37 @@ def get_diff_name_status(repo_path: str) -> dict[str, str]:
 def get_staged_diff(repo_path: str) -> str:
     exit_code, stdout, _ = _run_git(repo_path, ["diff", "--cached", "--unified=3"])
     return stdout if exit_code == 0 else ""
+
+
+def _cached_paths(repo_path: str) -> set[str]:
+    code, stdout, _ = _run_git(repo_path, ["diff", "--cached", "--name-only"])
+    return set(_normalize_paths(stdout.splitlines())) if code == 0 else set()
+
+
+def _file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def stage_exact_paths(repo_path: str, accepted_paths: list[str], baseline_hashes: dict[str, str]) -> tuple[bool, str]:
+    """Stage an accepted slice only when the index and frozen bytes match it."""
+    accepted = _normalize_paths(accepted_paths)
+    if not accepted or set(accepted) != set(baseline_hashes):
+        return False, "accepted paths and baseline hashes must match exactly"
+    if _cached_paths(repo_path):
+        return False, "cached index is not empty"
+    root = Path(repo_path).resolve()
+    for relative in accepted:
+        candidate = (root / relative).resolve()
+        if root not in candidate.parents or not candidate.is_file():
+            return False, f"accepted path is invalid: {relative}"
+        if _file_sha256(candidate) != baseline_hashes[relative]:
+            return False, f"baseline hash drift: {relative}"
+    code, _, stderr = _run_git(repo_path, ["add", "--", *accepted])
+    if code != 0:
+        return False, stderr or "git add failed"
+    if _cached_paths(repo_path) != set(accepted):
+        return False, "cached path set does not match accepted paths"
+    return True, "exact paths staged"
 
 
 def get_untracked_files(repo_path: str) -> dict[str, str]:
