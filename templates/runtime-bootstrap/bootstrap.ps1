@@ -84,6 +84,16 @@ function New-FromTemplate($templateFile, $targetRel, $desc) {
     Write-Output "[GEN] $targetRel"
 }
 
+function Get-Sha256Hash($path) {
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.IO.File]::ReadAllBytes($path)
+        return ([BitConverter]::ToString($sha256.ComputeHash($bytes))).Replace("-", "")
+    } finally {
+        $sha256.Dispose()
+    }
+}
+
 Write-Output "`n=== Step 1: Universal Assets ==="
 Copy-Universal "rules" "rules" "8 rules, 44 entries"
 Copy-Universal "schemas" "schemas" "18 JSON Schema files"
@@ -122,9 +132,9 @@ if ($DryRun) {
 }
 
 # --- Governance Manifest (hash-locked, generated after all files exist) ---
-$p0Hash = (Get-FileHash (Join-Path $ProjectRoot "rules\core.md") -Algorithm SHA256).Hash
-$sadpHash = (Get-FileHash (Join-Path $ProjectRoot "docs\agent-runtime\sub-agent-dispatch-protocol.md") -Algorithm SHA256).Hash
-$agentsHash = (Get-FileHash (Join-Path $ProjectRoot "AGENTS.md") -Algorithm SHA256).Hash
+$p0Hash = Get-Sha256Hash (Join-Path $ProjectRoot "rules\core.md")
+$sadpHash = Get-Sha256Hash (Join-Path $ProjectRoot "docs\agent-runtime\sub-agent-dispatch-protocol.md")
+$agentsHash = Get-Sha256Hash (Join-Path $ProjectRoot "AGENTS.md")
 $ManifestPlaceholders = @{
     "{{P0_HASH}}" = $p0Hash
     "{{GATE0_HASH}}" = $sadpHash
