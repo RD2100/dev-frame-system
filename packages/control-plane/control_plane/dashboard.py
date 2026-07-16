@@ -13,7 +13,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, quote, urlencode, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlencode, urlparse
 
 from .client_launcher import build_client_launch_plan, render_client_launch_plan_json
 from .client_manifest import render_visual_client_manifest_json
@@ -312,6 +312,18 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     self._send_text(HTTPStatus.NOT_FOUND, "application/json; charset=utf-8", json.dumps({"error": "session_not_found"}))
                     return
                 self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", json.dumps(session, indent=2, ensure_ascii=True))
+                return
+            if path.startswith("/sessions/"):
+                session_id = unquote(path[len("/sessions/"):])
+                if not session_id or "/" in session_id:
+                    self._send_text(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", "session not found\n")
+                    return
+                state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=paper_project_dirs)
+                session = public_session_detail(state.get("sessions"), session_id)
+                if session is None:
+                    self._send_text(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", "session not found\n")
+                    return
+                self._send_text(HTTPStatus.OK, "text/html; charset=utf-8", _render_session_detail_html(session))
                 return
             if path == "/web-ai-sessions.json":
                 state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=paper_project_dirs)
@@ -1378,6 +1390,56 @@ def _gate_by_id(gates: object, gate_id: str) -> dict[str, Any] | None:
         if isinstance(gate, dict) and str(gate.get("gate_id") or "") == gate_id:
             return gate
     return None
+
+
+def _render_session_detail_html(session: dict[str, Any]) -> str:
+    """Render the already-public session projection without exposing runtime data."""
+    fields = [
+        ("Session ID", session.get("session_id")),
+        ("Status", session.get("status")),
+        ("Provider", session.get("provider")),
+        ("Binding", session.get("binding_id")),
+        ("Agent", session.get("agent_id")),
+        ("Agent Role", session.get("agent_role")),
+        ("Project", session.get("project_id")),
+        ("Run ID", session.get("run_id")),
+        ("TaskSpec", session.get("task_spec_id")),
+        ("Messages", session.get("message_count")),
+        ("Tool Calls", session.get("tool_call_count")),
+        ("Changed Files", ", ".join(str(value) for value in session.get("changed_files", []))),
+        ("Diff Summary", session.get("diff_summary")),
+        ("Gates", ", ".join(str(value) for value in session.get("gates", []))),
+        ("Actions", ", ".join(str(value) for value in session.get("actions", []))),
+    ]
+    rows = "\n".join(
+        f"<dt>{escape(label)}</dt><dd>{escape(str(value or '-'))}</dd>"
+        for label, value in fields
+    )
+    return "\n".join([
+        "<!doctype html>",
+        '<html lang="en">',
+        "<head>",
+        '<meta charset="utf-8">',
+        '<meta name="viewport" content="width=device-width, initial-scale=1">',
+        "<title>DevFrame Session</title>",
+        "<style>",
+        "body{font-family:system-ui,sans-serif;margin:0;background:#f8fafc;color:#111827;}",
+        "main{max-width:920px;margin:0 auto;padding:32px 20px;}",
+        "section{background:#fff;border:1px solid #d1d5db;border-radius:8px;padding:20px;margin-top:16px;}",
+        "dl{display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px 16px;}",
+        "dt{font-weight:700;color:#374151;}dd{margin:0;overflow-wrap:anywhere;}",
+        "a{color:#14532d;text-decoration:none;}a:hover{text-decoration:underline;}",
+        "</style>",
+        "</head>",
+        "<body><main>",
+        "<p>DevFrame Local Agent Control Plane</p>",
+        "<h1>Session</h1>",
+        "<section><dl>",
+        rows,
+        "</dl></section>",
+        '<p><a href="/">Dashboard</a></p>',
+        "</main></body></html>",
+    ])
 
 
 def _render_review_gate_open_html(

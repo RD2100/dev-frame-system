@@ -104,7 +104,7 @@ def test_session_detail_endpoint_returns_public_projection_and_hides_runtime_ref
     state = {
         "sessions": [{
             "session_id": "review-session-1",
-            "provider": "chatgpt",
+            "provider": "chatgpt<script>alert('xss')</script>",
             "binding_id": "web-ai",
             "agent_id": "reviewer-1",
             "agent_role": "reviewer",
@@ -147,11 +147,29 @@ def test_session_detail_endpoint_returns_public_projection_and_hides_runtime_ref
         assert "native_refs" not in payload
         assert "secret" not in json.dumps(payload)
 
+        with urlopen(f"{base_url}/sessions/review-session-1", timeout=5) as response:
+            html = response.read().decode("utf-8")
+
+        assert response.status == 200
+        assert "<h1>Session</h1>" in html
+        assert "review-session-1" in html
+        assert "chatgpt&lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;" in html
+        assert "<script>alert('xss')</script>" not in html
+        assert "D:/private" not in html
+        assert "must-not-leak" not in html
+        assert "<form" not in html
+
         try:
             with urlopen(f"{base_url}/sessions/missing-session.json", timeout=5):
                 raise AssertionError("missing session unexpectedly returned a response")
         except HTTPError as error:
             assert error.code == 404
+        for path in ("/sessions/missing-session", "/sessions/review/session-1"):
+            try:
+                with urlopen(f"{base_url}{path}", timeout=5):
+                    raise AssertionError(f"{path} unexpectedly returned a response")
+            except HTTPError as error:
+                assert error.code == 404
     finally:
         server.shutdown()
         server.server_close()
@@ -197,9 +215,33 @@ def test_session_stream_links_to_matching_read_only_detail(tmp_path, monkeypatch
             html = response.read().decode("utf-8")
 
         assert response.status == 200
-        assert 'href="/sessions/review-session-1.json"' in html
-        assert 'href="/sessions/.json"' not in html
-        assert 'action="/sessions/review-session-1.json"' not in html
+        assert 'href="/sessions/review-session-1"' in html
+        assert 'href="/sessions/review-session-1.json"' not in html
+        assert 'href="/sessions/"' not in html
+        assert 'action="/sessions/review-session-1"' not in html
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_session_detail_html_route_decodes_stream_link_id(tmp_path, monkeypatch):
+    session_id = "review session-1"
+    monkeypatch.setattr(
+        dashboard_module,
+        "build_visual_control_plane_state",
+        lambda *a, **kw: {"sessions": [{"session_id": session_id, "status": "completed"}]},
+    )
+    server = build_dashboard_server(runtime_dir=tmp_path / "runtime", port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        with urlopen(f"{base_url}/sessions/review%20session-1", timeout=5) as response:
+            html = response.read().decode("utf-8")
+
+        assert response.status == 200
+        assert session_id in html
     finally:
         server.shutdown()
         server.server_close()
