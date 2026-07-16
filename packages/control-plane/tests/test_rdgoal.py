@@ -787,6 +787,10 @@ def test_dashboard_server_serves_html_and_state_json_read_only(tmp_path):
             html = response.read().decode("utf-8")
         with urlopen(f"{base_url}/state.json", timeout=5) as response:
             state = json.loads(response.read().decode("utf-8"))
+        with urlopen(Request(f"{base_url}/state.json", method="HEAD"), timeout=5) as response:
+            assert response.status == 200
+            assert response.headers["Content-Type"] == "application/json; charset=utf-8"
+            assert response.read() == b""
         with urlopen(f"{base_url}/actions.json?status=open&source_type=gate", timeout=5) as response:
             actions_payload = json.loads(response.read().decode("utf-8"))
         with urlopen(f"{base_url}/actions.json?source-type=gate", timeout=5) as response:
@@ -846,6 +850,14 @@ def test_dashboard_server_serves_html_and_state_json_read_only(tmp_path):
             assert error.code == 405
         else:
             raise AssertionError("dashboard accepted a write request")
+        for method in ("POST", "PUT", "PATCH", "DELETE"):
+            try:
+                urlopen(Request(f"{base_url}/state.json", method=method), timeout=5)
+            except HTTPError as error:
+                assert error.code == 405
+                assert error.headers["Allow"] == "GET, HEAD, OPTIONS"
+            else:
+                raise AssertionError(f"dashboard accepted a {method} state write request")
     finally:
         server.shutdown()
         server.server_close()
