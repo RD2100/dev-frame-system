@@ -1579,6 +1579,7 @@ def test_sessions_help_is_available(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "Usage: devframe sessions" in output
     assert "--runtime-dir" in output
+    assert "--session-id" in output
     assert "--format" in output
 
 

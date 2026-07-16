@@ -16,7 +16,7 @@ HELP_TEXT = """DevFrame Code CLI
   devframe client                    - launch the zero-config local Agent client
   devframe dashboard serve           - serve read-only local dashboard
   devframe actions                   - show Visual Control Plane action queue
-  devframe sessions                  - show all Visual Control Plane sessions (including imported web AI sessions)
+  devframe sessions [--session-id <id>] - show public Visual Control Plane session summaries or one exact detail
   devframe visual-state              - export Visual Control Plane state
 
   Advanced orchestration
@@ -60,7 +60,7 @@ CODE_STATUS_USAGE = "Usage: devframe code status [latest|<go-run-id>] [--runtime
 CODE_EXECUTE_USAGE = "Usage: devframe code execute [latest|<go-run-id>] [--runtime-dir <dir>] [--timeout <seconds>] [--rerun-passed] [--evidence-dir <dir>] [--auto-finalize | --prepare-evidence-dir <dir>]"
 SESSION_USAGE = "Usage: devframe code session [latest|<go-run-id>] [--runtime-dir <dir>] [--format text|json]"
 CLIENT_USAGE = "Usage: devframe client [serve|plan|bridge|t3desktop|smoke|doctor] [--runtime-dir <dir>] [--paper-project <dir>] [--host 127.0.0.1] [--port 8765] [--lang en|zh-CN] [--dry-run] [--format text|json] [--open] [--allow-remote] [--output <dir>] [--t3-root <dir>] [--force] [--prod]"
-SESSIONS_USAGE = "Usage: devframe sessions [--runtime-dir <dir>] [--format text|json]"
+SESSIONS_USAGE = "Usage: devframe sessions [--runtime-dir <dir>] [--session-id <id>] [--format text|json]"
 WEB_AI_IMPORT_USAGE = "Usage: devframe web-ai import <source> [--runtime-dir <dir>]"
 WEB_AI_PROBE_USAGE = "Usage: devframe web-ai probe codexpro|devspace --endpoint <url> [--project <id>] [--format text|json|session-json]"
 WEB_AI_LIVE_CHECK_USAGE = "Usage: devframe web-ai live-check codexpro|devspace --endpoint <url> [--token <token>] [--project <id>] [--tool server_config|handoff_to_agent|task_intake|project_summary] [--format text|json|session-json] [--import] [--runtime-dir <dir>]"
