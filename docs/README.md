@@ -12,6 +12,7 @@ Start here when you need to understand which document is authoritative, which do
 | Understand the runtime model | [Agent Runtime Operating Model](agent-runtime/operating-model.md) |
 | Understand the main review and acceptance discipline | [Reviewer Playbook](agent-runtime/reviewer-playbook.md) |
 | Understand current release scope | [Release Readiness](status/release-readiness.md) |
+| Resume current public work | [Current Handoff](status/HANDOFF.md) |
 | Navigate every `docs/status` record by authority level | [Status Document Inventory](status/status-document-inventory.md) |
 | Understand the current review map | [Reviewer Index](status/reviewer-index.md) |
 
@@ -123,6 +124,8 @@ Use [status](status/) for current release state, recon receipts, audit notes, an
 Rules of thumb:
 
 - `release-readiness.md` explains the current release boundary.
+- `HANDOFF.md` is the single current continuation entrypoint; older handoff
+  records remain historical context.
 - `status-document-inventory.md` explains how to read `docs/status/` without treating every file as current authority.
 - `governance-spine-and-document-coordination.md` explains how the active plans fit into one governance sequence.
 - `current-coverage-audit-evidence-20260704.md` records the bounded evidence snapshot behind the master plan's current coverage audit.
