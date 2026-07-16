@@ -369,29 +369,34 @@ def go_dispatch(
 ):
     """Dispatch a SADP TaskSpec to the OpenCode-backed workflow."""
     init_env()
-    spec = _load_task_spec(task_spec_path)
-    from .task_spec_adapter import from_task_spec
-    adapted = from_task_spec(spec)
+    raw_spec = _load_task_spec(task_spec_path)
+    from .task_spec_adapter import from_task_spec, TaskSpecValidationError
 
-    pid = project_id or spec.get("project_id") or spec.get("project")
+    requested_mode = "dry-run" if dry_run else "apply" if apply_changes else "dry-run"
+
+    # Validate the canonical TaskSpec and the final execution mode together.
+    # A CLI flag must not bypass the adapter's apply-mode safety boundary.
+    try:
+        adapted = from_task_spec(raw_spec, envelope={"mode": requested_mode})
+    except TaskSpecValidationError as exc:
+        console.print(f"[red]TaskSpec validation failed: {exc}[/red]")
+        raise typer.Exit(1)
+    op = adapted["operational"]
+
+    pid = project_id
     if not pid:
-        console.print("[red]TaskSpec missing project_id (or pass --project).[/red]")
+        console.print("[red]--project is required for @go dispatch.[/red]")
         raise typer.Exit(1)
 
-    mode_apply = adapted.get("mode", "dry-run") == "apply"
-    if apply_changes:
-        mode_apply = True
-    if dry_run:
-        mode_apply = False
-
-    verify_commands = _verification_commands_from_spec(adapted.get("verification", []))
-    _check_verify_deny_conflict(verify_commands, adapted.get("forbidden_files", []))
+    mode_apply = op["mode"] == "apply"
+    verify_commands = _verification_commands_from_spec(op["verification"])
+    _check_verify_deny_conflict(verify_commands, op["forbidden_files"])
 
     task_id = add_task(
         pid,
-        adapted["title"],
-        adapted.get("description", ""),
-        adapted.get("risk", "medium"),
+        op["title"],
+        op["description"],
+        op["risk"],
         coding_backend="opencode",
     )
     console.print(f"[bold]@go dispatch[/bold] TaskSpec -> {task_id} (backend=opencode)")
@@ -401,10 +406,10 @@ def go_dispatch(
         task_id,
         apply_changes=mode_apply,
         run_tests=run_tests,
-        task_allowed_files=adapted.get("allowed_files", []),
-        task_forbidden_files=adapted.get("forbidden_files", []),
+        task_allowed_files=op["allowed_files"],
+        task_forbidden_files=op["forbidden_files"],
         task_test_commands=verify_commands or None,
-        task_spec=spec,
+        task_spec=raw_spec,
     )
 
     run_dir = result.get("run_dir", "") if result else ""
@@ -802,30 +807,64 @@ def _check_verify_deny_conflict(
         raise typer.Exit(69)
 
 def _write_execution_report(run_dir: str) -> str:
-    """Write @go ExecutionReport artifacts from run evidence."""
+    """Write canonical ExecutionReport artifacts from run evidence.
+
+    Reads only canonical ExecutionReport fields (report_id, batch_id,
+    generated_at, status, summary, executor_id, run_ids, reviewer_artifacts,
+    blocking_issues, recommendations, trust_record) and projects a Markdown
+    view referencing source evidence paths/summaries without assuming old keys.
+    """
     from .execution_report_adapter import to_execution_report
     report = to_execution_report(run_dir)
     save_run_json(run_dir, "execution-report.json", report)
     lines = [
         "# ExecutionReport",
         "",
-        f"- **Task ID**: {report.get('task_id', '')}",
+        f"- **Report ID**: {report.get('report_id', '')}",
+        f"- **Batch ID**: {report.get('batch_id', '')}",
+        f"- **Generated At**: {report.get('generated_at', '')}",
         f"- **Status**: {report.get('status', 'unknown')}",
-        f"- **Diff**: {report.get('diff_summary', '')}",
-        f"- **Safety**: {report.get('safety', {}).get('overall', 'unknown')}",
-        f"- **Evidence Trust**: {report.get('evidence_trust', '')}",
-        "",
-        "## Changed Files",
+        f"- **Summary**: {report.get('summary', '')}",
     ]
-    changed = report.get("changed_files", [])
-    lines.extend(f"- `{path}`" for path in changed) if changed else lines.append("- (none)")
-    lines.extend([
-        "",
-        "## Test Results",
-        "```",
-        str(report.get("test_results", ""))[:2000],
-        "```",
-    ])
+    executor_id = report.get("executor_id", "")
+    if executor_id:
+        lines.append(f"- **Executor**: {executor_id}")
+
+    run_ids = report.get("run_ids", [])
+    if run_ids:
+        lines.append("")
+        lines.append("## Run IDs")
+        lines.extend(f"- `{rid}`" for rid in run_ids)
+
+    reviewer_artifacts = report.get("reviewer_artifacts")
+    if reviewer_artifacts:
+        lines.append("")
+        lines.append("## Reviewer Artifacts")
+        lines.append(f"- review.md: `{reviewer_artifacts.get('review_md', '')}`")
+        lines.append(f"- review.yaml: `{reviewer_artifacts.get('review_yaml', '')}`")
+        lines.append(f"- reviewer_role: {reviewer_artifacts.get('reviewer_role', '')}")
+        lines.append(f"- reviewer_id: {reviewer_artifacts.get('reviewer_id', '')}")
+
+    blocking = report.get("blocking_issues", [])
+    if blocking:
+        lines.append("")
+        lines.append("## Blocking Issues")
+        lines.extend(f"- {issue}" for issue in blocking)
+
+    recommendations = report.get("recommendations", [])
+    if recommendations:
+        lines.append("")
+        lines.append("## Recommendations")
+        lines.extend(f"- {rec}" for rec in recommendations)
+
+    trust = report.get("trust_record")
+    if trust:
+        lines.append("")
+        lines.append("## Trust Record")
+        for key in ("session_id", "model_used", "tokens_used", "dispatch_method", "cost_estimate"):
+            if key in trust:
+                lines.append(f"- {key}: {trust[key]}")
+
     return save_run_file(run_dir, "execution-report.md", "\n".join(lines))
 
 # ============================================================

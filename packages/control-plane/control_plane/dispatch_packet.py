@@ -207,6 +207,14 @@ class DispatchPacketStore:
                 "protected_files_touched": any(_is_protected_target(target) for target in targets),
                 "conflict_level": "high" if len(targets) > 1 else "low",
             },
+            "security_report": {
+                "scan_status": "not_run",
+                "new_external_api": False,
+                "env_example_placeholders_only": None,
+                "real_key_patterns_found": None,
+                "staged_diff_secret_scan_run": False,
+                "key_rotation_needed": None,
+            },
         }
 
     def _task_spec_markdown(self, packet: DispatchPacket) -> str:

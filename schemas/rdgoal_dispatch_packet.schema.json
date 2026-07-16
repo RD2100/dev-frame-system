@@ -43,13 +43,33 @@
     "dispatch_ready": { "type": "boolean" },
     "task_spec": {
       "type": "object",
-      "required": ["task_id", "title", "priority", "status", "description"],
+      "required": ["task_id", "title", "priority", "status", "description", "security_report"],
       "properties": {
         "task_id": { "type": "string" },
         "title": { "type": "string" },
         "priority": { "type": "string" },
         "status": { "type": "string" },
-        "description": { "type": "string" }
+        "description": { "type": "string" },
+        "security_report": {
+          "type": "object",
+          "required": [
+            "scan_status",
+            "new_external_api",
+            "env_example_placeholders_only",
+            "real_key_patterns_found",
+            "staged_diff_secret_scan_run",
+            "key_rotation_needed"
+          ],
+          "properties": {
+            "scan_status": { "type": "string", "enum": ["not_run", "passed", "failed"] },
+            "new_external_api": { "type": "boolean" },
+            "env_example_placeholders_only": { "type": ["boolean", "null"] },
+            "real_key_patterns_found": { "type": ["boolean", "null"] },
+            "staged_diff_secret_scan_run": { "type": "boolean" },
+            "key_rotation_needed": { "type": ["boolean", "null"] }
+          },
+          "additionalProperties": true
+        }
       },
       "additionalProperties": true
     },
