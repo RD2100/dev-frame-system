@@ -206,6 +206,34 @@ class TeamRuntime:
             },
         ))
 
+    def record_agent_message(self, run_id: str, from_agent_id: str, to_agent_id: str,
+                             *, kind: str, summary: str) -> str:
+        """Record an explicit agent-to-agent message as a durable event.
+
+        Unlike the lifecycle projections (task-assign/claim/result) which are
+        synthesized from task state transitions, this records a real inter-agent
+        communication fact. Fail closed: missing any required field raises
+        ``ValueError`` so no partial message is ever persisted.
+        """
+        for _name, _value in (
+            ("from_agent_id", from_agent_id),
+            ("to_agent_id", to_agent_id),
+            ("kind", kind),
+            ("summary", summary),
+        ):
+            if not str(_value or "").strip():
+                raise ValueError(f"record_agent_message requires a non-empty {_name}.")
+        return self._append(TeamEvent(
+            event_type="agent_message",
+            run_id=run_id,
+            agent_id=from_agent_id,
+            payload={
+                "to_agent_id": str(to_agent_id),
+                "kind": str(kind),
+                "summary": str(summary),
+            },
+        ))
+
     def read_all(self) -> list[dict[str, Any]]:
         return _read_team_events(self.path)
 
@@ -563,6 +591,24 @@ def build_team_runtime_view(runtime_dir: str | Path | None = None) -> dict[str, 
                     "run_id": run_id,
                     "summary": summary,
                 })
+        elif event_type == "agent_message":
+            to_agent_id = str(payload.get("to_agent_id") or "")
+            msg_kind = str(payload.get("kind") or "")
+            msg_summary = str(payload.get("summary") or "")
+            message_bus.append({
+                "message_id": f"team-{event_id}",
+                "from_role": agent_id,
+                "to_role": to_agent_id,
+                "kind": msg_kind,
+                "run_id": run_id,
+                "summary": msg_summary,
+            })
+            event_log.append({
+                "event_id": f"team-{event_id}",
+                "kind": "agent-message",
+                "run_id": run_id,
+                "summary": msg_summary,
+            })
     return {
         "message_bus": message_bus,
         "event_log": event_log,

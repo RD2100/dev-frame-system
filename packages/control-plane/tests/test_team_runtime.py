@@ -274,6 +274,52 @@ def test_view_folds_events_into_schema_shapes(tmp_path):
         assert pattern.match(entry["message_id"]), entry["message_id"]
 
 
+def test_explicit_agent_message_is_durable_and_not_a_lifecycle_projection(tmp_path):
+    team = TeamRuntime(runtime_dir=tmp_path)
+
+    team.record_agent_message(
+        "go-run-message",
+        "coding-agent-1",
+        "coding-agent-2",
+        kind="handoff",
+        summary="Please review the isolated implementation.",
+    )
+
+    record = json.loads((tmp_path / TEAM_EVENTS_FILE).read_text(encoding="utf-8"))
+    assert record["event_type"] == "agent_message"
+    assert record["agent_id"] == "coding-agent-1"
+    assert record["payload"] == {
+        "to_agent_id": "coding-agent-2",
+        "kind": "handoff",
+        "summary": "Please review the isolated implementation.",
+    }
+
+    view = build_team_runtime_view(tmp_path)
+    assert ("coding-agent-1", "coding-agent-2", "handoff") in {
+        (message["from_role"], message["to_role"], message["kind"])
+        for message in view["message_bus"]
+    }
+    assert {
+        "agent-message",
+    } <= {event["kind"] for event in view["event_log"]}
+
+
+def test_explicit_agent_message_rejects_missing_required_fields(tmp_path):
+    team = TeamRuntime(runtime_dir=tmp_path)
+
+    for kwargs in (
+        {"from_agent_id": "", "to_agent_id": "coding-agent-2", "kind": "handoff", "summary": "x"},
+        {"from_agent_id": "coding-agent-1", "to_agent_id": "", "kind": "handoff", "summary": "x"},
+        {"from_agent_id": "coding-agent-1", "to_agent_id": "coding-agent-2", "kind": "", "summary": "x"},
+        {"from_agent_id": "coding-agent-1", "to_agent_id": "coding-agent-2", "kind": "handoff", "summary": ""},
+    ):
+        try:
+            team.record_agent_message("go-run-message", **kwargs)
+        except ValueError:
+            continue
+        raise AssertionError("expected explicit message validation to fail closed")
+
+
 def test_journal_refuses_inside_repo(tmp_path):
     # repo_root == runtime_dir means the journal would live inside the repo.
     team = TeamRuntime(runtime_dir=tmp_path, repo_root=tmp_path)
