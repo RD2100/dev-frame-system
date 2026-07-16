@@ -3059,7 +3059,7 @@ def _workbench_session_lane(sessions: list[dict[str, Any]], lang: str) -> str:
 
 
 def _session_detail_href(session_id: object) -> str:
-    return f"/sessions/{quote(str(session_id or ''), safe='')}.json"
+    return f"/sessions/{quote(str(session_id or ''), safe='')}"
 
 
 def _session_detail_link(session_id: object) -> str:
