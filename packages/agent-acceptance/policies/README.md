@@ -6,6 +6,7 @@ Normative policy documents. These define behavioral rules that complement the JS
 
 | Policy | Purpose | Priority |
 |--------|---------|----------|
+| `OUTCOME_FIRST_DELIVERY_POLICY.md` | Keeps governance proportional to milestone risk and distinguishes outcome evidence from control activity | P0/P1 |
 | `TERMINAL_STATE_POLICY.md` | Defines when terminal=true is valid; when false, agent MUST continue | P0 |
 | `DISPATCHER_POLICY.md` | Dispatcher must produce actionable DISPATCH_RESULT; not just suggestions | P0 |
 | `AUTONOMOUS_PROGRESS_POLICY.md` | What can auto-advance vs what requires human | P0 |
@@ -34,8 +35,8 @@ Added by AA-2: Flow Runner / TaskSpec Runner behavioral rules.
 |--------|---------|----------|
 | `FLOW_RUNNER_POLICY.md` | Runner is dev-frame execution layer; reads agent-acceptance rules; validates schemas before execution; only terminal=true produces final report | P0 |
 | `TASKSPEC_RUNNER_POLICY.md` | TaskSpec must be machine-readable JSON; Markdown-only rejected; high_risk → human_required; forbidden_actions blocked at schema level | P0 |
-| `RUN_UNTIL_TERMINAL_POLICY.md` | Default: run-until-terminal; terminal=false NEVER stops; only 6 valid terminal reasons; TaskSpec generation ≠ terminal | P0 |
-| `NEXT_TASKSPEC_CONSUMPTION_POLICY.md` | next_task_spec_path is mandatory consumption; ready_to_dispatch ≠ dispatched; unconsumed TaskSpec = P0 violation | P0 |
+| `RUN_UNTIL_TERMINAL_POLICY.md` | Runs an explicit bounded chain until terminal; it does not manufacture a new project milestone | P0 |
+| `NEXT_TASKSPEC_CONSUMPTION_POLICY.md` | An explicit next_task_spec_path is mandatory consumption; creating one merely to avoid idle is forbidden | P0 |
 | `RUNNER_FAILURE_POLICY.md` | Fail-closed on schema missing/invalid, outcome missing, GPT unknown, CDP failure; high-risk → human_required; repeated failure escalation | P0 |
 
 ### Runner Policy Precedence
@@ -43,3 +44,8 @@ Added by AA-2: Flow Runner / TaskSpec Runner behavioral rules.
 Runner policies (AA-2) build on AA-1 policies. When a runner policy references the same concept as an AA-1 policy (e.g., terminal state), the AA-2 policy provides **runner-level enforcement** — the AA-1 policy remains the normative definition.
 
 AA-1 policies define WHAT the rules are. AA-2 runner policies define HOW the runner mechanically enforces them.
+
+`OUTCOME_FIRST_DELIVERY_POLICY.md` defines the hierarchy around those runner
+contracts. Mandatory continuation applies inside an explicit non-terminal
+chain. It does not require a coordinator to keep the entire project
+non-terminal after a bounded milestone reaches `accepted_done`.

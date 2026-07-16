@@ -68,3 +68,55 @@
 - **Rule**: Run `git status --short` before and after the task. Include both in the ExecutionReport. The diff between pre and post must only show approved changes.
 - **Verification**: Pre and post status are included in report, diff is clean.
 - **Conflict Handling**: If git is unavailable, use `ls -R` with timestamps as fallback.
+
+---
+
+## RULE review-007: Verification Must Be Risk-Proportional
+
+- **Priority**: P1 (Scope Control)
+- **Trigger**: Selecting verification for a code, config, docs, or research batch
+- **Scope**: All phases
+- **Rule**: Match verification to blast radius and evidence criticality. Low-
+  risk local changes use static or focused checks and share a broad check at
+  the containing milestone. Medium-risk work adds affected integration or build
+  checks. P0/P1, production, security, concurrency, and formal experiment
+  entry paths require a relevant real-path regression and milestone-level broad
+  verification.
+- **Verification**: ExecutionReport names the risk profile and separates
+  per-batch commands from milestone commands.
+- **Conflict Handling**: A stricter repository, release, or safety gate wins.
+  Governance budget never downgrades a critical or high-risk check.
+
+---
+
+## RULE review-008: Review Requires an Explicit Verdict
+
+- **Priority**: P1 (Scope Control)
+- **Trigger**: Counting a reviewer run as review evidence
+- **Scope**: All phases
+- **Rule**: Reading the diff or restating test output is not a review. Valid
+  review evidence contains reviewer identity, reviewed inputs, explicit
+  verdict, findings, and unresolved P0/P1 count. Replace an empty reviewer at
+  most once. Critical and high-risk work remains blocked without independent
+  review; lower-risk fallback is allowed only when project policy explicitly
+  authorizes and labels it.
+- **Verification**: Review artifact has a parseable verdict and findings list;
+  executor and reviewer identities satisfy the selected review profile.
+- **Conflict Handling**: Missing or invalid verdict is BLOCKED, never PASS.
+
+---
+
+## RULE review-009: Control Events Are Not Outcome Evidence
+
+- **Priority**: P2 (Evidence)
+- **Trigger**: Reporting progress or deciding that a stalled project advanced
+- **Scope**: All phases
+- **Rule**: Goal refreshes, source reads, hashes, provider probes, worker
+  starts, PID polls, and unchanged status reports are control events. They may
+  support an audit, but they do not prove delivery progress without a milestone
+  artifact, actual diff, verification result, review verdict, or accepted
+  delivery.
+- **Verification**: Each progress claim references at least one outcome artifact
+  defined by the active milestone.
+- **Conflict Handling**: Report control-only turns as unchanged status, not
+  business progress.

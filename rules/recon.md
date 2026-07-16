@@ -219,3 +219,19 @@ suggestion.
   downstream diff, test, and review reports reference it.
 - **Conflict Handling**: If no durable receipt exists, keep the next action
   read-only or create the receipt before dispatching coder workers.
+
+## RULE recon-010: Check HEAD Before Declaring a Capability Gap
+
+- **Priority**: P1
+- **Trigger**: Creating remediation work, a negative probe, or a TaskSpec for
+  allegedly missing behavior
+- **Rule**: Inspect committed `HEAD`, existing tests, the authoritative backlog,
+  and the actual diff before declaring a capability absent. A dirty or
+  untracked candidate is not evidence that `HEAD` lacks the behavior. Build
+  only the smallest capability matrix needed to select the next milestone.
+- **Verification**: TaskSpec or milestone record cites the inspected HEAD path
+  or symbol, relevant existing tests, and the specific uncovered gap or current
+  failing evidence.
+- **Conflict Handling**: If HEAD already covers the path, close the proposed
+  remediation as already satisfied. If ownership of the dirty candidate is
+  unclear, do not use it as backlog authority.

@@ -14,7 +14,7 @@ success unless the evidence and exit-code rules are satisfied.
 | Path | Purpose |
 |---|---|
 | `contracts/` | Normative JSON schemas (`FLOW_OUTCOME`, `TASKSPEC`, `DISPATCH_RESULT`, runner schemas) and contract YAML for flow, dispatch, paper, and context-compression work |
-| `policies/` | Normative behavioral policies (terminal state, dispatcher, stage gate, run-until-terminal, runner failure, evidence pack) that complement the schemas |
+| `policies/` | Normative behavioral policies (outcome-first delivery, terminal state, dispatcher, stage gate, run-until-terminal, runner failure, evidence pack) that complement the schemas |
 | `governance/` | `expected-files.txt` and `manifest-ignore.txt` describing which files a project should protect and which to exclude from manifest checks |
 | `templates/ci-preflight/` | One-time pre-commit / pre-push governance hook installer (`register-hooks.ps1`, `ci-preflight.ps1`, hooks, governance lists) |
 
@@ -23,6 +23,9 @@ success unless the evidence and exit-code rules are satisfied.
 - Exit code contract: `0 = PASS`, `1 = BLOCKED`, `2 = FAILED`.
 - No fake green: `FAILED` and `BLOCKED` must never be reported as `PASS`.
 - Default dry-run: real, irreversible actions require an explicit opt-in flag.
+- Outcome-first scope: governance intensity follows milestone risk; process
+  activity does not substitute for a product, research, test, review, or
+  delivery outcome.
 - Precedence: **Contracts > Policies > Conventions**. If a policy contradicts a
   contract, the contract wins because contracts are machine-enforceable.
 

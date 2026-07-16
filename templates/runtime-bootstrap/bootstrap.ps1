@@ -95,12 +95,13 @@ function Get-Sha256Hash($path) {
 }
 
 Write-Output "`n=== Step 1: Universal Assets ==="
-Copy-Universal "rules" "rules" "8 rules, 44 entries"
+Copy-Universal "rules" "rules" "Public rule catalog"
 Copy-Universal "schemas" "schemas" "18 JSON Schema files"
 Copy-Universal "docs/agent-runtime/operating-model.md" "docs/agent-runtime/operating-model.md" "Operating model"
 Copy-Universal "docs/agent-runtime/integration-contracts.md" "docs/agent-runtime/integration-contracts.md" "Integration contracts"
 Copy-Universal "docs/agent-runtime/verification-gates.md" "docs/agent-runtime/verification-gates.md" "Verification gates"
 Copy-Universal "docs/agent-runtime/runtime-invariants.md" "docs/agent-runtime/runtime-invariants.md" "Runtime invariants"
+Copy-Universal "docs/agent-runtime/outcome-first-delivery.md" "docs/agent-runtime/outcome-first-delivery.md" "Outcome-first delivery"
 Copy-Universal "docs/agent-runtime/reviewer-playbook.md" "docs/agent-runtime/reviewer-playbook.md" "Reviewer playbook"
 Copy-Universal "docs/agent-runtime/sub-agent-dispatch-protocol.md" "docs/agent-runtime/sub-agent-dispatch-protocol.md" "SADP protocol"
 Copy-Universal "docs/agent-runtime/dispatch-model-profiles.md" "docs/agent-runtime/dispatch-model-profiles.md" "Model profiles"

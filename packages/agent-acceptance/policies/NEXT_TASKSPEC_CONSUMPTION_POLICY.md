@@ -2,7 +2,7 @@
 
 > Authority: agent-acceptance
 > Consumers: dev-frame-opencode (oracle_flow_runner.py, oracle_taskspec_runner.py)
-> Version: 1.0.0
+> Version: 1.1.0
 > Depends on: TASKSPEC.schema.json, DISPATCH_RESULT.schema.json, RUN_UNTIL_TERMINAL_POLICY.md
 
 ---
@@ -12,6 +12,11 @@
 **If `next_task_spec_path` exists, it MUST be consumed.** A generated TaskSpec is a mandatory next step, not an optional suggestion.
 
 Failing to consume `next_task_spec_path` when `terminal=false` is a P0 policy violation.
+
+This is a consumption rule, not a TaskSpec creation mandate. A coordinator
+MUST NOT create `next_task_spec_path` solely to avoid an idle project or to
+prove continued activity after a milestone reaches `accepted_done`. See
+`OUTCOME_FIRST_DELIVERY_POLICY.md`.
 
 ---
 
@@ -30,6 +35,15 @@ next_task_spec_path set
 ---
 
 ## Key Distinctions
+
+### resumable pointer != next_task_spec_path
+
+A closed milestone may name the next eligible candidate or a backlog item for
+recovery. That pointer is scheduling metadata. While the parent finite Delivery
+Goal remains active, the project root coordinator decides whether to activate
+the candidate as `next_task_spec_path`; the global controller does not design
+the ordinary batch. Once activated in a non-terminal chain, consumption is
+mandatory.
 
 ### ready_to_dispatch != dispatched
 
@@ -90,3 +104,5 @@ If the runner is in a mode where it can only prepare but not execute (e.g., `sin
 | ready_to_dispatch treated as dispatched | State misrepresented | Execute, then set dispatched |
 | TaskSpec generated treated as terminal | Stops before execution | Continue to dispatch |
 | Runner defers consumption without resume_command | Cannot resume later | Always provide resume_command |
+| Coordinator creates an out-of-scope TaskSpec only to avoid idle | Expands the finite Delivery Goal | Close the goal or retain the discovery in backlog |
+| Global controller chooses the next ordinary TaskSpec | Removes project-root ownership | Send a generic resume directive and let the project root select it |

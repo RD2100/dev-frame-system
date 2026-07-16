@@ -2,13 +2,16 @@
 
 > Authority: agent-acceptance
 > Consumers: dev-frame-opencode post-decision driver, any dispatcher component
-> Version: 1.0.0
+> Version: 1.1.0
 
 ---
 
 ## Core Rule
 
-The dispatcher MUST produce a consumable `DISPATCH_RESULT` that automation can read and act on. The dispatcher SHALL NOT merely "suggest" — it must generate actionable state.
+The dispatcher MUST produce a consumable `DISPATCH_RESULT` that automation can
+read and act on. The dispatcher SHALL NOT merely "suggest" - it must generate
+actionable state for an explicit bounded chain. It must not manufacture a new
+stage after natural milestone completion.
 
 ---
 
@@ -17,7 +20,7 @@ The dispatcher MUST produce a consumable `DISPATCH_RESULT` that automation can r
 | Business Decision | allow_next_stage | Dispatcher Action | dispatch_status | terminal | should_execute_next |
 |-------------------|------------------|-------------------|-----------------|----------|---------------------|
 | accepted | true | Generate TaskSpec + dispatch | dispatched | false | true |
-| accepted | false | TaskSpec generated, await further signal | taskspec_generated | false | false |
+| accepted | false | Close the bounded milestone with reason `accepted_done`; keep only a resumable backlog pointer | stopped | true | false |
 | partial | true (subset) | Dispatch allowed subset | dispatched | false | true |
 | partial | false | TaskSpec generated, manual confirm | manual_confirm_required | false | false |
 | blocked | N/A | Generate reconciliation plan | stopped | true | false |
@@ -53,6 +56,31 @@ GPT accepts → allow_next_stage=true
 ```
 
 The dispatcher MUST NOT stop here. The flow is explicitly non-terminal.
+
+This path is valid only when the active milestone already defines the next
+stage. `allow_next_stage=true` must not be synthesized merely because later
+project backlog exists.
+
+---
+
+## accepted + allow_next_stage=false Path
+
+When current milestone evidence and required gates pass and no explicit stage
+remains active:
+
+```
+business_decision: accepted
+allow_next_stage: false
+  -> dispatcher writes DISPATCH_RESULT with:
+    dispatch_status: stopped
+    terminal: true
+    should_execute_next: false
+    reason: accepted_done
+    required_next_action: <resumable backlog pointer or "none">
+```
+
+The pointer is not a `next_task_spec_path`. A later coordinator activation
+creates the next bounded chain.
 
 ---
 
@@ -110,3 +138,4 @@ The dispatcher must never guess or assume acceptance when the decision is unknow
 | Dispatcher writes "ready" but doesn't dispatch | ready_to_dispatch without dispatch is stuck | Either dispatch or explicitly stop |
 | Dispatcher assumes accepted on transport success | Transport != business decision | Read business_decision from FLOW_OUTCOME |
 | Dispatcher emits "suggestion" without action fields | Suggestion != dispatch | Must include should_execute_next and next_task_spec_path |
+| Dispatcher creates a next stage only to avoid idle | Scheduling metadata becomes fabricated work | Close with accepted_done and leave a resumable pointer |
