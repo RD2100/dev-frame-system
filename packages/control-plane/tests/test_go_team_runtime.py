@@ -68,6 +68,22 @@ def _noop_report_command() -> list[str]:
     return [sys.executable, "-c", script]
 
 
+def _message_report_command(
+    to_agent_id: str,
+    *,
+    kind: str = "handoff",
+    summary: str = "Please review the result.",
+) -> list[str]:
+    script = (
+        "import json,os;"
+        "from pathlib import Path;"
+        "packet=Path(os.environ['RDGOAL_PACKET_DIR']);"
+        f"(packet/'team-message.json').write_text(json.dumps({{'to_agent_id':{to_agent_id!r},'kind':{kind!r},'summary':{summary!r}}}),encoding='utf-8');"
+        "Path(os.environ['RDGOAL_REPORT_PATH']).write_text('## ExecutionReport\\n\\n- **Status**: pass\\n- **Changed Files**:\\n- (none)\\n- **Evidence**: hermetic message-route test\\n',encoding='utf-8')"
+    )
+    return [sys.executable, "-c", script]
+
+
 def test_execution_records_team_events_and_surfaces_in_state(tmp_path):
     project = tmp_path / "proj"
     project.mkdir()
@@ -287,3 +303,70 @@ def test_overlapping_claim_in_real_execute_fails_second_agent(tmp_path):
     error_text = (Path(agent2.packet_dir) / "go-agent-error.txt").read_text(encoding="utf-8")
     assert "already claimed" in error_text
     assert agent1.targets[0] in error_text
+
+
+def test_execute_go_run_records_explicit_worker_message_for_run_participant(tmp_path):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "a.py").write_text("a = 1\n", encoding="utf-8")
+    (project / "b.py").write_text("b = 2\n", encoding="utf-8")
+    runtime = tmp_path / "runtime"
+
+    prepared = run_go_dispatch(
+        project,
+        "explicit message route",
+        runtime_dir=runtime,
+        agents=2,
+        targets=["a.py", "b.py"],
+        execute=False,
+        worker_command=_noop_report_command(),
+    )
+    metadata_path = Path(prepared.metadata_path)
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["agents"][0]["worker_command"] = _message_report_command("coding-agent-2")
+    metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=True), encoding="utf-8")
+
+    executed = execute_go_run(runtime, prepared.go_run_id)
+
+    assert {agent.status for agent in executed.agents} == {"completed"}
+    messages = [
+        item
+        for item in build_team_runtime_view(runtime)["message_bus"]
+        if item["kind"] == "handoff"
+    ]
+    assert len(messages) == 1
+    assert messages[0]["from_role"] == "coding-agent-1"
+    assert messages[0]["to_role"] == "coding-agent-2"
+    assert messages[0]["summary"] == "Please review the result."
+    assert not (Path(executed.agents[0].packet_dir) / "team-message.json").exists()
+
+
+def test_execute_go_run_discards_invalid_worker_message_without_failing_worker(tmp_path):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "a.py").write_text("a = 1\n", encoding="utf-8")
+    (project / "b.py").write_text("b = 2\n", encoding="utf-8")
+    runtime = tmp_path / "runtime"
+
+    prepared = run_go_dispatch(
+        project,
+        "invalid explicit message route",
+        runtime_dir=runtime,
+        agents=2,
+        targets=["a.py", "b.py"],
+        execute=False,
+        worker_command=_noop_report_command(),
+    )
+    metadata_path = Path(prepared.metadata_path)
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["agents"][0]["worker_command"] = _message_report_command("not-in-this-run")
+    metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=True), encoding="utf-8")
+
+    executed = execute_go_run(runtime, prepared.go_run_id)
+
+    assert {agent.status for agent in executed.agents} == {"completed"}
+    assert not [
+        item
+        for item in build_team_runtime_view(runtime)["message_bus"]
+        if item["kind"] in {"handoff", "note", "review-request"}
+    ]

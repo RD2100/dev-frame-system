@@ -29,6 +29,9 @@ DEFAULT_OPENCODE_AGENT = "build"
 DEFAULT_GO_WORKER = "opencode"
 GO_WORKERS = ("opencode",)
 SUCCESS_WORKER_STATUSES = {"pass", "passed", "completed"}
+TEAM_MESSAGE_SIDECAR = "team-message.json"
+_TEAM_MESSAGE_KINDS = {"handoff", "note", "review-request"}
+_MAX_TEAM_MESSAGE_SUMMARY_CHARS = 500
 
 
 @dataclass
@@ -311,10 +314,11 @@ def _execute_parallel(
     # facts while agents actually run, instead of synthesizing them at read time.
     team = TeamRuntime(runtime_dir=result.runtime_dir)
     driver = result.driver or "command"
+    participant_ids = {agent.agent_id for agent in result.agents}
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = [
             pool.submit(_run_group, result.runtime_dir, result.project_root, result.go_run_id,
-                        group, timeout_seconds, team, driver, acp_command)
+                        group, timeout_seconds, team, driver, acp_command, participant_ids)
             for group in groups
         ]
         for future in as_completed(futures):
@@ -324,16 +328,18 @@ def _execute_parallel(
 def _run_group(runtime_dir: str, project_root: str, go_run_id: str,
                group: list[GoAgentDispatch], timeout_seconds: int,
                team: TeamRuntime | None = None, driver: str = "command",
-               acp_command: list[str] | None = None) -> None:
+               acp_command: list[str] | None = None,
+               participant_ids: set[str] | None = None) -> None:
     for agent in group:
         _run_agent_in_place(runtime_dir, project_root, go_run_id, agent, timeout_seconds,
-                            team, driver, acp_command)
+                            team, driver, acp_command, participant_ids)
 
 
 def _run_agent_in_place(runtime_dir: str, project_root: str, go_run_id: str,
                         agent: GoAgentDispatch, timeout_seconds: int,
                         team: TeamRuntime | None = None, driver: str = "command",
-                        acp_command: list[str] | None = None) -> None:
+                        acp_command: list[str] | None = None,
+                        participant_ids: set[str] | None = None) -> None:
     try:
         cwd, env_overrides = _resolve_isolation(runtime_dir, project_root, go_run_id, agent)
         _ensure_agent_context_artifacts(runtime_dir, agent)
@@ -366,6 +372,9 @@ def _run_agent_in_place(runtime_dir: str, project_root: str, go_run_id: str,
                 go_run_id, agent.agent_id,
                 status=agent.worker_status or "completed",
                 report_path=agent.report_path, isolated=agent.isolated,
+            )
+            _record_worker_message_sidecar(
+                team, go_run_id, agent, participant_ids or {agent.agent_id},
             )
     except Exception as exc:  # pragma: no cover - defensive guard
         agent.status = "failed"
@@ -420,6 +429,56 @@ def _ensure_agent_context_artifacts(runtime_dir: str, agent: GoAgentDispatch) ->
     packet = DispatchPacketStore(runtime_dir=runtime_dir).ensure_context_artifacts(agent.packet_dir)
     agent.context_packet_path = packet.context_packet_path
     agent.context_ledger_path = packet.context_ledger_path
+
+
+def _record_worker_message_sidecar(team: TeamRuntime, go_run_id: str,
+                                   agent: GoAgentDispatch,
+                                   participant_ids: set[str]) -> None:
+    """Record one bounded, data-only message emitted by the executing agent.
+
+    Worker reports remain free-form Markdown and are deliberately not parsed
+    for collaboration data. This sidecar is a narrow controller-owned contract:
+    the sender is bound to the current agent and the recipient must already be
+    a distinct participant in the same run.
+    """
+    sidecar_path = Path(agent.packet_dir) / TEAM_MESSAGE_SIDECAR
+    if not sidecar_path.is_file():
+        return
+    try:
+        payload = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if not isinstance(payload, dict) or set(payload) != {"to_agent_id", "kind", "summary"}:
+        return
+    to_agent_id = payload["to_agent_id"]
+    kind = payload["kind"]
+    summary = payload["summary"]
+    if not all(isinstance(value, str) for value in (to_agent_id, kind, summary)):
+        return
+    if (
+        to_agent_id not in participant_ids
+        or to_agent_id == agent.agent_id
+        or kind not in _TEAM_MESSAGE_KINDS
+        or not summary
+        or summary != summary.strip()
+        or "\x00" in summary
+        or len(summary) > _MAX_TEAM_MESSAGE_SUMMARY_CHARS
+    ):
+        return
+    try:
+        team.record_agent_message(
+            go_run_id,
+            agent.agent_id,
+            to_agent_id,
+            kind=kind,
+            summary=summary,
+        )
+    except (OSError, ValueError):
+        return
+    try:
+        sidecar_path.unlink()
+    except OSError:
+        return
 
 
 def _apply_opencode_events(agent: GoAgentDispatch) -> None:
