@@ -38,6 +38,11 @@ def test_root_help_is_available(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "DevFrame Code CLI" in output
     assert "OpenCode-first local coding tool" in output
+    assert "Daily coding loop" in output
+    assert "1. Prepare : devframe code" in output
+    assert "2. Status  : devframe code status" in output
+    assert "3. Execute : devframe code execute" in output
+    assert "Optional setup" in output
     assert "devframe code [[<goal>] | --prompt-file <path>]" in output
     assert "devframe client" in output
     assert "devframe code workers" in output
