@@ -431,7 +431,6 @@ def _run_import(
         manifest_content += "\n\n## Included Files\n"
         for mode, blob_hash, path, _, _ in sorted(blobs, key=lambda x: x[2]):
             manifest_content += f"- `{mode} {blob_hash} {path}`\n"
-        manifest_content += "\n"
 
         if patch_manifest_entries:
             manifest_content += "## Applied Source Patches\n\n"
@@ -441,7 +440,6 @@ def _run_import(
                 manifest_content += f"- **Original Text (JSON-escaped)**: `{json.dumps(pe['original_text'])}`\n"
                 manifest_content += f"- **Replacement Text (JSON-escaped)**: `{json.dumps(pe['replacement_text'])}`\n"
                 manifest_content += f"- **Patched File SHA-256**: `{pe['patched_file_sha256']}`\n"
-            manifest_content += "\n"
 
         manifest_path = staging / "IMPORT_MANIFEST.md"
         manifest_path.write_text(manifest_content, encoding="utf-8")
