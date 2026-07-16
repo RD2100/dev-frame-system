@@ -1,126 +1,74 @@
 # Launch Now
 
-Date: 2026-07-09
+Date: 2026-07-17
 
-## Initial Owner-Gate Snapshot
+Verdict: **CONDITIONAL-GO** for continued public development on `main`.
+Release, deployment, and production changes are outside this verdict.
 
-- timestamp_utc: `2026-07-08T12:50:23+00:00`
-- head: `5cea92a56f63270831c3213dfc93f1de8c409139`
-- dirty_summary_version: `fd1244ac1f00`
-- counts: `total=28, tracked=21, untracked=7, modified=21, added=0, deleted=0, renamed=0, copied=0, unmerged=0`
-- snapshot_cmd: `release-closure status snapshot from repository root`
-- snapshot_id: `2026-07-08T12:50:23+00:00:5cea92a56f63:fd1244ac1f00`
+## Historical Release Baseline
 
-This snapshot records the dirty-tree state that was reviewed before owner
-approval. Current release status is the GitHub Release `v0.1.0`, with
-post-release status documentation maintained on `main`.
-The `head` above is the historical owner-gate snapshot head, not the current
-`main` HEAD.
+Verdict: **GITHUB RELEASED as `v0.1.0`**; **PYPI NOT PUBLISHED**. This records
+the completed GitHub release without reopening a publication or deployment
+gate for the current cleanup wave.
+The `v0.1.0` tag resolves to release commit
+`d555e3203fdf68feacd9c4f186595f8f178d51a2`.
 
-Verdict: **GITHUB RELEASED as `v0.1.0`**; **PYPI NOT PUBLISHED**;
-**PHASE 6 PAPER ADAPTER IN PROGRESS**.
+### Initial Owner-Gate Snapshot
 
-This is the current launch-control entrypoint. It replaces reading every
-runtime-governance batch note first, but it does not delete or supersede their
-evidence.
+The original owner-gate snapshot used head
+`5cea92a56f63270831c3213dfc93f1de8c409139`, an ancestor of that release
+commit. This is the historical owner-gate snapshot head, not the current `main` head.
+
+This is the current launch-control entrypoint.
+
+### Post-Release Remaining Decisions
+
+PyPI publication, deployment, and production changes remain separate owner
+decisions and are not authorized by this repository-cleanup verdict.
 
 ## Current Decision
 
-Runtime-governance closure has advanced through Batch J and the follow-up
-batch-review fixes. The reviewed dirty tree was converted into explicit batch
-commits after owner approval, the branch was pushed to PR #4, the PR was merged
-to `main`, and the GitHub `Release verification` check passed on `main`.
-Release `v0.1.0` was then published as a GitHub Release with the
-`devframe_control_plane-0.1.0-py3-none-any.whl` asset.
+The accepted public mainline is usable for continued development. The current
+work is change-tree consolidation: preserve local candidates, remove proven
+noise, and deliver retained capabilities as small reviewed pull requests.
+Local dirty state and imported source are not release evidence.
 
-That evidence proves the local gate, PR route, merge route, main CI route, and
-GitHub Release publication for `v0.1.0`. It does not prove PyPI publication,
-downstream adoption, or complete Phase 6 paper-domain adapter closure.
-
-The paper-domain adapter is no longer deferred: Phase 6 has started after the
-GitHub Release. Current paper support has read-model, visual-state, controlled
-local action-execution coverage, paper FinalVerdict projection into the run
-index, and automatic limited FinalVerdict generation for the reference paper
-closure stage. `/rdpaper` still needs external-provider/manual safety-gate
-closure before it can be called complete.
-
-## Executed After Owner Approval
-
-- `current-dirty-tree-batch-map-20260708.md`: the batch map exists and has now
-  been reviewed against the live dirty tree and used for explicit batch
-  commits.
-- PR route: owner approval was given after the local batch commits. The current
-  branch was pushed to PR #4, and GitHub `Release verification` passed for that
-  route.
-- Publication: GitHub Release `v0.1.0` was executed with the control-plane
-  wheel asset. PyPI publication was not executed because this repository does
-  not define a PyPI publish workflow or credential path.
-
-## Done Locally
+## Already Good Enough
 
 | Area | Status | Evidence |
-| --- | --- | --- |
-| Runtime-governance Batch F sealed context artifacts | done locally | [runtime-governance-batch-f-sealed-context-artifacts.md](runtime-governance-batch-f-sealed-context-artifacts.md) |
-| Runtime-governance Batch G generic go opt-in finalization | done locally | [runtime-governance-batch-g-generic-go-opt-in-finalization.md](runtime-governance-batch-g-generic-go-opt-in-finalization.md) |
-| Runtime-governance Batch H ai-workflow-hub chain evidence adapter | done locally | [runtime-governance-batch-h-ai-workflow-hub-chain-evidence-canonicalization.md](runtime-governance-batch-h-ai-workflow-hub-chain-evidence-canonicalization.md) |
-| Runtime-governance Batch I generic go prepare evidence | done locally | [runtime-governance-batch-i-generic-go-prepare-evidence.md](runtime-governance-batch-i-generic-go-prepare-evidence.md) |
-| Runtime-governance Batch J automatic superseding FinalVerdict | done locally | [runtime-governance-batch-j-automatic-superseding-final-verdict.md](runtime-governance-batch-j-automatic-superseding-final-verdict.md) |
-| Full local release gate | done locally | [release-readiness.md](release-readiness.md) |
-| PR branch and GitHub Release verification | done for PR route | PR #4 on `RD2100/dev-frame-system` |
-| Main merge and main Release verification | done for release route | merge commit `d555e3203fdf68feacd9c4f186595f8f178d51a2`, run `28949249871` |
-| GitHub Release `v0.1.0` | published | `https://github.com/RD2100/dev-frame-system/releases/tag/v0.1.0` |
-| Reviewer handoff surface | done locally | [reviewer-index.md](reviewer-index.md) |
-| Dirty worktree batch map and final local review | done locally | [current-dirty-tree-batch-map-20260708.md](current-dirty-tree-batch-map-20260708.md) |
-| Phase 6 paper read-model adapter start | done locally and merged | PR #8 on `RD2100/dev-frame-system` |
-| Phase 6 controlled paper action execution | done locally | `dashboard.py`, `visual_state.py`, and `visual_control_plane_state.schema.json` |
-| Phase 6 paper FinalVerdict run-index projection | done locally | `run_index.py` projects canonical paper `closure/FINAL_VERDICT.json` into `final_verdict_ref`, `review_refs`, `gate_refs`, and fail-closed invalid verdicts. |
-| Phase 6 reference paper FinalVerdict generation | done locally | `stage_executor.py` writes `closure/FINAL_VERDICT.json` as `accepted_with_limitation` for synthetic dry-run closure and includes it in the reference paper pipeline contract. |
-
-## Deferred From This Release
-
-| Area | Bucket | Reason | Evidence |
-| --- | --- | --- | --- |
-| Remaining paper-domain adapter and `/rdpaper` closure | phase-6-in-progress | Current repo support covers paper read-model, visual-state projection, controlled local command execution, paper FinalVerdict projection, and limited FinalVerdict generation for the reference closure stage; full domain-adapter authority still needs external-provider/manual safety-gate closure. | [runtime-governance-and-evidence-closure-transformation-plan.md](runtime-governance-and-evidence-closure-transformation-plan.md), [runtime-governance-batch-e-paper-trust-fail-closed.md](runtime-governance-batch-e-paper-trust-fail-closed.md), [runtime-governance-batch-j-automatic-superseding-final-verdict.md](runtime-governance-batch-j-automatic-superseding-final-verdict.md) |
+|---|---|---|
+| Public mainline | PRs #15 through #20 merged | [Current Handoff](HANDOFF.md) |
+| Session inspection | Read-only list, JSON detail, and HTML detail are on `main` | `packages/control-plane/control_plane/dashboard.py` and its tests |
+| Public distribution gate | Passing on the accepted mainline slices | `scripts/verify-public-snapshot.ps1` and GitHub Release verification |
+| Current continuation entrypoint | One authoritative handoff | [Current Handoff](HANDOFF.md) |
 
 ## Remaining Blockers
 
-| ID | Bucket | Blocker | Owner | Next action | Pass condition |
-| --- | --- | --- | --- | --- | --- |
-| B1 | done | Dirty worktree batches have been converted into explicit batch commits. | Owner, Agent | None. | Clean current branch plus local gate evidence. |
-| B2 | done for PR route | Branch push, PR route, and GitHub Release verification were completed for PR #4 before merge. | Owner, Agent | None. | PR branch existed and CI was green. |
-| B3 | done for GitHub Release | PR merge, release tagging, GitHub Release, and release-asset publication were authorized and completed. | Owner, Agent | None for GitHub Release `v0.1.0`. | Release URL and main CI evidence exist. |
-| B4 | owner_required | PyPI publication and downstream announcement are not executed by this repository's release workflow. | Owner | Decide whether a separate PyPI or downstream distribution process should exist. | Separate publish workflow, credentials, and evidence. |
+| ID | Blocker | Why non-blocking for this verdict | Owner | Next action | Pass condition |
+|---|---|---|---|---|---|
+| CT-1 | The primary worktree still contains retained local candidates | Non-blocking: it blocks tree closure, not continued work from accepted `main` | Coordinator | Classify, back up, consolidate, test, and review each bounded slice | No unowned status entries remain |
+| CT-2 | Local runtime state needs exclusion from public change lists | Non-blocking: it is preserved outside accepted commits and does not alter `main` | Coordinator | Merge the narrow `.aiworkflow/` ignore slice after CI | Ignore probe and public snapshot pass on `main` |
+| CT-3 | Release or deployment has not been requested for this closure wave | Out-of-scope: release and production require a separate verdict | Owner | Make a separate release decision when desired | Explicit authorization plus release evidence and postcheck |
 
-## Post-Release Remaining Decisions
+## Accepted Deferred Items
 
-No action in this section is authorized by this document. It is the remaining
-decision menu after GitHub Release `v0.1.0`.
-
-| Decision | Meaning | Agent action after approval |
-| --- | --- | --- |
-| `approve-pypi-route` | Define and execute a separate PyPI publication path. | Add or use an approved PyPI workflow, publish with credentials, and record evidence. |
-| `continue-phase-6-paper-adapter` | Continue the started paper-domain adapter and `/rdpaper` closure slices. | Implement the next Phase 6 slice, verify, review, and prepare a PR. |
-| `hold-after-github-release` | Keep `v0.1.0` as the current public release. | Do not publish to PyPI or start Phase 6 automatically. |
-
-GitHub Release publication is complete for `v0.1.0`. PyPI publication remains a
-separate future decision because no PyPI publish workflow is defined here.
-
-Default next action if no new decision is given: keep `v0.1.0` as the current
-GitHub Release and do not create a PyPI release.
+| Item | Why non-blocking | Follow-up trigger |
+|---|---|---|
+| Historical Tutti shell and Windows-preview research | Useful input, but not current implementation authority | A new shell/product slice passes Recon against current `main` |
+| Historical RD-Code realignment plans | They contain prior exploration, not a current product commitment | A current capability gap requires re-evaluation |
+| PyPI and downstream publication | Separate from repository cleanup | Owner explicitly requests a publication route |
 
 ## Next 3 Actions
 
-1. Owner: decide whether PyPI publication is needed for this project.
-2. Agent: continue Phase 6 paper-domain adapter closure in small verified slices.
-3. Agent after approval: create the matching implementation or publication
-   evidence and update this status entrypoint again.
+1. Merge the local-state ignore PR after its required check succeeds.
+2. Consolidate backed-up handoff and shell-plan material into current authority,
+   then remove the redundant working copies.
+3. Review the remaining product candidates by subsystem and deliver only
+   independently verified slices.
 
-## Evidence Map
+## Source Of Truth
 
-| Question | Start Here |
-| --- | --- |
-| Can this be publicly released now? | This file, then [release-readiness.md](release-readiness.md). |
-| How should the current dirty worktree be reviewed? | [current-dirty-tree-batch-map-20260708.md](current-dirty-tree-batch-map-20260708.md). |
-| What changed in the current closure wave? | [reviewer-index.md](reviewer-index.md), then Batch F-J evidence records. |
-| Why are there many status files? | [status-document-inventory.md](status-document-inventory.md). |
-| What is the broader transformation plan? | [runtime-governance-and-evidence-closure-transformation-plan.md](runtime-governance-and-evidence-closure-transformation-plan.md). |
+- Current continuation and accepted merges: [HANDOFF.md](HANDOFF.md)
+- Detailed review map: [reviewer-index.md](reviewer-index.md)
+- Release boundary: [release-readiness.md](release-readiness.md)
+- Status document classification: [status-document-inventory.md](status-document-inventory.md)

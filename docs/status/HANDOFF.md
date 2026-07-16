@@ -2,6 +2,9 @@
 
 Lifecycle state: Current public handoff
 
+Verdict: **HANDOFF** for continued repository development; no release or
+deployment verdict is implied.
+
 This is the single starting point for a maintainer resuming public
 `dev-frame-system` work. It summarizes release-ready work without turning
 local runtime state, private evidence, or an unreviewed worktree into public
@@ -9,10 +12,25 @@ history.
 
 ## Current Mainline
 
-The default branch is `main`. Its recent accepted milestones are PRs #15, #16,
-#17, and #18, merged as `0939b6e`, `c501308`, `e77baff`, and `3a5dfca`
-respectively. PR #18 adds the read-only HTML session-detail route while
-preserving the JSON detail route.
+The default branch is `main`. Its recent accepted milestones are PRs #15
+through #20. PR #18 adds the read-only HTML session-detail route while
+preserving the JSON detail route; PRs #19 and #20 establish this handoff and
+its non-destructive closure audit.
+
+## Product Direction
+
+- DevFrame contracts remain authoritative for tasks, evidence, review, gates,
+  decisions, and final acceptance. A client or imported product surface may
+  project those records but must not silently become the authority.
+- `products/tutti/` is a curated source snapshot inside the public repository.
+  Its presence proves neither a desktop release nor production readiness.
+- Historical Tutti shell, Windows-preview, and RD-Code realignment documents
+  are research inputs, not current execution instructions. Provider names,
+  model IDs, external checkout paths, and old phase numbering in those records
+  are not public commitments.
+- Any new shell or control-surface slice starts with Recon against current
+  `main`, reuses existing product paths where they fit, and requires real-path
+  verification before acceptance.
 
 ## Start Here
 
