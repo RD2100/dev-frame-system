@@ -6,6 +6,10 @@ Lifecycle state: Current public-snapshot reviewer map
 
 This is the reviewer map for the first open-source release batch. It focuses on what is currently proven and auditable in the repository: MCP/Web-AI intake, T3/native client projection, and governed visual state.
 
+For the current public continuation state and accepted merge history, begin
+with [Current Handoff](HANDOFF.md). This index remains the detailed map for
+code and verification review.
+
 ## In-Scope Review Surface
 
 - `packages/control-plane`: runtime, entrypoints, probes, and client launch surfaces.
