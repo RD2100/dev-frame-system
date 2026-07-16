@@ -61,16 +61,16 @@ P0 invariants cannot be downgraded by P1-P4 considerations. No exception path ex
 | **Detection** | `git status --short` diff between pre and post. Any new or modified file not in the approved paths list is a violation. |
 | **Gate Decision on Violation** | BLOCKED. Unapproved writes must be reverted or escalated for review. |
 
-### INV-004: No Dirty Baseline File Modification
+### INV-004: Captured Dirty Baseline Protection
 
 | Field | Value |
 |-------|-------|
 | **ID** | INV-004 |
 | **Priority** | P0 (Hard Stop) |
 | **Scope** | Phase 0-5 |
-| **Rule** | The 13 modified and 6 untracked files present at baseline must not be altered. This includes: README.md, scripts/*, agent-workqueue/*, docs/FLOW_CATALOG.md, docs/NEXT_STAGE_BACKLOG.md, docs/RUNBOOK.md. New work must only touch batch-approved output paths. |
-| **Violation Example** | An agent edits `README.md` to add a new section. An agent modifies `scripts/Run-WorkQueue.ps1` to fix a bug. |
-| **Detection** | `git diff --name-only` must not include any file from the dirty baseline list. `git status --short` must show those files unchanged. |
+| **Rule** | The dirty baseline captured for the task must be identified by a manifest and per-path content hashes, not by a hardcoded file count. A worker may change a baseline path only when the TaskSpec names that exact path and its pre-write hash matches the TaskSpec baseline; every other baseline path must remain byte-for-byte unchanged. New work must only touch task-approved output paths. |
+| **Violation Example** | A worker edits a dirty baseline path that is absent from Allowed Files. A listed path has drifted from its declared pre-write hash, but the worker continues. |
+| **Detection** | Before writing, compare every allowed path with its declared baseline hash. After execution, reconcile actual changed paths and hashes against the manifest and accepted slice; do not rely on porcelain counts alone. |
 | **Gate Decision on Violation** | BLOCKED. Report immediately. Do not continue the batch. |
 
 ### INV-005: New Files Only Under Approved Directories
@@ -370,17 +370,17 @@ P0 invariants cannot be downgraded by P1-P4 considerations. No exception path ex
 | **Detection** | Check git log/reflog for `--no-verify` flags. Audit hook bypass patterns. |
 | **Gate Decision on Violation** | FAILED. Document the bypass, report the hook failure, and create a task to fix the hook. |
 
-### INV-027: Phase 0-5 Commit Freeze
+### INV-027: Root-Accepted Local Commit Lifecycle
 
 | Field | Value |
 |-------|-------|
 | **ID** | INV-027 |
 | **Priority** | P1 (Scope Control) |
-| **Scope** | Phase 0-5 |
-| **Rule** | No git commits, stashes, resets, cleans, or other git state mutations are permitted in Phase 0-5. The existing dirty baseline (13 modified + 6 untracked) must be preserved exactly as-is. All batch work is tracked as untracked new files. |
-| **Violation Example** | An agent commits a finished batch file. An agent stashes changes to "clean up." |
-| **Detection** | `git log` shows no new commits since baseline. `git stash list` unchanged. `git status --short` shows dirty baseline files unchanged. |
-| **Gate Decision on Violation** | FAILED. Any git mutation must be reported and escalated. |
+| **Scope** | All phases, all agents |
+| **Rule** | A coding worker must not stage, commit, or set `root_accepted`. Only the root coordinator may set `root_accepted`, after independent review of the actual diff and all required evidence pass. Every `root_accepted` slice must then become exactly one local logical commit: the root coordinator stages only the accepted paths, proves the cached path set and content exactly match the accepted slice, and commits before the next slice begins. Failed, blocked, rejected, or unreviewed slices must not be committed. Push, pull request creation, merge, release, history rewrite, hook registration, and global Git or agent configuration require an explicit human gate; force-push to `main` or `master` remains forbidden. |
+| **Violation Example** | A worker commits its own output. A root coordinator accepts based only on the worker report. A commit is created before independent review, includes an unrelated dirty path, or uses `git add -A`, `git add .`, or `git commit -a`. A `root_accepted` slice is left mixed with the next slice instead of receiving its own commit. |
+| **Detection** | Verify the independent reviewer verdict and evidence references precede the root-owned `root_accepted` record. Compare the accepted path set with `git diff --cached --name-only` and cached content before commit, then verify the resulting commit contains exactly that slice. Confirm protected baseline hashes outside the slice and pre-existing staged content are unchanged. |
+| **Gate Decision on Violation** | BLOCKED before an unauthorized commit. If an unauthorized mutation already occurred, stop and escalate without using restore, stash, reset, or clean. |
 
 ---
 
@@ -574,7 +574,7 @@ P0 invariants cannot be downgraded by P1-P4 considerations. No exception path ex
 | INV-001 | Source of Truth | P0 | Canonical Root Reference |
 | INV-002 | Source of Truth | P0 | No Path Drift |
 | INV-003 | Approved Outputs | P0 | Write Scope Containment |
-| INV-004 | Approved Outputs | P0 | No Dirty Baseline File Modification |
+| INV-004 | Approved Outputs | P0 | Captured Dirty Baseline Protection |
 | INV-005 | Approved Outputs | P0 | New Files Only Under Approved Directories |
 | INV-006 | Pre/Post Git Status | P0 | Pre-Batch Git Status Required |
 | INV-007 | Pre/Post Git Status | P0 | Post-Batch Git Status Required |
@@ -597,7 +597,7 @@ P0 invariants cannot be downgraded by P1-P4 considerations. No exception path ex
 | INV-024 | Dangerous Git | P0 | No Force Push to Main/Master |
 | INV-025 | Dangerous Git | P0 | No Destructive Git Without Approval |
 | INV-026 | Dangerous Git | P1 | No Skip Hooks |
-| INV-027 | Dangerous Git | P1 | Phase 0-5 Commit Freeze |
+| INV-027 | Dangerous Git | P1 | Root-Accepted Local Commit Lifecycle |
 | INV-028 | Executor Self-Approval | P0 | Executor Cannot Approve Own Work |
 | INV-029 | Executor Self-Approval | P1 | Gate Result Must Be Explicit |
 | INV-030 | Skill Installation | P0 | No Skill Installation |
@@ -663,4 +663,4 @@ No P0 invariant may be downgraded by a P1, P2, P3, or P4 consideration. P0 viola
 - `rules/core.md` -- Core rules: destructive git, secrets, phase boundary, exit code, dirty baseline, evidence
 - `rules/security.md` -- Security rules: secrets, command injection, path traversal, input validation, credentials, thread safety, encryption, error messages
 - `rules/review.md` -- Review rules: no fake green, report template, reviewer index, evidence chain, gate results, pre/post status
-- `rules/git.md` -- Git rules: force push, destructive commands, skip hooks, clean commits, amend, phase 0-5 commit freeze
+- `rules/git.md` -- Git rules: force push, destructive commands, skip hooks, clean commits, amend, root-accepted local commit lifecycle

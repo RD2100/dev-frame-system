@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from control_plane.team_runtime import (
     TEAM_EVENTS_FILE,
     TeamRuntime,
@@ -238,6 +240,37 @@ def test_conflict_dedup_across_repeated_targets(tmp_path):
     assert len([c for c in conflicts if c["file_path"] == "a.py"]) == 1
 
 
+def test_duplicate_target_claim_is_rejected_without_journal_mutation(tmp_path):
+    team = TeamRuntime(runtime_dir=tmp_path)
+    team.record_task_created("go-run-claims", "agent-a", targets=["shared.py"])
+    team.record_task_created("go-run-claims", "agent-b", targets=["shared.py"])
+    team.record_task_claimed("go-run-claims", "agent-a")
+    team.record_task_claimed("go-run-claims", "agent-a")
+    journal = tmp_path / TEAM_EVENTS_FILE
+    line_count = len(journal.read_text(encoding="utf-8").splitlines())
+
+    with pytest.raises(ValueError, match="shared.py"):
+        team.record_task_claimed("go-run-claims", "agent-b")
+
+    assert len(journal.read_text(encoding="utf-8").splitlines()) == line_count
+    conflicts = build_team_runtime_view(tmp_path)["conflict_control"]
+    assert [(item["file_path"], item["owner_agent_id"]) for item in conflicts] == [
+        ("shared.py", "agent-a"),
+    ]
+
+
+def test_distinct_targets_can_be_claimed_in_the_same_run(tmp_path):
+    team = TeamRuntime(runtime_dir=tmp_path)
+    team.record_task_created("go-run-claims", "agent-a", targets=["a.py"])
+    team.record_task_created("go-run-claims", "agent-b", targets=["b.py"])
+
+    team.record_task_claimed("go-run-claims", "agent-a")
+    team.record_task_claimed("go-run-claims", "agent-b")
+
+    task_board = build_team_runtime_view(tmp_path)["task_board"]
+    assert {task["status"] for task in task_board} == {"claimed"}
+
+
 def test_record_lifecycle_is_persisted(tmp_path):
     team = TeamRuntime(runtime_dir=tmp_path)
     team.record_task_created("go-run-1", "coding-agent-1", shard_index=1, shard_count=2, targets=["a.py"])
@@ -272,6 +305,52 @@ def test_view_folds_events_into_schema_shapes(tmp_path):
         assert pattern.match(entry["event_id"]), entry["event_id"]
     for entry in view["message_bus"]:
         assert pattern.match(entry["message_id"]), entry["message_id"]
+
+
+def test_explicit_agent_message_is_durable_and_not_a_lifecycle_projection(tmp_path):
+    team = TeamRuntime(runtime_dir=tmp_path)
+
+    team.record_agent_message(
+        "go-run-message",
+        "coding-agent-1",
+        "coding-agent-2",
+        kind="handoff",
+        summary="Please review the isolated implementation.",
+    )
+
+    record = json.loads((tmp_path / TEAM_EVENTS_FILE).read_text(encoding="utf-8"))
+    assert record["event_type"] == "agent_message"
+    assert record["agent_id"] == "coding-agent-1"
+    assert record["payload"] == {
+        "to_agent_id": "coding-agent-2",
+        "kind": "handoff",
+        "summary": "Please review the isolated implementation.",
+    }
+
+    view = build_team_runtime_view(tmp_path)
+    assert ("coding-agent-1", "coding-agent-2", "handoff") in {
+        (message["from_role"], message["to_role"], message["kind"])
+        for message in view["message_bus"]
+    }
+    assert {
+        "agent-message",
+    } <= {event["kind"] for event in view["event_log"]}
+
+
+def test_explicit_agent_message_rejects_missing_required_fields(tmp_path):
+    team = TeamRuntime(runtime_dir=tmp_path)
+
+    for kwargs in (
+        {"from_agent_id": "", "to_agent_id": "coding-agent-2", "kind": "handoff", "summary": "x"},
+        {"from_agent_id": "coding-agent-1", "to_agent_id": "", "kind": "handoff", "summary": "x"},
+        {"from_agent_id": "coding-agent-1", "to_agent_id": "coding-agent-2", "kind": "", "summary": "x"},
+        {"from_agent_id": "coding-agent-1", "to_agent_id": "coding-agent-2", "kind": "handoff", "summary": ""},
+    ):
+        try:
+            team.record_agent_message("go-run-message", **kwargs)
+        except ValueError:
+            continue
+        raise AssertionError("expected explicit message validation to fail closed")
 
 
 def test_journal_refuses_inside_repo(tmp_path):

@@ -349,26 +349,13 @@ def _update_run_state_with_recovery(project_id: str, run_id: str,
 def recover_run_evidence(project_id: str, run_id: str) -> dict[str, Any]:
     """Recover changed_files from diff.patch or worktree after OS/system kill.
 
-    Priority: state.json (if nonempty) > diff.patch > worktree.
+    Priority: diff.patch > worktree. State is written only as recovered output.
     Does NOT change run status. Does NOT git add.
     """
     rd = _hub_dir() / "runs" / project_id / run_id
     sf = rd / "state.json"
 
-    # 1. Check existing state
-    existing_files: list[str] = []
-    if sf.exists():
-        try:
-            s = json.loads(sf.read_text(encoding="utf-8"))
-            existing_files = s.get("changed_files", [])
-        except Exception:
-            pass
-    if existing_files:
-        return {"run_id": run_id, "recovered": False,
-                "changed_files": existing_files,
-                "source": "state", "warnings": []}
-
-    # 2. Try diff.patch
+    # 1. Try diff.patch. Worker-reported state is not change evidence.
     dp = rd / "diff.patch"
     recovered_files: list[str] = []
     recovered_status: dict[str, str] = {}
@@ -382,7 +369,7 @@ def recover_run_evidence(project_id: str, run_id: str) -> dict[str, Any]:
         if recovered_files:
             source = "diff.patch"
 
-    # 3. Fallback: worktree scan
+    # 2. Fallback: worktree scan
     if not recovered_files:
         wt_path = ""
         if sf.exists():

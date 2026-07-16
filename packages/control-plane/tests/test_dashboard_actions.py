@@ -99,6 +99,113 @@ def _fake_popen(*args, **kwargs):
     return _FakeProcess()
 
 
+def test_session_detail_endpoint_returns_public_projection_and_hides_runtime_refs(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime"
+    state = {
+        "sessions": [{
+            "session_id": "review-session-1",
+            "provider": "chatgpt",
+            "binding_id": "web-ai",
+            "agent_id": "reviewer-1",
+            "agent_role": "reviewer",
+            "project_id": "demo-project",
+            "run_id": "run-1",
+            "task_spec_id": "D:/private/TASKSPEC.json",
+            "task_spec_path": "D:/private/TASKSPEC.json",
+            "report_path": "D:/private/ExecutionReport.md",
+            "status": "completed",
+            "messages": [{"message_id": "m1", "role": "agent", "content_summary": "Reviewed."}],
+            "tool_calls": [{"tool_call_id": "t1", "name": "test", "status": "completed"}],
+            "changed_files": ["src/demo.py"],
+            "diff_summary": "1 file changed",
+            "evidence_refs": ["D:/private/evidence/receipt.md"],
+            "cost": {"amount": 0, "currency": "USD"},
+            "tokens": {"input": 1, "output": 2, "total": 3},
+            "gates": ["review-gate"],
+            "actions": ["Review result"],
+            "native_refs": {"runtime": "web-ai-import", "secret": "must-not-leak"},
+        }],
+    }
+    monkeypatch.setattr(dashboard_module, "build_visual_control_plane_state", lambda *a, **kw: state)
+
+    server = build_dashboard_server(runtime_dir=runtime_dir, port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        with urlopen(f"{base_url}/sessions/review-session-1.json", timeout=5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+
+        assert response.status == 200
+        assert payload["session_id"] == "review-session-1"
+        assert payload["task_spec_id"] == "TASKSPEC.json"
+        assert payload["message_count"] == 1
+        assert payload["tool_call_count"] == 1
+        assert "task_spec_path" not in payload
+        assert "report_path" not in payload
+        assert "evidence_refs" not in payload
+        assert "native_refs" not in payload
+        assert "secret" not in json.dumps(payload)
+
+        try:
+            with urlopen(f"{base_url}/sessions/missing-session.json", timeout=5):
+                raise AssertionError("missing session unexpectedly returned a response")
+        except HTTPError as error:
+            assert error.code == 404
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_session_stream_links_to_matching_read_only_detail(tmp_path, monkeypatch):
+    state = {
+        "projects": [],
+        "provider_bindings": [],
+        "agents": [],
+        "sessions": [{
+            "session_id": "review-session-1",
+            "provider": "chatgpt",
+            "agent_role": "reviewer",
+            "status": "completed",
+        }, {
+            "session_id": "",
+            "provider": "unknown",
+            "agent_role": "custom",
+            "status": "unknown",
+        }],
+        "runs": [],
+        "gates": [],
+        "decisions": [],
+        "next_actions": [],
+        "team": {},
+        "safety": {
+            "raw_transcripts_persisted": False,
+            "remote_execution_default": False,
+            "human_gate_required_for": ["credential_access"],
+        },
+        "skills": [],
+    }
+    monkeypatch.setattr(dashboard_module, "build_visual_control_plane_state", lambda *a, **kw: state)
+
+    server = build_dashboard_server(runtime_dir=tmp_path / "runtime", port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        with urlopen(base_url, timeout=5) as response:
+            html = response.read().decode("utf-8")
+
+        assert response.status == 200
+        assert 'href="/sessions/review-session-1.json"' in html
+        assert 'href="/sessions/.json"' not in html
+        assert 'action="/sessions/review-session-1.json"' not in html
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
 def test_execute_action_persists_action_run_record(tmp_path, monkeypatch):
     runtime_dir = tmp_path / "runtime"
     go_run_id = "go-test"

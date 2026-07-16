@@ -31,6 +31,24 @@ Keep the root clean:
 
 The project is about using a web AI session, usually GPT Web, as an external brain for software development. Through MCP, that web AI becomes a local agent entrypoint. The web AI coordinates direction, tasks, evidence, and review while IDEs, CLIs, browsers, scripts, tests, and coding agents act as interchangeable executors.
 
+## Accepted Slice Git Lifecycle
+
+Follow `rules/git.md` RULE git-006 for every write-capable slice:
+
+- Coding workers may edit, test, and report, but they must not stage, commit, or
+  set `root_accepted`.
+- Only the root coordinator may set `root_accepted`, and only after independent
+  review, required evidence, and reconciliation against the actual diff pass.
+- Each `root_accepted` slice must become exactly one local logical commit. The
+  root coordinator stages only the accepted paths and verifies that the cached
+  path set and content exactly match the accepted slice before committing.
+- Failed, blocked, rejected, or unreviewed slices must not be committed. In a
+  dirty worktree, broad staging, broad restore, stash, reset, and clean are not
+  part of the slice lifecycle; the captured baseline remains protected.
+- Push, pull request creation, merge, release, history rewrite, hook
+  registration, and global Git or agent configuration require an explicit
+  human gate. Force-push to `main` or `master` remains forbidden.
+
 ## Before Changing Files
 
 Follow [Agent Coding Discipline](docs/agent-runtime/agent-coding-discipline.md)

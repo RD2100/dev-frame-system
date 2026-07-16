@@ -8,7 +8,8 @@
 |-----------|-----------|
 | Read files | Within {{PROJECT_ROOT}} |
 | List directories | Within {{PROJECT_ROOT}} |
-| Git status/log/diff | Read-only |
+| Git status/log/diff/hash | Read-only |
+| Root-accepted local Git commit | Root coordinator only; independent review and required evidence pass, `root_accepted` is recorded, exact accepted paths are staged, cached diff is reconciled, and one local logical commit is created |
 | Search (rg, Grep, Select-String) | Read-only |
 | JSON validation | Read-only schema audit |
 | CodeGraph search/context/explore | Read-only; reindex = human gate |
@@ -29,7 +30,8 @@ templates/
 
 | Category | Forbidden |
 |----------|-----------|
-| Git | push, commit, reset, clean, checkout, stash, force-push, branch delete |
+| Git slice lifecycle | Worker staging or commit; pre-`root_accepted` commit; commit of failed, blocked, rejected, or unreviewed work; `git add -A`; `git add .`; `git commit -a`; broad restore or checkout; stash; reset; clean |
+| Git external effects | Push, pull request creation, merge, release, history rewrite, hook registration, or global Git/agent configuration without an explicit human gate; force-push to `main` or `master` is always forbidden |
 | Packages | npm/pip/yarn/pnpm/cargo install |
 | MCP | enable, register, modify config |
 | Scripts | execute .ps1/.py/.sh without ScriptSafetyRecord + human gate |

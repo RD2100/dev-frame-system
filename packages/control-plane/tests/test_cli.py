@@ -1579,6 +1579,7 @@ def test_sessions_help_is_available(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "Usage: devframe sessions" in output
     assert "--runtime-dir" in output
+    assert "--session-id" in output
     assert "--format" in output
 
 
@@ -1671,6 +1672,65 @@ def test_sessions_json_output(tmp_path, monkeypatch, capsys):
     assert sessions["sessions"][0]["provider"] == "deepseek"
     assert sessions["sessions"][0]["agent_role"] == "reviewer"
     assert sessions["sessions"][0]["status"] == "idle"
+
+
+def test_sessions_returns_one_public_session_by_exact_id(tmp_path, monkeypatch, capsys):
+    runtime_dir = tmp_path / "runtime"
+    sessions_dir = runtime_dir / "web-ai-sessions"
+    sessions_dir.mkdir(parents=True)
+    (sessions_dir / "review.json").write_text(
+        json.dumps({
+            "session_id": "review-session-1",
+            "provider": "chatgpt",
+            "agent_role": "reviewer",
+            "project_id": "demo-project",
+            "task_spec_id": "D:/private/TASKSPEC.json",
+            "status": "completed",
+            "messages": [{"message_id": "m1", "role": "agent", "content_summary": "Reviewed."}],
+            "tool_calls": [],
+            "changed_files": [],
+            "evidence_refs": ["D:/private/evidence.md"],
+            "gates": [],
+            "actions": [],
+            "native_refs": {"secret": "must-not-leak"},
+        }),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "sessions",
+        "--runtime-dir",
+        str(runtime_dir),
+        "--session-id",
+        "review-session-1",
+        "--format",
+        "json",
+    ])
+
+    assert devframe_cli_main() == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["session"]["session_id"] == "review-session-1"
+    assert payload["session"]["task_spec_id"] == "TASKSPEC.json"
+    assert "native_refs" not in payload["session"]
+    assert "D:/private" not in json.dumps(payload)
+
+
+def test_sessions_rejects_unknown_session_id(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime"
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "sessions",
+        "--runtime-dir",
+        str(runtime_dir),
+        "--session-id",
+        "missing-session",
+    ])
+
+    with pytest.raises(SystemExit) as error:
+        devframe_cli_main()
+
+    assert error.value.code == 2
 
 
 def test_sessions_reports_missing_runtime(tmp_path, monkeypatch, capsys):

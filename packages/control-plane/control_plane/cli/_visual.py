@@ -113,20 +113,29 @@ def cmd_sessions() -> int:
     from ..backup_guard import default_runtime_dir
     from ..visual_state import (
         build_visual_control_plane_state,
+        public_session_detail,
         public_session_summaries,
     )
 
     parser = argparse.ArgumentParser(prog="devframe sessions")
     parser.add_argument("--runtime-dir", default=None, help="Local devframe runtime directory")
+    parser.add_argument("--session-id", default=None, help="Exact public DevFrameSession id to inspect")
     parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format")
     parser.add_argument("--output", default=None, help="Write output to a file instead of stdout")
     args = parser.parse_args(sys.argv[2:])
 
     runtime_dir = Path(args.runtime_dir).resolve() if args.runtime_dir else default_runtime_dir()
     state = build_visual_control_plane_state(runtime_dir)
-    sessions = public_session_summaries(state.get("sessions", []))
+    if args.session_id:
+        session = public_session_detail(state.get("sessions"), args.session_id)
+        if session is None:
+            parser.error(f"session not found: {args.session_id}")
+        sessions = [session]
+    else:
+        sessions = public_session_summaries(state.get("sessions", []))
     if args.format == "json":
-        rendered = json.dumps({"sessions": sessions}, indent=2, ensure_ascii=False)
+        payload = {"session": sessions[0]} if args.session_id else {"sessions": sessions}
+        rendered = json.dumps(payload, indent=2, ensure_ascii=False)
     else:
         lines = ["DevFrame sessions", "runtime_dir  : hidden; use --format json for machine-readable summaries", ""]
         if not sessions:

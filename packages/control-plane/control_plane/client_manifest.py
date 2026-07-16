@@ -110,6 +110,15 @@ def build_visual_client_manifest() -> dict[str, Any]:
             "description": "Public session list for conversation workbench and session detail navigation.",
         },
         {
+            "id": "session-detail",
+            "path": "/sessions/{session_id}.json",
+            "method": "GET",
+            "contract": "public_session_detail",
+            "object_types": ["DevFrameSession"],
+            "mutates": False,
+            "description": "Exact-match public session detail projection; missing sessions return 404.",
+        },
+        {
             "id": "web-ai-sessions",
             "path": "/web-ai-sessions.json",
             "method": "GET",

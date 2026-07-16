@@ -143,6 +143,10 @@ devframe code session --runtime-dir C:\Users\you\.devframe-runtime
 devframe code session --runtime-dir C:\Users\you\.devframe-runtime --format json
 ```
 
+Use `devframe sessions --session-id <id> --format json` to inspect one public
+DevFrameSession detail. The command reads local visual state only, omits native
+runtime references and local paths, and exits nonzero when the id is missing.
+
 The focused total-control entrypoint is also installed:
 
 ```powershell

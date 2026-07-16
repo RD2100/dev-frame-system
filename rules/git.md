@@ -19,9 +19,9 @@
 ## RULE git-002: No Destructive Commands Without Approval
 
 - **Priority**: P0 (Hard Stop)
-- **Trigger**: `git reset --hard`, `git clean -fd`, `git checkout -- <file>`, `git stash drop`, `git branch -D`
+- **Trigger**: `git reset`, `git clean`, `git restore`, `git checkout -- <path>`, `git stash`, `git branch -D`, or history-rewriting commands
 - **Scope**: All phases
-- **Rule**: Destructive git commands that irreversibly discard work require explicit human approval. State what would be lost and why it must be discarded.
+- **Rule**: Destructive git commands that discard or hide work require explicit human approval. State what would be lost or moved and why the operation is necessary. The automated logical-slice lifecycle must never use these commands to obtain a clean worktree.
 - **Verification**: Git reflog shows no unapproved destructive operations.
 - **Conflict Handling**: If a destructive command is in a batch plan, flag it, do not execute without separate confirmation.
 
@@ -60,11 +60,15 @@
 
 ---
 
-## RULE git-006: Phase 0-5 Commit Freeze
+## RULE git-006: Root-Accepted Local Commit Lifecycle
 
 - **Priority**: P1 (Scope Control)
-- **Trigger**: Any git commit
-- **Scope**: Phase 0-5 bootstrap
-- **Rule**: Do not commit, stash, reset, clean, or otherwise mutate git state during Phase 0-5. The existing dirty baseline (13 modified + 6 untracked) must be preserved exactly as-is. All new work is untracked.
-- **Verification**: `git status --short` shows unchanged modified files; no new commits.
-- **Conflict Handling**: If a batch plan requires a git mutation, flag it, do not execute.
+- **Trigger**: Any write-capable slice, staging attempt, or local commit
+- **Scope**: All phases, all agents, including dirty worktrees
+- **Rule**: A coding worker may edit, test, and return an ExecutionReport, but it must not stage files, create commits, or set `root_accepted`. Only the root coordinator may set `root_accepted`, after an independent reviewer passes the actual diff and all required evidence passes. Worker success, exit code, or self-report is never acceptance.
+- **Required Lifecycle**: Preserve the captured baseline manifest and per-path hashes. For each `root_accepted` slice, the root coordinator stages only the accepted path set with path-specific commands, verifies `git diff --cached --name-only` and the cached content exactly match the accepted slice, then creates exactly one local logical commit before starting the next slice.
+- **Rejected States**: Failed, blocked, rejected, unreviewed, or otherwise non-`root_accepted` slices must not be committed.
+- **Dirty-Worktree Safety**: Do not use `git add -A`, `git add .`, `git commit -a`, broad restore or checkout, stash, reset, or clean as part of the slice lifecycle. Unrelated baseline paths and any pre-existing staged content must remain unchanged. A destructive recovery operation is outside this lifecycle and requires its own explicit human approval under git-002.
+- **External-Effect Gate**: Push, pull request creation, merge, release, history rewrite, hook registration, and global Git or agent configuration require an explicit human gate. Force-push to `main` or `master` remains forbidden under git-001.
+- **Verification**: The root acceptance record identifies the reviewer verdict, evidence, accepted paths, and baseline. The staged path set and cached diff match that record exactly, the resulting commit contains exactly those paths, and protected baseline hashes outside the slice are unchanged.
+- **Conflict Handling**: On any mismatch, stop without committing, leave unrelated work untouched, and return the slice for review or human resolution. Do not repair the mismatch with broad Git state mutations.

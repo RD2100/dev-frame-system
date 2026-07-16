@@ -36,6 +36,7 @@ from .visual_state import (
     action_filter_values,
     build_visual_control_plane_state,
     filter_action_queue,
+    public_session_detail,
     public_session_summaries,
     render_action_queue_markdown,
     render_visual_control_plane_state_html,
@@ -300,6 +301,18 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     json.dumps({"sessions": public_session_summaries(state.get("sessions", []))}, indent=2, ensure_ascii=True),
                 )
                 return
+            if path.startswith("/sessions/") and path.endswith(".json"):
+                session_id = path[len("/sessions/"):-len(".json")]
+                if not session_id or "/" in session_id:
+                    self._send_text(HTTPStatus.NOT_FOUND, "application/json; charset=utf-8", json.dumps({"error": "session_not_found"}))
+                    return
+                state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=paper_project_dirs)
+                session = public_session_detail(state.get("sessions"), session_id)
+                if session is None:
+                    self._send_text(HTTPStatus.NOT_FOUND, "application/json; charset=utf-8", json.dumps({"error": "session_not_found"}))
+                    return
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", json.dumps(session, indent=2, ensure_ascii=True))
+                return
             if path == "/web-ai-sessions.json":
                 state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=paper_project_dirs)
                 web_ai_sessions = [
@@ -436,6 +449,18 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                 self._send_text(HTTPStatus.OK, "text/plain; charset=utf-8", "ok\n")
                 return
             self._send_text(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", "not found\n")
+
+        def do_HEAD(self) -> None:
+            if urlparse(self.path).path == "/state.json":
+                state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=paper_project_dirs)
+                self._send_text(
+                    HTTPStatus.OK,
+                    "application/json; charset=utf-8",
+                    render_visual_control_plane_state_json(state),
+                    send_body=False,
+                )
+                return
+            self.send_error(HTTPStatus.NOT_IMPLEMENTED, f"Unsupported method ({self.command!r})")
 
         def do_OPTIONS(self) -> None:
             self.send_response(HTTPStatus.NO_CONTENT)
@@ -1140,17 +1165,33 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
             return
 
         def _method_not_allowed(self) -> None:
-            self._send_text(HTTPStatus.METHOD_NOT_ALLOWED, "text/plain; charset=utf-8", "default-read-only dashboard\n")
+            allowed_methods = "GET, HEAD, OPTIONS" if urlparse(self.path).path == "/state.json" else None
+            self._send_text(
+                HTTPStatus.METHOD_NOT_ALLOWED,
+                "text/plain; charset=utf-8",
+                "default-read-only dashboard\n",
+                allowed_methods=allowed_methods,
+            )
 
-        def _send_text(self, status: HTTPStatus, content_type: str, text: str) -> None:
+        def _send_text(
+            self,
+            status: HTTPStatus,
+            content_type: str,
+            text: str,
+            allowed_methods: str | None = None,
+            send_body: bool = True,
+        ) -> None:
             data = text.encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", "no-store")
+            if allowed_methods:
+                self.send_header("Allow", allowed_methods)
             self._send_cors_headers()
             self.end_headers()
-            self.wfile.write(data)
+            if send_body:
+                self.wfile.write(data)
 
         def _send_cors_headers(self) -> None:
             origin = self.headers.get("Origin")

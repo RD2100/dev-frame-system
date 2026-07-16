@@ -401,6 +401,70 @@ def test_public_snapshot_rejects_generated_build_dirs():
         shutil.rmtree(probe_root, ignore_errors=True)
 
 
+def test_public_snapshot_ignores_gitignored_tutti_build_outputs():
+    probe_dir = (
+        REPO_ROOT
+        / "products"
+        / "tutti"
+        / "apps"
+        / "desktop"
+        / "build"
+        / "app-runtime"
+        / f"snapshot-probe-{uuid.uuid4().hex}"
+    )
+    probe_dir.mkdir(parents=True)
+    (probe_dir / "generated.txt").write_text("ignored local build output", encoding="utf-8")
+    try:
+        result = subprocess.run(
+            [
+                "powershell",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(REPO_ROOT / "scripts" / "verify-public-snapshot.ps1"),
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+    finally:
+        shutil.rmtree(probe_dir, ignore_errors=True)
+
+
+def test_public_snapshot_ignores_empty_gitignored_tutti_build_dir():
+    probe_dir = (
+        REPO_ROOT
+        / "products"
+        / "tutti"
+        / "apps"
+        / "desktop"
+        / "build"
+        / "empty-app-runtime-probe"
+    )
+    probe_dir.mkdir(parents=True)
+    try:
+        result = subprocess.run(
+            [
+                "powershell",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(REPO_ROOT / "scripts" / "verify-public-snapshot.ps1"),
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+    finally:
+        shutil.rmtree(probe_dir, ignore_errors=True)
+
+
 def test_public_snapshot_rejects_root_ai_bridge_dir():
     probe_dir = REPO_ROOT / ".ai-bridge"
     probe_dir.mkdir(parents=True, exist_ok=True)

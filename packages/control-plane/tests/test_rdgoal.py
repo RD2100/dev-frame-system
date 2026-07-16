@@ -787,6 +787,10 @@ def test_dashboard_server_serves_html_and_state_json_read_only(tmp_path):
             html = response.read().decode("utf-8")
         with urlopen(f"{base_url}/state.json", timeout=5) as response:
             state = json.loads(response.read().decode("utf-8"))
+        with urlopen(Request(f"{base_url}/state.json", method="HEAD"), timeout=5) as response:
+            assert response.status == 200
+            assert response.headers["Content-Type"] == "application/json; charset=utf-8"
+            assert response.read() == b""
         with urlopen(f"{base_url}/actions.json?status=open&source_type=gate", timeout=5) as response:
             actions_payload = json.loads(response.read().decode("utf-8"))
         with urlopen(f"{base_url}/actions.json?source-type=gate", timeout=5) as response:
@@ -846,6 +850,14 @@ def test_dashboard_server_serves_html_and_state_json_read_only(tmp_path):
             assert error.code == 405
         else:
             raise AssertionError("dashboard accepted a write request")
+        for method in ("POST", "PUT", "PATCH", "DELETE"):
+            try:
+                urlopen(Request(f"{base_url}/state.json", method=method), timeout=5)
+            except HTTPError as error:
+                assert error.code == 405
+                assert error.headers["Allow"] == "GET, HEAD, OPTIONS"
+            else:
+                raise AssertionError(f"dashboard accepted a {method} state write request")
     finally:
         server.shutdown()
         server.server_close()
@@ -2007,6 +2019,27 @@ def test_runtime_store_read_all_tolerates_truncated_trailing_line(tmp_path):
 
     assert len(events) == 1
     assert events[0]["project_id"] == "test-project"
+
+
+def test_dispatch_packet_taskspec_includes_canonical_security_report(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    contract_path = write_contract(tmp_path)
+
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    orchestrator.register(contract_path, project_root)
+    result = orchestrator.dispatch(
+        project_id="demo-project",
+        requirement="Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+    task_spec = json.loads(
+        (Path(result.packet.packet_dir) / "TASKSPEC.json").read_text(encoding="utf-8")
+    )
+
+    Draft202012Validator(load_schema("schemas/agent-runtime/task-spec.schema.json")).validate(task_spec)
+    assert task_spec["security_report"]["scan_status"] == "not_run"
 
 
 def test_skill_registry_lists_shipped_agent_acceptance():

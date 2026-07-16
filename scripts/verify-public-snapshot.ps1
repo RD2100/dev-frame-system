@@ -84,6 +84,14 @@ $forbiddenRootNamePatterns = @(
     "review-bundle-*"
 )
 
+$tuttiAllowedBuildRoot = "products\tutti\apps\desktop\build"
+$tuttiAllowedBuildFiles = @(
+    "$tuttiAllowedBuildRoot\entitlements.mac.inherit.plist",
+    "$tuttiAllowedBuildRoot\entitlements.mac.plist",
+    "$tuttiAllowedBuildRoot\icon.png"
+)
+$tuttiWallpaperPath = "products\tutti\apps\desktop\src\renderer\src\assets\workspace-wallpaper\tutti.png"
+
 $forbiddenTextPatterns = @(
     @{
         Name = "private dev-frame-system checkout path"
@@ -119,6 +127,7 @@ $textScanExtensions = @(
 
 $textScanAllowlist = @(
     "packages\control-plane\tests\test_public_snapshot.py",
+    "scripts\import-tutti-snapshot.py",
     "scripts\verify-public-snapshot.ps1"
 )
 
@@ -131,6 +140,7 @@ $ignoredGeneratedDirs = @(
     ".pytest_cache",
     ".ruff_cache",
     ".mypy_cache"
+    "node_modules"
 )
 
 function Test-IsUnderIgnoredGeneratedDir {
@@ -149,6 +159,28 @@ function Test-IsUnderIgnoredGeneratedDir {
     return $false
 }
 
+function Test-IsIgnoredTuttiLocalArtifact {
+    param(
+        [string]$BasePath,
+        [string]$RelativePath
+    )
+
+    if ([string]::IsNullOrWhiteSpace($RelativePath) -or -not $RelativePath.StartsWith("products\tutti\", [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+    }
+    $gitPath = $RelativePath -replace "\\", "/"
+    foreach ($ignoredPath in $script:ignoredTuttiLocalPaths) {
+        if (
+            $gitPath -eq $ignoredPath -or
+            $gitPath.StartsWith("$ignoredPath/", [System.StringComparison]::OrdinalIgnoreCase) -or
+            $ignoredPath.StartsWith("$gitPath/", [System.StringComparison]::OrdinalIgnoreCase)
+        ) {
+            return $true
+        }
+    }
+    return $false
+}
+
 function Get-PublicSnapshotItems {
     param(
         [string]$Path,
@@ -156,6 +188,9 @@ function Get-PublicSnapshotItems {
     )
 
     Get-ChildItem -LiteralPath $Path -Force | ForEach-Object {
+        if (-not ($_ -is [System.IO.FileSystemInfo]) -or [string]::IsNullOrWhiteSpace($_.FullName)) {
+            return
+        }
         if ($_.PSIsContainer) {
             $relative = Get-RelativeSnapshotPath -BasePath $RootPath -TargetPath $_.FullName
 
@@ -179,6 +214,19 @@ function Get-PublicSnapshotItems {
             $_
         }
     }
+}
+
+$script:ignoredTuttiLocalPaths = @()
+if (Test-Path -LiteralPath (Join-Path $rootPath ".git")) {
+    $script:ignoredTuttiLocalPaths = @(
+        & git -C $rootPath ls-files --others --ignored --exclude-standard --directory -- products/tutti 2>$null |
+            ForEach-Object {
+                $path = ($_.TrimEnd('/') -replace "\\", "/")
+                if (-not [string]::IsNullOrWhiteSpace($path)) {
+                    $path
+                }
+            }
+    )
 }
 
 $missing = New-Object System.Collections.Generic.List[string]
@@ -262,6 +310,22 @@ Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | ForEach-Object {
 
     $relative = Get-RelativeSnapshotPath -BasePath $rootPath -TargetPath $_.FullName
 
+    if (Test-IsIgnoredTuttiLocalArtifact -BasePath $rootPath -RelativePath $relative) {
+        return
+    }
+
+    if ($relative -eq $tuttiAllowedBuildRoot) {
+        return
+    }
+
+    if ($relative.StartsWith("$tuttiAllowedBuildRoot\", [System.StringComparison]::OrdinalIgnoreCase)) {
+        if (-not $_.PSIsContainer -and ($tuttiAllowedBuildFiles -contains $relative)) {
+            return
+        }
+        $violations.Add("forbidden tutti build artifact: $relative")
+        return
+    }
+
     if (Test-IsUnderIgnoredGeneratedDir -BasePath $rootPath -TargetPath $_.FullName) {
         return
     }
@@ -288,7 +352,7 @@ Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | ForEach-Object {
         $violations.Add("forbidden extension: $relative")
     }
 
-    if (-not $_.PSIsContainer -and $_.Length -gt 5MB) {
+    if (-not $_.PSIsContainer -and $_.Length -gt 5MB -and $relative -ne $tuttiWallpaperPath) {
         $violations.Add("file exceeds 5MB: $relative")
     }
 }
@@ -301,13 +365,18 @@ if ($violations.Count -gt 0) {
 $privateTextFailures = New-Object System.Collections.Generic.List[string]
 $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
 Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | Where-Object {
-    -not $_.PSIsContainer -and ($textScanExtensions -contains $_.Extension)
+    $_ -is [System.IO.FileSystemInfo] -and -not $_.PSIsContainer -and
+        -not [string]::IsNullOrWhiteSpace($_.FullName) -and
+        ($textScanExtensions -contains $_.Extension)
 } | ForEach-Object {
     if (Test-IsUnderIgnoredGeneratedDir -BasePath $rootPath -TargetPath $_.FullName) {
         return
     }
 
     $relative = Get-RelativeSnapshotPath -BasePath $rootPath -TargetPath $_.FullName
+    if (Test-IsIgnoredTuttiLocalArtifact -BasePath $rootPath -RelativePath $relative) {
+        return
+    }
     if ($textScanAllowlist -contains $relative) {
         return
     }
@@ -333,19 +402,27 @@ if ($privateTextFailures.Count -gt 0) {
 }
 
 $jsonFailures = New-Object System.Collections.Generic.List[string]
-Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | Where-Object { -not $_.PSIsContainer -and $_.Extension -eq ".json" } | ForEach-Object {
-    if (Test-IsUnderIgnoredGeneratedDir -BasePath $rootPath -TargetPath $_.FullName) {
+Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | Where-Object {
+    $_ -is [System.IO.FileSystemInfo] -and -not $_.PSIsContainer -and
+        -not [string]::IsNullOrWhiteSpace($_.FullName) -and $_.Extension -eq ".json"
+} | ForEach-Object {
+    $jsonFile = $_
+    if (Test-IsUnderIgnoredGeneratedDir -BasePath $rootPath -TargetPath $jsonFile.FullName) {
+        return
+    }
+
+    $relative = Get-RelativeSnapshotPath -BasePath $rootPath -TargetPath $jsonFile.FullName
+    if (Test-IsIgnoredTuttiLocalArtifact -BasePath $rootPath -RelativePath $relative) {
         return
     }
 
     try {
-        $jsonText = [System.IO.File]::ReadAllText($_.FullName, $utf8)
+        $jsonText = [System.IO.File]::ReadAllText($jsonFile.FullName, $utf8)
         if ($jsonText.Length -gt 0 -and $jsonText[0] -eq [char]0xFEFF) {
             $jsonText = $jsonText.Substring(1)
         }
         $jsonText | ConvertFrom-Json | Out-Null
     } catch {
-        $relative = Get-RelativeSnapshotPath -BasePath $rootPath -TargetPath $_.FullName
         $jsonFailures.Add("${relative}: $($_.Exception.Message)")
     }
 }
