@@ -66,7 +66,10 @@ Use:
 - `--dashboard` when you want the control-plane view immediately
 
 `devframe code status` and `devframe code execute` are there so a run becomes a
-recoverable session rather than a one-shot command.
+recoverable session rather than a one-shot command. The text status view gives
+a path-free, read-only next-step summary: prepared work is ready to run;
+paused, blocked, and failed work needs attention; completed work is ready for
+result review.
 
 ## Secondary Surfaces
 
