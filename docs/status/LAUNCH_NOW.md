@@ -5,6 +5,27 @@ Date: 2026-07-17
 Verdict: **CONDITIONAL-GO** for continued public development on `main`.
 Release, deployment, and production changes are outside this verdict.
 
+## Historical Release Baseline
+
+Verdict: **GITHUB RELEASED as `v0.1.0`**; **PYPI NOT PUBLISHED**. This records
+the completed GitHub release without reopening a publication or deployment
+gate for the current cleanup wave.
+The `v0.1.0` tag resolves to release commit
+`d555e3203fdf68feacd9c4f186595f8f178d51a2`.
+
+### Initial Owner-Gate Snapshot
+
+The original owner-gate snapshot used head
+`5cea92a56f63270831c3213dfc93f1de8c409139`, an ancestor of that release
+commit. This is the historical owner-gate snapshot head, not the current `main` head.
+
+This is the current launch-control entrypoint.
+
+### Post-Release Remaining Decisions
+
+PyPI publication, deployment, and production changes remain separate owner
+decisions and are not authorized by this repository-cleanup verdict.
+
 ## Current Decision
 
 The accepted public mainline is usable for continued development. The current
