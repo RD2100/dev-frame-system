@@ -409,6 +409,21 @@ def public_session_summaries(sessions: object) -> list[dict[str, Any]]:
     ]
 
 
+def public_session_detail(sessions: object, session_id: object) -> dict[str, Any] | None:
+    """Return one public session projection for the read-only detail route."""
+    if not isinstance(sessions, list):
+        return None
+    requested_id = str(session_id or "")
+    if not requested_id:
+        return None
+    for session in sessions:
+        if isinstance(session, dict) and str(session.get("session_id") or "") == requested_id:
+            detail = _public_session_summary(session)
+            detail["task_spec_id"] = _public_file_label(session.get("task_spec_id"))
+            return detail
+    return None
+
+
 def _public_session_summary(session: dict[str, Any]) -> dict[str, Any]:
     return {
         "session_id": str(session.get("session_id") or ""),
@@ -441,6 +456,11 @@ def _public_ref_label(value: object) -> str:
     if len(parts) >= 2 and parts[-1] == "TASKSPEC.json":
         return "/".join(parts[-2:])
     return parts[-1]
+
+
+def _public_file_label(value: object) -> str:
+    text = str(value or "").strip()
+    return Path(text.replace("\\", "/")).name if text else ""
 
 
 def _public_count(value: object) -> int:

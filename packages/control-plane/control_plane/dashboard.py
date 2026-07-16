@@ -36,6 +36,7 @@ from .visual_state import (
     action_filter_values,
     build_visual_control_plane_state,
     filter_action_queue,
+    public_session_detail,
     public_session_summaries,
     render_action_queue_markdown,
     render_visual_control_plane_state_html,
@@ -299,6 +300,18 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     "application/json; charset=utf-8",
                     json.dumps({"sessions": public_session_summaries(state.get("sessions", []))}, indent=2, ensure_ascii=True),
                 )
+                return
+            if path.startswith("/sessions/") and path.endswith(".json"):
+                session_id = path[len("/sessions/"):-len(".json")]
+                if not session_id or "/" in session_id:
+                    self._send_text(HTTPStatus.NOT_FOUND, "application/json; charset=utf-8", json.dumps({"error": "session_not_found"}))
+                    return
+                state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=paper_project_dirs)
+                session = public_session_detail(state.get("sessions"), session_id)
+                if session is None:
+                    self._send_text(HTTPStatus.NOT_FOUND, "application/json; charset=utf-8", json.dumps({"error": "session_not_found"}))
+                    return
+                self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", json.dumps(session, indent=2, ensure_ascii=True))
                 return
             if path == "/web-ai-sessions.json":
                 state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=paper_project_dirs)
