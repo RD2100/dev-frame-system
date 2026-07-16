@@ -167,12 +167,21 @@ def update_batch_status(goal_id: str, batch_id: str, status: str,
                         run_id: str = "", task_id: str = "", review_result: str = "",
                         changed_files: list[str] = None, diff_scope_ok: bool = False,
                         evidence_recovered: bool = None,
-                        evidence_recovery_source: str = "") -> bool:
+                        evidence_recovery_source: str = "",
+                        expected_revision: int | None = None) -> bool:
     g = load_goal(goal_id)
     if not g or not g.get("batches"):
         return False
     for b in g["batches"]:
         if b["batch_id"] == batch_id:
+            revision = b.get("revision", 0)
+            if expected_revision is not None and expected_revision != revision:
+                return False
+            attempt_id = b.get("attempt_id", "")
+            if run_id and attempt_id and run_id != attempt_id:
+                return False
+            if run_id and not attempt_id:
+                b["attempt_id"] = run_id
             b["status"] = status
             if run_id: b["run_id"] = run_id; g.setdefault("run_ids", []).append(run_id)
             if task_id: b["task_id"] = task_id
@@ -181,6 +190,7 @@ def update_batch_status(goal_id: str, batch_id: str, status: str,
             b["diff_scope_ok"] = diff_scope_ok
             if evidence_recovered is not None: b["evidence_recovered"] = evidence_recovered
             if evidence_recovery_source: b["evidence_recovery_source"] = evidence_recovery_source
+            b["revision"] = revision + 1
             _save(goal_id, g)
             return True
     return False
