@@ -240,6 +240,7 @@ def test_visual_client_manifest_matches_public_schema():
         "/t3-shell.json",
         "/api/t3/coordinator-entry",
         "/sessions.json",
+        "/sessions/{session_id}.json",
         "/web-ai-sessions.json",
         "/actions.json",
         "/actions.md",

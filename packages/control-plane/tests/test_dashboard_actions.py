@@ -158,6 +158,54 @@ def test_session_detail_endpoint_returns_public_projection_and_hides_runtime_ref
         thread.join(timeout=5)
 
 
+def test_session_stream_links_to_matching_read_only_detail(tmp_path, monkeypatch):
+    state = {
+        "projects": [],
+        "provider_bindings": [],
+        "agents": [],
+        "sessions": [{
+            "session_id": "review-session-1",
+            "provider": "chatgpt",
+            "agent_role": "reviewer",
+            "status": "completed",
+        }, {
+            "session_id": "",
+            "provider": "unknown",
+            "agent_role": "custom",
+            "status": "unknown",
+        }],
+        "runs": [],
+        "gates": [],
+        "decisions": [],
+        "next_actions": [],
+        "team": {},
+        "safety": {
+            "raw_transcripts_persisted": False,
+            "remote_execution_default": False,
+            "human_gate_required_for": ["credential_access"],
+        },
+        "skills": [],
+    }
+    monkeypatch.setattr(dashboard_module, "build_visual_control_plane_state", lambda *a, **kw: state)
+
+    server = build_dashboard_server(runtime_dir=tmp_path / "runtime", port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        with urlopen(base_url, timeout=5) as response:
+            html = response.read().decode("utf-8")
+
+        assert response.status == 200
+        assert 'href="/sessions/review-session-1.json"' in html
+        assert 'href="/sessions/.json"' not in html
+        assert 'action="/sessions/review-session-1.json"' not in html
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
 def test_execute_action_persists_action_run_record(tmp_path, monkeypatch):
     runtime_dir = tmp_path / "runtime"
     go_run_id = "go-test"

@@ -3045,7 +3045,7 @@ def _workbench_session_lane(sessions: list[dict[str, Any]], lang: str) -> str:
         body = '<ul class="workbench-list">' + "".join(
             '<li>'
             f'<span>{_h(session.get("provider", ""))} / {_h(session.get("agent_role", ""))}</span>'
-            f'<code>{_h(session.get("session_id", ""))}</code>'
+            f'{_session_detail_link(session.get("session_id", ""))}'
             f'{_badge(session.get("status", ""))}'
             '</li>'
             for session in sessions[:5]
@@ -3056,6 +3056,17 @@ def _workbench_session_lane(sessions: list[dict[str, Any]], lang: str) -> str:
         f'{body}'
         '</article>'
     )
+
+
+def _session_detail_href(session_id: object) -> str:
+    return f"/sessions/{quote(str(session_id or ''), safe='')}.json"
+
+
+def _session_detail_link(session_id: object) -> str:
+    label = str(session_id or "")
+    if not label:
+        return "<code></code>"
+    return f'<a class="row-link" href="{_h(_session_detail_href(label))}"><code>{_h(label)}</code></a>'
 
 
 def _workbench_gate_lane(
