@@ -260,6 +260,7 @@ def test_code_status_reads_latest_go_run_without_creating_packets(tmp_path, monk
     assert devframe_cli_main() == 0
     metadata_files_before = list((runtime_dir / "go-runs").glob("*/go-run.json"))
     metadata = json.loads(metadata_files_before[0].read_text(encoding="utf-8"))
+    capsys.readouterr()
     monkeypatch.setattr(sys, "argv", [
         "devframe",
         "code",
@@ -277,6 +278,8 @@ def test_code_status_reads_latest_go_run_without_creating_packets(tmp_path, monk
     assert metadata["go_run_id"] in output
     assert "status       : prepared" in output
     assert "coding-agent-1" in output
+    assert "Ready to run" in output
+    assert str(runtime_dir) not in output
     assert metadata_files_after == metadata_files_before
 
 
@@ -333,6 +336,46 @@ def test_code_status_reports_missing_runtime(tmp_path, monkeypatch, capsys):
 
     assert exit_code == 1
     assert "no go runs found" in output.err
+
+
+@pytest.mark.parametrize(
+    ("run_status", "expected_guidance"),
+    [
+        ("paused", "Needs attention"),
+        ("blocked", "Needs attention"),
+        ("failed", "Needs attention"),
+        ("completed", "Complete: review the result"),
+    ],
+)
+def test_code_status_renders_path_free_recovery_guidance(tmp_path, monkeypatch, capsys, run_status, expected_guidance):
+    runtime_dir = tmp_path / "private-runtime"
+    report_path = runtime_dir / "reports" / "worker-report.md"
+    run_id = f"go-{run_status}"
+    metadata_path = runtime_dir / "go-runs" / run_id / "go-run.json"
+    metadata_path.parent.mkdir(parents=True)
+    metadata_path.write_text(json.dumps({
+        "go_run_id": run_id,
+        "runtime_dir": str(runtime_dir),
+        "status": run_status,
+        "requirement": "Recover a bounded run.",
+        "agents": [{
+            "agent_id": "coding-agent-1",
+            "status": run_status,
+            "worker_status": run_status,
+            "report_path": str(report_path),
+        }],
+    }), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", [
+        "devframe", "code", "status", run_id, "--runtime-dir", str(runtime_dir),
+    ])
+
+    assert devframe_cli_main() == 0
+    output = capsys.readouterr().out
+
+    assert expected_guidance in output
+    assert str(runtime_dir) not in output
+    assert str(report_path) not in output
+    assert "devframe code execute" not in output
 
 
 def test_code_execute_reuses_prepared_go_run_packets(tmp_path, monkeypatch, capsys):

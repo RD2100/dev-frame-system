@@ -1001,10 +1001,11 @@ def _read_go_run_json(path: Path) -> dict:
 
 
 def _render_go_run_status(run: dict) -> str:
+    status = _ui_status(run.get("status", ""))
     lines = [
         "DevFrame Code status",
         f"go_run_id    : {run.get('go_run_id', '')}",
-        f"status       : {_ui_status(run.get('status', ''))}",
+        f"status       : {status}",
         f"agents       : {len(run.get('agents', []))}",
         f"requirement  : {run.get('requirement', '')}",
     ]
@@ -1030,22 +1031,20 @@ def _render_go_run_status(run: dict) -> str:
         changed_files = _metadata_strings(agent.get("changed_files"))
         if changed_files:
             lines.append(f"  changed: {', '.join(changed_files)}")
-        if agent.get("report_path"):
-            lines.append(f"  report : {agent.get('report_path')}")
     if not agents:
         lines.append("- (no agents)")
-    go_run_id = str(run.get("go_run_id", "")).strip()
-    runtime_dir = str(run.get("runtime_dir", "")).strip()
-    if go_run_id and runtime_dir:
-        lines.extend([
-            "",
-            "Next",
-            f"Inspect   : devframe code status {go_run_id} --runtime-dir {runtime_dir}",
-            f"Resume    : devframe code execute {go_run_id} --runtime-dir {runtime_dir}",
-            f"Control   : devframe dashboard serve --runtime-dir {runtime_dir}",
-            f"Queue     : devframe actions --runtime-dir {runtime_dir}",
-        ])
+    lines.extend(["", "Next", _status_recovery_guidance(status)])
     return "\n".join(lines) + "\n"
+
+
+def _status_recovery_guidance(status: str) -> str:
+    if status == "prepared":
+        return "Ready to run: review the prepared work, then choose when to execute."
+    if status in {"paused", "blocked", "failed"}:
+        return "Needs attention: inspect the agent status and resolve the blocker before retrying."
+    if status == "complete":
+        return "Complete: review the result before starting new work."
+    return "Needs attention: the run state is not recognized."
 
 
 def _metadata_strings(value: object) -> list[str]:
