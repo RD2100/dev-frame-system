@@ -1033,8 +1033,26 @@ def _render_go_run_status(run: dict) -> str:
             lines.append(f"  changed: {', '.join(changed_files)}")
     if not agents:
         lines.append("- (no agents)")
+    attention = _agent_attention_summary(agents)
+    if attention:
+        lines.extend(["", f"Needs attention: {attention}."])
     lines.extend(["", "Next", _status_recovery_guidance(status)])
     return "\n".join(lines) + "\n"
+
+
+def _agent_attention_summary(agents: object) -> str:
+    if not isinstance(agents, list):
+        return ""
+    summaries = []
+    for agent in agents:
+        if not isinstance(agent, dict):
+            continue
+        status = _ui_status(agent.get("worker_status") or agent.get("status") or "")
+        if status in {"paused", "blocked", "failed"}:
+            agent_id = str(agent.get("agent_id") or "").strip()
+            if agent_id:
+                summaries.append(f"{agent_id} ({status})")
+    return ", ".join(summaries)
 
 
 def _status_recovery_guidance(status: str) -> str:

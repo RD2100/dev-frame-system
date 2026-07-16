@@ -383,6 +383,33 @@ def test_code_status_renders_path_free_recovery_guidance(tmp_path, monkeypatch, 
     assert "devframe code execute" not in output
 
 
+def test_code_status_names_only_agents_that_need_attention(tmp_path, monkeypatch, capsys):
+    runtime_dir = tmp_path / "private-runtime"
+    metadata_path = runtime_dir / "go-runs" / "go-attention" / "go-run.json"
+    metadata_path.parent.mkdir(parents=True)
+    metadata_path.write_text(json.dumps({
+        "go_run_id": "go-attention",
+        "runtime_dir": str(runtime_dir),
+        "status": "blocked",
+        "requirement": "Recover a bounded run.",
+        "agents": [
+            {"agent_id": "coding-agent-1", "status": "completed", "worker_status": "completed"},
+            {"agent_id": "coding-agent-2", "status": "blocked", "worker_status": "blocked"},
+            {"agent_id": "coding-agent-3", "status": "failed", "worker_status": "failed"},
+        ],
+    }), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", [
+        "devframe", "code", "status", "go-attention", "--runtime-dir", str(runtime_dir),
+    ])
+
+    assert devframe_cli_main() == 0
+    output = capsys.readouterr().out
+
+    assert "Needs attention: coding-agent-2 (blocked), coding-agent-3 (failed)." in output
+    assert "coding-agent-1 (complete)" not in output
+    assert str(runtime_dir) not in output
+
+
 def test_code_execute_reuses_prepared_go_run_packets(tmp_path, monkeypatch, capsys):
     project_root = tmp_path / "demo-project"
     runtime_dir = tmp_path / "runtime"
