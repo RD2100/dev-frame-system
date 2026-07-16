@@ -27,6 +27,7 @@ coverage/
 .agent/
 .ai/
 .ai-bridge/
+.aiworkflow/
 .agents/
 .claude/
 .codex/
