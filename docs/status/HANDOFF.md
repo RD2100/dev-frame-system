@@ -37,6 +37,22 @@ instructions: `continue-global-coordinator-conversation-mainline.md`,
 `next-agent-global-coordinator-prompt.md`, and
 `devframe-code-opencode-handoff.md`.
 
+## Closure Gate Snapshot
+
+On 2026-07-17, the coordinator completed a non-destructive Change Tree Closure
+Gate against `main` at `9b273972`. There were no staged paths in the primary
+worktree. Its 111 tracked/untracked status records were preserved as an
+unowned local exception with status SHA-256
+`43cad6ba4c067fab1bab95ee55491ff4e1629868e4eac8263d73a1ab9aefdba1`.
+
+The session-detail and documentation release worktrees were clean. Four
+historical M1 verification worktrees still contain small uncommitted candidate
+sets, and the Tutti snapshot candidate contains a large staged import set.
+Those worktrees remain explicitly retained: no reset, clean, stash, bulk
+stage, or deletion was used. `git remote prune origin --dry-run` found no
+stale remote-tracking references, and there were no open public PRs after the
+accepted documentation merge.
+
 ## Known Gates
 
 - Merge only CI-green, reviewed, exact-head PRs into `main` with a normal
