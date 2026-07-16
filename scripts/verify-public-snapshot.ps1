@@ -84,6 +84,14 @@ $forbiddenRootNamePatterns = @(
     "review-bundle-*"
 )
 
+$tuttiAllowedBuildRoot = "products\tutti\apps\desktop\build"
+$tuttiAllowedBuildFiles = @(
+    "$tuttiAllowedBuildRoot\entitlements.mac.inherit.plist",
+    "$tuttiAllowedBuildRoot\entitlements.mac.plist",
+    "$tuttiAllowedBuildRoot\icon.png"
+)
+$tuttiWallpaperPath = "products\tutti\apps\desktop\src\renderer\src\assets\workspace-wallpaper\tutti.png"
+
 $forbiddenTextPatterns = @(
     @{
         Name = "private dev-frame-system checkout path"
@@ -263,6 +271,18 @@ Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | ForEach-Object {
 
     $relative = Get-RelativeSnapshotPath -BasePath $rootPath -TargetPath $_.FullName
 
+    if ($relative -eq $tuttiAllowedBuildRoot) {
+        return
+    }
+
+    if ($relative.StartsWith("$tuttiAllowedBuildRoot\", [System.StringComparison]::OrdinalIgnoreCase)) {
+        if (-not $_.PSIsContainer -and ($tuttiAllowedBuildFiles -contains $relative)) {
+            return
+        }
+        $violations.Add("forbidden tutti build artifact: $relative")
+        return
+    }
+
     if (Test-IsUnderIgnoredGeneratedDir -BasePath $rootPath -TargetPath $_.FullName) {
         return
     }
@@ -289,7 +309,7 @@ Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | ForEach-Object {
         $violations.Add("forbidden extension: $relative")
     }
 
-    if (-not $_.PSIsContainer -and $_.Length -gt 5MB) {
+    if (-not $_.PSIsContainer -and $_.Length -gt 5MB -and $relative -ne $tuttiWallpaperPath) {
         $violations.Add("file exceeds 5MB: $relative")
     }
 }
