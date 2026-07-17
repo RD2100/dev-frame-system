@@ -1,6 +1,6 @@
 # Workflow Consolidation and Command Plan
 
-Lifecycle state: Draft active plan
+Lifecycle state: Historical plan; scheduling superseded by `HANDOFF.md`
 
 ## Purpose
 

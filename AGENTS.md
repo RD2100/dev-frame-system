@@ -31,6 +31,19 @@ Keep the root clean:
 
 The project is about using a web AI session, usually GPT Web, as an external brain for software development. Through MCP, that web AI becomes a local agent entrypoint. The web AI coordinates direction, tasks, evidence, and review while IDEs, CLIs, browsers, scripts, tests, and coding agents act as interchangeable executors.
 
+## Document Authority
+
+Read `docs/status/HANDOFF.md` before planning or resuming repository work. It
+is the single current execution root: it selects the active milestone, risk
+register, write set, verification gate, and next action. Do not create a
+parallel master plan, roadmap, handoff, or current backlog in `docs/status/`.
+
+Other status documents are supporting evidence, scoped Recon Receipts, stable
+runtime explanations, or historical research. They may constrain a slice in
+their own scope, but they do not choose the next task. If they conflict with
+the execution root, record the conflict there and follow the root plus the
+mandatory rules in this file and `rules/`.
+
 ## Accepted Slice Git Lifecycle
 
 Follow `rules/git.md` RULE git-006 for every write-capable slice:

@@ -1,6 +1,6 @@
 # Runtime Governance And Evidence Closure Transformation Plan
 
-Lifecycle state: Draft active plan
+Lifecycle state: Historical plan; scheduling superseded by `HANDOFF.md`
 
 Reader: DevFrame maintainers implementing the next control-plane architecture slices
 

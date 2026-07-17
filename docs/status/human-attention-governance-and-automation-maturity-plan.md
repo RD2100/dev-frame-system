@@ -1,6 +1,6 @@
 # Human Attention Governance And Automation Maturity Plan
 
-Lifecycle state: Draft active planning record
+Lifecycle state: Historical planning record; scheduling superseded by `HANDOFF.md`
 
 Plan status: Accepted as the attention-governance layer for the document-driven
 transformation plan. Not yet an implementation claim.

@@ -915,14 +915,64 @@ def test_post_release_docs_do_not_reopen_pr_publication_holds():
     assert "GitHub Release `v0.1.0`" in batch_map
 
 
-def test_launch_now_historical_owner_gate_head_is_explicit():
+def test_launch_now_is_frozen_release_snapshot():
     launch_now = (REPO_ROOT / "docs" / "status" / "LAUNCH_NOW.md").read_text(
         encoding="utf-8-sig",
     )
 
+    assert "FROZEN RELEASE SNAPSHOT" in launch_now
     assert "Initial Owner-Gate Snapshot" in launch_now
     assert "historical owner-gate snapshot head, not the current" in launch_now
-    assert "This is the current launch-control entrypoint" in launch_now
+    assert "This was the launch-control entrypoint for the recorded release snapshot" in launch_now
+
+
+def test_handoff_is_the_single_current_execution_root():
+    handoff = (REPO_ROOT / "docs" / "status" / "HANDOFF.md").read_text(
+        encoding="utf-8-sig",
+    )
+    inventory = (
+        REPO_ROOT / "docs" / "status" / "status-document-inventory.md"
+    ).read_text(encoding="utf-8-sig")
+    docs_readme = (REPO_ROOT / "docs" / "README.md").read_text(
+        encoding="utf-8-sig",
+    )
+    agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8-sig")
+    supporting_paths = [
+        REPO_ROOT / "docs" / "status" / "LAUNCH_NOW.md",
+        REPO_ROOT / "docs" / "status" / "release-readiness.md",
+        REPO_ROOT / "docs" / "status" / "reviewer-index.md",
+    ]
+
+    assert "CANONICAL EXECUTION ROOT" in handoff
+    assert "Do not create another master plan" in handoff
+    assert "| `current-entry` | `HANDOFF.md` |" in inventory
+    assert "| `current-entry` | `LAUNCH_NOW.md`" not in inventory
+    assert "Active plans may set direction" not in inventory
+    assert "unless the master plan is updated" not in inventory
+    assert "newer coordination record" not in inventory
+    assert "only document that selects the active milestone" in docs_readme
+    assert "## Current Planning Docs" not in docs_readme
+    assert "single current execution root" in agents
+    for path in supporting_paths:
+        text = path.read_text(encoding="utf-8-sig")
+        assert "HANDOFF.md" in text, path
+
+    launch_now = supporting_paths[0].read_text(encoding="utf-8-sig")
+    assert "## Current Decision" not in launch_now
+    assert "## Next 3 Actions" not in launch_now
+
+    for path in (REPO_ROOT / "docs" / "status").glob("*.md"):
+        if path.name == "HANDOFF.md":
+            continue
+        text = path.read_text(encoding="utf-8-sig")
+        lifecycle_lines = [
+            line for line in text.splitlines()
+            if line.lower().startswith("lifecycle state:")
+        ]
+        assert not any(
+            re.search(r"\bactive\b", line, flags=re.IGNORECASE)
+            for line in lifecycle_lines
+        ), path
 
 
 def test_reviewer_index_mentions_new_public_files():

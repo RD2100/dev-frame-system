@@ -1,6 +1,6 @@
 # Governance Rules Spec
 
-Lifecycle state: Draft active rules spec
+Lifecycle state: Historical rules proposal; scheduling superseded by `HANDOFF.md`
 
 Rule status: Accepted for phase-one planning, not yet a stable runtime contract.
 

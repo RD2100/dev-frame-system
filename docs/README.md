@@ -2,7 +2,7 @@
 
 This directory contains the public documentation map for dev-frame-system.
 
-Start here when you need to understand which document is authoritative, which documents are planning records, and which ones are historical evidence.
+For current project direction, read [DevFrame Project Execution Root](status/HANDOFF.md) first. It is the only document that selects the active milestone and next action. The rest of this directory is supporting runtime documentation, scoped evidence, or historical research.
 
 ## Read First
 
@@ -12,8 +12,8 @@ Start here when you need to understand which document is authoritative, which do
 | Understand the runtime model | [Agent Runtime Operating Model](agent-runtime/operating-model.md) |
 | Understand the main review and acceptance discipline | [Reviewer Playbook](agent-runtime/reviewer-playbook.md) |
 | Understand current release scope | [Release Readiness](status/release-readiness.md) |
-| Resume current public work | [Current Handoff](status/HANDOFF.md) |
-| Navigate every `docs/status` record by authority level | [Status Document Inventory](status/status-document-inventory.md) |
+| Choose the current objective and next action | [DevFrame Project Execution Root](status/HANDOFF.md) |
+| Navigate historical status records | [Status Document Inventory](status/status-document-inventory.md) |
 | Understand the current review map | [Reviewer Index](status/reviewer-index.md) |
 
 ## Stable Runtime Docs
@@ -42,11 +42,10 @@ capability instead of reading every status document.
 This map is maintained as the first stop for future agents. It lists subsystem
 entry points, not every file under `docs/status`.
 
-Directory reliability rule: when adding a new public subsystem, stable runtime
-contract, deferred module, or important control-plane plan, update the matching
-entries in this functional map, `status/status-document-inventory.md`,
-`status/reviewer-index.md`, and the master plan if it changes phase order,
-scope, or deferral status.
+Directory reliability rule: when adding a new public subsystem or stable
+runtime contract, update this functional map and the relevant review index.
+When it changes milestone order, scope, or deferral status, update only the
+execution root rather than creating another plan.
 
 | Capability | Start here | Key implementation |
 |---|---|---|
@@ -79,9 +78,11 @@ scope, or deferral status.
 | Paper knowledge-base iteration | [Paper Knowledge Base Iteration MVP Plan](status/paper-knowledge-base-iteration-mvp-plan.md) | Deferred paper-domain fixture module after the review-governance kernel, using Obsidian/RAG/external-brain substrate |
 | Documentation governance | [Documentation Management Audit and Plan](status/documentation-management-audit-and-plan.md) | `docs/README.md`, `status/status-document-inventory.md`, `status/governance-spine-and-document-coordination.md` |
 
-## Current Planning Docs
+## Historical Planning Library
 
-Use these documents to guide near-term architecture work:
+The following documents preserve prior architectural reasoning and scoped
+research. They do not schedule work. Promote a plan into the execution root
+before implementing it.
 
 - [Status Document Inventory](status/status-document-inventory.md)
 - [Governance Spine And Document Coordination](status/governance-spine-and-document-coordination.md)
@@ -124,14 +125,14 @@ Use [status](status/) for current release state, recon receipts, audit notes, an
 Rules of thumb:
 
 - `release-readiness.md` explains the current release boundary.
-- `HANDOFF.md` is the single current continuation entrypoint; older handoff
-  records remain historical context.
-- `status-document-inventory.md` explains how to read `docs/status/` without treating every file as current authority.
-- `governance-spine-and-document-coordination.md` explains how the active plans fit into one governance sequence.
-- `current-coverage-audit-evidence-20260704.md` records the bounded evidence snapshot behind the master plan's current coverage audit.
+- `HANDOFF.md` is the single current execution root; older handoff records
+  remain historical context.
+- `status-document-inventory.md` is a historical lookup index, not a backlog.
+- `governance-spine-and-document-coordination.md` preserves the former cross-plan synthesis.
+- `current-coverage-audit-evidence-20260704.md` records the bounded evidence snapshot behind the historical master-plan coverage audit.
 - `working-tree-cleanup-inventory-20260705.md` classifies the current dirty tree into cleanup batches before UI/product design proceeds.
 - `asset-utilization-inventory-20260705.md` records current repository and local agent asset counts, including skills, MCP, plugins, and runtime evidence.
-- `unified-object-model-decision-record.md`, `governance-contradiction-matrix.md`, and `governance-rules-spec.md` are the current foundations for `document-driven-transformation-master-plan.md`.
+- `unified-object-model-decision-record.md`, `governance-contradiction-matrix.md`, and `governance-rules-spec.md` preserve foundations used by the historical transformation plan.
 - `context-noise-governance-and-automation-plan.md` explains how automated context management filters stale, irrelevant, disposable, or misleading material for high-frequency use.
 - `model-knowledge-gap-governance-plan.md` explains how to stop model common sense from becoming unverified product or architecture judgment.
 - `project-and-cross-project-memory-harness-governance-plan.md` explains how project memory and cross-project hints are governed, evaluated, isolated, and promoted.
@@ -141,8 +142,8 @@ Rules of thumb:
 - `human-attention-governance-and-automation-maturity-plan.md` explains why automation exists to protect scarce human attention.
 - `early-adopter-user-asset-governance-plan.md` explains how early users bring existing workflow assets into governed customization.
 - `competitive-moat-and-user-demand-critical-review.md` separates real early-adopter needs from generic plugin or competitor-parity distractions.
-- `document-driven-transformation-master-plan.md` coordinates implementation phases, stop lines, and proof requirements.
-- `document-driven-transformation-final-plan-20260705.md` is the coding-agent-facing final candidate that consolidates the current planning set into the next executable sequence.
+- `document-driven-transformation-master-plan.md` preserves the former implementation phases, stop lines, and proof requirements.
+- `document-driven-transformation-final-plan-20260705.md` preserves the former coding-agent-facing consolidation candidate.
 - `review-governance-kernel-completion-20260706.md` records latest review-governance kernel progress through P3-2 local GPT-equivalent review PASS; P3-2 landed in `2725227d` and has local branch-level review PASS at `bd73d6bc`, but is still pending PR/CI and publication evidence, so it is not a release-ready record.
 - `runtime-governance-status-vocabulary-inventory.md` records current status families before Batch A schemas map them into separate lifecycle axes.
 - `runtime-governance-batch-a-contract-completion.md` records local Batch A contract evidence without claiming release readiness.
@@ -166,14 +167,17 @@ Rules of thumb:
 
 ## Documentation Governance
 
-The current documentation governance plan is:
+The current documentation governance rule is:
 
 1. Keep `README.md` focused on product entry and quick start.
 2. Keep `docs/README.md` as the documentation map.
-3. Keep durable runtime rules in `docs/agent-runtime/`.
-4. Keep active plans, receipts, and release evidence in `docs/status/`.
-5. Promote stable plans out of `docs/status/` only after implementation proves them.
-6. Archive or supersede stale status records instead of letting them compete with current guidance.
+3. Keep `docs/status/HANDOFF.md` as the only current execution plan.
+4. Keep durable runtime rules in `docs/agent-runtime/`.
+5. Keep scoped receipts and historical evidence in `docs/status/` without
+   treating them as current instructions.
+6. Do not create a new status document for a normal milestone; update the
+   execution root in place.
+7. Archive or supersede stale records only after reference and validator checks.
 
-For details, see [Documentation Management Audit and Plan](status/documentation-management-audit-and-plan.md).
-For the execution sequence, see [Documentation Management Detailed Rollout Plan](status/documentation-management-detailed-rollout-plan.md).
+For historical rationale, see [Documentation Management Audit and Plan](status/documentation-management-audit-and-plan.md).
+For the current execution sequence, use [DevFrame Project Execution Root](status/HANDOFF.md).

@@ -1,6 +1,6 @@
 # Goal-Bound Evidence Gate Plan
 
-Lifecycle state: Draft active phase plan
+Lifecycle state: Historical phase plan; scheduling superseded by `HANDOFF.md`
 
 Plan status: Accepted as a contraction of the Goal Supervisor idea, not as a
 new autonomous coordinator mainline.

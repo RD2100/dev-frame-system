@@ -1,6 +1,6 @@
 # Document-Driven Transformation Master Plan
 
-Lifecycle state: Draft active master plan
+Lifecycle state: Historical master plan; scheduling superseded by `HANDOFF.md`
 
 Plan status: Accepted as the coordinating plan for phase-one design and
 implementation planning, not yet a stable runtime contract.

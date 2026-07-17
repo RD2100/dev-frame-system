@@ -2,6 +2,10 @@
 
 Lifecycle state: Current public-snapshot reviewer map
 
+This is a review aid, not a task backlog or architecture authority. The active
+milestone and next action are defined only by
+[DevFrame Project Execution Root](HANDOFF.md).
+
 ## Purpose
 
 This is the reviewer map for the first open-source release batch. It focuses on what is currently proven and auditable in the repository: MCP/Web-AI intake, T3/native client projection, and governed visual state.

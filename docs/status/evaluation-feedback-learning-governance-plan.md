@@ -1,6 +1,6 @@
 # Evaluation, Feedback, And Learning Governance Plan
 
-Lifecycle state: Draft active plan
+Lifecycle state: Historical plan; scheduling superseded by `HANDOFF.md`
 
 Reader: DevFrame maintainers implementing provider-neutral evaluation and controlled improvement workflows
 

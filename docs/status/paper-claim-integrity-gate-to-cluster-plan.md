@@ -1,6 +1,6 @@
 # Paper Claim Integrity Gate To Cluster Plan
 
-Lifecycle state: Draft active phase plan
+Lifecycle state: Historical phase plan; scheduling superseded by `HANDOFF.md`
 
 Plan status: Proposed as the paper-domain vertical plan for review. This is a
 design and sequencing document, not an implementation claim.

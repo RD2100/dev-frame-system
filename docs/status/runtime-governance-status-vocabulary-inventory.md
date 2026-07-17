@@ -1,6 +1,6 @@
 # Runtime Governance Status Vocabulary Inventory
 
-Lifecycle state: Draft active plan support record
+Lifecycle state: Historical plan support record; scheduling superseded by `HANDOFF.md`
 
 Reader: DevFrame maintainers preparing the Batch A runtime-governance contract
 schemas.

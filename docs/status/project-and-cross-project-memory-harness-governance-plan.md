@@ -1,6 +1,6 @@
 # Project And Cross-Project Memory Harness Governance Plan
 
-Lifecycle state: Draft active planning record
+Lifecycle state: Historical planning record; scheduling superseded by `HANDOFF.md`
 
 Plan status: Accepted as the memory-governance design direction for project
 memory, cross-project memory candidates, and harness-based evaluation. Not yet

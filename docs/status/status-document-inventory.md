@@ -1,10 +1,16 @@
 # Status Document Inventory
 
-Lifecycle state: Draft active coordination record
+Lifecycle state: Historical lookup index
+
+**Authority warning:** this file does not schedule work. The only current
+execution authority is [DevFrame Project Execution Root](HANDOFF.md). The
+inventory exists to preserve discoverability and audit classification while the
+status-document set is gradually reduced.
 
 Reader: DevFrame maintainers trying to understand which `docs/status` files are current guidance, which are evidence, and which are historical context.
 
-Post-read action: choose the right status document for the question at hand, and avoid treating every file in `docs/status` as equally authoritative.
+Post-read action: use the execution root first, then open only the supporting
+record needed for evidence or a scoped Recon question.
 
 Related docs: [Documentation Management Audit and Plan](documentation-management-audit-and-plan.md), [Documentation Management Detailed Rollout Plan](documentation-management-detailed-rollout-plan.md), [Governance Spine And Document Coordination](governance-spine-and-document-coordination.md), [Reviewer Index](../status/reviewer-index.md)
 
@@ -21,12 +27,9 @@ future planning can distinguish current authority from historical traceability.
 
 For current governance planning, read in this order:
 
-1. [docs/README.md](../README.md)
-2. [Current Handoff](HANDOFF.md)
-3. [Status Document Inventory](status-document-inventory.md)
-4. [Governance Spine And Document Coordination](governance-spine-and-document-coordination.md)
-5. [Reviewer Index](../status/reviewer-index.md)
-6. The specific active plan or recon receipt that matches the task.
+1. [DevFrame Project Execution Root](HANDOFF.md)
+2. [docs/README.md](../README.md)
+3. The specific stable runtime rule, evidence record, or Recon Receipt required by that root.
 
 For release review, start with [Launch Now](LAUNCH_NOW.md), then
 [Release Readiness](../status/release-readiness.md) and
@@ -38,9 +41,10 @@ Use these states when reading or editing files in this folder:
 
 | State | Meaning | Default action |
 |---|---|---|
-| `current-entry` | Navigation or reviewer map for the current public snapshot | Keep linked from `docs/README.md` |
-| `active-plan` | Current architectural direction, not yet a stable runtime contract | Use for planning; do not claim as implemented behavior |
-| `deferred-module-plan` | A named module or capability path that is intentionally after the current implementation slice | Keep discoverable; do not schedule as current work unless the master plan is updated |
+| `current-entry` | The single current execution root | Keep linked from `docs/README.md` |
+| `supporting-entry` | Release, review, or historical navigation aid | Consult only for its stated scope |
+| `historical-plan` | Prior architectural direction or research | Do not schedule work from it without promotion into `HANDOFF.md` |
+| `deferred-reference` | A named later capability retained for research | Keep discoverable; schedule only after promotion into `HANDOFF.md` |
 | `recon-receipt` | Scoped pre-work, reuse assessment, and decision record | Treat as authority only for its bounded scope |
 | `release-state` | Current release boundary or readiness state | Keep exact and evidence-backed |
 | `evidence-record` | Proof of a run, probe, audit, or live integration | Preserve for traceability; do not generalize beyond its scope |
@@ -48,20 +52,21 @@ Use these states when reading or editing files in this folder:
 | `historical-stage` | Previous stage execution report or milestone trace | Preserve, but do not use as current authority without a newer link |
 | `source-material` | External or exploratory research distilled into planning docs | Distill before promotion; do not make it normative directly |
 
-## Current Entry Records
+## Authority And Supporting Records
 
 | File | Role | Notes |
 |---|---|---|
-| `LAUNCH_NOW.md` | Current launch-control entrypoint | Shortest go/no-go decision, blockers, and evidence map |
-| `HANDOFF.md` | Current continuation entrypoint | Single authority for resuming public work |
-| `status-document-inventory.md` | Current status-folder control map | This file |
-| `governance-spine-and-document-coordination.md` | Current cross-plan synthesis | Explains the governance sequence and next document writes |
-| `reviewer-index.md` | Public-snapshot reviewer map | Should list active status docs that matter to review |
-| `release-readiness.md` | Current release boundary | Use before judging release claims |
+| `HANDOFF.md` | Canonical execution root | The only source for current direction, milestone order, risk, and next action |
+| `LAUNCH_NOW.md` | Frozen launch snapshot | Historical go/no-go evidence; it does not schedule development |
+| `status-document-inventory.md` | Historical lookup index | This file; it preserves discoverability only |
+| `governance-spine-and-document-coordination.md` | Historical synthesis | Prior cross-plan reasoning, not a current sequence |
+| `reviewer-index.md` | Public-snapshot reviewer map | File-level review aid, not a backlog |
+| `release-readiness.md` | Release boundary | Use only for release, deployment, or publication judgments |
 
 ## Observed File Classification Snapshot
 
-Observed on 2026-07-04, with review-governance completion status added on
+Observed on 2026-07-04, reconciled into a single execution authority on
+2026-07-18, with review-governance completion status added on
 2026-07-06, runtime-governance Batch A planning and contract evidence added on
 2026-07-07, Batch B through Batch E implementation audit records added on
 2026-07-08, Batch F sealed context artifact evidence added on 2026-07-08, and
@@ -73,9 +78,10 @@ Update this snapshot when adding or retiring status documents.
 
 | State | Files |
 |---|---|
-| `current-entry` | `LAUNCH_NOW.md`, `HANDOFF.md`, `status-document-inventory.md`, `governance-spine-and-document-coordination.md`, `reviewer-index.md`, `release-readiness.md` |
-| `active-plan` | `workflow-consolidation-and-command-plan.md`, `context-management-architecture-plan.md`, `context-noise-governance-and-automation-plan.md`, `context-led-model-performance-control-plan.md`, `model-knowledge-gap-governance-plan.md`, `project-and-cross-project-memory-harness-governance-plan.md`, `goal-bound-evidence-gate-plan.md`, `paper-claim-integrity-gate-to-cluster-plan.md`, `documentation-management-audit-and-plan.md`, `documentation-management-detailed-rollout-plan.md`, `runtime-governance-and-evidence-closure-transformation-plan.md`, `runtime-governance-status-vocabulary-inventory.md`, `evaluation-feedback-learning-governance-plan.md`, `total-control-policy-engine-and-human-escalation-governance-plan.md`, `human-attention-governance-and-automation-maturity-plan.md`, `early-adopter-user-asset-governance-plan.md`, `competitive-moat-and-user-demand-critical-review.md`, `unified-object-model-decision-record.md`, `governance-contradiction-matrix.md`, `governance-rules-spec.md`, `document-driven-transformation-master-plan.md`, `document-driven-transformation-final-plan-20260705.md`, `design-coverage-gap-remediation-plan.md`, `review-first-governance-kernel-contraction-plan.md`, `review-first-governance-kernel-implementation-spec.md`, `reuse-first-constraint-governance-implementation-plan.md`, `skill-asset-utilization-plan.md` |
-| `deferred-module-plan` | `browser-automation-transport-roadmap.md`, `paper-knowledge-base-iteration-mvp-plan.md`, `graph-projection-knowledge-canvas-plan.md` |
+| `current-entry` | `HANDOFF.md` |
+| `supporting-entry` | `LAUNCH_NOW.md`, `status-document-inventory.md`, `governance-spine-and-document-coordination.md`, `reviewer-index.md`, `release-readiness.md` |
+| `historical-plan` | `workflow-consolidation-and-command-plan.md`, `context-management-architecture-plan.md`, `context-noise-governance-and-automation-plan.md`, `context-led-model-performance-control-plan.md`, `model-knowledge-gap-governance-plan.md`, `project-and-cross-project-memory-harness-governance-plan.md`, `goal-bound-evidence-gate-plan.md`, `paper-claim-integrity-gate-to-cluster-plan.md`, `documentation-management-audit-and-plan.md`, `documentation-management-detailed-rollout-plan.md`, `runtime-governance-and-evidence-closure-transformation-plan.md`, `runtime-governance-status-vocabulary-inventory.md`, `evaluation-feedback-learning-governance-plan.md`, `total-control-policy-engine-and-human-escalation-governance-plan.md`, `human-attention-governance-and-automation-maturity-plan.md`, `early-adopter-user-asset-governance-plan.md`, `competitive-moat-and-user-demand-critical-review.md`, `unified-object-model-decision-record.md`, `governance-contradiction-matrix.md`, `governance-rules-spec.md`, `document-driven-transformation-master-plan.md`, `document-driven-transformation-final-plan-20260705.md`, `design-coverage-gap-remediation-plan.md`, `review-first-governance-kernel-contraction-plan.md`, `review-first-governance-kernel-implementation-spec.md`, `reuse-first-constraint-governance-implementation-plan.md`, `skill-asset-utilization-plan.md` |
+| `deferred-reference` | `browser-automation-transport-roadmap.md`, `paper-knowledge-base-iteration-mvp-plan.md`, `graph-projection-knowledge-canvas-plan.md` |
 | `area-plan` | `product-maturity-roadmap.md`, `local-agent-cluster-roadmap.md`, `cluster-coordinator-design-and-roadmap.md`, `phase-1-global-coordinator-conversation-plan.md`, `launch-cutover-checklist.md`, `agent-cluster-unknowns-register.md`, `global-lifecycle-gsd-superpowers-assessment.md`, `design-orchestration-mcp.md`, `design-devframe-mcp-orchestrator-surface.md` |
 | `reuse-assessment` | `t3code-client-mainline-reuse-assessment.md`, `local-agent-control-plane-stage-8-open-source-reuse-visual-mvp.md` |
 | `recon-receipt` | `recon-receipt-acp-backbone.md`, `recon-receipt-cli-decomposition.md`, `recon-receipt-cluster-control-surface.md`, `recon-receipt-customization-layer.md`, `recon-receipt-devframe-mcp-server.md`, `recon-receipt-go-dispatch-claim-propagation.md`, `recon-receipt-go-explicit-team-messages.md`, `recon-receipt-global-coordinator-conversation-mainline.md`, `recon-receipt-local-agent-client-mainline.md`, `recon-receipt-mcp-consent.md`, `recon-receipt-mcp-live-probe-sse.md`, `recon-receipt-obsidian-stage3.md`, `recon-receipt-obsidian-stage4-sync.md`, `recon-receipt-opencode-event-integration.md`, `recon-receipt-paper-pdf-fulltext-segmentation.md`, `recon-receipt-parallel-write-isolation.md`, `recon-receipt-pluggable-model-provider.md`, `recon-receipt-rd-code-prod-launch.md`, `recon-receipt-rdcode-bridge-data.md`, `recon-receipt-rdcode-writeback.md`, `recon-receipt-runtime-governance-unification.md`, `recon-receipt-session-detail-cli.md`, `recon-receipt-session-detail-discoverability.md`, `recon-receipt-session-detail-read-model.md`, `recon-receipt-t3-rebrand-i18n.md`, `recon-receipt-team-runtime.md`, `recon-receipt-team-runtime-claims.md`, `recon-receipt-team-runtime-messages.md`, `recon-receipt-workflow-engine.md` |
@@ -85,14 +91,14 @@ Update this snapshot when adding or retiring status documents.
 | `evidence-record` | `current-coverage-audit-evidence-20260704.md`, `working-tree-cleanup-inventory-20260705.md`, `asset-utilization-inventory-20260705.md`, `current-dirty-tree-batch-map-20260708.md`, `review-governance-kernel-completion-20260706.md`, `runtime-governance-batch-a-contract-completion.md`, `runtime-governance-batch-b-read-only-run-index.md`, `runtime-governance-batch-c-rdreview-prepare-only.md`, `runtime-governance-batch-d-independent-gate.md`, `runtime-governance-batch-e-ai-workflow-hub-chain-evidence-classification.md`, `runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md`, `runtime-governance-batch-e-atgo-runtime-finalize-command.md`, `runtime-governance-batch-e-chain-evidence-schema-compatibility.md`, `runtime-governance-batch-e-explicit-team-evidence-events.md`, `runtime-governance-batch-e-final-verdict-lifecycle.md`, `runtime-governance-batch-e-final-verdict-supersession-projection.md`, `runtime-governance-batch-e-go-evidence-team-runtime-finalization.md`, `runtime-governance-batch-e-paper-trust-fail-closed.md`, `runtime-governance-batch-e-team-context-refs.md`, `runtime-governance-batch-e-team-review-verdict-events.md`, `runtime-governance-batch-e-workflow-review-pending.md`, `runtime-governance-batch-f-sealed-context-artifacts.md`, `runtime-governance-batch-g-generic-go-opt-in-finalization.md`, `runtime-governance-batch-h-ai-workflow-hub-chain-evidence-canonicalization.md`, `runtime-governance-batch-i-generic-go-prepare-evidence.md`, `runtime-governance-batch-j-automatic-superseding-final-verdict.md`, `evidence-web-ai-mcp-live-roundtrip.md`, `legacy-submodule-baseline.json` |
 | `external-recon` | `codexpro-devspace-mcp-recon.md` |
 
-## Active Planning Set
+## Historical Planning Set
 
-These files form the current planning spine. They should be read as design
-direction, not as proof that the target system already exists.
+These files preserve the former planning spine. They are research and design
+inputs, not current execution instructions. A bounded item must be promoted
+into `HANDOFF.md` before implementation.
 
-For a shorter implementation entrypoint, use the implementation must-read pack
-defined in `document-driven-transformation-master-plan.md` before opening the
-full active planning set.
+Do not reconstruct a current plan by combining this set. Use the execution root
+and open only the source record it names for the current milestone.
 
 | File | Planning role |
 |---|---|
@@ -137,10 +143,10 @@ full active planning set.
 | `unified-object-model-decision-record.md` | Freezes the phase-one governance object kernel |
 | `governance-contradiction-matrix.md` | Names and resolves cross-plan contradictions before integration |
 | `governance-rules-spec.md` | Turns the object model into phase-one operational rules |
-| `document-driven-transformation-master-plan.md` | Coordinates the document-driven transformation phases and stop lines |
-| `document-driven-transformation-final-plan-20260705.md` | Coding-agent-facing final candidate that consolidates the current planning set into the next executable sequence |
+| `document-driven-transformation-master-plan.md` | Historical phase and stop-line design |
+| `document-driven-transformation-final-plan-20260705.md` | Historical coding-agent-facing consolidation candidate |
 | `design-coverage-gap-remediation-plan.md` | Turns cross-document coverage gaps into a prioritized remediation queue |
-| `review-first-governance-kernel-contraction-plan.md` | Narrows the next implementation discussion to the review-first governance kernel |
+| `review-first-governance-kernel-contraction-plan.md` | Historical contraction decision for the review-first governance kernel |
 | `review-first-governance-kernel-implementation-spec.md` | Defines the first fixture, contract, and test package for development |
 | `reuse-first-constraint-governance-implementation-plan.md` | Plans how to reuse open-source patterns without hand-rolling or over-adopting dependencies |
 | `skill-asset-utilization-plan.md` | Routes existing skills into governed work types and defers deeper skill telemetry until the kernel exists |
@@ -153,28 +159,12 @@ reuse-first constraints if the question is about later modules.
 
 | File | Deferred role |
 |---|---|
-| `browser-automation-transport-roadmap.md` | Defines the later multi-browser transport path; current browser automation should keep using the CDP-family binding unless the master plan is revised |
+| `browser-automation-transport-roadmap.md` | Historical proposal for a later multi-browser transport path |
 | `paper-knowledge-base-iteration-mvp-plan.md` | Defines a later paper-domain fixture module for knowledge-base iteration after the review-governance kernel exists |
 | `graph-projection-knowledge-canvas-plan.md` | Defines a later read-only graph projection and human-editable canvas layer for code, docs, and knowledge relationships |
 
-The next implementation planning records should be derived from:
-
-1. `document-driven-transformation-master-plan.md`
-2. `document-driven-transformation-final-plan-20260705.md`
-3. `unified-object-model-decision-record.md`
-4. `governance-rules-spec.md`
-5. `review-first-governance-kernel-contraction-plan.md`
-6. `review-first-governance-kernel-implementation-spec.md`
-7. `reuse-first-constraint-governance-implementation-plan.md`
-8. `skill-asset-utilization-plan.md`
-9. `model-knowledge-gap-governance-plan.md`
-10. `context-noise-governance-and-automation-plan.md`
-11. `project-and-cross-project-memory-harness-governance-plan.md`
-12. `goal-bound-evidence-gate-plan.md`
-13. `paper-claim-integrity-gate-to-cluster-plan.md`
-14. `human-attention-governance-and-automation-maturity-plan.md`
-15. `early-adopter-user-asset-governance-plan.md`
-16. `competitive-moat-and-user-demand-critical-review.md`
+These records may supply evidence or constraints to a milestone already named
+in `HANDOFF.md`; they may not create or reorder milestones by themselves.
 
 ## Recon Receipts
 
@@ -198,8 +188,8 @@ reuse-before-building discipline for a specific area, such as:
 - workflow engine.
 
 Rule: a recon receipt may justify work in its own scope, but it should not be
-used as the whole-platform architecture. If a later active plan supersedes part
-of a receipt, link both documents and state the boundary explicitly.
+used as the whole-platform architecture. If the execution root supersedes part
+of a receipt, link both records and state the boundary explicitly.
 
 ## Stage And Evidence Records
 
@@ -226,7 +216,7 @@ Files such as `continue-global-coordinator-conversation-mainline.md`,
 `next-agent-global-coordinator-prompt.md`, and
 `devframe-code-opencode-handoff.md` are handoff material. They are valuable
 because they make work transferable, but they should expire as authority after
-their instructions are consumed into active plans, stable docs, or implemented
+their instructions are consumed into the execution root, stable docs, or implemented
 contracts.
 
 Current rule: use handoff files for continuity, then retire their claims into a
@@ -239,15 +229,15 @@ decision record or stable doc before implementing major new behavior.
    workflow proves it.
    `docs/agent-runtime/agent-coding-discipline.md` is explicitly an operating
    discipline and planning sidecar, not a stable runtime behavior claim.
-3. Active plans may set direction, but they must not describe target behavior as
-   implemented fact.
-4. Recon receipts are scoped and cannot override newer cross-plan decisions.
+3. Historical plans may inform a milestone only after `HANDOFF.md` promotes the
+   bounded work; they do not set direction by themselves.
+4. Recon receipts are scoped and cannot override the execution root.
 5. RDCode/T3/client documents describe projection surfaces unless a backend
    governance document explicitly grants write authority.
-6. External research must be distilled into a repo-local decision record before
-   it becomes a planning dependency.
-7. If two status documents conflict, the newer coordination record should name
-   the conflict instead of silently choosing one side.
+6. External research must be distilled into the execution root or a stable
+   runtime contract before it becomes an implementation dependency.
+7. If status documents conflict, record the conflict in `HANDOFF.md`; no other
+   coordination record may silently become current.
 8. Any external-review export is disposable. It is not a source of truth.
 
 ## External Review Export Hygiene
@@ -271,12 +261,12 @@ The folder still needs these follow-up improvements:
 
 - add lifecycle labels to older active and historical files when they are next
   edited;
-- derive kernel fixtures and contracts from the master plan;
+- derive current fixtures and contracts only from the execution root;
 - promote proven runtime contracts out of `docs/status` only after tests and
   evidence exist;
-- keep `docs/README.md`, this inventory, `reviewer-index.md`, and
-  `document-driven-transformation-master-plan.md` synchronized whenever a new
-  public subsystem or deferred module is added. This is now guarded by
+- keep `docs/README.md`, this inventory, `reviewer-index.md`, and `HANDOFF.md`
+  synchronized whenever a new public subsystem or deferred module is added.
+  This is now guarded by
   `packages/control-plane/control_plane/docs_drift_validator.py`,
   `packages/control-plane/tests/test_docs_drift_validator.py`, and the
   lightweight current-entry checks in

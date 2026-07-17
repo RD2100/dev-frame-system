@@ -1,6 +1,6 @@
 # Competitive Moat And User Demand Critical Review
 
-Lifecycle state: Draft active critical review
+Lifecycle state: Historical critical review; scheduling superseded by `HANDOFF.md`
 
 Review status: Accepted as the competitive critique layer for the current
 document-driven transformation plan. Not yet a product claim.

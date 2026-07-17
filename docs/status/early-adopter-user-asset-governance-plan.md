@@ -1,6 +1,6 @@
 # Early Adopter User Asset Governance Plan
 
-Lifecycle state: Draft active planning record
+Lifecycle state: Historical planning record; scheduling superseded by `HANDOFF.md`
 
 Plan status: Accepted as the early-adopter and user-asset layer for the
 document-driven transformation plan. Not yet an implementation claim.

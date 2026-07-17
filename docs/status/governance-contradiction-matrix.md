@@ -1,6 +1,6 @@
 # Governance Contradiction Matrix
 
-Lifecycle state: Draft active coordination record
+Lifecycle state: Historical coordination record; scheduling superseded by `HANDOFF.md`
 
 Reader: DevFrame maintainers reconciling active planning documents before
 writing the document-driven transformation master plan.

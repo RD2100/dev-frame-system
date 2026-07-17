@@ -8,7 +8,7 @@ Reader: a maintainer or coding agent preparing to reorganize DevFrame documentat
 
 Post-read action: execute the rollout phase by phase, stopping after each phase to verify discoverability, authority, and link integrity.
 
-Lifecycle state: Draft active plan.
+Lifecycle state: Historical plan; scheduling superseded by `HANDOFF.md`.
 
 Related docs:
 

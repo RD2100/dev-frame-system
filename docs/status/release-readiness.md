@@ -2,6 +2,10 @@
 
 Lifecycle state: Current release-state record
 
+This file is limited to release, deployment, and publication boundaries. It is
+not the project execution plan. Read [DevFrame Project Execution Root](HANDOFF.md)
+before choosing development work.
+
 This page records the current public-release gate for `dev-frame-system`.
 It is meant for reviewers who need to decide whether the repository is ready
 to share, package, or hand off.

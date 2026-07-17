@@ -1,6 +1,6 @@
 # Design Coverage Gap Remediation Plan
 
-Lifecycle state: Accepted active remediation plan
+Lifecycle state: Historical remediation plan; scheduling superseded by `HANDOFF.md`
 
 Plan status: External-brain review v2 PASS on 2026-07-04. This is a
 gap-driven companion to the master plan, not a stable runtime contract.

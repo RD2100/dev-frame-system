@@ -1,5 +1,11 @@
 # Launch Now
 
+Lifecycle state: **FROZEN RELEASE SNAPSHOT**
+
+This file records a release/closure decision only. It does not select current
+development work. Read [DevFrame Project Execution Root](HANDOFF.md) for the
+active milestone and next action.
+
 Date: 2026-07-17
 
 Verdict: **CONDITIONAL-GO** for continued public development on `main`.
@@ -19,19 +25,19 @@ The original owner-gate snapshot used head
 `5cea92a56f63270831c3213dfc93f1de8c409139`, an ancestor of that release
 commit. This is the historical owner-gate snapshot head, not the current `main` head.
 
-This is the current launch-control entrypoint.
+This was the launch-control entrypoint for the recorded release snapshot.
 
 ### Post-Release Remaining Decisions
 
 PyPI publication, deployment, and production changes remain separate owner
 decisions and are not authorized by this repository-cleanup verdict.
 
-## Current Decision
+## Recorded Decision
 
-The accepted public mainline is usable for continued development. The current
-work is change-tree consolidation: preserve local candidates, remove proven
-noise, and deliver retained capabilities as small reviewed pull requests.
-Local dirty state and imported source are not release evidence.
+At the time of this snapshot, the accepted public mainline was usable for
+continued development and the recorded work was change-tree consolidation.
+Local dirty state and imported source were not release evidence. Current work
+is defined only by `HANDOFF.md`.
 
 ## Already Good Enough
 
@@ -58,7 +64,10 @@ Local dirty state and imported source are not release evidence.
 | Historical RD-Code realignment plans | They contain prior exploration, not a current product commitment | A current capability gap requires re-evaluation |
 | PyPI and downstream publication | Separate from repository cleanup | Owner explicitly requests a publication route |
 
-## Next 3 Actions
+## Recorded Next 3 Actions (Superseded)
+
+These actions describe the frozen 2026-07-17 snapshot. Do not execute them as
+the current backlog; use `HANDOFF.md`.
 
 1. Merge the local-state ignore PR after its required check succeeds.
 2. Consolidate backed-up handoff and shell-plan material into current authority,

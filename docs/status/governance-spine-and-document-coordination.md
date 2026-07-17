@@ -1,6 +1,6 @@
 # Governance Spine And Document Coordination
 
-Lifecycle state: Draft active coordination record
+Lifecycle state: Historical coordination record; scheduling superseded by `HANDOFF.md`
 
 Reader: DevFrame maintainers turning the current planning documents into one coherent document-driven transformation path.
 

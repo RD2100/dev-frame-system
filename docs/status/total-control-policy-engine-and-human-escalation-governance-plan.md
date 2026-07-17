@@ -1,6 +1,6 @@
 # Total-Control Policy Engine And Human Escalation Governance Plan
 
-Lifecycle state: Draft active plan
+Lifecycle state: Historical plan; scheduling superseded by `HANDOFF.md`
 
 Reader: DevFrame maintainers evaluating and designing the next governance layer for the Global Coordinator and rdgoal total-control path
 

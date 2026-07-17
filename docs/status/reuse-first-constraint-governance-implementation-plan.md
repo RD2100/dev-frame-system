@@ -1,6 +1,6 @@
 # Reuse-First Constraint Governance Implementation Plan
 
-Lifecycle state: Draft active implementation plan
+Lifecycle state: Historical implementation plan; scheduling superseded by `HANDOFF.md`
 
 Plan status: Accepted as the reuse-first planning layer for the review-first
 governance kernel. Not yet an implementation claim.

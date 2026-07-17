@@ -1,6 +1,6 @@
 # Review-First Governance Kernel Implementation Spec
 
-Lifecycle state: Draft active implementation spec
+Lifecycle state: Historical implementation spec; scheduling superseded by `HANDOFF.md`
 
 Spec status: Implemented. Phase 1A kernel passed external GPT review (Round 7, GO).
 

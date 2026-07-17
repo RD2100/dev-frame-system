@@ -1,6 +1,6 @@
 # Context Noise Governance And Automation Plan
 
-Lifecycle state: Draft active planning record
+Lifecycle state: Historical planning record; scheduling superseded by `HANDOFF.md`
 
 Plan status: Accepted as the noise-control layer for automated context
 management. Not yet an implementation claim.

@@ -1,6 +1,6 @@
 # Unified Object Model Decision Record
 
-Lifecycle state: Draft active decision record
+Lifecycle state: Historical decision record; scheduling superseded by `HANDOFF.md`
 
 Decision status: Accepted for phase-one planning, not yet a stable runtime
 contract.

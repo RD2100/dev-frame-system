@@ -1,6 +1,6 @@
 # Review-First Governance Kernel Contraction Plan
 
-Lifecycle state: Draft active contraction plan
+Lifecycle state: Historical contraction plan; scheduling superseded by `HANDOFF.md`
 
 Plan status: Accepted as the near-term narrowing plan under the document-driven
 transformation master plan.

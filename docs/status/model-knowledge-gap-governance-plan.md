@@ -1,6 +1,6 @@
 # Model Knowledge Gap Governance Plan
 
-Lifecycle state: Draft active planning record
+Lifecycle state: Historical planning record; scheduling superseded by `HANDOFF.md`
 
 Plan status: Accepted as the model-assumption and knowledge-gap layer for the
 document-driven transformation plan. Not yet an implementation claim.
