@@ -37,7 +37,21 @@ def _renderer_environment(port: int) -> dict[str, str]:
     }
 
 
-def test_rdcode_instance_spec_is_schema_valid_and_isolated(tmp_path):
+@pytest.fixture
+def pinned_rdcode_tools(monkeypatch):
+    tool_paths = {
+        "node": "C:/tools/node.exe",
+        "pnpm": "C:/tools/pnpm.cmd",
+    }
+    monkeypatch.setattr(rdcode_instance, "_command_path", tool_paths.get)
+    monkeypatch.setattr(
+        rdcode_instance,
+        "_command_version",
+        lambda executable, *, cwd: f"{Path(executable).stem}-test",
+    )
+
+
+def test_rdcode_instance_spec_is_schema_valid_and_isolated(tmp_path, pinned_rdcode_tools):
     t3_root = _t3_root(tmp_path)
     runtime_dir = tmp_path / "runtime"
     portable_pwsh = tmp_path / "powershell-portable" / "PowerShell" / "7" / "pwsh.exe"
@@ -87,7 +101,7 @@ def test_rdcode_instance_spec_is_schema_valid_and_isolated(tmp_path):
     assert "dist-electron" not in Path(spec["paths"]["checkoutLockPath"]).parts
 
 
-def test_rdcode_instance_spec_rejects_unsafe_identity_and_port_collisions(tmp_path):
+def test_rdcode_instance_spec_rejects_unsafe_identity_and_port_collisions(tmp_path, pinned_rdcode_tools):
     t3_root = _t3_root(tmp_path)
     kwargs = {
         "runtime_dir": tmp_path / "runtime",
@@ -113,7 +127,7 @@ def test_rdcode_instance_spec_rejects_unsafe_identity_and_port_collisions(tmp_pa
     assert accepted["controlPlane"]["host"] == "127.0.0.2"
 
 
-def test_rdcode_instance_fingerprint_changes_with_build_input(tmp_path):
+def test_rdcode_instance_fingerprint_changes_with_build_input(tmp_path, pinned_rdcode_tools):
     t3_root = _t3_root(tmp_path)
     kwargs = {
         "runtime_dir": tmp_path / "runtime",
@@ -131,7 +145,7 @@ def test_rdcode_instance_fingerprint_changes_with_build_input(tmp_path):
     assert first["build"]["fingerprint"] != second["build"]["fingerprint"]
 
 
-def test_rdcode_instance_fingerprint_tracks_all_workspace_packages(tmp_path):
+def test_rdcode_instance_fingerprint_tracks_all_workspace_packages(tmp_path, pinned_rdcode_tools):
     t3_root = _t3_root(tmp_path)
     kwargs = {
         "runtime_dir": tmp_path / "runtime",
@@ -191,6 +205,19 @@ def test_rdcode_instance_resolves_tool_versions_in_t3_root(tmp_path, monkeypatch
     ]
 
 
+def test_rdcode_instance_rejects_missing_required_tools(tmp_path, monkeypatch):
+    monkeypatch.setattr(rdcode_instance, "_command_path", lambda _command: None)
+
+    with pytest.raises(RdCodeInstanceError, match="node and pnpm must both be available on PATH"):
+        build_rdcode_instance_spec(
+            runtime_dir=tmp_path / "runtime",
+            t3_root=_t3_root(tmp_path),
+            host="127.0.0.1",
+            control_plane_port=8788,
+            renderer_environment=_renderer_environment(8788),
+        )
+
+
 def test_rdcode_instance_rejects_unreadable_pinned_tool_version(tmp_path, monkeypatch):
     monkeypatch.setattr(
         rdcode_instance.subprocess,
@@ -204,7 +231,7 @@ def test_rdcode_instance_rejects_unreadable_pinned_tool_version(tmp_path, monkey
         rdcode_instance._command_version("C:/tools/pnpm.cmd", cwd=tmp_path)
 
 
-def test_write_rdcode_instance_spec_is_round_trippable(tmp_path):
+def test_write_rdcode_instance_spec_is_round_trippable(tmp_path, pinned_rdcode_tools):
     spec = build_rdcode_instance_spec(
         runtime_dir=tmp_path / "runtime",
         t3_root=_t3_root(tmp_path),
@@ -220,7 +247,7 @@ def test_write_rdcode_instance_spec_is_round_trippable(tmp_path):
     assert not spec_path.with_suffix(spec_path.suffix + ".tmp").exists()
 
 
-def test_write_rdcode_instance_spec_is_atomic_under_concurrent_writers(tmp_path):
+def test_write_rdcode_instance_spec_is_atomic_under_concurrent_writers(tmp_path, pinned_rdcode_tools):
     spec = build_rdcode_instance_spec(
         runtime_dir=tmp_path / "runtime",
         t3_root=_t3_root(tmp_path),
