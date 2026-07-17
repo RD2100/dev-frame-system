@@ -7,6 +7,7 @@ from threading import Thread
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+import pytest
 from jsonschema import Draft202012Validator
 from jsonschema.validators import validator_for
 import yaml
@@ -1265,6 +1266,143 @@ def test_command_worker_runs_command_and_ingests_report(tmp_path):
     assert worker_result.summary.status == "passed"
     assert worker_result.summary.changed_files == ["src/app.py"]
     assert (Path(result.packet.packet_dir) / "worker-output.txt").exists()
+
+
+def _review_claim_command(review_status: str = "- **Review Status**: pass") -> list[str]:
+    report = (
+        "## ExecutionReport: command\n\n"
+        "- **Status**: pass\n"
+        f"{review_status}\n"
+        "- **Changed Files**:\n"
+        "- `src/app.py`\n"
+        "- **Evidence**: command ok\n"
+    )
+    return [
+        sys.executable,
+        "-c",
+        (
+            "import os, pathlib; "
+            "pathlib.Path(os.environ['RDGOAL_REPORT_PATH']).write_text("
+            f"{report!r},"
+            "encoding='utf-8')"
+        ),
+    ]
+
+
+def _write_canonical_acceptance(
+    packet_dir: Path,
+    *,
+    summary_reviewer_id: str = "reviewer-1",
+    review_overrides: dict | None = None,
+    final_overrides: dict | None = None,
+) -> None:
+    review = {
+        "reviewer_role": "independent_reviewer",
+        "reviewer_type": "ai",
+        "reviewer_id": "reviewer-1",
+        "executor_id": "executor-1",
+        "verdict": "pass",
+        "reviewed_inputs": [
+            "diff.patch",
+            "test-output.md",
+            "safety-report.json",
+            "chain-evidence.json",
+        ],
+        "findings": [],
+    }
+    review.update(review_overrides or {})
+    final_verdict = {
+        "verdict_id": "fv-command-worker-1",
+        "produced_by": "root-coordinator",
+        "produced_at": "2026-07-17T00:00:00Z",
+        "producer_role": "governance",
+        "final_state": "final_ready",
+        "inputs_reviewed": ["review.json"],
+        "gate_summary": [{"gate_id": "independent-review", "result": "pass"}],
+        "reviewer_summary": {
+            "reviewer_id": summary_reviewer_id,
+            "verdict": "pass",
+            "evidence_path": "review.json",
+        },
+        "limitations": [],
+        "human_or_governance_reference": "root-acceptance-1",
+    }
+    final_verdict.update(final_overrides or {})
+    (packet_dir / "review.json").write_text(json.dumps(review), encoding="utf-8")
+    (packet_dir / "FINAL_VERDICT.json").write_text(json.dumps(final_verdict), encoding="utf-8")
+
+
+def _run_review_claim(
+    tmp_path: Path,
+    *,
+    review_status: str = "- **Review Status**: pass",
+    canonical: bool = False,
+    summary_reviewer_id: str = "reviewer-1",
+    review_overrides: dict | None = None,
+    final_overrides: dict | None = None,
+):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    orchestrator.register(write_contract(tmp_path), project_root)
+    result = orchestrator.dispatch(
+        project_id="demo-project",
+        requirement="Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+    if canonical:
+        _write_canonical_acceptance(
+            Path(result.packet.packet_dir),
+            summary_reviewer_id=summary_reviewer_id,
+            review_overrides=review_overrides,
+            final_overrides=final_overrides,
+        )
+    return CommandWorker(runtime_dir=runtime_dir).run_packet(
+        result.packet.packet_dir,
+        _review_claim_command(review_status),
+    )
+
+
+@pytest.mark.parametrize("review_status", ["- **Review Status**: pass", "## Review Status\npassed"])
+def test_command_worker_self_reported_review_pass_without_canonical_acceptance_is_blocked(
+    tmp_path,
+    review_status,
+):
+    worker_result = _run_review_claim(tmp_path, review_status=review_status)
+    assert worker_result.summary.status == "blocked"
+
+
+def test_command_worker_accepts_independent_canonical_review_and_final_verdict(tmp_path):
+    worker_result = _run_review_claim(tmp_path, canonical=True)
+    assert worker_result.summary.status == "passed"
+
+
+def test_command_worker_rejects_inconsistent_canonical_reviewer_identity(tmp_path):
+    worker_result = _run_review_claim(tmp_path, canonical=True, summary_reviewer_id="reviewer-2")
+    assert worker_result.summary.status == "blocked"
+
+
+@pytest.mark.parametrize(
+    ("review_overrides", "final_overrides"),
+    [
+        ({"executor_id": "reviewer-1"}, {}),
+        ({"findings": [{"id": "risk-1", "severity": "P1", "status": "open", "title": "Open risk"}]}, {}),
+        ({}, {"producer_role": "worker"}),
+    ],
+)
+def test_command_worker_rejects_non_independent_or_open_risk_acceptance(
+    tmp_path,
+    review_overrides,
+    final_overrides,
+):
+    worker_result = _run_review_claim(
+        tmp_path,
+        canonical=True,
+        review_overrides=review_overrides,
+        final_overrides=final_overrides,
+    )
+    assert worker_result.summary.status == "blocked"
 
 
 def test_command_worker_failed_command_is_not_fake_green(tmp_path):

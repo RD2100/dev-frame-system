@@ -11,6 +11,10 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
+from jsonschema import FormatChecker
+from jsonschema.exceptions import SchemaError, ValidationError
+from jsonschema.validators import validator_for
+
 from .agent_adapter import SubAgentObjective
 from .backup_guard import default_runtime_dir, is_inside
 from .decision_engine import Decision
@@ -149,10 +153,17 @@ class DispatchPacketStore:
         packet = self.load_packet(packet_dir)
         report = Path(report_path)
         text = report.read_text(encoding="utf-8")
+        status = _extract_status(text)
+        if (
+            status == "passed"
+            and _claims_review_or_final_acceptance(text)
+            and not _has_valid_canonical_acceptance(Path(packet_dir))
+        ):
+            status = "blocked"
         summary = ExecutionReportSummary(
             packet_id=packet.packet_id,
             project_id=packet.project_id,
-            status=_extract_status(text),
+            status=status,
             changed_files=_extract_changed_files(text),
             verification=_extract_verification(text),
             report_path=str(report.resolve()),
@@ -477,6 +488,98 @@ def _extract_status(text: str) -> str:
         if _is_report_section_header(stripped, "status"):
             capture_next = True
     return "unknown"
+
+
+def _claims_review_or_final_acceptance(text: str) -> bool:
+    acceptance_sections = (
+        "review status",
+        "reviewer verdict",
+        "review verdict",
+        "final acceptance",
+        "final verdict",
+        "acceptance status",
+    )
+    claim_pattern = re.compile(
+        r"\b(?:review status|reviewer verdict|review verdict|final acceptance|final verdict|acceptance status)\b"
+        r".{0,40}\b(?:pass(?:ed)?|approved|accepted|final_ready|accepted_with_limitation)\b",
+        re.IGNORECASE,
+    )
+    capture_next = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if capture_next:
+            if not stripped:
+                continue
+            return _is_positive_acceptance_value(stripped)
+        if claim_pattern.search(stripped):
+            return True
+        for section in acceptance_sections:
+            if not _is_report_section_header(stripped, section):
+                continue
+            inline_value = _inline_section_value(stripped)
+            if inline_value:
+                return _is_positive_acceptance_value(inline_value)
+            capture_next = True
+            break
+    return False
+
+
+def _is_positive_acceptance_value(value: str) -> bool:
+    token = value.strip().strip("`* ").casefold().split()
+    if not token:
+        return False
+    return token[0].strip("`*:,.;") in {
+        "pass",
+        "passed",
+        "approved",
+        "accepted",
+        "final_ready",
+        "accepted_with_limitation",
+    }
+
+
+def _has_valid_canonical_acceptance(packet_dir: Path) -> bool:
+    schema_root = Path(__file__).resolve().parents[3] / "schemas" / "agent-runtime"
+    try:
+        review = _load_schema_valid_json(packet_dir / "review.json", schema_root / "review.schema.json")
+        final_verdict = _load_schema_valid_json(
+            packet_dir / "FINAL_VERDICT.json",
+            schema_root / "final-verdict.schema.json",
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError, SchemaError, ValidationError):
+        return False
+
+    reviewer_id = str(review["reviewer_id"])
+    if review["verdict"] != "pass" or reviewer_id == str(review["executor_id"]):
+        return False
+    if str(review["reviewer_role"]).strip().casefold() in {"executor", "fixer", "coder", "worker"}:
+        return False
+    if any(
+        finding["status"] == "open" and finding["severity"] in {"P0", "P1"}
+        for finding in review["findings"]
+    ):
+        return False
+
+    if final_verdict["final_state"] not in {"final_ready", "accepted_with_limitation"}:
+        return False
+    if str(final_verdict["producer_role"]).strip().casefold() in {
+        "executor",
+        "fixer",
+        "coder",
+        "worker",
+    }:
+        return False
+    reviewer_summary = final_verdict["reviewer_summary"]
+    return reviewer_summary["reviewer_id"] == reviewer_id and reviewer_summary["verdict"] == review["verdict"]
+
+
+def _load_schema_valid_json(payload_path: Path, schema_path: Path) -> dict[str, Any]:
+    payload = json.loads(payload_path.read_text(encoding="utf-8-sig"))
+    schema = json.loads(schema_path.read_text(encoding="utf-8-sig"))
+    validator_class = validator_for(schema)
+    validator_class.check_schema(schema)
+    validator_class(schema, format_checker=FormatChecker()).validate(payload)
+    return payload
 
 
 def _extract_changed_files(text: str) -> list[str]:

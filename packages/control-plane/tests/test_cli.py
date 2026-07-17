@@ -1396,12 +1396,9 @@ def test_go_execute_runs_worker_command_for_each_agent(tmp_path, monkeypatch, ca
         "Path(os.environ['RDGOAL_REPORT_PATH']).write_text("
         "'## ExecutionReport\\n\\n"
         "- **Status**: pass\\n"
-        "- **Review Status**: pass\\n"
         "- **Changed Files**:\\n"
         "- `src/app.py`\\n"
-        "- **Evidence**: fake worker command\\n"
-        "- **Reviewer Index**:\\n"
-        "- fake worker evidence\\n', encoding='utf-8')"
+        "- **Evidence**: fake worker command\\n', encoding='utf-8')"
     )
     monkeypatch.setattr(sys, "argv", [
         "devframe",
