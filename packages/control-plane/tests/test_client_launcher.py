@@ -5,6 +5,8 @@ from pathlib import Path
 from threading import Thread
 from urllib.request import urlopen
 
+import pytest
+
 from control_plane.cli import main as devframe_cli_main
 from control_plane.client_launcher import (
     _analyze_renderer_state,
@@ -246,6 +248,36 @@ def test_client_t3desktop_installs_bundle_and_prints_launch_plan(tmp_path, monke
     assert "wrote" in output
     assert (t3_root / "devframe.t3desktop.mjs").exists()
     assert (t3_root / "apps/web/src/devframe/devframeShellBridge.ts").exists()
+
+
+def test_client_t3desktop_overwrite_bridge_does_not_request_process_cleanup(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_serve_t3_desktop_client(*args, **kwargs):
+        calls.append(kwargs)
+        return 0
+
+    monkeypatch.setattr(
+        "control_plane.client_launcher.serve_t3_desktop_client",
+        fake_serve_t3_desktop_client,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "devframe",
+            "client",
+            "t3desktop",
+            "--t3-root",
+            str(tmp_path / "t3code"),
+            "--overwrite-bridge",
+        ],
+    )
+
+    assert devframe_cli_main() == 0
+    assert len(calls) == 1
+    assert calls[0]["force"] is True
+    assert calls[0]["cleanup_stale"] is False
 
 
 def test_client_t3desktop_requires_t3_root(tmp_path, monkeypatch, capsys):
@@ -1685,6 +1717,32 @@ class TestStaleT3Processes:
 
 
 class TestForceCleanupIntegration:
+    def test_bridge_overwrite_can_run_without_process_cleanup(self, tmp_path, monkeypatch):
+        t3_root = tmp_path / "t3code"
+        (t3_root / "apps/web").mkdir(parents=True)
+        (t3_root / "package.json").write_text("{}", encoding="utf-8")
+        launcher = t3_root / "devframe.t3desktop.mjs"
+        launcher.write_text("stale bridge", encoding="utf-8")
+
+        monkeypatch.setattr("control_plane.client_launcher.shutil.which", lambda command: f"C:\\Tools\\{command}.cmd")
+        monkeypatch.setattr("control_plane.dashboard.serve_dashboard", lambda *args, **kwargs: None)
+        monkeypatch.setattr(
+            "control_plane.client_launcher._cleanup_stale_t3_processes",
+            lambda *args, **kwargs: pytest.fail("bridge-only overwrite must not clean up processes"),
+        )
+        monkeypatch.setattr(
+            "control_plane.client_launcher.subprocess.run",
+            lambda *args, **kwargs: type("CompletedProcess", (), {"returncode": 0})(),
+        )
+
+        assert serve_t3_desktop_client(
+            runtime_dir=tmp_path / "runtime",
+            t3_root=t3_root,
+            force=True,
+            cleanup_stale=False,
+        ) == 0
+        assert launcher.read_text(encoding="utf-8") != "stale bridge"
+
     def test_force_invokes_cleanup_before_launching(self, tmp_path, monkeypatch, capsys):
         t3_root = tmp_path / "t3code"
         (t3_root / "apps/web").mkdir(parents=True)
