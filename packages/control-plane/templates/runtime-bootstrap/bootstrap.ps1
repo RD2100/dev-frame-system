@@ -84,13 +84,17 @@ function New-FromTemplate($templateFile, $targetRel, $desc) {
     Write-Output "[GEN] $targetRel"
 }
 
-function Get-Sha256Hash($path) {
-    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+function Get-Sha256($path) {
+    $stream = [System.IO.File]::OpenRead($path)
     try {
-        $bytes = [System.IO.File]::ReadAllBytes($path)
-        return ([BitConverter]::ToString($sha256.ComputeHash($bytes))).Replace("-", "")
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            return ([System.BitConverter]::ToString($sha256.ComputeHash($stream))).Replace("-", "")
+        } finally {
+            $sha256.Dispose()
+        }
     } finally {
-        $sha256.Dispose()
+        $stream.Dispose()
     }
 }
 
@@ -133,9 +137,9 @@ if ($DryRun) {
 }
 
 # --- Governance Manifest (hash-locked, generated after all files exist) ---
-$p0Hash = Get-Sha256Hash (Join-Path $ProjectRoot "rules\core.md")
-$sadpHash = Get-Sha256Hash (Join-Path $ProjectRoot "docs\agent-runtime\sub-agent-dispatch-protocol.md")
-$agentsHash = Get-Sha256Hash (Join-Path $ProjectRoot "AGENTS.md")
+$p0Hash = Get-Sha256 (Join-Path $ProjectRoot "rules\core.md")
+$sadpHash = Get-Sha256 (Join-Path $ProjectRoot "docs\agent-runtime\sub-agent-dispatch-protocol.md")
+$agentsHash = Get-Sha256 (Join-Path $ProjectRoot "AGENTS.md")
 $ManifestPlaceholders = @{
     "{{P0_HASH}}" = $p0Hash
     "{{GATE0_HASH}}" = $sadpHash

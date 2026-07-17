@@ -13,7 +13,7 @@ bootstrap_date: "{{CURRENT_DATE}}"
 canonical_root: "{{PROJECT_ROOT}}"
 ```
 
-## Protected Sections (Locked — Hash-Verified)
+## Protected Sections (Locked -- Hash-Verified)
 
 These sections are **locked** in the target project. Any modification without a registered
 local override is treated as `governance_drift` and must be escalated to human review.
@@ -21,10 +21,10 @@ local override is treated as `governance_drift` and must be escalated to human r
 | Section ID | File | Description | Hash |
 |------------|------|-------------|------|
 | P0_RULES | `rules/core.md` | All P0 rules (core-001 ~ core-008) | {{P0_HASH}} |
-| GATE_0 | `docs/agent-runtime/sub-agent-dispatch-protocol.md` §0-0.2 | Gate 0 + Cumulative Trigger + Ledger | {{GATE0_HASH}} |
+| GATE_0 | `docs/agent-runtime/sub-agent-dispatch-protocol.md` sections 0-0.2 | Gate 0 + Cumulative Trigger + Ledger | {{GATE0_HASH}} |
 | VETO_CONTRACT | `docs/agent-runtime/sub-agent-dispatch-protocol.md` (core-008 Veto section) | Execute agent veto rights and anti-abuse | {{VETO_HASH}} |
 | PROTECTED_FILES | `AGENTS.md` (Hard Stops section) | File protection list | {{PROTECTED_HASH}} |
-| CUMULATIVE_TRIGGER | `docs/agent-runtime/sub-agent-dispatch-protocol.md` §0.0a | Anti-gaming cumulative trigger window | {{CUMULATIVE_HASH}} |
+| CUMULATIVE_TRIGGER | `docs/agent-runtime/sub-agent-dispatch-protocol.md` section 0.0a | Anti-gaming cumulative trigger window | {{CUMULATIVE_HASH}} |
 
 ## Local Override Policy
 
@@ -50,9 +50,9 @@ local_overrides:
 On every session start, the agent must:
 
 1. Compare protected section hashes against manifest
-2. If any hash differs → flag `governance_drift`
-3. Check for unregistered local overrides → flag `unauthorized_mutation`
-4. Drift found in P0_RULES or GATE_0 → **pause execution, escalate to human**
+2. If any hash differs -> flag `governance_drift`
+3. Check for unregistered local overrides -> flag `unauthorized_mutation`
+4. Drift found in P0_RULES or GATE_0 -> **pause execution, escalate to human**
 
 ```yaml
 drift_action:
@@ -62,16 +62,16 @@ drift_action:
   non_protected_file_changed: note_only
 ```
 
-## Imported Resources — Trust Status
+## Imported Resources -- Trust Status
 
 Resources imported from the source project are **not trusted by default**:
 
 | Resource | Default Status | Must Verify Before Use |
 |----------|---------------|----------------------|
-| Capabilities | unknown (all) | Yes — local verification required |
-| Lessons | watch (all) | Yes — applicability must be confirmed |
-| Rules (protected) | active (locked) | No — but drift is detected |
-| Profiles | reference_only | Yes — model/tool availability differs |
+| Capabilities | unknown (all) | Yes -- local verification required |
+| Lessons | watch (all) | Yes -- applicability must be confirmed |
+| Rules (protected) | active (locked) | No -- but drift is detected |
+| Profiles | reference_only | Yes -- model/tool availability differs |
 
 ```yaml
 imported_resource_policy:
