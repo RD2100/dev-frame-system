@@ -904,6 +904,7 @@ def serve_t3_desktop_client(
     open_browser: bool = False,
     refresh_seconds: int = 5,
     mode: str = "dev",
+    cleanup_stale: bool | None = None,
 ) -> int:
     from .dashboard import serve_dashboard
     from .t3_bridge_bundle import (
@@ -970,7 +971,9 @@ def serve_t3_desktop_client(
         webbrowser.open(dashboard_url)
 
     resolved_t3_root_path = Path(t3_root).resolve()
-    if force:
+    if cleanup_stale is None:
+        cleanup_stale = force
+    if cleanup_stale:
         cleanup = _cleanup_stale_t3_processes(resolved_t3_root_path)
         if cleanup["stale_found"]:
             print(

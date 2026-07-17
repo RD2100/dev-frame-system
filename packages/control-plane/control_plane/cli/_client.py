@@ -94,6 +94,11 @@ def cmd_client() -> int:
     parser.add_argument("--output", default=None, help="Write a standalone T3 bridge bundle directory")
     parser.add_argument("--t3-root", default=None, help="Install bridge files into a local T3 Code checkout")
     parser.add_argument("--force", action="store_true", help="Overwrite existing generated bridge files")
+    parser.add_argument(
+        "--overwrite-bridge",
+        action="store_true",
+        help="Overwrite generated bridge files without cleaning up stale T3 processes",
+    )
     parser.add_argument("--cdp-endpoint", default=None, help="Loopback CDP endpoint for renderer state probing")
     parser.add_argument("--prod", action="store_true", help="Run the prebuilt production T3 Desktop (fast startup, low memory) instead of the Vite dev server")
     args = parser.parse_args(raw_args)
@@ -139,7 +144,8 @@ def cmd_client() -> int:
             port=args.port,
             lang=args.lang,
             paper_project_dirs=args.paper_project,
-            force=args.force,
+            force=args.force or args.overwrite_bridge,
+            cleanup_stale=args.force,
             open_browser=args.open,
             refresh_seconds=args.refresh_seconds,
             mode="prod" if args.prod else "dev",

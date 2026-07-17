@@ -47,20 +47,36 @@ if (-not $Dev) {
 }
 Write-Host ""
 
-if ($Rebuild -and -not $Dev) {
-    $env:DEVFRAME_T3_FORCE_BUILD = "1"
-}
-
 # Give the desktop client a fresh Windows AppUserModelID under the RD-Code brand.
 # Windows caches the taskbar icon per AppUserModelID; the upstream default
 # ("com.t3tools.t3code") keeps resurrecting the old T3 taskbar icon from cache
 # even after the icon assets are replaced. A distinct RD-Code identity makes
 # Windows use the current window icon (apps/desktop/resources/icon.ico).
-$env:T3CODE_DESKTOP_APP_USER_MODEL_ID = "com.rdcode.client"
+$previousLocation = Get-Location
+$previousAppUserModelId = $env:T3CODE_DESKTOP_APP_USER_MODEL_ID
+$previousForceBuild = $env:DEVFRAME_T3_FORCE_BUILD
+try {
+    $env:T3CODE_DESKTOP_APP_USER_MODEL_ID = "com.rdcode.client"
+    if ($Rebuild -and -not $Dev) {
+        $env:DEVFRAME_T3_FORCE_BUILD = "1"
+    }
 
-Set-Location $pkg
-if ($Dev) {
-    python -m control_plane.cli client t3desktop --t3-root "$t3" --port $port --force
-} else {
-    python -m control_plane.cli client t3desktop --t3-root "$t3" --port $port --force --prod
+    Set-Location $pkg
+    if ($Dev) {
+        python -m control_plane.cli client t3desktop --t3-root "$t3" --port $port --overwrite-bridge
+    } else {
+        python -m control_plane.cli client t3desktop --t3-root "$t3" --port $port --overwrite-bridge --prod
+    }
+} finally {
+    Set-Location $previousLocation
+    if ($null -eq $previousAppUserModelId) {
+        Remove-Item Env:T3CODE_DESKTOP_APP_USER_MODEL_ID -ErrorAction SilentlyContinue
+    } else {
+        $env:T3CODE_DESKTOP_APP_USER_MODEL_ID = $previousAppUserModelId
+    }
+    if ($null -eq $previousForceBuild) {
+        Remove-Item Env:DEVFRAME_T3_FORCE_BUILD -ErrorAction SilentlyContinue
+    } else {
+        $env:DEVFRAME_T3_FORCE_BUILD = $previousForceBuild
+    }
 }
