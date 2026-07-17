@@ -50,8 +50,16 @@ def run_apply_preflight(project_id: str, task_id: str = "",
     # 6. Session gate
     from .session_gate import ensure_session_marker
     sm = ensure_session_marker(project_path or ".", created_by="preflight")
-    checks.append({"name": "session_gate", "status": "PASS" if sm["complete"] else "WARN",
-                   "detail": f"{sum(1 for v in sm.get('missing_fields',[]) if v)} fields missing"})
+    checks.append({
+        "name": "session_gate",
+        "status": "PASS" if sm["complete"] else "BLOCKED",
+        "detail": (
+            "complete"
+            if sm["complete"]
+            else f"{sm.get('reason', 'incomplete')}: "
+                 f"{len(sm.get('missing_fields', []))} fields missing"
+        ),
+    })
 
     # Determine overall
     blocked_checks = [c for c in checks if c["status"] == "BLOCKED"]
