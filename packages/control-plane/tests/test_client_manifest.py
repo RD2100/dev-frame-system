@@ -68,6 +68,11 @@ def test_visual_client_manifest_matches_public_schema():
         },
         {
             "method": "POST",
+            "path": "/api/t3/conversation-intake",
+            "requires": ["loopback-client", "loopback-origin", "canonical-environment-id", "known-thread", "project-binding"],
+        },
+        {
+            "method": "POST",
             "path": "/api/t3/cluster-roster",
             "requires": ["loopback-client", "loopback-origin", "validated-roster"],
         },
@@ -168,6 +173,15 @@ def test_visual_client_manifest_matches_public_schema():
             "description": "Loopback-only cluster run start for a &-mentioned target. Authorized by the human's inline confirm in the conversation; starts a project-coordinator run. No dashboard approval is involved.",
         },
         {
+            "id": "t3-conversation-intake",
+            "path": "/api/t3/conversation-intake",
+            "method": "POST",
+            "contract": "t3_conversation_intake",
+            "object_types": ["DevFrameSession"],
+            "mutates": True,
+            "description": "Loopback-only durable human message intake for the global coordinator or a project-bound goal conversation.",
+        },
+        {
             "id": "t3-cluster-roster-save",
             "path": "/api/t3/cluster-roster",
             "method": "POST",
@@ -248,6 +262,7 @@ def test_visual_client_manifest_matches_public_schema():
         "/actions/open",
         "/actions/execute",
         "/api/t3/approval-response",
+        "/api/t3/conversation-intake",
     }
     assert manifest["governance"]["reconReceipt"] == "docs/status/recon-receipt-local-agent-client-mainline.md"
     assert manifest["governance"]["rkrRulePath"] == "rules/recon.md"

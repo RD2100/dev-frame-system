@@ -482,6 +482,50 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
 
         def do_POST(self) -> None:
             parsed_url = urlparse(self.path)
+            if parsed_url.path == "/api/t3/conversation-intake":
+                if not _client_is_loopback(self.client_address[0]):
+                    body = json.dumps({"error": "loopback_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                if not _loopback_origin_allowed(self):
+                    body = json.dumps({"error": "loopback_origin_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                raw_body = self._read_body()
+                try:
+                    payload = json.loads(raw_body) if raw_body else {}
+                except json.JSONDecodeError:
+                    body = json.dumps({"error": "invalid_json_body"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                from .conversation_intake import IntakeError, record_intake
+
+                try:
+                    result = record_intake(
+                        runtime_dir,
+                        payload.get("threadId"),
+                        payload.get("projectId"),
+                        payload.get("clientRequestId"),
+                        payload.get("message"),
+                        environment_id=payload.get("environmentId"),
+                    )
+                except IntakeError as exc:
+                    detail = str(exc)
+                    if detail == "unknown_thread":
+                        status = HTTPStatus.NOT_FOUND
+                    elif detail in {"resolution_failed", "journal_corrupt"}:
+                        status = HTTPStatus.INTERNAL_SERVER_ERROR
+                    else:
+                        status = HTTPStatus.BAD_REQUEST
+                    body = json.dumps({"accepted": False, "error": detail}, indent=2, ensure_ascii=True)
+                    self._send_text(status, "application/json; charset=utf-8", body)
+                    return
+                from .t3_adapter import invalidate_t3_shell_cache
+
+                invalidate_t3_shell_cache(runtime_dir)
+                body = json.dumps(result, indent=2, ensure_ascii=True)
+                self._send_text(HTTPStatus.ACCEPTED, "application/json; charset=utf-8", body)
+                return
             if parsed_url.path == "/go/dispatch":
                 if not _client_is_loopback(self.client_address[0]):
                     body = json.dumps({"error": "loopback_required"}, indent=2, ensure_ascii=True)

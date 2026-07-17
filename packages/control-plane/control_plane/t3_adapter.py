@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from .conversation_intake import GLOBAL_COORDINATOR_THREAD_ID
 from .visual_state import build_visual_control_plane_state
 
 
@@ -29,7 +30,7 @@ _WEB_AI_KEYWORDS = (
 
 _TASK_INTAKE_KEYWORDS = ("task intake", "task-intake", "task_intake")
 _PROJECT_SUMMARY_KEYWORDS = ("project summary", "project-summary", "project_summary")
-_GLOBAL_COORDINATOR_THREAD_ID = "devframe-team-workbench-session"
+_GLOBAL_COORDINATOR_THREAD_ID = GLOBAL_COORDINATOR_THREAD_ID
 
 
 def _t3_shell_cache_key(
@@ -90,6 +91,15 @@ def build_t3_client_shell(
         )
         _T3_SHELL_CACHE[cache_key] = (now, deepcopy(shell))
         return shell
+
+
+def invalidate_t3_shell_cache(runtime_dir: str | Path | None) -> None:
+    """Drop cached shell snapshots for one runtime after a local state write."""
+    runtime_key = str(Path(runtime_dir).resolve()) if runtime_dir is not None else ""
+    with _T3_SHELL_BUILD_LOCK:
+        for cache in (_T3_SHELL_CACHE, _T3_SHELL_COMPACT_JSON_CACHE):
+            for key in [candidate for candidate in cache if candidate[0] == runtime_key]:
+                cache.pop(key, None)
 
 
 def build_t3_client_shell_from_state(
@@ -179,6 +189,7 @@ def build_t3_client_shell_from_state(
             thread_shell,
             updated_at,
             team if _is_team_workbench_session(thread_shell.get("id")) else None,
+            runtime_dir=runtime_dir,
         )
         for thread_shell in thread_shells
     ]
@@ -2155,7 +2166,13 @@ def _review_board_summary(
     return lines
 
 
-def _thread_detail(thread_shell: dict[str, Any], updated_at: str, team: dict[str, Any] | None = None) -> dict[str, Any]:
+def _thread_detail(
+    thread_shell: dict[str, Any],
+    updated_at: str,
+    team: dict[str, Any] | None = None,
+    *,
+    runtime_dir: str | Path | None = None,
+) -> dict[str, Any]:
     devframe = thread_shell.get("devframe", {})
     if not isinstance(devframe, dict):
         devframe = {}
@@ -2369,8 +2386,15 @@ def _thread_detail(thread_shell: dict[str, Any], updated_at: str, team: dict[str
             "sequence": 0,
             "createdAt": updated_at,
         })
+    from .conversation_intake import build_intake_activities
+
+    intake_activities = (
+        build_intake_activities(runtime_dir, thread_id, updated_at)
+        if runtime_dir is not None
+        else []
+    )
     next_sequence = 3 + len(approval_activities)
-    for activity in evidence_activities + gate_activities + team_context_activities:
+    for activity in evidence_activities + gate_activities + team_context_activities + intake_activities:
         activity["sequence"] = next_sequence
         next_sequence += 1
     return {
@@ -2462,6 +2486,7 @@ def _thread_detail(thread_shell: dict[str, Any], updated_at: str, team: dict[str
             *evidence_activities,
             *gate_activities,
             *team_context_activities,
+            *intake_activities,
         ],
         "checkpoints": [],
         "session": thread_shell.get("session"),
@@ -2534,6 +2559,21 @@ def _cluster_run_thread_detail(
         action_details=action_details,
         updated_at=updated_at,
     )
+    from .conversation_intake import build_intake_activities
+
+    intake_activities = (
+        build_intake_activities(
+            runtime_dir,
+            _text(thread_shell.get("id"), run_id),
+            updated_at,
+        )
+        if runtime_dir is not None
+        else []
+    )
+    next_sequence = 2 + len(approval_activities)
+    for activity in intake_activities:
+        activity["sequence"] = next_sequence
+        next_sequence += 1
     proposed_plan = "\n".join([
         "# DevFrame Goal Conversation",
         "",
@@ -2597,6 +2637,7 @@ def _cluster_run_thread_detail(
                 "createdAt": updated_at,
             },
             *approval_activities,
+            *intake_activities,
         ],
         "checkpoints": [],
         "session": thread_shell.get("session"),
