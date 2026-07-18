@@ -29,26 +29,13 @@ HELP_TEXT = """DevFrame Code CLI
   devframe init [template] [target]  - initialize project
   devframe doctor                    - check package health
 
-  Web AI and specialist tools
-  devframe web-ai import <source>    - import a summary-only web AI session JSON into the runtime
-  devframe web-ai probe <provider>   - build an importable CodexPro/DevSpace binding probe
-  devframe web-ai live-check codexpro|devspace --endpoint <url> [--token <token>] [--project <id>] [--tool server_config|handoff_to_agent|task_intake|project_summary] [--format text|json|session-json] - live-check an MCP endpoint
-  devframe web-ai ensure-browser      - ensure the dedicated logged-in Web AI browser profile is reachable through CDP
-  devframe web-ai bind-chrome        - bind an already-open ChatGPT Chrome tab as a summary-only session
-  devframe web-ai bind-conversation --conversation <chatgpt-url> [--project <id>] [--project-root <dir>] [--runtime-dir <dir>] - bind an explicit ChatGPT conversation URL without reading Chrome
-  devframe web-ai submit-review --zip <path> --prompt-file <path> --conversation <url-or-id> [--cdp-endpoint <url>] [--execute] - submit a review zip to a web AI conversation
-  devframe web-ai prepare-review-bundle --question <text> --source role=path [--required-role role] [--project-root <dir>] [--runtime-dir <dir>] - prepare and gate a ZIP for external Web AI review
-  devframe web-ai validate-review-bundle --zip <path> - verify review bundle manifest, coverage status, and file hashes
-  devframe web-ai record-mcp-result --conversation <url> --tool-name <name> --status completed|blocked|failed|web_host_completed|web_host_no_result|local_mcp_completed [--provider chatgpt] [--project dev-frame-system] [--connector-name <name>] [--connector-app-id <id>] [--marker <text>] --result <summary> [--output-id <id>] [--output-name <name>] [--runtime-dir <dir>] - record an observed Web GPT MCP tool result
-  devframe web-ai record-task-intake --conversation <url> --task-title <text> --task-summary <text> [--provider chatgpt] [--project dev-frame-system] [--connector-name <name>] [--connector-app-id <id>] [--priority high|medium|low] [--suggested-agent opencode|codex|custom] [--marker <text>] [--runtime-dir <dir>] - record a safe Web GPT task intake summary
-  devframe web-ai import-task-intakes --project-root <dir> [--runtime-dir <dir>] [--provider codexpro] [--project dev-frame-system] [--connector-name <name>] [--connector-app-id <id>] - import .ai-bridge/task-intakes/*.json into the runtime
-  devframe web-ai dispatch-task-intakes --project-root <dir> [--runtime-dir <dir>] [--intake-id <id>] [--agents 1] [--execute] - dispatch imported Web GPT task intakes into @go/OpenCode
-  devframe pack validate <zip>       - validate evidence pack
-  devframe writeback apply --workspace <root> --path <rel> --contents-file <f> [--action-id <id>] [--runtime-dir <dir>] [--confirm] [--format text|json] - human-gated, audited single-file workspace write-back (preview without --confirm)
-  devframe handoff generate          - generate handoff doc
-  devframe handoff validate <file>   - validate handoff
-  devframe handoff bootstrap         - dry-run bootstrap
-  devframe handoff transfer --to <url> [--live --safety-flag] - transfer handoff
+  Specialist tools
+  devframe web-ai ...               - Web AI binding, review, and task-intake helpers
+  devframe pack validate ...        - validate an evidence pack
+  devframe writeback apply ...      - audited single-file workspace write-back
+  devframe handoff ...              - generate, validate, bootstrap, or transfer handoffs
+
+  Run devframe <command> --help for command-specific options.
 """
 
 RUN_USAGE = "Usage: devframe run --pipeline <path> [--execute] [--project <dir>]"

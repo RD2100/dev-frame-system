@@ -51,6 +51,14 @@ def test_root_help_is_available(monkeypatch, capsys):
     assert "devframe go <project> <goal>" in output
     assert "devframe atgo <goal>" in output
     assert "devframe dashboard serve" in output
+    assert "devframe web-ai ..." in output
+    assert "devframe pack validate ..." in output
+    assert "devframe writeback apply ..." in output
+    assert "devframe handoff ..." in output
+    assert "Run devframe <command> --help" in output
+    assert "devframe web-ai record-mcp-result" not in output
+    assert "devframe writeback apply --workspace" not in output
+    assert "devframe handoff transfer --to" not in output
 
 
 def test_code_help_is_available(monkeypatch, capsys):
