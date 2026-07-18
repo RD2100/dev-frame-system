@@ -87,7 +87,7 @@ recently closed P1 risks are:
 
 | ID | Status | Priority | Risk | Evidence | Closure condition |
 |---|---|---|---|---|---|
-| KERNEL-001 | active | P1 | One physical go run can appear as separate `go_run` and `team_events` projections with the same canonical `run_id`; the team projection may lose the project identity | 2026-07-17 read-only cluster probe produced duplicate records and `unknown-project` on the team side | One deterministic canonical read view per physical run, with merged provenance and fail-closed acceptance state |
+| KERNEL-001 | closed | P1 | One physical go run could appear as separate `go_run` and `team_events` projections with the same canonical `run_id`; the team projection could lose the project identity | Canonical real-path RED→GREEN, 40 RunIndex tests, 87 related regressions, a clean public snapshot, and an independent read-only review passed on 2026-07-18 | One deterministic canonical read view per physical run, with merged provenance and fail-closed acceptance state |
 | DOCS-001 | closed | P1 | 120 tracked status documents could be mistaken for competing current plans | Lifecycle demotion, authority tests, docs-drift checks, independent review, and a clean exported public-snapshot gate passed on 2026-07-18 | `HANDOFF.md` is the only scheduling authority; all other status documents are explicitly non-scheduling references |
 
 `DOCS-001` is mitigated by this document slice. Physical archival or deletion
@@ -102,13 +102,13 @@ permission to start parallel implementation.
 | Milestone | State | User-visible outcome | Exit evidence |
 |---|---|---|---|
 | M0. Authority consolidation | accepted | One document controls direction and next work | Documentation drift, public snapshot, link, diff, and independent review gates passed |
-| M1. Canonical run truth | active | CLI and clients see one governance record for one physical run | Real-path duplicate-run RED becomes one deterministic canonical projection; no false `final_ready` |
-| M2. Review closure | queued | A real run moves from report to review, gate, and FinalVerdict without manual state reinterpretation | Real execution remains `review_pending` before independent review and becomes `final_ready` only after valid evidence |
+| M1. Canonical run truth | accepted | CLI and clients see one governance record for one physical run | Real-path duplicate-run RED became one deterministic canonical projection; invalid authority paths fail closed |
+| M2. Review closure | active | A real run moves from report to review, gate, and FinalVerdict without manual state reinterpretation | Real execution remains `review_pending` before independent review and becomes `final_ready` only after valid evidence |
 | M3. Tutti adapter | queued | Tutti opens the existing DevFrame dashboard as a local Workspace App | Local app load/reload, `/healthz`, `/state.json`, and a visible Tutti path pass without Tutti core changes |
 | M4. Executor equivalence | queued | The same TaskSpec can use command or ACP execution without changing governance meaning | Normalized RunRecord parity test passes; provider-specific data stays in provenance |
 | M5. Paper vertical | queued | Paper work reuses the same evidence, review, and gate authority | One bounded paper task completes through the canonical kernel without a parallel state machine |
 
-## Current Milestone: M1 Canonical Run Truth
+## Completed Milestone: M1 Canonical Run Truth
 
 ### Objective
 
@@ -164,6 +164,44 @@ git diff --check
 - No client or executor may acquire FinalVerdict authority.
 - Do not start M2 until M1 has a real-path GREEN, independent review, actual
   diff reconciliation, and P0/P1 findings equal to zero for its slice.
+
+### M1 Verdict
+
+Accepted on 2026-07-18. Raw adapter entries remain audit-visible while
+`canonical_runs` merges matching go and TeamRuntime projections. Project
+identity, worker/reviewer identity, FinalVerdict artifact and event producer
+identity, producer role, status conflicts, and journal snapshot drift all fail
+closed. Evidence: `test_run_index.py` (40 passed), related regression tests
+(87 passed), clean-worktree public snapshot (41 passed), `git diff --check`,
+and independent read-only review with P0/P1 equal to zero. A large-run event
+lookup index is a future P2 performance optimization, not an acceptance gap.
+
+## Current Milestone: M2 Review Closure
+
+### Objective
+
+Prove the transition from a governed execution report to independent review,
+gate evidence, and FinalVerdict without clients or workers reinterpreting the
+state themselves.
+
+### Recon And Initial Write Set
+
+Start with read-only Recon of the existing TeamRuntime, `rdreview`, evidence
+gate, and RunIndex paths. The initial write set is limited to
+`packages/control-plane/tests/` for the first real-path RED. Freeze any
+production write set only after that RED identifies the missing contract.
+
+### First Required RED
+
+Create one real TeamRuntime-backed run that has a passing worker report but no
+valid independent review, gate, or FinalVerdict. The public read path must
+remain `review_pending`; any path that reaches `final_ready` is a failure.
+
+### Stop Lines
+
+- No automatic review or FinalVerdict synthesis.
+- No client, worker, or executor acceptance authority.
+- No storage, schema, client, Tutti, RD-Code, or provider changes during Recon.
 
 ## Execution Protocol
 
@@ -228,11 +266,9 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 | 2026-07-18 | Use a Tutti Workspace App wrapper before modifying Tutti core | Existing local-app load/reload and dashboard endpoints already provide the required seam |
 | 2026-07-18 | Defer paper expansion until run identity, review closure, and executor parity are proven | Domain growth must not hide an unstable kernel boundary |
 | 2026-07-18 | Accept M0 and promote M1 to active | Authority tests, docs drift, clean exported snapshot, actual diff review, and independent review passed |
+| 2026-07-18 | Accept M1 and promote M2 to active | Canonical projection, authority-boundary probes, clean snapshot, actual diff review, and independent read-only review passed |
 
 ## Next Action
 
-Add real-path RED coverage for the three independent-review findings: reviewer
-identity colliding with the merged worker set, missing project identity, and
-non-equivalent run or worker statuses. Then revise the existing M1 production
-candidate until all negative paths fail closed and the valid FinalVerdict path
-still reaches `final_ready`.
+Complete M2 Recon, then create the first TeamRuntime-backed `review_pending`
+RED and freeze the smallest production write set needed to close it.

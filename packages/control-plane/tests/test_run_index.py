@@ -5,7 +5,9 @@ from pathlib import Path
 
 from jsonschema.validators import validator_for
 
+import control_plane.run_index as run_index_module
 from control_plane.run_index import ADAPTER_VERSION, build_run_index
+from control_plane.team_runtime import TeamRuntime
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -135,6 +137,506 @@ def _records_by_adapter(index: dict) -> dict[str, list[dict]]:
     for entry in index["runs"]:
         grouped.setdefault(entry["adapter_id"], []).append(entry["record"])
     return grouped
+
+
+def _write_physical_go_run(
+    runtime: Path,
+    *,
+    team_project_id: str,
+    go_project_id: str = "demo-project",
+    go_status: str = "passed",
+    go_worker_status: str = "passed",
+    team_worker_status: str = "passed",
+    go_only_worker_id: str = "",
+) -> str:
+    report_path = runtime / "reports" / "worker.md"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text("worker report\n", encoding="utf-8")
+    agents = [{
+        "agent_id": "coding-agent-1",
+        "status": "completed",
+        "worker_status": go_worker_status,
+        "report_path": str(report_path),
+    }]
+    if go_only_worker_id:
+        agents.append({
+            "agent_id": go_only_worker_id,
+            "status": "completed",
+            "worker_status": "passed",
+            "report_path": str(report_path),
+        })
+    _write_json(runtime / "go-runs" / "go-canonical" / "go-run.json", {
+        "go_run_id": "go-canonical",
+        "project_id": go_project_id,
+        "status": go_status,
+        "created_at": "2026-07-18T00:00:00Z",
+        "agents": agents,
+    })
+    team = TeamRuntime(runtime_dir=runtime)
+    team.record_task_created(
+        "go-canonical",
+        "coding-agent-1",
+        project_id=team_project_id,
+        targets=["src/app.py"],
+    )
+    return team.record_result(
+        "go-canonical",
+        "coding-agent-1",
+        status=team_worker_status,
+        report_path=str(report_path),
+    )
+
+
+def _write_team_final_ready(
+    runtime: Path,
+    *,
+    reviewer_id: str,
+    result_event_id: str,
+    producer_role: str = "governance",
+) -> None:
+    report_path = runtime / "reports" / "worker.md"
+    review_path = runtime / "reviews" / "review.yaml"
+    review_path.parent.mkdir(parents=True)
+    review_path.write_text("verdict: pass\n", encoding="utf-8")
+    final_path = runtime / "final" / "final-verdict.json"
+    gate_id = "gate-go-canonical-independent-review"
+    review_id = "review-go-canonical"
+    _write_json(final_path, {
+        "verdict_id": "fv-go-canonical",
+        "produced_by": "go-evidence-finalizer",
+        "produced_at": "2026-07-18T00:02:00Z",
+        "producer_role": producer_role,
+        "final_state": "final_ready",
+        "inputs_reviewed": [str(report_path), str(review_path)],
+        "gate_summary": [{
+            "gate_id": gate_id,
+            "result": "pass",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": reviewer_id,
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:go-canonical",
+    })
+    context_packet_path, context_ledger_path = _write_sealed_context(
+        runtime,
+        "go-canonical-context",
+    )
+    team = TeamRuntime(runtime_dir=runtime)
+    team.record_task_created(
+        "go-canonical",
+        "coding-agent-1",
+        context_refs=[
+            {
+                "ref_type": "context_packet",
+                "ref_path": str(context_packet_path),
+                "context_id": "cp-go-canonical-context",
+            },
+            {
+                "ref_type": "context_ledger",
+                "ref_path": str(context_ledger_path),
+                "context_id": "cl-go-canonical-context",
+            },
+        ],
+    )
+    team.record_review_ref(
+        "go-canonical",
+        reviewer_id,
+        review_id=review_id,
+        reviewer_role="reviewer",
+        executor_id="coding-agent-1",
+        verdict="pass",
+        ref_path=str(review_path),
+        reviewed_evidence_refs=[f"ev-team-{result_event_id}"],
+    )
+    team.record_final_verdict_ref(
+        "go-canonical",
+        "go-evidence-finalizer",
+        verdict_id="fv-go-canonical",
+        producer_role=producer_role,
+        final_state="final_ready",
+        ref_path=str(final_path),
+        review_ref=review_id,
+        gate_refs=[gate_id],
+        gate_summary=[{
+            "gate_id": gate_id,
+            "result": "pass",
+            "evidence_path": str(review_path),
+        }],
+        human_or_governance_reference="go-evidence-finalize:go-canonical",
+    )
+
+
+def test_run_index_builds_one_canonical_view_for_matching_go_and_team_run(tmp_path):
+    runtime = tmp_path / "runtime"
+    _write_physical_go_run(runtime, team_project_id="")
+
+    index = build_run_index(runtime)
+    repeated = build_run_index(runtime)
+
+    assert len(index["runs"]) == 2
+    raw_entries = {entry["adapter_id"]: entry for entry in index["runs"]}
+    assert set(raw_entries) == {"go_run", "team_events"}
+    assert {entry["record"]["run_id"] for entry in raw_entries.values()} == {"run-go-canonical"}
+    assert raw_entries["go_run"]["record"]["project_id"] == "demo-project"
+    assert raw_entries["team_events"]["record"]["project_id"] == "unknown-project"
+
+    assert index["canonical_runs"] == repeated["canonical_runs"]
+    assert len(index["canonical_runs"]) == 1
+    canonical_entry = index["canonical_runs"][0]
+    canonical_record = canonical_entry["record"]
+    _run_record_validator().validate(canonical_record)
+    assert canonical_record["run_id"] == "run-go-canonical"
+    assert canonical_record["project_id"] == "demo-project"
+    assert canonical_record["review_state"] == "review_pending"
+    assert canonical_record["acceptance_state"] == "review_pending"
+    assert {
+        source["adapter_id"] for source in canonical_entry["provenance"]["sources"]
+    } == {"go_run", "team_events"}
+
+
+def test_run_index_fails_closed_on_conflicting_canonical_project_identity(tmp_path):
+    runtime = tmp_path / "runtime"
+    _write_physical_go_run(runtime, team_project_id="conflicting-project")
+
+    index = build_run_index(runtime)
+
+    assert len(index["runs"]) == 2
+    raw_entries = {entry["adapter_id"]: entry for entry in index["runs"]}
+    assert raw_entries["go_run"]["record"]["project_id"] == "demo-project"
+    assert raw_entries["team_events"]["record"]["project_id"] == "conflicting-project"
+
+    assert len(index["canonical_runs"]) == 1
+    canonical_entry = index["canonical_runs"][0]
+    canonical_record = canonical_entry["record"]
+    _run_record_validator().validate(canonical_record)
+    assert canonical_record["run_id"] == "run-go-canonical"
+    assert canonical_record["project_id"] == "unknown-project"
+    assert canonical_record["outcome"] == "blocked"
+    assert canonical_record["acceptance_state"] == "blocked"
+    assert canonical_record["failure_refs"][0]["status"] == "blocked"
+    assert "project identity conflict" in canonical_record["domain_refs"]["diagnostic"].lower()
+    assert {
+        source["adapter_id"] for source in canonical_entry["provenance"]["sources"]
+    } == {"go_run", "team_events"}
+
+
+def test_run_index_blocks_canonical_reviewer_found_in_merged_worker_union(tmp_path):
+    runtime = tmp_path / "runtime"
+    result_event_id = _write_physical_go_run(
+        runtime,
+        team_project_id="demo-project",
+        go_only_worker_id="reviewer-1",
+    )
+    _write_team_final_ready(
+        runtime,
+        reviewer_id="reviewer-1",
+        result_event_id=result_event_id,
+    )
+
+    index = build_run_index(runtime)
+
+    raw_entries = {entry["adapter_id"]: entry["record"] for entry in index["runs"]}
+    assert raw_entries["team_events"]["acceptance_state"] == "final_ready"
+    assert {item["worker_id"] for item in raw_entries["go_run"]["worker_results"]} == {
+        "coding-agent-1",
+        "reviewer-1",
+    }
+    canonical_record = index["canonical_runs"][0]["record"]
+    _run_record_validator().validate(canonical_record)
+    assert canonical_record["acceptance_state"] == "blocked"
+    assert canonical_record["outcome"] == "blocked"
+    assert canonical_record["failure_refs"][0]["status"] == "blocked"
+    diagnostic = canonical_record["domain_refs"]["diagnostic"].lower()
+    assert "reviewer-1" in diagnostic
+    assert "worker" in diagnostic
+
+
+def test_run_index_blocks_canonical_final_verdict_producer_in_merged_worker_union(tmp_path):
+    runtime = tmp_path / "runtime"
+    result_event_id = _write_physical_go_run(
+        runtime,
+        team_project_id="demo-project",
+        go_only_worker_id="go-evidence-finalizer",
+    )
+    _write_team_final_ready(
+        runtime,
+        reviewer_id="reviewer-1",
+        result_event_id=result_event_id,
+    )
+
+    index = build_run_index(runtime)
+
+    raw_entries = {entry["adapter_id"]: entry["record"] for entry in index["runs"]}
+    assert raw_entries["team_events"]["acceptance_state"] == "final_ready"
+    assert {item["worker_id"] for item in raw_entries["go_run"]["worker_results"]} == {
+        "coding-agent-1",
+        "go-evidence-finalizer",
+    }
+    canonical_record = index["canonical_runs"][0]["record"]
+    _run_record_validator().validate(canonical_record)
+    assert canonical_record["acceptance_state"] == "blocked"
+    assert canonical_record["outcome"] == "blocked"
+    assert canonical_record["failure_refs"][0]["status"] == "blocked"
+    diagnostic = canonical_record["domain_refs"]["diagnostic"].lower()
+    assert "go-evidence-finalizer" in diagnostic
+    assert "worker" in diagnostic
+
+
+def test_run_index_blocks_canonical_final_verdict_event_producer_in_merged_worker_union(tmp_path):
+    runtime = tmp_path / "runtime"
+    result_event_id = _write_physical_go_run(
+        runtime,
+        team_project_id="demo-project",
+        go_only_worker_id="event-producer-worker",
+    )
+    _write_team_final_ready(
+        runtime,
+        reviewer_id="reviewer-1",
+        result_event_id=result_event_id,
+    )
+    events_path = runtime / "team-events.jsonl"
+    events = [json.loads(line) for line in events_path.read_text(encoding="utf-8").splitlines()]
+    final_event = next(event for event in events if event["event_type"] == "final_verdict_ref")
+    final_event["agent_id"] = "event-producer-worker"
+    events_path.write_text(
+        "".join(json.dumps(event, ensure_ascii=True) + "\n" for event in events),
+        encoding="utf-8",
+    )
+
+    index = build_run_index(runtime)
+
+    raw_entries = {entry["adapter_id"]: entry["record"] for entry in index["runs"]}
+    assert raw_entries["team_events"]["acceptance_state"] == "final_ready"
+    assert final_event["payload"]["produced_by"] == "go-evidence-finalizer"
+    assert {item["worker_id"] for item in raw_entries["go_run"]["worker_results"]} == {
+        "coding-agent-1",
+        "event-producer-worker",
+    }
+    canonical_record = index["canonical_runs"][0]["record"]
+    _run_record_validator().validate(canonical_record)
+    assert canonical_record["acceptance_state"] == "blocked"
+    assert canonical_record["outcome"] == "blocked"
+    assert canonical_record["failure_refs"][0]["status"] == "blocked"
+    diagnostic = canonical_record["domain_refs"]["diagnostic"].lower()
+    assert "event-producer-worker" in diagnostic
+    assert "worker" in diagnostic
+
+
+def test_run_index_blocks_client_final_verdict_producer_role(tmp_path):
+    runtime = tmp_path / "runtime"
+    result_event_id = _write_physical_go_run(
+        runtime,
+        team_project_id="demo-project",
+    )
+    _write_team_final_ready(
+        runtime,
+        reviewer_id="reviewer-1",
+        result_event_id=result_event_id,
+        producer_role="client",
+    )
+
+    index = build_run_index(runtime)
+
+    raw_entries = {entry["adapter_id"]: entry["record"] for entry in index["runs"]}
+    raw_team_record = raw_entries["team_events"]
+    _run_record_validator().validate(raw_team_record)
+    assert raw_team_record["acceptance_state"] == "blocked"
+    assert raw_team_record["outcome"] == "blocked"
+    assert raw_team_record["failure_refs"][0]["status"] == "blocked"
+    raw_diagnostic = raw_team_record["domain_refs"]["diagnostic"].lower()
+    assert "client" in raw_diagnostic
+    assert "producer role" in raw_diagnostic
+
+    canonical_record = index["canonical_runs"][0]["record"]
+    _run_record_validator().validate(canonical_record)
+    assert canonical_record["acceptance_state"] == "blocked"
+    assert canonical_record["outcome"] == "blocked"
+    assert canonical_record["failure_refs"][0]["status"] == "blocked"
+    canonical_diagnostic = canonical_record["domain_refs"]["diagnostic"].lower()
+    assert "client" in canonical_diagnostic
+    assert "producer role" in canonical_diagnostic
+
+
+def test_run_index_blocks_dotted_client_final_verdict_producer_role(tmp_path):
+    runtime = tmp_path / "runtime"
+    result_event_id = _write_physical_go_run(
+        runtime,
+        team_project_id="demo-project",
+    )
+    _write_team_final_ready(
+        runtime,
+        reviewer_id="reviewer-1",
+        result_event_id=result_event_id,
+        producer_role="client.adapter",
+    )
+
+    index = build_run_index(runtime)
+
+    raw_entries = {entry["adapter_id"]: entry["record"] for entry in index["runs"]}
+    raw_team_record = raw_entries["team_events"]
+    _run_record_validator().validate(raw_team_record)
+    assert raw_team_record["acceptance_state"] == "blocked"
+    assert raw_team_record["outcome"] == "blocked"
+    assert raw_team_record["failure_refs"][0]["status"] == "blocked"
+    raw_diagnostic = raw_team_record["domain_refs"]["diagnostic"].lower()
+    assert "client" in raw_diagnostic
+    assert "producer role" in raw_diagnostic
+
+    canonical_record = index["canonical_runs"][0]["record"]
+    _run_record_validator().validate(canonical_record)
+    assert canonical_record["acceptance_state"] == "blocked"
+    assert canonical_record["outcome"] == "blocked"
+    assert canonical_record["failure_refs"][0]["status"] == "blocked"
+    canonical_diagnostic = canonical_record["domain_refs"]["diagnostic"].lower()
+    assert "client" in canonical_diagnostic
+    assert "producer role" in canonical_diagnostic
+
+
+def test_run_index_fails_closed_when_team_journal_changes_after_initial_parse(
+    tmp_path,
+    monkeypatch,
+):
+    runtime = tmp_path / "runtime"
+    result_event_id = _write_physical_go_run(
+        runtime,
+        team_project_id="demo-project",
+    )
+    _write_team_final_ready(
+        runtime,
+        reviewer_id="reviewer-1",
+        result_event_id=result_event_id,
+    )
+    initial = build_run_index(runtime)
+    assert _records_by_adapter(initial)["team_events"][0]["acceptance_state"] == "final_ready"
+    assert initial["canonical_runs"][0]["record"]["acceptance_state"] == "final_ready"
+
+    events_path = (runtime / "team-events.jsonl").resolve()
+    original_read_snapshot = run_index_module._read_jsonl_snapshot
+    journal_changed_after_parse = False
+
+    def read_then_replace_final_event(path):
+        nonlocal journal_changed_after_parse
+        parsed, source_hash = original_read_snapshot(path)
+        if Path(path).resolve() == events_path and not journal_changed_after_parse:
+            events = [
+                json.loads(line)
+                for line in events_path.read_text(encoding="utf-8").splitlines()
+            ]
+            final_event = next(
+                event for event in events if event["event_type"] == "final_verdict_ref"
+            )
+            final_event["payload"]["produced_by"] = "coding-agent-1"
+            final_event["payload"]["producer_role"] = "client.adapter"
+            events_path.write_text(
+                "".join(json.dumps(event, ensure_ascii=True) + "\n" for event in events),
+                encoding="utf-8",
+            )
+            journal_changed_after_parse = True
+        return parsed, source_hash
+
+    monkeypatch.setattr(
+        run_index_module,
+        "_read_jsonl_snapshot",
+        read_then_replace_final_event,
+    )
+
+    index = run_index_module.build_run_index(runtime)
+
+    assert journal_changed_after_parse is True
+    raw_team_record = _records_by_adapter(index)["team_events"][0]
+    _run_record_validator().validate(raw_team_record)
+    assert raw_team_record["acceptance_state"] == "final_ready"
+    assert raw_team_record["outcome"] == "passed"
+
+    canonical_record = index["canonical_runs"][0]["record"]
+    _run_record_validator().validate(canonical_record)
+    assert canonical_record["acceptance_state"] == "blocked"
+    assert canonical_record["outcome"] == "blocked"
+    canonical_diagnostic = str(
+        canonical_record["domain_refs"].get("diagnostic") or ""
+    ).lower()
+    assert "team event source" in canonical_diagnostic
+    assert "changed" in canonical_diagnostic or "unbound" in canonical_diagnostic
+
+
+def test_run_index_blocks_canonical_run_without_valid_project_identity(tmp_path):
+    runtime = tmp_path / "runtime"
+    _write_physical_go_run(
+        runtime,
+        go_project_id="",
+        team_project_id="",
+    )
+
+    index = build_run_index(runtime)
+
+    raw_entries = {entry["adapter_id"]: entry["record"] for entry in index["runs"]}
+    assert {record["project_id"] for record in raw_entries.values()} == {"unknown-project"}
+    canonical_record = index["canonical_runs"][0]["record"]
+    _run_record_validator().validate(canonical_record)
+    assert canonical_record["project_id"] == "unknown-project"
+    assert canonical_record["acceptance_state"] == "blocked"
+    assert canonical_record["outcome"] == "blocked"
+    assert canonical_record["failure_refs"][0]["status"] == "blocked"
+    assert "project identity" in canonical_record["domain_refs"]["diagnostic"].lower()
+
+
+def test_run_index_blocks_non_equivalent_run_and_worker_statuses(tmp_path):
+    runtime = tmp_path / "runtime"
+    _write_physical_go_run(
+        runtime,
+        team_project_id="demo-project",
+        go_status="running",
+        go_worker_status="unknown",
+        team_worker_status="passed",
+    )
+
+    index = build_run_index(runtime)
+
+    raw_entries = {entry["adapter_id"]: entry["record"] for entry in index["runs"]}
+    assert raw_entries["go_run"]["domain_refs"]["legacy_status"] == "running"
+    assert raw_entries["team_events"]["domain_refs"]["legacy_status"] == "passed"
+    assert raw_entries["go_run"]["worker_results"][0]["status"] == "unknown"
+    assert raw_entries["team_events"]["worker_results"][0]["status"] == "passed"
+    canonical_record = index["canonical_runs"][0]["record"]
+    _run_record_validator().validate(canonical_record)
+    assert canonical_record["acceptance_state"] == "blocked"
+    assert canonical_record["outcome"] == "blocked"
+    assert canonical_record["failure_refs"][0]["status"] == "blocked"
+    diagnostic = canonical_record["domain_refs"]["diagnostic"].lower()
+    assert "run status conflict" in diagnostic
+    assert "worker result conflict" in diagnostic
+
+
+def test_run_index_keeps_valid_canonical_final_verdict_final_ready(tmp_path):
+    runtime = tmp_path / "runtime"
+    result_event_id = _write_physical_go_run(
+        runtime,
+        team_project_id="demo-project",
+    )
+    _write_team_final_ready(
+        runtime,
+        reviewer_id="reviewer-1",
+        result_event_id=result_event_id,
+    )
+
+    index = build_run_index(runtime)
+
+    raw_entries = {entry["adapter_id"]: entry["record"] for entry in index["runs"]}
+    assert raw_entries["team_events"]["acceptance_state"] == "final_ready"
+    canonical_record = index["canonical_runs"][0]["record"]
+    _run_record_validator().validate(canonical_record)
+    assert canonical_record["project_id"] == "demo-project"
+    assert canonical_record["review_state"] == "review_passed"
+    assert canonical_record["gate_state"] == "gate_passed"
+    assert canonical_record["acceptance_state"] == "final_ready"
+    assert canonical_record["review_refs"][0]["reviewer_id"] == "reviewer-1"
+    assert {item["worker_id"] for item in canonical_record["worker_results"]} == {
+        "coding-agent-1",
+    }
 
 
 def test_run_index_projects_legacy_adapters_into_schema_records(tmp_path):

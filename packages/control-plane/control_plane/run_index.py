@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -46,7 +47,460 @@ def build_run_index(
         "adapter_version": ADAPTER_VERSION,
         "runtime_dir": str(runtime),
         "runs": entries,
+        "canonical_runs": _canonical_run_entries(entries),
     }
+
+
+def _canonical_run_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    team_snapshots = _canonical_team_event_snapshots(entries)
+    paired_indexes: set[int] = set()
+    candidates: dict[str, dict[str, list[tuple[int, dict[str, Any]]]]] = {}
+    for index, entry in enumerate(entries):
+        adapter_id = str(entry.get("adapter_id") or "")
+        if adapter_id not in {"go_run", "team_events"}:
+            continue
+        run_id = str(_as_dict(entry.get("record")).get("run_id") or "")
+        if not run_id:
+            continue
+        candidates.setdefault(run_id, {}).setdefault(adapter_id, []).append((index, entry))
+
+    canonical: list[dict[str, Any]] = []
+    for run_id in sorted(candidates):
+        by_adapter = candidates[run_id]
+        if not by_adapter.get("go_run") or not by_adapter.get("team_events"):
+            continue
+        paired = by_adapter["go_run"] + by_adapter["team_events"]
+        paired_indexes.update(index for index, _entry_item in paired)
+        canonical.append(_canonical_go_team_entry(
+            run_id,
+            [entry for _index, entry in paired],
+            team_snapshots,
+        ))
+
+    for index, entry in enumerate(entries):
+        if index in paired_indexes:
+            continue
+        passthrough = deepcopy(entry)
+        passthrough["provenance"] = {
+            **deepcopy(_as_dict(entry.get("provenance"))),
+            "sources": [_canonical_source(entry)],
+        }
+        canonical.append(passthrough)
+
+    canonical.sort(key=lambda item: (
+        str(_as_dict(item.get("record")).get("run_id") or ""),
+        str(item.get("adapter_id") or ""),
+        json.dumps(_as_dict(item.get("provenance")), sort_keys=True, ensure_ascii=True),
+    ))
+    return canonical
+
+
+def _canonical_go_team_entry(
+    run_id: str,
+    entries: list[dict[str, Any]],
+    team_snapshots: dict[tuple[str, str], tuple[list[dict[str, Any]], str]],
+) -> dict[str, Any]:
+    sources = sorted((_canonical_source(entry) for entry in entries), key=_stable_json)
+    records = [deepcopy(_as_dict(entry.get("record"))) for entry in entries]
+    go_records = [
+        record for entry, record in zip(entries, records)
+        if entry.get("adapter_id") == "go_run"
+    ]
+    base = deepcopy(sorted(go_records, key=_stable_json)[0])
+    diagnostics: list[str] = []
+
+    project_ids = sorted({
+        project_id
+        for record in records
+        if (project_id := str(record.get("project_id") or "").strip())
+        and project_id != "unknown-project"
+    })
+    if len(project_ids) == 1:
+        project_id = project_ids[0]
+    else:
+        project_id = "unknown-project"
+        if len(project_ids) > 1:
+            diagnostics.append(f"project identity conflict: {', '.join(project_ids)}")
+        else:
+            diagnostics.append("project identity is missing from all canonical sources")
+
+    base["project_id"] = project_id
+    base["goal_id"] = f"goal-{_safe_token(project_id)}"
+    base["created_at"] = _earliest_date_time(record.get("created_at") for record in records)
+    base["updated_at"] = _latest_date_time(record.get("updated_at") for record in records)
+
+    worker_results, worker_diagnostics = _canonical_worker_results(records)
+    base["worker_results"] = worker_results
+    diagnostics.extend(worker_diagnostics)
+    diagnostics.extend(
+        str(_as_dict(record.get("domain_refs")).get("diagnostic") or "")
+        for entry, record in zip(entries, records)
+        if entry.get("adapter_id") == "team_events"
+        and str(_as_dict(record.get("domain_refs")).get("diagnostic") or "")
+    )
+
+    for field, key in (
+        ("artifact_refs", "artifact_id"),
+        ("evidence_refs", "evidence_id"),
+        ("review_refs", "review_id"),
+        ("gate_refs", "gate_id"),
+        ("failure_refs", "failure_id"),
+    ):
+        merged, conflicts = _merge_record_refs(records, field, key)
+        base[field] = merged
+        diagnostics.extend(conflicts)
+    worker_ids = {
+        str(result.get("worker_id") or "")
+        for result in base["worker_results"]
+        if str(result.get("worker_id") or "")
+    }
+    for review_ref in base["review_refs"]:
+        reviewer_id = str(review_ref.get("reviewer_id") or "")
+        if review_ref.get("verdict") == "pass" and reviewer_id in worker_ids:
+            diagnostics.append(f"passing reviewer {reviewer_id} matches a worker in the canonical run")
+
+    final_refs = {
+        _stable_json(record["final_verdict_ref"]): deepcopy(record["final_verdict_ref"])
+        for record in records
+        if isinstance(record.get("final_verdict_ref"), dict)
+    }
+    if len(final_refs) == 1:
+        base["final_verdict_ref"] = next(iter(final_refs.values()))
+        verdict_path = Path(str(base["final_verdict_ref"].get("uri") or ""))
+        verdict_artifact, verdict_diagnostic = _read_json_file(verdict_path)
+        if verdict_diagnostic:
+            diagnostics.append(
+                f"final verdict producer identity cannot be verified: {verdict_diagnostic}"
+            )
+        else:
+            produced_by = str(verdict_artifact.get("produced_by") or "").strip()
+            if produced_by in worker_ids:
+                diagnostics.append(
+                    f"final verdict producer {produced_by} matches a worker in the canonical run"
+                )
+        event_producer_id, event_diagnostic = _canonical_final_verdict_event_producer(
+            entries,
+            base["final_verdict_ref"],
+            team_snapshots,
+        )
+        if event_diagnostic:
+            diagnostics.append(
+                f"final verdict event producer identity cannot be verified: {event_diagnostic}"
+            )
+        elif event_producer_id in worker_ids:
+            diagnostics.append(
+                f"final verdict event producer {event_producer_id} matches a worker in the canonical run"
+            )
+    else:
+        base.pop("final_verdict_ref", None)
+        if len(final_refs) > 1:
+            diagnostics.append("final verdict reference conflict")
+
+    limitations = sorted({
+        str(item)
+        for record in records
+        for item in record.get("limitations", [])
+        if isinstance(record.get("limitations"), list) and str(item)
+    })
+    if limitations:
+        base["limitations"] = limitations
+    else:
+        base.pop("limitations", None)
+
+    source_domain_refs: dict[str, list[dict[str, Any]]] = {}
+    for entry, record in zip(entries, records):
+        adapter_id = str(entry.get("adapter_id") or "unknown")
+        source_domain_refs.setdefault(adapter_id, []).append(deepcopy(_as_dict(record.get("domain_refs"))))
+    for adapter_id in source_domain_refs:
+        source_domain_refs[adapter_id].sort(key=_stable_json)
+    domain_refs: dict[str, Any] = {
+        "adapter_version": ADAPTER_VERSION,
+        "legacy_adapter": "canonical_run",
+        "source_adapters": sorted(source_domain_refs),
+        "source_domain_refs": source_domain_refs,
+    }
+
+    status, status_diagnostic = _canonical_status(records)
+    if status_diagnostic:
+        diagnostics.append(status_diagnostic)
+    axes = _axes(
+        status,
+        adapter_id="team_events",
+        review_refs=base["review_refs"],
+        gate_refs=base["gate_refs"],
+        final_verdict_ref=base.get("final_verdict_ref"),
+        failure_refs=base["failure_refs"],
+    )
+    if diagnostics:
+        diagnostic = "; ".join(sorted(set(diagnostics)))
+        failure_ref = {
+            "failure_id": f"failure-canonical-reconcile-{_safe_token(run_id)}",
+            "status": "blocked",
+            "uri": str(sources[0].get("source_path") or run_id),
+        }
+        base["failure_refs"] = _merge_unique_refs(base["failure_refs"] + [failure_ref], "failure_id")
+        domain_refs["diagnostic"] = diagnostic
+        axes = _axis("closed", "blocked", "not_reviewed", "gate_blocked", "blocked", "blocked")
+    base.update(axes)
+    base["domain_refs"] = domain_refs
+
+    return {
+        "adapter_id": "canonical_run",
+        "source_type": "canonical_run_projection",
+        "adapter_version": ADAPTER_VERSION,
+        "provenance": {
+            "canonical_run_id": run_id,
+            "sources": sources,
+        },
+        "record": base,
+    }
+
+
+def _canonical_team_event_snapshots(
+    entries: list[dict[str, Any]],
+) -> dict[tuple[str, str], tuple[list[dict[str, Any]], str]]:
+    snapshots: dict[tuple[str, str], tuple[list[dict[str, Any]], str]] = {}
+    sources = {
+        (
+            str(_as_dict(entry.get("provenance")).get("source_path") or ""),
+            str(_as_dict(entry.get("provenance")).get("source_hash") or ""),
+        )
+        for entry in entries
+        if entry.get("adapter_id") == "team_events"
+    }
+    for source_path, expected_hash in sorted(sources):
+        if not source_path or not expected_hash:
+            snapshots[(source_path, expected_hash)] = ([], "team event source provenance is incomplete")
+            continue
+        items, actual_hash = _read_jsonl_snapshot(Path(source_path))
+        if not actual_hash:
+            snapshots[(source_path, expected_hash)] = ([], f"team event source cannot be read: {source_path}")
+            continue
+        if actual_hash != expected_hash:
+            snapshots[(source_path, expected_hash)] = (
+                [],
+                f"team event source changed before producer verification: {source_path}",
+            )
+            continue
+        diagnostic = next((str(item["diagnostic"]) for item in items if item.get("diagnostic")), "")
+        snapshots[(source_path, expected_hash)] = (items, diagnostic)
+    return snapshots
+
+
+def _canonical_source(entry: dict[str, Any]) -> dict[str, Any]:
+    provenance = _as_dict(entry.get("provenance"))
+    return {
+        "adapter_id": str(entry.get("adapter_id") or ""),
+        "source_type": str(entry.get("source_type") or ""),
+        "adapter_version": str(entry.get("adapter_version") or ""),
+        "source_path": str(provenance.get("source_path") or ""),
+        "legacy_id": str(provenance.get("legacy_id") or ""),
+        "source_hash": str(provenance.get("source_hash") or ""),
+    }
+
+
+def _canonical_final_verdict_event_producer(
+    entries: list[dict[str, Any]],
+    final_ref: dict[str, Any],
+    team_snapshots: dict[tuple[str, str], tuple[list[dict[str, Any]], str]],
+) -> tuple[str, str]:
+    sources = {
+        (
+            str(_as_dict(entry.get("provenance")).get("source_path") or ""),
+            str(_as_dict(entry.get("provenance")).get("legacy_id") or ""),
+            str(_as_dict(entry.get("provenance")).get("source_hash") or ""),
+        )
+        for entry in entries
+        if entry.get("adapter_id") == "team_events"
+    }
+    if not sources:
+        return "", "team event source is missing"
+
+    verdict_id = str(final_ref.get("verdict_id") or "")
+    verdict_uri = str(final_ref.get("uri") or "")
+    matches: list[dict[str, Any]] = []
+    for source_path, run_id, expected_hash in sorted(sources):
+        if not source_path or not run_id or not expected_hash:
+            return "", "team event source provenance is incomplete"
+        items, snapshot_diagnostic = team_snapshots.get(
+            (source_path, expected_hash),
+            ([], "team event source snapshot is missing"),
+        )
+        if snapshot_diagnostic:
+            return "", snapshot_diagnostic
+        for item in items:
+            if item.get("diagnostic"):
+                return "", str(item["diagnostic"])
+            event = _as_dict(item.get("record"))
+            payload = _as_dict(event.get("payload"))
+            if (
+                event.get("event_type") == "final_verdict_ref"
+                and str(event.get("run_id") or "") == run_id
+                and str(payload.get("verdict_id") or "") == verdict_id
+                and str(payload.get("ref_path") or "") == verdict_uri
+            ):
+                matches.append(event)
+
+    if not matches:
+        return "", "matching final_verdict_ref event is missing"
+    if len(matches) > 1:
+        return "", "matching final_verdict_ref event is ambiguous"
+    _artifact, artifact_diagnostic = _validate_final_verdict_artifact(
+        Path(verdict_uri),
+        _as_dict(matches[0].get("payload")),
+    )
+    if artifact_diagnostic:
+        return "", artifact_diagnostic
+    producer_id = str(matches[0].get("agent_id") or "").strip()
+    if not producer_id:
+        return "", "matching final_verdict_ref event producer_id is missing"
+    return producer_id, ""
+
+
+def _canonical_worker_results(records: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for record in records:
+        for item in record.get("worker_results", []):
+            if not isinstance(item, dict):
+                continue
+            key = (str(item.get("worker_id") or ""), str(item.get("worker_role") or ""))
+            grouped.setdefault(key, []).append(item)
+
+    results: list[dict[str, Any]] = []
+    diagnostics: list[str] = []
+    status_priority = {
+        "verified": 0,
+        "passed": 1,
+        "succeeded": 2,
+        "completed": 3,
+        "unknown": 4,
+        "cancelled": 5,
+        "blocked": 6,
+        "error": 7,
+        "failed": 8,
+    }
+    for key in sorted(grouped):
+        items = grouped[key]
+        statuses = {str(item.get("status") or "unknown") for item in items}
+        if len({_canonical_status_category(status) for status in statuses}) > 1:
+            diagnostics.append(f"worker result conflict for {key[0] or 'unknown-worker'}")
+        selected_status = sorted(statuses, key=lambda value: (status_priority.get(value, 99), value))[0]
+        result = {
+            "worker_id": key[0] or "unknown-worker",
+            "worker_role": key[1] or "worker",
+            "status": selected_status,
+            "reported_at": _latest_date_time(item.get("reported_at") for item in items),
+        }
+        artifact_refs = sorted({
+            str(ref)
+            for item in items
+            for ref in item.get("artifact_refs", [])
+            if isinstance(item.get("artifact_refs"), list) and str(ref)
+        })
+        if artifact_refs:
+            result["artifact_refs"] = artifact_refs
+        results.append(result)
+    return results, diagnostics
+
+
+def _merge_record_refs(
+    records: list[dict[str, Any]],
+    field: str,
+    key: str,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    grouped: dict[str, dict[str, dict[str, Any]]] = {}
+    for record in records:
+        for item in record.get(field, []):
+            if not isinstance(item, dict):
+                continue
+            item_key = str(item.get(key) or "")
+            grouped.setdefault(item_key, {})[_stable_json(item)] = deepcopy(item)
+    merged: list[dict[str, Any]] = []
+    diagnostics: list[str] = []
+    for item_key in sorted(grouped):
+        variants = grouped[item_key]
+        if len(variants) > 1:
+            diagnostics.append(f"{field} conflict for {item_key or 'missing-id'}")
+        merged.append(variants[sorted(variants)[0]])
+    return merged, diagnostics
+
+
+def _merge_unique_refs(items: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
+    by_key = {str(item.get(key) or ""): deepcopy(item) for item in items}
+    return [by_key[item_key] for item_key in sorted(by_key)]
+
+
+def _canonical_status(records: list[dict[str, Any]]) -> tuple[str, str]:
+    statuses = {
+        _safe_token(_as_dict(record.get("domain_refs")).get("legacy_status")).replace("_", "-")
+        for record in records
+    }
+    categories = {_canonical_status_category(status) for status in statuses}
+    diagnostic = (
+        f"run status conflict: {', '.join(sorted(statuses))}"
+        if len(categories) > 1
+        else ""
+    )
+    representatives = {
+        "success": "passed",
+        "failure": "failed",
+        "blocked": "blocked",
+        "human_required": "human-required",
+        "cancelled": "cancelled",
+        "running": "running",
+        "queued": "queued",
+        "unknown": "unknown",
+    }
+    category = next(iter(categories), "unknown")
+    return representatives[category], diagnostic
+
+
+def _canonical_status_category(status: object) -> str:
+    token = _safe_token(status).replace("_", "-")
+    if token in {"pass", "passed", "completed", "success", "succeeded", "verified", "accepted"}:
+        return "success"
+    if token in {"failed", "fail", "failure", "error"}:
+        return "failure"
+    if token in {"blocked", "hard-stop", "insufficient-evidence"}:
+        return "blocked"
+    if token in {"human-required", "needs-human"}:
+        return "human_required"
+    if token == "cancelled":
+        return "cancelled"
+    if token in {"running", "reviewing"}:
+        return "running"
+    if token in {"queued", "prepared", "ready", "deferred", "draft"}:
+        return "queued"
+    return "unknown"
+
+
+def _earliest_date_time(values: Any) -> str:
+    return _ordered_date_time(values, reverse=False)
+
+
+def _latest_date_time(values: Any) -> str:
+    return _ordered_date_time(values, reverse=True)
+
+
+def _ordered_date_time(values: Any, *, reverse: bool) -> str:
+    candidates = [str(value) for value in values if str(value or "")]
+    if not candidates:
+        return _date_time("")
+
+    def key(value: str) -> tuple[datetime, str]:
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            parsed = datetime.min.replace(tzinfo=timezone.utc)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed, value
+
+    return _date_time(sorted(candidates, key=key, reverse=reverse)[0])
+
+
+def _stable_json(value: object) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
 def _rdgoal_entries(runtime: Path) -> list[dict[str, Any]]:
@@ -184,7 +638,8 @@ def _team_event_entries(runtime: Path) -> list[dict[str, Any]]:
     path = runtime / TEAM_EVENTS_FILE
     events_by_run: dict[str, list[dict[str, Any]]] = {}
     entries: list[dict[str, Any]] = []
-    for item in _read_jsonl_with_diagnostics(path):
+    items, source_hash = _read_jsonl_snapshot(path)
+    for item in items:
         if item.get("diagnostic"):
             entries.append(_failure_entry("team_events", item["legacy_id"], path, item["diagnostic"]))
             continue
@@ -198,7 +653,7 @@ def _team_event_entries(runtime: Path) -> list[dict[str, Any]]:
         context_refs = _team_context_refs(events)
         worker_agent_ids = _team_worker_agent_ids(result_events)
         review_refs, review_failures = _team_review_refs(events, worker_agent_ids)
-        final_verdict_ref, final_failures, limitations, gate_refs = _team_final_verdict_ref(
+        final_verdict_ref, final_failures, limitations, gate_refs, final_diagnostics = _team_final_verdict_ref(
             events,
             review_refs,
             worker_agent_ids,
@@ -246,8 +701,10 @@ def _team_event_entries(runtime: Path) -> list[dict[str, Any]]:
                     "review_ref_count": len(review_refs),
                     "gate_ref_count": len(gate_refs),
                     "final_verdict_ref_present": bool(final_verdict_ref),
+                    "diagnostic": "; ".join(sorted(set(final_diagnostics))) if final_diagnostics else None,
                 },
             ),
+            source_hash=source_hash,
         ))
     return entries
 
@@ -1010,6 +1467,7 @@ def _entry(
     source_path: Path,
     legacy_id: str,
     record: dict[str, Any],
+    source_hash: str | None = None,
 ) -> dict[str, Any]:
     return {
         "adapter_id": adapter_id,
@@ -1019,7 +1477,7 @@ def _entry(
             "source_path": str(source_path),
             "legacy_id": legacy_id,
             "adapter_version": ADAPTER_VERSION,
-            "source_hash": _source_hash(source_path),
+            "source_hash": source_hash if source_hash is not None else _source_hash(source_path),
         },
         "record": record,
     }
@@ -1090,16 +1548,33 @@ def _read_yaml_file(path: Path) -> tuple[dict[str, Any], str]:
 
 
 def _read_jsonl_with_diagnostics(path: Path) -> list[dict[str, Any]]:
+    return _read_jsonl_snapshot(path)[0]
+
+
+def _read_jsonl_snapshot(path: Path) -> tuple[list[dict[str, Any]], str]:
     if not path.exists():
-        return []
-    items: list[dict[str, Any]] = []
+        return [], ""
     try:
-        lines = path.read_text(encoding="utf-8-sig").splitlines()
+        raw = path.read_bytes()
     except OSError as exc:
         return [{
             "legacy_id": path.name,
             "diagnostic": f"unable to read JSONL file: {type(exc).__name__}: {exc}",
-        }]
+        }], ""
+    source_hash = f"sha256:{hashlib.sha256(raw).hexdigest()}"
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        return [{
+            "legacy_id": path.name,
+            "diagnostic": f"unable to decode JSONL file: {type(exc).__name__}: {exc}",
+        }], source_hash
+    return _parse_jsonl_text(path, text), source_hash
+
+
+def _parse_jsonl_text(path: Path, text: str) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    lines = text.splitlines()
     for index, line in enumerate(lines, start=1):
         stripped = line.strip()
         if not stripped:
@@ -1519,8 +1994,15 @@ def _team_final_verdict_ref(
     review_refs: list[dict[str, Any]],
     blocked_producer_ids: set[str],
     context_refs: list[dict[str, str]],
-) -> tuple[dict[str, Any] | None, list[dict[str, Any]], list[str], list[dict[str, Any]]]:
+) -> tuple[
+    dict[str, Any] | None,
+    list[dict[str, Any]],
+    list[str],
+    list[dict[str, Any]],
+    list[str],
+]:
     failures: list[dict[str, Any]] = []
+    diagnostics: list[str] = []
     pass_review_ids = {
         str(ref.get("review_id") or "")
         for ref in review_refs
@@ -1562,10 +2044,12 @@ def _team_final_verdict_ref(
         )
         if diagnostic:
             failures.append(_event_failure_ref("team-final-verdict", event, diagnostic, ref_path))
+            diagnostics.append(diagnostic)
             continue
         artifact, artifact_diagnostic = _validate_final_verdict_artifact(Path(ref_path), payload)
         if artifact_diagnostic:
             failures.append(_event_failure_ref("team-final-verdict", event, artifact_diagnostic, ref_path))
+            diagnostics.append(artifact_diagnostic)
             continue
         context_diagnostic = (
             _final_ready_context_diagnostic(events, context_refs)
@@ -1579,6 +2063,7 @@ def _team_final_verdict_ref(
                 context_diagnostic,
                 ref_path,
             ))
+            diagnostics.append(context_diagnostic)
             continue
         gate_refs = _gate_refs_from_final_verdict_artifact(
             artifact,
@@ -1593,12 +2078,16 @@ def _team_final_verdict_ref(
         }
         missing_gates = sorted(ref for ref in gate_refs_text if ref not in pass_gate_ids)
         if final_state == "final_ready" and missing_gates:
+            gate_diagnostic = (
+                f"final verdict gate_refs are not passing in artifact: {', '.join(missing_gates)}"
+            )
             failures.append(_event_failure_ref(
                 "team-final-verdict",
                 event,
-                f"final verdict gate_refs are not passing in artifact: {', '.join(missing_gates)}",
+                gate_diagnostic,
                 ref_path,
             ))
+            diagnostics.append(gate_diagnostic)
             continue
         final_ref = {
             "verdict_id": verdict_id,
@@ -1618,8 +2107,8 @@ def _team_final_verdict_ref(
             chain = _final_verdict_supersession_chain(artifact, Path(ref_path))
             if chain:
                 final_ref["supersession_chain"] = chain
-        return final_ref, [], [str(item) for item in artifact.get("limitations", []) if str(item)] if isinstance(artifact.get("limitations"), list) else [], gate_refs
-    return None, failures, [], []
+        return final_ref, [], [str(item) for item in artifact.get("limitations", []) if str(item)] if isinstance(artifact.get("limitations"), list) else [], gate_refs, []
+    return None, failures, [], [], diagnostics
 
 
 def _unsafe_team_final_verdict(
@@ -1636,14 +2125,18 @@ def _unsafe_team_final_verdict(
     pass_review_ids: set[str],
     valid_review_ids: set[str],
 ) -> str:
-    role_token = _safe_token(producer_role)
+    role_token = _safe_token(producer_role).replace("_", "-").replace(".", "-")
     if not verdict_id:
         return "verdict_id is missing"
     if not verdict_id.startswith("fv-"):
         return "verdict_id must start with fv-"
     if not producer_role:
         return "producer_role is missing"
-    if role_token in {"executor", "fixer", "coder", "worker"}:
+    role_parts = set(role_token.split("-"))
+    if (
+        role_token in {"executor", "fixer", "coder", "worker", "clientadapter"}
+        or "client" in role_parts
+    ):
         return f"producer role is not governance-owned: {role_token}"
     if not produced_by:
         return "produced_by is missing"
