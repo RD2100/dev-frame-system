@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -10,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .backup_guard import default_runtime_dir
+from .backup_guard import default_runtime_dir, is_inside
 from .execution_plan import plan_write_set_groups
 from .dispatch_packet import DispatchPacketStore
 from .methodology_dispatch import resolve_methodology
@@ -198,6 +199,93 @@ def run_go_dispatch(
     else:
         result.status = _result_status(result)
 
+    result.metadata_path = str(_write_metadata(result))
+    return result
+
+
+def run_toolchain_dispatch(
+    project_path: str | Path,
+    manifest_path: str | Path,
+    action: str,
+    requirement: str,
+    *,
+    working_directory: str,
+    expected_manifest_sha256: str,
+    runtime_dir: str | Path,
+    execute: bool,
+    timeout_seconds: int = 900,
+) -> GoDispatchResult:
+    """Dispatch one manifest action through the existing command/team path."""
+    if timeout_seconds < 1:
+        raise ValueError("toolchain timeout must be at least 1 second")
+    runtime_root = Path(runtime_dir).resolve()
+    project_root = Path(project_path).resolve()
+    if is_inside(runtime_root, project_root):
+        raise ValueError("toolchain runtime directory must stay outside the project")
+    workdir = (project_root / working_directory).resolve()
+    if not project_root.is_dir() or not is_inside(workdir, project_root):
+        raise ValueError("toolchain working directory must stay inside the project")
+    if not workdir.is_dir():
+        raise ValueError("toolchain working directory does not exist")
+
+    orchestrator = Orchestrator(runtime_dir=runtime_root, repo_root=project_root)
+    dispatch_result = rdgoal(
+        orchestrator,
+        project_root,
+        requirement,
+        operation=f"toolchain {action}",
+        targets=[working_directory],
+        contracts_dir=runtime_root / "contracts",
+    )
+    packet = dispatch_result.dispatch.packet
+    if packet is None:
+        raise ValueError("toolchain dispatch did not produce a task packet")
+
+    manifest = Path(manifest_path).resolve()
+    go_run_id = f"toolchain-{packet.project_id}-{int(time.time() * 1000)}-{uuid.uuid4().hex[:6]}"
+    report_path = Path(packet.packet_dir) / "ExecutionReport.md"
+    command = [
+        sys.executable,
+        "-m",
+        "control_plane.toolchain_execution",
+        "--manifest",
+        str(manifest),
+        "--action",
+        action,
+        "--project",
+        str(project_root),
+        "--expected-sha256",
+        expected_manifest_sha256,
+        "--timeout",
+        str(timeout_seconds),
+        "--report-path",
+        str(report_path),
+    ]
+    agent = GoAgentDispatch(
+        agent_id="toolchain-executor",
+        shard_index=1,
+        shard_count=1,
+        targets=[working_directory],
+        target_bytes=0,
+        packet_dir=packet.packet_dir,
+        task_spec_path=str(Path(packet.packet_dir) / "TASKSPEC.json"),
+        worker_command=command,
+        model_provider="",
+    )
+    result = GoDispatchResult(
+        go_run_id=go_run_id,
+        project_id=packet.project_id,
+        project_root=str(project_root),
+        requirement=requirement,
+        runtime_dir=str(runtime_root),
+        status="queued",
+        execute=execute,
+        agents=[agent],
+        driver="command",
+    )
+    if execute:
+        _execute_parallel(result, timeout_seconds=timeout_seconds + 5)
+        result.status = _result_status(result)
     result.metadata_path = str(_write_metadata(result))
     return result
 

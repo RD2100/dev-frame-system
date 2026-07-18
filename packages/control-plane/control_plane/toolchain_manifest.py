@@ -59,10 +59,28 @@ def _validate_working_directory(value: Any, errors: list[str]) -> str:
 def validate_toolchain_manifest(source: str | Path) -> dict[str, Any]:
     """Return a stable preview contract; never executes or writes the manifest."""
     path = Path(source).resolve()
+    try:
+        source_bytes = path.read_bytes()
+    except OSError as exc:
+        return {
+            "status": "fail",
+            "errors": [f"cannot read toolchain manifest: {exc}"],
+            "manifest_path": str(path),
+            "execution": "explicit_only",
+        }
+    return validate_toolchain_manifest_bytes(source_bytes, path)
+
+
+def validate_toolchain_manifest_bytes(
+    source_bytes: bytes,
+    source: str | Path,
+) -> dict[str, Any]:
+    """Validate one immutable byte snapshot for preview or execution."""
+    path = Path(source).resolve()
     errors: list[str] = []
     try:
-        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        payload = yaml.safe_load(source_bytes.decode("utf-8"))
+    except (UnicodeError, yaml.YAMLError) as exc:
         return {
             "status": "fail",
             "errors": [f"cannot read toolchain manifest: {exc}"],

@@ -304,6 +304,7 @@ def cmd_paper_finalize(argv: list[str] | None = None) -> int:
 def cmd_adapter_verify(argv: list[str] | None = None) -> int:
     """Compare two existing canonical executor projections without writing state."""
     import argparse
+    import hashlib
     import json
 
     from ..adapter_conformance import verify_adapter_conformance
@@ -369,6 +370,114 @@ def cmd_toolchain_preview(argv: list[str] | None = None) -> int:
         else:
             print("Toolchain manifest: FAILED")
     return 0 if result["status"] == "pass" else 1
+
+
+def cmd_toolchain_run(argv: list[str] | None = None) -> int:
+    """Preview or explicitly execute one validated manifest action."""
+    import argparse
+    import hashlib
+    import json
+    from dataclasses import asdict
+
+    from ..backup_guard import default_runtime_dir, is_inside
+    from ..go_dispatch import render_go_dispatch_text, run_toolchain_dispatch
+    from ..toolchain_manifest import validate_toolchain_manifest_bytes
+
+    parser = argparse.ArgumentParser(prog="devframe toolchain run")
+    parser.add_argument("--manifest", required=True)
+    parser.add_argument("--action", choices=("build", "test", "lint"), required=True)
+    parser.add_argument("--project", required=True)
+    parser.add_argument("--runtime-dir", default=None)
+    parser.add_argument("--timeout", type=int, default=900)
+    parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--format", choices=("text", "json"), default="text")
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as exc:
+        return int(exc.code)
+    if args.timeout < 1:
+        print("ERROR: --timeout must be at least 1 second", file=sys.stderr)
+        return 2
+
+    manifest_path = Path(args.manifest).resolve()
+    try:
+        manifest_bytes = manifest_path.read_bytes()
+    except OSError as exc:
+        result = {
+            "status": "fail",
+            "errors": [f"cannot read toolchain manifest: {exc}"],
+            "manifest_path": str(manifest_path),
+            "execution": "explicit_only",
+        }
+        approved_sha256 = ""
+    else:
+        result = validate_toolchain_manifest_bytes(manifest_bytes, manifest_path)
+        approved_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
+    command = result.get("commands", {}).get(args.action)
+    project_root = Path(args.project).resolve()
+    working_directory = (project_root / result.get("working_directory", ".")).resolve()
+    if result["status"] == "pass" and not command:
+        result["status"] = "fail"
+        result["errors"].append(f"commands.{args.action} is required for this action")
+    if result["status"] == "pass" and (
+        not project_root.is_dir()
+        or not is_inside(working_directory, project_root)
+        or not working_directory.is_dir()
+    ):
+        result["status"] = "fail"
+        result["errors"].append("project or manifest working_directory is unavailable")
+
+    if result["status"] != "pass":
+        if args.format == "json":
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            for error in result["errors"]:
+                print(f"  FAIL: {error}")
+            print("Toolchain action: FAILED")
+        return 1
+
+    if not args.execute:
+        preview = {
+            **result,
+            "action": args.action,
+            "project_root": str(project_root),
+            "working_directory": str(working_directory),
+            "execution": "explicit_only",
+            "status": "preview",
+        }
+        if args.format == "json":
+            print(json.dumps(preview, indent=2, ensure_ascii=False))
+        else:
+            print(
+                f"Toolchain action: PREVIEW ({result['toolchain_id']}; "
+                f"action={args.action}; execution=explicit_only)"
+            )
+        return 0
+
+    try:
+        dispatched = run_toolchain_dispatch(
+            project_root,
+            args.manifest,
+            args.action,
+            f"Run manifest action {args.action} for {result['toolchain_id']}",
+            working_directory=result["working_directory"],
+            expected_manifest_sha256=approved_sha256,
+            runtime_dir=args.runtime_dir or default_runtime_dir(),
+            execute=True,
+            timeout_seconds=args.timeout,
+        )
+    except (OSError, ValueError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+    if args.format == "json":
+        payload = asdict(dispatched)
+        payload["action"] = args.action
+        payload["execution"] = "explicit_only"
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(f"Toolchain action: {args.action} (execution=explicit_only)")
+        print(render_go_dispatch_text(dispatched), end="")
+    return 0 if dispatched.status in {"queued", "passed"} else 1
 
 
 def cmd_rdgoal() -> int:

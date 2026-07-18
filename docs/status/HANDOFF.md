@@ -115,7 +115,8 @@ permission to start parallel implementation.
 | M5. Paper vertical | accepted | Paper work reuses the same evidence, review, and gate authority | One bounded synthetic paper task completes through the canonical kernel without a parallel state machine |
 | M6. Adapter conformance entry | accepted | A third-party command-style executor can prove canonical governance parity offline | A bounded user CLI check reuses the accepted M4 parity path and fails closed on missing or divergent canonical records |
 | M7. Toolchain adapter manifest | accepted | A compiler/test command set can be described and checked against the kernel without binding the kernel to one compiler | One offline manifest-driven preview and conformance contract, with execution still explicit and provider-neutral |
-| M8. Governed toolchain run | active | One selected manifest action can enter the existing governed command path without creating a compiler-specific runtime | A real temporary project executes one manifest action only after explicit opt-in and produces canonical run, evidence, review-pending, and adapter-conformance projections |
+| M8. Governed toolchain run | accepted | One selected manifest action can enter the existing governed command path without creating a compiler-specific runtime | A real temporary project executes one manifest action only after explicit opt-in and produces canonical run, evidence, review-pending, and adapter-conformance projections |
+| M9. Toolchain run inspection | active | A user can inspect one governed toolchain result without decoding generic go-run metadata or opening packet files | Read-only Recon proves the smallest reuse path for action, digest, command/cwd evidence, worker result, report reference, and review state; implementation starts only after a real missing-path RED |
 
 ## Completed Milestone: M1 Canonical Run Truth
 
@@ -738,6 +739,79 @@ from one validated manifest action to the existing explicit command dispatch,
 then freeze a finite write set and a real temporary-project RED before any
 production edit.
 
+### M8 Recon Receipt And Real RED
+
+The existing `go_dispatch` path already provides the required packet creation,
+explicit token-list `CommandWorker`, TeamRuntime task/result events, and
+canonical RunIndex projection. It is the reuse path. The missing contract is a
+provider-neutral wrapper that selects one already-validated manifest action,
+rechecks the manifest bytes, and uses that command as one governed task.
+
+Real RED on 2026-07-18, using a temporary project and manifest at
+`.devframe-runtime/probes/m8-toolchain-run-1784367590004/`:
+
+```text
+devframe toolchain run --manifest <probe>\toolchain.yaml --action test \
+  --project <probe> --execute
+Usage: devframe toolchain preview --manifest <path> [--format text|json]
+exit 1
+```
+
+### Frozen M8 Write Set And Stop Lines
+
+- `packages/control-plane/control_plane/toolchain_manifest.py`
+- `packages/control-plane/control_plane/toolchain_execution.py`
+- `packages/control-plane/control_plane/go_dispatch.py`
+- `packages/control-plane/control_plane/worker.py` (preserve a failed worker's
+  specific rejection evidence while keeping the outer result fail-closed)
+- `packages/control-plane/control_plane/cli/_core.py`
+- `packages/control-plane/control_plane/cli/_usage.py`
+- `packages/control-plane/control_plane/cli/app.py`
+- `packages/control-plane/tests/test_toolchain_execution.py`
+- `packages/control-plane/tests/test_cli.py`
+- `scripts/verify-control-plane-wheel.ps1`
+- this execution root at the M8 milestone boundary
+
+Stop lines: no shell-string execution, implicit execution, model/provider
+binding for toolchain actions, arbitrary environment or credential reads, new
+runtime/storage authority, client/dashboard/Tutti/RD-Code changes, or public
+runtime artifacts. Runtime evidence stays under ignored `.devframe-runtime`.
+
+### M8 Closure Verdict
+
+Accepted locally on 2026-07-18. `devframe toolchain run` defaults to a
+no-write preview and executes one tokenized build/test/lint action only after
+explicit `--execute`. The CLI-approved manifest bytes are bound by SHA-256 to
+the worker's single read and parse; manifest replacement, runtime placement
+inside the project, cwd escape, missing working directories, and implicit
+`.cmd`/`.bat` shell adapters fail closed. The command runs in a dedicated
+process group, timeout cleanup covers descendants, and a failed worker's
+specific rejection report remains attached beneath the outer failed status.
+Canonical projection stops at `review_pending` and does not invent a model or
+provider identity.
+
+The production RED was the missing public `toolchain run` route. A second
+real-path RED proved that `CommandWorker` previously overwrote the worker's
+manifest-drift rejection report. The final affected suite passed 235 tests
+with one platform-specific skip. The full control-plane suite passed 1,607
+tests with two skips in the clean candidate clone. A newly built and installed
+wheel completed the full smoke, including preview, explicit execution, marker,
+and canonical `review_pending` checks. The clean public-snapshot gate and
+`git diff --check` passed. Independent review reported P0=0, P1=0, P2=0, and
+P3=0.
+
+Reviewer Index:
+
+| Item | Evidence |
+|---|---|
+| Changed files | This execution root; `toolchain_manifest.py`; new `toolchain_execution.py`; `go_dispatch.py`; `worker.py`; CLI core/usage/router; new focused execution tests; wheel verification; 10 paths total |
+| Critical paths | Default preview and explicit execute; immutable approved manifest bytes; project/runtime/cwd containment; batch-shell rejection; process-group timeout cleanup; fail-closed worker report preservation; TeamRuntime and canonical RunIndex `review_pending` projection |
+| Tests and checks | Missing-route and overwritten-report REDs; affected regression `235 passed, 1 skipped`; clean-clone full suite `1607 passed, 2 skipped`; installed-wheel smoke `[OK]`; clean public snapshot `[OK]`; `git diff --check` passed with only an LF-to-CRLF notice |
+| Generated artifacts | TaskSpec: `.devframe-runtime/probes/m8-toolchain-run-1784367590004/TASKSPEC.json`; clean candidate clone: `.devframe-runtime/isolated/m8-final-1784375115911`; wheel, venv, manifests, runtime, and fixture scripts were temporary and untracked |
+| Known gaps | Windows cannot execute the POSIX-only process-group integration probe; a POSIX-only real test and an independent signal-sequence test cover the branch. Real provider/network execution, push, PR, merge, release, and deployment remain outside M8 |
+| Review focus | Preserve first-read SHA binding, no-write preview, exact project/runtime/cwd boundaries, fail-closed outer status, descendant cleanup, empty provider provenance, and the prohibition on acceptance before independent review |
+| Verdict | Independent `gpt-5.6-sol` high review PASS; P0=0, P1=0, P2=0, P3=0 |
+
 ### M5 Closure Verdict
 
 Accepted locally on 2026-07-18. The shipped `devframe run` paper path now ends
@@ -852,13 +926,15 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 | 2026-07-18 | Accept M5 after explicit external-review finalization was made fail-closed | The executor stops at review pending; current bytes, live bypass state, manifested hashes, attested reviewer identity, and duplicate verdict paths are revalidated before limited acceptance |
 | 2026-07-18 | Accept M6 after adding the offline adapter conformance entry | A third-party command-style runtime can be compared against canonical code/go governance semantics without a new runtime, provider, or write authority |
 | 2026-07-18 | Accept M7 and promote M8 to read-only Recon | Toolchain manifests now fail closed through the installed CLI without executing commands; the next product gap is explicit reuse of the existing governed command path |
+| 2026-07-18 | Accept M8 and promote M9 to read-only Recon | One manifest action now traverses the governed command, evidence, team, and canonical review-pending path; the next user-facing gap is concise inspection of that result without exposing a second runtime authority |
 
 ## Next Action
 
-Commit the exact accepted M7 paths as one local logical commit. Then begin M8
-with one bounded read-only Recon of the validated manifest, TaskSpec, command
-driver, TeamRuntime, RunIndex, and adapter-conformance seams. The first M8 RED
-must use a temporary project and prove that the current public CLI cannot yet
-run one selected manifest action through the existing governed command path.
-Do not add a second runtime, shell-string execution, client, dashboard, or
-provider.
+Commit the exact accepted M8 paths as one local logical commit. Then begin M9
+with one bounded read-only Recon of the existing go-run metadata, worker report,
+TeamRuntime events, RunIndex projection, and status renderers. Determine whether
+a concise toolchain-specific inspection command can reuse those records without
+introducing another runtime or copying report text into authority state. The
+first implementation batch requires a real installed-CLI missing-path RED and
+a finite write set; do not add execution, acceptance, provider, client, or
+dashboard behavior during Recon.

@@ -20,6 +20,8 @@ $codeRuntimeDir = Join-Path $tempRoot "code-runtime"
 $adapterReferenceDir = Join-Path $tempRoot "adapter-reference"
 $adapterCandidateDir = Join-Path $tempRoot "adapter-candidate"
 $toolchainManifestPath = Join-Path $tempRoot "toolchain.yaml"
+$toolchainProjectDir = Join-Path $tempRoot "toolchain-project"
+$toolchainRuntimeDir = Join-Path $tempRoot "toolchain-runtime"
 $previewRuntimeDir = Join-Path $tempRoot "preview-runtime"
 
 function Invoke-Step {
@@ -149,8 +151,10 @@ for base in base_paths:
     assert result.status == "passed", result.status
 print("adapter conformance fixtures ready")
 '@
+    $adapterFixtureScript = Join-Path $tempRoot "adapter-fixture.py"
+    Set-Content -LiteralPath $adapterFixtureScript -Value $adapterFixtureCode -Encoding UTF8
     Invoke-Step "build adapter conformance fixtures" $python @(
-        "-c", $adapterFixtureCode, $adapterReferenceDir, $adapterCandidateDir
+        $adapterFixtureScript, $adapterReferenceDir, $adapterCandidateDir
     )
     Invoke-Step "devframe adapter conformance" $devframe @(
         "adapter", "verify", "--reference-runtime", (Join-Path $adapterReferenceDir "runtime"),
@@ -166,6 +170,47 @@ print("adapter conformance fixtures ready")
         "import json, subprocess, sys; payload = json.loads(subprocess.check_output([sys.argv[1], 'toolchain', 'preview', '--manifest', sys.argv[2], '--format', 'json'], text=True)); assert payload['status'] == 'pass'; assert payload['execution'] == 'explicit_only'; assert payload['adapter_contract'] == {'domain': 'code', 'profile': 'toolchain'}; print('toolchain preview ok')",
         $devframe,
         $toolchainManifestPath
+    )
+    $toolchainFixtureCode = @'
+import json
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+root.mkdir(parents=True, exist_ok=True)
+command = [
+    sys.executable,
+    "-c",
+    "from pathlib import Path; Path('toolchain-marker.txt').write_text('ok', encoding='utf-8')",
+]
+(root / "toolchain.json").write_text(json.dumps({
+    "toolchain_id": "wheel-python-run",
+    "compiler": "python",
+    "working_directory": ".",
+    "commands": {"build": command, "test": command},
+}), encoding="utf-8")
+print("toolchain run fixture ready")
+'@
+    $toolchainFixtureScript = Join-Path $tempRoot "toolchain-fixture.py"
+    Set-Content -LiteralPath $toolchainFixtureScript -Value $toolchainFixtureCode -Encoding UTF8
+    Invoke-Step "build toolchain run fixture" $python @(
+        $toolchainFixtureScript, $toolchainProjectDir
+    )
+    Invoke-Step "devframe toolchain run preview" $devframe @(
+        "toolchain", "run", "--manifest", (Join-Path $toolchainProjectDir "toolchain.json"),
+        "--action", "test", "--project", $toolchainProjectDir,
+        "--runtime-dir", $toolchainRuntimeDir, "--format", "json"
+    )
+    Invoke-Step "devframe toolchain run execute" $devframe @(
+        "toolchain", "run", "--manifest", (Join-Path $toolchainProjectDir "toolchain.json"),
+        "--action", "test", "--project", $toolchainProjectDir,
+        "--runtime-dir", $toolchainRuntimeDir, "--execute", "--format", "json"
+    )
+    Invoke-Step "toolchain canonical review pending" $python @(
+        "-c",
+        "from control_plane.run_index import build_run_index; import pathlib, sys; index = build_run_index(sys.argv[1]); paired = [entry for entry in index['canonical_runs'] if {'go_run', 'team_events'} <= {source['adapter_id'] for source in entry['provenance']['sources']}]; assert len(paired) == 1; assert paired[0]['record']['review_state'] == 'review_pending'; assert pathlib.Path(sys.argv[2], 'toolchain-marker.txt').read_text(encoding='utf-8') == 'ok'; print('toolchain canonical review_pending ok')",
+        $toolchainRuntimeDir,
+        $toolchainProjectDir
     )
     Invoke-Step "devframe dashboard help" $python @(
         "-c",

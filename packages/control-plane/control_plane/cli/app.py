@@ -31,6 +31,7 @@ from ._core import (
     cmd_rdgoal,
     cmd_run,
     cmd_toolchain_preview,
+    cmd_toolchain_run,
 )
 from ._review import cmd_rdreview
 from ._visual import cmd_actions, cmd_dashboard, cmd_sessions, cmd_visual_state
@@ -107,6 +108,11 @@ def main() -> int:
                 print(TOOLCHAIN_PREVIEW_USAGE)
                 return 0
             return cmd_toolchain_preview(sys.argv[3:])
+        if sub == "run":
+            if _wants_help(sys.argv[3:]):
+                print(TOOLCHAIN_RUN_USAGE)
+                return 0
+            return cmd_toolchain_run(sys.argv[3:])
         print(TOOLCHAIN_PREVIEW_USAGE)
         return 0 if _wants_help(sys.argv[2:]) else 1
 

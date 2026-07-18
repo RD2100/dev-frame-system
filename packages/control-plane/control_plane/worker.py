@@ -142,10 +142,18 @@ class CommandWorker:
             return WorkerResult(packet=packet, report_path=str(report_path), summary=summary)
 
         if completed.returncode != 0:
-            report_path.write_text(
-                self._failed_report(packet, f"worker command exited {completed.returncode}"),
-                encoding="utf-8",
+            worker_report = ""
+            if report_path.exists():
+                try:
+                    worker_report = report_path.read_text(encoding="utf-8")
+                except OSError:
+                    worker_report = ""
+            failure_report = self._failed_report(
+                packet, f"worker command exited {completed.returncode}"
             )
+            if worker_report:
+                failure_report += "\n## Worker-provided report\n\n" + worker_report
+            report_path.write_text(failure_report, encoding="utf-8")
         elif not report_path.exists():
             report_path.write_text(
                 self._failed_report(packet, "worker command did not produce ExecutionReport.md"),

@@ -34,6 +34,7 @@ HELP_TEXT = """DevFrame Code CLI
   devframe pack validate ...        - validate an evidence pack
   devframe adapter verify ...       - compare canonical executor projections offline
   devframe toolchain preview ...    - validate a compiler/test manifest without executing it
+  devframe toolchain run ...        - preview or explicitly run one validated manifest action
   devframe paper finalize ...       - finalize a paper run after external review
   devframe writeback apply ...      - audited single-file workspace write-back
   devframe handoff ...              - generate, validate, bootstrap, or transfer handoffs
@@ -54,6 +55,10 @@ ADAPTER_VERIFY_USAGE = (
 )
 TOOLCHAIN_PREVIEW_USAGE = (
     "Usage: devframe toolchain preview --manifest <path> [--format text|json]"
+)
+TOOLCHAIN_RUN_USAGE = (
+    "Usage: devframe toolchain run --manifest <path> --action build|test|lint "
+    "--project <dir> [--runtime-dir <dir>] [--execute] [--format text|json]"
 )
 DASHBOARD_USAGE = "Usage: devframe dashboard serve [--runtime-dir <dir>] [--paper-project <dir>] [--host 127.0.0.1] [--port 8765] [--allow-remote]"
 GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--worker opencode] [--model provider/model]"
