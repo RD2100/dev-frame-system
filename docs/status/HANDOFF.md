@@ -197,6 +197,25 @@ Create one real TeamRuntime-backed run that has a passing worker report but no
 valid independent review, gate, or FinalVerdict. The public read path must
 remain `review_pending`; any path that reaches `final_ready` is a failure.
 
+### Recon Result
+
+The first M2 increment is already implemented in the committed runtime and is
+therefore closed without a new production change. `tools/go_evidence.py`
+records review and FinalVerdict references only after the evidence gate passes;
+the TeamRuntime and RunIndex then project `final_ready`. The same real path
+keeps self-review and invalid-review cases at `review_pending` without a
+FinalVerdict. Evidence on 2026-07-18:
+
+- `tests/test_go_evidence.py` selected M2 paths: 5 passed.
+- `test_finalize_backfills_go_run_context_before_team_runtime_final_ready`
+  proves the valid `go_evidence -> TeamRuntime -> RunIndex` transition.
+- `test_finalize_records_only_evidence_refs_for_self_review_blocker` and the
+  invalid-review variants prove the missing-review negative path.
+
+The existing runtime-governance Recon Receipt covers this adapter boundary.
+The frozen write set for a follow-up M2 code slice is empty: a new production
+change requires a newly observed lifecycle gap and a new real-path RED.
+
 ### Stop Lines
 
 - No automatic review or FinalVerdict synthesis.
@@ -267,8 +286,10 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 | 2026-07-18 | Defer paper expansion until run identity, review closure, and executor parity are proven | Domain growth must not hide an unstable kernel boundary |
 | 2026-07-18 | Accept M0 and promote M1 to active | Authority tests, docs drift, clean exported snapshot, actual diff review, and independent review passed |
 | 2026-07-18 | Accept M1 and promote M2 to active | Canonical projection, authority-boundary probes, clean snapshot, actual diff review, and independent read-only review passed |
+| 2026-07-18 | Close the first M2 review-closure increment as already satisfied | Existing go-evidence, TeamRuntime, and RunIndex paths provide the required valid and invalid lifecycle transitions |
 
 ## Next Action
 
-Complete M2 Recon, then create the first TeamRuntime-backed `review_pending`
-RED and freeze the smallest production write set needed to close it.
+Perform an independent review of the existing M2 lifecycle evidence. If it
+finds no uncovered transition, promote M3; otherwise freeze the smallest
+real-path RED and write set for the uncovered gap.
