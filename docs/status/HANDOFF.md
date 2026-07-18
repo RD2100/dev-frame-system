@@ -92,6 +92,7 @@ recently closed P1 risks are:
 | DOCS-001 | closed | P1 | 120 tracked status documents could be mistaken for competing current plans | Lifecycle demotion, authority tests, docs-drift checks, independent review, and a clean exported public-snapshot gate passed on 2026-07-18 | `HANDOFF.md` is the only scheduling authority; all other status documents are explicitly non-scheduling references |
 | DIST-001 | closed | P1 | A 3,770-file Tutti snapshot and importer made a replaceable client look like part of the DevFrame kernel and inflated the public checkout | Real RED probe, exact Git untracking, ignored local-reference check, strict tracked-product probe, 1,564 control-plane tests passed, and no active importer references | `products/tutti/` is not tracked, the local reference is ignored, and the kernel distribution remains self-contained |
 | DOCS-002 | closed | P2 | Two expired coordinator handoff prompts duplicated the current execution root and encouraged stale takeover instructions | Activity-reference audit, exact retirement, inventory update, docs-drift and current-entry tests passed | `HANDOFF.md` and stable runtime docs are the only live continuation path; retired prompts remain recoverable in Git history |
+| DIST-002 | closed | P2 | A desktop-shortcut helper promoted the deprecated T3/RD-Code visual-client path despite having no current product, test, or release entrypoint | Script-reference audit found only one historical roadmap mention; launcher tests and release gates do not depend on it | The shortcut helper is removed; the tested `launch-editor.ps1` advanced entry remains available |
 
 `DOCS-001` is mitigated by this document slice. Physical archival or deletion
 is a later cleanup operation and must first prove that no active validator,
@@ -324,6 +325,24 @@ P0=0 and P1=0. Remaining status documents require individual classification;
 do not bulk-delete Recon Receipts, release evidence, or files read by runtime
 validators.
 
+### M3 Batch 3 Verification
+
+The script audit retained the three active release-verification scripts and the
+tested `launch-editor.ps1` advanced client launcher. It retired only
+`scripts/create-editor-shortcut.ps1`, whose sole reference was a historical
+roadmap and whose only function was to create a desktop shortcut for the
+deprioritized visual-client path.
+
+Evidence:
+
+- Activity-reference audit: one historical reference, no README, CLI, test,
+  workflow, rule, or release-gate reference.
+- `test_launch_editor_script.py` remains the contract for the retained launcher.
+- Public-snapshot and docs-drift gates do not require the shortcut helper.
+
+P0=0 and P1=0. Do not remove the retained scripts without a separate real-path
+replacement or retirement contract.
+
 ### Stop Lines
 
 - No automatic review or FinalVerdict synthesis.
@@ -400,7 +419,7 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 
 ## Next Action
 
-Continue the status-document and script audit with the next clearly redundant
-historical batch. In parallel, inventory dashboard callers and tests; do not
-delete dashboard code until a real user-flow probe proves it is unused and a
+Continue the status-document audit with the next clearly redundant historical
+batch. Inventory dashboard callers and tests separately; do not delete
+dashboard code until a real user-flow probe proves it is unused and a
 replacement CLI/API path is documented.
