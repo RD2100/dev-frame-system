@@ -91,6 +91,7 @@ recently closed P1 risks are:
 | KERNEL-001 | closed | P1 | One physical go run could appear as separate `go_run` and `team_events` projections with the same canonical `run_id`; the team projection could lose the project identity | Canonical real-path RED→GREEN, 40 RunIndex tests, 87 related regressions, a clean public snapshot, and an independent read-only review passed on 2026-07-18 | One deterministic canonical read view per physical run, with merged provenance and fail-closed acceptance state |
 | DOCS-001 | closed | P1 | 120 tracked status documents could be mistaken for competing current plans | Lifecycle demotion, authority tests, docs-drift checks, independent review, and a clean exported public-snapshot gate passed on 2026-07-18 | `HANDOFF.md` is the only scheduling authority; all other status documents are explicitly non-scheduling references |
 | DIST-001 | closed | P1 | A 3,770-file Tutti snapshot and importer made a replaceable client look like part of the DevFrame kernel and inflated the public checkout | Real RED probe, exact Git untracking, ignored local-reference check, strict tracked-product probe, 1,564 control-plane tests passed, and no active importer references | `products/tutti/` is not tracked, the local reference is ignored, and the kernel distribution remains self-contained |
+| DOCS-002 | closed | P2 | Two expired coordinator handoff prompts duplicated the current execution root and encouraged stale takeover instructions | Activity-reference audit, exact retirement, inventory update, docs-drift and current-entry tests passed | `HANDOFF.md` and stable runtime docs are the only live continuation path; retired prompts remain recoverable in Git history |
 
 `DOCS-001` is mitigated by this document slice. Physical archival or deletion
 is a later cleanup operation and must first prove that no active validator,
@@ -302,6 +303,27 @@ Reviewer Index:
 | Static checks | `git diff --check` passed; `git ls-files products/tutti` -> 0; `git check-ignore products/tutti/README.md` -> ignored |
 | Findings and focus | P0=0, P1=0 for this slice. Verify a clean checkout's public snapshot before release; do not treat the local ignored reference as a release artifact |
 
+### M3 Batch 2 Verification
+
+The reference audit retired two stale coordinator handoff prompts:
+`continue-global-coordinator-conversation-mainline.md` and
+`next-agent-global-coordinator-prompt.md`. Neither had an active code, test,
+rule, or documentation entrypoint reference; both duplicated instructions now
+represented by this file. The historical inventory was updated, and the files
+remain recoverable from Git history.
+
+Evidence:
+
+- `rg` activity-reference audit returned no live references after retirement.
+- `python -m pytest packages/control-plane/tests/test_docs_drift_validator.py -q`
+  -> 23 passed.
+- Current-entry and release snapshot checks -> 3 passed.
+- `git diff --check` -> passed.
+
+P0=0 and P1=0. Remaining status documents require individual classification;
+do not bulk-delete Recon Receipts, release evidence, or files read by runtime
+validators.
+
 ### Stop Lines
 
 - No automatic review or FinalVerdict synthesis.
@@ -378,8 +400,7 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 
 ## Next Action
 
-Run a separate reference audit of status documents and scripts. Classify each
-candidate as active, supporting, historical, or safe-to-delete; then execute
-only the first deletion batch whose references and validators are proven clear.
-Only after that audit may the project decide whether any dashboard
-implementation is truly unused and removable.
+Continue the status-document and script audit with the next clearly redundant
+historical batch. In parallel, inventory dashboard callers and tests; do not
+delete dashboard code until a real user-flow probe proves it is unused and a
+replacement CLI/API path is documented.
