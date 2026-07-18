@@ -93,6 +93,7 @@ recently closed P1 risks are:
 | DIST-001 | closed | P1 | A 3,770-file Tutti snapshot and importer made a replaceable client look like part of the DevFrame kernel and inflated the public checkout | Real RED probe, exact Git untracking, ignored local-reference check, strict tracked-product probe, 1,564 control-plane tests passed, and no active importer references | `products/tutti/` is not tracked, the local reference is ignored, and the kernel distribution remains self-contained |
 | DOCS-002 | closed | P2 | Two expired coordinator handoff prompts duplicated the current execution root and encouraged stale takeover instructions | Activity-reference audit, exact retirement, inventory update, docs-drift and current-entry tests passed | `HANDOFF.md` and stable runtime docs are the only live continuation path; retired prompts remain recoverable in Git history |
 | DIST-002 | closed | P2 | A desktop-shortcut helper promoted the deprecated T3/RD-Code visual-client path despite having no current product, test, or release entrypoint | Script-reference audit found only one historical roadmap mention; launcher tests and release gates do not depend on it | The shortcut helper is removed; the tested `launch-editor.ps1` advanced entry remains available |
+| DOCS-003 | closed | P2 | A pre-release cutover checklist and superseded 90-day product roadmap remained visible after their decisions were absorbed into the current execution and release roots | Per-file audit found no live dependency; docs drift and current-entry gates passed; independent review passed with P0/P1/P2/P3 equal to zero | Current direction remains in `HANDOFF.md`; release history remains in `LAUNCH_NOW.md` and `release-readiness.md`; retired drafts remain recoverable in Git history |
 
 `DOCS-001` is mitigated by this document slice. Physical archival or deletion
 is a later cleanup operation and must first prove that no active validator,
@@ -343,6 +344,40 @@ Evidence:
 P0=0 and P1=0. Do not remove the retained scripts without a separate real-path
 replacement or retirement contract.
 
+### M3 Batch 4 Verification
+
+Retire only `product-maturity-roadmap.md` and `launch-cutover-checklist.md`.
+At the captured `HEAD` baseline, both were referenced only by the historical
+status inventory. Their live decisions are already represented by this
+execution root, the repository README files, `LAUNCH_NOW.md`, and
+`release-readiness.md`.
+
+Preserve `agent-cluster-unknowns-register.md` because it still records
+unverified assumptions. Preserve `design-devframe-mcp-orchestrator-surface.md`
+because it contains unique MCP permission, audit, network, and human-gate
+boundaries not yet promoted to a stable runtime contract.
+
+Evidence:
+
+- `python -m pytest packages/control-plane/tests/test_docs_drift_validator.py -q`
+  -> 23 passed.
+- Eight selected public-snapshot tests covering links, the current execution
+  root, release boundaries, and reviewer visibility passed.
+- Activity-reference audit found only this retirement record after the
+  inventory update; `git diff HEAD --check` passed.
+
+Reviewer Index:
+
+| Item | Evidence |
+|---|---|
+| Changed files | `HANDOFF.md`, `status-document-inventory.md`, and exact deletion of `product-maturity-roadmap.md` plus `launch-cutover-checklist.md` |
+| Critical paths | Canonical execution root, historical status inventory, docs drift validator, current-entry links, and frozen release evidence |
+| Tests and checks | Docs drift: 23 passed; selected current-entry/release checks: 8 passed; exact reference audit and `git diff HEAD --check` passed |
+| Generated artifacts | None |
+| Known gaps | The independent read-only reviewer could inspect test sources but its sandbox rejected launching pytest; root-side test runs supplied the execution evidence |
+| Review focus | Preserve Recon Receipts, current release evidence, runtime contracts, and status documents with unique unresolved constraints |
+| Verdict | PASS; P0=0, P1=0, P2=0, P3=0 |
+
 ### Stop Lines
 
 - No automatic review or FinalVerdict synthesis.
@@ -419,7 +454,6 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 
 ## Next Action
 
-Continue the status-document audit with the next clearly redundant historical
-batch. Inventory dashboard callers and tests separately; do not delete
-dashboard code until a real user-flow probe proves it is unused and a
+Inventory dashboard callers and tests as a separate read-only M3 batch. Do not
+delete dashboard code until a real user-flow probe proves it is unused and a
 replacement CLI/API path is documented.
