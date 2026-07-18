@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-acceptance/schemas/gpt_review_result.schema.json",
+  "title": "GPT Review Result",
+  "type": "object",
+  "required": [
+    "REVIEW_RUN_ID",
+    "template_version",
+    "task_type",
+    "review_stage",
+    "overall_judgment",
+    "reviewer_type",
+    "evidence_inspected",
+    "blocking_reasons",
+    "missing_evidence",
+    "scope_violation",
+    "fake_green_risk",
+    "safety_boundaries_respected",
+    "required_next_action",
+    "allow_proceed",
+    "rationale",
+    "created_at",
+    "task_type_specific"
+  ],
+  "properties": {
+    "REVIEW_RUN_ID": {"type": "string", "minLength": 1},
+    "template_version": {"type": "string", "const": "gpt-review-template-v1"},
+    "task_type": {
+      "type": "string",
+      "enum": [
+        "authorization",
+        "execution_closure",
+        "design_review",
+        "paper_contract_design",
+        "paper_revision_review",
+        "citation_verification",
+        "context_handoff",
+        "cdp_pilot",
+        "archive_governance"
+      ]
+    },
+    "review_stage": {"type": "string", "enum": ["authorization", "execution", "closure", "audit", "handoff"]},
+    "overall_judgment": {"type": "string", "enum": ["accepted", "blocked", "human_required", "review_unverified"]},
+    "reviewer_type": {"type": "string", "enum": ["gpt", "human", "agent"]},
+    "contract_id": {"type": ["string", "null"]},
+    "contract_version": {"type": ["string", "null"]},
+    "evidence_pack": {
+      "type": ["object", "null"],
+      "properties": {
+        "path": {"type": ["string", "null"]},
+        "sha256": {"type": ["string", "null"]},
+        "manifest_valid": {"type": "boolean"}
+      }
+    },
+    "evidence_inspected": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["path", "inspected"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"type": ["string", "null"]},
+          "inspected": {"type": "boolean"},
+          "role": {"type": "string"}
+        }
+      }
+    },
+    "blocking_reasons": {"type": "array", "items": {"type": "string"}},
+    "missing_evidence": {"type": "array", "items": {"type": "string"}},
+    "scope_violation": {"type": "boolean"},
+    "fake_green_risk": {"type": "boolean"},
+    "safety_boundaries_respected": {"type": "boolean"},
+    "required_next_action": {"type": "string"},
+    "allow_proceed": {"type": "boolean"},
+    "review_unverified_reason": {"type": ["string", "null"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "next_task_authorization": {
+      "type": "object",
+      "properties": {
+        "task_id": {"type": "string", "minLength": 1},
+        "authorized": {"type": "string", "enum": ["已授权", "未授权"]},
+        "execute_immediately": {"type": "string", "enum": ["是", "否"]},
+        "ask_before_starting": {"type": "string", "enum": ["是", "否"]}
+      }
+    },
+    "required_fixes": {"type": "array", "items": {"type": "string"}},
+    "resubmission_requirements": {"type": "array", "items": {"type": "string"}},
+    "rationale": {"type": "string", "minLength": 1},
+    "task_type_specific": {
+      "type": "object",
+      "patternProperties": {
+        "^(authorization|execution_closure|design_review|paper_contract_design|paper_revision_review|citation_verification|context_handoff|cdp_pilot|archive_governance)$": {"type": "object"}
+      },
+      "additionalProperties": false,
+      "minProperties": 1,
+      "maxProperties": 1
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"overall_judgment": {"const": "accepted"}}},
+      "then": {"properties": {"allow_proceed": {"const": true}}}
+    },
+    {
+      "if": {"properties": {"overall_judgment": {"const": "blocked"}}},
+      "then": {"properties": {"allow_proceed": {"const": false}}}
+    },
+    {
+      "if": {"properties": {"overall_judgment": {"enum": ["human_required", "review_unverified"]}}},
+      "then": {"properties": {"allow_proceed": {"const": false}}}
+    },
+    {
+      "if": {"properties": {"overall_judgment": {"const": "review_unverified"}}},
+      "then": {
+        "required": ["review_unverified_reason"],
+        "properties": {"review_unverified_reason": {"type": "string", "minLength": 1}}
+      }
+    },
+    {
+      "if": {"properties": {"overall_judgment": {"const": "accepted"}}},
+      "then": {
+        "required": ["next_task_authorization"],
+        "properties": {
+          "next_task_authorization": {
+            "type": "object",
+            "required": ["task_id", "authorized", "execute_immediately"]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"overall_judgment": {"const": "blocked"}}},
+      "then": {
+        "required": ["required_fixes", "resubmission_requirements"],
+        "properties": {
+          "required_fixes": {"type": "array", "minItems": 1},
+          "resubmission_requirements": {"type": "array", "minItems": 1}
+        }
+      }
+    }
+  ]
+}

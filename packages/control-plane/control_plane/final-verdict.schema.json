@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FinalVerdict",
+  "description": "Governance final verdict boundary. This must be produced by governance or human/main coordinator, never by the executor alone.",
+  "type": "object",
+  "required": [
+    "verdict_id",
+    "produced_by",
+    "produced_at",
+    "producer_role",
+    "final_state",
+    "inputs_reviewed",
+    "gate_summary",
+    "reviewer_summary",
+    "limitations",
+    "human_or_governance_reference"
+  ],
+  "properties": {
+    "verdict_id": {"type": "string", "pattern": "^fv-[A-Za-z0-9._-]+$"},
+    "produced_by": {"type": "string", "minLength": 1},
+    "produced_at": {"type": "string", "format": "date-time"},
+    "producer_role": {
+      "type": "string",
+      "not": {"enum": ["executor", "fixer", "coder", "worker"]}
+    },
+    "final_state": {
+      "type": "string",
+      "enum": ["final_ready", "accepted_with_limitation", "blocked", "failed", "deferred"]
+    },
+    "inputs_reviewed": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "gate_summary": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["gate_id", "result"],
+        "properties": {
+          "gate_id": {"type": "string"},
+          "result": {"type": "string", "enum": ["pass", "fail", "blocked", "warning", "skipped"]},
+          "evidence_path": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "reviewer_summary": {
+      "type": "object",
+      "required": ["reviewer_id", "verdict", "evidence_path"],
+      "properties": {
+        "reviewer_id": {"type": "string", "minLength": 1},
+        "verdict": {"type": "string", "enum": ["pass", "blocked", "fail", "escalate"]},
+        "evidence_path": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "limitations": {"type": "array", "items": {"type": "string"}},
+    "human_or_governance_reference": {"type": "string", "minLength": 1},
+    "supersedes": {
+      "type": "object",
+      "required": ["verdict_id", "uri", "reason"],
+      "properties": {
+        "verdict_id": {"type": "string", "pattern": "^fv-[A-Za-z0-9._-]+$"},
+        "uri": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"final_state": {"const": "final_ready"}},
+        "required": ["final_state"]
+      },
+      "then": {
+        "not": {
+          "properties": {
+            "limitations": {
+              "contains": {
+                "pattern": "(offline candidate|dry-run only|zip review only|runtime not executed)"
+              }
+            }
+          },
+          "required": ["limitations"]
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

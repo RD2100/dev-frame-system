@@ -6,7 +6,7 @@ Current verdict: **READY TO CONTINUE** on the bounded milestone below. This is
 not a release, deployment, or production verdict.
 
 Last reconciled: 2026-07-18 against the local `main` candidate based on
-`d3495f4f`; `origin/main` remains at `e7f5f489` until the ordinary push gate is
+`044ad0ca`; `origin/main` remains at `e7f5f489` until the ordinary push gate is
 approved.
 
 ## Authority
@@ -112,7 +112,7 @@ permission to start parallel implementation.
 | M2. Review closure | accepted | A real run moves from report to review, gate, and FinalVerdict without manual state reinterpretation | Real execution remains `review_pending` before independent review and becomes `final_ready` only after valid evidence |
 | M3. Kernel distribution contraction | accepted | A fresh checkout contains the DevFrame kernel and replaceable adapters, not a vendored client product | Tracked Tutti snapshot and importer are gone, local reference remains ignored, public paths and core tests pass, and the dashboard is documented as optional diagnostics |
 | M4. Executor equivalence | accepted | The same TaskSpec can use command or ACP execution without changing governance meaning | Normalized RunRecord parity test passes; provider-specific data stays in provenance |
-| M5. Paper vertical | queued | Paper work reuses the same evidence, review, and gate authority | One bounded paper task completes through the canonical kernel without a parallel state machine |
+| M5. Paper vertical | active | Paper work reuses the same evidence, review, and gate authority | One bounded synthetic paper task completes through the canonical kernel without a parallel state machine |
 
 ## Completed Milestone: M1 Canonical Run Truth
 
@@ -482,11 +482,144 @@ Accepted on 2026-07-18 as already implemented, with durable executor-parity
 proof added. A future executor must satisfy the same canonical parity contract
 before it can be treated as interchangeable.
 
+## Current Milestone: M5 Paper Vertical
+
+### Objective
+
+Run one bounded, synthetic-only paper task through the shipped DevFrame CLI and
+canonical governance projection. The executor must produce a review-pending
+candidate; an explicit `devframe paper finalize` command may consume a separately
+authored independent review and then reuse the existing gate, FinalVerdict, and
+RunIndex authority. Do not add another workflow engine, client, provider, or paper
+state authority.
+
+### Recon Receipt And Real RED
+
+This section is the durable Recon Receipt for the first M5 repair slice under
+`rules/recon.md` RULES recon-001, recon-003, recon-009, and recon-010.
+
+- Resource map: `control_plane.cli` owns `devframe init` and `devframe run`;
+  `stage_executor.py` owns the synthetic paper stages; `submission_adapter.py`
+  owns the dry-run submission boundary; paper schemas and contracts remain in
+  `schemas/` and `packages/agent-acceptance/contracts/`; `run_index.py` owns the
+  canonical read projection. Generated runs stay under `.devframe-runtime/`.
+- Reuse decision: reuse PyYAML, JSON Schema, the existing pack manifest, paper
+  Task IO contracts, submission adapter, FinalVerdict schema, and RunIndex.
+  Do not restore the missing private validator scripts or copy the separate
+  ai-workflow-hub paper state machine into the control plane.
+- Integration risks: fail closed on malformed paper IO, unredacted/private
+  content, bypass submission paths, incomplete evidence packs, failed tests,
+  or invalid FinalVerdict. Keep synthetic-only and dry-run limitations visible.
+- Build decision: add only an in-package paper pipeline gate and route the
+  existing stage executor through it. The obsolete `live_handoff_transfer.py`
+  is explicitly forbidden by `NO_BYPASS_SUBMISSION_CONTRACT`, has no runtime
+  caller, and is superseded by `playwright_bridge.py`; remove it from the
+  distribution and documentation rather than allowlisting it.
+
+Production-path RED on 2026-07-18:
+
+```text
+devframe init paper_iteration <isolated-project>
+devframe run --pipeline packages/control-plane/pipelines/reference_paper_review.yaml --project <isolated-project> --execute
+Stages: 4/5 completed
+blocking: bypass_check_failed,
+paper_task_directory_paper_task_validator_not_found,
+paper_task_evidence_pack_paper_task_validator_not_found,
+workflow_closure_validator_not_found
+```
+
+The failure is in the clean public distribution: `stage_executor.py` and
+`devframe pack validate` still call three `packages/agent-acceptance/scripts/`
+files that are not shipped. It is not a provider, model, credential, network,
+or paper-content failure.
+
+After the shipped gates replaced those dependencies, the same production path
+reached 6/7 stages and exposed the next same-slice failure: closure launched the
+entire control-plane source test suite and timed out after 60 seconds. Installed
+wheels do not ship that test tree, so source pytest is a development/CI gate,
+not a valid per-run product dependency. M5 closure must use bounded artifact,
+privacy, submission, and bypass checks instead; repository tests remain part of
+the delivery verification outside the user run.
+
+The bounded closure then completed 7/7 stages and projected a limited canonical
+RunRecord, but the probe found no `TASKSPEC.json` or `execution-report.json`.
+It also exposed the literal unrendered template identity `run-paper-paper_id`,
+which would collide across newly initialized paper projects. The final M5 delta
+is therefore a thin canonical artifact adapter plus deterministic paper-project
+template rendering, not a second paper state machine.
+
+The first implementation also exposed four P1 boundary failures in independent
+review: the executor manufactured reviewer artifacts and FinalVerdict input,
+the synthetic gate accepted authorized real excerpts, the browser bypass was a
+whole-file allowlist, and pack validation ignored payload hashes. The repair
+keeps execution at `review_pending`, requires exact synthetic/dry-run state,
+uses AST reachability for the existing live bridge, validates safe unique ZIP
+entries and SHA-256, and adds an explicit external-review finalizer. A second
+real path proved `review_pending -> accepted_with_limitation` only after the
+independent review JSON passed identity, schema, state, evidence, and pack-hash
+checks.
+
+### Frozen First-Slice Write Set
+
+- `packages/control-plane/control_plane/paper_pipeline_gate.py`
+- `packages/control-plane/control_plane/stage_executor.py`
+- `packages/control-plane/control_plane/cli/_core.py`
+- `packages/control-plane/control_plane/cli/app.py`
+- `packages/control-plane/control_plane/cli/_usage.py`
+- `packages/control-plane/control_plane/run_index.py`
+- `packages/control-plane/control_plane/final-verdict.schema.json`
+- `packages/control-plane/control_plane/gpt-review-result.schema.json`
+- `packages/control-plane/control_plane/live_handoff_transfer.py` (exact deletion)
+- `packages/control-plane/pipelines/reference_paper_review.yaml`
+- `packages/control-plane/setup.py`
+- `packages/control-plane/tests/test_stage_executor.py`
+- `packages/control-plane/tests/test_cli.py`
+- `packages/control-plane/tests/test_run_index.py`
+- `scripts/verify-control-plane-wheel.ps1`
+- `docs/README.md`
+- this execution root at the milestone boundary
+
+Stop lines: no real paper, browser, provider, network, credential, publication,
+new workflow engine, ai-workflow-hub migration, executor-synthesized review, or
+executor-synthesized FinalVerdict. The execution slice ends at `review_pending`;
+only an explicit governance finalize with an external review may produce the
+synthetic `accepted_with_limitation` result. Any path outside this write set
+requires a new observed failure and an explicit scope amendment.
+
 ### Stop Lines
 
-- No automatic review or FinalVerdict synthesis.
+- No executor-controlled review or FinalVerdict synthesis; explicit finalization
+  requires an external review artifact, distinct identity, current evidence
+  hashes, and passing paper state/gates.
 - No client, worker, or executor acceptance authority.
 - No storage, schema, client, Tutti, RD-Code, or provider changes during Recon.
+
+### M5 Closure Verdict
+
+Accepted locally on 2026-07-18. The shipped `devframe run` paper path now ends
+at `review_pending`; only `devframe paper finalize` may consume a review file
+outside the paper project, with an explicitly attested review SHA-256 and
+reviewer ID. Finalization revalidates the current project bytes, synthetic and
+dry-run boundaries, live bypass scan, evidence manifest, and both supported
+FinalVerdict path spellings before producing `accepted_with_limitation`.
+
+The first independent review found four boundary defects. Their production-path
+RED was five focused failures; the repair turned the same set green, the
+affected suite passed 185 tests, the installed-wheel smoke passed, and a clean
+exported public snapshot passed. The final independent review reported
+P0=0, P1=0, P2=0, and P3=0.
+
+Reviewer Index:
+
+| Item | Evidence |
+|---|---|
+| Changed files | `docs/README.md`, this execution root, CLI core/usage/app, `paper_pipeline_gate.py`, `stage_executor.py`, `run_index.py`, two packaged schemas, the paper pipeline, setup metadata, two focused test files, wheel verification, and exact deletion of `live_handoff_transfer.py`; 16 paths total |
+| Critical paths | `devframe run`; review-pending closure; evidence-pack creation and current-byte binding; live bypass scan; external review attestation; explicit finalization; canonical RunIndex projection |
+| Tests and checks | Real RED `5 failed`; focused GREEN `5 passed`; affected regression `185 passed`; installed-wheel smoke passed; clean exported public snapshot passed; `git diff --check` passed |
+| Generated artifacts | Runtime probe, review JSON, wheel/build temporaries, and clean snapshot stayed under ignored runtime or temporary directories; none enter the public repository |
+| Known gaps | Real paper content, provider/browser execution, publication, release, deployment, push, and merge remain outside M5 |
+| Review focus | Preserve the joint requirement for external review path, review hash, reviewer identity, current project bytes, live bypass scan, strict manifest metadata, and duplicate-verdict protection |
+| Verdict | Independent review PASS; P0=0, P1=0, P2=0, P3=0 |
 
 ## Execution Protocol
 
@@ -516,6 +649,10 @@ For ordinary low- and medium-risk delivery, governance effort should remain
 near or below the policy's coarse 20 percent budget. When it does not, remove
 duplicate suites, reports, polling, and reviewer retries before changing a hard
 safety gate.
+
+One finding batch gets one bounded repair batch, one affected regression, and
+one re-review. Do not turn unchanged polling, repeated plans, or intermediate
+status narration into additional delivery stages.
 
 Activity, worker count, document count, and report count are not outcomes.
 Progress requires a product artifact, actual diff, test result, review verdict,
@@ -568,12 +705,13 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 | 2026-07-18 | Replace the fixed nine-step milestone ritual with the existing Outcome-First risk profiles | The old verification guide contradicted the normative policy and imposed release-shaped work on low-risk batches; L0-L3 operating lanes now preserve hard gates while selecting proportionate evidence |
 | 2026-07-18 | Accept M3 after the distribution closure audit and root-help contraction | Tutti is external and ignored, the importer is retired, the dashboard remains an explicit optional diagnostic, and root discovery is concise without removing capability |
 | 2026-07-18 | Accept M4 as already implemented and retain a durable command/ACP parity test | Both executors traverse the production dispatch, TeamRuntime, and canonical RunIndex path with identical governance semantics; driver identity remains provenance |
+| 2026-07-18 | Accept M5 after explicit external-review finalization was made fail-closed | The executor stops at review pending; current bytes, live bypass state, manifested hashes, attested reviewer identity, and duplicate verdict paths are revalidated before limited acceptance |
 
 ## Next Action
 
-Start M5 with a bounded read-only capability matrix for one paper task. Trace
-the committed paper entrypoint through TaskSpec, execution evidence,
-independent review, gate evidence, and FinalVerdict. Run one safe canonical-path
-probe. Open a production write set only if that probe exposes a concrete gap;
-otherwise record the existing path as already satisfied. Do not create a
-parallel paper state machine or expand the client/dashboard surface.
+After the exact M5 paths are committed, start M6 Adapter Conformance Entry. Its
+finite product outcome is one user-runnable, offline conformance check showing
+that a third-party command-style executor can project the same canonical
+governance meaning as the shipped command and ACP drivers. Begin with a
+read-only capability matrix and one failing public CLI contract; reuse the M4
+parity path, and do not add a provider, client, dashboard, or second runtime.

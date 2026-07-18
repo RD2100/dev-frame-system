@@ -7,6 +7,7 @@ setup(
     version="0.1.0",
     packages=find_packages(include=["control_plane", "control_plane.*", *RESOURCE_PACKAGES]),
     package_data={
+        "control_plane": ["*.schema.json"],
         "pipelines": ["*.yaml"],
         "schemas": [
             "*.json",

@@ -53,12 +53,25 @@ def test_root_help_is_available(monkeypatch, capsys):
     assert "devframe dashboard serve" in output
     assert "devframe web-ai ..." in output
     assert "devframe pack validate ..." in output
+    assert "devframe paper finalize ..." in output
     assert "devframe writeback apply ..." in output
     assert "devframe handoff ..." in output
     assert "Run devframe <command> --help" in output
     assert "devframe web-ai record-mcp-result" not in output
     assert "devframe writeback apply --workspace" not in output
     assert "devframe handoff transfer --to" not in output
+
+
+def test_paper_finalize_help_is_available(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["devframe", "paper", "finalize", "--help"])
+
+    assert devframe_cli_main() == 0
+
+    output = capsys.readouterr().out
+    assert "devframe paper finalize --project <dir>" in output
+    assert "--review <independent-review.json>" in output
+    assert "--review-sha256 <sha256>" in output
+    assert "--reviewer-id <review-run-id>" in output
 
 
 def test_code_help_is_available(monkeypatch, capsys):
@@ -1473,6 +1486,25 @@ def test_init_code_project_generates_runnable_pipeline(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["devframe", "run", "--pipeline", str(pipeline_path)])
 
     assert devframe_cli_main() == 0
+
+
+def test_init_paper_iteration_renders_stable_project_identity(tmp_path, monkeypatch):
+    project_root = tmp_path / "paper-demo"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["devframe", "init", "paper_iteration", str(project_root)],
+    )
+
+    assert devframe_cli_main() == 0
+
+    rendered_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in project_root.iterdir()
+        if path.is_file()
+    )
+    assert "{{" not in rendered_text
+    assert 'paper_id: "paper-demo"' in rendered_text
 
 
 def test_run_execute_passes_project_dir_to_stage_executor(tmp_path, monkeypatch):

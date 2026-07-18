@@ -104,10 +104,10 @@ stages:
         - PRE_SUBMISSION_CHECK.yaml
         - PAPER_TASK_VALIDATION.directory.json
         - PAPER_TASK_VALIDATION.zip.json
+        - BYPASS_CHECK_OUTPUT.txt
+        - PAPER_PIPELINE_GATE.json
         - SUBMISSION_RESULT.json
         - FLOW_OUTCOME.json
-        - FINAL_VERDICT.json
-        - TEST_OUTPUT.txt
         - SAFETY_ATTESTATION.md
 
 recovery_policy:

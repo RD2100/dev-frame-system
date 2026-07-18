@@ -17,6 +17,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from dataclasses import dataclass, field
 
+import yaml
+
+from .paper_pipeline_gate import (
+    scan_submission_bypass,
+    validate_evidence_pack,
+    validate_paper_pipeline_project,
+    validate_paper_task_source,
+    write_gate_result,
+)
+
 
 PIPELINE_RUN_ID = f"ref-paper-{uuid.uuid4().hex[:8]}"
 import tempfile
@@ -45,6 +55,127 @@ def paper_task_dir(target: Path) -> Path:
     return target / PAPER_TASK_DIRNAME
 
 
+def _paper_identity(target: Path) -> tuple[str, str]:
+    profile_path = target / "PAPER_PROFILE.yaml"
+    profile: dict = {}
+    if profile_path.is_file():
+        loaded = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            profile = loaded
+    paper_id = str(profile.get("paper_id", "")).strip()
+    title = str(profile.get("title", "")).strip()
+    if not paper_id or "{{" in paper_id:
+        paper_id = target.name
+    if not title or "{{" in title:
+        title = target.name
+    return paper_id, title
+
+
+def write_paper_task_spec(target: Path) -> Path:
+    paper_id, title = _paper_identity(target)
+    task_spec = {
+        "task_id": PIPELINE_RUN_ID,
+        "title": f"Synthetic paper review: {title}",
+        "priority": "P2",
+        "status": "ready",
+        "description": (
+            "Run the bounded synthetic paper review pipeline without real paper "
+            "content, external submission, or final publication claims."
+        ),
+        "assumptions": [
+            "All paper content is synthetic.",
+            "Submission remains dry-run only.",
+        ],
+        "risk_notes": "Real paper content and external submission remain forbidden.",
+        "estimated_tools": ["devframe-paper-pipeline"],
+        "conflict_registry": {
+            "read_set": [
+                "input/SYNTHETIC_PAPER.md",
+                f"{PAPER_TASK_DIRNAME}/PAPER_TASK_INPUT.yaml",
+            ],
+            "write_set": [
+                "review/",
+                "evidence/",
+                "submission/",
+                "closure/",
+            ],
+            "protected_files_touched": False,
+            "conflict_level": "low",
+        },
+    }
+    path = target / "TASKSPEC.json"
+    path.write_text(json.dumps(task_spec, indent=2, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def write_paper_execution_report(
+    target: Path,
+    verifier_failures: list[str],
+    generated_at: str,
+) -> tuple[Path, Path]:
+    paper_id, _ = _paper_identity(target)
+    execution_failed = bool(verifier_failures)
+    report = {
+        "report_id": f"execution-report-{PIPELINE_RUN_ID}",
+        "batch_id": PIPELINE_RUN_ID,
+        "generated_at": generated_at,
+        "status": "fail" if execution_failed else "escalate",
+        "review_status": "rejected" if execution_failed else "submitted",
+        "summary": (
+            "Synthetic paper execution completed within dry-run and no-real-content "
+            "boundaries; independent governance review is still required."
+            if not execution_failed
+            else "Synthetic paper execution failed its bounded runtime gates."
+        ),
+        "executor_id": "devframe-paper-stage-executor",
+        "run_ids": [f"run-paper-{paper_id}"],
+        "recommendations": [
+            "Require explicit human authorization before any real paper content or external submission."
+        ],
+        "blocking_issues": (
+            verifier_failures
+            if execution_failed
+            else ["independent_review_required"]
+        ),
+    }
+
+    json_path = target / "execution-report.json"
+    markdown_path = target / "execution-report.md"
+    json_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+    markdown_path.write_text(
+        "\n".join([
+            "# ExecutionReport",
+            "",
+            f"- Batch: `{PIPELINE_RUN_ID}`",
+            f"- Status: `{report['status']}`",
+            f"- Review: `{report['review_status']}`",
+            f"- Summary: {report['summary']}",
+            "- Next gate: independent governance review",
+            "",
+        ]),
+        encoding="utf-8",
+    )
+    return json_path, markdown_path
+
+
+def mark_paper_execution_state(target: Path, *, failed: bool) -> None:
+    state_path = target / "PAPER_STATE.yaml"
+    state: dict = {}
+    if state_path.is_file():
+        loaded = yaml.safe_load(state_path.read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            state = loaded
+    state.update({
+        "current_stage": "failed" if failed else "review_requested",
+        "status": "failed" if failed else "completed",
+        "next_stage": "retry_execution" if failed else "review_received",
+    })
+    state_path.write_text(
+        yaml.safe_dump(state, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+
+
 def write_pre_submission_check(path: Path, check_result: dict) -> None:
     yaml_lines = [f"# Pre-Submission Check", f"pipeline_run_id: {PIPELINE_RUN_ID}", ""]
     for k, v in check_result.items():
@@ -58,102 +189,16 @@ def write_pre_submission_check(path: Path, check_result: dict) -> None:
 
 
 def run_paper_task_validator(source: Path, output_path: Path) -> tuple[bool, str | None]:
-    validator_script = ROOT.parent / "agent-acceptance" / "scripts" / "validate_paper_task.py"
-    if not validator_script.exists():
-        output_path.write_text("paper task validator not found\n", encoding="utf-8")
-        return False, "paper_task_validator_not_found"
-
-    import subprocess
-
     try:
-        result = subprocess.run(
-            [sys.executable, str(validator_script), str(source), "--json-output", str(output_path)],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        result = validate_paper_task_source(source)
+        write_gate_result(result, output_path)
     except Exception as exc:
-        output_path.write_text(f"paper task validator error: {exc}\n", encoding="utf-8")
+        output_path.write_text(
+            json.dumps({"status": "fail", "errors": [str(exc)]}, indent=2),
+            encoding="utf-8",
+        )
         return False, "paper_task_validator_error"
-    if not output_path.exists():
-        output_path.write_text(result.stdout + "\n" + result.stderr, encoding="utf-8")
-    return (result.returncode == 0, None if result.returncode == 0 else "paper_task_validator_failed")
-
-
-def paper_final_verdict_state(verifier_failures: list[str]) -> str:
-    return "failed" if verifier_failures else "accepted_with_limitation"
-
-
-def paper_final_verdict_limitations(privacy_path: Path) -> list[str]:
-    limitations = [
-        "dry-run only paper workflow; no real paper final acceptance claimed",
-        "synthetic offline candidate; real user paper content was not processed",
-        "external provider not executed; submission mode remained dry_run",
-    ]
-    if not privacy_path.exists():
-        limitations.append("privacy attestation missing at closure time")
-    return limitations
-
-
-def paper_final_verdict_gate_summary(
-    privacy_path: Path,
-    flow_path: Path,
-    verifier_failures: list[str],
-) -> list[dict[str, str]]:
-    gate_summary = [{
-        "gate_id": f"gate-{PIPELINE_RUN_ID}-closure-verifiers",
-        "result": "fail" if verifier_failures else "pass",
-        "evidence_path": str(flow_path),
-    }, {
-        "gate_id": f"gate-{PIPELINE_RUN_ID}-synthetic-boundary",
-        "result": "warning",
-        "evidence_path": str(flow_path),
-    }]
-    if privacy_path.exists():
-        gate_summary.insert(0, {
-            "gate_id": f"gate-{PIPELINE_RUN_ID}-privacy",
-            "result": "pass",
-            "evidence_path": str(privacy_path),
-        })
-    return gate_summary
-
-
-def write_paper_final_verdict(
-    target: Path,
-    flow_path: Path,
-    closure_report_path: Path,
-    verifier_failures: list[str],
-    generated_at: str,
-) -> Path:
-    review_path = target / "review" / "REVIEW_REPORT.md"
-    privacy_path = paper_task_dir(target) / "PRIVACY_ATTESTATION.yaml"
-    evidence_pack_path = target / "evidence" / "ref-paper-review-pack.zip"
-    final_state = paper_final_verdict_state(verifier_failures)
-    review_evidence_path = review_path if review_path.exists() else flow_path
-    inputs_reviewed = [
-        str(path)
-        for path in [review_path, privacy_path, flow_path, closure_report_path, evidence_pack_path]
-        if path.exists()
-    ]
-    verdict = {
-        "verdict_id": f"fv-paper-{PIPELINE_RUN_ID}",
-        "produced_by": "devframe-paper-governance-finalizer",
-        "produced_at": generated_at,
-        "producer_role": "governance",
-        "final_state": final_state,
-        "inputs_reviewed": inputs_reviewed or [str(flow_path)],
-        "gate_summary": paper_final_verdict_gate_summary(privacy_path, flow_path, verifier_failures),
-        "reviewer_summary": {
-            "reviewer_id": "devframe-paper-reviewer",
-            "verdict": "fail" if verifier_failures else "pass",
-            "evidence_path": str(review_evidence_path),
-        },
-        "limitations": paper_final_verdict_limitations(privacy_path),
-        "human_or_governance_reference": PIPELINE_RUN_ID,
-    }
-    verdict_path = target / "closure" / "FINAL_VERDICT.json"
-    verdict_path.write_text(json.dumps(verdict, indent=2, ensure_ascii=False), encoding="utf-8")
-    return verdict_path
+    return result.passed, None if result.passed else "paper_task_validator_failed"
 
 
 def execute_project_init(project_dir: Path = None) -> StageResult:
@@ -286,6 +331,7 @@ notes: "All content is synthetic. No real paper text or user data was processed.
     (paper_task_dir(target) / "PAPER_TASK_INPUT.yaml").write_text(paper_input, encoding="utf-8")
     (paper_task_dir(target) / "PRIVACY_ATTESTATION.yaml").write_text(privacy_attestation, encoding="utf-8")
     (paper_task_dir(target) / "REDACTION_REPORT.yaml").write_text(redaction_report, encoding="utf-8")
+    task_spec_path = write_paper_task_spec(target)
 
     result.status = "completed"
     result.outputs = [
@@ -295,6 +341,7 @@ notes: "All content is synthetic. No real paper text or user data was processed.
         str(paper_task_dir(target) / "PAPER_TASK_INPUT.yaml"),
         str(paper_task_dir(target) / "PRIVACY_ATTESTATION.yaml"),
         str(paper_task_dir(target) / "REDACTION_REPORT.yaml"),
+        str(task_spec_path),
     ]
     return result
 
@@ -426,7 +473,6 @@ contains_unredacted_excerpt: false
 contains_user_identity: false
 """
     (paper_task_dir(target) / "PAPER_TASK_OUTPUT.yaml").write_text(paper_output, encoding="utf-8")
-
     result.status = "completed"
     result.outputs = [
         str(target / "review" / "REVIEW_REPORT.md"),
@@ -534,6 +580,78 @@ generated_by: devframe_stage_executor
     return result
 
 
+def rebuild_paper_evidence_pack(target: Path) -> tuple[Path, Path]:
+    """Rebuild the pack from all paper artifacts produced so far."""
+    zip_path = target / "evidence" / "ref-paper-review-pack.zip"
+    manifest_path = target / "evidence" / "PACK_MANIFEST.md"
+    source_dirs = ("input", PAPER_TASK_DIRNAME, "review", "submission", "closure", "evidence")
+    files: list[Path] = []
+    for dirname in source_dirs:
+        root = target / dirname
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            if path in {zip_path, manifest_path} or path.suffix == ".zip":
+                continue
+            files.append(path)
+    for name in ("TASKSPEC.json", "execution-report.json", "execution-report.md"):
+        path = target / name
+        if path.is_file():
+            files.append(path)
+
+    entries = []
+    for path in sorted(files):
+        relative = path.relative_to(target).as_posix()
+        role = {
+            "input": "synthetic_input",
+            PAPER_TASK_DIRNAME: "paper_task_protocol",
+            "review": "review_output",
+            "submission": "submission_result",
+            "closure": "governance_closure",
+            "evidence": "gate_evidence",
+        }.get(relative.split("/", 1)[0], "deliverable")
+        entries.append({
+            "path": relative,
+            "role": role,
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        })
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    manifest_lines = [
+        "# Evidence Pack Manifest - REF-PAPER",
+        f"pipeline_run_id: {PIPELINE_RUN_ID}",
+        f"created_at: {now}",
+        "synthetic_only: true",
+        f"files_count: {len(entries) + 1}",
+        "",
+        "| path | role | sha256 |",
+        "|------|------|--------|",
+    ]
+    manifest_lines.extend(
+        f"| {entry['path']} | {entry['role']} | {entry['sha256']} |"
+        for entry in entries
+    )
+    manifest_lines.extend([
+        "| PACK_MANIFEST.md | pack_manifest | self_excluded |",
+        "",
+        "manifest_valid: true",
+        "generated_by: devframe_stage_executor",
+        "",
+    ])
+    manifest_text = "\n".join(manifest_lines)
+    manifest_path.write_text(manifest_text, encoding="utf-8")
+
+    temporary_path = zip_path.with_suffix(".rebuild.zip")
+    with zipfile.ZipFile(temporary_path, "w", zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(files):
+            archive.write(path, path.relative_to(target).as_posix())
+        archive.writestr("PACK_MANIFEST.md", manifest_text)
+    temporary_path.replace(zip_path)
+    return zip_path, manifest_path
+
+
 def execute_pre_submission_check(project_dir: Path = None) -> StageResult:
     """Stage 4: Pre-submission gate — bypass check, manifest consistency, summary-only detection."""
     result = StageResult(stage_id="pre_submission_check")
@@ -545,15 +663,13 @@ def execute_pre_submission_check(project_dir: Path = None) -> StageResult:
     zip_path = target / "evidence" / "ref-paper-review-pack.zip"
 
     # 1. Bypass check
-    import subprocess, sys
-    bypass_script = str(Path(__file__).resolve().parent.parent.parent / "agent-acceptance" / "scripts" / "check_submission_bypass.py")
     try:
-        r = subprocess.run([sys.executable, bypass_script], capture_output=True, text=True, timeout=30,
-                           cwd=str(Path(__file__).resolve().parent.parent.parent / "agent-acceptance"))
-        bypass_passed = r.returncode == 0
-    except Exception:
+        bypass_result = scan_submission_bypass()
+        write_gate_result(bypass_result, target / "evidence" / "BYPASS_CHECK_OUTPUT.txt")
+        bypass_passed = bypass_result.passed
+    except Exception as exc:
         bypass_passed = None
-        warnings.append("Bypass checker not available (agent-acceptance repo may not be present)")
+        warnings.append(f"Bypass checker unavailable: {exc}")
 
     # 2. Manifest consistency
     manifest_ok = False
@@ -573,6 +689,7 @@ def execute_pre_submission_check(project_dir: Path = None) -> StageResult:
                 manifest_ok = not extra_zip and not extra_man
 
     # 3. Summary-only detection
+    summary_only = True
     if zip_path.exists():
         with zipfile.ZipFile(zip_path, "r") as zf:
             content_files = [n for n in zf.namelist() if n.endswith((".md", ".yaml", ".json")) and n not in ("PACK_MANIFEST.md", "GPT_REVIEW_PROMPT.md", "SAFETY_ATTESTATION.md")]
@@ -592,7 +709,7 @@ def execute_pre_submission_check(project_dir: Path = None) -> StageResult:
         "blocking_issues": [],
     }
     if bypass_passed is None:
-        warnings.append("Bypass checker unavailable (agent-acceptance repo may not be present in CI)")
+        check_result["blocking_issues"].append("bypass_checker_unavailable")
     elif not bypass_passed:
         check_result["blocking_issues"].append("bypass_check_failed")
     if not manifest_ok:
@@ -603,29 +720,7 @@ def execute_pre_submission_check(project_dir: Path = None) -> StageResult:
     check_path = target / "evidence" / "PRE_SUBMISSION_CHECK.yaml"
     write_pre_submission_check(check_path, check_result)
 
-    # 4.5 Rebuild evidence pack to include any post-build files + fix manifest
-    if zip_path.exists():
-        tmp_zp = zip_path.with_suffix(".rebuild.zip")
-        old = {}
-        with zipfile.ZipFile(str(zip_path), "r") as zf:
-            for n in zf.namelist():
-                if n != "PACK_MANIFEST.md": old[n] = zf.read(n)
-        with zipfile.ZipFile(str(tmp_zp), "w", zipfile.ZIP_DEFLATED) as zf:
-            for n, c in old.items(): zf.writestr(n, c)
-        ents = []
-        with zipfile.ZipFile(str(tmp_zp), "r") as zf:
-            for fn in sorted(zf.namelist()):
-                if fn == "PACK_MANIFEST.md": continue
-                ents.append({"path": fn, "sha256": hashlib.sha256(zf.read(fn)).hexdigest()})
-        m = "# Pre-submission pack\n| path | role | sha256 |\n|------|------|--------|\n"
-        for e in ents: m += f"| {e['path']} | deliverable | {e['sha256']} |\n"
-        m += "| PACK_MANIFEST.md | pack_manifest | self_excluded |\n"
-        with zipfile.ZipFile(str(tmp_zp), "a", zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr("PACK_MANIFEST.md", m)
-        import shutil
-        shutil.move(str(tmp_zp), str(zip_path))
-
-    # 4.6 Run PAPER-A3 paper task validator on both protocol files and evidence ZIP.
+    # 4.5 Run PAPER-A3 paper task validator on both protocol files and evidence ZIP.
     paper_dir = paper_task_dir(target)
     paper_dir_output = target / "evidence" / "PAPER_TASK_VALIDATION.directory.json"
     paper_zip_output = target / "evidence" / "PAPER_TASK_VALIDATION.zip.json"
@@ -640,23 +735,11 @@ def execute_pre_submission_check(project_dir: Path = None) -> StageResult:
         check_result["blocking_issues"].append(f"paper_task_evidence_pack_{paper_zip_issue}")
         check_result["result"] = "fail"
 
-    # 5. Run agent-acceptance workflow closure validator (SD-01/02/03)
-    validator_script = ROOT.parent / "agent-acceptance" / "scripts" / "validate_workflow_closure.py"
-    if not validator_script.exists():
-        check_result["blocking_issues"].append("workflow_closure_validator_not_found")
-        check_result["result"] = "fail"
-    elif zip_path.exists():
-        import subprocess as sp
-        vr = sp.run([sys.executable, str(validator_script), str(zip_path)],
-                     capture_output=True, text=True, timeout=30)
-        val_path = target / "evidence" / "WORKFLOW_CLOSURE_VALIDATION.yaml"
-        val_yaml = "# WORKFLOW_CLOSURE_VALIDATION\n# Generated by stage_executor\n" + vr.stdout
-        val_path.write_text(val_yaml, encoding="utf-8")
-        if vr.returncode != 0:
-            check_result["blocking_issues"].append("workflow_closure_validator_failed")
-            check_result["result"] = "fail"
+    # Closure authority is evaluated after submission by FinalVerdict + RunIndex.
+    check_result["closure_validation"] = "deferred_to_final_verdict"
 
     write_pre_submission_check(check_path, check_result)
+    rebuild_paper_evidence_pack(target)
 
     if not check_result["blocking_issues"]:
         result.status = "completed"
@@ -714,50 +797,10 @@ def execute_submission_dry_run(project_dir: Path = None) -> StageResult:
 
 
 def execute_closure(project_dir: Path = None) -> StageResult:
-    """Stage 6: Rebuild evidence pack (include post-build files) + generate FLOW_OUTCOME + closure."""
+    """Stage 6: Seal execution evidence and stop at independent review."""
     result = StageResult(stage_id="closure")
     target = project_dir or RUN_DIR
     ensure_dir(target / "closure")
-
-    # Rebuild evidence ZIP to include files generated after build_evidence_pack
-    # (e.g., WORKFLOW_CLOSURE_VALIDATION.yaml from pre_submission_check)
-    # Then rebuild manifest with all files
-    zip_path = target / "evidence" / "ref-paper-review-pack.zip"
-    if zip_path.exists():
-        extra_files = []
-        for f in (target / "evidence").iterdir():
-            if f.is_file() and f.suffix != ".zip" and f.name != "PACK_MANIFEST.md":
-                extra_files.append(f)
-
-        if extra_files:
-            # Extract all files, add extras, rebuild ZIP + manifest
-            tmp_zp = zip_path.with_suffix(".tmp.zip")
-            old_files = {}
-            with zipfile.ZipFile(str(zip_path), "r") as zf:
-                for n in zf.namelist():
-                    if n != "PACK_MANIFEST.md":
-                        old_files[n] = zf.read(n)
-            with zipfile.ZipFile(str(tmp_zp), "w", zipfile.ZIP_DEFLATED) as zf:
-                for name, content in old_files.items():
-                    zf.writestr(name, content)
-                for f in extra_files:
-                    rel = f"evidence/{f.name}"
-                    if rel not in old_files:
-                        zf.writestr(rel, f.read_text(encoding="utf-8"))
-            # Rebuild manifest
-            entries = []
-            with zipfile.ZipFile(str(tmp_zp), "r") as zf:
-                for fn in sorted(zf.namelist()):
-                    if fn == "PACK_MANIFEST.md": continue
-                    h = hashlib.sha256(zf.read(fn)).hexdigest()
-                    entries.append({"path": fn, "role": "deliverable", "sha256": h})
-            m = "# Evidence Pack - Reference Paper Review\n| path | role | sha256 |\n|------|------|--------|\n"
-            for e in entries: m += f"| {e['path']} | {e['role']} | {e['sha256']} |\n"
-            m += "| PACK_MANIFEST.md | pack_manifest | self_excluded |\n"
-            with zipfile.ZipFile(str(tmp_zp), "a", zipfile.ZIP_DEFLATED) as zf:
-                zf.writestr("PACK_MANIFEST.md", m)
-            import shutil
-            shutil.move(str(tmp_zp), str(zip_path))
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -781,7 +824,7 @@ def execute_closure(project_dir: Path = None) -> StageResult:
         "submission_mode": "dry_run",
         "live_cdp_used": False,
         "bypass_detected": False,
-        "final_status": "completed",
+        "final_status": "review_pending",
         "safety": {
             "guard_removal_approved": False,
             "evidence_cleanup_approved": False,
@@ -790,61 +833,23 @@ def execute_closure(project_dir: Path = None) -> StageResult:
         }
     }
 
-    # Capture verification outputs into evidence/
-    import subprocess, sys as _sys
-    verifier_results = {}
-    verifier_failures = []
-    # Run tests and capture output
-    try:
-        test_result = subprocess.run([_sys.executable, "-m", "pytest", str(ROOT / "tests"), "-q"],
-                                      capture_output=True, text=True, timeout=60, cwd=str(ROOT))
-        verifier_results["pytest"] = {
-            "returncode": test_result.returncode,
-            "status": "passed" if test_result.returncode == 0 else "failed",
+    pipeline_gate = validate_paper_pipeline_project(target)
+    write_gate_result(pipeline_gate, target / "evidence" / "PAPER_PIPELINE_GATE.json")
+    verifier_results = {
+        "paper_pipeline_gate": {
+            "returncode": 0 if pipeline_gate.passed else 1,
+            "status": "passed" if pipeline_gate.passed else "failed",
+            "reason": "; ".join(pipeline_gate.errors),
         }
-        if test_result.returncode != 0:
-            verifier_failures.append("pytest_failed")
-        (target / "evidence" / "TEST_OUTPUT.txt").write_text(
-            test_result.stdout + "\n" + test_result.stderr, encoding="utf-8")
-    except subprocess.TimeoutExpired as exc:
-        verifier_results["pytest"] = {"returncode": 124, "status": "failed", "reason": "timeout"}
-        verifier_failures.append("pytest_timeout")
-        (target / "evidence" / "TEST_OUTPUT.txt").write_text(
-            (exc.stdout or "") + "\n" + (exc.stderr or "") + "\npytest timeout", encoding="utf-8")
-    except Exception as exc:
-        verifier_results["pytest"] = {"returncode": None, "status": "blocked", "reason": str(exc)}
-        verifier_failures.append("pytest_unavailable")
-        (target / "evidence" / "TEST_OUTPUT.txt").write_text(
-            f"pytest unavailable: {exc}", encoding="utf-8")
-
-    # Run bypass checker
-    bypass_script = str(ROOT.parent / "agent-acceptance" / "scripts" / "check_submission_bypass.py")
-    try:
-        bypass_result = subprocess.run([_sys.executable, bypass_script], capture_output=True, text=True, timeout=30,
-                                        cwd=str(ROOT.parent / "agent-acceptance"))
-        (target / "evidence" / "BYPASS_CHECK_OUTPUT.txt").write_text(bypass_result.stdout, encoding="utf-8")
-        verifier_results["bypass_checker"] = {
-            "returncode": bypass_result.returncode,
-            "status": "passed" if bypass_result.returncode == 0 else "failed",
-        }
-        if bypass_result.returncode != 0:
-            verifier_failures.append("bypass_checker_failed")
-    except subprocess.TimeoutExpired:
-        verifier_results["bypass_checker"] = {"returncode": 124, "status": "failed", "reason": "timeout"}
-        verifier_failures.append("bypass_checker_timeout")
-        (target / "evidence" / "BYPASS_CHECK_OUTPUT.txt").write_text("bypass checker timeout", encoding="utf-8")
-    except Exception as exc:
-        verifier_results["bypass_checker"] = {"returncode": None, "status": "blocked", "reason": str(exc)}
-        verifier_failures.append("bypass_checker_unavailable")
-        (target / "evidence" / "BYPASS_CHECK_OUTPUT.txt").write_text("bypass checker unavailable", encoding="utf-8")
+    }
+    verifier_failures = [] if pipeline_gate.passed else ["paper_pipeline_gate_failed"]
 
     if verifier_failures:
         flow_outcome["final_status"] = "failed"
         flow_outcome["stages"]["closure"] = "failed"
         flow_outcome["verifier_failures"] = verifier_failures
     flow_outcome["verifiers"] = verifier_results
-    flow_outcome["final_verdict_state"] = paper_final_verdict_state(verifier_failures)
-    flow_outcome["final_verdict_path"] = str(target / "closure" / "FINAL_VERDICT.json")
+    flow_outcome["final_verdict_state"] = "deferred"
 
     flow_path = target / "closure" / "FLOW_OUTCOME.json"
     flow_path.write_text(json.dumps(flow_outcome, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -906,24 +911,54 @@ def execute_closure(project_dir: Path = None) -> StageResult:
 - evidence/ref-paper-review-pack.zip — standard evidence pack
 - evidence/PACK_MANIFEST.md — manifest with SHA256
 - evidence/PRE_SUBMISSION_CHECK.yaml — pre-submission gate result
+- evidence/PAPER_PIPELINE_GATE.json — bounded runtime artifact and safety gate
 - submission/SUBMISSION_RESULT.json — submission_adapter dry-run result
 - closure/FLOW_OUTCOME.json — framework-generated flow outcome
 - closure/CLOSURE_REPORT.md — this report
-- closure/FINAL_VERDICT.json — canonical limited FinalVerdict
+ - execution-report.json — execution candidate awaiting independent review
 """
     closure_report_path = target / "closure" / "CLOSURE_REPORT.md"
     closure_report_path.write_text(closure_report, encoding="utf-8")
-    final_verdict_path = write_paper_final_verdict(
+    execution_report_paths = write_paper_execution_report(
         target,
-        flow_path,
-        closure_report_path,
         verifier_failures,
         now,
     )
+    rebuild_paper_evidence_pack(target)
+
+    pack_result = validate_evidence_pack(
+        target / "evidence" / "ref-paper-review-pack.zip"
+    )
+    if not pack_result.passed:
+        verifier_failures.append("evidence_pack_integrity_failed")
+        flow_outcome["final_status"] = "failed"
+        flow_outcome["stages"]["closure"] = "failed"
+        flow_outcome["verifier_failures"] = verifier_failures
+        flow_outcome["verifiers"]["evidence_pack_integrity"] = {
+            "returncode": 1,
+            "status": "failed",
+            "reason": "; ".join(pack_result.errors),
+        }
+        flow_path.write_text(
+            json.dumps(flow_outcome, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        execution_report_paths = write_paper_execution_report(
+            target,
+            verifier_failures,
+            now,
+        )
+        rebuild_paper_evidence_pack(target)
+
+    mark_paper_execution_state(target, failed=bool(verifier_failures))
 
     result.status = "failed" if verifier_failures else "completed"
     result.errors = verifier_failures
-    result.outputs = [str(flow_path), str(closure_report_path), str(final_verdict_path)]
+    result.outputs = [
+        str(flow_path),
+        str(closure_report_path),
+        *(str(path) for path in execution_report_paths),
+    ]
     return result
 
 

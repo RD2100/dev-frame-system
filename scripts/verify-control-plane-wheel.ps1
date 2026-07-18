@@ -11,6 +11,9 @@ $wheelDir = Join-Path $tempRoot "wheelhouse"
 $venvDir = Join-Path $tempRoot "venv"
 $projectDir = Join-Path $tempRoot "demo-project"
 $paperDir = Join-Path $tempRoot "paper-project"
+$paperExecutionDir = Join-Path $tempRoot "paper-execution-project"
+$paperReviewPath = Join-Path $tempRoot "paper-independent-review.json"
+$paperRuntimeDir = Join-Path $tempRoot "paper-runtime"
 $runtimeDir = Join-Path $tempRoot "runtime"
 $goRuntimeDir = Join-Path $tempRoot "go-runtime"
 $codeRuntimeDir = Join-Path $tempRoot "code-runtime"
@@ -116,6 +119,40 @@ try {
     Invoke-Step "devframe doctor" $devframe @("doctor")
     Invoke-Step "devframe init" $devframe @("init", "code_project", $projectDir)
     Invoke-Step "devframe init paper_iteration" $devframe @("init", "paper_iteration", $paperDir)
+    Invoke-Step "devframe init executable paper_iteration" $devframe @(
+        "init", "paper_iteration", $paperExecutionDir
+    )
+    $paperPipeline = & $python -c "from pathlib import Path; import pipelines; print(Path(pipelines.__file__).parent / 'reference_paper_review.yaml')"
+    if ($LASTEXITCODE -ne 0 -or -not $paperPipeline) {
+        throw "installed paper pipeline path could not be resolved"
+    }
+    Invoke-Step "devframe paper synthetic pipeline" $devframe @(
+        "run", "--pipeline", $paperPipeline, "--project", $paperExecutionDir, "--execute"
+    )
+    Invoke-Step "devframe paper synthetic artifacts" $python @(
+        "-c",
+        "import json, pathlib, subprocess, sys; root = pathlib.Path(sys.argv[2]); required = ['TASKSPEC.json', 'execution-report.json', 'execution-report.md', 'closure/FLOW_OUTCOME.json', 'evidence/ref-paper-review-pack.zip']; missing = [name for name in required if not (root / name).is_file()]; assert not missing, missing; assert not (root / 'closure/FINAL_VERDICT.json').exists(); report = json.loads((root / 'execution-report.json').read_text(encoding='utf-8')); assert report['status'] == 'escalate'; assert report['review_status'] == 'submitted'; assert report['blocking_issues'] == ['independent_review_required']; subprocess.run([sys.argv[1], 'pack', 'validate', str(root / 'evidence/ref-paper-review-pack.zip')], check=True); print('paper synthetic execution candidate ok')",
+        $devframe,
+        $paperExecutionDir
+    )
+    Invoke-Step "build independent paper review fixture" $python @(
+        "-c",
+        "import hashlib,json,pathlib,sys; root=pathlib.Path(sys.argv[1]); rel=['TASKSPEC.json','execution-report.json','closure/FLOW_OUTCOME.json','evidence/PAPER_PIPELINE_GATE.json','evidence/ref-paper-review-pack.zip']; sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest(); review={'REVIEW_RUN_ID':'wheel-independent-paper-review','template_version':'gpt-review-template-v1','task_type':'paper_revision_review','review_stage':'closure','overall_judgment':'accepted','reviewer_type':'agent','evidence_pack':{'path':'evidence/ref-paper-review-pack.zip','sha256':sha(root/'evidence/ref-paper-review-pack.zip'),'manifest_valid':True},'evidence_inspected':[{'path':p,'sha256':sha(root/p),'inspected':True,'role':'paper_execution_evidence'} for p in rel],'blocking_reasons':[],'missing_evidence':[],'scope_violation':False,'fake_green_risk':False,'safety_boundaries_respected':True,'required_next_action':'none','allow_proceed':True,'rationale':'Installed-wheel fixture independently covers the bounded paper evidence.','created_at':'2026-07-18T00:00:00Z','next_task_authorization':{'task_id':'close-synthetic-paper-run','authorized':'\u5df2\u6388\u6743','execute_immediately':'\u5426','ask_before_starting':'\u662f'},'task_type_specific':{'paper_revision_review':{}}}; pathlib.Path(sys.argv[2]).write_text(json.dumps(review,indent=2),encoding='utf-8')",
+        $paperExecutionDir,
+        $paperReviewPath
+    )
+    $paperReviewSha256 = (Get-FileHash -LiteralPath $paperReviewPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    Invoke-Step "devframe paper explicit finalize" $devframe @(
+        "paper", "finalize", "--project", $paperExecutionDir, "--review", $paperReviewPath,
+        "--review-sha256", $paperReviewSha256,
+        "--reviewer-id", "wheel-independent-paper-review"
+    )
+    Invoke-Step "devframe paper canonical accepted projection" $python @(
+        "-c",
+        "import json,pathlib,sys; from control_plane.run_index import build_run_index; root=pathlib.Path(sys.argv[1]); verdict=json.loads((root/'closure/FINAL_VERDICT.json').read_text(encoding='utf-8')); assert verdict['final_state']=='accepted_with_limitation'; record=[item['record'] for item in build_run_index(sys.argv[2],paper_project_dirs=[root])['runs'] if item['adapter_id']=='paper'][0]; assert record['review_state']=='review_passed'; assert record['acceptance_state']=='accepted_with_limitation'; print('paper canonical accepted projection ok')",
+        $paperExecutionDir,
+        $paperRuntimeDir
+    )
     Invoke-Step "devframe client dry run" $python @(
         "-c",
         "import subprocess, sys; text = subprocess.check_output([sys.argv[1], 'client', '--dry-run', '--runtime-dir', sys.argv[2], '--port', '8788'], text=True); assert 'DevFrame Local Agent Client' in text; assert 'Primary path : devframe code (governed coding CLI)' in text; assert 'Mode         : Secondary T3 Code desktop/native client + DevFrame read model + control-plane inspection' in text; assert 'Dashboard    : http://127.0.0.1:8788/?lang=zh-CN (auxiliary)' in text; assert 'http://127.0.0.1:8788/?lang=zh-CN' in text; assert 't3 bridge' in text; assert 't3 shell' in text; assert '/go page' in text; assert 'Write policy : read-only' in text; print('client dry run ok')",

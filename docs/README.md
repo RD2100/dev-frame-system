@@ -67,7 +67,7 @@ execution root rather than creating another plan.
 | Web AI external brain | [Web AI Adapter Contract](agent-runtime/web-ai-adapter-contract.md) | `web_ai_mcp_recorder.py`, `provider_binding_probe.py`, `chrome_binding_probe.py`, `conversation_binding.py`, `external_review_bundle.py`, `tools/skills/bind-chrome/SKILL.md`, `tools/skills/external-brain/SKILL.md`, `schemas/web_ai_adapter.schema.json`, `schemas/external_review_bundle.schema.json` |
 | MCP consent and local MCP server | [Agent Protocol Landscape](agent-runtime/agent-protocol-landscape.md) | `mcp_consent.py`, `mcp_server.py`, `mcp_live_probe.py`, `cli/_mcp.py` |
 | ACP/OpenCode execution bridge | [Agent Protocol Landscape](agent-runtime/agent-protocol-landscape.md) | `acp_client.py`, `acp_session.py`, `opencode_events.py`, `workflow_engine.py` |
-| Handoff and live transfer | [Reviewer Index](status/reviewer-index.md) | `handoff_generator.py`, `handoff_verifier.py`, `live_handoff_transfer.py`, `schemas/handoff_evidence_map.schema.json` |
+| Handoff and live transfer | [Reviewer Index](status/reviewer-index.md) | `handoff_generator.py`, `handoff_verifier.py`, `playwright_bridge.py`, `schemas/handoff_evidence_map.schema.json` |
 | Writeback proposals | [Visual Control Plane](agent-runtime/visual-control-plane.md) | `writeback.py`, `dashboard.py` `/api/t3/writeback-propose` |
 | Pipelines and staged execution | [Integration Contracts](agent-runtime/integration-contracts.md) | `pipeline_spec.py`, `pipeline_runner.py`, `stage_executor.py` |
 | Worktree isolation | [Visual Control Plane](agent-runtime/visual-control-plane.md) | `worktree.py`, `cluster_run.py`, `go_dispatch.py` |

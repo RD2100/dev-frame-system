@@ -967,9 +967,14 @@ def _paper_evidence_refs(project_dir: Path, paper_id: str) -> list[dict[str, Any
     token = _safe_token(paper_id)
     refs: list[dict[str, Any]] = []
     candidates = [
+        ("canonical-task", "context_packet", project_dir / "TASKSPEC.json", "outcome"),
         ("task", "context_packet", project_dir / "paper_task" / "PAPER_TASK_INPUT.yaml", "outcome"),
         ("privacy", "gate_result", project_dir / "paper_task" / "PRIVACY_ATTESTATION.yaml", "gate"),
+        ("paper-pipeline-gate", "gate_result", project_dir / "evidence" / "PAPER_PIPELINE_GATE.json", "gate"),
         ("review", "review", project_dir / "review" / "REVIEW_REPORT.md", "review"),
+        ("execution-report", "command_output", project_dir / "execution-report.json", "outcome"),
+        ("independent-review", "review", project_dir / "governance" / "INDEPENDENT_REVIEW.json", "review"),
+        ("review-gate", "gate_result", project_dir / "governance" / "REVIEW_GATE.json", "gate"),
         ("closure", "command_output", project_dir / "closure" / "CLOSURE_REPORT.md", "outcome"),
         ("flow-outcome", "other", project_dir / "closure" / "FLOW_OUTCOME.json", "outcome"),
         ("evidence-pack", "other", project_dir / "evidence" / "ref-paper-review-pack.zip", "limitation"),
@@ -2260,7 +2265,16 @@ def _read_final_verdict_artifact_for_chain(path: Path) -> tuple[dict[str, Any], 
 
 
 def _schema_validator(schema_path: str):
-    schema = json.loads((_repo_root() / schema_path).read_text(encoding="utf-8-sig"))
+    schema_file = _repo_root() / schema_path
+    if schema_file.is_file():
+        schema = json.loads(schema_file.read_text(encoding="utf-8-sig"))
+    elif schema_path == "schemas/agent-runtime/final-verdict.schema.json":
+        packaged_schema = Path(__file__).resolve().parent / "final-verdict.schema.json"
+        if not packaged_schema.is_file():
+            raise FileNotFoundError(f"schema is not packaged: {schema_path}")
+        schema = json.loads(packaged_schema.read_text(encoding="utf-8"))
+    else:
+        raise FileNotFoundError(f"schema is not packaged: {schema_path}")
     validator_class = validator_for(schema)
     validator_class.check_schema(schema)
     return validator_class(schema)

@@ -32,6 +32,7 @@ HELP_TEXT = """DevFrame Code CLI
   Specialist tools
   devframe web-ai ...               - Web AI binding, review, and task-intake helpers
   devframe pack validate ...        - validate an evidence pack
+  devframe paper finalize ...       - finalize a paper run after external review
   devframe writeback apply ...      - audited single-file workspace write-back
   devframe handoff ...              - generate, validate, bootstrap, or transfer handoffs
 
@@ -39,6 +40,11 @@ HELP_TEXT = """DevFrame Code CLI
 """
 
 RUN_USAGE = "Usage: devframe run --pipeline <path> [--execute] [--project <dir>]"
+PAPER_FINALIZE_USAGE = (
+    "Usage: devframe paper finalize --project <dir> "
+    "--review <independent-review.json> --review-sha256 <sha256> "
+    "--reviewer-id <review-run-id>"
+)
 DASHBOARD_USAGE = "Usage: devframe dashboard serve [--runtime-dir <dir>] [--paper-project <dir>] [--host 127.0.0.1] [--port 8765] [--allow-remote]"
 GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--worker opencode] [--model provider/model]"
 ATGO_USAGE = "Usage: devframe atgo \"<goal>\" [--project <dir>] [--runtime-dir <dir>] [--target <path>] [--execute] [--auto-finalize]"

@@ -1,6 +1,8 @@
 """Core devframe commands: init, doctor, run, handoff, pack, rdgoal."""
 from __future__ import annotations
 
+from datetime import date
+import re
 import sys
 from pathlib import Path
 
@@ -8,6 +10,21 @@ from pathlib import Path
 # pipelines/, schemas/ and the control_plane package). This module lives one
 # level deeper than the old cli.py, so it walks up three parents.
 ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+def _render_template_text(template: str, target_dir: Path, text: str) -> str:
+    if template != "paper_iteration":
+        return text
+    paper_id = re.sub(r"[^A-Za-z0-9._-]+", "-", target_dir.name).strip("-")
+    replacements = {
+        "{{PAPER_ID}}": paper_id or "paper-project",
+        "{{PAPER_TITLE}}": target_dir.name or "Paper Project",
+        "{{DATE}}": date.today().isoformat(),
+        "{{CURRENT_ITERATION}}": "1",
+    }
+    for marker, value in replacements.items():
+        text = text.replace(marker, value)
+    return text
 
 
 def cmd_init(template: str = "code_project", target: str = ".") -> int:
@@ -23,7 +40,12 @@ def cmd_init(template: str = "code_project", target: str = ".") -> int:
             rel = src.relative_to(tpl_dir)
             dst = target_dir / rel
             dst.parent.mkdir(parents=True, exist_ok=True)
-            dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+            text = _render_template_text(
+                template,
+                target_dir,
+                src.read_text(encoding="utf-8"),
+            )
+            dst.write_text(text, encoding="utf-8")
             print(f"  created: {rel}")
     print(f"Project initialized from template '{template}' in {target_dir}")
     return 0
@@ -146,8 +168,13 @@ def cmd_handoff_transfer() -> int:
 
 def cmd_pack_validate(zip_path: str) -> int:
     """Validate evidence pack: manifest consistency, no bypass, files present."""
-    import subprocess
     import zipfile
+
+    from ..paper_pipeline_gate import (
+        scan_submission_bypass,
+        validate_evidence_pack,
+        validate_paper_task_source,
+    )
 
     zp = Path(zip_path)
     if not zp.exists():
@@ -155,93 +182,122 @@ def cmd_pack_validate(zip_path: str) -> int:
         return 1
 
     errors = 0
+    pack_result = validate_evidence_pack(zp)
+    if not pack_result.passed:
+        for error in pack_result.errors:
+            print(f"  FAIL: {error}")
+        print(f"Pack validation: FAILED ({len(pack_result.errors)} errors)")
+        return 1
+    print(
+        "  PASS: Manifest paths and SHA256 match unique, safe ZIP entries "
+        f"({pack_result.details['zip_entries']} files)"
+    )
+
+    is_paper_pack = False
     with zipfile.ZipFile(zp, "r") as zf:
         namelist = set(zf.namelist())
+        is_paper_pack = "paper_task/PAPER_TASK_INPUT.yaml" in namelist
         print(f"  ZIP files: {len(namelist)}")
 
-        if "PACK_MANIFEST.md" not in namelist:
-            print("  FAIL: PACK_MANIFEST.md not in ZIP")
+        summary_files = {
+            "GPT_REVIEW_PROMPT.md",
+            "CLOSURE_REPORT.md",
+            "CLOSURE_REPORT.yaml",
+            "SAFETY_ATTESTATION.md",
+            "PACK_MANIFEST.md",
+            "WORKFLOW_CLOSURE_VALIDATION.yaml",
+        }
+        verify_files = {"TEST_OUTPUT.txt", "BYPASS_CHECK_OUTPUT.txt", "GATE_OUTPUT.txt", "DOCTOR_OUTPUT.txt"}
+        actual_patterns = [
+            "contracts/",
+            "schemas/",
+            "docs/",
+            "templates/",
+            "scripts/",
+            "tests/",
+            "pipelines/",
+            "examples/",
+            "review/",
+            "input/",
+            "closure/",
+            "submission/",
+            "control_plane/",
+            "diff.patch",
+        ]
+        actual_deliverables = [
+            file_name for file_name in namelist
+            if file_name not in summary_files
+            and file_name not in verify_files
+            and any(file_name.startswith(pattern.rstrip("/")) or pattern.rstrip("/") in file_name for pattern in actual_patterns)
+        ]
+        if not actual_deliverables:
+            print("  FAIL: Evidence pack is summary-only (no actual deliverables per A1 patterns)")
             errors += 1
         else:
-            manifest_text = zf.read("PACK_MANIFEST.md").decode("utf-8")
-            manifest_files = set()
-            for line in manifest_text.split("\n"):
-                if line.startswith("|") and "|" in line[1:]:
-                    parts = [p.strip() for p in line.split("|")[1:-1]]
-                    if parts and parts[0] and not parts[0].startswith("-"):
-                        manifest_files.add(parts[0])
-            manifest_files.discard("path")
+            print(f"  PASS: Contains {len(actual_deliverables)} actual deliverable files (A1 patterns)")
 
-            extra_in_zip = namelist - manifest_files - {"PACK_MANIFEST.md"}
-            extra_in_manifest = manifest_files - namelist
-            if extra_in_zip:
-                print(f"  FAIL: Files in ZIP but not manifest: {extra_in_zip}")
-                errors += 1
-            if extra_in_manifest:
-                print(f"  FAIL: Files in manifest but not ZIP: {extra_in_manifest}")
-                errors += 1
-            if not extra_in_zip and not extra_in_manifest:
-                print(f"  PASS: Manifest <-> ZIP bidirectional match ({len(manifest_files)} files)")
-
-            summary_files = {
-                "GPT_REVIEW_PROMPT.md",
-                "CLOSURE_REPORT.md",
-                "CLOSURE_REPORT.yaml",
-                "SAFETY_ATTESTATION.md",
-                "PACK_MANIFEST.md",
-                "WORKFLOW_CLOSURE_VALIDATION.yaml",
-            }
-            verify_files = {"TEST_OUTPUT.txt", "BYPASS_CHECK_OUTPUT.txt", "GATE_OUTPUT.txt", "DOCTOR_OUTPUT.txt"}
-            actual_patterns = [
-                "contracts/",
-                "schemas/",
-                "docs/",
-                "templates/",
-                "scripts/",
-                "tests/",
-                "pipelines/",
-                "examples/",
-                "review/",
-                "input/",
-                "closure/",
-                "submission/",
-                "control_plane/",
-                "diff.patch",
-            ]
-            actual_deliverables = [
-                file_name for file_name in namelist
-                if file_name not in summary_files
-                and file_name not in verify_files
-                and any(file_name.startswith(pattern.rstrip("/")) or pattern.rstrip("/") in file_name for pattern in actual_patterns)
-            ]
-            if not actual_deliverables:
-                print("  FAIL: Evidence pack is summary-only (no actual deliverables per A1 patterns)")
-                errors += 1
-            else:
-                print(f"  PASS: Contains {len(actual_deliverables)} actual deliverable files (A1 patterns)")
-
-    validator_script = ROOT.parent / "agent-acceptance" / "scripts" / "validate_workflow_closure.py"
-    if validator_script.exists():
-        print("  Running workflow closure validator...")
-        result = subprocess.run(
-            [sys.executable, str(validator_script), str(zp)],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
-        )
-        print(f"  {result.stdout.strip()}")
-        if result.returncode != 0:
+    if is_paper_pack:
+        paper_result = validate_paper_task_source(zp)
+        if paper_result.passed:
+            print("  PASS: Paper task input, output, and privacy boundary")
+        else:
             errors += 1
-            print("  FAIL: Workflow closure validation failed (SD-01/02/03 check)")
+            for error in paper_result.errors:
+                print(f"  FAIL: {error}")
+
+    bypass_result = scan_submission_bypass()
+    if bypass_result.passed:
+        print("  PASS: No unapproved submission path detected")
     else:
-        print("  FAIL: agent-acceptance validator not found; cannot verify SD-01/02/03")
         errors += 1
+        for error in bypass_result.errors:
+            print(f"  FAIL: {error}")
 
     if errors:
         print(f"Pack validation: FAILED ({errors} errors)")
         return 1
     print("Pack validation: PASS")
+    return 0
+
+
+def cmd_paper_finalize(argv: list[str] | None = None) -> int:
+    """Finalize a paper candidate only after explicit independent review."""
+    import argparse
+
+    from ..paper_pipeline_gate import finalize_paper_project
+
+    parser = argparse.ArgumentParser(prog="devframe paper finalize")
+    parser.add_argument("--project", required=True, help="Initialized paper project directory")
+    parser.add_argument("--review", required=True, help="External independent review JSON")
+    parser.add_argument(
+        "--review-sha256",
+        required=True,
+        help="Expected SHA-256 of the external review JSON",
+    )
+    parser.add_argument(
+        "--reviewer-id",
+        required=True,
+        help="Independently attested REVIEW_RUN_ID",
+    )
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as exc:
+        return int(exc.code)
+
+    result = finalize_paper_project(
+        args.project,
+        args.review,
+        args.review_sha256,
+        args.reviewer_id,
+    )
+    if not result.passed:
+        for error in result.errors:
+            print(f"  FAIL: {error}")
+        print("Paper finalization: FAILED")
+        return 1
+    print(f"  PASS: Independent review {result.details['review_id']}")
+    print(f"  FinalVerdict: {result.details['final_verdict']}")
+    print("Paper finalization: PASS (accepted_with_limitation)")
     return 0
 
 

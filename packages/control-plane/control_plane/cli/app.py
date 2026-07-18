@@ -26,6 +26,7 @@ from ._core import (
     cmd_handoff_validate,
     cmd_init,
     cmd_pack_validate,
+    cmd_paper_finalize,
     cmd_rdgoal,
     cmd_run,
 )
@@ -76,6 +77,16 @@ def main() -> int:
 
     if cmd == "rdgoal":
         return cmd_rdgoal()
+
+    if cmd == "paper":
+        sub = sys.argv[2] if len(sys.argv) > 2 else ""
+        if sub == "finalize":
+            if _wants_help(sys.argv[3:]):
+                print(PAPER_FINALIZE_USAGE)
+                return 0
+            return cmd_paper_finalize(sys.argv[3:])
+        print(PAPER_FINALIZE_USAGE)
+        return 1
 
     if cmd == "code":
         if len(sys.argv) > 2 and sys.argv[2] == "workers":
