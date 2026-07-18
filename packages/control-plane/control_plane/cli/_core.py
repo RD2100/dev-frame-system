@@ -480,6 +480,38 @@ def cmd_toolchain_run(argv: list[str] | None = None) -> int:
     return 0 if dispatched.status in {"queued", "passed"} else 1
 
 
+def cmd_toolchain_status(argv: list[str] | None = None) -> int:
+    """Inspect one toolchain run without mutating runtime state."""
+    import argparse
+    import json
+
+    from ..backup_guard import default_runtime_dir
+    from ..toolchain_inspection import (
+        inspect_toolchain_run,
+        render_toolchain_inspection,
+    )
+
+    parser = argparse.ArgumentParser(prog="devframe toolchain status")
+    parser.add_argument("run_id", nargs="?", default="latest")
+    parser.add_argument("--runtime-dir", default=None)
+    parser.add_argument("--format", choices=("text", "json"), default="text")
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as exc:
+        return int(exc.code)
+    runtime_root = Path(args.runtime_dir).resolve() if args.runtime_dir else default_runtime_dir()
+    try:
+        inspection = inspect_toolchain_run(runtime_root, args.run_id)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    if args.format == "json":
+        print(json.dumps(inspection, indent=2, ensure_ascii=False))
+    else:
+        print(render_toolchain_inspection(inspection), end="")
+    return 0
+
+
 def cmd_rdgoal() -> int:
     from ..rdgoal_cli import main as rdgoal_main
     return rdgoal_main(sys.argv[2:])

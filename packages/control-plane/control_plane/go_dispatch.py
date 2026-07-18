@@ -1,6 +1,7 @@
 """User-facing /go coding-agent dispatch for DevFrame."""
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 import time
@@ -79,6 +80,7 @@ class GoDispatchResult:
     methodology: dict[str, Any] | None = None
     model_provider: str = ""
     driver: str = "command"
+    toolchain: dict[str, str] | None = None
 
 
 def run_go_dispatch(
@@ -282,6 +284,12 @@ def run_toolchain_dispatch(
         execute=execute,
         agents=[agent],
         driver="command",
+        toolchain={
+            "action": action,
+            "approved_manifest_sha256": expected_manifest_sha256,
+            "manifest_path": str(manifest),
+            "working_directory": str(workdir),
+        },
     )
     if execute:
         _execute_parallel(result, timeout_seconds=timeout_seconds + 5)
@@ -319,6 +327,24 @@ def load_go_run_result(runtime_dir: str | Path, run_id: str = "latest") -> GoDis
     runtime_root = Path(runtime_dir).resolve()
     data = _read_go_run_metadata(_resolve_go_run_metadata_path(runtime_root, run_id))
     return _go_result_from_metadata(data, fallback_runtime_dir=runtime_root)
+
+
+def load_go_run_result_snapshot(
+    runtime_dir: str | Path,
+    run_id: str = "latest",
+) -> tuple[GoDispatchResult, str]:
+    """Load one go run and return the hash of the exact parsed bytes."""
+    from .run_index import _read_runtime_contained_bytes
+
+    runtime_root = Path(runtime_dir).resolve()
+    metadata_path = _resolve_go_run_metadata_path(runtime_root, run_id)
+    raw, diagnostic = _read_runtime_contained_bytes(metadata_path, runtime_root)
+    if raw is None:
+        detail = f": {diagnostic}" if diagnostic else ""
+        raise ValueError(f"go run metadata is unreadable: {metadata_path}{detail}")
+    data = _parse_go_run_metadata_bytes(raw, metadata_path)
+    result = _go_result_from_metadata(data, fallback_runtime_dir=runtime_root)
+    return result, f"sha256:{hashlib.sha256(raw).hexdigest()}"
 
 
 def render_go_dispatch_text(result: GoDispatchResult) -> str:
@@ -742,7 +768,10 @@ def _write_metadata(result: GoDispatchResult) -> Path:
     runtime_root = Path(result.runtime_dir)
     path = runtime_root / "go-runs" / result.go_run_id / "go-run.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(asdict(result), indent=2, ensure_ascii=True), encoding="utf-8")
+    payload = asdict(result)
+    if payload.get("toolchain") is None:
+        payload.pop("toolchain", None)
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
     return path
 
 
@@ -764,12 +793,28 @@ def _resolve_go_run_metadata_path(runtime_root: Path, run_id: str) -> Path:
 
 def _read_go_run_metadata(path: Path) -> dict[str, Any]:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        raw = path.read_bytes()
+    except OSError as exc:
         raise ValueError(f"go run metadata is unreadable: {path}") from exc
+    return _parse_go_run_metadata_bytes(raw, path)
+
+
+def _parse_go_run_metadata_bytes(raw: bytes, path: Path) -> dict[str, Any]:
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"go run metadata is unreadable: {path}") from exc
+    if not isinstance(data, dict):
+        raise ValueError(f"go run metadata is unreadable: {path}")
+    return data
 
 
 def _go_result_from_metadata(data: dict[str, Any], *, fallback_runtime_dir: Path) -> GoDispatchResult:
+    agent_items = data.get("agents", [])
+    if not isinstance(agent_items, list) or any(
+        not isinstance(agent, dict) for agent in agent_items
+    ):
+        raise ValueError("go run metadata agents must be a list of objects")
     agents = [
         GoAgentDispatch(
             agent_id=str(agent.get("agent_id", "")),
@@ -802,7 +847,7 @@ def _go_result_from_metadata(data: dict[str, Any], *, fallback_runtime_dir: Path
             context_packet_path=str(agent.get("context_packet_path", "")),
             context_ledger_path=str(agent.get("context_ledger_path", "")),
         )
-        for agent in data.get("agents", [])
+        for agent in agent_items
     ]
     return GoDispatchResult(
         go_run_id=str(data.get("go_run_id", "")),
@@ -818,6 +863,11 @@ def _go_result_from_metadata(data: dict[str, Any], *, fallback_runtime_dir: Path
         methodology=data.get("methodology"),
         model_provider=str(data.get("model_provider", "")),
         driver=str(data.get("driver", "command") or "command"),
+        toolchain=(
+            data["toolchain"]
+            if isinstance(data.get("toolchain"), dict)
+            else None
+        ),
     )
 
 

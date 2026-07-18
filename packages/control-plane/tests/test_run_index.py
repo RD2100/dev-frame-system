@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
+import pytest
 from jsonschema.validators import validator_for
 
 import control_plane.run_index as run_index_module
@@ -137,6 +142,20 @@ def _records_by_adapter(index: dict) -> dict[str, list[dict]]:
     for entry in index["runs"]:
         grouped.setdefault(entry["adapter_id"], []).append(entry["record"])
     return grouped
+
+
+def _create_directory_link(link: Path, target: Path) -> None:
+    if os.name == "nt":
+        result = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise OSError(result.stderr.strip() or result.stdout.strip())
+        return
+    link.symlink_to(target, target_is_directory=True)
 
 
 def _write_physical_go_run(
@@ -515,12 +534,12 @@ def test_run_index_fails_closed_when_team_journal_changes_after_initial_parse(
     assert initial["canonical_runs"][0]["record"]["acceptance_state"] == "final_ready"
 
     events_path = (runtime / "team-events.jsonl").resolve()
-    original_read_snapshot = run_index_module._read_jsonl_snapshot
+    original_read_snapshot = run_index_module._read_runtime_jsonl_snapshot
     journal_changed_after_parse = False
 
-    def read_then_replace_final_event(path):
+    def read_then_replace_final_event(path, runtime_dir):
         nonlocal journal_changed_after_parse
-        parsed, source_hash = original_read_snapshot(path)
+        parsed, source_hash = original_read_snapshot(path, runtime_dir)
         if Path(path).resolve() == events_path and not journal_changed_after_parse:
             events = [
                 json.loads(line)
@@ -540,7 +559,7 @@ def test_run_index_fails_closed_when_team_journal_changes_after_initial_parse(
 
     monkeypatch.setattr(
         run_index_module,
-        "_read_jsonl_snapshot",
+        "_read_runtime_jsonl_snapshot",
         read_then_replace_final_event,
     )
 
@@ -561,6 +580,220 @@ def test_run_index_fails_closed_when_team_journal_changes_after_initial_parse(
     ).lower()
     assert "team event source" in canonical_diagnostic
     assert "changed" in canonical_diagnostic or "unbound" in canonical_diagnostic
+
+
+def test_run_index_rejects_go_metadata_through_external_directory_link(tmp_path):
+    runtime = tmp_path / "runtime"
+    go_runs = runtime / "go-runs"
+    go_runs.mkdir(parents=True)
+    outside_run = tmp_path / "outside-go-run"
+    _write_json(outside_run / "go-run.json", {
+        "go_run_id": "external-go-run",
+        "project_id": "external-project",
+        "status": "passed",
+        "created_at": "2026-07-19T00:00:00Z",
+        "agents": [],
+    })
+    linked_run = go_runs / "linked-run"
+    _create_directory_link(linked_run, outside_run)
+    try:
+        index = build_run_index(runtime)
+    finally:
+        linked_run.rmdir()
+
+    records = _records_by_adapter(index)["go_run"]
+    assert len(records) == 1
+    record = records[0]
+    _run_record_validator().validate(record)
+    assert record["outcome"] == "blocked"
+    assert record["acceptance_state"] == "blocked"
+    diagnostic = str(record["domain_refs"].get("diagnostic") or "").lower()
+    assert "runtime" in diagnostic
+    assert "outside" in diagnostic or "contain" in diagnostic
+
+
+def test_runtime_contained_reader_rejects_external_final_handle_path(
+    tmp_path,
+    monkeypatch,
+):
+    runtime = tmp_path / "runtime"
+    candidate = runtime / "team-events.jsonl"
+    candidate.parent.mkdir(parents=True)
+    candidate.write_text('{}\n', encoding="utf-8")
+    external = tmp_path / "outside" / "team-events.jsonl"
+    external.parent.mkdir()
+    external.write_text('{}\n', encoding="utf-8")
+    monkeypatch.setattr(
+        run_index_module,
+        "_final_path_from_handle",
+        lambda _handle: external,
+    )
+
+    raw, diagnostic = run_index_module._read_runtime_contained_bytes(
+        candidate,
+        runtime.resolve(),
+    )
+
+    assert raw is None
+    assert "runtime" in diagnostic.lower()
+    assert "outside" in diagnostic.lower() or "contain" in diagnostic.lower()
+
+    index = run_index_module.build_run_index(runtime)
+    record = _records_by_adapter(index)["team_events"][0]
+    _run_record_validator().validate(record)
+    assert record["outcome"] == "blocked"
+    assert record["acceptance_state"] == "blocked"
+
+
+def test_final_path_from_handle_uses_darwin_f_getpath(monkeypatch):
+    expected = Path("/private/tmp/devframe/runtime/go-run.json")
+    calls = []
+
+    def fake_fcntl(file_descriptor, command, buffer):
+        calls.append((file_descriptor, command, buffer))
+        raw_path = os.fsencode(expected)
+        return raw_path + b"\0" + (b"\0" * (len(buffer) - len(raw_path) - 1))
+
+    monkeypatch.setitem(
+        sys.modules,
+        "fcntl",
+        SimpleNamespace(F_GETPATH=50, fcntl=fake_fcntl),
+    )
+
+    result = run_index_module._darwin_final_path_from_handle(
+        SimpleNamespace(fileno=lambda: 41),
+    )
+
+    assert result == expected
+    assert len(calls) == 1
+    file_descriptor, command, buffer = calls[0]
+    assert file_descriptor == 41
+    assert command == 50
+    assert buffer == b"\0" * 1024
+
+
+@pytest.mark.parametrize("raw_path", [b"", b"/private/tmp/unterminated"])
+def test_darwin_final_path_from_handle_rejects_unproven_path(
+    monkeypatch,
+    raw_path,
+):
+    monkeypatch.setitem(
+        sys.modules,
+        "fcntl",
+        SimpleNamespace(F_GETPATH=50, fcntl=lambda *_args: raw_path),
+    )
+
+    with pytest.raises(OSError, match="empty or unterminated"):
+        run_index_module._darwin_final_path_from_handle(
+            SimpleNamespace(fileno=lambda: 41),
+        )
+
+
+def test_posix_final_path_from_handle_routes_darwin_and_rejects_unproven_bsd(
+    monkeypatch,
+):
+    handle = SimpleNamespace(fileno=lambda: 42)
+    expected = Path("/private/tmp/devframe/runtime/team-events.jsonl")
+    monkeypatch.setattr(
+        run_index_module,
+        "_darwin_final_path_from_handle",
+        lambda candidate: expected if candidate is handle else None,
+    )
+
+    assert run_index_module._posix_final_path_from_handle(handle, "darwin") == expected
+
+    with pytest.raises(OSError, match="unsupported on freebsd14"):
+        run_index_module._posix_final_path_from_handle(handle, "freebsd14")
+
+
+def test_run_index_rejects_team_journal_symlink_to_external_file(tmp_path):
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    outside = tmp_path / "outside-team-events.jsonl"
+    outside.write_text(
+        json.dumps({
+            "event_type": "task_result",
+            "run_id": "external-team-run",
+            "agent_id": "external-worker",
+            "payload": {"status": "passed"},
+            "timestamp": "2026-07-19T00:00:00Z",
+            "event_id": "external-event",
+        }) + "\n",
+        encoding="utf-8",
+    )
+    journal = runtime / "team-events.jsonl"
+    try:
+        journal.symlink_to(outside)
+    except OSError as exc:
+        pytest.skip(f"real file symlink is unavailable: {exc}")
+
+    index = build_run_index(runtime)
+
+    records = _records_by_adapter(index)["team_events"]
+    assert len(records) == 1
+    record = records[0]
+    _run_record_validator().validate(record)
+    assert record["outcome"] == "blocked"
+    assert record["acceptance_state"] == "blocked"
+    diagnostic = str(record["domain_refs"].get("diagnostic") or "").lower()
+    assert "runtime" in diagnostic
+    assert "outside" in diagnostic or "contain" in diagnostic
+
+
+def test_runtime_contained_reader_preserves_internal_go_and_journal_projection(tmp_path):
+    runtime = tmp_path / "runtime"
+    _write_physical_go_run(runtime, team_project_id="demo-project")
+
+    index = build_run_index(runtime)
+
+    records = _records_by_adapter(index)
+    assert set(records) >= {"go_run", "team_events"}
+    assert records["go_run"][0]["project_id"] == "demo-project"
+    assert records["team_events"][0]["project_id"] == "demo-project"
+    assert index["canonical_runs"][0]["record"]["acceptance_state"] == "review_pending"
+    go_entry = next(entry for entry in index["runs"] if entry["adapter_id"] == "go_run")
+    go_metadata = runtime / "go-runs" / "go-canonical" / "go-run.json"
+    expected_hash = run_index_module.hashlib.sha256(go_metadata.read_bytes()).hexdigest()
+    assert go_entry["provenance"]["source_hash"] == f"sha256:{expected_hash}"
+
+
+def test_runtime_contained_reader_rejects_in_place_change_during_read(
+    tmp_path,
+    monkeypatch,
+):
+    runtime = tmp_path / "runtime"
+    candidate = runtime / "team-events.jsonl"
+    candidate.parent.mkdir(parents=True)
+    candidate.write_text('{}\n', encoding="utf-8")
+    original_fstat = run_index_module.os.fstat
+    call_count = 0
+
+    def changing_fstat(file_descriptor):
+        nonlocal call_count
+        call_count += 1
+        result = original_fstat(file_descriptor)
+        if call_count == 1:
+            return result
+        return SimpleNamespace(
+            st_dev=result.st_dev,
+            st_ino=result.st_ino,
+            st_mode=result.st_mode,
+            st_nlink=result.st_nlink,
+            st_size=result.st_size,
+            st_mtime_ns=result.st_mtime_ns + 1,
+            st_ctime_ns=result.st_ctime_ns,
+        )
+
+    monkeypatch.setattr(run_index_module.os, "fstat", changing_fstat)
+
+    raw, diagnostic = run_index_module._read_runtime_contained_bytes(
+        candidate,
+        runtime.resolve(),
+    )
+
+    assert raw is None
+    assert call_count == 2
+    assert "changed during handle-bound read" in diagnostic
 
 
 def test_run_index_blocks_canonical_run_without_valid_project_identity(tmp_path):

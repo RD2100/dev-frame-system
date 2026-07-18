@@ -212,6 +212,13 @@ print("toolchain run fixture ready")
         $toolchainRuntimeDir,
         $toolchainProjectDir
     )
+    Invoke-Step "devframe toolchain status" $python @(
+        "-c",
+        "import json, pathlib, subprocess, sys; payload = json.loads(subprocess.check_output([sys.argv[1], 'toolchain', 'status', 'latest', '--runtime-dir', sys.argv[2], '--format', 'json'], text=True)); assert payload['schema_version'] == 1; assert payload['action'] == 'test'; assert len(payload['approved_manifest_sha256']) == 64; assert pathlib.Path(payload['project_root']).resolve() == pathlib.Path(sys.argv[3]).resolve(); assert pathlib.Path(payload['working_directory']).resolve() == pathlib.Path(sys.argv[3]).resolve(); assert payload['worker_outcome'] == 'passed'; assert pathlib.Path(payload['report_path']).name == 'ExecutionReport.md'; assert payload['review_state'] == 'review_pending'; assert payload['acceptance_state'] == 'review_pending'; assert payload['execution'] == 'explicit_only'; print('toolchain status ok')",
+        $devframe,
+        $toolchainRuntimeDir,
+        $toolchainProjectDir
+    )
     Invoke-Step "devframe dashboard help" $python @(
         "-c",
         "import subprocess, sys; text = subprocess.check_output([sys.argv[1], 'dashboard', '--help'], text=True); assert 'Usage: devframe dashboard serve' in text; print('devframe dashboard help ok')",

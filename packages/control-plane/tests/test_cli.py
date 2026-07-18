@@ -56,6 +56,8 @@ def test_root_help_is_available(monkeypatch, capsys):
     assert "devframe paper finalize ..." in output
     assert "devframe adapter verify ..." in output
     assert "devframe toolchain preview ..." in output
+    assert "devframe toolchain run ..." in output
+    assert "devframe toolchain status ..." in output
     assert "devframe writeback apply ..." in output
     assert "devframe handoff ..." in output
     assert "Run devframe <command> --help" in output

@@ -5,9 +5,9 @@ Lifecycle state: **CANONICAL EXECUTION ROOT**
 Current verdict: **READY TO CONTINUE** on the bounded milestone below. This is
 not a release, deployment, or production verdict.
 
-Last reconciled: 2026-07-18 against the local `main` candidate based on
-`044ad0ca`; `origin/main` remains at `e7f5f489` until the ordinary push gate is
-approved.
+Last reconciled: 2026-07-19 against the accepted local M9 candidate. Ordinary
+push is authorized for this milestone; the remote head is verified as delivery
+evidence instead of being predicted in this document.
 
 ## Authority
 
@@ -69,7 +69,7 @@ The current public mainline includes these accepted capabilities:
 
 | Area | Current proof |
 |---|---|
-| Public repository | Local `main` contains the accepted M1-M7 kernel and adapter slices above `origin/main`; ordinary push remains gated, and the commit containing the M7 verdict is the local M7 delivery boundary |
+| Public repository | Local `main` contains the accepted M1-M9 kernel and adapter slices; M9's exact commit and ordinary remote-head verification form the next delivery boundary |
 | Release history | GitHub Release `v0.1.0` exists; PyPI, deployment, and production rollout remain separate decisions |
 | Governed coding | TaskSpec dispatch, execution reports, sealed context, review/gate evidence, and opt-in finalization exist |
 | Acceptance safety | PR #29 requires canonical acceptance evidence instead of trusting worker status alone |
@@ -89,6 +89,7 @@ recently closed P1 risks are:
 | ID | Status | Priority | Risk | Evidence | Closure condition |
 |---|---|---|---|---|---|
 | KERNEL-001 | closed | P1 | One physical go run could appear as separate `go_run` and `team_events` projections with the same canonical `run_id`; the team projection could lose the project identity | Canonical real-path RED→GREEN, 40 RunIndex tests, 87 related regressions, a clean public snapshot, and an independent read-only review passed on 2026-07-18 | One deterministic canonical read view per physical run, with merged provenance and fail-closed acceptance state |
+| KERNEL-002 | closed | P1 | Toolchain inspection could combine same-ID metadata provenance from one byte snapshot with canonical review/acceptance state from another snapshot | A real CLI A/B replacement RED, exact handle-bound metadata SHA binding, 74 focused tests, 219 related regressions, installed-wheel status smoke, an isolated public snapshot, and independent review passed on 2026-07-19 | Inspection output and canonical governance state must share the exact same `go_run` source hash |
 | DOCS-001 | closed | P1 | 120 tracked status documents could be mistaken for competing current plans | Lifecycle demotion, authority tests, docs-drift checks, independent review, and a clean exported public-snapshot gate passed on 2026-07-18 | `HANDOFF.md` is the only scheduling authority; all other status documents are explicitly non-scheduling references |
 | DIST-001 | closed | P1 | A 3,770-file Tutti snapshot and importer made a replaceable client look like part of the DevFrame kernel and inflated the public checkout | Real RED probe, exact Git untracking, ignored local-reference check, strict tracked-product probe, 1,564 control-plane tests passed, and no active importer references | `products/tutti/` is not tracked, the local reference is ignored, and the kernel distribution remains self-contained |
 | DOCS-002 | closed | P2 | Two expired coordinator handoff prompts duplicated the current execution root and encouraged stale takeover instructions | Activity-reference audit, exact retirement, inventory update, docs-drift and current-entry tests passed | `HANDOFF.md` and stable runtime docs are the only live continuation path; retired prompts remain recoverable in Git history |
@@ -116,7 +117,8 @@ permission to start parallel implementation.
 | M6. Adapter conformance entry | accepted | A third-party command-style executor can prove canonical governance parity offline | A bounded user CLI check reuses the accepted M4 parity path and fails closed on missing or divergent canonical records |
 | M7. Toolchain adapter manifest | accepted | A compiler/test command set can be described and checked against the kernel without binding the kernel to one compiler | One offline manifest-driven preview and conformance contract, with execution still explicit and provider-neutral |
 | M8. Governed toolchain run | accepted | One selected manifest action can enter the existing governed command path without creating a compiler-specific runtime | A real temporary project executes one manifest action only after explicit opt-in and produces canonical run, evidence, review-pending, and adapter-conformance projections |
-| M9. Toolchain run inspection | active | A user can inspect one governed toolchain result without decoding generic go-run metadata or opening packet files | Read-only Recon proves the smallest reuse path for action, digest, command/cwd evidence, worker result, report reference, and review state; implementation starts only after a real missing-path RED |
+| M9. Toolchain run inspection | accepted | A user can inspect one governed toolchain result without decoding generic go-run metadata or opening packet files | Installed CLI status binds structured toolchain provenance to the exact canonical source bytes and remains read-only/fail-closed |
+| M10A. Governed workflow profiles | active after M9 delivery | Structured coding or paper context deterministically selects and records an ordered, permission-bounded Skill profile without executing external capabilities | HEAD-based Recon and a real missing-path RED identify the smallest extension of existing TaskSpec/workflow/skill evidence contracts; ambiguous generic work remains human-required |
 
 ## Completed Milestone: M1 Canonical Run Truth
 
@@ -812,6 +814,101 @@ Reviewer Index:
 | Review focus | Preserve first-read SHA binding, no-write preview, exact project/runtime/cwd boundaries, fail-closed outer status, descendant cleanup, empty provider provenance, and the prohibition on acceptance before independent review |
 | Verdict | Independent `gpt-5.6-sol` high review PASS; P0=0, P1=0, P2=0, P3=0 |
 
+## Completed Milestone: M9 Toolchain Run Inspection
+
+M9 is a read-only product slice. It must let a user inspect one governed
+toolchain run without decoding generic go metadata or opening packet files.
+It reuses existing go-run metadata for project/worker/report provenance and the
+canonical RunIndex for review/acceptance state. It does not execute, resume,
+review, accept, finalize, or mutate a run.
+
+### M9 Recon Receipt And Real RED
+
+The durable Recon Receipt and TaskSpec are under ignored runtime state:
+
+- `.devframe-runtime/probes/m9-toolchain-status-1784377692703/RECON-RECEIPT.md`
+- `.devframe-runtime/probes/m9-toolchain-status-1784377692703/TASKSPEC.json`
+
+The reuse decision is to adapt the existing `load_go_run_result()` and
+`build_run_index()` paths. Generic code status already reads go metadata but
+does not expose canonical review state. M8's action, approved manifest SHA-256,
+and cwd currently exist only inside worker command/report text; M9 must not
+parse those strings as a public contract. The smallest missing provenance is a
+bounded `toolchain` object in the existing go-run metadata.
+
+Installed-wheel RED on 2026-07-18, from committed `df5f67ec`:
+
+```text
+devframe toolchain status --runtime-dir <empty-runtime>
+Usage: devframe toolchain preview --manifest <path> [--format text|json]
+exit 1
+```
+
+### Frozen M9 Write Set And Stop Lines
+
+- `packages/control-plane/control_plane/go_dispatch.py`
+- `packages/control-plane/control_plane/toolchain_inspection.py`
+- `packages/control-plane/control_plane/run_index.py`
+- `packages/control-plane/control_plane/cli/_core.py`
+- `packages/control-plane/control_plane/cli/_usage.py`
+- `packages/control-plane/control_plane/cli/app.py`
+- `packages/control-plane/tests/test_toolchain_inspection.py`
+- `packages/control-plane/tests/test_run_index.py`
+- `packages/control-plane/tests/test_cli.py`
+- `scripts/verify-control-plane-wheel.ps1`
+- this execution root at the M9 milestone boundary
+
+Stop lines: no command execution or resume behavior, no review/acceptance or
+finalization mutation, no second runtime/store/index, no command-string report
+parsing, no dashboard/client/provider/network/credential behavior, and no
+public runtime artifacts. Missing, corrupt, non-toolchain, or non-canonical
+runs must fail closed.
+
+### M9 Closure Verdict
+
+Accepted locally on 2026-07-19. `devframe toolchain status` now projects the
+action, approved manifest digest, working directory, worker/report provenance,
+and canonical review/acceptance state through one read-only CLI path. The exact
+metadata bytes parsed by inspection are read from one contained handle and
+hashed; the canonical `go_run` source must carry the same run ID and source
+hash. A same-ID A/B metadata replacement therefore fails closed instead of
+combining provenance with another snapshot's governance state.
+
+The production-path RED returned success while exposing replacement project
+and action data with the original canonical state. The repaired path exits 1
+with no JSON stdout. Toolchain inspection passed 26 tests; RunIndex plus
+inspection passed 74 tests with one platform skip; the related manifest,
+execution, inspection, index, and CLI set passed 219 tests with two platform
+skips. A newly built and installed wheel completed `devframe toolchain status`,
+the exact 11-path isolated candidate passed the public-snapshot gate, and
+`git diff --check` passed. Independent review reported P0=0, P1=0, P2=1, and
+P3=0. The P2 is explicit fail-closed behavior on non-Darwin BSD variants; it
+does not permit mixed state or authority escalation.
+
+Reviewer Index:
+
+| Item | Evidence |
+|---|---|
+| Changed files | This execution root; `go_dispatch.py`; new `toolchain_inspection.py`; `run_index.py`; CLI core/usage/router; new focused inspection tests; RunIndex and CLI tests; wheel verification; 11 paths total |
+| Critical paths | Structured toolchain provenance; explicit/latest selection; handle-bound metadata/journal reads; exact metadata-to-canonical source hash binding; report containment; CLI text/JSON and installed-wheel routing |
+| Tests and checks | Same-ID A/B RED then GREEN; inspection `26 passed`; RunIndex plus inspection `74 passed, 1 skipped`; related regression `219 passed, 2 skipped`; installed-wheel smoke `[OK]`; isolated public snapshot `[OK]`; focused Ruff and `git diff --check` passed |
+| Generated artifacts | Recon, TaskSpec, repair report, and independent reviews remain under ignored `.devframe-runtime/probes/m9-toolchain-status-1784377692703/`; the hash-matched candidate remains under ignored `.devframe-runtime/isolated/m9-final-1784379702491/` |
+| Known gaps | Darwin `F_GETPATH` has deterministic contract tests but no macOS-host run; FreeBSD and other unproven BSD variants fail closed; protected concurrent methodology/humanize/ai-check paths remain outside M9 |
+| Review focus | Preserve exact metadata/canonical source-hash equality, one-handle containment and bytes, read-only status behavior, generic-run isolation, and the prohibition on acceptance mutation |
+| Verdict | Independent `gpt-5.6-sol` high review PASS; P0=0, P1=0, P2=1, P3=0 |
+
+## Current Milestone: M10A Governed Workflow Profiles
+
+M10A begins only after the accepted M9 commit and authorized ordinary push are
+verified. Its first batch is HEAD-based read-only Recon plus a production-path
+missing-profile RED. It must reuse TaskSpec, the existing workflow engine,
+skill registry/usage, asset utilization, fingerprint/promotion validation, and
+P0 deny behavior. It may select, record, and project a deterministic ordered
+profile from trusted structured context, but it must not execute external
+Skills, infer work type from free text, add a second workflow/evidence engine,
+or grant network, credential, global-install, write, review, or acceptance
+authority.
+
 ### M5 Closure Verdict
 
 Accepted locally on 2026-07-18. The shipped `devframe run` paper path now ends
@@ -927,14 +1024,15 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 | 2026-07-18 | Accept M6 after adding the offline adapter conformance entry | A third-party command-style runtime can be compared against canonical code/go governance semantics without a new runtime, provider, or write authority |
 | 2026-07-18 | Accept M7 and promote M8 to read-only Recon | Toolchain manifests now fail closed through the installed CLI without executing commands; the next product gap is explicit reuse of the existing governed command path |
 | 2026-07-18 | Accept M8 and promote M9 to read-only Recon | One manifest action now traverses the governed command, evidence, team, and canonical review-pending path; the next user-facing gap is concise inspection of that result without exposing a second runtime authority |
+| 2026-07-19 | Accept M9 and promote M10A to read-only Recon after exact delivery | Toolchain status now binds the exact parsed metadata bytes to canonical governance provenance; automatic workflow work must begin with a deterministic contract and missing-path RED, not external Skill execution or free-text guessing |
 
 ## Next Action
 
-Commit the exact accepted M8 paths as one local logical commit. Then begin M9
-with one bounded read-only Recon of the existing go-run metadata, worker report,
-TeamRuntime events, RunIndex projection, and status renderers. Determine whether
-a concise toolchain-specific inspection command can reuse those records without
-introducing another runtime or copying report text into authority state. The
-first implementation batch requires a real installed-CLI missing-path RED and
-a finite write set; do not add execution, acceptance, provider, client, or
-dashboard behavior during Recon.
+After the exact accepted M9 commit and authorized ordinary push are verified,
+start M10A with HEAD-based read-only Recon of the committed skill registry,
+methodology dispatch, WorkflowEngine, TaskSpec/custom/methodology schemas,
+skill-usage/asset/promotion validators, go dispatch, and paper pipeline. Record
+one scoped Recon Receipt under ignored runtime evidence, then establish a real
+production-path RED showing that structured coding and paper contexts currently
+lack an auditable ordered profile. Do not execute external Skills or edit the
+protected concurrent methodology/humanize/ai-check paths in this first batch.

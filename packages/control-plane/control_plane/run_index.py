@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import sys
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 import yaml
 from jsonschema.validators import validator_for
@@ -47,12 +49,15 @@ def build_run_index(
         "adapter_version": ADAPTER_VERSION,
         "runtime_dir": str(runtime),
         "runs": entries,
-        "canonical_runs": _canonical_run_entries(entries),
+        "canonical_runs": _canonical_run_entries(entries, runtime),
     }
 
 
-def _canonical_run_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    team_snapshots = _canonical_team_event_snapshots(entries)
+def _canonical_run_entries(
+    entries: list[dict[str, Any]],
+    runtime: Path,
+) -> list[dict[str, Any]]:
+    team_snapshots = _canonical_team_event_snapshots(entries, runtime)
     paired_indexes: set[int] = set()
     candidates: dict[str, dict[str, list[tuple[int, dict[str, Any]]]]] = {}
     for index, entry in enumerate(entries):
@@ -258,6 +263,7 @@ def _canonical_go_team_entry(
 
 def _canonical_team_event_snapshots(
     entries: list[dict[str, Any]],
+    runtime: Path,
 ) -> dict[tuple[str, str], tuple[list[dict[str, Any]], str]]:
     snapshots: dict[tuple[str, str], tuple[list[dict[str, Any]], str]] = {}
     sources = {
@@ -272,7 +278,7 @@ def _canonical_team_event_snapshots(
         if not source_path or not expected_hash:
             snapshots[(source_path, expected_hash)] = ([], "team event source provenance is incomplete")
             continue
-        items, actual_hash = _read_jsonl_snapshot(Path(source_path))
+        items, actual_hash = _read_runtime_jsonl_snapshot(Path(source_path), runtime)
         if not actual_hash:
             snapshots[(source_path, expected_hash)] = ([], f"team event source cannot be read: {source_path}")
             continue
@@ -596,10 +602,16 @@ def _rdgoal_entries(runtime: Path) -> list[dict[str, Any]]:
 def _go_run_entries(runtime: Path) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     for path in sorted((runtime / "go-runs").glob("*/go-run.json")):
-        data, diagnostic = _read_json_file(path)
+        data, diagnostic, source_hash = _read_runtime_json_file(path, runtime)
         legacy_id = str(data.get("go_run_id") or path.parent.name) if data else path.parent.name
         if diagnostic:
-            entries.append(_failure_entry("go_run", legacy_id, path, diagnostic))
+            entries.append(_failure_entry(
+                "go_run",
+                legacy_id,
+                path,
+                diagnostic,
+                source_hash=source_hash,
+            ))
             continue
         agents = data.get("agents") if isinstance(data.get("agents"), list) else []
         evidence_refs = _agent_evidence_refs(agents)
@@ -630,6 +642,7 @@ def _go_run_entries(runtime: Path) -> list[dict[str, Any]]:
                     "agent_count": len(agents),
                 },
             ),
+            source_hash=source_hash,
         ))
     return entries
 
@@ -638,10 +651,16 @@ def _team_event_entries(runtime: Path) -> list[dict[str, Any]]:
     path = runtime / TEAM_EVENTS_FILE
     events_by_run: dict[str, list[dict[str, Any]]] = {}
     entries: list[dict[str, Any]] = []
-    items, source_hash = _read_jsonl_snapshot(path)
+    items, source_hash = _read_runtime_jsonl_snapshot(path, runtime)
     for item in items:
         if item.get("diagnostic"):
-            entries.append(_failure_entry("team_events", item["legacy_id"], path, item["diagnostic"]))
+            entries.append(_failure_entry(
+                "team_events",
+                item["legacy_id"],
+                path,
+                item["diagnostic"],
+                source_hash=source_hash,
+            ))
             continue
         event = item["record"]
         run_id = str(event.get("run_id") or "")
@@ -1488,7 +1507,14 @@ def _entry(
     }
 
 
-def _failure_entry(adapter_id: str, legacy_id: str, source_path: Path, diagnostic: str) -> dict[str, Any]:
+def _failure_entry(
+    adapter_id: str,
+    legacy_id: str,
+    source_path: Path,
+    diagnostic: str,
+    *,
+    source_hash: str | None = None,
+) -> dict[str, Any]:
     token = _safe_token(f"{adapter_id}-{legacy_id}")
     failure = {
         "failure_id": f"failure-{token}",
@@ -1519,6 +1545,7 @@ def _failure_entry(adapter_id: str, legacy_id: str, source_path: Path, diagnosti
         source_path=source_path,
         legacy_id=legacy_id,
         record=record,
+        source_hash=source_hash,
     )
 
 
@@ -1534,6 +1561,25 @@ def _read_json_file(path: Path) -> tuple[dict[str, Any], str]:
     if not isinstance(data, dict):
         return {}, "JSON root is not an object"
     return data, ""
+
+
+def _read_runtime_json_file(
+    path: Path,
+    runtime: Path,
+) -> tuple[dict[str, Any], str, str]:
+    raw, diagnostic = _read_runtime_contained_bytes(path, runtime)
+    if raw is None:
+        return {}, diagnostic or f"missing JSON file: {path}", ""
+    source_hash = f"sha256:{hashlib.sha256(raw).hexdigest()}"
+    try:
+        data = json.loads(raw.decode("utf-8-sig"))
+    except UnicodeDecodeError as exc:
+        return {}, f"unable to decode JSON file: {type(exc).__name__}: {exc}", source_hash
+    except json.JSONDecodeError as exc:
+        return {}, f"invalid JSON at line {exc.lineno}, column {exc.colno}: {exc.msg}", source_hash
+    if not isinstance(data, dict):
+        return {}, "JSON root is not an object", source_hash
+    return data, "", source_hash
 
 
 def _read_yaml_file(path: Path) -> tuple[dict[str, Any], str]:
@@ -1575,6 +1621,140 @@ def _read_jsonl_snapshot(path: Path) -> tuple[list[dict[str, Any]], str]:
             "diagnostic": f"unable to decode JSONL file: {type(exc).__name__}: {exc}",
         }], source_hash
     return _parse_jsonl_text(path, text), source_hash
+
+
+def _read_runtime_jsonl_snapshot(
+    path: Path,
+    runtime: Path,
+) -> tuple[list[dict[str, Any]], str]:
+    raw, diagnostic = _read_runtime_contained_bytes(path, runtime)
+    if raw is None:
+        if not diagnostic:
+            return [], ""
+        return [{
+            "legacy_id": path.name,
+            "diagnostic": diagnostic,
+        }], ""
+    source_hash = f"sha256:{hashlib.sha256(raw).hexdigest()}"
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        return [{
+            "legacy_id": path.name,
+            "diagnostic": f"unable to decode JSONL file: {type(exc).__name__}: {exc}",
+        }], source_hash
+    return _parse_jsonl_text(path, text), source_hash
+
+
+def _read_runtime_contained_bytes(
+    path: Path,
+    runtime: Path,
+) -> tuple[bytes | None, str]:
+    try:
+        handle = path.open("rb")
+    except FileNotFoundError:
+        return None, ""
+    except OSError as exc:
+        return None, f"unable to read runtime file: {type(exc).__name__}: {exc}"
+    try:
+        with handle:
+            before = os.fstat(handle.fileno())
+            final_path = _final_path_from_handle(handle)
+            if not _path_is_within_runtime(final_path, runtime):
+                return None, (
+                    "runtime containment rejected final handle path outside runtime: "
+                    f"{final_path}"
+                )
+            raw = handle.read()
+            after = os.fstat(handle.fileno())
+    except OSError as exc:
+        return None, f"unable to read runtime file: {type(exc).__name__}: {exc}"
+    if _stable_fstat(before) != _stable_fstat(after):
+        return None, f"runtime file changed during handle-bound read: {path}"
+    return raw, ""
+
+
+def _final_path_from_handle(handle: BinaryIO) -> Path:
+    if os.name == "nt":
+        return _windows_final_path_from_handle(handle)
+    return _posix_final_path_from_handle(handle, sys.platform)
+
+
+def _posix_final_path_from_handle(handle: BinaryIO, platform: str) -> Path:
+    if platform.startswith("linux"):
+        return Path(os.readlink(f"/proc/self/fd/{handle.fileno()}"))
+    if platform == "darwin":
+        return _darwin_final_path_from_handle(handle)
+    raise OSError(f"final handle path resolution is unsupported on {platform}")
+
+
+def _darwin_final_path_from_handle(handle: BinaryIO) -> Path:
+    import fcntl
+
+    buffer_size = 1024
+    raw_path = fcntl.fcntl(
+        handle.fileno(),
+        fcntl.F_GETPATH,
+        b"\0" * buffer_size,
+    )
+    if not isinstance(raw_path, bytes):
+        raise OSError("Darwin F_GETPATH returned a non-bytes path")
+    terminator = raw_path.find(b"\0")
+    if terminator <= 0:
+        raise OSError("Darwin F_GETPATH returned an empty or unterminated path")
+    return Path(os.fsdecode(raw_path[:terminator]))
+
+
+def _windows_final_path_from_handle(handle: BinaryIO) -> Path:
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    get_final_path = kernel32.GetFinalPathNameByHandleW
+    get_final_path.argtypes = [
+        wintypes.HANDLE,
+        wintypes.LPWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+    ]
+    get_final_path.restype = wintypes.DWORD
+    os_handle = msvcrt.get_osfhandle(handle.fileno())
+    size = 260
+    while True:
+        buffer = ctypes.create_unicode_buffer(size)
+        length = get_final_path(os_handle, buffer, size, 0)
+        if length == 0:
+            error = ctypes.get_last_error()
+            raise OSError(error, ctypes.FormatError(error))
+        if length < size:
+            value = buffer.value
+            if value.startswith("\\\\?\\UNC\\"):
+                value = "\\\\" + value[8:]
+            elif value.startswith("\\\\?\\"):
+                value = value[4:]
+            return Path(value)
+        size = length + 1
+
+
+def _path_is_within_runtime(path: Path, runtime: Path) -> bool:
+    try:
+        path.resolve(strict=True).relative_to(runtime.resolve(strict=True))
+    except (OSError, RuntimeError, ValueError):
+        return False
+    return True
+
+
+def _stable_fstat(value: os.stat_result) -> tuple[int, ...]:
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_mode,
+        value.st_nlink,
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+    )
 
 
 def _parse_jsonl_text(path: Path, text: str) -> list[dict[str, Any]]:
