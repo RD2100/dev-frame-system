@@ -55,6 +55,7 @@ def test_root_help_is_available(monkeypatch, capsys):
     assert "devframe pack validate ..." in output
     assert "devframe paper finalize ..." in output
     assert "devframe adapter verify ..." in output
+    assert "devframe toolchain preview ..." in output
     assert "devframe writeback apply ..." in output
     assert "devframe handoff ..." in output
     assert "Run devframe <command> --help" in output
@@ -83,6 +84,15 @@ def test_adapter_verify_help_is_available(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "devframe adapter verify --reference-runtime <dir>" in output
     assert "--candidate-runtime <dir>" in output
+
+
+def test_toolchain_preview_help_is_available(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["devframe", "toolchain", "preview", "--help"])
+
+    assert devframe_cli_main() == 0
+
+    output = capsys.readouterr().out
+    assert "devframe toolchain preview --manifest <path>" in output
 
 
 def test_code_help_is_available(monkeypatch, capsys):

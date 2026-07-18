@@ -69,7 +69,7 @@ The current public mainline includes these accepted capabilities:
 
 | Area | Current proof |
 |---|---|
-| Public repository | Local `main` is based on `d3495f4f` and contains two reviewed, unpushed commits above `origin/main` at `e7f5f489`; the accepted M4 closure slice also remains local until the ordinary push gate is approved |
+| Public repository | Local `main` contains the accepted M1-M7 kernel and adapter slices above `origin/main`; ordinary push remains gated, and the commit containing the M7 verdict is the local M7 delivery boundary |
 | Release history | GitHub Release `v0.1.0` exists; PyPI, deployment, and production rollout remain separate decisions |
 | Governed coding | TaskSpec dispatch, execution reports, sealed context, review/gate evidence, and opt-in finalization exist |
 | Acceptance safety | PR #29 requires canonical acceptance evidence instead of trusting worker status alone |
@@ -114,7 +114,8 @@ permission to start parallel implementation.
 | M4. Executor equivalence | accepted | The same TaskSpec can use command or ACP execution without changing governance meaning | Normalized RunRecord parity test passes; provider-specific data stays in provenance |
 | M5. Paper vertical | accepted | Paper work reuses the same evidence, review, and gate authority | One bounded synthetic paper task completes through the canonical kernel without a parallel state machine |
 | M6. Adapter conformance entry | accepted | A third-party command-style executor can prove canonical governance parity offline | A bounded user CLI check reuses the accepted M4 parity path and fails closed on missing or divergent canonical records |
-| M7. Toolchain adapter manifest | active | A compiler/test command set can be described and checked against the kernel without binding the kernel to one compiler | One offline manifest-driven preview and conformance contract, with execution still explicit and provider-neutral |
+| M7. Toolchain adapter manifest | accepted | A compiler/test command set can be described and checked against the kernel without binding the kernel to one compiler | One offline manifest-driven preview and conformance contract, with execution still explicit and provider-neutral |
+| M8. Governed toolchain run | active | One selected manifest action can enter the existing governed command path without creating a compiler-specific runtime | A real temporary project executes one manifest action only after explicit opt-in and produces canonical run, evidence, review-pending, and adapter-conformance projections |
 
 ## Completed Milestone: M1 Canonical Run Truth
 
@@ -664,6 +665,79 @@ Reviewer Index:
 | Review focus | Preserve paired canonical-source requirements, six-field semantic equality, driver provenance, ambiguity fail-closed behavior, read-only CLI operation, and packaged real-path smoke |
 | Verdict | Independent review PASS; P0=0, P1=0, P2=0, P3=0 |
 
+## Completed Milestone: M7 Toolchain Adapter Manifest
+
+### Recon Receipt And Real RED
+
+M7 reuses the installed PyYAML dependency, the existing structured pipeline
+validation style, and the CLI's read-only preview pattern. A toolchain manifest
+describes a compiler label plus build/test/lint command tokens; it is not an
+execution request and must not read credentials or mutate a project. The
+manifest validator is a boundary adapter, not a second TaskSpec or runtime
+authority.
+
+Production RED on 2026-07-18:
+
+```text
+devframe toolchain preview --manifest toolchain.yaml
+Unknown command: toolchain
+exit 1
+```
+
+### Frozen M7 Write Set And Stop Lines
+
+- `packages/control-plane/control_plane/toolchain_manifest.py`
+- `packages/control-plane/control_plane/cli/_core.py`
+- `packages/control-plane/control_plane/cli/_usage.py`
+- `packages/control-plane/control_plane/cli/app.py`
+- `packages/control-plane/tests/test_toolchain_manifest.py`
+- `packages/control-plane/tests/test_cli.py`
+- `scripts/verify-control-plane-wheel.ps1`
+- this execution root at the M7 milestone boundary
+
+Stop lines: no command execution, shell/provider/browser integration, env or
+credential reads, TaskSpec schema changes, new runtime state, client/dashboard
+UI, compiler-specific adapter, or production data.
+
+### M7 Closure Verdict
+
+Accepted locally on 2026-07-18. `devframe toolchain preview --manifest`
+validates a provider-neutral YAML manifest and returns a canonical
+`domain=code`, `profile=toolchain` preview with `execution=explicit_only`.
+The validator requires string IDs, project-relative working directories, and
+tokenized build/test commands; it rejects unknown fields, mixed-type YAML keys,
+absolute or escaping paths, empty tokens, and all C0/DEL control characters.
+It does not execute commands, read environment variables or credentials, or
+write runtime state.
+
+The production RED was the missing public CLI route. The final affected suite
+passed 145 tests. A newly built and installed wheel reported `toolchain preview
+ok` and completed the full control-plane wheel smoke. A clean exported public
+snapshot passed, `git diff --check` passed, and independent review reported
+P0=0, P1=0, P2=0, and P3=0.
+
+Reviewer Index:
+
+| Item | Evidence |
+|---|---|
+| Changed files | This execution root; `toolchain_manifest.py`; CLI core/usage/router; focused manifest and CLI tests; wheel verification; 8 paths total |
+| Critical paths | `app.main -> cmd_toolchain_preview -> validate_toolchain_manifest`; `yaml.safe_load`; typed unknown-key handling; ID, command-token, and working-directory boundaries; installed-wheel CLI entry |
+| Tests and checks | Missing-route RED exit 1; affected regression 145 passed; independent control/path/type probe matrix passed; installed-wheel real-path smoke passed; clean exported public snapshot passed; `git diff --check` passed |
+| Generated artifacts | Wheel, virtual environment, manifests, and adapter fixtures were temporary; the retained clean-snapshot clone under the system temp directory is not part of the repository |
+| Known gaps | Real compiler execution, provider/browser/network integration, push, PR, merge, release, and deployment remain outside M7 |
+| Review focus | Preserve validation before normalization, mixed-key type safety, lexical path containment, token-list-only commands, and the preview's no-execution/no-runtime-write boundary |
+| Verdict | Independent review PASS; P0=0, P1=0, P2=0, P3=0 |
+
+## Current Milestone: M8 Governed Toolchain Run
+
+M8 will reuse the existing command executor, TaskSpec boundary, TeamRuntime,
+RunIndex, and M6 adapter conformance path. It must not introduce a second
+runtime, shell-string command path, compiler-specific plugin, dashboard, or
+provider binding. The first batch is read-only Recon: locate the narrowest path
+from one validated manifest action to the existing explicit command dispatch,
+then freeze a finite write set and a real temporary-project RED before any
+production edit.
+
 ### M5 Closure Verdict
 
 Accepted locally on 2026-07-18. The shipped `devframe run` paper path now ends
@@ -777,12 +851,14 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 | 2026-07-18 | Accept M4 as already implemented and retain a durable command/ACP parity test | Both executors traverse the production dispatch, TeamRuntime, and canonical RunIndex path with identical governance semantics; driver identity remains provenance |
 | 2026-07-18 | Accept M5 after explicit external-review finalization was made fail-closed | The executor stops at review pending; current bytes, live bypass state, manifested hashes, attested reviewer identity, and duplicate verdict paths are revalidated before limited acceptance |
 | 2026-07-18 | Accept M6 after adding the offline adapter conformance entry | A third-party command-style runtime can be compared against canonical code/go governance semantics without a new runtime, provider, or write authority |
+| 2026-07-18 | Accept M7 and promote M8 to read-only Recon | Toolchain manifests now fail closed through the installed CLI without executing commands; the next product gap is explicit reuse of the existing governed command path |
 
 ## Next Action
 
-After the exact M6 paths are committed, start M7 Toolchain Adapter Manifest.
-Its finite product outcome is one offline manifest-driven preview that describes
-compiler/test commands and checks their adapter contract without binding the
-kernel to Go, Gradle, pytest, npm, or one provider. Begin with a read-only
-capability matrix and one failing public contract; keep execution explicit and
-do not add a new runtime, client, dashboard, or provider.
+Commit the exact accepted M7 paths as one local logical commit. Then begin M8
+with one bounded read-only Recon of the validated manifest, TaskSpec, command
+driver, TeamRuntime, RunIndex, and adapter-conformance seams. The first M8 RED
+must use a temporary project and prove that the current public CLI cannot yet
+run one selected manifest action through the existing governed command path.
+Do not add a second runtime, shell-string execution, client, dashboard, or
+provider.

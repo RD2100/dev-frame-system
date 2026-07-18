@@ -340,6 +340,37 @@ def cmd_adapter_verify(argv: list[str] | None = None) -> int:
     return 0 if result["status"] == "pass" else 1
 
 
+def cmd_toolchain_preview(argv: list[str] | None = None) -> int:
+    """Validate a toolchain manifest without executing any command."""
+    import argparse
+    import json
+
+    from ..toolchain_manifest import validate_toolchain_manifest
+
+    parser = argparse.ArgumentParser(prog="devframe toolchain preview")
+    parser.add_argument("--manifest", required=True)
+    parser.add_argument("--format", choices=("text", "json"), default="text")
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as exc:
+        return int(exc.code)
+
+    result = validate_toolchain_manifest(args.manifest)
+    if args.format == "json":
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        for error in result["errors"]:
+            print(f"  FAIL: {error}")
+        if result["status"] == "pass":
+            print(
+                "Toolchain manifest: PASS "
+                f"({result['toolchain_id']}; execution={result['execution']})"
+            )
+        else:
+            print("Toolchain manifest: FAILED")
+    return 0 if result["status"] == "pass" else 1
+
+
 def cmd_rdgoal() -> int:
     from ..rdgoal_cli import main as rdgoal_main
     return rdgoal_main(sys.argv[2:])

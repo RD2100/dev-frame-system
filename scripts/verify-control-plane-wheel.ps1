@@ -19,6 +19,7 @@ $goRuntimeDir = Join-Path $tempRoot "go-runtime"
 $codeRuntimeDir = Join-Path $tempRoot "code-runtime"
 $adapterReferenceDir = Join-Path $tempRoot "adapter-reference"
 $adapterCandidateDir = Join-Path $tempRoot "adapter-candidate"
+$toolchainManifestPath = Join-Path $tempRoot "toolchain.yaml"
 $previewRuntimeDir = Join-Path $tempRoot "preview-runtime"
 
 function Invoke-Step {
@@ -154,6 +155,17 @@ print("adapter conformance fixtures ready")
     Invoke-Step "devframe adapter conformance" $devframe @(
         "adapter", "verify", "--reference-runtime", (Join-Path $adapterReferenceDir "runtime"),
         "--candidate-runtime", (Join-Path $adapterCandidateDir "runtime")
+    )
+    Invoke-Step "build toolchain manifest fixture" $python @(
+        "-c",
+        "from pathlib import Path; import sys; Path(sys.argv[1]).write_text('toolchain_id: wheel-python\ncompiler: python\ncommands:\n  build: [python, -m, compileall]\n  test: [python, -m, pytest]\n', encoding='utf-8')",
+        $toolchainManifestPath
+    )
+    Invoke-Step "devframe toolchain preview" $python @(
+        "-c",
+        "import json, subprocess, sys; payload = json.loads(subprocess.check_output([sys.argv[1], 'toolchain', 'preview', '--manifest', sys.argv[2], '--format', 'json'], text=True)); assert payload['status'] == 'pass'; assert payload['execution'] == 'explicit_only'; assert payload['adapter_contract'] == {'domain': 'code', 'profile': 'toolchain'}; print('toolchain preview ok')",
+        $devframe,
+        $toolchainManifestPath
     )
     Invoke-Step "devframe dashboard help" $python @(
         "-c",

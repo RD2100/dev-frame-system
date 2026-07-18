@@ -30,6 +30,7 @@ from ._core import (
     cmd_paper_finalize,
     cmd_rdgoal,
     cmd_run,
+    cmd_toolchain_preview,
 )
 from ._review import cmd_rdreview
 from ._visual import cmd_actions, cmd_dashboard, cmd_sessions, cmd_visual_state
@@ -97,6 +98,16 @@ def main() -> int:
                 return 0
             return cmd_adapter_verify(sys.argv[3:])
         print(ADAPTER_VERIFY_USAGE)
+        return 0 if _wants_help(sys.argv[2:]) else 1
+
+    if cmd == "toolchain":
+        sub = sys.argv[2] if len(sys.argv) > 2 else ""
+        if sub == "preview":
+            if _wants_help(sys.argv[3:]):
+                print(TOOLCHAIN_PREVIEW_USAGE)
+                return 0
+            return cmd_toolchain_preview(sys.argv[3:])
+        print(TOOLCHAIN_PREVIEW_USAGE)
         return 0 if _wants_help(sys.argv[2:]) else 1
 
     if cmd == "code":
