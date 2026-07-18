@@ -155,8 +155,9 @@ git worktree, use `--changed --agents auto` to target modified, staged, or
 untracked files and choose a bounded shard count automatically; use
 `--max-agents` to cap the fan-out. Preview and dispatch balance targets by
 estimated bytes to avoid overloading one worker with most of the context.
-`--dashboard` serves the same runtime in the read-only visual interface; use
-the English/中文 switch in the page, or open `?lang=zh-CN` directly for Chinese.
+Use `devframe dashboard serve --runtime-dir <dir>` separately when you need the
+same runtime in the read-only visual interface; use the English/中文 switch in
+the page, or open `?lang=zh-CN` directly for Chinese.
 Each go-run card shows copyable `devframe code status` and
 `devframe code execute` commands for the prepared run.
 The terminal output also prints those exact commands, so the first usable loop
@@ -188,7 +189,7 @@ you can use its project-local `/go` bridge instead:
 
 ```powershell
 .\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed
-.\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed -Prepare -Dashboard
+.\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed -Prepare
 .\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed -Execute
 ```
 

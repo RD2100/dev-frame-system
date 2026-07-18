@@ -55,7 +55,12 @@ RUN_USAGE = "Usage: devframe run --pipeline <path> [--execute] [--project <dir>]
 DASHBOARD_USAGE = "Usage: devframe dashboard serve [--runtime-dir <dir>] [--paper-project <dir>] [--host 127.0.0.1] [--port 8765] [--allow-remote]"
 GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--worker opencode] [--model provider/model]"
 ATGO_USAGE = "Usage: devframe atgo \"<goal>\" [--project <dir>] [--runtime-dir <dir>] [--target <path>] [--execute] [--auto-finalize]"
-CODE_USAGE = "Usage: devframe code [[\"<goal>\"] | --prompt-file <path>] [--project <dir>] [--agents 1|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--worker opencode] [--dashboard]"
+CODE_USAGE = (
+    "Usage: devframe code [[\"<goal>\"] | --prompt-file <path>] [--project <dir>] "
+    "[--agents 1|auto] [--max-agents 4] [--target <path>] [--changed] "
+    "[--since <git-ref>] [--preview] [--execute] [--worker opencode]\n"
+    "  Start optional diagnostics separately with devframe dashboard serve."
+)
 CODE_WORKERS_USAGE = "Usage: devframe code workers [--format text|json]"
 CODE_PROVIDERS_USAGE = "Usage: devframe code providers [--format text|json]"
 CODE_STATUS_USAGE = "Usage: devframe code status [latest|<go-run-id>] [--runtime-dir <dir>] [--format text|json]"

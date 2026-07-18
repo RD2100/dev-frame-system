@@ -6,8 +6,7 @@ Current verdict: **READY TO CONTINUE** on the bounded milestone below. This is
 not a release, deployment, or production verdict.
 
 Last reconciled: 2026-07-18 against the clean `main` worktree at
-`d6c03f7b384f16f5be7dce0fb8246c7e5737ec0a`, immediately before this
-distribution-contraction slice.
+`c832fa4ab9a3e15b77fa91e2ccbf6919fdd6ad06`, immediately before M3 Batch 5.
 
 ## Authority
 
@@ -69,7 +68,7 @@ The current public mainline includes these accepted capabilities:
 
 | Area | Current proof |
 |---|---|
-| Public repository | `main` and `origin/main` both resolved to `d6c03f7b` immediately before this cleanup slice; the primary worktree was clean at reconciliation |
+| Public repository | `main` and `origin/main` both resolved to `c832fa4a` immediately before M3 Batch 5; the primary worktree was clean at reconciliation |
 | Release history | GitHub Release `v0.1.0` exists; PyPI, deployment, and production rollout remain separate decisions |
 | Governed coding | TaskSpec dispatch, execution reports, sealed context, review/gate evidence, and opt-in finalization exist |
 | Acceptance safety | PR #29 requires canonical acceptance evidence instead of trusting worker status alone |
@@ -94,6 +93,7 @@ recently closed P1 risks are:
 | DOCS-002 | closed | P2 | Two expired coordinator handoff prompts duplicated the current execution root and encouraged stale takeover instructions | Activity-reference audit, exact retirement, inventory update, docs-drift and current-entry tests passed | `HANDOFF.md` and stable runtime docs are the only live continuation path; retired prompts remain recoverable in Git history |
 | DIST-002 | closed | P2 | A desktop-shortcut helper promoted the deprecated T3/RD-Code visual-client path despite having no current product, test, or release entrypoint | Script-reference audit found only one historical roadmap mention; launcher tests and release gates do not depend on it | The shortcut helper is removed; the tested `launch-editor.ps1` advanced entry remains available |
 | DOCS-003 | closed | P2 | A pre-release cutover checklist and superseded 90-day product roadmap remained visible after their decisions were absorbed into the current execution and release roots | Per-file audit found no live dependency; docs drift and current-entry gates passed; independent review passed with P0/P1/P2/P3 equal to zero | Current direction remains in `HANDOFF.md`; release history remains in `LAUNCH_NOW.md` and `release-readiness.md`; retired drafts remain recoverable in Git history |
+| DIST-003 | closed | P2 | The primary `devframe code` command carried an optional dashboard-launch shortcut plus four dashboard-only server parameters, duplicating the explicit diagnostic command and widening the daily coding surface | Existing client Recon and reuse assessment, real CLI/bootstrap RED, minimal GREEN, 1,564 control-plane tests, installed-wheel smoke, and a second independent review with P0/P1/P2/P3 equal to zero | `devframe code` stays CLI-first while `devframe dashboard serve` preserves the full diagnostic/API surface |
 
 `DOCS-001` is mitigated by this document slice. Physical archival or deletion
 is a later cleanup operation and must first prove that no active validator,
@@ -378,6 +378,61 @@ Reviewer Index:
 | Review focus | Preserve Recon Receipts, current release evidence, runtime contracts, and status documents with unique unresolved constraints |
 | Verdict | PASS; P0=0, P1=0, P2=0, P3=0 |
 
+### M3 Batch 5 Verification
+
+The existing `recon-receipt-local-agent-client-mainline.md` and
+`t3code-client-mainline-reuse-assessment.md` cover this client boundary. The
+Recon audit found that the dashboard server itself is not redundant: it hosts
+read-only state and session inspection, T3/RD-Code adapter endpoints, action
+queues, controlled mutation routes, and explicit remote-bind protections. It
+must remain independently runnable and release-tested.
+
+The redundant layer was the `devframe code --dashboard` shortcut. It added
+`--dashboard`, `--host`, `--port`, `--refresh-seconds`, and `--allow-remote` to
+the primary coding command even though every prepared run already prints the
+equivalent `devframe dashboard serve --runtime-dir <dir>` command. Batch 5
+removes only that shortcut and its bootstrap `-Dashboard` alias. The standalone
+dashboard command, server, endpoints, security checks, and client adapters are
+unchanged.
+
+Evidence:
+
+- Real RED: three of four focused tests failed because code help still exposed
+  `--dashboard`, the production parser still accepted it, and bootstrap still
+  generated `-Dashboard`; the standalone remote-bind safety test passed.
+- GREEN: the same four tests passed after the contraction.
+- Dashboard and CLI regression: 178 passed.
+- Control-plane suite: 1,564 passed, 1 skipped, 4 deselected. The deselected
+  snapshot cases are blocked in the primary worktree by preserved `.agents`,
+  `.aiworkflow/reports`, `.claude`, `.codex`, and `.gsd` local state.
+- Installed control-plane wheel smoke passed, including CLI help, code prepare,
+  the standalone dashboard, client/T3 endpoints, action queues, controlled
+  execution, invalid filters, and rejected PATCH requests.
+- The five retired `devframe code` arguments are covered through the production
+  parser; the final focused CLI, standalone safety, and bootstrap gate passed 8
+  tests.
+- A fresh independent read-only review passed with P0=0, P1=0, P2=0, and P3=0.
+  The dispatch API accepted the `gpt-5.6-sol` and `high` selectors; this is
+  selector attestation, not an internal model self-attestation.
+
+Review focus: verify that no primary-code dashboard launch path remains, the
+bootstrap wrapper still supports preview/prepare/execute, standalone dashboard
+security and API contracts are preserved, documentation points to the explicit
+replacement command, and no historical status snapshot is rewritten as current
+authority.
+
+Reviewer Index:
+
+| Item | Evidence |
+|---|---|
+| Changed files | `README.md`, `HANDOFF.md`, control-plane quickstart/README, `_coding.py`, `_usage.py`, bootstrap docs/templates/wrappers, focused CLI/public-snapshot tests, and wheel smoke assertions; 14 paths total |
+| Critical paths | `devframe code` production parser and dispatch, bootstrap preview/prepare/execute, standalone dashboard loopback guard, dashboard/T3/client/action APIs |
+| Tests and checks | Real RED; final focused gate 8 passed; dashboard/CLI regression 178 passed; control-plane 1,564 passed and 1 skipped; installed-wheel smoke passed; `git diff --check` passed |
+| Generated artifacts | None retained in the public repository |
+| Known gaps | Release, deployment, and production validation remain out of scope; strict clean-candidate snapshot remains the root pre-push delivery gate |
+| Review focus | Ensure exact staged paths contain no standalone dashboard/API change and the ordinary push remains non-force |
+| Verdict | PASS; P0=0, P1=0, P2=0, P3=0 |
+
 ### Stop Lines
 
 - No automatic review or FinalVerdict synthesis.
@@ -451,9 +506,13 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 | 2026-07-18 | Close the first M2 review-closure increment as already satisfied | Existing go-evidence, TeamRuntime, and RunIndex paths provide the required valid and invalid lifecycle transitions |
 | 2026-07-18 | Accept M2 and promote M3 to read-only Recon | Full production-shaped lifecycle tests and an independent source review found no uncovered review-closure transition |
 | 2026-07-18 | Deprioritize Tutti dashboard integration and contract M3 as distribution contraction | The kernel is the product; a vendored 3,770-file client snapshot adds maintenance cost without proving a required user flow |
+| 2026-07-18 | Keep the dashboard as optional diagnostics but remove its shortcut from `devframe code` | The server has real client/API and safety duties; automatic launch parameters make the primary coding loop wider without adding unique capability |
+| 2026-07-18 | Accept M3 Batch 5 after the focused finding was repaired and independently re-reviewed | Five retired arguments now have production-parser coverage; standalone dashboard and API boundaries are unchanged; P0/P1/P2/P3 are zero |
 
 ## Next Action
 
-Inventory dashboard callers and tests as a separate read-only M3 batch. Do not
-delete dashboard code until a real user-flow probe proves it is unused and a
-replacement CLI/API path is documented.
+Finish the accepted Batch 5 Git delivery: stage only the 14 reviewed paths,
+verify the cached path set and content, create one logical commit, pass the
+strict clean-candidate snapshot, and use the current user's authorization for
+an ordinary non-force push. Stop this bounded slice after remote reconciliation;
+select the next M3 contraction only under a separate finite goal.

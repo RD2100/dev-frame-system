@@ -65,7 +65,10 @@ Use:
 - `--command <your-worker>` for a custom executor
 - `--changed --agents auto` to keep scope tight in a real git worktree
 - `--since <git-ref>` to scope the task to a branch delta
-- `--dashboard` when you want the control-plane view immediately
+
+Run `devframe dashboard serve --runtime-dir <dir>` separately when you want the
+optional control-plane view. The primary coding command stays a bounded CLI
+prepare/inspect/execute loop.
 
 `devframe code status` and `devframe code execute` are there so a run becomes a
 recoverable session rather than a one-shot command. The text status view gives

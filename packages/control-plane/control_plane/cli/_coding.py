@@ -9,7 +9,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..coding_dispatch import resolve_agent_count, resolve_coding_targets
-from ._common import _is_loopback_host
 from ._usage import CODE_USAGE
 
 
@@ -436,11 +435,6 @@ def cmd_code() -> int:
     parser.add_argument("--model", default=None, help="Model id for the selected worker; opencode defaults to stepfun/step-3.7-flash")
     parser.add_argument("--model-provider", default=None, help="Model source behind OpenCode: opencode-api | local-ollama | web-chatgpt-shim. See 'devframe code providers'")
     parser.add_argument("--opencode-agent", default=DEFAULT_OPENCODE_AGENT, help="OpenCode agent name")
-    parser.add_argument("--dashboard", action="store_true", help="Serve the read-only dashboard after preparing the session")
-    parser.add_argument("--host", default="127.0.0.1", help="Dashboard bind host when --dashboard is used")
-    parser.add_argument("--port", type=int, default=8765, help="Dashboard bind port when --dashboard is used")
-    parser.add_argument("--refresh-seconds", type=int, default=5, help="Dashboard refresh interval; use 0 to disable")
-    parser.add_argument("--allow-remote", action="store_true", help="Allow --dashboard to bind outside loopback")
     parser.add_argument(
         "--driver",
         choices=["command", "acp"],
@@ -469,9 +463,6 @@ def cmd_code() -> int:
         print(CODE_USAGE)
         return 2
     effective_goal, methodology = resolve_methodology(goal)
-    if args.dashboard and not args.allow_remote and not _is_loopback_host(args.host):
-        print("ERROR: dashboard exposes local runtime paths; use --allow-remote to bind outside loopback.")
-        return 1
     try:
         targets = resolve_coding_targets(args.project, args.target, changed=args.changed, since=args.since)
         agents = resolve_agent_count(args.agents, targets, max_agents=args.max_agents)
@@ -527,18 +518,6 @@ def cmd_code() -> int:
     print("Default mode : prepare first, inspect, then execute when you choose")
     print("")
     print(_render_code_dispatch_text(result), end="")
-    if args.dashboard:
-        from ..dashboard import serve_dashboard
-
-        print("")
-        print("Dashboard UI : starting read-only visual interface")
-        print("Chinese UI   : append ?lang=zh-CN to the dashboard URL")
-        serve_dashboard(
-            runtime_dir=result.runtime_dir,
-            host=args.host,
-            port=args.port,
-            refresh_seconds=args.refresh_seconds,
-        )
     return 0 if result.status in {"queued", "passed"} else 1
 
 

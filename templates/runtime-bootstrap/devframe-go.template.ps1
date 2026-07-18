@@ -7,7 +7,7 @@
     command templates without creating rdgoal packets or running workers.
 .EXAMPLE
     .\tools\devframe-go.ps1 -Goal "Fix the failing tests"
-    .\tools\devframe-go.ps1 -Goal "Fix the failing tests" -Changed -Prepare -Dashboard
+    .\tools\devframe-go.ps1 -Goal "Fix the failing tests" -Changed -Prepare
     .\tools\devframe-go.ps1 -Goal "Fix the failing tests" -Changed -Execute
 #>
 
@@ -27,7 +27,6 @@ param(
     [switch]$Changed,
     [switch]$Prepare,
     [switch]$Execute,
-    [switch]$Dashboard,
     [string[]]$Command = @()
 )
 
@@ -76,12 +75,8 @@ if ($Model) {
 
 if ($Execute) {
     $argsList += "--execute"
-} elseif (-not $Prepare -and -not $Dashboard) {
+} elseif (-not $Prepare) {
     $argsList += "--preview"
-}
-
-if ($Dashboard) {
-    $argsList += "--dashboard"
 }
 
 if ($Command.Count -gt 0) {

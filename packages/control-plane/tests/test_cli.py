@@ -67,7 +67,8 @@ def test_code_help_is_available(monkeypatch, capsys):
     assert "--since" in output
     assert "--preview" in output
     assert "--worker" in output
-    assert "--dashboard" in output
+    assert "--dashboard" not in output
+    assert "devframe dashboard serve" in output
 
 
 def test_client_help_is_available(monkeypatch, capsys):
@@ -1107,58 +1108,55 @@ def test_code_changed_requires_git_changes(tmp_path, monkeypatch, capsys):
     assert not runtime_dir.exists()
 
 
-def test_code_dashboard_serves_prepared_session(tmp_path, monkeypatch, capsys):
-    from control_plane import dashboard
-
+@pytest.mark.parametrize(
+    "retired_args",
+    [
+        ["--dashboard"],
+        ["--host", "127.0.0.1"],
+        ["--port", "8765"],
+        ["--refresh-seconds", "5"],
+        ["--allow-remote"],
+    ],
+)
+def test_code_rejects_retired_dashboard_arguments_before_runtime_write(
+    tmp_path,
+    monkeypatch,
+    capsys,
+    retired_args,
+):
     project_root = tmp_path / "demo-project"
     runtime_dir = tmp_path / "runtime"
     project_root.mkdir()
-    captured = {}
-
-    def fake_serve_dashboard(**kwargs):
-        captured.update(kwargs)
-
-    monkeypatch.setattr(dashboard, "serve_dashboard", fake_serve_dashboard)
     monkeypatch.setattr(sys, "argv", [
         "devframe",
         "code",
-        "Add a visible coding dashboard.",
+        "Reject the retired dashboard shortcut.",
         "--project",
         str(project_root),
         "--runtime-dir",
         str(runtime_dir),
-        "--dashboard",
-        "--port",
-        "0",
-        "--refresh-seconds",
-        "0",
+        "--preview",
+        *retired_args,
     ])
 
-    exit_code = devframe_cli_main()
-    output = capsys.readouterr().out
+    with pytest.raises(SystemExit) as exc_info:
+        devframe_cli_main()
+    output = capsys.readouterr()
 
-    assert exit_code == 0
-    assert "Dashboard UI : starting read-only visual interface" in output
-    assert "Chinese UI   : append ?lang=zh-CN to the dashboard URL" in output
-    assert captured["runtime_dir"] == str(runtime_dir.resolve())
-    assert captured["host"] == "127.0.0.1"
-    assert captured["port"] == 0
-    assert captured["refresh_seconds"] == 0
+    assert exc_info.value.code == 2
+    assert "unrecognized arguments:" in output.err
+    assert retired_args[0] in output.err
+    assert not runtime_dir.exists()
 
 
-def test_code_dashboard_requires_allow_remote_for_non_loopback(tmp_path, monkeypatch, capsys):
-    project_root = tmp_path / "demo-project"
+def test_dashboard_serve_requires_allow_remote_for_non_loopback(tmp_path, monkeypatch, capsys):
     runtime_dir = tmp_path / "runtime"
-    project_root.mkdir()
     monkeypatch.setattr(sys, "argv", [
         "devframe",
-        "code",
-        "Add a visible coding dashboard.",
-        "--project",
-        str(project_root),
+        "dashboard",
+        "serve",
         "--runtime-dir",
         str(runtime_dir),
-        "--dashboard",
         "--host",
         "0.0.0.0",
     ])

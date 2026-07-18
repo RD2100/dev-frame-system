@@ -86,8 +86,9 @@ tools/devframe-go.ps1         <- Project-local /go wrapper for coding-agent fan-
 Use `tools/devframe-go.ps1` as the project-local `/go` bridge. By default it
 runs `devframe code --preview`, so it shows changed-file shards and worker
 command templates without creating packets or spending worker tokens. Add
-`-Prepare -Dashboard` to create queued packets and inspect the local dashboard
-without running workers. Add `-Execute` only after reviewing the preview.
+`-Prepare` to create queued packets without running workers. Start optional
+diagnostics separately with `devframe dashboard serve --runtime-dir <dir>`.
+Add `-Execute` only after reviewing the preview.
 
 ## Accepted Slice Git Lifecycle
 

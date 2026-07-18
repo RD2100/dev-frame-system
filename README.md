@@ -159,14 +159,14 @@ Bootstrap also generates a project-local `/go` bridge for advanced use:
 
 ```powershell
 .\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed
-.\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed -Prepare -Dashboard
+.\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed -Prepare
 .\tools\devframe-go.ps1 -Goal "Build the MVP" -Changed -Execute
 ```
 
 The wrapper defaults to preview mode, so it shows changed-file shards and worker
 command templates before any rdgoal packets or worker runs are created. Use
-`-Prepare -Dashboard` to create queued packets and view them without running
-workers.
+`-Prepare` to create queued packets without running workers. Start optional
+diagnostics separately with `devframe dashboard serve --runtime-dir <dir>`.
 
 Install the CLI and use the mainline coding loop first:
 
@@ -174,11 +174,12 @@ Install the CLI and use the mainline coding loop first:
 cd .\packages\control-plane
 pip install -e .
 cd D:\my-project
-devframe code "Build the MVP" --target src --runtime-dir "$env:TEMP\devframe-code" --dashboard
+devframe code "Build the MVP" --target src --runtime-dir "$env:TEMP\devframe-code"
 devframe code workers
 devframe code "Fix the branch" --changed --agents auto --worker opencode --preview
 devframe code status --runtime-dir "$env:TEMP\devframe-code"
 devframe code execute --runtime-dir "$env:TEMP\devframe-code"
+devframe dashboard serve --runtime-dir "$env:TEMP\devframe-code"
 ```
 
 Advanced orchestration stays available when you need it:
@@ -200,11 +201,12 @@ the automatic fan-out. Use `--preview` to print the shard plan and worker
 command template without creating packets or spending worker tokens. Shards are
 balanced by estimated target bytes so one agent does not accidentally receive
 most of the file context. Add `--execute` only when you are ready to spend
-worker tokens. Add `--dashboard` to open the read-only local visual interface
-for the same runtime; the dashboard has an English/中文 language switch, and
-`?lang=zh-CN` still opens the Chinese view directly. Each go-run card also
-shows the exact `devframe code status` and `devframe code execute` commands for
-that prepared run.
+worker tokens. The main coding command does not launch a browser surface; use
+`devframe dashboard serve --runtime-dir <dir>` separately when the optional
+diagnostic view is useful. The dashboard has an English/中文 language switch,
+and `?lang=zh-CN` opens the Chinese view directly. Each go-run card also shows
+the exact `devframe code status` and `devframe code execute` commands for that
+prepared run.
 After preparing a run, use `devframe code execute [latest|<go-run-id>]` to
 spend worker tokens later without creating another set of packets; passed
 agents are skipped unless `--rerun-passed` is provided.

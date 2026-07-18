@@ -241,6 +241,8 @@ def test_runtime_bootstrap_generates_go_wrapper(tmp_path):
     assert '"--preview"' in text
     assert '"--execute"' in text
     assert "$Prepare -and $Execute" in text
+    assert "[switch]$Dashboard" not in text
+    assert '"--dashboard"' not in text
     assert "& devframe @argsList" in text
     assert "tools/devframe-go.ps1" in agents.read_text(encoding="utf-8-sig")
 
@@ -300,9 +302,9 @@ def test_runtime_bootstrap_generates_go_wrapper(tmp_path):
             "-File",
             str(wrapper),
             "-Goal",
-            "Prepare dashboard dispatch.",
+            "Prepare wrapper dispatch.",
             "-Changed",
-            "-Dashboard",
+            "-Prepare",
         ],
         cwd=project_root,
         capture_output=True,
@@ -315,9 +317,9 @@ def test_runtime_bootstrap_generates_go_wrapper(tmp_path):
     prepare_args = prepare_capture_path.read_text(encoding="utf-8").strip()
 
     assert prepare_result.returncode == 0, prepare_result.stdout + prepare_result.stderr
-    assert 'code "Prepare dashboard dispatch."' in prepare_args
+    assert 'code "Prepare wrapper dispatch."' in prepare_args
     assert "--changed" in prepare_args
-    assert "--dashboard" in prepare_args
+    assert "--dashboard" not in prepare_args
     assert "--preview" not in prepare_args
     assert "--execute" not in prepare_args
 
