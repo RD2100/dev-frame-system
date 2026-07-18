@@ -301,6 +301,45 @@ def cmd_paper_finalize(argv: list[str] | None = None) -> int:
     return 0
 
 
+def cmd_adapter_verify(argv: list[str] | None = None) -> int:
+    """Compare two existing canonical executor projections without writing state."""
+    import argparse
+    import json
+
+    from ..adapter_conformance import verify_adapter_conformance
+
+    parser = argparse.ArgumentParser(prog="devframe adapter verify")
+    parser.add_argument("--reference-runtime", required=True)
+    parser.add_argument("--candidate-runtime", required=True)
+    parser.add_argument("--reference-run-id")
+    parser.add_argument("--candidate-run-id")
+    parser.add_argument("--format", choices=("text", "json"), default="text")
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as exc:
+        return int(exc.code)
+
+    result = verify_adapter_conformance(
+        args.reference_runtime,
+        args.candidate_runtime,
+        reference_run_id=args.reference_run_id,
+        candidate_run_id=args.candidate_run_id,
+    )
+    if args.format == "json":
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        for error in result["errors"]:
+            print(f"  FAIL: {error}")
+        if result["status"] == "pass":
+            print(
+                "Adapter conformance: PASS "
+                f"({result['reference']['run_id']} -> {result['candidate']['run_id']})"
+            )
+        else:
+            print("Adapter conformance: FAILED")
+    return 0 if result["status"] == "pass" else 1
+
+
 def cmd_rdgoal() -> int:
     from ..rdgoal_cli import main as rdgoal_main
     return rdgoal_main(sys.argv[2:])

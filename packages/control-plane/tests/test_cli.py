@@ -54,6 +54,7 @@ def test_root_help_is_available(monkeypatch, capsys):
     assert "devframe web-ai ..." in output
     assert "devframe pack validate ..." in output
     assert "devframe paper finalize ..." in output
+    assert "devframe adapter verify ..." in output
     assert "devframe writeback apply ..." in output
     assert "devframe handoff ..." in output
     assert "Run devframe <command> --help" in output
@@ -72,6 +73,16 @@ def test_paper_finalize_help_is_available(monkeypatch, capsys):
     assert "--review <independent-review.json>" in output
     assert "--review-sha256 <sha256>" in output
     assert "--reviewer-id <review-run-id>" in output
+
+
+def test_adapter_verify_help_is_available(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["devframe", "adapter", "verify", "--help"])
+
+    assert devframe_cli_main() == 0
+
+    output = capsys.readouterr().out
+    assert "devframe adapter verify --reference-runtime <dir>" in output
+    assert "--candidate-runtime <dir>" in output
 
 
 def test_code_help_is_available(monkeypatch, capsys):

@@ -112,7 +112,9 @@ permission to start parallel implementation.
 | M2. Review closure | accepted | A real run moves from report to review, gate, and FinalVerdict without manual state reinterpretation | Real execution remains `review_pending` before independent review and becomes `final_ready` only after valid evidence |
 | M3. Kernel distribution contraction | accepted | A fresh checkout contains the DevFrame kernel and replaceable adapters, not a vendored client product | Tracked Tutti snapshot and importer are gone, local reference remains ignored, public paths and core tests pass, and the dashboard is documented as optional diagnostics |
 | M4. Executor equivalence | accepted | The same TaskSpec can use command or ACP execution without changing governance meaning | Normalized RunRecord parity test passes; provider-specific data stays in provenance |
-| M5. Paper vertical | active | Paper work reuses the same evidence, review, and gate authority | One bounded synthetic paper task completes through the canonical kernel without a parallel state machine |
+| M5. Paper vertical | accepted | Paper work reuses the same evidence, review, and gate authority | One bounded synthetic paper task completes through the canonical kernel without a parallel state machine |
+| M6. Adapter conformance entry | accepted | A third-party command-style executor can prove canonical governance parity offline | A bounded user CLI check reuses the accepted M4 parity path and fails closed on missing or divergent canonical records |
+| M7. Toolchain adapter manifest | active | A compiler/test command set can be described and checked against the kernel without binding the kernel to one compiler | One offline manifest-driven preview and conformance contract, with execution still explicit and provider-neutral |
 
 ## Completed Milestone: M1 Canonical Run Truth
 
@@ -594,6 +596,74 @@ requires a new observed failure and an explicit scope amendment.
 - No client, worker, or executor acceptance authority.
 - No storage, schema, client, Tutti, RD-Code, or provider changes during Recon.
 
+## Current Milestone: M6 Adapter Conformance Entry
+
+### Recon Receipt And Real RED
+
+The accepted M4 parity path is the reuse boundary for this slice:
+`go_dispatch.run_go_dispatch` produces the execution and TeamRuntime facts,
+`run_index.build_run_index` reconciles them into `canonical_runs`, and the
+existing `test_go_acp_driver.py` proves command/ACP semantic equality. The new
+surface must remain read-only and must not create another adapter or authority.
+
+Production RED on 2026-07-18:
+
+```text
+devframe adapter verify --help
+Unknown command: adapter
+exit 1
+```
+
+The first M6 contract is therefore a bounded offline comparison of one
+reference canonical go record and one candidate canonical go record. It fails
+closed when either runtime has no unique paired `go_run` + `team_events`
+projection, when the candidate lacks adapter provenance, or when canonical
+governance fields differ.
+
+### Frozen M6 Write Set And Stop Lines
+
+- `packages/control-plane/control_plane/adapter_conformance.py`
+- `packages/control-plane/control_plane/cli/_core.py`
+- `packages/control-plane/control_plane/cli/_usage.py`
+- `packages/control-plane/control_plane/cli/app.py`
+- `packages/control-plane/tests/test_adapter_conformance.py`
+- `packages/control-plane/tests/test_cli.py`
+- `scripts/verify-control-plane-wheel.ps1`
+- this execution root at the M6 milestone boundary
+
+Stop lines: no changes to `go_dispatch.py`, `run_index.py`, ACP transport,
+provider/browser integrations, client/dashboard UI, schemas, network, or
+production data. The command reads existing runtime evidence and writes no
+runtime state.
+
+### M6 Closure Verdict
+
+Accepted locally on 2026-07-18. The new read-only `devframe adapter verify`
+command compares one reference and one candidate `canonical_runs` projection;
+it requires paired `go_run` + `team_events`, `domain=code`, `profile=go`,
+driver provenance, equal canonical governance fields, and an unambiguous run
+selection. Missing or divergent evidence returns non-zero without writing
+runtime state.
+
+The production RED was the missing CLI route. The final focused suite passed
+4 tests, the M4/CLI affected regression passed 140 tests, the installed wheel
+constructed two local `execute=true` command runtimes and reported
+`Adapter conformance: PASS`, and the complete wheel smoke ended with
+`[OK] Control-plane wheel smoke passed`. Independent review reported
+P0=0, P1=0, P2=0, and P3=0.
+
+Reviewer Index:
+
+| Item | Evidence |
+|---|---|
+| Changed files | This execution root; adapter conformance module; CLI core/usage/router; focused conformance and CLI tests; wheel verification; 8 paths total |
+| Critical paths | `_select_canonical_go_record`; `verify_adapter_conformance`; canonical RunIndex projection; `devframe adapter verify`; installed-wheel local runtime fixtures |
+| Tests and checks | Missing-route RED exit 1; focused GREEN 4 passed; affected regression 140 passed; installed-wheel real-path smoke passed; `git diff --check` passed |
+| Generated artifacts | Temporary fixture runtimes and wheel outputs stayed under the smoke temp directory; no runtime state or artifact enters the public repository |
+| Known gaps | Real compiler/provider/browser/network execution, release, deployment, push, and merge remain outside M6 |
+| Review focus | Preserve paired canonical-source requirements, six-field semantic equality, driver provenance, ambiguity fail-closed behavior, read-only CLI operation, and packaged real-path smoke |
+| Verdict | Independent review PASS; P0=0, P1=0, P2=0, P3=0 |
+
 ### M5 Closure Verdict
 
 Accepted locally on 2026-07-18. The shipped `devframe run` paper path now ends
@@ -706,12 +776,13 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 | 2026-07-18 | Accept M3 after the distribution closure audit and root-help contraction | Tutti is external and ignored, the importer is retired, the dashboard remains an explicit optional diagnostic, and root discovery is concise without removing capability |
 | 2026-07-18 | Accept M4 as already implemented and retain a durable command/ACP parity test | Both executors traverse the production dispatch, TeamRuntime, and canonical RunIndex path with identical governance semantics; driver identity remains provenance |
 | 2026-07-18 | Accept M5 after explicit external-review finalization was made fail-closed | The executor stops at review pending; current bytes, live bypass state, manifested hashes, attested reviewer identity, and duplicate verdict paths are revalidated before limited acceptance |
+| 2026-07-18 | Accept M6 after adding the offline adapter conformance entry | A third-party command-style runtime can be compared against canonical code/go governance semantics without a new runtime, provider, or write authority |
 
 ## Next Action
 
-After the exact M5 paths are committed, start M6 Adapter Conformance Entry. Its
-finite product outcome is one user-runnable, offline conformance check showing
-that a third-party command-style executor can project the same canonical
-governance meaning as the shipped command and ACP drivers. Begin with a
-read-only capability matrix and one failing public CLI contract; reuse the M4
-parity path, and do not add a provider, client, dashboard, or second runtime.
+After the exact M6 paths are committed, start M7 Toolchain Adapter Manifest.
+Its finite product outcome is one offline manifest-driven preview that describes
+compiler/test commands and checks their adapter contract without binding the
+kernel to Go, Gradle, pytest, npm, or one provider. Begin with a read-only
+capability matrix and one failing public contract; keep execution explicit and
+do not add a new runtime, client, dashboard, or provider.

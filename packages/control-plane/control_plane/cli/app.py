@@ -25,6 +25,7 @@ from ._core import (
     cmd_handoff_transfer,
     cmd_handoff_validate,
     cmd_init,
+    cmd_adapter_verify,
     cmd_pack_validate,
     cmd_paper_finalize,
     cmd_rdgoal,
@@ -87,6 +88,16 @@ def main() -> int:
             return cmd_paper_finalize(sys.argv[3:])
         print(PAPER_FINALIZE_USAGE)
         return 1
+
+    if cmd == "adapter":
+        sub = sys.argv[2] if len(sys.argv) > 2 else ""
+        if sub == "verify":
+            if _wants_help(sys.argv[3:]):
+                print(ADAPTER_VERIFY_USAGE)
+                return 0
+            return cmd_adapter_verify(sys.argv[3:])
+        print(ADAPTER_VERIFY_USAGE)
+        return 0 if _wants_help(sys.argv[2:]) else 1
 
     if cmd == "code":
         if len(sys.argv) > 2 and sys.argv[2] == "workers":

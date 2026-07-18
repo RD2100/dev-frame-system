@@ -17,6 +17,8 @@ $paperRuntimeDir = Join-Path $tempRoot "paper-runtime"
 $runtimeDir = Join-Path $tempRoot "runtime"
 $goRuntimeDir = Join-Path $tempRoot "go-runtime"
 $codeRuntimeDir = Join-Path $tempRoot "code-runtime"
+$adapterReferenceDir = Join-Path $tempRoot "adapter-reference"
+$adapterCandidateDir = Join-Path $tempRoot "adapter-candidate"
 $previewRuntimeDir = Join-Path $tempRoot "preview-runtime"
 
 function Invoke-Step {
@@ -100,6 +102,58 @@ try {
         "-c",
         "import subprocess, sys; text = subprocess.check_output([sys.argv[1], 'run', '--help'], text=True); assert 'Usage: devframe run --pipeline <path>' in text; print('devframe run help ok')",
         $devframe
+    )
+    Invoke-Step "devframe adapter verify help" $python @(
+        "-c",
+        "import subprocess, sys; text = subprocess.check_output([sys.argv[1], 'adapter', 'verify', '--help'], text=True); assert '--reference-runtime <dir>' in text; assert '--candidate-runtime <dir>' in text; print('adapter conformance help ok')",
+        $devframe
+    )
+    $adapterFixtureCode = @'
+import pathlib
+import sys
+from control_plane.go_dispatch import run_go_dispatch
+
+base_paths = [pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])]
+report = "\n".join([
+    "## ExecutionReport",
+    "",
+    "- **Status**: pass",
+    "- **Review Status**: draft",
+    "- **Changed Files**:",
+    "- (none)",
+    "- **Evidence**: packaged adapter conformance fixture",
+]) + "\n"
+worker_script = (
+    "import os; from pathlib import Path; "
+    f"Path(os.environ['RDGOAL_REPORT_PATH']).write_text({report!r}, encoding='utf-8')"
+)
+worker = [sys.executable, "-c", worker_script]
+for base in base_paths:
+    base.mkdir(parents=True, exist_ok=True)
+    project = base / "project"
+    project.mkdir(exist_ok=True)
+    (project / "target.py").write_text("value = 0\n", encoding="utf-8")
+    result = run_go_dispatch(
+        project,
+        "packaged adapter conformance fixture",
+        runtime_dir=base / "runtime",
+        agents=1,
+        targets=["target.py"],
+        execute=True,
+        worker_command=worker,
+        driver="command",
+        model_provider="opencode-api",
+        timeout_seconds=60,
+    )
+    assert result.status == "passed", result.status
+print("adapter conformance fixtures ready")
+'@
+    Invoke-Step "build adapter conformance fixtures" $python @(
+        "-c", $adapterFixtureCode, $adapterReferenceDir, $adapterCandidateDir
+    )
+    Invoke-Step "devframe adapter conformance" $devframe @(
+        "adapter", "verify", "--reference-runtime", (Join-Path $adapterReferenceDir "runtime"),
+        "--candidate-runtime", (Join-Path $adapterCandidateDir "runtime")
     )
     Invoke-Step "devframe dashboard help" $python @(
         "-c",
