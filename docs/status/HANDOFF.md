@@ -5,8 +5,9 @@ Lifecycle state: **CANONICAL EXECUTION ROOT**
 Current verdict: **READY TO CONTINUE** on the bounded milestone below. This is
 not a release, deployment, or production verdict.
 
-Last reconciled: 2026-07-18 against `main` at
-`b996c74f754bf0c277930767f6d5efccee467ca6` with a clean primary worktree.
+Last reconciled: 2026-07-18 against the clean `main` worktree at
+`0f2f4a235e25f6f89c6da64dfda911c326675f94`, immediately before this
+documentation update.
 
 ## Authority
 
@@ -103,8 +104,8 @@ permission to start parallel implementation.
 |---|---|---|---|
 | M0. Authority consolidation | accepted | One document controls direction and next work | Documentation drift, public snapshot, link, diff, and independent review gates passed |
 | M1. Canonical run truth | accepted | CLI and clients see one governance record for one physical run | Real-path duplicate-run RED became one deterministic canonical projection; invalid authority paths fail closed |
-| M2. Review closure | active | A real run moves from report to review, gate, and FinalVerdict without manual state reinterpretation | Real execution remains `review_pending` before independent review and becomes `final_ready` only after valid evidence |
-| M3. Tutti adapter | queued | Tutti opens the existing DevFrame dashboard as a local Workspace App | Local app load/reload, `/healthz`, `/state.json`, and a visible Tutti path pass without Tutti core changes |
+| M2. Review closure | accepted | A real run moves from report to review, gate, and FinalVerdict without manual state reinterpretation | Real execution remains `review_pending` before independent review and becomes `final_ready` only after valid evidence |
+| M3. Tutti adapter | active (Recon) | Tutti opens the existing DevFrame dashboard as a local Workspace App | Local app load/reload, `/healthz`, `/state.json`, and a visible Tutti path pass without Tutti core changes |
 | M4. Executor equivalence | queued | The same TaskSpec can use command or ACP execution without changing governance meaning | Normalized RunRecord parity test passes; provider-specific data stays in provenance |
 | M5. Paper vertical | queued | Paper work reuses the same evidence, review, and gate authority | One bounded paper task completes through the canonical kernel without a parallel state machine |
 
@@ -216,6 +217,69 @@ The existing runtime-governance Recon Receipt covers this adapter boundary.
 The frozen write set for a follow-up M2 code slice is empty: a new production
 change requires a newly observed lifecycle gap and a new real-path RED.
 
+### Independent M2 Review
+
+The independent review on 2026-07-18 found no uncovered lifecycle transition.
+The review followed the production-shaped path rather than accepting artifact
+fields in isolation:
+
+- `tools/go_evidence.py` evaluates the evidence gate, writes its governance
+  artifacts, and records only references in TeamRuntime.
+- `TeamRuntime` records the execution, review, and FinalVerdict journal events.
+- `control_plane.run_index` validates independent reviewer identity, governance
+  ownership, passing gate evidence, and sealed context before it projects
+  `final_ready`.
+- The valid lifecycle test reaches `final_ready`; self-review, malformed review,
+  worker-role review, non-passing review, and missing sealed context remain
+  non-final or blocked.
+
+Reviewer Index:
+
+| Item | Evidence |
+|---|---|
+| Changed files | None; this was a read-only review of committed behavior |
+| Critical paths | `tools/go_evidence.py:record_team_runtime_finalization`; `packages/control-plane/control_plane/team_runtime.py`; `packages/control-plane/control_plane/run_index.py:_team_review_refs`, `_team_final_verdict_ref`, and `_axes` |
+| Real-path tests | `python -m pytest tests/test_go_evidence.py -q` -> 36 passed; `python -m pytest packages/control-plane/tests/test_run_index.py -q` -> 40 passed |
+| Generated artifacts | Per-test temporary evidence directories and TeamRuntime journals; pytest cleaned them after execution |
+| Findings | P0=0, P1=0. P2: event lookup for unusually large journals remains a future performance optimization, not a correctness gap |
+| Review focus | Keep FinalVerdict authority limited to governance producers and preserve the requirement for a passing independent review, passing gate, and sealed context |
+
+### M2 Verdict
+
+Accepted on 2026-07-18. No M2 production write set is open. Promote M3 only
+as read-only Recon until a durable Recon Receipt and reuse decision authorize a
+write-capable adapter slice.
+
+## Current Milestone: M3 Tutti Adapter Recon
+
+### Objective
+
+Determine the smallest public, read-only adapter that lets a local Tutti
+Workspace App display the existing DevFrame dashboard without changing Tutti
+core or creating a second governance authority.
+
+### Frozen Recon Scope
+
+- Read existing DevFrame dashboard entrypoints and their `/healthz` and
+  `/state.json` contracts.
+- Read the existing Tutti Workspace App local-app load/reload boundary and
+  identify its public extension mechanism.
+- Produce the directory-level resource map, capability matrix, reuse candidate
+  list, integration risk table, and build-vs-buy decision required by
+  `rules/recon.md` RULE recon-002 and RULE recon-003.
+- Record whether the existing Tutti Workspace App is reusable as-is or needs a
+  thin adapter; check its license and public-distribution boundary before any
+  source is copied or vendored.
+
+### Stop Lines
+
+- No Tutti core change, vendoring, submodule, client runtime, provider binding,
+  or dashboard rewrite.
+- No production write set or coder dispatch before a durable Recon Receipt is
+  recorded and the reuse decision is reviewed.
+- DevFrame keeps TaskSpec, run identity, evidence, review, gates, decisions,
+  and FinalVerdict authority under `rules/open-source-reuse.md` RULE reuse-002.
+
 ### Stop Lines
 
 - No automatic review or FinalVerdict synthesis.
@@ -287,9 +351,11 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 | 2026-07-18 | Accept M0 and promote M1 to active | Authority tests, docs drift, clean exported snapshot, actual diff review, and independent review passed |
 | 2026-07-18 | Accept M1 and promote M2 to active | Canonical projection, authority-boundary probes, clean snapshot, actual diff review, and independent read-only review passed |
 | 2026-07-18 | Close the first M2 review-closure increment as already satisfied | Existing go-evidence, TeamRuntime, and RunIndex paths provide the required valid and invalid lifecycle transitions |
+| 2026-07-18 | Accept M2 and promote M3 to read-only Recon | Full production-shaped lifecycle tests and an independent source review found no uncovered review-closure transition |
 
 ## Next Action
 
-Perform an independent review of the existing M2 lifecycle evidence. If it
-finds no uncovered transition, promote M3; otherwise freeze the smallest
-real-path RED and write set for the uncovered gap.
+Perform the M3 Tutti Adapter Recon and publish one durable Recon Receipt with
+the resource map, reuse decision, license/public-surface check, exact adapter
+boundary, and smallest safe follow-up slice. Do not edit Tutti or dispatch a
+write-capable worker before that receipt passes review.
