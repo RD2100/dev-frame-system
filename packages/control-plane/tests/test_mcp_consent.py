@@ -59,6 +59,47 @@ def test_allow_always_auto_authorizes_returning_client(tmp_path):
     assert conn["status"] == "authorized"
 
 
+def test_sensitive_scope_requires_current_session_human_decision(tmp_path):
+    mcp_consent.register_connection("s1", "Codex", runtime_dir=tmp_path)
+    mcp_consent.request_scope("s1", mcp_consent.MEMORY_READ_SCOPE)
+    decided = mcp_consent.decide("s1", "allow_always", runtime_dir=tmp_path)
+    assert mcp_consent.MEMORY_READ_SCOPE in decided["scopes"]
+    assert mcp_consent.is_current_human_authorized("s1") is True
+
+    mcp_consent._reset_for_tests()
+    returning = mcp_consent.register_connection("s2", "Codex", runtime_dir=tmp_path)
+    assert returning["status"] == "authorized"
+    assert returning["authorization_source"] == "persisted_grant"
+    assert mcp_consent.has_scope("s2", mcp_consent.MEMORY_READ_SCOPE) is False
+    assert mcp_consent.is_current_human_authorized("s2") is False
+
+
+def test_tool_call_audit_reports_failure_when_audit_path_is_unwritable(tmp_path):
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    (runtime / "mcp-audit.jsonl").mkdir()
+    mcp_consent.register_connection("s1", "Codex", runtime_dir=runtime)
+    ok = mcp_consent.record_tool_call(
+        "s1",
+        "search_obsidian_memory",
+        authorized=False,
+        runtime_dir=runtime,
+        required_scope=mcp_consent.MEMORY_READ_SCOPE,
+    )
+    assert ok is False
+
+
+def test_revoke_invalidates_all_active_sessions_for_same_fingerprint(tmp_path):
+    mcp_consent.register_connection("s1", "Codex", runtime_dir=tmp_path)
+    mcp_consent.decide("s1", "allow_always", runtime_dir=tmp_path)
+    mcp_consent.register_connection("s2", "Codex", runtime_dir=tmp_path)
+    assert mcp_consent.is_authorized("s1") is True
+    assert mcp_consent.is_authorized("s2") is True
+    mcp_consent.decide("s1", "revoke", runtime_dir=tmp_path)
+    assert mcp_consent.is_authorized("s1") is False
+    assert mcp_consent.is_authorized("s2") is False
+
+
 def test_invalid_decision_raises(tmp_path):
     mcp_consent.register_connection("s1", "ChatGPT", runtime_dir=tmp_path)
     with pytest.raises(mcp_consent.ConsentError):
@@ -77,6 +118,29 @@ def test_audit_log_records_events(tmp_path):
     events = [json.loads(line)["event"] for line in audit]
     assert "connect" in events
     assert "decision" in events
+
+
+def test_audit_hashes_untrusted_client_and_project_values(tmp_path):
+    client_name = "client-sk-this-value-must-not-be-logged"
+    project_id = r"C:\private\vault\project-secret"
+    mcp_consent.register_connection("s1", client_name, runtime_dir=tmp_path)
+    mcp_consent.record_tool_call(
+        "s1",
+        "search_obsidian_memory",
+        authorized=False,
+        runtime_dir=tmp_path,
+        required_scope=mcp_consent.MEMORY_READ_SCOPE,
+        project_id=project_id,
+    )
+
+    raw_audit = (tmp_path / "mcp-audit.jsonl").read_text(encoding="utf-8")
+    assert client_name not in raw_audit
+    assert project_id not in raw_audit
+    events = [json.loads(line) for line in raw_audit.splitlines()]
+    connect = next(event for event in events if event["event"] == "connect")
+    tool_call = next(event for event in events if event["event"] == "tool_call")
+    assert connect["client_fingerprint"] == mcp_consent.fingerprint(client_name)
+    assert tool_call["project_id_hash"]
 
 
 def _post(base_url, path, payload, headers=None):

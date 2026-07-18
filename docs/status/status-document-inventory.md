@@ -178,6 +178,9 @@ The next implementation planning records should be derived from:
 
 ## Recon Receipts
 
+The current Obsidian-to-Codex memory slice is recorded in
+`recon-receipt-obsidian-codex-memory-mvp.md`.
+
 `recon-receipt-*.md` files are scoped pre-work records. They satisfy the
 reuse-before-building discipline for a specific area, such as:
 

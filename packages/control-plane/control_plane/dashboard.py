@@ -46,6 +46,9 @@ from .visual_state import (
 )
 
 
+MAX_MCP_REQUEST_BYTES = 8 * 1024 * 1024
+
+
 def build_dashboard_server(
     runtime_dir: str | Path | None = None,
     host: str = "127.0.0.1",
@@ -1155,7 +1158,31 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                             json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32001, "message": "unauthorized"}}, ensure_ascii=True),
                         )
                         return
-                raw_body = self._read_body()
+                try:
+                    raw_body = self._read_body(
+                        max_bytes=MAX_MCP_REQUEST_BYTES,
+                        strict_utf8=True,
+                    )
+                except ValueError as exc:
+                    reason = str(exc)
+                    status = (
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+                        if reason == "request_body_too_large"
+                        else HTTPStatus.BAD_REQUEST
+                    )
+                    self._send_text(
+                        status,
+                        "application/json; charset=utf-8",
+                        json.dumps(
+                            {
+                                "jsonrpc": "2.0",
+                                "id": None,
+                                "error": {"code": -32700, "message": reason},
+                            },
+                            ensure_ascii=True,
+                        ),
+                    )
+                    return
                 try:
                     payload = json.loads(raw_body) if raw_body else {}
                 except json.JSONDecodeError:
@@ -1202,10 +1229,31 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                 return
             self._method_not_allowed()
 
-        def _read_body(self) -> str:
-            content_length = int(self.headers.get("Content-Length", 0))
+        def _read_body(
+            self,
+            *,
+            max_bytes: int | None = None,
+            strict_utf8: bool = False,
+        ) -> str:
+            try:
+                content_length = int(self.headers.get("Content-Length", 0))
+            except (TypeError, ValueError) as exc:
+                raise ValueError("invalid_content_length") from exc
+            if content_length < 0:
+                raise ValueError("invalid_content_length")
+            if max_bytes is not None and content_length > max_bytes:
+                raise ValueError("request_body_too_large")
             if content_length > 0:
-                return self.rfile.read(content_length).decode("utf-8", errors="replace")
+                data = self.rfile.read(content_length)
+                if len(data) != content_length:
+                    raise ValueError("request_body_incomplete")
+                try:
+                    return data.decode(
+                        "utf-8",
+                        errors="strict" if strict_utf8 else "replace",
+                    )
+                except UnicodeDecodeError as exc:
+                    raise ValueError("invalid_utf8_body") from exc
             return ""
 
         def do_PUT(self) -> None:

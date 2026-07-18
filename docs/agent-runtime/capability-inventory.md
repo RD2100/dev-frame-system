@@ -119,6 +119,16 @@ Rule reference: rules/core.md core-007. Status: proposed = NOT usable until appr
 
 <!-- Add project-specific capabilities (#11+) below. Set Status: proposed. Reviewer changes to approved. -->
 
+## 11. Governed Obsidian Memory MCP
+- **Platform**: Codex
+- **Type**: memory | **Access**: allowlisted_read + proposal_only | **Risk**: high
+- **Preferred for**: bounded retrieval from explicitly allowlisted Obsidian Markdown notes and create-only candidate memory proposals through the existing DevFrame MCP and write-back gates
+- **Forbidden for**: whole-vault scans, absolute-path reads, treating memory as authority, direct vault mutation, automatic promotion, Codex native memory mutation, or use without current-session human consent and durable audit
+- **Fallback**: checked-in `AGENTS.md` and runtime docs; manual review without private-vault access
+- **Human gate**: yes (current connection memory scope and every candidate apply) | **Must explain if skipped**: yes
+- **Evidence**: `docs/agent-runtime/obsidian-codex-memory.md`; focused memory, MCP consent/server, and write-back tests
+- **Status**: proposed
+
 ---
 
 ## Summary
@@ -135,6 +145,7 @@ Rule reference: rules/core.md core-007. Status: proposed = NOT usable until appr
 | 8 | Reviewer Playbooks | Both | review | low | approved | reference |
 | 9 | Hooks (Draft) | Claude | hook | medium | approved | audit-only |
 | 10 | Phase 6 SourceLock | Both | source_lock | critical | approved | design_only |
+| 11 | Governed Obsidian Memory MCP | Codex | memory | high | proposed | allowlisted_read + proposal_only |
 
 ### Status Legend
 
