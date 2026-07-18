@@ -27,7 +27,9 @@ from .writeback import WritebackError, safe_resolve_workspace_path, stage_writeb
 MEMORY_ROOT_ENV = "DEVFRAME_OBSIDIAN_MEMORY_ROOT"
 MEMORY_ALLOWLIST_ENV = "DEVFRAME_OBSIDIAN_MEMORY_ALLOWLIST"
 MEMORY_INBOX_ENV = "DEVFRAME_OBSIDIAN_MEMORY_INBOX"
+MEMORY_STATE_DIR_ENV = "DEVFRAME_OBSIDIAN_MEMORY_STATE_DIR"
 DEFAULT_MEMORY_INBOX = "_devframe/memory-inbox"
+ACTIVATED_MEMORY_INBOX = "wiki/memories"
 
 MAX_QUERY_CHARS = 500
 MAX_PATHS = 32
@@ -66,6 +68,15 @@ _MEMORY_TYPES = frozenset(
         "reference",
     }
 )
+_LINK_MEMORY_TYPES = {
+    "preference": "preference",
+    "lesson": "fact",
+    "failure_pattern": "procedure",
+    "design_decision": "decision",
+    "workflow_rule": "procedure",
+    "gotcha": "fact",
+    "reference": "note",
+}
 _SECRET_PATTERNS = (
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----", re.IGNORECASE),
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
@@ -114,8 +125,43 @@ class ObsidianMemoryError(Exception):
     """Raised when a request violates the bounded memory contract."""
 
 
+def _activation_memory_defaults() -> dict[str, object] | None:
+    if any(
+        str(os.environ.get(name) or "").strip()
+        for name in (MEMORY_ROOT_ENV, MEMORY_ALLOWLIST_ENV, MEMORY_INBOX_ENV)
+    ):
+        return None
+    configured = str(os.environ.get(MEMORY_STATE_DIR_ENV) or "").strip()
+    state_dir = (
+        Path(configured).expanduser()
+        if configured
+        else Path.home() / ".devframe" / "obsidian-memory"
+    )
+    try:
+        from .obsidian_memory_activation import _load_active_state
+
+        loaded = _load_active_state(
+            state_dir,
+            runtime_probe=lambda _runtime, _package: True,
+        )
+    except Exception:
+        return None
+    if loaded is None:
+        return None
+    _state, vault, wiki, _runtime, _ready = loaded
+    return {
+        "root": vault,
+        "wiki": wiki,
+        "allowlist": ["wiki/index.md"],
+        "inbox": ACTIVATED_MEMORY_INBOX,
+    }
+
+
 def _memory_root() -> Path:
     configured = str(os.environ.get(MEMORY_ROOT_ENV) or "").strip()
+    if not configured:
+        defaults = _activation_memory_defaults()
+        configured = str(defaults["root"]) if defaults else ""
     if not configured:
         raise ObsidianMemoryError(f"{MEMORY_ROOT_ENV} is required")
     configured_path = Path(configured)
@@ -196,7 +242,11 @@ def _path_key(relative_path: str) -> str:
 def _configured_allowlist() -> dict[str, str]:
     raw = str(os.environ.get(MEMORY_ALLOWLIST_ENV) or "").strip()
     if not raw:
-        raise ObsidianMemoryError(f"{MEMORY_ALLOWLIST_ENV} is required")
+        defaults = _activation_memory_defaults()
+        if defaults:
+            raw = json.dumps(defaults["allowlist"])
+        else:
+            raise ObsidianMemoryError(f"{MEMORY_ALLOWLIST_ENV} is required")
     values: list[Any]
     if raw.startswith("["):
         try:
@@ -225,8 +275,12 @@ def memory_authority_fingerprint(project_id: str) -> str:
     if not project or len(project) > 200 or "\x00" in project:
         raise ObsidianMemoryError("project_id is invalid")
     root = _memory_root()
+    defaults = _activation_memory_defaults()
     inbox = _canonical_relative_path(
-        str(os.environ.get(MEMORY_INBOX_ENV) or DEFAULT_MEMORY_INBOX),
+        str(
+            os.environ.get(MEMORY_INBOX_ENV)
+            or (defaults["inbox"] if defaults else DEFAULT_MEMORY_INBOX)
+        ),
         markdown=False,
     )
     allowlist = sorted(_configured_allowlist().values(), key=str.casefold)
@@ -598,16 +652,74 @@ def _memory_note(
     memory_type: str,
     source_refs: list[str],
     created_at: str,
+    activated: bool = False,
 ) -> str:
+    if activated:
+        source = f"devframe-approved:{source_refs[0]}"[:500]
+        summary = " ".join(lesson.split())[:280]
+        link_memory_type = _LINK_MEMORY_TYPES[memory_type]
+        lines = [
+            "---",
+            "type: memory",
+            f"title: {json.dumps(title, ensure_ascii=False)}",
+            f"memory_id: {json.dumps(memory_id, ensure_ascii=False)}",
+            f"memory_type: {json.dumps(link_memory_type, ensure_ascii=False)}",
+            f"devframe_memory_type: {json.dumps(memory_type, ensure_ascii=False)}",
+            "scope: project",
+            "visibility: project",
+            f"project: {json.dumps(project_id, ensure_ascii=False)}",
+            f"project_id: {json.dumps(project_id, ensure_ascii=False)}",
+            "status: active",
+            f"date_captured: {json.dumps(created_at, ensure_ascii=False)}",
+            f"source: {json.dumps(source, ensure_ascii=False)}",
+            "review_status: reviewed",
+            f"reviewed_at: {json.dumps(created_at, ensure_ascii=False)}",
+            "authority: reviewed",
+            "freshness: current",
+            "privacy_classification: private_by_default",
+            f"tags: {json.dumps(['memory', memory_type], ensure_ascii=False)}",
+            "source_refs:",
+        ]
+        lines.extend(
+            f"  - {json.dumps(ref, ensure_ascii=False)}" for ref in source_refs
+        )
+        lines.extend(
+            [
+                "---",
+                "",
+                f"# {title}",
+                "",
+                f"> **TLDR:** {summary}",
+                "",
+                "## Memory",
+                "",
+                lesson,
+                "",
+                "## Use This When",
+                "",
+                "- A future task depends on this human-approved project context.",
+                "",
+                "## Source",
+                "",
+            ]
+        )
+        lines.extend(f"- {json.dumps(ref, ensure_ascii=False)}" for ref in source_refs)
+        lines.append("")
+        return "\n".join(lines)
+
+    authority = "reviewed" if activated else "candidate"
+    status = "active" if activated else "proposed"
+    review_status = "reviewed" if activated else "pending"
     lines = [
         "---",
         f"memory_id: {json.dumps(memory_id, ensure_ascii=False)}",
         f"memory_type: {json.dumps(memory_type, ensure_ascii=False)}",
         "scope: project",
         f"project_id: {json.dumps(project_id, ensure_ascii=False)}",
-        "authority: candidate",
+        f"authority: {authority}",
         "freshness: current",
-        "status: proposed",
+        f"status: {status}",
+        f"review_status: {review_status}",
         "privacy_classification: private_by_default",
         f"created_at: {json.dumps(created_at, ensure_ascii=False)}",
         "source_refs:",
@@ -648,10 +760,14 @@ def stage_obsidian_memory_proposal(
         for ref in source_refs
     ]
     session = _validate_proposal_text(thread_id, field="thread_id", max_chars=300)
+    defaults = _activation_memory_defaults()
     root = _memory_root()
     authority_fingerprint = memory_authority_fingerprint(project)
     inbox = _canonical_relative_path(
-        str(os.environ.get(MEMORY_INBOX_ENV) or DEFAULT_MEMORY_INBOX),
+        str(
+            os.environ.get(MEMORY_INBOX_ENV)
+            or (defaults["inbox"] if defaults else DEFAULT_MEMORY_INBOX)
+        ),
         markdown=False,
     )
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -666,18 +782,34 @@ def stage_obsidian_memory_proposal(
         memory_type=kind,
         source_refs=refs,
         created_at=created_at,
+        activated=False,
+    )
+    approved_contents = (
+        _memory_note(
+            memory_id=memory_id,
+            project_id=project,
+            title=note_title,
+            lesson=note_lesson,
+            memory_type=kind,
+            source_refs=refs,
+            created_at=created_at,
+            activated=True,
+        )
+        if defaults is not None
+        else contents
     )
     if any(
         _contains_secret(value)
         for value in [project, note_title, note_lesson, *refs, session]
-    ) or _contains_secret(contents):
+    ) or _contains_secret(contents) or _contains_secret(approved_contents):
         raise ObsidianMemoryError("candidate memory was rejected by the secret policy")
 
+    proposal_contents = approved_contents if defaults is not None else contents
     staged = stage_writeback_proposal(
         runtime_dir,
         root,
         relative_path,
-        contents,
+        proposal_contents,
         thread_id=session,
         project_id=project,
         require_absent=True,
@@ -694,7 +826,7 @@ def stage_obsidian_memory_proposal(
         "relativePath": preview["relative_path"],
         "operation": preview["operation"],
         "bytes": preview["bytes"],
-        "contentSha256": hashlib.sha256(contents.encode("utf-8")).hexdigest(),
+        "contentSha256": hashlib.sha256(proposal_contents.encode("utf-8")).hexdigest(),
         "vaultFingerprint": authority_fingerprint[:16],
         "humanGate": "A human must approve this create-only candidate before the vault changes.",
     }

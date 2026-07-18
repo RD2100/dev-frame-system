@@ -16,6 +16,10 @@ HELP_TEXT = """DevFrame Code CLI
 
   Control plane
   devframe client                    - launch the zero-config local Agent client
+  devframe memory activate --vault <dir> [--confirm] - bind governed Obsidian memory (preview by default)
+  devframe memory status             - inspect path-redacted memory readiness
+  devframe memory repair [--confirm] - restore only a missing managed MCP config block
+  devframe memory deactivate [--confirm] - remove only the managed activation
   devframe dashboard serve           - serve read-only local dashboard
   devframe actions                   - show Visual Control Plane action queue
   devframe sessions [--session-id <id>] - show public Visual Control Plane session summaries or one exact detail
@@ -52,6 +56,15 @@ HELP_TEXT = """DevFrame Code CLI
 """
 
 RUN_USAGE = "Usage: devframe run --pipeline <path> [--execute] [--project <dir>]"
+MEMORY_USAGE = (
+    "Usage: devframe memory activate --vault <dedicated-vault> [--confirm] [--format text|json]\n"
+    "       devframe memory status [--format text|json]\n"
+    "       devframe memory repair [--confirm] [--format text|json]\n"
+    "       devframe memory deactivate [--confirm] [--format text|json]\n"
+    "  Activate is preview-only without --confirm. Repair/deactivate return exit 3 "
+    "when a confirmed change is available, exit 0 when already settled, and exit 2 "
+    "when the governed state is unsafe or unavailable."
+)
 DASHBOARD_USAGE = "Usage: devframe dashboard serve [--runtime-dir <dir>] [--paper-project <dir>] [--host 127.0.0.1] [--port 8765] [--allow-remote]"
 GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--worker opencode] [--model provider/model]"
 ATGO_USAGE = "Usage: devframe atgo \"<goal>\" [--project <dir>] [--runtime-dir <dir>] [--target <path>] [--execute] [--auto-finalize]"

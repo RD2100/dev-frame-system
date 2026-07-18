@@ -1,7 +1,8 @@
 # Governed Obsidian Memory For Codex
 
-Lifecycle state: implemented bounded MVP; not release-ready for unattended or
-real private-vault use. Capability activation remains human-controlled.
+Lifecycle state: implemented bounded zero-configuration MVP candidate; first-use
+activation remains explicit and human-controlled, and the candidate is still
+restricted to a dedicated disposable Vault until the final gates pass.
 
 Recon receipt:
 [RECON-OBSIDIAN-CODEX-MEMORY-MVP-20260718](../status/recon-receipt-obsidian-codex-memory-mvp.md)
@@ -15,11 +16,117 @@ features, index a private vault, or treat remembered text as project authority.
 After reading this document, a user should be able to:
 
 1. keep Codex native Memories separate from a curated Obsidian knowledge base;
-2. expose only explicitly allowlisted Markdown notes through the existing
-   DevFrame MCP server;
-3. understand the current-session consent, durable audit, and human write-back
-   gates;
-4. validate the path with a disposable vault before considering a real vault.
+2. activate one dedicated Link-compatible Vault through an installed or
+   editable DevFrame control plane;
+3. expose only the governed `status` and `recall` facade tools while keeping
+   Link's write/admin tools private;
+4. understand the durable transaction, exact-payload approval, audit, and
+   create-only write-back gates.
+
+The current candidate also provides a one-time activation command that manages
+the Codex MCP block and `SessionStart` hook. Subsequent sessions receive a
+bounded recall capsule automatically; they do not require Obsidian to be open.
+
+## Current zero-configuration activation
+
+Run the command without `--confirm` first. It validates the dedicated Vault and
+prints a path-redacted preview without installing a runtime or writing files:
+
+```powershell
+devframe memory activate --vault <dedicated-vault> --format json
+```
+
+After reviewing that preview, the one explicit first-use approval provisions an
+isolated runtime, installs the control-plane plus exact `mcp==1.28.1` and
+`link-mcp==1.7.0` from a complete Windows CPython 3.10 wheel lock in which every
+runtime package has an exact version and SHA-256,
+creates the Link-compatible `raw/` and `wiki/` layout, and adds reversible
+managed blocks to the selected Codex home:
+
+```powershell
+devframe memory activate --vault <dedicated-vault> --confirm
+devframe memory status
+```
+
+If a later external configuration rewrite completely removes the managed MCP
+block while the activation record, instructions, hook, and Vault are still
+exact, preview the bounded recovery before confirming it:
+
+```powershell
+devframe memory repair --format json
+devframe memory repair --confirm
+```
+
+Repair restores only the absent MCP block and preserves the current unrelated
+Codex configuration. Its preview remains zero-write and reports whether the
+managed runtime facade needs a content refresh. On confirmation, a legacy or
+stale facade is refreshed only when its dependency marker is still the exact
+approved lock and the activation points to the runtime under the selected state
+directory. Partial markers, a changed dependency contract, a same-name
+unmanaged server, changed managed instructions or hooks, incompatible state,
+or Vault drift are rejected. The repair updates its exact removal record so the
+normal deactivation path can still remove only DevFrame-owned text.
+
+Confirmed activation, repair, and deactivation are serialized by a
+cross-process lifecycle lock. Before the first managed file changes, DevFrame
+persists a bounded transaction record containing only managed text patches and
+before/after hashes. A later confirmed lifecycle command completes an
+interrupted transaction only when every target still matches an exact recorded
+before or after state; unrelated concurrent edits fail closed. Config,
+instructions, and hook bytes (including CRLF and compact JSON formatting) are
+restored exactly when the managed text is removed.
+
+The generated stdio server is `devframe-obsidian-memory`. Its protocol surface
+contains only `status` and `recall`; Link's `remember`, `ingest`, `review`, and
+`admin` tools are not proxied to any AI client. A managed `SessionStart` hook
+calls the same bounded read plane and writes one untrusted, secret-scanned
+capsule to hook stdout. Recalled Markdown can guide work but never overrides
+system/developer instructions, repository rules, current source, tests,
+evidence, review, or explicit human decisions.
+
+The activation record is private local state under the selected state directory
+(default: `~/.devframe/obsidian-memory`). Generated Codex config, AGENTS,
+status, hook output, and MCP responses do not contain the absolute Vault path.
+Other MCP-capable AI clients can use the same stdio command after passing the
+same human-controlled configuration; the facade itself, rather than a client
+allowlist, enforces the two-tool read-only boundary.
+
+Automatic provisioning does not inherit host site-packages. An editable source
+checkout is staged through its package source. An installed wheel instead
+stages only `control_plane` files whose SHA-256 values match that installed
+distribution's wheel RECORD, then installs that verified snapshot into the
+isolated runtime after the complete exact-version/hash dependency lock. An
+unknown or editable distribution without an approved source fails closed;
+arbitrary external interpreter paths remain rejected. The runtime manifest also
+binds a deterministic SHA-256 over every installed `control_plane` payload file.
+An exact dependency marker with a legacy or different facade digest is refreshed
+in place with a forced facade-only reinstall during confirmed activation or
+repair and verified again before Codex configuration changes; fixed third-party
+dependencies are not force-reinstalled and a different dependency marker is
+never upgraded implicitly. Provisioning subprocesses receive a controlled
+environment that excludes caller `PYTHONPATH`, `PYTHONHOME`, and `VIRTUAL_ENV`
+while retaining explicit network proxy/index settings. If provisioning or a
+later activation transaction fails, a runtime created by that attempt is removed
+with the other managed changes. An existing runtime is never deleted by
+rollback, and it is retained when an activation journal still requires it for
+forward recovery.
+
+To remove only the managed blocks, leave the Vault untouched, and require a
+restart to take effect:
+
+```powershell
+devframe memory deactivate --confirm
+```
+
+If the activation state is present, the existing DevFrame
+`propose_obsidian_memory` path automatically uses `wiki/memories` as its
+create-only destination when the old memory environment variables are absent.
+The proposal is staged outside the Vault, remains invisible to Link recall,
+and carries `authority: candidate`, `status: proposed`, and
+`review_status: pending`. Only after a separate human approval is it
+materialized with
+`authority: reviewed`, `status: active`, and `review_status: reviewed`. Explicit
+legacy environment variables still take precedence for older/manual setups.
 
 ## Two Memory Layers
 
@@ -36,7 +143,26 @@ still belongs in `AGENTS.md`, repository rules, or other checked-in documents.
 The Codex Memories feature was reported as experimental and disabled on the
 host inspected for this slice. No global Codex configuration was changed.
 
-## Runtime Shape
+## Current zero-configuration runtime shape
+
+```mermaid
+flowchart LR
+  S["Codex SessionStart"] --> H["managed recall-hook"]
+  C["Any MCP client"] --> F["DevFrame read-only facade"]
+  H --> F
+  F --> L["fixed Link 1.7.0 slim runtime"]
+  L --> W["approved Markdown wiki"]
+  A["DevFrame propose_obsidian_memory"] --> P["pending proposal outside Vault"]
+  P --> G["human approval"]
+  G -->|approve| W
+  G -->|reject| N["Vault unchanged"]
+```
+
+The facade is the client-facing read boundary. Link remains a mature local
+Markdown/index implementation behind it, while DevFrame remains the durable
+write and approval authority.
+
+## Legacy governed HTTP runtime shape
 
 ```mermaid
 flowchart LR
@@ -72,6 +198,7 @@ Configure the dashboard process before it starts:
 | `DEVFRAME_OBSIDIAN_MEMORY_ROOT` | yes | Existing Obsidian vault directory. The server resolves it locally and never returns the absolute root to the MCP client. |
 | `DEVFRAME_OBSIDIAN_MEMORY_ALLOWLIST` | yes | Non-empty list of vault-relative `.md` paths. Retrieval enforces it, and consent/proposal authority fingerprints bind to it. A JSON array is the recommended portable form. Newlines or the host path separator are also accepted. |
 | `DEVFRAME_OBSIDIAN_MEMORY_INBOX` | no | Vault-relative candidate folder. Default: `_devframe/memory-inbox`. It must not be absolute, traverse upward, or enter `.obsidian/`. |
+| `DEVFRAME_OBSIDIAN_MEMORY_STATE_DIR` | no | Activation state directory used by the existing proposal path when the three legacy memory variables are absent. Default: `~/.devframe/obsidian-memory`; state-derived writes use `wiki/memories`. |
 | `DEVFRAME_MCP_TOKEN` | no on loopback | Existing MCP transport token. If configured, `/mcp` requires it. Keep the dashboard on loopback unless remote exposure has been separately reviewed. |
 
 Example PowerShell configuration for a disposable vault:
@@ -99,14 +226,20 @@ $env:DEVFRAME_OBSIDIAN_MEMORY_INBOX = '_devframe/memory-inbox'
 devframe dashboard serve --runtime-dir $runtime --host 127.0.0.1 --port 8765
 ```
 
-Connect a compatible MCP client to `http://127.0.0.1:8765/mcp` through that
-client's normal, human-controlled configuration. This MVP does not edit global
-Codex MCP configuration for the user.
+Connect a compatible MCP client to `http://127.0.0.1:8765/mcp` only when using
+the legacy HTTP path above. That path remains available for explicit allowlist
+and consent experiments; the current zero-configuration activation uses the
+managed local stdio facade instead and edits only marked Codex blocks after
+`--confirm`.
 
 The allowlist is a server boundary, not merely a search hint. Every retrieval
 call must also provide a non-empty `relativePaths` subset. The adapter never
 recursively discovers notes, expands globs, reads `.obsidian/`, accepts an
 absolute caller path, or falls back to scanning the vault.
+
+In activation-managed mode, the read facade owns bounded Link recall and does
+not use this caller-selected legacy allowlist. The existing HTTP
+`search_obsidian_memory` contract remains explicit and allowlist-bound.
 
 ## MCP Tools
 
@@ -239,7 +372,19 @@ The adapter enforces these boundaries independently of client instructions:
 - candidate title, lesson, source references, and generated note containing a
   recognized sensitive pattern rejected before a proposal is persisted;
 - absolute vault paths redacted from MCP results, pending previews, and public
-  apply results.
+  apply results;
+- a complete exact-version/SHA-256 runtime wheel lock, isolated-runtime
+  identity checks, and rejection of host `site-packages` inheritance;
+- a 96,000-character pre-parse ceiling on upstream read-plane JSON and smaller
+  post-governance MCP/hook output limits;
+- activation state bound to the exact Codex home, with status/deactivation
+  rejecting missing or changed managed config, instructions, hook content, or
+  generated chunks;
+- confirmed lifecycle operations serialized across processes, with a durable
+  forward-recovery journal and exact byte restoration for unrelated Codex
+  files;
+- the pending proposal payload byte-identical to the final create-only note, so
+  approval never changes candidate bytes behind the human-visible gate.
 
 The `/mcp` HTTP endpoint also rejects a declared request body larger than
 8 MiB before reading it and decodes MCP JSON as strict UTF-8. Invalid,
@@ -259,6 +404,7 @@ the focused suite from the repository root:
 
 ```powershell
 python -m pytest `
+  packages/control-plane/tests/test_obsidian_memory_activation.py `
   packages/control-plane/tests/test_obsidian_memory.py `
   packages/control-plane/tests/test_mcp_consent.py `
   packages/control-plane/tests/test_mcp_server.py `
@@ -266,39 +412,42 @@ python -m pytest `
   -q
 ```
 
-The real HTTP acceptance path is covered by
+The legacy explicit-environment HTTP adapter remains covered by
 `test_memory_search_real_http_round_trip`: it starts the loopback dashboard,
 initializes an MCP session, observes the authorization gate, records a current
 human decision, retries the tool, and retrieves Chinese text from a temporary
-vault. Proposal tests confirm that the vault is unchanged before approval,
-approval is bound to the originating thread, and create-only apply cannot
-overwrite a file that appeared after staging.
+vault. Those HTTP tests do not substitute for the zero-configuration Link
+facade acceptance path.
 
-For a manual disposable-vault check, use the configuration above, confirm that
-`tools/list` advertises both memory tools, then verify:
+For a disposable zero-configuration check, build and install the current wheel
+in a fresh Windows CPython 3.10 environment, activate a new empty dedicated
+Vault, and verify:
 
-- a call before approval returns an authorization error and no note text;
-- a requested note outside `DEVFRAME_OBSIDIAN_MEMORY_ALLOWLIST` is rejected;
-- search returns only vault-relative metadata and a bounded excerpt;
-- proposal returns a `wb-*` id while the inbox note is still absent;
-- rejection leaves the vault unchanged;
-- approval creates one candidate note under the configured inbox.
+- installed `devframe memory activate|status|repair|deactivate` entrypoints and
+  their preview/confirm exit codes;
+- `codex mcp list/get` accepts the generated TOML and reports only `status` and
+  `recall` as enabled tools;
+- real stdio initialize/list/call uses the isolated Link runtime without a fake
+  callback and returns neither Vault paths nor secret canaries;
+- proposal returns a `wb-*` id while the final note is absent, and the proposal
+  payload/hash exactly match the bytes eligible for apply;
+- rejection leaves the Vault unchanged, while matching-thread approval creates
+  one reviewed/active note and real Link recall returns its unique phrase;
+- the exact command recorded in `hooks.json` returns one bounded untrusted
+  capsule, and deactivation restores all pre-activation Codex file bytes while
+  retaining the Vault, runtime, and approved memory.
 
 ## Current Limits And Deferred Evaluation
 
-- Retrieval is deterministic lexical scoring over explicitly selected notes.
-  There is no semantic index, full-text index, vector store, graph store, or
-  automatic consolidation.
-- A call can select at most 32 paths, return at most 8 results, and returns at
-  most a 700-character excerpt per result. Individual notes are capped at
-  256,000 bytes and the selected set at 2,000,000 bytes.
-- Notes must be UTF-8 Markdown. Frontmatter must have a mapping root with scalar
-  values; `tags` and `source_refs` may also be scalar sequences. Duplicate keys,
-  aliases, anchors, explicit YAML tags, nested structures, malformed or
-  unclosed frontmatter, and configured size-limit violations make the note
-  unavailable. This is intentionally not a general Obsidian property parser.
-- The server does not discover which allowlisted notes are relevant. The client
-  must already have the approved relative paths for the current task.
+- The zero-configuration read plane delegates recall to fixed Link 1.7.0 but
+  exposes only DevFrame's bounded `status` and `recall` facade. Link's internal
+  schema/index behavior is an upstream dependency, not a DevFrame authority or
+  automatic truth-maintenance system.
+- The older explicit-environment adapter remains available for scoped legacy
+  integrations. That adapter uses deterministic lexical scoring over a
+  caller-selected subset of an explicit allowlist, with at most 32 paths, 8
+  results, and 700 characters per excerpt; those limits do not describe Link's
+  zero-configuration recall algorithm.
 - A process interruption after a proposal is claimed leaves it in `applying`
   until a later approval request detects that the claiming process is gone.
   Recovery re-checks the bound authority and content digest, then either
@@ -308,14 +457,33 @@ For a manual disposable-vault check, use the configuration above, confirm that
   path validation and the later open/write are not one atomic operation. A
   hostile concurrent filesystem mutation could still race the check, so use
   only a disposable, non-hostile vault tree for this MVP.
-- Memory remains guidance only. This slice does not promote candidates,
-  synchronize cross-project memory, update existing notes, or resolve stale or
-  conflicting memories automatically.
-- Obsidian Local REST API integration, live private-vault verification, and
-  semantic or temporal retrieval remain separate evaluations.
+- Lifecycle locks coordinate DevFrame processes that share either the selected
+  Codex home or activation state directory, using one fixed Codex-home-then-state
+  lock order. An unrelated program can still rewrite Codex files without
+  honoring those locks; exact hash mismatches stop recovery and require human
+  inspection rather than overwriting the new content.
+- The bundled dependency lock currently targets Windows CPython 3.10, the host
+  used for this MVP. Other Python/platform combinations fail closed and need a
+  separately generated, reviewed hash lock before support can be claimed.
+- Runtime package versions, venv identity, paths, marker provenance, and the
+  complete installed `control_plane` payload digest are re-probed before every
+  facade call. Third-party dependency files are version-checked rather than all
+  re-hashed after installation, so an actor with write access to the private
+  runtime directory remains outside the full hostile-runtime threat boundary.
+- Memory remains guidance only. This slice does not automatically promote
+  candidates, synchronize cross-project memory, update existing notes, or
+  resolve stale or conflicting memories; a human approval is the promotion
+  event for the activation-managed `wiki/memories` destination.
+- Startup recall reliability still needs a repeated fresh-task sample; a hook
+  success proves delivery of a bounded capsule, not that every model will use
+  recalled context perfectly.
+- Obsidian Local REST API integration, mixed/private-vault use, automatic
+  ingest/consolidation, and additional semantic or temporal retrieval remain
+  separate evaluations.
 - Native Codex Memories were not enabled globally, generated Codex memory files
   were not modified, and no real user vault was read while accepting this MVP.
 
-Any future real-vault access, global Codex configuration change, automatic
-promotion, external index, or broader storage backend requires a new human and
-Recon gate.
+Any future mixed/private-vault access, automatic plugin installation, automatic
+promotion without a human gate, external index, or broader storage backend
+requires a new human and Recon gate. The current activation itself is only
+approved for a dedicated disposable Vault and the explicit `--confirm` action.

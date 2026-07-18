@@ -15,6 +15,9 @@ $runtimeDir = Join-Path $tempRoot "runtime"
 $goRuntimeDir = Join-Path $tempRoot "go-runtime"
 $codeRuntimeDir = Join-Path $tempRoot "code-runtime"
 $previewRuntimeDir = Join-Path $tempRoot "preview-runtime"
+$memoryVaultDir = Join-Path $tempRoot "memory-vault"
+$memoryCodexDir = Join-Path $tempRoot "memory-codex"
+$memoryStateDir = Join-Path $tempRoot "memory-state"
 
 function Invoke-Step {
     param(
@@ -97,6 +100,14 @@ try {
         "-c",
         "import subprocess, sys; text = subprocess.check_output([sys.argv[1], 'run', '--help'], text=True); assert 'Usage: devframe run --pipeline <path>' in text; print('devframe run help ok')",
         $devframe
+    )
+    Invoke-Step "devframe memory installed lifecycle" $python @(
+        "-c",
+        "import json, pathlib, subprocess, sys; exe, vault, codex, state = sys.argv[1:]; pathlib.Path(vault, '.obsidian').mkdir(parents=True); pathlib.Path(codex).mkdir(); help_run = subprocess.run([exe, 'memory', '--help'], capture_output=True, text=True); assert help_run.returncode == 0 and 'Usage: devframe memory' in help_run.stdout; status = subprocess.run([exe, 'memory', 'status', '--state-dir', state, '--format', 'json'], capture_output=True, text=True); assert status.returncode == 0 and json.loads(status.stdout)['status'] == 'inactive'; preview = subprocess.run([exe, 'memory', 'activate', '--vault', vault, '--codex-home', codex, '--state-dir', state, '--format', 'json'], capture_output=True, text=True); assert preview.returncode == 0 and json.loads(preview.stdout)['status'] == 'preview'; assert not pathlib.Path(state).exists(); assert list(pathlib.Path(codex).iterdir()) == []; assert sorted(path.name for path in pathlib.Path(vault).iterdir()) == ['.obsidian']; repair = subprocess.run([exe, 'memory', 'repair', '--codex-home', codex, '--state-dir', state, '--format', 'json'], capture_output=True, text=True); assert repair.returncode == 2 and json.loads(repair.stdout)['error'] == 'memory_repair_rejected'; deactivate = subprocess.run([exe, 'memory', 'deactivate', '--codex-home', codex, '--state-dir', state, '--format', 'json'], capture_output=True, text=True); assert deactivate.returncode == 0 and json.loads(deactivate.stdout)['status'] == 'inactive'; print('memory installed lifecycle ok')",
+        $devframe,
+        $memoryVaultDir,
+        $memoryCodexDir,
+        $memoryStateDir
     )
     Invoke-Step "devframe dashboard help" $python @(
         "-c",

@@ -400,6 +400,9 @@ def _proposal_digest(proposal: dict[str, Any]) -> str:
             "staged_at",
         )
     }
+    for key in ("apply_contents", "apply_content_sha256"):
+        if key in proposal:
+            protected[key] = proposal.get(key)
     encoded = json.dumps(
         protected, sort_keys=True, ensure_ascii=True, separators=(",", ":")
     ).encode("utf-8")
@@ -427,6 +430,7 @@ def stage_writeback_proposal(
     redact_preview_root: bool = False,
     proposal_kind: str = "writeback",
     authority_fingerprint: str = "",
+    apply_contents: str | None = None,
 ) -> dict[str, Any]:
     """Validate and stage a proposed write-back as a pending, human-gated item.
 
@@ -444,12 +448,18 @@ def stage_writeback_proposal(
     if redact_preview_root:
         public_preview.pop("workspace_root", None)
     request_id = "wb-" + secrets.token_hex(8)
+    approved_contents = contents if apply_contents is None else apply_contents
+    if not isinstance(approved_contents, str):
+        raise WritebackError("apply_contents must be a string")
+    if len(approved_contents.encode("utf-8")) > max_bytes:
+        raise WritebackError("approved contents exceed max write-back size")
     proposal = {
         "request_id": request_id,
         "status": "pending",
         "workspace_root": str(Path(workspace_root).resolve()),
         "relative_path": preview["relative_path"],
         "contents": contents,
+        "apply_contents": approved_contents,
         "thread_id": str(thread_id or ""),
         "project_id": str(project_id or ""),
         "proposal_kind": str(proposal_kind or "writeback"),
@@ -458,6 +468,9 @@ def stage_writeback_proposal(
         "redact_preview_root": bool(redact_preview_root),
         "preview": public_preview,
         "content_sha256": hashlib.sha256(contents.encode("utf-8")).hexdigest(),
+        "apply_content_sha256": hashlib.sha256(
+            approved_contents.encode("utf-8")
+        ).hexdigest(),
         "staged_at": datetime.now(timezone.utc).isoformat(),
     }
     proposal["proposal_digest"] = _proposal_digest(proposal)
@@ -533,6 +546,7 @@ def _validate_proposal_for_apply(
     digest = str(proposal.get("proposal_digest") or "")
     if not digest or not secrets.compare_digest(digest, _proposal_digest(proposal)):
         raise WritebackError("write-back proposal integrity check failed")
+    _proposal_apply_contents(proposal)
     if is_memory_proposal:
         expected_authority = str(proposal.get("authority_fingerprint") or "")
         if not expected_authority:
@@ -551,6 +565,22 @@ def _validate_proposal_for_apply(
         if not secrets.compare_digest(expected_authority, current_authority):
             raise WritebackError("memory proposal authority changed")
     return is_memory_proposal
+
+
+def _proposal_apply_contents(proposal: dict[str, Any]) -> str:
+    contents = proposal.get("apply_contents", proposal.get("contents"))
+    if not isinstance(contents, str):
+        raise WritebackError("write-back proposal integrity check failed")
+    expected = proposal.get("apply_content_sha256")
+    if expected is not None and (
+        not isinstance(expected, str)
+        or not secrets.compare_digest(
+            expected,
+            hashlib.sha256(contents.encode("utf-8")).hexdigest(),
+        )
+    ):
+        raise WritebackError("write-back proposal integrity check failed")
+    return contents
 
 
 def _claim_pending_proposal(
@@ -711,7 +741,9 @@ def _matching_apply_audit(
     proposal: dict[str, Any],
 ) -> dict[str, Any] | None:
     request_id = _safe_request_id(str(proposal.get("request_id") or ""))
-    expected_digest = str(proposal.get("content_sha256") or "")
+    expected_digest = hashlib.sha256(
+        _proposal_apply_contents(proposal).encode("utf-8")
+    ).hexdigest()
     audit_dir = Path(runtime_dir).resolve() / "writeback-runs" / request_id
     if not audit_dir.is_dir():
         return None
@@ -736,7 +768,7 @@ def _write_recovery_audit(
     proposal: dict[str, Any],
 ) -> dict[str, Any]:
     request_id = _safe_request_id(str(proposal.get("request_id") or ""))
-    contents = str(proposal.get("contents") or "")
+    contents = _proposal_apply_contents(proposal)
     record: dict[str, Any] = {
         "applied": True,
         "action_id": request_id,
@@ -771,7 +803,9 @@ def _finish_recovered_memory_proposal(
         data = target.read_bytes()
     except OSError as exc:
         raise WritebackError("create-only target could not be verified") from exc
-    expected_digest = str(proposal.get("content_sha256") or "")
+    expected_digest = hashlib.sha256(
+        _proposal_apply_contents(proposal).encode("utf-8")
+    ).hexdigest()
     if hashlib.sha256(data).hexdigest() != expected_digest:
         _set_proposal_status(
             runtime_dir,
@@ -831,7 +865,7 @@ def _recover_memory_proposal(
             result = apply_writeback_with_audit(
                 proposal["workspace_root"],
                 proposal["relative_path"],
-                proposal["contents"],
+                _proposal_apply_contents(proposal),
                 runtime_dir=runtime_dir,
                 action_id=str(proposal.get("request_id") or ""),
                 confirm=True,
@@ -918,7 +952,7 @@ def resolve_writeback_proposal(
         result = apply_writeback_with_audit(
             proposal["workspace_root"],
             proposal["relative_path"],
-            proposal["contents"],
+            _proposal_apply_contents(proposal),
             runtime_dir=runtime_dir,
             action_id=rid,
             confirm=True,
