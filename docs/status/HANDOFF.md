@@ -5,8 +5,9 @@ Lifecycle state: **CANONICAL EXECUTION ROOT**
 Current verdict: **READY TO CONTINUE** on the bounded milestone below. This is
 not a release, deployment, or production verdict.
 
-Last reconciled: 2026-07-18 against the clean `main` worktree at
-`e7f5f489cb5037aaa3fb4a324dd99bb87d84aa25`, after M3 Batch 5 delivery.
+Last reconciled: 2026-07-18 against the local `main` candidate based on
+`d3495f4f`; `origin/main` remains at `e7f5f489` until the ordinary push gate is
+approved.
 
 ## Authority
 
@@ -68,7 +69,7 @@ The current public mainline includes these accepted capabilities:
 
 | Area | Current proof |
 |---|---|
-| Public repository | `main`, `origin/main`, and the remote `main` resolved to `e7f5f489`; the primary worktree was clean after M3 Batch 5 delivery |
+| Public repository | Local `main` is based on `d3495f4f` and contains two reviewed, unpushed commits above `origin/main` at `e7f5f489`; the accepted M4 closure slice also remains local until the ordinary push gate is approved |
 | Release history | GitHub Release `v0.1.0` exists; PyPI, deployment, and production rollout remain separate decisions |
 | Governed coding | TaskSpec dispatch, execution reports, sealed context, review/gate evidence, and opt-in finalization exist |
 | Acceptance safety | PR #29 requires canonical acceptance evidence instead of trusting worker status alone |
@@ -109,8 +110,8 @@ permission to start parallel implementation.
 | M0. Authority consolidation | accepted | One document controls direction and next work | Documentation drift, public snapshot, link, diff, and independent review gates passed |
 | M1. Canonical run truth | accepted | CLI and clients see one governance record for one physical run | Real-path duplicate-run RED became one deterministic canonical projection; invalid authority paths fail closed |
 | M2. Review closure | accepted | A real run moves from report to review, gate, and FinalVerdict without manual state reinterpretation | Real execution remains `review_pending` before independent review and becomes `final_ready` only after valid evidence |
-| M3. Kernel distribution contraction | active | A fresh checkout contains the DevFrame kernel and replaceable adapters, not a vendored client product | Tracked Tutti snapshot and importer are gone, local reference remains ignored, public paths and core tests pass, and the dashboard is documented as optional diagnostics |
-| M4. Executor equivalence | queued | The same TaskSpec can use command or ACP execution without changing governance meaning | Normalized RunRecord parity test passes; provider-specific data stays in provenance |
+| M3. Kernel distribution contraction | accepted | A fresh checkout contains the DevFrame kernel and replaceable adapters, not a vendored client product | Tracked Tutti snapshot and importer are gone, local reference remains ignored, public paths and core tests pass, and the dashboard is documented as optional diagnostics |
+| M4. Executor equivalence | accepted | The same TaskSpec can use command or ACP execution without changing governance meaning | Normalized RunRecord parity test passes; provider-specific data stays in provenance |
 | M5. Paper vertical | queued | Paper work reuses the same evidence, review, and gate authority | One bounded paper task completes through the canonical kernel without a parallel state machine |
 
 ## Completed Milestone: M1 Canonical Run Truth
@@ -181,7 +182,7 @@ closed. Evidence: `test_run_index.py` (40 passed), related regression tests
 and independent read-only review with P0/P1 equal to zero. A large-run event
 lookup index is a future P2 performance optimization, not an acceptance gap.
 
-## Current Milestone: M2 Review Closure
+## Completed Milestone: M2 Review Closure
 
 ### Objective
 
@@ -254,7 +255,7 @@ Accepted on 2026-07-18. No M2 production write set is open. Promote M3 only
 as read-only Recon until a durable Recon Receipt and reuse decision authorize a
 write-capable adapter slice.
 
-## Current Milestone: M3 Kernel Distribution Contraction
+## Completed Milestone: M3 Kernel Distribution Contraction
 
 ### Objective
 
@@ -433,6 +434,54 @@ Reviewer Index:
 | Review focus | Ensure exact staged paths contain no standalone dashboard/API change and the ordinary push remains non-force |
 | Verdict | PASS; P0=0, P1=0, P2=0, P3=0 |
 
+### M3 Closure Verdict
+
+Accepted on 2026-07-18. The closure audit confirmed that `products/tutti/`
+has zero tracked files, its retained local checkout is ignored, and the retired
+snapshot importer has no active execution path. The standalone dashboard and
+its API/security contracts remain intact. The final root-help contraction
+reduced the primary discovery screen from 48 to 35 lines while preserving all
+commands and subcommand help; the complete CLI gate passed 129 tests. No M3
+write set remains open.
+
+## Completed Milestone: M4 Executor Equivalence
+
+### Objective
+
+Prove that command and ACP execution remain replaceable adapters: they may
+retain different provenance, but they must project the same canonical
+governance meaning for an equivalent TaskSpec.
+
+### Verification
+
+The production capability was already present, so this milestone did not
+change production code. A durable production-shaped parity test now executes a
+real command worker and a mock governed ACP session through
+`run_go_dispatch`, persists TeamRuntime events, and reconciles each run through
+`build_run_index` using both `go_run` and `team_events` sources.
+
+Both drivers project the same canonical values for `domain`, `profile`,
+`outcome`, `review_state`, `gate_state`, and `acceptance_state`. Driver identity
+does not enter those governance fields; it remains in source-domain provenance.
+
+Reviewer Index:
+
+| Item | Evidence |
+|---|---|
+| Changed files | `packages/control-plane/tests/test_go_acp_driver.py`; this execution root records the accepted milestone |
+| Critical paths | `run_go_dispatch`; command worker; governed ACP session; TeamRuntime event persistence; `build_run_index` canonical `go_run + team_events` reconciliation |
+| Tests and checks | ACP, TeamRuntime, and RunIndex affected regression: 64 passed; docs-drift and Outcome-First policy checks: 32 passed; complete CLI gate: 129 passed; `git diff --check` passed |
+| Generated artifacts | Test-only temporary Git repositories, execution reports, TeamRuntime journals, and run indexes; no generated artifact is retained in the public repository |
+| Known gaps | Release, deployment, and production provider validation remain outside this milestone; provider/model identity is provenance rather than governance authority |
+| Review focus | Preserve semantic parity when adding executors; provider-specific fields must stay in provenance and must not alter review, gate, or acceptance meaning |
+| Verdict | Independent review PASS; P0=0, P1=0, P2=0, P3=0 |
+
+### M4 Verdict
+
+Accepted on 2026-07-18 as already implemented, with durable executor-parity
+proof added. A future executor must satisfy the same canonical parity contract
+before it can be treated as interchangeable.
+
 ### Stop Lines
 
 - No automatic review or FinalVerdict synthesis.
@@ -517,10 +566,14 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 | 2026-07-18 | Keep the dashboard as optional diagnostics but remove its shortcut from `devframe code` | The server has real client/API and safety duties; automatic launch parameters make the primary coding loop wider without adding unique capability |
 | 2026-07-18 | Accept M3 Batch 5 after the focused finding was repaired and independently re-reviewed | Five retired arguments now have production-parser coverage; standalone dashboard and API boundaries are unchanged; P0/P1/P2/P3 are zero |
 | 2026-07-18 | Replace the fixed nine-step milestone ritual with the existing Outcome-First risk profiles | The old verification guide contradicted the normative policy and imposed release-shaped work on low-risk batches; L0-L3 operating lanes now preserve hard gates while selecting proportionate evidence |
+| 2026-07-18 | Accept M3 after the distribution closure audit and root-help contraction | Tutti is external and ignored, the importer is retired, the dashboard remains an explicit optional diagnostic, and root discovery is concise without removing capability |
+| 2026-07-18 | Accept M4 as already implemented and retain a durable command/ACP parity test | Both executors traverse the production dispatch, TeamRuntime, and canonical RunIndex path with identical governance semantics; driver identity remains provenance |
 
 ## Next Action
 
-Start an L1 contraction of root `devframe --help`: keep the daily `devframe
-code` loop and concise category-level discovery, but remove the wall of
-specialist argument syntax from the root screen. Preserve every command and
-its subcommand help; this is navigation simplification, not capability removal.
+Start M5 with a bounded read-only capability matrix for one paper task. Trace
+the committed paper entrypoint through TaskSpec, execution evidence,
+independent review, gate evidence, and FinalVerdict. Run one safe canonical-path
+probe. Open a production write set only if that probe exposes a concrete gap;
+otherwise record the existing path as already satisfied. Do not create a
+parallel paper state machine or expand the client/dashboard surface.

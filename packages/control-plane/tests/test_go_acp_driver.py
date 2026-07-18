@@ -13,6 +13,7 @@ import textwrap
 from pathlib import Path
 
 from control_plane.go_dispatch import run_go_dispatch
+from control_plane.run_index import build_run_index
 from control_plane.team_runtime import build_team_runtime_view
 
 # Mock ACP agent: handshake, session, on prompt it writes target.py via the
@@ -48,6 +49,37 @@ MOCK_ACP_AGENT = textwrap.dedent(
             send({"jsonrpc":"2.0","id":mid,"error":{"code":-32601,"message":"nope"}})
     """
 )
+
+
+def _passing_command() -> list[str]:
+    report = chr(10).join([
+        "## ExecutionReport",
+        "",
+        "- **Status**: pass",
+        "- **Review Status**: draft",
+        "- **Changed Files**:",
+        "- (none)",
+        "- **Evidence**: command-driver parity probe",
+    ]) + chr(10)
+    script = (
+        "import os;"
+        "from pathlib import Path;"
+        f"Path(os.environ['RDGOAL_REPORT_PATH']).write_text({report!r},encoding='utf-8')"
+    )
+    return [sys.executable, "-c", script]
+
+
+def _canonical_go_record(runtime: Path) -> dict:
+    matches = []
+    for entry in build_run_index(runtime)["canonical_runs"]:
+        adapters = {
+            source.get("adapter_id")
+            for source in entry.get("provenance", {}).get("sources", [])
+        }
+        if {"go_run", "team_events"} <= adapters:
+            matches.append(entry["record"])
+    assert len(matches) == 1
+    return matches[0]
 
 
 def test_go_with_acp_driver_produces_report_and_records(tmp_path):
@@ -131,3 +163,74 @@ def test_default_driver_is_command(tmp_path):
         agents=1, targets=["a.py"], execute=False,
     )
     assert result.driver == "command"
+
+
+def test_command_and_acp_drivers_have_equivalent_canonical_governance(tmp_path):
+    projects = {}
+    runtimes = {}
+    for driver in ("command", "acp"):
+        root = tmp_path / driver
+        project = root / "proj"
+        project.mkdir(parents=True)
+        (project / "target.py").write_text("x = 0\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(project), "init", "-q"], check=True)
+        subprocess.run(["git", "-C", str(project), "config", "user.email", "t@e.com"], check=True)
+        subprocess.run(["git", "-C", str(project), "config", "user.name", "t"], check=True)
+        subprocess.run(["git", "-C", str(project), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(project), "commit", "-q", "-m", "init"], check=True)
+        projects[driver] = project
+        runtimes[driver] = root / "runtime"
+
+    acp_script = tmp_path / "acp" / "mock_acp_agent.py"
+    acp_script.write_text(MOCK_ACP_AGENT, encoding="utf-8")
+
+    command_result = run_go_dispatch(
+        projects["command"],
+        "equivalent governed task",
+        runtime_dir=runtimes["command"],
+        agents=1,
+        targets=["target.py"],
+        execute=True,
+        worker_command=_passing_command(),
+        driver="command",
+        timeout_seconds=60,
+    )
+    acp_result = run_go_dispatch(
+        projects["acp"],
+        "equivalent governed task",
+        runtime_dir=runtimes["acp"],
+        agents=1,
+        targets=["target.py"],
+        execute=True,
+        driver="acp",
+        acp_command=[sys.executable, str(acp_script)],
+        timeout_seconds=60,
+    )
+
+    assert command_result.status == acp_result.status == "passed"
+    semantic_keys = (
+        "domain",
+        "profile",
+        "outcome",
+        "review_state",
+        "gate_state",
+        "acceptance_state",
+    )
+    command_record = _canonical_go_record(runtimes["command"])
+    acp_record = _canonical_go_record(runtimes["acp"])
+    assert {key: command_record[key] for key in semantic_keys} == {
+        key: acp_record[key] for key in semantic_keys
+    } == {
+        "domain": "code",
+        "profile": "go",
+        "outcome": "passed",
+        "review_state": "review_pending",
+        "gate_state": "not_evaluated",
+        "acceptance_state": "review_pending",
+    }
+    assert "driver" not in command_record
+    assert "driver" not in acp_record
+    command_source = command_record["domain_refs"]["source_domain_refs"]["go_run"][0]
+    acp_source = acp_record["domain_refs"]["source_domain_refs"]["go_run"][0]
+    assert command_source["driver"] == "command"
+    assert acp_source["driver"] == "acp"
