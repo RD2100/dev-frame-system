@@ -1,4 +1,0 @@
-pnpm exec lint-staged
-pnpm check:electron-runtime-boundaries:staged
-pnpm check:ui-boundaries:staged
-pnpm check:renderer-boundaries:staged

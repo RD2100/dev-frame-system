@@ -84,14 +84,6 @@ $forbiddenRootNamePatterns = @(
     "review-bundle-*"
 )
 
-$tuttiAllowedBuildRoot = "products\tutti\apps\desktop\build"
-$tuttiAllowedBuildFiles = @(
-    "$tuttiAllowedBuildRoot\entitlements.mac.inherit.plist",
-    "$tuttiAllowedBuildRoot\entitlements.mac.plist",
-    "$tuttiAllowedBuildRoot\icon.png"
-)
-$tuttiWallpaperPath = "products\tutti\apps\desktop\src\renderer\src\assets\workspace-wallpaper\tutti.png"
-
 $forbiddenTextPatterns = @(
     @{
         Name = "private dev-frame-system checkout path"
@@ -127,7 +119,6 @@ $textScanExtensions = @(
 
 $textScanAllowlist = @(
     "packages\control-plane\tests\test_public_snapshot.py",
-    "scripts\import-tutti-snapshot.py",
     "scripts\verify-public-snapshot.ps1"
 )
 
@@ -139,7 +130,8 @@ $ignoredGeneratedDirs = @(
     ".vscode",
     ".pytest_cache",
     ".ruff_cache",
-    ".mypy_cache"
+    ".mypy_cache",
+    "products",
     "node_modules"
 )
 
@@ -153,28 +145,6 @@ function Test-IsUnderIgnoredGeneratedDir {
     $parts = $relative -split '[\\/]'
     foreach ($part in $parts) {
         if ($ignoredGeneratedDirs -contains $part) {
-            return $true
-        }
-    }
-    return $false
-}
-
-function Test-IsIgnoredTuttiLocalArtifact {
-    param(
-        [string]$BasePath,
-        [string]$RelativePath
-    )
-
-    if ([string]::IsNullOrWhiteSpace($RelativePath) -or -not $RelativePath.StartsWith("products\tutti\", [System.StringComparison]::OrdinalIgnoreCase)) {
-        return $false
-    }
-    $gitPath = $RelativePath -replace "\\", "/"
-    foreach ($ignoredPath in $script:ignoredTuttiLocalPaths) {
-        if (
-            $gitPath -eq $ignoredPath -or
-            $gitPath.StartsWith("$ignoredPath/", [System.StringComparison]::OrdinalIgnoreCase) -or
-            $ignoredPath.StartsWith("$gitPath/", [System.StringComparison]::OrdinalIgnoreCase)
-        ) {
             return $true
         }
     }
@@ -214,19 +184,6 @@ function Get-PublicSnapshotItems {
             $_
         }
     }
-}
-
-$script:ignoredTuttiLocalPaths = @()
-if (Test-Path -LiteralPath (Join-Path $rootPath ".git")) {
-    $script:ignoredTuttiLocalPaths = @(
-        & git -C $rootPath ls-files --others --ignored --exclude-standard --directory -- products/tutti 2>$null |
-            ForEach-Object {
-                $path = ($_.TrimEnd('/') -replace "\\", "/")
-                if (-not [string]::IsNullOrWhiteSpace($path)) {
-                    $path
-                }
-            }
-    )
 }
 
 $missing = New-Object System.Collections.Generic.List[string]
@@ -286,11 +243,16 @@ if ($FailOnTrackedForbidden -and (Test-Path -LiteralPath (Join-Path $rootPath ".
     $trackedFailures = New-Object System.Collections.Generic.List[string]
     $trackedForbidden = & git -C $rootPath ls-files -- `
         "chatgpt-review-reply.txt" `
-        "review-bundle-*" 2>$null
+        "review-bundle-*" `
+        "products/*" 2>$null
 
     foreach ($path in $trackedForbidden) {
         if (-not [string]::IsNullOrWhiteSpace($path)) {
-            $trackedFailures.Add("tracked forbidden review artifact: $path")
+            if ($path -like "products/*") {
+                $trackedFailures.Add("tracked bundled product: $path")
+            } else {
+                $trackedFailures.Add("tracked forbidden review artifact: $path")
+            }
         }
     }
 
@@ -309,22 +271,6 @@ Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | ForEach-Object {
     }
 
     $relative = Get-RelativeSnapshotPath -BasePath $rootPath -TargetPath $_.FullName
-
-    if (Test-IsIgnoredTuttiLocalArtifact -BasePath $rootPath -RelativePath $relative) {
-        return
-    }
-
-    if ($relative -eq $tuttiAllowedBuildRoot) {
-        return
-    }
-
-    if ($relative.StartsWith("$tuttiAllowedBuildRoot\", [System.StringComparison]::OrdinalIgnoreCase)) {
-        if (-not $_.PSIsContainer -and ($tuttiAllowedBuildFiles -contains $relative)) {
-            return
-        }
-        $violations.Add("forbidden tutti build artifact: $relative")
-        return
-    }
 
     if (Test-IsUnderIgnoredGeneratedDir -BasePath $rootPath -TargetPath $_.FullName) {
         return
@@ -352,7 +298,7 @@ Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | ForEach-Object {
         $violations.Add("forbidden extension: $relative")
     }
 
-    if (-not $_.PSIsContainer -and $_.Length -gt 5MB -and $relative -ne $tuttiWallpaperPath) {
+    if (-not $_.PSIsContainer -and $_.Length -gt 5MB) {
         $violations.Add("file exceeds 5MB: $relative")
     }
 }
@@ -374,9 +320,6 @@ Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | Where-Object {
     }
 
     $relative = Get-RelativeSnapshotPath -BasePath $rootPath -TargetPath $_.FullName
-    if (Test-IsIgnoredTuttiLocalArtifact -BasePath $rootPath -RelativePath $relative) {
-        return
-    }
     if ($textScanAllowlist -contains $relative) {
         return
     }
@@ -412,9 +355,6 @@ Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | Where-Object {
     }
 
     $relative = Get-RelativeSnapshotPath -BasePath $rootPath -TargetPath $jsonFile.FullName
-    if (Test-IsIgnoredTuttiLocalArtifact -BasePath $rootPath -RelativePath $relative) {
-        return
-    }
 
     try {
         $jsonText = [System.IO.File]::ReadAllText($jsonFile.FullName, $utf8)

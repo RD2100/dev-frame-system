@@ -465,6 +465,97 @@ def test_public_snapshot_ignores_empty_gitignored_tutti_build_dir():
         shutil.rmtree(probe_dir, ignore_errors=True)
 
 
+def test_tutti_snapshot_is_external_reference_only():
+    tracked = subprocess.check_output(
+        ["git", "ls-files", "--", "products/tutti"],
+        cwd=REPO_ROOT,
+        text=True,
+    ).splitlines()
+
+    assert tracked == []
+    assert not (REPO_ROOT / "scripts" / "import-tutti-snapshot.py").exists()
+
+
+def test_strict_public_snapshot_rejects_tracked_product_reference(tmp_path):
+    required_dirs = [
+        ".github/workflows",
+        "docs/agent-runtime/negative-test-fixtures",
+        "docs/assets",
+        "docs/status",
+        "packages/agent-acceptance",
+        "packages/ai-workflow-hub",
+        "packages/control-plane",
+        "packages/test-frame",
+        "rules",
+        "schemas",
+        "templates/runtime-bootstrap",
+    ]
+    for relative in required_dirs:
+        path = tmp_path / relative
+        path.mkdir(parents=True, exist_ok=True)
+
+    required_files = [
+        "README.md",
+        "README.zh-CN.md",
+        "AGENTS.md",
+        ".github/workflows/release-verify.yml",
+        "docs/assets/devframe-system-banner.svg",
+        "docs/module-sources.md",
+        "docs/status/release-readiness.md",
+        "docs/status/reviewer-index.md",
+        "rules/recon.md",
+        "scripts/verify-control-plane-wheel.ps1",
+        "scripts/verify-public-snapshot.ps1",
+        "scripts/verify-release.ps1",
+    ]
+    for relative in required_files:
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
+
+    (tmp_path / "README.md").write_text("", encoding="utf-8")
+    (tmp_path / "README.zh-CN.md").write_text("", encoding="utf-8")
+    (tmp_path / "AGENTS.md").write_text("rules/recon.md", encoding="utf-8")
+    (tmp_path / "rules" / "README.md").write_text("recon.md", encoding="utf-8")
+    (tmp_path / "rules" / "open-source-reuse.md").write_text("rules/recon.md", encoding="utf-8")
+    (tmp_path / "rules" / "recon.md").write_text(
+        "RULE recon-001: Recon Gate Before Write-Capable Work",
+        encoding="utf-8",
+    )
+    (tmp_path / "docs" / "agent-runtime" / "negative-test-fixtures" / "NEG-031-missing-recon-receipt.json").write_text(
+        '{"name": "Missing Recon Receipt"}',
+        encoding="utf-8",
+    )
+    shutil.copy2(
+        REPO_ROOT / "scripts" / "verify-public-snapshot.ps1",
+        tmp_path / "scripts" / "verify-public-snapshot.ps1",
+    )
+    product_file = tmp_path / "products" / "tutti" / "README.md"
+    product_file.parent.mkdir(parents=True)
+    product_file.write_text("bundled product", encoding="utf-8")
+
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "products/tutti/README.md"], cwd=tmp_path, check=True)
+    result = subprocess.run(
+        [
+            "powershell",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(tmp_path / "scripts" / "verify-public-snapshot.ps1"),
+            "-FailOnTrackedForbidden",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "tracked bundled product: products/tutti/README.md" in result.stdout
+
+
 def test_public_snapshot_rejects_root_ai_bridge_dir():
     probe_dir = REPO_ROOT / ".ai-bridge"
     probe_dir.mkdir(parents=True, exist_ok=True)
@@ -841,6 +932,7 @@ def test_release_gate_enables_git_index_artifact_check():
 
     assert "-FailOnTrackedForbidden" in release_script
     assert "tracked forbidden review artifact" in snapshot_script
+    assert "tracked bundled product" in snapshot_script
 
 
 def test_release_gate_runs_docs_drift_validator_through_pytest():

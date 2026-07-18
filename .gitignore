@@ -38,6 +38,10 @@ coverage/
 .opencode/
 .vscode/
 
+# External product/reference checkouts are kept locally, not vendored into
+# the DevFrame distribution.
+products/
+
 # Local runtime journals (also kept under .devframe-runtime/ by default). Listed
 # by name to defend against a misconfigured --runtime-dir pointing at a tracked path.
 rdgoal-events.jsonl

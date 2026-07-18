@@ -6,8 +6,8 @@ Current verdict: **READY TO CONTINUE** on the bounded milestone below. This is
 not a release, deployment, or production verdict.
 
 Last reconciled: 2026-07-18 against the clean `main` worktree at
-`0f2f4a235e25f6f89c6da64dfda911c326675f94`, immediately before this
-documentation update.
+`d6c03f7b384f16f5be7dce0fb8246c7e5737ec0a`, immediately before this
+distribution-contraction slice.
 
 ## Authority
 
@@ -69,7 +69,7 @@ The current public mainline includes these accepted capabilities:
 
 | Area | Current proof |
 |---|---|
-| Public repository | `main` and `origin/main` both resolve to `b996c74f`; primary worktree was clean at reconciliation |
+| Public repository | `main` and `origin/main` both resolved to `d6c03f7b` immediately before this cleanup slice; the primary worktree was clean at reconciliation |
 | Release history | GitHub Release `v0.1.0` exists; PyPI, deployment, and production rollout remain separate decisions |
 | Governed coding | TaskSpec dispatch, execution reports, sealed context, review/gate evidence, and opt-in finalization exist |
 | Acceptance safety | PR #29 requires canonical acceptance evidence instead of trusting worker status alone |
@@ -90,6 +90,7 @@ recently closed P1 risks are:
 |---|---|---|---|---|---|
 | KERNEL-001 | closed | P1 | One physical go run could appear as separate `go_run` and `team_events` projections with the same canonical `run_id`; the team projection could lose the project identity | Canonical real-path RED→GREEN, 40 RunIndex tests, 87 related regressions, a clean public snapshot, and an independent read-only review passed on 2026-07-18 | One deterministic canonical read view per physical run, with merged provenance and fail-closed acceptance state |
 | DOCS-001 | closed | P1 | 120 tracked status documents could be mistaken for competing current plans | Lifecycle demotion, authority tests, docs-drift checks, independent review, and a clean exported public-snapshot gate passed on 2026-07-18 | `HANDOFF.md` is the only scheduling authority; all other status documents are explicitly non-scheduling references |
+| DIST-001 | closed | P1 | A 3,770-file Tutti snapshot and importer made a replaceable client look like part of the DevFrame kernel and inflated the public checkout | Real RED probe, exact Git untracking, ignored local-reference check, strict tracked-product probe, 1,564 control-plane tests passed, and no active importer references | `products/tutti/` is not tracked, the local reference is ignored, and the kernel distribution remains self-contained |
 
 `DOCS-001` is mitigated by this document slice. Physical archival or deletion
 is a later cleanup operation and must first prove that no active validator,
@@ -105,7 +106,7 @@ permission to start parallel implementation.
 | M0. Authority consolidation | accepted | One document controls direction and next work | Documentation drift, public snapshot, link, diff, and independent review gates passed |
 | M1. Canonical run truth | accepted | CLI and clients see one governance record for one physical run | Real-path duplicate-run RED became one deterministic canonical projection; invalid authority paths fail closed |
 | M2. Review closure | accepted | A real run moves from report to review, gate, and FinalVerdict without manual state reinterpretation | Real execution remains `review_pending` before independent review and becomes `final_ready` only after valid evidence |
-| M3. Tutti adapter | active (Recon) | Tutti opens the existing DevFrame dashboard as a local Workspace App | Local app load/reload, `/healthz`, `/state.json`, and a visible Tutti path pass without Tutti core changes |
+| M3. Kernel distribution contraction | active | A fresh checkout contains the DevFrame kernel and replaceable adapters, not a vendored client product | Tracked Tutti snapshot and importer are gone, local reference remains ignored, public paths and core tests pass, and the dashboard is documented as optional diagnostics |
 | M4. Executor equivalence | queued | The same TaskSpec can use command or ACP execution without changing governance meaning | Normalized RunRecord parity test passes; provider-specific data stays in provenance |
 | M5. Paper vertical | queued | Paper work reuses the same evidence, review, and gate authority | One bounded paper task completes through the canonical kernel without a parallel state machine |
 
@@ -250,35 +251,56 @@ Accepted on 2026-07-18. No M2 production write set is open. Promote M3 only
 as read-only Recon until a durable Recon Receipt and reuse decision authorize a
 write-capable adapter slice.
 
-## Current Milestone: M3 Tutti Adapter Recon
+## Current Milestone: M3 Kernel Distribution Contraction
 
 ### Objective
 
-Determine the smallest public, read-only adapter that lets a local Tutti
-Workspace App display the existing DevFrame dashboard without changing Tutti
-core or creating a second governance authority.
+Reduce the public repository to the governance kernel and its necessary,
+understandable adapters. Tutti remains an external reference checkout, not a
+vendored product or a second implementation path. The dashboard remains
+available as an optional diagnostic surface while its product value is assessed;
+it is not the primary delivery target.
 
-### Frozen Recon Scope
+### Frozen Cleanup Scope
 
-- Read existing DevFrame dashboard entrypoints and their `/healthz` and
-  `/state.json` contracts.
-- Read the existing Tutti Workspace App local-app load/reload boundary and
-  identify its public extension mechanism.
-- Produce the directory-level resource map, capability matrix, reuse candidate
-  list, integration risk table, and build-vs-buy decision required by
-  `rules/recon.md` RULE recon-002 and RULE recon-003.
-- Record whether the existing Tutti Workspace App is reusable as-is or needs a
-  thin adapter; check its license and public-distribution boundary before any
-  source is copied or vendored.
+- Remove the tracked `products/tutti/` snapshot from the public distribution;
+  keep any local checkout available only as an ignored external reference.
+- Remove the one-off snapshot importer that exists only to recreate the
+  vendored copy.
+- Preserve the DevFrame CLI, governance kernel, schemas, tests, and necessary
+  adapter contracts.
+- Inventory dashboard references before any later decision to retire or shrink
+  that code; this slice does not delete a live CLI surface.
+- Keep all historical Tutti evidence as supporting records unless a later
+  cleanup proves it is unreferenced and safe to remove.
 
 ### Stop Lines
 
-- No Tutti core change, vendoring, submodule, client runtime, provider binding,
-  or dashboard rewrite.
-- No production write set or coder dispatch before a durable Recon Receipt is
-  recorded and the reuse decision is reviewed.
+- No Tutti core change, submodule, client runtime, provider binding, or
+  dashboard rewrite.
+- Do not delete the local external reference checkout in this slice.
 - DevFrame keeps TaskSpec, run identity, evidence, review, gates, decisions,
   and FinalVerdict authority under `rules/open-source-reuse.md` RULE reuse-002.
+
+### M3 Batch 1 Verification
+
+The first contraction batch externalizes the local Tutti reference without
+deleting its disk copy. The public repository no longer tracks the snapshot or
+the one-off `scripts/import-tutti-snapshot.py` importer. The public snapshot
+script now treats `products/` as an ignored external-reference root and its
+strict mode rejects any future tracked product path.
+
+Reviewer Index:
+
+| Item | Evidence |
+|---|---|
+| Changed paths | `.gitignore`, `README.md`, `README.zh-CN.md`, `scripts/verify-public-snapshot.ps1`, `packages/control-plane/tests/test_public_snapshot.py`, `docs/status/HANDOFF.md`; exact deletion set is the tracked `products/tutti/` snapshot plus `scripts/import-tutti-snapshot.py` |
+| Preserved paths | The local `products/tutti/` directory remains on disk and is ignored; no local reference files were physically deleted |
+| Critical paths | Public snapshot traversal, strict tracked-product check, public distribution boundary, `devframe code` product positioning |
+| Real-path tests | RED before cleanup: tracked Tutti paths reported by `git ls-files`; GREEN after cleanup: external-reference probe and strict tracked-product probe passed |
+| Regression tests | `python -m pytest packages/control-plane/tests -q` -> 1,564 passed, 1 skipped; four public-snapshot tests remain blocked by pre-existing `.agents`, `.aiworkflow/reports`, `.claude`, `.codex`, and `.gsd` directories in the primary worktree |
+| Static checks | `git diff --check` passed; `git ls-files products/tutti` -> 0; `git check-ignore products/tutti/README.md` -> ignored |
+| Findings and focus | P0=0, P1=0 for this slice. Verify a clean checkout's public snapshot before release; do not treat the local ignored reference as a release artifact |
 
 ### Stop Lines
 
@@ -346,16 +368,18 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 | 2026-07-18 | Keep `docs/status/HANDOFF.md` as the canonical path and expand it instead of creating another master plan | Reusing the established entrypoint reduces document sprawl |
 | 2026-07-18 | Define DevFrame as a governance kernel, not a new monolithic runtime package | Existing contracts and authority paths are substantial; another facade would duplicate them |
 | 2026-07-18 | Make canonical run reconciliation the first implementation milestone | A real cluster probe exposed duplicate identity before any new client or adapter work |
-| 2026-07-18 | Use a Tutti Workspace App wrapper before modifying Tutti core | Existing local-app load/reload and dashboard endpoints already provide the required seam |
+| 2026-07-18 | Keep Tutti as an external reference and defer Workspace App integration | Existing local-app load/reload and dashboard endpoints remain optional references; no required user flow currently justifies a public adapter |
 | 2026-07-18 | Defer paper expansion until run identity, review closure, and executor parity are proven | Domain growth must not hide an unstable kernel boundary |
 | 2026-07-18 | Accept M0 and promote M1 to active | Authority tests, docs drift, clean exported snapshot, actual diff review, and independent review passed |
 | 2026-07-18 | Accept M1 and promote M2 to active | Canonical projection, authority-boundary probes, clean snapshot, actual diff review, and independent read-only review passed |
 | 2026-07-18 | Close the first M2 review-closure increment as already satisfied | Existing go-evidence, TeamRuntime, and RunIndex paths provide the required valid and invalid lifecycle transitions |
 | 2026-07-18 | Accept M2 and promote M3 to read-only Recon | Full production-shaped lifecycle tests and an independent source review found no uncovered review-closure transition |
+| 2026-07-18 | Deprioritize Tutti dashboard integration and contract M3 as distribution contraction | The kernel is the product; a vendored 3,770-file client snapshot adds maintenance cost without proving a required user flow |
 
 ## Next Action
 
-Perform the M3 Tutti Adapter Recon and publish one durable Recon Receipt with
-the resource map, reuse decision, license/public-surface check, exact adapter
-boundary, and smallest safe follow-up slice. Do not edit Tutti or dispatch a
-write-capable worker before that receipt passes review.
+Run a separate reference audit of status documents and scripts. Classify each
+candidate as active, supporting, historical, or safe-to-delete; then execute
+only the first deletion batch whose references and validators are proven clear.
+Only after that audit may the project decide whether any dashboard
+implementation is truly unused and removable.

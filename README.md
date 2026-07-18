@@ -57,7 +57,7 @@ run later.
 
 Everything else exists to support that loop:
 
-- the dashboard is the control-plane view
+- the dashboard is an optional read-only diagnostic view
 - `rdgoal` is the deeper orchestration layer
 - the T3/RD-Code bridge is a secondary client track
 - MCP/ACP, provider selection, and paper flows are advanced capability surfaces
@@ -108,7 +108,7 @@ DevFrame's main product behavior is:
 
 Supporting behaviors:
 
-- **Control-plane view**: inspect runs, actions, sessions, and gates in the read-only dashboard.
+- **Optional diagnostics**: inspect runs, actions, sessions, and gates in the read-only dashboard when a visual view is useful.
 - **Advanced orchestration**: use `rdgoal`, `go`, or Web AI bindings when the default coding loop is not enough.
 - **Bootstrap and reuse**: install the same operating layer into another repo.
 

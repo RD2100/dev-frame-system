@@ -28,7 +28,7 @@ devframe go <project> <goal>
 rdgoal <project> <goal>
 ```
 
-**请先把 DevFrame 理解为一个受治理的编码产品。`devframe code` 是日常主循环；dashboard、rdgoal、RD-Code 客户端、MCP/ACP、paper workflow 都是围绕这条主线的支撑层或高级层。**
+**请先把 DevFrame 理解为一个受治理的编码产品。`devframe code` 是日常主循环；dashboard 只是可选的只读诊断视图，rdgoal、RD-Code 客户端、MCP/ACP、paper workflow 都是围绕这条主线的支撑层或高级层。**
 
 > **当前状态：** 本仓库在当前开发上下文中已经通过本地 release gate，
 > 但这不等于对外正式发布完成。确切边界见
