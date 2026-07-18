@@ -1,7 +1,15 @@
 # Verification Gates -- RD2100 Agent Runtime v2
 
 > Batch B1, 2026-05-27
-> Defines quality gates that every agent execution must pass through.
+> Defines finding severity and evidence semantics. Delivery intensity is chosen
+> from the normative
+> [`OUTCOME_FIRST_DELIVERY_POLICY.md`](../../packages/agent-acceptance/policies/OUTCOME_FIRST_DELIVERY_POLICY.md),
+> not from one fixed verification cycle.
+
+P0-P3 classify the consequence of a finding. They are not four mandatory tool
+runs for every change. A task first selects a delivery profile from blast
+radius, reversibility, and evidence criticality; it then applies the relevant
+gates without weakening any P0/P1 hard stop.
 
 ## Gate Hierarchy
 
@@ -72,31 +80,33 @@ Gate result: PASS -> continue. FAIL -> **WARNING, should fix but may proceed wit
 
 Gate result: PASS -> continue. FAIL -> **INFO, not blocking**.
 
-## Gate Execution Order
+## Delivery Profiles
 
-When an agent completes a task:
+The policy profiles remain the machine-facing vocabulary. The L0-L3 labels are
+only concise operating lanes for humans; they do not create another schema.
 
-```
-1. P0 Security Gate
-   - security-checklist runs (mandatory)
-   - Human must approve if gate fails
-   - BLOCKED state if any P0 check fails
+| Lane | Policy profile | Typical work | Required verification | Review |
+|------|----------------|--------------|-----------------------|--------|
+| L0 | `read_only`, or docs-only `low` | Inventory, explanation, narrow docs correction | Citations, links, parsing, or focused static checks | Root review; no code reviewer |
+| L1 | `low` | Local P2/P3 behavior, selectors, pure reducers, narrow diagnostics | Focused checks and a real path when behavior changes; broader checks wait for the containing milestone | Root review unless a stricter rule applies |
+| L2 | `medium` | Multi-file product flow, shared UI/business behavior, non-destructive config | Focused tests plus affected integration or build; one broad regression at the milestone or PR boundary | One batch review; independent review only when repository policy requires it |
+| L3 | `high`, `critical` | P0/P1, auth, concurrency, shared contracts, release, production, credentials, destructive work | Real-path regression plus affected integration and relevant broad/full verification | Independent review required; `critical` also keeps its explicit human gate |
 
-2. P1 Correctness Gate
-   - Reviewer-approved build/test evidence or explicit blocked_by_env record
-   - Regression comparison
-   - FAILED state if any P1 check fails
+Recon triggers in `rules/recon.md`, exact Git ownership in `rules/git.md`, and
+human gates remain applicable in every lane. A low lane removes duplicate
+ceremony; it never downgrades a high-severity finding.
 
-3. P2 Quality Gate
-   - ai-code-review runs (P2 level)
-   - performance-lint runs
-   - WARNING if issues found
+## Gate Selection
 
-4. P3 Completeness Gate
-   - Documentation check
-   - Changelog update
-   - INFO if incomplete
-```
+1. Declare one policy profile before selecting tests or review.
+2. Identify relevant P0-P3 findings from the actual scope. Any applicable P0
+   or P1 failure remains blocking.
+3. Run the profile's focused evidence first. Run broad or full checks once at
+   the containing milestone, PR, release, or L3 boundary.
+4. Use the profile's review requirement. Do not dispatch an independent
+   reviewer merely to satisfy a low-risk ritual.
+5. Record explicit PASS, FAIL, WARNING, BLOCKED, or justified SKIPPED results
+   only at the natural batch or milestone boundary.
 
 ## Agent-Acceptance Gate Mapping
 

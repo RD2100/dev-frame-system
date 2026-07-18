@@ -6,7 +6,7 @@ Current verdict: **READY TO CONTINUE** on the bounded milestone below. This is
 not a release, deployment, or production verdict.
 
 Last reconciled: 2026-07-18 against the clean `main` worktree at
-`c832fa4ab9a3e15b77fa91e2ccbf6919fdd6ad06`, immediately before M3 Batch 5.
+`e7f5f489cb5037aaa3fb4a324dd99bb87d84aa25`, after M3 Batch 5 delivery.
 
 ## Authority
 
@@ -68,7 +68,7 @@ The current public mainline includes these accepted capabilities:
 
 | Area | Current proof |
 |---|---|
-| Public repository | `main` and `origin/main` both resolved to `c832fa4a` immediately before M3 Batch 5; the primary worktree was clean at reconciliation |
+| Public repository | `main`, `origin/main`, and the remote `main` resolved to `e7f5f489`; the primary worktree was clean after M3 Batch 5 delivery |
 | Release history | GitHub Release `v0.1.0` exists; PyPI, deployment, and production rollout remain separate decisions |
 | Governed coding | TaskSpec dispatch, execution reports, sealed context, review/gate evidence, and opt-in finalization exist |
 | Acceptance safety | PR #29 requires canonical acceptance evidence instead of trusting worker status alone |
@@ -441,24 +441,32 @@ Reviewer Index:
 
 ## Execution Protocol
 
-Every milestone follows this loop:
+Use the risk profiles in
+`packages/agent-acceptance/policies/OUTCOME_FIRST_DELIVERY_POLICY.md` and the
+operating lanes in `docs/agent-runtime/verification-gates.md`.
 
-1. Reconcile this file against current `HEAD`, worktree state, existing tests,
-   and the relevant Recon Receipt.
-2. Freeze one bounded TaskSpec with read set, write set, non-goals, RED,
-   verification commands, and stop lines.
-3. Produce a real-path RED before changing P0/P1 behavior.
-4. Implement the smallest GREEN without adjacent refactoring.
-5. Run targeted tests, relevant regression tests, the public snapshot gate,
-   and `git diff --check`.
-6. Reconcile the actual diff and generated artifacts against the frozen slice.
-7. Perform independent review and record a Reviewer Index: changed files,
-   critical paths, tests, artifacts, gaps, and review focus.
-8. Only the root coordinator may accept the slice and perform exact-path Git
-   staging and one logical commit. Push, PR, merge, release, and deployment
-   follow the human gates in `AGENTS.md`.
-9. Update this file with the milestone verdict and promote exactly one queued
-   milestone to current.
+1. **Select**: inspect committed `HEAD`, the current failure, and this file;
+   freeze one coherent outcome, write set, non-goals, and risk profile. Reuse an
+   existing Recon Receipt, and open Recon only when `rules/recon.md` triggers.
+2. **Implement**: make the smallest reversible batch. Require a real RED for a
+   P0/P1 failure or changed production behavior when the path can be exercised;
+   do not manufacture RED cases for wording-only work.
+3. **Verify**: run focused evidence for the selected profile. Add affected
+   integration/build checks for medium work, and reserve broad/full suites plus
+   mandatory independent review for the milestone, PR, or high/critical gate.
+4. **Accept and deliver**: reconcile the actual diff once. Follow the selected
+   review profile, then use root-only exact staging and one logical commit.
+   Push, PR, merge, release, and deployment retain the human gates in
+   `AGENTS.md`.
+5. **Record at the natural milestone boundary**: update this file once with
+   the outcome, decisive evidence, residual risk, and next finite candidate.
+   Do not create status-only batches or count Goal updates, polling, and report
+   repetition as delivery.
+
+For ordinary low- and medium-risk delivery, governance effort should remain
+near or below the policy's coarse 20 percent budget. When it does not, remove
+duplicate suites, reports, polling, and reviewer retries before changing a hard
+safety gate.
 
 Activity, worker count, document count, and report count are not outcomes.
 Progress requires a product artifact, actual diff, test result, review verdict,
@@ -508,11 +516,11 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 | 2026-07-18 | Deprioritize Tutti dashboard integration and contract M3 as distribution contraction | The kernel is the product; a vendored 3,770-file client snapshot adds maintenance cost without proving a required user flow |
 | 2026-07-18 | Keep the dashboard as optional diagnostics but remove its shortcut from `devframe code` | The server has real client/API and safety duties; automatic launch parameters make the primary coding loop wider without adding unique capability |
 | 2026-07-18 | Accept M3 Batch 5 after the focused finding was repaired and independently re-reviewed | Five retired arguments now have production-parser coverage; standalone dashboard and API boundaries are unchanged; P0/P1/P2/P3 are zero |
+| 2026-07-18 | Replace the fixed nine-step milestone ritual with the existing Outcome-First risk profiles | The old verification guide contradicted the normative policy and imposed release-shaped work on low-risk batches; L0-L3 operating lanes now preserve hard gates while selecting proportionate evidence |
 
 ## Next Action
 
-Finish the accepted Batch 5 Git delivery: stage only the 14 reviewed paths,
-verify the cached path set and content, create one logical commit, pass the
-strict clean-candidate snapshot, and use the current user's authorization for
-an ordinary non-force push. Stop this bounded slice after remote reconciliation;
-select the next M3 contraction only under a separate finite goal.
+Start an L1 contraction of root `devframe --help`: keep the daily `devframe
+code` loop and concise category-level discovery, but remove the wall of
+specialist argument syntax from the root screen. Preserve every command and
+its subcommand help; this is navigation simplification, not capability removal.

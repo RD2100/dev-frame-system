@@ -110,6 +110,41 @@ def test_risk_profiles_preserve_hard_gates_and_reduce_repeated_work():
     assert "no-fake-green" in policy
 
 
+def test_verification_entrypoints_apply_risk_profiles_without_a_fixed_full_cycle():
+    gates = _read(REPO_ROOT / "docs" / "agent-runtime" / "verification-gates.md")
+    handoff = _read(REPO_ROOT / "docs" / "status" / "HANDOFF.md")
+    execution_protocol = handoff.split("## Execution Protocol", 1)[1].split(
+        "## Documentation Policy", 1
+    )[0]
+    normalized_gates = " ".join(gates.split())
+    normalized_execution_protocol = " ".join(execution_protocol.split())
+
+    assert "OUTCOME_FIRST_DELIVERY_POLICY.md" in gates
+    for profile in ("`read_only`", "`low`", "`medium`", "`high`", "`critical`"):
+        assert profile in gates
+    for lane in ("L0", "L1", "L2", "L3"):
+        assert re.search(rf"^\| {lane} \|", gates, flags=re.MULTILINE)
+    assert "Root review; no code reviewer" in normalized_gates
+    assert "Root review unless a stricter rule applies" in normalized_gates
+    assert "one broad regression at the milestone or PR boundary" in normalized_gates
+    assert "Independent review required" in normalized_gates
+    assert "Do not dispatch an independent reviewer" in normalized_gates
+    assert "every agent execution must pass through" not in gates
+
+    assert "OUTCOME_FIRST_DELIVERY_POLICY.md" in normalized_execution_protocol
+    assert "selected profile" in normalized_execution_protocol
+    assert "reserve broad/full suites" in normalized_execution_protocol
+    assert "high/critical gate" in normalized_execution_protocol
+    assert "natural milestone boundary" in normalized_execution_protocol
+    for fixed_cycle_text in (
+        "Every milestone follows this loop",
+        "Produce a real-path RED",
+        "public snapshot gate",
+        "Perform independent review and record",
+    ):
+        assert fixed_cycle_text not in execution_protocol
+
+
 def test_project_rules_expose_outcome_first_decision_points():
     orchestration = _read(REPO_ROOT / "rules" / "orchestration.md")
     normalized_orchestration = " ".join(orchestration.split()).lower()
