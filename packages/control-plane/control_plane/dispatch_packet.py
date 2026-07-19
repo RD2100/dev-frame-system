@@ -5,6 +5,7 @@ import json
 import re
 import time
 import uuid
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -67,7 +68,8 @@ class DispatchPacketStore:
     def write_packet(self, *, contract: ProjectContract, project_root: str | Path,
                      requirement: str, operation: str, targets: list[str],
                      decision: Decision, objective: SubAgentObjective,
-                     dispatch_ready: bool) -> DispatchPacket:
+                     dispatch_ready: bool, work_type: str | None = None,
+                     workflow_profile: dict[str, Any] | None = None) -> DispatchPacket:
         self._ensure_runtime_outside_repo()
         packet_id = f"rdgoal-{contract.project_id}-{int(time.time() * 1000)}-{uuid.uuid4().hex[:6]}"
         packet_dir = self.outbox / contract.project_id / packet_id
@@ -91,6 +93,8 @@ class DispatchPacketStore:
                 targets=targets,
                 decision=decision,
                 dispatch_ready=dispatch_ready,
+                work_type=work_type,
+                workflow_profile=workflow_profile,
             ),
             objective_text=objective.text,
             context_packet_path=str(context_packet_path),
@@ -182,9 +186,10 @@ class DispatchPacketStore:
 
     def _task_spec(self, *, packet_id: str, contract: ProjectContract, requirement: str,
                    operation: str, targets: list[str], decision: Decision,
-                   dispatch_ready: bool) -> dict[str, Any]:
+                   dispatch_ready: bool, work_type: str | None = None,
+                   workflow_profile: dict[str, Any] | None = None) -> dict[str, Any]:
         status = "ready" if dispatch_ready else "deferred"
-        return {
+        task_spec = {
             "task_id": packet_id,
             "title": f"rdgoal: {operation}",
             "priority": "P2",
@@ -227,10 +232,27 @@ class DispatchPacketStore:
                 "key_rotation_needed": None,
             },
         }
+        if work_type:
+            task_spec["work_type"] = str(work_type)
+        if workflow_profile is not None:
+            task_spec["workflow_profile"] = deepcopy(workflow_profile)
+        return task_spec
 
     def _task_spec_markdown(self, packet: DispatchPacket) -> str:
         spec = packet.task_spec
         targets = "\n".join(f"- {target}" for target in packet.targets) or "- (none)"
+        profile = spec.get("workflow_profile")
+        profile_id = str(profile.get("profile_id") or "") if isinstance(profile, dict) else ""
+        profile_line = (
+            f"- **Workflow Profile**: {profile_id} (planned only)\n"
+            if profile_id
+            else ""
+        )
+        work_type_line = (
+            f"- **Work Type**: {spec['work_type']}\n"
+            if spec.get("work_type")
+            else ""
+        )
         return (
             f"# TaskSpec: {spec['task_id']}\n\n"
             f"- **Project**: {packet.project_id}\n"
@@ -238,6 +260,8 @@ class DispatchPacketStore:
             f"- **Decision Mode**: {packet.decision_mode}\n"
             f"- **Dispatch Ready**: {packet.dispatch_ready}\n"
             f"- **Project Root**: {packet.project_root}\n\n"
+            f"{work_type_line}"
+            f"{profile_line}"
             "## Targets\n\n"
             f"{targets}\n\n"
             "## Objective\n\n"

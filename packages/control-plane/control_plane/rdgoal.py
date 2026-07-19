@@ -4,6 +4,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from .orchestrator import DispatchResult, Orchestrator
 from .project_contract import render_contract_markdown, slugify_project_id
@@ -94,7 +95,9 @@ def run_rdinit(project_root: str | Path, *, apply: bool = False) -> str:
 def rdgoal(orchestrator: Orchestrator, project_path: str | Path, requirement: str,
            *, operation: str = "direction choice", targets: list[str] | None = None,
            apply_rdinit: bool = False,
-           contracts_dir: str | Path | None = None) -> RdGoalResult:
+           contracts_dir: str | Path | None = None,
+           work_type: str | None = None,
+           workflow_profile: dict[str, Any] | None = None) -> RdGoalResult:
     root = Path(project_path).resolve()
     project_id = slugify_project_id(root)
     notes: list[str] = []
@@ -120,6 +123,8 @@ def rdgoal(orchestrator: Orchestrator, project_path: str | Path, requirement: st
         requirement=requirement,
         operation=operation,
         targets=targets or [],
+        work_type=work_type,
+        workflow_profile=workflow_profile,
     )
 
     return RdGoalResult(

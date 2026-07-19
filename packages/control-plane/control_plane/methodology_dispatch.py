@@ -1,9 +1,138 @@
 """Read-only methodology dispatch matrix for dev-frame-system."""
 from __future__ import annotations
 
+import hashlib
+import json
+from pathlib import Path
 from typing import Any
 
-from .skill_registry import list_methodology_skills
+from .skill_registry import REPO_ROOT, list_methodology_skills
+
+WORKFLOW_PROFILE_CONTRACT_VERSION = "workflow-profile.v1"
+WORKFLOW_PROFILE_RESOLVER_VERSION = "workflow-profile-resolver.v1"
+
+_WORKFLOW_PROFILE_DEFINITIONS: dict[str, dict[str, Any]] = {
+    "coding": {
+        "profile_id": "governed-coding-v1",
+        "profile_version": "1.0.0",
+        "selection_source": "coding_workflow_entrypoint",
+        "network_enabled": False,
+        "require_red_green_evidence": True,
+        "stages": [
+            {
+                "stage_id": "intent",
+                "skill_id": "intent-framing-gate",
+                "execution_mode": "instruction",
+                "permissions": {"read": True, "write": False, "network": False, "credentials": False},
+                "human_gate": "none",
+                "required_artifacts": ["task_spec"],
+                "required_evidence": ["requirement_alignment"],
+            },
+            {
+                "stage_id": "implementation",
+                "skill_id": "tdd",
+                "execution_mode": "instruction",
+                "permissions": {"read": True, "write": True, "network": False, "credentials": False},
+                "human_gate": "none",
+                "required_artifacts": ["actual_diff", "test_results"],
+                "required_evidence": ["red_green_or_direct_verification"],
+            },
+            {
+                "stage_id": "evidence",
+                "skill_id": "evidence-driven-acceptance",
+                "execution_mode": "advisory",
+                "permissions": {"read": True, "write": False, "network": False, "credentials": False},
+                "human_gate": "none",
+                "required_artifacts": ["execution_report"],
+                "required_evidence": ["verification_results"],
+            },
+            {
+                "stage_id": "review",
+                "skill_id": "review-governance-kernel",
+                "execution_mode": "advisory",
+                "permissions": {"read": True, "write": False, "network": False, "credentials": False},
+                "human_gate": "none",
+                "required_artifacts": ["review_report"],
+                "required_evidence": ["independent_review", "gate_decision"],
+            },
+        ],
+    },
+    "paper": {
+        "profile_id": "governed-paper-v1",
+        "profile_version": "1.0.0",
+        "selection_source": "paper_pipeline_entrypoint",
+        "network_enabled": True,
+        "require_red_green_evidence": False,
+        "stages": [
+            {
+                "stage_id": "public_source_acquisition",
+                "skill_id": "agent-reach",
+                "execution_mode": "tool",
+                "permissions": {"read": True, "write": False, "network": True, "credentials": False},
+                "human_gate": "required_before_execution",
+                "required_artifacts": ["source_inventory"],
+                "required_evidence": ["public_source_log"],
+                "external_adoption_required": True,
+            },
+            {
+                "stage_id": "citation_lock",
+                "skill_id": "context-pack-builder",
+                "execution_mode": "instruction",
+                "permissions": {"read": True, "write": True, "network": False, "credentials": False},
+                "human_gate": "none",
+                "required_artifacts": ["citation_lock"],
+                "required_evidence": ["source_hashes"],
+            },
+            {
+                "stage_id": "draft",
+                "skill_id": "external-brain",
+                "execution_mode": "instruction",
+                "permissions": {"read": True, "write": True, "network": False, "credentials": False},
+                "human_gate": "none",
+                "required_artifacts": ["paper_draft"],
+                "required_evidence": ["citation_coverage"],
+            },
+            {
+                "stage_id": "fact_check",
+                "skill_id": "evidence-driven-acceptance",
+                "execution_mode": "advisory",
+                "permissions": {"read": True, "write": False, "network": False, "credentials": False},
+                "human_gate": "none",
+                "required_artifacts": ["fact_check_report"],
+                "required_evidence": ["locked_claim_invariants"],
+            },
+            {
+                "stage_id": "expression_refinement",
+                "skill_id": "humanize",
+                "execution_mode": "instruction",
+                "permissions": {"read": True, "write": True, "network": False, "credentials": False},
+                "human_gate": "required_before_execution",
+                "required_artifacts": ["invariant_diff"],
+                "required_evidence": ["citations_numbers_formulas_names_claims_unchanged"],
+                "external_adoption_required": True,
+            },
+            {
+                "stage_id": "style_lint",
+                "skill_id": "ai-check",
+                "execution_mode": "advisory",
+                "permissions": {"read": True, "write": False, "network": False, "credentials": False},
+                "human_gate": "required_before_execution",
+                "required_artifacts": ["style_diagnostic"],
+                "required_evidence": ["diagnostic_only_no_authorship_claim"],
+                "external_adoption_required": True,
+            },
+            {
+                "stage_id": "review",
+                "skill_id": "review-governance-kernel",
+                "execution_mode": "advisory",
+                "permissions": {"read": True, "write": False, "network": False, "credentials": False},
+                "human_gate": "none",
+                "required_artifacts": ["review_report"],
+                "required_evidence": ["independent_review", "gate_decision"],
+            },
+        ],
+    },
+}
 
 _METHODOLOGY_TRAIT_OVERRIDES: dict[str, dict[str, Any]] = {
     "tdd": {
@@ -144,6 +273,181 @@ def _effective_run_constraints(
         return resolve_capabilities(skills.effective, SKILL_POLICY, hard_denies=p0_denies)
     except Exception:  # noqa: BLE001 - never break run dispatch on optional config
         return None
+
+
+def resolve_workflow_profile(
+    work_type: str | None,
+    *,
+    runtime_dir: Any = None,
+    project_id: str | None = None,
+) -> dict[str, Any]:
+    """Resolve a planned-only profile from trusted structured context."""
+    normalized_work_type = str(work_type or "").strip().lower()
+    definition = _WORKFLOW_PROFILE_DEFINITIONS.get(normalized_work_type)
+    if definition is None:
+        unresolved = {
+            "contract_version": WORKFLOW_PROFILE_CONTRACT_VERSION,
+            "resolver_version": WORKFLOW_PROFILE_RESOLVER_VERSION,
+            "profile_id": "unresolved",
+            "profile_version": "1.0.0",
+            "work_type": "generic",
+            "selection_source": "unresolved_structured_context",
+            "resolution_status": "human_required",
+            "execution_state": "planned_only",
+            "human_gate_required": True,
+            "constraints": {
+                "read_only": True,
+                "network_enabled": False,
+                "require_red_green_evidence": False,
+            },
+            "ordered_stages": [],
+        }
+        return _with_profile_fingerprint(unresolved)
+
+    constraints = _resolved_profile_constraints(
+        definition,
+        runtime_dir=runtime_dir,
+        project_id=project_id,
+    )
+    ordered_stages = [
+        _resolved_profile_stage(stage, constraints)
+        for stage in definition["stages"]
+    ]
+    human_gate_required = any(
+        stage["human_gate"] != "none" or stage["availability"] != "registered"
+        for stage in ordered_stages
+    )
+    profile = {
+        "contract_version": WORKFLOW_PROFILE_CONTRACT_VERSION,
+        "resolver_version": WORKFLOW_PROFILE_RESOLVER_VERSION,
+        "profile_id": definition["profile_id"],
+        "profile_version": definition["profile_version"],
+        "work_type": normalized_work_type,
+        "selection_source": definition["selection_source"],
+        "resolution_status": "selected",
+        "execution_state": "planned_only",
+        "human_gate_required": human_gate_required,
+        "constraints": constraints,
+        "ordered_stages": ordered_stages,
+    }
+    return _with_profile_fingerprint(profile)
+
+
+def _resolved_profile_constraints(
+    definition: dict[str, Any],
+    *,
+    runtime_dir: Any,
+    project_id: str | None,
+) -> dict[str, bool]:
+    constraints = {
+        "read_only": False,
+        "network_enabled": bool(definition["network_enabled"]),
+        "require_red_green_evidence": bool(
+            definition["require_red_green_evidence"]
+        ),
+    }
+    if not project_id:
+        return constraints
+    effective = _effective_run_constraints(runtime_dir, project_id)
+    if effective is None:
+        return constraints
+    constraints["read_only"] = bool(effective.get("readOnly"))
+    constraints["network_enabled"] = (
+        constraints["network_enabled"]
+        and bool(effective.get("networkEnabled"))
+    )
+    constraints["require_red_green_evidence"] = (
+        constraints["require_red_green_evidence"]
+        or bool(effective.get("requireRedGreenEvidence"))
+    )
+    return constraints
+
+
+def _resolved_profile_stage(
+    definition: dict[str, Any],
+    constraints: dict[str, bool],
+) -> dict[str, Any]:
+    permissions = dict(definition["permissions"])
+    if constraints["read_only"]:
+        permissions["write"] = False
+    if not constraints["network_enabled"]:
+        permissions["network"] = False
+    permissions["credentials"] = False
+
+    availability, source_path, skill_fingerprint = _skill_snapshot(
+        str(definition["skill_id"]),
+        external_adoption_required=bool(
+            definition.get("external_adoption_required")
+        ),
+    )
+    human_gate = str(definition["human_gate"])
+    if availability != "registered":
+        human_gate = "required_before_execution"
+    return {
+        "stage_id": str(definition["stage_id"]),
+        "skill_id": str(definition["skill_id"]),
+        "skill_source_path": source_path,
+        "skill_fingerprint": skill_fingerprint,
+        "availability": availability,
+        "execution_mode": str(definition["execution_mode"]),
+        "permissions": permissions,
+        "human_gate": human_gate,
+        "required_artifacts": list(definition["required_artifacts"]),
+        "required_evidence": list(definition["required_evidence"]),
+    }
+
+
+def _skill_snapshot(
+    skill_id: str,
+    *,
+    external_adoption_required: bool,
+) -> tuple[str, str | None, str | None]:
+    if external_adoption_required:
+        return "not_adopted", None, None
+    entry = METHODOLOGY_DISPATCH.get(skill_id)
+    if not entry:
+        return "missing", None, None
+    source_path = str(entry.get("source_path") or "").strip()
+    if not source_path:
+        return "missing", None, None
+    source = _existing_skill_source(source_path)
+    if source is None:
+        return "missing", source_path, None
+    try:
+        raw = source.read_bytes()
+    except OSError:
+        return "missing", source_path, None
+    return (
+        "registered",
+        source_path,
+        f"sha256:{hashlib.sha256(raw).hexdigest()}",
+    )
+
+
+def _existing_skill_source(source_path: str) -> Path | None:
+    package_root = Path(__file__).resolve().parents[1]
+    for root in (REPO_ROOT.resolve(), package_root.resolve()):
+        candidate = (root / source_path).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            continue
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _with_profile_fingerprint(profile: dict[str, Any]) -> dict[str, Any]:
+    canonical = json.dumps(
+        profile,
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return {
+        **profile,
+        "profile_fingerprint": f"sha256:{hashlib.sha256(canonical).hexdigest()}",
+    }
 
 
 def resolve_methodology(

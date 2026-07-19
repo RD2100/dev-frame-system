@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 
 import yaml
 
+from .methodology_dispatch import resolve_workflow_profile
 from .paper_pipeline_gate import (
     scan_submission_bypass,
     validate_evidence_pack,
@@ -73,6 +74,7 @@ def _paper_identity(target: Path) -> tuple[str, str]:
 
 def write_paper_task_spec(target: Path) -> Path:
     paper_id, title = _paper_identity(target)
+    workflow_profile = resolve_workflow_profile("paper")
     task_spec = {
         "task_id": PIPELINE_RUN_ID,
         "title": f"Synthetic paper review: {title}",
@@ -88,6 +90,8 @@ def write_paper_task_spec(target: Path) -> Path:
         ],
         "risk_notes": "Real paper content and external submission remain forbidden.",
         "estimated_tools": ["devframe-paper-pipeline"],
+        "work_type": "paper",
+        "workflow_profile": workflow_profile,
         "conflict_registry": {
             "read_set": [
                 "input/SYNTHETIC_PAPER.md",

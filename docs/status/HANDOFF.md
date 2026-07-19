@@ -5,7 +5,7 @@ Lifecycle state: **CANONICAL EXECUTION ROOT**
 Current verdict: **READY TO CONTINUE** on the bounded milestone below. This is
 not a release, deployment, or production verdict.
 
-Last reconciled: 2026-07-19 against the accepted local M9 candidate. Ordinary
+Last reconciled: 2026-07-19 against the accepted local M10A candidate. Ordinary
 push is authorized for this milestone; the remote head is verified as delivery
 evidence instead of being predicted in this document.
 
@@ -72,6 +72,7 @@ The current public mainline includes these accepted capabilities:
 | Public repository | Local `main` contains the accepted M1-M9 kernel and adapter slices; M9's exact commit and ordinary remote-head verification form the next delivery boundary |
 | Release history | GitHub Release `v0.1.0` exists; PyPI, deployment, and production rollout remain separate decisions |
 | Governed coding | TaskSpec dispatch, execution reports, sealed context, review/gate evidence, and opt-in finalization exist |
+| Workflow profiles | Trusted coding and paper entrypoints deterministically record ordered, permission-bounded, planned-only Skill stages; ambiguous work remains human-required |
 | Acceptance safety | PR #29 requires canonical acceptance evidence instead of trusting worker status alone |
 | Conversation intake | PR #30 adds durable conversation intake without making the client an authority |
 | Session safety | PR #24 makes the ai-workflow-hub session gate fail closed |
@@ -96,6 +97,7 @@ recently closed P1 risks are:
 | DIST-002 | closed | P2 | A desktop-shortcut helper promoted the deprecated T3/RD-Code visual-client path despite having no current product, test, or release entrypoint | Script-reference audit found only one historical roadmap mention; launcher tests and release gates do not depend on it | The shortcut helper is removed; the tested `launch-editor.ps1` advanced entry remains available |
 | DOCS-003 | closed | P2 | A pre-release cutover checklist and superseded 90-day product roadmap remained visible after their decisions were absorbed into the current execution and release roots | Per-file audit found no live dependency; docs drift and current-entry gates passed; independent review passed with P0/P1/P2/P3 equal to zero | Current direction remains in `HANDOFF.md`; release history remains in `LAUNCH_NOW.md` and `release-readiness.md`; retired drafts remain recoverable in Git history |
 | DIST-003 | closed | P2 | The primary `devframe code` command carried an optional dashboard-launch shortcut plus four dashboard-only server parameters, duplicating the explicit diagnostic command and widening the daily coding surface | Existing client Recon and reuse assessment, real CLI/bootstrap RED, minimal GREEN, 1,564 control-plane tests, installed-wheel smoke, and a second independent review with P0/P1/P2/P3 equal to zero | `devframe code` stays CLI-first while `devframe dashboard serve` preserves the full diagnostic/API surface |
+| KERNEL-003 | queued for M10B | P2 | A malformed or unavailable project Skill policy can make Profile planning fall back to its built-in defaults without a diagnostic | M10A independent review; no M10A consumer executes Profile stages | Before any Profile stage is consumed, policy-resolution failure must become human-required or conservatively read-only/no-network, with a real-path regression |
 
 `DOCS-001` is mitigated by this document slice. Physical archival or deletion
 is a later cleanup operation and must first prove that no active validator,
@@ -118,7 +120,8 @@ permission to start parallel implementation.
 | M7. Toolchain adapter manifest | accepted | A compiler/test command set can be described and checked against the kernel without binding the kernel to one compiler | One offline manifest-driven preview and conformance contract, with execution still explicit and provider-neutral |
 | M8. Governed toolchain run | accepted | One selected manifest action can enter the existing governed command path without creating a compiler-specific runtime | A real temporary project executes one manifest action only after explicit opt-in and produces canonical run, evidence, review-pending, and adapter-conformance projections |
 | M9. Toolchain run inspection | accepted | A user can inspect one governed toolchain result without decoding generic go-run metadata or opening packet files | Installed CLI status binds structured toolchain provenance to the exact canonical source bytes and remains read-only/fail-closed |
-| M10A. Governed workflow profiles | active after M9 delivery | Structured coding or paper context deterministically selects and records an ordered, permission-bounded Skill profile without executing external capabilities | HEAD-based Recon and a real missing-path RED identify the smallest extension of existing TaskSpec/workflow/skill evidence contracts; ambiguous generic work remains human-required |
+| M10A. Governed workflow profiles | accepted | Structured coding or paper context deterministically selects and records an ordered, permission-bounded Skill profile without executing external capabilities | Real coding and paper missing-path REDs became schema-valid planned-only TaskSpecs; generic ambiguity remains human-required; installed-wheel and independent review gates passed |
+| M10B. Governed coding canary | next after M10A delivery | One offline coding entrypoint can consume a narrowly adopted pre/post stage plan without changing correctness, safety, or acceptance authority | Policy-resolution failure is first made fail-closed; one provenance/fingerprint-bound static rule canary passes real coding tests without hooks, network, credentials, global install, or non-coding activation |
 
 ## Completed Milestone: M1 Canonical Run Truth
 
@@ -899,15 +902,43 @@ Reviewer Index:
 
 ## Current Milestone: M10A Governed Workflow Profiles
 
-M10A begins only after the accepted M9 commit and authorized ordinary push are
-verified. Its first batch is HEAD-based read-only Recon plus a production-path
-missing-profile RED. It must reuse TaskSpec, the existing workflow engine,
-skill registry/usage, asset utilization, fingerprint/promotion validation, and
-P0 deny behavior. It may select, record, and project a deterministic ordered
-profile from trusted structured context, but it must not execute external
-Skills, infer work type from free text, add a second workflow/evidence engine,
-or grant network, credential, global-install, write, review, or acceptance
-authority.
+Accepted locally on 2026-07-19. Trusted coding and paper entrypoints now select
+deterministic, versioned Profile plans and record them through the existing
+TaskSpec, rdgoal packet, go metadata, RunIndex, and paper pipeline paths. The
+contract records ordered stages, per-stage permissions, human gates, artifact
+and evidence requirements, Skill availability, source fingerprint, selection
+source, and Profile fingerprint. It remains `planned_only`: no production path
+iterates or executes its stages, selection creates no `skill_usage`, and it
+cannot produce review, FinalVerdict, or acceptance.
+
+The ignored Recon Receipt, TaskSpec, and production-path RED are under
+`.devframe-runtime/probes/m10a-workflow-profile-1784393403104/`. Coding and
+paper TaskSpecs originally lacked an auditable Profile (`2 failed`); the final
+contract and real paths pass 11 focused tests. Unknown or free-text-like work
+types normalize to `generic`, require a human decision, and carry no stages.
+TaskSpec validation requires the outer and inner work types to match and
+requires Profile fields to appear as one coherent pair.
+
+The affected production and compatibility set passed 539 tests with one
+platform skip. A freshly built and installed wheel exercised coding, paper,
+toolchain, rdgoal, RunIndex, client, and dashboard smoke paths and exited 0.
+The exact candidate passed the isolated public-snapshot gate, focused Ruff and
+`git diff --check`. Independent `gpt-5.6-sol` high review closed one schema P1
+and returned P0=0, P1=0, P2=1, P3=0 after repair. The retained P2 is policy
+resolver failure falling back to default planning constraints; M10A has no
+execution consumer, but M10B must fail closed before consuming any stage.
+
+Reviewer Index:
+
+| Item | Evidence |
+|---|---|
+| Changed files | This execution root; seven existing control-plane modules; canonical and test-frame TaskSpec schemas; one focused Profile test; wheel verification; 12 accepted paths total |
+| Critical paths | Structured work type to deterministic resolver; resolver to TaskSpec/packet; go metadata to RunIndex projection; paper pipeline to planned-only TaskSpec; schema coherence and restrictive project/P0 policy overlay |
+| Tests and checks | Missing-path RED `2 failed`; focused Profile/schema `11 passed`; affected real-path set `539 passed, 1 skipped`; installed-wheel smoke `[OK]`; isolated public snapshot `[OK]`; Ruff, AST, schema-mirror, and `git diff --check` passed |
+| Generated artifacts | Recon, TaskSpec, and RED remain under ignored `.devframe-runtime/probes/m10a-workflow-profile-1784393403104/`; exact snapshot remains under ignored `.devframe-runtime/isolated/m10a-final-1784419752090/` |
+| Known gaps | Policy-resolution exceptions must fail closed before M10B execution; fingerprint/adoption remains descriptive until M10B adds an execution-time rejection; Agent Reach, Humanize, and ai-check execution remain deferred |
+| Review focus | Preserve planned-only behavior, outer/inner schema coherence, generic human-required fail-closed behavior, exact Skill/Profile fingerprints, and the ban on selection self-certifying usage or acceptance |
+| Verdict | Independent review PASS; P0=0, P1=0, P2=1, P3=0 |
 
 ### M5 Closure Verdict
 
@@ -1025,14 +1056,15 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 | 2026-07-18 | Accept M7 and promote M8 to read-only Recon | Toolchain manifests now fail closed through the installed CLI without executing commands; the next product gap is explicit reuse of the existing governed command path |
 | 2026-07-18 | Accept M8 and promote M9 to read-only Recon | One manifest action now traverses the governed command, evidence, team, and canonical review-pending path; the next user-facing gap is concise inspection of that result without exposing a second runtime authority |
 | 2026-07-19 | Accept M9 and promote M10A to read-only Recon after exact delivery | Toolchain status now binds the exact parsed metadata bytes to canonical governance provenance; automatic workflow work must begin with a deterministic contract and missing-path RED, not external Skill execution or free-text guessing |
+| 2026-07-19 | Accept M10A and queue one offline coding canary | Structured entrypoints now produce auditable planned-only Profiles without executing Skills; the next slice must first close policy-resolution failure and then prove one adopted, fingerprint-bound coding rule without hooks or external capabilities |
 
 ## Next Action
 
-After the exact accepted M9 commit and authorized ordinary push are verified,
-start M10A with HEAD-based read-only Recon of the committed skill registry,
-methodology dispatch, WorkflowEngine, TaskSpec/custom/methodology schemas,
-skill-usage/asset/promotion validators, go dispatch, and paper pipeline. Record
-one scoped Recon Receipt under ignored runtime evidence, then establish a real
-production-path RED showing that structured coding and paper contexts currently
-lack an auditable ordered profile. Do not execute external Skills or edit the
-protected concurrent methodology/humanize/ai-check paths in this first batch.
+After the exact M10A commit and authorized ordinary push are verified, freeze a
+separate M10B coding-canary TaskSpec. First make project policy-resolution
+failure human-required or conservatively read-only/no-network. Then adopt one
+small, provenance/license/fingerprint-bound static coding rule and consume it
+through the existing coding workflow only. Do not install lifecycle hooks,
+plugins, global packages, MCP configuration, or external Skills; do not enable
+network, credentials, paper rewriting, Agent Reach, Humanize, or ai-check; and
+do not treat lower LOC, Profile selection, or Skill usage as acceptance.

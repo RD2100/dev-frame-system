@@ -15,7 +15,7 @@ from typing import Any
 from .backup_guard import default_runtime_dir, is_inside
 from .execution_plan import plan_write_set_groups
 from .dispatch_packet import DispatchPacketStore
-from .methodology_dispatch import resolve_methodology
+from .methodology_dispatch import resolve_methodology, resolve_workflow_profile
 from .project_contract import slugify_project_id
 from .model_providers import resolve_model_provider
 from .opencode_events import parse_opencode_run_jsonl
@@ -81,6 +81,7 @@ class GoDispatchResult:
     model_provider: str = ""
     driver: str = "command"
     toolchain: dict[str, str] | None = None
+    workflow_profile: dict[str, Any] | None = None
 
 
 def run_go_dispatch(
@@ -130,6 +131,11 @@ def run_go_dispatch(
     effective_requirement, methodology = resolve_methodology(
         requirement, runtime_dir=runtime_root, project_id=resolved_project_id
     )
+    workflow_profile = resolve_workflow_profile(
+        "coding",
+        runtime_dir=runtime_root,
+        project_id=resolved_project_id,
+    )
     orchestrator = Orchestrator(runtime_dir=runtime_root)
     dispatches: list[GoAgentDispatch] = []
     project_id = ""
@@ -149,6 +155,8 @@ def run_go_dispatch(
             operation=f"go coding shard {shard_number}/{agents}",
             targets=shard_targets,
             apply_rdinit=apply_rdinit,
+            work_type="coding",
+            workflow_profile=workflow_profile,
         )
         project_id = dispatch_result.project_id
         packet = dispatch_result.dispatch.packet
@@ -191,6 +199,7 @@ def run_go_dispatch(
         methodology=methodology,
         model_provider=provider.provider_id,
         driver=driver,
+        workflow_profile=workflow_profile,
     )
 
     if execute and dispatches:
@@ -362,6 +371,10 @@ def render_go_dispatch_text(result: GoDispatchResult) -> str:
     if result.methodology:
         title = str(result.methodology.get("title") or result.methodology.get("skill_id") or "unknown")
         lines.append(f"methodology   : {title}")
+    if result.workflow_profile:
+        profile_id = str(result.workflow_profile.get("profile_id") or "unknown")
+        state = str(result.workflow_profile.get("execution_state") or "unknown")
+        lines.append(f"workflow     : {profile_id} ({state})")
     lines.extend([
         "",
         "Agents",
@@ -771,6 +784,8 @@ def _write_metadata(result: GoDispatchResult) -> Path:
     payload = asdict(result)
     if payload.get("toolchain") is None:
         payload.pop("toolchain", None)
+    if payload.get("workflow_profile") is None:
+        payload.pop("workflow_profile", None)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
     return path
 
@@ -866,6 +881,11 @@ def _go_result_from_metadata(data: dict[str, Any], *, fallback_runtime_dir: Path
         toolchain=(
             data["toolchain"]
             if isinstance(data.get("toolchain"), dict)
+            else None
+        ),
+        workflow_profile=(
+            data["workflow_profile"]
+            if isinstance(data.get("workflow_profile"), dict)
             else None
         ),
     )

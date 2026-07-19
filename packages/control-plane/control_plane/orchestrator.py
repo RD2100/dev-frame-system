@@ -89,7 +89,9 @@ class Orchestrator:
         return ok, message
 
     def dispatch(self, *, project_id: str, requirement: str, operation: str,
-                 targets: list[str] | None = None, summary: str = "") -> DispatchResult:
+                 targets: list[str] | None = None, summary: str = "",
+                 work_type: str | None = None,
+                 workflow_profile: dict[str, Any] | None = None) -> DispatchResult:
         targets = targets or []
         project = self.projects[project_id]
         request = OperationRequest(operation=operation, targets=targets, summary=summary)
@@ -114,6 +116,8 @@ class Orchestrator:
             decision=decision,
             objective=objective,
             dispatch_ready=guard.allowed and objective.dispatch_ready,
+            work_type=work_type,
+            workflow_profile=workflow_profile,
         )
         result = DispatchResult(
             project_id=project_id,

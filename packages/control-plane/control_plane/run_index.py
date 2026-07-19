@@ -615,6 +615,7 @@ def _go_run_entries(runtime: Path) -> list[dict[str, Any]]:
             continue
         agents = data.get("agents") if isinstance(data.get("agents"), list) else []
         evidence_refs = _agent_evidence_refs(agents)
+        workflow_profile = _as_dict(data.get("workflow_profile"))
         entries.append(_entry(
             adapter_id="go_run",
             source_type="go_run_metadata",
@@ -640,6 +641,13 @@ def _go_run_entries(runtime: Path) -> list[dict[str, Any]]:
                     "driver": data.get("driver", ""),
                     "model_provider": data.get("model_provider", ""),
                     "agent_count": len(agents),
+                    "workflow_profile_id": workflow_profile.get("profile_id", ""),
+                    "workflow_profile_fingerprint": workflow_profile.get(
+                        "profile_fingerprint", ""
+                    ),
+                    "workflow_profile_state": workflow_profile.get(
+                        "execution_state", ""
+                    ),
                 },
             ),
             source_hash=source_hash,
