@@ -83,7 +83,7 @@ def test_confirmed_activation_writes_only_secret_free_managed_state(tmp_path: Pa
     assert str(vault.resolve()) not in combined_public_text
     assert 'model = "test-model"' in config_text
     assert "# devframe:obsidian-memory-config:start" in config_text
-    assert 'args = ["-I", "-m", "control_plane.cli"' in config_text
+    assert 'args = ["-I", "-B", "-m", "control_plane.cli"' in config_text
     assert 'enabled_tools = ["status", "recall"]' in config_text
     assert 'default_tools_approval_mode = "auto"' in config_text
     assert "# Existing global guidance" in agents_text
@@ -97,7 +97,7 @@ def test_confirmed_activation_writes_only_secret_free_managed_state(tmp_path: Pa
     managed_hook = session_start[1]
     assert managed_hook["matcher"] == "startup|resume|clear|compact"
     assert "memory recall-hook" in managed_hook["hooks"][0]["command"]
-    assert " -I -m control_plane.cli " in managed_hook["hooks"][0]["command"]
+    assert " -I -B -m control_plane.cli " in managed_hook["hooks"][0]["command"]
 
     wiki = vault / "wiki"
     assert (vault / "raw").is_dir()
@@ -996,7 +996,7 @@ def test_runtime_probe_subprocess_uses_isolated_mode(
         activation.UPSTREAM_PACKAGE,
         expected_control_plane_payload_sha256="0" * 64,
     ) is False
-    assert observed["arguments"][:3] == [str(runtime_python), "-I", "-c"]
+    assert observed["arguments"][:4] == [str(runtime_python), "-I", "-B", "-c"]
     assert "PYTHONPATH" not in observed["environment"]
 
 
@@ -1026,7 +1026,7 @@ def test_link_child_uses_isolated_mode(tmp_path: Path, monkeypatch) -> None:
             {},
         )
 
-    assert observed["args"][:3] == ["-I", "-m", "link_mcp"]
+    assert observed["args"][:4] == ["-I", "-B", "-m", "link_mcp"]
     assert observed["cwd"] == tmp_path / "vault"
 
 

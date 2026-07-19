@@ -105,8 +105,10 @@ repair and verified again before Codex configuration changes; fixed third-party
 dependencies are not force-reinstalled and a different dependency marker is
 never upgraded implicitly. Every managed Python child runs in isolated mode so
 the current working directory, user site, and caller Python environment cannot
-shadow the installed facade or Link module. Provisioning subprocesses also
-receive a controlled environment that excludes caller `PYTHONPATH`,
+shadow the installed facade or Link module. Read-plane and runtime-probe
+entrypoints also disable bytecode writes so previews and recall do not mutate
+the managed runtime. Provisioning subprocesses receive a controlled environment
+that excludes caller `PYTHONPATH`,
 `PYTHONHOME`, and `VIRTUAL_ENV` while retaining explicit network proxy/index
 settings. If provisioning or a
 later activation transaction fails, a runtime created by that attempt is removed

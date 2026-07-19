@@ -630,6 +630,7 @@ def _toml_string(value: str) -> str:
 def _managed_config_chunk(*, runtime_python: Path, state_dir: Path) -> str:
     args = [
         "-I",
+        "-B",
         "-m",
         "control_plane.cli",
         "memory",
@@ -720,6 +721,7 @@ def _hook_command(runtime_python: Path, state_dir: Path) -> str:
     parts = [
         str(runtime_python),
         "-I",
+        "-B",
         "-m",
         "control_plane.cli",
         "memory",
@@ -974,6 +976,7 @@ def _default_runtime_probe(
             [
                 str(runtime_python),
                 "-I",
+                "-B",
                 "-c",
                 (
                     "import importlib.metadata as m,json,pathlib,sys,control_plane,link_mcp;"
@@ -1935,6 +1938,7 @@ async def _call_link_tool(
         command=str(runtime_python),
         args=[
             "-I",
+            "-B",
             "-m",
             "link_mcp",
             "--wiki",
