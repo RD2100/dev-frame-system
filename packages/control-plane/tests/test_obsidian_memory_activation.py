@@ -83,6 +83,7 @@ def test_confirmed_activation_writes_only_secret_free_managed_state(tmp_path: Pa
     assert str(vault.resolve()) not in combined_public_text
     assert 'model = "test-model"' in config_text
     assert "# devframe:obsidian-memory-config:start" in config_text
+    assert 'args = ["-I", "-m", "control_plane.cli"' in config_text
     assert 'enabled_tools = ["status", "recall"]' in config_text
     assert 'default_tools_approval_mode = "auto"' in config_text
     assert "# Existing global guidance" in agents_text
@@ -96,6 +97,7 @@ def test_confirmed_activation_writes_only_secret_free_managed_state(tmp_path: Pa
     managed_hook = session_start[1]
     assert managed_hook["matcher"] == "startup|resume|clear|compact"
     assert "memory recall-hook" in managed_hook["hooks"][0]["command"]
+    assert " -I -m control_plane.cli " in managed_hook["hooks"][0]["command"]
 
     wiki = vault / "wiki"
     assert (vault / "raw").is_dir()
@@ -120,6 +122,35 @@ def test_confirmed_activation_writes_only_secret_free_managed_state(tmp_path: Pa
     )
     assert len(state["runtimeLockSha256"]) == 64
     assert state["codexHome"] == str(codex_home.resolve())
+
+
+def test_managed_hook_ignores_control_plane_shadow_in_cwd(tmp_path: Path) -> None:
+    from control_plane.obsidian_memory_activation import _hook_command
+
+    malicious_cwd = tmp_path / "malicious-project"
+    shadow_package = malicious_cwd / "control_plane"
+    shadow_package.mkdir(parents=True)
+    (shadow_package / "__init__.py").write_text("", encoding="utf-8")
+    marker = tmp_path / "shadow-executed.txt"
+    (shadow_package / "cli.py").write_text(
+        "from pathlib import Path\n"
+        f"Path({str(marker)!r}).write_text('executed', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+
+    command = _hook_command(Path(sys.executable), tmp_path / "inactive-state")
+    subprocess.run(
+        command,
+        cwd=malicious_cwd,
+        input="{}",
+        capture_output=True,
+        text=True,
+        shell=True,
+        timeout=15,
+        check=False,
+    )
+
+    assert not marker.exists()
 
 
 def test_confirmed_activation_is_idempotent(tmp_path: Path) -> None:
@@ -767,8 +798,8 @@ def test_runtime_provisioning_installs_exact_link_version_in_isolated_venv(
         command = [str(value) for value in arguments]
         calls.append(command)
         runner_environments.append(_kwargs.get("env"))
-        if command[1:3] == ["-m", "venv"]:
-            runtime_python = Path(command[3]) / "Scripts" / "python.exe"
+        if command[1:4] == ["-I", "-m", "venv"]:
+            runtime_python = Path(command[4]) / "Scripts" / "python.exe"
             runtime_python.parent.mkdir(parents=True)
             runtime_python.write_bytes(b"")
         if "pip" in command and "install" in command:
@@ -815,8 +846,9 @@ def test_runtime_provisioning_installs_exact_link_version_in_isolated_venv(
     locked_install = next(command for command in calls if "-r" in command)
     assert "--upgrade" not in source_install + locked_install
     assert "--system-site-packages" not in next(
-        command for command in calls if command[1:3] == ["-m", "venv"]
+        command for command in calls if command[1:4] == ["-I", "-m", "venv"]
     )
+    assert all(command[1] == "-I" for command in calls)
     assert "--no-deps" in source_install
     assert "--force-reinstall" in source_install
     assert "--force-reinstall" not in locked_install
@@ -860,7 +892,7 @@ def test_runtime_provisioning_refreshes_legacy_same_version_facade(
         nonlocal source_installs
         command = [str(value) for value in arguments]
         runtime_root = state_dir / "isolated-runtime"
-        if command[1:3] == ["-m", "venv"]:
+        if command[1:4] == ["-I", "-m", "venv"]:
             runtime_python = runtime_root / "Scripts" / "python.exe"
             runtime_python.parent.mkdir(parents=True)
             runtime_python.write_bytes(b"")
@@ -940,6 +972,62 @@ def test_runtime_provisioning_refreshes_legacy_same_version_facade(
         )
     assert source_installs == 2
     assert installed_payload.read_text(encoding="utf-8") == "PAYLOAD = 'new'\n"
+
+
+def test_runtime_probe_subprocess_uses_isolated_mode(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from control_plane import obsidian_memory_activation as activation
+
+    runtime_python = tmp_path / "python.exe"
+    runtime_python.write_bytes(b"")
+    observed: dict[str, object] = {}
+
+    def runner(arguments, **kwargs):
+        observed["arguments"] = [str(value) for value in arguments]
+        observed["environment"] = kwargs.get("env")
+        return SimpleNamespace(returncode=1, stdout="", stderr="")
+
+    monkeypatch.setattr(activation.subprocess, "run", runner)
+
+    assert activation._default_runtime_probe(
+        runtime_python,
+        activation.UPSTREAM_PACKAGE,
+        expected_control_plane_payload_sha256="0" * 64,
+    ) is False
+    assert observed["arguments"][:3] == [str(runtime_python), "-I", "-c"]
+    assert "PYTHONPATH" not in observed["environment"]
+
+
+def test_link_child_uses_isolated_mode(tmp_path: Path, monkeypatch) -> None:
+    import anyio
+    from mcp.client import stdio as mcp_stdio
+
+    from control_plane.obsidian_memory_activation import _call_link_tool
+
+    observed: dict[str, object] = {}
+
+    class ParametersCaptured(Exception):
+        pass
+
+    def capture_parameters(**kwargs):
+        observed.update(kwargs)
+        raise ParametersCaptured
+
+    monkeypatch.setattr(mcp_stdio, "StdioServerParameters", capture_parameters)
+
+    with pytest.raises(ParametersCaptured):
+        anyio.run(
+            _call_link_tool,
+            Path(sys.executable),
+            tmp_path / "vault" / "wiki",
+            "recall",
+            {},
+        )
+
+    assert observed["args"][:3] == ["-I", "-m", "link_mcp"]
+    assert observed["cwd"] == tmp_path / "vault"
 
 
 def test_runtime_probe_uses_in_process_contract_for_facade_server(

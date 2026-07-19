@@ -103,9 +103,12 @@ An exact dependency marker with a legacy or different facade digest is refreshed
 in place with a forced facade-only reinstall during confirmed activation or
 repair and verified again before Codex configuration changes; fixed third-party
 dependencies are not force-reinstalled and a different dependency marker is
-never upgraded implicitly. Provisioning subprocesses receive a controlled
-environment that excludes caller `PYTHONPATH`, `PYTHONHOME`, and `VIRTUAL_ENV`
-while retaining explicit network proxy/index settings. If provisioning or a
+never upgraded implicitly. Every managed Python child runs in isolated mode so
+the current working directory, user site, and caller Python environment cannot
+shadow the installed facade or Link module. Provisioning subprocesses also
+receive a controlled environment that excludes caller `PYTHONPATH`,
+`PYTHONHOME`, and `VIRTUAL_ENV` while retaining explicit network proxy/index
+settings. If provisioning or a
 later activation transaction fails, a runtime created by that attempt is removed
 with the other managed changes. An existing runtime is never deleted by
 rollback, and it is retained when an activation journal still requires it for
@@ -121,12 +124,14 @@ devframe memory deactivate --confirm
 If the activation state is present, the existing DevFrame
 `propose_obsidian_memory` path automatically uses `wiki/memories` as its
 create-only destination when the old memory environment variables are absent.
-The proposal is staged outside the Vault, remains invisible to Link recall,
-and carries `authority: candidate`, `status: proposed`, and
-`review_status: pending`. Only after a separate human approval is it
-materialized with
-`authority: reviewed`, `status: active`, and `review_status: reviewed`. Explicit
-legacy environment variables still take precedence for older/manual setups.
+The pending proposal is staged outside the Vault and remains invisible to Link
+recall. In activation-managed mode it contains the exact final note bytes a
+human reviews, already marked `authority: reviewed`, `status: active`, and
+`review_status: reviewed`; those fields describe the bytes eligible for
+materialization, not an approval that has already happened. The Vault remains
+unchanged until the separate human approval. Explicit legacy environment
+variables still take precedence for older/manual setups and retain the older
+candidate/proposed/pending note metadata.
 
 ## Two Memory Layers
 

@@ -629,6 +629,7 @@ def _toml_string(value: str) -> str:
 
 def _managed_config_chunk(*, runtime_python: Path, state_dir: Path) -> str:
     args = [
+        "-I",
         "-m",
         "control_plane.cli",
         "memory",
@@ -718,6 +719,7 @@ def _append_managed_chunk(existing: str, chunk: str, *, start: str, end: str) ->
 def _hook_command(runtime_python: Path, state_dir: Path) -> str:
     parts = [
         str(runtime_python),
+        "-I",
         "-m",
         "control_plane.cli",
         "memory",
@@ -971,6 +973,7 @@ def _default_runtime_probe(
         completed = subprocess.run(
             [
                 str(runtime_python),
+                "-I",
                 "-c",
                 (
                     "import importlib.metadata as m,json,pathlib,sys,control_plane,link_mcp;"
@@ -1345,7 +1348,7 @@ def provision_obsidian_memory_runtime(
     staged_source = resolved_state_dir / f".obsidian-memory-source-{os.getpid()}"
     try:
         if not runtime_python.is_file():
-            venv_arguments = [str(installer_python), "-m", "venv"]
+            venv_arguments = [str(installer_python), "-I", "-m", "venv"]
             venv_arguments.append(str(runtime_root))
             run_checked(
                 venv_arguments,
@@ -1359,6 +1362,7 @@ def provision_obsidian_memory_runtime(
         run_checked(
             [
                 str(runtime_python),
+                "-I",
                 "-m",
                 "pip",
                 "install",
@@ -1373,6 +1377,7 @@ def provision_obsidian_memory_runtime(
         )
         install_arguments = [
             str(runtime_python),
+            "-I",
             "-m",
             "pip",
             "install",
@@ -1929,6 +1934,7 @@ async def _call_link_tool(
     parameters = StdioServerParameters(
         command=str(runtime_python),
         args=[
+            "-I",
             "-m",
             "link_mcp",
             "--wiki",

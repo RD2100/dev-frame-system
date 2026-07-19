@@ -451,6 +451,8 @@ def stage_writeback_proposal(
     approved_contents = contents if apply_contents is None else apply_contents
     if not isinstance(approved_contents, str):
         raise WritebackError("apply_contents must be a string")
+    if approved_contents != contents:
+        raise WritebackError("apply_contents must match approved contents")
     if len(approved_contents.encode("utf-8")) > max_bytes:
         raise WritebackError("approved contents exceed max write-back size")
     proposal = {
@@ -568,9 +570,12 @@ def _validate_proposal_for_apply(
 
 
 def _proposal_apply_contents(proposal: dict[str, Any]) -> str:
-    contents = proposal.get("apply_contents", proposal.get("contents"))
-    if not isinstance(contents, str):
+    approved_contents = proposal.get("contents")
+    contents = proposal.get("apply_contents", approved_contents)
+    if not isinstance(approved_contents, str) or not isinstance(contents, str):
         raise WritebackError("write-back proposal integrity check failed")
+    if contents != approved_contents:
+        raise WritebackError("write-back proposal approved contents mismatch")
     expected = proposal.get("apply_content_sha256")
     if expected is not None and (
         not isinstance(expected, str)
@@ -580,7 +585,7 @@ def _proposal_apply_contents(proposal: dict[str, Any]) -> str:
         )
     ):
         raise WritebackError("write-back proposal integrity check failed")
-    return contents
+    return approved_contents
 
 
 def _claim_pending_proposal(

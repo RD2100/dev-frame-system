@@ -6,6 +6,7 @@ write returns an honest audit record.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import multiprocessing
 import os
@@ -407,6 +408,51 @@ def test_stage_rejects_unsafe_proposal(tmp_path):
     rt = tmp_path / "rt"
     with pytest.raises(WritebackError):
         stage_writeback_proposal(rt, ws, "../escape.txt", "x")
+
+
+def test_stage_rejects_distinct_apply_contents(tmp_path):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    rt = tmp_path / "rt"
+
+    with pytest.raises(WritebackError, match="must match approved contents"):
+        stage_writeback_proposal(
+            rt,
+            ws,
+            "approved.txt",
+            "visible approved content",
+            apply_contents="hidden applied content",
+        )
+
+    assert not (ws / "approved.txt").exists()
+
+
+def test_resolve_rejects_legacy_distinct_apply_contents(tmp_path):
+    from control_plane.writeback import _proposal_digest
+
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    rt = tmp_path / "rt"
+    staged = stage_writeback_proposal(
+        rt,
+        ws,
+        "approved.txt",
+        "visible approved content",
+    )
+    proposal_path = rt / "writeback-proposals" / f"{staged['request_id']}.json"
+    proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    proposal["apply_contents"] = "hidden applied content"
+    proposal["apply_content_sha256"] = hashlib.sha256(
+        proposal["apply_contents"].encode("utf-8")
+    ).hexdigest()
+    proposal["proposal_digest"] = _proposal_digest(proposal)
+    proposal_path.write_text(json.dumps(proposal), encoding="utf-8")
+
+    with pytest.raises(WritebackError, match="approved contents"):
+        resolve_writeback_proposal(rt, staged["request_id"], "approve")
+
+    assert not (ws / "approved.txt").exists()
+    assert load_writeback_proposal(rt, staged["request_id"])["status"] == "pending"
 
 
 def test_resolve_rejects_invalid_request_id(tmp_path):
