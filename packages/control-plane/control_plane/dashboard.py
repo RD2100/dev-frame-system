@@ -631,11 +631,38 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
                     return
                 if request_id.startswith("wb-"):
-                    from .writeback import WritebackError, resolve_writeback_proposal
+                    from .obsidian_memory import (
+                        PLAN_PROPOSAL_KIND,
+                        ObsidianMemoryError,
+                        approve_project_plan,
+                    )
+                    from .writeback import (
+                        WritebackError,
+                        load_writeback_proposal,
+                        resolve_writeback_proposal,
+                    )
 
                     try:
-                        wb = resolve_writeback_proposal(runtime_dir, request_id, decision, expected_thread_id=thread_id)
-                    except WritebackError as exc:
+                        proposal = load_writeback_proposal(runtime_dir, request_id)
+                        if (
+                            decision == "approve"
+                            and proposal is not None
+                            and proposal.get("proposal_kind") == PLAN_PROPOSAL_KIND
+                        ):
+                            wb = approve_project_plan(
+                                runtime_dir,
+                                request_id,
+                                confirm=True,
+                                expected_thread_id=thread_id,
+                            )
+                        else:
+                            wb = resolve_writeback_proposal(
+                                runtime_dir,
+                                request_id,
+                                decision,
+                                expected_thread_id=thread_id,
+                            )
+                    except (ObsidianMemoryError, WritebackError) as exc:
                         body = json.dumps({
                             "responded": False,
                             "error": "writeback_rejected",

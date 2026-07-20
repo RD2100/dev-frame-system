@@ -37,6 +37,7 @@ HELP_TEXT = """DevFrame Code CLI
   devframe toolchain run ...        - preview or explicitly run one validated manifest action
   devframe toolchain status ...     - inspect one governed toolchain result without mutating it
   devframe paper finalize ...       - finalize a paper run after external review
+  devframe memory plan ...          - propose, approve, or recall one governed Obsidian working plan
   devframe writeback apply ...      - audited single-file workspace write-back
   devframe handoff ...              - generate, validate, bootstrap, or transfer handoffs
 
@@ -101,6 +102,16 @@ WRITEBACK_APPLY_USAGE = (
     "[--format text|json]\n"
     "  Human-gated single-file workspace write-back. Without --confirm it only "
     "previews (exit 3); with --confirm it applies the write and records an audit."
+)
+
+MEMORY_PLAN_USAGE = (
+    "Usage: devframe memory plan propose --project-root <dir> --project-id <id> "
+    "[--vault-root <dir>] --contents-file <file> [--runtime-dir <dir>] "
+    "[--format text|json]\n"
+    "       devframe memory plan approve --request-id <wb-id> "
+    "[--runtime-dir <dir>] [--confirm] [--format text|json]\n"
+    "       devframe memory plan recall --project-root <dir> --project-id <id> "
+    "[--vault-root <dir>] [--format text|json]"
 )
 
 MCP_CONNECTIONS_USAGE = (

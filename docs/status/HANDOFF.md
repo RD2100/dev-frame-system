@@ -2,12 +2,12 @@
 
 Lifecycle state: **CANONICAL EXECUTION ROOT**
 
-Current verdict: **READY TO CONTINUE** on the bounded milestone below. This is
-not a release, deployment, or production verdict.
+Current verdict: **M11A ACCEPTED LOCALLY**. This is not a release, deployment,
+or production verdict.
 
-Last reconciled: 2026-07-19 against the accepted local M10A candidate. Ordinary
-push is authorized for this milestone; the remote head is verified as delivery
-evidence instead of being predicted in this document.
+Last reconciled: 2026-07-20 against the captured `main` baseline at `904fc68b`
+and the bounded M11A accepted slice. M11A push and live Memory cutover remain
+separate human gates; this document does not predict remote delivery evidence.
 
 ## Authority
 
@@ -98,6 +98,7 @@ recently closed P1 risks are:
 | DOCS-003 | closed | P2 | A pre-release cutover checklist and superseded 90-day product roadmap remained visible after their decisions were absorbed into the current execution and release roots | Per-file audit found no live dependency; docs drift and current-entry gates passed; independent review passed with P0/P1/P2/P3 equal to zero | Current direction remains in `HANDOFF.md`; release history remains in `LAUNCH_NOW.md` and `release-readiness.md`; retired drafts remain recoverable in Git history |
 | DIST-003 | closed | P2 | The primary `devframe code` command carried an optional dashboard-launch shortcut plus four dashboard-only server parameters, duplicating the explicit diagnostic command and widening the daily coding surface | Existing client Recon and reuse assessment, real CLI/bootstrap RED, minimal GREEN, 1,564 control-plane tests, installed-wheel smoke, and a second independent review with P0/P1/P2/P3 equal to zero | `devframe code` stays CLI-first while `devframe dashboard serve` preserves the full diagnostic/API surface |
 | KERNEL-003 | queued for M10B | P2 | A malformed or unavailable project Skill policy can make Profile planning fall back to its built-in defaults without a diagnostic | M10A independent review; no M10A consumer executes Profile stages | Before any Profile stage is consumed, policy-resolution failure must become human-required or conservatively read-only/no-network, with a real-path regression |
+| MEMORY-001 | closed | P1 | The validated Obsidian candidate and its installed local read runtime could become a second lifecycle beside current `main` if a new plan feature were added without an explicit migration/cutover boundary | Candidate/main reconciliation, production-path RED -> GREEN, `1720 passed, 6 skipped` on a fresh verify tree, installed-wheel canary `3/0/0`, and independent review PASS with P0/P1/P2/P3 all zero on 2026-07-20 | Current `main` owns the only maintained Memory semantics and existing writeback owns all mutation; live Vault/MCP Hook replacement remains a separate human-gated cutover |
 
 `DOCS-001` is mitigated by this document slice. Physical archival or deletion
 is a later cleanup operation and must first prove that no active validator,
@@ -121,7 +122,8 @@ permission to start parallel implementation.
 | M8. Governed toolchain run | accepted | One selected manifest action can enter the existing governed command path without creating a compiler-specific runtime | A real temporary project executes one manifest action only after explicit opt-in and produces canonical run, evidence, review-pending, and adapter-conformance projections |
 | M9. Toolchain run inspection | accepted | A user can inspect one governed toolchain result without decoding generic go-run metadata or opening packet files | Installed CLI status binds structured toolchain provenance to the exact canonical source bytes and remains read-only/fail-closed |
 | M10A. Governed workflow profiles | accepted | Structured coding or paper context deterministically selects and records an ordered, permission-bounded Skill profile without executing external capabilities | Real coding and paper missing-path REDs became schema-valid planned-only TaskSpecs; generic ambiguity remains human-required; installed-wheel and independent review gates passed |
-| M10B. Governed coding canary | next after M10A delivery | One offline coding entrypoint can consume a narrowly adopted pre/post stage plan without changing correctness, safety, or acceptance authority | Policy-resolution failure is first made fail-closed; one provenance/fingerprint-bound static rule canary passes real coding tests without hooks, network, credentials, global install, or non-coding activation |
+| M10B. Governed coding canary | queued before any Profile execution consumer | One offline coding entrypoint can consume a narrowly adopted pre/post stage plan without changing correctness, safety, or acceptance authority | Policy-resolution failure is first made fail-closed; one provenance/fingerprint-bound static rule canary passes real coding tests without hooks, network, credentials, global install, or non-coding activation |
+| M11A. Unified Obsidian working-plan MVP | accepted | Codex, CLI, and later RD-Code can share one private working plan without moving formal project authority out of the repository or creating a second write lifecycle | Existing writeback stages and create-only publishes immutable project-plan versions; source drift, target races, project leakage, secret content, and absolute-path disclosure fail closed through real MCP/CLI paths; full, wheel, canary, and independent-review gates passed locally |
 
 ## Completed Milestone: M1 Canonical Run Truth
 
@@ -900,7 +902,7 @@ Reviewer Index:
 | Review focus | Preserve exact metadata/canonical source-hash equality, one-handle containment and bytes, read-only status behavior, generic-run isolation, and the prohibition on acceptance mutation |
 | Verdict | Independent `gpt-5.6-sol` high review PASS; P0=0, P1=0, P2=1, P3=0 |
 
-## Current Milestone: M10A Governed Workflow Profiles
+## Completed Milestone: M10A Governed Workflow Profiles
 
 Accepted locally on 2026-07-19. Trusted coding and paper entrypoints now select
 deterministic, versioned Profile plans and record them through the existing
@@ -940,32 +942,97 @@ Reviewer Index:
 | Review focus | Preserve planned-only behavior, outer/inner schema coherence, generic human-required fail-closed behavior, exact Skill/Profile fingerprints, and the ban on selection self-certifying usage or acceptance |
 | Verdict | Independent review PASS; P0=0, P1=0, P2=1, P3=0 |
 
-### M5 Closure Verdict
+## Completed Milestone: M11A Unified Obsidian Working-Plan MVP
 
-Accepted locally on 2026-07-18. The shipped `devframe run` paper path now ends
-at `review_pending`; only `devframe paper finalize` may consume a review file
-outside the paper project, with an explicitly attested review SHA-256 and
-reviewer ID. Finalization revalidates the current project bytes, synthetic and
-dry-run boundaries, live bypass scan, evidence manifest, and both supported
-FinalVerdict path spellings before producing `accepted_with_limitation`.
+### Objective
 
-The first independent review found four boundary defects. Their production-path
-RED was five focused failures; the repair turned the same set green, the
-affected suite passed 185 tests, the installed-wheel smoke passed, and a clean
-exported public snapshot passed. The final independent review reported
-P0=0, P1=0, P2=0, and P3=0.
+Make current `main` the only maintained Obsidian Memory implementation for the
+first useful product slice. `HANDOFF.md` remains the formal execution root;
+Obsidian stores one bounded private working plan per project. The Memory module
+owns schema, scope, source binding, and safe recall. Existing `writeback.py`
+remains the only proposal, human approval, mutation, and audit owner. CLI and
+MCP remain stateless adapters.
+
+### Recon, Contract, And RED
+
+The ignored Recon Receipt and TaskSpec are under `.devframe-runtime/recon/` and
+`.devframe-runtime/contracts/`. They reconcile the fixed candidate at
+`0b60c1d9d771` against current main and explicitly reject wholesale merge, the
+2,871-line activation controller, parallel stores, Link as an MVP dependency,
+automatic memory, global configuration changes, and real private-Vault writes.
+
+The real production RED was the missing `control_plane.obsidian_memory` import
+from the new MCP/CLI contract test. GREEN requires MCP proposal -> existing
+human approval -> bounded recall plus CLI propose -> exact request-ID approval,
+with source-byte binding and atomic create-only target publication.
+
+### Frozen Write Set
+
+- `packages/control-plane/control_plane/obsidian_memory.py`
+- `packages/control-plane/control_plane/writeback.py`
+- `packages/control-plane/control_plane/mcp_server.py`
+- `packages/control-plane/control_plane/cli/_memory.py`
+- `packages/control-plane/control_plane/cli/app.py`
+- `packages/control-plane/control_plane/cli/_usage.py`
+- `packages/control-plane/control_plane/dashboard.py`
+- `packages/control-plane/tests/test_obsidian_project_plan.py`
+- `docs/agent-runtime/obsidian-memory.md`
+- this execution root
+
+Existing writeback/MCP tests may receive focused assertions only if a real
+regression requires them. The protected methodology, Humanize, and ai-check
+candidate paths remain outside this slice.
+
+### Acceptance And Stop Lines
+
+- Focused real paths and affected writeback/MCP regressions pass.
+- Installed-wheel CLI and isolated public-snapshot gates pass.
+- Actual diff contains no activation controller, parallel store, private Vault,
+  runtime state, global config, Link dependency, automatic apply, or deletion.
+- Independent review reported P0=0, P1=0, P2=0, and P3=0 before root acceptance.
+- Live Vault/MCP Hook switch, disabling the old runtime, push, PR, merge, and
+  release remain separate human gates.
+
+### M11A Accepted Local Slice
+
+The bounded implementation was accepted locally as the only maintained project
+working-plan path on current `main`. It derives immutable, create-only Obsidian
+notes from the current repository `HANDOFF.md`; routes proposal, explicit
+approval, mutation, and audit through existing writeback; and exposes stateless
+CLI and MCP adapters. No live private Vault, activation controller, parallel
+store, Link dependency, automatic apply, or global configuration change enters
+the slice.
+
+Production-path RED -> GREEN and review repairs bind approval to the exact
+previewed project-plan action, proposal-time Vault and source physical
+identities, and the current source SHA-256 before and around publication.
+Create-only recovery requires a matching audit, Dashboard approval uses the
+plan-specific validator, malformed UTF-8 fails with a controlled error, secret
+patterns include GitHub OAuth and encrypted private keys, and recall returns no
+absolute project, Vault, runtime, or target path.
+
+The affected regression passed 121 tests with four platform skips. A fresh
+verification worktree passed all 1,720 control-plane tests with six platform
+skips, focused Ruff on the M11A-attributable files, compileall, `git diff
+--check`, and the public-snapshot gate. The installed-wheel gate passed with
+wheel SHA-256
+`45cca1e516b7c37018cc19f0276e055fcd913c6d98a314db1ddd085448798ca2`.
+Its installed CLI canary (PowerShell 7.6) returned propose/approve/recall exits
+`3/0/0`, created one managed note, recalled `current`, and exposed zero
+absolute roots. The local acceptance gate is closed; live cutover and remote
+delivery remain human-gated.
 
 Reviewer Index:
 
 | Item | Evidence |
 |---|---|
-| Changed files | `docs/README.md`, this execution root, CLI core/usage/app, `paper_pipeline_gate.py`, `stage_executor.py`, `run_index.py`, two packaged schemas, the paper pipeline, setup metadata, two focused test files, wheel verification, and exact deletion of `live_handoff_transfer.py`; 16 paths total |
-| Critical paths | `devframe run`; review-pending closure; evidence-pack creation and current-byte binding; live bypass scan; external review attestation; explicit finalization; canonical RunIndex projection |
-| Tests and checks | Real RED `5 failed`; focused GREEN `5 passed`; affected regression `185 passed`; installed-wheel smoke passed; clean exported public snapshot passed; `git diff --check` passed |
-| Generated artifacts | Runtime probe, review JSON, wheel/build temporaries, and clean snapshot stayed under ignored runtime or temporary directories; none enter the public repository |
-| Known gaps | Real paper content, provider/browser execution, publication, release, deployment, push, and merge remain outside M5 |
-| Review focus | Preserve the joint requirement for external review path, review hash, reviewer identity, current project bytes, live bypass scan, strict manifest metadata, and duplicate-verdict protection |
-| Verdict | Independent review PASS; P0=0, P1=0, P2=0, P3=0 |
+| Changed files | `docs/status/HANDOFF.md`; `docs/agent-runtime/obsidian-memory.md`; `control_plane/obsidian_memory.py`; `control_plane/writeback.py`; `control_plane/mcp_server.py`; `control_plane/dashboard.py`; CLI `_memory.py`, `app.py`, and `_usage.py`; `tests/test_obsidian_project_plan.py`; 10 paths total |
+| Critical paths | Project/source validation and immutable note derivation; proposal preview and action binding; exact request-ID approval; handle-bound source/root revalidation; atomic create-only publication and audit recovery; bounded recall; CLI, MCP, and Dashboard adapters |
+| Tests and checks | Production RED -> GREEN; focused Obsidian `68 passed, 3 skipped`; writeback/MCP `58 passed, 1 skipped`; Dashboard/MCP `17 passed`; repair probes `7 passed`; affected `121 passed, 4 skipped`; fresh full control-plane `1720 passed, 6 skipped`; Ruff on M11A-attributable files, compileall, and `git diff --check` passed; public snapshot passed; latest wheel verification passed with SHA-256 `45cca1e516b7c37018cc19f0276e055fcd913c6d98a314db1ddd085448798ca2`; installed canary `3/0/0`, one note, `current`, zero root leaks |
+| Generated artifacts | Recon: `.devframe-runtime/recon/recon-obsidian-memory-unification-20260719.md`; TaskSpec: `.devframe-runtime/contracts/m11a-unified-obsidian-plan-mvp.md`; canary: `.devframe-runtime/probes/m11a-installed-memory-canary.ps1`; fresh verification tree: `.devframe-runtime/verify/m11a-final-601b2b9788f941e1af0d1f441dcd6ae3`; retained wheel is identified by the SHA-256 above (its local temp path stays out of public docs) |
+| Known gaps | Live Vault/MCP Hook cutover, disabling the old runtime, a fresh live-session canary, push, PR, merge, release, and deployment remain human-gated and unexecuted |
+| Review focus | Preserve proposal-time physical identity and current source-byte binding; pre/post-publish rechecks; preview/action coherence; create-only audit-backed recovery; secret rejection; bounded path-free responses; no second write authority |
+| Verdict | Independent read-only review PASS on 2026-07-20; P0=0, P1=0, P2=0, P3=0; M11A accepted locally |
 
 ## Execution Protocol
 
@@ -1057,14 +1124,13 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 | 2026-07-18 | Accept M8 and promote M9 to read-only Recon | One manifest action now traverses the governed command, evidence, team, and canonical review-pending path; the next user-facing gap is concise inspection of that result without exposing a second runtime authority |
 | 2026-07-19 | Accept M9 and promote M10A to read-only Recon after exact delivery | Toolchain status now binds the exact parsed metadata bytes to canonical governance provenance; automatic workflow work must begin with a deterministic contract and missing-path RED, not external Skill execution or free-text guessing |
 | 2026-07-19 | Accept M10A and queue one offline coding canary | Structured entrypoints now produce auditable planned-only Profiles without executing Skills; the next slice must first close policy-resolution failure and then prove one adopted, fingerprint-bound coding rule without hooks or external capabilities |
+| 2026-07-19 | Promote unified Obsidian working plans before new client features | Shared private context is on the single external-brain product spine; current main must absorb only the bounded candidate behavior and reuse canonical writeback before RD-Code, Web AI, or automatic memory expands the surface |
+| 2026-07-20 | Accept M11A locally and close MEMORY-001 | The fresh full suite, latest installed wheel canary, public-snapshot gate, exact diff checks, and independent read-only review all passed; live Vault/MCP Hook cutover and remote Git delivery remain explicit human gates |
 
 ## Next Action
 
-After the exact M10A commit and authorized ordinary push are verified, freeze a
-separate M10B coding-canary TaskSpec. First make project policy-resolution
-failure human-required or conservatively read-only/no-network. Then adopt one
-small, provenance/license/fingerprint-bound static coding rule and consume it
-through the existing coding workflow only. Do not install lifecycle hooks,
-plugins, global packages, MCP configuration, or external Skills; do not enable
-network, credentials, paper rewriting, Agent Reach, Humanize, or ai-check; and
-do not treat lower LOC, Profile selection, or Skill usage as acceptance.
+M11A has no remaining repository implementation action in this slice. The next
+action is a human-gated decision about live Vault/MCP Hook cutover, including
+whether to disable the old runtime. A separate human gate is required before
+push or PR creation (and any later merge or release). No live cutover or remote
+Git effect has been performed.

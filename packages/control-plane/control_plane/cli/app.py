@@ -38,6 +38,7 @@ from ._review import cmd_rdreview
 from ._visual import cmd_actions, cmd_dashboard, cmd_sessions, cmd_visual_state
 from ._writeback import cmd_writeback_apply
 from ._mcp import cmd_mcp_connections
+from ._memory import cmd_memory
 from ._webai import (
     cmd_web_ai_bind_chrome,
     cmd_web_ai_bind_conversation,
@@ -305,6 +306,12 @@ def main() -> int:
             return cmd_mcp_connections(prog="devframe mcp connections")
         print(MCP_CONNECTIONS_USAGE)
         return 0 if _wants_help(sys.argv[2:]) else 1
+
+    if cmd == "memory":
+        if _wants_help(sys.argv[2:]):
+            print(MEMORY_PLAN_USAGE)
+            return 0
+        return cmd_memory()
 
     if cmd == "writeback":
         sub = sys.argv[2] if len(sys.argv) > 2 else ""

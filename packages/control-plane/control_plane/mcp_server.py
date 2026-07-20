@@ -83,6 +83,35 @@ TOOLS: list[dict[str, Any]] = [
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
     {
+        "name": "propose_project_plan",
+        "description": (
+            "Stage one project-scoped Obsidian working plan through the existing "
+            "human writeback gate. The MCP call never writes the Vault."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "projectId": {"type": "string"},
+                "contents": {"type": "string"},
+            },
+            "required": ["projectId", "contents"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "recall_project_plan",
+        "description": (
+            "Recall the bounded project working plan only when it still matches "
+            "the authoritative HANDOFF.md bytes."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {"projectId": {"type": "string"}},
+            "required": ["projectId"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "get_run_status",
         "description": "Read-only status of a governed /go run (or the latest). Metadata only.",
         "inputSchema": {
@@ -324,6 +353,73 @@ def _call_tool(
         from .writeback import list_pending_writeback_proposals
 
         return _tool_text(req_id, {"pending": list_pending_writeback_proposals(runtime_dir)})
+
+    if name in {"propose_project_plan", "recall_project_plan"}:
+        from .dashboard import _resolve_writeback_workspace_root
+        from .obsidian_memory import (
+            ObsidianMemoryError,
+            recall_project_plan,
+            stage_project_plan,
+        )
+
+        project_id = str(arguments.get("projectId") or "").strip()
+        if not project_id:
+            return _tool_text(req_id, {"error": f"{name} requires projectId"}, is_error=True)
+        project_root = _resolve_writeback_workspace_root(
+            runtime_dir,
+            paper_project_dirs,
+            project_id,
+        )
+        if not project_root:
+            return _tool_text(
+                req_id,
+                {"error": "unknown_project", "projectId": project_id},
+                is_error=True,
+            )
+        try:
+            if name == "recall_project_plan":
+                return _tool_text(
+                    req_id,
+                    recall_project_plan(
+                        vault_root=None,
+                        project_root=project_root,
+                        project_id=project_id,
+                    ),
+                )
+            contents = arguments.get("contents")
+            if not isinstance(contents, str):
+                return _tool_text(
+                    req_id,
+                    {"error": "propose_project_plan requires string contents"},
+                    is_error=True,
+                )
+            staged = stage_project_plan(
+                runtime_dir,
+                vault_root=None,
+                project_root=project_root,
+                project_id=project_id,
+                plan_markdown=contents,
+            )
+        except ObsidianMemoryError as exc:
+            return _tool_text(
+                req_id,
+                {"error": "obsidian_plan_rejected", "detail": str(exc)},
+                is_error=True,
+            )
+        return _tool_text(
+            req_id,
+            {
+                "staged": True,
+                "requestId": staged["request_id"],
+                "projectId": staged["project_id"],
+                "relativePath": staged["relative_path"],
+                "operation": staged["operation"],
+                "bytes": staged["bytes"],
+                "sourceSha256": staged["source_sha256"],
+                "planSha256": staged["plan_sha256"],
+                "humanGate": "A human must approve this proposal before the Vault changes.",
+            },
+        )
 
     if name == "get_run_status":
         return _tool_text(req_id, _run_status_summary(runtime_dir, paper_project_dirs, arguments.get("runId")))
