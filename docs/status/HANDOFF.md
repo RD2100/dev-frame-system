@@ -2,11 +2,11 @@
 
 Lifecycle state: **CANONICAL EXECUTION ROOT**
 
-Current verdict: **M11A ACCEPTED LOCALLY**. This is not a release, deployment,
-or production verdict.
+Current verdict: **M11A LIVE CUTOVER ACCEPTED LOCALLY**. This is not a
+release, deployment, or production verdict.
 
-Last reconciled: 2026-07-20 against the captured `main` baseline at `904fc68b`
-and the bounded M11A accepted slice. M11A push and live Memory cutover remain
+Last reconciled: 2026-07-22 against accepted local commit `55b62270` and the
+human-authorized M11A live cutover. Push, PR, and remote delivery remain
 separate human gates; this document does not predict remote delivery evidence.
 
 ## Authority
@@ -98,7 +98,7 @@ recently closed P1 risks are:
 | DOCS-003 | closed | P2 | A pre-release cutover checklist and superseded 90-day product roadmap remained visible after their decisions were absorbed into the current execution and release roots | Per-file audit found no live dependency; docs drift and current-entry gates passed; independent review passed with P0/P1/P2/P3 equal to zero | Current direction remains in `HANDOFF.md`; release history remains in `LAUNCH_NOW.md` and `release-readiness.md`; retired drafts remain recoverable in Git history |
 | DIST-003 | closed | P2 | The primary `devframe code` command carried an optional dashboard-launch shortcut plus four dashboard-only server parameters, duplicating the explicit diagnostic command and widening the daily coding surface | Existing client Recon and reuse assessment, real CLI/bootstrap RED, minimal GREEN, 1,564 control-plane tests, installed-wheel smoke, and a second independent review with P0/P1/P2/P3 equal to zero | `devframe code` stays CLI-first while `devframe dashboard serve` preserves the full diagnostic/API surface |
 | KERNEL-003 | queued for M10B | P2 | A malformed or unavailable project Skill policy can make Profile planning fall back to its built-in defaults without a diagnostic | M10A independent review; no M10A consumer executes Profile stages | Before any Profile stage is consumed, policy-resolution failure must become human-required or conservatively read-only/no-network, with a real-path regression |
-| MEMORY-001 | closed | P1 | The validated Obsidian candidate and its installed local read runtime could become a second lifecycle beside current `main` if a new plan feature were added without an explicit migration/cutover boundary | Candidate/main reconciliation, production-path RED -> GREEN, `1720 passed, 6 skipped` on a fresh verify tree, installed-wheel canary `3/0/0`, and independent review PASS with P0/P1/P2/P3 all zero on 2026-07-20 | Current `main` owns the only maintained Memory semantics and existing writeback owns all mutation; live Vault/MCP Hook replacement remains a separate human-gated cutover |
+| MEMORY-001 | closed | P1 | The validated Obsidian candidate and its installed local read runtime could become a second lifecycle beside current `main` if a new plan feature were added without an explicit migration/cutover boundary | Candidate/main reconciliation, production-path RED -> GREEN, `1720 passed, 6 skipped` on a fresh verify tree, installed-wheel canary `3/0/0`, independent review PASS with P0/P1/P2/P3 all zero, and the 2026-07-20 live MCP + SessionStart canaries | Current `main` owns the only maintained Memory semantics and existing writeback owns all mutation; the current wheel is the sole active local runtime, while the old runtime is inactive and retained only for rollback |
 
 `DOCS-001` is mitigated by this document slice. Physical archival or deletion
 is a later cleanup operation and must first prove that no active validator,
@@ -123,7 +123,7 @@ permission to start parallel implementation.
 | M9. Toolchain run inspection | accepted | A user can inspect one governed toolchain result without decoding generic go-run metadata or opening packet files | Installed CLI status binds structured toolchain provenance to the exact canonical source bytes and remains read-only/fail-closed |
 | M10A. Governed workflow profiles | accepted | Structured coding or paper context deterministically selects and records an ordered, permission-bounded Skill profile without executing external capabilities | Real coding and paper missing-path REDs became schema-valid planned-only TaskSpecs; generic ambiguity remains human-required; installed-wheel and independent review gates passed |
 | M10B. Governed coding canary | queued before any Profile execution consumer | One offline coding entrypoint can consume a narrowly adopted pre/post stage plan without changing correctness, safety, or acceptance authority | Policy-resolution failure is first made fail-closed; one provenance/fingerprint-bound static rule canary passes real coding tests without hooks, network, credentials, global install, or non-coding activation |
-| M11A. Unified Obsidian working-plan MVP | accepted | Codex, CLI, and later RD-Code can share one private working plan without moving formal project authority out of the repository or creating a second write lifecycle | Existing writeback stages and create-only publishes immutable project-plan versions; source drift, target races, project leakage, secret content, and absolute-path disclosure fail closed through real MCP/CLI paths; full, wheel, canary, and independent-review gates passed locally |
+| M11A. Unified Obsidian working-plan MVP | accepted (live locally) | Codex, CLI, and later RD-Code can share one private working plan without moving formal project authority out of the repository or creating a second write lifecycle | Existing writeback stages and create-only publishes immutable project-plan versions; source drift, target races, project leakage, secret content, and absolute-path disclosure fail closed through real MCP/CLI paths; local cutover and fresh live canaries passed |
 
 ## Completed Milestone: M1 Canonical Run Truth
 
@@ -990,8 +990,10 @@ candidate paths remain outside this slice.
 - Actual diff contains no activation controller, parallel store, private Vault,
   runtime state, global config, Link dependency, automatic apply, or deletion.
 - Independent review reported P0=0, P1=0, P2=0, and P3=0 before root acceptance.
-- Live Vault/MCP Hook switch, disabling the old runtime, push, PR, merge, and
-  release remain separate human gates.
+- The human-authorized live Vault/MCP Hook switch is configured against the
+  current wheel; fresh MCP, CLI, and project-scoped SessionStart canaries plus
+  independent live-state review pass before root acceptance. Push, PR, merge,
+  and release remain separate human gates.
 
 ### M11A Accepted Local Slice
 
@@ -1019,20 +1021,57 @@ wheel SHA-256
 `45cca1e516b7c37018cc19f0276e055fcd913c6d98a314db1ddd085448798ca2`.
 Its installed CLI canary (PowerShell 7.6) returned propose/approve/recall exits
 `3/0/0`, created one managed note, recalled `current`, and exposed zero
-absolute roots. The local acceptance gate is closed; live cutover and remote
-delivery remain human-gated.
+absolute roots. The local implementation acceptance gate is closed; the live
+cutover is active locally under its separate evidence gate, and remote delivery
+remains human-gated.
+
+### Live Cutover Accepted Locally
+
+The human-authorized local cutover replaces the stale `memory serve` MCP entry
+and old upstream recall hook with the current mainline wheel. The active server
+is loopback-only at `/mcp` and requires the existing DevFrame bearer token.
+The Codex MCP registration permits only `recall_project_plan` and
+`propose_project_plan`; the latter only stages a proposal, so Vault publication
+still requires exact human approval through canonical writeback.
+
+The isolated runtime uses wheel SHA-256
+`45cca1e516b7c37018cc19f0276e055fcd913c6d98a314db1ddd085448798ca2`.
+Its Memory and MCP module hashes match the accepted M11A files. SessionStart
+uses a bounded, project-scoped, read-only wrapper over `memory plan recall`;
+the Codex global instructions name the same current tools. The old isolated
+runtime is no longer referenced by MCP or the hook, has no listener, and
+remains intact only for rollback.
+
+The first real live proposal wrote no Vault file before exact request-ID
+approval, then create-only publication produced one managed note. Fresh CLI
+and MCP probes recalled `current` with zero absolute-path leaks. SessionStart
+allows only a fully qualified repository root or child path; foreign projects,
+similar prefixes, rooted-relative paths, missing or malformed input, and an
+oversized payload fail closed before service startup without plan content or
+path disclosure. The real at-logon task cold-started to `Ready`, enabled, last
+result zero, one loopback listener, and the expected runtime process chain;
+warm Hook probes completed below the configured timeout with stable PIDs.
+
+The managed MCP block was reconciled without replacing unrelated Codex
+provider or MCP settings, and the installed runtime module hashes still match
+the accepted source. Independent phase-1 live review closed P0/P1/P3 and
+authorized final source binding. One P2 environment advisory remains: shell
+test wrappers may keep tracking a detached service after it has bound, while
+the actual scheduled task and warm Hook lifecycle complete normally. Exact
+final note/source binding and one last independent read-only reconciliation
+must pass before this closeout is committed.
 
 Reviewer Index:
 
 | Item | Evidence |
 |---|---|
-| Changed files | `docs/status/HANDOFF.md`; `docs/agent-runtime/obsidian-memory.md`; `control_plane/obsidian_memory.py`; `control_plane/writeback.py`; `control_plane/mcp_server.py`; `control_plane/dashboard.py`; CLI `_memory.py`, `app.py`, and `_usage.py`; `tests/test_obsidian_project_plan.py`; 10 paths total |
+| Changed files | Accepted implementation: `docs/status/HANDOFF.md`; `docs/agent-runtime/obsidian-memory.md`; `control_plane/obsidian_memory.py`; `control_plane/writeback.py`; `control_plane/mcp_server.py`; `control_plane/dashboard.py`; CLI `_memory.py`, `app.py`, and `_usage.py`; `tests/test_obsidian_project_plan.py`; 10 paths total. Live closeout: `docs/status/HANDOFF.md` only |
 | Critical paths | Project/source validation and immutable note derivation; proposal preview and action binding; exact request-ID approval; handle-bound source/root revalidation; atomic create-only publication and audit recovery; bounded recall; CLI, MCP, and Dashboard adapters |
-| Tests and checks | Production RED -> GREEN; focused Obsidian `68 passed, 3 skipped`; writeback/MCP `58 passed, 1 skipped`; Dashboard/MCP `17 passed`; repair probes `7 passed`; affected `121 passed, 4 skipped`; fresh full control-plane `1720 passed, 6 skipped`; Ruff on M11A-attributable files, compileall, and `git diff --check` passed; public snapshot passed; latest wheel verification passed with SHA-256 `45cca1e516b7c37018cc19f0276e055fcd913c6d98a314db1ddd085448798ca2`; installed canary `3/0/0`, one note, `current`, zero root leaks |
+| Tests and checks | Production RED -> GREEN; focused Obsidian `68 passed, 3 skipped`; writeback/MCP `58 passed, 1 skipped`; Dashboard/MCP `17 passed`; repair probes `7 passed`; affected `121 passed, 4 skipped`; fresh live affected `143 passed, 4 skipped` with the live token deliberately removed only from the isolated test process; fresh full control-plane `1720 passed, 6 skipped`; Ruff on M11A-attributable files, compileall, and `git diff --check` passed; public snapshot passed; latest wheel verification passed with SHA-256 `45cca1e516b7c37018cc19f0276e055fcd913c6d98a314db1ddd085448798ca2`; isolated canary `3/0/0`, one note, `current`, zero root leaks; live MCP initialize/list/pre-consent/`allow_once`/recall; 12 reject and 3 allow SessionStart scope probes; actual scheduled-task cold start; final note/source binding canaries |
 | Generated artifacts | Recon: `.devframe-runtime/recon/recon-obsidian-memory-unification-20260719.md`; TaskSpec: `.devframe-runtime/contracts/m11a-unified-obsidian-plan-mvp.md`; canary: `.devframe-runtime/probes/m11a-installed-memory-canary.ps1`; fresh verification tree: `.devframe-runtime/verify/m11a-final-601b2b9788f941e1af0d1f441dcd6ae3`; retained wheel is identified by the SHA-256 above (its local temp path stays out of public docs) |
-| Known gaps | Live Vault/MCP Hook cutover, disabling the old runtime, a fresh live-session canary, push, PR, merge, release, and deployment remain human-gated and unexecuted |
+| Known gaps | A shell/ProcessStartInfo observer can continue tracking the detached service after successful bind; the real scheduled task returns `Ready`/zero and warm Hooks pass, so this remains a non-blocking P2 environment advisory. A newly started Codex task must instantiate the restored MCP registration and complete its normal connection-consent gate; push, PR, merge, release, and deployment remain human-gated and unexecuted |
 | Review focus | Preserve proposal-time physical identity and current source-byte binding; pre/post-publish rechecks; preview/action coherence; create-only audit-backed recovery; secret rejection; bounded path-free responses; no second write authority |
-| Verdict | Independent read-only review PASS on 2026-07-20; P0=0, P1=0, P2=0, P3=0; M11A accepted locally |
+| Verdict | M11A live cutover accepted locally after exact final binding and independent read-only reconciliation; P0=0, P1=0, P2=1 non-blocking environment advisory, P3=0 |
 
 ## Execution Protocol
 
@@ -1126,11 +1165,12 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 | 2026-07-19 | Accept M10A and queue one offline coding canary | Structured entrypoints now produce auditable planned-only Profiles without executing Skills; the next slice must first close policy-resolution failure and then prove one adopted, fingerprint-bound coding rule without hooks or external capabilities |
 | 2026-07-19 | Promote unified Obsidian working plans before new client features | Shared private context is on the single external-brain product spine; current main must absorb only the bounded candidate behavior and reuse canonical writeback before RD-Code, Web AI, or automatic memory expands the surface |
 | 2026-07-20 | Accept M11A locally and close MEMORY-001 | The fresh full suite, latest installed wheel canary, public-snapshot gate, exact diff checks, and independent read-only review all passed; live Vault/MCP Hook cutover and remote Git delivery remain explicit human gates |
+| 2026-07-22 | Accept and activate M11A live locally under the existing human gate | The current accepted wheel now owns the loopback MCP and project-scoped SessionStart path; create-only publication, current recalls, startup task, token boundary, input isolation, path-redaction probes, and independent review pass while the old runtime remains rollback-only |
 
 ## Next Action
 
-M11A has no remaining repository implementation action in this slice. The next
-action is a human-gated decision about live Vault/MCP Hook cutover, including
-whether to disable the old runtime. A separate human gate is required before
-push or PR creation (and any later merge or release). No live cutover or remote
-Git effect has been performed.
+M11A has no remaining repository implementation action in this slice. The live
+Vault/MCP Hook cutover is active locally; the old runtime is inactive and kept
+only for rollback. The next external action is the separate human gate for push
+or PR creation (and any later merge or release). No remote Git effect has been
+performed.
