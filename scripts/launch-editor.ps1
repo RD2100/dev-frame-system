@@ -14,11 +14,13 @@
 # needed while actively editing the RD-Code fork source). Pass -Rebuild to force
 # a fresh production build before starting.
 #
-# Prerequisites (already verified by `devframe client doctor`): a local T3 Code
-# checkout under .devframe-runtime/external/t3code with node_modules installed,
-# Node 24+, and pnpm.
+# Prerequisites (already verified by `devframe client doctor`): a valid T3 Code
+# checkout selected by -T3Root, DEVFRAME_T3_ROOT/T3CODE_ROOT/T3_ROOT, or the
+# repo-local .devframe-runtime/external/t3code default; node_modules installed;
+# Node 24+; and pnpm. The existing CLI materializes the generated bridge files.
 
 param(
+    [string]$T3Root,
     [switch]$Dev,
     [switch]$Rebuild
 )
@@ -26,11 +28,29 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $pkg = Join-Path $repoRoot "packages\control-plane"
-$t3 = Join-Path $repoRoot ".devframe-runtime\external\t3code"
+$defaultT3Root = Join-Path $repoRoot ".devframe-runtime\external\t3code"
+$selectedT3Root = if (-not [string]::IsNullOrWhiteSpace($T3Root)) {
+    $T3Root
+} elseif (-not [string]::IsNullOrWhiteSpace($env:DEVFRAME_T3_ROOT)) {
+    $env:DEVFRAME_T3_ROOT
+} elseif (-not [string]::IsNullOrWhiteSpace($env:T3CODE_ROOT)) {
+    $env:T3CODE_ROOT
+} elseif (-not [string]::IsNullOrWhiteSpace($env:T3_ROOT)) {
+    $env:T3_ROOT
+} else {
+    $defaultT3Root
+}
 $port = 8788
 
-if (-not (Test-Path (Join-Path $t3 "devframe.t3desktop.mjs"))) {
-    Write-Error "T3 editor checkout not found at $t3. Run: devframe client bridge --t3-root <T3 checkout>"
+try {
+    $t3 = (Resolve-Path -LiteralPath $selectedT3Root -ErrorAction Stop).Path
+} catch {
+    Write-Error "T3 editor checkout not found at $selectedT3Root. Pass -T3Root <T3 checkout>, set DEVFRAME_T3_ROOT/T3CODE_ROOT/T3_ROOT, or place it at $defaultT3Root."
+    exit 1
+}
+if (-not (Test-Path -LiteralPath (Join-Path $t3 "package.json") -PathType Leaf) -or
+    -not (Test-Path -LiteralPath (Join-Path $t3 "apps\web") -PathType Container)) {
+    Write-Error "Invalid T3 editor checkout at $t3. Expected package.json and apps\web."
     exit 1
 }
 

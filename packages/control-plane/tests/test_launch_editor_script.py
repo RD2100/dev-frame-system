@@ -9,9 +9,24 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 LAUNCHER = REPO_ROOT / "scripts" / "launch-editor.ps1"
 PWSH = shutil.which("pwsh")
+T3_ROOT_ENV_VARS = ("DEVFRAME_T3_ROOT", "T3CODE_ROOT", "T3_ROOT")
 
 
-def _run_launcher(tmp_path: Path, *, arguments: str, exit_code: int) -> tuple[dict[str, str], str]:
+def _create_t3_checkout(path: Path, *, with_bridge: bool) -> Path:
+    (path / "apps" / "web").mkdir(parents=True, exist_ok=True)
+    (path / "package.json").write_text('{"name":"t3code-test"}\n', encoding="utf-8")
+    if with_bridge:
+        (path / "devframe.t3desktop.mjs").write_text("// test fixture\n", encoding="utf-8")
+    return path
+
+
+def _run_launcher(
+    tmp_path: Path,
+    *,
+    arguments: str,
+    exit_code: int,
+    environment: dict[str, str] | None = None,
+) -> tuple[dict[str, str], str]:
     fixture_root = tmp_path / "fixture"
     script_dir = fixture_root / "scripts"
     package_dir = fixture_root / "packages" / "control-plane"
@@ -20,10 +35,10 @@ def _run_launcher(tmp_path: Path, *, arguments: str, exit_code: int) -> tuple[di
     caller_dir = tmp_path / "caller"
     trace_path = tmp_path / "python-trace.txt"
 
-    for path in (script_dir, package_dir, t3_dir, fake_bin, caller_dir):
+    for path in (script_dir, package_dir, fake_bin, caller_dir):
         path.mkdir(parents=True, exist_ok=True)
     shutil.copy2(LAUNCHER, script_dir / LAUNCHER.name)
-    (t3_dir / "devframe.t3desktop.mjs").write_text("// test fixture\n", encoding="utf-8")
+    _create_t3_checkout(t3_dir, with_bridge=True)
     (fake_bin / "python.cmd").write_text(
         "@echo off\r\n"
         '> "%TRACE_PATH%" echo cwd=%CD%\r\n'
@@ -36,6 +51,9 @@ def _run_launcher(tmp_path: Path, *, arguments: str, exit_code: int) -> tuple[di
     )
 
     env = os.environ.copy()
+    for name in T3_ROOT_ENV_VARS:
+        env.pop(name, None)
+    env.update(environment or {})
     env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
     env["TRACE_PATH"] = str(trace_path)
     env["FAKE_EXIT_CODE"] = str(exit_code)
@@ -59,6 +77,8 @@ def _run_launcher(tmp_path: Path, *, arguments: str, exit_code: int) -> tuple[di
         check=False,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
 
     assert completed.returncode == 0, completed.stderr
@@ -68,10 +88,102 @@ def _run_launcher(tmp_path: Path, *, arguments: str, exit_code: int) -> tuple[di
 
 
 @pytest.mark.skipif(PWSH is None, reason="PowerShell is required for the Windows launcher probe")
+def test_launch_editor_uses_explicit_external_t3_root_without_preinstalled_bridge(tmp_path):
+    external_t3 = _create_t3_checkout(tmp_path / "external t3", with_bridge=False)
+    environment_t3 = _create_t3_checkout(tmp_path / "environment t3", with_bridge=False)
+
+    trace, caller_state = _run_launcher(
+        tmp_path,
+        arguments=f"-T3Root '{external_t3}'",
+        exit_code=0,
+        environment={"DEVFRAME_T3_ROOT": str(environment_t3)},
+    )
+
+    assert str(external_t3) in trace["args"]
+    assert str(environment_t3) not in trace["args"]
+    assert trace["args"].endswith("--prod")
+    assert caller_state.endswith("|False")
+
+
+@pytest.mark.skipif(PWSH is None, reason="PowerShell is required for the Windows launcher probe")
+def test_launch_editor_uses_devframe_t3_root_without_arguments(tmp_path):
+    external_t3 = _create_t3_checkout(tmp_path / "external t3", with_bridge=False)
+    t3code_root = _create_t3_checkout(tmp_path / "t3code root", with_bridge=False)
+    t3_root = _create_t3_checkout(tmp_path / "t3 root", with_bridge=False)
+
+    trace, caller_state = _run_launcher(
+        tmp_path,
+        arguments="",
+        exit_code=0,
+        environment={
+            "DEVFRAME_T3_ROOT": str(external_t3),
+            "T3CODE_ROOT": str(t3code_root),
+            "T3_ROOT": str(t3_root),
+        },
+    )
+
+    assert str(external_t3) in trace["args"]
+    assert str(t3code_root) not in trace["args"]
+    assert str(t3_root) not in trace["args"]
+    assert trace["args"].endswith("--prod")
+    assert caller_state.endswith("|False")
+
+
+@pytest.mark.skipif(PWSH is None, reason="PowerShell is required for the Windows launcher probe")
+@pytest.mark.parametrize("variable_name", ["T3CODE_ROOT", "T3_ROOT"])
+def test_launch_editor_uses_fallback_t3_root_environment_variables(tmp_path, variable_name: str):
+    external_t3 = _create_t3_checkout(tmp_path / variable_name.lower(), with_bridge=False)
+
+    trace, caller_state = _run_launcher(
+        tmp_path,
+        arguments="",
+        exit_code=0,
+        environment={variable_name: str(external_t3)},
+    )
+
+    assert str(external_t3) in trace["args"]
+    assert caller_state.endswith("|False")
+
+
+@pytest.mark.skipif(PWSH is None, reason="PowerShell is required for the Windows launcher probe")
+def test_launch_editor_rejects_invalid_explicit_t3_root(tmp_path):
+    invalid_t3 = tmp_path / "invalid t3"
+    invalid_t3.mkdir()
+
+    completed = subprocess.run(
+        [
+            PWSH,
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(LAUNCHER),
+            "-T3Root",
+            str(invalid_t3),
+        ],
+        cwd=REPO_ROOT,
+        env={**os.environ, "NO_COLOR": "1"},
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert completed.returncode == 1
+    assert "Invalid T3 editor checkout at" in completed.stderr
+    assert str(invalid_t3) in completed.stderr
+    assert "package.json and apps\\web" in completed.stderr
+
+
+@pytest.mark.skipif(PWSH is None, reason="PowerShell is required for the Windows launcher probe")
 def test_launch_editor_scopes_rebuild_and_restores_caller_state(tmp_path):
     trace, caller_state = _run_launcher(tmp_path, arguments="-Rebuild", exit_code=0)
 
     assert Path(trace["cwd"]) == tmp_path / "fixture" / "packages" / "control-plane"
+    assert str(tmp_path / "fixture" / ".devframe-runtime" / "external" / "t3code") in trace["args"]
     assert trace["args"].endswith("--prod")
     assert "--overwrite-bridge" in trace["args"].split()
     assert "--force" not in trace["args"].split()
