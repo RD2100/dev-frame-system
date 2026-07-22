@@ -107,6 +107,37 @@ def test_prepare_review_bundle_prompts_for_awaited_downstream_operation_completi
     assert "downstream-only or mutation-only evidence is insufficient" in prompt
 
 
+def test_prepare_review_bundle_prompts_for_navigation_return_single_flight(tmp_path):
+    project = tmp_path / "project"
+    runtime = tmp_path / "runtime"
+    project.mkdir()
+    (project / "handler.js").write_text("async function navigate() {}\n", encoding="utf-8")
+
+    result = prepare_external_review_bundle(
+        project_root=project,
+        runtime_dir=runtime,
+        output_id="navigation-return-review",
+        review_question="Does navigation preserve single-flight ownership until return?",
+        required_roles=["code"],
+        sources=[ReviewSource("handler.js", role="code")],
+    )
+
+    prompt_path = Path(result["manifest_path"]).parent / "REVIEW_PROMPT.md"
+    prompt = prompt_path.read_text(encoding="utf-8").lower()
+
+    assert "conditional navigation single-flight review" in prompt
+    assert "across navigation; otherwise skip this section" in prompt
+    assert "`navigateto`/`navigateback` return lifecycle" in prompt
+    assert "`redirectto`/`switchtab`/`relaunch` unload lifecycle" in prompt
+    assert "busy or token remains held after a successful `navigateto`" in prompt
+    assert "synchronous double-trigger probe" in prompt
+    assert "success -> `onhide` -> `onshow` -> retry probe" in prompt
+    assert "failure -> retry probe" in prompt
+    assert "unload-stale probe" in prompt
+    assert "lifecycle methods must release the return lock" in prompt
+    assert "direct test-only state mutation is insufficient" in prompt
+
+
 def test_prepare_review_bundle_marks_missing_required_role_incomplete(tmp_path):
     project = tmp_path / "project"
     runtime = tmp_path / "runtime"
