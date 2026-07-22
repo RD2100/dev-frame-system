@@ -35,6 +35,8 @@ coverage/
 .devframe-runtime/
 .gsd/
 .kiro/
+# Root OpenCode config may contain local credentials and must stay untracked.
+/opencode.config.json
 .opencode/
 .vscode/
 

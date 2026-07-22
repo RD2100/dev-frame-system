@@ -5,6 +5,21 @@ param(
 
 $ErrorActionPreference = "Stop"
 $rootPath = [System.IO.Path]::GetFullPath($Root)
+$sensitiveConfigPath = "opencode.config.json"
+
+if (Test-Path -LiteralPath (Join-Path $rootPath ".git")) {
+    $trackedSensitiveConfig = @(
+        & git -C $rootPath ls-files -- $sensitiveConfigPath 2>$null
+    )
+    if ($LASTEXITCODE -ne 0) {
+        Write-Output "[PUBLIC-SNAPSHOT-FAIL] unable to verify tracked sensitive config metadata"
+        exit 1
+    }
+    if ($trackedSensitiveConfig.Count -gt 0) {
+        Write-Output "[PUBLIC-SNAPSHOT-FAIL] tracked sensitive config: $sensitiveConfigPath"
+        exit 1
+    }
+}
 
 function Get-RelativeSnapshotPath {
     param(
@@ -181,7 +196,10 @@ function Get-PublicSnapshotItems {
                 Get-PublicSnapshotItems -Path $_.FullName -RootPath $RootPath
             }
         } else {
-            $_
+            $relative = Get-RelativeSnapshotPath -BasePath $RootPath -TargetPath $_.FullName
+            if ($relative -ne $sensitiveConfigPath) {
+                $_
+            }
         }
     }
 }

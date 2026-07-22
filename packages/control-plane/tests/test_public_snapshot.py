@@ -184,6 +184,118 @@ def _json_semantics(path):
     return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
+def _write_minimal_public_snapshot_fixture(root):
+    for relative in [
+        "packages/agent-acceptance",
+        "packages/ai-workflow-hub",
+        "packages/control-plane",
+        "packages/test-frame",
+        "schemas",
+        "templates/runtime-bootstrap",
+    ]:
+        (root / relative).mkdir(parents=True, exist_ok=True)
+
+    files = {
+        "README.md": "",
+        "README.zh-CN.md": "",
+        "AGENTS.md": "rules/recon.md",
+        ".github/workflows/release-verify.yml": "",
+        "docs/assets/devframe-system-banner.svg": "",
+        "docs/module-sources.md": "",
+        "docs/status/release-readiness.md": "",
+        "docs/status/reviewer-index.md": "",
+        "docs/agent-runtime/negative-test-fixtures/NEG-031-missing-recon-receipt.json": '{"name": "Missing Recon Receipt"}',
+        "rules/README.md": "recon.md",
+        "rules/open-source-reuse.md": "rules/recon.md",
+        "rules/recon.md": "RULE recon-001: Recon Gate Before Write-Capable Work",
+        "scripts/verify-control-plane-wheel.ps1": "",
+        "scripts/verify-release.ps1": "",
+    }
+    for relative, content in files.items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    shutil.copy2(
+        REPO_ROOT / "scripts" / "verify-public-snapshot.ps1",
+        root / "scripts" / "verify-public-snapshot.ps1",
+    )
+
+
+def _run_public_snapshot(root, *args):
+    return subprocess.run(
+        [
+            "powershell",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(root / "scripts" / "verify-public-snapshot.ps1"),
+            *args,
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+
+def test_public_snapshot_rejects_tracked_opencode_config_before_content_scan(tmp_path):
+    _write_minimal_public_snapshot_fixture(tmp_path)
+    config_path = tmp_path / "opencode.config.json"
+    config_path.write_text("synthetic-invalid-json-placeholder", encoding="utf-8")
+
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "--", config_path.name], cwd=tmp_path, check=True)
+    result = _run_public_snapshot(tmp_path)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert "tracked sensitive config: opencode.config.json" in output
+    assert "[JSON-FAIL]" not in output
+    assert "synthetic-invalid-json-placeholder" not in output
+
+
+def test_gitignore_keeps_root_opencode_config_local(tmp_path):
+    shutil.copy2(REPO_ROOT / ".gitignore", tmp_path / ".gitignore")
+    root_config = tmp_path / "opencode.config.json"
+    nested_config = tmp_path / "nested" / "opencode.config.json"
+    root_config.write_text("synthetic-local-config-placeholder", encoding="utf-8")
+    nested_config.parent.mkdir()
+    nested_config.write_text("synthetic-nested-config-placeholder", encoding="utf-8")
+
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
+    root_result = subprocess.run(
+        ["git", "check-ignore", "--quiet", "--no-index", "--", root_config.name],
+        cwd=tmp_path,
+        check=False,
+    )
+    nested_result = subprocess.run(
+        ["git", "check-ignore", "--quiet", "--no-index", "--", "nested/opencode.config.json"],
+        cwd=tmp_path,
+        check=False,
+    )
+
+    assert root_result.returncode == 0
+    assert nested_result.returncode == 1
+
+
+def test_public_snapshot_skips_untracked_root_opencode_config_content(tmp_path):
+    _write_minimal_public_snapshot_fixture(tmp_path)
+    shutil.copy2(REPO_ROOT / ".gitignore", tmp_path / ".gitignore")
+    (tmp_path / "opencode.config.json").write_text(
+        "synthetic-invalid-json-placeholder",
+        encoding="utf-8",
+    )
+
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
+    result = _run_public_snapshot(tmp_path)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "[JSON-FAIL]" not in output
+    assert "synthetic-invalid-json-placeholder" not in output
+
+
 def test_public_snapshot_allows_python_test_caches():
     for leftover in REPO_ROOT.glob("public-snapshot-probe-*"):
         shutil.rmtree(leftover, ignore_errors=True)
@@ -479,80 +591,14 @@ def test_tutti_snapshot_is_external_reference_only():
 
 
 def test_strict_public_snapshot_rejects_tracked_product_reference(tmp_path):
-    required_dirs = [
-        ".github/workflows",
-        "docs/agent-runtime/negative-test-fixtures",
-        "docs/assets",
-        "docs/status",
-        "packages/agent-acceptance",
-        "packages/ai-workflow-hub",
-        "packages/control-plane",
-        "packages/test-frame",
-        "rules",
-        "schemas",
-        "templates/runtime-bootstrap",
-    ]
-    for relative in required_dirs:
-        path = tmp_path / relative
-        path.mkdir(parents=True, exist_ok=True)
-
-    required_files = [
-        "README.md",
-        "README.zh-CN.md",
-        "AGENTS.md",
-        ".github/workflows/release-verify.yml",
-        "docs/assets/devframe-system-banner.svg",
-        "docs/module-sources.md",
-        "docs/status/release-readiness.md",
-        "docs/status/reviewer-index.md",
-        "rules/recon.md",
-        "scripts/verify-control-plane-wheel.ps1",
-        "scripts/verify-public-snapshot.ps1",
-        "scripts/verify-release.ps1",
-    ]
-    for relative in required_files:
-        path = tmp_path / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("", encoding="utf-8")
-
-    (tmp_path / "README.md").write_text("", encoding="utf-8")
-    (tmp_path / "README.zh-CN.md").write_text("", encoding="utf-8")
-    (tmp_path / "AGENTS.md").write_text("rules/recon.md", encoding="utf-8")
-    (tmp_path / "rules" / "README.md").write_text("recon.md", encoding="utf-8")
-    (tmp_path / "rules" / "open-source-reuse.md").write_text("rules/recon.md", encoding="utf-8")
-    (tmp_path / "rules" / "recon.md").write_text(
-        "RULE recon-001: Recon Gate Before Write-Capable Work",
-        encoding="utf-8",
-    )
-    (tmp_path / "docs" / "agent-runtime" / "negative-test-fixtures" / "NEG-031-missing-recon-receipt.json").write_text(
-        '{"name": "Missing Recon Receipt"}',
-        encoding="utf-8",
-    )
-    shutil.copy2(
-        REPO_ROOT / "scripts" / "verify-public-snapshot.ps1",
-        tmp_path / "scripts" / "verify-public-snapshot.ps1",
-    )
+    _write_minimal_public_snapshot_fixture(tmp_path)
     product_file = tmp_path / "products" / "tutti" / "README.md"
     product_file.parent.mkdir(parents=True)
     product_file.write_text("bundled product", encoding="utf-8")
 
     subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
     subprocess.run(["git", "add", "products/tutti/README.md"], cwd=tmp_path, check=True)
-    result = subprocess.run(
-        [
-            "powershell",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            str(tmp_path / "scripts" / "verify-public-snapshot.ps1"),
-            "-FailOnTrackedForbidden",
-        ],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
+    result = _run_public_snapshot(tmp_path, "-FailOnTrackedForbidden")
 
     assert result.returncode == 1, result.stdout + result.stderr
     assert "tracked bundled product: products/tutti/README.md" in result.stdout
