@@ -97,6 +97,67 @@ def test_toolchain_preview_help_is_available(monkeypatch, capsys):
     assert "devframe toolchain preview --manifest <path>" in output
 
 
+def test_toolchain_run_json_omits_internal_canary_validation_state(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    project_root = tmp_path / "toolchain-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    manifest_path = project_root / "toolchain.json"
+    action_sentinel = project_root / "manifest-action-ran.txt"
+    command = [
+        sys.executable,
+        "-c",
+        (
+            "from pathlib import Path; "
+            f"Path({str(action_sentinel)!r}).write_text('ran', encoding='utf-8')"
+        ),
+    ]
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "toolchain_id": "public-json-boundary",
+                "working_directory": ".",
+                "commands": {"build": command, "test": command},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(
+        "PYTHONPATH",
+        str(REPO_ROOT / "packages" / "control-plane"),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "devframe",
+            "toolchain",
+            "run",
+            "--manifest",
+            str(manifest_path),
+            "--action",
+            "test",
+            "--project",
+            str(project_root),
+            "--runtime-dir",
+            str(runtime_dir),
+            "--execute",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert devframe_cli_main() == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["status"] == "passed"
+    assert action_sentinel.read_text(encoding="utf-8") == "ran"
+    assert "_workflow_canary_envelope_validated" not in payload
+
+
 def test_code_help_is_available(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["devframe", "code", "--help"])
 
@@ -113,6 +174,22 @@ def test_code_help_is_available(monkeypatch, capsys):
     assert "--worker" in output
     assert "--dashboard" not in output
     assert "devframe dashboard serve" in output
+
+
+def test_workflow_canary_cli_help_is_explicit_and_code_only(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["devframe", "code", "--help"])
+    assert devframe_cli_main() == 0
+    code_help = capsys.readouterr().out
+
+    monkeypatch.setattr(sys, "argv", ["devframe", "go", "--help"])
+    assert devframe_cli_main() == 0
+    go_help = capsys.readouterr().out
+
+    assert "--workflow-canary" in code_help
+    assert "@go read" in code_help
+    assert "canary-only" in code_help
+    assert "no worker or ACP" in code_help
+    assert "--workflow-canary" not in go_help
 
 
 def test_client_help_is_available(monkeypatch, capsys):
@@ -527,6 +604,371 @@ def test_code_execute_reuses_prepared_go_run_packets(tmp_path, monkeypatch, caps
     assert {agent["worker_status"] for agent in metadata_after["agents"]} == {"passed"}
     assert len(list(marker_dir.glob("*.txt"))) == 2
     assert state["go_runs"][0]["status"] == "passed"
+
+
+def _write_cli_workflow_canary_policy(runtime_dir: Path, project_root: Path) -> Path:
+    policy_path = runtime_dir / project_root.name.lower() / "skills.json"
+    policy_path.parent.mkdir(parents=True)
+    policy_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "skills": [
+                    {
+                        "id": "workflow-canary-read-only",
+                        "title": "Workflow canary read only",
+                        "triggers": ["@workflow-canary-read-only"],
+                        "readOnly": True,
+                        "networkEnabled": False,
+                        "requireRedGreenEvidence": True,
+                    }
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return policy_path
+
+
+@pytest.mark.parametrize(
+    ("canary_args", "expected"),
+    [([], False), (["--workflow-canary"], True)],
+    ids=["default-off", "explicit-on"],
+)
+def test_code_cli_passes_explicit_workflow_canary_kwarg(
+    tmp_path,
+    monkeypatch,
+    capsys,
+    canary_args,
+    expected,
+):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    _write_cli_workflow_canary_policy(runtime_dir, project_root)
+    captured = []
+
+    def capture_dispatch(*args, **kwargs):
+        captured.append(kwargs["workflow_canary"])
+        raise ValueError("captured dispatch")
+
+    monkeypatch.setattr(
+        "control_plane.go_dispatch.run_go_dispatch",
+        capture_dispatch,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "devframe",
+            "code",
+            "@go read inspect the bounded source.",
+            "--project",
+            str(project_root),
+            "--runtime-dir",
+            str(runtime_dir),
+            *canary_args,
+        ],
+    )
+
+    assert devframe_cli_main() == 2
+    assert captured == [expected]
+    assert "captured dispatch" in capsys.readouterr().err
+
+
+def test_workflow_canary_after_command_fails_before_any_worker_boundary(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    from control_plane import go_dispatch as go_dispatch_module
+
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    sentinel = tmp_path / "worker-ran.txt"
+    project_root.mkdir()
+    _write_cli_workflow_canary_policy(runtime_dir, project_root)
+    worker_code = (
+        "from pathlib import Path; import os; "
+        f"Path({str(sentinel)!r}).write_text('worker-ran', encoding='utf-8'); "
+        "Path(os.environ['RDGOAL_REPORT_PATH']).write_text("
+        "'## ExecutionReport\\n\\n"
+        "- **Status**: pass\\n"
+        "- **Review Status**: draft\\n"
+        "- **Changed Files**:\\n"
+        "- (none)\\n"
+        "- **Evidence**: CLI remainder boundary probe\\n', encoding='utf-8')"
+    )
+    command = [sys.executable, "-c", worker_code]
+    command_entries = []
+    acp_entries = []
+    real_worker = go_dispatch_module.CommandWorker
+
+    class TrackingCommandWorker:
+        def __init__(self, *args, **kwargs):
+            command_entries.append("CommandWorker")
+            self._delegate = real_worker(*args, **kwargs)
+
+        def run_packet(self, *args, **kwargs):
+            return self._delegate.run_packet(*args, **kwargs)
+
+    def tracking_acp(*args, **kwargs):
+        acp_entries.append("ACP")
+        raise AssertionError("workflow canary entered the ACP boundary")
+
+    monkeypatch.setattr(go_dispatch_module, "CommandWorker", TrackingCommandWorker)
+    monkeypatch.setattr(go_dispatch_module, "_run_one_agent_acp", tracking_acp)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "devframe",
+            "code",
+            "@go read inspect the bounded source.",
+            "--project",
+            str(project_root),
+            "--runtime-dir",
+            str(runtime_dir),
+            "--execute",
+            "--command",
+            *command,
+            "--workflow-canary",
+        ],
+    )
+
+    exit_code = devframe_cli_main()
+    captured = capsys.readouterr()
+
+    assert exit_code != 0
+    assert "--workflow-canary" in captured.err
+    assert not sentinel.exists()
+    assert command_entries == []
+    assert acp_entries == []
+    assert not (runtime_dir / "rdgoal-outbox").exists()
+    assert not (runtime_dir / "go-runs").exists()
+
+
+def test_workflow_canary_cli_preview_never_constructs_a_worker_command(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    _write_cli_workflow_canary_policy(runtime_dir, project_root)
+
+    def reject_worker_command(*args, **kwargs):
+        raise AssertionError("workflow canary preview constructed a worker command")
+
+    monkeypatch.setattr(
+        "control_plane.go_dispatch.build_go_worker_command",
+        reject_worker_command,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "devframe",
+            "code",
+            "@go read inspect the bounded source.",
+            "--project",
+            str(project_root),
+            "--runtime-dir",
+            str(runtime_dir),
+            "--workflow-canary",
+            "--preview",
+        ],
+    )
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "DevFrame coding preview" in output
+    assert "workflow     : canary_only" in output
+    assert "worker       : none (canary-only; no command or ACP)" in output
+    assert "pre:intent" in output
+    assert "post:evidence" in output
+    assert "command:" not in output
+    assert not (runtime_dir / "rdgoal-outbox").exists()
+    assert not (runtime_dir / "go-runs").exists()
+
+
+def test_workflow_canary_cli_prepare_and_resume_use_only_draft_evidence(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    _write_cli_workflow_canary_policy(runtime_dir, project_root)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "devframe",
+            "code",
+            "@go read inspect the bounded source.",
+            "--project",
+            str(project_root),
+            "--runtime-dir",
+            str(runtime_dir),
+            "--workflow-canary",
+        ],
+    )
+
+    prepare_exit = devframe_cli_main()
+    prepare_output = capsys.readouterr().out
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    prepared = json.loads(metadata_path.read_text(encoding="utf-8"))
+    packet_dir = Path(prepared["agents"][0]["packet_dir"])
+
+    assert prepare_exit == 0
+    assert "workflow     : canary_only (prepared)" in prepare_output
+    assert "run    : canary-only (no worker/ACP)" in prepare_output
+    assert prepared["workflow_canary"]["status"] == "prepared"
+    assert prepared["workflow_canary"]["stage_results"] == []
+    assert prepared["agents"][0]["worker_command"] == []
+    assert not (packet_dir / "ExecutionReport.md").exists()
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "devframe",
+            "code",
+            "status",
+            prepared["go_run_id"],
+            "--runtime-dir",
+            str(runtime_dir),
+            "--format",
+            "json",
+        ],
+    )
+    assert devframe_cli_main() == 0
+    public_status = json.loads(capsys.readouterr().out)
+    assert "_workflow_canary_envelope_validated" not in public_status
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "devframe",
+            "code",
+            "execute",
+            prepared["go_run_id"],
+            "--runtime-dir",
+            str(runtime_dir),
+        ],
+    )
+    resume_exit = devframe_cli_main()
+    resume_output = capsys.readouterr().out
+    completed = json.loads(metadata_path.read_text(encoding="utf-8"))
+    report_path = Path(completed["agents"][0]["report_path"])
+    report_text = report_path.read_text(encoding="utf-8")
+
+    assert resume_exit == 0
+    assert "DevFrame Code execute" in resume_output
+    assert "workflow     : canary_only (passed)" in resume_output
+    assert completed["status"] == "passed"
+    assert completed["workflow_canary"]["status"] == "passed"
+    assert [
+        (stage["phase"], stage["stage_id"])
+        for stage in completed["workflow_canary"]["stage_results"]
+    ] == [("pre", "intent"), ("post", "evidence")]
+    assert "**Review Status**: draft" in report_text
+    assert "FinalVerdict" not in report_text
+    assert not list(runtime_dir.rglob("FINAL_VERDICT.json"))
+    assert not list(runtime_dir.rglob("review.yaml"))
+    assert not list(runtime_dir.rglob("review.md"))
+
+
+def test_workflow_canary_cli_resume_policy_drift_is_read_only(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    policy_path = _write_cli_workflow_canary_policy(runtime_dir, project_root)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "devframe",
+            "code",
+            "@go read inspect the bounded source.",
+            "--project",
+            str(project_root),
+            "--runtime-dir",
+            str(runtime_dir),
+            "--workflow-canary",
+        ],
+    )
+    assert devframe_cli_main() == 0
+    capsys.readouterr()
+    metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
+    metadata_before = metadata_path.read_bytes()
+    run_id = json.loads(metadata_before)["go_run_id"]
+    policy_path.write_bytes(policy_path.read_bytes() + b"\n")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "devframe",
+            "code",
+            "execute",
+            run_id,
+            "--runtime-dir",
+            str(runtime_dir),
+        ],
+    )
+
+    exit_code = devframe_cli_main()
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "workflow canary" in captured.err
+    assert metadata_path.read_bytes() == metadata_before
+    packet_dir = Path(json.loads(metadata_before)["agents"][0]["packet_dir"])
+    assert not (packet_dir / "ExecutionReport.md").exists()
+    assert not (runtime_dir / "rdgoal-reports").exists()
+
+
+def test_workflow_canary_cli_missing_policy_exits_two_without_packets(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "devframe",
+            "code",
+            "@go read inspect the bounded source.",
+            "--project",
+            str(project_root),
+            "--runtime-dir",
+            str(runtime_dir),
+            "--workflow-canary",
+        ],
+    )
+
+    exit_code = devframe_cli_main()
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "workflow canary" in captured.err
+    assert not (runtime_dir / "rdgoal-outbox").exists()
+    assert not (runtime_dir / "go-runs").exists()
 
 
 def test_code_execute_skips_previously_passed_agents(tmp_path, monkeypatch, capsys):
@@ -3682,7 +4124,7 @@ def test_atgo_prepare_writes_methodology_to_chain_evidence(tmp_path, monkeypatch
     ])
 
     exit_code = devframe_cli_main()
-    output = capsys.readouterr().out
+    capsys.readouterr()
     metadata_path = next((runtime_dir / "go-runs").glob("*/go-run.json"))
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     evidence_dir = runtime_dir / "atgo-runs" / metadata["go_run_id"]

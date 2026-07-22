@@ -72,7 +72,9 @@ ATGO_USAGE = "Usage: devframe atgo \"<goal>\" [--project <dir>] [--runtime-dir <
 CODE_USAGE = (
     "Usage: devframe code [[\"<goal>\"] | --prompt-file <path>] [--project <dir>] "
     "[--agents 1|auto] [--max-agents 4] [--target <path>] [--changed] "
-    "[--since <git-ref>] [--preview] [--execute] [--worker opencode]\n"
+    "[--since <git-ref>] [--preview] [--execute] [--worker opencode] "
+    "[--workflow-canary]\n"
+    "  --workflow-canary is an explicit @go read canary-only path with no worker or ACP.\n"
     "  Start optional diagnostics separately with devframe dashboard serve."
 )
 CODE_WORKERS_USAGE = "Usage: devframe code workers [--format text|json]"
