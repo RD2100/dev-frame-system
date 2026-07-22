@@ -442,31 +442,126 @@ def _execute_parallel(
     team = TeamRuntime(runtime_dir=result.runtime_dir)
     driver = result.driver or "command"
     participant_ids = {agent.agent_id for agent in result.agents}
+    expected_agent_ids = [agent.agent_id for agent in agents_to_run]
+    batch_id = team.record_worker_start_batch(
+        result.go_run_id,
+        status="started",
+        expected_agent_ids=expected_agent_ids,
+    )
+    submit_attempted_agent_ids: list[str] = []
+    submit_failure: Exception | None = None
+    submitted_future_failures: list[Exception] = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = [
-            pool.submit(_run_group, result.runtime_dir, result.project_root, result.go_run_id,
-                        group, timeout_seconds, team, driver, acp_command, participant_ids)
-            for group in groups
-        ]
-        for future in as_completed(futures):
-            future.result()
+        futures = []
+        for group in groups:
+            submit_attempted_agent_ids.extend(agent.agent_id for agent in group)
+            try:
+                futures.append(pool.submit(
+                    _run_group,
+                    result.runtime_dir,
+                    result.project_root,
+                    result.go_run_id,
+                    group,
+                    timeout_seconds,
+                    team,
+                    driver,
+                    acp_command,
+                    participant_ids,
+                    batch_id,
+                ))
+            except Exception as exc:
+                submit_failure = exc
+                break
+        if submit_failure is None:
+            for future in as_completed(futures):
+                future.result()
+        else:
+            # Drain every successfully submitted future. Submission order makes
+            # the surfaced worker failure deterministic if several futures fail.
+            for future in futures:
+                try:
+                    future.result()
+                except Exception as exc:
+                    submitted_future_failures.append(exc)
+
+    if submit_failure is not None:
+        try:
+            durable = _durable_worker_start_state(
+                team,
+                result.go_run_id,
+                batch_id,
+                expected_agent_ids,
+            )
+            team.record_worker_start_batch(
+                result.go_run_id,
+                status="failed",
+                batch_id=batch_id,
+                expected_agent_ids=expected_agent_ids,
+                submit_attempted_agent_ids=submit_attempted_agent_ids,
+                durable_started_agent_ids=durable["started"],
+                durable_terminal_agent_ids=durable["terminal"],
+                durable_failed_agent_ids=durable["failed"],
+                error_type=type(submit_failure).__name__,
+                error_summary=str(submit_failure) or "no error message",
+            )
+        except Exception as journal_exc:
+            raise journal_exc from submit_failure
+        if submitted_future_failures:
+            raise submitted_future_failures[0] from submit_failure
+        raise submit_failure
+
+
+def _durable_worker_start_state(
+    team: TeamRuntime,
+    run_id: str,
+    batch_id: str,
+    expected_agent_ids: list[str],
+) -> dict[str, list[str]]:
+    expected = set(expected_agent_ids)
+    started: set[str] = set()
+    terminal: set[str] = set()
+    failed: set[str] = set()
+    for event in team.read_all(strict=True):
+        if str(event.get("run_id") or "") != run_id:
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        if str(payload.get("batch_id") or "") != batch_id:
+            continue
+        agent_id = str(event.get("agent_id") or "")
+        if agent_id not in expected:
+            continue
+        event_type = str(event.get("event_type") or "")
+        if event_type == "task_created":
+            started.add(agent_id)
+        elif event_type == "task_result":
+            terminal.add(agent_id)
+            status = str(payload.get("status") or "").strip().lower()
+            if status in {"blocked", "cancelled", "error", "fail", "failed"}:
+                failed.add(agent_id)
+    return {
+        "started": [agent_id for agent_id in expected_agent_ids if agent_id in started],
+        "terminal": [agent_id for agent_id in expected_agent_ids if agent_id in terminal],
+        "failed": [agent_id for agent_id in expected_agent_ids if agent_id in failed],
+    }
 
 
 def _run_group(runtime_dir: str, project_root: str, go_run_id: str,
                group: list[GoAgentDispatch], timeout_seconds: int,
                team: TeamRuntime | None = None, driver: str = "command",
                acp_command: list[str] | None = None,
-               participant_ids: set[str] | None = None) -> None:
+               participant_ids: set[str] | None = None,
+               batch_id: str = "") -> None:
     for agent in group:
         _run_agent_in_place(runtime_dir, project_root, go_run_id, agent, timeout_seconds,
-                            team, driver, acp_command, participant_ids)
+                            team, driver, acp_command, participant_ids, batch_id)
 
 
 def _run_agent_in_place(runtime_dir: str, project_root: str, go_run_id: str,
                         agent: GoAgentDispatch, timeout_seconds: int,
                         team: TeamRuntime | None = None, driver: str = "command",
                         acp_command: list[str] | None = None,
-                        participant_ids: set[str] | None = None) -> None:
+                        participant_ids: set[str] | None = None,
+                        batch_id: str = "") -> None:
     try:
         cwd, env_overrides = _resolve_isolation(runtime_dir, project_root, go_run_id, agent)
         _ensure_agent_context_artifacts(runtime_dir, agent)
@@ -477,8 +572,14 @@ def _run_agent_in_place(runtime_dir: str, project_root: str, go_run_id: str,
                 shard_index=agent.shard_index, shard_count=agent.shard_count,
                 targets=agent.targets,
                 context_refs=context_refs,
+                batch_id=batch_id,
             )
-            team.record_task_claimed(go_run_id, agent.agent_id, context_refs=context_refs)
+            team.record_task_claimed(
+                go_run_id,
+                agent.agent_id,
+                context_refs=context_refs,
+                batch_id=batch_id,
+            )
         if driver == "acp":
             worker_result = _run_one_agent_acp(
                 runtime_dir, agent, timeout_seconds,
@@ -499,6 +600,7 @@ def _run_agent_in_place(runtime_dir: str, project_root: str, go_run_id: str,
                 go_run_id, agent.agent_id,
                 status=agent.worker_status or "completed",
                 report_path=agent.report_path, isolated=agent.isolated,
+                batch_id=batch_id,
             )
             _record_worker_message_sidecar(
                 team, go_run_id, agent, participant_ids or {agent.agent_id},
@@ -509,7 +611,12 @@ def _run_agent_in_place(runtime_dir: str, project_root: str, go_run_id: str,
         agent.report_path = ""
         _write_agent_failure(agent, exc)
         if team is not None:
-            team.record_result(go_run_id, agent.agent_id, status="failed")
+            team.record_result(
+                go_run_id,
+                agent.agent_id,
+                status="failed",
+                batch_id=batch_id,
+            )
 
 
 def _resolve_isolation(runtime_dir: str, project_root: str, go_run_id: str,

@@ -7,16 +7,20 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from threading import Event
 
+import pytest
 from jsonschema.validators import validator_for
 
+from control_plane import go_dispatch as go_dispatch_module
 from control_plane.go_dispatch import (
     SUCCESS_WORKER_STATUSES,
     execute_go_run,
     run_go_dispatch,
 )
+from control_plane.run_index import build_run_index
 from control_plane.t3_adapter import build_t3_client_shell
-from control_plane.team_runtime import TEAM_EVENTS_FILE, build_team_runtime_view
+from control_plane.team_runtime import TEAM_EVENTS_FILE, TeamRuntime, build_team_runtime_view
 from control_plane.visual_state import build_visual_control_plane_state
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -178,6 +182,210 @@ def test_execution_records_team_events_and_surfaces_in_state(tmp_path):
     outcome_gates = [g for g in team["review_gates"] if g["kind"] == "go-run-outcome"]
     assert outcome_gates
     assert {g["status"] for g in outcome_gates} == {"open"}
+
+
+def test_partial_submit_failure_records_one_fail_closed_start_diagnostic(tmp_path, monkeypatch):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "a.py").write_text("a = 1\n", encoding="utf-8")
+    (project / "b.py").write_text("b = 2\n", encoding="utf-8")
+    runtime = tmp_path / "runtime"
+    real_executor = go_dispatch_module.ThreadPoolExecutor
+
+    class FailSecondSubmit:
+        def __init__(self, *args, **kwargs):
+            self._executor = real_executor(*args, **kwargs)
+            self._submit_count = 0
+
+        def __enter__(self):
+            self._executor.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self._executor.__exit__(*args)
+
+        def submit(self, *args, **kwargs):
+            self._submit_count += 1
+            if self._submit_count == 2:
+                raise RuntimeError("controller submit failed after one worker start")
+            return self._executor.submit(*args, **kwargs)
+
+    monkeypatch.setattr(go_dispatch_module, "ThreadPoolExecutor", FailSecondSubmit)
+
+    with pytest.raises(RuntimeError, match="controller submit failed after one worker start"):
+        run_go_dispatch(
+            project,
+            "partial submit failure",
+            runtime_dir=runtime,
+            agents=2,
+            targets=["a.py", "b.py"],
+            execute=True,
+            worker_command=_noop_report_command(),
+        )
+
+    records = [
+        json.loads(line)
+        for line in (runtime / TEAM_EVENTS_FILE).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    start_events = [
+        record
+        for record in records
+        if record["event_type"] == "workflow_event"
+        and record["payload"].get("phase") == "worker-start"
+    ]
+    assert [event["payload"]["status"] for event in start_events] == ["started", "failed"]
+    expected_agent_ids = ["coding-agent-1", "coding-agent-2"]
+    assert start_events[0]["payload"]["expected_agent_ids"] == expected_agent_ids
+    assert start_events[0]["payload"]["expected_count"] == 2
+
+    failed = start_events[1]["payload"]
+    assert failed["expected_agent_ids"] == expected_agent_ids
+    assert failed["expected_count"] == 2
+    assert failed["submit_attempted_agent_ids"] == expected_agent_ids
+    assert failed["submit_attempted_count"] == 2
+    assert failed["durable_started_agent_ids"] == ["coding-agent-1"]
+    assert failed["durable_started_count"] == 1
+    assert failed["durable_terminal_agent_ids"] == ["coding-agent-1"]
+    assert failed["durable_terminal_count"] == 1
+    assert failed["durable_failed_agent_ids"] == []
+    assert failed["durable_failed_count"] == 0
+    assert failed["unaccounted_agent_ids"] == ["coding-agent-2"]
+    assert failed["unaccounted_count"] == 1
+    assert failed["error_type"] == "RuntimeError"
+    assert failed["error_summary"] == "controller submit failed after one worker start"
+
+    created = [record for record in records if record["event_type"] == "task_created"]
+    results = [record for record in records if record["event_type"] == "task_result"]
+    assert [record["agent_id"] for record in created] == ["coding-agent-1"]
+    assert [record["agent_id"] for record in results] == ["coding-agent-1"]
+
+    view = build_team_runtime_view(runtime)
+    errors = [event for event in view["event_log"] if event["kind"] == "worker-start-failed"]
+    assert len(errors) == 1
+    assert "expected=2" in errors[0]["summary"]
+    assert "unaccounted=1 (coding-agent-2)" in errors[0]["summary"]
+    assert "RuntimeError: controller submit failed" in errors[0]["summary"]
+
+    index = build_run_index(runtime)
+    team_record = next(
+        entry["record"]
+        for entry in index["runs"]
+        if entry["adapter_id"] == "team_events"
+    )
+    assert team_record["outcome"] == "blocked"
+    assert team_record["acceptance_state"] == "blocked"
+    assert len(team_record["failure_refs"]) == 1
+    assert team_record["failure_refs"][0]["failure_id"].startswith(
+        "failure-team-worker-start-"
+    )
+    assert team_record["domain_refs"]["diagnostic"] == errors[0]["summary"]
+
+
+def test_partial_submit_failure_surfaces_submitted_future_journal_error(
+    tmp_path,
+    monkeypatch,
+):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "a.py").write_text("a = 1\n", encoding="utf-8")
+    (project / "b.py").write_text("b = 2\n", encoding="utf-8")
+    runtime = tmp_path / "runtime"
+    submit_failed = Event()
+    real_executor = go_dispatch_module.ThreadPoolExecutor
+    original_record_result = TeamRuntime.record_result
+
+    class FailSecondSubmit:
+        def __init__(self, *args, **kwargs):
+            self._executor = real_executor(*args, **kwargs)
+            self._submit_count = 0
+
+        def __enter__(self):
+            self._executor.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self._executor.__exit__(*args)
+
+        def submit(self, *args, **kwargs):
+            self._submit_count += 1
+            if self._submit_count == 2:
+                submit_failed.set()
+                raise RuntimeError("controller submit failed after one worker start")
+            return self._executor.submit(*args, **kwargs)
+
+    def fail_first_worker_result(self, run_id, agent_id, **kwargs):
+        if agent_id == "coding-agent-1":
+            assert submit_failed.wait(timeout=5)
+            raise OSError("worker journal append failed after partial submit")
+        return original_record_result(self, run_id, agent_id, **kwargs)
+
+    monkeypatch.setattr(go_dispatch_module, "ThreadPoolExecutor", FailSecondSubmit)
+    monkeypatch.setattr(TeamRuntime, "record_result", fail_first_worker_result)
+
+    with pytest.raises(
+        OSError,
+        match="worker journal append failed after partial submit",
+    ) as raised:
+        run_go_dispatch(
+            project,
+            "partial submit and worker journal failure",
+            runtime_dir=runtime,
+            agents=2,
+            targets=["a.py", "b.py"],
+            execute=True,
+            worker_command=_noop_report_command(),
+        )
+
+    assert isinstance(raised.value.__cause__, RuntimeError)
+    assert str(raised.value.__cause__) == (
+        "controller submit failed after one worker start"
+    )
+    records = [
+        json.loads(line)
+        for line in (runtime / TEAM_EVENTS_FILE).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    start_failures = [
+        record
+        for record in records
+        if record["event_type"] == "workflow_event"
+        and record["payload"].get("phase") == "worker-start"
+        and record["payload"].get("status") == "failed"
+    ]
+    assert len(start_failures) == 1
+    assert start_failures[0]["payload"]["error_type"] == "RuntimeError"
+    assert start_failures[0]["payload"]["error_summary"] == (
+        "controller submit failed after one worker start"
+    )
+    created = [record for record in records if record["event_type"] == "task_created"]
+    results = [record for record in records if record["event_type"] == "task_result"]
+    assert [record["agent_id"] for record in created] == ["coding-agent-1"]
+    assert results == []
+
+
+def test_started_worker_batch_does_not_fail_while_workers_are_mid_flight(tmp_path):
+    runtime = tmp_path / "runtime"
+    team = TeamRuntime(runtime_dir=runtime)
+    team.record_worker_start_batch(
+        "go-mid-flight",
+        status="started",
+        expected_agent_ids=["coding-agent-1", "coding-agent-2"],
+    )
+
+    view = build_team_runtime_view(runtime)
+    assert [event["kind"] for event in view["event_log"]] == ["workflow-worker-start"]
+
+    index = build_run_index(runtime)
+    team_record = next(
+        entry["record"]
+        for entry in index["runs"]
+        if entry["adapter_id"] == "team_events"
+    )
+    assert team_record["outcome"] == "unknown"
+    assert team_record["acceptance_state"] == "review_pending"
+    assert team_record["failure_refs"] == []
+    assert team_record["domain_refs"].get("diagnostic") is None
 
 
 def test_prepare_only_records_no_team_events(tmp_path):

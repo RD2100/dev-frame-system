@@ -686,8 +686,9 @@ def _team_event_entries(runtime: Path) -> list[dict[str, Any]]:
             worker_agent_ids,
             context_refs,
         )
-        failure_refs = review_failures + final_failures
-        status = _aggregate_team_status(result_events)
+        worker_start_failures, worker_start_diagnostics = _team_worker_start_failures(events)
+        failure_refs = review_failures + final_failures + worker_start_failures
+        status = "failed" if worker_start_failures else _aggregate_team_status(result_events)
         entries.append(_entry(
             adapter_id="team_events",
             source_type="team_event_journal",
@@ -728,12 +729,38 @@ def _team_event_entries(runtime: Path) -> list[dict[str, Any]]:
                     "review_ref_count": len(review_refs),
                     "gate_ref_count": len(gate_refs),
                     "final_verdict_ref_present": bool(final_verdict_ref),
-                    "diagnostic": "; ".join(sorted(set(final_diagnostics))) if final_diagnostics else None,
+                    "worker_start_failure_count": len(worker_start_failures),
+                    "diagnostic": (
+                        "; ".join(sorted(set(final_diagnostics + worker_start_diagnostics)))
+                        if final_diagnostics or worker_start_diagnostics
+                        else None
+                    ),
                 },
             ),
             source_hash=source_hash,
         ))
     return entries
+
+
+def _team_worker_start_failures(
+    events: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    failures: list[dict[str, Any]] = []
+    diagnostics: list[str] = []
+    for event in events:
+        if event.get("event_type") != "workflow_event":
+            continue
+        payload = _as_dict(event.get("payload"))
+        phase = _safe_token(payload.get("phase")).replace("_", "-")
+        status = _safe_token(payload.get("status")).replace("_", "-")
+        if phase != "worker-start" or status != "failed":
+            continue
+        diagnostic = str(payload.get("summary") or "").strip()
+        if not diagnostic:
+            diagnostic = "Worker start batch failed without an actionable diagnostic."
+        failures.append(_event_failure_ref("team-worker-start", event, diagnostic))
+        diagnostics.append(diagnostic)
+    return failures, diagnostics
 
 
 def _atgo_entries(runtime: Path) -> list[dict[str, Any]]:

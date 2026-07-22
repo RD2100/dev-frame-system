@@ -108,7 +108,8 @@ class TeamRuntime:
     def record_task_created(self, run_id: str, agent_id: str, *,
                             project_id: str = "", shard_index: int = 0,
                             shard_count: int = 0, targets: list[str] | None = None,
-                            context_refs: list[dict[str, Any]] | None = None) -> str:
+                            context_refs: list[dict[str, Any]] | None = None,
+                            batch_id: str = "") -> str:
         return self._append(TeamEvent(
             event_type="task_created",
             run_id=run_id,
@@ -119,16 +120,21 @@ class TeamRuntime:
                 "shard_count": shard_count,
                 "targets": list(targets or []),
                 "context_refs": _normalize_context_refs(context_refs),
+                "batch_id": str(batch_id or ""),
             },
         ))
 
     def record_task_claimed(self, run_id: str, agent_id: str,
-                            *, context_refs: list[dict[str, Any]] | None = None) -> str:
+                            *, context_refs: list[dict[str, Any]] | None = None,
+                            batch_id: str = "") -> str:
         event = TeamEvent(
             event_type="task_claimed",
             run_id=run_id,
             agent_id=agent_id,
-            payload={"context_refs": _normalize_context_refs(context_refs)},
+            payload={
+                "context_refs": _normalize_context_refs(context_refs),
+                "batch_id": str(batch_id or ""),
+            },
         )
         with self._lock:
             targets_by_agent: dict[str, set[str]] = {}
@@ -159,7 +165,8 @@ class TeamRuntime:
         return event.event_id
 
     def record_result(self, run_id: str, agent_id: str, *, status: str,
-                      report_path: str = "", isolated: bool = False) -> str:
+                      report_path: str = "", isolated: bool = False,
+                      batch_id: str = "") -> str:
         event_id = self._append(TeamEvent(
             event_type="task_result",
             run_id=run_id,
@@ -169,6 +176,7 @@ class TeamRuntime:
                 "report_present": bool(report_path),
                 "report_path": str(report_path or ""),
                 "isolated": bool(isolated),
+                "batch_id": str(batch_id or ""),
             },
         ))
         if report_path:
@@ -265,6 +273,98 @@ class TeamRuntime:
                 "summary": str(summary),
             },
         ))
+
+    def record_worker_start_batch(
+        self,
+        run_id: str,
+        *,
+        status: str,
+        expected_agent_ids: list[str],
+        batch_id: str = "",
+        submit_attempted_agent_ids: list[str] | None = None,
+        durable_started_agent_ids: list[str] | None = None,
+        durable_terminal_agent_ids: list[str] | None = None,
+        durable_failed_agent_ids: list[str] | None = None,
+        error_type: str = "",
+        error_summary: str = "",
+    ) -> str:
+        """Record controller intent or failure for one worker-start batch."""
+        normalized_status = str(status or "").strip().lower()
+        if normalized_status not in {"started", "failed"}:
+            raise ValueError("worker start batch status must be started or failed")
+        expected = _normalize_agent_ids(expected_agent_ids)
+        if not expected:
+            raise ValueError("worker start batch requires expected_agent_ids")
+
+        attempted = _normalize_agent_ids(submit_attempted_agent_ids)
+        started = _normalize_agent_ids(durable_started_agent_ids)
+        terminal = _normalize_agent_ids(durable_terminal_agent_ids)
+        failed = _normalize_agent_ids(durable_failed_agent_ids)
+        expected_set = set(expected)
+        for name, agent_ids in (
+            ("submit_attempted_agent_ids", attempted),
+            ("durable_started_agent_ids", started),
+            ("durable_terminal_agent_ids", terminal),
+            ("durable_failed_agent_ids", failed),
+        ):
+            unknown = sorted(set(agent_ids) - expected_set)
+            if unknown:
+                raise ValueError(f"{name} contains unexpected agents: {', '.join(unknown)}")
+        if set(failed) - set(terminal):
+            raise ValueError("durable_failed_agent_ids must be terminal")
+
+        event = TeamEvent(
+            event_type="workflow_event",
+            run_id=run_id,
+            agent_id="controller",
+            payload={},
+        )
+        resolved_batch_id = str(batch_id or event.event_id)
+        if normalized_status == "started" and batch_id:
+            raise ValueError("started worker batch creates its own batch_id")
+        if normalized_status == "failed" and not batch_id:
+            raise ValueError("failed worker batch requires batch_id")
+
+        accounted = set(started) | set(terminal)
+        unaccounted = [agent_id for agent_id in expected if agent_id not in accounted]
+        normalized_error_type = str(error_type or "").strip()
+        normalized_error_summary = str(error_summary or "").strip()[:500]
+        if normalized_status == "started":
+            summary = f"Controller will start {len(expected)} worker(s) for run {run_id}."
+        else:
+            if not normalized_error_type or not normalized_error_summary:
+                raise ValueError("failed worker batch requires error_type and error_summary")
+            unaccounted_text = ", ".join(unaccounted) or "none"
+            summary = (
+                "Worker start batch failed: "
+                f"expected={len(expected)}, attempted={len(attempted)}, "
+                f"durable_started={len(started)}, durable_terminal={len(terminal)}, "
+                f"durable_failed={len(failed)}, unaccounted={len(unaccounted)} "
+                f"({unaccounted_text}); {normalized_error_type}: {normalized_error_summary}"
+            )
+
+        event.payload = {
+            "phase": "worker-start",
+            "status": normalized_status,
+            "role": "controller",
+            "summary": summary,
+            "batch_id": resolved_batch_id,
+            "expected_agent_ids": expected,
+            "expected_count": len(expected),
+            "submit_attempted_agent_ids": attempted,
+            "submit_attempted_count": len(attempted),
+            "durable_started_agent_ids": started,
+            "durable_started_count": len(started),
+            "durable_terminal_agent_ids": terminal,
+            "durable_terminal_count": len(terminal),
+            "durable_failed_agent_ids": failed,
+            "durable_failed_count": len(failed),
+            "unaccounted_agent_ids": unaccounted,
+            "unaccounted_count": len(unaccounted),
+            "error_type": normalized_error_type,
+            "error_summary": normalized_error_summary,
+        }
+        return self._append(event)
 
     def record_agent_message(self, run_id: str, from_agent_id: str, to_agent_id: str,
                              *, kind: str, summary: str) -> str:
@@ -502,8 +602,8 @@ class TeamRuntime:
             self._append_locked(event)
             return event.event_id
 
-    def read_all(self) -> list[dict[str, Any]]:
-        return _read_team_events(self.path)
+    def read_all(self, *, strict: bool = False) -> list[dict[str, Any]]:
+        return _read_team_events(self.path, strict=strict)
 
 
 def _read_team_events(path: Path, *, strict: bool = False) -> list[dict[str, Any]]:
@@ -557,6 +657,18 @@ def _normalize_context_refs(value: list[dict[str, Any]] | None) -> list[dict[str
             "context_id": str(item.get("context_id") or ""),
         })
     return refs
+
+
+def _normalize_agent_ids(value: list[str] | None) -> list[str]:
+    agent_ids: list[str] = []
+    seen: set[str] = set()
+    for item in value or []:
+        agent_id = str(item or "").strip()
+        if not agent_id or agent_id in seen:
+            continue
+        seen.add(agent_id)
+        agent_ids.append(agent_id)
+    return agent_ids
 
 
 def _normalize_gate_summary(value: list[dict[str, Any]] | None) -> list[dict[str, str]]:
@@ -854,9 +966,14 @@ def build_team_runtime_view(runtime_dir: str | Path | None = None) -> dict[str, 
             role = _slug(payload.get("role")) or "coordinator"
             _touch_agent(role, "active")
             summary = str(payload.get("summary") or f"{role} {phase}: {status}")
+            event_kind = (
+                "worker-start-failed"
+                if _slug(phase) == "worker-start" and _slug(status) == "failed"
+                else f"workflow-{_slug(phase)}"
+            )
             event_log.append({
                 "event_id": f"team-{event_id}",
-                "kind": f"workflow-{_slug(phase)}",
+                "kind": event_kind,
                 "run_id": run_id,
                 "summary": summary,
             })
