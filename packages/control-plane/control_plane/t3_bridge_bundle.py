@@ -731,6 +731,9 @@ export interface DevFrameCoordinatorGoalRequest {
   readonly target: string;
   readonly goal: string;
   readonly proposedBy?: string;
+  readonly executor?: string;
+  readonly modelProvider?: string;
+  readonly model?: string;
 }
 
 export interface DevFrameCoordinatorGoalResponse {
@@ -769,6 +772,15 @@ export async function startDevFrameCoordinatorGoal(
   config: DevFrameControlPlaneConfig,
   input: DevFrameCoordinatorGoalRequest,
 ): Promise<DevFrameCoordinatorGoalResponse> {
+  if (input.executor !== undefined && !input.executor.trim()) {
+    throw new Error("executor must not be blank when provided");
+  }
+  if (input.modelProvider !== undefined && !input.modelProvider.trim()) {
+    throw new Error("modelProvider must not be blank when provided");
+  }
+  if (input.model !== undefined && !input.model.trim()) {
+    throw new Error("model must not be blank when provided");
+  }
   const response = await fetch(new URL("/api/t3/cluster-run", config.controlPlaneBaseUrl).toString(), {
     method: "POST",
     cache: "no-store",
@@ -781,6 +793,9 @@ export async function startDevFrameCoordinatorGoal(
       target: input.target,
       goal: input.goal,
       ...(input.proposedBy ? { proposedBy: input.proposedBy } : {}),
+      ...(input.executor !== undefined ? { executor: input.executor } : {}),
+      ...(input.modelProvider !== undefined ? { modelProvider: input.modelProvider } : {}),
+      ...(input.model !== undefined ? { model: input.model } : {}),
     }),
   });
   if (!response.ok) {
