@@ -227,6 +227,124 @@ def test_dashboard_cluster_targets_and_run(tmp_path, monkeypatch):
         thread.join(timeout=5)
 
 
+def test_rdcode_goal_product_path_projects_authoritative_review_state(tmp_path, monkeypatch):
+    from control_plane.team_runtime import build_team_runtime_view
+    from control_plane.workflow_engine import WorkflowEngine
+
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "task.py").write_text("value = 1\n", encoding="utf-8")
+    worker_script = (
+        "import os;"
+        "from pathlib import Path;"
+        "Path(os.environ['RDGOAL_REPORT_PATH']).write_text("
+        "'## ExecutionReport\\n\\n- **Status**: pass\\n- **Changed Files**:\\n- (none)\\n"
+        "- **Evidence**: local cluster product-path test\\n',encoding='utf-8')"
+    )
+
+    def run_local_workflow(runtime, project_path, target, goal, run_id, on_prepared=None):
+        assert target == "coordinator"
+        assert run_id.startswith("g-")
+        return WorkflowEngine(runtime).run_coding_workflow(
+            project_path,
+            goal,
+            agents=1,
+            targets=["task.py"],
+            worker_command=[sys.executable, "-c", worker_script],
+            on_prepared=on_prepared,
+        )
+
+    monkeypatch.setattr(cluster_run_module, "_run_cluster_workflow", run_local_workflow)
+    server = build_dashboard_server(runtime_dir=runtime_dir, port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        status, started = _post_json(base_url, "/api/t3/cluster-run", {
+            "projectId": str(workspace),
+            "target": "coordinator",
+            "goal": "add authoritative review projection",
+        })
+        assert status == 202
+
+        deadline = time.monotonic() + 10
+        detail = {}
+        while time.monotonic() < deadline:
+            _, detail = _get_json(
+                base_url,
+                f"/api/t3/cluster-run-events?runId={started['runId']}",
+            )
+            if detail.get("goRunId") and detail.get("status") not in {"running", "started"}:
+                break
+            time.sleep(0.02)
+        assert detail.get("status") == "passed", detail
+        go_run_id = detail["goRunId"]
+
+        recorded_team = build_team_runtime_view(runtime_dir)
+        assert any(item.get("run_id") == go_run_id for item in recorded_team["message_bus"])
+        assert any(item.get("run_id") == go_run_id for item in recorded_team["evidence_store"])
+        assert any(item.get("run_id") == go_run_id for item in recorded_team["review_gates"])
+
+        unlinked_status, unlinked = _post_json(base_url, "/api/t3/cluster-run", {
+            "projectId": str(workspace),
+            "target": "coordinator",
+            "goal": "hello",
+        })
+        assert unlinked_status == 202
+        assert unlinked["kind"] == "conversation"
+
+        shell_status, shell = _get_json(base_url, "/t3-shell.json")
+        assert shell_status == 200
+        goal_thread = next(item for item in shell["t3"]["threads"] if item["id"] == started["runId"])
+        devframe = goal_thread["devframe"]
+        authoritative_team = shell["devframe"]["team"]
+        expected_message_ids = {
+            item["messageId"] for item in authoritative_team["messageBus"]
+            if item["runId"] == go_run_id
+        }
+        expected_evidence_ids = {
+            item["evidenceId"] for item in authoritative_team["evidenceStore"]
+            if item["runId"] == go_run_id
+        }
+        expected_gates = {
+            item["gateId"]: item for item in authoritative_team["reviewGates"]
+            if item["runId"] == go_run_id
+        }
+        assert expected_message_ids
+        assert expected_evidence_ids
+        assert expected_gates
+        assert devframe["relatedRunIds"] == [go_run_id]
+        assert set(devframe["teamMessageIds"]) == expected_message_ids
+        assert set(devframe["teamEvidenceIds"]) == expected_evidence_ids
+        assert set(devframe["teamReviewGateIds"]) == set(expected_gates)
+        gate_details = {item["gateId"]: item for item in devframe["teamDetailGates"]}
+        assert set(gate_details) == set(expected_gates)
+        for gate_id, expected in expected_gates.items():
+            assert {
+                key: gate_details[gate_id][key]
+                for key in ("kind", "status", "reason", "runId")
+            } == {
+                key: expected[key]
+                for key in ("kind", "status", "reason", "runId")
+            }
+        assert all(item["openPath"] for item in gate_details.values())
+        assert all(item["openUrl"].startswith(base_url) for item in gate_details.values())
+
+        unlinked_thread = next(item for item in shell["t3"]["threads"] if item["id"] == unlinked["runId"])
+        unlinked_devframe = unlinked_thread["devframe"]
+        assert unlinked_devframe["relatedRunIds"] == []
+        assert unlinked_devframe["teamMessageIds"] == []
+        assert unlinked_devframe["teamEvidenceIds"] == []
+        assert unlinked_devframe["teamReviewGateIds"] == []
+        assert unlinked_devframe["teamDetailGates"] == []
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
 def test_dashboard_projects_endpoint_lists_registered_projects(tmp_path, monkeypatch):
     runtime_dir = tmp_path / "runtime"
     runtime_dir.mkdir()
