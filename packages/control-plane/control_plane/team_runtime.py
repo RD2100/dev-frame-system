@@ -24,9 +24,19 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .backup_guard import default_runtime_dir, is_inside
+from .governance_events import (
+    ROOT_GATE_EVENT_TYPE,
+    PreparedRootGateTransition,
+    RootGateLifecycleError,
+    fold_root_gate_requests,
+    prepare_root_gate_acknowledgement,
+    prepare_root_gate_decision,
+    prepare_root_gate_dispatch,
+    prepare_root_gate_request,
+)
 
 TEAM_EVENTS_FILE = "team-events.jsonl"
 
@@ -264,23 +274,143 @@ class TeamRuntime:
             },
         ))
 
+    def record_root_gate_request(
+        self,
+        run_id: str,
+        actor: str,
+        *,
+        request_id: str,
+        dedupe_key: str,
+        project_id: str,
+        gate: str,
+        summary: str,
+        exact_write_set: list[str],
+        evidence_refs: list[str],
+        reason: str,
+    ) -> str:
+        """Persist a new root-gate request or return an exact retry's event ID."""
+        return self._record_root_gate_transition(lambda records: prepare_root_gate_request(
+            records,
+            run_id=run_id,
+            actor=actor,
+            request_id=request_id,
+            dedupe_key=dedupe_key,
+            project_id=project_id,
+            gate=gate,
+            summary=summary,
+            exact_write_set=exact_write_set,
+            evidence_refs=evidence_refs,
+            reason=reason,
+        ))
+
+    def record_root_gate_acknowledgement(
+        self,
+        request_id: str,
+        actor: str,
+        *,
+        reason: str,
+    ) -> str:
+        """Record root receipt of a known request."""
+        return self._record_root_gate_transition(
+            lambda records: prepare_root_gate_acknowledgement(
+                records,
+                request_id=request_id,
+                actor=actor,
+                reason=reason,
+            )
+        )
+
+    def record_root_gate_decision(
+        self,
+        request_id: str,
+        actor: str,
+        *,
+        decision: str,
+        reason: str,
+    ) -> str:
+        """Record an authorized or rejected decision after acknowledgement."""
+        return self._record_root_gate_transition(lambda records: prepare_root_gate_decision(
+            records,
+            request_id=request_id,
+            actor=actor,
+            decision=decision,
+            reason=reason,
+        ))
+
+    def record_root_gate_dispatch(
+        self,
+        request_id: str,
+        actor: str,
+        *,
+        task_ids: list[str],
+        reason: str,
+    ) -> str:
+        """Record dispatch task IDs after an authorized decision."""
+        return self._record_root_gate_transition(lambda records: prepare_root_gate_dispatch(
+            records,
+            request_id=request_id,
+            actor=actor,
+            task_ids=task_ids,
+            reason=reason,
+        ))
+
+    def read_root_gate_requests(self) -> dict[str, dict[str, Any]]:
+        """Reconstruct root-gate request state from the durable team journal."""
+        with self._lock:
+            return fold_root_gate_requests(_read_team_events(self.path, strict=True))
+
+    def _record_root_gate_transition(
+        self,
+        prepare: Callable[[list[dict[str, Any]]], PreparedRootGateTransition],
+    ) -> str:
+        if self.repo_root and is_inside(self.runtime_dir, self.repo_root):
+            raise ValueError("Team runtime journal must not be inside the public repository.")
+        with self._lock:
+            prepared = prepare(_read_team_events(self.path, strict=True))
+            if prepared.existing_event_id:
+                return prepared.existing_event_id
+            audit_event = prepared.audit_event
+            if audit_event is None:
+                raise RuntimeError("Prepared root-gate transition has no event to persist.")
+            event = TeamEvent(
+                event_type=ROOT_GATE_EVENT_TYPE,
+                run_id=prepared.run_id,
+                agent_id=str(audit_event["actor"]),
+                payload=audit_event,
+                timestamp=str(audit_event["timestamp"]),
+                event_id=str(audit_event["event_id"]),
+            )
+            self._append_locked(event)
+            return event.event_id
+
     def read_all(self) -> list[dict[str, Any]]:
         return _read_team_events(self.path)
 
 
-def _read_team_events(path: Path) -> list[dict[str, Any]]:
+def _read_team_events(path: Path, *, strict: bool = False) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     events: list[dict[str, Any]] = []
     with path.open(encoding="utf-8") as handle:
-        for line in handle:
+        for line_number, line in enumerate(handle, start=1):
             stripped = line.strip()
             if not stripped:
                 continue
             try:
-                events.append(json.loads(stripped))
-            except json.JSONDecodeError:
+                record = json.loads(stripped)
+            except json.JSONDecodeError as exc:
+                if strict:
+                    raise RootGateLifecycleError(
+                        f"Root-gate lifecycle found malformed TeamRuntime journal JSONL "
+                        f"at line {line_number}."
+                    ) from exc
                 continue
+            if strict and not isinstance(record, dict):
+                raise RootGateLifecycleError(
+                    f"Root-gate lifecycle found malformed TeamRuntime journal event "
+                    f"at line {line_number}."
+                )
+            events.append(record)
     return events
 
 
