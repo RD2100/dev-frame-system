@@ -30,6 +30,7 @@ def _run_launcher(tmp_path: Path, *, arguments: str, exit_code: int) -> tuple[di
         '>> "%TRACE_PATH%" echo args=%*\r\n'
         '>> "%TRACE_PATH%" echo app_id=%T3CODE_DESKTOP_APP_USER_MODEL_ID%\r\n'
         '>> "%TRACE_PATH%" echo force_build=%DEVFRAME_T3_FORCE_BUILD%\r\n'
+        'if "%~1"=="-c" exit /b 0\r\n'
         "exit /b %FAKE_EXIT_CODE%\r\n",
         encoding="ascii",
     )

@@ -1,4 +1,7 @@
 import json
+import os
+import shutil
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -21,6 +24,132 @@ from control_plane.client_launcher import (
     serve_t3_desktop_client,
 )
 from control_plane.dashboard import build_dashboard_server
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+LAUNCH_EDITOR = REPO_ROOT / "scripts" / "launch-editor.ps1"
+PWSH = shutil.which("pwsh")
+
+
+def _run_launch_editor_interpreter_probe(
+    tmp_path: Path,
+    *,
+    healthy_fallback: bool,
+) -> tuple[subprocess.CompletedProcess[str], list[str], list[dict], dict | None]:
+    fixture_root = tmp_path / "fixture"
+    script_dir = fixture_root / "scripts"
+    package_dir = fixture_root / "packages" / "control-plane"
+    cli_dir = package_dir / "control_plane" / "cli"
+    t3_dir = fixture_root / ".devframe-runtime" / "external" / "t3code"
+    fake_bin = tmp_path / "fake-bin"
+    for path in (script_dir, cli_dir, t3_dir, fake_bin):
+        path.mkdir(parents=True, exist_ok=True)
+
+    shutil.copy2(LAUNCH_EDITOR, script_dir / LAUNCH_EDITOR.name)
+    (t3_dir / "devframe.t3desktop.mjs").write_text("// test fixture\n", encoding="utf-8")
+    (package_dir / "control_plane" / "__init__.py").write_text("", encoding="utf-8")
+    (cli_dir / "__init__.py").write_text(
+        "import json, os, pathlib, sys\n"
+        "trace = os.environ.get('IMPORT_TRACE_PATH')\n"
+        "if trace:\n"
+        "    with pathlib.Path(trace).open('a', encoding='utf-8') as handle:\n"
+        "        handle.write(json.dumps({'argv0': sys.argv[0], 'executable': os.path.realpath(sys.executable)}) + '\\n')\n",
+        encoding="utf-8",
+    )
+    (cli_dir / "__main__.py").write_text(
+        "import json, os, pathlib, sys\n"
+        "pathlib.Path(os.environ['LAUNCH_TRACE_PATH']).write_text(json.dumps({"
+        "'args': sys.argv[1:], 'cwd': os.getcwd(), "
+        "'executable': os.path.realpath(sys.executable)}), encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+
+    candidate_trace = tmp_path / "candidate-trace.txt"
+    import_trace = tmp_path / "import-trace.jsonl"
+    launch_trace = tmp_path / "launch-trace.json"
+    (fake_bin / "python.cmd").write_text(
+        "@echo off\r\n"
+        '>> "%CANDIDATE_TRACE_PATH%" echo python:%*\r\n'
+        "exit /b 17\r\n",
+        encoding="ascii",
+    )
+    py_candidate = Path(sys.executable) if healthy_fallback else tmp_path / "broken" / "python.exe"
+    if not healthy_fallback:
+        py_candidate.parent.mkdir(parents=True)
+        py_candidate.write_bytes(b"not a Windows executable")
+    (fake_bin / "py.cmd").write_text(
+        "@echo off\r\n"
+        '>> "%CANDIDATE_TRACE_PATH%" echo py:%*\r\n'
+        'if /I "%~1"=="-0p" (\r\n'
+        "  echo -V:3 *        %PY_LIST_CANDIDATE%\r\n"
+        "  exit /b 0\r\n"
+        ")\r\n"
+        "exit /b 18\r\n",
+        encoding="ascii",
+    )
+
+    env = os.environ.copy()
+    system32 = Path(env.get("SystemRoot", r"C:\Windows")) / "System32"
+    env["PATH"] = f"{fake_bin}{os.pathsep}{system32}"
+    env["CANDIDATE_TRACE_PATH"] = str(candidate_trace)
+    env["PY_LIST_CANDIDATE"] = str(py_candidate)
+    env["IMPORT_TRACE_PATH"] = str(import_trace)
+    env["LAUNCH_TRACE_PATH"] = str(launch_trace)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env.pop("PYTHONPATH", None)
+
+    completed = subprocess.run(
+        [PWSH, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", script_dir / LAUNCH_EDITOR.name],
+        cwd=tmp_path,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+    candidates = candidate_trace.read_text(encoding="utf-8").splitlines() if candidate_trace.exists() else []
+    imports = [json.loads(line) for line in import_trace.read_text(encoding="utf-8").splitlines()] if import_trace.exists() else []
+    launch = json.loads(launch_trace.read_text(encoding="utf-8")) if launch_trace.exists() else None
+    return completed, candidates, imports, launch
+
+
+@pytest.mark.skipif(PWSH is None, reason="PowerShell is required for the Windows launcher probe")
+def test_launch_editor_validates_then_uses_healthy_py_discovered_interpreter(tmp_path):
+    completed, candidates, imports, launch = _run_launch_editor_interpreter_probe(
+        tmp_path,
+        healthy_fallback=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert candidates[0].startswith("python:-c ")
+    assert candidates[1] == "py:-0p"
+    assert len(imports) == 2
+    assert imports[0]["argv0"] == "-c"
+    assert launch is not None
+    assert Path(launch["executable"]).resolve() == Path(sys.executable).resolve()
+    assert Path(launch["cwd"]) == tmp_path / "fixture" / "packages" / "control-plane"
+    assert launch["args"][-1] == "--prod"
+    assert launch["args"][:3] == ["client", "t3desktop", "--t3-root"]
+
+
+@pytest.mark.skipif(PWSH is None, reason="PowerShell is required for the Windows launcher probe")
+def test_launch_editor_fails_clearly_when_no_interpreter_validates(tmp_path):
+    completed, candidates, imports, launch = _run_launch_editor_interpreter_probe(
+        tmp_path,
+        healthy_fallback=False,
+    )
+
+    assert completed.returncode != 0
+    assert candidates[0].startswith("python:-c ")
+    assert candidates[1] == "py:-0p"
+    assert imports == []
+    assert launch is None
+    output = f"{completed.stdout}\n{completed.stderr}"
+    assert "No usable Python interpreter" in output
+    assert "python" in output
+    assert "py launcher" in output
 
 
 def test_client_launch_plan_maps_t3_bridge_and_opencode_executor(tmp_path, monkeypatch):

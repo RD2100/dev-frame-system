@@ -62,10 +62,82 @@ try {
     }
 
     Set-Location $pkg
-    if ($Dev) {
-        python -m control_plane.cli client t3desktop --t3-root "$t3" --port $port --overwrite-bridge
+    $pythonFailures = @()
+    $seenPythonPaths = @{}
+    $probeCode = "import os, sys; import control_plane.cli; expected=os.path.normcase(os.path.realpath(os.path.join(os.getcwd(), 'control_plane', 'cli', '__init__.py'))); actual=os.path.normcase(os.path.realpath(control_plane.cli.__file__)); raise SystemExit(0 if sys.version_info >= (3, 10) and actual == expected else 1)"
+    $validatePython = {
+        param([string]$Path)
+        try {
+            & $Path -c $probeCode *> $null
+            return $LASTEXITCODE -eq 0
+        } catch {
+            return $false
+        }
+    }
+    $selectedPython = $null
+
+    $pathPython = Get-Command python -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($null -ne $pathPython) {
+        $seenPythonPaths[$pathPython.Path] = $true
+        if (& $validatePython $pathPython.Path) {
+            $selectedPython = [pscustomobject]@{
+                Label = "python"
+                Path = $pathPython.Path
+            }
+        } else {
+            $pythonFailures += "python failed source-checkout validation"
+        }
     } else {
-        python -m control_plane.cli client t3desktop --t3-root "$t3" --port $port --overwrite-bridge --prod
+        $pythonFailures += "python is unavailable"
+    }
+
+    if ($null -eq $selectedPython) {
+        $pyLauncher = Get-Command py -CommandType Application -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($null -ne $pyLauncher) {
+            try {
+                $pyList = @(& $pyLauncher.Path -0p 2>$null)
+                $pyListExitCode = $LASTEXITCODE
+            } catch {
+                $pyList = @()
+                $pyListExitCode = $null
+            }
+            if ($pyListExitCode -eq 0) {
+                foreach ($line in $pyList) {
+                    if ([string]$line -notmatch '(?<path>[A-Za-z]:\\.*\\python(?:w)?\.exe)\s*$') {
+                        continue
+                    }
+                    $resolvedCandidate = Resolve-Path -LiteralPath $Matches.path -ErrorAction SilentlyContinue
+                    if ($null -eq $resolvedCandidate -or $seenPythonPaths.ContainsKey($resolvedCandidate.Path)) {
+                        continue
+                    }
+                    $seenPythonPaths[$resolvedCandidate.Path] = $true
+                    if (& $validatePython $resolvedCandidate.Path) {
+                        $selectedPython = [pscustomobject]@{
+                            Label = "py launcher"
+                            Path = $resolvedCandidate.Path
+                        }
+                        break
+                    }
+                    $pythonFailures += "py launcher candidate failed source-checkout validation"
+                }
+            } else {
+                $pythonFailures += "py launcher discovery failed"
+            }
+        } else {
+            $pythonFailures += "py launcher is unavailable"
+        }
+    }
+    if ($null -eq $selectedPython) {
+        throw "No usable Python interpreter found. $($pythonFailures -join '; '). Each candidate must be Python 3.10+ and import control_plane.cli from the source checkout."
+    }
+    Write-Host "Python        : $($selectedPython.Label) (validated source checkout)"
+
+    if ($Dev) {
+        & $selectedPython.Path -m control_plane.cli client t3desktop --t3-root "$t3" --port $port --overwrite-bridge
+    } else {
+        & $selectedPython.Path -m control_plane.cli client t3desktop --t3-root "$t3" --port $port --overwrite-bridge --prod
     }
 } finally {
     Set-Location $previousLocation
