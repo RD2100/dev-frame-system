@@ -21,6 +21,7 @@ import json
 import threading
 import time
 import uuid
+import weakref
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,10 +29,15 @@ from typing import Any, Callable
 
 from .backup_guard import default_runtime_dir, is_inside
 from .governance_events import (
+    CONCURRENT_SLICE_ALLOWLIST_EVENT_TYPE,
     ROOT_GATE_EVENT_TYPE,
+    PreparedConcurrentSliceAllowlistEvent,
     PreparedRootGateTransition,
     RootGateLifecycleError,
+    fold_concurrent_slice_allowlists,
     fold_root_gate_requests,
+    prepare_concurrent_slice_allowlist_baseline,
+    prepare_concurrent_slice_allowlist_delta,
     prepare_root_gate_acknowledgement,
     prepare_root_gate_decision,
     prepare_root_gate_dispatch,
@@ -39,6 +45,17 @@ from .governance_events import (
 )
 
 TEAM_EVENTS_FILE = "team-events.jsonl"
+_JOURNAL_LOCKS_GUARD = threading.Lock()
+_JOURNAL_LOCKS: weakref.WeakValueDictionary[Path, threading.Lock] = (
+    weakref.WeakValueDictionary()
+)
+
+
+def _journal_lock(path: Path) -> threading.Lock:
+    """Return the process-local lock for one resolved TeamRuntime journal."""
+    resolved_path = path.resolve()
+    with _JOURNAL_LOCKS_GUARD:
+        return _JOURNAL_LOCKS.setdefault(resolved_path, threading.Lock())
 
 
 @dataclass
@@ -63,15 +80,18 @@ class TeamRuntime:
     """Append-only recorder for real team events.
 
     Thread-safe: `_execute_parallel` runs agent groups in parallel threads and
-    shares one TeamRuntime, so appends are serialized with an internal lock.
+    all TeamRuntime instances for the same resolved journal share a process-local
+    lock. This makes read/prepare/append atomic in the documented in-process
+    model; it does not claim cross-process synchronization.
     """
 
     def __init__(self, runtime_dir: str | Path | None = None,
                  repo_root: str | Path | None = None) -> None:
-        self.runtime_dir = Path(runtime_dir).resolve() if runtime_dir else default_runtime_dir()
+        runtime_path = Path(runtime_dir) if runtime_dir else default_runtime_dir()
+        self.runtime_dir = runtime_path.resolve()
         self.repo_root = Path(repo_root).resolve() if repo_root else None
-        self.path = self.runtime_dir / TEAM_EVENTS_FILE
-        self._lock = threading.Lock()
+        self.path = (self.runtime_dir / TEAM_EVENTS_FILE).resolve()
+        self._lock = _journal_lock(self.path)
 
     def _append(self, event: TeamEvent) -> str:
         with self._lock:
@@ -359,9 +379,108 @@ class TeamRuntime:
         with self._lock:
             return fold_root_gate_requests(_read_team_events(self.path, strict=True))
 
+    def record_concurrent_slice_allowlist_baseline(
+        self,
+        run_id: str,
+        actor: str,
+        *,
+        reviewer_task_id: str,
+        dedupe_key: str,
+        checkout_identity: str,
+        exact_repo_paths: list[str],
+        baseline_manifest: str,
+        baseline_hash: str,
+        version: int,
+        reason: str,
+    ) -> str:
+        """Register one reviewer's durable concurrent-path baseline."""
+        return self._record_governance_event(
+            lambda records: prepare_concurrent_slice_allowlist_baseline(
+                records,
+                run_id=run_id,
+                actor=actor,
+                reviewer_task_id=reviewer_task_id,
+                dedupe_key=dedupe_key,
+                checkout_identity=checkout_identity,
+                exact_repo_paths=exact_repo_paths,
+                baseline_manifest=baseline_manifest,
+                baseline_hash=baseline_hash,
+                version=version,
+                reason=reason,
+            ),
+            event_type=CONCURRENT_SLICE_ALLOWLIST_EVENT_TYPE,
+            missing_event_message=(
+                "Prepared concurrent-slice allowlist baseline has no event to persist."
+            ),
+        )
+
+    def record_concurrent_slice_allowlist_delta(
+        self,
+        actor: str,
+        *,
+        reviewer_task_id: str,
+        writer_task_id: str,
+        dedupe_key: str,
+        checkout_identity: str,
+        exact_repo_paths: list[str],
+        baseline_manifest: str,
+        baseline_hash: str,
+        previous_version: int,
+        new_version: int,
+        delivered_at: str,
+        first_file_change_at: str,
+        reason: str,
+    ) -> str:
+        """Append one delivered-before-edit writer allowlist delta."""
+        return self._record_governance_event(
+            lambda records: prepare_concurrent_slice_allowlist_delta(
+                records,
+                actor=actor,
+                reviewer_task_id=reviewer_task_id,
+                writer_task_id=writer_task_id,
+                dedupe_key=dedupe_key,
+                checkout_identity=checkout_identity,
+                exact_repo_paths=exact_repo_paths,
+                baseline_manifest=baseline_manifest,
+                baseline_hash=baseline_hash,
+                previous_version=previous_version,
+                new_version=new_version,
+                delivered_at=delivered_at,
+                first_file_change_at=first_file_change_at,
+                reason=reason,
+            ),
+            event_type=CONCURRENT_SLICE_ALLOWLIST_EVENT_TYPE,
+            missing_event_message=(
+                "Prepared concurrent-slice allowlist delta has no event to persist."
+            ),
+        )
+
+    def read_concurrent_slice_allowlists(self) -> dict[str, dict[str, Any]]:
+        """Reconstruct concurrent-path authorization from the durable journal."""
+        with self._lock:
+            return fold_concurrent_slice_allowlists(
+                _read_team_events(self.path, strict=True)
+            )
+
     def _record_root_gate_transition(
         self,
         prepare: Callable[[list[dict[str, Any]]], PreparedRootGateTransition],
+    ) -> str:
+        return self._record_governance_event(
+            prepare,
+            event_type=ROOT_GATE_EVENT_TYPE,
+            missing_event_message="Prepared root-gate transition has no event to persist.",
+        )
+
+    def _record_governance_event(
+        self,
+        prepare: Callable[
+            [list[dict[str, Any]]],
+            PreparedRootGateTransition | PreparedConcurrentSliceAllowlistEvent,
+        ],
+        *,
+        event_type: str,
+        missing_event_message: str,
     ) -> str:
         if self.repo_root and is_inside(self.runtime_dir, self.repo_root):
             raise ValueError("Team runtime journal must not be inside the public repository.")
@@ -371,9 +490,9 @@ class TeamRuntime:
                 return prepared.existing_event_id
             audit_event = prepared.audit_event
             if audit_event is None:
-                raise RuntimeError("Prepared root-gate transition has no event to persist.")
+                raise RuntimeError(missing_event_message)
             event = TeamEvent(
-                event_type=ROOT_GATE_EVENT_TYPE,
+                event_type=event_type,
                 run_id=prepared.run_id,
                 agent_id=str(audit_event["actor"]),
                 payload=audit_event,
