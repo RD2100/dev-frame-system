@@ -154,6 +154,9 @@ def _reconcile_orphaned_run(
         "运行已中断：在完成前控制台进程已停止（例如编辑器被重新启动）。"
         "重新发送该目标即可重新开始。"
     )
+    authority = updated.get("authority")
+    if isinstance(authority, dict):
+        updated["authority"] = {**authority, "delegationState": "interrupted"}
     updated["finishedAt"] = _now()
     try:
         _write_run_record(runtime_dir, updated)
@@ -168,6 +171,24 @@ def _now() -> str:
 
 def _new_run_id() -> str:
     return "g-" + secrets.token_hex(3)
+
+
+def _delegation_authority(
+    project_id: str,
+    run_id: str,
+    requested_by: str,
+) -> dict[str, str]:
+    return {
+        "delegationId": f"delegation-{run_id}",
+        "rootControllerId": "root-controller",
+        "projectControllerId": f"project-controller-{_slug(project_id)}",
+        "projectId": project_id,
+        "clusterRunId": run_id,
+        "goRunId": "",
+        "delegationState": "delegated",
+        "delegatedAt": _now(),
+        "requestedBy": requested_by,
+    }
 
 
 def _runs_dir(runtime_dir: str | Path | None) -> Path:
@@ -297,7 +318,44 @@ def _run_and_record(
         rec["goRunId"] = str(go_run_id)
         rec["status"] = "running"
         rec["summary"] = "Coordinator planned the goal; agents are working…"
+        authority = rec.get("authority")
+        bound_authority: dict[str, Any] | None = None
+        if isinstance(authority, dict):
+            bound_authority = {
+                **authority,
+                "goRunId": str(go_run_id),
+                "delegationState": "running",
+            }
+            rec["authority"] = bound_authority
+        # The cluster/go authority link is primary state. Optional team-journal
+        # telemetry must never run before this durable binding exists.
         _write_run_record(runtime_dir, rec)
+        if bound_authority is not None:
+            from .team_runtime import TeamRuntime
+
+            summary = (
+                f"{bound_authority['rootControllerId']} delegated "
+                f"{bound_authority['delegationId']} for project "
+                f"{bound_authority['projectId']} from cluster "
+                f"{bound_authority['clusterRunId']} to "
+                f"{bound_authority['projectControllerId']} "
+                f"(go run {go_run_id})."
+            )
+            team = TeamRuntime(runtime_dir)
+            team.record_workflow_event(
+                str(go_run_id),
+                phase="delegation",
+                status="delegated",
+                role=str(bound_authority["rootControllerId"]),
+                summary=summary,
+            )
+            team.record_agent_message(
+                str(go_run_id),
+                str(bound_authority["rootControllerId"]),
+                str(bound_authority["projectControllerId"]),
+                kind="delegation",
+                summary=summary,
+            )
 
     record = _load_run_record(runtime_dir, run_id) or {
         "runId": run_id, "target": target, "goal": goal, "projectPath": project_path,
@@ -314,16 +372,26 @@ def _run_and_record(
         go_run_id = getattr(result, "go_run_id", None)
         if go_run_id:
             record["goRunId"] = str(go_run_id)
+        authority = record.get("authority")
+        if isinstance(authority, dict):
+            record["authority"] = {
+                **authority,
+                "goRunId": str(go_run_id or authority.get("goRunId") or ""),
+                "delegationState": str(verdict or record["status"]),
+            }
         summary_parts = []
         if verdict:
             summary_parts.append(f"verdict={verdict}")
         if isinstance(passed, int) or isinstance(failed, int):
             summary_parts.append(f"{passed or 0} passed, {failed or 0} failed")
         record["summary"] = "; ".join(summary_parts) or "Run finished."
-    except Exception as exc:  # noqa: BLE001 - record the failure honestly, never fake green
+    except Exception:  # noqa: BLE001 - public run summaries must not expose internal details
         record = _load_run_record(runtime_dir, run_id) or record
         record["status"] = "failed"
-        record["summary"] = f"Run failed: {exc}"
+        record["summary"] = "Run failed due to an internal coordinator error."
+        authority = record.get("authority")
+        if isinstance(authority, dict):
+            record["authority"] = {**authority, "delegationState": "failed"}
     record["finishedAt"] = _now()
     _write_run_record(runtime_dir, record)
 
@@ -394,12 +462,14 @@ def cluster_run_detail(runtime_dir: str | Path | None, run_id: str) -> dict[str,
     return {
         "runId": record.get("runId"),
         "goRunId": record.get("goRunId"),
+        "projectId": record.get("projectId"),
         "target": record.get("target"),
         "goal": record.get("goal"),
         "status": record.get("status"),
         "summary": record.get("summary"),
         "messages": messages,
         "agents": _agent_summaries(runtime_dir, go_run_id),
+        **({"authority": record["authority"]} if isinstance(record.get("authority"), dict) else {}),
         **({"methodology": methodology} if methodology else {}),
     }
 
@@ -510,6 +580,7 @@ def start_cluster_run(
     goal: str,
     *,
     proposed_by: str = "rd-code-editor",
+    root_delegation: bool = False,
 ) -> dict[str, Any]:
     """Validate + start a background project-coordinator run. Returns immediately."""
     path, project_id = _resolve_project_reference(runtime_dir, project_path)
@@ -523,7 +594,15 @@ def start_cluster_run(
         raise ClusterRunError("goal is required")
     if not is_valid_cluster_target(runtime_dir, tid):
         raise ClusterRunError(f"unknown cluster target: {target}")
+    if root_delegation and tid != "coordinator":
+        raise ClusterRunError("root delegation must enter through the coordinator")
     run_id = _new_run_id()
+    requested_by = str(proposed_by or "rd-code-editor")
+    authority = (
+        _delegation_authority(project_id, run_id, requested_by)
+        if root_delegation
+        else None
+    )
 
     # Phase C triage: a conversational goal (e.g. "你好" / "你能做什么") is
     # answered directly by the coordinator — no coding agents, no token spend.
@@ -536,13 +615,15 @@ def start_cluster_run(
     if classify_goal(text) == GOAL_KIND_CONVERSATION:
         conversation_kind = "global_coordinator" if tid == "coordinator" else "native_chat"
         reply = coordinator_conversation_reply(text)
+        if authority is not None:
+            authority = {**authority, "delegationState": "answered"}
         record = {
             "runId": run_id,
             "target": tid,
             "goal": text,
             "projectId": project_id,
             "projectPath": path,
-            "proposedBy": str(proposed_by or "rd-code-editor"),
+            "proposedBy": requested_by,
             "ownerPid": os.getpid(),
             "kind": "conversation",
             "status": "answered",
@@ -550,6 +631,7 @@ def start_cluster_run(
             "coordinatorAnswer": reply,
             "startedAt": _now(),
             "finishedAt": _now(),
+            **({"authority": authority} if authority is not None else {}),
         }
         _write_run_record(runtime_dir, record)
         return {
@@ -569,6 +651,7 @@ def start_cluster_run(
                 "status": "bound",
             },
             "answer": reply,
+            **({"authority": authority} if authority is not None else {}),
         }
     # Resolve the methodology (built-in @trigger or a user-created custom skill)
     # that governs this run, so it is recorded and shown in the detail view.
@@ -598,21 +681,39 @@ def start_cluster_run(
         "goal": text,
         "projectId": project_id,
         "projectPath": path,
-        "proposedBy": str(proposed_by or "rd-code-editor"),
+        "proposedBy": requested_by,
         "ownerPid": os.getpid(),
         "status": "running",
         "summary": "Coordinator received the goal; starting…",
         "startedAt": _now(),
+        **({"authority": authority} if authority is not None else {}),
         **({"methodology": methodology_summary} if methodology_summary else {}),
     }
     _write_run_record(runtime_dir, record)
-    thread = threading.Thread(
-        target=_run_and_record,
-        args=(runtime_dir, path, tid, text, run_id),
-        name=f"cluster-run-{run_id}",
-        daemon=True,
-    )
-    thread.start()
+    try:
+        thread = threading.Thread(
+            target=_run_and_record,
+            args=(runtime_dir, path, tid, text, run_id),
+            name=f"cluster-run-{run_id}",
+            daemon=True,
+        )
+        thread.start()
+    except Exception:  # noqa: BLE001 - terminate the durable record before surfacing 500
+        failed_record = {
+            **record,
+            "status": "failed",
+            "summary": "Coordinator run could not be started.",
+            "finishedAt": _now(),
+        }
+        failed_authority = failed_record.get("authority")
+        if isinstance(failed_authority, dict):
+            failed_record["authority"] = {
+                **failed_authority,
+                "goRunId": "",
+                "delegationState": "failed",
+            }
+        _write_run_record(runtime_dir, failed_record)
+        raise
     return {
         "started": True,
         "runId": run_id,
@@ -628,4 +729,5 @@ def start_cluster_run(
             "projectPath": path,
             "status": "bound",
         },
+        **({"authority": authority} if authority is not None else {}),
     }
