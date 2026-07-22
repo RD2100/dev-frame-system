@@ -400,7 +400,7 @@ def _context_id(ref_type: str, ref_path: str) -> str:
 
 
 def _team_runtime_has_sealed_context_refs(team: TeamRuntime, run_id: str) -> bool:
-    for event in team.read_all():
+    for event in team.read_all(strict=True):
         if str(event.get("run_id") or "") != run_id:
             continue
         if event.get("event_type") not in {"task_created", "task_claimed"}:
@@ -419,7 +419,7 @@ def _team_runtime_has_sealed_context_refs(team: TeamRuntime, run_id: str) -> boo
 
 def _team_runtime_has_success_task_result(team: TeamRuntime, run_id: str, agent_id: str) -> bool:
     success_statuses = {"pass", "passed", "completed", "success", "succeeded", "verified"}
-    for event in team.read_all():
+    for event in team.read_all(strict=True):
         if (
             not isinstance(event, dict)
             or str(event.get("run_id") or "") != run_id
@@ -480,7 +480,7 @@ def _team_runtime_has_evidence_ref(
     ref_type: str,
     ref_path: str,
 ) -> bool:
-    for event in team.read_all():
+    for event in team.read_all(strict=True):
         if not isinstance(event, dict) or str(event.get("run_id") or "") != run_id:
             continue
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
@@ -504,7 +504,7 @@ def _team_runtime_has_finalization_refs(
 ) -> bool:
     has_review = False
     has_final_verdict = False
-    for event in team.read_all():
+    for event in team.read_all(strict=True):
         if not isinstance(event, dict) or str(event.get("run_id") or "") != run_id:
             continue
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}

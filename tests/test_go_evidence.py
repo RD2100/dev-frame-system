@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
 
 import go_evidence
 from control_plane.run_index import build_run_index
-from control_plane.team_runtime import TEAM_EVENTS_FILE, build_team_runtime_view
+from control_plane.team_runtime import TEAM_EVENTS_FILE, TeamRuntime, build_team_runtime_view
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -577,6 +577,38 @@ def test_finalize_team_runtime_recording_is_idempotent_for_same_verdict(tmp_path
     record = next(entry["record"] for entry in index["runs"] if entry["adapter_id"] == "team_events")
     assert record["acceptance_state"] == "final_ready"
     assert record["final_verdict_ref"]["verdict_id"] == "fv-go-evidence-rerun"
+
+
+def test_finalize_refuses_malformed_team_runtime_journal_without_appending(tmp_path, capsys):
+    evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
+    _write_json(
+        os.path.join(evidence_dir, "chain-evidence.json"),
+        _chain_evidence(run_id="go-evidence-malformed-journal"),
+    )
+    runtime_dir = tmp_path / "runtime"
+    _write_go_run_metadata(str(runtime_dir), "go-evidence-malformed-journal")
+    TeamRuntime(runtime_dir=runtime_dir).record_workflow_event(
+        "existing-run",
+        phase="plan",
+        status="completed",
+    )
+    journal = runtime_dir / TEAM_EVENTS_FILE
+    with journal.open("ab") as handle:
+        handle.write(b'{"event_type":\n')
+    before = journal.read_bytes()
+
+    rc = go_evidence.main(
+        ["finalize", evidence_dir, "--team-runtime-dir", str(runtime_dir)]
+    )
+
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert captured.out == ""
+    assert captured.err == (
+        "failed to record team runtime finalization: RootGateLifecycleError: "
+        "Root-gate lifecycle found malformed TeamRuntime journal JSONL at line 2.\n"
+    )
+    assert journal.read_bytes() == before
 
 
 def test_finalize_without_go_run_metadata_stays_blocked_without_sealed_context(tmp_path):

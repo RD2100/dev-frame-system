@@ -502,8 +502,8 @@ class TeamRuntime:
             self._append_locked(event)
             return event.event_id
 
-    def read_all(self) -> list[dict[str, Any]]:
-        return _read_team_events(self.path)
+    def read_all(self, *, strict: bool = False) -> list[dict[str, Any]]:
+        return _read_team_events(self.path, strict=strict)
 
 
 def _read_team_events(path: Path, *, strict: bool = False) -> list[dict[str, Any]]:
