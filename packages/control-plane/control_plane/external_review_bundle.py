@@ -299,6 +299,8 @@ def _render_prompt(review_question: str, sources: list[dict[str, Any]], status: 
         "- Identify the earliest await capable of producing page or application state.",
         "- Require deferred out-of-order success and deferred out-of-order failure or rejection probes at that earliest boundary. Downstream-only deferral is insufficient when an upstream await exists.",
         "- Fail the review if request ownership or generation is introduced below an upstream await. Warn when there are two or more awaits but tests control only the later await.",
+        "- When a handler releases busy or lock in a finally block, require that every downstream Promise-returning `load*` or `refresh*` boundary that defines operation completion is awaited or returned.",
+        "- Require a deferred probe at each such completion boundary. Downstream-only or mutation-only evidence is insufficient.",
         "",
         f"Bundle status: {status}",
         f"Review question: {review_question}",
