@@ -68,6 +68,35 @@ def _noop_report_command() -> list[str]:
     return [sys.executable, "-c", script]
 
 
+def _corrupt_claim_report_command(journal_path: Path) -> list[str]:
+    script = (
+        "import json,os;"
+        "from pathlib import Path;"
+        f"journal=Path({str(journal_path)!r});"
+        "lines=journal.read_text(encoding='utf-8').splitlines();"
+        "claim_index=next(i for i,line in enumerate(lines) "
+        "if json.loads(line)['event_type']=='task_claimed');"
+        "lines[claim_index]='{\"event_type\":\"task_claimed\"';"
+        "journal.write_text('\\n'.join(lines)+'\\n',encoding='utf-8');"
+        "Path(os.environ['RDGOAL_REPORT_PATH']).write_text('## ExecutionReport\\n\\n"
+        "- **Status**: pass\\n- **Changed Files**:\\n- (none)\\n"
+        "- **Evidence**: malformed claim journal regression\\n',encoding='utf-8')"
+    )
+    return [sys.executable, "-c", script]
+
+
+def _marker_report_command(marker_path: Path) -> list[str]:
+    script = (
+        "import os;"
+        "from pathlib import Path;"
+        f"Path({str(marker_path)!r}).write_text('started\\n',encoding='utf-8');"
+        "Path(os.environ['RDGOAL_REPORT_PATH']).write_text('## ExecutionReport\\n\\n"
+        "- **Status**: pass\\n- **Changed Files**:\\n- (none)\\n"
+        "- **Evidence**: second worker marker\\n',encoding='utf-8')"
+    )
+    return [sys.executable, "-c", script]
+
+
 def _message_report_command(
     to_agent_id: str,
     *,
@@ -303,6 +332,47 @@ def test_overlapping_claim_in_real_execute_fails_second_agent(tmp_path):
     error_text = (Path(agent2.packet_dir) / "go-agent-error.txt").read_text(encoding="utf-8")
     assert "already claimed" in error_text
     assert agent1.targets[0] in error_text
+
+
+def test_corrupt_claim_journal_fails_closed_before_second_overlapping_worker(tmp_path):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "a.py").write_text("a = 1\n", encoding="utf-8")
+    (project / "b.py").write_text("b = 2\n", encoding="utf-8")
+    runtime = tmp_path / "runtime"
+    second_worker_marker = tmp_path / "second-worker-started.txt"
+
+    prepared = run_go_dispatch(
+        project,
+        "malformed claim journal regression",
+        runtime_dir=runtime,
+        agents=2,
+        targets=["a.py", "b.py"],
+        execute=False,
+        worker_command=_noop_report_command(),
+    )
+    metadata_path = Path(prepared.metadata_path)
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["agents"][1]["targets"] = list(metadata["agents"][0]["targets"])
+    metadata["agents"][0]["worker_command"] = _corrupt_claim_report_command(
+        runtime / TEAM_EVENTS_FILE
+    )
+    metadata["agents"][1]["worker_command"] = _marker_report_command(second_worker_marker)
+    metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=True), encoding="utf-8")
+
+    executed = execute_go_run(runtime, prepared.go_run_id)
+
+    agent1, agent2 = executed.agents
+    assert agent1.worker_status in SUCCESS_WORKER_STATUSES
+    assert agent1.status == "completed"
+    assert not second_worker_marker.exists(), "second overlapping worker was invoked"
+    assert agent2.worker_status == "failed"
+    assert agent2.status == "failed"
+    error_text = (Path(agent2.packet_dir) / "go-agent-error.txt").read_text(encoding="utf-8")
+    assert error_text == (
+        "RootGateLifecycleError: Root-gate lifecycle found malformed TeamRuntime journal JSONL "
+        "at line 2.\n"
+    )
 
 
 def test_execute_go_run_records_explicit_worker_message_for_run_participant(tmp_path):

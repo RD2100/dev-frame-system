@@ -133,7 +133,7 @@ class TeamRuntime:
         with self._lock:
             targets_by_agent: dict[str, set[str]] = {}
             claimed_agents: set[str] = set()
-            for record in _read_team_events(self.path):
+            for record in _read_team_events(self.path, strict=True):
                 if str(record.get("run_id") or "") != run_id:
                     continue
                 recorded_agent_id = str(record.get("agent_id") or "")
