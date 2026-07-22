@@ -1,9 +1,9 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Evidence Capture Hook Output",
-  "description": "Schema for _evidence/hook-output/latest.json produced by pre-commit.governance.ps1",
+  "description": "Schema for _evidence/hook-output/latest.json produced by CI preflight hooks",
   "type": "object",
-  "required": ["timestamp", "hook_version", "stages", "git_context", "overall_result"],
+  "required": ["timestamp", "hook_name", "hook_version", "python_interpreter", "stages", "git_context", "overall_result"],
   "properties": {
     "timestamp": {
       "type": "string",
@@ -15,17 +15,56 @@
       "pattern": "^\\d+\\.\\d+\\.\\d+$",
       "description": "Semantic version of the governance hook script"
     },
+    "hook_name": {
+      "type": "string",
+      "enum": ["pre-commit", "pre-push", "ci-preflight"],
+      "description": "Execution surface that produced this receipt"
+    },
+    "python_interpreter": {
+      "type": "object",
+      "required": ["executable", "version", "selection_source", "health", "exit_code", "status"],
+      "properties": {
+        "executable": {
+          "type": ["string", "null"],
+          "description": "Resolved absolute configured interpreter path, or null when configuration is unavailable"
+        },
+        "version": {
+          "type": ["string", "null"],
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Version returned by the current health probe, or null when the probe cannot run"
+        },
+        "selection_source": {
+          "type": "string",
+          "enum": ["explicit_parameter", "repo_local_config"],
+          "description": "How the interpreter selection entered the attested configuration path"
+        },
+        "health": {
+          "type": "string",
+          "enum": ["healthy", "missing_config", "invalid_config", "missing_executable", "path_drift", "binary_drift", "probe_failed", "version_drift"],
+          "description": "Current interpreter health and drift classification"
+        },
+        "exit_code": {
+          "type": ["integer", "null"],
+          "description": "Current health-probe process exit code, or null when no process could start"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["PASS", "BLOCKED"],
+          "description": "Fail-closed interpreter decision"
+        }
+      }
+    },
     "stages": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 5,
+      "maxItems": 6,
       "items": {
         "type": "object",
         "required": ["name", "exit_code", "output_file", "duration_ms"],
         "properties": {
           "name": {
             "type": "string",
-            "enum": ["manifest-regen", "sadp-audit", "ai-guard", "test-governance", "conversation-health"]
+            "enum": ["python-interpreter", "manifest-regen", "sadp-audit", "ai-guard", "governance-drift", "test-governance", "conversation-health"]
           },
           "exit_code": {
             "type": ["integer", "null"],
