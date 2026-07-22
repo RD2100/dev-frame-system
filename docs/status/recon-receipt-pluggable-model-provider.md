@@ -75,3 +75,85 @@
 - Live web-shim backend (browser/CDP driving a web AI session as an
   OpenAI-compatible endpoint), including ToS assessment and real verification.
 - Web-AI-as-MCP-client coordinator path (architecture B), tracked separately.
+
+## Security amendment: external-secret execution boundary
+
+- receipt_id: `recon-opencode-external-secret-boundary-2026-07-22`
+- date: 2026-07-22
+- approval: The user authorized the P0 containment and fail-closed provider
+  remediation after independent metadata-only verification and security review.
+- scope: AI Workflow Hub OpenCode process launch, readiness, evidence, and
+  acceptance paths. Control-plane dispatch is a later slice because its current
+  `go_dispatch.py` ownership conflicts with unrelated work.
+
+### Resource map
+
+- process client: `packages/ai-workflow-hub/src/ai_workflow_hub/opencode_client.py`
+- readiness probe: `packages/ai-workflow-hub/src/ai_workflow_hub/opencode_readiness.py`
+- one-shot execution: `packages/ai-workflow-hub/src/ai_workflow_hub/opencode_slice0.py`
+- serve execution: `packages/ai-workflow-hub/src/ai_workflow_hub/opencode_serve_slice1.py`
+- acceptance gate: `packages/ai-workflow-hub/src/ai_workflow_hub/acceptance.py`
+- configuration loader: `packages/ai-workflow-hub/src/ai_workflow_hub/config_loader.py`
+- existing environment contract: `OPENCODE_API_KEY`, optional
+  `OPENCODE_API_BASE`, `OPENCODE_BIN`, and `OPENCODE_MODEL_OVERRIDE`
+- state/evidence sinks: process results, readiness errors, execution reports,
+  and persisted stdout/stderr produced by the paths above
+- local configuration boundary: root `opencode.config.json` is local-only and
+  was removed from tracking by the accepted containment slice; its contents are
+  not an implementation or test input
+
+### Capability matrix and reuse decision
+
+- external secret injection
+  - existing capability: environment propagation through the current config
+    loader and process launcher
+  - decision: reuse; do not add a credential store, JSON secret parser, or new
+    configuration format
+- paid OpenCode execution
+  - existing gap: some paths can reach process or artifact creation without a
+    verified required secret
+  - decision: add one shared, minimal fail-closed check within the existing
+    AI-hub boundary before process or artifact creation
+- local/no-key execution
+  - existing capability: provider contracts may explicitly identify a local
+    backend
+  - decision: preserve only when the current contract can distinguish it
+    without guessing; otherwise fail closed and return for a narrower contract
+- output handling
+  - existing gap: stdout, stderr, exceptions, timeouts, and persisted reports
+    can carry inherited process text
+  - decision: reuse current result/evidence objects and sanitize at their
+    existing capture boundaries; do not introduce a second evidence store
+
+### Integration risks
+
+- secret disclosure (P0): process output or exception text may contain an
+  injected value. Mitigation: sentinel-based negative tests across every
+  capture/persistence path; errors name environment variables only.
+- spawn-before-validation (P0): a paid path may start work before validating
+  configuration. Mitigation: prove subprocess and artifact writers are not
+  called when the external secret is missing.
+- local-provider regression (P1): a blanket key requirement could disable a
+  legitimate local backend. Mitigation: preserve only an existing explicit
+  local/no-key contract; do not infer one from labels or command presence.
+- scope collision (P1): control-plane dispatch currently overlaps unrelated
+  dirty work. Mitigation: keep this amendment's first write slice inside the
+  AI Workflow Hub exact paths below.
+
+### Recommended next slice
+
+- exact write set:
+  - `packages/ai-workflow-hub/src/ai_workflow_hub/opencode_client.py`
+  - `packages/ai-workflow-hub/src/ai_workflow_hub/opencode_readiness.py`
+  - `packages/ai-workflow-hub/src/ai_workflow_hub/opencode_slice0.py`
+  - `packages/ai-workflow-hub/src/ai_workflow_hub/opencode_serve_slice1.py`
+  - `packages/ai-workflow-hub/src/ai_workflow_hub/acceptance.py`
+  - `packages/ai-workflow-hub/tests/test_opencode_security.py`
+- required evidence: synthetic REDs for missing-secret pre-spawn failure and
+  sentinel removal from all returned/persisted error paths; focused existing
+  slice0/serve regressions; no live provider call or real credential read
+- review gate: independent security reviewer verifies P0/P1, exact scope,
+  fail-closed ordering, local-provider compatibility, and absence of sentinel
+  text in results and artifacts
+- out of scope: credential rotation/revocation, history rewriting, provider
+  live calls, control-plane dispatch, global configuration, and deployment

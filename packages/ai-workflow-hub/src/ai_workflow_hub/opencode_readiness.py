@@ -4,6 +4,12 @@ from __future__ import annotations
 import subprocess
 import shutil
 
+from .opencode_client import (
+    _missing_external_secret_message,
+    _sanitize_external_secret_text,
+    opencode_external_secret_is_configured,
+)
+
 
 def opencode_is_installed() -> bool:
     """Check if the opencode binary is on PATH."""
@@ -16,6 +22,8 @@ def opencode_probe(model: str = "deepseek/deepseek-v4-pro",
 
     Returns (success, error_message).
     """
+    if not opencode_external_secret_is_configured():
+        return False, _missing_external_secret_message()
     if not opencode_is_installed():
         return False, "opencode binary not found on PATH"
 
@@ -26,13 +34,14 @@ def opencode_probe(model: str = "deepseek/deepseek-v4-pro",
         )
         if result.returncode == 0:
             return True, ""
-        return False, f"opencode exited with code {result.returncode}: {result.stderr[:500]}"
+        stderr = _sanitize_external_secret_text(result.stderr)[:500]
+        return False, f"opencode exited with code {result.returncode}: {stderr}"
     except subprocess.TimeoutExpired:
         return False, f"opencode probe timed out after {timeout}s"
     except FileNotFoundError:
         return False, "opencode binary not found"
     except Exception as e:
-        return False, str(e)
+        return False, _sanitize_external_secret_text(e)
 
 
 def readiness_check(model: str = "deepseek/deepseek-v4-pro",

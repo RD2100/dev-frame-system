@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 import socket
 import subprocess
 import tempfile
@@ -20,7 +21,11 @@ from pathlib import Path
 from typing import Any
 from urllib import error, request
 
-from .opencode_client import _find_opencode
+from .opencode_client import (
+    _find_opencode,
+    _sanitize_external_secret_text,
+    _sanitize_external_secret_value,
+)
 from .opencode_slice0 import MARKER_CONTENT, MARKER_FILE
 
 
@@ -35,6 +40,7 @@ def run_opencode_serve_slice1_probe(
     output_dir: str | None = None,
     timeout: int = 120,
 ) -> dict[str, Any]:
+    opencode_path = _find_opencode()
     artifact_dir = Path(output_dir) if output_dir else Path(tempfile.mkdtemp(prefix="opencode-serve-slice1-"))
     artifact_dir.mkdir(parents=True, exist_ok=True)
     workspace = artifact_dir / "workspace"
@@ -49,7 +55,6 @@ def run_opencode_serve_slice1_probe(
         binding_validation["valid"],
         binding_validation.get("reason", ""),
     )
-    opencode_path = _find_opencode()
     report["opencode_path"] = opencode_path
     if not opencode_path:
         _set_check(report, "opencode_cli", False, "opencode CLI not found")
@@ -67,7 +72,35 @@ def run_opencode_serve_slice1_probe(
 
     stdout_path = artifact_dir / "serve-stdout.log"
     stderr_path = artifact_dir / "serve-stderr.log"
-    proc = _start_server(opencode_path, workspace, port, model, stdout_path, stderr_path)
+    _remove_previous_final_logs(stdout_path, stderr_path)
+    capture_dir, capture_stdout_path, capture_stderr_path = _private_server_log_paths()
+    try:
+        proc = _start_server(
+            opencode_path,
+            workspace,
+            port,
+            model,
+            capture_stdout_path,
+            capture_stderr_path,
+        )
+    except Exception as exc:
+        _publish_server_logs(
+            capture_dir,
+            capture_stdout_path,
+            capture_stderr_path,
+            stdout_path,
+            stderr_path,
+        )
+        raise RuntimeError(_sanitize_external_secret_text(exc)) from None
+    except BaseException:
+        _publish_server_logs(
+            capture_dir,
+            capture_stdout_path,
+            capture_stderr_path,
+            stdout_path,
+            stderr_path,
+        )
+        raise
     report["server"]["pid"] = proc.pid
     health_ok = False
     finalized_before_cleanup = False
@@ -126,19 +159,29 @@ def run_opencode_serve_slice1_probe(
         report["checks"].update(wait_checks)
         report.update(wait_result)
     finally:
-        sse.stop()
-        disposed = _dispose_server(base_url) if health_ok else False
-        if disposed:
-            try:
-                proc.wait(timeout=10)
-            except subprocess.TimeoutExpired:
+        try:
+            sse.stop()
+            disposed = _dispose_server(base_url) if health_ok else False
+            if disposed:
+                try:
+                    proc.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    _stop_server(proc)
+            else:
                 _stop_server(proc)
-        else:
-            _stop_server(proc)
+        finally:
+            _publish_server_logs(
+                capture_dir,
+                capture_stdout_path,
+                capture_stderr_path,
+                stdout_path,
+                stderr_path,
+            )
         report["server"]["stdout_log"] = str(stdout_path)
         report["server"]["stderr_log"] = str(stderr_path)
         report["server"]["disposed"] = disposed
         report["server"]["returncode"] = proc.poll()
+        _sanitize_persisted_logs(report)
         stop_ok, stop_detail = _server_stopped_result(disposed, proc.poll(), stderr_path)
         _set_check(
             report,
@@ -150,6 +193,77 @@ def run_opencode_serve_slice1_probe(
             _finalize_report(report, artifact_dir)
 
     return _finalize_report(report, artifact_dir)
+
+
+def _remove_previous_final_logs(*paths: Path) -> None:
+    for path in paths:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            raise RuntimeError(
+                _sanitize_external_secret_text(
+                    f"unable to prepare final OpenCode serve log: {exc}"
+                )
+            ) from None
+
+
+def _private_server_log_paths() -> tuple[Path, Path, Path]:
+    capture_dir = Path(tempfile.mkdtemp(prefix="opencode-serve-capture-"))
+    try:
+        capture_dir.chmod(0o700)
+    except OSError as exc:
+        shutil.rmtree(capture_dir, ignore_errors=True)
+        raise RuntimeError(
+            _sanitize_external_secret_text(
+                f"unable to secure private OpenCode serve log directory: {exc}"
+            )
+        ) from None
+    return capture_dir, capture_dir / "stdout.log", capture_dir / "stderr.log"
+
+
+def _publish_server_logs(
+    capture_dir: Path,
+    capture_stdout_path: Path,
+    capture_stderr_path: Path,
+    stdout_path: Path,
+    stderr_path: Path,
+) -> None:
+    try:
+        _atomic_publish_sanitized_log(capture_stdout_path, stdout_path)
+        _atomic_publish_sanitized_log(capture_stderr_path, stderr_path)
+    except Exception as exc:
+        raise RuntimeError(
+            _sanitize_external_secret_text(
+                f"unable to publish sanitized OpenCode serve logs: {exc}"
+            )
+        ) from None
+    finally:
+        shutil.rmtree(capture_dir, ignore_errors=True)
+
+
+def _atomic_publish_sanitized_log(source_path: Path, destination_path: Path) -> None:
+    try:
+        text = source_path.read_text(encoding="utf-8", errors="replace")
+    except FileNotFoundError:
+        text = ""
+    sanitized = _sanitize_external_secret_text(text)
+    fd, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination_path.name}.",
+        suffix=".tmp",
+        dir=destination_path.parent,
+    )
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            fd = -1
+            stream.write(sanitized)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_path, destination_path)
+    finally:
+        if fd >= 0:
+            os.close(fd)
+        temporary_path.unlink(missing_ok=True)
 
 
 def evaluate_serve_report(report: dict[str, Any]) -> dict[str, Any]:
@@ -238,23 +352,45 @@ def _start_server(
         {"permission": "allow", "model": model},
         ensure_ascii=False,
     )
-    stdout = stdout_path.open("w", encoding="utf-8")
-    stderr = stderr_path.open("w", encoding="utf-8")
-    return subprocess.Popen(
-        [
-            opencode_path,
-            "serve",
-            "--hostname",
-            "127.0.0.1",
-            "--port",
-            str(port),
-            "--print-logs",
-        ],
-        cwd=workspace,
-        stdout=stdout,
-        stderr=stderr,
-        env=env,
-    )
+    stdout = None
+    stderr = None
+    try:
+        stdout = _open_private_log_capture(stdout_path)
+        stderr = _open_private_log_capture(stderr_path)
+        return subprocess.Popen(
+            [
+                opencode_path,
+                "serve",
+                "--hostname",
+                "127.0.0.1",
+                "--port",
+                str(port),
+                "--print-logs",
+            ],
+            cwd=workspace,
+            stdout=stdout,
+            stderr=stderr,
+            env=env,
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            _sanitize_external_secret_text(f"opencode serve start failed: {exc}")
+        ) from None
+    finally:
+        if stdout is not None:
+            stdout.close()
+        if stderr is not None:
+            stderr.close()
+
+
+def _open_private_log_capture(path: Path):
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        return os.fdopen(fd, "w", encoding="utf-8")
+    except Exception:
+        os.close(fd)
+        path.unlink(missing_ok=True)
+        raise
 
 
 def _wait_for_health(base_url: str, timeout: int) -> dict[str, Any]:
@@ -266,7 +402,7 @@ def _wait_for_health(base_url: str, timeout: int) -> dict[str, Any]:
             if data.get("healthy"):
                 return data
         except Exception as exc:
-            last_error = str(exc)
+            last_error = _sanitize_external_secret_text(exc)
         time.sleep(0.25)
     return {"healthy": False, "error": last_error or "health timeout"}
 
@@ -322,7 +458,7 @@ def _http_json(base_url: str, method: str, path: str, body: dict[str, Any] | Non
     req = _request(base_url, method, path, body)
     with request.urlopen(req, timeout=10) as response:
         data = response.read().decode("utf-8", errors="replace")
-    return json.loads(data) if data else {}
+    return _sanitize_external_secret_value(json.loads(data) if data else {})
 
 
 def _http_status(base_url: str, method: str, path: str, body: dict[str, Any] | None = None) -> int:
@@ -340,7 +476,7 @@ def _dispose_server(base_url: str) -> bool:
         status = _http_status(base_url, "POST", "/instance/dispose", {})
         return 200 <= status < 300
     except Exception:
-        logger.debug("opencode serve dispose failed", exc_info=True)
+        logger.debug("opencode serve dispose failed")
         return False
 
 
@@ -397,7 +533,7 @@ class _SseConsumer:
                         current_event = ""
                         data_lines = []
         except Exception:
-            logger.debug("opencode serve SSE consumer stopped after error", exc_info=True)
+            logger.debug("opencode serve SSE consumer stopped after error")
             return
 
 
@@ -414,8 +550,8 @@ def _parse_sse_event(event_name: str, data_lines: list[str]) -> dict[str, Any] |
     if isinstance(parsed, dict):
         if event_name and "type" not in parsed:
             parsed["type"] = event_name
-        return parsed
-    return {"type": event_name or "message", "data": parsed}
+        return _sanitize_external_secret_value(parsed)
+    return _sanitize_external_secret_value({"type": event_name or "message", "data": parsed})
 
 
 def _finalize_report(report: dict[str, Any], artifact_dir: Path) -> dict[str, Any]:
@@ -424,6 +560,8 @@ def _finalize_report(report: dict[str, Any], artifact_dir: Path) -> dict[str, An
         report["version"] = _safe_command_record(version)
         version_text = (version.get("stdout", "").strip().splitlines() or ["unknown"])[0]
         report["cache_key"] = f"{version_text}|{os.name}|{report.get('mode', '')}"
+    _sanitize_persisted_logs(report)
+    report = _sanitize_external_secret_value(report)
     event_path = artifact_dir / "serve-events.jsonl"
     event_path.write_text(
         "\n".join(json.dumps(event, ensure_ascii=False) for event in report.get("events", {}).get("raw_sample", [])),
@@ -556,9 +694,11 @@ def _server_stopped_result(disposed: bool, returncode: int | None, stderr_path: 
 
 def _server_error_signals(stderr_path: Path) -> list[str]:
     try:
-        text = stderr_path.read_text(encoding="utf-8", errors="replace")
+        text = _sanitize_external_secret_text(
+            stderr_path.read_text(encoding="utf-8", errors="replace")
+        )
     except OSError as exc:
-        return [f"unreadable stderr log: {exc}"]
+        return [_sanitize_external_secret_text(f"unreadable stderr log: {exc}")]
     signals: list[str] = []
     for line in text.splitlines():
         lowered = line.lower()
@@ -584,12 +724,21 @@ def _run_command(command: list[str], *, cwd: Path, timeout: int) -> dict[str, An
             timeout=timeout,
             check=False,
         )
-        return {"exit_code": completed.returncode, "stdout": completed.stdout, "stderr": completed.stderr}
+        return _sanitize_external_secret_value(
+            {"exit_code": completed.returncode, "stdout": completed.stdout, "stderr": completed.stderr}
+        )
     except subprocess.TimeoutExpired as exc:
-        return {"exit_code": 124, "stdout": exc.stdout or "", "stderr": exc.stderr or "timeout"}
+        return _sanitize_external_secret_value(
+            {"exit_code": 124, "stdout": exc.stdout or "", "stderr": exc.stderr or "timeout"}
+        )
+    except Exception as exc:
+        return _sanitize_external_secret_value(
+            {"exit_code": 1, "stdout": "", "stderr": f"opencode command failed: {exc}"}
+        )
 
 
 def _safe_command_record(result: dict[str, Any]) -> dict[str, Any]:
+    result = _sanitize_external_secret_value(result)
     return {
         "exit_code": result.get("exit_code", -1),
         "stdout_preview": str(result.get("stdout", ""))[:500],
@@ -598,6 +747,7 @@ def _safe_command_record(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def _summarize_command(result: dict[str, Any]) -> str:
+    result = _sanitize_external_secret_value(result)
     if result.get("exit_code") == 0:
         return (str(result.get("stdout", "")).strip().splitlines() or ["exit 0"])[0][:200]
     return (str(result.get("stderr", "")).strip().splitlines() or [f"exit {result.get('exit_code')}"])[0][:200]
@@ -624,3 +774,15 @@ def _collect_keys(value: Any, keys: set[str], prefix: str = "") -> None:
 def _has_key_containing(keys: set[str], needle: str) -> bool:
     lowered = needle.lower()
     return any(lowered in key.lower() for key in keys)
+
+
+def _sanitize_persisted_logs(report: dict[str, Any]) -> None:
+    for name in ("stdout", "stderr"):
+        path_value = report.get("paths", {}).get(name)
+        if not path_value:
+            continue
+        path = Path(path_value)
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        path.write_text(_sanitize_external_secret_text(text), encoding="utf-8")

@@ -8,10 +8,8 @@
 
 from __future__ import annotations
 
-import json as _json
 import logging
 import os
-import signal
 import subprocess
 import tempfile
 import time
@@ -20,6 +18,56 @@ from typing import Any
 
 
 logger = logging.getLogger(__name__)
+REQUIRED_EXTERNAL_SECRET_ENV = "OPENCODE_API_KEY"
+_SENSITIVE_EXTERNAL_ENV_VARS = (REQUIRED_EXTERNAL_SECRET_ENV, "OPENCODE_API_BASE")
+
+
+class OpenCodeSecretRequiredError(RuntimeError):
+    """Raised before OpenCode work when its external secret is unavailable."""
+
+
+def opencode_external_secret_is_configured() -> bool:
+    return bool(os.environ.get(REQUIRED_EXTERNAL_SECRET_ENV, "").strip())
+
+
+def _missing_external_secret_message() -> str:
+    return f"required environment variable is not set: {REQUIRED_EXTERNAL_SECRET_ENV}"
+
+
+def _require_external_secret() -> None:
+    if not opencode_external_secret_is_configured():
+        raise OpenCodeSecretRequiredError(_missing_external_secret_message())
+
+
+def _sanitize_external_secret_text(value: Any) -> str:
+    if isinstance(value, bytes):
+        text = value.decode("utf-8", errors="replace")
+    else:
+        text = str(value or "")
+    for env_name in _SENSITIVE_EXTERNAL_ENV_VARS:
+        secret = os.environ.get(env_name, "")
+        if secret:
+            text = text.replace(secret, f"<redacted:{env_name}>")
+    return text
+
+
+def _sanitize_external_secret_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            (
+                _sanitize_external_secret_text(key)
+                if isinstance(key, (str, bytes))
+                else key
+            ): _sanitize_external_secret_value(child)
+            for key, child in value.items()
+        }
+    if isinstance(value, list):
+        return [_sanitize_external_secret_value(child) for child in value]
+    if isinstance(value, tuple):
+        return tuple(_sanitize_external_secret_value(child) for child in value)
+    if isinstance(value, (str, bytes)):
+        return _sanitize_external_secret_text(value)
+    return value
 
 
 def _ensure_env() -> None:
@@ -37,6 +85,7 @@ _opencode_help_cache: dict[str, str] = {}
 
 def _find_opencode() -> str | None:
     global _opencode_path
+    _require_external_secret()
     if _opencode_path is not None:
         return _opencode_path
 
@@ -89,6 +138,8 @@ def shutil_which(cmd: str) -> str | None:
 
 
 def opencode_is_available() -> bool:
+    if not opencode_external_secret_is_configured():
+        return False
     return _find_opencode() is not None
 
 
@@ -101,11 +152,11 @@ def _run_opencode_help(args: list[str]) -> str:
         return ""
     try:
         r = subprocess.run([p] + args + ["--help"], capture_output=True, text=True, timeout=10)
-        text = r.stdout or r.stderr or ""
+        text = _sanitize_external_secret_text(r.stdout or r.stderr or "")
         _opencode_help_cache[cache_key] = text
         return text
     except Exception:
-        logger.debug("opencode help probe failed", exc_info=True)
+        logger.debug("opencode help probe failed")
         return ""
 
 
@@ -117,6 +168,8 @@ def opencode_supports_flag(flag: str) -> bool:
 
 
 def opencode_cli_check() -> dict[str, Any]:
+    if not opencode_external_secret_is_configured():
+        return {"available": False, "path": None, "error": _missing_external_secret_message()}
     p = _find_opencode()
     if not p:
         return {"available": False, "path": None, "error": "opencode CLI not found"}
@@ -129,15 +182,19 @@ def opencode_cli_check() -> dict[str, Any]:
     try:
         r = subprocess.run([p, "models"], capture_output=True, text=True, timeout=10)
         result["models_cmd_ok"] = r.returncode == 0
-        result["models_stdout"] = r.stdout[:500] if r.returncode == 0 else ""
+        result["models_stdout"] = (
+            _sanitize_external_secret_text(r.stdout)[:500] if r.returncode == 0 else ""
+        )
     except Exception:
-        logger.debug("opencode models probe failed", exc_info=True)
+        logger.debug("opencode models probe failed")
         result["models_cmd_ok"] = False
         result["models_stdout"] = ""
     return result
 
 
 def opencode_list_models() -> list[str]:
+    if not opencode_external_secret_is_configured():
+        return []
     p = _find_opencode()
     if not p:
         return []
@@ -145,22 +202,27 @@ def opencode_list_models() -> list[str]:
         r = subprocess.run([p, "models"], capture_output=True, text=True, timeout=10)
         if r.returncode != 0:
             return []
-        return [l.strip().split()[0] for l in r.stdout.strip().split("\n")
-                if l.strip() and not l.startswith("Model") and not l.startswith("---")]
+        stdout = _sanitize_external_secret_text(r.stdout)
+        return [line.strip().split()[0] for line in stdout.strip().split("\n")
+                if line.strip() and not line.startswith("Model") and not line.startswith("---")]
     except Exception:
-        logger.debug("opencode models list failed", exc_info=True)
+        logger.debug("opencode models list failed")
         return []
 
 
 def opencode_validate_model(model_id: str) -> tuple[bool, str]:
+    if not opencode_external_secret_is_configured():
+        return False, _missing_external_secret_message()
     if "/" not in model_id:
-        return False, f"模型 ID 必须使用 provider/model 格式: {model_id}"
+        return False, _sanitize_external_secret_text(
+            f"模型 ID 必须使用 provider/model 格式: {model_id}"
+        )
     models = opencode_list_models()
     if not models:
-        return True, f"格式 OK (无法校验 remote): {model_id}"
+        return True, _sanitize_external_secret_text(f"格式 OK (无法校验 remote): {model_id}")
     if model_id in models:
-        return True, f"模型已找到: {model_id}"
-    return False, f"不在已知列表中: {model_id}"
+        return True, _sanitize_external_secret_text(f"模型已找到: {model_id}")
+    return False, _sanitize_external_secret_text(f"不在已知列表中: {model_id}")
 
 
 # ---------------------------------------------------------------------------
@@ -194,11 +256,34 @@ def opencode_run(
 ) -> dict[str, Any]:
     """调用 opencode run — 非交互模式，Popen + 进程树治理."""
 
-    _ensure_env()
+    try:
+        _ensure_env()
+    except Exception as exc:
+        return _sanitize_external_secret_value({
+            "exit_code": 1,
+            "stdout": "",
+            "stderr": f"ERROR: opencode environment initialization failed: {exc}",
+            "timed_out": False,
+            "duration_seconds": 0,
+            "model": model,
+            "cwd": cwd or "",
+        })
+    if not opencode_external_secret_is_configured():
+        return _sanitize_external_secret_value({
+            "exit_code": 1,
+            "stdout": "",
+            "stderr": _missing_external_secret_message(),
+            "timed_out": False,
+            "duration_seconds": 0,
+            "model": model,
+            "cwd": cwd or "",
+        })
     p = _find_opencode()
     if not p:
-        return {"exit_code": 1, "stdout": "", "stderr": "ERROR: opencode CLI not found",
-                "timed_out": False, "duration_seconds": 0, "model": model, "cwd": cwd or ""}
+        return _sanitize_external_secret_value(
+            {"exit_code": 1, "stdout": "", "stderr": "ERROR: opencode CLI not found",
+             "timed_out": False, "duration_seconds": 0, "model": model, "cwd": cwd or ""}
+        )
 
     safe_model = model or "deepseek/deepseek-v4-pro"
     safe_prompt = prompt if isinstance(prompt, str) else str(prompt or "")
@@ -218,7 +303,7 @@ def opencode_run(
 
     cmd.append(safe_prompt)
 
-    command_preview = " ".join(str(a) for a in cmd)[:200]
+    command_preview = _sanitize_external_secret_text(" ".join(str(a) for a in cmd))[:200]
 
     # 临时文件捕获输出
     stdout_fd, stdout_tmp = tempfile.mkstemp(suffix=".log", prefix="oc_stdout_")
@@ -251,11 +336,15 @@ def opencode_run(
                 try:
                     proc.wait(timeout=5)
                 except Exception:
-                    logger.debug("opencode process did not exit after tree kill", exc_info=True)
+                    logger.debug("opencode process did not exit after tree kill")
 
         # 读取输出
-        stdout = Path(stdout_tmp).read_text(encoding="utf-8", errors="replace")
-        stderr = Path(stderr_tmp).read_text(encoding="utf-8", errors="replace")
+        stdout = _sanitize_external_secret_text(
+            Path(stdout_tmp).read_text(encoding="utf-8", errors="replace")
+        )
+        stderr = _sanitize_external_secret_text(
+            Path(stderr_tmp).read_text(encoding="utf-8", errors="replace")
+        )
 
         if timed_out:
             stderr = f"TIMEOUT after {timeout}s\ncommand: {command_preview}\n{stderr}"
@@ -271,7 +360,7 @@ def opencode_run(
 
     except Exception as e:
         stdout = ""
-        stderr = f"ERROR: opencode run exception: {e}"
+        stderr = _sanitize_external_secret_text(f"ERROR: opencode run exception: {e}")
         if stderr_log:
             Path(stderr_log).parent.mkdir(parents=True, exist_ok=True)
             Path(stderr_log).write_text(stderr, encoding="utf-8")
@@ -285,7 +374,7 @@ def opencode_run(
         except Exception:
             logger.debug("failed to remove temporary opencode stderr log", exc_info=True)
 
-    return {
+    return _sanitize_external_secret_value({
         "exit_code": exit_code,
         "stdout": stdout,
         "stderr": stderr,
@@ -294,4 +383,4 @@ def opencode_run(
         "timed_out": timed_out,
         "duration_seconds": round(time.time() - start_time, 1),
         "command_preview": command_preview,
-    }
+    })

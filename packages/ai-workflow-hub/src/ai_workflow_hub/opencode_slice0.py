@@ -20,7 +20,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .opencode_client import _find_opencode, opencode_supports_flag
+from .opencode_client import (
+    _find_opencode,
+    _sanitize_external_secret_text,
+    _sanitize_external_secret_value,
+    opencode_supports_flag,
+)
 
 
 DEFAULT_MODEL = "stepfun/step-3.7-flash"
@@ -37,6 +42,7 @@ def run_opencode_slice0_probe(
 ) -> dict[str, Any]:
     """Run a real OpenCode write probe and persist a reviewable report."""
 
+    opencode_path = _find_opencode()
     artifact_dir = Path(output_dir) if output_dir else Path(tempfile.mkdtemp(prefix="opencode-slice0-"))
     artifact_dir.mkdir(parents=True, exist_ok=True)
     workspace = artifact_dir / "workspace"
@@ -59,7 +65,6 @@ def run_opencode_slice0_probe(
         },
     }
 
-    opencode_path = _find_opencode()
     report["opencode_path"] = opencode_path
     if not opencode_path:
         _set_check(report, "opencode_cli", False, "opencode CLI not found")
@@ -91,7 +96,9 @@ def run_opencode_slice0_probe(
         command.extend(["--format", "json"])
     command.append(_build_probe_prompt())
 
-    result = _run_command(command, cwd=workspace, timeout=timeout)
+    result = _sanitize_external_secret_value(
+        _run_command(command, cwd=workspace, timeout=timeout)
+    )
     stdout_path = artifact_dir / "opencode-stdout.jsonl"
     stderr_path = artifact_dir / "opencode-stderr.log"
     stdout_path.write_text(result["stdout"], encoding="utf-8")
@@ -141,6 +148,7 @@ def run_opencode_slice0_probe(
 def parse_jsonl(text: str) -> dict[str, Any]:
     """Parse JSONL loosely enough for unstable OpenCode event schemas."""
 
+    text = _sanitize_external_secret_text(text)
     events: list[dict[str, Any]] = []
     invalid_lines: list[str] = []
     for line in text.splitlines():
@@ -190,29 +198,37 @@ def _run_command(command: list[str], *, cwd: Path, timeout: int) -> dict[str, An
             timeout=timeout,
             check=False,
         )
-        return {
+        return _sanitize_external_secret_value({
             "exit_code": completed.returncode,
             "stdout": completed.stdout,
             "stderr": completed.stderr,
             "timed_out": False,
             "duration_seconds": round(time.time() - start, 2),
-        }
+        })
     except subprocess.TimeoutExpired as exc:
-        return {
+        return _sanitize_external_secret_value({
             "exit_code": 124,
             "stdout": _as_text(exc.stdout),
             "stderr": _as_text(exc.stderr) or f"TIMEOUT after {timeout}s",
             "timed_out": True,
             "duration_seconds": round(time.time() - start, 2),
-        }
+        })
     except FileNotFoundError as exc:
-        return {
+        return _sanitize_external_secret_value({
             "exit_code": 127,
             "stdout": "",
-            "stderr": str(exc),
+            "stderr": _sanitize_external_secret_text(exc),
             "timed_out": False,
             "duration_seconds": round(time.time() - start, 2),
-        }
+        })
+    except Exception as exc:
+        return _sanitize_external_secret_value({
+            "exit_code": 1,
+            "stdout": "",
+            "stderr": f"opencode command failed: {exc}",
+            "timed_out": False,
+            "duration_seconds": round(time.time() - start, 2),
+        })
 
 
 def _build_probe_prompt() -> str:
@@ -240,6 +256,7 @@ def _finalize_report(report: dict[str, Any], artifact_dir: Path) -> dict[str, An
         version_text = (version.get("stdout", "").strip().splitlines() or ["unknown"])[0]
         report["cache_key"] = f"{version_text}|{os.name}|{report.get('mode', '')}"
 
+    report = _sanitize_external_secret_value(report)
     report_path = artifact_dir / "slice0-report.json"
     report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     report["paths"]["report"] = str(report_path)
@@ -247,6 +264,7 @@ def _finalize_report(report: dict[str, Any], artifact_dir: Path) -> dict[str, An
 
 
 def _safe_command_record(result: dict[str, Any]) -> dict[str, Any]:
+    result = _sanitize_external_secret_value(result)
     return {
         "exit_code": result["exit_code"],
         "timed_out": result["timed_out"],
@@ -257,6 +275,7 @@ def _safe_command_record(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def _summarize_command(result: dict[str, Any]) -> str:
+    result = _sanitize_external_secret_value(result)
     if result["timed_out"]:
         return f"timed out after {result['duration_seconds']}s"
     if result["exit_code"] == 0:
@@ -276,8 +295,8 @@ def _as_text(value: str | bytes | None) -> str:
     if value is None:
         return ""
     if isinstance(value, bytes):
-        return value.decode("utf-8", errors="replace")
-    return value
+        return _sanitize_external_secret_text(value)
+    return _sanitize_external_secret_text(value)
 
 
 def _collect_keys(value: Any, keys: set[str], prefix: str = "") -> None:

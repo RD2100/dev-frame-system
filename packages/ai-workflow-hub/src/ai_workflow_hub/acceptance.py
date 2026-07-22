@@ -11,6 +11,11 @@ from pathlib import Path
 from typing import Any
 
 from .config_loader import _hub_dir
+from .opencode_client import (
+    _missing_external_secret_message,
+    _sanitize_external_secret_text,
+    opencode_external_secret_is_configured,
+)
 
 
 _results: list[dict[str, Any]] = []
@@ -18,30 +23,33 @@ _suite_name = ""
 _start_time = 0.0
 
 
-def _record(test: str, status: str, detail: str = "") -> None:
+def _record(test: str, status: str, detail: str = "") -> tuple[str, str]:
+    test = _sanitize_external_secret_text(test)
+    detail = _sanitize_external_secret_text(detail)
     _results.append({
         "test": test, "status": status, "detail": detail,
         "suite": _suite_name,
     })
+    return test, detail
 
 
 def _pass(test: str, detail: str = "") -> None:
-    _record(test, "PASS", detail)
+    test, detail = _record(test, "PASS", detail)
     print(f"  [PASS] {test} {detail}")
 
 
 def _fail(test: str, detail: str = "") -> None:
-    _record(test, "FAIL", detail)
+    test, detail = _record(test, "FAIL", detail)
     print(f"  [FAIL] {test} {detail}")
 
 
 def _blocked(test: str, reason: str = "") -> None:
-    _record(test, "BLOCKED_BY_ENV", reason)
+    test, reason = _record(test, "BLOCKED_BY_ENV", reason)
     print(f"  [BLOCKED] {test}: {reason}")
 
 
 def _fixture_blocked(test: str, reason: str = "") -> None:
-    _record(test, "BLOCKED_BY_FIXTURE", reason)
+    test, reason = _record(test, "BLOCKED_BY_FIXTURE", reason)
     print(f"  [FIXTURE] {test}: {reason}")
 
 
@@ -129,7 +137,7 @@ def run_smoke() -> int:
 
     # Env
     _pass("OPENCODE_API_KEY", "set" if os.environ.get("OPENCODE_API_KEY") else "not set")
-    _pass("OPENCODE_API_BASE", os.environ.get("OPENCODE_API_BASE", "default"))
+    _pass("OPENCODE_API_BASE", "set" if os.environ.get("OPENCODE_API_BASE") else "default")
 
     # File structure
     for f in ["projects.yaml", "tasks.yaml",
@@ -168,6 +176,9 @@ def run_backend() -> int:
     _start_time = time.time()
 
     print("\n=== Backend Tests ===")
+    if not opencode_external_secret_is_configured():
+        _blocked("opencode", _missing_external_secret_message())
+        return 1
 
     # OpenCode
     from .opencode_client import opencode_is_available, opencode_cli_check
@@ -1280,6 +1291,9 @@ def run_backend_probe() -> int:
     _start_time = time.time()
 
     print("\n=== Backend Probe Classification ===")
+    if not opencode_external_secret_is_configured():
+        _blocked("opencode", _missing_external_secret_message())
+        return 1
     import urllib.error as _ue
 
     # 1. Simulate: proxy unreachable
