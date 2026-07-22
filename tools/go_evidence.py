@@ -303,13 +303,12 @@ def record_team_runtime_finalization(
 
 
 def _record_go_run_context_refs(team: TeamRuntime, runtime_dir: str, run_id: str) -> list[str]:
-    if _team_runtime_has_sealed_context_refs(team, run_id):
-        return []
     try:
         result = load_go_run_result(runtime_dir, run_id)
     except Exception:  # noqa: BLE001 - context refs are best-effort provenance
         return []
     store = DispatchPacketStore(runtime_dir=runtime_dir)
+    context_event_types = _team_runtime_context_event_types(team, run_id)
     event_ids: list[str] = []
     for agent in result.agents:
         try:
@@ -324,20 +323,23 @@ def _record_go_run_context_refs(team: TeamRuntime, runtime_dir: str, run_id: str
         )
         if not context_refs:
             continue
-        event_ids.append(team.record_task_created(
-            run_id,
-            agent.agent_id,
-            project_id=result.project_id,
-            shard_index=agent.shard_index,
-            shard_count=agent.shard_count,
-            targets=agent.targets,
-            context_refs=context_refs,
-        ))
-        event_ids.append(team.record_task_claimed(
-            run_id,
-            agent.agent_id,
-            context_refs=context_refs,
-        ))
+        existing_event_types = context_event_types.get(agent.agent_id, set())
+        if "task_created" not in existing_event_types:
+            event_ids.append(team.record_task_created(
+                run_id,
+                agent.agent_id,
+                project_id=result.project_id,
+                shard_index=agent.shard_index,
+                shard_count=agent.shard_count,
+                targets=agent.targets,
+                context_refs=context_refs,
+            ))
+        if "task_claimed" not in existing_event_types:
+            event_ids.append(team.record_task_claimed(
+                run_id,
+                agent.agent_id,
+                context_refs=context_refs,
+            ))
     return event_ids
 
 
@@ -355,15 +357,41 @@ def _record_go_run_task_results(
     event_ids: list[str] = []
     for agent in result.agents:
         agent_id = str(agent.agent_id or "")
-        if not agent_id or _team_runtime_has_success_task_result(team, run_id, agent_id):
+        if not agent_id:
             continue
-        event_ids.append(team.record_result(
+        report_ref_path = str(report_path if report_path.exists() else agent.report_path)
+        has_task_result, task_result_event_id = _team_runtime_success_task_result_state(
+            team,
             run_id,
             agent_id,
-            status="passed",
-            report_path=str(report_path if report_path.exists() else agent.report_path),
-            isolated=bool(agent.isolated),
-        ))
+        )
+        if not has_task_result:
+            task_result_event_id = team.record_result(
+                run_id,
+                agent_id,
+                status="passed",
+                report_path=report_ref_path,
+                isolated=bool(agent.isolated),
+            )
+            event_ids.append(task_result_event_id)
+        if (
+            report_ref_path
+            and not _team_runtime_has_evidence_ref(
+                team,
+                run_id,
+                "report",
+                report_ref_path,
+                agent_id=agent_id,
+                source_event_id=task_result_event_id,
+            )
+        ):
+            event_ids.append(team.record_evidence_ref(
+                run_id,
+                agent_id,
+                ref_type="report",
+                ref_path=report_ref_path,
+                source_event_id=task_result_event_id,
+            ))
     return event_ids
 
 
@@ -402,7 +430,11 @@ def _context_id(ref_type: str, ref_path: str) -> str:
     return path.name
 
 
-def _team_runtime_has_sealed_context_refs(team: TeamRuntime, run_id: str) -> bool:
+def _team_runtime_context_event_types(
+    team: TeamRuntime,
+    run_id: str,
+) -> dict[str, set[str]]:
+    event_types_by_agent: dict[str, set[str]] = {}
     for event in team.read_all(strict=True):
         if str(event.get("run_id") or "") != run_id:
             continue
@@ -416,11 +448,18 @@ def _team_runtime_has_sealed_context_refs(team: TeamRuntime, run_id: str) -> boo
             if isinstance(ref, dict)
         }
         if {"context_packet", "context_ledger"} <= ref_types:
-            return True
-    return False
+            agent_id = str(event.get("agent_id") or "")
+            event_types_by_agent.setdefault(agent_id, set()).add(
+                str(event.get("event_type") or "")
+            )
+    return event_types_by_agent
 
 
-def _team_runtime_has_success_task_result(team: TeamRuntime, run_id: str, agent_id: str) -> bool:
+def _team_runtime_success_task_result_state(
+    team: TeamRuntime,
+    run_id: str,
+    agent_id: str,
+) -> tuple[bool, str]:
     success_statuses = {"pass", "passed", "completed", "success", "succeeded", "verified"}
     for event in team.read_all(strict=True):
         if (
@@ -432,8 +471,8 @@ def _team_runtime_has_success_task_result(team: TeamRuntime, run_id: str, agent_
             continue
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
         if _safe_token(payload.get("status")) in success_statuses:
-            return True
-    return False
+            return True, str(event.get("event_id") or "")
+    return False, ""
 
 
 def _record_blocked_finalization_evidence_refs(
@@ -482,6 +521,9 @@ def _team_runtime_has_evidence_ref(
     run_id: str,
     ref_type: str,
     ref_path: str,
+    *,
+    agent_id: str | None = None,
+    source_event_id: str | None = None,
 ) -> bool:
     for event in team.read_all(strict=True):
         if not isinstance(event, dict) or str(event.get("run_id") or "") != run_id:
@@ -491,6 +533,11 @@ def _team_runtime_has_evidence_ref(
             str(event.get("event_type") or "") == "evidence_ref"
             and str(payload.get("ref_type") or "") == ref_type
             and str(payload.get("ref_path") or "") == ref_path
+            and (agent_id is None or str(event.get("agent_id") or "") == agent_id)
+            and (
+                source_event_id is None
+                or str(payload.get("source_event_id") or "") == source_event_id
+            )
         ):
             return True
     return False

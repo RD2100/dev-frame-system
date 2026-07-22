@@ -654,6 +654,249 @@ def test_finalize_retry_after_review_append_does_not_duplicate_authority(
     assert final_index["canonical_runs"][0]["record"]["acceptance_state"] == "final_ready"
 
 
+@pytest.mark.parametrize("failure_boundary", ["task_claimed", "report_evidence"])
+def test_finalize_retry_completes_partial_pre_review_backfill(
+    tmp_path,
+    monkeypatch,
+    failure_boundary,
+):
+    run_id = f"go-evidence-{failure_boundary}-interruption"
+    evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
+    _write_json(
+        os.path.join(evidence_dir, "chain-evidence.json"),
+        _chain_evidence(run_id=run_id),
+    )
+    runtime_dir = str(tmp_path / "runtime")
+    _write_go_run_metadata(runtime_dir, run_id)
+    original_record_task_claimed = TeamRuntime.record_task_claimed
+    original_record_evidence_ref = TeamRuntime.record_evidence_ref
+
+    def interrupt_task_claim(self, *args, **kwargs):
+        raise RuntimeError("injected task claim persistence failure")
+
+    def interrupt_report_evidence(self, *args, **kwargs):
+        if kwargs.get("ref_type") == "report":
+            raise RuntimeError("injected report evidence persistence failure")
+        return original_record_evidence_ref(self, *args, **kwargs)
+
+    if failure_boundary == "task_claimed":
+        monkeypatch.setattr(
+            TeamRuntime,
+            "record_task_claimed",
+            interrupt_task_claim,
+        )
+        preserved_event_type = "task_created"
+    else:
+        monkeypatch.setattr(
+            TeamRuntime,
+            "record_evidence_ref",
+            interrupt_report_evidence,
+        )
+        preserved_event_type = "task_result"
+
+    first_rc = go_evidence.main(
+        ["finalize", evidence_dir, "--team-runtime-dir", runtime_dir]
+    )
+
+    assert first_rc == 2
+    journal = tmp_path / "runtime" / TEAM_EVENTS_FILE
+    first_events = [
+        json.loads(line)
+        for line in journal.read_text(encoding="utf-8").strip().splitlines()
+    ]
+    preserved_events = [
+        event for event in first_events
+        if event["event_type"] == preserved_event_type
+    ]
+    assert len(preserved_events) == 1
+    if failure_boundary == "task_claimed":
+        assert not any(
+            event["event_type"] == "task_claimed" for event in first_events
+        )
+    else:
+        assert not any(
+            event["event_type"] == "evidence_ref"
+            and event["payload"].get("ref_type") == "report"
+            for event in first_events
+        )
+    preserved_event_id = preserved_events[0]["event_id"]
+
+    monkeypatch.setattr(
+        TeamRuntime,
+        "record_task_claimed",
+        original_record_task_claimed,
+    )
+    monkeypatch.setattr(
+        TeamRuntime,
+        "record_evidence_ref",
+        original_record_evidence_ref,
+    )
+    retry_rc = go_evidence.main(
+        ["finalize", evidence_dir, "--team-runtime-dir", runtime_dir]
+    )
+
+    assert retry_rc == 0
+    retry_events = [
+        json.loads(line)
+        for line in journal.read_text(encoding="utf-8").strip().splitlines()
+    ]
+    event_types = [event["event_type"] for event in retry_events]
+    assert event_types.count("task_created") == 1
+    assert event_types.count("task_claimed") == 1
+    assert event_types.count("task_result") == 1
+    assert event_types.count("review_ref") == 1
+    assert event_types.count("final_verdict_ref") == 1
+    report_refs = [
+        event for event in retry_events
+        if event["event_type"] == "evidence_ref"
+        and event["payload"].get("ref_type") == "report"
+    ]
+    assert len(report_refs) == 1
+    task_result_event_id = next(
+        event["event_id"]
+        for event in retry_events
+        if event["event_type"] == "task_result"
+    )
+    assert report_refs[0]["payload"]["source_event_id"] == task_result_event_id
+    assert next(
+        event["event_id"]
+        for event in retry_events
+        if event["event_type"] == preserved_event_type
+    ) == preserved_event_id
+    final_index = build_run_index(runtime_dir)
+    assert final_index["canonical_runs"][0]["record"]["acceptance_state"] == "final_ready"
+
+
+def test_finalize_retry_backfills_shared_report_ref_per_successful_agent(
+    tmp_path,
+    monkeypatch,
+):
+    run_id = "go-evidence-shared-report-interruption"
+    evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
+    _write_json(
+        os.path.join(evidence_dir, "chain-evidence.json"),
+        _chain_evidence(run_id=run_id),
+    )
+    runtime_dir = str(tmp_path / "runtime")
+    first_packet_dir = _write_go_run_metadata(runtime_dir, run_id)
+    second_packet_dir = os.path.join(
+        runtime_dir,
+        "rdgoal-outbox",
+        "demo-project",
+        f"{run_id}-packet-2",
+    )
+    second_task_spec_path = os.path.join(second_packet_dir, "TASKSPEC.json")
+    _write_json(second_task_spec_path, {
+        "task_id": f"{run_id}-task-2",
+        "title": "go evidence test packet 2",
+        "status": "ready",
+    })
+    _write(os.path.join(second_packet_dir, "TASKSPEC.md"), "# TaskSpec\n")
+    _write_json(os.path.join(second_packet_dir, "packet.json"), {
+        "packet_id": f"{run_id}-packet-2",
+        "project_id": "demo-project",
+        "project_root": runtime_dir,
+        "requirement": "Finalize shared go evidence report refs.",
+        "operation": "go coding shard 2/2",
+        "targets": ["src/demo-2.py"],
+        "decision_mode": "recommend_execute",
+        "dispatch_ready": True,
+        "task_spec": {
+            "task_id": f"{run_id}-task-2",
+            "title": "go evidence test packet 2",
+            "status": "ready",
+        },
+        "objective_text": "Verify per-agent shared report ref backfill.",
+        "context_packet_path": "",
+        "context_ledger_path": "",
+        "packet_dir": second_packet_dir,
+        "created_at": "2026-07-08T00:00:00+00:00",
+    })
+    metadata_path = os.path.join(runtime_dir, "go-runs", run_id, "go-run.json")
+    with open(metadata_path, "r", encoding="utf-8") as fh:
+        metadata = json.load(fh)
+    metadata["agents"][0]["shard_count"] = 2
+    second_agent = dict(metadata["agents"][0])
+    second_agent.update({
+        "agent_id": "coding-agent-2",
+        "shard_index": 2,
+        "targets": ["src/demo-2.py"],
+        "packet_dir": second_packet_dir,
+        "task_spec_path": second_task_spec_path,
+    })
+    metadata["agents"].append(second_agent)
+    _write_json(metadata_path, metadata)
+    assert first_packet_dir != second_packet_dir
+
+    original_record_evidence_ref = TeamRuntime.record_evidence_ref
+
+    def interrupt_second_agent_report_ref(self, run_id, agent_id, **kwargs):
+        if agent_id == "coding-agent-2" and kwargs.get("ref_type") == "report":
+            raise RuntimeError("injected second agent report persistence failure")
+        return original_record_evidence_ref(self, run_id, agent_id, **kwargs)
+
+    monkeypatch.setattr(
+        TeamRuntime,
+        "record_evidence_ref",
+        interrupt_second_agent_report_ref,
+    )
+    first_rc = go_evidence.main(
+        ["finalize", evidence_dir, "--team-runtime-dir", runtime_dir]
+    )
+
+    assert first_rc == 2
+    journal = tmp_path / "runtime" / TEAM_EVENTS_FILE
+    first_events = [
+        json.loads(line)
+        for line in journal.read_text(encoding="utf-8").strip().splitlines()
+    ]
+    assert [
+        event["agent_id"]
+        for event in first_events
+        if event["event_type"] == "task_result"
+    ] == ["coding-agent-1", "coding-agent-2"]
+    assert [
+        event["agent_id"]
+        for event in first_events
+        if event["event_type"] == "evidence_ref"
+        and event["payload"].get("ref_type") == "report"
+    ] == ["coding-agent-1"]
+
+    monkeypatch.setattr(
+        TeamRuntime,
+        "record_evidence_ref",
+        original_record_evidence_ref,
+    )
+    assert go_evidence.main(
+        ["finalize", evidence_dir, "--team-runtime-dir", runtime_dir]
+    ) == 0
+    assert go_evidence.main(
+        ["finalize", evidence_dir, "--team-runtime-dir", runtime_dir]
+    ) == 0
+
+    final_events = [
+        json.loads(line)
+        for line in journal.read_text(encoding="utf-8").strip().splitlines()
+    ]
+    task_result_ids = {
+        event["agent_id"]: event["event_id"]
+        for event in final_events
+        if event["event_type"] == "task_result"
+    }
+    report_refs = [
+        event for event in final_events
+        if event["event_type"] == "evidence_ref"
+        and event["payload"].get("ref_type") == "report"
+    ]
+    assert len(report_refs) == 2
+    assert {
+        (event["agent_id"], event["payload"].get("source_event_id"))
+        for event in report_refs
+    } == set(task_result_ids.items())
+    final_index = build_run_index(runtime_dir)
+    assert final_index["canonical_runs"][0]["record"]["acceptance_state"] == "final_ready"
+
+
 def test_finalize_refuses_malformed_team_runtime_journal_without_appending(tmp_path, capsys):
     evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
     _write_json(
