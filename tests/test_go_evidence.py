@@ -579,6 +579,81 @@ def test_finalize_team_runtime_recording_is_idempotent_for_same_verdict(tmp_path
     assert record["final_verdict_ref"]["verdict_id"] == "fv-go-evidence-rerun"
 
 
+def test_finalize_retry_after_review_append_does_not_duplicate_authority(
+    tmp_path,
+    monkeypatch,
+):
+    run_id = "go-evidence-interrupted-finalize"
+    evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
+    _write_json(
+        os.path.join(evidence_dir, "chain-evidence.json"),
+        _chain_evidence(run_id=run_id),
+    )
+    runtime_dir = str(tmp_path / "runtime")
+    _write_go_run_metadata(runtime_dir, run_id)
+    original_record_final_verdict_ref = TeamRuntime.record_final_verdict_ref
+
+    def interrupt_after_review_append(self, *args, **kwargs):
+        raise RuntimeError("injected final verdict persistence failure")
+
+    monkeypatch.setattr(
+        TeamRuntime,
+        "record_final_verdict_ref",
+        interrupt_after_review_append,
+    )
+
+    first_rc = go_evidence.main(
+        ["finalize", evidence_dir, "--team-runtime-dir", runtime_dir]
+    )
+
+    assert first_rc == 2
+    journal = tmp_path / "runtime" / TEAM_EVENTS_FILE
+    first_events = [
+        json.loads(line)
+        for line in journal.read_text(encoding="utf-8").strip().splitlines()
+    ]
+    first_review_events = [
+        event for event in first_events if event["event_type"] == "review_ref"
+    ]
+    assert len(first_review_events) == 1
+    assert not any(
+        event["event_type"] == "final_verdict_ref" for event in first_events
+    )
+    first_review_id = first_review_events[0]["payload"]["review_id"]
+    first_review_event_id = first_review_events[0]["event_id"]
+    first_index = build_run_index(runtime_dir)
+    assert first_index["canonical_runs"][0]["record"]["acceptance_state"] == "review_pending"
+
+    monkeypatch.setattr(
+        TeamRuntime,
+        "record_final_verdict_ref",
+        original_record_final_verdict_ref,
+    )
+    retry_rc = go_evidence.main(
+        ["finalize", evidence_dir, "--team-runtime-dir", runtime_dir]
+    )
+
+    assert retry_rc == 0
+    retry_events = [
+        json.loads(line)
+        for line in journal.read_text(encoding="utf-8").strip().splitlines()
+    ]
+    review_events = [
+        event for event in retry_events if event["event_type"] == "review_ref"
+    ]
+    final_verdict_events = [
+        event for event in retry_events
+        if event["event_type"] == "final_verdict_ref"
+    ]
+    assert len(review_events) == 1
+    assert review_events[0]["payload"]["review_id"] == first_review_id
+    assert review_events[0]["event_id"] == first_review_event_id
+    assert len(final_verdict_events) == 1
+    assert final_verdict_events[0]["payload"]["review_ref"] == first_review_id
+    final_index = build_run_index(runtime_dir)
+    assert final_index["canonical_runs"][0]["record"]["acceptance_state"] == "final_ready"
+
+
 def test_finalize_refuses_malformed_team_runtime_journal_without_appending(tmp_path, capsys):
     evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
     _write_json(

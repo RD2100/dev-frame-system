@@ -234,14 +234,15 @@ def record_team_runtime_finalization(
     review_id = f"review-{_safe_token(run_id)}-{_safe_token(reviewer_id)}"
     event_ids.extend(_record_go_run_context_refs(team, runtime_dir, run_id))
     event_ids.extend(_record_go_run_task_results(team, runtime_dir, run_id, evidence_path))
-    if _team_runtime_has_finalization_refs(
+    has_review_ref, has_final_verdict_ref = _team_runtime_finalization_ref_state(
         team,
         run_id=run_id,
         review_id=review_id,
         review_ref_path=str(evidence_path / "review.yaml"),
         verdict_id=str(final_verdict.get("verdict_id") or ""),
         final_verdict_ref_path=str(final_verdict_path),
-    ):
+    )
+    if has_review_ref and has_final_verdict_ref:
         return event_ids
     reviewed_inputs = [
         str(item) for item in review.get("reviewed_inputs", [])
@@ -252,50 +253,52 @@ def record_team_runtime_finalization(
         for name in REQUIRED_INPUTS
         if (evidence_path / name).exists()
     ]
-    event_ids.append(
-        team.record_review_ref(
-            run_id,
-            reviewer_id,
-            review_id=review_id,
-            reviewer_role=str(review.get("reviewer_role") or ""),
-            executor_id=str(
-                review.get("executor_id") or chain.get("executor_id") or ""
-            ),
-            verdict=str(review.get("verdict") or ""),
-            ref_path=str(evidence_path / "review.yaml"),
-            reviewed_evidence_refs=reviewed_evidence_refs,
-            reviewed_inputs=reviewed_inputs,
-            source="go_evidence_finalize",
+    if not has_review_ref:
+        event_ids.append(
+            team.record_review_ref(
+                run_id,
+                reviewer_id,
+                review_id=review_id,
+                reviewer_role=str(review.get("reviewer_role") or ""),
+                executor_id=str(
+                    review.get("executor_id") or chain.get("executor_id") or ""
+                ),
+                verdict=str(review.get("verdict") or ""),
+                ref_path=str(evidence_path / "review.yaml"),
+                reviewed_evidence_refs=reviewed_evidence_refs,
+                reviewed_inputs=reviewed_inputs,
+                source="go_evidence_finalize",
+            )
         )
-    )
     gate_refs = [
         str(item.get("gate_id") or "")
         for item in final_verdict.get("gate_summary", [])
         if isinstance(item, dict) and str(item.get("gate_id") or "")
     ]
-    event_ids.append(
-        team.record_final_verdict_ref(
-            run_id,
-            str(final_verdict.get("produced_by") or "go-evidence-finalizer"),
-            verdict_id=str(final_verdict.get("verdict_id") or ""),
-            producer_role=str(final_verdict.get("producer_role") or ""),
-            final_state=str(final_verdict.get("final_state") or ""),
-            ref_path=str(final_verdict_path),
-            review_ref=review_id,
-            gate_refs=gate_refs,
-            gate_summary=[
-                item for item in final_verdict.get("gate_summary", [])
-                if isinstance(item, dict)
-            ],
-            limitations=[
-                str(item) for item in final_verdict.get("limitations", [])
-                if str(item)
-            ],
-            human_or_governance_reference=str(
-                final_verdict.get("human_or_governance_reference") or ""
-            ),
+    if not has_final_verdict_ref:
+        event_ids.append(
+            team.record_final_verdict_ref(
+                run_id,
+                str(final_verdict.get("produced_by") or "go-evidence-finalizer"),
+                verdict_id=str(final_verdict.get("verdict_id") or ""),
+                producer_role=str(final_verdict.get("producer_role") or ""),
+                final_state=str(final_verdict.get("final_state") or ""),
+                ref_path=str(final_verdict_path),
+                review_ref=review_id,
+                gate_refs=gate_refs,
+                gate_summary=[
+                    item for item in final_verdict.get("gate_summary", [])
+                    if isinstance(item, dict)
+                ],
+                limitations=[
+                    str(item) for item in final_verdict.get("limitations", [])
+                    if str(item)
+                ],
+                human_or_governance_reference=str(
+                    final_verdict.get("human_or_governance_reference") or ""
+                ),
+            )
         )
-    )
     return event_ids
 
 
@@ -493,7 +496,7 @@ def _team_runtime_has_evidence_ref(
     return False
 
 
-def _team_runtime_has_finalization_refs(
+def _team_runtime_finalization_ref_state(
     team: TeamRuntime,
     *,
     run_id: str,
@@ -501,7 +504,7 @@ def _team_runtime_has_finalization_refs(
     review_ref_path: str,
     verdict_id: str,
     final_verdict_ref_path: str,
-) -> bool:
+) -> tuple[bool, bool]:
     has_review = False
     has_final_verdict = False
     for event in team.read_all(strict=True):
@@ -521,7 +524,7 @@ def _team_runtime_has_finalization_refs(
                 and str(payload.get("ref_path") or "") == final_verdict_ref_path
                 and str(payload.get("review_ref") or "") == review_id
             ) or has_final_verdict
-    return has_review and has_final_verdict
+    return has_review, has_final_verdict
 
 
 def init_chain_evidence(run_evidence_dir: str, run_id: str, executor_id: str, mode: str | None = None, planner: str | None = None, task: str | None = None, methodology: dict | None = None) -> str:
