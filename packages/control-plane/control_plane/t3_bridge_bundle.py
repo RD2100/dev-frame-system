@@ -224,6 +224,57 @@ export interface DevFrameProjectOption {
   readonly label: string;
 }
 
+export interface DevFrameT3ThreadSession {
+  readonly threadId: string;
+  readonly status: string;
+  readonly providerName: string;
+  readonly runtimeMode: string;
+  readonly activeTurnId: string | null;
+  readonly lastError: string | null;
+  readonly updatedAt: string;
+}
+
+export interface DevFrameThreadReviewGate {
+  readonly gateId: string;
+  readonly kind: string;
+  readonly status: string;
+  readonly reason: string;
+  readonly runId: string;
+  readonly openPath?: string;
+  readonly openUrl?: string;
+}
+
+export interface DevFrameThreadAction {
+  readonly actionId: string;
+  readonly sourceType: string;
+  readonly sourceId: string;
+  readonly priority: string;
+  readonly status: string;
+  readonly label: string;
+  readonly detail: string;
+  readonly command: string;
+  readonly resumeFilter: string;
+  readonly handoffPath: string;
+  readonly handoffUrl: string;
+  readonly openPath: string;
+  readonly openUrl: string;
+}
+
+export interface DevFrameReviewGateStatusCounts {
+  readonly pass?: number;
+  readonly "blocked/failed"?: number;
+  readonly "open/ready/needs_human"?: number;
+  readonly unknown?: number;
+}
+
+export interface DevFrameThreadAuthority extends DevFrameThreadTeamRefs {
+  readonly relatedRunIds: readonly string[];
+  readonly actionDetails: readonly DevFrameThreadAction[];
+  readonly teamDetailGates: readonly DevFrameThreadReviewGate[];
+  readonly teamReviewGateStatusCounts: DevFrameReviewGateStatusCounts;
+  readonly teamNextActionableGates: readonly DevFrameThreadReviewGate[];
+}
+
 export interface DevFrameT3ThreadShell {
   readonly id: string;
   readonly projectId: string;
@@ -234,6 +285,8 @@ export interface DevFrameT3ThreadShell {
   readonly threadListPriority?: number;
   readonly threadListSummary?: string;
   readonly updatedAt?: string;
+  readonly session: DevFrameT3ThreadSession;
+  readonly devframe: DevFrameThreadAuthority;
 }
 
 export interface DevFrameT3ShellSnapshot {
@@ -244,14 +297,17 @@ export interface DevFrameT3ShellSnapshot {
   readonly updatedAt: string;
 }
 
-export type DevFrameThreadDetail = Record<string, unknown> &
-  DevFrameThreadTeamRefs & {
-    readonly threadKind?: DevFrameThreadKind;
-    readonly coordinatorScope?: DevFrameCoordinatorScope;
-    readonly projectBinding?: DevFrameProjectBinding;
-    readonly threadListPriority?: number;
-    readonly threadListSummary?: string;
-  };
+export interface DevFrameThreadDetail {
+  readonly id: string;
+  readonly projectId: string;
+  readonly title: string;
+  readonly threadKind?: DevFrameThreadKind;
+  readonly coordinatorScope?: DevFrameCoordinatorScope;
+  readonly projectBinding?: DevFrameProjectBinding;
+  readonly threadListPriority?: number;
+  readonly threadListSummary?: string;
+  readonly session: DevFrameT3ThreadSession;
+}
 
 export interface DevFrameTeamAgent {
   readonly agentId: string;
@@ -489,7 +545,7 @@ export function sortDevFrameThreadsForDisplay(
   snapshot: DevFrameT3ShellSnapshot,
 ): DevFrameT3ShellSnapshot {
   const detailsById = new Map(
-    (snapshot.threadDetails ?? []).map((detail) => [String((detail as { id?: unknown }).id ?? ""), detail]),
+    (snapshot.threadDetails ?? []).map((detail) => [detail.id, detail]),
   );
   const threads = [...snapshot.threads].sort((a, b) => {
     const [ap, au, at] = threadSortKey(a);
