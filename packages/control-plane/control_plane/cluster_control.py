@@ -24,6 +24,7 @@ from .scoped_store import ScopedStore
 
 __all__ = [
     "COORDINATOR_ID",
+    "PAPER_TARGET_ID",
     "ClusterControlError",
     "ROSTER_FILE",
     "load_cluster_roster",
@@ -37,6 +38,7 @@ __all__ = [
 
 
 COORDINATOR_ID = "coordinator"
+PAPER_TARGET_ID = "rdpaper"
 
 # Documented default worker roster, mirroring the /go orchestration phases
 # (coordinator plans, executor edits, reviewer checks). These let the editor
@@ -47,6 +49,7 @@ _DEFAULT_AGENT_ROLES: tuple[tuple[str, str], ...] = (
 )
 
 _COORDINATOR_LABEL = "Coordinator (主控)"
+_PAPER_TARGET_LABEL = "Paper Review (论文审查)"
 
 
 class ClusterControlError(Exception):
@@ -241,9 +244,9 @@ def list_cluster_targets(
 ) -> list[dict[str, Any]]:
     """Enumerate mentionable cluster targets for a project.
 
-    Always includes the coordinator (主控). Adds any agents recorded by the team
-    runtime (source ``recorded``) and a default worker roster (source
-    ``default``), deduped by stable mention id.
+    Always includes the coordinator (主控) and the governed local paper product.
+    Adds any agents recorded by the team runtime (source ``recorded``) and a
+    default worker roster (source ``default``), deduped by stable mention id.
     """
     targets: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -259,6 +262,13 @@ def list_cluster_targets(
         "kind": "coordinator",
         "role": "coordinator",
         "label": _COORDINATOR_LABEL,
+        "source": "default",
+    })
+    _add({
+        "id": PAPER_TARGET_ID,
+        "kind": "product",
+        "role": "paper_reviewer",
+        "label": _PAPER_TARGET_LABEL,
         "source": "default",
     })
 
