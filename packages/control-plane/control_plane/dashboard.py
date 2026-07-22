@@ -815,6 +815,43 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     body = json.dumps({"error": "invalid_json_body"}, indent=2, ensure_ascii=True)
                     self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
                     return
+                if not isinstance(payload, dict):
+                    body = json.dumps({"error": "invalid_payload"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                selection_fields = ("executor", "modelProvider", "model")
+                present_selection_fields = [
+                    field for field in selection_fields if field in payload
+                ]
+                selection_kwargs = {}
+                if present_selection_fields:
+                    selection_values = [payload.get(field) for field in selection_fields]
+                    if (
+                        len(present_selection_fields) != len(selection_fields)
+                        or any(
+                            not isinstance(value, str) or not value.strip()
+                            for value in selection_values
+                        )
+                    ):
+                        body = json.dumps(
+                            {
+                                "error": "missing_or_invalid_params",
+                                "requiredTogether": list(selection_fields),
+                            },
+                            indent=2,
+                            ensure_ascii=True,
+                        )
+                        self._send_text(
+                            HTTPStatus.BAD_REQUEST,
+                            "application/json; charset=utf-8",
+                            body,
+                        )
+                        return
+                    selection_kwargs = {
+                        "executor": payload["executor"],
+                        "model_provider": payload["modelProvider"],
+                        "model": payload["model"],
+                    }
                 project_id = str(payload.get("projectId") or "").strip()
                 target = str(payload.get("target") or "").strip()
                 goal = str(payload.get("goal") or "").strip()
@@ -832,6 +869,7 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                         target,
                         goal,
                         proposed_by=proposed_by,
+                        **selection_kwargs,
                     )
                 except ClusterRunError as exc:
                     body = json.dumps({"error": "cluster_run_rejected", "detail": str(exc)}, indent=2, ensure_ascii=True)
@@ -851,6 +889,11 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     "conversationKind": started.get("conversationKind"),
                     "coordinatorScope": started.get("coordinatorScope"),
                     "projectBinding": started.get("projectBinding"),
+                    **{
+                        field: started[field]
+                        for field in selection_fields
+                        if field in started
+                    },
                     **({"kind": started["kind"]} if started.get("kind") else {}),
                     **({"answer": started["answer"]} if started.get("answer") else {}),
                     "note": "Coordinator run started. Progress streams into the conversation; the dashboard only monitors.",

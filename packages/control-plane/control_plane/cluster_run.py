@@ -342,6 +342,10 @@ def _run_cluster_workflow(
     goal: str,
     run_id: str,
     on_prepared: Any = None,
+    *,
+    executor: str | None = None,
+    model_provider: str | None = None,
+    model: str | None = None,
 ) -> Any:
     """Real project-coordinator run. Module seam so tests can patch it.
 
@@ -353,9 +357,44 @@ def _run_cluster_workflow(
     """
     from .workflow_engine import WorkflowEngine
 
-    return WorkflowEngine(runtime_dir).run_coding_workflow(
-        project_path, goal, on_prepared=on_prepared
+    engine = WorkflowEngine(runtime_dir)
+    if executor is None:
+        return engine.run_coding_workflow(
+            project_path, goal, on_prepared=on_prepared
+        )
+    return engine.run_coding_workflow(
+        project_path,
+        goal,
+        worker=executor,
+        model_provider=model_provider,
+        model=model,
+        on_prepared=on_prepared,
     )
+
+
+def _validate_execution_selection(
+    executor: Any,
+    model_provider: Any,
+    model: Any,
+    *,
+    target: str,
+) -> bool:
+    values = (executor, model_provider, model)
+    if all(value is None for value in values):
+        return False
+    if any(value is None for value in values):
+        raise ClusterRunError(
+            "executor, modelProvider, and model must be provided together"
+        )
+    if any(not isinstance(value, str) or not value.strip() for value in values):
+        raise ClusterRunError(
+            "executor, modelProvider, and model must be non-blank strings"
+        )
+    if target == PAPER_TARGET_ID:
+        raise ClusterRunError(
+            "cluster target 'rdpaper' does not consume executor/model selection"
+        )
+    return True
 
 
 def _load_yaml_mapping(path: Path, label: str) -> dict[str, Any]:
@@ -686,6 +725,9 @@ def _run_and_record(
     goal: str,
     run_id: str,
     paper_root_reservation: str = "",
+    executor: str | None = None,
+    model_provider: str | None = None,
+    model: str | None = None,
 ) -> None:
     if target == PAPER_TARGET_ID:
         _run_paper_and_record(
@@ -707,11 +749,38 @@ def _run_and_record(
 
     record = _load_run_record(runtime_dir, run_id) or {
         "runId": run_id, "target": target, "goal": goal, "projectPath": project_path,
+        **(
+            {
+                "executor": executor,
+                "modelProvider": model_provider,
+                "model": model,
+            }
+            if executor is not None
+            else {}
+        ),
     }
     try:
-        result = _run_cluster_workflow(
-            runtime_dir, project_path, target, goal, run_id, on_prepared=_on_prepared
-        )
+        if executor is None:
+            result = _run_cluster_workflow(
+                runtime_dir,
+                project_path,
+                target,
+                goal,
+                run_id,
+                on_prepared=_on_prepared,
+            )
+        else:
+            result = _run_cluster_workflow(
+                runtime_dir,
+                project_path,
+                target,
+                goal,
+                run_id,
+                on_prepared=_on_prepared,
+                executor=executor,
+                model_provider=model_provider,
+                model=model,
+            )
         record = _load_run_record(runtime_dir, run_id) or record
         record["status"] = str(getattr(result, "status", None) or "completed")
         verdict = getattr(result, "verdict", None)
@@ -916,6 +985,9 @@ def start_cluster_run(
     goal: str,
     *,
     proposed_by: str = "rd-code-editor",
+    executor: str | None = None,
+    model_provider: str | None = None,
+    model: str | None = None,
 ) -> dict[str, Any]:
     """Validate and start a background cluster target run. Returns immediately."""
     path, project_id = _resolve_project_reference(runtime_dir, project_path)
@@ -929,8 +1001,13 @@ def start_cluster_run(
         raise ClusterRunError("goal is required")
     if not is_valid_cluster_target(runtime_dir, tid):
         raise ClusterRunError(f"unknown cluster target: {target}")
+    selection_requested = _validate_execution_selection(
+        executor,
+        model_provider,
+        model,
+        target=tid,
+    )
     paper_run_id = _validate_paper_project(path) if tid == PAPER_TARGET_ID else ""
-    run_id = _new_run_id()
 
     # Phase C triage: a conversational goal (e.g. "你好" / "你能做什么") is
     # answered directly by the coordinator — no coding agents, no token spend.
@@ -940,7 +1017,13 @@ def start_cluster_run(
         coordinator_conversation_reply,
     )
 
-    if tid != PAPER_TARGET_ID and classify_goal(text) == GOAL_KIND_CONVERSATION:
+    goal_kind = classify_goal(text) if tid != PAPER_TARGET_ID else ""
+    if selection_requested and goal_kind == GOAL_KIND_CONVERSATION:
+        raise ClusterRunError(
+            "conversational cluster runs do not consume executor/model selection"
+        )
+    run_id = _new_run_id()
+    if goal_kind == GOAL_KIND_CONVERSATION:
         conversation_kind = "global_coordinator" if tid == "coordinator" else "native_chat"
         reply = coordinator_conversation_reply(text)
         record = {
@@ -1019,11 +1102,30 @@ def start_cluster_run(
             ),
             "startedAt": _now(),
             **({"methodology": methodology_summary} if methodology_summary else {}),
+            **(
+                {
+                    "executor": executor,
+                    "modelProvider": model_provider,
+                    "model": model,
+                }
+                if selection_requested
+                else {}
+            ),
         }
         _write_run_record(runtime_dir, record)
         thread = threading.Thread(
             target=_run_and_record,
-            args=(runtime_dir, path, tid, text, run_id, paper_root_reservation),
+            args=(
+                runtime_dir,
+                path,
+                tid,
+                text,
+                run_id,
+                paper_root_reservation,
+                executor,
+                model_provider,
+                model,
+            ),
             name=f"cluster-run-{run_id}",
             daemon=True,
         )
@@ -1038,6 +1140,15 @@ def start_cluster_run(
         "goal": text,
         "projectId": project_id,
         "projectPath": path,
+        **(
+            {
+                "executor": executor,
+                "modelProvider": model_provider,
+                "model": model,
+            }
+            if selection_requested
+            else {}
+        ),
         **({"kind": "paper", "paperRunId": paper_run_id} if paper_run_id else {}),
         "conversationKind": "goal_conversation",
         "coordinatorScope": "project",
