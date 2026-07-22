@@ -1,4 +1,3 @@
-import json
 import sys
 import zipfile
 from pathlib import Path
@@ -47,6 +46,38 @@ def test_prepare_review_bundle_is_ready_with_required_roles(tmp_path):
         assert "CONTEXT_LEDGER.md" in names
         assert "REVIEW_PROMPT.md" in names
         assert "sources/docs/README.md" in names
+
+
+def test_prepare_review_bundle_prompts_for_earliest_async_state_boundary(tmp_path):
+    project = tmp_path / "project"
+    runtime = tmp_path / "runtime"
+    project.mkdir()
+    (project / "handler.js").write_text("async function load() {}\n", encoding="utf-8")
+
+    result = prepare_external_review_bundle(
+        project_root=project,
+        runtime_dir=runtime,
+        output_id="async-state-review",
+        review_question="Is this latest-wins state handler race-safe?",
+        required_roles=["code"],
+        sources=[ReviewSource("handler.js", role="code")],
+    )
+
+    prompt_path = Path(result["manifest_path"]).parent / "REVIEW_PROMPT.md"
+    prompt = prompt_path.read_text(encoding="utf-8").lower()
+
+    assert "async latest-wins state handler" in prompt
+    assert "otherwise skip this section" in prompt
+    assert "earliest await capable of producing page or application state" in prompt
+    assert "out-of-order success" in prompt
+    assert "out-of-order failure or rejection" in prompt
+    assert "downstream-only deferral is insufficient" in prompt
+    assert "ownership or generation" in prompt
+    assert "below an upstream await" in prompt
+    assert "fail the review" in prompt
+    assert "two or more awaits" in prompt
+    assert "tests control only the later await" in prompt
+    assert "warn when" in prompt
 
 
 def test_prepare_review_bundle_marks_missing_required_role_incomplete(tmp_path):
