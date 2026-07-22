@@ -2217,6 +2217,25 @@ def test_skill_registry_lists_external_brain_flow_skills():
     assert "@intent-frame" in skills["intent-framing-gate"].get("triggers", [])
 
 
+@pytest.mark.parametrize(
+    "skill_id",
+    ["intent-framing-gate", "evidence-driven-acceptance"],
+)
+def test_packaged_workflow_canary_skill_matches_canonical_source(skill_id):
+    canonical = REPO_ROOT / "tools" / "skills" / skill_id / "SKILL.md"
+    packaged = (
+        REPO_ROOT
+        / "packages"
+        / "control-plane"
+        / "templates"
+        / "methodology-skills"
+        / skill_id
+        / "SKILL.md"
+    )
+
+    assert packaged.read_bytes() == canonical.read_bytes()
+
+
 def test_methodology_dispatch_resolves_external_brain_flow_triggers():
     from control_plane.methodology_dispatch import resolve_methodology
 

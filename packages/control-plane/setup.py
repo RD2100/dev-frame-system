@@ -18,6 +18,7 @@ setup(
         "templates": [
             "code_project/*",
             "context_handoff/*",
+            "methodology-skills/*/SKILL.md",
             "paper_iteration/*",
             "runtime-bootstrap/*",
             "visual_control_plane/*",

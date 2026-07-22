@@ -4,7 +4,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+SOURCE_REPO_ROOT = Path(__file__).resolve().parents[3]
+_SOURCE_CHECKOUT = (
+    PACKAGE_ROOT.name == "control-plane"
+    and PACKAGE_ROOT.parent.name == "packages"
+    and (PACKAGE_ROOT / "setup.py").is_file()
+)
+REPO_ROOT = SOURCE_REPO_ROOT if _SOURCE_CHECKOUT else PACKAGE_ROOT
 
 
 def _safe_id(value: str) -> str:
@@ -59,47 +66,66 @@ def match_methodology(requirement: str) -> dict[str, Any] | None:
     return trigger_map.get(first_token)
 
 
+def _append_skill(
+    skills: list[dict[str, Any]],
+    seen: set[str],
+    skill_md: Path,
+    *,
+    source_root: Path,
+    fallback_name: str,
+) -> None:
+    text = skill_md.read_text(encoding="utf-8")
+    fm = _parse_frontmatter(text) or {}
+    skill_id = _safe_id(str(fm.get("name") or fallback_name))
+    if skill_id in seen:
+        return
+    seen.add(skill_id)
+    skills.append({
+        "skill_id": skill_id,
+        "title": str(fm.get("name") or fallback_name),
+        "source_path": str(skill_md.relative_to(source_root)),
+        "source_kind": "local_repository_asset",
+        "triggers": _extract_triggers(str(fm.get("description") or "")),
+        "status": "registered",
+    })
+
+
 def list_methodology_skills() -> list[dict[str, Any]]:
     skills: list[dict[str, Any]] = []
     seen: set[str] = set()
 
+    packaged_skills = PACKAGE_ROOT / "templates" / "methodology-skills"
     tools_skills = REPO_ROOT / "tools" / "skills"
-    if tools_skills.is_dir():
-        for skill_dir in sorted(tools_skills.iterdir()):
+    skill_roots = (
+        ((tools_skills, REPO_ROOT), (packaged_skills, PACKAGE_ROOT))
+        if _SOURCE_CHECKOUT
+        else ((packaged_skills, PACKAGE_ROOT), (tools_skills, REPO_ROOT))
+    )
+    for skills_root, source_root in skill_roots:
+        if not skills_root.is_dir():
+            continue
+        for skill_dir in sorted(skills_root.iterdir()):
             if not skill_dir.is_dir():
                 continue
             skill_md = skill_dir / "SKILL.md"
             if not skill_md.exists():
                 continue
-            text = skill_md.read_text(encoding="utf-8")
-            fm = _parse_frontmatter(text) or {}
-            skill_id = _safe_id(str(fm.get("name") or skill_dir.name))
-            if skill_id in seen:
-                continue
-            seen.add(skill_id)
-            skills.append({
-                "skill_id": skill_id,
-                "title": str(fm.get("name") or skill_dir.name),
-                "source_path": str(skill_md.relative_to(REPO_ROOT)),
-                "source_kind": "local_repository_asset",
-                "triggers": _extract_triggers(str(fm.get("description") or "")),
-                "status": "registered",
-            })
+            _append_skill(
+                skills,
+                seen,
+                skill_md,
+                source_root=source_root,
+                fallback_name=skill_dir.name,
+            )
 
-    shipped = REPO_ROOT / "templates" / "runtime-bootstrap" / "SKILL.md"
+    shipped = PACKAGE_ROOT / "templates" / "runtime-bootstrap" / "SKILL.md"
     if shipped.exists():
-        text = shipped.read_text(encoding="utf-8")
-        fm = _parse_frontmatter(text) or {}
-        skill_id = _safe_id(str(fm.get("name") or "agent-acceptance"))
-        if skill_id not in seen:
-            seen.add(skill_id)
-            skills.append({
-                "skill_id": skill_id,
-                "title": str(fm.get("name") or "agent-acceptance"),
-                "source_path": str(shipped.relative_to(REPO_ROOT)),
-                "source_kind": "local_repository_asset",
-                "triggers": _extract_triggers(str(fm.get("description") or "")),
-                "status": "registered",
-            })
+        _append_skill(
+            skills,
+            seen,
+            shipped,
+            source_root=PACKAGE_ROOT,
+            fallback_name="agent-acceptance",
+        )
 
     return sorted(skills, key=lambda s: s["skill_id"])
