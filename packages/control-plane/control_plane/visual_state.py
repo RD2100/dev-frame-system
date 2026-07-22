@@ -2156,6 +2156,50 @@ def _go_run_states(runtime_dir: str | Path) -> list[dict[str, Any]]:
     return runs
 
 
+def public_cluster_run_states(records: object) -> list[dict[str, Any]]:
+    """Project durable cluster records into the public T3 read-model shape."""
+    if not isinstance(records, list):
+        return []
+
+    runs: list[dict[str, Any]] = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        run_id = str(record.get("runId") or "")
+        if not run_id:
+            continue
+        run = {
+            "run_id": run_id,
+            "project_id": str(record.get("projectId") or ""),
+            "project_path": str(record.get("projectPath") or ""),
+            "target": str(record.get("target") or ""),
+            "goal": str(record.get("goal") or ""),
+            "status": str(record.get("status") or ""),
+            "summary": str(record.get("summary") or ""),
+            "go_run_id": str(record.get("goRunId") or ""),
+            "started_at": str(record.get("startedAt") or ""),
+            "finished_at": str(record.get("finishedAt") or ""),
+        }
+        selection = (
+            record.get("executor"),
+            record.get("modelProvider"),
+            record.get("model"),
+        )
+        if all(isinstance(value, str) and value.strip() for value in selection):
+            run["execution_selection"] = {
+                "executor": selection[0],
+                "model_provider": selection[1],
+                "model": selection[2],
+                "provenance": {
+                    "source_type": "cluster_run_record",
+                    "source_id": run_id,
+                    "record_ref": f"cluster-run:{run_id}",
+                },
+            }
+        runs.append(run)
+    return runs
+
+
 def _go_run_status_command(go_run_id: str, runtime_dir: str | Path) -> str:
     return f"devframe code status {_quote_arg(go_run_id)} --runtime-dir {_quote_arg(runtime_dir)}"
 

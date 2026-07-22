@@ -14,7 +14,7 @@ from typing import Any
 from urllib.parse import quote
 
 from .conversation_intake import GLOBAL_COORDINATOR_THREAD_ID
-from .visual_state import build_visual_control_plane_state
+from .visual_state import build_visual_control_plane_state, public_cluster_run_states
 
 
 _T3_SHELL_CACHE_TTL = 2.0
@@ -160,7 +160,12 @@ def build_t3_client_shell_from_state(
         if isinstance(session, dict)
     ]
     projected_thread_ids = {str(thread.get("id") or "") for thread in thread_shells if isinstance(thread, dict)}
-    cluster_runs = [run for run in (cluster_runs or []) if isinstance(run, dict)]
+    cluster_runs = public_cluster_run_states(cluster_runs or [])
+    cluster_runs_by_id = {
+        _cluster_run_text(run, "run_id", "runId", ""): run
+        for run in cluster_runs
+        if _cluster_run_text(run, "run_id", "runId", "")
+    }
     thread_shells.extend(
         _cluster_run_thread_shell(
             run,
@@ -169,7 +174,8 @@ def build_t3_client_shell_from_state(
             updated_at,
         )
         for run in cluster_runs
-        if str(run.get("runId") or "") and str(run.get("runId") or "") not in projected_thread_ids
+        if _cluster_run_text(run, "run_id", "runId", "")
+        and _cluster_run_text(run, "run_id", "runId", "") not in projected_thread_ids
     )
     first_project = next((project for project in projects if isinstance(project, dict)), {})
     project_id = _text(first_project.get("project_id"), "project")
@@ -183,7 +189,12 @@ def build_t3_client_shell_from_state(
         )
     )
     thread_details = [
-        _cluster_run_thread_detail(thread_shell, runtime_dir, updated_at)
+        _cluster_run_thread_detail(
+            thread_shell,
+            runtime_dir,
+            updated_at,
+            cluster_runs_by_id.get(_text((thread_shell.get("devframe") or {}).get("runId"), "")),
+        )
         if _is_cluster_goal_thread(thread_shell)
         else _thread_detail(
             thread_shell,
@@ -990,16 +1001,65 @@ def _cluster_run_status_to_session_status(status: str) -> str:
     }.get(_text(status, "running"), "idle")
 
 
+def _cluster_run_text(
+    run: dict[str, Any],
+    visual_key: str,
+    record_key: str,
+    fallback: str,
+) -> str:
+    value = run.get(visual_key)
+    if value is None:
+        value = run.get(record_key)
+    return _text(value, fallback)
+
+
+def _cluster_run_execution_selection(run: dict[str, Any]) -> dict[str, Any] | None:
+    projected = run.get("execution_selection")
+    if isinstance(projected, dict):
+        executor = projected.get("executor")
+        model_provider = projected.get("model_provider")
+        model = projected.get("model")
+        provenance = projected.get("provenance")
+    else:
+        executor = run.get("executor")
+        model_provider = run.get("modelProvider")
+        model = run.get("model")
+        provenance = None
+    selection = (executor, model_provider, model)
+    if not all(isinstance(value, str) and value.strip() for value in selection):
+        return None
+
+    run_id = _cluster_run_text(run, "run_id", "runId", "")
+    provenance = provenance if isinstance(provenance, dict) else {}
+    source_type = _text(provenance.get("source_type"), "cluster_run_record")
+    source_id = _text(provenance.get("source_id"), run_id)
+    record_ref = _text(
+        provenance.get("record_ref"),
+        f"cluster-run:{source_id}",
+    )
+    return {
+        "executor": executor,
+        "modelProvider": model_provider,
+        "model": model,
+        "provenance": {
+            "sourceType": source_type,
+            "sourceId": source_id,
+            "recordRef": record_ref,
+        },
+    }
+
+
 def _cluster_run_thread_shell(
     run: dict[str, Any],
     actions_by_source: dict[str, list[dict[str, Any]]],
     base_url: str,
     updated_at: str,
 ) -> dict[str, Any]:
-    run_id = _text(run.get("runId"), "")
+    run_id = _cluster_run_text(run, "run_id", "runId", "")
     goal = _text(run.get("goal"), run_id)
-    project_id = _text(run.get("projectId"), "project")
-    project_path = _text(run.get("projectPath"), "")
+    project_id = _cluster_run_text(run, "project_id", "projectId", "project")
+    project_path = _cluster_run_text(run, "project_path", "projectPath", "")
+    execution_selection = _cluster_run_execution_selection(run)
     action_ids = _unique(
         [
             str(action.get("action_id"))
@@ -1038,16 +1098,29 @@ def _cluster_run_thread_shell(
             summary=_text(run.get("summary"), ""),
         ),
         "modelSelection": {
-            "instanceId": "devframe-project-coordinator",
-            "model": "devframe-project-coordinator",
+            "instanceId": (
+                execution_selection["executor"]
+                if execution_selection
+                else "devframe-project-coordinator"
+            ),
+            "model": (
+                execution_selection["model"]
+                if execution_selection
+                else "devframe-project-coordinator"
+            ),
         },
         "runtimeMode": "approval-required" if pending_action or status in {"failed", "interrupted"} else "full-access",
         "interactionMode": "plan",
         "branch": None,
         "worktreePath": project_path or None,
         "latestTurn": None,
-        "createdAt": _text(run.get("startedAt"), updated_at),
-        "updatedAt": _text(run.get("finishedAt"), _text(run.get("startedAt"), updated_at)),
+        "createdAt": _cluster_run_text(run, "started_at", "startedAt", updated_at),
+        "updatedAt": _cluster_run_text(
+            run,
+            "finished_at",
+            "finishedAt",
+            _cluster_run_text(run, "started_at", "startedAt", updated_at),
+        ),
         "archivedAt": None,
         "session": {
             "threadId": run_id,
@@ -1056,7 +1129,12 @@ def _cluster_run_thread_shell(
             "runtimeMode": "approval-required" if pending_action or status in {"failed", "interrupted"} else "full-access",
             "activeTurnId": None,
             "lastError": "Goal conversation failed or was interrupted." if status in {"failed", "interrupted"} else None,
-            "updatedAt": _text(run.get("finishedAt"), _text(run.get("startedAt"), updated_at)),
+            "updatedAt": _cluster_run_text(
+                run,
+                "finished_at",
+                "finishedAt",
+                _cluster_run_text(run, "started_at", "startedAt", updated_at),
+            ),
         },
         "latestUserMessageAt": None,
         "hasPendingApprovals": bool(action_ids),
@@ -1072,11 +1150,19 @@ def _cluster_run_thread_shell(
             "toolCallCount": 0,
             "changedFiles": [],
             "diffSummary": _text(run.get("summary"), ""),
-            "relatedRunIds": [_text(run.get("goRunId"), "")] if _text(run.get("goRunId"), "") else [],
+            "relatedRunIds": (
+                [_cluster_run_text(run, "go_run_id", "goRunId", "")]
+                if _cluster_run_text(run, "go_run_id", "goRunId", "")
+                else []
+            ),
             "gateIds": [],
             "actionIds": action_ids,
             "actionDetails": action_details,
-            "evidenceRefs": [],
+            "evidenceRefs": (
+                [{"refPath": execution_selection["provenance"]["recordRef"]}]
+                if execution_selection
+                else []
+            ),
             "evidenceRefOverflow": 0,
             "teamTaskIds": [],
             "teamMessageIds": [],
@@ -2497,6 +2583,7 @@ def _cluster_run_thread_detail(
     thread_shell: dict[str, Any],
     runtime_dir: str | Path | None,
     updated_at: str,
+    cluster_run: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     run_id = _text((thread_shell.get("devframe") or {}).get("runId"), "")
     detail_data: dict[str, Any] = {}
@@ -2513,6 +2600,7 @@ def _cluster_run_thread_detail(
     messages = [m for m in detail_data.get("messages", []) if isinstance(m, dict)]
     agents = [a for a in detail_data.get("agents", []) if isinstance(a, dict)]
     action_details = _action_detail_list((thread_shell.get("devframe") or {}).get("actionDetails"))
+    execution_selection = _cluster_run_execution_selection(cluster_run or {})
     details = [
         "### DevFrame Goal Conversation",
         "",
@@ -2523,6 +2611,13 @@ def _cluster_run_thread_detail(
     ]
     if summary:
         details.append(f"- Summary: {summary}")
+    if execution_selection:
+        details.extend([
+            f"- Executor: {execution_selection['executor']}",
+            f"- Model provider: {execution_selection['modelProvider']}",
+            f"- Model: {execution_selection['model']}",
+            f"- Selection provenance: `{execution_selection['provenance']['recordRef']}`",
+        ])
     if messages:
         details.extend(["", "## Coordinator Timeline", ""])
         for msg in messages:
@@ -2559,6 +2654,27 @@ def _cluster_run_thread_detail(
         action_details=action_details,
         updated_at=updated_at,
     )
+    selection_activities = []
+    if execution_selection:
+        selection_activities.append({
+            "id": f"{_text(thread_shell.get('id'), run_id)}-execution-selection",
+            "tone": "info",
+            "kind": "devframe.execution.selection",
+            "summary": "Governed executor and model selection projected from the durable cluster-run record.",
+            "payload": {
+                "runId": run_id,
+                "executionSelection": {
+                    "executor": execution_selection["executor"],
+                    "modelProvider": execution_selection["modelProvider"],
+                    "model": execution_selection["model"],
+                },
+                "provenance": execution_selection["provenance"],
+                "writePolicy": "read-only",
+            },
+            "turnId": None,
+            "sequence": 2,
+            "createdAt": updated_at,
+        })
     from .conversation_intake import build_intake_activities
 
     intake_activities = (
@@ -2570,7 +2686,7 @@ def _cluster_run_thread_detail(
         if runtime_dir is not None
         else []
     )
-    next_sequence = 2 + len(approval_activities)
+    next_sequence = 2 + len(selection_activities) + len(approval_activities)
     for activity in intake_activities:
         activity["sequence"] = next_sequence
         next_sequence += 1
@@ -2636,6 +2752,7 @@ def _cluster_run_thread_detail(
                 "sequence": 1,
                 "createdAt": updated_at,
             },
+            *selection_activities,
             *approval_activities,
             *intake_activities,
         ],
