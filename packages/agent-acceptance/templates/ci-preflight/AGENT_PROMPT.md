@@ -1243,23 +1243,58 @@ powershell -ExecutionPolicy Bypass -File ci-preflight.ps1
 
 预期：已有的工具对应的检查项 PASS，没有的工具对应的检查项 SKIP。三项不应有 FAILED。
 
-### 第七步：测试 hook 触发
+### 第七步：非破坏性验证 hook 配置、文件与语法
 
-用无害方式验证 hook 真的会触发：
+不要运行 hook，不要创建测试提交，不要暂存或提交文件，也不要通过改写 Git 历史来验证 hook。
 
-```bash
-echo "# ci-preflight test" >> README.md
-git add README.md
-git commit -m "test: verify CI preflight hooks"
-```
-
-观察输出应包含 `=== Pre-Commit Governance Gate ===`。
-
-然后回滚：
+先记录当前仓库状态，并读取仓库实际使用的 hook 路径：
 
 ```bash
-git reset --hard HEAD~1
+git status --short
+git config --local --get core.hooksPath
 ```
+
+`core.hooksPath` 应为 `hooks`。如果未配置或结果不是 `hooks`，报告实际结果并停止。
+
+只读取 pre-commit 治理脚本的精确路径，并用 PowerShell AST 解析器检查语法；不要执行脚本：
+
+```powershell
+$ProjectRoot = (Resolve-Path -LiteralPath ".").Path
+$HookScript = Join-Path $ProjectRoot "hooks\pre-commit.governance.ps1"
+if (-not (Test-Path -LiteralPath $HookScript -PathType Leaf)) {
+    Write-Error "Missing expected hook file: $HookScript"
+    exit 1
+}
+$ResolvedHookScript = (Resolve-Path -LiteralPath $HookScript).Path
+if (-not [string]::Equals(
+    $ResolvedHookScript,
+    $HookScript,
+    [System.StringComparison]::OrdinalIgnoreCase
+)) {
+    Write-Error "Hook path mismatch: $ResolvedHookScript"
+    exit 1
+}
+$tokens = $null
+$parseErrors = $null
+[System.Management.Automation.Language.Parser]::ParseFile(
+    $ResolvedHookScript,
+    [ref]$tokens,
+    [ref]$parseErrors
+) | Out-Null
+if ($parseErrors.Count -ne 0) {
+    $parseErrors | ForEach-Object { Write-Error $_.Message }
+    exit 1
+}
+Write-Host "[OK] Hook file exists at the expected path and parses successfully."
+```
+
+预期输出包含 `[OK] Hook file exists at the expected path and parses successfully.`。然后再次读取仓库状态：
+
+```bash
+git status --short
+```
+
+前后状态应一致。若前后状态不一致或出现任何意外仓库改动，保留现场，列出确切路径并停止；不要运行 `git reset`、`git restore`、`git stash` 或 `git clean`。
 
 ### 第八步：报告
 
@@ -1283,7 +1318,7 @@ git reset --hard HEAD~1
 
 **验证**：
   ci-preflight.ps1   : PASS / FAILED
-  hook 触发测试       : PASS / FAILED
+  hook 配置/文件/语法验证 : PASS / FAILED
 
 **后续步骤**：
   1. 编辑 governance/expected-files.txt 加入本项目治理文件

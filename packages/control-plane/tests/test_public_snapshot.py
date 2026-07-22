@@ -2,11 +2,13 @@ from pathlib import Path
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import uuid
 
 from jsonschema import Draft7Validator, Draft202012Validator
+import pytest
 import yaml
 
 
@@ -895,6 +897,622 @@ def test_public_scripts_and_adapters_exclude_private_machine_paths():
         text = path.read_text(encoding="utf-8-sig")
         for pattern in forbidden:
             assert pattern not in text, f"{path} contains private path pattern {pattern!r}"
+
+
+def _ci_preflight_step_seven_command_blocks(text):
+    section_start = text.index("### 第七步：")
+    section_end = text.index("### 第八步：", section_start)
+    step_seven = text[section_start:section_end]
+    fenced_blocks = re.findall(
+        r"```(bash|sh|shell|powershell|pwsh)[^\S\r\n]*\r?\n(.*?)```",
+        step_seven,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    command_blocks = []
+    for language, block in fenced_blocks:
+        executable_lines = "\n".join(
+            line.strip()
+            for line in block.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        )
+        command_blocks.append((language.casefold(), executable_lines))
+    return command_blocks
+
+
+def _ci_preflight_step_seven_executable_lines(text):
+    return "\n".join(
+        executable_lines
+        for _language, executable_lines in _ci_preflight_step_seven_command_blocks(
+            text,
+        )
+    )
+
+
+# Keep these categories aligned with `git -h` and the full `git.html` OPTIONS
+# table; Git 2.54 documents --attr-source/--list-cmds only in the latter.
+_CI_PREFLIGHT_GIT_GLOBAL_FLAGS = {
+    "--bare",
+    "--glob-pathspecs",
+    "--icase-pathspecs",
+    "--literal-pathspecs",
+    "--no-advice",
+    "--no-lazy-fetch",
+    "--no-optional-locks",
+    "--no-pager",
+    "--no-replace-objects",
+    "--noglob-pathspecs",
+    "--paginate",
+    "-P",
+    "-p",
+}
+_CI_PREFLIGHT_GIT_GLOBAL_OPTIONS_WITH_VALUES = {
+    "-C",
+    "-c",
+    "--attr-source",
+    "--config-env",
+    "--git-dir",
+    "--namespace",
+    "--super-prefix",
+    "--work-tree",
+}
+_CI_PREFLIGHT_GIT_SHORT_GLOBAL_OPTIONS_WITH_VALUES = {"-C", "-c"}
+_CI_PREFLIGHT_GIT_GLOBAL_OPTIONS_WITH_OPTIONAL_INLINE_VALUES = {
+    "--exec-path",
+}
+_CI_PREFLIGHT_GIT_TERMINAL_GLOBAL_OPTIONS = {
+    "--help",
+    "--html-path",
+    "--info-path",
+    "--man-path",
+    "--version",
+    "-h",
+    "-v",
+}
+_CI_PREFLIGHT_GIT_TERMINAL_GLOBAL_OPTIONS_WITH_VALUES = {
+    "--list-cmds",
+}
+_CI_PREFLIGHT_FORBIDDEN_GIT_SUBCOMMANDS = {
+    "add": "add",
+    "clean": "clean",
+    "commit": "commit",
+    "filter-branch": "history rewrite",
+    "filter-repo": "history rewrite",
+    "rebase": "rebase",
+    "reset": "reset",
+    "restore": "restore",
+    "stash": "stash",
+}
+_CI_PREFLIGHT_BASH_LANGUAGES = {"bash", "sh", "shell"}
+_CI_PREFLIGHT_POWERSHELL_LANGUAGES = {"powershell", "pwsh"}
+_CI_PREFLIGHT_SHELL_ASSIGNMENT_RE = re.compile(
+    r"[A-Za-z_][A-Za-z0-9_]*=.*",
+)
+_CI_PREFLIGHT_ENV_FLAGS = {
+    "-",
+    "--debug",
+    "--ignore-environment",
+    "--list-signal-handling",
+    "--null",
+    "-0",
+    "-i",
+    "-v",
+}
+_CI_PREFLIGHT_ENV_OPTIONS_WITH_VALUES = {
+    "--chdir",
+    "--unset",
+    "-C",
+    "-u",
+}
+_CI_PREFLIGHT_ENV_SHORT_OPTIONS_WITH_VALUES = {"-C", "-u"}
+_CI_PREFLIGHT_ENV_OPTIONS_WITH_OPTIONAL_INLINE_VALUES = {
+    "--block-signal",
+    "--default-signal",
+    "--ignore-signal",
+}
+_CI_PREFLIGHT_ENV_TERMINAL_OPTIONS = {"--help", "--version"}
+
+
+def _ci_preflight_shell_commands(line, language):
+    commands = []
+    command_start = 0
+    index = 0
+    quote = ""
+    language = language.casefold()
+    escape = ""
+    if language in _CI_PREFLIGHT_BASH_LANGUAGES:
+        escape = "\\"
+    elif language in _CI_PREFLIGHT_POWERSHELL_LANGUAGES:
+        escape = "`"
+    while index < len(line):
+        character = line[index]
+        if quote:
+            if character == quote:
+                if index + 1 < len(line) and line[index + 1] == quote:
+                    index += 2
+                    continue
+                quote = ""
+            elif quote == '"' and character == escape:
+                index += 2
+                continue
+            index += 1
+            continue
+        if character == escape:
+            index += 2
+            continue
+        if character in {"'", '"'}:
+            quote = character
+            index += 1
+            continue
+        if character in {";", "&", "|"}:
+            command = line[command_start:index].strip()
+            if command:
+                commands.append(command)
+            if (
+                character in {"&", "|"}
+                and index + 1 < len(line)
+                and line[index + 1] == character
+            ):
+                index += 1
+            command_start = index + 1
+        index += 1
+    command = line[command_start:].strip()
+    if command:
+        commands.append(command)
+    return commands
+
+
+def _ci_preflight_executable_name(token):
+    return token.replace("\\", "/").rsplit("/", 1)[-1].casefold()
+
+
+def _ci_preflight_expand_env_split_string(tokens, index):
+    token = tokens[index]
+    option, separator, value = token.partition("=")
+    consumed = 1
+    if option == "--split-string":
+        if not separator:
+            if index + 1 >= len(tokens):
+                return None
+            value = tokens[index + 1]
+            consumed = 2
+    elif token == "-S":
+        if index + 1 >= len(tokens):
+            return None
+        value = tokens[index + 1]
+        consumed = 2
+    elif token.startswith("-S"):
+        value = token[2:]
+    else:
+        return None
+    try:
+        return shlex.split(value, posix=True), consumed
+    except ValueError:
+        return None
+
+
+def _ci_preflight_env_command_tokens(tokens):
+    tokens = list(tokens[1:])
+    index = 0
+    options_done = False
+    while index < len(tokens):
+        token = tokens[index]
+        if not options_done and token == "--":
+            options_done = True
+            index += 1
+            continue
+        if not options_done and token in _CI_PREFLIGHT_ENV_TERMINAL_OPTIONS:
+            return []
+        if not options_done and token in _CI_PREFLIGHT_ENV_FLAGS:
+            index += 1
+            continue
+        option, separator, _value = token.partition("=")
+        if not options_done and (
+            option == "--split-string" or token.startswith("-S")
+        ):
+            split_string = _ci_preflight_expand_env_split_string(tokens, index)
+            if split_string is None:
+                return []
+            expanded, consumed = split_string
+            tokens[index : index + consumed] = expanded
+            continue
+        if (
+            not options_done
+            and option in _CI_PREFLIGHT_ENV_OPTIONS_WITH_OPTIONAL_INLINE_VALUES
+        ):
+            index += 1
+            continue
+        if not options_done and option in _CI_PREFLIGHT_ENV_OPTIONS_WITH_VALUES:
+            index += 1 if separator else 2
+            continue
+        if not options_done and any(
+            token.startswith(short_option) and token != short_option
+            for short_option in _CI_PREFLIGHT_ENV_SHORT_OPTIONS_WITH_VALUES
+        ):
+            index += 1
+            continue
+        if _CI_PREFLIGHT_SHELL_ASSIGNMENT_RE.fullmatch(token):
+            options_done = True
+            index += 1
+            continue
+        if not options_done and token.startswith("-"):
+            return []
+        break
+    return tokens[index:]
+
+
+def _ci_preflight_bash_command_builtin_tokens(tokens):
+    index = 1
+    while index < len(tokens):
+        token = tokens[index]
+        if token == "--":
+            return tokens[index + 1 :]
+        if token == "-" or not token.startswith("-"):
+            return tokens[index:]
+        options = token[1:]
+        if not options or any(option not in {"p", "v", "V"} for option in options):
+            return []
+        if "v" in options or "V" in options:
+            return []
+        index += 1
+    return []
+
+
+def _ci_preflight_bash_command_tokens(tokens):
+    index = 0
+    while (
+        index < len(tokens)
+        and _CI_PREFLIGHT_SHELL_ASSIGNMENT_RE.fullmatch(tokens[index])
+    ):
+        index += 1
+    tokens = tokens[index:]
+    if tokens and tokens[0] == "command":
+        tokens = _ci_preflight_bash_command_builtin_tokens(tokens)
+    if tokens and _ci_preflight_executable_name(tokens[0]) in {"env", "env.exe"}:
+        return _ci_preflight_env_command_tokens(tokens)
+    return tokens
+
+
+def _ci_preflight_git_subcommand(line, language="bash"):
+    try:
+        tokens = shlex.split(line, posix=True)
+    except ValueError:
+        return ""
+    if tokens and tokens[0] == "&":
+        tokens = tokens[1:]
+    if language.casefold() in _CI_PREFLIGHT_BASH_LANGUAGES:
+        tokens = _ci_preflight_bash_command_tokens(tokens)
+    elif tokens and tokens[0] == "command":
+        tokens = tokens[1:]
+    if not tokens:
+        return ""
+    executable = _ci_preflight_executable_name(tokens[0])
+    if executable not in {"git", "git.exe"}:
+        return ""
+
+    index = 1
+    while index < len(tokens):
+        token = tokens[index]
+        if token == "--":
+            index += 1
+            break
+        if token in _CI_PREFLIGHT_GIT_TERMINAL_GLOBAL_OPTIONS:
+            return ""
+        if token in _CI_PREFLIGHT_GIT_GLOBAL_FLAGS:
+            index += 1
+            continue
+        option, separator, _value = token.partition("=")
+        if option in _CI_PREFLIGHT_GIT_TERMINAL_GLOBAL_OPTIONS_WITH_VALUES:
+            return ""
+        if option in _CI_PREFLIGHT_GIT_GLOBAL_OPTIONS_WITH_OPTIONAL_INLINE_VALUES:
+            # `git -h` declares --exec-path[=<path>]. With `=`, parsing
+            # continues; without it, Git prints the path and exits.
+            if not separator:
+                return ""
+            index += 1
+            continue
+        if option in _CI_PREFLIGHT_GIT_GLOBAL_OPTIONS_WITH_VALUES:
+            index += 1 if separator else 2
+            continue
+        if any(
+            token.startswith(short_option) and token != short_option
+            for short_option in _CI_PREFLIGHT_GIT_SHORT_GLOBAL_OPTIONS_WITH_VALUES
+        ):
+            index += 1
+            continue
+        break
+    if index >= len(tokens):
+        return ""
+    return tokens[index].casefold()
+
+
+def _ci_preflight_step_seven_forbidden_commands(text):
+    findings = []
+    for language, executable_lines in _ci_preflight_step_seven_command_blocks(text):
+        for line in executable_lines.splitlines():
+            for command in _ci_preflight_shell_commands(line, language):
+                subcommand = _ci_preflight_git_subcommand(command, language)
+                finding = _CI_PREFLIGHT_FORBIDDEN_GIT_SUBCOMMANDS.get(subcommand)
+                if finding and finding not in findings:
+                    findings.append(finding)
+    return findings
+
+
+def _ci_preflight_with_step_seven_command(text, command, language="bash"):
+    step_seven_start = text.index("### 第七步：")
+    step_seven_end = text.index("### 第八步：", step_seven_start)
+    fence = re.search(
+        rf"```{re.escape(language)}\s*\n",
+        text[step_seven_start:step_seven_end],
+        flags=re.IGNORECASE,
+    )
+    if fence is None:
+        raise AssertionError(f"Step 7 has no {language!r} command fence")
+    insertion_point = step_seven_start + fence.end()
+    return text[:insertion_point] + f"{command}\n" + text[insertion_point:]
+
+
+def test_distributed_ci_preflight_agent_prompt_uses_safe_recovery():
+    path = (
+        REPO_ROOT
+        / "packages"
+        / "agent-acceptance"
+        / "templates"
+        / "ci-preflight"
+        / "AGENT_PROMPT.md"
+    )
+    text = path.read_text(encoding="utf-8-sig")
+    executable_lines = _ci_preflight_step_seven_executable_lines(text)
+
+    assert _ci_preflight_step_seven_forbidden_commands(text) == []
+
+    assert re.search(
+        r"(?m)^git config --local --get core\.hooksPath$",
+        executable_lines,
+    )
+    assert "git config --get core.hooksPath" not in executable_lines
+    assert not re.search(
+        r"(?im)^(?:powershell|pwsh)(?:\.exe)?\b.*\s-File\s+"
+        r"hooks/pre-commit\.governance\.ps1$",
+        executable_lines,
+    )
+    assert not re.search(
+        r"(?im)^(?:&|\.)\s+(?:\$HookScript|\$ResolvedHookScript|"
+        r"hooks[/\\]pre-commit\.governance\.ps1)$",
+        executable_lines,
+    )
+    assert executable_lines.count("git status --short") >= 2
+    assert "Test-Path -LiteralPath $HookScript -PathType Leaf" in executable_lines
+    assert "Resolve-Path -LiteralPath $HookScript" in executable_lines
+    assert (
+        "[System.Management.Automation.Language.Parser]::ParseFile"
+        in executable_lines
+    )
+    assert "不要运行 hook" in text
+    assert "不要创建测试提交" in text
+    assert "列出确切路径并停止" in text
+    assert "保留现场" in text
+    assert "hook 配置/文件/语法验证" in text
+
+
+@pytest.mark.parametrize(
+    ("label", "command"),
+    [
+        ("add", "git add README.md"),
+        ("commit", 'git commit -m "test: verify hook"'),
+        ("commit", 'git --no-pager commit -m "probe"'),
+        ("reset", "git --no-pager reset --hard HEAD~1"),
+        ("commit", 'git -C "C:/repo with spaces" commit -m "probe"'),
+        ("commit", 'git --exec-path=C:/git-core commit -m "mutation probe"'),
+        ("add", "git --git-dir=.git add README.md"),
+        ("add", "git --git-dir .git add README.md"),
+        ("reset", 'git --work-tree "." reset --hard HEAD'),
+        ("commit", 'git --namespace=probe commit -m "probe"'),
+        ("commit", 'git --namespace probe commit -m "probe"'),
+        ("add", "git --config-env core.editor=GIT_EDITOR add README.md"),
+        ("add", "git --config-env=core.editor=GIT_EDITOR add README.md"),
+        ("reset", "git -c core.hooksPath=hooks reset --hard HEAD"),
+        ("add", "git --no-lazy-fetch add README.md"),
+        ("commit", 'git -P commit -m "probe"'),
+        ("add", "git --attr-source=HEAD add README.md"),
+        ("add", "git status --short; git add README.md"),
+        ("commit", "git status --short && git commit -m probe"),
+    ],
+)
+def test_distributed_ci_preflight_agent_prompt_rejects_mutating_step_seven_commands(
+    label,
+    command,
+):
+    path = (
+        REPO_ROOT
+        / "packages"
+        / "agent-acceptance"
+        / "templates"
+        / "ci-preflight"
+        / "AGENT_PROMPT.md"
+    )
+    text = path.read_text(encoding="utf-8-sig")
+    mutated = _ci_preflight_with_step_seven_command(text, command)
+
+    assert label in _ci_preflight_step_seven_forbidden_commands(mutated)
+
+
+@pytest.mark.parametrize(
+    ("label", "command"),
+    [
+        ("add", "GIT_OPTIONAL_LOCKS=0 git add README.md"),
+        ("commit", "env GIT_OPTIONAL_LOCKS=0 git commit -m probe"),
+        ("reset", "env -i GIT_OPTIONAL_LOCKS=0 git reset --hard HEAD"),
+        (
+            "add",
+            "env -S 'GIT_OPTIONAL_LOCKS=0 git add README.md'",
+        ),
+        (
+            "restore",
+            "env --unset=GIT_DIR GIT_OPTIONAL_LOCKS=0 git restore README.md",
+        ),
+    ],
+)
+def test_distributed_ci_preflight_agent_prompt_rejects_mutating_git_after_bash_prefixes(
+    label,
+    command,
+):
+    path = (
+        REPO_ROOT
+        / "packages"
+        / "agent-acceptance"
+        / "templates"
+        / "ci-preflight"
+        / "AGENT_PROMPT.md"
+    )
+    text = path.read_text(encoding="utf-8-sig")
+    mutated = _ci_preflight_with_step_seven_command(text, command)
+
+    assert label in _ci_preflight_step_seven_forbidden_commands(mutated)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo GIT_OPTIONAL_LOCKS=0 git add README.md",
+        "env GIT_OPTIONAL_LOCKS=0 echo git commit -m probe",
+    ],
+)
+def test_distributed_ci_preflight_agent_prompt_does_not_skip_arbitrary_prefixes(
+    command,
+):
+    path = (
+        REPO_ROOT
+        / "packages"
+        / "agent-acceptance"
+        / "templates"
+        / "ci-preflight"
+        / "AGENT_PROMPT.md"
+    )
+    text = path.read_text(encoding="utf-8-sig")
+    mutated = _ci_preflight_with_step_seven_command(text, command)
+
+    assert _ci_preflight_step_seven_forbidden_commands(mutated) == []
+
+
+@pytest.mark.parametrize(
+    ("label", "command"),
+    [
+        ("add", "command -p git add README.md"),
+        ("add", "command -- git add README.md"),
+        ("commit", "command -p -- git commit -m probe"),
+        ("reset", "command -p -p -- git reset --hard HEAD"),
+        (
+            "restore",
+            "GIT_OPTIONAL_LOCKS=0 command -pp git restore README.md",
+        ),
+    ],
+)
+def test_distributed_ci_preflight_agent_prompt_rejects_mutating_git_after_command(
+    label,
+    command,
+):
+    path = (
+        REPO_ROOT
+        / "packages"
+        / "agent-acceptance"
+        / "templates"
+        / "ci-preflight"
+        / "AGENT_PROMPT.md"
+    )
+    text = path.read_text(encoding="utf-8-sig")
+    mutated = _ci_preflight_with_step_seven_command(text, command)
+
+    assert label in _ci_preflight_step_seven_forbidden_commands(mutated)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "command -v git add README.md",
+        "command -V git commit -m probe",
+        "command -p -v -- git reset --hard HEAD",
+        "command -pV git restore README.md",
+    ],
+)
+def test_distributed_ci_preflight_agent_prompt_allows_command_queries(command):
+    path = (
+        REPO_ROOT
+        / "packages"
+        / "agent-acceptance"
+        / "templates"
+        / "ci-preflight"
+        / "AGENT_PROMPT.md"
+    )
+    text = path.read_text(encoding="utf-8-sig")
+    mutated = _ci_preflight_with_step_seven_command(text, command)
+
+    assert _ci_preflight_step_seven_forbidden_commands(mutated) == []
+
+
+@pytest.mark.parametrize(
+    ("language", "command"),
+    [
+        ("bash", r"git status --short -- README\; git add README.md"),
+        ("bash", r"git status --short -- README\& git commit -m probe"),
+        ("powershell", "git status --short -- README`; git add README.md"),
+    ],
+)
+def test_distributed_ci_preflight_agent_prompt_allows_escaped_shell_separators(
+    language,
+    command,
+):
+    path = (
+        REPO_ROOT
+        / "packages"
+        / "agent-acceptance"
+        / "templates"
+        / "ci-preflight"
+        / "AGENT_PROMPT.md"
+    )
+    text = path.read_text(encoding="utf-8-sig")
+    mutated = _ci_preflight_with_step_seven_command(text, command, language)
+
+    assert _ci_preflight_step_seven_forbidden_commands(mutated) == []
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git --no-pager status --short",
+        "git --attr-source=HEAD status --short",
+        'git -C "C:/repo with spaces" config --local --get core.hooksPath',
+        "git --git-dir=.git --work-tree=. status --short",
+        "git --config-env core.editor=GIT_EDITOR config --get user.name",
+        'git status --short -- "README; git add README.md"',
+        'git config --get "safe.key&&git commit -m probe"',
+        "git status --short; git config --local --get core.hooksPath",
+    ],
+)
+def test_distributed_ci_preflight_agent_prompt_allows_read_only_git_commands(command):
+    path = (
+        REPO_ROOT
+        / "packages"
+        / "agent-acceptance"
+        / "templates"
+        / "ci-preflight"
+        / "AGENT_PROMPT.md"
+    )
+    text = path.read_text(encoding="utf-8-sig")
+    mutated = _ci_preflight_with_step_seven_command(text, command)
+
+    assert _ci_preflight_step_seven_forbidden_commands(mutated) == []
+
+
+def test_ci_preflight_git_exec_path_without_equals_is_terminal():
+    command = 'git --exec-path commit -m "not executed by Git"'
+
+    assert _ci_preflight_git_subcommand(command) == ""
+
+
+def test_ci_preflight_git_list_commands_option_is_terminal():
+    command = "git --list-cmds=builtins commit -m not-executed"
+
+    assert _ci_preflight_git_subcommand(command) == ""
 
 
 def test_dispatch_model_profiles_doc_is_ascii_only():
