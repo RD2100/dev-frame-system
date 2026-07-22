@@ -1086,6 +1086,45 @@ def test_build_t3_client_shell_projects_cluster_runs_as_goal_conversations(tmp_p
     assert "coding-agent-1" in text
 
 
+def test_dashboard_reload_restores_passed_cluster_run_as_stopped(tmp_path):
+    runtime_dir = tmp_path / "runtime"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir(parents=True)
+    cluster_run_module._write_run_record(runtime_dir, {
+        "runId": "g-passed01",
+        "projectId": "demo-project",
+        "projectPath": str(workspace),
+        "target": "coordinator",
+        "goal": "Ship the feature",
+        "ownerPid": os.getpid(),
+        "status": "passed",
+        "summary": "verdict=awaiting_review; 2 passed, 0 failed",
+        "startedAt": "2026-07-01T00:00:00Z",
+        "finishedAt": "2026-07-01T00:01:00Z",
+    })
+
+    restored_shells = []
+    for _ in range(2):
+        server = build_dashboard_server(runtime_dir=runtime_dir, port=0, refresh_seconds=0)
+        server_thread = Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        try:
+            base_url = f"http://127.0.0.1:{server.server_address[1]}"
+            with urlopen(f"{base_url}/t3-shell.json", timeout=5) as response:
+                restored_shells.append(json.loads(response.read().decode("utf-8")))
+        finally:
+            server.shutdown()
+            server.server_close()
+            server_thread.join(timeout=5)
+
+    for shell in restored_shells:
+        goal_thread = next(
+            thread for thread in shell["t3"]["threads"] if thread["id"] == "g-passed01"
+        )
+        assert goal_thread["session"]["status"] == "stopped"
+        assert "demo-project: stopped -" in goal_thread["threadListSummary"]
+
+
 def test_t3_shell_sanitizes_windows_absolute_evidence_paths(tmp_path):
     project_root = tmp_path / "project"
     contract_path = project_root / "rules" / "project-contracts" / "demo.md"

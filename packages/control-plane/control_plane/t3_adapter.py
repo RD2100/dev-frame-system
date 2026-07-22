@@ -986,6 +986,7 @@ def _cluster_run_status_to_session_status(status: str) -> str:
     return {
         "answered": "stopped",
         "completed": "stopped",
+        "passed": "stopped",
         "failed": "error",
         "interrupted": "error",
         "running": "running",
