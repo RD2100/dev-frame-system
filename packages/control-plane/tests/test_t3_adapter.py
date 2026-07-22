@@ -14,6 +14,7 @@ from control_plane import cluster_run as cluster_run_module
 from control_plane import dashboard as dashboard_module
 from control_plane import t3_adapter as t3_adapter_module
 from control_plane.dashboard import build_dashboard_server
+from control_plane.team_runtime import TeamRuntime
 from control_plane.t3_adapter import (
     build_t3_client_shell,
     build_t3_client_shell_from_state,
@@ -989,10 +990,247 @@ def test_t3_client_shell_team_projection_backward_compatible_without_team():
     assert team["evidenceStore"] == []
     assert team["reviewGates"] == []
     assert team["conflictControl"] == []
+    assert team["activityLiveness"]["state"] == "idle"
+    assert team["activityLiveness"]["wakeRequired"] is False
+    assert team["activityLiveness"]["dedupeKey"] == ""
+    legacy_shell = copy.deepcopy(shell)
+    legacy_shell["devframe"]["team"].pop("activityLiveness")
+    validate_schema(load_schema(), legacy_shell)
     assert shell["t3"]["threads"][-1]["id"] == "devframe-team-workbench-session"
     assert shell["t3"]["threads"][-1]["threadKind"] == "global_coordinator"
     assert shell["t3"]["threads"][-1]["threadListPriority"] == 0
     assert shell["t3"]["threadDetails"][-1]["threadKind"] == "global_coordinator"
+
+
+def test_t3_actual_team_runtime_projects_activity_liveness_and_refreshes_after_ack(tmp_path):
+    team = TeamRuntime(runtime_dir=tmp_path)
+    team.record_root_gate_request(
+        "run-t3-liveness",
+        "project-controller",
+        request_id="root-gate-t3-liveness",
+        dedupe_key="dev-frame-system/t3-liveness",
+        project_id="dev-frame-system",
+        gate="P1",
+        summary="T3 must expose gated READY starvation.",
+        exact_write_set=["packages/control-plane/control_plane/t3_adapter.py"],
+        evidence_refs=["evidence/t3-liveness-red.json"],
+        reason="No child currently owns the gated READY work.",
+    )
+
+    first = build_t3_client_shell(tmp_path)
+    duplicate = build_t3_client_shell(tmp_path)
+
+    validate_schema(load_schema(), first)
+    assert duplicate["devframe"]["team"]["activityLiveness"] == first["devframe"]["team"]["activityLiveness"]
+    activity = first["devframe"]["team"]["activityLiveness"]
+    assert activity["state"] == "gated_ready"
+    assert activity["counts"] == {
+        "internalWorkers": 0,
+        "visibleWorkers": 2,
+        "activeWorkers": 0,
+        "ownedCommands": 0,
+        "ready": 0,
+        "gatedReady": 1,
+    }
+    assert activity["wakeRequired"] is True
+    assert activity["dedupeKey"]
+    assert activity["gatedReady"][0]["dedupeKey"] == "dev-frame-system/t3-liveness"
+
+    team.record_root_gate_acknowledgement(
+        "root-gate-t3-liveness",
+        "root-controller",
+        reason="Root acknowledged the request.",
+    )
+    refreshed = build_t3_client_shell(tmp_path)
+    validate_schema(load_schema(), refreshed)
+    refreshed_activity = refreshed["devframe"]["team"]["activityLiveness"]
+    assert refreshed_activity["counts"]["gatedReady"] == 0
+    assert refreshed_activity["wakeRequired"] is False
+    assert refreshed_activity["dedupeKey"] == ""
+
+
+def test_t3_activity_cache_reuses_unchanged_run_digests_and_invalidates_incrementally(
+    tmp_path,
+    monkeypatch,
+):
+    team = TeamRuntime(runtime_dir=tmp_path)
+    team.record_root_gate_request(
+        "run-t3-action-liveness",
+        "project-controller",
+        request_id="root-gate-t3-action-liveness",
+        dedupe_key="dev-frame-system/t3-action-liveness",
+        project_id="dev-frame-system",
+        gate="P1",
+        summary="T3 must refresh when the only owned command completes.",
+        exact_write_set=["packages/control-plane/control_plane/t3_adapter.py"],
+        evidence_refs=["evidence/t3-action-liveness-red.json"],
+        reason="The command owner is the only fact preventing a starvation wake.",
+    )
+    active_record_path = (
+        tmp_path
+        / "action-runs"
+        / "cache-sensitive-action"
+        / "run-1"
+        / "action-run.json"
+    )
+    active_record_path.parent.mkdir(parents=True)
+    active_record = {
+        "action_id": "cache-sensitive-action",
+        "action_run_id": "run-1",
+        "status": "started",
+        "run_id": "cache-command-owner",
+        "go_run_id": "cache-command-owner",
+        "kind": "go_execute",
+        "command": "devframe go execute cache-command-owner",
+    }
+    active_record_path.write_text(json.dumps(active_record), encoding="utf-8")
+    terminal_record_path = (
+        tmp_path
+        / "action-runs"
+        / "cache-sensitive-action"
+        / "run-2"
+        / "action-run.json"
+    )
+    terminal_record_path.parent.mkdir(parents=True)
+    terminal_record_path.write_text(
+        json.dumps({
+            "action_id": "cache-sensitive-action",
+            "action_run_id": "run-2",
+            "status": "completed",
+            "run_id": "terminal-command-owner",
+            "go_run_id": "terminal-command-owner",
+            "kind": "go_execute",
+            "command": "devframe go execute terminal-command-owner",
+        }),
+        encoding="utf-8",
+    )
+
+    original_read_bytes = Path.read_bytes
+    body_reads: list[Path] = []
+
+    def counting_read_bytes(path: Path) -> bytes:
+        if path.name == "action-run.json":
+            body_reads.append(path)
+        return original_read_bytes(path)
+
+    original_build_visual = t3_adapter_module.build_visual_control_plane_state
+    rebuild_count = 0
+
+    def counting_build_visual(*args, **kwargs):
+        nonlocal rebuild_count
+        rebuild_count += 1
+        return original_build_visual(*args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_bytes", counting_read_bytes)
+    monkeypatch.setattr(
+        t3_adapter_module,
+        "build_visual_control_plane_state",
+        counting_build_visual,
+    )
+
+    started = build_t3_client_shell(tmp_path)["devframe"]["team"]["activityLiveness"]
+    assert started["state"] == "active"
+    assert started["counts"]["ownedCommands"] == 1
+    assert started["wakeRequired"] is False
+    assert len(body_reads) == 2
+    assert rebuild_count == 1
+
+    duplicate = build_t3_client_shell(tmp_path)["devframe"]["team"]["activityLiveness"]
+    assert duplicate == started
+    assert len(body_reads) == 2
+    assert rebuild_count == 1
+
+    active_record["status"] = "completed"
+    active_record_path.write_text(json.dumps(active_record), encoding="utf-8")
+    completed = build_t3_client_shell(tmp_path)["devframe"]["team"]["activityLiveness"]
+
+    assert completed["state"] == "gated_ready"
+    assert completed["counts"]["ownedCommands"] == 0
+    assert completed["wakeRequired"] is True
+    assert "devframe go execute" not in json.dumps(completed)
+    assert len(body_reads) == 3
+    assert body_reads[-1] == active_record_path
+    assert rebuild_count == 2
+
+    terminal_record_path.unlink()
+    after_deletion = build_t3_client_shell(tmp_path)["devframe"]["team"]["activityLiveness"]
+    assert after_deletion == completed
+    assert len(body_reads) == 3
+    assert rebuild_count == 3
+
+
+def test_t3_activity_revision_tolerates_non_file_and_permission_errors_without_leakage(
+    tmp_path,
+    monkeypatch,
+):
+    team = TeamRuntime(runtime_dir=tmp_path)
+    team.record_root_gate_request(
+        "run-t3-unreadable-liveness",
+        "project-controller",
+        request_id="root-gate-t3-unreadable-liveness",
+        dedupe_key="dev-frame-system/t3-unreadable-liveness",
+        project_id="dev-frame-system",
+        gate="P1",
+        summary="An unreadable action record must not break the T3 shell.",
+        exact_write_set=["packages/control-plane/control_plane/t3_adapter.py"],
+        evidence_refs=["evidence/t3-unreadable-liveness-red.json"],
+        reason="Unreadable local audit records are skipped by the visual loader.",
+    )
+    non_file_record = (
+        tmp_path
+        / "action-runs"
+        / "non-file-sensitive-action"
+        / "run-directory"
+        / "action-run.json"
+    )
+    non_file_record.mkdir(parents=True)
+    denied_record = (
+        tmp_path
+        / "action-runs"
+        / "permission-sensitive-action"
+        / "run-denied"
+        / "action-run.json"
+    )
+    denied_record.parent.mkdir(parents=True)
+    denied_command = "devframe go execute permission-secret-command"
+    denied_record.write_text(
+        json.dumps({
+            "action_id": "permission-sensitive-action",
+            "action_run_id": "run-denied",
+            "status": "started",
+            "run_id": "permission-owner",
+            "command": denied_command,
+        }),
+        encoding="utf-8",
+    )
+    original_read_bytes = Path.read_bytes
+    original_read_text = Path.read_text
+
+    def denied_read_bytes(path: Path) -> bytes:
+        if path == denied_record:
+            raise PermissionError("synthetic denied action-run body")
+        return original_read_bytes(path)
+
+    def denied_read_text(path: Path, *args, **kwargs) -> str:
+        if path == denied_record:
+            raise PermissionError("synthetic denied action-run body")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_bytes", denied_read_bytes)
+    monkeypatch.setattr(Path, "read_text", denied_read_text)
+
+    shell = build_t3_client_shell(tmp_path)
+    activity = shell["devframe"]["team"]["activityLiveness"]
+    revision = t3_adapter_module._runtime_activity_revision(tmp_path)
+    serialized = json.dumps({"activity": activity, "revision": revision})
+
+    assert activity["state"] == "gated_ready"
+    assert activity["counts"]["ownedCommands"] == 0
+    assert activity["wakeRequired"] is True
+    assert "non-file-sensitive-action" not in serialized
+    assert "permission-sensitive-action" not in serialized
+    assert "run-denied" not in serialized
+    assert denied_command not in serialized
 
 
 def test_global_coordinator_thread_exists_even_without_team_or_sessions():
@@ -1202,7 +1440,6 @@ def test_t3_shell_evidence_store_sanitizes_ref_paths(tmp_path):
     }
 
     shell = build_t3_client_shell_from_state(state)
-    json_str = json.dumps(shell)
 
     team = shell["devframe"]["team"]
     for entry in team["evidenceStore"]:
@@ -1936,7 +2173,6 @@ def test_large_synthetic_reviewer_session_renders_detail_digest():
     shell = build_t3_client_shell_from_state(state)
 
     validate_schema(load_schema(), shell)
-    thread = shell["t3"]["threads"][0]
     detail = shell["t3"]["threadDetails"][0]
     message_text = detail["messages"][0]["text"]
 

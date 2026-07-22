@@ -18,6 +18,7 @@ import control_plane.mcp_consent as mcp_consent  # noqa: E402
 from control_plane.dashboard import build_dashboard_server  # noqa: E402
 from control_plane.mcp_live_probe import mcp_live_probe  # noqa: E402
 from control_plane.mcp_server import TOOLS, handle_mcp_jsonrpc  # noqa: E402
+from control_plane.team_runtime import TeamRuntime  # noqa: E402
 
 
 def _authorize(session_id, runtime_dir):
@@ -247,6 +248,51 @@ def test_get_team_status_shape(tmp_path):
     payload = _call("get_team_status", {}, tmp_path, "sess-team")
     for key in ("agentRegistry", "taskBoard", "recentEvents", "reviewGates", "conflictControl"):
         assert key in payload
+
+
+def test_get_team_status_projects_real_activity_liveness_without_recording_a_wake(tmp_path):
+    mcp_consent._reset_for_tests()
+    _authorize("sess-liveness", tmp_path)
+    team = TeamRuntime(runtime_dir=tmp_path)
+    team.record_root_gate_request(
+        "run-mcp-liveness",
+        "project-controller",
+        request_id="root-gate-mcp-liveness",
+        dedupe_key="dev-frame-system/mcp-liveness",
+        project_id="dev-frame-system",
+        gate="P1",
+        summary="MCP must expose gated READY starvation.",
+        exact_write_set=["packages/control-plane/control_plane/mcp_server.py"],
+        evidence_refs=["evidence/mcp-liveness-red.json"],
+        reason="No active child owns the gated READY work.",
+    )
+    journal = tmp_path / "team-events.jsonl"
+    before_reads = journal.read_bytes()
+
+    first = _call("get_team_status", {}, tmp_path, "sess-liveness")
+    duplicate = _call("get_team_status", {}, tmp_path, "sess-liveness")
+
+    assert duplicate["activityLiveness"] == first["activityLiveness"]
+    assert journal.read_bytes() == before_reads
+    activity = first["activityLiveness"]
+    assert activity["state"] == "gated_ready"
+    assert activity["counts"]["activeWorkers"] == 0
+    assert activity["counts"]["gatedReady"] == 1
+    assert activity["wakeRequired"] is True
+    assert activity["dedupeKey"]
+    assert "wake" not in json.dumps(first["recentEvents"]).lower()
+
+    team.record_task_created(
+        "run-mcp-liveness",
+        "mcp-live-child",
+        project_id="dev-frame-system",
+        targets=["packages/control-plane/control_plane/mcp_server.py"],
+    )
+    team.record_task_claimed("run-mcp-liveness", "mcp-live-child")
+    active = _call("get_team_status", {}, tmp_path, "sess-liveness")["activityLiveness"]
+    assert active["counts"]["activeWorkers"] == 1
+    assert active["wakeRequired"] is False
+    assert active["dedupeKey"] == ""
 
 
 def test_list_pending_gates_shape(tmp_path):

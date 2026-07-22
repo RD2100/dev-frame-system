@@ -1,9 +1,11 @@
 """T3 Code facing read model projection for the Visual Control Plane."""
 from __future__ import annotations
 
+import hashlib
 import json
 import platform
 import re
+import stat
 import threading
 import time
 from copy import deepcopy
@@ -13,7 +15,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from .activity_liveness import project_activity_liveness
 from .conversation_intake import GLOBAL_COORDINATOR_THREAD_ID
+from .team_runtime import TEAM_EVENTS_FILE
 from .visual_state import build_visual_control_plane_state
 
 
@@ -21,6 +25,12 @@ _T3_SHELL_CACHE_TTL = 2.0
 _T3_SHELL_CACHE: dict[tuple, tuple[float, dict[str, Any]]] = {}
 _T3_SHELL_COMPACT_JSON_CACHE: dict[tuple, tuple[float, str]] = {}
 _T3_SHELL_BUILD_LOCK = threading.RLock()
+_ACTION_RUN_REVISION_LOCK = threading.RLock()
+_ACTION_RUN_REVISION_INDEX: dict[
+    str,
+    dict[str, tuple[tuple[object, ...], bytes]],
+] = {}
+_ACTION_RUN_REVISION_MAX_RUNTIMES = 64
 
 _WEB_AI_KEYWORDS = (
     "web gpt", "webgpt", "task intake", "task-intake", "mcp",
@@ -42,7 +52,125 @@ def _t3_shell_cache_key(
         str(Path(runtime_dir).resolve()) if runtime_dir is not None else "",
         tuple(str(Path(p).resolve()) for p in (paper_project_dirs or [])),
         base_url,
+        _runtime_activity_revision(runtime_dir),
     )
+
+
+def _runtime_activity_revision(runtime_dir: str | Path | None) -> tuple[int, int, int, str]:
+    """Bind cached T3 liveness to team and owned-command lifecycle changes."""
+    if runtime_dir is None:
+        return (0, 0, 0, "")
+    root = Path(runtime_dir).resolve()
+    team_size = 0
+    team_mtime = 0
+    try:
+        team_stat = (root / TEAM_EVENTS_FILE).stat()
+        team_size = team_stat.st_size
+        team_mtime = team_stat.st_mtime_ns
+    except FileNotFoundError:
+        pass
+    action_run_count, action_run_digest = _action_run_content_revision(root)
+    return (team_size, team_mtime, action_run_count, action_run_digest)
+
+
+def _action_run_content_revision(runtime_root: Path) -> tuple[int, str]:
+    """Return an incremental path- and command-free action-run content digest."""
+    runtime_key = str(runtime_root.resolve())
+    action_runs_root = runtime_root / "action-runs"
+    with _ACTION_RUN_REVISION_LOCK:
+        previous = _ACTION_RUN_REVISION_INDEX.get(runtime_key, {})
+        current: dict[str, tuple[tuple[object, ...], bytes]] = {}
+        contributions: list[bytes] = []
+        try:
+            record_paths = sorted(action_runs_root.glob("*/*/action-run.json"))
+        except OSError as exc:
+            _store_action_run_revision_index(runtime_key, current)
+            opaque = _opaque_action_run_revision("scan-error", "", (type(exc).__name__,))
+            return (1, opaque.hex())
+
+        for record_path in record_paths:
+            identity = record_path.relative_to(action_runs_root).as_posix()
+            try:
+                record_stat = record_path.stat()
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                metadata: tuple[object, ...] = ("stat-error", type(exc).__name__)
+                content_digest = _opaque_action_run_revision(
+                    "stat-error",
+                    identity,
+                    metadata,
+                )
+            else:
+                metadata = (
+                    record_stat.st_dev,
+                    record_stat.st_ino,
+                    record_stat.st_mode,
+                    record_stat.st_size,
+                    record_stat.st_mtime_ns,
+                    record_stat.st_ctime_ns,
+                )
+                cached = previous.get(identity)
+                if cached is not None and cached[0] == metadata:
+                    content_digest = cached[1]
+                elif not stat.S_ISREG(record_stat.st_mode):
+                    content_digest = _opaque_action_run_revision(
+                        "non-file",
+                        identity,
+                        metadata,
+                    )
+                else:
+                    try:
+                        content = record_path.read_bytes()
+                    except FileNotFoundError:
+                        continue
+                    except OSError as exc:
+                        content_digest = _opaque_action_run_revision(
+                            f"read-error:{type(exc).__name__}",
+                            identity,
+                            metadata,
+                        )
+                    else:
+                        content_digest = hashlib.sha256(b"action-run-content\0" + content).digest()
+            current[identity] = (metadata, content_digest)
+            contributions.append(content_digest)
+
+        _store_action_run_revision_index(runtime_key, current)
+        if not contributions:
+            return (0, "")
+        aggregate = hashlib.sha256()
+        for content_digest in sorted(contributions):
+            aggregate.update(content_digest)
+        return (len(contributions), aggregate.hexdigest())
+
+
+def _store_action_run_revision_index(
+    runtime_key: str,
+    current: dict[str, tuple[tuple[object, ...], bytes]],
+) -> None:
+    """Refresh one runtime entry and bound stale runtime metadata."""
+    _ACTION_RUN_REVISION_INDEX.pop(runtime_key, None)
+    if current:
+        _ACTION_RUN_REVISION_INDEX[runtime_key] = current
+    while len(_ACTION_RUN_REVISION_INDEX) > _ACTION_RUN_REVISION_MAX_RUNTIMES:
+        oldest_runtime = next(iter(_ACTION_RUN_REVISION_INDEX))
+        _ACTION_RUN_REVISION_INDEX.pop(oldest_runtime, None)
+
+
+def _opaque_action_run_revision(
+    kind: str,
+    identity: str,
+    metadata: tuple[object, ...],
+) -> bytes:
+    """Hash unreadable record metadata without exposing its identity."""
+    digest = hashlib.sha256()
+    digest.update(b"opaque-action-run\0")
+    digest.update(kind.encode("utf-8", errors="replace"))
+    digest.update(b"\0")
+    digest.update(hashlib.sha256(identity.encode("utf-8", errors="replace")).digest())
+    digest.update(b"\0")
+    digest.update(repr(metadata).encode("utf-8", errors="replace"))
+    return digest.digest()
 
 
 def _prune_t3_shell_cache(now: float) -> None:
@@ -479,6 +607,7 @@ def _project_team(team: dict[str, Any]) -> dict[str, Any]:
         "evidenceStore": _project_team_evidence(team.get("evidence_store")),
         "reviewGates": _project_team_gates(team.get("review_gates")),
         "conflictControl": _project_team_conflicts(team.get("conflict_control")),
+        "activityLiveness": project_activity_liveness(team.get("activity_liveness")),
     }
 
 
@@ -491,6 +620,7 @@ def _empty_team_projection() -> dict[str, Any]:
         "evidenceStore": [],
         "reviewGates": [],
         "conflictControl": [],
+        "activityLiveness": project_activity_liveness(None),
     }
 
 
@@ -1485,7 +1615,6 @@ def _team_workbench_summary_lines(
     task_count = len(team.get("task_board") or [])
     message_count = len(team.get("message_bus") or [])
     evidence_count = len(team.get("evidence_store") or [])
-    gate_count = len(team.get("review_gates") or [])
     conflict_count = len(team.get("conflict_control") or [])
     event_count = len(team.get("event_log") or [])
 
@@ -2092,7 +2221,6 @@ def _review_board_summary(
     team_task_ids = _strings(devframe.get("teamTaskIds"))
     team_msg_ids = _strings(devframe.get("teamMessageIds"))
     team_ev_ids = _strings(devframe.get("teamEvidenceIds"))
-    team_gate_ids = _strings(devframe.get("teamReviewGateIds"))
     team_conflict_files = _strings(devframe.get("teamConflictFiles"))
     team_detail_gates = devframe.get("teamDetailGates", [])
     team_detail_events = devframe.get("teamDetailEvents", [])
@@ -2301,7 +2429,6 @@ def _thread_detail(
                 if team_detail_events:
                     details.append("- **Events**:")
                     for ev in team_detail_events:
-                        eid = _text(ev.get("eventId"), "")
                         kind = _text(ev.get("kind"), "")
                         summary = _text(ev.get("summary"), "")
                         details.append(f"  - [{kind}] {summary}")

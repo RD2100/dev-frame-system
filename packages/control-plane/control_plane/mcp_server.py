@@ -235,6 +235,7 @@ def _run_status_summary(runtime_dir, paper_project_dirs, run_id: str | None) -> 
 
 
 def _team_status_summary(runtime_dir, paper_project_dirs, project_id: str | None) -> dict[str, Any]:
+    from .activity_liveness import project_activity_liveness
     from .visual_state import build_visual_control_plane_state
 
     state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=paper_project_dirs)
@@ -270,6 +271,7 @@ def _team_status_summary(runtime_dir, paper_project_dirs, project_id: str | None
         "reviewGates": gates,
         "conflictControl": conflicts,
         "messageCount": len(team.get("message_bus") or []),
+        "activityLiveness": project_activity_liveness(team.get("activity_liveness")),
     }
 
 

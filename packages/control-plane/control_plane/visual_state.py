@@ -9,6 +9,7 @@ from urllib.parse import quote
 
 import yaml
 
+from .activity_liveness import build_activity_liveness
 from .runtime_digest import build_runtime_digest
 from .skill_registry import list_methodology_skills
 from .team_runtime import build_team_runtime_view
@@ -1014,6 +1015,14 @@ def _build_team_model(
             evidence_store.append(recorded_evidence)
             _projected_evidence_ids.add(evidence_id)
             _projected_evidence_keys.add(evidence_key)
+    activity_liveness = build_activity_liveness(
+        str(runtime_dir or ""),
+        recorded_team=recorded,
+        visible_agents=agents,
+        visible_sessions=sessions,
+        actions=next_actions,
+        action_runs=action_runs,
+    )
     return {
         "agent_registry": agent_registry,
         "task_board": task_board,
@@ -1022,6 +1031,7 @@ def _build_team_model(
         "evidence_store": evidence_store,
         "review_gates": review_gates,
         "conflict_control": conflict_control,
+        "activity_liveness": activity_liveness,
     }
 
 
@@ -1057,7 +1067,6 @@ def _team_agent_registry(
             if not agent_id or agent_id in seen:
                 continue
             seen.add(agent_id)
-            go_run_id = _safe_id(str(run.get("go_run_id") or ""))
             agent_sessions = [
                 _safe_id(str(s.get("session_id") or ""))
                 for s in sessions

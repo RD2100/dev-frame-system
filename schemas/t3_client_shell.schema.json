@@ -537,7 +537,86 @@
         "eventLog": { "type": "array", "items": { "$ref": "#/definitions/team_event_projection" } },
         "evidenceStore": { "type": "array", "items": { "$ref": "#/definitions/team_evidence_projection" } },
         "reviewGates": { "type": "array", "items": { "$ref": "#/definitions/team_gate_projection" } },
-        "conflictControl": { "type": "array", "items": { "$ref": "#/definitions/team_conflict_projection" } }
+        "conflictControl": { "type": "array", "items": { "$ref": "#/definitions/team_conflict_projection" } },
+        "activityLiveness": { "$ref": "#/definitions/activity_liveness_projection" }
+      },
+      "additionalProperties": false
+    },
+    "activity_liveness_projection": {
+      "type": "object",
+      "required": ["state", "controller", "internalWorkers", "visibleWorkers", "ownedCommands", "ready", "gatedReady", "counts", "wakeRequired", "dedupeKey"],
+      "properties": {
+        "state": { "type": "string", "enum": ["idle", "active", "ready", "gated_ready", "acknowledged"] },
+        "controller": { "$ref": "#/definitions/activity_controller_projection" },
+        "internalWorkers": { "type": "array", "items": { "$ref": "#/definitions/activity_worker_projection" } },
+        "visibleWorkers": { "type": "array", "items": { "$ref": "#/definitions/activity_worker_projection" } },
+        "ownedCommands": { "type": "array", "items": { "$ref": "#/definitions/activity_command_projection" } },
+        "ready": { "type": "array", "items": { "$ref": "#/definitions/activity_work_projection" } },
+        "gatedReady": { "type": "array", "items": { "$ref": "#/definitions/activity_work_projection" } },
+        "counts": { "$ref": "#/definitions/activity_counts_projection" },
+        "wakeRequired": { "type": "boolean" },
+        "dedupeKey": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "activity_controller_projection": {
+      "type": "object",
+      "required": ["workerId", "status", "childWorkerIds"],
+      "properties": {
+        "workerId": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "minLength": 1 },
+        "childWorkerIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "activity_worker_projection": {
+      "type": "object",
+      "required": ["workerId", "parentId", "role", "status", "runIds", "commandIds"],
+      "properties": {
+        "workerId": { "type": "string", "minLength": 1 },
+        "parentId": { "type": "string", "minLength": 1 },
+        "role": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "minLength": 1 },
+        "runIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "commandIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "activity_command_projection": {
+      "type": "object",
+      "required": ["commandId", "ownerId", "runId", "kind", "status"],
+      "properties": {
+        "commandId": { "type": "string", "minLength": 1 },
+        "ownerId": { "type": "string", "minLength": 1 },
+        "runId": { "type": "string" },
+        "kind": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "activity_work_projection": {
+      "type": "object",
+      "required": ["workId", "projectId", "runId", "kind", "state", "dedupeKey"],
+      "properties": {
+        "workId": { "type": "string", "minLength": 1 },
+        "projectId": { "type": "string" },
+        "runId": { "type": "string" },
+        "kind": { "type": "string", "minLength": 1 },
+        "state": { "type": "string", "enum": ["ready", "gated_ready"] },
+        "dedupeKey": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "activity_counts_projection": {
+      "type": "object",
+      "required": ["internalWorkers", "visibleWorkers", "activeWorkers", "ownedCommands", "ready", "gatedReady"],
+      "properties": {
+        "internalWorkers": { "type": "integer", "minimum": 0 },
+        "visibleWorkers": { "type": "integer", "minimum": 0 },
+        "activeWorkers": { "type": "integer", "minimum": 0 },
+        "ownedCommands": { "type": "integer", "minimum": 0 },
+        "ready": { "type": "integer", "minimum": 0 },
+        "gatedReady": { "type": "integer", "minimum": 0 }
       },
       "additionalProperties": false
     }
