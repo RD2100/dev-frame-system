@@ -6,11 +6,9 @@ runs pre-submission check, produces FLOW_OUTCOME and closure report.
 synthetic_only: true. no_real_paper: true. no_live_cdp: true.
 """
 from __future__ import annotations
-import os
-import sys
-import json
 import hashlib
-import time
+import json
+import tempfile
 import uuid
 import zipfile
 from datetime import datetime, timezone
@@ -19,7 +17,7 @@ from dataclasses import dataclass, field
 
 import yaml
 
-from .methodology_dispatch import resolve_workflow_profile
+from .methodology_dispatch import WorkflowCanaryError, resolve_workflow_profile
 from .paper_pipeline_gate import (
     scan_submission_bypass,
     validate_evidence_pack,
@@ -30,7 +28,6 @@ from .paper_pipeline_gate import (
 
 
 PIPELINE_RUN_ID = f"ref-paper-{uuid.uuid4().hex[:8]}"
-import tempfile
 RUN_DIR = Path(tempfile.gettempdir()) / "ref-paper-test"
 ROOT = Path(__file__).resolve().parent.parent
 PAPER_TASK_DIRNAME = "paper_task"
@@ -42,6 +39,127 @@ class StageResult:
     status: str = "pending"  # pending | completed | failed
     outputs: list = field(default_factory=list)
     errors: list = field(default_factory=list)
+
+
+_CODING_WORKFLOW_CANARY_STAGES = (
+    ("pre", "intent", "intent-framing-gate", "task_spec_profile_bound"),
+    ("post", "evidence", "evidence-driven-acceptance", "draft_execution_report_only"),
+)
+
+
+def execute_coding_workflow_canary(
+    packet_dir: str | Path,
+    *,
+    workflow_profile: dict,
+    workflow_canary: dict,
+) -> tuple[Path, list[dict[str, str]]]:
+    """Consume the two frozen offline stages and write draft evidence only."""
+    packet_root = Path(packet_dir).resolve()
+    task_spec = _read_workflow_canary_json(
+        packet_root / "TASKSPEC.json",
+        "TaskSpec",
+    )
+    _read_workflow_canary_json(packet_root / "packet.json", "dispatch packet")
+
+    constraints = workflow_profile.get("constraints")
+    if (
+        task_spec.get("work_type") != "coding"
+        or task_spec.get("workflow_profile") != workflow_profile
+        or "skill_usage" in task_spec
+        or workflow_profile.get("execution_state") != "planned_only"
+        or not isinstance(constraints, dict)
+        or constraints.get("read_only") is not True
+        or constraints.get("network_enabled") is not False
+    ):
+        raise WorkflowCanaryError(
+            "workflow canary TaskSpec is not the bound offline read-only profile"
+        )
+
+    expected_bindings = [
+        {"phase": phase, "stage_id": stage_id, "skill_id": skill_id}
+        for phase, stage_id, skill_id, _ in _CODING_WORKFLOW_CANARY_STAGES
+    ]
+    actual_bindings = workflow_canary.get("stage_bindings")
+    if (
+        workflow_canary.get("mode") != "canary_only"
+        or not isinstance(actual_bindings, list)
+        or [
+            {
+                "phase": binding.get("phase"),
+                "stage_id": binding.get("stage_id"),
+                "skill_id": binding.get("skill_id"),
+            }
+            for binding in actual_bindings
+            if isinstance(binding, dict)
+        ]
+        != expected_bindings
+        or len(actual_bindings) != len(expected_bindings)
+    ):
+        raise WorkflowCanaryError("workflow canary stage bindings are malformed")
+
+    forbidden_outputs = (
+        "review.json",
+        "review.yaml",
+        "review.md",
+        "FINAL_VERDICT.json",
+    )
+    if any((packet_root / name).exists() for name in forbidden_outputs):
+        raise WorkflowCanaryError(
+            "workflow canary packet contains an authoritative review artifact"
+        )
+
+    task_id = str(task_spec.get("task_id") or "").strip()
+    binding_fingerprint = str(
+        workflow_canary.get("binding_fingerprint") or ""
+    ).strip()
+    if not task_id or not binding_fingerprint.startswith("sha256:"):
+        raise WorkflowCanaryError("workflow canary immutable binding is malformed")
+
+    stage_results = [
+        {
+            "phase": phase,
+            "stage_id": stage_id,
+            "skill_id": skill_id,
+            "status": "passed",
+            "evidence": evidence,
+        }
+        for phase, stage_id, skill_id, evidence in _CODING_WORKFLOW_CANARY_STAGES
+    ]
+    report_path = packet_root / "ExecutionReport.md"
+    if report_path.is_symlink():
+        raise WorkflowCanaryError(
+            "workflow canary draft execution report path must not be a symlink"
+        )
+    report_path.write_text(
+        (
+            f"## ExecutionReport: {task_id}\n\n"
+            "- **Status**: pass\n"
+            "- **Review Status**: draft\n"
+            "- **Summary**: Offline workflow canary consumed the frozen "
+            "pre:intent and post:evidence rule bindings without constructing "
+            "a worker or ACP session.\n"
+            "- **Changed Files**:\n"
+            "- (none)\n"
+            f"- **Evidence**: workflow canary binding {binding_fingerprint}; "
+            "pre:intent=passed; post:evidence=passed.\n"
+            "- **Risks**: Canary-only output is draft evidence and carries no "
+            "review or acceptance authority.\n"
+        ),
+        encoding="utf-8",
+    )
+    return report_path, stage_results
+
+
+def _read_workflow_canary_json(path: Path, label: str) -> dict:
+    try:
+        payload = json.loads(path.read_bytes().decode("utf-8"))
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise WorkflowCanaryError(
+            f"workflow canary {label} is missing, unreadable, or malformed"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise WorkflowCanaryError(f"workflow canary {label} is malformed")
+    return payload
 
 
 def sha256(text: str) -> str:
@@ -181,7 +299,7 @@ def mark_paper_execution_state(target: Path, *, failed: bool) -> None:
 
 
 def write_pre_submission_check(path: Path, check_result: dict) -> None:
-    yaml_lines = [f"# Pre-Submission Check", f"pipeline_run_id: {PIPELINE_RUN_ID}", ""]
+    yaml_lines = ["# Pre-Submission Check", f"pipeline_run_id: {PIPELINE_RUN_ID}", ""]
     for k, v in check_result.items():
         if isinstance(v, list):
             yaml_lines.append(f"{k}:")
@@ -539,10 +657,10 @@ files_count: {len(file_entries) + 1}
         manifest_files.add(e["path"])
 
     # PACK_MANIFEST.md hash is self-excluded (circular dependency)
-    manifest_text += f"| PACK_MANIFEST.md | pack_manifest | self_excluded |\n"
+    manifest_text += "| PACK_MANIFEST.md | pack_manifest | self_excluded |\n"
     manifest_files.add("PACK_MANIFEST.md")
 
-    manifest_text += f"""
+    manifest_text += """
 manifest_valid: true
 generated_by: devframe_stage_executor
 """
@@ -662,7 +780,6 @@ def execute_pre_submission_check(project_dir: Path = None) -> StageResult:
     target = project_dir or RUN_DIR
     ensure_dir(target / "evidence")
 
-    errors = []
     warnings = []
     zip_path = target / "evidence" / "ref-paper-review-pack.zip"
 
@@ -772,7 +889,7 @@ def execute_submission_dry_run(project_dir: Path = None) -> StageResult:
         review_run_id=PIPELINE_RUN_ID,
         prompt_text="Synthetic paper review evidence pack — dry-run submission only.",
     )
-    submit_result = adapter.submit(request)
+    adapter.submit(request)
 
     # Write SUBMISSION_RESULT.json
     submission_output = {
