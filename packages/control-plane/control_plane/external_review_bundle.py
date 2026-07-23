@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import posixpath
 import re
 import zipfile
 from typing import Any
@@ -97,6 +98,19 @@ _DETAIL_LOADER_MANUAL_FINDINGS = (
     "detail_assignment_missing_identity_guard",
     "route_loader_missing_retry_context",
     "route_loader_missing_lifecycle_invalidation",
+)
+_AUTH_FAIL_CLOSED_CONTRACT_ID = "auth-fail-closed-top-level-side-effect.v1"
+_AUTH_FAIL_CLOSED_PROFILE = "auth_fail_closed_contract"
+_AUTH_FAIL_CLOSED_ZERO_COUNTERS = (
+    "init",
+    "collection",
+    "read",
+    "write",
+    "transaction",
+)
+_AUTH_FAIL_CLOSED_REQUIRED_PROBES = (
+    "empty_identity_injected_before_fresh_module_load",
+    "handler_invoked_with_sdk_side_effect_counters_all_zero",
 )
 
 # The repository-root schema is not installed by the control-plane wheel. Keep
@@ -216,6 +230,18 @@ _PUBLIC_MANIFEST_SCHEMA = json.loads(
       "additionalProperties": false
     },
     "review_contract": {
+      "if": {
+        "required": ["contract_id"],
+        "properties": {
+          "contract_id": {
+            "const": "auth-fail-closed-top-level-side-effect.v1"
+          }
+        }
+      },
+      "then": { "$ref": "#/definitions/auth_fail_closed_review_contract" },
+      "else": { "$ref": "#/definitions/identity_detail_review_contract" }
+    },
+    "identity_detail_review_contract": {
       "type": "object",
       "required": [
         "contract_id",
@@ -309,6 +335,98 @@ _PUBLIC_MANIFEST_SCHEMA = json.loads(
         }
       },
       "additionalProperties": false
+    },
+    "auth_fail_closed_review_contract": {
+      "type": "object",
+      "required": [
+        "contract_id",
+        "applicable",
+        "source_paths",
+        "findings",
+        "inspection",
+        "probe_evidence",
+        "required_probes"
+      ],
+      "properties": {
+        "contract_id": {
+          "type": "string",
+          "const": "auth-fail-closed-top-level-side-effect.v1"
+        },
+        "applicable": { "type": "boolean", "const": true },
+        "source_paths": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "findings": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/finding" }
+        },
+        "inspection": {
+          "type": "object",
+          "required": ["complete", "issues"],
+          "properties": {
+            "complete": { "type": "boolean" },
+            "issues": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/inspection_issue" }
+            }
+          },
+          "additionalProperties": false
+        },
+        "probe_evidence": {
+          "type": "object",
+          "required": [
+            "status",
+            "source_paths",
+            "matched_source_paths",
+            "required_zero_counters"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["present", "unverified"]
+            },
+            "source_paths": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "matched_source_paths": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "required_zero_counters": {
+              "type": "array",
+              "minItems": 5,
+              "maxItems": 5,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "enum": ["init", "collection", "read", "write", "transaction"]
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "required_probes": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "empty_identity_injected_before_fresh_module_load",
+              "handler_invoked_with_sdk_side_effect_counters_all_zero"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false
@@ -374,13 +492,19 @@ def prepare_external_review_bundle(
     if blocking_issues:
         status = BLOCKED if any(issue.startswith("forbidden_") or issue.startswith("sensitive_") for issue in blocking_issues) else INCOMPLETE
 
-    review_contracts = (
-        _inspect_identity_detail_loader_sources(source_entries)
-        if profile == _DETAIL_LOADER_PROFILE
-        else []
-    )
+    if profile == _DETAIL_LOADER_PROFILE:
+        review_contracts = _inspect_identity_detail_loader_sources(source_entries)
+    elif profile == _AUTH_FAIL_CLOSED_PROFILE:
+        review_contracts = _inspect_auth_fail_closed_sources(source_entries)
+    else:
+        review_contracts = []
     if status == READY and any(
         contract["inspection"]["complete"] is not True
+        for contract in review_contracts
+    ):
+        status = INCOMPLETE
+    if status == READY and any(
+        contract["contract_id"] == _AUTH_FAIL_CLOSED_CONTRACT_ID
         for contract in review_contracts
     ):
         status = INCOMPLETE
@@ -506,6 +630,9 @@ def validate_external_review_bundle(zip_path: str | Path) -> dict[str, Any]:
             issues.extend(_review_prompt_profile_issues(manifest, prompt_raw))
             issues.extend(
                 _identity_manifest_coherence_issues(manifest, package_files)
+            )
+            issues.extend(
+                _auth_manifest_coherence_issues(manifest, package_files)
             )
     except (OSError, zipfile.BadZipFile, UnicodeDecodeError, json.JSONDecodeError) as exc:
         return {"valid": False, "status": BLOCKED, "issues": [f"zip_validation_error:{exc}"]}
@@ -719,6 +846,141 @@ def _identity_probe_coherence_issues(
     return [] if coherent else ["identity_contract_manifest_incoherent:probe_evidence"]
 
 
+def _auth_manifest_coherence_issues(
+    manifest: dict[str, Any],
+    package_files: list[dict[str, Any]],
+) -> list[str]:
+    contracts = manifest.get("review_contracts")
+    auth_contracts = [
+        contract
+        for contract in contracts
+        if isinstance(contract, dict)
+        and contract.get("contract_id") == _AUTH_FAIL_CLOSED_CONTRACT_ID
+    ] if isinstance(contracts, list) else []
+    if manifest.get("profile") != _AUTH_FAIL_CLOSED_PROFILE:
+        return (
+            ["auth_contract_manifest_incoherent:profile_contract_mismatch"]
+            if auth_contracts else []
+        )
+    if not auth_contracts:
+        return []
+
+    issues: list[str] = []
+    if manifest.get("status") != INCOMPLETE:
+        issues.append("auth_contract_manifest_incoherent:status")
+    if not isinstance(contracts, list) or len(contracts) != 1 or len(auth_contracts) != 1:
+        issues.append("auth_contract_manifest_incoherent:contract_selection")
+        return issues
+
+    contract = auth_contracts[0]
+    production_paths = sorted(
+        source_path
+        for entry in package_files
+        if entry.get("generated") is False and not _is_probe_source(entry)
+        for source_path in [entry.get("source_path")]
+        if isinstance(source_path, str) and source_path
+    )
+    source_paths = contract.get("source_paths")
+    source_path_items = (
+        source_paths
+        if isinstance(source_paths, list)
+        and all(isinstance(path, str) and path for path in source_paths)
+        else []
+    )
+    if (
+        contract.get("applicable") is not True
+        or not source_path_items
+        or source_paths != sorted(set(source_paths))
+        or not set(source_paths).issubset(production_paths)
+    ):
+        issues.append("auth_contract_manifest_incoherent:source_paths")
+
+    finding_pairs = _manifest_code_pairs(contract.get("findings"))
+    toplevel_paths = {
+        source_path
+        for source_path, code in finding_pairs
+        if code == "module_toplevel_sdk_handle_before_handler_auth"
+    }
+    analysis_unverified_paths = {
+        source_path
+        for source_path, code in finding_pairs
+        if code == "auth_fail_closed_analysis_unverified"
+    }
+    if (
+        toplevel_paths & analysis_unverified_paths
+        or toplevel_paths | analysis_unverified_paths != set(source_path_items)
+    ):
+        issues.append("auth_contract_manifest_incoherent:findings")
+
+    inspection = contract.get("inspection")
+    inspection_items = (
+        inspection.get("issues")
+        if isinstance(inspection, dict)
+        and isinstance(inspection.get("issues"), list)
+        else []
+    )
+    inspected_issue_paths = {
+        source_path
+        for source_path, _ in _manifest_code_pairs(inspection_items)
+    }
+    coherent_inspection = (
+        isinstance(inspection, dict)
+        and (
+            (
+                bool(analysis_unverified_paths)
+                and inspection.get("complete") is False
+                and analysis_unverified_paths.issubset(inspected_issue_paths)
+            )
+            or (
+                not analysis_unverified_paths
+                and inspection == {"complete": True, "issues": []}
+            )
+        )
+    )
+    if not coherent_inspection:
+        issues.append("auth_contract_manifest_incoherent:inspection")
+    if contract.get("required_probes") != list(_AUTH_FAIL_CLOSED_REQUIRED_PROBES):
+        issues.append("auth_contract_manifest_incoherent:required_probes")
+
+    probe_evidence = contract.get("probe_evidence")
+    probe_paths = sorted(
+        source_path
+        for entry in package_files
+        if entry.get("generated") is False and _is_probe_source(entry)
+        for source_path in [entry.get("source_path")]
+        if isinstance(source_path, str) and source_path
+    )
+    coherent_probe = isinstance(probe_evidence, dict)
+    if coherent_probe:
+        matched_paths = probe_evidence.get("matched_source_paths")
+        status = probe_evidence.get("status")
+        coherent_probe = (
+            probe_evidence.get("source_paths") == probe_paths
+            and isinstance(matched_paths, list)
+            and all(isinstance(path, str) and path for path in matched_paths)
+            and matched_paths == sorted(set(matched_paths))
+            and set(matched_paths).issubset(probe_paths)
+            and probe_evidence.get("required_zero_counters")
+            == list(_AUTH_FAIL_CLOSED_ZERO_COUNTERS)
+            and (
+                (status == "present" and bool(matched_paths))
+                or (status == "unverified" and not matched_paths)
+            )
+        )
+        unverified_findings = {
+            source_path
+            for source_path, code in finding_pairs
+            if code == "auth_fail_closed_probe_unverified"
+        }
+        expected_unverified = (
+            set(source_path_items) if status == "unverified" else set()
+        )
+        coherent_probe = coherent_probe and unverified_findings == expected_unverified
+    if not coherent_probe:
+        issues.append("auth_contract_manifest_incoherent:probe_evidence")
+    return issues
+
+
 def _source_entry(project_root: Path, source: ReviewSource) -> dict[str, Any]:
     candidate = (project_root / source.path).resolve() if not Path(source.path).is_absolute() else Path(source.path).resolve()
     try:
@@ -780,6 +1042,10 @@ def _detail_loader_inspection(relative: Path, raw: bytes) -> dict[str, Any] | No
         }
     return {
         "text": _sanitize_javascript_lexically(text),
+        "probe_text": _sanitize_javascript_lexically(
+            text,
+            preserve_strings=True,
+        ),
         "complete": not truncated,
         "issue": {
             "code": "detail_loader_inspection_truncated",
@@ -844,7 +1110,386 @@ def _inspect_identity_detail_loader_sources(
     ]
 
 
-def _sanitize_javascript_lexically(text: str) -> str:
+def _inspect_auth_fail_closed_sources(
+    sources: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    applicable_paths: list[str] = []
+    unverified_paths: list[str] = []
+    inspection_issues: list[dict[str, Any]] = []
+    for entry in sources:
+        if _is_probe_source(entry):
+            continue
+        source_path = str(entry["source_path"])
+        inspection = entry.get("inspection")
+        if not isinstance(inspection, dict) or inspection.get("complete") is not True:
+            unverified_paths.append(source_path)
+            issue = inspection.get("issue") if isinstance(inspection, dict) else None
+            inspection_issues.append(
+                issue if isinstance(issue, dict) else {
+                    "code": "auth_fail_closed_inspection_unavailable",
+                    "source_path": source_path,
+                }
+            )
+        elif _has_toplevel_sdk_handle_before_auth(entry):
+            applicable_paths.append(source_path)
+    source_paths = sorted(set(applicable_paths) | set(unverified_paths))
+    applicable_paths = sorted(set(applicable_paths))
+    unverified_paths = sorted(set(unverified_paths))
+    if not source_paths:
+        return []
+
+    probe_paths = sorted(
+        str(entry["source_path"])
+        for entry in sources if _is_probe_source(entry)
+    )
+    matched_probe_paths = sorted(
+        str(entry["source_path"])
+        for entry in sources
+        if _is_probe_source(entry)
+        and _has_direct_auth_fail_closed_probe(entry, source_paths)
+    )
+    probe_status = "present" if matched_probe_paths else "unverified"
+    findings = [
+        {
+            "code": "module_toplevel_sdk_handle_before_handler_auth",
+            "source_path": source_path,
+        }
+        for source_path in applicable_paths
+    ]
+    findings.extend(
+        {
+            "code": "auth_fail_closed_analysis_unverified",
+            "source_path": source_path,
+        }
+        for source_path in unverified_paths
+    )
+    if probe_status == "unverified":
+        findings.extend(
+            {
+                "code": "auth_fail_closed_probe_unverified",
+                "source_path": source_path,
+            }
+            for source_path in source_paths
+        )
+    return [
+        {
+            "contract_id": _AUTH_FAIL_CLOSED_CONTRACT_ID,
+            "applicable": True,
+            "source_paths": source_paths,
+            "findings": findings,
+            "inspection": {
+                "complete": not inspection_issues,
+                "issues": inspection_issues,
+            },
+            "probe_evidence": {
+                "status": probe_status,
+                "source_paths": probe_paths,
+                "matched_source_paths": matched_probe_paths,
+                "required_zero_counters": list(_AUTH_FAIL_CLOSED_ZERO_COUNTERS),
+            },
+            "required_probes": list(_AUTH_FAIL_CLOSED_REQUIRED_PROBES),
+        }
+    ]
+
+
+def _has_toplevel_sdk_handle_before_auth(entry: dict[str, Any]) -> bool:
+    inspection = entry.get("inspection")
+    if not isinstance(inspection, dict) or inspection.get("complete") is not True:
+        return False
+    text = inspection.get("text")
+    if not isinstance(text, str):
+        return False
+    top_level = _javascript_top_level_text(text)
+    identifier = r"[A-Za-z_$][\w$]*"
+    assignment = (
+        rf"(?:\b(?:const|let|var)\s+{identifier}\s*=\s*|"
+        rf"\b{identifier}\s*=\s*)"
+    )
+    creates_handle = bool(
+        re.search(
+            assignment + rf"(?:{identifier}\.)?database\s*\(",
+            top_level,
+        )
+        or re.search(
+            assignment + rf"{identifier}\.collection\s*\(",
+            top_level,
+        )
+    )
+    if not creates_handle:
+        return False
+    return any(
+        "getWXContext" in block
+        and re.search(r"\bOPENID\b", block, re.IGNORECASE)
+        and re.search(r"if\s*\(\s*!\s*[A-Za-z_$][\w$]*\b", block)
+        for block in _javascript_handler_blocks(text)
+    )
+
+
+def _javascript_top_level_text(text: str) -> str:
+    output = list(text)
+    depth = 0
+    for index, character in enumerate(text):
+        if character == "{":
+            depth += 1
+        elif character == "}":
+            depth = max(0, depth - 1)
+        elif depth:
+            if character not in {"\r", "\n"}:
+                output[index] = " "
+    return "".join(output)
+
+
+def _javascript_handler_blocks(text: str) -> list[str]:
+    blocks: list[str] = []
+    for match in re.finditer(
+        r"\b(?:exports\.[A-Za-z_$][\w$]*|module\.exports)\s*=",
+        text,
+    ):
+        brace = text.find("{", match.end())
+        if brace >= 0:
+            block = _balanced_javascript_block(text, brace)
+            if block is not None:
+                blocks.append(block)
+    return blocks
+
+
+def _balanced_javascript_block(text: str, opening_brace: int) -> str | None:
+    depth = 0
+    for index in range(opening_brace, len(text)):
+        if text[index] == "{":
+            depth += 1
+        elif text[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[opening_brace:index + 1]
+    return None
+
+
+def _has_direct_auth_fail_closed_probe(
+    entry: dict[str, Any],
+    reviewed_source_paths: list[str],
+) -> bool:
+    inspection = entry.get("inspection")
+    if not isinstance(inspection, dict) or inspection.get("complete") is not True:
+        return False
+    text = inspection.get("probe_text")
+    if not isinstance(text, str):
+        return False
+    for raw_block in _javascript_test_blocks(text):
+        block = _without_static_false_blocks(raw_block)
+        reset = re.search(r"\b(?:jest|vi)\.resetModules\s*\(", block)
+        empty_identity = re.search(
+            r"\b(?P<identity_sdk>[A-Za-z_$][\w$]*)"
+            r"\.getWXContext\.mockReturnValue(?:Once)?\s*\(\s*"
+            r"\{\s*OPENID\s*:\s*(?:\"\"|''|``)\s*\}\s*\)",
+            block,
+        )
+        sdk_mock = re.search(
+            r"\b(?:jest|vi)\.doMock\s*\(\s*"
+            r"[\"'](?P<sdk>[^\"']+)[\"']\s*,\s*"
+            r"\(\s*\)\s*=>\s*(?P<sdk_object>[A-Za-z_$][\w$]*)\s*\)",
+            block,
+        )
+        module_load = re.search(
+            r"\b(?:const|let)\s+(?P<handler>[A-Za-z_$][\w$]*)\s*=\s*"
+            r"require\s*\(\s*[\"'](?P<module>[^\"']+)[\"']\s*\)",
+            block,
+        )
+        if not all((reset, empty_identity, sdk_mock, module_load)):
+            continue
+        handler_call = re.search(
+            rf"\bawait\s+{re.escape(module_load.group('handler'))}\."
+            r"[A-Za-z_$][\w$]*\s*\(",
+            block,
+        )
+        assertion = re.search(
+            r"\bexpect\s*\(\s*(?P<counter>[A-Za-z_$][\w$]*)\s*\)"
+            r"\.toEqual\s*"
+            r"\(\s*\{(?P<counters>[\s\S]*?)\}\s*\)",
+            block,
+        )
+        if not handler_call or not assertion:
+            continue
+        counters = assertion.group("counters")
+        counter_name = assertion.group("counter")
+        sdk_counters_bound = _sdk_counters_are_directly_bound(
+            block,
+            counter_name,
+            sdk_mock.group("sdk_object"),
+        )
+        asserts_all_zero = all(
+            re.search(rf"\b{counter}\s*:\s*0\b", counters)
+            for counter in _AUTH_FAIL_CLOSED_ZERO_COUNTERS
+        )
+        if (
+            reset.start() < empty_identity.start() < sdk_mock.start() < module_load.start()
+            and module_load.end() < handler_call.start() < assertion.start()
+            and sdk_mock.group("sdk") in {"wx-server-sdk", "@cloudbase/node-sdk"}
+            and empty_identity.group("identity_sdk")
+            == sdk_mock.group("sdk_object")
+            and _required_module_matches_reviewed_source(
+                str(entry["source_path"]),
+                module_load.group("module"),
+                reviewed_source_paths,
+            )
+            and sdk_counters_bound
+            and asserts_all_zero
+        ):
+            return True
+    return False
+
+
+def _sdk_counters_are_directly_bound(
+    block: str,
+    counter_name: str,
+    sdk_object_name: str,
+) -> bool:
+    counter = re.escape(counter_name)
+    sdk_object = _javascript_object_literal(block, sdk_object_name)
+    if sdk_object is None or not _counter_callback_is_bound(
+        sdk_object,
+        r"\binit",
+        counter,
+        "init",
+    ):
+        return False
+    database_binding = re.search(
+        r"\bdatabase\s*:\s*(?:jest|vi)\.fn\s*\(\s*"
+        r"\([^)]*\)\s*=>\s*(?P<database>[A-Za-z_$][\w$]*)\s*\)",
+        sdk_object,
+    )
+    if database_binding is None:
+        return False
+    database_object = _javascript_object_literal(
+        block,
+        database_binding.group("database"),
+    )
+    if database_object is None or not _counter_callback_is_bound(
+        database_object,
+        r"\b(?:runTransaction|startTransaction)",
+        counter,
+        "transaction",
+    ):
+        return False
+    collection_binding = re.search(
+        r"\bcollection\s*:\s*(?:jest|vi)\.fn\s*\(\s*"
+        r"\([^)]*\)\s*=>\s*\{(?P<body>[^{}]{0,2048}?)\}\s*\)",
+        database_object,
+    )
+    if collection_binding is None:
+        return False
+    collection_body = collection_binding.group("body")
+    collection_return = re.search(
+        r"\breturn\s+(?P<collection>[A-Za-z_$][\w$]*)\s*;",
+        collection_body,
+    )
+    if (
+        collection_return is None
+        or re.match(
+            rf"\s*\b{counter}\.collection\s*\+=\s*1\s*;",
+            collection_body,
+        ) is None
+    ):
+        return False
+    collection_object = _javascript_object_literal(
+        block,
+        collection_return.group("collection"),
+    )
+    return (
+        collection_object is not None
+        and _counter_callback_is_bound(
+            collection_object,
+            r"\b(?:get|find|query)",
+            counter,
+            "read",
+        )
+        and _counter_callback_is_bound(
+            collection_object,
+            r"\b(?:add|set|update|remove|delete)",
+            counter,
+            "write",
+        )
+    )
+
+
+def _counter_callback_is_bound(
+    object_text: str,
+    property_pattern: str,
+    counter_name: str,
+    counter_part: str,
+) -> bool:
+    return bool(
+        re.search(
+            property_pattern
+            + r"\s*:\s*(?:jest|vi)\.fn\s*\(\s*(?:async\s*)?"
+            r"\([^)]*\)\s*=>\s*\{\s*"
+            + rf"\b{counter_name}\.{counter_part}\s*\+=\s*1\s*;",
+            object_text,
+        )
+    )
+
+
+def _javascript_object_literal(text: str, variable_name: str) -> str | None:
+    declaration = re.search(
+        rf"\b(?:const|let|var)\s+{re.escape(variable_name)}\s*=\s*\{{",
+        text,
+    )
+    if declaration is None:
+        return None
+    return _balanced_javascript_block(text, declaration.end() - 1)
+
+
+def _required_module_matches_reviewed_source(
+    probe_source_path: str,
+    required_module: str,
+    reviewed_source_paths: list[str],
+) -> bool:
+    if not required_module.startswith("."):
+        return False
+    resolved = posixpath.normpath(
+        posixpath.join(
+            posixpath.dirname(probe_source_path.replace("\\", "/")),
+            required_module,
+        )
+    )
+    resolved_stem = posixpath.splitext(resolved)[0]
+    return any(
+        posixpath.splitext(source_path.replace("\\", "/"))[0] == resolved_stem
+        for source_path in reviewed_source_paths
+    )
+
+
+def _without_static_false_blocks(text: str) -> str:
+    output = list(text)
+    for match in re.finditer(r"\bif\s*\(\s*false\s*\)\s*\{", text):
+        block = _balanced_javascript_block(text, match.end() - 1)
+        if block is None:
+            continue
+        stop = match.end() - 1 + len(block)
+        for index in range(match.start(), stop):
+            if output[index] not in {"\r", "\n"}:
+                output[index] = " "
+    return "".join(output)
+
+
+def _javascript_test_blocks(text: str) -> list[str]:
+    blocks: list[str] = []
+    for match in re.finditer(
+        r"\b(?:test|it)\s*\([\s\S]{0,1024}?=>\s*\{",
+        text,
+    ):
+        brace = match.end() - 1
+        block = _balanced_javascript_block(text, brace)
+        if block is not None:
+            blocks.append(block)
+    return blocks
+
+
+def _sanitize_javascript_lexically(
+    text: str,
+    *,
+    preserve_strings: bool = False,
+) -> str:
     output = list(text)
     index = 0
     while index < len(text):
@@ -864,6 +1509,9 @@ def _sanitize_javascript_lexically(text: str) -> str:
                 stop += 1
                 if text[stop - 1] == quote:
                     break
+            if preserve_strings:
+                index = stop
+                continue
         else:
             index += 1
             continue
@@ -981,6 +1629,40 @@ def _render_prompt(
         lines.extend(f"- {issue}" for issue in issues)
     for contract in review_contracts:
         lines.extend(["", f"Executable review contract: {contract['contract_id']}"])
+        if contract["contract_id"] == _AUTH_FAIL_CLOSED_CONTRACT_ID:
+            inspection = contract["inspection"]
+            if not inspection["complete"]:
+                lines.append(
+                    "Automated inspection incomplete; treat every affected "
+                    "source as applicable and unverified."
+                )
+                for issue in inspection["issues"]:
+                    lines.append(
+                        f"- {issue['code']} | source={issue['source_path']}"
+                    )
+            if contract["findings"]:
+                lines.append(
+                    "Automated findings are review requirements, not a code verdict:"
+                )
+                for finding in contract["findings"]:
+                    lines.append(
+                        f"- {finding['code']} | source={finding['source_path']}"
+                    )
+            lines.extend(
+                [
+                    "",
+                    "Required auth fail-closed probe:",
+                    "- Reset module state, inject an empty OPENID, then perform a "
+                    "fresh module load and invoke the exported handler.",
+                    "- Use SDK-bound counters; helper-only or mock-only assertions "
+                    "are not evidence.",
+                    "- Required zero-call result: init=0, collection=0, read=0, "
+                    "write=0, transaction=0.",
+                    f"- Structured probe evidence: "
+                    f"{contract['probe_evidence']['status']}.",
+                ]
+            )
+            continue
         inspection = contract["inspection"]
         if not inspection["complete"]:
             lines.append(

@@ -44,6 +44,8 @@ DETAIL_LOADER_MATRIX = [
     "unload_invalidation",
 ]
 IDENTITY_DETAIL_PROFILE = "identity_detail_contract"
+AUTH_FAIL_CLOSED_PROFILE = "auth_fail_closed_contract"
+AUTH_FAIL_CLOSED_COUNTERS = ["init", "collection", "read", "write", "transaction"]
 
 
 def _write_unsafe_detail_loader(project: Path, name: str = "detail-loader.ts") -> Path:
@@ -101,6 +103,121 @@ export class GuardedRouteDetailPanel {
         encoding="utf-8",
     )
     return source
+
+
+def _write_toplevel_cloud_handle(project: Path, name: str = "index.js") -> Path:
+    source = project / name
+    source.write_text(
+        """
+const cloud = require("wx-server-sdk");
+cloud.init();
+const db = cloud.database();
+const records = db.collection("records");
+
+exports.main = async () => {
+  const { OPENID } = cloud.getWXContext();
+  if (!OPENID) {
+    return { ok: false, error: "unauthenticated" };
+  }
+  return records.where({ owner: OPENID }).get();
+};
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    return source
+
+
+def _auth_probe_text(*, direct: bool) -> str:
+    body = """
+jest.resetModules();
+const sdkCalls = { init: 0, collection: 0, read: 0, write: 0, transaction: 0 };
+const collection = {
+  where: jest.fn(() => collection),
+  get: jest.fn(async () => { sdkCalls.read += 1; }),
+  add: jest.fn(async () => { sdkCalls.write += 1; }),
+};
+const db = {
+  collection: jest.fn(() => {
+    sdkCalls.collection += 1;
+    return collection;
+  }),
+  runTransaction: jest.fn(async () => { sdkCalls.transaction += 1; }),
+};
+const cloud = {
+  init: jest.fn(() => { sdkCalls.init += 1; }),
+  database: jest.fn(() => db),
+  getWXContext: jest.fn(),
+};
+cloud.getWXContext.mockReturnValue({ OPENID: "" });
+jest.doMock("wx-server-sdk", () => cloud);
+const handler = require("../index");
+await handler.main({});
+expect(sdkCalls).toEqual({
+  init: 0,
+  collection: 0,
+  read: 0,
+  write: 0,
+  transaction: 0,
+});
+""".strip()
+    if direct:
+        return f'test("empty identity has no SDK side effects", async () => {{\n{body}\n}});\n'
+    return (
+        f"async function helperOnlyProbe() {{\n{body}\n}}\n"
+        'test("empty identity", async () => helperOnlyProbe());\n'
+    )
+
+
+def _adversarial_auth_probe_text(kind: str) -> str:
+    text = _auth_probe_text(direct=True)
+    if kind.startswith("short-circuit-"):
+        counter = kind.removeprefix("short-circuit-")
+        return text.replace(
+            f"sdkCalls.{counter} += 1;",
+            f"false && (sdkCalls.{counter} += 1);",
+        )
+    if kind == "conditional-no-brace":
+        return text.replace(
+            "sdkCalls.init += 1;",
+            "if (shouldCount) sdkCalls.init += 1;",
+        )
+    if kind == "conditional-ternary":
+        return text.replace(
+            "sdkCalls.write += 1;",
+            "shouldCount ? (sdkCalls.write += 1) : 0;",
+        )
+    if kind == "unrelated-sdk":
+        return text.replace('"wx-server-sdk"', '"unrelated-sdk"')
+    if kind == "unbound-sdk":
+        return text.replace(
+            'cloud.getWXContext.mockReturnValue({ OPENID: "" });',
+            'const unrelatedCloud = { getWXContext: jest.fn() };\n'
+            'unrelatedCloud.getWXContext.mockReturnValue({ OPENID: "" });',
+        ).replace(
+            'jest.doMock("wx-server-sdk", () => cloud);',
+            'jest.doMock("wx-server-sdk", () => unrelatedCloud);',
+        )
+    if kind == "unrelated-handler":
+        return text.replace('require("../index")', 'require("../other")')
+    if kind == "dead-counters":
+        for counter in AUTH_FAIL_CLOSED_COUNTERS:
+            text = text.replace(f"sdkCalls.{counter} += 1;", "")
+        dead_increments = "\n".join(
+            f"  sdkCalls.{counter} += 1;"
+            for counter in AUTH_FAIL_CLOSED_COUNTERS
+        )
+        return text.replace(
+            "const sdkCalls = { init: 0, collection: 0, read: 0, "
+            "write: 0, transaction: 0 };",
+            "const sdkCalls = { init: 0, collection: 0, read: 0, "
+            f"write: 0, transaction: 0 }};\nif (false) {{\n{dead_increments}\n}}",
+        )
+    if kind == "dead-chain":
+        prefix = 'test("empty identity has no SDK side effects", async () => {\n'
+        body = text.removeprefix(prefix).removesuffix("});\n")
+        return f"{prefix}if (false) {{\n{body}\n}}\n}});\n"
+    raise AssertionError(f"unknown adversarial probe: {kind}")
 
 
 def _run_review_cli(
@@ -1379,3 +1496,391 @@ def test_review_bundle_cli_marks_set_state_publication_unverified(tmp_path):
         for issue in contract["inspection"]["issues"]
     )
     assert "Automated inspection incomplete" in prompt
+
+
+def test_review_bundle_cli_records_auth_fail_closed_toplevel_side_effect_contract(
+    tmp_path,
+):
+    project = tmp_path / "project"
+    runtime = tmp_path / "runtime"
+    project.mkdir()
+    source = _write_toplevel_cloud_handle(project)
+
+    completed, manifest, prompt = _run_review_cli(
+        project,
+        runtime,
+        [("code", source.name)],
+        output_id="auth-toplevel-side-effect",
+        profile=AUTH_FAIL_CLOSED_PROFILE,
+    )
+
+    assert completed.returncode == 1, completed.stderr
+    assert manifest["status"] == INCOMPLETE
+    assert manifest["validator"]["valid"] is False
+    assert len(manifest["review_contracts"]) == 1
+    contract = manifest["review_contracts"][0]
+    assert contract == {
+        "contract_id": "auth-fail-closed-top-level-side-effect.v1",
+        "applicable": True,
+        "source_paths": [source.name],
+        "findings": [
+            {
+                "code": "module_toplevel_sdk_handle_before_handler_auth",
+                "source_path": source.name,
+            },
+            {
+                "code": "auth_fail_closed_probe_unverified",
+                "source_path": source.name,
+            },
+        ],
+        "inspection": {"complete": True, "issues": []},
+        "probe_evidence": {
+            "status": "unverified",
+            "source_paths": [],
+            "matched_source_paths": [],
+            "required_zero_counters": AUTH_FAIL_CLOSED_COUNTERS,
+        },
+        "required_probes": [
+            "empty_identity_injected_before_fresh_module_load",
+            "handler_invoked_with_sdk_side_effect_counters_all_zero",
+        ],
+    }
+    assert "auth-fail-closed-top-level-side-effect.v1" in prompt
+    assert "fresh module load" in prompt
+    assert "init=0, collection=0, read=0, write=0, transaction=0" in prompt
+
+    schema_path = (
+        Path(__file__).resolve().parents[3]
+        / "schemas"
+        / "external_review_bundle.schema.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    Draft7Validator.check_schema(schema)
+    Draft7Validator(schema).validate(manifest)
+    assert _PUBLIC_MANIFEST_SCHEMA == schema
+
+
+@pytest.mark.parametrize(
+    ("tamper", "expected_issue"),
+    [
+        ("probe-status", "auth_contract_manifest_incoherent:probe_evidence"),
+        ("source-path-type", "auth_contract_manifest_incoherent:source_paths"),
+        ("matched-path-type", "auth_contract_manifest_incoherent:probe_evidence"),
+    ],
+)
+def test_validate_review_bundle_rejects_incoherent_auth_contract(
+    tamper,
+    expected_issue,
+    tmp_path,
+):
+    project = tmp_path / "project"
+    runtime = tmp_path / "runtime"
+    project.mkdir()
+    source = _write_toplevel_cloud_handle(project)
+    result = prepare_external_review_bundle(
+        project_root=project,
+        runtime_dir=runtime,
+        output_id="auth-manifest-coherence",
+        review_question="Does empty identity fail closed before SDK side effects?",
+        profile=AUTH_FAIL_CLOSED_PROFILE,
+        sources=[ReviewSource(source.name, role="code", authority="candidate")],
+    )
+    zip_path = Path(result["zip_path"])
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        manifest = json.loads(zf.read("PACK_MANIFEST.json"))
+    contract = manifest["review_contracts"][0]
+    if tamper == "probe-status":
+        contract["probe_evidence"]["status"] = "present"
+    elif tamper == "source-path-type":
+        contract["source_paths"] = [{"not": "a path"}]
+    elif tamper == "matched-path-type":
+        contract["probe_evidence"]["matched_source_paths"] = [{"not": "a path"}]
+
+    tampered = tmp_path / f"auth-incoherent-{tamper}.zip"
+    _repack_with_manifest(zip_path, tampered, manifest)
+    completed = _run_validate_cli(tampered)
+    validation = json.loads(completed.stdout)
+
+    assert completed.returncode == 1, completed.stderr
+    assert validation["valid"] is False
+    assert validation["status"] == BLOCKED
+    assert expected_issue in validation["issues"]
+
+
+@pytest.mark.parametrize(
+    ("name", "text"),
+    [
+        (
+            "comments.js",
+            """
+// const db = cloud.database();
+// const records = db.collection("records");
+exports.main = async () => {
+  const OPENID = cloud.getWXContext().OPENID;
+  const sample = "const db = cloud.database(); db.collection('records')";
+  if (!OPENID) return { ok: false };
+};
+""",
+        ),
+        (
+            "handler-local.js",
+            """
+exports.main = async () => {
+  const OPENID = cloud.getWXContext().OPENID;
+  if (!OPENID) return { ok: false };
+  const db = cloud.database();
+  return db.collection("records").get();
+};
+""",
+        ),
+    ],
+)
+def test_review_bundle_cli_does_not_trigger_auth_contract_for_non_toplevel_handles(
+    name,
+    text,
+    tmp_path,
+):
+    project = tmp_path / "project"
+    runtime = tmp_path / "runtime"
+    project.mkdir()
+    source = project / name
+    source.write_text(text.strip() + "\n", encoding="utf-8")
+
+    completed, manifest, prompt = _run_review_cli(
+        project,
+        runtime,
+        [("code", source.name)],
+        output_id=f"auth-negative-{source.stem}",
+        profile=AUTH_FAIL_CLOSED_PROFILE,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert manifest["status"] == READY
+    assert manifest["validator"]["valid"] is True
+    assert manifest["review_contracts"] == []
+    assert "auth-fail-closed-top-level-side-effect.v1" not in prompt
+
+
+@pytest.mark.parametrize("probe_kind", ["helper", "mock-only"])
+def test_review_bundle_cli_does_not_accept_non_real_auth_probe(probe_kind, tmp_path):
+    project = tmp_path / "project"
+    runtime = tmp_path / "runtime"
+    tests_dir = project / "tests"
+    tests_dir.mkdir(parents=True)
+    source = _write_toplevel_cloud_handle(project)
+    probe = tests_dir / "index.test.js"
+    probe.write_text(
+        _auth_probe_text(direct=False)
+        if probe_kind == "helper"
+        else """
+test("empty identity", async () => {
+  cloud.getWXContext.mockReturnValue({ OPENID: "" });
+  const sdkCalls = { init: 0, collection: 0, read: 0, write: 0, transaction: 0 };
+  expect(sdkCalls).toEqual({
+    init: 0, collection: 0, read: 0, write: 0, transaction: 0,
+  });
+});
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    completed, manifest, _ = _run_review_cli(
+        project,
+        runtime,
+        [("code", source.name), ("test", probe.relative_to(project).as_posix())],
+        output_id=f"auth-{probe_kind}",
+        profile=AUTH_FAIL_CLOSED_PROFILE,
+    )
+
+    assert completed.returncode == 1, completed.stderr
+    contract = manifest["review_contracts"][0]
+    assert contract["probe_evidence"]["status"] == "unverified"
+    assert contract["probe_evidence"]["matched_source_paths"] == []
+    assert {
+        finding["code"] for finding in contract["findings"]
+    } >= {"auth_fail_closed_probe_unverified"}
+
+
+def test_review_bundle_cli_accepts_direct_structured_auth_probe_evidence(tmp_path):
+    project = tmp_path / "project"
+    runtime = tmp_path / "runtime"
+    tests_dir = project / "tests"
+    tests_dir.mkdir(parents=True)
+    source = _write_toplevel_cloud_handle(project)
+    probe = tests_dir / "index.test.js"
+    probe.write_text(_auth_probe_text(direct=True), encoding="utf-8")
+
+    completed, manifest, _ = _run_review_cli(
+        project,
+        runtime,
+        [("code", source.name), ("test", probe.relative_to(project).as_posix())],
+        output_id="auth-direct-probe",
+        profile=AUTH_FAIL_CLOSED_PROFILE,
+    )
+
+    assert completed.returncode == 1, completed.stderr
+    contract = manifest["review_contracts"][0]
+    assert contract["probe_evidence"] == {
+        "status": "present",
+        "source_paths": [probe.relative_to(project).as_posix()],
+        "matched_source_paths": [probe.relative_to(project).as_posix()],
+        "required_zero_counters": AUTH_FAIL_CLOSED_COUNTERS,
+    }
+    assert "auth_fail_closed_probe_unverified" not in {
+        finding["code"] for finding in contract["findings"]
+    }
+    assert "module_toplevel_sdk_handle_before_handler_auth" in {
+        finding["code"] for finding in contract["findings"]
+    }
+
+
+@pytest.mark.parametrize(
+    ("name", "content", "expected_issue"),
+    [
+        (
+            "unsupported.txt",
+            """
+exports.main = async () => {
+  const OPENID = cloud.getWXContext().OPENID;
+  if (!OPENID) return { ok: false };
+};
+""",
+            "auth_fail_closed_inspection_unavailable",
+        ),
+        (
+            "truncated.js",
+            (" " * 512_100)
+            + """
+const db = cloud.database();
+exports.main = async () => {
+  const OPENID = cloud.getWXContext().OPENID;
+  if (!OPENID) return { ok: false };
+};
+""",
+            "detail_loader_inspection_truncated",
+        ),
+    ],
+    ids=["unsupported", "truncated"],
+)
+def test_review_bundle_cli_keeps_uninspectable_auth_source_applicable(
+    name,
+    content,
+    expected_issue,
+    tmp_path,
+):
+    project = tmp_path / "project"
+    runtime = tmp_path / "runtime"
+    project.mkdir()
+    source = project / name
+    source.write_text(content.rstrip() + "\n", encoding="utf-8")
+
+    completed, manifest, prompt = _run_review_cli(
+        project,
+        runtime,
+        [("code", source.name)],
+        output_id=f"auth-uninspectable-{source.stem}",
+        profile=AUTH_FAIL_CLOSED_PROFILE,
+    )
+
+    assert completed.returncode == 1, completed.stderr
+    assert manifest["status"] == INCOMPLETE
+    contract = manifest["review_contracts"][0]
+    assert contract["applicable"] is True
+    assert contract["source_paths"] == [source.name]
+    assert contract["inspection"]["complete"] is False
+    assert expected_issue in {
+        issue["code"] for issue in contract["inspection"]["issues"]
+    }
+    assert "auth_fail_closed_analysis_unverified" in {
+        finding["code"] for finding in contract["findings"]
+    }
+    assert "Automated inspection incomplete" in prompt
+
+
+def test_review_bundle_cli_detects_toplevel_split_sdk_handle_assignments(tmp_path):
+    project = tmp_path / "project"
+    runtime = tmp_path / "runtime"
+    project.mkdir()
+    source = project / "index.js"
+    source.write_text(
+        """
+const cloud = require("wx-server-sdk");
+let db;
+db = cloud.database();
+let records;
+records = db.collection("records");
+exports.main = async () => {
+  const OPENID = cloud.getWXContext().OPENID;
+  if (!OPENID) return { ok: false };
+  return records.get();
+};
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    completed, manifest, _ = _run_review_cli(
+        project,
+        runtime,
+        [("code", source.name)],
+        output_id="auth-split-assignment",
+        profile=AUTH_FAIL_CLOSED_PROFILE,
+    )
+
+    assert completed.returncode == 1, completed.stderr
+    assert manifest["status"] == INCOMPLETE
+    contract = manifest["review_contracts"][0]
+    assert contract["source_paths"] == [source.name]
+    assert "module_toplevel_sdk_handle_before_handler_auth" in {
+        finding["code"] for finding in contract["findings"]
+    }
+
+
+@pytest.mark.parametrize(
+    "probe_kind",
+    [
+        "unrelated-sdk",
+        "unbound-sdk",
+        "unrelated-handler",
+        "dead-counters",
+        "dead-chain",
+        "short-circuit-init",
+        "short-circuit-collection",
+        "short-circuit-read",
+        "short-circuit-write",
+        "short-circuit-transaction",
+        "conditional-no-brace",
+        "conditional-ternary",
+    ],
+)
+def test_review_bundle_cli_rejects_adversarial_structured_auth_probe(
+    probe_kind,
+    tmp_path,
+):
+    project = tmp_path / "project"
+    runtime = tmp_path / "runtime"
+    tests_dir = project / "tests"
+    tests_dir.mkdir(parents=True)
+    source = _write_toplevel_cloud_handle(project)
+    probe = tests_dir / "index.test.js"
+    probe.write_text(
+        _adversarial_auth_probe_text(probe_kind),
+        encoding="utf-8",
+    )
+
+    completed, manifest, _ = _run_review_cli(
+        project,
+        runtime,
+        [("code", source.name), ("test", probe.relative_to(project).as_posix())],
+        output_id=f"auth-adversarial-{probe_kind}",
+        profile=AUTH_FAIL_CLOSED_PROFILE,
+    )
+
+    assert completed.returncode == 1, completed.stderr
+    contract = manifest["review_contracts"][0]
+    assert contract["probe_evidence"]["status"] == "unverified"
+    assert contract["probe_evidence"]["matched_source_paths"] == []
+    assert "auth_fail_closed_probe_unverified" in {
+        finding["code"] for finding in contract["findings"]
+    }
