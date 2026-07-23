@@ -420,6 +420,61 @@ def test_generated_bridge_rejects_provider_without_default_before_runtime_artifa
         thread.join(timeout=5)
 
 
+@pytest.mark.parametrize("secret_value", [None, ""])
+def test_generated_bridge_preserves_configurable_provider_secret_retry_before_artifacts(
+    tmp_path: Path,
+    monkeypatch,
+    secret_value: str | None,
+) -> None:
+    runtime = tmp_path / "runtime"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    t3_root = _install_generated_bridge(tmp_path)
+    if secret_value is None:
+        monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("OPENCODE_API_KEY", secret_value)
+    server = build_dashboard_server(runtime_dir=runtime, port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    request = {
+        "projectId": str(workspace),
+        "target": "coordinator",
+        "goal": "Implement the provider retry projection",
+    }
+    probe_body = (
+        f"const request: DevFrameCoordinatorGoalRequest = {json.dumps(request)};\n"
+        "try {\n"
+        "  await startDevFrameCoordinatorGoal(config, request);\n"
+        '  throw new Error("expected provider secret preflight to reject");\n'
+        "} catch (error) {\n"
+        "  if (!(error instanceof DevFrameCoordinatorGoalError)) throw error;\n"
+        "  console.log(JSON.stringify({\n"
+        "    status: error.status,\n"
+        "    code: error.code,\n"
+        "    detail: error.detail,\n"
+        "    retry: error.retry,\n"
+        "  }));\n"
+        "}\n"
+    )
+    try:
+        rejection = _run_generated_bridge_probe(t3_root, base_url, probe_body)
+        assert rejection["status"] == 400
+        assert rejection["code"] == "cluster_run_rejected"
+        assert "missing_external_secret" in str(rejection["detail"])
+        assert rejection["retry"] == {
+            "allowed": True,
+            "action": "configure_external_secret",
+        }
+        assert str(workspace) not in str(rejection)
+        assert not runtime.exists()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
 def test_actual_dashboard_rejects_unknown_execution_selection_before_artifacts(
     tmp_path: Path,
     monkeypatch,

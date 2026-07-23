@@ -886,11 +886,11 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     )
                 except ClusterRunError as exc:
                     body = json.dumps({
-                        "error": "cluster_run_rejected",
-                        "detail": str(exc),
-                        "retry": {"allowed": False, "action": "correct_request"},
+                        "error": exc.code,
+                        "detail": exc.detail,
+                        "retry": exc.retry,
                     }, indent=2, ensure_ascii=True)
-                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    self._send_text(exc.status, "application/json; charset=utf-8", body)
                     return
                 except Exception:  # noqa: BLE001 - unknown failures must stay opaque at the public boundary
                     body = json.dumps({

@@ -31,7 +31,19 @@ from .visual_state import build_visual_control_plane_state
 
 
 class ClusterRunError(Exception):
-    pass
+    def __init__(
+        self,
+        detail: str,
+        *,
+        status: int = 400,
+        code: str = "cluster_run_rejected",
+        retry: dict[str, Any] | None = None,
+    ) -> None:
+        self.status = status
+        self.code = code
+        self.detail = detail
+        self.retry = retry or {"allowed": False, "action": "correct_request"}
+        super().__init__(detail)
 
 
 def _normalize_local_path(raw: str) -> str:
@@ -874,7 +886,7 @@ def _preflight_execution_provider(model_provider: str | None) -> None:
     try:
         resolve_provider_secret(provider.provider_id)
     except ProviderSecretError as exc:
-        raise ClusterRunError(str(exc)) from exc
+        raise ClusterRunError(str(exc), retry=exc.to_dict()["retry"]) from exc
 
 
 def _validate_execution_selection(
