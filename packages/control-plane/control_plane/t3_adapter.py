@@ -186,7 +186,13 @@ def build_t3_client_shell_from_state(
         )
     )
     thread_details = [
-        _cluster_run_thread_detail(thread_shell, runtime_dir, updated_at)
+        _cluster_run_thread_detail(
+            thread_shell,
+            runtime_dir,
+            updated_at,
+            team_review_gates,
+            _clean_base_url(base_url),
+        )
         if _is_cluster_goal_thread(thread_shell)
         else _thread_detail(
             thread_shell,
@@ -711,7 +717,7 @@ def _thread_shell(
         ]
     )
     action_details = _action_details(actions_by_source, action_ids, base_url)
-    pending_gate = any(_text(gate.get("status"), "") in {"open", "blocked", "failed"} for gate in run_gates)
+    pending_gate = _has_pending_gate(run_gates)
     pending_action = bool(action_ids)
     thread_kind = _thread_kind(session, related_run_ids)
     project_binding = _project_binding(thread_kind, project_id)
@@ -985,6 +991,7 @@ def _thread_list_summary(
 def _cluster_run_status_to_session_status(status: str) -> str:
     return {
         "answered": "stopped",
+        "blocked": "ready",
         "completed": "stopped",
         "passed": "stopped",
         "failed": "error",
@@ -1023,7 +1030,6 @@ def _cluster_run_thread_shell(
     )
     action_details = _action_details(actions_by_source, action_ids, base_url)
     status = _text(run.get("status"), "running")
-    pending_action = bool(action_ids)
     session_status = _cluster_run_status_to_session_status(status)
     all_team_gates = (
         _readable_team_gates(go_run_id, [], team_review_gates, base_url)
@@ -1032,6 +1038,11 @@ def _cluster_run_thread_shell(
     team_detail_gates, team_detail_gate_overflow = _cap_with_overflow(
         all_team_gates,
         _PROJECTED_DETAIL_LIMIT,
+    )
+    pending_approval = _has_pending_approval(all_team_gates, action_details)
+    runtime_mode = _runtime_mode(
+        run,
+        pending_approval or status in {"failed", "interrupted"},
     )
     return {
         "id": run_id,
@@ -1058,7 +1069,7 @@ def _cluster_run_thread_shell(
             "instanceId": "devframe-project-coordinator",
             "model": "devframe-project-coordinator",
         },
-        "runtimeMode": "approval-required" if pending_action or status in {"failed", "interrupted"} else "full-access",
+        "runtimeMode": runtime_mode,
         "interactionMode": "plan",
         "branch": None,
         "worktreePath": project_path or None,
@@ -1070,13 +1081,13 @@ def _cluster_run_thread_shell(
             "threadId": run_id,
             "status": session_status,
             "providerName": "devframe",
-            "runtimeMode": "approval-required" if pending_action or status in {"failed", "interrupted"} else "full-access",
+            "runtimeMode": runtime_mode,
             "activeTurnId": None,
             "lastError": "Goal conversation failed or was interrupted." if status in {"failed", "interrupted"} else None,
             "updatedAt": _text(run.get("finishedAt"), _text(run.get("startedAt"), updated_at)),
         },
         "latestUserMessageAt": None,
-        "hasPendingApprovals": bool(action_ids),
+        "hasPendingApprovals": pending_approval,
         "hasPendingUserInput": bool(action_ids),
         "hasActionableProposedPlan": any(_text(action.get("status"), "").lower() == "ready" for action in action_details),
         "devframe": {
@@ -1639,11 +1650,7 @@ def _approval_activities(
     sequence = 3
     seen_ids: set[str] = set()
     for action in action_details:
-        status = _text(action.get("status"), "").lower()
-        if status != "ready":
-            continue
-        command = _text(action.get("command"), "")
-        if not command:
+        if not _is_approvable_action(action):
             continue
         action_id = _text(action.get("actionId"), "")
         if not action_id or action_id in seen_ids:
@@ -1734,7 +1741,7 @@ def _gate_status_tone(status: str) -> str:
     s = status.strip().lower()
     if s in {"blocked", "failed", "error"}:
         return "error"
-    if s in {"open", "pending", "waiting"}:
+    if _is_approvable_gate({"status": s}):
         return "approval"
     if s in {"pass", "passed", "success", "complete", "completed"}:
         return "info"
@@ -2523,6 +2530,8 @@ def _cluster_run_thread_detail(
     thread_shell: dict[str, Any],
     runtime_dir: str | Path | None,
     updated_at: str,
+    team_review_gates: dict[str, list[dict[str, Any]]],
+    base_url: str,
 ) -> dict[str, Any]:
     run_id = _text((thread_shell.get("devframe") or {}).get("runId"), "")
     detail_data: dict[str, Any] = {}
@@ -2585,6 +2594,37 @@ def _cluster_run_thread_detail(
         action_details=action_details,
         updated_at=updated_at,
     )
+    devframe = thread_shell.get("devframe") or {}
+    gate_details = list(devframe.get("teamDetailGates", []))
+    related_run_ids = _strings(devframe.get("relatedRunIds"))
+    all_team_gates = (
+        _readable_team_gates(
+            related_run_ids[0],
+            related_run_ids[1:],
+            team_review_gates,
+            base_url,
+        )
+        if related_run_ids else []
+    )
+    visible_gate_ids = {
+        _text(gate.get("gateId"), "")
+        for gate in gate_details
+        if isinstance(gate, dict)
+    }
+    gate_details.extend(
+        gate
+        for gate in all_team_gates
+        if (
+            isinstance(gate, dict)
+            and _is_approvable_gate(gate)
+            and _text(gate.get("gateId"), "") not in visible_gate_ids
+        )
+    )
+    gate_activities = _gate_activities(
+        _text(thread_shell.get("id"), run_id or "goal"),
+        gate_details,
+        updated_at,
+    )
     from .conversation_intake import build_intake_activities
 
     intake_activities = (
@@ -2596,8 +2636,8 @@ def _cluster_run_thread_detail(
         if runtime_dir is not None
         else []
     )
-    next_sequence = 2 + len(approval_activities)
-    for activity in intake_activities:
+    next_sequence = 2
+    for activity in approval_activities + gate_activities + intake_activities:
         activity["sequence"] = next_sequence
         next_sequence += 1
     proposed_plan = "\n".join([
@@ -2663,6 +2703,7 @@ def _cluster_run_thread_detail(
                 "createdAt": updated_at,
             },
             *approval_activities,
+            *gate_activities,
             *intake_activities,
         ],
         "checkpoints": [],
@@ -2736,6 +2777,33 @@ def _runtime_mode(session: dict[str, Any], pending_gate: bool) -> str:
     if pending_gate or _text(session.get("status"), "") in {"blocked", "needs_human"}:
         return "approval-required"
     return "full-access"
+
+
+def _has_pending_gate(gates: list[dict[str, Any]]) -> bool:
+    return any(
+        _text(gate.get("status"), "") in {"open", "blocked", "failed"}
+        for gate in gates
+    )
+
+
+def _has_pending_approval(
+    gates: list[dict[str, Any]],
+    actions: list[dict[str, str]],
+) -> bool:
+    return any(_is_approvable_gate(gate) for gate in gates) or any(
+        _is_approvable_action(action) for action in actions
+    )
+
+
+def _is_approvable_gate(gate: dict[str, Any]) -> bool:
+    return _text(gate.get("status"), "").lower() == "open"
+
+
+def _is_approvable_action(action: dict[str, Any]) -> bool:
+    return (
+        _text(action.get("status"), "").lower() == "ready"
+        and bool(_text(action.get("command"), ""))
+    )
 
 
 def _session_status(session: dict[str, Any]) -> str:

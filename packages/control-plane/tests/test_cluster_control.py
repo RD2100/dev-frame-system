@@ -28,6 +28,7 @@ from control_plane.cluster_control import (  # noqa: E402
 )
 from control_plane.cluster_run import ClusterRunError, start_cluster_run  # noqa: E402
 from control_plane.dashboard import build_dashboard_server  # noqa: E402
+from control_plane.t3_adapter import build_t3_client_shell_from_state  # noqa: E402
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -35,6 +36,10 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 def _load_coordinator_entry_schema() -> dict:
     return json.loads((REPO_ROOT / "schemas" / "t3_coordinator_entry.schema.json").read_text(encoding="utf-8"))
+
+
+def _load_client_shell_schema() -> dict:
+    return json.loads((REPO_ROOT / "schemas" / "t3_client_shell.schema.json").read_text(encoding="utf-8"))
 
 
 def _validate_schema(schema: dict, data: dict) -> None:
@@ -299,6 +304,18 @@ def test_rdcode_goal_product_path_projects_authoritative_review_state(tmp_path, 
         assert shell_status == 200
         goal_thread = next(item for item in shell["t3"]["threads"] if item["id"] == started["runId"])
         devframe = goal_thread["devframe"]
+        assert goal_thread["session"]["status"] == "stopped"
+        assert goal_thread["runtimeMode"] == "approval-required"
+        assert goal_thread["session"]["runtimeMode"] == "approval-required"
+        assert goal_thread["hasPendingApprovals"] is True
+        goal_detail = next(
+            item for item in shell["t3"]["threadDetails"]
+            if item["id"] == started["runId"]
+        )
+        assert any(
+            activity["tone"] == "approval"
+            for activity in goal_detail["activities"]
+        )
         authoritative_team = shell["devframe"]["team"]
         expected_message_ids = {
             item["messageId"] for item in authoritative_team["messageBus"]
@@ -343,6 +360,187 @@ def test_rdcode_goal_product_path_projects_authoritative_review_state(tmp_path, 
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+@pytest.mark.parametrize(
+    (
+        "case",
+        "raw_status",
+        "gate_status",
+        "action_status",
+        "action_command",
+        "expected_session_status",
+        "expected_runtime_mode",
+        "expected_pending_approval",
+    ),
+    [
+        ("open review gate", "passed", "open", None, "", "stopped", "approval-required", True),
+        ("blocked review gate", "passed", "blocked", None, "", "stopped", "full-access", False),
+        ("failed review gate", "passed", "failed", None, "", "stopped", "full-access", False),
+        ("passed review gate", "passed", "pass", None, "", "stopped", "full-access", False),
+        ("info action", "passed", None, "info", "devframe inspect", "stopped", "full-access", False),
+        ("open action", "passed", None, "open", "devframe inspect", "stopped", "full-access", False),
+        ("ready action without command", "passed", None, "ready", "", "stopped", "full-access", False),
+        (
+            "ready command action",
+            "passed",
+            None,
+            "ready",
+            "devframe inspect",
+            "stopped",
+            "approval-required",
+            True,
+        ),
+        ("legacy passed run", "passed", None, None, "", "stopped", "full-access", False),
+        ("raw blocked run", "blocked", None, None, "", "ready", "approval-required", False),
+    ],
+)
+def test_cluster_run_projection_fails_closed_for_review_and_blocked_states(
+    case,
+    raw_status,
+    gate_status,
+    action_status,
+    action_command,
+    expected_session_status,
+    expected_runtime_mode,
+    expected_pending_approval,
+):
+    go_run_id = "go-projection"
+    review_gates = (
+        [{
+            "gate_id": "gate-review",
+            "run_id": go_run_id,
+            "kind": "independent_review",
+            "status": gate_status,
+            "reason": "Independent review is still required.",
+        }]
+        if gate_status
+        else []
+    )
+    actions = (
+        [{
+            "action_id": f"action-{case.replace(' ', '-')}",
+            "source_type": "cluster_run",
+            "source_id": "g-projection",
+            "priority": "high",
+            "status": action_status,
+            "label": case,
+            "command": action_command,
+        }]
+        if action_status
+        else []
+    )
+    shell = build_t3_client_shell_from_state(
+        {
+            "version": 1,
+            "projects": [],
+            "sessions": [],
+            "next_actions": actions,
+            "gates": [],
+            "provider_bindings": [],
+            "runs": [],
+            "go_runs": [],
+            "team": {"review_gates": review_gates},
+        },
+        cluster_runs=[{
+            "runId": "g-projection",
+            "goRunId": go_run_id,
+            "projectId": "demo-project",
+            "goal": "Project a fail-closed cluster lifecycle",
+            "status": raw_status,
+        }],
+    )
+
+    thread = next(item for item in shell["t3"]["threads"] if item["id"] == "g-projection")
+    detail = next(item for item in shell["t3"]["threadDetails"] if item["id"] == "g-projection")
+    approval_activities = [
+        activity for activity in detail["activities"]
+        if activity["tone"] == "approval"
+    ]
+    assert thread["session"]["status"] == expected_session_status
+    assert thread["runtimeMode"] == expected_runtime_mode
+    assert thread["session"]["runtimeMode"] == expected_runtime_mode
+    assert thread["session"]["lastError"] is None
+    assert thread["hasPendingApprovals"] is expected_pending_approval
+    assert bool(approval_activities) is expected_pending_approval
+
+
+@pytest.mark.parametrize("leading_status", ["pass", "blocked", "failed"])
+def test_cluster_run_projection_surfaces_open_gate_beyond_detail_limit(
+    leading_status,
+):
+    go_run_id = "go-overflow"
+    review_gates = [
+        {
+            "gate_id": f"gate-{leading_status}-{index}",
+            "run_id": go_run_id,
+            "kind": "independent_review",
+            "status": leading_status,
+            "reason": f"Review is {leading_status}.",
+        }
+        for index in range(10)
+    ] + [{
+        "gate_id": "gate-open-overflow",
+        "run_id": go_run_id,
+        "kind": "independent_review",
+        "status": "open",
+        "reason": "Independent review is still required.",
+    }]
+    shell = build_t3_client_shell_from_state(
+        {
+            "version": 1,
+            "projects": [],
+            "sessions": [],
+            "next_actions": [],
+            "gates": [],
+            "provider_bindings": [],
+            "runs": [],
+            "go_runs": [],
+            "team": {"review_gates": review_gates},
+        },
+        cluster_runs=[{
+            "runId": "g-overflow",
+            "goRunId": go_run_id,
+            "projectId": "demo-project",
+            "goal": "Keep an overflowed open review gate visible",
+            "status": "passed",
+        }],
+    )
+    _validate_schema(_load_client_shell_schema(), shell)
+
+    thread = next(item for item in shell["t3"]["threads"] if item["id"] == "g-overflow")
+    detail = next(item for item in shell["t3"]["threadDetails"] if item["id"] == "g-overflow")
+    devframe = thread["devframe"]
+    approval_activities = [
+        activity for activity in detail["activities"]
+        if activity["tone"] == "approval"
+    ]
+
+    assert [gate["status"] for gate in devframe["teamDetailGates"]] == [
+        leading_status
+    ] * 10
+    assert devframe["teamDetailGateOverflow"] == 1
+    next_actionable_gate_ids = [
+        gate["gateId"] for gate in devframe["teamNextActionableGates"]
+    ]
+    if leading_status == "pass":
+        assert next_actionable_gate_ids == ["gate-open-overflow"]
+    else:
+        assert next_actionable_gate_ids == [
+            f"gate-{leading_status}-{index}"
+            for index in range(10)
+        ]
+    assert thread["hasPendingApprovals"] is True
+    assert thread["runtimeMode"] == "approval-required"
+    assert thread["session"]["runtimeMode"] == "approval-required"
+    assert [
+        (activity["id"], activity["kind"], activity["payload"]["gateId"])
+        for activity in approval_activities
+    ] == [(
+        "g-overflow-gate-gate-open-overflow",
+        "devframe.gate.projected",
+        "gate-open-overflow",
+    )]
 
 
 def test_dashboard_projects_endpoint_lists_registered_projects(tmp_path, monkeypatch):
