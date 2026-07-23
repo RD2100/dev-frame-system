@@ -12,10 +12,14 @@ run.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 import json
 import os
 import secrets
+import tempfile
 import threading
+import time
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -53,6 +57,9 @@ def _normalize_local_path(raw: str) -> str:
 
 
 _ACTIVE_STATUSES = {"running", "started"}
+_ATOMIC_REPLACE_ATTEMPTS = 20
+_ATOMIC_REPLACE_RETRY_SECONDS = 0.01
+_RUN_RECORD_LOCKS = tuple(threading.RLock() for _ in range(64))
 
 
 def _resolve_project_reference(
@@ -142,27 +149,34 @@ def _reconcile_orphaned_run(
     that thread, so on read we honestly downgrade such orphaned runs to
     "interrupted" instead of showing a frozen "running" state.
     """
-    status = str(record.get("status") or "").lower()
-    if status not in _ACTIVE_STATUSES or record.get("finishedAt"):
+    run_id = str(record.get("runId") or "")
+    if not run_id:
         return record
-    owner = record.get("ownerPid")
-    if isinstance(owner, int) and _pid_alive(owner):
-        return record
-    updated = dict(record)
-    updated["status"] = "interrupted"
-    updated["summary"] = (
-        "运行已中断：在完成前控制台进程已停止（例如编辑器被重新启动）。"
-        "重新发送该目标即可重新开始。"
-    )
-    authority = updated.get("authority")
-    if isinstance(authority, dict):
-        updated["authority"] = {**authority, "delegationState": "interrupted"}
-    updated["finishedAt"] = _now()
-    try:
-        _write_run_record(runtime_dir, updated)
-    except OSError:
-        pass
-    return updated
+    with _run_record_transaction(runtime_dir, run_id):
+        current = _load_run_record(runtime_dir, run_id)
+        if current is None:
+            return record
+        status = str(current.get("status") or "").lower()
+        if status not in _ACTIVE_STATUSES or current.get("finishedAt"):
+            return current
+        owner = current.get("ownerPid")
+        if isinstance(owner, int) and _pid_alive(owner):
+            return current
+        updated = dict(current)
+        updated["status"] = "interrupted"
+        updated["summary"] = (
+            "运行已中断：在完成前控制台进程已停止（例如编辑器被重新启动）。"
+            "重新发送该目标即可重新开始。"
+        )
+        authority = updated.get("authority")
+        if isinstance(authority, dict):
+            updated["authority"] = {**authority, "delegationState": "interrupted"}
+        updated["finishedAt"] = _now()
+        try:
+            _write_run_record(runtime_dir, updated)
+        except OSError:
+            return updated
+        return updated
 
 
 def _now() -> str:
@@ -198,25 +212,67 @@ def _runs_dir(runtime_dir: str | Path | None) -> Path:
     return base / "cluster-runs"
 
 
+def _run_record_path(runtime_dir: str | Path | None, run_id: str) -> Path:
+    return _runs_dir(runtime_dir) / f"{_slug(run_id)}.json"
+
+
+def _run_record_lock(path: Path) -> threading.RLock:
+    lock_key = os.path.normcase(str(path.resolve()))
+    return _RUN_RECORD_LOCKS[hash(lock_key) % len(_RUN_RECORD_LOCKS)]
+
+
+@contextmanager
+def _run_record_transaction(
+    runtime_dir: str | Path | None,
+    run_id: str,
+) -> Iterator[None]:
+    with _run_record_lock(_run_record_path(runtime_dir, run_id)):
+        yield
+
+
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.parent / (path.name + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
-    os.replace(tmp, path)
+    with _run_record_lock(path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=path.parent,
+                prefix=f"{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as stream:
+                tmp = Path(stream.name)
+                stream.write(json.dumps(payload, indent=2, ensure_ascii=True))
+            for attempt in range(_ATOMIC_REPLACE_ATTEMPTS):
+                try:
+                    os.replace(tmp, path)
+                    return
+                except PermissionError:
+                    if attempt + 1 == _ATOMIC_REPLACE_ATTEMPTS:
+                        raise
+                    time.sleep(_ATOMIC_REPLACE_RETRY_SECONDS)
+        finally:
+            if tmp is not None:
+                tmp.unlink(missing_ok=True)
 
 
 def _write_run_record(runtime_dir: str | Path | None, record: dict[str, Any]) -> None:
-    _atomic_write(_runs_dir(runtime_dir) / f"{record['runId']}.json", record)
+    path = _run_record_path(runtime_dir, str(record["runId"]))
+    with _run_record_lock(path):
+        _atomic_write(path, record)
 
 
 def _load_run_record(runtime_dir: str | Path | None, run_id: str) -> dict[str, Any] | None:
-    path = _runs_dir(runtime_dir) / f"{_slug(run_id)}.json"
-    if not path.is_file():
-        return None
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
+    path = _run_record_path(runtime_dir, run_id)
+    with _run_record_lock(path):
+        if not path.is_file():
+            return None
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
 
 
 def list_cluster_runs(runtime_dir: str | Path | None) -> list[dict[str, Any]]:
@@ -273,12 +329,13 @@ def rename_cluster_run(
     text = str(goal or "").strip()
     if not text:
         raise ClusterRunError("goal must not be empty")
-    record = _load_run_record(runtime_dir, rid)
-    if record is None:
-        raise ClusterRunError("cluster run not found")
-    record["goal"] = text
-    _write_run_record(runtime_dir, record)
-    return record
+    with _run_record_transaction(runtime_dir, rid):
+        record = _load_run_record(runtime_dir, rid)
+        if record is None:
+            raise ClusterRunError("cluster run not found")
+        record["goal"] = text
+        _write_run_record(runtime_dir, record)
+        return record
 
 
 def _run_cluster_workflow(
@@ -288,6 +345,10 @@ def _run_cluster_workflow(
     goal: str,
     run_id: str,
     on_prepared: Any = None,
+    *,
+    executor: str | None = None,
+    model_provider: str | None = None,
+    model: str | None = None,
 ) -> Any:
     """Real project-coordinator run. Module seam so tests can patch it.
 
@@ -299,8 +360,18 @@ def _run_cluster_workflow(
     """
     from .workflow_engine import WorkflowEngine
 
+    selection: dict[str, str] = {}
+    if executor is not None:
+        selection["worker"] = executor
+    if model_provider is not None:
+        selection["model_provider"] = model_provider
+    if model is not None:
+        selection["model"] = model
     return WorkflowEngine(runtime_dir).run_coding_workflow(
-        project_path, goal, on_prepared=on_prepared
+        project_path,
+        goal,
+        on_prepared=on_prepared,
+        **selection,
     )
 
 
@@ -310,26 +381,30 @@ def _run_and_record(
     target: str,
     goal: str,
     run_id: str,
+    executor: str | None = None,
+    model_provider: str | None = None,
+    model: str | None = None,
 ) -> None:
     def _on_prepared(go_run_id: str) -> None:
-        rec = _load_run_record(runtime_dir, run_id)
-        if rec is None:
-            return
-        rec["goRunId"] = str(go_run_id)
-        rec["status"] = "running"
-        rec["summary"] = "Coordinator planned the goal; agents are working…"
-        authority = rec.get("authority")
         bound_authority: dict[str, Any] | None = None
-        if isinstance(authority, dict):
-            bound_authority = {
-                **authority,
-                "goRunId": str(go_run_id),
-                "delegationState": "running",
-            }
-            rec["authority"] = bound_authority
-        # The cluster/go authority link is primary state. Optional team-journal
-        # telemetry must never run before this durable binding exists.
-        _write_run_record(runtime_dir, rec)
+        with _run_record_transaction(runtime_dir, run_id):
+            rec = _load_run_record(runtime_dir, run_id)
+            if rec is None:
+                return
+            rec["goRunId"] = str(go_run_id)
+            rec["status"] = "running"
+            rec["summary"] = "Coordinator planned the goal; agents are working…"
+            authority = rec.get("authority")
+            if isinstance(authority, dict):
+                bound_authority = {
+                    **authority,
+                    "goRunId": str(go_run_id),
+                    "delegationState": "running",
+                }
+                rec["authority"] = bound_authority
+            # The cluster/go authority link is primary state. Optional team-journal
+            # telemetry must never run before this durable binding exists.
+            _write_run_record(runtime_dir, rec)
         if bound_authority is not None:
             from .team_runtime import TeamRuntime
 
@@ -357,43 +432,64 @@ def _run_and_record(
                 summary=summary,
             )
 
-    record = _load_run_record(runtime_dir, run_id) or {
+    fallback_record = _load_run_record(runtime_dir, run_id) or {
         "runId": run_id, "target": target, "goal": goal, "projectPath": project_path,
     }
+    run_failed = False
+    result: Any = None
     try:
+        selection: dict[str, str] = {}
+        if executor is not None:
+            selection["executor"] = executor
+        if model_provider is not None:
+            selection["model_provider"] = model_provider
+        if model is not None:
+            selection["model"] = model
         result = _run_cluster_workflow(
-            runtime_dir, project_path, target, goal, run_id, on_prepared=_on_prepared
+            runtime_dir,
+            project_path,
+            target,
+            goal,
+            run_id,
+            on_prepared=_on_prepared,
+            **selection,
         )
-        record = _load_run_record(runtime_dir, run_id) or record
-        record["status"] = str(getattr(result, "status", None) or "completed")
-        verdict = getattr(result, "verdict", None)
-        passed = getattr(result, "passed_agents", None)
-        failed = getattr(result, "failed_agents", None)
-        go_run_id = getattr(result, "go_run_id", None)
-        if go_run_id:
-            record["goRunId"] = str(go_run_id)
-        authority = record.get("authority")
-        if isinstance(authority, dict):
-            record["authority"] = {
-                **authority,
-                "goRunId": str(go_run_id or authority.get("goRunId") or ""),
-                "delegationState": str(verdict or record["status"]),
-            }
-        summary_parts = []
-        if verdict:
-            summary_parts.append(f"verdict={verdict}")
-        if isinstance(passed, int) or isinstance(failed, int):
-            summary_parts.append(f"{passed or 0} passed, {failed or 0} failed")
-        record["summary"] = "; ".join(summary_parts) or "Run finished."
     except Exception:  # noqa: BLE001 - public run summaries must not expose internal details
-        record = _load_run_record(runtime_dir, run_id) or record
-        record["status"] = "failed"
-        record["summary"] = "Run failed due to an internal coordinator error."
-        authority = record.get("authority")
-        if isinstance(authority, dict):
-            record["authority"] = {**authority, "delegationState": "failed"}
-    record["finishedAt"] = _now()
-    _write_run_record(runtime_dir, record)
+        run_failed = True
+    with _run_record_transaction(runtime_dir, run_id):
+        record = _load_run_record(runtime_dir, run_id) or fallback_record
+        if not run_failed:
+            try:
+                record["status"] = str(getattr(result, "status", None) or "completed")
+                verdict = getattr(result, "verdict", None)
+                passed = getattr(result, "passed_agents", None)
+                failed = getattr(result, "failed_agents", None)
+                go_run_id = getattr(result, "go_run_id", None)
+                if go_run_id:
+                    record["goRunId"] = str(go_run_id)
+                authority = record.get("authority")
+                if isinstance(authority, dict):
+                    record["authority"] = {
+                        **authority,
+                        "goRunId": str(go_run_id or authority.get("goRunId") or ""),
+                        "delegationState": str(verdict or record["status"]),
+                    }
+                summary_parts = []
+                if verdict:
+                    summary_parts.append(f"verdict={verdict}")
+                if isinstance(passed, int) or isinstance(failed, int):
+                    summary_parts.append(f"{passed or 0} passed, {failed or 0} failed")
+                record["summary"] = "; ".join(summary_parts) or "Run finished."
+            except Exception:  # noqa: BLE001 - keep the public failure summary opaque
+                run_failed = True
+        if run_failed:
+            record["status"] = "failed"
+            record["summary"] = "Run failed due to an internal coordinator error."
+            authority = record.get("authority")
+            if isinstance(authority, dict):
+                record["authority"] = {**authority, "delegationState": "failed"}
+        record["finishedAt"] = _now()
+        _write_run_record(runtime_dir, record)
 
 
 def cluster_run_detail(runtime_dir: str | Path | None, run_id: str) -> dict[str, Any]:
@@ -469,6 +565,9 @@ def cluster_run_detail(runtime_dir: str | Path | None, run_id: str) -> dict[str,
         "summary": record.get("summary"),
         "messages": messages,
         "agents": _agent_summaries(runtime_dir, go_run_id),
+        **({"executor": record["executor"]} if record.get("executor") else {}),
+        **({"modelProvider": record["modelProvider"]} if record.get("modelProvider") else {}),
+        **({"model": record["model"]} if record.get("model") else {}),
         **({"authority": record["authority"]} if isinstance(record.get("authority"), dict) else {}),
         **({"methodology": methodology} if methodology else {}),
     }
@@ -581,6 +680,9 @@ def start_cluster_run(
     *,
     proposed_by: str = "rd-code-editor",
     root_delegation: bool = False,
+    executor: str | None = None,
+    model_provider: str | None = None,
+    model: str | None = None,
 ) -> dict[str, Any]:
     """Validate + start a background project-coordinator run. Returns immediately."""
     path, project_id = _resolve_project_reference(runtime_dir, project_path)
@@ -596,6 +698,18 @@ def start_cluster_run(
         raise ClusterRunError(f"unknown cluster target: {target}")
     if root_delegation and tid != "coordinator":
         raise ClusterRunError("root delegation must enter through the coordinator")
+    selected_executor, selected_model_provider, selected_model = (
+        _validate_execution_selection(executor, model_provider, model)
+    )
+    selection_fields = {
+        **({"executor": selected_executor} if selected_executor is not None else {}),
+        **(
+            {"modelProvider": selected_model_provider}
+            if selected_model_provider is not None
+            else {}
+        ),
+        **({"model": selected_model} if selected_model is not None else {}),
+    }
     run_id = _new_run_id()
     requested_by = str(proposed_by or "rd-code-editor")
     authority = (
@@ -686,6 +800,7 @@ def start_cluster_run(
         "status": "running",
         "summary": "Coordinator received the goal; starting…",
         "startedAt": _now(),
+        **selection_fields,
         **({"authority": authority} if authority is not None else {}),
         **({"methodology": methodology_summary} if methodology_summary else {}),
     }
@@ -693,7 +808,16 @@ def start_cluster_run(
     try:
         thread = threading.Thread(
             target=_run_and_record,
-            args=(runtime_dir, path, tid, text, run_id),
+            args=(
+                runtime_dir,
+                path,
+                tid,
+                text,
+                run_id,
+                selected_executor,
+                selected_model_provider,
+                selected_model,
+            ),
             name=f"cluster-run-{run_id}",
             daemon=True,
         )
@@ -723,6 +847,7 @@ def start_cluster_run(
         "projectPath": path,
         "conversationKind": "goal_conversation",
         "coordinatorScope": "project",
+        **selection_fields,
         "projectBinding": {
             "mode": "required",
             "projectId": project_id,
@@ -731,3 +856,55 @@ def start_cluster_run(
         },
         **({"authority": authority} if authority is not None else {}),
     }
+
+
+def _validate_execution_selection(
+    executor: str | None,
+    model_provider: str | None,
+    model: str | None,
+) -> tuple[str | None, str | None, str | None]:
+    """Validate explicit execution provenance before any run artifact exists."""
+    selected_executor: str | None = None
+    if executor is not None:
+        if not isinstance(executor, str) or not executor.strip():
+            raise ClusterRunError("executor must be a non-blank string when provided")
+        selected_executor = executor.strip().lower()
+        from .go_dispatch import GO_WORKERS
+
+        if selected_executor not in GO_WORKERS:
+            raise ClusterRunError(f"unknown executor: {selected_executor}")
+
+    selected_model_provider: str | None = None
+    provider_default_model = ""
+    if model_provider is not None:
+        if not isinstance(model_provider, str) or not model_provider.strip():
+            raise ClusterRunError("modelProvider must be a non-blank string when provided")
+        from .model_providers import resolve_model_provider
+
+        try:
+            provider = resolve_model_provider(model_provider)
+        except ValueError as exc:
+            raise ClusterRunError(str(exc)) from exc
+        if provider.live_backend != "ready":
+            raise ClusterRunError(
+                f"model provider {provider.provider_id!r} has a deferred live backend"
+            )
+        selected_model_provider = provider.provider_id
+        provider_default_model = str(provider.model or "").strip()
+
+    selected_model: str | None = None
+    if model is not None:
+        if not isinstance(model, str) or not model.strip():
+            raise ClusterRunError("model must be a non-blank string when provided")
+        selected_model = model.strip()
+    if (
+        selected_model_provider is not None
+        and selected_model is None
+        and not provider_default_model
+    ):
+        raise ClusterRunError(
+            f"model provider {selected_model_provider!r} requires an explicit model "
+            "because it has no default model"
+        )
+
+    return selected_executor, selected_model_provider, selected_model

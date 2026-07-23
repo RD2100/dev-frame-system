@@ -823,17 +823,28 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                 project_value = payload.get("projectId") if isinstance(payload, dict) else None
                 target_value = payload.get("target") if isinstance(payload, dict) else None
                 goal_value = payload.get("goal") if isinstance(payload, dict) else None
+                selection_values = {
+                    key: payload.get(key) if isinstance(payload, dict) else None
+                    for key in ("executor", "modelProvider", "model")
+                }
                 valid_project = isinstance(project_value, str) and bool(project_value.strip())
                 valid_target = target_omitted or (
                     isinstance(target_value, str) and bool(target_value.strip())
                 )
                 valid_goal = isinstance(goal_value, str) and bool(goal_value.strip())
-                if not all((valid_project, valid_target, valid_goal)):
+                valid_selection = all(
+                    key not in payload
+                    or (isinstance(value, str) and bool(value.strip()))
+                    for key, value in selection_values.items()
+                ) if isinstance(payload, dict) else False
+                if not all((valid_project, valid_target, valid_goal, valid_selection)):
                     body = json.dumps({
                         "error": "missing_or_invalid_params",
                         "detail": (
                             "projectId and goal must be non-blank strings; target is optional "
-                            "but must be a non-blank string when provided."
+                            "but must be a non-blank string when provided; executor, "
+                            "modelProvider, and model are optional but must be non-blank "
+                            "strings when provided."
                         ),
                         "required": ["projectId", "goal"],
                         "retry": {"allowed": False, "action": "correct_request"},
@@ -844,6 +855,21 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                 target = "coordinator" if target_omitted else target_value.strip()
                 goal = goal_value.strip()
                 proposed_by = str(payload.get("proposedBy") or "rd-code-editor").strip()
+                executor = (
+                    selection_values["executor"].strip()
+                    if "executor" in payload
+                    else None
+                )
+                model_provider = (
+                    selection_values["modelProvider"].strip()
+                    if "modelProvider" in payload
+                    else None
+                )
+                model = (
+                    selection_values["model"].strip()
+                    if "model" in payload
+                    else None
+                )
                 from .cluster_run import ClusterRunError, start_cluster_run
 
                 try:
@@ -854,6 +880,9 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                         goal,
                         proposed_by=proposed_by,
                         root_delegation=target_omitted,
+                        executor=executor,
+                        model_provider=model_provider,
+                        model=model,
                     )
                 except ClusterRunError as exc:
                     body = json.dumps({
@@ -881,6 +910,13 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     "conversationKind": started.get("conversationKind"),
                     "coordinatorScope": started.get("coordinatorScope"),
                     "projectBinding": started.get("projectBinding"),
+                    **({"executor": started["executor"]} if started.get("executor") else {}),
+                    **(
+                        {"modelProvider": started["modelProvider"]}
+                        if started.get("modelProvider")
+                        else {}
+                    ),
+                    **({"model": started["model"]} if started.get("model") else {}),
                     **({"authority": started["authority"]} if started.get("authority") else {}),
                     **({"kind": started["kind"]} if started.get("kind") else {}),
                     **({"answer": started["answer"]} if started.get("answer") else {}),
