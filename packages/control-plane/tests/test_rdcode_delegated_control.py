@@ -23,11 +23,13 @@ from control_plane import cluster_run as cluster_run_module  # noqa: E402
 from control_plane.cluster_run import list_cluster_runs  # noqa: E402
 from control_plane.dashboard import build_dashboard_server  # noqa: E402
 from control_plane.go_dispatch import load_go_run_result  # noqa: E402
+from control_plane.runtime_store import JournalEvent, RuntimeStore  # noqa: E402
 from control_plane.t3_bridge_bundle import (  # noqa: E402
     build_t3_bridge_bundle,
     install_t3_bridge_bundle,
 )
 from control_plane.team_runtime import TeamRuntime, build_team_runtime_view  # noqa: E402
+from control_plane.visual_state import build_visual_control_plane_state  # noqa: E402
 from control_plane.workflow_engine import WorkflowEngine  # noqa: E402
 
 
@@ -163,6 +165,34 @@ def _start_generated_goal(
         f"const result = await startDevFrameCoordinatorGoal({{ controlPlaneBaseUrl: {json.dumps(base_url)} }}, request);\n"
         "console.log(JSON.stringify(result));\n",
     )
+
+
+def _start_generated_goals(
+    t3_root: Path,
+    base_url: str,
+    project_ids: list[str],
+) -> list[dict[str, object]]:
+    output = _run_generated_probe(
+        t3_root,
+        "import { startDevFrameCoordinatorGoal }\n"
+        '  from "./apps/web/src/devframe/devframeShellBridge.ts";\n\n'
+        f"const projectIds = {json.dumps(project_ids)};\n"
+        "const results = await Promise.all(projectIds.map((projectId) =>\n"
+        "  startDevFrameCoordinatorGoal(\n"
+        f"    {{ controlPlaneBaseUrl: {json.dumps(base_url)} }},\n"
+        "    {\n"
+        "      projectId,\n"
+        '      goal: "Implement two independent local child shards.",\n'
+        '      proposedBy: "rd-code-project-identity-test",\n'
+        "    },\n"
+        "  )\n"
+        "));\n"
+        "console.log(JSON.stringify({ results }));\n",
+        filename="project-identity-probe.ts",
+    )
+    results = output["results"]
+    assert isinstance(results, list)
+    return results
 
 
 def _typecheck_generated_bridge(t3_root: Path) -> None:
@@ -652,3 +682,76 @@ def test_disjoint_local_children_keep_parallel_evidence_truth(
         "review_ref",
         "final_verdict_ref",
     }
+
+
+def test_generated_bridge_preserves_registered_ids_across_concurrent_same_basename_runs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    roots = [
+        tmp_path / "project-a-root" / "shared",
+        tmp_path / "project-b-root" / "shared",
+    ]
+    project_ids = ["probe-project-a", "probe-project-b"]
+    for root in roots:
+        root.mkdir(parents=True)
+        (root / "module_a.py").write_text("VALUE_A = 1\n", encoding="utf-8")
+        (root / "module_b.py").write_text("VALUE_B = 2\n", encoding="utf-8")
+    store = RuntimeStore(runtime_dir=runtime_dir)
+    for project_id, root in zip(project_ids, roots, strict=True):
+        store.append(
+            JournalEvent(
+                event_type="project_registered",
+                project_id=project_id,
+                payload={"project_root": str(root), "priority": "medium"},
+            )
+        )
+    _install_safe_opencode_fixture(tmp_path, monkeypatch, sleep_seconds=0.1)
+    t3_root = _install_generated_bridge(tmp_path, runtime_dir)
+
+    with _running_dashboard(runtime_dir) as base_url:
+        started = _start_generated_goals(t3_root, base_url, project_ids)
+        details = [
+            _wait_for_terminal_detail(base_url, str(item["runId"]))
+            for item in started
+        ]
+
+    assert {item["projectId"] for item in started} == set(project_ids)
+    assert {detail["projectId"] for detail in details} == set(project_ids)
+    assert {
+        detail["authority"]["projectId"]
+        for detail in details
+        if isinstance(detail["authority"], dict)
+    } == set(project_ids)
+    go_results = [
+        load_go_run_result(runtime_dir, str(detail["goRunId"]))
+        for detail in details
+    ]
+    assert {result.project_id for result in go_results} == set(project_ids)
+    assert all(len(result.agents) == 2 for result in go_results)
+    packets = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in runtime_dir.rglob("packet.json")
+    ]
+    assert len(packets) == 4
+    assert {packet["project_id"] for packet in packets} == set(project_ids)
+
+    events = TeamRuntime(runtime_dir).read_all()
+    task_events = [event for event in events if event["event_type"] == "task_created"]
+    assert len(task_events) == 4
+    assert {event["payload"]["project_id"] for event in task_events} == set(project_ids)
+
+    reloaded = build_visual_control_plane_state(runtime_dir=runtime_dir)
+    assert {project["project_id"] for project in reloaded["projects"]} == set(project_ids)
+    assert {run["project_id"] for run in reloaded["go_runs"]} == set(project_ids)
+    assert not {
+        "shared",
+        "project-a-root",
+        "project-b-root",
+    } & {project["project_id"] for project in reloaded["projects"]}
+    for project_id, root in zip(project_ids, roots, strict=True):
+        contracts = root / "rules" / "project-contracts"
+        assert (contracts / f"{project_id}.md").exists()
+        assert not (contracts / "shared.md").exists()

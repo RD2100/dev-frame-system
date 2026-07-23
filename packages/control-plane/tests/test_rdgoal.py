@@ -214,6 +214,56 @@ def test_rdgoal_default_contract_is_project_local(tmp_path):
     assert Path(result.contract_path).exists()
 
 
+def test_rdgoal_uses_authoritative_project_id_for_contract_and_packet(tmp_path):
+    project_root = tmp_path / "directory-name-does-not-match"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+
+    result = rdgoal(
+        orchestrator,
+        project_root,
+        "Build a working MVP prototype.",
+        project_id="registered-project-id",
+        operation="choose architecture direction",
+    )
+
+    assert result.project_id == "registered-project-id"
+    assert Path(result.contract_path) == (
+        project_root / "rules" / "project-contracts" / "registered-project-id.md"
+    )
+    packet = json.loads(
+        (Path(result.dispatch.packet.packet_dir) / "packet.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert packet["project_id"] == "registered-project-id"
+    assert not (
+        project_root
+        / "rules"
+        / "project-contracts"
+        / "directory-name-does-not-match.md"
+    ).exists()
+
+
+def test_rdgoal_rejects_unsafe_authoritative_project_id_before_writes(tmp_path):
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+
+    with pytest.raises(ValueError, match="project_id must be a lowercase slug"):
+        rdgoal(
+            orchestrator,
+            project_root,
+            "Build a working MVP prototype.",
+            project_id="../escaped",
+        )
+
+    assert not (project_root / "rules").exists()
+    assert not runtime_dir.exists()
+
+
 def test_rdgoal_apply_rdinit_without_bootstrap_assets_does_not_crash(tmp_path, monkeypatch):
     project_root = tmp_path / "project"
     runtime_dir = tmp_path / "runtime"

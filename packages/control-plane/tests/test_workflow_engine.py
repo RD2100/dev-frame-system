@@ -143,3 +143,36 @@ def test_workflow_records_driver_in_start_event(tmp_path):
     ]
     start_summaries = [r["payload"]["summary"] for r in starts if r.get("event_type") == "workflow_event" and r["payload"].get("phase") == "start"]
     assert any("driver=command" in s for s in start_summaries)
+
+
+def test_workflow_preserves_authoritative_project_id_in_go_and_team_runtime(tmp_path):
+    runtime = tmp_path / "runtime"
+    project = _project(tmp_path)
+    engine = WorkflowEngine(runtime_dir=runtime)
+
+    result = engine.run_coding_workflow(
+        project,
+        "authoritative project identity workflow",
+        project_id="registered-project-id",
+        agents=2,
+        targets=["a.py", "b.py"],
+        worker_command=_pass_command(),
+    )
+
+    assert result.project_id == "registered-project-id"
+    go_run = json.loads(
+        (runtime / "go-runs" / result.go_run_id / "go-run.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert go_run["project_id"] == "registered-project-id"
+    events = [
+        json.loads(line)
+        for line in (runtime / TEAM_EVENTS_FILE).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    task_events = [event for event in events if event["event_type"] == "task_created"]
+    assert len(task_events) == 2
+    assert {event["payload"]["project_id"] for event in task_events} == {
+        "registered-project-id"
+    }

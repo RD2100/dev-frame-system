@@ -88,6 +88,7 @@ def run_go_dispatch(
     project_path: str | Path,
     requirement: str,
     *,
+    project_id: str | None = None,
     runtime_dir: str | Path | None = None,
     agents: int = 2,
     targets: list[str] | None = None,
@@ -127,7 +128,7 @@ def run_go_dispatch(
     runtime_root = Path(runtime_dir).resolve() if runtime_dir else default_runtime_dir()
     project_root = Path(project_path).resolve()
     target_shards = split_targets_by_size(project_root, targets or [], agents)
-    resolved_project_id = slugify_project_id(project_root)
+    resolved_project_id = str(project_id or "").strip() or slugify_project_id(project_root)
     effective_requirement, methodology = resolve_methodology(
         requirement, runtime_dir=runtime_root, project_id=resolved_project_id
     )
@@ -152,6 +153,7 @@ def run_go_dispatch(
             orchestrator,
             project_root,
             shard_requirement,
+            project_id=resolved_project_id,
             operation=f"go coding shard {shard_number}/{agents}",
             targets=shard_targets,
             apply_rdinit=apply_rdinit,
@@ -445,6 +447,7 @@ def _execute_parallel(
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = [
             pool.submit(_run_group, result.runtime_dir, result.project_root, result.go_run_id,
+                        result.project_id,
                         group, timeout_seconds, team, driver, acp_command, participant_ids)
             for group in groups
         ]
@@ -452,17 +455,19 @@ def _execute_parallel(
             future.result()
 
 
-def _run_group(runtime_dir: str, project_root: str, go_run_id: str,
+def _run_group(runtime_dir: str, project_root: str, go_run_id: str, project_id: str,
                group: list[GoAgentDispatch], timeout_seconds: int,
                team: TeamRuntime | None = None, driver: str = "command",
                acp_command: list[str] | None = None,
                participant_ids: set[str] | None = None) -> None:
     for agent in group:
-        _run_agent_in_place(runtime_dir, project_root, go_run_id, agent, timeout_seconds,
+        _run_agent_in_place(runtime_dir, project_root, go_run_id, project_id,
+                            agent, timeout_seconds,
                             team, driver, acp_command, participant_ids)
 
 
 def _run_agent_in_place(runtime_dir: str, project_root: str, go_run_id: str,
+                        project_id: str,
                         agent: GoAgentDispatch, timeout_seconds: int,
                         team: TeamRuntime | None = None, driver: str = "command",
                         acp_command: list[str] | None = None,
@@ -474,6 +479,7 @@ def _run_agent_in_place(runtime_dir: str, project_root: str, go_run_id: str,
             context_refs = _agent_context_refs(agent)
             team.record_task_created(
                 go_run_id, agent.agent_id,
+                project_id=project_id,
                 shard_index=agent.shard_index, shard_count=agent.shard_count,
                 targets=agent.targets,
                 context_refs=context_refs,

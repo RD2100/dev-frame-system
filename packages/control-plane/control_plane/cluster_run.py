@@ -299,8 +299,13 @@ def _run_cluster_workflow(
     """
     from .workflow_engine import WorkflowEngine
 
+    record = _load_run_record(runtime_dir, run_id) or {}
+    project_id = str(record.get("projectId") or "").strip() or None
     return WorkflowEngine(runtime_dir).run_coding_workflow(
-        project_path, goal, on_prepared=on_prepared
+        project_path,
+        goal,
+        project_id=project_id,
+        on_prepared=on_prepared,
     )
 
 
@@ -362,7 +367,12 @@ def _run_and_record(
     }
     try:
         result = _run_cluster_workflow(
-            runtime_dir, project_path, target, goal, run_id, on_prepared=_on_prepared
+            runtime_dir,
+            project_path,
+            target,
+            goal,
+            run_id,
+            on_prepared=_on_prepared,
         )
         record = _load_run_record(runtime_dir, run_id) or record
         record["status"] = str(getattr(result, "status", None) or "completed")

@@ -68,6 +68,7 @@ class WorkflowEngine:
         project_path: str | Path,
         goal: str,
         *,
+        project_id: str | None = None,
         agents: int = 2,
         targets: list[str] | None = None,
         worker_command: list[str] | None = None,
@@ -90,6 +91,7 @@ class WorkflowEngine:
         prepared = run_go_dispatch(
             project_path,
             goal,
+            project_id=project_id,
             runtime_dir=self.runtime_dir,
             agents=agents,
             targets=targets,

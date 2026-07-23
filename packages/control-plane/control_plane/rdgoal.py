@@ -1,6 +1,7 @@
 """rdgoal total-control entry point."""
 from __future__ import annotations
 
+import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -93,13 +94,16 @@ def run_rdinit(project_root: str | Path, *, apply: bool = False) -> str:
 
 
 def rdgoal(orchestrator: Orchestrator, project_path: str | Path, requirement: str,
-           *, operation: str = "direction choice", targets: list[str] | None = None,
+           *, project_id: str | None = None,
+           operation: str = "direction choice", targets: list[str] | None = None,
            apply_rdinit: bool = False,
            contracts_dir: str | Path | None = None,
            work_type: str | None = None,
            workflow_profile: dict[str, Any] | None = None) -> RdGoalResult:
     root = Path(project_path).resolve()
-    project_id = slugify_project_id(root)
+    resolved_project_id = str(project_id or "").strip() or slugify_project_id(root)
+    if re.fullmatch(r"[a-z0-9][a-z0-9-]*", resolved_project_id) is None:
+        raise ValueError("project_id must be a lowercase slug")
     notes: list[str] = []
 
     rdinit_action = run_rdinit(root, apply=apply_rdinit)
@@ -110,7 +114,7 @@ def rdgoal(orchestrator: Orchestrator, project_path: str | Path, requirement: st
         notes.append("rdinit bootstrap assets are unavailable in this installation; dispatch packet was still generated.")
 
     contract_path, created = ensure_contract(
-        project_id,
+        resolved_project_id,
         requirement,
         contracts_dir=contracts_dir or default_contracts_dir(root),
     )
@@ -119,7 +123,7 @@ def rdgoal(orchestrator: Orchestrator, project_path: str | Path, requirement: st
 
     orchestrator.register(contract_path, root)
     dispatch = orchestrator.dispatch(
-        project_id=project_id,
+        project_id=resolved_project_id,
         requirement=requirement,
         operation=operation,
         targets=targets or [],
@@ -128,7 +132,7 @@ def rdgoal(orchestrator: Orchestrator, project_path: str | Path, requirement: st
     )
 
     return RdGoalResult(
-        project_id=project_id,
+        project_id=resolved_project_id,
         project_root=str(root),
         contract_path=str(contract_path),
         governed=governed,
