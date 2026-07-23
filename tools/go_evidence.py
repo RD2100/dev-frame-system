@@ -469,7 +469,7 @@ def _can_record_non_pass_final_verdict_ref(result) -> bool:
         return False
     if reason.startswith("reviewer_role"):
         return False
-    if reason == "reviewer_id must differ from executor_id":
+    if reason.startswith("reviewer_id"):
         return False
     return str(result.review.get("verdict") or "") in {"blocked", "fail", "escalate"}
 

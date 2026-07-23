@@ -10,7 +10,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
 
 import go_evidence
 from control_plane.run_index import build_run_index
-from control_plane.team_runtime import TEAM_EVENTS_FILE, build_team_runtime_view
+from control_plane.team_runtime import (
+    TEAM_EVENTS_FILE,
+    TeamRuntime,
+    build_team_runtime_view,
+)
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -206,6 +210,49 @@ def test_reviewer_role_whitespace_and_case_self_review_blocked(tmp_path, reviewe
     with open(os.path.join(evidence_dir, "final-verdict.json"), "r", encoding="utf-8") as fh:
         final_verdict = json.load(fh)
     assert final_verdict["final_state"] == "blocked"
+
+
+@pytest.mark.parametrize(
+    "review_overrides",
+    [
+        {"reviewer_role": "controller"},
+        {"reviewer_role": " Coordinator "},
+        {"reviewer_role": "ROOT"},
+        {"reviewer_id": "controller"},
+        {"reviewer_id": " Coordinator "},
+        {"reviewer_id": "ROOT"},
+    ],
+)
+def test_governance_author_review_cannot_finalize(
+    tmp_path, review_overrides
+):
+    evidence_dir = _setup_minimal_evidence(
+        str(tmp_path / "evidence"), review_overrides
+    )
+    runtime_dir = str(tmp_path / "runtime")
+
+    rc = go_evidence.main([
+        "finalize",
+        evidence_dir,
+        "--team-runtime-dir",
+        runtime_dir,
+    ])
+
+    assert rc == 1
+    with open(os.path.join(evidence_dir, "final-verdict.json"), "r", encoding="utf-8") as fh:
+        final_verdict = json.load(fh)
+    assert final_verdict["final_state"] == "blocked"
+    journal_path = tmp_path / "runtime" / TEAM_EVENTS_FILE
+    if journal_path.exists():
+        events = [
+            json.loads(line)
+            for line in journal_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert not {
+            "review_ref",
+            "final_verdict_ref",
+        } & {event["event_type"] for event in events}
 
 
 def test_open_p0_finding_blocked(tmp_path):
@@ -508,6 +555,8 @@ def test_finalize_backfills_go_run_context_before_team_runtime_final_ready(tmp_p
         "task_claimed",
         "task_result",
         "evidence_ref",
+        "task_created",
+        "task_claimed",
         "review_ref",
         "final_verdict_ref",
     ]
@@ -535,6 +584,292 @@ def test_finalize_backfills_go_run_context_before_team_runtime_final_ready(tmp_p
     assert record["final_verdict_ref"]["verdict_id"] == "fv-go-evidence-finalize"
 
 
+def test_finalize_valid_bound_review_assignment_can_reach_final_ready(tmp_path):
+    run_id = "go-bound-review-finalize"
+    evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
+    _write_json(
+        os.path.join(evidence_dir, "chain-evidence.json"),
+        _chain_evidence(run_id=run_id),
+    )
+    runtime_dir = str(tmp_path / "runtime")
+    _write_go_run_metadata(runtime_dir, run_id)
+    team = TeamRuntime(runtime_dir=runtime_dir)
+    team.record_task_created(
+        run_id,
+        "reviewer-1",
+        task_kind="independent_review",
+        agent_role="reviewer",
+        targets=["src/demo.py"],
+    )
+    team.record_task_claimed(run_id, "reviewer-1")
+
+    rc = go_evidence.main([
+        "finalize",
+        evidence_dir,
+        "--team-runtime-dir",
+        runtime_dir,
+    ])
+
+    assert rc == 0
+    view = build_team_runtime_view(runtime_dir)
+    reviewer_task = next(
+        task for task in view["task_board"]
+        if task["agent_ids"] == ["reviewer-1"]
+    )
+    assert reviewer_task["status"] == "completed"
+    index = build_run_index(runtime_dir)
+    record = next(
+        entry["record"]
+        for entry in index["runs"]
+        if entry["adapter_id"] == "team_events"
+    )
+    assert record["acceptance_state"] == "final_ready"
+    assert record["review_refs"][0]["reviewer_id"] == "reviewer-1"
+    assert record["final_verdict_ref"]["verdict_id"] == f"fv-{run_id}"
+
+
+def test_finalize_resumes_legacy_bare_pass_without_allowing_review_takeover(tmp_path):
+    run_id = "go-legacy-pending-review"
+    reviewer_id = "reviewer-1"
+    evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
+    _write_json(
+        os.path.join(evidence_dir, "chain-evidence.json"),
+        _chain_evidence(run_id=run_id),
+    )
+    runtime_dir = str(tmp_path / "runtime")
+    _write_go_run_metadata(runtime_dir, run_id)
+    review_id = f"review-{run_id}-{reviewer_id}"
+    review_path = os.path.join(evidence_dir, "review.yaml")
+    reviewed_evidence_refs = [
+        os.path.join(evidence_dir, name)
+        for name in go_evidence.REQUIRED_INPUTS
+    ]
+    legacy_review = {
+        "event_type": "review_ref",
+        "run_id": run_id,
+        "agent_id": reviewer_id,
+        "payload": {
+            "review_id": review_id,
+            "reviewer_id": reviewer_id,
+            "reviewer_role": "reviewer",
+            "executor_id": "executor-1",
+            "verdict": "pass",
+            "ref_path": review_path,
+            "reviewed_evidence_refs": reviewed_evidence_refs,
+            "reviewed_inputs": [
+                "diff.patch",
+                "test-output.md",
+                "safety-report.json",
+                "chain-evidence.json",
+            ],
+            "source": "go_evidence_finalize",
+        },
+        "timestamp": "2026-07-23T00:00:00+00:00",
+        "event_id": "legacy-bare-pass-review",
+    }
+    journal_path = tmp_path / "runtime" / TEAM_EVENTS_FILE
+    journal_path.parent.mkdir(parents=True, exist_ok=True)
+    journal_path.write_text(json.dumps(legacy_review) + "\n", encoding="utf-8")
+    team = TeamRuntime(runtime_dir=runtime_dir)
+    journal_before = journal_path.read_bytes()
+
+    with pytest.raises(ValueError, match="active review assignment"):
+        team.record_review_ref(
+            run_id,
+            "reviewer-2",
+            review_id="review-conflicting-reconstructed-owner",
+            reviewer_role="reviewer",
+            executor_id="executor-1",
+            verdict="pass",
+            ref_path=review_path,
+            reviewed_evidence_refs=reviewed_evidence_refs,
+            reviewed_inputs=[
+                "diff.patch",
+                "test-output.md",
+                "safety-report.json",
+                "chain-evidence.json",
+            ],
+            source="go_evidence_finalize",
+        )
+
+    assert journal_path.read_bytes() == journal_before
+    with pytest.raises(ValueError, match="active review assignment"):
+        team.record_task_created(
+            run_id,
+            "reviewer-2",
+            task_kind="independent_review",
+            agent_role="reviewer",
+            targets=["src/demo.py"],
+        )
+
+    assert journal_path.read_bytes() == journal_before
+    rc = go_evidence.main([
+        "finalize",
+        evidence_dir,
+        "--team-runtime-dir",
+        runtime_dir,
+    ])
+
+    assert rc == 0
+    events = team.read_all()
+    assert sum(event["event_type"] == "review_ref" for event in events) == 1
+    assert sum(event["event_type"] == "final_verdict_ref" for event in events) == 1
+    assert not [
+        event
+        for event in events
+        if event["event_type"] == "task_created"
+        and event["agent_id"] == reviewer_id
+    ]
+    final_event = next(
+        event for event in events if event["event_type"] == "final_verdict_ref"
+    )
+    assert final_event["payload"]["review_ref"] == review_id
+
+
+def test_finalize_retries_after_final_verdict_journal_failure_without_duplicates(
+    tmp_path, monkeypatch
+):
+    run_id = "go-final-verdict-retry"
+    evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
+    _write_json(
+        os.path.join(evidence_dir, "chain-evidence.json"),
+        _chain_evidence(run_id=run_id),
+    )
+    runtime_dir = str(tmp_path / "runtime")
+    _write_go_run_metadata(runtime_dir, run_id)
+    team = TeamRuntime(runtime_dir=runtime_dir)
+    team.record_task_created(
+        run_id,
+        "reviewer-1",
+        task_kind="independent_review",
+        agent_role="reviewer",
+        targets=["src/demo.py"],
+    )
+    team.record_task_claimed(run_id, "reviewer-1")
+    original_record_final = TeamRuntime.record_final_verdict_ref
+
+    def reject_final_verdict_write(*_args, **_kwargs):
+        raise OSError("injected final verdict journal failure")
+
+    monkeypatch.setattr(
+        TeamRuntime,
+        "record_final_verdict_ref",
+        reject_final_verdict_write,
+    )
+
+    first_rc = go_evidence.main([
+        "finalize",
+        evidence_dir,
+        "--team-runtime-dir",
+        runtime_dir,
+    ])
+
+    assert first_rc == 2
+    first_events = team.read_all()
+    assert sum(event["event_type"] == "review_ref" for event in first_events) == 1
+    assert not [
+        event for event in first_events if event["event_type"] == "final_verdict_ref"
+    ]
+    first_view = build_team_runtime_view(runtime_dir)
+    first_review_task = next(
+        task
+        for task in first_view["task_board"]
+        if task["agent_ids"] == ["reviewer-1"]
+    )
+    assert first_review_task["status"] == "claimed"
+    with pytest.raises(ValueError, match="active review assignment"):
+        team.record_task_created(
+            run_id,
+            "reviewer-2",
+            task_kind="independent_review",
+            agent_role="reviewer",
+            targets=["src/demo.py"],
+        )
+
+    monkeypatch.setattr(
+        TeamRuntime,
+        "record_final_verdict_ref",
+        original_record_final,
+    )
+    second_rc = go_evidence.main([
+        "finalize",
+        evidence_dir,
+        "--team-runtime-dir",
+        runtime_dir,
+    ])
+
+    assert second_rc == 0
+    final_events = team.read_all()
+    assert sum(event["event_type"] == "review_ref" for event in final_events) == 1
+    assert sum(event["event_type"] == "final_verdict_ref" for event in final_events) == 1
+    final_view = build_team_runtime_view(runtime_dir)
+    final_review_task = next(
+        task
+        for task in final_view["task_board"]
+        if task["agent_ids"] == ["reviewer-1"]
+    )
+    assert final_review_task["status"] == "completed"
+    final_record = next(
+        entry["record"]
+        for entry in build_run_index(runtime_dir)["runs"]
+        if entry["adapter_id"] == "team_events"
+    )
+    assert final_record["acceptance_state"] == "final_ready"
+    team.record_task_created(
+        run_id,
+        "reviewer-2",
+        task_kind="independent_review",
+        agent_role="reviewer",
+        targets=["src/demo.py"],
+    )
+
+
+def test_finalize_bound_fail_review_remains_rework_not_final_ready(tmp_path):
+    run_id = "go-bound-review-rework"
+    evidence_dir = _setup_minimal_evidence(
+        str(tmp_path / "evidence"), {"verdict": "fail"}
+    )
+    _write_json(
+        os.path.join(evidence_dir, "chain-evidence.json"),
+        _chain_evidence(run_id=run_id),
+    )
+    runtime_dir = str(tmp_path / "runtime")
+    _write_go_run_metadata(runtime_dir, run_id)
+    team = TeamRuntime(runtime_dir=runtime_dir)
+    team.record_task_created(
+        run_id,
+        "reviewer-1",
+        task_kind="independent_review",
+        agent_role="reviewer",
+        targets=["src/demo.py"],
+    )
+    team.record_task_claimed(run_id, "reviewer-1")
+
+    rc = go_evidence.main([
+        "finalize",
+        evidence_dir,
+        "--team-runtime-dir",
+        runtime_dir,
+    ])
+
+    assert rc == 1
+    view = build_team_runtime_view(runtime_dir)
+    reviewer_task = next(
+        task for task in view["task_board"]
+        if task["agent_ids"] == ["reviewer-1"]
+    )
+    assert reviewer_task["status"] == "failed"
+    index = build_run_index(runtime_dir)
+    record = next(
+        entry["record"]
+        for entry in index["runs"]
+        if entry["adapter_id"] == "team_events"
+    )
+    assert record["acceptance_state"] != "final_ready"
+    assert record["review_refs"][0]["verdict"] == "fail"
+    assert record["final_verdict_ref"]["final_state"] == "failed"
+
+
 def test_finalize_team_runtime_recording_is_idempotent_for_same_verdict(tmp_path):
     evidence_dir = _setup_minimal_evidence(str(tmp_path / "evidence"))
     _write_json(
@@ -556,6 +891,8 @@ def test_finalize_team_runtime_recording_is_idempotent_for_same_verdict(tmp_path
         "task_claimed",
         "task_result",
         "evidence_ref",
+        "task_created",
+        "task_claimed",
         "review_ref",
         "final_verdict_ref",
     ]
@@ -566,6 +903,8 @@ def test_finalize_team_runtime_recording_is_idempotent_for_same_verdict(tmp_path
         "task-claimed",
         "task-result",
         "evidence-ref",
+        "task-created",
+        "task-claimed",
         "review-ref",
         "final-verdict-ref",
     ]
@@ -592,7 +931,12 @@ def test_finalize_without_go_run_metadata_stays_blocked_without_sealed_context(t
     assert rc == 0
     lines = (tmp_path / "runtime" / TEAM_EVENTS_FILE).read_text(encoding="utf-8").strip().splitlines()
     events = [json.loads(line) for line in lines]
-    assert [event["event_type"] for event in events] == ["review_ref", "final_verdict_ref"]
+    assert [event["event_type"] for event in events] == [
+        "task_created",
+        "task_claimed",
+        "review_ref",
+        "final_verdict_ref",
+    ]
 
     index = build_run_index(runtime_dir)
     record = next(entry["record"] for entry in index["runs"] if entry["adapter_id"] == "team_events")
@@ -648,6 +992,8 @@ def test_finalize_records_blocked_team_runtime_refs_without_final_ready(tmp_path
         "evidence_ref",
         "evidence_ref",
         "evidence_ref",
+        "task_created",
+        "task_claimed",
         "review_ref",
         "final_verdict_ref",
     ]
@@ -736,6 +1082,35 @@ def test_finalize_records_only_evidence_refs_for_invalid_non_pass_blockers(tmp_p
     assert record["acceptance_state"] == "review_pending"
     assert "final_verdict_ref" not in record
     assert record["domain_refs"]["final_verdict_ref_present"] is False
+
+
+@pytest.mark.parametrize("reviewer_id", ["root", "controller", "coordinator"])
+@pytest.mark.parametrize("verdict", ["blocked", "fail", "escalate"])
+def test_finalize_non_pass_governance_reviewer_id_is_policy_blocked(
+    tmp_path, reviewer_id, verdict
+):
+    evidence_dir = _setup_minimal_evidence(
+        str(tmp_path / "evidence"),
+        {"reviewer_id": reviewer_id, "verdict": verdict},
+    )
+    runtime_dir = str(tmp_path / "runtime")
+
+    rc = go_evidence.main([
+        "finalize",
+        evidence_dir,
+        "--team-runtime-dir",
+        runtime_dir,
+    ])
+
+    assert rc == 1
+    with open(os.path.join(evidence_dir, "final-verdict.json"), "r", encoding="utf-8") as fh:
+        final_verdict = json.load(fh)
+    assert final_verdict["final_state"] == "blocked"
+    events = TeamRuntime(runtime_dir=runtime_dir).read_all()
+    assert not {
+        "review_ref",
+        "final_verdict_ref",
+    } & {event["event_type"] for event in events}
 
 
 @pytest.mark.parametrize("verdict,expected_state", [

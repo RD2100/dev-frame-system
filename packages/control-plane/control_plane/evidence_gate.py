@@ -9,6 +9,12 @@ from typing import Any
 
 from jsonschema.validators import validator_for
 
+from .team_runtime import (
+    ALLOWED_REVIEW_VERDICTS,
+    BLOCKED_REVIEW_ROLES,
+    BLOCKED_REVIEWER_IDS,
+)
+
 REQUIRED_FILES = [
     "diff.patch",
     "test-output.md",
@@ -28,8 +34,8 @@ FULL_EVIDENCE_FILES = REQUIRED_FILES + [
     "final-report.md",
     "final-verdict.json",
 ]
-BLOCKED_ROLES = {"executor", "fixer", "coder", "worker"}
-ALLOWED_VERDICTS = {"pass", "blocked", "fail", "escalate"}
+BLOCKED_ROLES = BLOCKED_REVIEW_ROLES
+ALLOWED_VERDICTS = ALLOWED_REVIEW_VERDICTS
 
 
 @dataclass(frozen=True)
@@ -170,6 +176,15 @@ def evaluate_evidence_dir(evidence_dir: str | Path) -> EvidenceGateResult:
 
     reviewer_id = str(review.get("reviewer_id", "")).strip()
     executor_id = str(review.get("executor_id", "")).strip()
+    if reviewer_id.casefold() in BLOCKED_REVIEWER_IDS:
+        return EvidenceGateResult(
+            status="blocked",
+            reason=f"reviewer_id '{reviewer_id}' is not independent",
+            review=review,
+            chain_evidence=chain_evidence,
+            missing_files=[],
+            missing_inputs=[],
+        )
     if reviewer_id and executor_id and reviewer_id == executor_id:
         return EvidenceGateResult(
             status="blocked",

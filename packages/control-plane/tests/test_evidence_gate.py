@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 import yaml
 from jsonschema.validators import validator_for
 
@@ -134,6 +135,38 @@ def test_evidence_gate_blocks_whitespace_padded_executor_role(tmp_path):
     assert final_verdict["final_state"] == "blocked"
 
 
+@pytest.mark.parametrize("reviewer_role", ["controller", " Coordinator ", "ROOT"])
+def test_evidence_gate_blocks_governance_authority_reviewer_roles(
+    tmp_path, reviewer_role
+):
+    evidence_dir = tmp_path / "evidence"
+    _write_evidence(evidence_dir, _review(reviewer_role=reviewer_role))
+
+    result = evaluate_evidence_dir(evidence_dir)
+    final_verdict = build_final_verdict(
+        evidence_dir, result, "2026-07-07T00:00:00+00:00"
+    )
+
+    assert result.status == "blocked"
+    assert "review" in result.reason
+    assert final_verdict["final_state"] == "blocked"
+
+
+@pytest.mark.parametrize("reviewer_id", ["controller", " Coordinator ", "ROOT"])
+def test_evidence_gate_blocks_governance_author_reviewer_id(tmp_path, reviewer_id):
+    evidence_dir = tmp_path / "evidence"
+    _write_evidence(evidence_dir, _review(reviewer_id=reviewer_id))
+
+    result = evaluate_evidence_dir(evidence_dir)
+    final_verdict = build_final_verdict(
+        evidence_dir, result, "2026-07-07T00:00:00+00:00"
+    )
+
+    assert result.status == "blocked"
+    assert "reviewer_id" in result.reason
+    assert final_verdict["final_state"] == "blocked"
+
+
 def test_evidence_gate_blocks_invalid_chain_evidence_schema(tmp_path):
     evidence_dir = tmp_path / "evidence"
     _write_evidence(evidence_dir, _review())
@@ -150,3 +183,42 @@ def test_evidence_gate_blocks_invalid_chain_evidence_schema(tmp_path):
     assert "chain-evidence.json schema invalid" in result.reason
     assert failure["source_contract"] == "EvidenceManifest"
     assert final_verdict["final_state"] == "blocked"
+
+
+def test_review_schema_mirror_matches_independent_reviewer_contract():
+    root_path = REPO_ROOT / "schemas" / "agent-runtime" / "review.schema.json"
+    mirror_path = (
+        REPO_ROOT
+        / "packages"
+        / "test-frame"
+        / "schemas"
+        / "agent-runtime"
+        / "review.schema.json"
+    )
+    root_schema = json.loads(root_path.read_text(encoding="utf-8-sig"))
+    mirror_schema = json.loads(mirror_path.read_text(encoding="utf-8-sig"))
+
+    assert mirror_schema == root_schema
+    assert root_schema["properties"]["verdict"]["enum"] == [
+        "pass",
+        "blocked",
+        "fail",
+        "escalate",
+    ]
+    valid = _review()
+    blocked_roles = [
+        "executor",
+        "fixer",
+        "coder",
+        "worker",
+        "controller",
+        "coordinator",
+        "root",
+    ]
+    for schema in (root_schema, mirror_schema):
+        validator_class = validator_for(schema)
+        validator_class.check_schema(schema)
+        validator = validator_class(schema)
+        validator.validate(valid)
+        for role in blocked_roles:
+            assert list(validator.iter_errors({**valid, "reviewer_role": role}))

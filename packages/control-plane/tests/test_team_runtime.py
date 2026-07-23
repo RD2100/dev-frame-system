@@ -179,7 +179,41 @@ def test_worker_success_without_review_never_passes_acceptance_gate(tmp_path):
 
 def test_review_and_final_verdict_events_project_as_distinct_team_objects(tmp_path):
     team = TeamRuntime(runtime_dir=tmp_path)
-    team.record_result("go-run-review", "coding-agent-1", status="passed", report_path="reports/worker.md")
+    report_path = tmp_path / "reports" / "worker.md"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text("worker evidence\n", encoding="utf-8")
+    review_path = tmp_path / "reviews" / "review.yaml"
+    review_path.parent.mkdir(parents=True)
+    review_path.write_text("verdict: pass\n", encoding="utf-8")
+    final_path = tmp_path / "final" / "final-verdict.json"
+    final_path.parent.mkdir(parents=True)
+    gate_id = "gate-go-run-review-independent-review"
+    final_path.write_text(json.dumps({
+        "verdict_id": "fv-go-run-review-1",
+        "produced_by": "go-evidence-finalizer",
+        "produced_at": "2026-07-23T00:00:00+00:00",
+        "producer_role": "governance",
+        "final_state": "final_ready",
+        "inputs_reviewed": [str(report_path), str(review_path)],
+        "gate_summary": [{
+            "gate_id": gate_id,
+            "result": "pass",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-1",
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:go-run-review",
+    }), encoding="utf-8")
+    team.record_result(
+        "go-run-review",
+        "coding-agent-1",
+        status="passed",
+        report_path=str(report_path),
+    )
     team.record_review_ref(
         "go-run-review",
         "reviewer-1",
@@ -187,10 +221,10 @@ def test_review_and_final_verdict_events_project_as_distinct_team_objects(tmp_pa
         reviewer_role="reviewer",
         executor_id="coding-agent-1",
         verdict="pass",
-        ref_path="reviews/review.yaml",
-        reviewed_evidence_refs=["ev-team-worker-report"],
+        ref_path=str(review_path),
+        reviewed_evidence_refs=[str(report_path)],
         reviewed_inputs=["diff.patch", "test-output.md", "safety-report.json", "chain-evidence.json"],
-        source="evidence_gate",
+        source="go_evidence_finalize",
     )
     team.record_final_verdict_ref(
         "go-run-review",
@@ -198,13 +232,13 @@ def test_review_and_final_verdict_events_project_as_distinct_team_objects(tmp_pa
         verdict_id="fv-go-run-review-1",
         producer_role="governance",
         final_state="final_ready",
-        ref_path="final/final-verdict.json",
+        ref_path=str(final_path),
         review_ref="review-go-run-review-1",
-        gate_refs=["gate-go-run-review-independent-review"],
+        gate_refs=[gate_id],
         gate_summary=[{
-            "gate_id": "gate-go-run-review-independent-review",
+            "gate_id": gate_id,
             "result": "pass",
-            "evidence_path": "reviews/review.yaml",
+            "evidence_path": str(review_path),
         }],
         human_or_governance_reference="go-evidence-finalize:go-run-review",
     )

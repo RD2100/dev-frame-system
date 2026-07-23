@@ -14,7 +14,17 @@ import yaml
 from jsonschema.validators import validator_for
 
 from .backup_guard import default_runtime_dir
-from .team_runtime import TEAM_EVENTS_FILE
+from .team_runtime import (
+    ALLOWED_REVIEW_VERDICTS,
+    BLOCKED_REVIEW_ROLES,
+    BLOCKED_REVIEWER_IDS,
+    TEAM_EVENTS_FILE,
+    TASK_KIND_EXECUTION,
+    TASK_KIND_INDEPENDENT_REVIEW,
+    team_final_review_liveness_diagnostic,
+    team_identity_ownership,
+    team_review_liveness,
+)
 
 ADAPTER_VERSION = "run-index.0.1"
 SCHEMA_VERSION = "0.1"
@@ -676,18 +686,32 @@ def _team_event_entries(runtime: Path) -> list[dict[str, Any]]:
             events_by_run.setdefault(run_id, []).append(event)
     for run_id, events in sorted(events_by_run.items()):
         latest = events[-1]
-        result_events = [event for event in events if event.get("event_type") == "task_result"]
+        result_events = _team_execution_result_events(events)
         context_refs = _team_context_refs(events)
-        worker_agent_ids = _team_worker_agent_ids(result_events)
-        review_refs, review_failures = _team_review_refs(events, worker_agent_ids)
+        execution_keys, _reviewer_keys = team_identity_ownership(events)
+        execution_agent_ids = {
+            agent_id
+            for event_run_id, agent_id in execution_keys
+            if event_run_id == run_id
+        }
+        review_liveness = team_review_liveness(events).get(run_id, {})
+        review_refs, review_failures = _team_review_refs(
+            events, execution_agent_ids, review_liveness
+        )
         final_verdict_ref, final_failures, limitations, gate_refs, final_diagnostics = _team_final_verdict_ref(
             events,
             review_refs,
-            worker_agent_ids,
+            execution_agent_ids,
             context_refs,
+            review_liveness,
         )
         failure_refs = review_failures + final_failures
         status = _aggregate_team_status(result_events)
+        active_review_pending = (
+            _team_active_review_pending(review_liveness)
+            and final_verdict_ref is None
+            and not failure_refs
+        )
         entries.append(_entry(
             adapter_id="team_events",
             source_type="team_event_journal",
@@ -712,6 +736,7 @@ def _team_event_entries(runtime: Path) -> list[dict[str, Any]]:
                 failure_refs=failure_refs,
                 limitations=limitations,
                 worker_results=_team_worker_results(result_events),
+                active_review_pending=active_review_pending,
                 domain_refs={
                     "legacy_adapter": "team_events",
                     "source_run_id": run_id,
@@ -883,15 +908,19 @@ def _atgo_entries(runtime: Path) -> list[dict[str, Any]]:
 def _unsafe_atgo_review(review: dict[str, Any]) -> str:
     reviewer_role_raw = str(review.get("reviewer_role") or "").strip()
     reviewer_role = _safe_token(reviewer_role_raw)
-    reviewer_id = str(review.get("reviewer_id") or "").strip()
-    executor_id = str(review.get("executor_id") or "").strip()
+    reviewer_id_raw = str(review.get("reviewer_id") or "").strip()
+    reviewer_id = _safe_token(reviewer_id_raw)
+    executor_id_raw = str(review.get("executor_id") or "").strip()
+    executor_id = _safe_token(executor_id_raw)
     if not reviewer_role_raw:
         return "reviewer_role is missing"
-    if not reviewer_id:
+    if not reviewer_id_raw:
         return "reviewer_id is missing"
-    if reviewer_role in {"executor", "fixer", "coder", "worker"}:
+    if reviewer_role in BLOCKED_REVIEW_ROLES:
         return f"reviewer role is not independent: {reviewer_role}"
-    if reviewer_id and executor_id and reviewer_id == executor_id:
+    if reviewer_id in BLOCKED_REVIEWER_IDS:
+        return f"reviewer identity is not independent: {reviewer_id}"
+    if reviewer_id_raw and executor_id_raw and reviewer_id == executor_id:
         return "reviewer_id matches executor_id"
     return ""
 
@@ -1366,6 +1395,7 @@ def _make_record(
     worker_results: list[dict[str, Any]] | None = None,
     failure_refs: list[dict[str, Any]] | None = None,
     domain_refs: dict[str, Any] | None = None,
+    active_review_pending: bool = False,
 ) -> dict[str, Any]:
     run_token = _safe_token(legacy_id)
     axes = _axes(
@@ -1375,6 +1405,7 @@ def _make_record(
         gate_refs=gate_refs or [],
         final_verdict_ref=final_verdict_ref,
         failure_refs=failure_refs or [],
+        active_review_pending=active_review_pending,
     )
     refs = {
         "adapter_version": ADAPTER_VERSION,
@@ -1426,6 +1457,7 @@ def _axes(
     gate_refs: list[dict[str, Any]],
     final_verdict_ref: dict[str, Any] | None,
     failure_refs: list[dict[str, Any]],
+    active_review_pending: bool = False,
 ) -> dict[str, str]:
     normalized = _safe_token(status).replace("_", "-")
     if (
@@ -1456,12 +1488,30 @@ def _axes(
         return _axis("closed", "failed", "review_failed", "gate_failed", "failed", "failed")
     if failure_refs and adapter_id == "team_events":
         return _axis("closed", "blocked", "not_reviewed", "gate_blocked", "blocked", "blocked")
+    review_verdict = str(review_refs[-1].get("verdict") or "") if review_refs else ""
+    if review_verdict == "fail":
+        return _axis("closed", "failed", "review_failed", "not_evaluated", "failed", "failed")
+    if review_verdict == "blocked":
+        return _axis("closed", "blocked", "review_blocked", "not_evaluated", "blocked", "blocked")
+    if review_verdict == "escalate":
+        return _axis(
+            "closed",
+            "human_required",
+            "escalated",
+            "not_evaluated",
+            "blocked",
+            "waiting_for_you",
+        )
     if normalized in {"queued", "prepared", "ready", "deferred", "draft", ""}:
         return _axis("prepared", "unknown", "not_reviewed", "not_evaluated", "deferred", "queued")
     if normalized in {"running", "reviewing"}:
         return _axis("running", "unknown", "review_pending", "gate_pending", "review_pending", "running")
     if normalized in {"pass", "passed", "completed", "success", "succeeded", "verified", "accepted"}:
-        review_state = "review_passed" if review_refs else "review_pending"
+        review_state = (
+            "review_pending"
+            if active_review_pending or not review_refs
+            else "review_passed"
+        )
         return _axis("awaiting_review", "passed", review_state, "not_evaluated", "review_pending", "completed")
     if normalized in {"blocked", "hard-stop", "human-required", "needs-human", "insufficient-evidence"}:
         outcome = "human_required" if normalized in {"human-required", "needs-human"} else "blocked"
@@ -1986,11 +2036,40 @@ def _team_evidence_kind(ref_type: str) -> str:
 def _team_review_refs(
     events: list[dict[str, Any]],
     blocked_reviewer_ids: set[str],
+    review_liveness: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     refs: list[dict[str, Any]] = []
     failures: list[dict[str, Any]] = []
+    conflicts = review_liveness.get("conflict_events")
+    if isinstance(conflicts, list) and conflicts:
+        conflict_event = _as_dict(conflicts[0])
+        return [], [_event_failure_ref(
+            "team-review-assignment",
+            conflict_event,
+            "run has multiple concurrent review assignments",
+        )]
+    ambiguous_review_ids = review_liveness.get(
+        "ambiguous_review_id_events"
+    )
+    if isinstance(ambiguous_review_ids, list) and ambiguous_review_ids:
+        ambiguous_event = _as_dict(ambiguous_review_ids[0])
+        return [], [_event_failure_ref(
+            "team-review-id",
+            ambiguous_event,
+            "review_id is reused across review assignment generations",
+        )]
     seen: set[str] = set()
+    active_reviewers: set[str] = set()
+    explicit_assignment_seen = False
     for event in events:
+        if _is_independent_review_task_event(event):
+            explicit_assignment_seen = True
+            assigned_reviewer = _team_review_assignment_owner(
+                event, blocked_reviewer_ids
+            )
+            if assigned_reviewer:
+                active_reviewers.add(assigned_reviewer)
+            continue
         if event.get("event_type") != "review_ref":
             continue
         payload = _as_dict(event.get("payload"))
@@ -1998,12 +2077,21 @@ def _team_review_refs(
         reviewer_id = str(payload.get("reviewer_id") or event.get("agent_id") or "")
         reviewer_role = str(payload.get("reviewer_role") or "")
         executor_id = str(payload.get("executor_id") or "")
-        verdict = _review_verdict(str(payload.get("verdict") or ""))
+        raw_verdict = str(payload.get("verdict") or "")
+        verdict = raw_verdict if raw_verdict in ALLOWED_REVIEW_VERDICTS else ""
         ref_path = str(payload.get("ref_path") or "")
         reviewed_evidence_refs = [
             str(ref) for ref in payload.get("reviewed_evidence_refs", [])
             if str(ref)
         ] if isinstance(payload.get("reviewed_evidence_refs"), list) else []
+        if explicit_assignment_seen and reviewer_id not in active_reviewers:
+            failures.append(_event_failure_ref(
+                "team-review",
+                event,
+                "reviewer_id does not own an active review assignment",
+                ref_path,
+            ))
+            continue
         diagnostic = _unsafe_team_review(
             review_id=review_id,
             reviewer_id=reviewer_id,
@@ -2020,6 +2108,7 @@ def _team_review_refs(
         if review_id in seen:
             continue
         seen.add(review_id)
+        active_reviewers.discard(reviewer_id)
         refs.append({
             "review_id": review_id,
             "reviewer_id": reviewer_id,
@@ -2029,6 +2118,50 @@ def _team_review_refs(
             "reviewed_evidence_refs": reviewed_evidence_refs,
         })
     return refs, failures
+
+
+def _team_active_review_pending(review_liveness: dict[str, Any]) -> bool:
+    active_reviewer_ids = review_liveness.get("active_reviewer_ids")
+    if not isinstance(active_reviewer_ids, list) or not active_reviewer_ids:
+        return False
+    pending_pass_reviews = review_liveness.get("pending_pass_reviews")
+    pending = (
+        pending_pass_reviews
+        if isinstance(pending_pass_reviews, dict)
+        else {}
+    )
+    return any(
+        not str(pending.get(reviewer_id) or "")
+        for reviewer_id in active_reviewer_ids
+    )
+
+
+def _is_independent_review_task_event(event: dict[str, Any]) -> bool:
+    if str(event.get("event_type") or "") != "task_created":
+        return False
+    payload = _as_dict(event.get("payload"))
+    return (
+        _normalize_team_task_kind(payload.get("task_kind"))
+        == TASK_KIND_INDEPENDENT_REVIEW
+    )
+
+
+def _team_review_assignment_owner(
+    event: dict[str, Any], blocked_reviewer_ids: set[str]
+) -> str:
+    reviewer_id = str(event.get("agent_id") or "")
+    payload = _as_dict(event.get("payload"))
+    reviewer_role = str(payload.get("agent_role") or "").strip()
+    role_token = _safe_token(reviewer_role)
+    if (
+        not reviewer_id
+        or not reviewer_role
+        or role_token in BLOCKED_REVIEW_ROLES
+        or _safe_token(reviewer_id) in BLOCKED_REVIEWER_IDS
+        or reviewer_id in blocked_reviewer_ids
+    ):
+        return ""
+    return reviewer_id
 
 
 def _unsafe_team_review(
@@ -2049,13 +2182,15 @@ def _unsafe_team_review(
         return "reviewer_id is missing"
     if not reviewer_role:
         return "reviewer_role is missing"
-    if role_token in {"executor", "fixer", "coder", "worker"}:
+    if role_token in BLOCKED_REVIEW_ROLES:
         return f"reviewer role is not independent: {role_token}"
+    if _safe_token(reviewer_id) in BLOCKED_REVIEWER_IDS:
+        return f"reviewer identity is not independent: {_safe_token(reviewer_id)}"
     if reviewer_id in blocked_reviewer_ids:
         return "reviewer_id matches a worker in the same run"
     if reviewer_id and executor_id and reviewer_id == executor_id:
         return "reviewer_id matches executor_id"
-    if verdict not in {"pass", "blocked", "fail", "escalate"}:
+    if verdict not in ALLOWED_REVIEW_VERDICTS:
         return "review verdict is not allowed"
     if not ref_path:
         return "review ref_path is missing"
@@ -2187,6 +2322,7 @@ def _team_final_verdict_ref(
     review_refs: list[dict[str, Any]],
     blocked_producer_ids: set[str],
     context_refs: list[dict[str, str]],
+    review_liveness: dict[str, Any],
 ) -> tuple[
     dict[str, Any] | None,
     list[dict[str, Any]],
@@ -2281,6 +2417,14 @@ def _team_final_verdict_ref(
                 ref_path,
             ))
             diagnostics.append(gate_diagnostic)
+            continue
+        liveness_diagnostic = team_final_review_liveness_diagnostic(
+            review_liveness,
+            final_state,
+            review_ref,
+        )
+        if liveness_diagnostic:
+            diagnostics.append(liveness_diagnostic)
             continue
         final_ref = {
             "verdict_id": verdict_id,
@@ -2569,6 +2713,29 @@ def _team_worker_results(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
             str(event.get("timestamp") or ""),
         ))
     return results
+
+
+def _team_execution_result_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    task_kinds: dict[str, str] = {}
+    results: list[dict[str, Any]] = []
+    for event in events:
+        event_type = str(event.get("event_type") or "")
+        agent_id = str(event.get("agent_id") or "")
+        if event_type == "task_created":
+            payload = _as_dict(event.get("payload"))
+            task_kinds[agent_id] = _normalize_team_task_kind(payload.get("task_kind"))
+        elif (
+            event_type == "task_result"
+            and task_kinds.get(agent_id, TASK_KIND_EXECUTION)
+            != TASK_KIND_INDEPENDENT_REVIEW
+        ):
+            results.append(event)
+    return results
+
+
+def _normalize_team_task_kind(value: object) -> str:
+    token = str(value or TASK_KIND_EXECUTION).strip().lower().replace("-", "_")
+    return token or TASK_KIND_EXECUTION
 
 
 def _team_worker_agent_ids(events: list[dict[str, Any]]) -> set[str]:

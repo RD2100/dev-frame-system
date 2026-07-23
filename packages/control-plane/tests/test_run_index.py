@@ -31,6 +31,11 @@ def _write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2, ensure_ascii=True), encoding="utf-8")
 
 
+def _append_legacy_team_event(runtime: Path, event: dict) -> None:
+    with (runtime / "team-events.jsonl").open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, ensure_ascii=True) + "\n")
+
+
 def _write_sealed_context(runtime: Path, token: str) -> tuple[Path, Path]:
     task_input = runtime / "context" / token / "TASKSPEC.json"
     task_input.parent.mkdir(parents=True, exist_ok=True)
@@ -220,13 +225,18 @@ def _write_team_final_ready(
     final_path = runtime / "final" / "final-verdict.json"
     gate_id = "gate-go-canonical-independent-review"
     review_id = "review-go-canonical"
+    reviewed_evidence_ref = f"ev-team-{result_event_id}"
     _write_json(final_path, {
         "verdict_id": "fv-go-canonical",
         "produced_by": "go-evidence-finalizer",
         "produced_at": "2026-07-18T00:02:00Z",
         "producer_role": producer_role,
         "final_state": "final_ready",
-        "inputs_reviewed": [str(report_path), str(review_path)],
+        "inputs_reviewed": [
+            str(report_path),
+            str(review_path),
+            reviewed_evidence_ref,
+        ],
         "gate_summary": [{
             "gate_id": gate_id,
             "result": "pass",
@@ -269,24 +279,50 @@ def _write_team_final_ready(
         executor_id="coding-agent-1",
         verdict="pass",
         ref_path=str(review_path),
-        reviewed_evidence_refs=[f"ev-team-{result_event_id}"],
+        reviewed_evidence_refs=[reviewed_evidence_ref],
+        source="go_evidence_finalize",
     )
-    team.record_final_verdict_ref(
-        "go-canonical",
-        "go-evidence-finalizer",
-        verdict_id="fv-go-canonical",
-        producer_role=producer_role,
-        final_state="final_ready",
-        ref_path=str(final_path),
-        review_ref=review_id,
-        gate_refs=[gate_id],
-        gate_summary=[{
+    final_payload = {
+        "verdict_id": "fv-go-canonical",
+        "produced_by": "go-evidence-finalizer",
+        "producer_role": producer_role,
+        "final_state": "final_ready",
+        "ref_path": str(final_path),
+        "review_ref": review_id,
+        "gate_refs": [gate_id],
+        "gate_summary": [{
             "gate_id": gate_id,
             "result": "pass",
             "evidence_path": str(review_path),
         }],
-        human_or_governance_reference="go-evidence-finalize:go-canonical",
-    )
+        "limitations": [],
+        "human_or_governance_reference": "go-evidence-finalize:go-canonical",
+    }
+    if producer_role == "governance":
+        team.record_final_verdict_ref(
+            "go-canonical",
+            "go-evidence-finalizer",
+            verdict_id=final_payload["verdict_id"],
+            producer_role=final_payload["producer_role"],
+            final_state=final_payload["final_state"],
+            ref_path=final_payload["ref_path"],
+            review_ref=final_payload["review_ref"],
+            gate_refs=final_payload["gate_refs"],
+            gate_summary=final_payload["gate_summary"],
+            limitations=final_payload["limitations"],
+            human_or_governance_reference=final_payload[
+                "human_or_governance_reference"
+            ],
+        )
+    else:
+        _append_legacy_team_event(runtime, {
+            "event_type": "final_verdict_ref",
+            "run_id": "go-canonical",
+            "agent_id": "go-evidence-finalizer",
+            "payload": final_payload,
+            "timestamp": "2026-07-18T00:02:00Z",
+            "event_id": "legacy-invalid-final-verdict-role",
+        })
 
 
 def test_run_index_builds_one_canonical_view_for_matching_go_and_team_run(tmp_path):
@@ -2604,6 +2640,47 @@ def test_run_index_blocks_atgo_executor_self_review(tmp_path):
     assert record["review_refs"] == []
     assert record["failure_refs"][0]["status"] == "blocked"
     assert "reviewer role is not independent" in record["domain_refs"]["diagnostic"]
+
+
+@pytest.mark.parametrize(
+    ("reviewer_role", "reviewer_id"),
+    [
+        (" Controller ", "reviewer-1"),
+        ("COORDINATOR", "reviewer-1"),
+        ("root", "reviewer-1"),
+        ("reviewer", " Controller "),
+        ("reviewer", "COORDINATOR"),
+        ("reviewer", "ROOT"),
+    ],
+)
+def test_run_index_blocks_atgo_governance_review_authors(
+    tmp_path, reviewer_role, reviewer_id
+):
+    runtime = tmp_path / "runtime"
+    review_dir = runtime / "atgo-runs" / "governance-review"
+    review_dir.mkdir(parents=True)
+    (review_dir / "review.yaml").write_text(
+        "\n".join([
+            "project_id: demo-project",
+            "verdict: pass",
+            f"reviewer_role: {json.dumps(reviewer_role)}",
+            f"reviewer_id: {json.dumps(reviewer_id)}",
+            "executor_id: coding-agent-1",
+        ]),
+        encoding="utf-8",
+    )
+
+    index = build_run_index(runtime)
+
+    assert len(index["runs"]) == 1
+    record = index["runs"][0]["record"]
+    _run_record_validator().validate(record)
+    assert record["outcome"] == "blocked"
+    assert record["review_state"] == "review_blocked"
+    assert record["acceptance_state"] == "blocked"
+    assert record["review_refs"] == []
+    assert record["failure_refs"][0]["status"] == "blocked"
+    assert "not independent" in record["domain_refs"]["diagnostic"]
 
 
 def test_run_index_keeps_non_ascii_legacy_ids_schema_safe(tmp_path):

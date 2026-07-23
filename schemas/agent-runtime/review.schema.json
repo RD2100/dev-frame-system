@@ -14,8 +14,18 @@
   "properties": {
     "reviewer_role": {
       "type": "string",
-      "not": { "enum": ["executor", "fixer", "coder"] },
-      "description": "Role that produced the review. Must be independent of executor/fixer/coder."
+      "not": {
+        "enum": [
+          "executor",
+          "fixer",
+          "coder",
+          "worker",
+          "controller",
+          "coordinator",
+          "root"
+        ]
+      },
+      "description": "Role that produced the review. Must be independent of execution and governance-author roles."
     },
     "reviewer_type": {
       "type": "string",
