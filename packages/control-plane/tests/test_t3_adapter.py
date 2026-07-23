@@ -13,6 +13,7 @@ from jsonschema.validators import validator_for
 from control_plane import cluster_run as cluster_run_module
 from control_plane import dashboard as dashboard_module
 from control_plane import t3_adapter as t3_adapter_module
+from control_plane import visual_state as visual_state_module
 from control_plane.dashboard import build_dashboard_server
 from control_plane.t3_adapter import (
     build_t3_client_shell,
@@ -1085,6 +1086,45 @@ def test_build_t3_client_shell_projects_cluster_runs_as_goal_conversations(tmp_p
     assert "coding-agent-1" in text
 
 
+def test_dashboard_reload_restores_passed_cluster_run_as_stopped(tmp_path):
+    runtime_dir = tmp_path / "runtime"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir(parents=True)
+    cluster_run_module._write_run_record(runtime_dir, {
+        "runId": "g-passed01",
+        "projectId": "demo-project",
+        "projectPath": str(workspace),
+        "target": "coordinator",
+        "goal": "Ship the feature",
+        "ownerPid": os.getpid(),
+        "status": "passed",
+        "summary": "verdict=awaiting_review; 2 passed, 0 failed",
+        "startedAt": "2026-07-01T00:00:00Z",
+        "finishedAt": "2026-07-01T00:01:00Z",
+    })
+
+    restored_shells = []
+    for _ in range(2):
+        server = build_dashboard_server(runtime_dir=runtime_dir, port=0, refresh_seconds=0)
+        server_thread = Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        try:
+            base_url = f"http://127.0.0.1:{server.server_address[1]}"
+            with urlopen(f"{base_url}/t3-shell.json", timeout=5) as response:
+                restored_shells.append(json.loads(response.read().decode("utf-8")))
+        finally:
+            server.shutdown()
+            server.server_close()
+            server_thread.join(timeout=5)
+
+    for shell in restored_shells:
+        goal_thread = next(
+            thread for thread in shell["t3"]["threads"] if thread["id"] == "g-passed01"
+        )
+        assert goal_thread["session"]["status"] == "stopped"
+        assert "demo-project: stopped -" in goal_thread["threadListSummary"]
+
+
 def test_t3_shell_sanitizes_windows_absolute_evidence_paths(tmp_path):
     project_root = tmp_path / "project"
     contract_path = project_root / "rules" / "project-contracts" / "demo.md"
@@ -1131,6 +1171,101 @@ def test_t3_shell_sanitizes_windows_absolute_evidence_paths(tmp_path):
     assert thread["devframe"]["evidenceRefs"][0]["openPath"] == "/evidence/open?ref=run-1/ExecutionReport.md"
     assert thread["devframe"]["evidenceRefs"][0]["openUrl"] == ""
     assert not Path(thread["devframe"]["evidenceRefs"][0]["refPath"]).is_absolute()
+
+
+def test_t3_shell_projects_paper_human_finalize_and_limited_terminal_state(
+    tmp_path,
+    monkeypatch,
+):
+    runtime_dir = tmp_path / "runtime"
+    paper_root = tmp_path / "paper"
+    paper_root.mkdir()
+    (paper_root / "PAPER_PROFILE.yaml").write_text(
+        "paper_id: demo-paper\ntitle: Demo Paper\n",
+        encoding="utf-8",
+    )
+    (paper_root / "PAPER_STATE.yaml").write_text(
+        "paper_id: demo-paper\nstatus: completed\n",
+        encoding="utf-8",
+    )
+    review_report = paper_root / "review" / "REVIEW_REPORT.md"
+    review_report.parent.mkdir()
+    review_report.write_text("# Synthetic review\n", encoding="utf-8")
+    canonical_record = {
+        "domain": "paper",
+        "profile": "rdpaper",
+        "outcome": "passed",
+        "review_state": "review_pending",
+        "acceptance_state": "review_pending",
+        "projection_state": "completed",
+        "evidence_refs": [{"uri": str(review_report)}],
+        "review_refs": [],
+        "gate_refs": [],
+        "failure_refs": [],
+        "limitations": ["No final acceptance before independent review."],
+        "domain_refs": {"source_path": str(paper_root / "PAPER_PROFILE.yaml")},
+    }
+    monkeypatch.setattr(
+        visual_state_module,
+        "build_run_index",
+        lambda *_args, **_kwargs: {
+            "canonical_runs": [{"adapter_id": "paper", "record": canonical_record}],
+        },
+    )
+
+    review_state = visual_state_module.build_visual_control_plane_state(
+        runtime_dir,
+        paper_project_dirs=[paper_root],
+    )
+    review_shell = build_t3_client_shell_from_state(review_state)
+    review_thread = next(
+        item for item in review_shell["t3"]["threads"]
+        if item["devframe"]["runId"] == "demo-paper-paper-review"
+    )
+    review_action = next(
+        item for item in review_thread["devframe"]["actionDetails"]
+        if item["actionId"] == "demo-paper-paper-review-command-action"
+    )
+    assert review_thread["session"]["status"] == "ready"
+    assert review_action["status"] == "open"
+    assert "devframe paper finalize" in review_action["command"]
+
+    independent_review = paper_root / "governance" / "INDEPENDENT_REVIEW.json"
+    final_verdict = paper_root / "closure" / "FINAL_VERDICT.json"
+    for path in (independent_review, final_verdict):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{}\n", encoding="utf-8")
+    canonical_record.update({
+        "review_state": "review_passed",
+        "acceptance_state": "accepted_with_limitation",
+        "projection_state": "completed",
+        "review_refs": [{"uri": str(independent_review), "result": "pass"}],
+        "final_verdict_ref": {
+            "uri": str(final_verdict),
+            "final_state": "accepted_with_limitation",
+        },
+        "limitations": ["Synthetic paper only; no publication authority."],
+    })
+
+    final_state = visual_state_module.build_visual_control_plane_state(
+        runtime_dir,
+        paper_project_dirs=[paper_root],
+    )
+    final_shell = build_t3_client_shell_from_state(final_state)
+    final_thread = next(
+        item for item in final_shell["t3"]["threads"]
+        if item["devframe"]["runId"] == "demo-paper-paper-review"
+    )
+    evidence_paths = {
+        item["refPath"] for item in final_thread["devframe"]["evidenceRefs"]
+    }
+
+    validate_schema(load_schema(), final_shell)
+    assert final_thread["session"]["status"] == "stopped"
+    assert "accepted_with_limitation" in final_thread["devframe"]["diffSummary"]
+    assert "Synthetic paper only" in final_thread["devframe"]["diffSummary"]
+    assert any(path.endswith("INDEPENDENT_REVIEW.json") for path in evidence_paths)
+    assert any(path.endswith("FINAL_VERDICT.json") for path in evidence_paths)
 
 
 def test_t3_shell_sanitizes_posix_absolute_evidence_paths():

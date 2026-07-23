@@ -12,18 +12,24 @@ from jsonschema import Draft202012Validator
 from jsonschema.validators import validator_for
 import yaml
 
+from control_plane import visual_state as visual_state_module
 from control_plane.backup_guard import BackupGuard
 from control_plane.cli import main as devframe_cli_main
-from control_plane.dashboard import build_dashboard_server
+from control_plane.dashboard import _execution_plan_for_action, build_dashboard_server
 from control_plane.decision_engine import DecisionEngine, DecisionMode, OperationRequest
 from control_plane.orchestrator import Orchestrator
 from control_plane.project_contract import load_contract, render_contract_markdown
 from control_plane.rdgoal import rdgoal
 from control_plane.go_dispatch import run_go_dispatch
 from control_plane.rdgoal_cli import main as rdgoal_cli_main
+from control_plane.run_index import build_run_index
 from control_plane.runtime_digest import build_runtime_digest, render_runtime_digest_markdown
 from control_plane.runtime_store import JournalEvent, RuntimeStore
-from control_plane.visual_state import build_visual_control_plane_state, render_visual_control_plane_state_html
+from control_plane.visual_state import (
+    _next_actions,
+    build_visual_control_plane_state,
+    render_visual_control_plane_state_html,
+)
 from control_plane.skill_registry import list_methodology_skills
 from control_plane.worker import AihubGoWorker, CommandWorker, LocalDryRunWorker
 
@@ -982,6 +988,255 @@ def make_paper_project(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     return paper_root
+
+
+def test_paper_review_and_retry_actions_cross_product_boundary():
+    review_run = {
+        "run_id": "paper-review",
+        "entrypoint": "rdpaper",
+        "status": "review_required",
+        "next_command": (
+            "devframe paper finalize --project P --review R "
+            "--review-sha256 H --reviewer-id I"
+        ),
+        "next_command_args": [
+            "paper", "finalize", "--project", "P", "--review", "R",
+            "--review-sha256", "H", "--reviewer-id", "I",
+        ],
+    }
+    failed_run = {
+        "run_id": "paper-failed",
+        "entrypoint": "rdpaper",
+        "status": "failed",
+        "next_command": (
+            "devframe run --pipeline reference_paper_review.yaml "
+            "--execute --project P"
+        ),
+        "next_command_args": [
+            "run", "--pipeline", "reference_paper_review.yaml",
+            "--execute", "--project", "P",
+        ],
+    }
+
+    review_actions = _next_actions([review_run], [], [])
+    failed_actions = _next_actions([failed_run], [], [])
+    unrelated_review_actions = _next_actions(
+        [{**review_run, "entrypoint": "rdgoal"}],
+        [],
+        [],
+    )
+    active_retry_actions = _next_actions(
+        [failed_run],
+        [],
+        [],
+        action_runs=[{
+            "action_id": "paper-failed-command-action",
+            "action_run_id": "20260722-120000",
+            "status": "started",
+        }],
+    )
+    completed_retry_actions = _next_actions(
+        [failed_run],
+        [],
+        [],
+        action_runs=[{
+            "action_id": "paper-failed-command-action",
+            "action_run_id": "20260722-120001",
+            "status": "completed",
+        }],
+    )
+
+    assert len(review_actions) == 1
+    assert review_actions[0]["status"] == "open"
+    assert unrelated_review_actions == []
+    assert failed_actions[0]["status"] == "ready"
+    assert _execution_plan_for_action(failed_actions[0], ".devframe-runtime") is not None
+    assert active_retry_actions == []
+    assert completed_retry_actions == []
+
+
+def test_visual_state_keeps_real_canonical_paper_run_running(tmp_path):
+    runtime_dir = tmp_path / "runtime"
+    paper_root = make_paper_project(tmp_path)
+    state_path = paper_root / "PAPER_STATE.yaml"
+    paper_state = yaml.safe_load(state_path.read_text(encoding="utf-8"))
+    paper_state["status"] = "running"
+    state_path.write_text(yaml.safe_dump(paper_state, sort_keys=False), encoding="utf-8")
+
+    index = build_run_index(runtime_dir, paper_project_dirs=[paper_root])
+    record = next(
+        entry["record"] for entry in index["canonical_runs"]
+        if entry["adapter_id"] == "paper"
+    )
+    state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=[paper_root])
+    paper_run = state["runs"][0]
+
+    assert record["phase"] == "running"
+    assert record["acceptance_state"] == "review_pending"
+    assert record["projection_state"] == "running"
+    assert paper_run["status"] == "running"
+    assert "devframe paper finalize" not in paper_run["next_command"]
+
+
+def test_visual_state_suppresses_stale_decision_for_real_canonical_review_pending(
+    tmp_path,
+):
+    runtime_dir = tmp_path / "runtime"
+    paper_root = make_paper_project(tmp_path)
+    state_path = paper_root / "PAPER_STATE.yaml"
+    paper_state = yaml.safe_load(state_path.read_text(encoding="utf-8"))
+    paper_state["status"] = "completed"
+    state_path.write_text(yaml.safe_dump(paper_state, sort_keys=False), encoding="utf-8")
+    adapter_path = paper_root / "WEB_AI_ADAPTER.yaml"
+    adapter_path.write_text(
+        adapter_path.read_text(encoding="utf-8").replace(
+            "manual_login_required: true",
+            "manual_login_required: false",
+        ),
+        encoding="utf-8",
+    )
+    closure_dir = paper_root / "closure"
+    closure_dir.mkdir()
+    (closure_dir / "FLOW_OUTCOME.json").write_text(
+        json.dumps({"final_status": "review_pending"}),
+        encoding="utf-8",
+    )
+
+    index = build_run_index(runtime_dir, paper_project_dirs=[paper_root])
+    record = next(
+        entry["record"] for entry in index["canonical_runs"]
+        if entry["adapter_id"] == "paper"
+    )
+    state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=[paper_root])
+    paper_actions = [
+        action for action in state["next_actions"]
+        if action["source_id"] in {
+            "demo-paper-paper-review",
+            "demo-paper-paper-decision",
+        }
+    ]
+
+    assert record["acceptance_state"] == "review_pending"
+    assert record["projection_state"] == "completed"
+    assert state["runs"][0]["status"] == "review_required"
+    assert len(paper_actions) == 1
+    assert paper_actions[0]["source_id"] == "demo-paper-paper-review"
+    assert "devframe paper finalize" in paper_actions[0]["command"]
+
+
+def test_visual_state_projects_canonical_paper_terminal_state_and_evidence(
+    tmp_path,
+    monkeypatch,
+):
+    runtime_dir = tmp_path / "runtime"
+    paper_root = make_paper_project(tmp_path)
+    evidence_paths = [
+        paper_root / "execution-report.json",
+        paper_root / "governance" / "INDEPENDENT_REVIEW.json",
+        paper_root / "governance" / "REVIEW_GATE.json",
+        paper_root / "closure" / "FINAL_VERDICT.json",
+    ]
+    for path in evidence_paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{}\n", encoding="utf-8")
+    canonical_record = {
+        "domain": "paper",
+        "profile": "rdpaper",
+        "outcome": "passed",
+        "review_state": "review_passed",
+        "acceptance_state": "accepted_with_limitation",
+        "projection_state": "completed",
+        "evidence_refs": [{"uri": str(evidence_paths[0])}],
+        "review_refs": [{"uri": str(evidence_paths[1]), "result": "pass"}],
+        "gate_refs": [{"uri": str(evidence_paths[2]), "result": "warning"}],
+        "final_verdict_ref": {
+            "uri": str(evidence_paths[3]),
+            "final_state": "accepted_with_limitation",
+        },
+        "failure_refs": [],
+        "limitations": ["Synthetic paper only; no publication authority."],
+        "domain_refs": {"source_path": str(paper_root / "PAPER_PROFILE.yaml")},
+    }
+    monkeypatch.setattr(
+        visual_state_module,
+        "build_run_index",
+        lambda *_args, **_kwargs: {
+            "canonical_runs": [{"adapter_id": "paper", "record": canonical_record}],
+        },
+    )
+
+    state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=[paper_root])
+
+    validate_schema("schemas/visual_control_plane_state.schema.json", state)
+    assert state["projects"][0]["status"] == "completed"
+    assert state["runs"][0]["status"] == "completed"
+    assert state["runs"][0]["evidence_status"] == "verified"
+    assert state["runs"][0]["review_status"] == "pass"
+    session = next(item for item in state["sessions"] if item["run_id"] == "demo-paper-paper-review")
+    assert session["status"] == "completed"
+    assert "accepted_with_limitation" in session["diff_summary"]
+    assert "Synthetic paper only" in session["diff_summary"]
+    assert set(map(str, evidence_paths)).issubset(session["evidence_refs"])
+    assert not any(
+        action["source_id"] == "demo-paper-paper-review"
+        for action in state["next_actions"]
+    )
+
+    canonical_record.update({
+        "acceptance_state": "final_ready",
+        "final_verdict_ref": {
+            "uri": str(evidence_paths[3]),
+            "final_state": "final_ready",
+        },
+        "limitations": [],
+    })
+    final_ready_state = build_visual_control_plane_state(
+        runtime_dir,
+        paper_project_dirs=[paper_root],
+    )
+    assert final_ready_state["runs"][0]["status"] == "completed"
+    assert final_ready_state["runs"][0]["evidence_status"] == "verified"
+
+    canonical_record.update({
+        "outcome": "failed",
+        "review_state": "review_failed",
+        "acceptance_state": "failed",
+        "projection_state": "failed",
+        "failure_refs": [{"uri": str(evidence_paths[3]), "status": "failed"}],
+        "final_verdict_ref": {
+            "uri": str(evidence_paths[3]),
+            "final_state": "failed",
+        },
+    })
+    failed_state = build_visual_control_plane_state(
+        runtime_dir,
+        paper_project_dirs=[paper_root],
+    )
+    assert failed_state["runs"][0]["status"] == "failed"
+    assert failed_state["runs"][0]["evidence_status"] == "disputed"
+    retry_action = next(
+        action for action in failed_state["next_actions"]
+        if action["source_id"] == "demo-paper-paper-review"
+    )
+    assert retry_action["status"] == "ready"
+    assert retry_action["command"].startswith("devframe run --pipeline")
+
+    canonical_record.update({
+        "outcome": "human_required",
+        "review_state": "not_reviewed",
+        "acceptance_state": "blocked",
+        "projection_state": "waiting_for_you",
+    })
+    human_state = build_visual_control_plane_state(
+        runtime_dir,
+        paper_project_dirs=[paper_root],
+    )
+    assert human_state["runs"][0]["status"] == "blocked"
+    assert human_state["runs"][0]["next_command"] == ""
+    assert not any(
+        action["source_id"] == "demo-paper-paper-review"
+        for action in human_state["next_actions"]
+    )
 
 
 def test_visual_state_includes_paper_project_workspace(tmp_path):

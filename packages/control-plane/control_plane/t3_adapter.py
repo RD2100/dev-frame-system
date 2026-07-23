@@ -167,6 +167,9 @@ def build_t3_client_shell_from_state(
             actions_by_source,
             _clean_base_url(base_url),
             updated_at,
+            team_evidence_store,
+            team_message_bus,
+            team_review_gates,
         )
         for run in cluster_runs
         if str(run.get("runId") or "") and str(run.get("runId") or "") not in projected_thread_ids
@@ -983,6 +986,7 @@ def _cluster_run_status_to_session_status(status: str) -> str:
     return {
         "answered": "stopped",
         "completed": "stopped",
+        "passed": "stopped",
         "failed": "error",
         "interrupted": "error",
         "running": "running",
@@ -995,8 +999,13 @@ def _cluster_run_thread_shell(
     actions_by_source: dict[str, list[dict[str, Any]]],
     base_url: str,
     updated_at: str,
+    team_evidence_store: dict[str, list[dict[str, Any]]],
+    team_message_bus: dict[str, list[dict[str, Any]]],
+    team_review_gates: dict[str, list[dict[str, Any]]],
 ) -> dict[str, Any]:
     run_id = _text(run.get("runId"), "")
+    raw_go_run_id = run.get("goRunId")
+    go_run_id = raw_go_run_id.strip() if isinstance(raw_go_run_id, str) else ""
     goal = _text(run.get("goal"), run_id)
     project_id = _text(run.get("projectId"), "project")
     project_path = _text(run.get("projectPath"), "")
@@ -1016,6 +1025,14 @@ def _cluster_run_thread_shell(
     status = _text(run.get("status"), "running")
     pending_action = bool(action_ids)
     session_status = _cluster_run_status_to_session_status(status)
+    all_team_gates = (
+        _readable_team_gates(go_run_id, [], team_review_gates, base_url)
+        if go_run_id else []
+    )
+    team_detail_gates, team_detail_gate_overflow = _cap_with_overflow(
+        all_team_gates,
+        _PROJECTED_DETAIL_LIMIT,
+    )
     return {
         "id": run_id,
         "projectId": project_id,
@@ -1072,26 +1089,35 @@ def _cluster_run_thread_shell(
             "toolCallCount": 0,
             "changedFiles": [],
             "diffSummary": _text(run.get("summary"), ""),
-            "relatedRunIds": [_text(run.get("goRunId"), "")] if _text(run.get("goRunId"), "") else [],
+            "relatedRunIds": [go_run_id] if go_run_id else [],
             "gateIds": [],
             "actionIds": action_ids,
             "actionDetails": action_details,
             "evidenceRefs": [],
             "evidenceRefOverflow": 0,
             "teamTaskIds": [],
-            "teamMessageIds": [],
-            "teamEvidenceIds": [],
-            "teamReviewGateIds": [],
+            "teamMessageIds": (
+                _team_message_ids_for_run(go_run_id, [], team_message_bus)
+                if go_run_id else []
+            ),
+            "teamEvidenceIds": (
+                _team_evidence_ids_for_run(go_run_id, [], team_evidence_store)
+                if go_run_id else []
+            ),
+            "teamReviewGateIds": (
+                _team_review_gate_ids_for_run(go_run_id, [], team_review_gates)
+                if go_run_id else []
+            ),
             "teamConflictFiles": [],
             "teamDetailMethodologies": [],
             "teamDetailMessages": [],
             "teamDetailMessageOverflow": 0,
             "teamDetailEvidence": [],
             "teamDetailEvidenceOverflow": 0,
-            "teamDetailGates": [],
-            "teamDetailGateOverflow": 0,
-            "teamReviewGateStatusCounts": {},
-            "teamNextActionableGates": [],
+            "teamDetailGates": team_detail_gates,
+            "teamDetailGateOverflow": team_detail_gate_overflow,
+            "teamReviewGateStatusCounts": _count_gate_statuses(all_team_gates),
+            "teamNextActionableGates": _sorted_actionable_gates(all_team_gates)[:_PROJECTED_DETAIL_LIMIT],
             "teamDetailConflicts": [],
             "teamDetailConflictOverflow": 0,
             "teamDetailEvents": [],

@@ -355,7 +355,131 @@ def test_bridge_source_thread_details_uses_typed_detail():
 
     assert "readonly threadDetails?: readonly DevFrameThreadDetail[]" in source
     assert "DevFrameThreadDetail" in source
-    assert "Record<string, unknown>" in source
+    assert "readonly id: string" in source
+    assert "export type DevFrameThreadDetail = Record<string, unknown>" not in source
+
+
+def test_installed_bridge_strongly_types_authoritative_goal_thread_projection(tmp_path):
+    from control_plane.t3_adapter import build_t3_client_shell_from_state
+
+    shell = build_t3_client_shell_from_state(
+        {
+            "version": 1,
+            "next_actions": [
+                {
+                    "action_id": "goal-1-review",
+                    "source_type": "run",
+                    "source_id": "goal-1",
+                    "priority": "high",
+                    "status": "ready",
+                    "label": "Review the blocked gate",
+                }
+            ],
+            "team": {
+                "review_gates": [
+                    {
+                        "gate_id": "go-1-outcome-gate",
+                        "kind": "go-run-outcome",
+                        "status": "blocked",
+                        "reason": "Independent review is required.",
+                        "run_id": "go-1",
+                    }
+                ]
+            },
+        },
+        base_url="http://127.0.0.1:8788",
+        cluster_runs=[
+            {
+                "runId": "goal-1",
+                "goRunId": "go-1",
+                "goal": "Project authoritative review state",
+                "projectId": "project-1",
+                "status": "failed",
+            }
+        ],
+    )
+    goal_thread = next(thread for thread in shell["t3"]["threads"] if thread["id"] == "goal-1")
+    authority = goal_thread["devframe"]
+    assert authority["relatedRunIds"] == ["go-1"]
+    assert authority["teamDetailGates"][0]["status"] == "blocked"
+    assert authority["teamReviewGateStatusCounts"] == {"blocked/failed": 1}
+    assert authority["teamNextActionableGates"] == authority["teamDetailGates"]
+    assert authority["actionDetails"][0]["actionId"] == "goal-1-review"
+    assert goal_thread["session"]["status"] == "error"
+
+    t3_root = tmp_path / "t3code"
+    (t3_root / "apps/web").mkdir(parents=True)
+    (t3_root / "package.json").write_text("{}", encoding="utf-8")
+    bundle = build_t3_bridge_bundle(build_client_launch_plan(runtime_dir=tmp_path / "runtime"))
+    install_t3_bridge_bundle(t3_root, bundle)
+    bridge_path = t3_root / "apps/web/src/devframe/devframeShellBridge.ts"
+    source = bridge_path.read_text(encoding="utf-8")
+
+    tsgo = shutil.which("tsgo")
+    if tsgo is not None:
+        (t3_root / "env.d.ts").write_text(
+            "interface ImportMetaEnv {\n"
+            "  readonly VITE_DEVFRAME_T3_SHELL_URL?: string;\n"
+            "  readonly VITE_DEVFRAME_CLIENT_PLAN_URL?: string;\n"
+            "  readonly VITE_DEVFRAME_CLIENT_MANIFEST_URL?: string;\n"
+            "}\n"
+            "interface ImportMeta { readonly env: ImportMetaEnv; }\n",
+            encoding="utf-8",
+        )
+        (t3_root / "authority-contract.ts").write_text(
+            "import type {\n"
+            "  DevFrameT3ShellEnvelope,\n"
+            "  DevFrameThreadAction,\n"
+            "  DevFrameThreadAuthority,\n"
+            "  DevFrameThreadReviewGate,\n"
+            '} from "./apps/web/src/devframe/devframeShellBridge";\n\n'
+            f"const actualEnvelope = {json.dumps(shell, ensure_ascii=True)} as const;\n"
+            "const envelope: DevFrameT3ShellEnvelope = actualEnvelope;\n"
+            'const thread = envelope.t3.threads.find((item) => item.id === "goal-1");\n'
+            'if (thread === undefined) throw new Error("missing goal thread");\n'
+            "const authority: DevFrameThreadAuthority = thread.devframe;\n"
+            "const relatedRunId: string | undefined = authority.relatedRunIds[0];\n"
+            "const gate: DevFrameThreadReviewGate | undefined = authority.teamDetailGates[0];\n"
+            "const gateStatus: string | undefined = gate?.status;\n"
+            'const blockedCount: number | undefined = authority.teamReviewGateStatusCounts["blocked/failed"];\n'
+            "const nextGate: DevFrameThreadReviewGate | undefined = authority.teamNextActionableGates[0];\n"
+            "const nextAction: DevFrameThreadAction | undefined = authority.actionDetails[0];\n"
+            "const sessionStatus: string = thread.session.status;\n"
+            "void [relatedRunId, gateStatus, blockedCount, nextGate, nextAction, sessionStatus];\n",
+            encoding="utf-8",
+        )
+        (t3_root / "tsconfig.json").write_text(
+            json.dumps(
+                {
+                    "compilerOptions": {
+                        "lib": ["ES2022", "DOM"],
+                        "module": "ESNext",
+                        "moduleResolution": "Bundler",
+                        "noEmit": True,
+                        "strict": True,
+                        "target": "ES2022",
+                    },
+                    "include": [
+                        "apps/web/src/devframe/devframeShellBridge.ts",
+                        "authority-contract.ts",
+                        "env.d.ts",
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        command = [tsgo, "--project", str(t3_root / "tsconfig.json"), "--pretty", "false"]
+        if Path(tsgo).suffix.lower() in {".bat", ".cmd"}:
+            command = [shutil.which("cmd") or "cmd", "/d", "/c", *command]
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    assert "export interface DevFrameThreadAuthority" in source
+    assert "readonly devframe: DevFrameThreadAuthority" in source
+    assert "export interface DevFrameThreadReviewGate" in source
+    assert "export interface DevFrameThreadAction" in source
+    assert "export interface DevFrameReviewGateStatusCounts" in source
+    assert "export type DevFrameThreadDetail = Record<string, unknown>" not in source
 
 
 def test_bridge_readme_includes_team_contract_docs():

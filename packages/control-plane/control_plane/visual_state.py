@@ -9,6 +9,7 @@ from urllib.parse import quote
 
 import yaml
 
+from .run_index import build_run_index
 from .runtime_digest import build_runtime_digest
 from .skill_registry import list_methodology_skills
 from .team_runtime import build_team_runtime_view
@@ -314,8 +315,9 @@ def build_visual_control_plane_state(
         _run_state(dispatch, reports_by_packet.get(dispatch.get("packet_id", "")), digest.get("runtime_dir", ""))
         for dispatch in dispatches
     ]
-    paper_projects = [_paper_project_state(path) for path in paper_roots]
-    paper_runs = [_paper_run_state(path) for path in paper_roots]
+    paper_records = _paper_canonical_records(digest.get("runtime_dir", ""), paper_roots)
+    paper_projects = [_paper_project_state(path, paper_records.get(path)) for path in paper_roots]
+    paper_runs = [_paper_run_state(path, paper_records.get(path)) for path in paper_roots]
     paper_provider_bindings = [_paper_provider_binding_state(path) for path in paper_roots]
     paper_provider_gates = [
         _paper_provider_gate_state(root, binding)
@@ -331,7 +333,7 @@ def build_visual_control_plane_state(
     )
     all_decisions = (
         [_decision_state(dispatch, reports_by_packet) for dispatch in dispatches]
-        + [_paper_decision_state(path) for path in paper_roots]
+        + [_paper_decision_state(path, paper_records.get(path)) for path in paper_roots]
     )
     go_packet_dirs = _go_packet_dirs(go_runs)
     all_sessions = (
@@ -342,14 +344,21 @@ def build_visual_control_plane_state(
         ]
         + _go_session_states(go_runs)
         + [
-            _paper_session_state(root, binding)
+            _paper_session_state(root, binding, paper_records.get(root))
             for root, binding in zip(paper_roots, paper_provider_bindings)
         ]
         + web_ai_sessions
         + _atgo_reviewer_session_states(digest.get("runtime_dir", ""), projects)
     )
     all_agents = _default_agents(paper_provider_bindings) + _web_ai_agents(web_ai_sessions)
-    all_next_actions = _next_actions(all_runs, all_gates, all_decisions, all_sessions, go_runs)
+    all_next_actions = _next_actions(
+        all_runs,
+        all_gates,
+        all_decisions,
+        all_sessions,
+        go_runs,
+        action_runs,
+    )
     return {
         "version": 1,
         "projects": projects + paper_projects,
@@ -1889,10 +1898,40 @@ def _normalize_tokens(value: object) -> dict[str, Any]:
     return result
 
 
-def _paper_session_state(root: Path, binding: dict[str, Any]) -> dict[str, Any]:
+def _paper_canonical_records(
+    runtime_dir: str | Path,
+    paper_roots: list[Path],
+) -> dict[Path, dict[str, Any]]:
+    if not paper_roots:
+        return {}
+    index = build_run_index(runtime_dir, paper_project_dirs=paper_roots)
+    records: dict[Path, dict[str, Any]] = {}
+    for entry in index.get("canonical_runs", []):
+        if not isinstance(entry, dict) or entry.get("adapter_id") != "paper":
+            continue
+        record = _as_dict(entry.get("record"))
+        domain_refs = _as_dict(record.get("domain_refs"))
+        source_path = str(domain_refs.get("source_path") or "")
+        if source_path:
+            records[Path(source_path).resolve().parent] = record
+    return records
+
+
+def _paper_session_state(
+    root: Path,
+    binding: dict[str, Any],
+    canonical_record: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     profile = _read_yaml(root / "PAPER_PROFILE.yaml")
     paper_id = _paper_id(root, profile)
     run_id = _safe_id(f"{paper_id}-paper-review")
+    run_state = _paper_run_state(root, canonical_record)
+    evidence_refs = _existing_refs([
+        root / "review" / "REVIEW_REPORT.md",
+        root / "closure" / "CLOSURE_REPORT.md",
+        root / "evidence" / "ref-paper-review-pack.zip",
+        *_paper_canonical_ref_paths(canonical_record),
+    ])
     return {
         "session_id": _safe_id(f"{paper_id}-{binding.get('provider', 'web-ai')}-review-session"),
         "provider": str(binding.get("provider") or "web-ai"),
@@ -1902,16 +1941,12 @@ def _paper_session_state(root: Path, binding: dict[str, Any]) -> dict[str, Any]:
         "project_id": paper_id,
         "run_id": run_id,
         "task_spec_id": str(root / "paper_task" / "PAPER_TASK_INPUT.yaml"),
-        "status": _session_status(_paper_run_state(root).get("status", "pending")),
+        "status": _session_status(run_state.get("status", "pending")),
         "messages": [],
         "tool_calls": [],
         "changed_files": [],
-        "diff_summary": "",
-        "evidence_refs": _existing_refs([
-            root / "review" / "REVIEW_REPORT.md",
-            root / "closure" / "CLOSURE_REPORT.md",
-            root / "evidence" / "ref-paper-review-pack.zip",
-        ]),
+        "diff_summary": _paper_canonical_summary(canonical_record),
+        "evidence_refs": list(dict.fromkeys(evidence_refs)),
         "cost": {},
         "tokens": {},
         "gates": [
@@ -1924,6 +1959,33 @@ def _paper_session_state(root: Path, binding: dict[str, Any]) -> dict[str, Any]:
             "adapter_config_path": str(root / "WEB_AI_ADAPTER.yaml"),
         },
     }
+
+
+def _paper_canonical_ref_paths(record: dict[str, Any] | None) -> list[str]:
+    if not record:
+        return []
+    refs: list[str] = []
+    for key in ("evidence_refs", "review_refs", "gate_refs", "failure_refs"):
+        for item in record.get(key, []):
+            if isinstance(item, dict) and item.get("uri"):
+                refs.append(str(item["uri"]))
+    final_verdict = _as_dict(record.get("final_verdict_ref"))
+    if final_verdict.get("uri"):
+        refs.append(str(final_verdict["uri"]))
+    return refs
+
+
+def _paper_canonical_summary(record: dict[str, Any] | None) -> str:
+    if not record:
+        return ""
+    acceptance_state = str(record.get("acceptance_state") or "")
+    if not acceptance_state:
+        return ""
+    summary = f"Canonical paper state: {acceptance_state}."
+    limitations = [str(item) for item in record.get("limitations", []) if str(item)]
+    if limitations:
+        summary += " Limitations: " + "; ".join(limitations)
+    return summary
 
 
 def _worker_provider(command: object) -> str:
@@ -2197,7 +2259,10 @@ def _go_methodology_state(value: object) -> dict[str, Any] | None:
     }
 
 
-def _paper_project_state(project_dir: str | Path) -> dict[str, Any]:
+def _paper_project_state(
+    project_dir: str | Path,
+    canonical_record: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     root = Path(project_dir).resolve()
     profile = _read_yaml(root / "PAPER_PROFILE.yaml")
     state = _read_yaml(root / "PAPER_STATE.yaml")
@@ -2208,12 +2273,22 @@ def _paper_project_state(project_dir: str | Path) -> dict[str, Any]:
         or _template_text(profile.get("current_stage"))
         or "drafting"
     )
-    status = _template_text(state.get("status")) or current_stage
+    status = _paper_project_status(_template_text(state.get("status")) or current_stage)
+    canonical_status = _paper_canonical_run_status(canonical_record)
+    if canonical_status:
+        status = {
+            "pending": "initialized",
+            "running": "active",
+            "review_required": "review_required",
+            "blocked": "blocked",
+            "failed": "blocked",
+            "completed": "completed",
+        }[canonical_status]
     return {
         "project_id": paper_id,
         "display_name": title,
         "goal": f"Paper review workspace: {title}",
-        "status": _paper_project_status(status),
+        "status": status,
         "risk_state": "human_required",
         "contract_path": str(root / "PAPER_REVIEW_SPEC.md"),
     }
@@ -2300,7 +2375,10 @@ def _manual_fallback_instructions(adapter: dict[str, Any]) -> list[str]:
     ]
 
 
-def _paper_run_state(project_dir: str | Path) -> dict[str, Any]:
+def _paper_run_state(
+    project_dir: str | Path,
+    canonical_record: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     root = Path(project_dir).resolve()
     profile = _read_yaml(root / "PAPER_PROFILE.yaml")
     state = _read_yaml(root / "PAPER_STATE.yaml")
@@ -2312,20 +2390,28 @@ def _paper_run_state(project_dir: str | Path) -> dict[str, Any]:
     closure_report = root / "closure" / "CLOSURE_REPORT.md"
     evidence_pack = root / "evidence" / "ref-paper-review-pack.zip"
     report_path = closure_report if closure_report.exists() else review_report
+    status = _paper_run_status(root, state, canonical_record)
+    waiting_for_human = _paper_waiting_for_human(canonical_record)
+    next_command = "" if waiting_for_human else _paper_next_command(root, evidence_pack, status)
+    next_command_args = (
+        []
+        if waiting_for_human
+        else _paper_next_command_args(root, evidence_pack, status)
+    )
     return {
         "run_id": run_id,
         "entrypoint": "rdpaper",
-        "status": _paper_run_status(root, state),
+        "status": status,
         "taskspec_status": "ready" if task_input.exists() else "draft",
-        "evidence_status": _paper_evidence_status(root),
-        "review_status": _paper_review_status(root),
+        "evidence_status": _paper_evidence_status(root, canonical_record),
+        "review_status": _paper_review_status(root, canonical_record),
         "report_path": str(report_path) if report_path.exists() else str(root / "PAPER_LEDGER.md"),
         "packet_path": str(paper_task) if paper_task.exists() else str(root),
         "taskspec_path": str(root / "PAPER_NEXT_TASK.md"),
         "taskspec_json_path": str(task_input) if task_input.exists() else "",
         "task_input_path": str(task_input) if task_input.exists() else "",
-        "next_command": _paper_next_command(root, evidence_pack),
-        "next_command_args": _paper_next_command_args(root, evidence_pack),
+        "next_command": next_command,
+        "next_command_args": next_command_args,
     }
 
 
@@ -2404,10 +2490,22 @@ def _provider_gate_next_action(health: str, binding: dict[str, Any]) -> str:
     return f"Review {_quote_arg(path)} and classify provider readiness before review."
 
 
-def _paper_decision_state(project_dir: str | Path) -> dict[str, Any]:
+def _paper_decision_state(
+    project_dir: str | Path,
+    canonical_record: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     root = Path(project_dir).resolve()
     profile = _read_yaml(root / "PAPER_PROFILE.yaml")
     paper_id = _paper_id(root, profile)
+    canonical_status = _paper_canonical_run_status(canonical_record)
+    if canonical_status:
+        return {
+            "decision_id": _safe_id(f"{paper_id}-paper-decision"),
+            "mode": "revise" if canonical_status in {"blocked", "failed"} else "continue",
+            "status": "executed",
+            "next_action": _paper_canonical_summary(canonical_record),
+            "run_id": _safe_id(f"{paper_id}-paper-review"),
+        }
     flow = _read_json(root / "closure" / "FLOW_OUTCOME.json")
     completed = flow.get("final_status") == "completed"
     provider_binding = _paper_provider_binding_state(root)
@@ -2458,7 +2556,49 @@ def _paper_project_status(status: str) -> str:
     return "initialized"
 
 
-def _paper_run_status(root: Path, state: dict[str, Any]) -> str:
+def _paper_canonical_run_status(record: dict[str, Any] | None) -> str:
+    if not record:
+        return ""
+    acceptance_state = str(record.get("acceptance_state") or "")
+    projection_state = str(record.get("projection_state") or "")
+    outcome = str(record.get("outcome") or "")
+    review_state = str(record.get("review_state") or "")
+    if acceptance_state in {"final_ready", "accepted_with_limitation"}:
+        return "completed"
+    if acceptance_state == "failed" or projection_state == "failed" or outcome == "failed":
+        return "failed"
+    if (
+        acceptance_state == "blocked"
+        or projection_state == "blocked"
+        or outcome in {"blocked", "human_required"}
+    ):
+        return "blocked"
+    if projection_state == "running":
+        return "running"
+    if acceptance_state == "review_pending" or review_state == "review_pending":
+        return "review_required"
+    if projection_state == "queued":
+        return "pending"
+    return ""
+
+
+def _paper_waiting_for_human(record: dict[str, Any] | None) -> bool:
+    if not record:
+        return False
+    return (
+        str(record.get("outcome") or "") == "human_required"
+        or str(record.get("projection_state") or "") == "waiting_for_you"
+    )
+
+
+def _paper_run_status(
+    root: Path,
+    state: dict[str, Any],
+    canonical_record: dict[str, Any] | None = None,
+) -> str:
+    canonical_status = _paper_canonical_run_status(canonical_record)
+    if canonical_status:
+        return canonical_status
     flow = _read_json(root / "closure" / "FLOW_OUTCOME.json")
     if flow.get("final_status") == "completed":
         return "completed"
@@ -2479,7 +2619,20 @@ def _paper_run_status(root: Path, state: dict[str, Any]) -> str:
     }.get(project_status, "pending")
 
 
-def _paper_evidence_status(root: Path) -> str:
+def _paper_evidence_status(
+    root: Path,
+    canonical_record: dict[str, Any] | None = None,
+) -> str:
+    if canonical_record:
+        if canonical_record.get("failure_refs"):
+            return "disputed"
+        if str(canonical_record.get("acceptance_state") or "") in {
+            "final_ready",
+            "accepted_with_limitation",
+        }:
+            return "verified"
+        if canonical_record.get("evidence_refs"):
+            return "collected"
     if (root / "evidence" / "ref-paper-review-pack.zip").exists():
         return "collected"
     if (root / "paper_task" / "PAPER_TASK_INPUT.yaml").exists() or (root / "review" / "REVIEW_REPORT.md").exists():
@@ -2487,7 +2640,19 @@ def _paper_evidence_status(root: Path) -> str:
     return "missing"
 
 
-def _paper_review_status(root: Path) -> str:
+def _paper_review_status(
+    root: Path,
+    canonical_record: dict[str, Any] | None = None,
+) -> str:
+    if canonical_record:
+        canonical_status = {
+            "review_passed": "pass",
+            "review_pending": "pending",
+            "review_blocked": "blocked",
+            "review_failed": "fail",
+        }.get(str(canonical_record.get("review_state") or ""))
+        if canonical_status:
+            return canonical_status
     flow = _read_json(root / "closure" / "FLOW_OUTCOME.json")
     if flow.get("final_status") == "completed":
         return "pass"
@@ -2496,16 +2661,41 @@ def _paper_review_status(root: Path) -> str:
     return "missing"
 
 
-def _paper_next_command(root: Path, evidence_pack: Path) -> str:
+def _paper_next_command(root: Path, evidence_pack: Path, status: str) -> str:
+    if status == "review_required":
+        return (
+            f"devframe paper finalize --project {_quote_arg(root)} "
+            "--review <external-review.json> --review-sha256 <sha256> "
+            "--reviewer-id <independent-reviewer-id>"
+        )
+    if status in {"blocked", "failed"}:
+        return _paper_pipeline_command(root)
     if evidence_pack.exists():
         return f"devframe pack validate {_quote_arg(evidence_pack)}"
+    return _paper_pipeline_command(root)
+
+
+def _paper_pipeline_command(root: Path) -> str:
     pipeline = ROOT / "pipelines" / "reference_paper_review.yaml"
     return f"devframe run --pipeline {_quote_arg(pipeline)} --execute --project {_quote_arg(root)}"
 
 
-def _paper_next_command_args(root: Path, evidence_pack: Path) -> list[str]:
+def _paper_next_command_args(root: Path, evidence_pack: Path, status: str) -> list[str]:
+    if status == "review_required":
+        return [
+            "paper", "finalize", "--project", str(root),
+            "--review", "<external-review.json>",
+            "--review-sha256", "<sha256>",
+            "--reviewer-id", "<independent-reviewer-id>",
+        ]
+    if status in {"blocked", "failed"}:
+        return _paper_pipeline_command_args(root)
     if evidence_pack.exists():
         return ["pack", "validate", str(evidence_pack)]
+    return _paper_pipeline_command_args(root)
+
+
+def _paper_pipeline_command_args(root: Path) -> list[str]:
     pipeline = ROOT / "pipelines" / "reference_paper_review.yaml"
     return ["run", "--pipeline", str(pipeline), "--execute", "--project", str(root)]
 
@@ -2752,6 +2942,7 @@ def _next_actions(
     decisions: list[dict[str, Any]],
     sessions: list[dict[str, Any]] | None = None,
     go_runs: list[dict[str, Any]] | None = None,
+    action_runs: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
     for gate in gates:
@@ -2774,17 +2965,41 @@ def _next_actions(
     for run in runs:
         status = str(run.get("status") or "")
         command = str(run.get("next_command") or "")
-        if status not in {"pending", "running", "blocked", "failed"} or not command:
+        entrypoint = str(run.get("entrypoint") or "")
+        paper_review = entrypoint == "rdpaper" and status == "review_required"
+        if (
+            status not in {"pending", "running", "blocked", "failed"}
+            and not paper_review
+        ) or not command:
             continue
         run_id = str(run.get("run_id") or "run")
+        action_id = _safe_id(f"{run_id}-command-action")
+        if (
+            entrypoint == "rdpaper"
+            and status in {"blocked", "failed"}
+            and not _paper_retry_allowed(action_id, action_runs or [])
+        ):
+            continue
+        paper_retry = entrypoint == "rdpaper" and status in {"blocked", "failed"}
+        action_status = "ready"
+        if paper_review:
+            action_status = "open"
+        elif status in {"blocked", "failed"} and not paper_retry:
+            action_status = "blocked"
         action = {
-            "action_id": _safe_id(f"{run_id}-command-action"),
+            "action_id": action_id,
             "source_type": "run",
             "source_id": run_id,
             "priority": "high" if status in {"blocked", "failed"} else "medium",
-            "status": "blocked" if status in {"blocked", "failed"} else "ready",
-            "label": "Run or inspect the next local command.",
-            "detail": str(run.get("entrypoint") or ""),
+            "status": action_status,
+            "label": (
+                "Provide an independent review, then finalize this paper run."
+                if paper_review
+                else "Retry this paper run through the existing local pipeline."
+                if paper_retry
+                else "Run or inspect the next local command."
+            ),
+            "detail": entrypoint,
             "command": command,
         }
         command_args = run.get("next_command_args")
@@ -2811,6 +3026,24 @@ def _next_actions(
         })
     actions.extend(_session_action_items(sessions or []))
     return sorted(actions, key=_action_sort_key)
+
+
+def _paper_retry_allowed(action_id: str, action_runs: list[dict[str, Any]]) -> bool:
+    matching = [
+        record
+        for record in action_runs
+        if str(record.get("action_id") or "") == action_id
+    ]
+    if not matching:
+        return True
+    latest = max(
+        matching,
+        key=lambda record: (
+            str(record.get("created_at") or ""),
+            str(record.get("action_run_id") or ""),
+        ),
+    )
+    return str(latest.get("status") or "") not in {"started", "running", "completed"}
 
 
 def _go_run_action_items(go_runs: list[dict[str, Any]]) -> list[dict[str, Any]]:

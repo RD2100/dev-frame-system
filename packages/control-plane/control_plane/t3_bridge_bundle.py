@@ -224,6 +224,57 @@ export interface DevFrameProjectOption {
   readonly label: string;
 }
 
+export interface DevFrameT3ThreadSession {
+  readonly threadId: string;
+  readonly status: string;
+  readonly providerName: string;
+  readonly runtimeMode: string;
+  readonly activeTurnId: string | null;
+  readonly lastError: string | null;
+  readonly updatedAt: string;
+}
+
+export interface DevFrameThreadReviewGate {
+  readonly gateId: string;
+  readonly kind: string;
+  readonly status: string;
+  readonly reason: string;
+  readonly runId: string;
+  readonly openPath?: string;
+  readonly openUrl?: string;
+}
+
+export interface DevFrameThreadAction {
+  readonly actionId: string;
+  readonly sourceType: string;
+  readonly sourceId: string;
+  readonly priority: string;
+  readonly status: string;
+  readonly label: string;
+  readonly detail: string;
+  readonly command: string;
+  readonly resumeFilter: string;
+  readonly handoffPath: string;
+  readonly handoffUrl: string;
+  readonly openPath: string;
+  readonly openUrl: string;
+}
+
+export interface DevFrameReviewGateStatusCounts {
+  readonly pass?: number;
+  readonly "blocked/failed"?: number;
+  readonly "open/ready/needs_human"?: number;
+  readonly unknown?: number;
+}
+
+export interface DevFrameThreadAuthority extends DevFrameThreadTeamRefs {
+  readonly relatedRunIds: readonly string[];
+  readonly actionDetails: readonly DevFrameThreadAction[];
+  readonly teamDetailGates: readonly DevFrameThreadReviewGate[];
+  readonly teamReviewGateStatusCounts: DevFrameReviewGateStatusCounts;
+  readonly teamNextActionableGates: readonly DevFrameThreadReviewGate[];
+}
+
 export interface DevFrameT3ThreadShell {
   readonly id: string;
   readonly projectId: string;
@@ -234,6 +285,8 @@ export interface DevFrameT3ThreadShell {
   readonly threadListPriority?: number;
   readonly threadListSummary?: string;
   readonly updatedAt?: string;
+  readonly session: DevFrameT3ThreadSession;
+  readonly devframe: DevFrameThreadAuthority;
 }
 
 export interface DevFrameT3ShellSnapshot {
@@ -244,14 +297,17 @@ export interface DevFrameT3ShellSnapshot {
   readonly updatedAt: string;
 }
 
-export type DevFrameThreadDetail = Record<string, unknown> &
-  DevFrameThreadTeamRefs & {
-    readonly threadKind?: DevFrameThreadKind;
-    readonly coordinatorScope?: DevFrameCoordinatorScope;
-    readonly projectBinding?: DevFrameProjectBinding;
-    readonly threadListPriority?: number;
-    readonly threadListSummary?: string;
-  };
+export interface DevFrameThreadDetail {
+  readonly id: string;
+  readonly projectId: string;
+  readonly title: string;
+  readonly threadKind?: DevFrameThreadKind;
+  readonly coordinatorScope?: DevFrameCoordinatorScope;
+  readonly projectBinding?: DevFrameProjectBinding;
+  readonly threadListPriority?: number;
+  readonly threadListSummary?: string;
+  readonly session: DevFrameT3ThreadSession;
+}
 
 export interface DevFrameTeamAgent {
   readonly agentId: string;
@@ -489,7 +545,7 @@ export function sortDevFrameThreadsForDisplay(
   snapshot: DevFrameT3ShellSnapshot,
 ): DevFrameT3ShellSnapshot {
   const detailsById = new Map(
-    (snapshot.threadDetails ?? []).map((detail) => [String((detail as { id?: unknown }).id ?? ""), detail]),
+    (snapshot.threadDetails ?? []).map((detail) => [detail.id, detail]),
   );
   const threads = [...snapshot.threads].sort((a, b) => {
     const [ap, au, at] = threadSortKey(a);
@@ -672,9 +728,57 @@ export interface DevFrameClusterTargetsResponse {
 
 export interface DevFrameCoordinatorGoalRequest {
   readonly projectId: string;
-  readonly target: string;
+  readonly target?: string;
   readonly goal: string;
   readonly proposedBy?: string;
+  readonly executor?: string;
+  readonly modelProvider?: string;
+  readonly model?: string;
+}
+
+export interface DevFrameDelegationAuthority {
+  readonly delegationId: string;
+  readonly rootControllerId: string;
+  readonly projectControllerId: string;
+  readonly projectId: string;
+  readonly clusterRunId: string;
+  readonly goRunId: string;
+  readonly delegationState: string;
+  readonly delegatedAt: string;
+  readonly requestedBy: string;
+}
+
+export interface DevFrameRequestRetryContext {
+  readonly allowed: boolean;
+  readonly action: string;
+}
+
+export interface DevFrameCoordinatorGoalErrorResponse {
+  readonly error: string;
+  readonly detail?: string;
+  readonly required?: readonly string[];
+  readonly retry: DevFrameRequestRetryContext;
+}
+
+export class DevFrameCoordinatorGoalError extends Error {
+  readonly status: number;
+  readonly code: string;
+  readonly detail?: string;
+  readonly retry: DevFrameRequestRetryContext;
+  readonly response: DevFrameCoordinatorGoalErrorResponse;
+
+  constructor(status: number, response: DevFrameCoordinatorGoalErrorResponse) {
+    const message = response.detail
+      ? `${response.error}: ${response.detail}`
+      : `${response.error} (HTTP ${status})`;
+    super(message);
+    this.name = "DevFrameCoordinatorGoalError";
+    this.status = status;
+    this.code = response.error;
+    this.detail = response.detail;
+    this.retry = response.retry;
+    this.response = response;
+  }
 }
 
 export interface DevFrameCoordinatorGoalResponse {
@@ -687,6 +791,7 @@ export interface DevFrameCoordinatorGoalResponse {
   readonly conversationKind?: string;
   readonly coordinatorScope?: string;
   readonly projectBinding?: Record<string, unknown>;
+  readonly authority?: DevFrameDelegationAuthority;
   readonly kind?: string;
   readonly answer?: string;
   readonly note?: string;
@@ -713,6 +818,15 @@ export async function startDevFrameCoordinatorGoal(
   config: DevFrameControlPlaneConfig,
   input: DevFrameCoordinatorGoalRequest,
 ): Promise<DevFrameCoordinatorGoalResponse> {
+  if (input.executor !== undefined && !input.executor.trim()) {
+    throw new Error("executor must not be blank when provided");
+  }
+  if (input.modelProvider !== undefined && !input.modelProvider.trim()) {
+    throw new Error("modelProvider must not be blank when provided");
+  }
+  if (input.model !== undefined && !input.model.trim()) {
+    throw new Error("model must not be blank when provided");
+  }
   const response = await fetch(new URL("/api/t3/cluster-run", config.controlPlaneBaseUrl).toString(), {
     method: "POST",
     cache: "no-store",
@@ -722,13 +836,45 @@ export async function startDevFrameCoordinatorGoal(
     },
     body: JSON.stringify({
       projectId: input.projectId,
-      target: input.target,
+      ...(input.target !== undefined ? { target: input.target } : {}),
       goal: input.goal,
       ...(input.proposedBy ? { proposedBy: input.proposedBy } : {}),
+      ...(input.executor !== undefined ? { executor: input.executor } : {}),
+      ...(input.modelProvider !== undefined ? { modelProvider: input.modelProvider } : {}),
+      ...(input.model !== undefined ? { model: input.model } : {}),
     }),
   });
   if (!response.ok) {
-    throw new Error(`DevFrame coordinator goal request failed: ${response.status}`);
+    const rawError = await response.json().catch(() => null) as unknown;
+    const errorRecord = (
+      typeof rawError === "object" && rawError !== null && !Array.isArray(rawError)
+        ? rawError
+        : {}
+    ) as Record<string, unknown>;
+    const rawRetry = errorRecord.retry;
+    const retryRecord = (
+      typeof rawRetry === "object" && rawRetry !== null && !Array.isArray(rawRetry)
+        ? rawRetry
+        : {}
+    ) as Record<string, unknown>;
+    const retry = {
+      allowed: typeof retryRecord.allowed === "boolean"
+        ? retryRecord.allowed
+        : false,
+      action: typeof retryRecord.action === "string" && retryRecord.action
+        ? retryRecord.action
+        : response.status >= 500 ? "inspect_status" : "correct_request",
+    };
+    throw new DevFrameCoordinatorGoalError(response.status, {
+      error: typeof errorRecord.error === "string" && errorRecord.error
+        ? errorRecord.error
+        : "cluster_run_request_failed",
+      ...(typeof errorRecord.detail === "string" ? { detail: errorRecord.detail } : {}),
+      ...(Array.isArray(errorRecord.required)
+        ? { required: errorRecord.required.filter((item): item is string => typeof item === "string") }
+        : {}),
+      retry,
+    });
   }
   return (await response.json()) as DevFrameCoordinatorGoalResponse;
 }
