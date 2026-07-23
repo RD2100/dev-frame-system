@@ -1,20 +1,36 @@
-from setuptools import find_packages, setup
+from pathlib import Path
+import shutil
 
-RESOURCE_PACKAGES = ["pipelines", "schemas", "templates"]
+from setuptools import find_packages, setup
+from setuptools.command.sdist import sdist as _sdist
+
+SETUP_ROOT = Path(__file__).resolve().parent
+REPO_SCHEMAS = SETUP_ROOT.parents[1] / "schemas"
+SDIST_SCHEMAS = SETUP_ROOT / "schemas"
+PUBLIC_SCHEMAS = SDIST_SCHEMAS if SDIST_SCHEMAS.is_dir() else REPO_SCHEMAS
+RESOURCE_PACKAGES = ["pipelines", "templates"]
+
+
+class SdistWithPublicSchemas(_sdist):
+    def make_release_tree(self, base_dir, files):
+        super().make_release_tree(base_dir, files)
+        for source in PUBLIC_SCHEMAS.rglob("*.schema.json"):
+            target = Path(base_dir) / "schemas" / source.relative_to(PUBLIC_SCHEMAS)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+
 
 setup(
     name="devframe-control-plane",
     version="0.1.0",
-    packages=find_packages(include=["control_plane", "control_plane.*", *RESOURCE_PACKAGES]),
+    packages=find_packages(include=["control_plane", "control_plane.*", *RESOURCE_PACKAGES])
+    + ["schemas"],
+    package_dir={"schemas": str(PUBLIC_SCHEMAS)},
+    cmdclass={"sdist": SdistWithPublicSchemas},
     package_data={
         "control_plane": ["*.schema.json"],
         "pipelines": ["*.yaml"],
-        "schemas": [
-            "*.json",
-            "agent-runtime/*",
-            "draft/*",
-            "resource-integration/*",
-        ],
+        "schemas": ["**/*.schema.json"],
         "templates": [
             "code_project/*",
             "context_handoff/*",
