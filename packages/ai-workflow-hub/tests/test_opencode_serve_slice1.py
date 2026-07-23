@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from jsonschema import Draft7Validator
+import pytest
 from typer.testing import CliRunner
 
 from ai_workflow_hub import opencode_serve_slice1
@@ -137,6 +138,84 @@ def test_run_probe_refinalizes_early_health_failure_after_server_cleanup(tmp_pat
     assert persisted["checks"]["server_stopped"]["status"] == "failed"
     assert persisted["failed_checks"] == ["server_health", "server_stopped"]
     assert persisted["partial_type"] == "serve-shutdown-nonzero"
+
+
+@pytest.mark.parametrize(
+    ("failure_stage", "failed_check"),
+    [
+        ("event_stream", "event_stream_connected"),
+        ("session", "session_created"),
+        ("prompt", "prompt_async_accepted"),
+    ],
+)
+def test_run_probe_finalizes_other_early_failures_only_after_server_cleanup(
+    tmp_path,
+    monkeypatch,
+    failure_stage,
+    failed_check,
+):
+    class FakeProc:
+        pid = 1234
+
+        def poll(self):
+            return None
+
+    class FakeSse:
+        def __init__(self, url, events):
+            pass
+
+        def start(self):
+            pass
+
+        def wait_connected(self, timeout):
+            return failure_stage != "event_stream"
+
+        def stop(self):
+            pass
+
+    monkeypatch.setattr(opencode_serve_slice1, "_find_opencode", lambda: "opencode")
+    monkeypatch.setattr(opencode_serve_slice1, "_find_free_port", lambda: 49152)
+    monkeypatch.setattr(opencode_serve_slice1, "_start_server", lambda *args: FakeProc())
+    monkeypatch.setattr(
+        opencode_serve_slice1,
+        "_wait_for_health",
+        lambda *args, **kwargs: {"healthy": True},
+    )
+    monkeypatch.setattr(opencode_serve_slice1, "_SseConsumer", FakeSse)
+    monkeypatch.setattr(
+        opencode_serve_slice1,
+        "_http_json",
+        lambda *args, **kwargs: {} if failure_stage == "session" else {"id": "session-1"},
+    )
+    monkeypatch.setattr(
+        opencode_serve_slice1,
+        "_http_status",
+        lambda *args, **kwargs: 500 if failure_stage == "prompt" else 204,
+    )
+    monkeypatch.setattr(
+        opencode_serve_slice1,
+        "_wait_for_completion",
+        lambda *args, **kwargs: pytest.fail("completion wait ran after an early failure"),
+    )
+    monkeypatch.setattr(opencode_serve_slice1, "_dispose_server", lambda base_url: False)
+    monkeypatch.setattr(opencode_serve_slice1, "_stop_server", lambda proc: None)
+
+    def fake_run_command(command, *, cwd: Path, timeout: int):
+        if command == ["git", "init"]:
+            return {"exit_code": 0, "stdout": "Initialized empty Git repository\n", "stderr": ""}
+        if command == ["opencode", "--version"]:
+            return {"exit_code": 0, "stdout": "opencode 1.0.0\n", "stderr": ""}
+        raise AssertionError(command)
+
+    monkeypatch.setattr(opencode_serve_slice1, "_run_command", fake_run_command)
+
+    report = opencode_serve_slice1.run_opencode_serve_slice1_probe(output_dir=str(tmp_path))
+    persisted = json.loads((tmp_path / "serve-slice1-report.json").read_text(encoding="utf-8"))
+
+    assert report == persisted
+    assert report["checks"][failed_check]["status"] == "failed"
+    assert report["checks"]["server_stopped"]["status"] == "failed"
+    assert report["failed_checks"] == [failed_check, "server_stopped"]
 
 
 def test_readiness_report_schema_accepts_slice1_shape(tmp_path):

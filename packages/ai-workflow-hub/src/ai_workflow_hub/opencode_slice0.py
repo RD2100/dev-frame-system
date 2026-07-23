@@ -256,10 +256,10 @@ def _finalize_report(report: dict[str, Any], artifact_dir: Path) -> dict[str, An
         version_text = (version.get("stdout", "").strip().splitlines() or ["unknown"])[0]
         report["cache_key"] = f"{version_text}|{os.name}|{report.get('mode', '')}"
 
-    report = _sanitize_external_secret_value(report)
     report_path = artifact_dir / "slice0-report.json"
-    report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     report["paths"]["report"] = str(report_path)
+    report = _sanitize_external_secret_value(report)
+    report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     return report
 
 

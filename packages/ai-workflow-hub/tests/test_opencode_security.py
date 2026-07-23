@@ -260,6 +260,40 @@ def test_slice0_sanitizes_returned_and_persisted_evidence(tmp_path: Path, monkey
         assert sentinel not in (tmp_path / name).read_text(encoding="utf-8")
 
 
+@pytest.mark.parametrize(
+    ("module", "runner_name", "report_name"),
+    [
+        (opencode_slice0, "run_opencode_slice0_probe", "slice0-report.json"),
+        (
+            opencode_serve_slice1,
+            "run_opencode_serve_slice1_probe",
+            "serve-slice1-report.json",
+        ),
+    ],
+)
+def test_probe_sanitizes_secret_bearing_output_dir_in_returned_and_persisted_report(
+    tmp_path: Path,
+    monkeypatch,
+    module,
+    runner_name: str,
+    report_name: str,
+):
+    sentinel = "synthetic-opencode-key-output-dir"
+    monkeypatch.setenv(REQUIRED_SECRET_ENV, sentinel)
+    monkeypatch.setattr(module, "_find_opencode", lambda: None)
+    artifact_dir = tmp_path / sentinel / "artifacts"
+
+    report = getattr(module, runner_name)(
+        model="synthetic/model",
+        output_dir=str(artifact_dir),
+        timeout=1,
+    )
+    persisted = json.loads((artifact_dir / report_name).read_text(encoding="utf-8"))
+
+    assert sentinel not in json.dumps(report)
+    assert sentinel not in json.dumps(persisted)
+
+
 def test_serve_slice1_sanitizes_returned_and_persisted_evidence(tmp_path: Path, monkeypatch):
     sentinel = "synthetic-opencode-key-serve"
     monkeypatch.setenv(REQUIRED_SECRET_ENV, sentinel)

@@ -103,7 +103,6 @@ def run_opencode_serve_slice1_probe(
         raise
     report["server"]["pid"] = proc.pid
     health_ok = False
-    finalized_before_cleanup = False
 
     events: list[dict[str, Any]] = []
     sse = _SseConsumer(f"{base_url}/event", events)
@@ -112,52 +111,60 @@ def run_opencode_serve_slice1_probe(
         report["server"]["health"] = health
         health_ok = bool(health.get("healthy"))
         _set_check(report, "server_health", bool(health.get("healthy")), json.dumps(health))
-        if not health.get("healthy"):
-            finalized_before_cleanup = True
-            return _finalize_report(report, artifact_dir)
-
-        sse.start()
-        connected = sse.wait_connected(timeout=min(20, timeout))
-        _set_check(
-            report,
-            "event_stream_connected",
-            connected,
-            "server.connected received" if connected else "server.connected not received",
-        )
-        if not connected:
-            finalized_before_cleanup = True
-            return _finalize_report(report, artifact_dir)
-
-        session = _http_json(base_url, "POST", "/session", {"title": "devframe opencode serve slice1"})
-        session_id = _extract_id(session)
-        report["session"] = {"id": session_id, "raw": session}
-        _set_check(report, "session_created", bool(session_id), session_id or "missing session id")
-        if not session_id:
-            finalized_before_cleanup = True
-            return _finalize_report(report, artifact_dir)
-
-        body = {
-            "model": _model_body(model),
-            "agent": "build",
-            "parts": [{"type": "text", "text": _probe_prompt()}],
-        }
-        prompt_status = _http_status(base_url, "POST", f"/session/{session_id}/prompt_async", body)
-        report["prompt_async"] = {"status": prompt_status}
-        _set_check(report, "prompt_async_accepted", prompt_status == 204, f"HTTP {prompt_status}")
-        if prompt_status != 204:
-            finalized_before_cleanup = True
-            return _finalize_report(report, artifact_dir)
-
-        wait_result = _wait_for_completion(
-            base_url=base_url,
-            session_id=session_id,
-            workspace=workspace,
-            events=events,
-            timeout=timeout,
-        )
-        wait_checks = wait_result.pop("checks", {})
-        report["checks"].update(wait_checks)
-        report.update(wait_result)
+        if health.get("healthy"):
+            sse.start()
+            connected = sse.wait_connected(timeout=min(20, timeout))
+            _set_check(
+                report,
+                "event_stream_connected",
+                connected,
+                "server.connected received" if connected else "server.connected not received",
+            )
+            if connected:
+                session = _http_json(
+                    base_url,
+                    "POST",
+                    "/session",
+                    {"title": "devframe opencode serve slice1"},
+                )
+                session_id = _extract_id(session)
+                report["session"] = {"id": session_id, "raw": session}
+                _set_check(
+                    report,
+                    "session_created",
+                    bool(session_id),
+                    session_id or "missing session id",
+                )
+                if session_id:
+                    body = {
+                        "model": _model_body(model),
+                        "agent": "build",
+                        "parts": [{"type": "text", "text": _probe_prompt()}],
+                    }
+                    prompt_status = _http_status(
+                        base_url,
+                        "POST",
+                        f"/session/{session_id}/prompt_async",
+                        body,
+                    )
+                    report["prompt_async"] = {"status": prompt_status}
+                    _set_check(
+                        report,
+                        "prompt_async_accepted",
+                        prompt_status == 204,
+                        f"HTTP {prompt_status}",
+                    )
+                    if prompt_status == 204:
+                        wait_result = _wait_for_completion(
+                            base_url=base_url,
+                            session_id=session_id,
+                            workspace=workspace,
+                            events=events,
+                            timeout=timeout,
+                        )
+                        wait_checks = wait_result.pop("checks", {})
+                        report["checks"].update(wait_checks)
+                        report.update(wait_result)
     finally:
         try:
             sse.stop()
@@ -189,8 +196,6 @@ def run_opencode_serve_slice1_probe(
             stop_ok,
             stop_detail,
         )
-        if finalized_before_cleanup:
-            _finalize_report(report, artifact_dir)
 
     return _finalize_report(report, artifact_dir)
 
@@ -561,15 +566,15 @@ def _finalize_report(report: dict[str, Any], artifact_dir: Path) -> dict[str, An
         version_text = (version.get("stdout", "").strip().splitlines() or ["unknown"])[0]
         report["cache_key"] = f"{version_text}|{os.name}|{report.get('mode', '')}"
     _sanitize_persisted_logs(report)
-    report = _sanitize_external_secret_value(report)
     event_path = artifact_dir / "serve-events.jsonl"
+    report_path = artifact_dir / "serve-slice1-report.json"
+    report["paths"]["report"] = str(report_path)
+    evaluate_serve_report(report)
+    report = _sanitize_external_secret_value(report)
     event_path.write_text(
         "\n".join(json.dumps(event, ensure_ascii=False) for event in report.get("events", {}).get("raw_sample", [])),
         encoding="utf-8",
     )
-    evaluate_serve_report(report)
-    report_path = artifact_dir / "serve-slice1-report.json"
-    report["paths"]["report"] = str(report_path)
     report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     return report
 
