@@ -508,7 +508,7 @@ def test_explicit_target_stays_compatible_and_bridge_preserves_backend_error(
             "try {\n"
             "  await startDevFrameCoordinatorGoal(config, {\n"
             f"    projectId: {json.dumps(str(workspace))},\n"
-            '    target: "rdpaper",\n'
+            '    target: "missing-worker",\n'
             '    goal: "Review the paper",\n'
             "  });\n"
             "} catch (error) {\n"
@@ -571,11 +571,11 @@ def test_explicit_target_stays_compatible_and_bridge_preserves_backend_error(
         "name": "DevFrameCoordinatorGoalError",
         "status": 400,
         "code": "cluster_run_rejected",
-        "detail": "unknown cluster target: rdpaper",
+        "detail": "unknown cluster target: missing-worker",
         "retry": {"allowed": False, "action": "correct_request"},
         "response": {
             "error": "cluster_run_rejected",
-            "detail": "unknown cluster target: rdpaper",
+            "detail": "unknown cluster target: missing-worker",
             "retry": {"allowed": False, "action": "correct_request"},
         },
     }

@@ -1,19 +1,17 @@
 """Start + track cluster runs from the editor (B inline-confirm → run).
 
 A human typing ``&target <goal>`` and confirming inline in the conversation is
-the authorization. There is NO dashboard-approval / proposal-staging step: this
-module starts a real project-coordinator run (reusing ``WorkflowEngine``) in the
-background, records a durable run entry the editor can poll, and updates that
-entry as the run progresses. The dashboard is monitoring only.
-
-The actual workflow invocation is isolated behind ``_run_cluster_workflow`` so
-tests can verify the start/track path without spawning a real, token-spending
-run.
+the authorization. There is NO dashboard-approval / proposal-staging step. The
+generic coding path reuses ``WorkflowEngine``; the ``rdpaper`` product target
+reuses the bounded local stage executor and stops at independent review. Both
+paths record a durable run entry the editor can poll. The dashboard is
+monitoring only.
 """
 from __future__ import annotations
 
 from contextlib import contextmanager
 import json
+import logging
 import os
 import secrets
 import tempfile
@@ -24,10 +22,89 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .cluster_control import _slug, is_valid_cluster_target
+from .cluster_control import PAPER_TARGET_ID, _slug, is_valid_cluster_target
 from .project_contract import slugify_project_id
 from .t3_adapter import _workspace_root
 from .visual_state import build_visual_control_plane_state
+
+
+logger = logging.getLogger(__name__)
+
+_PAPER_PROJECT_FILES = (
+    "PAPER_PROFILE.yaml",
+    "PAPER_STATE.yaml",
+    "PAPER_LEDGER.md",
+    "PAPER_NEXT_TASK.md",
+    "PAPER_REVIEW_SPEC.md",
+    "PAPER_SAFETY.md",
+    "WEB_AI_ADAPTER.yaml",
+)
+_PAPER_ALLOWED_INPUT_FILES = {
+    "SYNTHETIC_PAPER.md",
+    "SYNTHETIC_REFERENCES.yaml",
+}
+_PAPER_REQUIRED_EVIDENCE = (
+    "TASKSPEC.json",
+    "execution-report.json",
+    "closure/FLOW_OUTCOME.json",
+    "evidence/PAPER_PIPELINE_GATE.json",
+    "evidence/ref-paper-review-pack.zip",
+)
+_PAPER_MANAGED_DIRECTORIES = (
+    "input",
+    "run",
+    "paper_task",
+    "review",
+    "evidence",
+    "submission",
+    "closure",
+)
+_PAPER_MANAGED_FILES = (
+    "PAPER_STATE.yaml",
+    "TASKSPEC.json",
+    "execution-report.json",
+    "execution-report.md",
+)
+_PAPER_ALLOWED_MANAGED_FILE_PATHS = frozenset(
+    {
+        "PAPER_STATE.yaml",
+        "TASKSPEC.json",
+        "execution-report.json",
+        "execution-report.md",
+        "input/SYNTHETIC_PAPER.md",
+        "input/SYNTHETIC_REFERENCES.yaml",
+        "run/PIPELINE_RUN_ID.txt",
+        "paper_task/PAPER_TASK_INPUT.yaml",
+        "paper_task/PAPER_TASK_OUTPUT.yaml",
+        "paper_task/PRIVACY_ATTESTATION.yaml",
+        "paper_task/REDACTION_REPORT.yaml",
+        "review/DIMENSION_SCORES.yaml",
+        "review/REVIEW_REPORT.md",
+        "review/CITATION_CHECK_RESULT.yaml",
+        "review/REVIEW_ISSUES.yaml",
+        "evidence/ref-paper-review-pack.zip",
+        "evidence/PACK_MANIFEST.md",
+        "evidence/SAFETY_ATTESTATION.md",
+        "evidence/BYPASS_CHECK_OUTPUT.txt",
+        "evidence/PRE_SUBMISSION_CHECK.yaml",
+        "evidence/PAPER_TASK_VALIDATION.directory.json",
+        "evidence/PAPER_TASK_VALIDATION.zip.json",
+        "evidence/PAPER_PIPELINE_GATE.json",
+        "submission/SUBMISSION_RESULT.json",
+        "submission/SUBMISSION_REQUEST.json",
+        "closure/FLOW_OUTCOME.json",
+        "closure/CLOSURE_REPORT.md",
+        "closure/FINAL_VERDICT.json",
+        "closure/final-verdict.json",
+    }
+)
+_PAPER_ALLOWED_MANAGED_DIRECTORY_PATHS = frozenset(_PAPER_MANAGED_DIRECTORIES)
+_PAPER_ALLOWED_MANAGED_PATHS = (
+    _PAPER_ALLOWED_MANAGED_FILE_PATHS | _PAPER_ALLOWED_MANAGED_DIRECTORY_PATHS
+)
+_PAPER_MAX_MANAGED_ENTRIES = 512
+_PAPER_ROOT_RESERVATION_LOCK = threading.Lock()
+_PAPER_RESERVED_ROOTS: set[str] = set()
 
 
 class ClusterRunError(Exception):
@@ -375,6 +452,349 @@ def _run_cluster_workflow(
     )
 
 
+def _load_yaml_mapping(path: Path, label: str) -> dict[str, Any]:
+    import yaml
+
+    try:
+        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise ClusterRunError(f"invalid {label}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ClusterRunError(f"invalid {label}: expected a YAML mapping")
+    return payload
+
+
+def _paper_run_id(project_path: str | Path) -> str:
+    root = Path(project_path).resolve()
+    profile = _load_yaml_mapping(root / "PAPER_PROFILE.yaml", "PAPER_PROFILE.yaml")
+    paper_id = str(profile.get("paper_id") or "").strip()
+    if not paper_id or "{{" in paper_id or "}}" in paper_id:
+        raise ClusterRunError(
+            "invalid paper project: paper_id is missing or unrendered"
+        )
+    normalized = "".join(
+        char.lower() if char.isascii() and char.isalnum() else "-" for char in paper_id
+    )
+    normalized = "-".join(part for part in normalized.split("-") if part)
+    if not normalized:
+        raise ClusterRunError("invalid paper project: paper_id has no safe characters")
+    return f"{normalized}-paper-review"
+
+
+def _reserve_paper_root(project_path: str | Path) -> str:
+    reservation_key = os.path.normcase(str(Path(project_path).resolve()))
+    with _PAPER_ROOT_RESERVATION_LOCK:
+        if reservation_key in _PAPER_RESERVED_ROOTS:
+            raise ClusterRunError(
+                "paper project already has an active paper cluster run"
+            )
+        _PAPER_RESERVED_ROOTS.add(reservation_key)
+    return reservation_key
+
+
+def _release_paper_root(reservation_key: str) -> None:
+    if not reservation_key:
+        return
+    with _PAPER_ROOT_RESERVATION_LOCK:
+        _PAPER_RESERVED_ROOTS.discard(reservation_key)
+
+
+def _is_unsafe_managed_path(root: Path, path: Path) -> bool:
+    if path.is_symlink():
+        return True
+    is_junction = getattr(path, "is_junction", None)
+    if callable(is_junction) and is_junction():
+        return True
+    resolved = path.resolve()
+    if resolved != root and root not in resolved.parents:
+        return True
+    if path.is_dir():
+        return False
+    if not path.is_file():
+        return True
+    return path.stat().st_nlink > 1
+
+
+def _validate_paper_managed_paths(root: Path) -> None:
+    try:
+        candidates = [
+            root / name
+            for name in _PAPER_MANAGED_FILES
+            if (root / name).exists() or (root / name).is_symlink()
+        ]
+        managed_entries = 0
+        for name in _PAPER_MANAGED_DIRECTORIES:
+            directory = root / name
+            if not directory.exists() and not directory.is_symlink():
+                continue
+            candidates.append(directory)
+            if directory.is_dir() and not _is_unsafe_managed_path(root, directory):
+                for path in directory.rglob("*"):
+                    managed_entries += 1
+                    if managed_entries > _PAPER_MAX_MANAGED_ENTRIES:
+                        raise ClusterRunError(
+                            "unsafe paper project: managed path scan limit exceeded"
+                        )
+                    candidates.append(path)
+        relative_paths = {
+            path: path.relative_to(root).as_posix() for path in candidates
+        }
+        unsafe = sorted(
+            relative_paths[path]
+            for path in candidates
+            if _is_unsafe_managed_path(root, path)
+        )
+        unexpected = sorted(
+            relative
+            for relative in relative_paths.values()
+            if relative not in _PAPER_ALLOWED_MANAGED_PATHS
+        )
+        wrong_file_types = sorted(
+            relative_paths[path]
+            for path in candidates
+            if relative_paths[path] in _PAPER_ALLOWED_MANAGED_FILE_PATHS
+            and not path.is_file()
+        )
+        wrong_directory_types = sorted(
+            relative_paths[path]
+            for path in candidates
+            if relative_paths[path] in _PAPER_ALLOWED_MANAGED_DIRECTORY_PATHS
+            and not path.is_dir()
+        )
+    except OSError as exc:
+        raise ClusterRunError(f"cannot inspect managed paper paths: {exc}") from exc
+    if unsafe:
+        raise ClusterRunError(
+            "unsafe paper project: managed paths must be regular and project-local: "
+            + ", ".join(unsafe)
+        )
+    if unexpected:
+        unexpected_inputs = [
+            relative.removeprefix("input/")
+            for relative in unexpected
+            if relative.startswith("input/")
+        ]
+        if len(unexpected_inputs) == len(unexpected):
+            raise ClusterRunError(
+                "unsafe paper project: unexpected input files: "
+                + ", ".join(unexpected_inputs)
+            )
+        raise ClusterRunError(
+            "unsafe paper project: unexpected managed paper paths: "
+            + ", ".join(unexpected)
+        )
+    if wrong_file_types:
+        raise ClusterRunError(
+            "unsafe paper project: managed file slots must be regular files: "
+            + ", ".join(wrong_file_types)
+        )
+    if wrong_directory_types:
+        raise ClusterRunError(
+            "unsafe paper project: managed directory slots must be real directories: "
+            + ", ".join(wrong_directory_types)
+        )
+
+
+def _paper_final_verdict_exists(root: Path) -> bool:
+    closure = root / "closure"
+    return any(
+        (closure / name).exists()
+        for name in ("FINAL_VERDICT.json", "final-verdict.json")
+    )
+
+
+def _validate_paper_project(project_path: str | Path) -> str:
+    root = Path(project_path).resolve()
+    missing = [name for name in _PAPER_PROJECT_FILES if not (root / name).is_file()]
+    if missing:
+        raise ClusterRunError(
+            "invalid paper project: missing initialized files: " + ", ".join(missing)
+        )
+    if any((root / name).is_symlink() for name in _PAPER_PROJECT_FILES):
+        raise ClusterRunError(
+            "invalid paper project: initialized files must not be symlinks"
+        )
+    _validate_paper_managed_paths(root)
+
+    _load_yaml_mapping(root / "PAPER_STATE.yaml", "PAPER_STATE.yaml")
+    adapter = _load_yaml_mapping(root / "WEB_AI_ADAPTER.yaml", "WEB_AI_ADAPTER.yaml")
+    safety = adapter.get("safety")
+    if not isinstance(safety, dict):
+        raise ClusterRunError("invalid paper project: adapter safety policy is missing")
+    for flag in (
+        "allow_real_paper_full_text",
+        "allow_pdf_upload",
+        "allow_browser_profile_export",
+    ):
+        if safety.get(flag) is not False:
+            raise ClusterRunError(f"unsafe paper project: {flag} must be false")
+
+    input_dir = root / "input"
+    if input_dir.exists():
+        if input_dir.is_symlink() or not input_dir.is_dir():
+            raise ClusterRunError(
+                "unsafe paper project: input must be a real directory"
+            )
+        unexpected = sorted(
+            relative
+            for path in input_dir.rglob("*")
+            for relative in (path.relative_to(input_dir).as_posix(),)
+            if path.is_symlink()
+            or not path.is_file()
+            or relative not in _PAPER_ALLOWED_INPUT_FILES
+        )
+        if unexpected:
+            raise ClusterRunError(
+                "unsafe paper project: unexpected input files: " + ", ".join(unexpected)
+            )
+
+    if _paper_final_verdict_exists(root):
+        raise ClusterRunError(
+            "paper project already has a FinalVerdict; superseding it requires a separate slice"
+        )
+    return _paper_run_id(root)
+
+
+def _paper_evidence_refs(root: Path) -> list[str]:
+    return [
+        str(path.resolve())
+        for relative in _PAPER_REQUIRED_EVIDENCE
+        for path in (root / relative,)
+        if path.is_file()
+    ]
+
+
+def _verify_paper_execution(root: Path, results: list[Any]) -> list[str]:
+    from .paper_pipeline_gate import validate_paper_pipeline_project
+
+    failed_stages = [
+        result.stage_id for result in results if result.status != "completed"
+    ]
+    if len(results) != 7 or failed_stages:
+        detail = ", ".join(failed_stages) or f"only {len(results)}/7 stages returned"
+        raise ClusterRunError(f"paper pipeline failed: {detail}")
+    _validate_paper_managed_paths(root)
+    if _paper_final_verdict_exists(root):
+        raise ClusterRunError("paper executor crossed the independent-review boundary")
+
+    gate = validate_paper_pipeline_project(root)
+    if not gate.passed:
+        raise ClusterRunError("paper pipeline gate failed: " + "; ".join(gate.errors))
+
+    try:
+        flow = json.loads(
+            (root / "closure" / "FLOW_OUTCOME.json").read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ClusterRunError(f"paper closure outcome is invalid: {exc}") from exc
+    if flow.get("final_status") != "review_pending":
+        raise ClusterRunError("paper executor did not stop at review_pending")
+
+    evidence_refs = _paper_evidence_refs(root)
+    if len(evidence_refs) != len(_PAPER_REQUIRED_EVIDENCE):
+        raise ClusterRunError("paper pipeline evidence is missing")
+    return evidence_refs
+
+
+def _paper_review_action(
+    runtime_dir: str | Path | None,
+    root: Path,
+    paper_run_id: str,
+) -> dict[str, Any]:
+    state = build_visual_control_plane_state(
+        runtime_dir,
+        paper_project_dirs=[root],
+    )
+    paper_run = next(
+        (
+            item
+            for item in state.get("runs", [])
+            if item.get("entrypoint") == "rdpaper"
+            and item.get("run_id") == paper_run_id
+        ),
+        None,
+    )
+    paper_action = next(
+        (
+            item
+            for item in state.get("next_actions", [])
+            if item.get("detail") == "rdpaper" and item.get("source_id") == paper_run_id
+        ),
+        None,
+    )
+    if not paper_run or paper_run.get("status") != "review_required":
+        raise ClusterRunError(
+            "paper review-pending run is not visible in the control plane"
+        )
+    if not paper_action or paper_action.get("status") != "open":
+        raise ClusterRunError("paper independent-review action is not human-gated")
+    return paper_action
+
+
+def _run_paper_workflow(
+    runtime_dir: str | Path | None,
+    project_path: str,
+) -> dict[str, Any]:
+    from .stage_executor import execute_full_pipeline
+
+    root = Path(project_path).resolve()
+    paper_run_id = _validate_paper_project(root)
+    logger.debug("Starting offline paper pipeline: paper_run_id=%s", paper_run_id)
+    results = execute_full_pipeline(project_dir=root)
+    evidence_refs = _verify_paper_execution(root, results)
+    paper_action = _paper_review_action(runtime_dir, root, paper_run_id)
+
+    logger.debug(
+        "Offline paper pipeline reached review_pending: paper_run_id=%s",
+        paper_run_id,
+    )
+    return {
+        "kind": "paper",
+        "status": "review_pending",
+        "summary": (
+            "Paper pipeline completed; independent review and explicit "
+            "finalization are required."
+        ),
+        "paperRunId": paper_run_id,
+        "paperActionId": str(paper_action.get("action_id") or ""),
+        "paperActionEvidence": {
+            "status": str(paper_action.get("status") or ""),
+            "command": str(paper_action.get("command") or ""),
+        },
+        "evidenceRefs": evidence_refs,
+    }
+
+
+def _run_paper_and_record(
+    runtime_dir: str | Path | None,
+    project_path: str,
+    run_id: str,
+    reservation_key: str,
+) -> None:
+    try:
+        record = _load_run_record(runtime_dir, run_id) or {
+            "runId": run_id,
+            "target": PAPER_TARGET_ID,
+            "projectPath": project_path,
+        }
+        try:
+            record.update(_run_paper_workflow(runtime_dir, project_path))
+        except Exception as exc:  # noqa: BLE001 - persist the real product-path failure
+            logger.exception("Offline paper cluster run failed: run_id=%s", run_id)
+            record["status"] = "failed"
+            record["summary"] = f"Paper run failed: {exc}"
+            existing_evidence = _paper_evidence_refs(Path(project_path).resolve())
+            if existing_evidence:
+                record["evidenceRefs"] = existing_evidence
+        record["finishedAt"] = _now()
+        _write_run_record(runtime_dir, record)
+        from .t3_adapter import invalidate_t3_shell_cache
+
+        invalidate_t3_shell_cache(runtime_dir)
+    finally:
+        _release_paper_root(reservation_key)
+
+
 def _run_and_record(
     runtime_dir: str | Path | None,
     project_path: str,
@@ -384,7 +804,17 @@ def _run_and_record(
     executor: str | None = None,
     model_provider: str | None = None,
     model: str | None = None,
+    paper_root_reservation: str = "",
 ) -> None:
+    if target == PAPER_TARGET_ID:
+        _run_paper_and_record(
+            runtime_dir,
+            project_path,
+            run_id,
+            paper_root_reservation,
+        )
+        return
+
     def _on_prepared(go_run_id: str) -> None:
         bound_authority: dict[str, Any] | None = None
         with _run_record_transaction(runtime_dir, run_id):
@@ -698,6 +1128,12 @@ def start_cluster_run(
         raise ClusterRunError(f"unknown cluster target: {target}")
     if root_delegation and tid != "coordinator":
         raise ClusterRunError("root delegation must enter through the coordinator")
+    if tid == PAPER_TARGET_ID and any(
+        value is not None for value in (executor, model_provider, model)
+    ):
+        raise ClusterRunError(
+            "cluster target 'rdpaper' does not consume executor/model selection"
+        )
     selected_executor, selected_model_provider, selected_model = (
         _validate_execution_selection(executor, model_provider, model)
     )
@@ -710,6 +1146,7 @@ def start_cluster_run(
         ),
         **({"model": selected_model} if selected_model is not None else {}),
     }
+    paper_run_id = _validate_paper_project(path) if tid == PAPER_TARGET_ID else ""
     run_id = _new_run_id()
     requested_by = str(proposed_by or "rd-code-editor")
     authority = (
@@ -726,7 +1163,8 @@ def start_cluster_run(
         coordinator_conversation_reply,
     )
 
-    if classify_goal(text) == GOAL_KIND_CONVERSATION:
+    goal_kind = classify_goal(text) if tid != PAPER_TARGET_ID else ""
+    if goal_kind == GOAL_KIND_CONVERSATION:
         conversation_kind = "global_coordinator" if tid == "coordinator" else "native_chat"
         reply = coordinator_conversation_reply(text)
         if authority is not None:
@@ -772,23 +1210,31 @@ def start_cluster_run(
     # go_dispatch re-resolves the same way (runtime-aware), so the executor
     # packet carries the same constraints.
     methodology_summary: dict[str, Any] | None = None
-    try:
-        from .methodology_dispatch import resolve_methodology
+    if tid != PAPER_TARGET_ID:
+        try:
+            from .methodology_dispatch import resolve_methodology
 
-        _effective, methodology = resolve_methodology(
-            text, runtime_dir=runtime_dir, project_id=project_id
-        )
-        if methodology:
-            methodology_summary = {
-                "id": str(methodology.get("skill_id") or ""),
-                "label": str(methodology.get("display_label") or methodology.get("title") or ""),
-                "readOnly": bool(methodology.get("read_only")),
-                "networkEnabled": bool(methodology.get("network_enabled")),
-                "requireRedGreenEvidence": bool(methodology.get("require_red_green_evidence")),
-            }
-    except Exception:  # noqa: BLE001 - advisory metadata, never blocks the run
-        methodology_summary = None
+            _effective, methodology = resolve_methodology(
+                text, runtime_dir=runtime_dir, project_id=project_id
+            )
+            if methodology:
+                methodology_summary = {
+                    "id": str(methodology.get("skill_id") or ""),
+                    "label": str(
+                        methodology.get("display_label")
+                        or methodology.get("title")
+                        or ""
+                    ),
+                    "readOnly": bool(methodology.get("read_only")),
+                    "networkEnabled": bool(methodology.get("network_enabled")),
+                    "requireRedGreenEvidence": bool(
+                        methodology.get("require_red_green_evidence")
+                    ),
+                }
+        except Exception:  # noqa: BLE001 - advisory metadata, never blocks the run
+            methodology_summary = None
 
+    paper_root_reservation = _reserve_paper_root(path) if paper_run_id else ""
     record = {
         "runId": run_id,
         "target": tid,
@@ -797,15 +1243,20 @@ def start_cluster_run(
         "projectPath": path,
         "proposedBy": requested_by,
         "ownerPid": os.getpid(),
+        **({"kind": "paper", "paperRunId": paper_run_id} if paper_run_id else {}),
         "status": "running",
-        "summary": "Coordinator received the goal; starting…",
+        "summary": (
+            "Paper product accepted the bounded synthetic run; starting…"
+            if paper_run_id
+            else "Coordinator received the goal; starting…"
+        ),
         "startedAt": _now(),
         **selection_fields,
         **({"authority": authority} if authority is not None else {}),
         **({"methodology": methodology_summary} if methodology_summary else {}),
     }
-    _write_run_record(runtime_dir, record)
     try:
+        _write_run_record(runtime_dir, record)
         thread = threading.Thread(
             target=_run_and_record,
             args=(
@@ -817,12 +1268,14 @@ def start_cluster_run(
                 selected_executor,
                 selected_model_provider,
                 selected_model,
+                paper_root_reservation,
             ),
             name=f"cluster-run-{run_id}",
             daemon=True,
         )
         thread.start()
     except Exception:  # noqa: BLE001 - terminate the durable record before surfacing 500
+        _release_paper_root(paper_root_reservation)
         failed_record = {
             **record,
             "status": "failed",
@@ -845,6 +1298,7 @@ def start_cluster_run(
         "goal": text,
         "projectId": project_id,
         "projectPath": path,
+        **({"kind": "paper", "paperRunId": paper_run_id} if paper_run_id else {}),
         "conversationKind": "goal_conversation",
         "coordinatorScope": "project",
         **selection_fields,
