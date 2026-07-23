@@ -1,0 +1,21 @@
+{
+  "version": "agent-runtime-offline-registry.v1",
+  "resources": [
+    {
+      "uri": "https://rd2100.devframe/schemas/agent-runtime/executor-contract.schema.json",
+      "file": "executor-contract.schema.json"
+    },
+    {
+      "uri": "https://rd2100.devframe/schemas/agent-runtime/gate-result.schema.json",
+      "file": "gate-result.schema.json"
+    },
+    {
+      "uri": "https://rd2100.devframe/schemas/agent-runtime/task-spec.schema.json",
+      "file": "task-spec.schema.json"
+    },
+    {
+      "uri": "https://rd2100.devframe/schemas/agent-runtime/execution-report.schema.json",
+      "file": "execution-report.schema.json"
+    }
+  ]
+}

@@ -1,0 +1,357 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rd2100.devframe/schemas/agent-runtime/executor-contract.schema.json",
+  "title": "ExecutorContract",
+  "description": "Vendor-neutral requirements and runtime observations for a replaceable executor. Executor facts are bounded provenance and evidence; they must omit credentials and raw personal data, and never grant review, gate, or FinalVerdict authority.",
+  "type": "object",
+  "required": [
+    "contract_version"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "executor-contract.v1"
+    },
+    "requirements": {
+      "$ref": "#/$defs/requirements"
+    },
+    "observation": {
+      "$ref": "#/$defs/observation"
+    }
+  },
+  "anyOf": [
+    {
+      "required": [
+        "requirements"
+      ]
+    },
+    {
+      "required": [
+        "observation"
+      ]
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "requirements": {
+      "type": "object",
+      "description": "Capabilities and lifecycle operations a TaskSpec requires without naming a vendor implementation.",
+      "required": [
+        "required_capabilities",
+        "required_lifecycle_operations"
+      ],
+      "properties": {
+        "required_capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/open_identifier"
+          },
+          "uniqueItems": true,
+          "maxItems": 64
+        },
+        "required_lifecycle_operations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "discover",
+              "prepare",
+              "launch",
+              "observe",
+              "cancel",
+              "collect",
+              "close"
+            ]
+          },
+          "uniqueItems": true,
+          "maxItems": 7
+        },
+        "accepted_protocols": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/open_identifier"
+          },
+          "uniqueItems": true,
+          "maxItems": 16,
+          "description": "Optional protocol preferences such as command or ACP. Values are open for future protocols."
+        }
+      },
+      "additionalProperties": false
+    },
+    "observation": {
+      "type": "object",
+      "description": "What an executor adapter actually declared and observed during one bounded run.",
+      "required": [
+        "contract_version",
+        "adapter_id",
+        "adapter_version",
+        "protocol",
+        "declared_capabilities",
+        "negotiated_capabilities",
+        "lifecycle",
+        "quota",
+        "blockers",
+        "provenance"
+      ],
+      "properties": {
+        "contract_version": {
+          "const": "executor-contract.v1"
+        },
+        "adapter_id": {
+          "$ref": "#/$defs/open_identifier",
+          "description": "Stable adapter implementation identifier. It is not an authority role."
+        },
+        "adapter_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "protocol": {
+          "$ref": "#/$defs/protocol"
+        },
+        "declared_capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/open_identifier"
+          },
+          "uniqueItems": true,
+          "maxItems": 64
+        },
+        "negotiated_capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/open_identifier"
+          },
+          "uniqueItems": true,
+          "maxItems": 64,
+          "description": "Must be a subset of declared_capabilities; adapters enforce that semantic relation before publication."
+        },
+        "lifecycle": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/$defs/lifecycle_event"
+          }
+        },
+        "quota": {
+          "$ref": "#/$defs/quota"
+        },
+        "blockers": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/blocker"
+          }
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      },
+      "additionalProperties": false
+    },
+    "protocol": {
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/open_identifier"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "additionalProperties": false
+    },
+    "lifecycle_event": {
+      "type": "object",
+      "required": [
+        "phase",
+        "status",
+        "attempt",
+        "observed_at"
+      ],
+      "properties": {
+        "phase": {
+          "type": "string",
+          "enum": [
+            "discover",
+            "prepare",
+            "launch",
+            "observe",
+            "cancel",
+            "collect",
+            "close"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "started",
+            "completed",
+            "failed",
+            "blocked",
+            "cancelled"
+          ]
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timezone-aware ISO-8601 instant used with attempt to derive the terminal phase observation."
+        },
+        "detail": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      },
+      "additionalProperties": false
+    },
+    "quota": {
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "available",
+            "limited",
+            "exhausted"
+          ]
+        },
+        "remaining": {
+          "type": "number",
+          "minimum": 0
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "retry_after_seconds": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "blocker": {
+      "type": "object",
+      "required": [
+        "category",
+        "phase",
+        "retryable",
+        "reason",
+        "next_action"
+      ],
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": [
+            "environment",
+            "permission",
+            "quota",
+            "rate_limit",
+            "toolchain",
+            "timeout",
+            "cancelled",
+            "capability",
+            "identity",
+            "network",
+            "unknown"
+          ]
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "discover",
+            "prepare",
+            "launch",
+            "observe",
+            "cancel",
+            "collect",
+            "close"
+          ]
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "next_action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "retry_after_seconds": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "identity_attestation"
+      ],
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "provider_requested": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "provider_reported": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "model_requested": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "model_reported": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "identity_attestation": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "requested_unverified",
+            "unavailable",
+            "mismatch"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "open_identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+    }
+  }
+}

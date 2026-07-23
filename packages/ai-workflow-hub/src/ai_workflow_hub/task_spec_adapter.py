@@ -13,6 +13,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from .executor_contract import (
+    ExecutorContractValidationError,
+    validate_executor_requirements,
+)
+
 
 class TaskSpecValidationError(ValueError):
     """Raised when a TaskSpec violates canonical semantics."""
@@ -32,6 +37,7 @@ CANONICAL_TASK_SPEC_FIELDS: frozenset[str] = frozenset({
     "task_id", "title", "priority", "status", "description",
     "depends_on", "assumptions", "risk_notes", "estimated_tools",
     "gate_0", "conflict_registry", "security_report",
+    "work_type", "workflow_profile", "executor_requirements",
 })
 
 _VALID_PRIORITIES: frozenset[str] = frozenset({"P0", "P1", "P2", "P3"})
@@ -89,6 +95,12 @@ def _validate_canonical_task_spec(spec: Any) -> None:
             f"TaskSpec.status must be one of the 9 canonical values, "
             f"got: {spec['status']!r}"
         )
+
+    if "executor_requirements" in spec:
+        try:
+            validate_executor_requirements(spec["executor_requirements"])
+        except ExecutorContractValidationError as exc:
+            raise TaskSpecValidationError(str(exc)) from exc
 
 
 def from_task_spec(

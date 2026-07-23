@@ -8,6 +8,14 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from .executor_contract import (
+    ExecutorContractValidationError,
+    validate_executor_runtime,
+    validate_nonnegative_number,
+    validate_open_identifier,
+    validate_public_text,
+)
+
 
 class ExecutionReportError(ValueError):
     """Raised when run evidence cannot produce a canonical report."""
@@ -25,6 +33,86 @@ def _nonempty_string(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
+def _executor_runtime(state: dict[str, Any]) -> dict[str, Any] | None:
+    value = state.get("executor_runtime")
+    if value is None:
+        return None
+    try:
+        validate_executor_runtime(value)
+        return json.loads(json.dumps(value))
+    except (ExecutorContractValidationError, TypeError, ValueError) as exc:
+        raise ExecutionReportError(f"executor_runtime is invalid: {exc}") from exc
+
+
+def _executor_runtime_issues(runtime: dict[str, Any] | None) -> list[str]:
+    if runtime is None:
+        return []
+
+    issues: list[str] = []
+    lifecycle = runtime.get("lifecycle")
+    if isinstance(lifecycle, list):
+        latest_by_phase: dict[str, tuple[tuple[int, datetime], str, bool]] = {}
+        status_by_event_key: dict[tuple[str, int, datetime], str] = {}
+        conflicted_phases: set[str] = set()
+        for event in lifecycle:
+            if not isinstance(event, dict):
+                continue
+            phase = event.get("phase")
+            status = event.get("status")
+            attempt = event.get("attempt")
+            observed_at = event.get("observed_at")
+            if (
+                not isinstance(phase, str)
+                or not isinstance(status, str)
+                or not isinstance(attempt, int)
+                or not isinstance(observed_at, str)
+            ):
+                continue
+            observed = datetime.fromisoformat(observed_at.replace("Z", "+00:00")).astimezone(
+                timezone.utc
+            )
+            key = (attempt, observed)
+            event_key = (phase, attempt, observed)
+            previous_status = status_by_event_key.get(event_key)
+            if previous_status is not None and previous_status != status:
+                conflicted_phases.add(phase)
+            else:
+                status_by_event_key[event_key] = status
+            current = latest_by_phase.get(phase)
+            if current is None or key > current[0]:
+                latest_by_phase[phase] = (key, status, False)
+            elif key == current[0] and status != current[1]:
+                latest_by_phase[phase] = (key, current[1], True)
+        for phase, (_, status, conflict) in latest_by_phase.items():
+            if conflict or phase in conflicted_phases:
+                issues.append(f"Executor lifecycle {phase} has conflicting terminal observations.")
+                continue
+            if status != "completed":
+                issues.append(f"Executor lifecycle {phase} ended as {status}.")
+
+    quota = runtime.get("quota")
+    if isinstance(quota, dict) and _nonempty_string(quota.get("status")).lower() == "exhausted":
+        issues.append("Executor quota is exhausted.")
+
+    blockers = runtime.get("blockers")
+    if isinstance(blockers, list):
+        for blocker in blockers:
+            if isinstance(blocker, dict):
+                reason = _nonempty_string(blocker.get("reason"))
+                category = _nonempty_string(blocker.get("category")) or "unknown"
+                issues.append(reason or f"Executor reported a {category} blocker.")
+            else:
+                issues.append("Executor reported a malformed structured blocker.")
+
+    provenance = runtime.get("provenance")
+    if (
+        isinstance(provenance, dict)
+        and _nonempty_string(provenance.get("identity_attestation")).lower() == "mismatch"
+    ):
+        issues.append("Executor identity attestation mismatch.")
+    return issues
+
+
 def _canonical_status(state: dict[str, Any], run_path: Path) -> tuple[str, list[str]]:
     source_status = _nonempty_string(state.get("status")).lower()
     status = {
@@ -33,7 +121,7 @@ def _canonical_status(state: dict[str, Any], run_path: Path) -> tuple[str, list[
         "blocked": "blocked",
         "human_required": "escalate",
     }.get(source_status, "blocked")
-    issues: list[str] = []
+    issues = _executor_runtime_issues(_executor_runtime(state))
 
     if status != "pass":
         return status, issues
@@ -63,6 +151,17 @@ def _trust_record(state: dict[str, Any]) -> dict[str, Any] | None:
     executor = backend_calls.get("executor") if isinstance(backend_calls, dict) else None
     if not isinstance(executor, dict):
         return None
+    try:
+        if "backend" in executor and executor["backend"] is not None:
+            validate_open_identifier(executor["backend"], "trust_record.dispatch_method")
+        for field, label in (("session_id", "session_id"), ("model", "model_used")):
+            if field in executor and executor[field] is not None:
+                validate_public_text(executor[field], f"trust_record.{label}", maximum=256)
+        for field, label in (("tokens_used", "tokens_used"), ("cost_estimate", "cost_estimate")):
+            if field in executor and executor[field] is not None:
+                validate_nonnegative_number(executor[field], f"trust_record.{label}")
+    except ExecutorContractValidationError as exc:
+        raise ExecutionReportError(f"trust_record is invalid: {exc}") from exc
     mapping = {
         "session_id": "session_id",
         "model": "model_used",
@@ -111,6 +210,9 @@ def to_execution_report(
     trust_record = _trust_record(state)
     if trust_record:
         report["trust_record"] = trust_record
+    executor_runtime = _executor_runtime(state)
+    if executor_runtime is not None:
+        report["executor_runtime"] = executor_runtime
     if status == "pass":
         report["reviewer_artifacts"] = {
             "review_md": str(run_path / "review.md"),

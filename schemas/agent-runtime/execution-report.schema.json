@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rd2100.devframe/schemas/agent-runtime/execution-report.schema.json",
   "title": "ExecutionReport",
   "description": "Final structured report of a batch execution. Produced by a report generator, consumed by a human reviewer and planning agent. Must include trust_record for dispatched tasks and fallback_record when fallback was used.",
   "type": "object",
@@ -63,26 +64,35 @@
       "properties": {
         "session_id": {
           "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
           "description": "External agent session identifier"
         },
         "model_used": {
           "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
           "description": "Model used for dispatch (e.g. deepseek/deepseek-v4-pro)"
         },
         "tokens_used": {
           "type": "number",
+          "minimum": 0,
           "description": "Estimated token consumption"
         },
         "dispatch_method": {
-          "type": "string",
-          "enum": ["opencode", "codex_direct", "backup_model"],
-          "description": "How the task was dispatched"
+          "$ref": "./executor-contract.schema.json#/$defs/open_identifier",
+          "description": "Open dispatch adapter or route identifier. This is provenance, not governance authority."
         },
         "cost_estimate": {
           "type": "number",
+          "minimum": 0,
           "description": "Estimated cost in USD"
         }
       }
+    },
+    "executor_runtime": {
+      "$ref": "./executor-contract.schema.json#/$defs/observation",
+      "description": "Vendor-neutral runtime observation supplied by the executor adapter. Blockers and exhausted quota can only downgrade a claimed pass."
     },
     "fallback_record": {
       "type": "object",

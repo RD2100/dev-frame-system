@@ -23,6 +23,15 @@ This directory contains JSON Schema definitions for the core integration contrac
 | 12 | `chain-evidence.schema.json` | Role/session chain for an @go run |
 | 13 | `multi-agent-gate0-preflight.schema.json` | Read-only readiness report for multi-agent / multi-GPT pilot startup |
 | 14 | `multi-agent-dispatch-plan.schema.json` | Read-only first-wave worker assignment packet with conflict boundaries |
+| 15 | `runtime-authorization.schema.json` | Human/coordinator authorization for bounded live or controlled runtime |
+| 16 | `test-run-spec.schema.json` | Test-frame run specification with runtime boundary and expected status |
+| 17 | `positive-pilot-authorization-packet.schema.json` | Wrapper pairing RuntimeAuthorization with TestRunSpec for exactly one real-resource positive pilot track |
+| 17 | `test-execution-report.schema.json` | Test-frame execution result with blocked/failed/pass semantics |
+| 18 | `failure-record.schema.json` | Traceable blocked/failed state record |
+| 19 | `audit-event.schema.json` | Append-only governance event shape |
+| 20 | `final-verdict.schema.json` | Governance final verdict boundary |
+| 21 | `executor-contract.schema.json` | Vendor-neutral executor requirements, lifecycle, quota, blocker, and provenance observations |
+| 22 | `offline-schema-registry.json` | Local URI-to-file map for offline resolution of cross-schema references |
 
 ## Constraints
 
@@ -32,4 +41,28 @@ This directory contains JSON Schema definitions for the core integration contrac
   - SkillIntakeRecord disposition: `reference_only`, `candidate`, `defer`, `reject` only (no `install`, `absorb`, `approved`)
   - MemoryUpdateRecord status: `proposed` only for new records (no `approved` at agent level)
   - GateResult signer_role: must not be `executor`, `fixer`, or `coder`
+- RuntimeAuthorization does not imply a quality verdict.
+- TestExecutionReport does not imply final acceptance.
+- FinalVerdict must not be produced by executor/fixer/coder/worker roles.
+- Executor adapter, protocol, provider, and model identifiers are open
+  provenance strings; they never change review, gate, or FinalVerdict authority.
+- Executor observations must omit credentials, raw personal data, and absolute
+  local paths. Adapters fail closed before JSON or Markdown publication rather
+  than writing unsafe diagnostics into reports.
+- Executor lifecycle terminal state is derived by highest attempt and then the
+  newest timezone-aware observation, never by input array order. Negotiated
+  capabilities must be a subset of declared capabilities.
+- FinalVerdict superseding metadata is append-only lifecycle linkage, not
+  acceptance evidence.
 - Forbidden patterns (MCP config modification, UI-TARS/computer-use, package managers, external script execution) are documented in descriptions and NOT listed as permitted values.
+
+## Offline consumers
+
+The HTTPS `$id` values are stable identifiers, not network retrieval targets.
+Consumers must load `offline-schema-registry.json` from this same directory
+into their JSON Schema resolver and resolve every URI to its sibling file. The
+Python reference implementation is
+`ai_workflow_hub.agent_runtime_schemas.load_offline_validator(schema_filename, schema_dir)`;
+it accepts an explicit local schema directory and never performs network I/O.
+The Python wheel intentionally does not embed a second copy of these schemas:
+callers pass the public distribution bundle they want to validate.

@@ -1,5 +1,6 @@
-{
+﻿{
     "$schema":  "https://json-schema.org/draft/2020-12/schema",
+    "$id":  "https://rd2100.devframe/schemas/agent-runtime/task-spec.schema.json",
     "title":  "TaskSpec",
     "description":  "Describes a unit of work before execution begins. Produced by a planner agent or human operator, consumed by an executor agent. Construction tasks MUST include gate_0 and conflict_registry. Dual-format contract: this JSON schema is the machine-validatable subset; the SADP protocol defines the human-readable markdown projection with additional fields (Batch, Risk, Allowed Files, Forbidden, Acceptance Gates, Expected Output, Rollback, Report To). See integration-contracts.md for field mapping.",
     "type":  "object",
@@ -258,7 +259,11 @@
                        "workflow_profile":  {
                                                "$ref":  "#/$defs/workflow_profile",
                                                "description":  "Planned-only deterministic Skill-stage selection. Selection is not execution, review, or acceptance."
-                                           }
+                                           },
+                       "executor_requirements":  {
+                                                     "$ref":  "./executor-contract.schema.json#/$defs/requirements",
+                                                     "description":  "Vendor-neutral executor capabilities and lifecycle operations required by this task. Selection of an adapter remains an operational decision."
+                                                 }
                    },
     "$defs":  {
                    "workflow_profile":  {
