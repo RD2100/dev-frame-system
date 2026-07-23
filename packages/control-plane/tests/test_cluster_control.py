@@ -9,6 +9,7 @@ spawn a real, token-spending run.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -32,6 +33,11 @@ from control_plane.t3_adapter import build_t3_client_shell_from_state  # noqa: E
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+SYNTHETIC_OPENCODE_API_KEY = "synthetic-cluster-control-fixture"
+
+
+def _attest_default_execution(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENCODE_API_KEY", SYNTHETIC_OPENCODE_API_KEY)
 
 
 def _load_coordinator_entry_schema() -> dict:
@@ -69,6 +75,7 @@ def test_is_valid_cluster_target(tmp_path):
 
 
 def test_start_cluster_run_validates_and_starts(tmp_path, monkeypatch):
+    _attest_default_execution(monkeypatch)
     runtime = tmp_path / "runtime"
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -120,6 +127,7 @@ def test_start_cluster_run_requires_goal_and_dir(tmp_path, monkeypatch):
 
 
 def test_start_cluster_run_records_and_lists(tmp_path, monkeypatch):
+    _attest_default_execution(monkeypatch)
     from types import SimpleNamespace
 
     from control_plane.cluster_run import list_cluster_runs
@@ -187,6 +195,7 @@ def _post_json(base_url: str, path: str, payload: dict) -> tuple[int, dict]:
 
 
 def test_dashboard_cluster_targets_and_run(tmp_path, monkeypatch):
+    _attest_default_execution(monkeypatch)
     calls: list[tuple] = []
     monkeypatch.setattr(cluster_run_module, "_run_cluster_workflow", lambda *a, **k: calls.append(a))
     runtime_dir = tmp_path / "runtime"
@@ -233,6 +242,7 @@ def test_dashboard_cluster_targets_and_run(tmp_path, monkeypatch):
 
 
 def test_rdcode_goal_product_path_projects_authoritative_review_state(tmp_path, monkeypatch):
+    _attest_default_execution(monkeypatch)
     from control_plane.team_runtime import build_team_runtime_view
     from control_plane.workflow_engine import WorkflowEngine
 
@@ -292,6 +302,8 @@ def test_rdcode_goal_product_path_projects_authoritative_review_state(tmp_path, 
         assert any(item.get("run_id") == go_run_id for item in recorded_team["evidence_store"])
         assert any(item.get("run_id") == go_run_id for item in recorded_team["review_gates"])
 
+        monkeypatch.delenv("OPENCODE_API_KEY")
+        assert "OPENCODE_API_KEY" not in os.environ
         unlinked_status, unlinked = _post_json(base_url, "/api/t3/cluster-run", {
             "projectId": str(workspace),
             "target": "coordinator",
@@ -800,6 +812,7 @@ def test_dashboard_cluster_run_rejects_unknown_target(tmp_path, monkeypatch):
 
 
 def test_start_cluster_run_accepts_project_id_from_runtime_state(tmp_path, monkeypatch):
+    _attest_default_execution(monkeypatch)
     runtime = tmp_path / "runtime"
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -946,6 +959,7 @@ def test_normalize_local_path_handles_web_and_electron_forms(tmp_path):
 def test_start_cluster_run_accepts_leading_slash_drive_path(tmp_path, monkeypatch):
     """A leading-slash Windows drive path that points at a real directory must
     be accepted (it is normalized before the is_dir() check)."""
+    _attest_default_execution(monkeypatch)
     calls: list[tuple] = []
     monkeypatch.setattr(cluster_run_module, "_run_cluster_workflow", lambda *a, **k: calls.append(a))
     runtime = tmp_path / "runtime"
@@ -1140,6 +1154,7 @@ def test_conversational_goal_answers_without_running_agents(tmp_path, monkeypatc
 
 
 def test_development_goal_still_dispatches(tmp_path, monkeypatch):
+    _attest_default_execution(monkeypatch)
     calls: list[tuple] = []
     monkeypatch.setattr(
         cluster_run_module,

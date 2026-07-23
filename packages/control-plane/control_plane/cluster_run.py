@@ -710,14 +710,6 @@ def start_cluster_run(
         ),
         **({"model": selected_model} if selected_model is not None else {}),
     }
-    run_id = _new_run_id()
-    requested_by = str(proposed_by or "rd-code-editor")
-    authority = (
-        _delegation_authority(project_id, run_id, requested_by)
-        if root_delegation
-        else None
-    )
-
     # Phase C triage: a conversational goal (e.g. "你好" / "你能做什么") is
     # answered directly by the coordinator — no coding agents, no token spend.
     from .goal_triage import (
@@ -726,7 +718,18 @@ def start_cluster_run(
         coordinator_conversation_reply,
     )
 
-    if classify_goal(text) == GOAL_KIND_CONVERSATION:
+    goal_kind = classify_goal(text)
+    if goal_kind != GOAL_KIND_CONVERSATION:
+        _preflight_execution_provider(selected_model_provider)
+
+    run_id = _new_run_id()
+    requested_by = str(proposed_by or "rd-code-editor")
+    authority = (
+        _delegation_authority(project_id, run_id, requested_by)
+        if root_delegation
+        else None
+    )
+    if goal_kind == GOAL_KIND_CONVERSATION:
         conversation_kind = "global_coordinator" if tid == "coordinator" else "native_chat"
         reply = coordinator_conversation_reply(text)
         if authority is not None:
@@ -856,6 +859,22 @@ def start_cluster_run(
         },
         **({"authority": authority} if authority is not None else {}),
     }
+
+
+def _preflight_execution_provider(model_provider: str | None) -> None:
+    """Fail closed before an execution-capable cluster run creates artifacts."""
+    from .model_providers import resolve_model_provider
+    from .provider_secret import ProviderSecretError, resolve_provider_secret
+
+    provider = resolve_model_provider(model_provider)
+    if provider.live_backend != "ready":
+        raise ClusterRunError(
+            f"model provider {provider.provider_id!r} has a deferred live backend"
+        )
+    try:
+        resolve_provider_secret(provider.provider_id)
+    except ProviderSecretError as exc:
+        raise ClusterRunError(str(exc)) from exc
 
 
 def _validate_execution_selection(

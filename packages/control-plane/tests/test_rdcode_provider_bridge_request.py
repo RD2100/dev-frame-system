@@ -18,6 +18,9 @@ from control_plane.go_dispatch import load_go_run_result
 from control_plane.t3_bridge_bundle import build_t3_bridge_bundle, install_t3_bridge_bundle
 
 
+SYNTHETIC_OPENCODE_API_KEY = "synthetic-provider-bridge-fixture"
+
+
 def _json_bytes(payload: dict[str, object]) -> bytes:
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
@@ -342,6 +345,7 @@ def test_generated_bridge_selection_reaches_actual_dashboard_and_durable_go_run(
             "const started = await startDevFrameCoordinatorGoal(config, request);\n"
             "console.log(JSON.stringify(started));\n"
         )
+        monkeypatch.setenv("OPENCODE_API_KEY", SYNTHETIC_OPENCODE_API_KEY)
         default_started = _run_generated_bridge_probe(t3_root, base_url, omitted_probe)
         assert "executor" not in default_started
         assert "modelProvider" not in default_started

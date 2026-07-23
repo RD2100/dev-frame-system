@@ -42,6 +42,7 @@ AUTHORITY_FIELDS = {
     "delegatedAt",
     "requestedBy",
 }
+SYNTHETIC_OPENCODE_API_KEY = "synthetic-delegated-control-fixture"
 
 
 def _install_generated_bridge(tmp_path: Path, runtime_dir: Path) -> Path:
@@ -59,6 +60,7 @@ def _install_safe_opencode_fixture(
     *,
     sleep_seconds: float = 0.45,
 ) -> None:
+    monkeypatch.setenv("OPENCODE_API_KEY", SYNTHETIC_OPENCODE_API_KEY)
     bin_dir = tmp_path / "safe-bin"
     bin_dir.mkdir()
     worker_path = bin_dir / "safe_opencode_worker.py"
@@ -481,6 +483,7 @@ def test_explicit_target_stays_compatible_and_bridge_preserves_backend_error(
     runtime_dir.mkdir()
     workspace.mkdir()
     t3_root = _install_generated_bridge(tmp_path, runtime_dir)
+    monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
     sensitive_sentinel = (
         "SENSITIVE_SENTINEL::secret=do-not-leak::path=D:/private/config.json::"
         "worker_command=private-runner --token hidden"
@@ -494,6 +497,7 @@ def test_explicit_target_stays_compatible_and_bridge_preserves_backend_error(
             raise RuntimeError(sensitive_sentinel)
 
     with _running_dashboard(runtime_dir) as base_url:
+        assert "OPENCODE_API_KEY" not in os.environ
         output = _run_generated_probe(
             t3_root,
             "import { DevFrameCoordinatorGoalError, startDevFrameCoordinatorGoal }\n"
@@ -525,6 +529,7 @@ def test_explicit_target_stays_compatible_and_bridge_preserves_backend_error(
             "console.log(JSON.stringify({ explicit, failure }));\n",
             filename="explicit-target-probe.ts",
         )
+        monkeypatch.setenv("OPENCODE_API_KEY", SYNTHETIC_OPENCODE_API_KEY)
         monkeypatch.setattr(
             cluster_run_module,
             "threading",
