@@ -15,11 +15,12 @@
     "included_roles",
     "missing_required_roles",
     "blocking_issues",
+    "review_contracts",
     "package_files",
     "trust_statement"
   ],
   "properties": {
-    "schema_version": { "type": "integer", "const": 1 },
+    "schema_version": { "type": "integer", "const": 2 },
     "bundle_id": { "type": "string", "minLength": 1 },
     "created_at": { "type": "string", "minLength": 1 },
     "status": {
@@ -44,6 +45,10 @@
     "blocking_issues": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 }
+    },
+    "review_contracts": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/review_contract" }
     },
     "package_files": {
       "type": "array",
@@ -81,6 +86,123 @@
         }
       },
       "additionalProperties": true
+    }
+  },
+  "definitions": {
+    "finding": {
+      "type": "object",
+      "required": ["code", "source_path"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "source_path": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "inspection_issue": {
+      "type": "object",
+      "required": ["code", "source_path"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "source_path": { "type": "string", "minLength": 1 },
+        "inspected_bytes": { "type": "integer", "minimum": 0 },
+        "source_size_bytes": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "review_contract": {
+      "type": "object",
+      "required": [
+        "contract_id",
+        "applicable",
+        "source_paths",
+        "findings",
+        "inspection",
+        "probe_evidence",
+        "required_matrix",
+        "required_probes"
+      ],
+      "properties": {
+        "contract_id": { "type": "string", "const": "identity-detail-loader.v1" },
+        "applicable": { "type": "boolean", "const": true },
+        "source_paths": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "findings": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/finding" }
+        },
+        "inspection": {
+          "type": "object",
+          "required": ["complete", "issues"],
+          "properties": {
+            "complete": { "type": "boolean" },
+            "issues": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/inspection_issue" }
+            }
+          },
+          "additionalProperties": false
+        },
+        "probe_evidence": {
+          "type": "object",
+          "required": ["status", "source_paths"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["present", "missing", "unverified"]
+            },
+            "source_paths": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "matched_source_paths": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1 }
+            }
+          },
+          "additionalProperties": false
+        },
+        "required_matrix": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "null_response",
+              "truthy_malformed_response",
+              "mismatched_requested_identity",
+              "current_valid_response",
+              "deep_link_loading",
+              "transport_failure",
+              "business_failure",
+              "one_step_retry",
+              "hide_invalidation",
+              "unload_invalidation"
+            ]
+          }
+        },
+        "required_probes": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "real_adapter_deferred_success_at_earliest_state_await",
+              "real_adapter_deferred_failure_at_earliest_state_await"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false
