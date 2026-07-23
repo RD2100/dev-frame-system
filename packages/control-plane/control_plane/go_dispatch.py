@@ -17,9 +17,16 @@ from .execution_plan import plan_write_set_groups
 from .dispatch_packet import DispatchPacketStore
 from .methodology_dispatch import resolve_methodology, resolve_workflow_profile
 from .project_contract import slugify_project_id
-from .model_providers import resolve_model_provider
+from .model_providers import ModelProvider, resolve_model_provider
 from .opencode_events import parse_opencode_run_jsonl
 from .orchestrator import Orchestrator
+from .provider_secret import (
+    PROVIDER_SECRET_ENV_NAMES,
+    ProviderSecretAttestation,
+    ProviderSecretError,
+    redact_provider_secret_text,
+    resolve_provider_secret,
+)
 from .rdgoal import rdgoal
 from .team_runtime import TeamRuntime
 from .worker import CommandWorker, WorkerResult
@@ -84,6 +91,47 @@ class GoDispatchResult:
     workflow_profile: dict[str, Any] | None = None
 
 
+def _resolve_model_provider_safe(provider_id: object) -> ModelProvider:
+    try:
+        return resolve_model_provider(provider_id)  # type: ignore[arg-type]
+    except Exception:  # noqa: BLE001 - normalize all external selection errors
+        resolve_provider_secret(provider_id)
+        raise AssertionError("provider resolution unexpectedly succeeded")
+
+
+def _attest_provider_execution(
+    provider_id: str,
+    *,
+    driver: str,
+) -> ProviderSecretAttestation:
+    attestation = resolve_provider_secret(provider_id)
+    if driver != "command" and attestation.required:
+        raise ProviderSecretError(
+            "unsupported_secret_boundary",
+            provider_id=attestation.provider_id,
+            reference=attestation.reference,
+            detail="external provider secrets are supported only by the contained command worker",
+        )
+    return attestation
+
+
+def _provider_secret_for_prepared_execution(
+    result: GoDispatchResult,
+) -> ProviderSecretAttestation | None:
+    if not result.model_provider:
+        return None
+    provider = _resolve_model_provider_safe(result.model_provider)
+    if provider.live_backend == "deferred":
+        raise ValueError(
+            f"model provider {provider.provider_id!r} has a deferred live backend; "
+            "prepared execution is refused."
+        )
+    return _attest_provider_execution(
+        provider.provider_id,
+        driver=result.driver or "command",
+    )
+
+
 def run_go_dispatch(
     project_path: str | Path,
     requirement: str,
@@ -112,17 +160,34 @@ def run_go_dispatch(
     if driver not in {"command", "acp"}:
         raise ValueError(f"unknown driver: {driver!r} (expected 'command' or 'acp')")
 
-    # Resolve the model provider before any packet is created so an unknown id
-    # fails with no side effects (no fake green, no partial dispatch).
-    provider = resolve_model_provider(model_provider)
-    if execute and provider.live_backend == "deferred":
+    # An explicit custom command with no provider selection is provider-neutral.
+    # Default OpenCode dispatch keeps the default provider. This distinction is
+    # persisted so a prepared custom command does not later acquire a paid
+    # provider contract that the caller never selected.
+    custom_executor = worker_command is not None or (
+        driver == "acp" and acp_command is not None
+    )
+    provider = (
+        None
+        if model_provider is None and custom_executor
+        else _resolve_model_provider_safe(model_provider)
+    )
+    if execute and provider is not None and provider.live_backend == "deferred":
         raise ValueError(
             f"model provider {provider.provider_id!r} has a deferred live backend; "
             "preparing packets is allowed, but --execute is refused so the 'free' "
             "profile cannot silently run the paid default worker. Use a ready "
             "provider (opencode-api or local-ollama) to execute."
         )
-    effective_model = model if model else (provider.model or None)
+    provider_secret = (
+        _attest_provider_execution(provider.provider_id, driver=driver)
+        if execute and provider is not None
+        else None
+    )
+    effective_model = (
+        model if model else ((provider.model or None) if provider else None)
+    )
+    provider_id = provider.provider_id if provider is not None else ""
 
     runtime_root = Path(runtime_dir).resolve() if runtime_dir else default_runtime_dir()
     project_root = Path(project_path).resolve()
@@ -180,7 +245,7 @@ def run_go_dispatch(
             task_spec_path=str(Path(packet.packet_dir) / "TASKSPEC.json"),
             worker_command=command,
             methodology=methodology,
-            model_provider=provider.provider_id,
+            model_provider=provider_id,
             isolated=isolate,
             context_packet_path=packet.context_packet_path,
             context_ledger_path=packet.context_ledger_path,
@@ -197,13 +262,14 @@ def run_go_dispatch(
         execute=execute,
         agents=dispatches,
         methodology=methodology,
-        model_provider=provider.provider_id,
+        model_provider=provider_id,
         driver=driver,
         workflow_profile=workflow_profile,
     )
 
     if execute and dispatches:
-        _execute_parallel(result, timeout_seconds=timeout_seconds, acp_command=acp_command)
+        _execute_parallel(result, timeout_seconds=timeout_seconds, acp_command=acp_command,
+                          provider_secret=provider_secret)
 
     if not execute:
         result.status = "queued"
@@ -324,9 +390,13 @@ def execute_go_run(
         for agent in result.agents
         if rerun_passed or agent.worker_status not in SUCCESS_WORKER_STATUSES
     ]
+    provider_secret = (
+        _provider_secret_for_prepared_execution(result) if runnable_agents else None
+    )
     result.execute = True
     if runnable_agents:
-        _execute_parallel(result, timeout_seconds=timeout_seconds, agents=runnable_agents)
+        _execute_parallel(result, timeout_seconds=timeout_seconds, agents=runnable_agents,
+                          provider_secret=provider_secret)
     result.status = _result_status(result)
     result.metadata_path = str(_write_metadata(result))
     return result
@@ -427,6 +497,7 @@ def _execute_parallel(
     timeout_seconds: int,
     agents: list[GoAgentDispatch] | None = None,
     acp_command: list[str] | None = None,
+    provider_secret: ProviderSecretAttestation | None = None,
 ) -> None:
     agents_to_run = agents if agents is not None else result.agents
     if not agents_to_run:
@@ -445,7 +516,8 @@ def _execute_parallel(
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = [
             pool.submit(_run_group, result.runtime_dir, result.project_root, result.go_run_id,
-                        group, timeout_seconds, team, driver, acp_command, participant_ids)
+                        group, timeout_seconds, team, driver, acp_command, participant_ids,
+                        provider_secret)
             for group in groups
         ]
         for future in as_completed(futures):
@@ -456,17 +528,19 @@ def _run_group(runtime_dir: str, project_root: str, go_run_id: str,
                group: list[GoAgentDispatch], timeout_seconds: int,
                team: TeamRuntime | None = None, driver: str = "command",
                acp_command: list[str] | None = None,
-               participant_ids: set[str] | None = None) -> None:
+               participant_ids: set[str] | None = None,
+               provider_secret: ProviderSecretAttestation | None = None) -> None:
     for agent in group:
         _run_agent_in_place(runtime_dir, project_root, go_run_id, agent, timeout_seconds,
-                            team, driver, acp_command, participant_ids)
+                            team, driver, acp_command, participant_ids, provider_secret)
 
 
 def _run_agent_in_place(runtime_dir: str, project_root: str, go_run_id: str,
                         agent: GoAgentDispatch, timeout_seconds: int,
                         team: TeamRuntime | None = None, driver: str = "command",
                         acp_command: list[str] | None = None,
-                        participant_ids: set[str] | None = None) -> None:
+                        participant_ids: set[str] | None = None,
+                        provider_secret: ProviderSecretAttestation | None = None) -> None:
     try:
         cwd, env_overrides = _resolve_isolation(runtime_dir, project_root, go_run_id, agent)
         _ensure_agent_context_artifacts(runtime_dir, agent)
@@ -484,10 +558,12 @@ def _run_agent_in_place(runtime_dir: str, project_root: str, go_run_id: str,
                 runtime_dir, agent, timeout_seconds,
                 cwd=cwd or project_root, go_run_id=go_run_id, acp_command=acp_command,
                 team=team, env_overrides=env_overrides,
+                provider_secret=provider_secret,
             )
         else:
             worker_result = _run_one_agent(runtime_dir, agent, timeout_seconds,
-                                           cwd=cwd, env_overrides=env_overrides)
+                                           cwd=cwd, env_overrides=env_overrides,
+                                           provider_secret=provider_secret)
         agent.status = "completed"
         agent.worker_status = worker_result.summary.status
         agent.report_path = worker_result.report_path
@@ -507,7 +583,10 @@ def _run_agent_in_place(runtime_dir: str, project_root: str, go_run_id: str,
         agent.status = "failed"
         agent.worker_status = "failed"
         agent.report_path = ""
-        _write_agent_failure(agent, exc)
+        secrets = (
+            provider_secret.redaction_values() if provider_secret is not None else ()
+        )
+        _write_agent_failure(agent, exc, secrets=secrets)
         if team is not None:
             team.record_result(go_run_id, agent.agent_id, status="failed")
 
@@ -640,13 +719,16 @@ def _apply_opencode_events(agent: GoAgentDispatch) -> None:
 
 def _run_one_agent(runtime_dir: str, agent: GoAgentDispatch, timeout_seconds: int, *,
                    cwd: str | None = None,
-                   env_overrides: dict[str, str] | None = None) -> WorkerResult:
+                   env_overrides: dict[str, str] | None = None,
+                   provider_secret: ProviderSecretAttestation | None = None) -> WorkerResult:
     agent.status = "running"
     return CommandWorker(runtime_dir=runtime_dir, timeout_seconds=timeout_seconds).run_packet(
         agent.packet_dir,
         agent.worker_command,
         cwd=cwd,
         env_overrides=env_overrides,
+        provider_secret=provider_secret,
+        strip_provider_secrets=True,
     )
 
 
@@ -691,7 +773,8 @@ def _run_one_agent_acp(runtime_dir: str, agent: GoAgentDispatch, timeout_seconds
                        cwd: str, go_run_id: str,
                        acp_command: list[str] | None = None,
                        team: TeamRuntime | None = None,
-                       env_overrides: dict[str, str] | None = None) -> WorkerResult:
+                       env_overrides: dict[str, str] | None = None,
+                       provider_secret: ProviderSecretAttestation | None = None) -> WorkerResult:
     """Execute one agent through a governed ACP session instead of a CLI worker.
 
     Drives `GovernedAcpSession` with the packet's objective as the prompt, then
@@ -712,9 +795,12 @@ def _run_one_agent_acp(runtime_dir: str, agent: GoAgentDispatch, timeout_seconds
         cwd=cwd,
         team=team,
     )
+    acp_env_overrides = dict(env_overrides or {})
+    for env_name in PROVIDER_SECRET_ENV_NAMES:
+        acp_env_overrides[env_name] = ""
     session_result = session.run(
         prompt_text, run_id=go_run_id, agent_id=agent.agent_id,
-        prompt_timeout=float(timeout_seconds), env_overrides=env_overrides,
+        prompt_timeout=float(timeout_seconds), env_overrides=acp_env_overrides or None,
     )
     agent.session_id = session_result.session_id
 
@@ -899,9 +985,18 @@ def _string_list(value: object) -> list[str]:
     return []
 
 
-def _write_agent_failure(agent: GoAgentDispatch, exc: Exception) -> None:
+def _write_agent_failure(
+    agent: GoAgentDispatch,
+    exc: Exception,
+    *,
+    secrets: tuple[str, ...] = (),
+) -> None:
     path = Path(agent.packet_dir) / "go-agent-error.txt"
-    path.write_text(f"{type(exc).__name__}: {exc}\n", encoding="utf-8")
+    detail = redact_provider_secret_text(
+        f"{type(exc).__name__}: {exc}",
+        secrets,
+    )
+    path.write_text(f"{detail}\n", encoding="utf-8")
 
 
 def split_targets_by_size(project_root: str | Path, targets: list[str], agents: int) -> list[list[str]]:
