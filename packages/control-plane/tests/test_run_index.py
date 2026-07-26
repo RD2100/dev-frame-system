@@ -2963,3 +2963,165 @@ def test_run_index_blocks_passed_test_run_when_report_path_is_missing(tmp_path):
     assert record["evidence_refs"] == []
     assert record["failure_refs"][0]["uri"].endswith("test-run.json")
     assert "test report is missing" in record["domain_refs"]["diagnostic"]
+
+
+class _IterationCountingList(list):
+    """List that counts how many times its full event table is traversed."""
+
+    def __init__(self, items, counter):
+        super().__init__(items)
+        self._counter = counter
+
+    def __iter__(self):
+        self._counter["full_scans"] += 1
+        return super().__iter__()
+
+
+def _write_bulk_canonical_runs(
+    runtime: Path,
+    *,
+    run_count: int,
+    filler_events_per_run: int,
+) -> None:
+    report_path = runtime / "reports" / "bulk-worker.md"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text("bulk worker report\n", encoding="utf-8")
+    review_path = runtime / "reviews" / "bulk-review.yaml"
+    review_path.parent.mkdir(parents=True, exist_ok=True)
+    review_path.write_text("verdict: pass\n", encoding="utf-8")
+    final_path = runtime / "final" / "bulk-final-verdict.json"
+    _write_json(final_path, {
+        "verdict_id": "fv-bulk",
+        "produced_by": "go-evidence-finalizer",
+        "produced_at": "2026-07-18T00:02:00Z",
+        "producer_role": "governance",
+        "final_state": "blocked",
+        "inputs_reviewed": [str(report_path), str(review_path)],
+        "gate_summary": [{
+            "gate_id": "gate-bulk",
+            "result": "pass",
+            "evidence_path": str(review_path),
+        }],
+        "reviewer_summary": {
+            "reviewer_id": "reviewer-1",
+            "verdict": "pass",
+            "evidence_path": str(review_path),
+        },
+        "limitations": [],
+        "human_or_governance_reference": "bulk-fixture",
+    })
+    lines: list[dict] = []
+    for index in range(run_count):
+        run_id = f"bulk-{index:03d}"
+        _write_json(runtime / "go-runs" / run_id / "go-run.json", {
+            "go_run_id": run_id,
+            "project_id": "demo-project",
+            "status": "passed",
+            "created_at": "2026-07-18T00:00:00Z",
+            "agents": [{
+                "agent_id": "coding-agent",
+                "status": "completed",
+                "worker_status": "passed",
+                "report_path": str(report_path),
+            }],
+        })
+        lines.append({
+            "event_type": "task_result",
+            "run_id": run_id,
+            "agent_id": "coding-agent",
+            "payload": {"status": "completed", "report_path": str(report_path)},
+            "timestamp": "2026-07-18T00:00:30Z",
+            "event_id": f"team-{run_id}-result",
+        })
+        lines.append({
+            "event_type": "review_ref",
+            "run_id": run_id,
+            "agent_id": "reviewer-1",
+            "payload": {
+                "review_id": f"review-{run_id}",
+                "reviewer_id": "reviewer-1",
+                "reviewer_role": "reviewer",
+                "executor_id": "coding-agent",
+                "verdict": "pass",
+                "ref_path": str(review_path),
+                "reviewed_evidence_refs": [f"ev-team-team-{run_id}-result"],
+            },
+            "timestamp": "2026-07-18T00:01:00Z",
+            "event_id": f"team-{run_id}-review",
+        })
+        lines.append({
+            "event_type": "final_verdict_ref",
+            "run_id": run_id,
+            "agent_id": "governance-agent",
+            "payload": {
+                "verdict_id": "fv-bulk",
+                "produced_by": "go-evidence-finalizer",
+                "producer_role": "governance",
+                "final_state": "blocked",
+                "ref_path": str(final_path),
+                "review_ref": f"review-{run_id}",
+                "gate_refs": ["gate-bulk"],
+            },
+            "timestamp": "2026-07-18T00:02:00Z",
+            "event_id": f"team-{run_id}-final",
+        })
+        for filler in range(filler_events_per_run):
+            lines.append({
+                "event_type": "note",
+                "run_id": run_id,
+                "agent_id": "coding-agent",
+                "payload": {"note": f"filler-{filler}"},
+                "timestamp": "2026-07-18T00:00:10Z",
+                "event_id": f"team-{run_id}-note-{filler}",
+            })
+    events_path = runtime / "team-events.jsonl"
+    events_path.write_text(
+        "".join(json.dumps(line, ensure_ascii=True) + "\n" for line in lines),
+        encoding="utf-8",
+    )
+
+
+def test_run_index_canonical_producer_check_avoids_per_run_full_journal_scans(
+    tmp_path,
+    monkeypatch,
+):
+    runtime = tmp_path / "runtime"
+    run_count = 50
+    _write_bulk_canonical_runs(runtime, run_count=run_count, filler_events_per_run=17)
+
+    expected = build_run_index(runtime)
+
+    canonical_records = [entry["record"] for entry in expected["canonical_runs"]]
+    assert len(canonical_records) == run_count
+    assert all(
+        record["final_verdict_ref"]["verdict_id"] == "fv-bulk"
+        for record in canonical_records
+    )
+    assert all(
+        "diagnostic" not in record["domain_refs"]
+        for record in canonical_records
+    )
+    _run_record_validator().validate(canonical_records[0])
+
+    counter = {"full_scans": 0}
+    original_read_snapshot = run_index_module._read_runtime_jsonl_snapshot
+
+    def counting_read_snapshot(path, runtime_dir):
+        items, source_hash = original_read_snapshot(path, runtime_dir)
+        return _IterationCountingList(items, counter), source_hash
+
+    monkeypatch.setattr(
+        run_index_module,
+        "_read_runtime_jsonl_snapshot",
+        counting_read_snapshot,
+    )
+
+    instrumented = build_run_index(runtime)
+
+    assert instrumented == expected
+    assert counter["full_scans"] > 0
+    assert counter["full_scans"] <= 6, (
+        "team journal event table must be traversed a constant number of times, "
+        f"not once per canonical run (observed {counter['full_scans']} full "
+        f"traversals for {run_count} canonical runs)"
+    )

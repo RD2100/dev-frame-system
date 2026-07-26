@@ -103,7 +103,7 @@ def _canonical_run_entries(
 def _canonical_go_team_entry(
     run_id: str,
     entries: list[dict[str, Any]],
-    team_snapshots: dict[tuple[str, str], tuple[list[dict[str, Any]], str]],
+    team_snapshots: dict[tuple[str, str], tuple[dict[tuple[str, str, str], list[dict[str, Any]]], str]],
 ) -> dict[str, Any]:
     sources = sorted((_canonical_source(entry) for entry in entries), key=_stable_json)
     records = [deepcopy(_as_dict(entry.get("record"))) for entry in entries]
@@ -264,8 +264,8 @@ def _canonical_go_team_entry(
 def _canonical_team_event_snapshots(
     entries: list[dict[str, Any]],
     runtime: Path,
-) -> dict[tuple[str, str], tuple[list[dict[str, Any]], str]]:
-    snapshots: dict[tuple[str, str], tuple[list[dict[str, Any]], str]] = {}
+) -> dict[tuple[str, str], tuple[dict[tuple[str, str, str], list[dict[str, Any]]], str]]:
+    snapshots: dict[tuple[str, str], tuple[dict[tuple[str, str, str], list[dict[str, Any]]], str]] = {}
     sources = {
         (
             str(_as_dict(entry.get("provenance")).get("source_path") or ""),
@@ -276,21 +276,43 @@ def _canonical_team_event_snapshots(
     }
     for source_path, expected_hash in sorted(sources):
         if not source_path or not expected_hash:
-            snapshots[(source_path, expected_hash)] = ([], "team event source provenance is incomplete")
+            snapshots[(source_path, expected_hash)] = ({}, "team event source provenance is incomplete")
             continue
         items, actual_hash = _read_runtime_jsonl_snapshot(Path(source_path), runtime)
         if not actual_hash:
-            snapshots[(source_path, expected_hash)] = ([], f"team event source cannot be read: {source_path}")
+            snapshots[(source_path, expected_hash)] = ({}, f"team event source cannot be read: {source_path}")
             continue
         if actual_hash != expected_hash:
             snapshots[(source_path, expected_hash)] = (
-                [],
+                {},
                 f"team event source changed before producer verification: {source_path}",
             )
             continue
         diagnostic = next((str(item["diagnostic"]) for item in items if item.get("diagnostic")), "")
-        snapshots[(source_path, expected_hash)] = (items, diagnostic)
+        snapshots[(source_path, expected_hash)] = (
+            {} if diagnostic else _final_verdict_events_by_key(items),
+            diagnostic,
+        )
     return snapshots
+
+
+def _final_verdict_events_by_key(
+    items: list[dict[str, Any]],
+) -> dict[tuple[str, str, str], list[dict[str, Any]]]:
+    """Bucket final_verdict_ref events by (run_id, verdict_id, ref_path) in one pass."""
+    index: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for item in items:
+        event = _as_dict(item.get("record"))
+        if event.get("event_type") != "final_verdict_ref":
+            continue
+        payload = _as_dict(event.get("payload"))
+        key = (
+            str(event.get("run_id") or ""),
+            str(payload.get("verdict_id") or ""),
+            str(payload.get("ref_path") or ""),
+        )
+        index.setdefault(key, []).append(event)
+    return index
 
 
 def _canonical_source(entry: dict[str, Any]) -> dict[str, Any]:
@@ -308,7 +330,7 @@ def _canonical_source(entry: dict[str, Any]) -> dict[str, Any]:
 def _canonical_final_verdict_event_producer(
     entries: list[dict[str, Any]],
     final_ref: dict[str, Any],
-    team_snapshots: dict[tuple[str, str], tuple[list[dict[str, Any]], str]],
+    team_snapshots: dict[tuple[str, str], tuple[dict[tuple[str, str, str], list[dict[str, Any]]], str]],
 ) -> tuple[str, str]:
     sources = {
         (
@@ -328,24 +350,13 @@ def _canonical_final_verdict_event_producer(
     for source_path, run_id, expected_hash in sorted(sources):
         if not source_path or not run_id or not expected_hash:
             return "", "team event source provenance is incomplete"
-        items, snapshot_diagnostic = team_snapshots.get(
+        events_by_key, snapshot_diagnostic = team_snapshots.get(
             (source_path, expected_hash),
-            ([], "team event source snapshot is missing"),
+            ({}, "team event source snapshot is missing"),
         )
         if snapshot_diagnostic:
             return "", snapshot_diagnostic
-        for item in items:
-            if item.get("diagnostic"):
-                return "", str(item["diagnostic"])
-            event = _as_dict(item.get("record"))
-            payload = _as_dict(event.get("payload"))
-            if (
-                event.get("event_type") == "final_verdict_ref"
-                and str(event.get("run_id") or "") == run_id
-                and str(payload.get("verdict_id") or "") == verdict_id
-                and str(payload.get("ref_path") or "") == verdict_uri
-            ):
-                matches.append(event)
+        matches.extend(events_by_key.get((run_id, verdict_id, verdict_uri), []))
 
     if not matches:
         return "", "matching final_verdict_ref event is missing"
