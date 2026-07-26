@@ -15,6 +15,7 @@ from typing import Any, ClassVar
 from .backup_guard import default_runtime_dir, is_inside
 from .execution_plan import plan_write_set_groups
 from .dispatch_packet import DispatchPacketStore
+from .executor_adapter import ExecutorAdapter, ExecutorAdapterRegistry, ExecutorInvocation
 from .methodology_dispatch import (
     WorkflowCanaryError,
     prepare_workflow_canary_binding,
@@ -74,6 +75,8 @@ class GoAgentDispatch:
     packet_dir: str
     task_spec_path: str
     worker_command: list[str]
+    executor_adapter_id: str = ""
+    executor_protocol: str = ""
     status: str = "queued"
     report_path: str = ""
     worker_status: str = ""
@@ -251,10 +254,7 @@ def run_go_dispatch(
             raise ValueError("agents must be >= 1")
         if agents > 16:
             raise ValueError("agents must be <= 16")
-        if driver not in {"command", "acp"}:
-            raise ValueError(
-                f"unknown driver: {driver!r} (expected 'command' or 'acp')"
-            )
+        _default_executor_registry().resolve(driver)
 
         # Resolve the model provider before any packet is created so an unknown id
         # fails with no side effects (no fake green, no partial dispatch).
@@ -475,6 +475,7 @@ def execute_go_run(
 
     runtime_root = Path(runtime_dir).resolve() if runtime_dir else default_runtime_dir()
     result = load_go_run_result(runtime_root, run_id)
+    _default_executor_registry().resolve(result.driver or "command")
     result.runtime_dir = str(runtime_root)
     if result.workflow_canary is not None:
         _execute_workflow_canary(result)
@@ -732,15 +733,16 @@ def _execute_parallel(
     group_indices = plan_write_set_groups([agent.targets for agent in agents_to_run])
     groups = [[agents_to_run[index] for index in indices] for indices in group_indices]
     max_workers = max(1, len(groups))
+    driver = result.driver or "command"
+    adapter = _default_executor_registry().resolve(driver)
     # Real team runtime: record team events (Event Log + Message Bus) as durable
     # facts while agents actually run, instead of synthesizing them at read time.
     team = TeamRuntime(runtime_dir=result.runtime_dir)
-    driver = result.driver or "command"
     participant_ids = {agent.agent_id for agent in result.agents}
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = [
             pool.submit(_run_group, result.runtime_dir, result.project_root, result.go_run_id,
-                        group, timeout_seconds, team, driver, acp_command, participant_ids)
+                        group, timeout_seconds, team, adapter, acp_command, participant_ids)
             for group in groups
         ]
         for future in as_completed(futures):
@@ -749,20 +751,22 @@ def _execute_parallel(
 
 def _run_group(runtime_dir: str, project_root: str, go_run_id: str,
                group: list[GoAgentDispatch], timeout_seconds: int,
-               team: TeamRuntime | None = None, driver: str = "command",
+               team: TeamRuntime | None, adapter: ExecutorAdapter,
                acp_command: list[str] | None = None,
                participant_ids: set[str] | None = None) -> None:
     for agent in group:
         _run_agent_in_place(runtime_dir, project_root, go_run_id, agent, timeout_seconds,
-                            team, driver, acp_command, participant_ids)
+                            team, adapter, acp_command, participant_ids)
 
 
 def _run_agent_in_place(runtime_dir: str, project_root: str, go_run_id: str,
                         agent: GoAgentDispatch, timeout_seconds: int,
-                        team: TeamRuntime | None = None, driver: str = "command",
+                        team: TeamRuntime | None, adapter: ExecutorAdapter,
                         acp_command: list[str] | None = None,
                         participant_ids: set[str] | None = None) -> None:
     try:
+        agent.executor_adapter_id = adapter.adapter_id
+        agent.executor_protocol = adapter.protocol
         cwd, env_overrides = _resolve_isolation(runtime_dir, project_root, go_run_id, agent)
         _ensure_agent_context_artifacts(runtime_dir, agent)
         if team is not None:
@@ -774,15 +778,19 @@ def _run_agent_in_place(runtime_dir: str, project_root: str, go_run_id: str,
                 context_refs=context_refs,
             )
             team.record_task_claimed(go_run_id, agent.agent_id, context_refs=context_refs)
-        if driver == "acp":
-            worker_result = _run_one_agent_acp(
-                runtime_dir, agent, timeout_seconds,
-                cwd=cwd or project_root, go_run_id=go_run_id, acp_command=acp_command,
-                team=team, env_overrides=env_overrides,
+        worker_result = adapter.execute(
+            ExecutorInvocation(
+                runtime_dir=runtime_dir,
+                project_root=project_root,
+                go_run_id=go_run_id,
+                agent=agent,
+                timeout_seconds=timeout_seconds,
+                cwd=cwd,
+                env_overrides=env_overrides,
+                acp_command=acp_command,
+                team=team,
             )
-        else:
-            worker_result = _run_one_agent(runtime_dir, agent, timeout_seconds,
-                                           cwd=cwd, env_overrides=env_overrides)
+        )
         agent.status = "completed"
         agent.worker_status = worker_result.summary.status
         agent.report_path = worker_result.report_path
@@ -942,6 +950,47 @@ def _run_one_agent(runtime_dir: str, agent: GoAgentDispatch, timeout_seconds: in
         agent.worker_command,
         cwd=cwd,
         env_overrides=env_overrides,
+    )
+
+
+def _default_executor_registry() -> ExecutorAdapterRegistry:
+    """Build a local registry so adapters cannot become a second runtime."""
+    return ExecutorAdapterRegistry((
+        ExecutorAdapter(
+            driver="command",
+            adapter_id="command-worker",
+            protocol="process-v1",
+            _execute=_execute_command_adapter,
+        ),
+        ExecutorAdapter(
+            driver="acp",
+            adapter_id="governed-acp",
+            protocol="acp-stdio-v1",
+            _execute=_execute_acp_adapter,
+        ),
+    ))
+
+
+def _execute_command_adapter(invocation: ExecutorInvocation) -> WorkerResult:
+    return _run_one_agent(
+        invocation.runtime_dir,
+        invocation.agent,
+        invocation.timeout_seconds,
+        cwd=invocation.cwd,
+        env_overrides=invocation.env_overrides,
+    )
+
+
+def _execute_acp_adapter(invocation: ExecutorInvocation) -> WorkerResult:
+    return _run_one_agent_acp(
+        invocation.runtime_dir,
+        invocation.agent,
+        invocation.timeout_seconds,
+        cwd=invocation.cwd or invocation.project_root,
+        go_run_id=invocation.go_run_id,
+        acp_command=invocation.acp_command,
+        team=invocation.team,
+        env_overrides=invocation.env_overrides,
     )
 
 
@@ -1148,6 +1197,8 @@ def _go_result_from_metadata(data: dict[str, Any], *, fallback_runtime_dir: Path
             packet_dir=str(agent.get("packet_dir", "")),
             task_spec_path=str(agent.get("task_spec_path", "")),
             worker_command=_string_list(agent.get("worker_command", [])),
+            executor_adapter_id=str(agent.get("executor_adapter_id", "")),
+            executor_protocol=str(agent.get("executor_protocol", "")),
             status=str(agent.get("status", "queued") or "queued"),
             report_path=str(agent.get("report_path", "")),
             worker_status=str(agent.get("worker_status", "")),

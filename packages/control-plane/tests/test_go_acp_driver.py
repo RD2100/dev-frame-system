@@ -7,12 +7,20 @@ changed file (git), and record team events.
 """
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import textwrap
 from pathlib import Path
 
-from control_plane.go_dispatch import run_go_dispatch
+import pytest
+
+from control_plane.executor_adapter import (
+    ExecutorAdapter,
+    ExecutorAdapterError,
+    ExecutorAdapterRegistry,
+)
+from control_plane.go_dispatch import execute_go_run, run_go_dispatch
 from control_plane.run_index import build_run_index
 from control_plane.team_runtime import build_team_runtime_view
 
@@ -165,6 +173,85 @@ def test_default_driver_is_command(tmp_path):
     assert result.driver == "command"
 
 
+def test_executor_adapter_registry_fails_closed_for_unknown_driver():
+    registry = ExecutorAdapterRegistry()
+
+    with pytest.raises(ExecutorAdapterError, match="unknown driver"):
+        registry.resolve("claude-code")
+
+
+@pytest.mark.parametrize(
+    ("driver", "adapter_id"),
+    [
+        ("codex", "codex-cli"),
+        ("rd-code", "rd-code-client"),
+        ("claude-code", "claude-code-cli"),
+        ("opencode", "opencode-cli"),
+    ],
+)
+def test_executor_adapter_registry_accepts_open_vendor_neutral_ids(driver, adapter_id):
+    registry = ExecutorAdapterRegistry()
+    adapter = ExecutorAdapter(
+        driver=driver,
+        adapter_id=adapter_id,
+        protocol="process-v1",
+        _execute=lambda _invocation: None,
+    )
+
+    registry.register(adapter)
+
+    assert registry.resolve(driver) is adapter
+
+
+def test_go_rejects_unknown_adapter_before_creating_runtime_artifacts(tmp_path):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "target.py").write_text("x = 0\n", encoding="utf-8")
+    runtime = tmp_path / "runtime"
+
+    with pytest.raises(ExecutorAdapterError, match="unknown driver"):
+        run_go_dispatch(
+            project,
+            "must not dispatch",
+            runtime_dir=runtime,
+            agents=1,
+            targets=["target.py"],
+            execute=True,
+            driver="claude-code",
+        )
+
+    assert not runtime.exists()
+
+
+def test_resume_rejects_unknown_adapter_before_team_or_worker_side_effects(tmp_path):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "target.py").write_text("x = 0\n", encoding="utf-8")
+    runtime = tmp_path / "runtime"
+    prepared = run_go_dispatch(
+        project,
+        "prepare only",
+        runtime_dir=runtime,
+        agents=1,
+        targets=["target.py"],
+        execute=False,
+        worker_command=_passing_command(),
+        driver="command",
+    )
+    metadata_path = Path(prepared.metadata_path)
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["driver"] = "claude-code"
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    tampered_bytes = metadata_path.read_bytes()
+
+    with pytest.raises(ExecutorAdapterError, match="unknown driver"):
+        execute_go_run(runtime, prepared.go_run_id)
+
+    assert metadata_path.read_bytes() == tampered_bytes
+    assert not (runtime / "team-events.jsonl").exists()
+    assert not (Path(prepared.agents[0].packet_dir) / "go-agent-error.txt").exists()
+
+
 def test_command_and_acp_drivers_have_equivalent_canonical_governance(tmp_path):
     projects = {}
     runtimes = {}
@@ -208,6 +295,22 @@ def test_command_and_acp_drivers_have_equivalent_canonical_governance(tmp_path):
     )
 
     assert command_result.status == acp_result.status == "passed"
+    assert command_result.agents[0].executor_adapter_id == "command-worker"
+    assert command_result.agents[0].executor_protocol == "process-v1"
+    assert acp_result.agents[0].executor_adapter_id == "governed-acp"
+    assert acp_result.agents[0].executor_protocol == "acp-stdio-v1"
+
+    command_metadata = json.loads(
+        Path(command_result.metadata_path).read_text(encoding="utf-8")
+    )
+    acp_metadata = json.loads(
+        Path(acp_result.metadata_path).read_text(encoding="utf-8")
+    )
+    assert command_metadata["agents"][0]["executor_adapter_id"] == "command-worker"
+    assert command_metadata["agents"][0]["executor_protocol"] == "process-v1"
+    assert acp_metadata["agents"][0]["executor_adapter_id"] == "governed-acp"
+    assert acp_metadata["agents"][0]["executor_protocol"] == "acp-stdio-v1"
+
     semantic_keys = (
         "domain",
         "profile",
