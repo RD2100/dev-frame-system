@@ -55,6 +55,17 @@ def test_targets_include_coordinator_and_default_roster(tmp_path):
     assert len(ids) == len(set(ids))
 
 
+def test_targets_include_paper_review_product(tmp_path):
+    targets = list_cluster_targets(tmp_path / "runtime", "demo")
+    ids = [t["id"] for t in targets]
+    assert "rdpaper" in ids
+    paper = next(t for t in targets if t["id"] == "rdpaper")
+    assert paper["kind"] == "product"
+    assert paper["role"] == "paper_reviewer"
+    assert "论文审查" in paper["label"]
+    assert paper["source"] == "default"
+
+
 def test_is_valid_cluster_target(tmp_path):
     runtime = tmp_path / "runtime"
     assert is_valid_cluster_target(runtime, "coordinator", "demo") is True
