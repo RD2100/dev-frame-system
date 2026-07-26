@@ -840,6 +840,92 @@ def test_workflow_canary_cli_missing_policy_exits_two_without_packets(
     assert not (runtime_dir / "go-runs").exists()
 
 
+def test_workflow_canary_cli_prepare_resolves_canary_context_exactly_once(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    """The non-preview path delegates canary parsing to run_go_dispatch alone."""
+    from control_plane import go_dispatch
+
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    _write_cli_workflow_canary_policy(runtime_dir, project_root)
+    real_resolve = go_dispatch._resolve_workflow_canary_context
+    resolve_calls: list[tuple] = []
+
+    def counting_resolve(*args, **kwargs):
+        resolve_calls.append((args, kwargs))
+        return real_resolve(*args, **kwargs)
+
+    monkeypatch.setattr(
+        go_dispatch,
+        "_resolve_workflow_canary_context",
+        counting_resolve,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "devframe",
+            "code",
+            "@go read inspect the bounded source.",
+            "--project",
+            str(project_root),
+            "--runtime-dir",
+            str(runtime_dir),
+            "--workflow-canary",
+        ],
+    )
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "workflow     : canary_only (prepared)" in output
+    assert len(resolve_calls) == 1
+
+
+def test_workflow_canary_cli_invalid_options_exit_two_without_packets(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    """Non-canary options are still intercepted on the non-preview path."""
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    _write_cli_workflow_canary_policy(runtime_dir, project_root)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "devframe",
+            "code",
+            "@go read inspect the bounded source.",
+            "--project",
+            str(project_root),
+            "--runtime-dir",
+            str(runtime_dir),
+            "--workflow-canary",
+            "--agents",
+            "2",
+        ],
+    )
+
+    exit_code = devframe_cli_main()
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert (
+        "ERROR: workflow canary requires one unsharded command-mode read-only run"
+        in captured.err
+    )
+    assert not (runtime_dir / "rdgoal-outbox").exists()
+    assert not (runtime_dir / "go-runs").exists()
+
+
 def test_code_execute_skips_previously_passed_agents(tmp_path, monkeypatch, capsys):
     project_root = tmp_path / "demo-project"
     runtime_dir = tmp_path / "runtime"

@@ -478,7 +478,11 @@ def cmd_code() -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
     workflow_canary = None
-    if args.workflow_canary:
+    if args.workflow_canary and args.preview:
+        # Preview-only resolution for rendering the canary plan. The
+        # non-preview path below passes --workflow-canary straight to
+        # run_go_dispatch, whose internal resolution (same arguments, same
+        # WorkflowCanaryError surface) is the single authoritative parse.
         try:
             canary_context = _resolve_workflow_canary_context(
                 args.project,
