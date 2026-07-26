@@ -15,6 +15,12 @@ import control_plane.mcp_consent as mcp_consent  # noqa: E402
 from control_plane.dashboard import build_dashboard_server  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _isolate_devframe_mcp_token(monkeypatch):
+    # The suite must not inherit an operator-level DEVFRAME_MCP_TOKEN from the host.
+    monkeypatch.delenv("DEVFRAME_MCP_TOKEN", raising=False)
+
+
 def setup_function(_):
     mcp_consent._reset_for_tests()
 
