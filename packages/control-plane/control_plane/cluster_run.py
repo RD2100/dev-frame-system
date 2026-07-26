@@ -16,6 +16,7 @@ import json
 import os
 import secrets
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -181,7 +182,16 @@ def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.parent / (path.name + ".tmp")
     tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
-    os.replace(tmp, path)
+    # Windows: os.replace can transiently fail with a sharing violation while a
+    # concurrent reader briefly holds the destination open.
+    for attempt in range(5):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == 4:
+                raise
+            time.sleep(0.01 * (2**attempt))
 
 
 def _write_run_record(runtime_dir: str | Path | None, record: dict[str, Any]) -> None:

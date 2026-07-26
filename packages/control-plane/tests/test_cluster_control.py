@@ -66,6 +66,38 @@ def test_targets_include_paper_review_product(tmp_path):
     assert paper["source"] == "default"
 
 
+def test_atomic_write_retries_transient_windows_sharing_violation(tmp_path, monkeypatch):
+    calls = {"count": 0}
+    real_replace = cluster_run_module.os.replace
+
+    def flaky_replace(src, dst):
+        calls["count"] += 1
+        if calls["count"] <= 2:
+            raise PermissionError(13, "The process cannot access the file because it is being used by another process")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(cluster_run_module.os, "replace", flaky_replace)
+    monkeypatch.setattr(time, "sleep", lambda _s: None)
+    target = tmp_path / "cluster-runs" / "g-abc123.json"
+    cluster_run_module._atomic_write(target, {"runId": "g-abc123"})
+    assert calls["count"] == 3
+    assert json.loads(target.read_text(encoding="utf-8")) == {"runId": "g-abc123"}
+
+
+def test_atomic_write_raises_after_retry_exhaustion(tmp_path, monkeypatch):
+    calls = {"count": 0}
+
+    def always_locked(src, dst):
+        calls["count"] += 1
+        raise PermissionError(13, "sharing violation")
+
+    monkeypatch.setattr(cluster_run_module.os, "replace", always_locked)
+    monkeypatch.setattr(time, "sleep", lambda _s: None)
+    with pytest.raises(PermissionError):
+        cluster_run_module._atomic_write(tmp_path / "r.json", {"runId": "x"})
+    assert calls["count"] == 5
+
+
 def test_is_valid_cluster_target(tmp_path):
     runtime = tmp_path / "runtime"
     assert is_valid_cluster_target(runtime, "coordinator", "demo") is True
@@ -662,7 +694,6 @@ def test_orphaned_running_run_is_marked_interrupted(tmp_path, monkeypatch):
     """A run left at 'running' by a control-plane process that no longer exists
     must be reconciled to 'interrupted' on read, never shown frozen forever."""
     from control_plane.cluster_run import (
-        _reconcile_orphaned_run,
         cluster_run_detail,
         list_cluster_runs,
     )
@@ -937,7 +968,6 @@ def _roster_project_path(runtime, project_id):
 
 def test_resolve_roster_compat_no_project_layer(tmp_path):
     from control_plane.cluster_control import resolve_roster, save_cluster_roster
-    from control_plane.scope_resolver import Scope
 
     runtime = tmp_path / "runtime"
     save_cluster_roster(runtime, [{"id": "docs", "role": "docs", "label": "Docs"}])
