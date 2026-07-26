@@ -181,7 +181,7 @@ def cmd_atgo() -> int:
             f"# TaskSpec: {result.go_run_id}",
             "",
             f"- **Project**: {result.project_id or project_root.name}",
-            f"- **Operation**: atgo coding shard 1/1",
+            "- **Operation**: atgo coding shard 1/1",
             f"- **Project Root**: {project_root}",
             f"- **Requirement**: {result.requirement}",
             (
@@ -408,10 +408,10 @@ def cmd_code() -> int:
         DEFAULT_GO_WORKER,
         DEFAULT_OPENCODE_AGENT,
         GO_WORKERS,
+        _resolve_workflow_canary_context,
         build_go_worker_command,
         describe_go_worker,
         estimate_target_bytes,
-        render_go_dispatch_text,
         render_command,
         resolve_methodology,
         run_go_dispatch,
@@ -430,6 +430,14 @@ def cmd_code() -> int:
     parser.add_argument("--preview", action="store_true", help="Print the shard plan without creating packets")
     parser.add_argument("--runtime-dir", default=None, help="Local runtime directory for code session state")
     parser.add_argument("--execute", action="store_true", help="Run coding worker(s) instead of only preparing packets")
+    parser.add_argument(
+        "--workflow-canary",
+        action="store_true",
+        help=(
+            "Opt in only for @go read: run canary-only pre:intent/post:evidence "
+            "with no worker or ACP"
+        ),
+    )
     parser.add_argument("--timeout", type=int, default=900, help="Per-worker timeout in seconds")
     parser.add_argument("--worker", choices=GO_WORKERS, default=DEFAULT_GO_WORKER, help="Built-in coding worker profile")
     parser.add_argument("--model", default=None, help="Model id for the selected worker; opencode defaults to stepfun/step-3.7-flash")
@@ -469,6 +477,31 @@ def cmd_code() -> int:
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
+    workflow_canary = None
+    if args.workflow_canary:
+        try:
+            canary_context = _resolve_workflow_canary_context(
+                args.project,
+                goal,
+                runtime_dir=args.runtime_dir,
+                agents=agents,
+                targets=targets,
+                worker_command=args.command or None,
+                worker=args.worker,
+                model=args.model,
+                model_provider=args.model_provider,
+                opencode_agent=args.opencode_agent,
+                apply_rdinit=False,
+                isolate=args.isolate,
+                driver=args.driver,
+                acp_command=None,
+            )
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        effective_goal = canary_context.requirement
+        methodology = canary_context.methodology
+        workflow_canary = canary_context.binding
     if args.preview:
         print(_render_coding_preview(
             entrypoint="devframe code",
@@ -488,6 +521,7 @@ def cmd_code() -> int:
             split_targets=split_targets_by_size,
             estimate_target_bytes=estimate_target_bytes,
             methodology=methodology,
+            workflow_canary=workflow_canary,
         ), end="")
         return 0
 
@@ -507,6 +541,7 @@ def cmd_code() -> int:
             timeout_seconds=args.timeout,
             isolate=args.isolate,
             driver=args.driver,
+            workflow_canary=args.workflow_canary,
         )
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
@@ -742,6 +777,10 @@ def _render_code_dispatch_text(result) -> str:
     if result.methodology:
         title = str(result.methodology.get("title") or result.methodology.get("skill_id") or "unknown")
         lines.append(f"methodology   : {title}")
+    if result.workflow_canary:
+        mode = str(result.workflow_canary.get("mode") or "unknown")
+        status = str(result.workflow_canary.get("status") or "unknown")
+        lines.append(f"workflow     : {mode} ({status})")
     lines.extend([
         "",
         "Agents",
@@ -752,7 +791,12 @@ def _render_code_dispatch_text(result) -> str:
             f"- {agent.agent_id} shard={agent.shard_index}/{agent.shard_count} status={worker_status}"
         )
         lines.append(f"  targets: {', '.join(agent.targets) if agent.targets else '(project scope)'}")
-        lines.append(f"  run    : {_render_code_worker_command(result.runtime_dir, agent)}")
+        if result.workflow_canary:
+            lines.append("  run    : canary-only (no worker/ACP)")
+        else:
+            lines.append(
+                f"  run    : {_render_code_worker_command(result.runtime_dir, agent)}"
+            )
         if agent.report_path:
             lines.append(f"  report : {agent.report_path}")
         if agent.changed_files:
@@ -1071,13 +1115,50 @@ def _render_coding_preview(
     split_targets,
     estimate_target_bytes,
     methodology: dict | None = None,
+    workflow_canary: dict | None = None,
 ) -> str:
     from ..backup_guard import default_runtime_dir
 
     project_root = Path(project_path).resolve()
+    runtime_root = Path(runtime_dir).resolve() if runtime_dir else default_runtime_dir()
+    if workflow_canary:
+        lines = [
+            "DevFrame coding preview",
+            f"entrypoint   : {entrypoint}",
+            f"project_root : {project_root}",
+            f"runtime_dir  : {runtime_root}",
+            f"goal         : {goal}",
+        ]
+        if methodology:
+            title = str(
+                methodology.get("title")
+                or methodology.get("skill_id")
+                or "unknown"
+            )
+            lines.append(f"methodology  : {title}")
+        lines.extend(
+            [
+                "workflow     : canary_only",
+                f"execute      : {execute}",
+                "agents       : 1",
+                "targets      : 0",
+                "target_bytes : 0",
+                "worker       : none (canary-only; no command or ACP)",
+                "",
+                "Stages",
+                "- pre:intent",
+                "- post:evidence",
+                "",
+                "Next",
+                "Prepare   : re-run without --preview to create a resumable coding run.",
+                "Inspect   : use devframe code status after prepare.",
+                "Resume    : use devframe code execute to consume draft-only canary evidence.",
+            ]
+        )
+        return "\n".join(lines) + "\n"
+
     shards = split_targets(project_root, targets, agents)
     target_sizes = {target: estimate_target_bytes(project_root, target) for target in targets}
-    runtime_root = Path(runtime_dir).resolve() if runtime_dir else default_runtime_dir()
     worker_label = describe_worker(
         worker_command=worker_command,
         worker=worker,

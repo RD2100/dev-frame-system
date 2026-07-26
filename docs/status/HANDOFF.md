@@ -97,8 +97,9 @@ recently closed P1 risks are:
 | DIST-002 | closed | P2 | A desktop-shortcut helper promoted the deprecated T3/RD-Code visual-client path despite having no current product, test, or release entrypoint | Script-reference audit found only one historical roadmap mention; launcher tests and release gates do not depend on it | The shortcut helper is removed; the tested `launch-editor.ps1` advanced entry remains available |
 | DOCS-003 | closed | P2 | A pre-release cutover checklist and superseded 90-day product roadmap remained visible after their decisions were absorbed into the current execution and release roots | Per-file audit found no live dependency; docs drift and current-entry gates passed; independent review passed with P0/P1/P2/P3 equal to zero | Current direction remains in `HANDOFF.md`; release history remains in `LAUNCH_NOW.md` and `release-readiness.md`; retired drafts remain recoverable in Git history |
 | DIST-003 | closed | P2 | The primary `devframe code` command carried an optional dashboard-launch shortcut plus four dashboard-only server parameters, duplicating the explicit diagnostic command and widening the daily coding surface | Existing client Recon and reuse assessment, real CLI/bootstrap RED, minimal GREEN, 1,564 control-plane tests, installed-wheel smoke, and a second independent review with P0/P1/P2/P3 equal to zero | `devframe code` stays CLI-first while `devframe dashboard serve` preserves the full diagnostic/API surface |
-| KERNEL-003 | queued for M10B | P2 | A malformed or unavailable project Skill policy can make Profile planning fall back to its built-in defaults without a diagnostic | M10A independent review; no M10A consumer executes Profile stages | Before any Profile stage is consumed, policy-resolution failure must become human-required or conservatively read-only/no-network, with a real-path regression |
+| KERNEL-003 | closed | P2 | A malformed or unavailable project Skill policy can make Profile planning fall back to its built-in defaults without a diagnostic | M10B on 2026-07-26: missing, malformed, and unreadable `skills.json` policy all fail closed with zero side effects before any Profile stage is consumed; real-path regressions, a 42-check installed-CLI probe, and an independent non-author review passed | Before any Profile stage is consumed, policy-resolution failure must become human-required or conservatively read-only/no-network, with a real-path regression |
 | MEMORY-001 | closed | P1 | The validated Obsidian candidate and its installed local read runtime could become a second lifecycle beside current `main` if a new plan feature were added without an explicit migration/cutover boundary | Candidate/main reconciliation, production-path RED -> GREEN, `1720 passed, 6 skipped` on a fresh verify tree, installed-wheel canary `3/0/0`, independent review PASS with P0/P1/P2/P3 all zero, and the 2026-07-20 live MCP + SessionStart canaries | Current `main` owns the only maintained Memory semantics and existing writeback owns all mutation; the current wheel is the sole active local runtime, while the old runtime is inactive and retained only for rollback |
+| QUAL-001 | open | P2 | The QREM-B7/B8 dashboard handler-split results were lost before any commit, and `dashboard.py` complexity has regrown past the pre-remediation level (do_GET 88 / do_POST 158 decision points vs the B8 target of 64/140) | 2026-07-26 read-only audit: the implementation is absent from the worktree and from all Git history; specs, reports, and baselines remain under local `.aiworkflow/` | Either re-scope the remediation as a new governed slice from the retained specs, or the owner explicitly writes the debt off and archives the stale `.aiworkflow/session/current.json` |
 
 `DOCS-001` is mitigated by this document slice. Physical archival or deletion
 is a later cleanup operation and must first prove that no active validator,
@@ -122,7 +123,7 @@ permission to start parallel implementation.
 | M8. Governed toolchain run | accepted | One selected manifest action can enter the existing governed command path without creating a compiler-specific runtime | A real temporary project executes one manifest action only after explicit opt-in and produces canonical run, evidence, review-pending, and adapter-conformance projections |
 | M9. Toolchain run inspection | accepted | A user can inspect one governed toolchain result without decoding generic go-run metadata or opening packet files | Installed CLI status binds structured toolchain provenance to the exact canonical source bytes and remains read-only/fail-closed |
 | M10A. Governed workflow profiles | accepted | Structured coding or paper context deterministically selects and records an ordered, permission-bounded Skill profile without executing external capabilities | Real coding and paper missing-path REDs became schema-valid planned-only TaskSpecs; generic ambiguity remains human-required; installed-wheel and independent review gates passed |
-| M10B. Governed coding canary | queued before any Profile execution consumer | One offline coding entrypoint can consume a narrowly adopted pre/post stage plan without changing correctness, safety, or acceptance authority | Policy-resolution failure is first made fail-closed; one provenance/fingerprint-bound static rule canary passes real coding tests without hooks, network, credentials, global install, or non-coding activation |
+| M10B. Governed coding canary | accepted | One offline coding entrypoint consumes the narrowly adopted pre/post stage plan through an explicit opt-in without changing correctness, safety, or acceptance authority | Policy-resolution failure fails closed before any stage is consumed; the fingerprint-bound offline canary passed real CLI paths, the full affected gates, installed-wheel smoke, a 42-check real-path probe, and an independent non-author review |
 | M11A. Unified Obsidian working-plan MVP | accepted (live locally) | Codex, CLI, and later RD-Code can share one private working plan without moving formal project authority out of the repository or creating a second write lifecycle | Existing writeback stages and create-only publishes immutable project-plan versions; source drift, target races, project leakage, secret content, and absolute-path disclosure fail closed through real MCP/CLI paths; local cutover and fresh live canaries passed |
 
 ## Completed Milestone: M1 Canonical Run Truth
@@ -942,6 +943,77 @@ Reviewer Index:
 | Review focus | Preserve planned-only behavior, outer/inner schema coherence, generic human-required fail-closed behavior, exact Skill/Profile fingerprints, and the ban on selection self-certifying usage or acceptance |
 | Verdict | Independent review PASS; P0=0, P1=0, P2=1, P3=0 |
 
+## Completed Milestone: M10B Governed Coding Canary
+
+### Objective
+
+Let one offline coding entrypoint consume the narrowly adopted M10A
+`governed-coding-v1` pre/post stage plan through an explicit opt-in, close
+KERNEL-003 by making policy-resolution failure fail closed before any Profile
+stage is consumed, and register the externally sourced methodology skills
+without granting them any authority.
+
+### Delivered Behavior
+
+`devframe code` gains an explicit `--workflow-canary` opt-in that accepts only
+the structured `"@go read <goal>"` coding form. The canary consumes exactly
+two frozen offline stages (`pre:intent` intent-framing-gate and
+`post:evidence` evidence-driven-acceptance), constructs no worker, subprocess,
+ACP session, provider, network, or credential access, and produces only a
+`Review Status: draft` ExecutionReport that enters the ordinary review-pending
+channel. Project `skills.json` policy bytes, the resolved Profile, and every
+bound skill source are bound by double-read SHA-256 fingerprints under one
+`binding_fingerprint`; resume re-runs the full preparation from current disk
+state. Missing, malformed, or unreadable policy fails closed with zero side
+effects; authority injection (`final_ready`, `root_accepted`, `FinalVerdict`,
+forged or downgraded envelope markers) is rejected over a closed key set.
+
+The slice also registers the pinned third-party `@humanize` and `@ai-check`
+methodology skills with documented use boundaries in
+`docs/agent-runtime/methodology-skills.md`, adds the `rdpaper` cluster mention
+target with a focused roster test, and documents the contract in
+`docs/agent-runtime/coding-workflow-canary.md`.
+
+### Verification
+
+- Focused suites: workflow profiles plus full CLI `181 passed`; cluster
+  control `37 passed`; docs drift `23 passed`; stage executor `14 passed`.
+- Full control-plane suite: `1752 passed, 8 skipped`, 7 environment-blocked
+  failures — 4 pre-existing public-snapshot cases short-circuited by preserved
+  local root directories, and 3 MCP cases blocked by the ambient user-scope
+  `DEVFRAME_MCP_TOKEN` from the M11A live cutover (all 3 pass with the
+  variable cleared; the slice touches no MCP or dashboard path).
+- Installed-wheel smoke: 62 stages, `[OK] Control-plane wheel smoke passed`.
+- Real-path probe: 42 checks GREEN through the installed `devframe` entry —
+  the prepare/execute happy path stays `review_pending` with no acceptance
+  artifact; policy drift, authority injection, and non-coding activation all
+  fail closed with byte-identical metadata and zero runtime writes.
+- Static: no new Ruff findings, `compileall` 6/6, clean `git diff --check`,
+  and both intake LICENSE files verified as complete MIT texts.
+- Independent non-author review: PASS with P0=0, P1=0, P2=0, P3=4
+  (documentation precision, one redundant read-only CLI resolve, pre-existing
+  Ruff F401s, and this execution-root record — all non-blocking).
+
+Reviewer Index:
+
+| Item | Evidence |
+|---|---|
+| Changed files | `methodology_dispatch.py`; `go_dispatch.py`; `stage_executor.py`; CLI `_coding.py` and `_usage.py`; `cluster_control.py`; workflow-profile, CLI, and cluster-control tests; `docs/agent-runtime/methodology-skills.md`; new `docs/agent-runtime/coding-workflow-canary.md`; `tools/skills/humanize/` and `tools/skills/ai-check/`; this execution root; 16 paths total |
+| Critical paths | Fail-closed policy read before Profile resolution; double-read SHA-256 policy/profile/skill binding under one `binding_fingerprint`; resume full re-preparation; normalized authority-key rejection over a closed envelope; worker-free stage consumption; draft-only reporting through the guarded ingest path |
+| Tests and checks | Focused 181+37+23+14 passed; full suite `1752 passed, 8 skipped` with the 7 environment-blocked failures explained above; wheel smoke `[OK]`; 42-check real-path probe GREEN; adversarial probes (forged acceptance, fabricated stage results, path traversal, case-variant authority keys, reordered bindings, pre-seeded `FINAL_VERDICT.json`) all fail closed |
+| Generated artifacts | Probe fixtures and gate logs remain under the session scratchpad; no runtime artifact enters the public repository |
+| Known gaps | The upstream `harshaneel/humanize` pin is recorded but not network-verified; the ambient `DEVFRAME_MCP_TOKEN` leaks into three MCP tests (test-isolation follow-up); a Windows `os.replace` flake in `test_start_cluster_run_records_and_lists` (retry follow-up); one redundant read-only canary resolve in the CLI preview path |
+| Review focus | Preserve fail-closed policy resolution order, immutable binding fingerprints, closed envelope key sets, authority-field rejection, and the draft-only evidence boundary |
+| Verdict | Independent non-author review PASS; P0=0, P1=0, P2=0, P3=4 non-blocking |
+
+### M10B Verdict
+
+Accepted locally on 2026-07-26. KERNEL-003 is closed: policy-resolution
+failure now fails closed with zero side effects before any Profile stage is
+consumed. The canary remains the only Profile execution consumer, remains
+opt-in and offline, and cannot produce review, FinalVerdict, or acceptance.
+Push, PR, merge, and release remain separate human gates.
+
 ## Completed Milestone: M11A Unified Obsidian Working-Plan MVP
 
 ### Objective
@@ -1166,6 +1238,9 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 | 2026-07-19 | Promote unified Obsidian working plans before new client features | Shared private context is on the single external-brain product spine; current main must absorb only the bounded candidate behavior and reuse canonical writeback before RD-Code, Web AI, or automatic memory expands the surface |
 | 2026-07-20 | Accept M11A locally and close MEMORY-001 | The fresh full suite, latest installed wheel canary, public-snapshot gate, exact diff checks, and independent read-only review all passed; live Vault/MCP Hook cutover and remote Git delivery remain explicit human gates |
 | 2026-07-22 | Accept and activate M11A live locally under the existing human gate | The current accepted wheel now owns the loopback MCP and project-scoped SessionStart path; create-only publication, current recalls, startup task, token boundary, input isolation, path-redaction probes, and independent review pass while the old runtime remains rollback-only |
+| 2026-07-26 | Repair the staged all-NUL `docs/status/HANDOFF.md` index blob by restaging the intact working-tree bytes | A crash-zeroed file was staged at 13:22; forensic search across editor histories, dangling blobs, and agent logs found no recoverable variant, and committing the unrepaired index would have destroyed the execution root |
+| 2026-07-26 | Accept M10B with the methodology-skills intake and the rdpaper mention target, and close KERNEL-003 | Full affected gates, installed-wheel smoke, a 42-check real-path canary probe, and an independent non-author review (P0/P1/P2 = 0) passed; policy-resolution failure is fail-closed before any stage consumption |
+| 2026-07-26 | Register the lost QREM-B7/B8 remediation as open debt QUAL-001 instead of silently dropping it | The remediation code was never committed and is gone from disk; renewal or write-off is an explicit owner decision backed by the retained `.aiworkflow/` specs |
 
 ## Next Action
 
@@ -1174,3 +1249,244 @@ Vault/MCP Hook cutover is active locally; the old runtime is inactive and kept
 only for rollback. The next external action is the separate human gate for push
 or PR creation (and any later merge or release). No remote Git effect has been
 performed.
+
+## Session Handoff — 2026-07-26 — Universal Governance Pilot
+
+This is the latest continuation authority. It supersedes the older `Next
+Action` above for scheduling, but does not grant acceptance to any candidate.
+Current source, Git, tests, and independent review outrank remembered status.
+
+### User intent
+
+Build a provider-neutral governance layer that Codex, RD-Code/T3 Code, Claude
+Code, and OpenCode can share. Git, the lifecycle ledger, evidence, review, and
+integration remain authoritative; chat memory and executor reports do not.
+
+Communication preference: concise, direct Chinese. Lead with completed,
+blocked, and next action.
+
+### Live repository boundary at handoff capture
+
+- Canonical checkout: `D:\dev-frame-system`.
+- Branch: `codex/rdcode-secret-containment`.
+- HEAD: `77b594f8342a9d840bc660050e6319859a551468`.
+- The checkout was already dirty. Recheck it before every decision and
+  preserve all existing changes. Known modified paths:
+  - `docs/agent-runtime/methodology-skills.md`
+  - `docs/status/HANDOFF.md`
+  - `packages/control-plane/control_plane/cli/_coding.py`
+  - `packages/control-plane/control_plane/cli/_usage.py`
+  - `packages/control-plane/control_plane/cluster_control.py`
+  - `packages/control-plane/control_plane/go_dispatch.py`
+  - `packages/control-plane/control_plane/methodology_dispatch.py`
+  - `packages/control-plane/control_plane/stage_executor.py`
+  - `packages/control-plane/tests/test_cli.py`
+  - `packages/control-plane/tests/test_workflow_profiles.py`
+- Known untracked user-owned paths:
+  - `tools/skills/ai-check/`
+  - `tools/skills/humanize/`
+- Never reset, clean, stash, restore, rebase, or broadly stage these paths.
+
+### Earlier RD-CODE evidence boundary
+
+The earlier takeover work established that RD-CODE was not ready for user
+delivery. Three candidates were kept isolated and unstaged:
+
+- R1F launch/install candidate: independently reviewed after a real product
+  rework; preserve its frozen evidence rather than treating it as an implicit
+  integration.
+- Paper composed candidate: current raw bytes had drifted from the frozen
+  digest and therefore remained `REWORK`.
+- Project re-entry/identity candidate: source review passed, but review PASS
+  alone was not root acceptance or permission to commit.
+
+Evidence-custodian rule: when `REWORK` is only stale byte evidence and the
+original author is unavailable, a takeover custodian may refreeze the same
+exact paths only after focused tests and safe real-path probes pass. The
+custodian may not modify implementation, expand scope, stage, commit, push, or
+review their own evidence. A distinct non-author reviewer must still issue the
+only `PASS` or `REWORK` verdict.
+
+### Trusted Core v1 local candidate
+
+- Worktree: `D:\dev-frame-system-trusted-core-v1`.
+- Branch: `codex/trusted-core-v1`.
+- Local commit: `403046bfa2dd0d875d8cba93504307438b5c43f8`
+  (`fix(control-plane): harden trusted execution core`).
+- Status at capture: clean, local only; not pushed, merged, or deployed.
+- Delivered candidate behavior:
+  - verified linked-worktree execution for live writes;
+  - runtime-inside-repository fail-closed behavior;
+  - signed execution receipts and a controller-signed full run roster;
+  - authenticated v2 path leases, heartbeat, and fencing;
+  - strict toolchain snapshot/roster validation;
+  - minimized stdout/stderr persistence.
+- Honest evidence boundary: affected expansion `383 passed, 1 skipped`, public
+  snapshot passed, and focused non-author review passed. Do not claim the full
+  repository suite passed; an earlier full-suite attempt exceeded five minutes.
+- Residual P2: an adversarial process running as the same OS user is not
+  isolated by filesystem HMAC. True isolation needs a separately approved
+  sandbox, service account, or privileged controller.
+- Do not copy or cherry-pick this candidate into the dirty canonical checkout.
+  Reconcile it only from a fresh clean baseline with independent review.
+
+### RD Paper universal-governance pilot
+
+- Controller thread: `019f8871-28a2-70f0-9b67-cc3ae83a8aff`.
+- Controller model request: `gpt-5.6-sol` / `medium`.
+- Coding executor request: OpenCode `huoshan/glm-5-2`.
+- Model identities are `REQUESTED_UNVERIFIED` unless the runtime provides
+  attestation.
+- Synthetic local T1--T12 governance pilot: `12 PASS / 0 PARTIAL / 0 BLOCKED`.
+- Final governance validation:
+  - narrow E2E: `29 passed`;
+  - full suite: `306 passed`, `7` Windows symlink-capability skips;
+  - Ruff clean;
+  - non-author verdict: `PASS`, P0/P1=0.
+- Pilot commits:
+  - T1: `5fe86234766d424d19ec2f13860e4d55e3a7d1fe`;
+  - E2E: `356225d3a622713090e934544be0c5638ff7a073`.
+- Evidence: 10/10 records, SHA-256
+  `15830C45B292FDB8EB835847E3EA255F3A55C741A8E93F05F1DA5417476F8B2E`.
+- No push, merge, or destructive worktree retirement was performed.
+- RD Paper canonical facts last reported:
+  - branch `feat/g1-offline-runner-freeze-foundation`;
+  - HEAD `28498c1264ca35e04c87a926eca0aa0e9e5b4f45`;
+  - existing dirty count `16`, staged count `0`;
+  - the pilot did not absorb or clean those paths.
+- Open-source decisions:
+  - native Git worktree: `ADOPT`;
+  - `git-worktree-runner`: `ADAPT`, accounting for Git Bash/WSL on Windows;
+  - `mergetrain`: `ADAPT` concepts only;
+  - `claude-worktree-hub`: `ADAPT` lifecycle schema only;
+  - AgentFS and LangGraph: reference only.
+
+T1--T12 are complete and must not be rerun. The active Goal remains open only
+for the cross-tool RD-Code/T3 Code proof.
+
+### Current active cross-tool proof
+
+At the latest observation, RD-Code was identified as the DevFrame T3 Code
+desktop client/instance path rather than a separate standalone executable. The
+official T3 checkout was recognized with frozen SHA prefix `5719e8a`.
+
+One resumed OpenCode session was active:
+
+- session: `ses_06523774cffeSEL7FlLvW56BHj`;
+- requested executor/model: `huoshan/glm-5-2`;
+- one OpenCode process and one child Node process were healthy at capture;
+- dependency installation was partial: `node_modules` existed, Electron runtime
+  was still missing;
+- work was isolated to an exact ten-path DevFrame bridge slice;
+- `package.json` and `pnpm-lock` matched upstream before resume.
+
+Do not start a duplicate writer or installer. First check the process tree,
+session/log output, isolated worktree status, exact ten paths, package/lock
+bytes, and installation completeness. If the original process is still healthy,
+wait for it. If it stopped, resume the same session only when its state is
+recoverable; otherwise freeze the exact environment blocker.
+
+Completion requires exact scope, no unexplained package/lock drift, focused
+bridge/runtime verification, a Reviewer Index, and a separate non-author
+`PASS` or `REWORK`.
+
+### Open-source reuse gate
+
+Before implementing another governance mechanism, record a dated Recon Receipt
+with source/ref, license, maintenance signal, Windows suitability, security
+boundary, integration cost, rollback, and `ADOPT` / `ADAPT` / `REJECT`.
+Research alone is not delivery: the selected behavior must become a bounded
+executable gate or regression. Do not install every researched project.
+
+### Concrete next action
+
+1. Read `AGENTS.md`, this section, and live Git/worktree state.
+2. Read the latest RD Paper controller turn. Do not rerun T1--T12.
+3. Check the existing OpenCode/T3 process and exact isolated worktree facts.
+   Do not create a duplicate writer or dependency installer.
+4. On worker completion, require exact paths, package/lock stability, focused
+   product-path tests, and a non-author review.
+5. Keep the DevFrame root coordination-only. Accept only material state
+   transitions, not repeated status prose.
+6. After the cross-tool verdict, select only the proven reusable mechanisms
+   for a fresh clean DevFrame integration slice.
+7. Keep Trusted Core commit `403046b` separate until clean-baseline provenance
+   reconciliation and independent review are complete.
+
+### Hard stops
+
+- No push, merge, deployment, provider call, credential read, paper upload, or
+  destructive cleanup without a current explicit human gate.
+- No broad staging. Workers never stage or commit.
+- No claim that worker success, chat memory, a branch name, or a test count is
+  acceptance.
+- No claim that same-OS-user malicious-process isolation is solved.
+- No second master plan or handoff document.
+
+### Root reconciliation addendum — 2026-07-26 evening
+
+- The staged `docs/status/HANDOFF.md` index entry had been crash-zeroed to
+  113,960 NUL bytes at 13:22 and was restaged from the intact working tree;
+  forensics across editor histories, dangling blobs, and agent logs found no
+  recoverable richer version, so this 89,836-byte lineage plus the records
+  added below it is authoritative.
+- M10B was accepted under its milestone record above and delivered as three
+  logical commits: methodology-skills intake, rdpaper mention target, and the
+  canary slice including this record.
+- Test environment: a stale pip-orphaned `control_plane` copy in the global
+  Python 3.10 `site-packages` shadowed subprocess imports; it was renamed to
+  `control_plane.stale-20260726.bak` and the repository package is now
+  installed editable (rollback: uninstall `devframe-control-plane` and restore
+  the renamed directory).
+- Cross-tool proof line: the OpenCode session `ses_06523774cffeSEL7FlLvW56BHj`
+  and its clean ten-path worktree were verified recoverable; the dependency
+  install was restarted with the pinned `pnpm@11.10.0` via `npx` after a
+  corepack shim version mismatch was identified as the failed-restart cause.
+- The ambient user-scope `DEVFRAME_MCP_TOKEN` from the M11A live cutover makes
+  three MCP tests fail under an inherited user environment; all three pass
+  with the variable cleared. Test isolation is a queued follow-up.
+
+### Copy/paste prompt for the next DevFrame controller
+
+```text
+You are the new DevFrame root controller. Work from D:\dev-frame-system.
+Read AGENTS.md and the final section “Session Handoff — 2026-07-26 —
+Universal Governance Pilot” in docs/status/HANDOFF.md. Recheck live HEAD, Git
+status, upstream divergence, worktrees, active processes, and exact ownership.
+Preserve every pre-existing dirty/untracked path. Never reset, clean, stash,
+restore, rebase, or broadly stage.
+
+Your role is coordination and evidence review, not implementation. Continue the
+RD Paper controller task 019f8871-28a2-70f0-9b67-cc3ae83a8aff. Its controller
+requested gpt-5.6-sol / medium and its coding executor requested OpenCode
+huoshan/glm-5.2; record these as REQUESTED_UNVERIFIED unless runtime attestation
+exists.
+
+The synthetic T1--T12 governance pilot is already complete: 12/12 PASS, narrow
+29 passed, full 306 passed with 7 Windows capability skips, non-author PASS, and
+10/10 evidence records. Do not rerun it. The Goal remains active only for the
+RD-Code/T3 Code cross-tool proof.
+
+Read the RD Paper task's latest turn first. At last capture, resumed OpenCode
+session ses_06523774cffeSEL7FlLvW56BHj was working in one isolated exact
+ten-path T3 bridge slice after a partial dependency installation. Do not start a
+duplicate writer or installer. Check process/log/worktree/package-lock facts;
+then wait, resume that same recoverable session, or freeze an exact blocker.
+Require exact scope, unchanged package/lock bytes unless explicitly justified,
+focused bridge/runtime verification, Reviewer Index, and a separate non-author
+PASS/REWORK verdict.
+
+Trusted Core v1 remains a separate clean local candidate at
+D:\dev-frame-system-trusted-core-v1, commit
+403046bfa2dd0d875d8cba93504307438b5c43f8. It passed the affected 383/1
+boundary, public snapshot, and focused non-author review, but it is not pushed,
+merged, or deployed; full-suite completion is not claimed. Do not copy it into
+the dirty canonical checkout. Integrate only from a fresh clean baseline after
+provenance reconciliation and independent review.
+
+Return first: live facts, RD Paper/RD-Code verdict, Goal, real active tasks,
+RED/GREEN evidence, blockers, and the single next action. Use concise direct
+Chinese. Do not push, merge, deploy, read credentials, call a real provider,
+upload paper content, or perform destructive cleanup without a current explicit
+human gate.
+```

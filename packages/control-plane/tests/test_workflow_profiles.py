@@ -2,19 +2,29 @@
 
 from __future__ import annotations
 
+import hashlib
+import inspect
 import json
+import sys
 from pathlib import Path
 
 import pytest
 from jsonschema import ValidationError
 from jsonschema.validators import validator_for
 
+import control_plane.go_dispatch as go_dispatch_module
+import control_plane.methodology_dispatch as methodology_dispatch_module
 from control_plane.custom_skills import save_at as save_skills_at
-from control_plane.go_dispatch import load_go_run_result, run_go_dispatch
+from control_plane.go_dispatch import (
+    execute_go_run,
+    load_go_run_result,
+    run_go_dispatch,
+)
 from control_plane.methodology_dispatch import (
     resolve_methodology,
     resolve_workflow_profile,
 )
+from control_plane.project_contract import slugify_project_id
 from control_plane.rules_config import save_at as save_rules_at
 from control_plane.run_index import build_run_index
 from control_plane.scope_resolver import Scope
@@ -36,6 +46,58 @@ def _task_spec_schema() -> dict:
 def _validate_task_spec(task_spec: dict) -> None:
     schema = _task_spec_schema()
     validator_for(schema)(schema).validate(task_spec)
+
+
+def _write_workflow_canary_policy(runtime: Path, project: Path) -> Path:
+    project_id = slugify_project_id(project)
+    save_skills_at(
+        runtime,
+        Scope.PROJECT,
+        project_id,
+        [
+            {
+                "id": "workflow-canary-read-only",
+                "title": "Workflow canary read only",
+                "readOnly": True,
+                "networkEnabled": False,
+                "requireRedGreenEvidence": True,
+            }
+        ],
+    )
+    return runtime / project_id / "skills.json"
+
+
+def _real_worker_command(sentinel: Path) -> list[str]:
+    worker_code = (
+        "from pathlib import Path; import os; "
+        f"Path({str(sentinel)!r}).write_text('worker-ran', encoding='utf-8'); "
+        "Path(os.environ['RDGOAL_REPORT_PATH']).write_text("
+        "'## ExecutionReport\\n\\n"
+        "- **Status**: pass\\n"
+        "- **Review Status**: draft\\n"
+        "- **Changed Files**:\\n"
+        "- (none)\\n"
+        "- **Evidence**: real worker boundary probe\\n', encoding='utf-8')"
+    )
+    return [sys.executable, "-c", worker_code]
+
+
+def _run_workflow_canary_or_reproduce_legacy_worker(
+    project: Path,
+    runtime: Path,
+    sentinel: Path,
+):
+    """Keep the original production failure reproducible after the API lands."""
+    kwargs = {
+        "runtime_dir": runtime,
+        "agents": 1,
+        "execute": True,
+    }
+    if "workflow_canary" in inspect.signature(run_go_dispatch).parameters:
+        kwargs["workflow_canary"] = True
+    else:
+        kwargs["worker_command"] = _real_worker_command(sentinel)
+    return run_go_dispatch(project, "@go read inspect the bounded source.", **kwargs)
 
 
 def test_coding_profile_is_deterministic_and_planned_only() -> None:
@@ -258,3 +320,531 @@ def test_task_spec_schema_mirror_has_the_same_contract() -> None:
         ).read_text(encoding="utf-8-sig")
     )
     assert mirror == canonical
+
+
+def test_workflow_canary_bypasses_the_real_command_worker_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "code-project"
+    runtime = tmp_path / "runtime"
+    sentinel = tmp_path / "worker-ran.txt"
+    project.mkdir()
+    _write_workflow_canary_policy(runtime, project)
+
+    real_worker = go_dispatch_module.CommandWorker
+    real_builder = go_dispatch_module.build_go_worker_command
+    constructed: list[str] = []
+    built: list[str] = []
+
+    class TrackingCommandWorker:
+        def __init__(self, *args, **kwargs):
+            constructed.append("CommandWorker")
+            self._delegate = real_worker(*args, **kwargs)
+
+        def run_packet(self, *args, **kwargs):
+            return self._delegate.run_packet(*args, **kwargs)
+
+    def tracking_builder(*args, **kwargs):
+        built.append("build_go_worker_command")
+        return real_builder(*args, **kwargs)
+
+    def reject_acp_session(*args, **kwargs):
+        raise AssertionError("workflow canary entered the ACP session boundary")
+
+    monkeypatch.setattr(go_dispatch_module, "CommandWorker", TrackingCommandWorker)
+    monkeypatch.setattr(go_dispatch_module, "build_go_worker_command", tracking_builder)
+    monkeypatch.setattr(go_dispatch_module, "_run_one_agent_acp", reject_acp_session)
+
+    result = _run_workflow_canary_or_reproduce_legacy_worker(
+        project,
+        runtime,
+        sentinel,
+    )
+
+    assert result.methodology["selected_trigger"] == "@go read"
+    assert result.methodology["read_only"] is True
+    assert not sentinel.exists()
+    assert constructed == []
+    assert built == []
+    assert result.status == "passed"
+    assert result.agents[0].worker_command == []
+    assert result.agents[0].worker_status == "passed"
+    assert result.workflow_canary["mode"] == "canary_only"
+    assert result.workflow_canary["status"] == "passed"
+    assert [
+        (stage["phase"], stage["stage_id"], stage["status"])
+        for stage in result.workflow_canary["stage_results"]
+    ] == [
+        ("pre", "intent", "passed"),
+        ("post", "evidence", "passed"),
+    ]
+
+    task_spec = json.loads(
+        Path(result.agents[0].task_spec_path).read_text(encoding="utf-8")
+    )
+    report = Path(result.agents[0].report_path)
+    report_text = report.read_text(encoding="utf-8")
+    summary_path = (
+        runtime
+        / "rdgoal-reports"
+        / result.project_id
+        / Path(result.agents[0].packet_dir).name
+        / "execution-summary.json"
+    )
+    assert "skill_usage" not in task_spec
+    assert "**Review Status**: draft" in report_text
+    assert "**Changed Files**:\n- (none)" in report_text
+    assert "FinalVerdict" not in report_text
+    assert summary_path.is_file()
+    assert not list(runtime.rglob("FINAL_VERDICT.json"))
+    assert not list(runtime.rglob("review.yaml"))
+    assert not list(runtime.rglob("review.md"))
+
+
+@pytest.mark.parametrize("failure_kind", ["missing", "malformed", "io_error"])
+def test_workflow_canary_policy_failures_are_closed_before_any_side_effect(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_kind: str,
+) -> None:
+    project = tmp_path / f"code-project-{failure_kind}"
+    runtime = tmp_path / f"runtime-{failure_kind}"
+    sentinel = tmp_path / f"worker-ran-{failure_kind}.txt"
+    project.mkdir()
+    policy_path = runtime / slugify_project_id(project) / "skills.json"
+
+    if failure_kind == "malformed":
+        policy_path.parent.mkdir(parents=True)
+        policy_path.write_text("{not-json", encoding="utf-8")
+    elif failure_kind == "io_error":
+        _write_workflow_canary_policy(runtime, project)
+        original_read_bytes = Path.read_bytes
+
+        def fail_policy_read(path: Path) -> bytes:
+            if path.resolve() == policy_path.resolve():
+                raise OSError("simulated policy read failure")
+            return original_read_bytes(path)
+
+        monkeypatch.setattr(Path, "read_bytes", fail_policy_read)
+
+    with pytest.raises(ValueError, match="workflow canary") as error:
+        _run_workflow_canary_or_reproduce_legacy_worker(
+            project,
+            runtime,
+            sentinel,
+        )
+
+    assert type(error.value).__name__ == "WorkflowCanaryError"
+    assert not sentinel.exists()
+    assert not (runtime / "rdgoal-outbox").exists()
+    assert not (runtime / "go-runs").exists()
+    assert not (runtime / "rdgoal-reports").exists()
+
+
+def test_workflow_canary_prepare_persists_canonical_immutable_binding(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "code-project"
+    runtime = tmp_path / "runtime"
+    project.mkdir()
+    policy_path = _write_workflow_canary_policy(runtime, project)
+
+    result = run_go_dispatch(
+        project,
+        "@go read inspect the bounded source.",
+        runtime_dir=runtime,
+        agents=1,
+        execute=False,
+        workflow_canary=True,
+    )
+
+    canary = result.workflow_canary
+    assert canary["contract_version"] == "coding-workflow-canary.v1"
+    assert canary["mode"] == "canary_only"
+    assert canary["selection_source"] == "explicit_cli_opt_in"
+    assert canary["status"] == "prepared"
+    assert canary["stage_results"] == []
+    assert canary["policy_binding"] == {
+        "resolved_path": str(policy_path.resolve()),
+        "sha256": f"sha256:{hashlib.sha256(policy_path.read_bytes()).hexdigest()}",
+    }
+    assert canary["profile_binding"] == {
+        "profile_id": result.workflow_profile["profile_id"],
+        "profile_fingerprint": result.workflow_profile["profile_fingerprint"],
+    }
+    assert [
+        (stage["phase"], stage["stage_id"], stage["skill_id"])
+        for stage in canary["stage_bindings"]
+    ] == [
+        ("pre", "intent", "intent-framing-gate"),
+        ("post", "evidence", "evidence-driven-acceptance"),
+    ]
+    for stage in canary["stage_bindings"]:
+        source = REPO_ROOT / stage["source_path"]
+        assert stage["skill_fingerprint"] == (
+            f"sha256:{hashlib.sha256(source.read_bytes()).hexdigest()}"
+        )
+    canonical_binding = {
+        key: canary[key]
+        for key in (
+            "contract_version",
+            "mode",
+            "selection_source",
+            "policy_binding",
+            "profile_binding",
+            "stage_bindings",
+        )
+    }
+    canonical_bytes = json.dumps(
+        canonical_binding,
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    assert canary["binding_fingerprint"] == (
+        f"sha256:{hashlib.sha256(canonical_bytes).hexdigest()}"
+    )
+    assert result.agents[0].worker_command == []
+    assert not Path(result.agents[0].packet_dir, "ExecutionReport.md").exists()
+    assert not (runtime / "rdgoal-reports").exists()
+
+
+@pytest.mark.parametrize(
+    "invalid_options",
+    [
+        {"agents": 2},
+        {"targets": ["src/app.py"]},
+        {"worker_command": [sys.executable, "-c", "print('worker')"]},
+        {"worker": "custom-worker"},
+        {"model": "provider/model"},
+        {"model_provider": "local-ollama"},
+        {"opencode_agent": "plan"},
+        {"acp_command": ["opencode", "acp"]},
+        {"driver": "acp", "acp_command": ["opencode", "acp"]},
+        {"isolate": True},
+        {"apply_rdinit": True},
+    ],
+)
+def test_workflow_canary_rejects_non_canary_execution_options_before_packets(
+    tmp_path: Path,
+    invalid_options: dict,
+) -> None:
+    project = tmp_path / "code-project"
+    runtime = tmp_path / "runtime"
+    project.mkdir()
+    _write_workflow_canary_policy(runtime, project)
+    options = {
+        "runtime_dir": runtime,
+        "agents": 1,
+        "execute": False,
+        "workflow_canary": True,
+        **invalid_options,
+    }
+
+    with pytest.raises(ValueError, match="workflow canary"):
+        run_go_dispatch(
+            project,
+            "@go read inspect the bounded source.",
+            **options,
+        )
+
+    assert not (runtime / "rdgoal-outbox").exists()
+    assert not (runtime / "go-runs").exists()
+
+
+def test_workflow_canary_resume_rejects_policy_byte_drift_without_mutation(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "code-project"
+    runtime = tmp_path / "runtime"
+    project.mkdir()
+    policy_path = _write_workflow_canary_policy(runtime, project)
+    prepared = run_go_dispatch(
+        project,
+        "@go read inspect the bounded source.",
+        runtime_dir=runtime,
+        agents=1,
+        workflow_canary=True,
+    )
+    metadata_path = Path(prepared.metadata_path)
+    metadata_before = metadata_path.read_bytes()
+    policy_path.write_bytes(policy_path.read_bytes() + b"\n")
+
+    with pytest.raises(ValueError, match="workflow canary"):
+        execute_go_run(runtime, prepared.go_run_id)
+
+    assert metadata_path.read_bytes() == metadata_before
+    assert not Path(prepared.agents[0].packet_dir, "ExecutionReport.md").exists()
+    assert not (runtime / "rdgoal-reports").exists()
+
+
+@pytest.mark.parametrize("drift_kind", ["profile", "skill_source", "skill_bytes"])
+def test_workflow_canary_resume_rejects_profile_and_skill_drift_without_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    drift_kind: str,
+) -> None:
+    project = tmp_path / f"code-project-{drift_kind}"
+    runtime = tmp_path / f"runtime-{drift_kind}"
+    project.mkdir()
+    _write_workflow_canary_policy(runtime, project)
+    prepared = run_go_dispatch(
+        project,
+        "@go read inspect the bounded source.",
+        runtime_dir=runtime,
+        agents=1,
+        workflow_canary=True,
+    )
+    metadata_path = Path(prepared.metadata_path)
+    metadata_before = metadata_path.read_bytes()
+
+    if drift_kind == "profile":
+        monkeypatch.setitem(
+            methodology_dispatch_module._WORKFLOW_PROFILE_DEFINITIONS["coding"],
+            "profile_version",
+            "1.0.1-drift",
+        )
+    elif drift_kind == "skill_source":
+        monkeypatch.setitem(
+            methodology_dispatch_module.METHODOLOGY_DISPATCH[
+                "intent-framing-gate"
+            ],
+            "source_path",
+            "tools/skills/tdd/SKILL.md",
+        )
+    else:
+        intent_source = (
+            REPO_ROOT / "tools" / "skills" / "intent-framing-gate" / "SKILL.md"
+        ).resolve()
+        original_read_bytes = Path.read_bytes
+
+        def drift_skill_bytes(path: Path) -> bytes:
+            raw = original_read_bytes(path)
+            return raw + b"\n# drift" if path.resolve() == intent_source else raw
+
+        monkeypatch.setattr(Path, "read_bytes", drift_skill_bytes)
+
+    with pytest.raises(ValueError, match="workflow canary"):
+        execute_go_run(runtime, prepared.go_run_id)
+
+    assert metadata_path.read_bytes() == metadata_before
+    assert not Path(prepared.agents[0].packet_dir, "ExecutionReport.md").exists()
+    assert not (runtime / "rdgoal-reports").exists()
+
+
+def test_workflow_canary_resume_rejects_authority_metadata_injection(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "code-project"
+    runtime = tmp_path / "runtime"
+    project.mkdir()
+    _write_workflow_canary_policy(runtime, project)
+    prepared = run_go_dispatch(
+        project,
+        "@go read inspect the bounded source.",
+        runtime_dir=runtime,
+        agents=1,
+        workflow_canary=True,
+    )
+    metadata_path = Path(prepared.metadata_path)
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["workflow_canary"]["final_ready"] = True
+    metadata_path.write_text(
+        json.dumps(metadata, indent=2, ensure_ascii=True),
+        encoding="utf-8",
+    )
+    metadata_before = metadata_path.read_bytes()
+
+    with pytest.raises(ValueError, match="workflow canary"):
+        execute_go_run(runtime, prepared.go_run_id)
+
+    assert metadata_path.read_bytes() == metadata_before
+    assert not Path(prepared.agents[0].packet_dir, "ExecutionReport.md").exists()
+    assert not (runtime / "rdgoal-reports").exists()
+
+
+def _assert_workflow_canary_resume_is_side_effect_free(
+    runtime: Path,
+    prepared,
+    metadata_path: Path,
+    metadata_before: bytes,
+) -> None:
+    error = None
+    try:
+        execute_go_run(runtime, prepared.go_run_id)
+    except ValueError as exc:
+        error = exc
+
+    assert metadata_path.read_bytes() == metadata_before
+    assert not Path(prepared.agents[0].packet_dir, "ExecutionReport.md").exists()
+    assert not (runtime / "rdgoal-reports").exists()
+    assert error is not None
+    assert type(error).__name__ == "WorkflowCanaryError"
+    assert "workflow canary" in str(error)
+
+
+@pytest.mark.parametrize(
+    "authority_fields",
+    [
+        {"final_ready": True},
+        {"root_accepted": True},
+        {"FinalVerdict": {"final_state": "final_ready"}},
+        {
+            "final_ready": True,
+            "root_accepted": True,
+            "FinalVerdict": {"final_state": "final_ready"},
+        },
+    ],
+    ids=["final-ready", "root-accepted", "final-verdict", "combined"],
+)
+def test_workflow_canary_resume_rejects_top_level_authority_fields(
+    tmp_path: Path,
+    authority_fields: dict,
+) -> None:
+    project = tmp_path / "code-project"
+    runtime = tmp_path / "runtime"
+    project.mkdir()
+    _write_workflow_canary_policy(runtime, project)
+    prepared = run_go_dispatch(
+        project,
+        "@go read inspect the bounded source.",
+        runtime_dir=runtime,
+        agents=1,
+        workflow_canary=True,
+    )
+    metadata_path = Path(prepared.metadata_path)
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata.update(authority_fields)
+    metadata_path.write_text(
+        json.dumps(metadata, indent=2, ensure_ascii=True),
+        encoding="utf-8",
+    )
+    metadata_before = metadata_path.read_bytes()
+
+    _assert_workflow_canary_resume_is_side_effect_free(
+        runtime,
+        prepared,
+        metadata_path,
+        metadata_before,
+    )
+
+
+def test_workflow_canary_resume_rejects_forged_internal_validation_marker(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "code-project"
+    runtime = tmp_path / "runtime"
+    project.mkdir()
+    _write_workflow_canary_policy(runtime, project)
+    prepared = run_go_dispatch(
+        project,
+        "@go read inspect the bounded source.",
+        runtime_dir=runtime,
+        agents=1,
+        workflow_canary=True,
+    )
+    metadata_path = Path(prepared.metadata_path)
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["_workflow_canary_envelope_validated"] = True
+    metadata_path.write_text(
+        json.dumps(metadata, indent=2, ensure_ascii=True),
+        encoding="utf-8",
+    )
+    metadata_before = metadata_path.read_bytes()
+
+    _assert_workflow_canary_resume_is_side_effect_free(
+        runtime,
+        prepared,
+        metadata_path,
+        metadata_before,
+    )
+
+
+def test_workflow_canary_resume_rejects_deleted_marker(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "code-project"
+    runtime = tmp_path / "runtime"
+    project.mkdir()
+    _write_workflow_canary_policy(runtime, project)
+    prepared = run_go_dispatch(
+        project,
+        "@go read inspect the bounded source.",
+        runtime_dir=runtime,
+        agents=1,
+        workflow_canary=True,
+    )
+    metadata_path = Path(prepared.metadata_path)
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata.pop("workflow_canary")
+    metadata_path.write_text(
+        json.dumps(metadata, indent=2, ensure_ascii=True),
+        encoding="utf-8",
+    )
+    metadata_before = metadata_path.read_bytes()
+
+    _assert_workflow_canary_resume_is_side_effect_free(
+        runtime,
+        prepared,
+        metadata_path,
+        metadata_before,
+    )
+
+
+@pytest.mark.parametrize(
+    "downgraded_marker",
+    [None, False, {}],
+    ids=["null", "false", "empty-object"],
+)
+def test_workflow_canary_resume_rejects_downgraded_marker(
+    tmp_path: Path,
+    downgraded_marker: object,
+) -> None:
+    project = tmp_path / "code-project"
+    runtime = tmp_path / "runtime"
+    project.mkdir()
+    _write_workflow_canary_policy(runtime, project)
+    prepared = run_go_dispatch(
+        project,
+        "@go read inspect the bounded source.",
+        runtime_dir=runtime,
+        agents=1,
+        workflow_canary=True,
+    )
+    metadata_path = Path(prepared.metadata_path)
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["workflow_canary"] = downgraded_marker
+    metadata_path.write_text(
+        json.dumps(metadata, indent=2, ensure_ascii=True),
+        encoding="utf-8",
+    )
+    metadata_before = metadata_path.read_bytes()
+
+    _assert_workflow_canary_resume_is_side_effect_free(
+        runtime,
+        prepared,
+        metadata_path,
+        metadata_before,
+    )
+
+
+def test_plain_dispatch_keeps_workflow_canary_default_off(tmp_path: Path) -> None:
+    project = tmp_path / "code-project"
+    project.mkdir()
+    result = run_go_dispatch(
+        project,
+        "@go read inspect the ordinary bounded source.",
+        runtime_dir=tmp_path / "runtime",
+        agents=1,
+    )
+
+    metadata = json.loads(Path(result.metadata_path).read_text(encoding="utf-8"))
+    loaded = load_go_run_result(tmp_path / "runtime", result.go_run_id)
+    parameter = inspect.signature(run_go_dispatch).parameters["workflow_canary"]
+    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameter.default is False
+    assert result.workflow_canary is None
+    assert loaded.workflow_canary is None
+    assert "workflow_canary" not in metadata
+    assert result.agents[0].worker_command

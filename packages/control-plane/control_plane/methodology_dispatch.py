@@ -10,6 +10,36 @@ from .skill_registry import REPO_ROOT, list_methodology_skills
 
 WORKFLOW_PROFILE_CONTRACT_VERSION = "workflow-profile.v1"
 WORKFLOW_PROFILE_RESOLVER_VERSION = "workflow-profile-resolver.v1"
+WORKFLOW_CANARY_CONTRACT_VERSION = "coding-workflow-canary.v1"
+WORKFLOW_CANARY_MODE = "canary_only"
+WORKFLOW_CANARY_SELECTION_SOURCE = "explicit_cli_opt_in"
+
+_WORKFLOW_CANARY_STAGES = (
+    ("pre", "intent", "intent-framing-gate"),
+    ("post", "evidence", "evidence-driven-acceptance"),
+)
+_WORKFLOW_CANARY_BINDING_KEYS = (
+    "contract_version",
+    "mode",
+    "selection_source",
+    "policy_binding",
+    "profile_binding",
+    "stage_bindings",
+)
+_WORKFLOW_CANARY_KEYS = {
+    *_WORKFLOW_CANARY_BINDING_KEYS,
+    "status",
+    "binding_fingerprint",
+    "stage_results",
+}
+_WORKFLOW_CANARY_STAGE_EVIDENCE = {
+    "intent": "task_spec_profile_bound",
+    "evidence": "draft_execution_report_only",
+}
+
+
+class WorkflowCanaryError(ValueError):
+    """Fail-closed workflow-canary policy or immutable-binding failure."""
 
 _WORKFLOW_PROFILE_DEFINITIONS: dict[str, dict[str, Any]] = {
     "coding": {
@@ -448,6 +478,261 @@ def _with_profile_fingerprint(profile: dict[str, Any]) -> dict[str, Any]:
         **profile,
         "profile_fingerprint": f"sha256:{hashlib.sha256(canonical).hexdigest()}",
     }
+
+
+def _read_workflow_canary_policy(
+    runtime_dir: Any,
+    project_id: str | None,
+) -> tuple[Path, bytes]:
+    if runtime_dir is None or not project_id:
+        raise WorkflowCanaryError(
+            "workflow canary requires a runtime directory and project id"
+        )
+    from .custom_skills import SKILLS_FILE
+    from .scope_resolver import Scope
+    from .scoped_store import scoped_path
+
+    try:
+        path = scoped_path(runtime_dir, SKILLS_FILE, Scope.PROJECT, project_id)
+        raw = path.read_bytes()
+    except (OSError, ValueError) as exc:
+        raise WorkflowCanaryError(
+            "workflow canary project skill policy is missing or unreadable"
+        ) from exc
+    _validate_workflow_canary_policy(raw)
+    return path.resolve(), raw
+
+
+def _validate_workflow_canary_policy(raw: bytes) -> None:
+    from .custom_skills import _coerce_skill
+
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise WorkflowCanaryError(
+            "workflow canary project skill policy is malformed"
+        ) from exc
+    if (
+        not isinstance(payload, dict)
+        or payload.get("version") != 1
+        or not isinstance(payload.get("skills"), list)
+        or not payload["skills"]
+    ):
+        raise WorkflowCanaryError(
+            "workflow canary project skill policy has an invalid structure"
+        )
+    normalized = [_coerce_skill(item) for item in payload["skills"]]
+    if any(item is None for item in normalized):
+        raise WorkflowCanaryError(
+            "workflow canary project skill policy contains an invalid skill"
+        )
+    skill_ids = [str(item["id"]) for item in normalized if item is not None]
+    if len(skill_ids) != len(set(skill_ids)):
+        raise WorkflowCanaryError(
+            "workflow canary project skill policy contains duplicate skill ids"
+        )
+
+
+def _validate_workflow_canary_profile(profile: dict[str, Any]) -> None:
+    constraints = profile.get("constraints")
+    if (
+        profile.get("profile_id") != "governed-coding-v1"
+        or profile.get("work_type") != "coding"
+        or profile.get("resolution_status") != "selected"
+        or profile.get("execution_state") != "planned_only"
+        or not isinstance(constraints, dict)
+        or constraints.get("read_only") is not True
+        or constraints.get("network_enabled") is not False
+    ):
+        raise WorkflowCanaryError(
+            "workflow canary requires the offline read-only governed coding profile"
+        )
+
+
+def _workflow_canary_stage_binding(
+    profile: dict[str, Any],
+    phase: str,
+    stage_id: str,
+    skill_id: str,
+) -> dict[str, str]:
+    stages = profile.get("ordered_stages")
+    stage = (
+        next(
+            (
+                item
+                for item in stages
+                if isinstance(item, dict) and item.get("stage_id") == stage_id
+            ),
+            None,
+        )
+        if isinstance(stages, list)
+        else None
+    )
+    if not isinstance(stage, dict) or stage.get("skill_id") != skill_id:
+        raise WorkflowCanaryError(
+            f"workflow canary stage binding is unavailable: {phase}:{stage_id}"
+        )
+    permissions = stage.get("permissions")
+    if (
+        stage.get("availability") != "registered"
+        or stage.get("human_gate") != "none"
+        or not isinstance(permissions, dict)
+        or permissions.get("read") is not True
+        or permissions.get("write") is not False
+        or permissions.get("network") is not False
+        or permissions.get("credentials") is not False
+    ):
+        raise WorkflowCanaryError(
+            f"workflow canary stage is not offline read-only: {phase}:{stage_id}"
+        )
+    return _workflow_canary_skill_source(stage, phase, stage_id, skill_id)
+
+
+def _workflow_canary_skill_source(
+    stage: dict[str, Any],
+    phase: str,
+    stage_id: str,
+    skill_id: str,
+) -> dict[str, str]:
+    source_path = str(stage.get("skill_source_path") or "").strip()
+    source = _existing_skill_source(source_path) if source_path else None
+    try:
+        raw = source.read_bytes() if source is not None else None
+    except OSError as exc:
+        raise WorkflowCanaryError(
+            f"workflow canary skill source is unreadable: {skill_id}"
+        ) from exc
+    if raw is None:
+        raise WorkflowCanaryError(
+            f"workflow canary skill source is missing: {skill_id}"
+        )
+    fingerprint = f"sha256:{hashlib.sha256(raw).hexdigest()}"
+    if stage.get("skill_fingerprint") != fingerprint:
+        raise WorkflowCanaryError(
+            f"workflow canary skill fingerprint drifted: {skill_id}"
+        )
+    return {
+        "phase": phase,
+        "stage_id": stage_id,
+        "skill_id": skill_id,
+        "source_path": source_path,
+        "skill_fingerprint": fingerprint,
+    }
+
+
+def prepare_workflow_canary_binding(
+    *,
+    runtime_dir: Any,
+    project_id: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Resolve and bind one strict offline coding canary without side effects."""
+    policy_path, policy_raw = _read_workflow_canary_policy(runtime_dir, project_id)
+    profile = resolve_workflow_profile(
+        "coding",
+        runtime_dir=runtime_dir,
+        project_id=project_id,
+    )
+    _validate_workflow_canary_profile(profile)
+    stages = [
+        _workflow_canary_stage_binding(profile, phase, stage_id, skill_id)
+        for phase, stage_id, skill_id in _WORKFLOW_CANARY_STAGES
+    ]
+    confirmed_path, confirmed_raw = _read_workflow_canary_policy(
+        runtime_dir,
+        project_id,
+    )
+    if confirmed_path != policy_path or confirmed_raw != policy_raw:
+        raise WorkflowCanaryError(
+            "workflow canary project skill policy drifted during resolution"
+        )
+    binding = _workflow_canary_binding_payload(
+        policy_path,
+        policy_raw,
+        profile,
+        stages,
+    )
+    return profile, binding
+
+
+def _workflow_canary_binding_payload(
+    policy_path: Path,
+    policy_raw: bytes,
+    profile: dict[str, Any],
+    stages: list[dict[str, str]],
+) -> dict[str, Any]:
+    canonical_binding = {
+        "contract_version": WORKFLOW_CANARY_CONTRACT_VERSION,
+        "mode": WORKFLOW_CANARY_MODE,
+        "selection_source": WORKFLOW_CANARY_SELECTION_SOURCE,
+        "policy_binding": {
+            "resolved_path": str(policy_path),
+            "sha256": f"sha256:{hashlib.sha256(policy_raw).hexdigest()}",
+        },
+        "profile_binding": {
+            "profile_id": str(profile["profile_id"]),
+            "profile_fingerprint": str(profile["profile_fingerprint"]),
+        },
+        "stage_bindings": stages,
+    }
+    canonical = json.dumps(
+        canonical_binding,
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return {
+        **canonical_binding,
+        "status": "prepared",
+        "binding_fingerprint": f"sha256:{hashlib.sha256(canonical).hexdigest()}",
+        "stage_results": [],
+    }
+
+
+def verify_workflow_canary_binding(
+    prepared: dict[str, Any],
+    *,
+    runtime_dir: Any,
+    project_id: str,
+    task_spec_profile: dict[str, Any],
+) -> dict[str, Any]:
+    """Rebind immutable canary inputs before any report or stage side effect."""
+    if not isinstance(prepared, dict):
+        raise WorkflowCanaryError("workflow canary metadata is malformed")
+    if set(prepared) != _WORKFLOW_CANARY_KEYS:
+        raise WorkflowCanaryError("workflow canary metadata keys are malformed")
+    fresh_profile, fresh = prepare_workflow_canary_binding(
+        runtime_dir=runtime_dir,
+        project_id=project_id,
+    )
+    immutable_keys = (*_WORKFLOW_CANARY_BINDING_KEYS, "binding_fingerprint")
+    if any(prepared.get(key) != fresh.get(key) for key in immutable_keys):
+        raise WorkflowCanaryError("workflow canary immutable binding drifted")
+    if task_spec_profile != fresh_profile:
+        raise WorkflowCanaryError("workflow canary TaskSpec profile drifted")
+    status = prepared.get("status")
+    stage_results = prepared.get("stage_results")
+    if status not in {"prepared", "passed"}:
+        raise WorkflowCanaryError("workflow canary status is invalid")
+    if not isinstance(stage_results, list):
+        raise WorkflowCanaryError("workflow canary stage results are malformed")
+    if status == "prepared" and stage_results:
+        raise WorkflowCanaryError("workflow canary prepared result must be empty")
+    if status == "passed":
+        expected_results = [
+            {
+                "phase": phase,
+                "stage_id": stage_id,
+                "skill_id": skill_id,
+                "status": "passed",
+                "evidence": _WORKFLOW_CANARY_STAGE_EVIDENCE[stage_id],
+            }
+            for phase, stage_id, skill_id in _WORKFLOW_CANARY_STAGES
+        ]
+        if stage_results != expected_results:
+            raise WorkflowCanaryError(
+                "workflow canary passed stage results are malformed"
+            )
+    return fresh_profile
 
 
 def resolve_methodology(
