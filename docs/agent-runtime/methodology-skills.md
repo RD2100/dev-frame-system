@@ -84,6 +84,39 @@ repository-local skills:
   - triggers: from markdown frontmatter description, such as `@intent-frame`
   - status: `registered`
 
+- `humanize`
+  - title: `humanize`
+  - source_path: `tools/skills/humanize/SKILL.md`
+  - source_kind: `local_repository_asset`
+  - triggers: from markdown frontmatter description, such as `@humanize`
+  - status: `registered`
+  - use boundary: optional prose revision for papers and public documentation;
+    factual claims, citations, numbers, and authorial experience still require
+    source-backed human review
+
+- `ai-check`
+  - title: `ai-check`
+  - source_path: `tools/skills/ai-check/SKILL.md`
+  - source_kind: `local_repository_asset`
+  - triggers: from markdown frontmatter description, such as `@ai-check`
+  - status: `registered`
+  - use boundary: editorial surface-signal review only; its verdict and
+    AI-edited-fraction estimate are not authorship evidence or an acceptance gate
+
+### External intake record: `harshaneel/humanize`
+
+| Field | Recorded value |
+|---|---|
+| Source | `https://github.com/harshaneel/humanize` |
+| Pinned revision | `4ec797314537ec9c2105f276d4561d240a0390ba` |
+| License | MIT; the upstream license is preserved in each installed skill directory |
+| Installed scope | `humanize/SKILL.md`, `humanize/references/research.md`, and `ai-check/SKILL.md` |
+| Integration delta | Upstream skill bodies are preserved; only the frontmatter descriptions add explicit DevFrame triggers |
+| Human gate | Direct installation requested by the repository owner on 2026-07-18 |
+| Intended use | Optional paper-writing and documentation revision; `ai-check` is limited to editorial diagnostics |
+| Risk controls | Do not treat detector scores as authorship evidence; re-check every factual claim, citation, number, and claimed personal experience against sources |
+| Rollback | Remove `tools/skills/humanize`, `tools/skills/ai-check`, and these registry entries |
+
 The visual-state `skills` field is projection-only. Runtime custom skill edits
 use the scoped customization API and the `custom_skills.py` store described
 below.
