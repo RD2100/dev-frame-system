@@ -34,6 +34,10 @@ DEFAULT_MODEL = "stepfun/step-3.7-flash"
 logger = logging.getLogger(__name__)
 
 
+class _ProbeEarlyExit(Exception):
+    pass
+
+
 def run_opencode_serve_slice1_probe(
     *,
     model: str = DEFAULT_MODEL,
@@ -103,7 +107,6 @@ def run_opencode_serve_slice1_probe(
         raise
     report["server"]["pid"] = proc.pid
     health_ok = False
-    finalized_before_cleanup = False
 
     events: list[dict[str, Any]] = []
     sse = _SseConsumer(f"{base_url}/event", events)
@@ -113,8 +116,7 @@ def run_opencode_serve_slice1_probe(
         health_ok = bool(health.get("healthy"))
         _set_check(report, "server_health", bool(health.get("healthy")), json.dumps(health))
         if not health.get("healthy"):
-            finalized_before_cleanup = True
-            return _finalize_report(report, artifact_dir)
+            raise _ProbeEarlyExit
 
         sse.start()
         connected = sse.wait_connected(timeout=min(20, timeout))
@@ -125,16 +127,14 @@ def run_opencode_serve_slice1_probe(
             "server.connected received" if connected else "server.connected not received",
         )
         if not connected:
-            finalized_before_cleanup = True
-            return _finalize_report(report, artifact_dir)
+            raise _ProbeEarlyExit
 
         session = _http_json(base_url, "POST", "/session", {"title": "devframe opencode serve slice1"})
         session_id = _extract_id(session)
         report["session"] = {"id": session_id, "raw": session}
         _set_check(report, "session_created", bool(session_id), session_id or "missing session id")
         if not session_id:
-            finalized_before_cleanup = True
-            return _finalize_report(report, artifact_dir)
+            raise _ProbeEarlyExit
 
         body = {
             "model": _model_body(model),
@@ -145,8 +145,7 @@ def run_opencode_serve_slice1_probe(
         report["prompt_async"] = {"status": prompt_status}
         _set_check(report, "prompt_async_accepted", prompt_status == 204, f"HTTP {prompt_status}")
         if prompt_status != 204:
-            finalized_before_cleanup = True
-            return _finalize_report(report, artifact_dir)
+            raise _ProbeEarlyExit
 
         wait_result = _wait_for_completion(
             base_url=base_url,
@@ -158,6 +157,8 @@ def run_opencode_serve_slice1_probe(
         wait_checks = wait_result.pop("checks", {})
         report["checks"].update(wait_checks)
         report.update(wait_result)
+    except _ProbeEarlyExit:
+        pass
     finally:
         try:
             sse.stop()
@@ -189,8 +190,6 @@ def run_opencode_serve_slice1_probe(
             stop_ok,
             stop_detail,
         )
-        if finalized_before_cleanup:
-            _finalize_report(report, artifact_dir)
 
     return _finalize_report(report, artifact_dir)
 
