@@ -69,6 +69,18 @@ def test_write_t3_bridge_bundle_creates_installable_files(tmp_path):
     written = write_t3_bridge_bundle(tmp_path / "bundle", bundle)
 
     written_paths = {path.relative_to(tmp_path / "bundle").as_posix() for path in written}
+    assert written_paths == {
+        ".env.devframe.local",
+        "apps/web/src/connection/catalog.ts",
+        "apps/web/src/devframe/README.md",
+        "apps/web/src/devframe/devframeShellBridge.ts",
+        "apps/web/src/state/shell.ts",
+        "apps/web/src/state/threads.ts",
+        "devframe.local.json",
+        "devframe.t3desktop.mjs",
+        "devframe.t3desktop.prod.mjs",
+        "devframe.t3web.mjs",
+    }
     assert "devframe.local.json" in written_paths
     assert ".env.devframe.local" in written_paths
     assert "devframe.t3web.mjs" in written_paths
@@ -109,6 +121,8 @@ def test_write_t3_bridge_bundle_creates_installable_files(tmp_path):
     assert "createShellEnvironmentAtoms" in shell_source
     assert "loadDevFrameShellState" in shell_source
     assert "createEnvironmentSnapshotAtom(environmentShell.stateAtom)" in shell_source
+    assert "export const allEnvironmentShellsBootstrappedAtom" in shell_source
+    assert "connectionProjectionPhase(connection)" in shell_source
     thread_source = (tmp_path / "bundle" / "apps/web/src/state/threads.ts").read_text(encoding="utf-8")
     assert "loadDevFrameThreadState" in thread_source
     assert "threadDetails" in thread_source
@@ -135,15 +149,20 @@ def test_write_t3_bridge_bundle_creates_installable_files(tmp_path):
     # it would force isHostedStaticApp() into the read-only onboarding surface.
     assert "VITE_HOSTED_APP_CHANNEL" not in prod_launcher_source
     assert "VITE_DEVFRAME_CLIENT_PLAN_URL" in prod_launcher_source
-    assert 'T3CODE_DEVFRAME_DIRECT_RENDERER = "1"' in desktop_launcher_source
     assert "T3CODE_DESKTOP_REMOTE_DEBUGGING_PORT" in desktop_launcher_source
-    assert "DesktopWindow.ts" in desktop_launcher_source
-    assert "devframe-direct-renderer: patched" in desktop_launcher_source
-    assert "Option.match(environment.devServerUrl" in desktop_launcher_source
-    assert "url.origin" not in desktop_launcher_source
+    assert "writeFileSync" not in desktop_launcher_source
+    assert "DesktopWindow.ts" not in desktop_launcher_source
+    assert "dev-electron.mjs" not in desktop_launcher_source
     catalog_source = (tmp_path / "bundle" / "apps/web/src/connection/catalog.ts").read_text(encoding="utf-8")
     assert 'EnvironmentId.make("devframe-local")' in catalog_source
     assert "createDevFrameEnvironmentCatalogAtoms" in catalog_source
+    assert "...nativeEnvironmentCatalog" not in catalog_source
+    assert 'register: readOnlyCommand("register")' in catalog_source
+    assert 'remove: readOnlyCommand("remove")' in catalog_source
+    assert 'removeRelayEnvironments: readOnlyCommand("removeRelayEnvironments")' in catalog_source
+    assert 'retryNow: readOnlyCommand("retryNow")' in catalog_source
+    assert "devFrameReadOnlyShellEnvironment" in shell_source
+    assert "devFrameConfig === null ? nativeShellEnvironment : devFrameReadOnlyShellEnvironment" in shell_source
 
 
 def test_install_t3_bridge_bundle_refuses_overwrite_without_force(tmp_path):
@@ -452,45 +471,24 @@ def test_environment_excludes_backend_urls():
     assert "VITE_WS_URL" not in bundle["environment"]
 
 
-def test_desktop_launcher_sets_direct_renderer_env_and_patches_desktop_window():
+def test_desktop_launcher_preserves_upstream_source_boundary():
     bundle = build_t3_bridge_bundle()
     source = render_t3_desktop_launcher_source(bundle)
 
-    assert 'T3CODE_DEVFRAME_DIRECT_RENDERER = "1"' in source
-    assert "DesktopWindow.ts" in source
-    assert "devframe-direct-renderer: patched" in source
-    assert "Option.match(environment.devServerUrl" in source
-    assert "onSome: (url) => url.toString()" in source
-    assert "onNone: () => getDesktopUrl(environment.isDevelopment)" in source
-    assert "url.origin" not in source
+    assert 'const args = ["dev:desktop"]' in source
+    assert "readFileSync" not in source
+    assert "writeFileSync" not in source
+    assert "DesktopWindow.ts" not in source
+    assert "dev-electron.mjs" not in source
 
 
-def test_desktop_launcher_patches_remote_debugging_for_loopback_automation():
+def test_desktop_launcher_sets_upstream_remote_debugging_port_without_source_patch():
     bundle = build_t3_bridge_bundle()
     source = render_t3_desktop_launcher_source(bundle)
 
-    assert "dev-electron.mjs" in source
-    assert "devframe-remote-debugging-origin: patched" in source
-    assert "devframeDebugPort = process.env.T3CODE_DESKTOP_REMOTE_DEBUGGING_PORT || remoteDebuggingPort" in source
-    assert "--remote-debugging-address=127.0.0.1" in source
-    assert "devServer.origin" in source
-    assert "T3CODE_CDP_ALLOW_ORIGIN" in source
-    assert "T3CODE_DEVFRAME_CDP_ALLOW_ORIGIN" in source
-    assert "--remote-allow-origins=*" not in source
-    assert "http://127.0.0.1:5173" not in source
-    assert "already patched for loopback remote debugging" in source
-
-
-def test_desktop_launcher_upgrades_existing_remote_debugging_patch():
-    bundle = build_t3_bridge_bundle()
-    source = render_t3_desktop_launcher_source(bundle)
-
-    assert "replaceDevElectronMarkedBlock" in source
-    assert "const devElectronNextLine = " in source
-    assert "content.indexOf(devElectronMarker)" in source
-    assert "content.indexOf(devElectronNextLine, start)" in source
-    assert "Upgraded dev-electron.mjs loopback remote debugging patch." in source
-    assert "Cannot upgrade remote debugging origin patch" in source
+    assert "T3CODE_DESKTOP_REMOTE_DEBUGGING_PORT" in source
+    assert "T3CODE_DEVFRAME_CDP_ALLOW_ORIGIN" not in source
+    assert "writeFileSync" not in source
 
 
 def test_desktop_launcher_source_is_valid_javascript(tmp_path):
@@ -507,22 +505,6 @@ def test_desktop_launcher_source_is_valid_javascript(tmp_path):
     assert result.returncode == 0, result.stderr
 
 
-def test_desktop_launcher_is_idempotent_when_marker_present():
-    bundle = build_t3_bridge_bundle()
-    source = render_t3_desktop_launcher_source(bundle)
-
-    assert "desktopWindowContent.includes(desktopWindowMarker)" in source
-    assert "already patched for direct renderer" in source
-
-
-def test_desktop_launcher_fails_fast_when_upstream_line_missing_and_no_marker():
-    bundle = build_t3_bridge_bundle()
-    source = render_t3_desktop_launcher_source(bundle)
-
-    assert "Cannot apply direct-renderer patch: upstream line not found in DesktopWindow.ts and no marker present" in source
-    assert "process.exit(1)" in source
-
-
 def test_thread_state_includes_respond_to_thread_approval_bridge():
     from control_plane.t3_bridge_bundle import render_thread_state_source
 
@@ -530,6 +512,36 @@ def test_thread_state_includes_respond_to_thread_approval_bridge():
 
     assert "respondToApproval: devFrameRespondToApproval" in source
     assert "devFrameRespondToApproval" in source
+
+
+def test_thread_state_guards_every_non_approval_mutation_in_bridge_mode():
+    from control_plane.t3_bridge_bundle import render_thread_state_source
+
+    source = render_thread_state_source()
+
+    assert "devFrameReadOnlyThreadEnvironment" in source
+    assert ": { ...nativeThreadEnvironment" not in source
+    assert ": devFrameReadOnlyThreadEnvironment;" in source
+    guarded_commands = {
+        "create",
+        "delete",
+        "archive",
+        "unarchive",
+        "settle",
+        "unsettle",
+        "snooze",
+        "unsnooze",
+        "updateMetadata",
+        "setRuntimeMode",
+        "setInteractionMode",
+        "startTurn",
+        "interruptTurn",
+        "respondToUserInput",
+        "revertCheckpoint",
+        "stopSession",
+    }
+    for command in guarded_commands:
+        assert f'{command}: devFrameReadOnlyCommand("{command}")' in source
     assert source.index("const devFrameRespondToApproval") < source.index("export const threadEnvironment")
     assert "api/t3/approval-response" in source
     assert "readDevFrameShellBridgeConfig" in source

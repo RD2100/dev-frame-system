@@ -843,6 +843,7 @@ def render_catalog_source(env: dict[str, str] | None = None) -> str:
     return f"""import {{ PrimaryConnectionTarget, type SupervisorConnectionState }} from "@t3tools/client-runtime/connection";
 import {{ createEnvironmentCatalogAtoms, type EnvironmentCatalogState }} from "@t3tools/client-runtime/state/connections";
 import {{ EnvironmentId }} from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import * as Option from "effect/Option";
 import {{ AsyncResult, Atom }} from "effect/unstable/reactivity";
 
@@ -893,8 +894,15 @@ const DEVFRAME_CONNECTED_STATE: SupervisorConnectionState = {{
 }};
 
 function createDevFrameEnvironmentCatalogAtoms() {{
+  const readOnlyCommand = (label: string) => ({{
+    label: `devframe:catalog:read-only:${{label}}`,
+    run: async (_registry: unknown, _value: unknown) =>
+      AsyncResult.failure(
+        Cause.fail(new Error(`DevFrame bridge is read-only; catalog ${{label}} is unavailable.`)),
+      ),
+  }});
+
   return {{
-    ...nativeEnvironmentCatalog,
     catalogAtom: Atom.make(AsyncResult.success(DEVFRAME_CATALOG_STATE)).pipe(
       Atom.withLabel("devframe-environment-catalog"),
     ),
@@ -918,6 +926,10 @@ function createDevFrameEnvironmentCatalogAtoms() {{
         Atom.withLabel(`devframe-environment-state:${{environmentId}}`),
       ),
     ),
+    register: readOnlyCommand("register"),
+    remove: readOnlyCommand("remove"),
+    removeRelayEnvironments: readOnlyCommand("removeRelayEnvironments"),
+    retryNow: readOnlyCommand("retryNow"),
   }};
 }}
 
@@ -969,42 +981,10 @@ child.on("exit", (code, signal) => {{
 def render_t3_desktop_launcher_source(bundle: dict[str, Any]) -> str:
     env = bundle["environment"]
     env_json = json.dumps(env, indent=2, ensure_ascii=True)
-    direct_renderer_marker = "// devframe-direct-renderer: patched"
-    patched_lines = [
-        direct_renderer_marker,
-        "    const applicationUrl =",
-        '      process.env.T3CODE_DEVFRAME_DIRECT_RENDERER === "1" && environment.isDevelopment',
-        "        ? Option.match(environment.devServerUrl, {",
-        '            onSome: (url) => url.toString(),',
-        '            onNone: () => getDesktopUrl(environment.isDevelopment),',
-        "          })",
-        "        : getDesktopUrl(environment.isDevelopment);",
-    ]
-    patched_desktop_window_block = "\n".join(patched_lines)
-    remote_debugging_marker = "// devframe-remote-debugging-origin: patched"
-    patched_dev_electron_lines = [
-        remote_debugging_marker,
-        "  const devframeDebugPort = process.env.T3CODE_DESKTOP_REMOTE_DEBUGGING_PORT || remoteDebuggingPort;",
-        "  const cdpAllowOrigin = process.env.T3CODE_CDP_ALLOW_ORIGIN || devServer.origin;",
-        "  const electronArgs = devframeDebugPort",
-        "    ? [",
-        "        `--remote-debugging-port=${devframeDebugPort}`,",
-        '        "--remote-debugging-address=127.0.0.1",',
-        "        `--remote-allow-origins=${cdpAllowOrigin}`,",
-        "      ]",
-        "    : [];",
-    ]
-    patched_dev_electron_block = "\n".join(patched_dev_electron_lines)
-    dev_electron_upstream_block = (
-        "  const electronArgs = remoteDebuggingPort\n"
-        "    ? [`--remote-debugging-port=${remoteDebuggingPort}`]\n"
-        "    : [];"
-    )
     return f"""#!/usr/bin/env node
 import {{ spawn }} from "node:child_process";
 import {{ fileURLToPath }} from "node:url";
-import {{ dirname, join }} from "node:path";
-import {{ readFileSync, writeFileSync }} from "node:fs";
+import {{ dirname }} from "node:path";
 
 const devframeEnv = {env_json};
 const root = dirname(fileURLToPath(import.meta.url));
@@ -1012,80 +992,10 @@ const isWindows = process.platform === "win32";
 const command = isWindows ? "pnpm" : "pnpm";
 const args = ["dev:desktop"];
 const childEnv = {{ ...process.env, ...devframeEnv }};
-childEnv.T3CODE_DEVFRAME_DIRECT_RENDERER = "1";
 childEnv.T3CODE_DESKTOP_REMOTE_DEBUGGING_PORT =
     process.env.T3CODE_DESKTOP_REMOTE_DEBUGGING_PORT ||
     childEnv.T3CODE_DESKTOP_REMOTE_DEBUGGING_PORT ||
     "{T3_RENDERER_CDP_DEFAULT_PORT}";
-if (process.env.T3CODE_DEVFRAME_CDP_ALLOW_ORIGIN) {{
-  childEnv.T3CODE_CDP_ALLOW_ORIGIN = process.env.T3CODE_DEVFRAME_CDP_ALLOW_ORIGIN;
-}}
-
-const desktopWindowPath = join(root, "apps", "desktop", "src", "window", "DesktopWindow.ts");
-const desktopWindowMarker = {json.dumps(direct_renderer_marker)};
-const desktopWindowUpstreamLine = {json.dumps("    const applicationUrl = getDesktopUrl(environment.isDevelopment);")};
-const desktopWindowPatchedBlock = {json.dumps(patched_desktop_window_block)};
-const devElectronPath = join(root, "apps", "desktop", "scripts", "dev-electron.mjs");
-const devElectronMarker = {json.dumps(remote_debugging_marker)};
-const devElectronUpstreamBlock = {json.dumps(dev_electron_upstream_block)};
-const devElectronPatchedBlock = {json.dumps(patched_dev_electron_block)};
-const devElectronNextLine = "  const launchArgs = devProtocolClient";
-
-let desktopWindowContent = null;
-try {{
-  desktopWindowContent = readFileSync(desktopWindowPath, "utf8");
-}} catch {{
-  console.error(`[devframe] DesktopWindow.ts not found at ${{desktopWindowPath}}; cannot apply direct-renderer patch.`);
-  process.exit(1);
-}}
-
-if (!desktopWindowContent.includes(desktopWindowMarker)) {{
-  if (!desktopWindowContent.includes(desktopWindowUpstreamLine)) {{
-    console.error(`[devframe] Cannot apply direct-renderer patch: upstream line not found in DesktopWindow.ts and no marker present.`);
-    process.exit(1);
-  }}
-  const patched = desktopWindowContent.replace(desktopWindowUpstreamLine, desktopWindowPatchedBlock);
-  writeFileSync(desktopWindowPath, patched, "utf8");
-  console.log("[devframe] Patched DesktopWindow.ts for direct renderer.");
-}} else {{
-  console.log("[devframe] DesktopWindow.ts already patched for direct renderer.");
-}}
-
-function replaceDevElectronMarkedBlock(content) {{
-  const start = content.indexOf(devElectronMarker);
-  if (start < 0) return null;
-  const end = content.indexOf(devElectronNextLine, start);
-  if (end < 0) return null;
-  return content.slice(0, start) + devElectronPatchedBlock + "\\n" + content.slice(end);
-}}
-
-let devElectronContent = null;
-try {{
-  devElectronContent = readFileSync(devElectronPath, "utf8");
-}} catch {{
-  console.error(`[devframe] dev-electron.mjs not found at ${{devElectronPath}}; cannot apply remote debugging origin patch.`);
-  process.exit(1);
-}}
-
-if (!devElectronContent.includes(devElectronMarker)) {{
-  if (!devElectronContent.includes(devElectronUpstreamBlock)) {{
-    console.error(`[devframe] Cannot apply remote debugging origin patch: upstream block not found in dev-electron.mjs and no marker present.`);
-    process.exit(1);
-  }}
-  const patched = devElectronContent.replace(devElectronUpstreamBlock, devElectronPatchedBlock);
-  writeFileSync(devElectronPath, patched, "utf8");
-  console.log("[devframe] Patched dev-electron.mjs for loopback remote debugging.");
-}} else if (!devElectronContent.includes(devElectronPatchedBlock)) {{
-  const patched = replaceDevElectronMarkedBlock(devElectronContent);
-  if (patched === null) {{
-    console.error(`[devframe] Cannot upgrade remote debugging origin patch: marker found but following launchArgs anchor is missing.`);
-    process.exit(1);
-  }}
-  writeFileSync(devElectronPath, patched, "utf8");
-  console.log("[devframe] Upgraded dev-electron.mjs loopback remote debugging patch.");
-}} else {{
-  console.log("[devframe] dev-electron.mjs already patched for loopback remote debugging.");
-}}
 
 console.log("[devframe] Starting T3 Desktop with DevFrame local control plane.");
 console.log(`[devframe] DevFrame env applied (native editor mode; client plan ${{devframeEnv.VITE_DEVFRAME_CLIENT_PLAN_URL}}).`);
@@ -1205,6 +1115,10 @@ process.exit(startCode);
 
 def render_shell_state_source() -> str:
     return """import {
+  AVAILABLE_CONNECTION_STATE,
+  connectionProjectionPhase,
+} from "@t3tools/client-runtime/connection";
+import {
   createEnvironmentShellAtoms,
   createEnvironmentShellSummaryAtom,
   createEnvironmentSnapshotAtom,
@@ -1212,6 +1126,7 @@ def render_shell_state_source() -> str:
   type EnvironmentShellState,
 } from "@t3tools/client-runtime/state/shell";
 import type { EnvironmentId, OrchestrationShellSnapshot } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
@@ -1228,6 +1143,7 @@ import { environmentCatalog } from "../connection/catalog";
 import { connectionAtomRuntime } from "../connection/runtime";
 
 const nativeEnvironmentShell = createEnvironmentShellAtoms(connectionAtomRuntime);
+const nativeShellEnvironment = createShellEnvironmentAtoms(connectionAtomRuntime);
 const devFrameConfig = readDevFrameShellBridgeConfig();
 const devFrameControlPlaneConfig = readDevFrameControlPlaneConfig();
 
@@ -1347,7 +1263,18 @@ function createDevFrameCoordinatorShellEntryAtoms() {
   };
 }
 
-export const shellEnvironment = createShellEnvironmentAtoms(connectionAtomRuntime);
+const devFrameReadOnlyShellEnvironment = {
+  openInEditor: {
+    label: "devframe:shell:read-only:open-in-editor",
+    run: async (_registry: unknown, _value: unknown) =>
+      AsyncResult.failure(
+        Cause.fail(new Error("DevFrame bridge is read-only; openInEditor is unavailable.")),
+      ),
+  },
+};
+
+export const shellEnvironment =
+  devFrameConfig === null ? nativeShellEnvironment : devFrameReadOnlyShellEnvironment;
 export const environmentShell =
   devFrameConfig === null ? nativeEnvironmentShell : createDevFrameEnvironmentShellAtoms();
 export const environmentCoordinatorShellEntry = createDevFrameCoordinatorShellEntryAtoms();
@@ -1356,6 +1283,29 @@ export const environmentShellSummaryAtom = createEnvironmentShellSummaryAtom({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
   shellStateValueAtom: environmentShell.stateValueAtom,
 });
+
+export const allEnvironmentShellsBootstrappedAtom = Atom.make((get) => {
+  const catalog = AsyncResult.value(get(environmentCatalog.catalogAtom));
+  if (Option.isNone(catalog)) {
+    return false;
+  }
+  for (const environmentId of catalog.value.entries.keys()) {
+    if (Option.isSome(get(environmentShell.stateValueAtom(environmentId)).snapshot)) {
+      continue;
+    }
+    const connection = Option.getOrElse(
+      AsyncResult.value(get(environmentCatalog.stateAtom(environmentId))),
+      () => AVAILABLE_CONNECTION_STATE,
+    );
+    if (connectionProjectionPhase(connection) !== "disconnected") {
+      return false;
+    }
+    if (connection.phase === "backoff" && connection.desired && connection.attempt <= 2) {
+      return false;
+    }
+  }
+  return true;
+}).pipe(Atom.withLabel("web-all-environment-shells-bootstrapped"));
 """
 
 
@@ -1370,6 +1320,7 @@ import {
   createThreadEnvironmentAtoms,
 } from "@t3tools/client-runtime/state/threads";
 import type { EnvironmentId, OrchestrationThread, ThreadId } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
@@ -1523,10 +1474,43 @@ const devFrameRespondToApproval = {
     })(),
 };
 
+function devFrameReadOnlyCommand(label: string) {
+  return {
+    label: `devframe:thread:read-only:${label}`,
+    run: async (_registry: unknown, _value: unknown) =>
+      AsyncResult.failure(
+        Cause.fail(new Error(`DevFrame bridge is read-only; ${label} is unavailable.`)),
+      ),
+  };
+}
+
+// Keep this surface explicit: spreading nativeThreadEnvironment here would
+// silently expose current or future native mutations through the read-only
+// DevFrame bridge. Approval response is the sole allowed writeback.
+const devFrameReadOnlyThreadEnvironment = {
+  create: devFrameReadOnlyCommand("create"),
+  delete: devFrameReadOnlyCommand("delete"),
+  archive: devFrameReadOnlyCommand("archive"),
+  unarchive: devFrameReadOnlyCommand("unarchive"),
+  settle: devFrameReadOnlyCommand("settle"),
+  unsettle: devFrameReadOnlyCommand("unsettle"),
+  snooze: devFrameReadOnlyCommand("snooze"),
+  unsnooze: devFrameReadOnlyCommand("unsnooze"),
+  updateMetadata: devFrameReadOnlyCommand("updateMetadata"),
+  setRuntimeMode: devFrameReadOnlyCommand("setRuntimeMode"),
+  setInteractionMode: devFrameReadOnlyCommand("setInteractionMode"),
+  startTurn: devFrameReadOnlyCommand("startTurn"),
+  interruptTurn: devFrameReadOnlyCommand("interruptTurn"),
+  respondToApproval: devFrameRespondToApproval,
+  respondToUserInput: devFrameReadOnlyCommand("respondToUserInput"),
+  revertCheckpoint: devFrameReadOnlyCommand("revertCheckpoint"),
+  stopSession: devFrameReadOnlyCommand("stopSession"),
+};
+
 export const threadEnvironment =
   devFrameConfig === null
     ? nativeThreadEnvironment
-    : { ...nativeThreadEnvironment, respondToApproval: devFrameRespondToApproval };
+    : devFrameReadOnlyThreadEnvironment;
 export const environmentThreads =
   devFrameConfig === null ? nativeEnvironmentThreads : createDevFrameEnvironmentThreadStateAtoms();
 export const environmentThreadDetails = createEnvironmentThreadDetailAtoms(

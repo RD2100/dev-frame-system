@@ -119,9 +119,16 @@ def build_client_launch_plan(
             "clientPlan": f"{base_url}/client-plan.json",
         },
         "t3RendererCdp": {
+            "mode": "development-only",
             "port": T3_RENDERER_CDP_DEFAULT_PORT,
             "endpoint": f"http://127.0.0.1:{T3_RENDERER_CDP_DEFAULT_PORT}",
             "rendererOrigin": T3_RENDERER_WEB_DEV_DEFAULT_ORIGIN,
+            "supportedLauncher": "devframe.t3desktop.mjs",
+            "productionSupported": False,
+            "productionBehavior": (
+                "devframe.t3desktop.prod.mjs uses the upstream production launcher "
+                "without remote debugging; CDP/browser pairing is not a production acceptance claim."
+            ),
         },
         "reviewGate": {
             "id": "web-gpt-review-gate",
@@ -314,9 +321,7 @@ def _is_splash_title(title: str) -> bool:
     return lower == "" or lower in _SPLASH_TITLE_PATTERNS
 
 
-def _is_loopback_t3_renderer_page(page: dict[str, Any], title: str) -> bool:
-    if "t3 code" not in title:
-        return False
+def _is_t3_renderer_page(page: dict[str, Any], title: str) -> bool:
     page_url = (page.get("url") or "").strip()
     if not page_url:
         return False
@@ -324,11 +329,14 @@ def _is_loopback_t3_renderer_page(page: dict[str, Any], title: str) -> bool:
         parsed = urlparse(page_url)
     except ValueError:
         return False
-    return parsed.scheme in {"http", "https"} and parsed.hostname in {
-        "127.0.0.1",
-        "localhost",
-        "::1",
-    }
+    if parsed.scheme in {"t3code", "t3code-dev"}:
+        return parsed.hostname == "app"
+    if "t3 code" not in title:
+        return False
+    return (
+        parsed.scheme in {"http", "https"}
+        and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
+    )
 
 
 def _probe_cdp_targets(cdp_endpoint: str, timeout: int = 3) -> dict[str, Any]:
@@ -349,9 +357,17 @@ def _check_boot_shell_element(
     targets: list[dict[str, Any]],
     timeout: int = 3,
     origin: str | None = None,
+    recognized_origins: list[str] | None = None,
 ) -> dict[str, Any]:
     for target in targets:
         if target.get("type") != "page":
+            continue
+        page_url = str(target.get("url") or "").strip()
+        title = str(target.get("title") or "").strip().lower()
+        if recognized_origins and not (
+            any(page_url.startswith(candidate) for candidate in recognized_origins)
+            or _is_t3_renderer_page(target, title)
+        ):
             continue
         ws_url = target.get("webSocketDebuggerUrl")
         if not ws_url:
@@ -422,7 +438,7 @@ def _analyze_renderer_state(
     unrelated_pages: list[dict[str, Any]] = []
     for page in pages:
         title = (page.get("title") or "").strip().lower()
-        if not _url_matches(page) and not _is_loopback_t3_renderer_page(page, title):
+        if not _url_matches(page) and not _is_t3_renderer_page(page, title):
             unrelated_pages.append(page)
             continue
         is_splash = _is_splash_title(title)
@@ -707,10 +723,16 @@ def check_client_readiness(
                 t3_renderer_origins=t3_origins,
             )
             if renderer_state.get("status") == "rendered":
+                dashboard_parsed = urlparse(dashboard_url)
+                recognized_origins = [
+                    f"{dashboard_parsed.scheme}://{dashboard_parsed.netloc}",
+                    *t3_origins,
+                ]
                 dom_check = _check_boot_shell_element(
                     effective_cdp,
                     cdp_probe["targets"],
                     origin=t3_origins[0] if t3_origins else None,
+                    recognized_origins=recognized_origins,
                 )
                 if dom_check.get("available") and dom_check.get("present"):
                     renderer_state = {
@@ -721,6 +743,11 @@ def check_client_readiness(
                         ),
                         "pageCount": renderer_state.get("pageCount", 0),
                     }
+                elif dom_check.get("available"):
+                    renderer_state["domProbe"] = "passed"
+                else:
+                    renderer_state["domProbe"] = "unavailable"
+                    renderer_state["domProbeError"] = dom_check.get("error")
             renderer_ok = renderer_state.get("status") == "rendered"
             renderer_status = "pass" if renderer_ok else "warning"
             renderer_check: dict[str, Any] = {
@@ -731,6 +758,8 @@ def check_client_readiness(
                 "cdpSource": cdp_source,
                 "rendererState": renderer_state.get("status"),
                 "detail": renderer_state.get("detail"),
+                "domProbe": renderer_state.get("domProbe"),
+                "domProbeError": renderer_state.get("domProbeError"),
             }
             if renderer_state.get("status") == "boot-shell":
                 renderer_check["fixHint"] = (

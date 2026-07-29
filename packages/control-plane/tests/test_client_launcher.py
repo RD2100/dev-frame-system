@@ -109,6 +109,10 @@ def test_client_launch_plan_maps_t3_bridge_and_opencode_executor(tmp_path, monke
     assert "9222" not in plan["t3RendererCdp"]["endpoint"]
     assert plan["t3RendererCdp"]["endpoint"] == "http://127.0.0.1:8315"
     assert plan["t3RendererCdp"]["rendererOrigin"] == "http://127.0.0.1:5733"
+    assert plan["t3RendererCdp"]["mode"] == "development-only"
+    assert plan["t3RendererCdp"]["supportedLauncher"] == "devframe.t3desktop.mjs"
+    assert plan["t3RendererCdp"]["productionSupported"] is False
+    assert "not a production acceptance claim" in plan["t3RendererCdp"]["productionBehavior"]
     supported = plan.get("supportedMethodologies") or []
     assert len(supported) >= 2
     assert any(m["skillId"] == "agent-acceptance" for m in supported)
@@ -985,6 +989,7 @@ def test_client_doctor_cdp_rendered_page(tmp_path, monkeypatch, capsys):
     assert len(renderer_checks) == 1
     assert renderer_checks[0]["status"] == "pass"
     assert renderer_checks[0]["rendererState"] == "rendered"
+    assert renderer_checks[0]["domProbe"] == "unavailable"
 
 
 def test_client_doctor_cdp_boot_shell(tmp_path, monkeypatch, capsys):
@@ -1249,6 +1254,42 @@ def test_client_doctor_cdp_t3_renderer_page_matches_renderer_origin(tmp_path, mo
     assert renderer_checks[0]["rendererState"] == "rendered"
 
 
+def test_analyze_renderer_state_accepts_native_t3_desktop_scheme():
+    result = _analyze_renderer_state(
+        [
+            {
+                "id": "page-1",
+                "type": "page",
+                "title": "T3 Code (Alpha)",
+                "url": "t3code-dev://app/",
+            },
+        ],
+        dashboard_url="http://127.0.0.1:8765/?lang=zh-CN",
+        t3_renderer_origins=["http://127.0.0.1:5733"],
+    )
+
+    assert result["status"] == "rendered"
+    assert result["pageCount"] == 1
+
+
+def test_analyze_renderer_state_native_t3_desktop_scheme_can_report_boot_shell():
+    result = _analyze_renderer_state(
+        [
+            {
+                "id": "page-1",
+                "type": "page",
+                "title": "",
+                "url": "t3code-dev://app/",
+            },
+        ],
+        dashboard_url="http://127.0.0.1:8765/?lang=zh-CN",
+        t3_renderer_origins=["http://127.0.0.1:5733"],
+    )
+
+    assert result["status"] == "boot-shell"
+    assert result["pageCount"] == 1
+
+
 def test_client_doctor_cdp_t3_renderer_page_default_endpoint(tmp_path, monkeypatch, capsys):
     t3_root = tmp_path / "t3code"
     (t3_root / "apps/web").mkdir(parents=True)
@@ -1396,6 +1437,48 @@ def test_check_boot_shell_element_forwards_origin(monkeypatch):
     assert len(calls) == 1
     assert calls[0]["url"] == "ws://127.0.0.1:8315/devtools/page/page-1"
     assert calls[0]["origin"] == "http://127.0.0.1:5733"
+
+
+def test_check_boot_shell_element_skips_devtools_and_probes_native_t3_target(monkeypatch):
+    calls = []
+
+    def fake_create_connection(url, **kwargs):
+        calls.append({"url": url, **kwargs})
+        ws = type("FakeWS", (), {})()
+        ws.send = lambda data: None
+        ws.recv = lambda: json.dumps({"result": {"result": {"value": False}}})
+        ws.close = lambda: None
+        return ws
+
+    fake_websocket = type("mod", (), {"create_connection": fake_create_connection})
+    monkeypatch.setitem(sys.modules, "websocket", fake_websocket)
+
+    result = _check_boot_shell_element(
+        "http://127.0.0.1:8315",
+        [
+            {
+                "id": "devtools",
+                "type": "page",
+                "title": "DevTools",
+                "url": "devtools://devtools/bundled/devtools_app.html",
+                "webSocketDebuggerUrl": "ws://127.0.0.1:8315/devtools/page/devtools",
+            },
+            {
+                "id": "t3",
+                "type": "page",
+                "title": "T3 Code (Alpha)",
+                "url": "t3code-dev://app/",
+                "webSocketDebuggerUrl": "ws://127.0.0.1:8315/devtools/page/t3",
+            },
+        ],
+        origin="http://127.0.0.1:5733",
+        recognized_origins=["http://127.0.0.1:5733"],
+    )
+
+    assert result == {"available": True, "present": False}
+    assert [call["url"] for call in calls] == [
+        "ws://127.0.0.1:8315/devtools/page/t3",
+    ]
 
 
 def test_check_boot_shell_element_without_origin_omits_origin(monkeypatch):
