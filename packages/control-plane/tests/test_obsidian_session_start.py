@@ -29,6 +29,15 @@ def _template_base64(value: object) -> str:
     return base64.b64encode(str(value).encode("utf-8")).decode("ascii")
 
 
+def _session_hook_context(stdout: str) -> str:
+    payload = json.loads(stdout)
+    assert payload["continue"] is True
+    assert payload["suppressOutput"] is True
+    hook_output = payload["hookSpecificOutput"]
+    assert hook_output["hookEventName"] == "SessionStart"
+    return hook_output["additionalContext"]
+
+
 def _vault(root: Path) -> Path:
     vault = root / "vault"
     (vault / ".obsidian").mkdir(parents=True)
@@ -380,9 +389,10 @@ def test_session_hook_fails_open_when_start_helper_is_unavailable(tmp_path):
     )
 
     assert result.returncode == 0
-    assert "Status: current" in result.stdout
-    assert "Project: demo-123" in result.stdout
-    assert "bounded plan" in result.stdout
+    context = _session_hook_context(result.stdout)
+    assert "Status: current" in context
+    assert "Project: demo-123" in context
+    assert "bounded plan" in context
     assert str(tmp_path) not in result.stdout
 
 
@@ -454,7 +464,8 @@ def test_session_hook_does_not_wait_for_slow_start_helper(tmp_path):
     elapsed = time.monotonic() - started
 
     assert result.returncode == 0
-    assert "Status: missing" in result.stdout
+    context = _session_hook_context(result.stdout)
+    assert "Status: missing" in context
     assert elapsed < 3
 
 
@@ -515,6 +526,7 @@ def test_session_hook_treats_rendered_metacharacter_paths_as_literal(tmp_path):
     )
 
     assert result.returncode == 0
-    assert "Status: current" in result.stdout
-    assert "Project: literal" in result.stdout
+    context = _session_hook_context(result.stdout)
+    assert "Status: current" in context
+    assert "Project: literal" in context
     assert not (tmp_path / "owned.txt").exists()

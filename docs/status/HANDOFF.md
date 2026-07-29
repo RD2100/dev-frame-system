@@ -1665,8 +1665,39 @@ The root coordinator sets this bounded 11-path slice to `root_accepted` under
   final Luna Max actual-diff review returned `PASS` with P0/P1/P2/P3 all
   `None`.
 
-The two pre-existing dirty SessionStart template files remain outside this
-slice and protected. The root coordinator may now stage only these 11 accepted
-paths, verify the cached path set and content, and create one local logical
-commit. Do not push, create a PR, merge, reinstall global plugins, or release
-without the explicit human gate.
+The 11-path M11C slice is committed locally as `7a7ff09f`; its clean
+post-commit release gate again passed `2096 passed, 9 skipped`, public snapshot,
+wheel smoke, and whitespace verification. The two pre-existing SessionStart
+template changes stayed outside that commit and were closed in the separate
+residual slice below. Do not push, create a PR, merge, reinstall global
+plugins, or release without the explicit human gate.
+
+## Completed Residual: M11B SessionStart Hook Output Contract
+
+The public and packaged SessionStart templates now emit one compressed JSON
+Hook response with `continue`, `suppressOutput`, and
+`hookSpecificOutput.additionalContext`, matching the already active local Hook.
+This closes the final protected dirty baseline without reopening the M11B
+memory domain or M11C stdio transport.
+
+- Real RED: on clean `7a7ff09f`, the strengthened Windows production-path
+  tests failed all three Hook probes with `JSONDecodeError` because the public
+  template emitted bare text.
+- GREEN: the two mirrored templates plus the strengthened test passed
+  `15 passed`; scoped Ruff and `git diff --check` passed, and the template
+  SHA256 values match.
+- The installed Hook returned one JSON object with `continue=true`,
+  `suppressOutput=true`, `hookEventName=SessionStart`,
+  `Status: stale`, and `Project: dev-frame-system`.
+- The clean residual candidate release gate passed `2096 passed, 9 skipped`,
+  public snapshot verification, wheel smoke, and whitespace verification.
+- Independent Luna Max actual-diff review returned `PASS` with P0/P1/P2/P3 all
+  `None`; Base64 literal-path safety, fail-open behavior, JSON escaping, and
+  mirror integrity remain covered.
+
+The root coordinator sets this four-path residual slice to `root_accepted`
+under `agent-discipline-001`, `agent-discipline-005`,
+`agent-discipline-006`, and `agent-discipline-010`. Stage only both template
+mirrors, their production-path test, and this HANDOFF reconciliation; create
+one local logical commit. Push, PR, merge, global installation, and release
+remain explicit human gates.
