@@ -39,6 +39,7 @@ HELP_TEXT = """DevFrame Code CLI
   devframe paper finalize ...       - finalize a paper run after external review
   devframe memory session-start ... - resolve/register the current local project and recall fail-open
   devframe memory checkpoint ...    - capture one bounded immutable session checkpoint
+  devframe memory mcp-stdio ...     - run current-project Obsidian memory over on-demand stdio
   devframe memory plan ...          - propose, approve, or recall one governed Obsidian working plan
   devframe writeback apply ...      - audited single-file workspace write-back
   devframe handoff ...              - generate, validate, bootstrap, or transfer handoffs
@@ -109,7 +110,10 @@ WRITEBACK_APPLY_USAGE = (
 )
 
 MEMORY_PLAN_USAGE = (
-    "Usage: devframe memory plan propose --project-root <dir> --project-id <id> "
+    "Usage: devframe memory mcp-stdio [--runtime-dir <dir>]\n"
+    "       devframe memory session-start --cwd <dir> [--runtime-dir <dir>] "
+    "[--vault-root <dir>] [--format text|json]\n"
+    "       devframe memory plan propose --project-root <dir> --project-id <id> "
     "[--vault-root <dir>] --contents-file <file> [--runtime-dir <dir>] "
     "[--format text|json]\n"
     "       devframe memory plan approve --request-id <wb-id> "

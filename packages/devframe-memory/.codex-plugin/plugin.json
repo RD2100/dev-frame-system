@@ -1,0 +1,26 @@
+{
+  "name": "devframe-memory",
+  "version": "0.1.0",
+  "description": "Project-scoped Obsidian memory through an on-demand local MCP process.",
+  "author": {
+    "name": "RD2100",
+    "url": "https://github.com/RD2100"
+  },
+  "homepage": "https://github.com/RD2100/dev-frame-system",
+  "repository": "https://github.com/RD2100/dev-frame-system",
+  "license": "Apache-2.0",
+  "keywords": ["memory", "obsidian", "mcp"],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "DevFrame Memory",
+    "shortDescription": "Safe project memory without a resident service.",
+    "longDescription": "Recall and create bounded project memory in an Obsidian Vault through DevFrame's project-isolated, on-demand stdio MCP server.",
+    "developerName": "RD2100",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": [
+      "Recall the current project's working plan.",
+      "Search this project's reusable lessons."
+    ]
+  }
+}

@@ -2,16 +2,18 @@
 
 Lifecycle state: **CANONICAL EXECUTION ROOT**
 
-Current verdict: **M11B SAFE MEMORY AUTOMATION ACCEPTED LIVE LOCALLY**. The
-first independent release review found a P1 template-rendering issue; the
-Base64 configuration fix, clean release gate, fresh activation, native
-lifecycle probes, and repeat independent `PASS` now close it. This is not a
-remote release, deployment, or publication verdict.
+Current verdict: **M11C ON-DEMAND CROSS-CLIENT MEMORY ROOT_ACCEPTED LOCALLY**.
+The stdio adapter, client-native manifests, final installed-wheel probe, clean
+release gate, and repeat independent `PASS` close the local source slice. The
+already installed local memory plugin remains usable; this verdict did not
+reinstall global client state and is not a remote release, deployment, or
+publication verdict.
 
-Last reconciled: 2026-07-29 against current local source, the fresh installed
-runtime, native Codex Hook/MCP probes, the clean release gate, and repeat
-independent M11B review. Push, PR, and remote delivery remain separate human
-gates; this document does not predict remote delivery evidence.
+Last reconciled: 2026-07-29 against current local source, the M11C Recon
+Receipt, installed-wheel stdio probe, clean release gate, and repeat
+independent Luna Max review. Push, PR, global plugin installation, and remote
+delivery remain separate human gates; this document does not predict remote
+delivery evidence.
 
 ## Authority
 
@@ -1612,3 +1614,59 @@ separately reviewed Trusted Core slices. Do not push, publish Global Playbooks,
 enable Vault Git history, or broaden client/path trust. OS-process attestation
 beyond the exact token-bound Codex fingerprint and optional local Vault history
 each require a new scoped Recon.
+
+## Completed Milestone: M11C On-Demand Cross-Client Memory
+
+The 2026-07-29 user direction replaces the fragile resident HTTP/config path
+for memory access with a narrower client-spawned stdio adapter. The candidate
+reuses the accepted M11A/M11B project registry, Vault safety, create-only
+operations, secret scan, human-gated promotion, and read-only kill switch.
+
+- Recon:
+  `.devframe-runtime/recon/recon-obsidian-memory-stdio-plugins-20260729.md`
+- Command: `devframe memory mcp-stdio`
+- Scope: current-project memory tools only; project identity comes from the
+  process startup directory, not caller-provided Codex metadata.
+- Distribution: one Codex plugin package and one standard `.mcp.json` template
+  used by Claude Code or any stdio MCP client.
+- Explicit non-goals: no daemon, HTTP proxy, second index, external memory
+  authority, user config mutation, arbitrary Vault path, or global install.
+- Acceptance evidence: real subprocess initialize/list/recall, read-only and
+  cross-project negatives, installed-command probe, Codex plugin validation,
+  and Claude Code project-manifest discovery.
+
+### M11C Accepted Local Slice
+
+The root coordinator sets this bounded 11-path slice to `root_accepted` under
+`agent-discipline-001`, `agent-discipline-004`, `agent-discipline-005`,
+`agent-discipline-006`, and `agent-discipline-010`:
+
+- The server derives one project identity from its startup directory, exposes
+  only the seven accepted project-memory tools, rejects an explicit mismatched
+  project id, and reuses the M11A/M11B Vault and writeback safety.
+- Every id-less JSON-RPC object is ignored before envelope validation or tool
+  dispatch. The real subprocess regression proves malformed notifications and
+  an id-less write tool produce neither a response nor a Vault note.
+- The Codex plugin uses the official direct server-map shape. The two Claude
+  Code bootstrap manifests retain their client-native `mcpServers` wrapper and
+  are covered by the canonical runtime-bootstrap mirror test.
+- Fresh affected regression passed `135 passed, 4 skipped`; scoped Ruff,
+  `compileall`, and diff checks passed. The clean candidate release gate passed
+  `2096 passed, 9 skipped`, public snapshot verification, control-plane wheel
+  smoke, and whitespace verification.
+- The exact final wheel SHA256 is
+  `461B7895BB4674D90EDAC0AF68ABD725483756941E9EE7B32DC5C2016E146965`.
+  Its installed `devframe.exe memory mcp-stdio` completed initialize, exposed
+  exactly seven memory tools, and recalled `dev-frame-system` fail-open as
+  `stale` without an MCP error.
+- The first independent review returned `REWORK` for notification framing,
+  Codex/Claude manifest conflation, missing installed-command evidence, and
+  mirror coverage. The repairs and real-path evidence closed all findings; the
+  final Luna Max actual-diff review returned `PASS` with P0/P1/P2/P3 all
+  `None`.
+
+The two pre-existing dirty SessionStart template files remain outside this
+slice and protected. The root coordinator may now stage only these 11 accepted
+paths, verify the cached path set and content, and create one local logical
+commit. Do not push, create a PR, merge, reinstall global plugins, or release
+without the explicit human gate.

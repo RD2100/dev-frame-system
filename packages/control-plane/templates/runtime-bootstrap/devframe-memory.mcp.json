@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "devframe-memory": {
+      "type": "stdio",
+      "command": "devframe",
+      "args": ["memory", "mcp-stdio"]
+    }
+  }
+}

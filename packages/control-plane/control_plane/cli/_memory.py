@@ -52,6 +52,12 @@ def _checkpoint_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _stdio_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="devframe memory mcp-stdio")
+    parser.add_argument("--runtime-dir", default=None)
+    return parser
+
+
 def _print(payload: dict[str, object], output_format: str) -> None:
     if output_format == "json":
         print(json.dumps(payload, indent=2, ensure_ascii=True))
@@ -84,19 +90,33 @@ def cmd_memory() -> int:
 
     actions = {"propose", "approve", "recall"}
     is_session_start = len(sys.argv) >= 3 and sys.argv[2] == "session-start"
+    is_stdio = len(sys.argv) >= 3 and sys.argv[2] == "mcp-stdio"
     is_checkpoint = (
         len(sys.argv) >= 4
         and sys.argv[2] == "checkpoint"
         and sys.argv[3] == "capture-from-transcript"
     )
-    if not is_session_start and not is_checkpoint and (
+    if not is_session_start and not is_stdio and not is_checkpoint and (
         len(sys.argv) < 4 or sys.argv[2] != "plan" or sys.argv[3] not in actions
     ):
         print(
             "Usage: devframe memory session-start|checkpoint "
-            "capture-from-transcript|plan propose|approve|recall ..."
+            "capture-from-transcript|mcp-stdio|plan propose|approve|recall ..."
         )
         return 1
+    if is_stdio:
+        from ..memory_stdio import run_memory_stdio
+
+        args = _stdio_parser().parse_args(sys.argv[3:])
+        runtime_dir = (
+            Path(args.runtime_dir).resolve()
+            if args.runtime_dir
+            else default_runtime_dir()
+        )
+        return run_memory_stdio(
+            cwd=Path.cwd().resolve(),
+            runtime_dir=runtime_dir,
+        )
     if is_session_start:
         args = _session_start_parser().parse_args(sys.argv[3:])
         runtime_dir = (

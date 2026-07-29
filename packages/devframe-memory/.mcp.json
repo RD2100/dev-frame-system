@@ -1,0 +1,6 @@
+{
+  "devframe-memory": {
+    "command": "devframe",
+    "args": ["memory", "mcp-stdio"]
+  }
+}
