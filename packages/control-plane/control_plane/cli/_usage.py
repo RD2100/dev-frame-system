@@ -37,6 +37,8 @@ HELP_TEXT = """DevFrame Code CLI
   devframe toolchain run ...        - preview or explicitly run one validated manifest action
   devframe toolchain status ...     - inspect one governed toolchain result without mutating it
   devframe paper finalize ...       - finalize a paper run after external review
+  devframe memory session-start ... - resolve/register the current local project and recall fail-open
+  devframe memory checkpoint ...    - capture one bounded immutable session checkpoint
   devframe memory plan ...          - propose, approve, or recall one governed Obsidian working plan
   devframe writeback apply ...      - audited single-file workspace write-back
   devframe handoff ...              - generate, validate, bootstrap, or transfer handoffs
@@ -113,7 +115,11 @@ MEMORY_PLAN_USAGE = (
     "       devframe memory plan approve --request-id <wb-id> "
     "[--runtime-dir <dir>] [--confirm] [--format text|json]\n"
     "       devframe memory plan recall --project-root <dir> --project-id <id> "
-    "[--vault-root <dir>] [--format text|json]"
+    "[--vault-root <dir>] [--format text|json]\n"
+    "       devframe memory checkpoint capture-from-transcript --cwd <dir> "
+    "--transcript-path <file> --session-id <id> --turn-id <id> "
+    "--trigger auto|manual [--runtime-dir <dir>] [--vault-root <dir>] "
+    "[--format text|json]"
 )
 
 MCP_CONNECTIONS_USAGE = (

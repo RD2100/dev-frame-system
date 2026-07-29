@@ -1196,6 +1196,13 @@ def _effective_proposal_validator(
         from .obsidian_memory import _validate_project_plan_proposal
 
         return _validate_project_plan_proposal
+    if (
+        str(proposal.get("proposal_kind") or "")
+        == "obsidian_global_playbook_promotion"
+    ):
+        from .obsidian_memory import _validate_global_playbook_proposal
+
+        return _validate_global_playbook_proposal
     if str(proposal.get("proposal_kind") or "") != "writeback":
         raise WritebackError("write-back proposal kind requires a dedicated validator")
     return None

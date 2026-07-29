@@ -14,12 +14,16 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlsplit
+from urllib.request import url2pathname
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_INFO = {"name": "devframe-mcp", "version": "0.1"}
+MCP_SANDBOX_STATE_META_CAPABILITY = "codex/sandbox-state-meta"
 
 # JSON-RPC error codes
 _METHOD_NOT_FOUND = -32601
@@ -97,6 +101,12 @@ TOOLS: list[dict[str, Any]] = [
             "required": ["projectId", "contents"],
             "additionalProperties": False,
         },
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": True,
+            "idempotentHint": False,
+            "openWorldHint": False,
+        },
     },
     {
         "name": "recall_project_plan",
@@ -109,6 +119,140 @@ TOOLS: list[dict[str, Any]] = [
             "properties": {"projectId": {"type": "string"}},
             "required": ["projectId"],
             "additionalProperties": False,
+        },
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    },
+    {
+        "name": "list_project_lessons",
+        "description": (
+            "List bounded project lessons. Lessons are private untrusted "
+            "guidance and do not depend on the current HANDOFF hash."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "projectId": {"type": "string"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+            },
+            "required": ["projectId"],
+            "additionalProperties": False,
+        },
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    },
+    {
+        "name": "search_project_lessons",
+        "description": "Search bounded lessons inside one registered project.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "projectId": {"type": "string"},
+                "query": {"type": "string"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+            },
+            "required": ["projectId", "query"],
+            "additionalProperties": False,
+        },
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    },
+    {
+        "name": "capture_project_checkpoint",
+        "description": (
+            "Create one bounded immutable project checkpoint at a server-derived "
+            "path. Retry requires the same idempotency key and exact contents."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "projectId": {"type": "string"},
+                "idempotencyKey": {"type": "string"},
+                "sessionId": {"type": "string"},
+                "trigger": {"type": "string"},
+                "goal": {"type": "string"},
+                "decisions": {"type": "array", "items": {"type": "string"}},
+                "failedAttempts": {"type": "array", "items": {"type": "string"}},
+                "verification": {"type": "array", "items": {"type": "string"}},
+                "blockers": {"type": "array", "items": {"type": "string"}},
+                "nextAction": {"type": "string"},
+            },
+            "required": [
+                "projectId",
+                "idempotencyKey",
+                "sessionId",
+                "trigger",
+                "goal",
+                "nextAction",
+            ],
+            "additionalProperties": False,
+        },
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    },
+    {
+        "name": "create_project_lesson",
+        "description": (
+            "Create one bounded immutable project lesson at a server-derived "
+            "path. A global candidate is not globally published."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "projectId": {"type": "string"},
+                "idempotencyKey": {"type": "string"},
+                "title": {"type": "string"},
+                "lesson": {"type": "string"},
+                "evidence": {"type": "array", "items": {"type": "string"}},
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "globalCandidate": {"type": "boolean"},
+            },
+            "required": ["projectId", "idempotencyKey", "title", "lesson"],
+            "additionalProperties": False,
+        },
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    },
+    {
+        "name": "propose_global_playbook_promotion",
+        "description": (
+            "Stage a create-only promotion of one project lesson candidate. "
+            "Publication remains behind the existing human approval gate."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "projectId": {"type": "string"},
+                "lessonId": {"type": "string"},
+            },
+            "required": ["projectId", "lessonId"],
+            "additionalProperties": False,
+        },
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": True,
+            "idempotentHint": False,
+            "openWorldHint": False,
         },
     },
     {
@@ -160,6 +304,30 @@ TOOLS: list[dict[str, Any]] = [
     },
 ]
 
+_MEMORY_WRITE_TOOLS = {
+    "capture_project_checkpoint",
+    "create_project_lesson",
+    "propose_project_plan",
+    "propose_global_playbook_promotion",
+}
+_MEMORY_PROJECT_TOOLS = {
+    "propose_project_plan",
+    "recall_project_plan",
+    "list_project_lessons",
+    "search_project_lessons",
+    "capture_project_checkpoint",
+    "create_project_lesson",
+    "propose_global_playbook_promotion",
+}
+
+
+def available_tools() -> list[dict[str, Any]]:
+    from .obsidian_memory import memory_writes_disabled
+
+    if not memory_writes_disabled():
+        return TOOLS
+    return [tool for tool in TOOLS if tool["name"] not in _MEMORY_WRITE_TOOLS]
+
 
 def _result(req_id: Any, result: dict[str, Any]) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": req_id, "result": result}
@@ -176,6 +344,38 @@ def _tool_text(req_id: Any, payload: Any, *, is_error: bool = False) -> dict[str
 
 def new_session_id() -> str:
     return "devframe-mcp-" + secrets.token_hex(8)
+
+
+def _sandbox_cwd_from_request_meta(request_meta: Any) -> str:
+    if not isinstance(request_meta, dict):
+        raise ValueError("project_scope metadata is required")
+    sandbox_state = request_meta.get(MCP_SANDBOX_STATE_META_CAPABILITY)
+    if not isinstance(sandbox_state, dict):
+        raise ValueError("project_scope metadata is required")
+    raw_uri = sandbox_state.get("sandboxCwd")
+    if not isinstance(raw_uri, str) or not 1 <= len(raw_uri) <= 4_096:
+        raise ValueError("project_scope cwd is invalid")
+    if re.search(r"%(?![0-9A-Fa-f]{2})", raw_uri):
+        raise ValueError("project_scope cwd is invalid")
+    try:
+        parsed = urlsplit(raw_uri)
+        decoded_path = unquote(parsed.path, encoding="utf-8", errors="strict")
+    except (UnicodeError, ValueError) as exc:
+        raise ValueError("project_scope cwd is invalid") from exc
+    if (
+        parsed.scheme.casefold() != "file"
+        or parsed.netloc
+        or parsed.query
+        or parsed.fragment
+        or "\\" in decoded_path
+        or any(segment in {".", ".."} for segment in decoded_path.split("/"))
+        or any(ord(character) < 32 or ord(character) == 127 for character in decoded_path)
+    ):
+        raise ValueError("project_scope cwd is invalid")
+    candidate = Path(url2pathname(decoded_path))
+    if not candidate.is_absolute():
+        raise ValueError("project_scope cwd is invalid")
+    return str(candidate)
 
 
 def _project_shell_summary(runtime_dir, paper_project_dirs, base_url) -> dict[str, Any]:
@@ -308,13 +508,14 @@ def _call_tool(
     paper_project_dirs,
     base_url,
     req_id: Any,
+    request_meta: Any,
 ) -> dict[str, Any]:
     if name == "server_config":
         return _tool_text(req_id, {
             "server": SERVER_INFO,
             "protocolVersion": PROTOCOL_VERSION,
             "writePolicy": "read-only by default; AI may propose, humans approve",
-            "tools": [t["name"] for t in TOOLS],
+            "tools": [t["name"] for t in available_tools()],
         })
 
     if name == "read_project_shell":
@@ -354,26 +555,50 @@ def _call_tool(
 
         return _tool_text(req_id, {"pending": list_pending_writeback_proposals(runtime_dir)})
 
-    if name in {"propose_project_plan", "recall_project_plan"}:
-        from .dashboard import _resolve_writeback_workspace_root
+    if name in _MEMORY_WRITE_TOOLS:
+        from .obsidian_memory import memory_writes_disabled
+
+        if memory_writes_disabled():
+            return _tool_text(
+                req_id,
+                {"error": "obsidian_memory_read_only"},
+                is_error=True,
+            )
+
+    if name in _MEMORY_PROJECT_TOOLS:
         from .obsidian_memory import (
             ObsidianMemoryError,
+            capture_project_checkpoint,
+            create_project_lesson,
+            list_project_lessons,
             recall_project_plan,
+            resolve_session_project,
+            search_project_lessons,
+            stage_global_playbook_promotion,
             stage_project_plan,
         )
 
         project_id = str(arguments.get("projectId") or "").strip()
         if not project_id:
             return _tool_text(req_id, {"error": f"{name} requires projectId"}, is_error=True)
-        project_root = _resolve_writeback_workspace_root(
-            runtime_dir,
-            paper_project_dirs,
-            project_id,
-        )
-        if not project_root:
+        try:
+            sandbox_cwd = _sandbox_cwd_from_request_meta(request_meta)
+            project_context = resolve_session_project(
+                cwd=sandbox_cwd,
+                runtime_dir=runtime_dir,
+            )
+            if project_context["projectId"] != project_id:
+                raise ObsidianMemoryError(
+                    "project_scope does not match the current Codex project"
+                )
+            project_root = str(project_context["projectRoot"])
+        except (ObsidianMemoryError, ValueError):
             return _tool_text(
                 req_id,
-                {"error": "unknown_project", "projectId": project_id},
+                {
+                    "error": "project_scope_rejected",
+                    "detail": "Memory access requires the current Codex project scope.",
+                },
                 is_error=True,
             )
         try:
@@ -385,6 +610,83 @@ def _call_tool(
                         project_root=project_root,
                         project_id=project_id,
                     ),
+                )
+            if name == "list_project_lessons":
+                return _tool_text(
+                    req_id,
+                    list_project_lessons(
+                        vault_root=None,
+                        project_id=project_id,
+                        limit=arguments.get("limit", 20),
+                    ),
+                )
+            if name == "search_project_lessons":
+                return _tool_text(
+                    req_id,
+                    search_project_lessons(
+                        vault_root=None,
+                        project_id=project_id,
+                        query=arguments.get("query"),
+                        limit=arguments.get("limit", 10),
+                    ),
+                )
+            if name == "capture_project_checkpoint":
+                return _tool_text(
+                    req_id,
+                    capture_project_checkpoint(
+                        runtime_dir,
+                        vault_root=None,
+                        project_root=project_root,
+                        project_id=project_id,
+                        idempotency_key=arguments.get("idempotencyKey"),
+                        session_id=arguments.get("sessionId"),
+                        trigger=arguments.get("trigger"),
+                        goal=arguments.get("goal"),
+                        decisions=arguments.get("decisions"),
+                        failed_attempts=arguments.get("failedAttempts"),
+                        verification=arguments.get("verification"),
+                        blockers=arguments.get("blockers"),
+                        next_action=arguments.get("nextAction"),
+                    ),
+                )
+            if name == "create_project_lesson":
+                return _tool_text(
+                    req_id,
+                    create_project_lesson(
+                        runtime_dir,
+                        vault_root=None,
+                        project_root=project_root,
+                        project_id=project_id,
+                        idempotency_key=arguments.get("idempotencyKey"),
+                        title=arguments.get("title"),
+                        lesson=arguments.get("lesson"),
+                        evidence=arguments.get("evidence"),
+                        tags=arguments.get("tags"),
+                        global_candidate=arguments.get("globalCandidate", False),
+                    ),
+                )
+            if name == "propose_global_playbook_promotion":
+                staged = stage_global_playbook_promotion(
+                    runtime_dir,
+                    vault_root=None,
+                    project_root=project_root,
+                    project_id=project_id,
+                    lesson_id=arguments.get("lessonId"),
+                )
+                return _tool_text(
+                    req_id,
+                    {
+                        "staged": True,
+                        "requestId": staged["request_id"],
+                        "projectId": staged["project_id"],
+                        "lessonId": staged["lesson_id"],
+                        "operation": staged["operation"],
+                        "bytes": staged["bytes"],
+                        "humanGate": (
+                            "A human must approve this create-only promotion "
+                            "before the global playbook changes."
+                        ),
+                    },
                 )
             contents = arguments.get("contents")
             if not isinstance(contents, str):
@@ -403,7 +705,14 @@ def _call_tool(
         except ObsidianMemoryError as exc:
             return _tool_text(
                 req_id,
-                {"error": "obsidian_plan_rejected", "detail": str(exc)},
+                {
+                    "error": (
+                        "obsidian_plan_rejected"
+                        if name == "propose_project_plan"
+                        else "obsidian_memory_rejected"
+                    ),
+                    "detail": str(exc),
+                },
                 is_error=True,
             )
         return _tool_text(
@@ -490,12 +799,19 @@ def handle_mcp_jsonrpc(
     if method == "initialize":
         params = request.get("params") or {}
         client_info = params.get("clientInfo") if isinstance(params, dict) else {}
-        client_name = str((client_info or {}).get("name") or "unknown")
         new_sid = new_session_id()
-        mcp_consent.register_connection(new_sid, client_name, runtime_dir=runtime_dir)
+        mcp_consent.register_connection(
+            new_sid,
+            client_info if isinstance(client_info, dict) else None,
+            runtime_dir=runtime_dir,
+            trust_secret=resolve_mcp_token(runtime_dir),
+        )
         response = _result(req_id, {
             "protocolVersion": PROTOCOL_VERSION,
-            "capabilities": {"tools": {"listChanged": False}},
+            "capabilities": {
+                "tools": {"listChanged": False},
+                "experimental": {MCP_SANDBOX_STATE_META_CAPABILITY: {}},
+            },
             "serverInfo": SERVER_INFO,
         })
         return response, {"MCP-Session-Id": new_sid}
@@ -504,16 +820,21 @@ def handle_mcp_jsonrpc(
         return None, {}
 
     if method == "tools/list":
-        return _result(req_id, {"tools": TOOLS}), {}
+        return _result(req_id, {"tools": available_tools()}), {}
 
     if method == "tools/call":
         params = request.get("params") or {}
         name = str(params.get("name") or "")
         arguments = params.get("arguments") or {}
+        request_meta = params.get("_meta")
         if not isinstance(arguments, dict):
             return _error(req_id, _INVALID_PARAMS, "arguments must be an object"), {}
         # Connection consent gate: tools/call requires a human-authorized connection.
-        mcp_consent.ensure_connection(session_id or "", runtime_dir=runtime_dir)
+        mcp_consent.ensure_connection(
+            session_id or "",
+            runtime_dir=runtime_dir,
+            trust_secret=resolve_mcp_token(runtime_dir),
+        )
         authorized = mcp_consent.is_authorized(session_id)
         mcp_consent.record_tool_call(session_id, name, authorized=authorized, runtime_dir=runtime_dir)
         if not authorized:
@@ -532,6 +853,7 @@ def handle_mcp_jsonrpc(
             paper_project_dirs=paper_project_dirs,
             base_url=base_url,
             req_id=req_id,
+            request_meta=request_meta,
         ), {}
 
     if req_id is None:

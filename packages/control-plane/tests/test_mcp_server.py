@@ -37,6 +37,12 @@ def test_initialize_returns_protocol_and_session():
     response, headers = handle_mcp_jsonrpc({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
     assert response["result"]["protocolVersion"]
     assert response["result"]["serverInfo"]["name"] == "devframe-mcp"
+    assert (
+        response["result"]["capabilities"]["experimental"][
+            "codex/sandbox-state-meta"
+        ]
+        == {}
+    )
     assert "MCP-Session-Id" in headers
 
 
@@ -50,6 +56,76 @@ def test_tools_list_advertises_tools():
     names = {t["name"] for t in response["result"]["tools"]}
     assert {"server_config", "read_project_shell", "propose_writeback", "list_pending_writebacks"} <= names
     assert names == {t["name"] for t in TOOLS}
+
+
+def test_memory_tools_have_explicit_safety_annotations():
+    by_name = {tool["name"]: tool for tool in TOOLS}
+    read_tools = {
+        "recall_project_plan",
+        "search_project_lessons",
+        "list_project_lessons",
+    }
+    safe_create_tools = {
+        "capture_project_checkpoint",
+        "create_project_lesson",
+    }
+
+    for name in read_tools:
+        assert by_name[name]["annotations"] == {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        }
+    for name in safe_create_tools:
+        assert by_name[name]["annotations"] == {
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        }
+    for name in {"propose_project_plan", "propose_global_playbook_promotion"}:
+        assert by_name[name]["annotations"]["destructiveHint"] is True
+        assert by_name[name]["annotations"]["openWorldHint"] is False
+
+
+def test_memory_read_only_mode_hides_and_rejects_write_tools(tmp_path, monkeypatch):
+    monkeypatch.setenv("DEVFRAME_OBSIDIAN_MEMORY_READ_ONLY", "true")
+    response, _ = handle_mcp_jsonrpc(
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        runtime_dir=tmp_path,
+    )
+    names = {tool["name"] for tool in response["result"]["tools"]}
+
+    assert "recall_project_plan" in names
+    assert "search_project_lessons" in names
+    assert "capture_project_checkpoint" not in names
+    assert "create_project_lesson" not in names
+    assert "propose_project_plan" not in names
+    assert "propose_global_playbook_promotion" not in names
+
+    mcp_consent._reset_for_tests()
+    _authorize("sess-read-only", tmp_path)
+    blocked, _ = handle_mcp_jsonrpc(
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "create_project_lesson",
+                "arguments": {
+                    "projectId": "demo",
+                    "idempotencyKey": "event",
+                    "title": "Title",
+                    "lesson": "Lesson",
+                },
+            },
+        },
+        runtime_dir=tmp_path,
+        session_id="sess-read-only",
+    )
+    assert blocked["result"]["isError"] is True
+    assert "read_only" in blocked["result"]["content"][0]["text"]
 
 
 def test_unknown_method_errors():

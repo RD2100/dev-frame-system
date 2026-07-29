@@ -10,6 +10,8 @@ def test_runtime_bootstrap_contract_mirror_matches_public_template():
         "capability-inventory.template.md",
         "tool-policy.template.md",
         "governance-manifest.template.md",
+        "recall-obsidian-working-plan.template.ps1",
+        "checkpoint-obsidian-session.template.ps1",
         "bootstrap.ps1",
     ]
     for name in names:

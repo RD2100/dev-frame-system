@@ -12,9 +12,11 @@ never writes the workspace.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import threading
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -39,8 +41,58 @@ def _audit_path(runtime_dir: str | Path) -> Path:
     return Path(runtime_dir) / "mcp-audit.jsonl"
 
 
-def fingerprint(client_name: str | None) -> str:
-    return hashlib.sha256(("devframe-mcp:" + (client_name or "unknown")).encode("utf-8")).hexdigest()[:16]
+def _canonical_client_info(client_info: str | dict[str, Any] | None) -> dict[str, str]:
+    if isinstance(client_info, str):
+        raw: dict[str, Any] = {"name": client_info}
+    elif isinstance(client_info, dict):
+        raw = client_info
+    else:
+        raw = {}
+    result: dict[str, str] = {}
+    for key in ("name", "title", "version"):
+        value = str(raw.get(key) or "").strip()
+        value = "".join(
+            character
+            for character in value
+            if unicodedata.category(character) != "Cc"
+        )
+        encoded = value.encode("utf-8", errors="ignore")
+        if len(encoded) > 256:
+            value = encoded[:256].decode("utf-8", errors="ignore")
+        result[key] = value
+    if not result["name"]:
+        result["name"] = "unknown"
+    return result
+
+
+def _has_complete_client_info(
+    client_info: str | dict[str, Any] | None,
+    canonical_info: dict[str, str],
+) -> bool:
+    return isinstance(client_info, dict) and all(
+        canonical_info[key] and canonical_info[key] != "unknown"
+        for key in ("name", "title", "version")
+    )
+
+
+def fingerprint(
+    client_info: str | dict[str, Any] | None,
+    *,
+    trust_secret: str | None = None,
+) -> str:
+    """Return a v3 client-family fingerprint bound to MCP client name and token."""
+    canonical_info = _canonical_client_info(client_info)
+    canonical = json.dumps(
+        {"name": canonical_info["name"]},
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    secret = str(trust_secret or "")
+    key = hashlib.sha256(
+        b"devframe-mcp-client-trust-v3\0" + secret.encode("utf-8")
+    ).digest()
+    return hmac.new(key, canonical, hashlib.sha256).hexdigest()[:32]
 
 
 def _load_grants(runtime_dir: str | Path | None) -> dict[str, Any]:
@@ -77,18 +129,38 @@ def audit(runtime_dir: str | Path | None, event: dict[str, Any]) -> None:
         pass
 
 
-def register_connection(session_id: str, client_name: str | None, *, runtime_dir: str | Path | None = None) -> dict[str, Any]:
+def register_connection(
+    session_id: str,
+    client_info: str | dict[str, Any] | None,
+    *,
+    runtime_dir: str | Path | None = None,
+    trust_secret: str | None = None,
+) -> dict[str, Any]:
     """Record a connection on initialize; auto-authorize if an allow-always grant exists."""
     with _LOCK:
-        fp = fingerprint(client_name)
+        canonical_info = _canonical_client_info(client_info)
+        trust_bound = bool(str(trust_secret or ""))
+        identity_complete = _has_complete_client_info(client_info, canonical_info)
+        fp = fingerprint(canonical_info, trust_secret=trust_secret)
         status, scope = "pending", "none"
         grant = _load_grants(runtime_dir).get(fp)
-        if grant and grant.get("decision") == "allow_always" and not grant.get("revoked"):
+        if (
+            trust_bound
+            and identity_complete
+            and grant
+            and grant.get("decision") == "allow_always"
+            and grant.get("fingerprint_version") == 3
+            and not grant.get("revoked")
+        ):
             status, scope = "authorized", _AUTHORIZED_SCOPE
         conn = {
             "connection_id": session_id,
-            "client_name": client_name or "unknown",
+            "client_name": canonical_info["name"],
+            "client_info": canonical_info,
             "fingerprint": fp,
+            "fingerprint_version": 3,
+            "trust_bound": trust_bound,
+            "identity_complete": identity_complete,
             "status": status,
             "scope": scope,
             "created_at": _now(),
@@ -104,13 +176,24 @@ def register_connection(session_id: str, client_name: str | None, *, runtime_dir
         return dict(conn)
 
 
-def ensure_connection(session_id: str, client_name: str | None = None, *, runtime_dir: str | Path | None = None) -> dict[str, Any]:
+def ensure_connection(
+    session_id: str,
+    client_info: str | dict[str, Any] | None = None,
+    *,
+    runtime_dir: str | Path | None = None,
+    trust_secret: str | None = None,
+) -> dict[str, Any]:
     """Return a connection, registering it pending if unseen (e.g. after restart)."""
     with _LOCK:
         existing = _CONNECTIONS.get(session_id)
         if existing is not None:
             return dict(existing)
-    return register_connection(session_id, client_name, runtime_dir=runtime_dir)
+    return register_connection(
+        session_id,
+        client_info,
+        runtime_dir=runtime_dir,
+        trust_secret=trust_secret,
+    )
 
 
 def get_connection(session_id: str | None) -> dict[str, Any] | None:
@@ -165,12 +248,22 @@ def decide(connection_id: str, decision: str, *, runtime_dir: str | Path | None 
         elif decision == "allow_once":
             conn["status"], conn["scope"] = "authorized", _AUTHORIZED_SCOPE
         elif decision == "allow_always":
+            if (
+                conn.get("fingerprint_version") != 3
+                or not conn.get("trust_bound")
+                or not conn.get("identity_complete")
+            ):
+                raise ConsentError(
+                    "allow_always requires complete trust-bound clientInfo"
+                )
             conn["status"], conn["scope"] = "authorized", _AUTHORIZED_SCOPE
             if runtime_dir is not None:
                 grants = _load_grants(runtime_dir)
                 grants[conn["fingerprint"]] = {
                     "decision": "allow_always",
                     "client_name": conn["client_name"],
+                    "client_info": conn["client_info"],
+                    "fingerprint_version": 3,
                     "granted_at": _now(),
                     "revoked": False,
                 }

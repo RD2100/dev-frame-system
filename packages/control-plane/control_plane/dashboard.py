@@ -90,6 +90,9 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
         def do_GET(self) -> None:
             parsed_url = urlparse(self.path)
             path = parsed_url.path
+            if path == "/mcp":
+                self._method_not_allowed()
+                return
             if path in {"/", "/index.html"}:
                 state = build_visual_control_plane_state(runtime_dir, paper_project_dirs=paper_project_dirs)
                 query = parse_qs(parsed_url.query)
@@ -1165,6 +1168,7 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     body = json.dumps({"error": "loopback_required"}, indent=2, ensure_ascii=True)
                     self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
                     return
+                from . import mcp_consent
                 from .mcp_server import handle_mcp_jsonrpc, resolve_mcp_token
 
                 configured_token = resolve_mcp_token(runtime_dir)
@@ -1194,6 +1198,28 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     return
                 address, actual_port = self.server.server_address
                 request_session_id = self.headers.get("MCP-Session-Id") or self.headers.get("Mcp-Session-Id")
+                request_method = str(payload.get("method") or "") if isinstance(payload, dict) else ""
+                if (
+                    request_session_id
+                    and request_method != "initialize"
+                    and mcp_consent.get_connection(request_session_id) is None
+                ):
+                    self._send_text(
+                        HTTPStatus.NOT_FOUND,
+                        "application/json; charset=utf-8",
+                        json.dumps(
+                            {
+                                "jsonrpc": "2.0",
+                                "id": payload.get("id") if isinstance(payload, dict) else None,
+                                "error": {
+                                    "code": -32002,
+                                    "message": "session_not_found",
+                                },
+                            },
+                            ensure_ascii=True,
+                        ),
+                    )
+                    return
                 response, extra_headers = handle_mcp_jsonrpc(
                     payload,
                     runtime_dir=runtime_dir,
@@ -1248,7 +1274,13 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
             return
 
         def _method_not_allowed(self) -> None:
-            allowed_methods = "GET, HEAD, OPTIONS" if urlparse(self.path).path == "/state.json" else None
+            path = urlparse(self.path).path
+            if path == "/state.json":
+                allowed_methods = "GET, HEAD, OPTIONS"
+            elif path == "/mcp":
+                allowed_methods = "POST"
+            else:
+                allowed_methods = None
             self._send_text(
                 HTTPStatus.METHOD_NOT_ALLOWED,
                 "text/plain; charset=utf-8",

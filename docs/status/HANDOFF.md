@@ -2,12 +2,16 @@
 
 Lifecycle state: **CANONICAL EXECUTION ROOT**
 
-Current verdict: **M11A LIVE CUTOVER ACCEPTED LOCALLY**. This is not a
-release, deployment, or production verdict.
+Current verdict: **M11B SAFE MEMORY AUTOMATION ACCEPTED LIVE LOCALLY**. The
+first independent release review found a P1 template-rendering issue; the
+Base64 configuration fix, clean release gate, fresh activation, native
+lifecycle probes, and repeat independent `PASS` now close it. This is not a
+remote release, deployment, or publication verdict.
 
-Last reconciled: 2026-07-22 against accepted local commit `55b62270` and the
-human-authorized M11A live cutover. Push, PR, and remote delivery remain
-separate human gates; this document does not predict remote delivery evidence.
+Last reconciled: 2026-07-29 against current local source, the fresh installed
+runtime, native Codex Hook/MCP probes, the clean release gate, and repeat
+independent M11B review. Push, PR, and remote delivery remain separate human
+gates; this document does not predict remote delivery evidence.
 
 ## Authority
 
@@ -99,6 +103,7 @@ recently closed P1 risks are:
 | DIST-003 | closed | P2 | The primary `devframe code` command carried an optional dashboard-launch shortcut plus four dashboard-only server parameters, duplicating the explicit diagnostic command and widening the daily coding surface | Existing client Recon and reuse assessment, real CLI/bootstrap RED, minimal GREEN, 1,564 control-plane tests, installed-wheel smoke, and a second independent review with P0/P1/P2/P3 equal to zero | `devframe code` stays CLI-first while `devframe dashboard serve` preserves the full diagnostic/API surface |
 | KERNEL-003 | closed | P2 | A malformed or unavailable project Skill policy can make Profile planning fall back to its built-in defaults without a diagnostic | M10B on 2026-07-26: missing, malformed, and unreadable `skills.json` policy all fail closed with zero side effects before any Profile stage is consumed; real-path regressions, a 42-check installed-CLI probe, and an independent non-author review passed | Before any Profile stage is consumed, policy-resolution failure must become human-required or conservatively read-only/no-network, with a real-path regression |
 | MEMORY-001 | closed | P1 | The validated Obsidian candidate and its installed local read runtime could become a second lifecycle beside current `main` if a new plan feature were added without an explicit migration/cutover boundary | Candidate/main reconciliation, production-path RED -> GREEN, `1720 passed, 6 skipped` on a fresh verify tree, installed-wheel canary `3/0/0`, independent review PASS with P0/P1/P2/P3 all zero, and the 2026-07-20 live MCP + SessionStart canaries | Current `main` owns the only maintained Memory semantics and existing writeback owns all mutation; the current wheel is the sole active local runtime, while the old runtime is inactive and retained only for rollback |
+| MEMORY-002 | closed | P1 | Reducing repeated memory authorization could accidentally turn safe capture into arbitrary overwrite, cross-project publication, raw-chat persistence, or broad client trust | M11B production RED -> GREEN; focused `130 passed, 4 skipped`; clean exported full suite `2083 passed, 9 skipped` with two isolated non-M11B failures; exact wheel/source binding; native SessionStart, actual compaction, PreCompact retry/concurrency, fresh MCP reconnect, cross-project rejection, kill-switch, and outage probes; P0/P1 review passed | Exact token-bound client trust; only read/create-only tools pre-approved; deterministic agent-owned paths, bounded high-signal PreCompact capture, read-only kill switch, human-gated plan/global publication, and project scope bound to Codex sandbox cwd |
 | QUAL-001 | open | P2 | The QREM-B7/B8 dashboard handler-split results were lost before any commit, and `dashboard.py` complexity has regrown past the pre-remediation level (do_GET 88 / do_POST 158 decision points vs the B8 target of 64/140) | 2026-07-26 read-only audit: the implementation is absent from the worktree and from all Git history; specs, reports, and baselines remain under local `.aiworkflow/` | Either re-scope the remediation as a new governed slice from the retained specs, or the owner explicitly writes the debt off and archives the stale `.aiworkflow/session/current.json` |
 
 `DOCS-001` is mitigated by this document slice. Physical archival or deletion
@@ -125,6 +130,7 @@ permission to start parallel implementation.
 | M10A. Governed workflow profiles | accepted | Structured coding or paper context deterministically selects and records an ordered, permission-bounded Skill profile without executing external capabilities | Real coding and paper missing-path REDs became schema-valid planned-only TaskSpecs; generic ambiguity remains human-required; installed-wheel and independent review gates passed |
 | M10B. Governed coding canary | accepted | One offline coding entrypoint consumes the narrowly adopted pre/post stage plan through an explicit opt-in without changing correctness, safety, or acceptance authority | Policy-resolution failure fails closed before any stage is consumed; the fingerprint-bound offline canary passed real CLI paths, the full affected gates, installed-wheel smoke, a 42-check real-path probe, and an independent non-author review |
 | M11A. Unified Obsidian working-plan MVP | accepted (live locally) | Codex, CLI, and later RD-Code can share one private working plan without moving formal project authority out of the repository or creating a second write lifecycle | Existing writeback stages and create-only publishes immutable project-plan versions; source drift, target races, project leakage, secret content, and absolute-path disclosure fail closed through real MCP/CLI paths; local cutover and fresh live canaries passed |
+| M11B. Safe automatic Obsidian memory | accepted (live locally) | Exact trusted Codex clients can recall and create bounded project memory without repeated prompts, while destructive and global actions stay human-gated | Native PreCompact and MCP paths proved deterministic create-only checkpoints/lessons, exact-client reconnect, sandbox-cwd project isolation, kill switch, fail-open outage behavior, full related tests, and P0/P1 review |
 
 ## Completed Milestone: M1 Canonical Run Truth
 
@@ -1241,14 +1247,15 @@ Git mutations follow the current `AGENTS.md` authorization rules.
 | 2026-07-26 | Repair the staged all-NUL `docs/status/HANDOFF.md` index blob by restaging the intact working-tree bytes | A crash-zeroed file was staged at 13:22; forensic search across editor histories, dangling blobs, and agent logs found no recoverable variant, and committing the unrepaired index would have destroyed the execution root |
 | 2026-07-26 | Accept M10B with the methodology-skills intake and the rdpaper mention target, and close KERNEL-003 | Full affected gates, installed-wheel smoke, a 42-check real-path canary probe, and an independent non-author review (P0/P1/P2 = 0) passed; policy-resolution failure is fail-closed before any stage consumption |
 | 2026-07-26 | Register the lost QREM-B7/B8 remediation as open debt QUAL-001 instead of silently dropping it | The remediation code was never committed and is gone from disk; renewal or write-off is an explicit owner decision backed by the retained `.aiworkflow/` specs |
+| 2026-07-27 | Accept M11B live locally and close MEMORY-002 without widening destructive authority | Exact-client safe tools, sandbox-cwd project binding, immutable/idempotent checkpoint and lesson capture, native lifecycle and installed MCP probes, clean related gates, and P0/P1 review passed; plan/global publication, overwrite/delete, Git history, and remote delivery remain separate human gates |
 
 ## Next Action
 
-M11A has no remaining repository implementation action in this slice. The live
-Vault/MCP Hook cutover is active locally; the old runtime is inactive and kept
-only for rollback. The next external action is the separate human gate for push
-or PR creation (and any later merge or release). No remote Git effect has been
-performed.
+M11B has no remaining repository implementation action in this slice. Review
+the exact local Reviewer Index, then use a separate human gate for any local
+acceptance commit, push, PR, merge, or release. No remote Git effect has been
+performed. Vault Git history, OS-process attestation, and any broader automatic
+publication are new scoped decisions, not implicit continuation work.
 
 ## Session Handoff — 2026-07-26 — Universal Governance Pilot
 
@@ -1267,7 +1274,7 @@ blocked, and next action.
 
 ### Live repository boundary at handoff capture
 
-- Canonical checkout: `D:\dev-frame-system`.
+- Canonical checkout: `<canonical-local-checkout>`.
 - Branch: `codex/rdcode-secret-containment`.
 - HEAD: `77b594f8342a9d840bc660050e6319859a551468`.
 - The checkout was already dirty. Recheck it before every decision and
@@ -1309,7 +1316,7 @@ only `PASS` or `REWORK` verdict.
 
 ### Trusted Core v1 local candidate
 
-- Worktree: `D:\dev-frame-system-trusted-core-v1`.
+- Worktree: `<trusted-core-local-worktree>`.
 - Branch: `codex/trusted-core-v1`.
 - Local commit: `403046bfa2dd0d875d8cba93504307438b5c43f8`
   (`fix(control-plane): harden trusted execution core`).
@@ -1449,7 +1456,7 @@ executable gate or regression. Do not install every researched project.
 ### Copy/paste prompt for the next DevFrame controller
 
 ```text
-You are the new DevFrame root controller. Work from D:\dev-frame-system.
+You are the new DevFrame root controller. Work from the canonical local checkout.
 Read AGENTS.md and the final section “Session Handoff — 2026-07-26 —
 Universal Governance Pilot” in docs/status/HANDOFF.md. Recheck live HEAD, Git
 status, upstream divergence, worktrees, active processes, and exact ownership.
@@ -1476,8 +1483,8 @@ Require exact scope, unchanged package/lock bytes unless explicitly justified,
 focused bridge/runtime verification, Reviewer Index, and a separate non-author
 PASS/REWORK verdict.
 
-Trusted Core v1 remains a separate clean local candidate at
-D:\dev-frame-system-trusted-core-v1, commit
+Trusted Core v1 remains a separate clean local candidate at its isolated local
+worktree, commit
 403046bfa2dd0d875d8cba93504307438b5c43f8. It passed the affected 383/1
 boundary, public snapshot, and focused non-author review, but it is not pushed,
 merged, or deployed; full-suite completion is not claimed. Do not copy it into
@@ -1490,3 +1497,118 @@ Chinese. Do not push, merge, deploy, read credentials, call a real provider,
 upload paper content, or perform destructive cleanup without a current explicit
 human gate.
 ```
+
+## Session Handoff — 2026-07-27 — M11B Safe Automatic Obsidian Memory
+
+This is the latest scheduling authority. The user explicitly authorized a
+bounded global-local activation that minimizes repeated approval without
+weakening data safety. It does not authorize Git staging, commit, push, remote
+sync, arbitrary note edits, deletion, command execution, or automatic global
+playbook publication.
+
+### Frozen governance
+
+- Recon:
+  `.devframe-runtime/recon/recon-obsidian-memory-safe-automation-20260727.md`
+- TaskSpec:
+  `.devframe-runtime/contracts/obsidian-memory-safe-automation-20260727.md`
+- Existing RuntimeStore, writeback, MCP consent/audit, and Hook frameworks
+  remain authoritative; no second memory database, proposal store, or audit
+  store is permitted.
+- Basic Memory is AGPL architecture reference only. Obsidian Local REST API,
+  cyanheads/obsidian-mcp-server, and Obsidian Git are contract/recovery
+  references only; no external source or dependency is copied.
+
+### Required behavior
+
+- Working Plan remains HANDOFF-bound and stale on source drift.
+- Project Lessons and Session Checkpoints are immutable, project-scoped,
+  bounded, secret-scanned, and independent of HANDOFF hash.
+- Global candidates remain project lessons; promotion is a distinct
+  create-only human-gated proposal.
+- Only recall/search/list and deterministic safe-create tools may be
+  client-pre-approved. Plan/promotion, overwrite, edit, move, delete, arbitrary
+  path write, and command execution remain gated or unavailable.
+- Durable v3 `allow_always` binds the stable native client name to the
+  configured loopback token. Complete native clientInfo is required when the
+  grant is created; title and version remain audit fields rather than trust-key
+  inputs, so an ordinary Codex upgrade can reconnect without another prompt.
+  Name-only or tokenless clients cannot persist trust, and legacy v2 grants are
+  not silently promoted.
+- Native SessionStart stays read-only for startup/resume/clear/compact.
+  Native PreCompact captures only goal, decisions, failed attempts,
+  verification, blockers, and next action; raw chat is not stored.
+- `DEVFRAME_OBSIDIAN_MEMORY_READ_ONLY=true` hides and rejects all memory writes.
+- Every automatic path fails open on unavailable runtime/Vault/service and
+  never returns an absolute Vault path or secret.
+
+### Current evidence boundary
+
+- Production RED failed on missing safe-memory APIs and missing PreCompact
+  template as expected. A later P0 RED exposed dot-segment sandbox-cwd
+  normalization as a possible cross-project bypass; canonical local `file://`
+  parsing now rejects dot segments, backslashes, and remote authorities before
+  any Vault access.
+- On HEAD `dea13159414dec059bf982763ff5b46623be23b5`, the exact activated
+  source produced wheel SHA-256
+  `48F61AF38AF0AB2416907FE789C1C8184E16AC8E20657B3718DA8FAA9488DFBE`.
+  The installed hashes for all seven critical modules and both Hook templates
+  match source. The Windows logon task is `Ready`, reports result `0`, and owns
+  one loopback listener.
+- Native SessionStart `startup`, `resume`, `clear`, and `compact` passed for
+  both the Git project and a second project on another drive. Nested cwd,
+  non-Git roots, same-name isolation, missing plans, stale plans, and service or
+  Vault failure all remained bounded and fail-open.
+- A fresh registered PreCompact Hook probe against the current native Codex
+  transcript created one immutable checkpoint; the exact event retry created
+  no second record and both Hook deliveries returned the bounded fail-open
+  continuation envelope.
+- Fresh installed native Codex MCP calls automatically reinitialized after a
+  service restart, recalled the exact project without
+  `authorization_pending`, created one immutable checkpoint, and returned
+  `duplicate` on the same event retry. A direct Streamable HTTP restart probe
+  returned `404` for the stale session, then `200` for initialize and the
+  family-granted tool call under a changed client version. A second-drive
+  project returned its own `missing` result, while the current Codex connection
+  rejected cross-project and forged ids.
+- Project Lesson recall survived a HANDOFF hash change while Working Plan
+  retained `stale` semantics. A global candidate remained a project lesson;
+  no Global Playbook was published.
+- Fresh focused M11B domain/MCP/consent/Hook regression:
+  `134 passed, 4 skipped`. This includes unavailable-Vault fail-open,
+  create-only conflict/concurrency, secret, traversal, reparse/junction,
+  sandbox-scope, read-only kill-switch, and literal PowerShell-metacharacter
+  path coverage. The final clean release gate passed `2089 passed, 9 skipped`,
+  public snapshot, installed-wheel smoke, and `git diff --check`. `compileall`
+  also passed. Whole-file Ruff reported seven pre-existing dashboard findings
+  outside the M11B change lines, so lint is recorded transparently rather than
+  claimed green.
+- The first independent release review returned `REWORK`: rendered Hook path
+  placeholders were embedded in PowerShell-interpolated strings. Both public
+  and packaged SessionStart/PreCompact templates now accept only Base64-encoded
+  UTF-8 configuration values and decode them at runtime. A Windows
+  production-path regression using a literal `$()` directory passed without
+  creating the injected marker; the affected Hook/mirror suite passed
+  `30 passed, 1 skipped`. The repeat independent review found no P0/P1 and
+  returned `PASS`.
+- Fresh installed SessionStart `startup`, `resume`, `clear`, and `compact`
+  each returned exit `0`. With the service stopped, SessionStart returned in
+  about 2.1 seconds and restored the single listener asynchronously.
+  PreCompact created one checkpoint and the exact retry created zero. After a
+  service restart, native MCP recall reinitialized automatically without
+  `authorization_pending`; a bounded root checkpoint was created once and the
+  exact retry returned `duplicate`.
+- M11B changed the explicitly authorized local Hook/MCP/runtime configuration
+  and created only immutable test checkpoint/lesson records. Exact rollback
+  backups exist. It did not stage, commit, push, publish a global playbook,
+  enable Vault Git, or change remote state.
+
+### Next action
+
+The root coordinator may now stage the exact 21 accepted M11B paths, verify the
+cached path set and content, and create one local logical commit. After that,
+resume the isolated T3/RD-Code real-path closure before integrating the
+separately reviewed Trusted Core slices. Do not push, publish Global Playbooks,
+enable Vault Git history, or broaden client/path trust. OS-process attestation
+beyond the exact token-bound Codex fingerprint and optional local Vault history
+each require a new scoped Recon.

@@ -27,6 +27,7 @@ from control_plane.obsidian_memory import (  # noqa: E402
     approve_project_plan,
     managed_plan_relative_path,
     recall_project_plan,
+    resolve_session_project,
     stage_project_plan,
 )
 from control_plane.writeback import (  # noqa: E402
@@ -90,9 +91,23 @@ def _authorize(session_id: str, runtime_dir: Path) -> None:
     mcp_consent.decide(session_id, "allow_once", runtime_dir=runtime_dir)
 
 
-def _call(tool: str, args: dict[str, object], runtime_dir: Path, session_id: str) -> dict[str, object]:
+def _call(
+    tool: str,
+    args: dict[str, object],
+    runtime_dir: Path,
+    session_id: str,
+    *,
+    project_root: Path | None = None,
+) -> dict[str, object]:
+    params: dict[str, object] = {"name": tool, "arguments": args}
+    if project_root is not None:
+        params["_meta"] = {
+            "codex/sandbox-state-meta": {
+                "sandboxCwd": project_root.resolve().as_uri(),
+            }
+        }
     response, _ = handle_mcp_jsonrpc(
-        {"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": tool, "arguments": args}},
+        {"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": params},
         runtime_dir=runtime_dir,
         session_id=session_id,
     )
@@ -110,17 +125,14 @@ def test_real_mcp_plan_propose_approve_recall(tmp_path, monkeypatch):
     session_id = "sess-plan"
     _authorize(session_id, runtime)
     monkeypatch.setenv("DEVFRAME_OBSIDIAN_MEMORY_ROOT", str(vault))
-    monkeypatch.setattr(
-        dashboard_module,
-        "_resolve_writeback_workspace_root",
-        lambda _runtime, _paper, project_id: str(project) if project_id == "dev-frame-system" else "",
-    )
+    project_id = str(resolve_session_project(cwd=project, runtime_dir=runtime)["projectId"])
 
     proposed = _call(
         "propose_project_plan",
-        {"projectId": "dev-frame-system", "contents": "## Goal\n\nShip one unified memory path."},
+        {"projectId": project_id, "contents": "## Goal\n\nShip one unified memory path."},
         runtime,
         session_id,
+        project_root=project,
     )
     assert proposed["_isError"] is False
     assert proposed["staged"] is True
@@ -140,9 +152,10 @@ def test_real_mcp_plan_propose_approve_recall(tmp_path, monkeypatch):
 
     recalled = _call(
         "recall_project_plan",
-        {"projectId": "dev-frame-system"},
+        {"projectId": project_id},
         runtime,
         session_id,
+        project_root=project,
     )
     assert recalled["_isError"] is False
     assert recalled["status"] == "current"
@@ -172,17 +185,14 @@ def test_mcp_rejects_lone_surrogate_plan_as_controlled_tool_error(tmp_path, monk
     session_id = "sess-invalid-unicode"
     _authorize(session_id, runtime)
     monkeypatch.setenv("DEVFRAME_OBSIDIAN_MEMORY_ROOT", str(vault))
-    monkeypatch.setattr(
-        dashboard_module,
-        "_resolve_writeback_workspace_root",
-        lambda _runtime, _paper, project_id: str(project) if project_id == "demo" else "",
-    )
+    project_id = str(resolve_session_project(cwd=project, runtime_dir=runtime)["projectId"])
 
     proposed = _call(
         "propose_project_plan",
-        {"projectId": "demo", "contents": "invalid surrogate: \ud800"},
+        {"projectId": project_id, "contents": "invalid surrogate: \ud800"},
         runtime,
         session_id,
+        project_root=project,
     )
 
     assert proposed["_isError"] is True
