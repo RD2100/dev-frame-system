@@ -16,6 +16,15 @@
 | 状态 | **merged**（G1 submitted：b9edbb3924；main 合并提交 01eb0d288a；合并后 ui-workspace 155 tests 绿）。基线切片 45599c666c；实机验证全绿（2026-09-05 01:24，第二实例 :3081 + Playwright：行菜单 → Session ID → 完整 ID `session-714e9f00-…` 原样显示 → 复制按钮 → “已复制” → 剪贴板内容与完整 ID 一致，截图 apps/web/tmp-verify/sessionid-check.png）；该实例为全新启动进程，同一 SessionID 跨进程一致，即重启/冷恢复稳定性的直接证据 |
 | 下一步动作 | 无（已合并）。遗留可选项：对话框上提为浏览器 owner 级需同步改 G1 钉住的两个测试（注释已互指） |
 
+## 集成收口（2026-09-05，控制会话执行）
+
+| 项 | 值 |
+| --- | --- |
+| 最终集成提交链 | e247d0d008（catalog 豁免修复）→ d28f2577bc（merge G4）→ 5029beedfe（G4 注册）→ 5f888763cb（merge G5）→ a16ce0a872（G5 注册）→ f2755ddbba（merge G2）→ ee8e0ab646（composition-smoke 入 host 聚合）→ a010588564（最终形态：clientLibrary 配置 + corpus 豁免 + worktree-registry 索引行） |
+| 全量验证 | `pnpm run test`：16238 passed / 10 failed（4 文件；全部为 Windows 主机既有信号：codex real-product 缺 vendor CLI ×2、npm-resolution 基准缺 npm ×3、change-scope/build-environment 子进程 spec 在全量并行下 5s 超时 ×5——单独与小批运行全绿）；`pnpm run test:gui` 3913 passed / 1 skipped；`pnpm run build` 220 client artifacts；`pnpm run typecheck` 绿；`test:docs` 15/15；composition-smoke 5/5；corpus 门禁绿；双语配对 1132 对一致 |
+| 实机验证 | 第二实例 :3081（后台 job pwsh-10）：行菜单 → Session ID → 完整 ID → 复制 → "已复制" → 剪贴板一致（证据 .agents/devframe/evidence/sessionid-check.png，从 apps/web/tmp-verify 移入）。:3080 为用户当前会话宿主，重启留给用户执行 |
+| 清理 | 已删 apps/web/tmp-verify/、.agents/tmp/、临时日志；worktree g1–g5 与分支保留（可安全删除） |
+
 ## G2 — Thread / Agent / Worktree 关联与状态
 
 | 项 | 值 |
@@ -26,9 +35,9 @@
 | Worktree | D:\dsh-devframe-g2（分支 group2-thread-worktree） |
 | 文件责任范围 | 新包 packages/workflow/worktree-registry（或 packages/workspace 下扩展现有服务）；Agent Note proposed/ |
 | 验收标准 | WorktreeId 为 branded id 并持久化于 WorkspaceRecord 关联表；create/list/status/remove 服务齐备且有测试；不重复设计 SessionID（复用 dsh-brand、workspace 注册表）；README + 测试绿 |
-| 测试命令 | `pnpm exec vitest run packages/workflow/worktree-registry`（或实际包路径）；`pnpm exec tsc -b tsconfig.client.json`（如涉及） |
-| 状态 | 未启动 |
-| 下一步动作 | 先写 proposed Agent Note（复用点：WorkspaceRecord、SessionHeader.cwd 归属、git worktree 命令面） |
+| 测试命令 | `pnpm exec vitest run packages/workflow/worktree-registry`；`pnpm run verify-cordis-catalog` |
+| 状态 | **merged**（G2 submitted：3f23dd26ac，29 文件 +1887/−6；main 合并提交 f2755ddbba；合并后 11 tests 绿、verify-cordis-catalog 99 artifacts 绿、test:docs 15/15、typecheck 绿）。交付：`ctx.worktreeRegistry` Service Definition + git provider（经 subprocess）+ `worktrees` 存储域（branded WorktreeId）+ 11 测试（真实 git 子进程）+ 子系统页双语 + proposed 架构 Note。合并冲突：profileIdentity 豁免保留单份（e247d0d008 措辞）；lockfile 由 pnpm install 结算。集成边：其子系统页需 README 索引行（a010588564 补） |
+| 下一步动作 | 无（已合并）。后续位：worktree 工具 Consumer + prune 对账（proposed Note 已留设计位） |
 
 ## G3 — Project / Goal / Task / Evidence / 完成回执
 
