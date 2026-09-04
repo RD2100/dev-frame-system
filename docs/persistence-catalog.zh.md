@@ -397,20 +397,71 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 ### `devframe/*`
 
+<a id="devframegoal-binding--log-only"></a>
+
+#### `devframe/goal-binding` — log-only
+
+```ts persistence-catalog
+/** Complete Goal-to-task binding and admission budget for one project Goal. */
+'devframe/goal-binding': GoalBinding
+```
+
+来源：[`packages/experimental/devframe/src/events.ts:251`](../packages/experimental/devframe/src/events.ts)
+
+<a id="devframelifecycle--log-only"></a>
+
+#### `devframe/lifecycle` — log-only
+
+```ts persistence-catalog
+/** Whole lifecycle observation used to recover stop and writer ownership state. */
+'devframe/lifecycle': DevFrameLifecycleEventData
+```
+
+来源：[`packages/experimental/devframe/src/events.ts:259`](../packages/experimental/devframe/src/events.ts)
+
+<a id="devframereview--log-only"></a>
+
+#### `devframe/review` — log-only
+
+```ts persistence-catalog
+/** Independent reviewer decision and bounded findings for one source snapshot. */
+'devframe/review': DevFrameReviewEventData
+```
+
+来源：[`packages/experimental/devframe/src/events.ts:257`](../packages/experimental/devframe/src/events.ts)
+
 <a id="devframerole-policy--log-only"></a>
 
 #### `devframe/role-policy` — log-only
 
 ```ts persistence-catalog
-/**
- * Records one exact Agent's DevFrame role and policy identity. Recovery
- * must restore this lookup before execution and refuse resume when the
- * live identity or configured policy cannot be matched.
- */
-'devframe/role-policy': DevFrameRolePolicyEvent
+/** Complete role policy and live Agent assignments used for cold guard restoration. */
+'devframe/role-policy': DevFrameRolePolicyEventData
 ```
 
-来源：[`packages/experimental/devframe/src/permissions/events.ts:23`](../packages/experimental/devframe/src/permissions/events.ts)
+来源：[`packages/experimental/devframe/src/events.ts:249`](../packages/experimental/devframe/src/events.ts)
+
+<a id="devframeusage--log-only"></a>
+
+#### `devframe/usage` — log-only
+
+```ts persistence-catalog
+/** Reservation or settlement of one bounded project execution attempt. */
+'devframe/usage': DevFrameUsageEventData
+```
+
+来源：[`packages/experimental/devframe/src/events.ts:253`](../packages/experimental/devframe/src/events.ts)
+
+<a id="devframeverification--log-only"></a>
+
+#### `devframe/verification` — log-only
+
+```ts persistence-catalog
+/** Real configured-check results for one exact source snapshot. */
+'devframe/verification': DevFrameVerificationEventData
+```
+
+来源：[`packages/experimental/devframe/src/events.ts:255`](../packages/experimental/devframe/src/events.ts)
 
 ### `feedback/*`
 
