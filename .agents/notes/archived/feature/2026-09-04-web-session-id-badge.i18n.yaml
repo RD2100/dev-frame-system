@@ -1,0 +1,5 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Archived triplet: hashes frozen at
+# archival time; the archived sides are never edited again.
+2026-09-04-web-session-id-badge.md: 8ceed0806f402e13599f3ea2304495e1ce3fe0ce
+2026-09-04-web-session-id-badge.zh.md: 40f4947b84ce8b89f060b8adb365ee53df226747

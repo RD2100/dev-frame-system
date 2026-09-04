@@ -1,0 +1,70 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 320px;
+  max-width: 440px;
+}
+
+/* The full id never truncates: it breaks anywhere so every character stays
+   visible and selectable, which is the whole point of the dialog. */
+.id {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--dsw-alias-fill-subtle);
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--dsw-font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+  word-break: break-all;
+  user-select: all;
+  cursor: pointer;
+}
+
+.id:hover,
+.id:focus-visible {
+  background: var(--dsw-alias-fill-strong);
+}
+
+.copyRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.copy {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--dsw-alias-fill-subtle);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.copy:hover,
+.copy:focus-visible {
+  background: var(--dsw-alias-fill-strong);
+}
+
+/* The status line keeps its box while idle so an announced outcome never
+   reflows the dialog; the text itself appears only on an outcome. */
+.status {
+  min-height: 18px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.statusFailed {
+  color: var(--dsw-alias-state-error-primary);
+}

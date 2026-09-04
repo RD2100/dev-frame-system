@@ -1,6 +1,7 @@
-# Agent Note：Web 会话 ID 徽标
+# Agent Note: Web 会话 ID 徽标
 
 Status: implemented
+Archived: 2026-09-04
 
 [English](2026-09-04-web-session-id-badge.md) | 中文
 

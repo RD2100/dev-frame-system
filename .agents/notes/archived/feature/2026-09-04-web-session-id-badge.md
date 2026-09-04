@@ -1,6 +1,7 @@
 # Agent Note: Web session-id badge
 
 Status: implemented
+Archived: 2026-09-04
 
 English | [中文](2026-09-04-web-session-id-badge.zh.md)
 

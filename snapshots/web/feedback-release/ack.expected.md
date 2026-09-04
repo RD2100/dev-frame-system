@@ -2,9 +2,7 @@
   - navigation "Session hierarchy":
     - button "Reply with the single word" [disabled]
   - img
-  - text: Standard mode session-{{uuid}}
-  - button "Copy session ID":
-    - img
+  - text: Standard mode
   - button "Session log":
     - text: Session log
     - img
