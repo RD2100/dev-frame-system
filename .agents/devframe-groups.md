@@ -41,8 +41,8 @@
 | 文件责任范围 | packages/goal/**、packages/experimental/devframe/**（goal-binding、projection） |
 | 验收标准 | 完成回执以会话事件持久化（复用 goal/change 机制），Evidence 记录挂 GoalRef{id,revision}；不新造身份体系（复用 GoalId、TeamTaskId、WorkspaceId）；测试绿 |
 | 测试命令 | `pnpm exec vitest run packages/goal packages/experimental/devframe` |
-| 状态 | 未启动 |
-| 下一步动作 | 写 proposed Agent Note：回执事件 schema + evidence 归属 |
+| 状态 | **merged**（G3 submitted：04e28977d5；main 合并提交 527269c5bf；合并后 packages/goal 143 tests 绿、test:docs 15/15 绿）。设计：`goal/change` union 新成员 receipt（GOAL_CHANGE_VERSION=1 不变，无格式 bump）；recordReceipt 带 CAS + complete 门；evidence 非空强制；fold 不改状态。deferred：devframe GoalBinding 回执引用、@Remote 暴露、模型可见呈现 |
+| 下一步动作 | 无（已合并）。上游遗留：gen-cordis-catalog 在基线即红（ctx.profileIdentity partition violation，3bae3a9683 引入，非本夜改动），修复后重跑生成器闭合 goal.md 生成区 |
 
 ## G4 — 停止 / 恢复 / 超时 / 失败回滚可靠性
 
