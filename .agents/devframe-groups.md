@@ -55,8 +55,8 @@
 | 文件责任范围 | packages/goal/goal-round-driver、packages/guard/**、packages/subagent/**（仅可靠性路径） |
 | 验收标准 | 超时、停止、恢复、回滚路径各有行为测试；失败回滚不留半提交状态；不改动 goal/change 事件格式（避免与 G3 冲突） |
 | 测试命令 | `pnpm exec vitest run packages/goal packages/guard packages/subagent` |
-| 状态 | 未启动 |
-| 下一步动作 | 梳理现有 pause/resume 与超时守卫，找缺口 |
+| 状态 | **merged**（G4 submitted：bb45d0ee29；main 合并提交 d28f2577bc；合并后 guard+goal 177 tests 绿、typecheck 绿）。加固：goal-round-driver teardown 撤回 latched queued round（latched-maintenance 窗口），2 个回归测试经 stash 对照验证无修复即失败。审计确认停止/恢复/超时/回滚既有覆盖密集 |
+| 下一步动作 | 无（已合并）。未修复项（有理由）：retired-agent states Map 内部卫生、timeout 强制弃权（契约变更）、keepInbox 保留输入的 host 所有权边界——均已在 proposed Note Risks 记录 |
 
 ## G5 — 组合测试 / Web 回放 / 文档 / 快照 / 验收
 
