@@ -9,11 +9,13 @@ import {
   unlinkSync, writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import { describe, expect, it } from 'vitest'
 import {
   composeEntries,
+  DSH_PROFILE_IDENTITY_KEY,
+  ensureProfileIdentity,
   healProfilesModuleFallback,
   initProfile,
   loadProfile,
@@ -24,6 +26,7 @@ import {
   resolveProfileDir,
   writeProfileManifest,
   type Profile,
+  type ProfileManifest,
 } from '../src/index.ts'
 
 const tmp = (): string => mkdtempSync(join(tmpdir(), 'dsh-profile-'))
@@ -117,6 +120,71 @@ describe('manifest round-trip', () => {
     expect(() => readProfileManifest('t', dir)).toThrow('must hold a JSON object')
     expect(() => readProfileManifest('t', join(dir, 'nope'))).toThrow('failed to read profile manifest')
   })
+
+  it('rejects malformed owned fields before the loader trusts them', () => {
+    const dir = tmp()
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 1 }))
+    expect(() => readProfileManifest('t', dir)).toThrow('name must be a string')
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: [] }))
+    expect(() => readProfileManifest('t', dir)).toThrow('dependencies must be a JSON object')
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: { broken: 1 } }))
+    expect(() => readProfileManifest('t', dir)).toThrow('dependencies.broken must map package names to strings')
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ dsh: [] }))
+    expect(() => readProfileManifest('t', dir)).toThrow('dsh must be a JSON object')
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ dsh: { profile: [] } }))
+    expect(() => readProfileManifest('t', dir)).toThrow('dsh.profile must be a JSON object')
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ dsh: { bundle: [] } }))
+    expect(() => readProfileManifest('t', dir)).toThrow('dsh.bundle must be a JSON object')
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ dsh: { bundle: { patch: 1 } } }))
+    expect(() => readProfileManifest('t', dir)).toThrow('dsh.bundle.patch must be a non-empty string')
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ dsh: { bundle: { patch: '' } } }))
+    expect(() => readProfileManifest('t', dir)).toThrow('dsh.bundle.patch must be a non-empty string')
+    writeFileSync(join(dir, 'package.json'), '{')
+    expect(() => readProfileManifest('t', dir)).toThrow('failed to parse profile manifest')
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ dsh: { profile: { bundles: ['ok', 'ok'] } } }))
+    expect(() => readProfileManifest('t', dir)).toThrow('dsh.profile.bundles[1] duplicates')
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ dsh: { profile: { bundles: '../escape' } } }))
+    expect(() => readProfileManifest('t', dir)).toThrow('dsh.profile.bundles must be an array')
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ dsh: { profile: { bundles: ['@scope/../escape'] } } }))
+    expect(() => readProfileManifest('t', dir)).toThrow('dsh.profile.bundles[0] must be a non-empty package name')
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ dsh: { profile: { patchReload: 'later' } } }))
+    expect(() => readProfileManifest('t', dir)).toThrow('patchReload must be "live" or "startup"')
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ dsh: { profile: { id: 'not-a-uuid' } } }))
+    expect(() => readProfileManifest('t', dir)).toThrow('dsh.profile.id has an invalid UUID v4 value')
+  })
+})
+
+describe('ensureProfileIdentity', () => {
+  it('persists one UUID v4, preserves unrelated manifest fields, and is idempotent', async () => {
+    const home = tmp()
+    const dir = resolveProfileDir('devframe', home)
+    initProfile(dir, PROFILE_TEMPLATES.devframe?.bundles ?? [], 'startup')
+    const manifest = readProfileManifest('t', dir) as ProfileManifest & { custom?: string }
+    manifest.custom = 'preserve-me'
+    writeProfileManifest(dir, manifest)
+
+    const first = await ensureProfileIdentity('t', 'devframe', home)
+    expect(first.name).toBe('devframe')
+    expect(first.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u)
+    expect(readProfileManifest('t', dir)).toMatchObject({
+      custom: 'preserve-me',
+      dsh: { profile: { id: first.id } },
+    })
+    await expect(ensureProfileIdentity('t', 'devframe', home)).resolves.toEqual(first)
+    expect(DSH_PROFILE_IDENTITY_KEY).toBe('profileIdentity')
+  })
+
+  it('serializes concurrent identity creation through the profile manifest lock', async () => {
+    const home = tmp()
+    const dir = resolveProfileDir('parallel', home)
+    initProfile(dir, [])
+    const identities = await Promise.all([
+      ensureProfileIdentity('t', 'parallel', home),
+      ensureProfileIdentity('t', 'parallel', home),
+      ensureProfileIdentity('t', 'parallel', home),
+    ])
+    expect(new Set(identities.map(identity => identity.id))).toHaveLength(1)
+  })
 })
 
 describe('resolveBundleDir', () => {
@@ -192,6 +260,14 @@ describe('loadProfile', () => {
     expect(PROFILE_TEMPLATES.web?.bundles).toContain('@deepseek-ai/dsh-base')
     expect(PROFILE_TEMPLATES.web?.patchReload).toBe('live')
     expect(PROFILE_TEMPLATES.headless?.patchReload).toBe('startup')
+    expect(PROFILE_TEMPLATES.devframe).toEqual({
+      bundles: [
+        '@deepseek-ai/dsh-base',
+        '@deepseek-ai/dsh-headless',
+        '@deepseek-ai/dsh-experimental-agent-team-profile',
+      ],
+      patchReload: 'startup',
+    })
     expect(PROFILE_TEMPLATES.acp).toEqual({
       bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-acp-app'],
       patchReload: 'startup',
@@ -285,6 +361,78 @@ describe('loadProfile', () => {
     const dir = resolveProfileDir('demo', home)
     initProfile(dir, ['not-a-bundle'])
     expect(() => loadProfile('t', 'demo', anchor, home)).toThrow('declares no dsh.bundle')
+  })
+
+  it('fails loud when a bundle omits its patch declaration', () => {
+    const anchor = stageInstallation({})
+    const home = tmp()
+    const dir = resolveProfileDir('demo', home)
+    const packageDir = join(dirname(anchor), 'node_modules', 'missing-patch')
+    mkdirSync(packageDir, { recursive: true })
+    writeFileSync(join(packageDir, 'package.json'), JSON.stringify({
+      name: 'missing-patch',
+      version: '0.0.0',
+      dsh: { bundle: {} },
+    }))
+    mkdirSync(dir, { recursive: true })
+    writeProfileManifest(dir, { dsh: { profile: { bundles: ['missing-patch'] } } })
+    expect(() => loadProfile('t', 'demo', anchor, home)).toThrow('dsh.bundle.patch must be a non-empty string')
+  })
+
+  it('keeps a bundle patch inside the resolved package directory', () => {
+    const anchor = stageInstallation({})
+    const home = tmp()
+    const dir = resolveProfileDir('demo', home)
+    const packageDir = join(dirname(anchor), 'node_modules', 'unsafe-bundle')
+    mkdirSync(packageDir, { recursive: true })
+    writeFileSync(join(packageDir, 'package.json'), JSON.stringify({
+      name: 'unsafe-bundle',
+      version: '0.0.0',
+      dsh: { bundle: { patch: '../outside.yml' } },
+    }))
+    writeFileSync(join(dirname(packageDir), 'outside.yml'), '[]\n')
+    mkdirSync(dir, { recursive: true })
+    writeProfileManifest(dir, { dsh: { profile: { bundles: ['unsafe-bundle'] } } })
+    expect(() => loadProfile('t', 'demo', anchor, home)).toThrow('escapes its package root')
+  })
+
+  it.each([
+    ['a\u0000.yml', 'must be relative to its package root'],
+    ['/outside.yml', 'must be relative to its package root'],
+    ['C:outside.yml', 'must be relative to its package root'],
+    ['.', 'escapes its package root'],
+    ['..', 'escapes its package root'],
+    ['./missing.yml', 'does not name a file'],
+  ])('rejects unsafe bundle patch %s', (patch, message) => {
+    const anchor = stageInstallation({})
+    const home = tmp()
+    const dir = resolveProfileDir('demo', home)
+    const packageDir = join(dirname(anchor), 'node_modules', 'unsafe-bundle')
+    mkdirSync(packageDir, { recursive: true })
+    writeFileSync(join(packageDir, 'package.json'), JSON.stringify({
+      name: 'unsafe-bundle',
+      version: '0.0.0',
+      dsh: { bundle: { patch } },
+    }))
+    mkdirSync(dir, { recursive: true })
+    writeProfileManifest(dir, { dsh: { profile: { bundles: ['unsafe-bundle'] } } })
+    expect(() => loadProfile('t', 'demo', anchor, home)).toThrow(message)
+  })
+
+  it('rejects a bundle patch path that resolves to a directory', () => {
+    const anchor = stageInstallation({})
+    const home = tmp()
+    const dir = resolveProfileDir('demo', home)
+    const packageDir = join(dirname(anchor), 'node_modules', 'directory-patch-bundle')
+    mkdirSync(join(packageDir, 'patch-dir'), { recursive: true })
+    writeFileSync(join(packageDir, 'package.json'), JSON.stringify({
+      name: 'directory-patch-bundle',
+      version: '0.0.0',
+      dsh: { bundle: { patch: './patch-dir' } },
+    }))
+    mkdirSync(dir, { recursive: true })
+    writeProfileManifest(dir, { dsh: { profile: { bundles: ['directory-patch-bundle'] } } })
+    expect(() => loadProfile('t', 'demo', anchor, home)).toThrow('does not name a file')
   })
 })
 

@@ -11,12 +11,13 @@
 | `dsh --profile <name>` | 启动位于 `$DSH_HOME/profiles/<name>` 的指定 profile。 |
 | `dsh --profile acp` | 通过 ACP stdio 为自动化 client 提供服务，直至断开连接。 |
 | `dsh --profile headless "job"` | 运行一个全新的持久化会话，打印最终答案并退出。 |
+| `dsh --profile devframe "job"` | 运行源码 checkout 中的实验性 DevFrame 组合。 |
 | `dsh --profile sdk` | 通过 JSON-RPC stdio 为 SDK client 提供服务，直至关闭或断开连接。 |
 | `dsh --profile sdk-minimal` | 以独立极简 agent 配置树为 SDK client 提供服务。 |
 | `dsh web` | `--profile web` 的别名。 |
 | `dsh plugin --profile <name> <pnpm args>` | 通过在 profile 目录中转发给 pnpm 来管理该 profile 的插件。 |
 
-运行命令时所在的目录将作为默认 workspace 根目录。`web`、`headless`、`sdk`、`sdk-minimal` 和 `acp` profile 在首次使用时会从随附模板自动初始化；其他任何 profile 都必须通过 `dsh plugin` 创建。
+运行命令时所在的目录将作为默认 workspace 根目录。`web`、`headless`、`sdk`、`sdk-minimal` 和 `acp` profile 在首次使用时会从随附模板自动初始化；源码 checkout 还提供实验性的 `devframe` 模板。其他任何 profile 都必须通过 `dsh plugin` 创建。
 
 ## 应用参数
 
@@ -33,7 +34,7 @@ dsh --help                          # the launcher's own help
 <a id="profiles"></a>
 ## Profile
 
-profile 目录包含一个 `package.json`，其中记录树外插件依赖，以及 profile manifest（元数据清单）`dsh.profile`、其中按顺序排列的 `bundles` 列表与 `patchReload` 生命周期；还包含一个 `cordis.patch.yml`，其中保存用户自己的 patch 层。`patchReload: live` 监视 profile 与 home 级 patch 文件，`startup` 则只应用一次。
+profile 目录包含一个 `package.json`，其中记录树外插件依赖，以及 profile manifest（元数据清单）`dsh.profile`、其中按顺序排列的 `bundles` 列表、稳定的 `id` 与 `patchReload` 生命周期；还包含一个 `cordis.patch.yml`，其中保存用户自己的 patch 层。启动器会在挂载插件树前在 manifest 锁内创建 UUID v4 的 `id`。`patchReload: live` 监视 profile 与 home 级 patch 文件，`startup` 则只应用一次。
 
 配置树以空根为起点，依次叠加以下配置层：
 - `dsh.profile.bundles` 中各组合包的 patch

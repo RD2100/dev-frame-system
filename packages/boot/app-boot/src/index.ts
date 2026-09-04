@@ -19,11 +19,14 @@ import { dshHomePath, resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { createLaunchEnvironmentSnapshot, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import type {} from '@deepseek-ai/cordis-plugin-hmr'
 import type {} from '@deepseek-ai/dsh-system-prompt'
+import type { ProfileIdentity } from './profile.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Harness-home path resolver available to Loader `!!js` config expressions. */
     dshHomePath?: typeof dshHomePath
+    /** Stable profile identity provided by the launcher before tree mount. */
+    profileIdentity?: ProfileIdentity
   }
 }
 
@@ -31,6 +34,8 @@ export {
   composeEntries,
   DEFAULT_PROFILE_BUNDLES,
   DEFAULT_PROFILE_PATCH_RELOAD,
+  DSH_PROFILE_IDENTITY_KEY,
+  ensureProfileIdentity,
   healProfilesModuleFallback,
   initProfile,
   loadProfile,
@@ -45,6 +50,8 @@ export {
   type DshManifestSection,
   type DshProfileManifest,
   type Profile,
+  type ProfileId,
+  type ProfileIdentity,
   type ProfileLayer,
   type ProfileManifest,
   type ProfileModuleFallbackOptions,

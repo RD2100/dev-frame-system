@@ -20,6 +20,8 @@ import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import {
   boot,
   composeEntries,
+  DSH_PROFILE_IDENTITY_KEY,
+  ensureProfileIdentity,
   healProfilesModuleFallback,
   installFailLoud,
   loadOptionalPatches,
@@ -208,6 +210,7 @@ function suppressShutdownError(ctx: Context, signal: AbortSignal, error: unknown
  */
 export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Context; shutdown: ProcessShutdown }> {
   const composed = await composeProfile(options.profile, options.patchFiles)
+  const profileIdentity = await ensureProfileIdentity(NAME, options.profile)
   const app: { current?: Context } = {}
   const appReady = createAppReady()
   const shutdown = createProcessShutdown(async () => { await app.current?.fiber.dispose() })
@@ -253,6 +256,9 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
     // Before any config-tree entry mounts, so plugins resolve all launch-time
     // environment values from the same immutable provenance snapshot.
     hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, options.environment)
+    // The profile identity is durable and available before any config-tree
+    // plugin mounts, so host-owned features can bind their state to this profile.
+    hostCtx.provide(DSH_PROFILE_IDENTITY_KEY, profileIdentity)
     // The command line and bounded exit request are launcher facts available
     // to every app plugin that injects the argument snapshot.
     provideCmdline(hostCtx, {
