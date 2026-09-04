@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/testing/2026-09-04-devframe-cross-group-qa-evidence.md
+2026-09-04-devframe-cross-group-qa-evidence.md: 9f53ad17dac7eb09d6eec87d87befa97e78d0b6b
+2026-09-04-devframe-cross-group-qa-evidence.zh.md: fdc79ed9580d26b7a4e151af1c9cfdc431f33544
