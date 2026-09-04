@@ -31,6 +31,8 @@ declare module '@deepseek-ai/cordis' {
 export {
   composeEntries,
   DEFAULT_PROFILE_BUNDLES,
+  DSH_PROFILE_IDENTITY_KEY,
+  ensureProfileIdentity,
   healProfilesModuleFallback,
   initProfile,
   loadProfile,
@@ -45,6 +47,8 @@ export {
   type DshManifestSection,
   type DshProfileManifest,
   type Profile,
+  type ProfileId,
+  type ProfileIdentity,
   type ProfileLayer,
   type ProfileManifest,
 } from './profile.ts'

@@ -1,0 +1,12 @@
+# Deprecated compatibility overlay. The desktop launcher no longer uses this
+# file: it boots the formal `--profile devframe` profile directly, which owns
+# the same control-session and browser rows. Keep this overlay for callers that
+# still invoke `dsh web --patch scripts/devframe-web.patch.yml`; it is not the
+# canonical DevFrame entrypoint and must not create a second profile identity.
+
+- insert:
+    - id: devframe-control-session
+      name: '@deepseek-ai/dsh-devframe-control-session'
+
+    - id: client-ui-devframe-control-session
+      name: '@deepseek-ai/dsh-client-ui-devframe-control-session'

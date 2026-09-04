@@ -22,6 +22,7 @@
  * @module @deepseek-ai/dsh-app-boot/profile
  */
 
+import { randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
 import {
   existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync,
@@ -29,6 +30,8 @@ import {
 import { basename, dirname, join } from 'node:path'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { applyEntryPatches, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
+import type { Branded } from '@deepseek-ai/dsh-brand'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { loadOverlayPatches } from './index.ts'
 
@@ -46,8 +49,31 @@ export interface DshBundleManifest {
 
 /** The profile half of the `dsh` manifest section: what a profile directory composes. */
 export interface DshProfileManifest {
+  /** Stable UUID v4 identifying this profile independently of its path. */
+  id?: ProfileId
   /** Ordered bundle layer list (package names). */
   bundles?: string[]
+}
+
+/** Stable UUID v4 identifying one profile across process restarts. */
+export type ProfileId = Branded<'ProfileId'>
+
+/** Public profile identity, deliberately excluding its absolute directory. */
+export interface ProfileIdentity {
+  /** Stable persisted UUID v4. */
+  readonly id: ProfileId
+  /** Profile selector name passed to the launcher. */
+  readonly name: string
+}
+
+/** Root Context key populated by the product launcher before profile rows mount. */
+export const DSH_PROFILE_IDENTITY_KEY = 'profileIdentity'
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** Stable launcher-owned identity for the currently booted profile. */
+    profileIdentity?: ProfileIdentity
+  }
 }
 
 /**
@@ -114,6 +140,7 @@ export function resolveProfileDir(name: string, home: string = resolveDshHome())
 export const PROFILE_TEMPLATES: Record<string, readonly string[]> = {
   web: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'],
   headless: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-headless'],
+  devframe: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@deepseek-ai/dsh-devframe'],
 }
 
 /** Installation-owned bundle tuples normalized to the shipped template. */
@@ -141,6 +168,77 @@ const PROFILE_PNPM_WORKSPACE = `packages:
 nodeLinker: hoisted
 autoInstallPeers: false
 `
+
+/** Canonical lowercase RFC 4122 UUID v4 spelling emitted by `randomUUID()`. */
+const PROFILE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
+/** Whether a durable JSON value is an object section rather than an array. */
+function isManifestSection(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Brand a validated profile identity string.
+ * @param id - Canonical UUID v4 string read from or written to the profile manifest.
+ * @returns the same string branded as a profile id.
+ */
+function profileId(id: string): ProfileId {
+  return id as ProfileId
+}
+
+/**
+ * Return a profile's stable public identity, migrating a legacy manifest that
+ * lacks `dsh.profile.id`. Migration re-reads and atomically replaces the
+ * manifest under its cross-process writer lock, so concurrent first readers
+ * adopt the same UUID. An existing malformed section or id fails without
+ * changing the file.
+ * @param binName - diagnostic prefix on read failures.
+ * @param name - profile selector name.
+ * @param home - Harness home; defaults to {@link resolveDshHome}.
+ * @returns only the stable id and profile name, never the absolute directory.
+ */
+export async function ensureProfileIdentity(
+  binName: string,
+  name: string,
+  home: string = resolveDshHome(),
+): Promise<ProfileIdentity> {
+  const dir = resolveProfileDir(name, home)
+  const manifestPath = join(dir, 'package.json')
+  return withFileLock(manifestPath, async () => {
+    const manifest = readProfileManifest(binName, dir)
+    const dshValue: unknown = manifest.dsh
+    if (dshValue !== undefined && !isManifestSection(dshValue)) {
+      throw new Error(`${binName}: profile ${JSON.stringify(name)} has an invalid dsh section`)
+    }
+    const profileValue: unknown = dshValue?.profile
+    if (profileValue !== undefined && !isManifestSection(profileValue)) {
+      throw new Error(`${binName}: profile ${JSON.stringify(name)} has an invalid dsh.profile section`)
+    }
+    if (profileValue !== undefined && Object.hasOwn(profileValue, 'id')) {
+      const persisted = profileValue.id
+      if (typeof persisted !== 'string' || !PROFILE_ID_PATTERN.test(persisted)) {
+        throw new Error(`${binName}: profile ${JSON.stringify(name)} has an invalid dsh.profile.id`)
+      }
+      return { id: profileId(persisted), name }
+    }
+
+    const id = profileId(randomUUID())
+    const migrated: ProfileManifest = {
+      ...manifest,
+      dsh: {
+        ...dshValue,
+        profile: {
+          ...profileValue,
+          id,
+        },
+      },
+    }
+    await writeFileAtomic(manifestPath, `${JSON.stringify(migrated, undefined, 2)}\n`, {
+      mode: 0o600,
+    })
+    return { id, name }
+  })
+}
 
 /**
  * Initialize a profile directory: manifest, empty user patch layer, and the

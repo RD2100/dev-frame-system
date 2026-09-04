@@ -5,8 +5,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Built-artifact smoke for the first generated Remote: plain Node boots the
- * Host and Browser bundle handoffs, then crosses the shared `/api` HTTP route.
+ * Built-artifact smoke for generated Remotes: plain Node boots the Host and
+ * Browser bundle handoffs, then crosses the shared `/api` HTTP route.
  */
 
 const packageDir = fileURLToPath(new URL('..', import.meta.url))
@@ -22,13 +22,15 @@ const requiredArtifacts = [
   'packages/core/session/lib/index.js',
   'packages/goal/goal/lib/index.js',
   'packages/goal/goal/lib/typert.host.js',
+  'packages/devframe/control-session/lib/index.js',
+  'packages/devframe/control-session/lib/typert.host.js',
   'packages/api/gateway/lib/client.js',
   'packages/api/gateway/lib/index.js',
   'packages/typert/registry/lib/client.js',
   'packages/typert/registry/lib/index.js',
 ].every(path => existsSync(artifact(path)))
 
-describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
+describe.skipIf(!requiredArtifacts)('Generated Remote built LIB chain', () => {
   it('runs root and Agent-scoped calls through generated bundles and real HTTP', async () => {
     const urls = Object.fromEntries(Object.entries({
       agent: 'packages/core/agent/lib/index.js',
@@ -38,6 +40,8 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       connectionHost: 'packages/client/connection/lib/index.js',
       goal: 'packages/goal/goal/lib/index.js',
       goalTypert: 'packages/goal/goal/lib/typert.host.js',
+      controlSession: 'packages/devframe/control-session/lib/index.js',
+      controlSessionTypert: 'packages/devframe/control-session/lib/typert.host.js',
       registryClient: 'packages/typert/registry/lib/client.js',
       registryHost: 'packages/typert/registry/lib/index.js',
       remotesClient: 'packages/api/remotes/lib/client.js',
@@ -54,6 +58,8 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       const { default: TypertRemoteService } = await import(urls.apiGatewayHost)
       const { default: GoalService } = await import(urls.goal)
       const { TYPERT } = await import(urls.goalTypert)
+      const { default: DevFrameControlSessions } = await import(urls.controlSession)
+      const { TYPERT: controlSessionTYPERT } = await import(urls.controlSessionTypert)
       const { default: TypertRegistry } = await import(urls.registryHost)
       const { Session, SessionId } = await import(urls.session)
 
@@ -72,7 +78,19 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       await host.plugin(AgentRegistry)
       await host.plugin(TypertRemoteService)
       await host.plugin(GoalService)
+      // Use the real DevFrame Host service and generated descriptor. The
+      // bootstrap opener is replaced only at this test seam so the probe can
+      // publish a deterministic ready identity without starting a model.
+      const controlSessions = new DevFrameControlSessions(host)
+      controlSessions.openGlobal = async () => ({
+        id: 'devframe-global:built-profile',
+        role: 'global',
+        agent: {},
+      })
       host.typert.register(TYPERT)
+      host.typert.register(controlSessionTYPERT)
+      const generation = controlSessions.beginGlobalBootstrap()
+      await generation.open('built-profile')
 
       const makeAgent = rawId => {
         const session = new Session(SessionId(rawId))
@@ -157,6 +175,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       )
       const agentContext = client.extend({ builtAgentId: scopedAgent.id })
       const scopedResult = await agentContext.remote.goals.create({ objective: 'scoped goal', maxGoalRounds: 3 })
+      const readinessResult = await client.remote.devframeControlSessions.readiness(-1)
       const result = {
         invalidRejected,
         rootResult: rootResult.value,
@@ -166,6 +185,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
         scopedGoal: host.goals.get(scopedAgent)?.objective,
         rootEvents: rootAgent.session.events.length,
         scopedEvents: scopedAgent.session.events.length,
+        readiness: readinessResult.value,
       }
 
       await client.fiber.dispose()
@@ -188,6 +208,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       scopedGoal: string
       rootEvents: number
       scopedEvents: number
+      readiness: { status: string; generation: number; revision: number; sessionId?: string }
     }
     expect(output).toMatchObject({
       invalidRejected: true,
@@ -198,6 +219,12 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       scopedGoal: 'scoped goal',
       rootEvents: 2,
       scopedEvents: 1,
+      readiness: {
+        status: 'ready',
+        generation: 1,
+        revision: 2,
+        sessionId: 'devframe-global:built-profile',
+      },
     })
     expect(output.rootResult.ref.id).toMatch(/^goal-/)
     expect(output.scopedResult.ref.id).toMatch(/^goal-/)

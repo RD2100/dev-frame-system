@@ -2,16 +2,16 @@
 
 [English](README.md) | 中文
 
-文件型[凭据](../credentials/README.md)提供方：四层来源，一套明确的优先级。
+文件型[凭据](../credentials/README.md)提供方：四层来源，一套默认明确的优先级。交互式 Web 组合可以明确开启通过受管文档替换启动环境密钥。
 
 | 层 | 来源 id | 可写 | 优先 |
 |---|---|---|---|
-| 继承的进程环境 | `env` | 否 | 始终优先 |
+| 继承的进程环境 | `env` | 默认否 | 默认始终优先 |
 | `$DSH_HOME/.credentials.yaml` 文档 | `file` | 是（`set`/`unset`） | 高于两个 `.env` 层 |
 | `<invocation cwd>/.env` | `project-env` | 不在此处 | 高于用户 `.env` |
 | `$DSH_HOME/.env` | `user-env` | 不在此处 | 其余情况 |
 
-启动环境优先，因为按次覆盖（`DEEPSEEK_API_KEY=… dsh`、CI 机密、容器 `-e`）代表本次运行的操作者意图——而它无法从进程内部修改，就必须*可见地*只读：`describe()` 报告 `source: 'env', writable: false`，`set`/`unset` 直接拒绝，而不是写下一个读取方永远看不到的变更。
+启动环境默认优先，因为按次覆盖（`DEEPSEEK_API_KEY=… dsh`、CI 机密、容器 `-e`）代表本次运行的操作者意图——而它无法从进程内部修改，所以通常必须*可见地*只读：`describe()` 报告 `source: 'env', writable: false`，`set`/`unset` 直接拒绝，而不是写下一个读取方永远看不到的变更。交互式 Web 组合设置 `allowManagedOverride: true`；在该组合中，Models 页面就是明确的操作者配置入口，因此保存后的受管密钥会优先于启动环境值，输入框保持可写。
 
 它之下的所有来源优先级都低于受管存储，因此 Models 页写入的密钥会立即生效，即使某个 `.env` 里还留着更旧的密钥。没有存储任何东西时这两层仍会参与解析，`describe()` 会把来源报告为 `project-env` 或 `user-env` 且 `writable: true`——存入一个密钥就会取代它们成为生效来源。
 
@@ -23,6 +23,7 @@
 |---|---|---|
 | `path` | `<harness home>/.credentials.yaml` | 凭据文档位置。 |
 | `dshHome` | `$DSH_HOME` 或 `~/.dsh` | `path` 缺省时使用的 harness home。 |
+| `allowManagedOverride` | `false` | 允许交互式 profile 通过 `$DSH_HOME/.credentials.yaml` 替换启动环境值。 |
 | `watch` | `true` | 热发布外部编辑。 |
 | `debounceMs` | `100` | watcher 写入稳定窗口。 |
 
@@ -70,4 +71,5 @@ OPENAI_API_KEY: sk-…
 - **同一引用的并发写入是后写胜出**——写锁加读-改-写让并发写入者不会丢掉彼此的条目，但两个写入者编辑同一个引用时仍以较后的写入为准；没有修订检查。
 - **同 UID 进程可以读取该文档**——见[安全边界](#security-boundary)：文件效果沙箱模式不会拒绝读取，OS 钥匙串提供方仍是延后项。
 - **环境变化不可见**：快照在启动时冻结，因此启动之后 export 的变量既不会进入解析，也不会进入 `describe`；要更换来自环境的凭据需要重启。
+- **受管覆盖按 profile 开启**：只有明确设置 `allowManagedOverride` 的 profile 才能从 Web Models 页面替换启动环境值；headless 和 CI profile 仍保持启动环境优先。
 - **原子但不具备崩溃持久性**——继承自 `dsh-atomic-write`；存储在启动时重新读取。

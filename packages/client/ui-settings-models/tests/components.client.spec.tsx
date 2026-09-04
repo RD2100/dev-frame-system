@@ -1074,6 +1074,25 @@ describe('ModelsSection', () => {
     expect(editorKey.disabled).toBe(true)
   })
 
+  it('keeps the key input editable when the Web credential provider allows an override', async () => {
+    const { face, set } = await mountSection()
+    face.credentials.describe.mockImplementation((payload: { refs: string[] }) => Promise.resolve(ok({
+      credentials: Object.fromEntries(payload.refs.map(ref => [ref, {
+        configured: true,
+        source: 'env',
+        writable: true,
+      }])),
+    })))
+    fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
+    const editorKey = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
+    await waitFor(() => { expect(editorKey.disabled).toBe(false) })
+    fireEvent.change(editorKey, { target: { value: 'sk-web-override' } })
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => {
+      expect(set).toHaveBeenCalledWith({ ref: 'OPENAI_API_KEY', value: 'sk-web-override' })
+    })
+  })
+
   it('keeps a failed credential describe silent and the input usable', async () => {
     const { face, set } = await mountSection()
     face.credentials.describe.mockImplementation(() => Promise.resolve(fail('down', 'internal')) as never)

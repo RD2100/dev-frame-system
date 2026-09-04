@@ -127,6 +127,8 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
    * session clears the selection into the New Session view state.
    */
   archiveSession: (sessionId: SessionId) => Promise<void>
+  /** Copy a canonical Session ID from a row action menu. */
+  copySessionId: (sessionId: SessionId) => void
   /**
    * Reorder a session inside its Workspace account (DOM-insertBefore
    * semantics: omitted anchor appends to the end). The view refreshes from

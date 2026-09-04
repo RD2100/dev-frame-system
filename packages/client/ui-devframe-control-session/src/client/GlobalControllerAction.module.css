@@ -1,0 +1,83 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+}
+
+.railRow {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.action:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.action[aria-current='page'] {
+  background: var(--dsw-alias-interactive-bg-selected);
+  color: var(--dsw-alias-label-primary);
+}
+
+.action:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.collapsed {
+  justify-content: center;
+  flex: none;
+  width: 36px;
+  min-height: 36px;
+  padding: 0;
+}
+
+.label {
+  overflow: hidden;
+  flex: 1;
+  white-space: nowrap;
+}
+
+.status {
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.menuButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.menuButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}

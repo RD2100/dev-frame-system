@@ -8,6 +8,7 @@
 export const zh = {
   'group.ungrouped': '未分组',
   'session.new': '新会话',
+  'session.global': '总控',
   'section.workspaces': '工作区',
   'section.sessions': '会话',
   'viewOptions.label': '视图选项',
@@ -45,6 +46,7 @@ export const zh = {
   'delete.pending': '正在删除工作区…',
   'menu.fork': '分叉会话',
   'menu.archiveSession': '归档会话',
+  'menu.copySessionId': '复制 Session ID',
   'sessions.count.one': '{n} 个会话',
   'sessions.count.other': '{n} 个会话',
   'actions.workspace.aria': '工作区“{name}”的操作',
@@ -77,6 +79,7 @@ export type WorkspaceKey = keyof typeof zh
 export const en = {
   'group.ungrouped': 'Ungrouped',
   'session.new': 'New Session',
+  'session.global': 'Global Controller',
   'section.workspaces': 'Workspaces',
   'section.sessions': 'Sessions',
   'viewOptions.label': 'View options',
@@ -114,6 +117,7 @@ export const en = {
   'delete.pending': 'Deleting workspace…',
   'menu.fork': 'Fork session',
   'menu.archiveSession': 'Archive session',
+  'menu.copySessionId': 'Copy Session ID',
   'sessions.count.one': '{n} session',
   'sessions.count.other': '{n} sessions',
   'actions.workspace.aria': 'Workspace actions for {name}',

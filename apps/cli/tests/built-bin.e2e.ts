@@ -13,6 +13,8 @@ const repoRoot = fileURLToPath(new URL('../../../', import.meta.url))
 const cliVersion = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version
 const dshBin = join(repoRoot, 'apps/cli/lib/bin.js')
 const invalidProvider = fileURLToPath(new URL('./fixtures/invalid-provider.cordis.yml', import.meta.url))
+/** Opt-in because this boots the full published DevFrame profile in a child process. */
+const requireBuiltTaskSmoke = process.env.DSH_REQUIRE_BUILT_CLI_TASK_SMOKE === '1'
 
 async function runBuiltBin(
   args: readonly string[] = [],
@@ -393,6 +395,52 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
       rmSync(home, { recursive: true, force: true })
     }
   }, 30_000)
+
+  it.skipIf(!requireBuiltTaskSmoke)('runs one built DevFrame task and writes only its temporary README', async () => {
+    const apiKey = 'built-dsh-devframe-task-key'
+    const server = await startMockLlmServer({
+      // The first response creates the bounded project file; the second
+      // response settles the turn after the tool result is returned.
+      sequence: ['tool_call_success', 'success'],
+      apiKey,
+      toolName: 'write',
+      toolArguments: JSON.stringify({ file_path: 'README.md', content: '# smoke complete\n' }),
+      successText: 'built DevFrame task completed',
+    })
+    const home = mkdtempSync(join(tmpdir(), 'dsh-built-devframe-task-'))
+    const project = mkdtempSync(join(tmpdir(), 'dsh-built-devframe-project-'))
+    const readme = join(project, 'README.md')
+    try {
+      const result = await runBuiltBin([
+        '--profile', 'devframe',
+        'task',
+        '--project', project,
+        '--objective', 'Create README.md with exactly the bounded smoke marker.',
+        '--rounds', '1',
+      ], {
+        DSH_HOME: home,
+        DSH_TELEMETRY_DISABLED: '1',
+        DSH_PERMISSION_MODE: 'danger-full-access',
+        DEEPSEEK_API_KEY: apiKey,
+        DEEPSEEK_BASE_URL: server.baseURL,
+      }, project)
+      expect(result.code, `${result.stderr}\nstdout:\n${result.stdout}`).toBe(0)
+      expect(result.stderr).toBe('')
+      expect(JSON.parse(result.stdout.trim())).toMatchObject({ ok: true, outcome: 'completed' })
+      expect(result.stdout).not.toContain(project)
+      expect(result.stderr).not.toContain(project)
+      expect(
+        readFileSync(readme, 'utf8'),
+        JSON.stringify({ result, requests: server.requests.map(request => request.body) }),
+      ).toBe('# smoke complete\n')
+      expect(server.requests.length).toBeGreaterThanOrEqual(2)
+      expect(JSON.stringify(server.requests[0]?.body)).toContain('"write"')
+    } finally {
+      await server.close()
+      rmSync(home, { recursive: true, force: true })
+      rmSync(project, { recursive: true, force: true })
+    }
+  }, 60_000)
 
   it('does not load a project environment for --version', async () => {
     const project = mkdtempSync(join(tmpdir(), 'dsh-version-project-'))

@@ -3,8 +3,8 @@
 
 /**
  * Write text to the host clipboard, preferring the async Clipboard API and
- * falling back to `execCommand('copy')` on hosts (jsdom, insecure contexts)
- * that omit it.
+ * falling back to `execCommand('copy')` on hosts (jsdom, embedded browsers,
+ * insecure contexts) that omit or reject it.
  * @param text - the exact text to place on the clipboard.
  * @returns true only when the host accepted the write.
  */
@@ -17,8 +17,8 @@ export async function writeClipboard(text: string): Promise<boolean> {
       await navigator.clipboard.writeText(text)
       return true
     } catch {
-      // Denied permissions / iframe policy — do not claim success.
-      return false
+      // Embedded browsers can expose the async API while denying its permission.
+      // Fall through to the user-gesture-compatible legacy copy path.
     }
   }
   // jsdom and older hosts: best-effort execCommand path when present.

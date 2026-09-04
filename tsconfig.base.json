@@ -140,6 +140,7 @@
         "./packages/util/*/src/invariant.ts",
         "./packages/mcp/*/src/invariant.ts",
         "./packages/identity/*/src/invariant.ts",
+        "./packages/devframe/*/src/invariant.ts",
         "./packages/test-support/*/src/invariant.ts"
       ],
       // host/client package names prefix the group dir (dsh-client-<dir>), so
@@ -149,6 +150,8 @@
       "@deepseek-ai/dsh-client-*/invariant": ["./packages/client/*/src/invariant.ts"],
       "@deepseek-ai/dsh-headless/startup": ["./packages/bundle/headless/src/startup.ts"],
       "@deepseek-ai/dsh-web-app/startup": ["./packages/bundle/web-app/src/startup.ts"],
+      "@deepseek-ai/dsh-devframe/task-startup": ["./packages/bundle/devframe/src/task-startup.ts"],
+      "@deepseek-ai/dsh-devframe/task-runner": ["./packages/bundle/devframe/src/task-runner.ts"],
       "@deepseek-ai/dsh-client-*/client": ["./packages/client/*/src/client"],
        // One wildcard maps every @deepseek-ai/dsh-<name> to its source. Package
       // dir names are unique across groups, so first-on-disk-wins resolution is
@@ -172,6 +175,9 @@
       "@deepseek-ai/dsh-host-plugin-inventory": ["./packages/host/plugin-inventory/src"],
       "@deepseek-ai/dsh-host-plugin-inventory/types": ["./packages/host/plugin-inventory/src/types.ts"],
       "@deepseek-ai/dsh-client-ui-slots": ["./packages/client/ui-slots/src"],
+      "@deepseek-ai/dsh-client-ui-devframe-control-session": ["./packages/client/ui-devframe-control-session/src"],
+      "@deepseek-ai/dsh-devframe-control-session": ["./packages/devframe/control-session/src"],
+      "@deepseek-ai/dsh-devframe-control-session/types": ["./packages/devframe/control-session/src/types.ts"],
       "@deepseek-ai/dsh-client-ui-attachment": ["./packages/client/ui-attachment/src"],
       "@deepseek-ai/dsh-client-ui-primitives": ["./packages/client/ui-primitives/src"],
       "@deepseek-ai/dsh-client-schema-form": ["./packages/client/schema-form/src"],
@@ -270,6 +276,7 @@
         "./packages/util/*/src",
         "./packages/mcp/*/src",
         "./packages/identity/*/src",
+        "./packages/devframe/*/src",
         "./packages/test-support/*/src",
         "./packages/host/*/src",
         "./packages/client/*/src"

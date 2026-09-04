@@ -33,6 +33,9 @@
       "path": "../../packages/bundle/web-app"
     },
     {
+      "path": "../../packages/devframe/control-session"
+    },
+    {
       "path": "../../packages/host/apiproxy"
     },
     {
@@ -49,6 +52,9 @@
     },
     {
       "path": "../../packages/core/tools"
+    },
+    {
+      "path": "../../packages/util/atomic-write"
     },
     {
       "path": "../../packages/util/launch-environment"

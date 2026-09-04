@@ -1,0 +1,35 @@
+# Copy the two sections below into $DSH_HOME/settings.yaml.
+# Keep real keys in the managed credential store or environment variables;
+# never put API keys in this file.
+
+llm-pi-ai:
+  providers:
+    volcengine-primary:
+      displayName: 火山引擎主路由
+      apiKeyEnv: VOLCENGINE_API_KEY_PRIMARY
+      api: openai-completions
+      baseURL: https://ark.cn-beijing.volces.com/api/v3
+      models:
+        # Replace with the endpoint/model id from Volcengine Ark.
+        - id: ep-replace-primary
+          name: 火山主模型
+          contextWindow: 131072
+          maxTokens: 32768
+
+    volcengine-secondary:
+      displayName: 火山引擎备用路由
+      apiKeyEnv: VOLCENGINE_API_KEY_SECONDARY
+      api: openai-completions
+      baseURL: https://ark.cn-beijing.volces.com/api/v3
+      models:
+        # Replace with the second endpoint/model id from Volcengine Ark.
+        - id: ep-replace-secondary
+          name: 火山备用模型
+          contextWindow: 131072
+          maxTokens: 32768
+
+# Optional: choose which route new sessions use by default.
+# Existing sessions keep the provider/model recorded in their own log.
+agent-default-model:
+  provider: volcengine-primary
+  model: ep-replace-primary

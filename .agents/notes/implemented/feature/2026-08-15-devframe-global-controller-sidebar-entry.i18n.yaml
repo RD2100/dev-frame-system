@@ -1,0 +1,4 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Re-record after either side changes.
+2026-08-15-devframe-global-controller-sidebar-entry.md: 336aa3805f775c3fd5a4b454f5fa60fc921fdb47
+2026-08-15-devframe-global-controller-sidebar-entry.zh.md: 62564ec8da3a288f7835c442317891d2094cd24e

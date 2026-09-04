@@ -1,0 +1,21 @@
+# The thin DevFrame layer over dsh-web-app. Controller identity remains owned
+# by the Host service; the browser row only projects its client-safe event.
+
+- insert:
+    - id: devframe-control-session
+      name: '@deepseek-ai/dsh-devframe-control-session'
+
+    # CLI provider/runner: with no inner command the provider publishes
+    # nothing and the ordinary Web profile remains unchanged.
+    - id: devframe-task-startup
+      name: '@deepseek-ai/dsh-devframe/task-startup'
+
+    - id: devframe-task-runner
+      name: '@deepseek-ai/dsh-devframe/task-runner'
+      config:
+        # `ctx.get` is the non-blocking lookup: ordinary Web launches have no
+        # task request, so the runner receives `undefined` and stays inert.
+        request: !!js ctx.get('devframeTaskStartup')
+
+    - id: client-ui-devframe-control-session
+      name: '@deepseek-ai/dsh-client-ui-devframe-control-session'

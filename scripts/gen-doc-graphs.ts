@@ -230,6 +230,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns WorkspaceId-branded records over the domain facility; stable sessionIds accounts drive Host RPC and GUI projections.',
   },
   {
+    key: 'devframeControlSessions',
+    pkg: 'devframe-control-session',
+    title: 'Stable DevFrame Controller Sessions',
+    mode: 'core',
+    note: 'Opens deterministic Global and Project Controller identities through the native Agent, Session persistence, and Workspace services; Slice 0 keeps them identity-only and tool-denied.',
+  },
+  {
     key: 'sessionQuery',
     pkg: 'session-query',
     title: 'Session reads, traces, filters, and search',

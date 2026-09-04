@@ -13,6 +13,13 @@
 
 # ── surface-specific values the base deliberately omits ─────────────────────
 
+# The Web Models page is an operator-facing credential editor. It may write a
+# managed `$DSH_HOME/.credentials.yaml` value that replaces an inherited API
+# key; headless and CI profiles keep the base environment-wins behavior.
+- id: credentials
+  config:
+    allowManagedOverride: true
+
 - id: system-prompt
   config:
     persona: >-

@@ -57,6 +57,13 @@ export interface Config {
   path?: string
   /** Harness home used when `path` is omitted; defaults to `$DSH_HOME` or `~/.dsh`. */
   dshHome?: string
+  /**
+   * Let an interactive profile replace an inherited credential through the
+   * managed document. Headless/CI profiles keep the safer environment-wins
+   * default; the Web bundle opts in because its Models page is the operator's
+   * credential configuration surface.
+   */
+  allowManagedOverride?: boolean
   /** Watch the document and hot-publish external edits; defaults to true. */
   watch?: boolean
   /** Watcher write-settle window in milliseconds; defaults to 100. */
@@ -211,11 +218,14 @@ export class LocalCredentialProvider extends CredentialProvider {
   static Config: z<Config> = z.object({
     path: z.string(),
     dshHome: z.string(),
+    allowManagedOverride: z.boolean().default(false),
     watch: z.boolean().default(true),
     debounceMs: z.number().min(0).default(100),
   })
 
   private readonly spec: ResolvedSpec
+  /** Whether the owning profile explicitly exposes the Web credential editor. */
+  private readonly allowManagedOverride: boolean
   /**
    * Raw text of the last read or persisted document; `undefined` while the
    * file is absent. Watcher events whose content equals this cache are no-ops,
@@ -244,6 +254,7 @@ export class LocalCredentialProvider extends CredentialProvider {
     // Programmatic construction may bypass Schemastery normalization; resolve
     // the same defaults in one explicit step either way.
     this.spec = resolveSpec(config)
+    this.allowManagedOverride = config.allowManagedOverride === true
   }
 
   /** The inherited-environment value for a reference, or `undefined` when empty or unset. */
@@ -307,6 +318,14 @@ export class LocalCredentialProvider extends CredentialProvider {
   }
 
   override resolve(ref: CredentialRef): Promise<ResolvedCredential | undefined> {
+    // An interactive Web profile may deliberately replace an inherited value
+    // after the user saves a key in the Models page. The default remains
+    // environment-first for headless/CI profiles, where an inherited key is
+    // an explicit per-run operator choice.
+    if (this.allowManagedOverride) {
+      const stored = this.values.get(ref)
+      if (stored !== undefined) return Promise.resolve({ value: stored, source: 'file' })
+    }
     const inherited = this.inherited(ref)
     if (inherited !== undefined) return Promise.resolve({ value: inherited, source: 'env' })
     const stored = this.values.get(ref)
@@ -317,11 +336,19 @@ export class LocalCredentialProvider extends CredentialProvider {
   }
 
   override describe(ref: CredentialRef): Promise<CredentialInfo> {
+    if (this.allowManagedOverride && this.values.get(ref) !== undefined) {
+      return Promise.resolve({ configured: true, source: 'file', writable: true })
+    }
     // Only the inherited environment is unwritable: it is the one layer this
-    // process cannot edit. A user `.env` value is writable in the sense that
-    // matters — storing a key replaces it as the effective one.
+    // process cannot edit. Interactive profiles explicitly make the managed
+    // document the higher layer, so the visible field remains writable even
+    // before the first file value is saved.
     if (this.inherited(ref) !== undefined) {
-      return Promise.resolve({ configured: true, source: 'env', writable: false })
+      return Promise.resolve({
+        configured: true,
+        source: 'env',
+        writable: this.allowManagedOverride,
+      })
     }
     const stored = this.values.get(ref)
     if (stored !== undefined) return Promise.resolve({ configured: true, source: 'file', writable: true })
@@ -408,7 +435,7 @@ export class LocalCredentialProvider extends CredentialProvider {
    * provider resolves ranks below the document being written.
    */
   private assertUnshadowed(ref: CredentialRef, verb: 'set' | 'unset'): void {
-    if (this.inherited(ref) !== undefined) {
+    if (!this.allowManagedOverride && this.inherited(ref) !== undefined) {
       throw new Error(
         `credentials-local: "${ref}" is supplied read-only by the launching environment, so ${verb} would be`
         + ' shadowed; unset it in the shell you start dsh from instead',

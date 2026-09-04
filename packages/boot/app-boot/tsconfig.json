@@ -27,6 +27,12 @@
       "path": "../../runtime-diagnostics/invariants"
     },
     {
+      "path": "../../util/atomic-write"
+    },
+    {
+      "path": "../../util/brand"
+    },
+    {
       "path": "../../core/system-prompt"
     },
     {

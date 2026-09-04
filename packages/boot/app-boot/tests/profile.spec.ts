@@ -4,12 +4,13 @@
  * empty-root composition, and the installation module-fallback healing.
  */
 
-import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   composeEntries,
+  ensureProfileIdentity,
   healProfilesModuleFallback,
   initProfile,
   loadProfile,
@@ -80,6 +81,73 @@ describe('manifest round-trip', () => {
     writeFileSync(join(dir, 'package.json'), '[]')
     expect(() => readProfileManifest('t', dir)).toThrow('must hold a JSON object')
     expect(() => readProfileManifest('t', join(dir, 'nope'))).toThrow('failed to read profile manifest')
+  })
+})
+
+describe('profile identity', () => {
+  it('returns only the profile name and a stable persisted UUID for a new profile', async () => {
+    const home = tmp()
+    const dir = resolveProfileDir('daily', home)
+    initProfile(dir, ['@deepseek-ai/dsh-base'])
+
+    const first = await ensureProfileIdentity('t', 'daily', home)
+    const second = await ensureProfileIdentity('t', 'daily', home)
+
+    expect(Object.keys(first)).toEqual(['id', 'name'])
+    expect(first).toEqual(second)
+    expect(first.name).toBe('daily')
+    expect(first.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    expect(readProfileManifest('t', dir).dsh?.profile?.id).toBe(first.id)
+  })
+
+  it('serializes two concurrent first reads while migrating one legacy profile', async () => {
+    const home = tmp()
+    const dir = resolveProfileDir('legacy', home)
+    mkdirSync(dir, { recursive: true })
+    writeProfileManifest(dir, {
+      name: 'dsh-profile-legacy',
+      dsh: { profile: { bundles: ['@deepseek-ai/dsh-base'] } },
+    })
+
+    const [left, right] = await Promise.all([
+      ensureProfileIdentity('t', 'legacy', home),
+      ensureProfileIdentity('t', 'legacy', home),
+    ])
+
+    expect(left).toEqual(right)
+    expect(readProfileManifest('t', dir).dsh?.profile?.id).toBe(left.id)
+    expect(existsSync(join(dir, 'package.json.lock'))).toBe(false)
+  })
+
+  it.each([
+    ['a non-string id', 42],
+    ['a non-UUID string', 'not-a-uuid'],
+    ['a non-v4 UUID', '11111111-1111-1111-8111-111111111111'],
+    ['a non-canonical UUID', 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA'],
+  ])('fails closed on %s without replacing it', async (_label, id) => {
+    const home = tmp()
+    const dir = resolveProfileDir('broken', home)
+    mkdirSync(dir, { recursive: true })
+    const text = `${JSON.stringify({ name: 'dsh-profile-broken', dsh: { profile: { id, bundles: [] } } }, undefined, 2)}\n`
+    writeFileSync(join(dir, 'package.json'), text)
+
+    await expect(ensureProfileIdentity('t', 'broken', home))
+      .rejects.toThrow('profile "broken" has an invalid dsh.profile.id')
+    expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(text)
+    expect(existsSync(join(dir, 'package.json.lock'))).toBe(false)
+  })
+
+  it('fails closed when dsh.profile is not an object', async () => {
+    const home = tmp()
+    const dir = resolveProfileDir('broken', home)
+    mkdirSync(dir, { recursive: true })
+    const text = JSON.stringify({ dsh: { profile: [] } })
+    writeFileSync(join(dir, 'package.json'), text)
+
+    await expect(ensureProfileIdentity('t', 'broken', home))
+      .rejects.toThrow('profile "broken" has an invalid dsh.profile section')
+    expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(text)
+    expect(existsSync(join(dir, 'package.json.lock'))).toBe(false)
   })
 })
 

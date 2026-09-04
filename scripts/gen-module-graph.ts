@@ -15,6 +15,7 @@ import {
 
 const root = resolve(import.meta.dirname, '..')
 const OUT = 'docs/module-graph.md'
+const ZH_OUT = 'docs/module-graph.zh.md'
 type Pkg = PackageGraphNode
 
 const GROUP_ORDER = [
@@ -96,7 +97,27 @@ function render(pkgs: Pkg[]): string {
   ].join('\n')
 }
 
+/** Keep the generated Mermaid/table body identical across the bilingual pair. */
+function renderChineseSidecar(english: string): string {
+  const chinesePath = resolve(root, ZH_OUT)
+  const chinese = readFileSync(chinesePath, 'utf8')
+  const marker = '```mermaid'
+  const start = chinese.indexOf(marker)
+  const generated = english.indexOf(marker)
+  if (start < 0 || generated < 0) {
+    throw new Error(`gen-module-graph: ${ZH_OUT} is missing the Mermaid marker`)
+  }
+  return `${chinese.slice(0, start)}${english.slice(generated)}`
+}
+
 const content = render(collectPackageGraph(root, GROUP_ORDER, 'gen-module-graph'))
+let chineseContent: string | undefined
+try {
+  chineseContent = renderChineseSidecar(content)
+} catch {
+  // The English generator remains independently usable before the Chinese
+  // sidecar is created; the translation gate will report the missing pair.
+}
 
 if (process.argv.includes('--check')) {
   let committed: string | null = null
@@ -107,13 +128,26 @@ if (process.argv.includes('--check')) {
     // same remedy here—regenerate—so it is reported as stale below.
     committed = null
   }
-  if (committed === content) {
-    console.log(`gen-module-graph: ${OUT} is up to date.`)
-    process.exit(0)
+  if (committed !== content) {
+    console.error(`gen-module-graph: ${OUT} is stale. Run \`pnpm run gen-module-graph\` and commit ${OUT}.`)
+    process.exit(1)
   }
-  console.error(`gen-module-graph: ${OUT} is stale. Run \`pnpm run gen-module-graph\` and commit ${OUT}.`)
-  process.exit(1)
+  if (chineseContent !== undefined) {
+    let committedChinese: string | null = null
+    try {
+      committedChinese = readFileSync(resolve(root, ZH_OUT), 'utf8')
+    } catch {
+      committedChinese = null
+    }
+    if (committedChinese !== chineseContent) {
+      console.error(`gen-module-graph: ${ZH_OUT} is stale. Run \`pnpm run gen-module-graph\` and commit the bilingual pair.`)
+      process.exit(1)
+    }
+  }
+  console.log(`gen-module-graph: ${OUT} and ${ZH_OUT} are up to date.`)
+  process.exit(0)
 }
 
 writeFileSync(resolve(root, OUT), content)
+if (chineseContent !== undefined) writeFileSync(resolve(root, ZH_OUT), chineseContent)
 console.log(`gen-module-graph: wrote ${OUT}.`)

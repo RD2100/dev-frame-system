@@ -391,6 +391,24 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 来源：[`packages/compaction/compaction/src/types.ts:33`](../packages/compaction/compaction/src/types.ts)
 
+### `controller/*`
+
+<a id="controlleridentity--log-only"></a>
+
+#### `controller/identity` — log-only
+
+```ts persistence-catalog
+/**
+ * First durable event of a DevFrame Controller Session. It binds the
+ * deterministic Session id to one profile or workspace. The canonical cwd
+ * duplicates the native Session header contract; credentials, prompts, and
+ * mutable readiness claims remain excluded.
+ */
+'controller/identity': ControllerIdentityV1
+```
+
+来源：[`packages/devframe/control-session/src/types.ts:38`](../packages/devframe/control-session/src/types.ts)
+
 ### `feedback/*`
 
 <a id="feedbackrecord--log-only"></a>

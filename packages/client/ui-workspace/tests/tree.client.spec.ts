@@ -92,6 +92,16 @@ describe('deriveGroups', () => {
     expect(strayGroups.map(group => group.key)).toEqual(['first'])
   })
 
+  it('keeps the Global Controller out of the ordinary session tree', () => {
+    const global = { ...summary('devframe-global:profile-1', 1), blank: true }
+    const rows = deriveFlat(list(global), noArchive)
+    expect(rows).toEqual([])
+    const groups = deriveGroups(
+      list(global), [workspace('first', [global.id])], noArchive, view(['first']),
+    )
+    expect(groups[0]?.sessions).toEqual([])
+  })
+
   it('projects the completion reminder into session and search rows (absent = false)', () => {
     const done = { ...summary('done', 3), completed: true }
     const plain = summary('plain', 2)

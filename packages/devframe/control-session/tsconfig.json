@@ -1,0 +1,27 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../core/agent" },
+    { "path": "../../core/agent-default-model" },
+    { "path": "../../core/agent-loop" },
+    { "path": "../../preset/agent-presets" },
+    { "path": "../../core/session" },
+    { "path": "../../core/tools" },
+    { "path": "../../goal/goal" },
+    { "path": "../../goal/goal-round-driver" },
+    { "path": "../../session/session-projection" },
+    { "path": "../../typert/protocol" },
+    { "path": "../../session/session-persistence" },
+    { "path": "../../util/home-paths" },
+    { "path": "../../workspace/workspace" },
+    { "path": "../../runtime-diagnostics/invariants" }
+  ]
+}

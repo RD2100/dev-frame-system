@@ -28,6 +28,9 @@
       "path": "../../extensions/cordis-host-runner"
     },
     {
+      "path": "../../devframe/control-session"
+    },
+    {
       "path": "../../goal/goal"
     },
     {

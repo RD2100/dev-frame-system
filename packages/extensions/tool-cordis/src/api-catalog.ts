@@ -526,6 +526,55 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'devframeControlSessions',
+    summary: 'Host-owned stable Controller Session service.',
+    description: 'Host-owned stable Controller Session service.\n\nThis Slice 0 tracer deliberately supports one Host process. It serializes same-id opens inside that process and refuses to adopt a live Agent it did not create or resume itself. Durable multi-process writer fencing is deferred.',
+    methods: [
+      {
+        signature: 'beginGlobalBootstrap(): DevFrameGlobalBootstrapGeneration',
+        description: 'Begin one HMR-safe Global Controller bootstrap generation.',
+        parameters: [],
+        returns: 'the generation-owned start/block/stop controls.',
+      },
+      {
+        signature: 'readinessSnapshot(): DevFrameReadinessSnapshot',
+        description: 'Return the current pathless readiness projection for Host diagnostics and tests.',
+        parameters: [],
+        returns: 'a detached readiness snapshot without absolute paths or credentials.',
+      },
+      {
+        signature: '@Remote(\'readiness\') async remoteReadiness(afterRevision: number, signal: AbortSignal): Promise<DevFrameReadinessSnapshot>',
+        description: 'Long-poll the pathless Global Controller readiness projection.',
+        parameters: [{ name: 'afterRevision', description: 'caller\'s last observed revision, or -1 initially.' }, { name: 'signal', description: 'transport cancellation.' }],
+        returns: 'current state after a change or bounded timeout.',
+      },
+      {
+        signature: 'async dispatchGlobalGoal(options: DispatchGlobalGoalOptions): Promise<DevFrameGoalDispatchTrace>',
+        description: 'Dispatch one direct human objective through the existing Goal Round driver.\n\nThe adapter deliberately does not append a second task/run event family: Goal creation and the admitted Goal Round are already durable Session events, and the Agent turn carries the model request/identity. The returned trace names those existing records so a Client or CLI can correlate them.',
+        parameters: [{ name: 'options', description: 'bounded objective, profile identity, and optional cancellation signal.' }],
+        returns: 'a pathless trace after the Goal Round and Session flush complete.',
+      },
+      {
+        signature: 'async dispatchProjectGoal(options: DispatchProjectGoalOptions): Promise<DevFrameProjectGoalDispatchTrace>',
+        description: 'Dispatch one bounded objective through a project-scoped Agent.\n\nThe project id and root are checked against the native Workspace before the Agent is opened. Project Agents inherit DSH\'s existing tool registry; the Global Controller remains separately restricted by configureControllerAgent.',
+        parameters: [{ name: 'options', description: 'project identity, expected root, objective, and signal.' }],
+        returns: 'a pathless trace after the native Session flush succeeds.',
+      },
+      {
+        signature: 'async openGlobal(options: OpenGlobalControllerOptions): Promise<ControlSessionResult>',
+        description: 'Open the stable Global Controller for one provisioned profile.',
+        parameters: [{ name: 'options', description: 'Explicit persistent profile identity and cancellation.' }],
+        returns: 'the ready identity-only controller.',
+      },
+      {
+        signature: 'async openProject(options: OpenProjectControllerOptions): Promise<ControlSessionResult>',
+        description: 'Open the stable Project Controller for one native DSH workspace.',
+        parameters: [{ name: 'options', description: 'Explicit persistent profile and workspace identities.' }],
+        returns: 'the ready identity-only controller.',
+      },
+    ],
+  },
+  {
     key: 'directoryPicker',
     summary: 'Abstract directory-picking service.',
     description: 'Abstract directory-picking service. Subclass, implement `capability()`, and load the subclass as a plugin — it registers as `ctx.directoryPicker` (one implementation per context; loading a second throws, cordis\' standard duplicate-service behavior). The capability object must be stable for the service lifetime: consumers may capture it across calls.',
@@ -2870,6 +2919,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ContinuableSubagentDescriptorData extends SubagentDescriptorBase {\n    readonly mode: \'continuable\';\n    readonly label: string;\n    readonly agentProvider?: string;\n    readonly agentModel?: string;\n    readonly persona?: string;\n    readonly toolFilter?: ToolRestriction;\n}',
   },
   {
+    name: 'ControllerRole',
+    declaration: 'export type ControllerRole = \'global\' | \'project\';',
+  },
+  {
+    name: 'ControlSessionResult',
+    declaration: 'export interface ControlSessionResult {\n    readonly id: SessionId;\n    readonly role: ControllerRole;\n    readonly agent: Agent;\n}',
+  },
+  {
     name: 'CordisDynamicPackageId',
     declaration: 'export type CordisDynamicPackageId = Branded<\'CordisDynamicPackageId\'>;',
   },
@@ -2922,6 +2979,42 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type CredentialRef = Branded<\'CredentialRef\'>;',
   },
   {
+    name: 'DevFrameGlobalBootstrapGeneration',
+    declaration: 'export interface DevFrameGlobalBootstrapGeneration {\n    readonly generation: number;\n    readonly signal: AbortSignal;\n    open(profileId: string): Promise<void>;\n    block(code: DevFrameReadinessBlockedCode): void;\n    stop(): Promise<void>;\n}',
+  },
+  {
+    name: 'DevFrameGoalDispatchTrace',
+    declaration: 'export interface DevFrameGoalDispatchTrace {\n    readonly goalId: string;\n    readonly revision: number;\n    readonly round: number;\n    readonly roundsCompleted: number;\n    readonly sessionId: SessionId;\n    readonly provider: string;\n    readonly model: string;\n    readonly outcome: \'completed\' | \'failed\' | \'aborted\';\n}',
+  },
+  {
+    name: 'DevFrameProjectGoalDispatchTrace',
+    declaration: 'export interface DevFrameProjectGoalDispatchTrace extends DevFrameGoalDispatchTrace {\n    readonly projectId: string;\n}',
+  },
+  {
+    name: 'DevFrameReadinessBlocked',
+    declaration: 'export interface DevFrameReadinessBlocked {\n    readonly status: \'blocked\';\n    readonly generation: number;\n    readonly revision: number;\n    readonly code: DevFrameReadinessBlockedCode;\n}',
+  },
+  {
+    name: 'DevFrameReadinessBlockedCode',
+    declaration: 'export type DevFrameReadinessBlockedCode = \'BOOTSTRAP_NOT_STARTED\' | \'PROFILE_IDENTITY_UNAVAILABLE\' | \'PROFILE_LEASE_UNAVAILABLE\' | \'LOADER_UNAVAILABLE\' | \'CONTROLLER_UNAVAILABLE\';',
+  },
+  {
+    name: 'DevFrameReadinessReady',
+    declaration: 'export interface DevFrameReadinessReady {\n    readonly status: \'ready\';\n    readonly generation: number;\n    readonly revision: number;\n    readonly sessionId: string;\n}',
+  },
+  {
+    name: 'DevFrameReadinessSnapshot',
+    declaration: 'export type DevFrameReadinessSnapshot = DevFrameReadinessStarting | DevFrameReadinessReady | DevFrameReadinessBlocked | DevFrameReadinessStopping;',
+  },
+  {
+    name: 'DevFrameReadinessStarting',
+    declaration: 'export interface DevFrameReadinessStarting {\n    readonly status: \'starting\';\n    readonly generation: number;\n    readonly revision: number;\n}',
+  },
+  {
+    name: 'DevFrameReadinessStopping',
+    declaration: 'export interface DevFrameReadinessStopping {\n    readonly status: \'stopping\';\n    readonly generation: number;\n    readonly revision: number;\n}',
+  },
+  {
     name: 'DiffCallView',
     declaration: 'export interface DiffCallView {\n    card: \'diff\';\n    title: string;\n    diffs: FileDiff[];\n    locations?: FileLocation[];\n}',
   },
@@ -2948,6 +3041,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'DirectoryRegistrationHandle',
     declaration: 'export interface DirectoryRegistrationHandle {\n    (): void;\n    replace(entries: readonly LlmConfigurableProvider[]): void;\n}',
+  },
+  {
+    name: 'DispatchGlobalGoalOptions',
+    declaration: 'export interface DispatchGlobalGoalOptions {\n    readonly profileId: string;\n    readonly objective: string;\n    readonly maxGoalRounds?: number;\n    readonly signal?: AbortSignal;\n}',
+  },
+  {
+    name: 'DispatchProjectGoalOptions',
+    declaration: 'export interface DispatchProjectGoalOptions {\n    readonly profileId: string;\n    readonly projectId: string;\n    readonly projectRoot: string;\n    readonly objective: string;\n    readonly maxGoalRounds?: number;\n    readonly signal?: AbortSignal;\n}',
   },
   {
     name: 'Domain',
@@ -3472,6 +3573,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'OneShotSubagentDescriptorData',
     declaration: 'export interface OneShotSubagentDescriptorData extends SubagentDescriptorBase {\n    readonly mode: \'one-shot\';\n    readonly label?: string;\n}',
+  },
+  {
+    name: 'OpenGlobalControllerOptions',
+    declaration: 'export interface OpenGlobalControllerOptions {\n    readonly profileId: string;\n    readonly signal?: AbortSignal;\n}',
+  },
+  {
+    name: 'OpenProjectControllerOptions',
+    declaration: 'export interface OpenProjectControllerOptions extends OpenGlobalControllerOptions {\n    readonly workspaceId: string;\n}',
   },
   {
     name: 'PermissionSelect',

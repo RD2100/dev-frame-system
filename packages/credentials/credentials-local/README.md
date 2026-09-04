@@ -2,16 +2,16 @@
 
 English | [中文](README.zh.md)
 
-File-backed [credentials](../credentials/README.md) provider: four layers, one honest precedence.
+File-backed [credentials](../credentials/README.md) provider: four layers, one honest default precedence. The interactive Web bundle can explicitly opt into replacing an inherited key through the managed document.
 
 | Layer | Source id | Writable | Wins |
 |---|---|---|---|
-| Inherited process environment | `env` | no | always |
+| Inherited process environment | `env` | no by default | always by default |
 | `$DSH_HOME/.credentials.yaml` document | `file` | yes (`set`/`unset`) | over both `.env` layers |
 | `<invocation cwd>/.env` | `project-env` | not here | over the user `.env` |
 | `$DSH_HOME/.env` | `user-env` | not here | otherwise |
 
-The launching environment wins because a per-run override (`DEEPSEEK_API_KEY=… dsh`, a CI secret, a container `-e`) is operator intent for this run — and because it cannot be edited from inside, it must be *visibly* read-only: `describe()` reports `source: 'env', writable: false`, and `set`/`unset` reject instead of writing a change the reader would never see.
+The launching environment wins by default because a per-run override (`DEEPSEEK_API_KEY=… dsh`, a CI secret, a container `-e`) is operator intent for this run — and because it cannot be edited from inside, it is normally *visibly* read-only: `describe()` reports `source: 'env', writable: false`, and `set`/`unset` reject instead of writing a change the reader would never see. The interactive Web bundle sets `allowManagedOverride: true`; in that profile the Models page is the explicit operator surface, so a saved managed value takes precedence over the inherited value and the field remains writable.
 
 Everything below it loses to the managed store, so a key written by the Models page takes effect immediately even when an older key sits in a `.env`. Those two layers still resolve when nothing is stored, and `describe()` names them `project-env` or `user-env` with `writable: true` — storing a key replaces them as the effective source.
 
@@ -23,6 +23,7 @@ Under the product CLI, resolution reads the launcher's frozen [environment snaps
 |---|---|---|
 | `path` | `<harness home>/.credentials.yaml` | Credentials document location. |
 | `dshHome` | `$DSH_HOME` or `~/.dsh` | Harness home used when `path` is omitted. |
+| `allowManagedOverride` | `false` | Let an interactive profile replace an inherited environment value through `$DSH_HOME/.credentials.yaml`. |
 | `watch` | `true` | Hot-publish external edits. |
 | `debounceMs` | `100` | Watcher write-settle window. |
 
@@ -68,4 +69,5 @@ No direct invalidation; credentials never enter a request prefix.
 - **Same-reference concurrent writes are last-write-wins** — the writer lock and the read-modify-write keep concurrent writers from dropping each other's entries, but two writers editing one reference still resolve to the later write; there is no revision check.
 - **A same-UID process can read the document** — see [Security boundary](#security-boundary): the file-effect sandbox modes do not deny reads, and an OS-keychain provider is deferred.
 - **Environment changes are invisible** — the snapshot is frozen at launch, so a variable exported after startup reaches neither resolution nor `describe`; changing an environment-sourced credential takes a restart.
+- **Managed override is profile-scoped** — only a profile that explicitly sets `allowManagedOverride` can replace an inherited value from the Web Models page; headless and CI profiles keep environment-first behavior.
 - **Atomic, not crash-durable** — inherited from `dsh-atomic-write`; the store re-reads on boot.

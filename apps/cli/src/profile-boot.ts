@@ -14,12 +14,14 @@
 import { writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { FiberState, type Context } from '@deepseek-ai/cordis'
+import type { Context, FiberState } from '@deepseek-ai/cordis'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import {
   boot,
   composeEntries,
+  DSH_PROFILE_IDENTITY_KEY,
+  ensureProfileIdentity,
   healProfilesModuleFallback,
   installFailLoud,
   loadOptionalPatches,
@@ -30,6 +32,13 @@ import {
   type Profile,
 } from '@deepseek-ai/dsh-app-boot'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
+import {
+  acquireProfileHostFence,
+  DSH_PROFILE_HOST_FENCE_KEY,
+  type DevFrameGlobalBootstrapGeneration,
+  type ProfileHostFence,
+  type ProfileHostFenceLease,
+} from '@deepseek-ai/dsh-devframe-control-session'
 
 /** Shipped agent-preset root: beside this app's own config, in both source and built layouts. */
 const SHIPPED_PRESET_ROOT = fileURLToPath(new URL('../config/agent-presets/', import.meta.url))
@@ -39,6 +48,80 @@ import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
 import { createProcessShutdown, type ProcessShutdown } from './process-shutdown.ts'
 
 const NAME = 'dsh'
+
+/** Cordis exposes FiberState as a const enum, so mirror the runtime value. */
+const FIBER_ACTIVE = 2 as FiberState.ACTIVE
+
+/** The Host service row whose effective presence activates the canonical DevFrame writer fence. */
+const DEVFRAME_CONTROL_SESSION_ROW_ID = 'devframe-control-session'
+
+/**
+ * Web is the normal DevFrame surface. A one-shot `task` invocation keeps the
+ * same model/session/workspace services but must not start a second command
+ * parser or bind a browser server; these rows are the Web-only surface.
+ */
+const TASK_MODE_DISABLED_ROWS = [
+  'directory-picker',
+  'plugin-inventory',
+  'api-gateway',
+  'cordis-host-runner',
+  'web-startup',
+  'webserver',
+  'web-runtime',
+  'client-hmr',
+  'modules',
+  'connection',
+  'api-remotes',
+  'client-runtime',
+  'cordis-client-runner',
+  'ui-theme',
+  'locale',
+  'ui-layout',
+  'ui-sidebar',
+  'ui-settings',
+  'ui-settings-general',
+  'ui-settings-models',
+  'ui-settings-plugin-inventory',
+  'ui-conversation',
+  'ui-tool',
+  'ui-cordis',
+  'ui-workflow-run',
+  'ui-deliverables',
+  'ui-workspace',
+  'ui-input-trigger',
+  'ui-commands',
+  'ui-skill',
+  'ui-subagent',
+  'ui-jobs',
+  'ui-goal',
+  'ui-message-feedback',
+  'ui-model-selection',
+  'ui-permission',
+  'ui-agent-preset',
+  'ui-settings-plugins',
+  'ui-plan',
+  'ui-user-questions',
+  'ui-trajectory',
+  'client-ui-devframe-control-session',
+] as const
+
+/** Return the final overlay that turns the Web profile into a headless task run. */
+export function resolveTaskModePatches(args: readonly string[]): PatchOptions[] {
+  if (args[0] !== 'task') return []
+  return [
+    ...TASK_MODE_DISABLED_ROWS.map(id => ({ id, disabled: true })),
+    // The Web profile deliberately moves model-facing filesystem and shell
+    // tools behind an agent preset. A one-shot CLI task has no browser session
+    // to compose that preset, so restore the native host rows here. Global
+    // DevFrame controllers still install their own empty-tool guard; these
+    // rows only make the project Agent's DSH tool registry available.
+    { id: 'tool-fs', disabled: false },
+    { id: 'tool-fs-search', disabled: false },
+    { id: 'tool-str-replace-editor', disabled: false },
+    { id: 'tool-bash', disabled: process.platform === 'win32' },
+    { id: 'tool-pwsh', disabled: process.platform !== 'win32' },
+  ]
+}
 
 /**
  * The home-level user patch layer (`$DSH_HOME/cordis.patch.yml`), applied
@@ -142,16 +225,18 @@ function allPatches(composed: ComposedProfile): PatchOptions[] {
 function composeProfile(
   name: string,
   patchFiles: readonly string[],
+  taskMode = false,
 ): ComposedProfile {
   const profile = prepareProfile(name)
   const homePatches = loadOptionalPatches(NAME, homePatchPath()) ?? []
   const overlays = patchFiles.flatMap(file => loadOverlayPatches(NAME, resolve(file)))
   const bundlePatches = profile.layers.flatMap(layer => layer.patches)
+  const taskPatches = taskMode && name === 'devframe' ? resolveTaskModePatches(['task']) : []
   const rows = new Map<string, EntryOptions>()
-  for (const row of composeEntries([bundlePatches, profile.patches, homePatches, overlays])) {
+  for (const row of composeEntries([bundlePatches, profile.patches, homePatches, overlays, taskPatches])) {
     if (typeof row.id === 'string') rows.set(row.id, row)
   }
-  const composedOverlays = [...overlays]
+  const composedOverlays = [...overlays, ...taskPatches]
   // The SHIPPED root is the part of the roster only this app can resolve: it
   // sits beside this app's own config, in both the source and built layouts.
   // The writable root the roster appends is `dsh-agent-presets`' own, so a
@@ -194,8 +279,44 @@ export interface RunProfileOptions {
  */
 function suppressShutdownError(ctx: Context, signal: AbortSignal, error: unknown): void {
   if (signal.aborted) return
-  if (ctx.fiber.state !== FiberState.ACTIVE || ctx.get('loader') === undefined) return
+  if (ctx.fiber.state !== FIBER_ACTIVE || ctx.get('loader') === undefined) return
   throw error
+}
+
+function createProfileHostDisposer(
+  app: { current?: Context },
+  fence: ProfileHostFenceLease | undefined,
+  bootstrap: { current?: DevFrameGlobalBootstrapGeneration },
+): () => Promise<void> {
+  let operation: Promise<void> | undefined
+  return () => {
+    operation ??= (async () => {
+      const failures: unknown[] = []
+      try {
+        await bootstrap.current?.stop()
+      } catch (failure) {
+        failures.push(failure)
+      }
+      try {
+        await app.current?.fiber.dispose()
+      } catch (failure) {
+        failures.push(failure)
+      }
+      try {
+        await fence?.release()
+      } catch (fenceFailure) {
+        failures.push(fenceFailure)
+      }
+      if (failures.length === 1) {
+        const failure = failures[0]
+        throw failure instanceof Error
+          ? failure
+          : new Error('dsh: Profile Host teardown failed', { cause: failure })
+      }
+      if (failures.length > 1) throw new AggregateError(failures, 'dsh: Profile Host teardown failed')
+    })()
+    return operation
+  }
 }
 
 /**
@@ -205,9 +326,21 @@ function suppressShutdownError(ctx: Context, signal: AbortSignal, error: unknown
  * @returns the settled root context and the shutdown controller.
  */
 export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Context; shutdown: ProcessShutdown }> {
-  const composed = composeProfile(options.profile, options.patchFiles)
+  const composed = composeProfile(options.profile, options.patchFiles, options.args[0] === 'task')
+  const profileIdentity = await ensureProfileIdentity(NAME, options.profile)
+  const profileHostFence = composed.rows.has(DEVFRAME_CONTROL_SESSION_ROW_ID)
+    ? await acquireProfileHostFence()
+    : undefined
+  // Only the immutable owner proof enters the plugin tree. The launcher keeps
+  // the release capability private so a config plugin cannot surrender the
+  // process-wide writer fence while the tree is still live.
+  const profileHostProof: ProfileHostFence | undefined = profileHostFence === undefined
+    ? undefined
+    : { owner: profileHostFence.owner }
   const app: { current?: Context } = {}
-  const shutdown = createProcessShutdown(async () => { await app.current?.fiber.dispose() })
+  const globalBootstrap: { current?: DevFrameGlobalBootstrapGeneration } = {}
+  const disposeProfileHost = createProfileHostDisposer(app, profileHostFence, globalBootstrap)
+  const shutdown = createProcessShutdown(disposeProfileHost)
   const signalShutdown = new AbortController()
   const interrupt = (code: number): void => {
     signalShutdown.abort()
@@ -220,9 +353,7 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   // complete; SIGINT is a user interrupt and reports 130.
   process.on('SIGTERM', () => { interrupt(0) })
   process.on('SIGINT', () => { interrupt(130) })
-  installFailLoud(NAME, process, async () => {
-    await app.current?.fiber.dispose()
-  })
+  installFailLoud(NAME, process, disposeProfileHost)
 
   const rootConfig = join(composed.profile.dir, PROFILE_ROOT_FILENAME)
   // Recomposition for the live user layers: bundle layers below, overlays
@@ -245,19 +376,55 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   ])
   // Cloned for the same insert-aliasing reason as composeLive: the boot
   // application must not mutate the objects later reloads recompose from.
-  const ctx = await boot(NAME, rootConfig, structuredClone(allPatches(composed)), (hostCtx) => {
-    app.current = hostCtx
-    // Before any config-tree entry mounts, so plugins resolve all launch-time
-    // environment values from the same immutable provenance snapshot.
-    hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, options.environment)
-    // The command line and bounded exit request are launcher facts available
-    // to every app plugin that injects the argument snapshot.
-    provideCmdline(hostCtx, {
-      args: options.args,
-      exit: code => void shutdown.shutdown(code),
+  let ctx: Context
+  try {
+    ctx = await boot(NAME, rootConfig, structuredClone(allPatches(composed)), (hostCtx) => {
+      app.current = hostCtx
+      // Before any config-tree entry mounts, so plugins resolve all launch-time
+      // environment values from the same immutable provenance snapshot.
+      hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, options.environment)
+      hostCtx.provide(DSH_PROFILE_IDENTITY_KEY, profileIdentity)
+      if (profileHostProof !== undefined) {
+        hostCtx.provide(DSH_PROFILE_HOST_FENCE_KEY, profileHostProof)
+      }
+      // The command line and bounded exit request are launcher facts available
+      // to every app plugin that injects the argument snapshot.
+      provideCmdline(hostCtx, {
+        args: options.args,
+        exit: code => void shutdown.shutdown(code),
+      })
     })
-  })
+  } catch (failure) {
+    try {
+      await disposeProfileHost()
+    } catch (cleanupFailure) {
+      throw new AggregateError([failure, cleanupFailure], 'dsh: Profile Host startup cleanup failed')
+    }
+    throw failure
+  }
   app.current = ctx
+  // The DevFrame bundle owns one profile-scoped Global Controller. Start it
+  // only after the Loader has settled every row so identity publication and
+  // readiness are observed through the same live tree that serves the client.
+  // The generation is retained by the launcher so shutdown fences admission,
+  // releases the Agent, and only then disposes the tree and Host lease.
+  if (!signalShutdown.signal.aborted && profileHostFence !== undefined) {
+    const controlSessions = ctx.get('devframeControlSessions')
+    if (controlSessions !== undefined) {
+      const generation = controlSessions.beginGlobalBootstrap()
+      globalBootstrap.current = generation
+      try {
+        await generation.open(profileIdentity.id)
+      } catch (failure) {
+        try {
+          await disposeProfileHost()
+        } catch (cleanupFailure) {
+          throw new AggregateError([failure, cleanupFailure], 'dsh: Global Controller startup cleanup failed')
+        }
+        throw failure
+      }
+    }
+  }
   // A surface can dispose the whole tree while boot or this post-boot watcher
   // setup is still in flight — a signal, or a fast one-shot's appExit. Loader
   // presence and fiber state own liveness; the initial check skips a tree
@@ -266,7 +433,7 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   // through its bounded shutdown, which disposes the watchers before the
   // loop drains.
   if (!signalShutdown.signal.aborted
-    && ctx.fiber.state === FiberState.ACTIVE
+    && ctx.fiber.state === FIBER_ACTIVE
     && ctx.get('loader') !== undefined) {
     try {
       // Config-only HMR for the live profile patch layer: the web bundle

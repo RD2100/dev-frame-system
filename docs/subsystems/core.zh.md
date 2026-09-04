@@ -730,6 +730,76 @@ roots(): Agent[]
 
 Source: [`packages/core/agent/src/index.ts:256`](../../packages/core/agent/src/index.ts)
 
+<a id="ctxdevframecontrolsessions--devframecontrolsessions"></a>
+
+### `ctx.devframeControlSessions` — `DevFrameControlSessions`
+
+Host-owned stable Controller Session service.
+
+This Slice 0 tracer deliberately supports one Host process. It serializes same-id opens inside that process and refuses to adopt a live Agent it did not create or resume itself. Durable multi-process writer fencing is deferred.
+
+```ts cordis-catalog
+/**
+ * Begin one HMR-safe Global Controller bootstrap generation.
+ * @returns the generation-owned start/block/stop controls.
+ */
+beginGlobalBootstrap(): DevFrameGlobalBootstrapGeneration
+
+/**
+ * Return the current pathless readiness projection for Host diagnostics and tests.
+ * @returns a detached readiness snapshot without absolute paths or credentials.
+ */
+readinessSnapshot(): DevFrameReadinessSnapshot
+
+/**
+ * Long-poll the pathless Global Controller readiness projection.
+ * @param afterRevision - caller's last observed revision, or -1 initially.
+ * @param signal - transport cancellation.
+ * @returns current state after a change or bounded timeout.
+ */
+@Remote('readiness') async remoteReadiness(afterRevision: number, signal: AbortSignal): Promise<DevFrameReadinessSnapshot>
+
+/**
+ * Dispatch one direct human objective through the existing Goal Round driver.
+ *
+ * The adapter deliberately does not append a second task/run event family:
+ * Goal creation and the admitted Goal Round are already durable Session
+ * events, and the Agent turn carries the model request/identity. The returned
+ * trace names those existing records so a Client or CLI can correlate them.
+ * @param options - bounded objective, profile identity, and optional cancellation signal.
+ * @returns a pathless trace after the Goal Round and Session flush complete.
+ */
+async dispatchGlobalGoal(options: DispatchGlobalGoalOptions): Promise<DevFrameGoalDispatchTrace>
+
+/**
+ * Dispatch one bounded objective through a project-scoped Agent.
+ *
+ * The project id and root are checked against the native Workspace before
+ * the Agent is opened. Project Agents inherit DSH's existing tool registry;
+ * the Global Controller remains separately restricted by
+ * {@link configureControllerAgent}.
+ * @param options - project identity, expected root, objective, and signal.
+ * @returns a pathless trace after the native Session flush succeeds.
+ */
+async dispatchProjectGoal(options: DispatchProjectGoalOptions): Promise<DevFrameProjectGoalDispatchTrace>
+
+/**
+ * Open the stable Global Controller for one provisioned profile.
+ * @param options - Explicit persistent profile identity and cancellation.
+ * @returns the ready identity-only controller.
+ */
+async openGlobal(options: OpenGlobalControllerOptions): Promise<ControlSessionResult>
+
+/**
+ * Open the stable Project Controller for one native DSH workspace.
+ * @param options - Explicit persistent profile and workspace identities.
+ * @returns the ready identity-only controller.
+ */
+async openProject(options: OpenProjectControllerOptions): Promise<ControlSessionResult>
+```
+
+Source: [`packages/devframe/control-session/src/index.ts:419`](../../packages/devframe/control-session/src/index.ts)
+
 <a id="agent-events"></a>
 
 ### `agent/*` events

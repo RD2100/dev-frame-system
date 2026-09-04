@@ -112,10 +112,11 @@ describe('layer ladder', () => {
   async function bootLayered(
     path: string,
     layers: Parameters<typeof createLaunchEnvironmentSnapshot>[0],
+    config: { allowManagedOverride?: boolean } = {},
   ): Promise<Context> {
     const ctx = new Context()
     ctx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot(layers))
-    const fiber = ctx.plugin(LocalCredentialProvider, { path, watch: false })
+    const fiber = ctx.plugin(LocalCredentialProvider, { path, watch: false, ...config })
     cleanups.push(async () => { await fiber.dispose() })
     await fiber
     return ctx
@@ -220,6 +221,30 @@ describe('layer ladder', () => {
     expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'from-shell', source: 'env' })
     expect(await ctx.credentials.describe(KEY)).toEqual({ configured: true, source: 'env', writable: false })
     await expect(ctx.credentials.set(KEY, 'next')).rejects.toThrow(/launching environment/)
+  })
+
+  it('lets the interactive Web profile replace an inherited key in the managed store', async () => {
+    const dir = await tempDir()
+    const path = join(dir, '.credentials.yaml')
+    const ctx = await bootLayered(path, [
+      { source: 'process', values: { DSH_CRED_TEST: 'from-shell' } },
+    ], { allowManagedOverride: true })
+
+    expect(await ctx.credentials.describe(KEY)).toEqual({
+      configured: true,
+      source: 'env',
+      writable: true,
+    })
+    await expect(ctx.credentials.set(KEY, 'from-web')).resolves.toBeUndefined()
+    expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'from-web', source: 'file' })
+    expect(await ctx.credentials.describe(KEY)).toEqual({
+      configured: true,
+      source: 'file',
+      writable: true,
+    })
+
+    await expect(ctx.credentials.unset(KEY)).resolves.toBeUndefined()
+    expect(await ctx.credentials.resolve(KEY)).toEqual({ value: 'from-shell', source: 'env' })
   })
 })
 

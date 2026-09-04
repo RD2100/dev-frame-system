@@ -12,6 +12,14 @@ import {
 /** Group key for Sessions outside every Workspace. */
 export const UNGROUPED_KEY = ''
 
+/** Stable prefix of the profile-scoped DevFrame Global Controller session. */
+export const DEVFRAME_GLOBAL_SESSION_PREFIX = 'devframe-global:'
+
+/** Whether a session id belongs to the DevFrame Global Controller. */
+export function isGlobalControllerSession(id: SessionId): boolean {
+  return id.startsWith(DEVFRAME_GLOBAL_SESSION_PREFIX)
+}
+
 /** Display label for the ungrouped bucket row. */
 export const UNGROUPED_LABEL = 'Ungrouped'
 
@@ -30,6 +38,8 @@ export interface SessionNode {
   /** Finished running while not selected and not yet opened (the green "done" reminder dot). */
   completed: boolean
   updatedAt: number
+  /** True only for the profile-scoped DevFrame Global Controller row. */
+  global?: boolean
 }
 
 /** Session order selected by the Workspace browser. */
@@ -116,7 +126,11 @@ function byRecency(a: SessionSummary, b: SessionSummary): number {
  * unarchiving restores position.
  */
 function sessionVisible(session: SessionSummary, current: SessionId | undefined, archived: ReadonlySet<SessionId>): boolean {
-  return session.origin !== 'subagent'
+  // The profile-scoped Global Controller is a product entry, not a regular
+  // conversation row. It remains addressable through the dedicated sidebar
+  // action; keeping it out of this tree prevents a duplicate "总控" row.
+  return !isGlobalControllerSession(session.id)
+    && session.origin !== 'subagent'
     && !archived.has(session.id)
     && (!session.blank || session.id === current)
 }
@@ -223,6 +237,7 @@ function sessionNode(
     runningSubagentCount: descendants.get(s.id)?.runningCount ?? 0,
     completed: s.completed === true,
     updatedAt: s.updatedAt,
+    ...(isGlobalControllerSession(s.id) ? { global: true } : {}),
     ...(s.pendingInteraction === undefined ? {} : { pendingInteraction: s.pendingInteraction }),
   }
 }
