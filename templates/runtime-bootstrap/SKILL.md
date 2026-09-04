@@ -118,5 +118,5 @@ Run it from PowerShell after review to sync the template into local skill roots.
 
 The finalizer is deterministic. It may summarize and validate artifact presence, but it must not make code-quality judgments or override the reviewer. If reviewer evidence is missing or invalid, final status is `blocked`.
 
-Full protocol: `docs/agent-runtime/sub-agent-dispatch-protocol.md`
+Full protocol: `rules/orchestration.md` plus the active milestone in `PLAN.md`.
 Policy rules: project rules/docs plus deterministic `tools/ai_guard.py`. Root `.ai/policy.yaml` is optional and only applicable for private/local installs where not forbidden by repo policy.

@@ -1,16 +1,16 @@
-"""Tests for the RD-Code cluster control surface (&-mention targets + run start).
+"""Tests for the RD-Code cluster control surface.
 
-There is no dashboard-approval / proposal-staging path: a human typing
-`&target <goal>` and confirming inline in the conversation is the authorization.
-`start_cluster_run` validates the target and starts a project-coordinator run in
-the background. The real workflow invocation is patched out here so tests never
-spawn a real, token-spending run.
+Conversation input remains non-executing; development work requires a bound,
+expiring, single-use server confirmation. Cancellation propagates from the
+loopback HTTP surface through the workflow to real command-worker process trees
+while preserving durable evidence.
 """
 from __future__ import annotations
 
 import json
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Thread
 from urllib.error import HTTPError
@@ -31,6 +31,26 @@ from control_plane.dashboard import build_dashboard_server  # noqa: E402
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _confirmed_start(runtime, project: str, target: str, goal: str):
+    proposal = cluster_run_module.propose_cluster_run(
+        runtime,
+        "devframe-local",
+        project,
+        target,
+        goal,
+    )
+    return start_cluster_run(
+        runtime,
+        project,
+        target,
+        goal,
+        environment_id="devframe-local",
+        proposal_id=proposal["proposalId"],
+        confirmation_token=proposal["confirmationToken"],
+        decision="execute",
+    )
 
 
 def _load_coordinator_entry_schema() -> dict:
@@ -114,9 +134,9 @@ def test_start_cluster_run_validates_and_starts(tmp_path, monkeypatch):
     monkeypatch.setattr(
         cluster_run_module,
         "_run_cluster_workflow",
-        lambda rd, path, target, goal, run_id, on_prepared=None: calls.append((path, target, goal, run_id)),
+        lambda rd, path, target, goal, run_id, on_prepared=None, cancel_marker=None: calls.append((path, target, goal, run_id)),
     )
-    started = start_cluster_run(runtime, str(workspace), "coordinator", "ship the feature")
+    started = _confirmed_start(runtime, str(workspace), "coordinator", "ship the feature")
     assert started["started"] is True
     assert started["runId"].startswith("g-")
     assert started["target"] == "coordinator"
@@ -135,6 +155,293 @@ def test_start_cluster_run_validates_and_starts(tmp_path, monkeypatch):
     while not calls and time.time() < deadline:
         time.sleep(0.02)
     assert calls and calls[0][1] == "coordinator" and calls[0][2] == "ship the feature"
+
+
+def test_development_goal_requires_server_confirmation(tmp_path, monkeypatch):
+    runtime = tmp_path / "runtime"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        cluster_run_module,
+        "_run_cluster_workflow",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+
+    with pytest.raises(ClusterRunError, match="execution confirmation required"):
+        start_cluster_run(runtime, str(workspace), "coordinator", "修复登录页的报错")
+
+    assert calls == []
+    assert not (runtime / "cluster-runs").exists()
+
+
+def test_cluster_confirmation_is_bound_expiring_single_use(tmp_path, monkeypatch):
+    runtime = tmp_path / "runtime"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        cluster_run_module,
+        "_run_cluster_workflow",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+    goal = "修复登录页的报错"
+
+    proposal = cluster_run_module.propose_cluster_run(
+        runtime,
+        "devframe-local",
+        str(workspace),
+        "coordinator",
+        goal,
+    )
+    token = proposal["confirmationToken"]
+    proposal_files = list((runtime / "cluster-run-proposals").glob("crp-*.json"))
+    assert len(proposal_files) == 1
+    persisted = proposal_files[0].read_text(encoding="utf-8")
+    assert token not in persisted
+    assert "tokenHash" in persisted
+
+    started = start_cluster_run(
+        runtime,
+        str(workspace),
+        "coordinator",
+        goal,
+        environment_id="devframe-local",
+        proposal_id=proposal["proposalId"],
+        confirmation_token=token,
+        decision="execute",
+    )
+    assert started["started"] is True
+
+    with pytest.raises(ClusterRunError, match="already consumed"):
+        start_cluster_run(
+            runtime,
+            str(workspace),
+            "coordinator",
+            goal,
+            environment_id="devframe-local",
+            proposal_id=proposal["proposalId"],
+            confirmation_token=token,
+            decision="execute",
+        )
+
+    deadline = time.time() + 5
+    while not calls and time.time() < deadline:
+        time.sleep(0.02)
+    assert len(calls) == 1
+
+
+def test_stable_run_identity_and_source_linkage_make_start_idempotent(tmp_path, monkeypatch):
+    runtime = tmp_path / "runtime"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        cluster_run_module,
+        "_run_cluster_workflow",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+    goal = "Implement one bounded change."
+    proposal = cluster_run_module.propose_cluster_run(
+        runtime,
+        "devframe-local",
+        str(workspace),
+        "coordinator",
+        goal,
+        stable_run_id="g-stable-source-run",
+        source_proposal_id="ctp-stable-source-proposal",
+        source_turn_id="t3-stable-source-turn",
+    )
+    start_args = {
+        "environment_id": "devframe-local",
+        "proposal_id": proposal["proposalId"],
+        "confirmation_token": proposal["confirmationToken"],
+        "decision": "execute",
+        "stable_run_id": "g-stable-source-run",
+        "source_proposal_id": "ctp-stable-source-proposal",
+        "source_turn_id": "t3-stable-source-turn",
+    }
+
+    started = start_cluster_run(
+        runtime,
+        str(workspace),
+        "coordinator",
+        goal,
+        **start_args,
+    )
+    replay = start_cluster_run(
+        runtime,
+        str(workspace),
+        "coordinator",
+        goal,
+        **start_args,
+    )
+
+    assert started["runId"] == replay["runId"] == "g-stable-source-run"
+    assert replay["replayed"] is True
+    record = cluster_run_module._load_run_record(runtime, "g-stable-source-run")
+    assert record["sourceProposalId"] == "ctp-stable-source-proposal"
+    assert record["sourceTurnId"] == "t3-stable-source-turn"
+    deadline = time.time() + 5
+    while not calls and time.time() < deadline:
+        time.sleep(0.02)
+    assert len(calls) == 1
+
+
+def test_cluster_confirmation_rejects_expired_token(tmp_path, monkeypatch):
+    runtime = tmp_path / "runtime"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.setattr(cluster_run_module, "_run_cluster_workflow", lambda *args, **kwargs: None)
+    goal = "修复登录页的报错"
+    proposal = cluster_run_module.propose_cluster_run(
+        runtime,
+        "devframe-local",
+        str(workspace),
+        "coordinator",
+        goal,
+        ttl_seconds=0,
+    )
+
+    with pytest.raises(ClusterRunError, match="expired"):
+        start_cluster_run(
+            runtime,
+            str(workspace),
+            "coordinator",
+            goal,
+            environment_id="devframe-local",
+            proposal_id=proposal["proposalId"],
+            confirmation_token=proposal["confirmationToken"],
+            decision="execute",
+        )
+
+    assert not list((runtime / "cluster-run-proposals").glob("*.used"))
+    assert not (runtime / "cluster-runs").exists()
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "boolean-decision",
+        "boolean-token",
+        "forged-token",
+        "wrong-environment",
+        "wrong-project",
+        "wrong-target",
+        "wrong-goal",
+    ],
+)
+def test_cluster_confirmation_fails_closed_for_malformed_forged_or_mismatched(
+    tmp_path,
+    monkeypatch,
+    mutation,
+):
+    runtime = tmp_path / "runtime"
+    workspace = tmp_path / "workspace"
+    other_workspace = tmp_path / "other-workspace"
+    workspace.mkdir()
+    other_workspace.mkdir()
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        cluster_run_module,
+        "_run_cluster_workflow",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+    goal = "修复登录页的报错"
+    proposal = cluster_run_module.propose_cluster_run(
+        runtime,
+        "devframe-local",
+        str(workspace),
+        "coordinator",
+        goal,
+    )
+    values = {
+        "project": str(workspace),
+        "target": "coordinator",
+        "goal": goal,
+        "environment_id": "devframe-local",
+        "proposal_id": proposal["proposalId"],
+        "confirmation_token": proposal["confirmationToken"],
+        "decision": "execute",
+    }
+    if mutation == "boolean-decision":
+        values["decision"] = True
+    elif mutation == "boolean-token":
+        values["confirmation_token"] = True
+    elif mutation == "forged-token":
+        values["confirmation_token"] = "forged"
+    elif mutation == "wrong-environment":
+        values["environment_id"] = "other-environment"
+    elif mutation == "wrong-project":
+        values["project"] = str(other_workspace)
+    elif mutation == "wrong-target":
+        values["target"] = "executor"
+    elif mutation == "wrong-goal":
+        values["goal"] = goal + "!"
+
+    with pytest.raises(ClusterRunError):
+        start_cluster_run(
+            runtime,
+            values["project"],
+            values["target"],
+            values["goal"],
+            environment_id=values["environment_id"],
+            proposal_id=values["proposal_id"],
+            confirmation_token=values["confirmation_token"],
+            decision=values["decision"],
+        )
+
+    assert calls == []
+    assert not list((runtime / "cluster-run-proposals").glob("*.used"))
+    assert not (runtime / "cluster-runs").exists()
+
+
+def test_cluster_confirmation_allows_only_one_concurrent_consumer(tmp_path, monkeypatch):
+    runtime = tmp_path / "runtime"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        cluster_run_module,
+        "_run_cluster_workflow",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+    goal = "修复登录页的报错"
+    proposal = cluster_run_module.propose_cluster_run(
+        runtime,
+        "devframe-local",
+        str(workspace),
+        "coordinator",
+        goal,
+    )
+
+    def consume():
+        try:
+            return start_cluster_run(
+                runtime,
+                str(workspace),
+                "coordinator",
+                goal,
+                environment_id="devframe-local",
+                proposal_id=proposal["proposalId"],
+                confirmation_token=proposal["confirmationToken"],
+                decision="execute",
+            )
+        except ClusterRunError as exc:
+            return exc
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _index: consume(), range(2)))
+
+    assert sum(isinstance(result, dict) for result in results) == 1
+    assert sum(
+        isinstance(result, ClusterRunError) and "already consumed" in str(result)
+        for result in results
+    ) == 1
+    deadline = time.time() + 5
+    while not calls and time.time() < deadline:
+        time.sleep(0.02)
+    assert len(calls) == 1
 
 
 def test_start_cluster_run_rejects_unknown_target(tmp_path, monkeypatch):
@@ -168,11 +475,11 @@ def test_start_cluster_run_records_and_lists(tmp_path, monkeypatch):
     monkeypatch.setattr(
         cluster_run_module,
         "_run_cluster_workflow",
-        lambda rd, path, target, goal, run_id, on_prepared=None: SimpleNamespace(
+        lambda rd, path, target, goal, run_id, on_prepared=None, cancel_marker=None: SimpleNamespace(
             status="completed", verdict="continue", passed_agents=2, failed_agents=0, go_run_id="go-123"
         ),
     )
-    started = start_cluster_run(runtime, str(workspace), "coordinator", "ship it")
+    started = _confirmed_start(runtime, str(workspace), "coordinator", "ship it")
     run_id = started["runId"]
     # Background thread updates the record; wait for completion.
     deadline = time.time() + 5
@@ -188,6 +495,108 @@ def test_start_cluster_run_records_and_lists(tmp_path, monkeypatch):
     assert record["goal"] == "ship it"
     assert record["status"] == "completed"
     assert "2 passed" in record["summary"]
+
+
+def test_cancel_before_go_run_and_terminal_races_stay_truthful(tmp_path, monkeypatch):
+    from threading import Event
+    from types import SimpleNamespace
+
+    from control_plane.cluster_run import cancel_cluster_run, list_cluster_runs
+
+    runtime = tmp_path / "runtime"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    allow_finish = Event()
+    with pytest.raises(ClusterRunError) as missing_error:
+        cancel_cluster_run(runtime, "g-missing", requested_by="rd-code-editor")
+    assert missing_error.value.error_code == "cluster_run_not_found"
+    assert missing_error.value.status_code == 404
+    with pytest.raises(ClusterRunError):
+        cancel_cluster_run(runtime, "../g-missing", requested_by="rd-code-editor")
+
+    def fake_workflow(
+        rd,
+        path,
+        target,
+        goal,
+        run_id,
+        on_prepared=None,
+        cancel_marker=None,
+    ):
+        assert cancel_marker == cluster_run_module._cancellation_marker_path(rd, run_id)
+        assert allow_finish.wait(timeout=5)
+        if on_prepared is not None:
+            on_prepared("go-after-cancel")
+        return SimpleNamespace(
+            status="completed",
+            verdict="continue",
+            passed_agents=1,
+            failed_agents=0,
+            go_run_id="go-after-cancel",
+        )
+
+    monkeypatch.setattr(cluster_run_module, "_run_cluster_workflow", fake_workflow)
+    started = _confirmed_start(
+        runtime,
+        str(workspace),
+        "coordinator",
+        "implement cancellation",
+    )
+    run_id = started["runId"]
+
+    requested = cancel_cluster_run(runtime, run_id, requested_by="rd-code-editor")
+    assert requested["status"] == "cancel_requested"
+    assert requested["cancelRequestedBy"] == "rd-code-editor"
+    assert cluster_run_module._cancellation_marker_path(runtime, run_id).is_file()
+
+    allow_finish.set()
+    deadline = time.monotonic() + 5
+    record = None
+    while time.monotonic() < deadline:
+        record = next(
+            (item for item in list_cluster_runs(runtime) if item["runId"] == run_id),
+            None,
+        )
+        if (
+            record
+            and record.get("status") == "cancelled"
+            and record.get("goRunId") == "go-after-cancel"
+        ):
+            break
+        time.sleep(0.02)
+    assert record is not None
+    assert record["status"] == "cancelled"
+    assert record["goRunId"] == "go-after-cancel"
+    assert record.get("finishedAt")
+
+    repeated = cancel_cluster_run(runtime, run_id, requested_by="rd-code-editor")
+    assert repeated["status"] == "cancelled"
+
+    completed = _confirmed_start(
+        runtime,
+        str(workspace),
+        "coordinator",
+        "ship the finished result",
+    )
+    completed_id = completed["runId"]
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        completed_record = next(
+            (
+                item
+                for item in list_cluster_runs(runtime)
+                if item["runId"] == completed_id
+            ),
+            None,
+        )
+        if completed_record and completed_record.get("status") == "completed":
+            break
+        time.sleep(0.02)
+    assert completed_record["status"] == "completed"
+    with pytest.raises(ClusterRunError) as terminal_error:
+        cancel_cluster_run(runtime, completed_id, requested_by="rd-code-editor")
+    assert terminal_error.value.error_code == "cluster_run_terminal"
+    assert terminal_error.value.status_code == 409
 
 
 def _get_json(base_url: str, path: str) -> tuple[int, dict]:
@@ -241,10 +650,24 @@ def test_dashboard_cluster_targets_and_run(tmp_path, monkeypatch):
         ids = [t["id"] for t in body["targets"]]
         assert "coordinator" in ids and "executor" in ids
 
-        status, started = _post_json(base_url, "/api/t3/cluster-run", {
+        status, proposal = _post_json(base_url, "/api/t3/cluster-run-proposal", {
+            "environmentId": "devframe-local",
             "projectId": str(workspace),
             "target": "coordinator",
             "goal": "add a settings page",
+        })
+        assert status == 201
+        assert proposal["proposed"] is True
+        assert proposal["started"] is False
+
+        status, started = _post_json(base_url, "/api/t3/cluster-run", {
+            "environmentId": "devframe-local",
+            "projectId": str(workspace),
+            "target": "coordinator",
+            "goal": "add a settings page",
+            "proposalId": proposal["proposalId"],
+            "confirmationToken": proposal["confirmationToken"],
+            "decision": "execute",
         })
         assert status == 202
         assert started["started"] is True
@@ -268,6 +691,213 @@ def test_dashboard_cluster_targets_and_run(tmp_path, monkeypatch):
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+def test_dashboard_status_request_is_nonexecuting_without_confirmation(tmp_path, monkeypatch):
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        cluster_run_module,
+        "_run_cluster_workflow",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+    runtime_dir = tmp_path / "runtime"
+    workspace = tmp_path / "workspace"
+    runtime_dir.mkdir()
+    workspace.mkdir()
+    server = build_dashboard_server(runtime_dir=runtime_dir, port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        status, result = _post_json(base_url, "/api/t3/cluster-run", {
+            "projectId": str(workspace),
+            "target": "coordinator",
+            "goal": "汇报一下目前的项目进度情况",
+        })
+        assert status == 200
+        assert result["started"] is False
+        assert result["kind"] == "conversation"
+        assert result["answer"]
+        assert calls == []
+        assert not (runtime_dir / "go-runs").exists()
+        assert not (runtime_dir / "rdgoal-outbox").exists()
+        assert list(workspace.iterdir()) == []
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_dashboard_development_request_requires_confirmation(tmp_path, monkeypatch):
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        cluster_run_module,
+        "_run_cluster_workflow",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+    runtime_dir = tmp_path / "runtime"
+    workspace = tmp_path / "workspace"
+    runtime_dir.mkdir()
+    workspace.mkdir()
+    server = build_dashboard_server(runtime_dir=runtime_dir, port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        status, raw_body = _request_status(
+            base_url,
+            "/api/t3/cluster-run",
+            "POST",
+            payload={
+                "projectId": str(workspace),
+                "target": "coordinator",
+                "goal": "修复登录页的报错",
+            },
+        )
+        assert status == 409
+        assert json.loads(raw_body)["error"] == "execution_confirmation_required"
+        assert calls == []
+        assert not (runtime_dir / "cluster-runs").exists()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_dashboard_cancel_terminates_real_worker_tree_and_preserves_evidence(
+    tmp_path,
+    monkeypatch,
+):
+    from control_plane import go_dispatch as go_dispatch_module
+    from control_plane.go_dispatch import load_go_run_result
+
+    runtime_dir = tmp_path / "runtime"
+    workspace = tmp_path / "workspace"
+    runtime_dir.mkdir()
+    workspace.mkdir()
+    script_path = tmp_path / "sleeping-go-worker.py"
+    script_path.write_text(
+        "import json, os, pathlib, subprocess, sys, time\n"
+        "packet = pathlib.Path(os.environ['RDGOAL_PACKET_DIR'])\n"
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'])\n"
+        "(packet / 'worker-pids.json').write_text("
+        "json.dumps({'parent': os.getpid(), 'child': child.pid}), encoding='utf-8')\n"
+        "time.sleep(120)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        go_dispatch_module,
+        "build_go_worker_command",
+        lambda **_kwargs: [sys.executable, str(script_path)],
+    )
+
+    server = build_dashboard_server(runtime_dir=runtime_dir, port=0, refresh_seconds=0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    discovered_pids: dict[str, int] = {}
+    try:
+        status, proposal = _post_json(base_url, "/api/t3/cluster-run-proposal", {
+            "environmentId": "devframe-local",
+            "projectId": str(workspace),
+            "target": "coordinator",
+            "goal": "implement a cancellable worker probe",
+        })
+        assert status == 201
+        status, started = _post_json(base_url, "/api/t3/cluster-run", {
+            "environmentId": "devframe-local",
+            "projectId": str(workspace),
+            "target": "coordinator",
+            "goal": "implement a cancellable worker probe",
+            "proposalId": proposal["proposalId"],
+            "confirmationToken": proposal["confirmationToken"],
+            "decision": "execute",
+        })
+        assert status == 202
+        run_id = started["runId"]
+
+        deadline = time.monotonic() + 15
+        pid_paths: list[Path] = []
+        while time.monotonic() < deadline:
+            pid_paths = list(runtime_dir.rglob("worker-pids.json"))
+            if pid_paths:
+                break
+            time.sleep(0.05)
+        assert pid_paths, "real HTTP-started worker process did not launch"
+        for pid_path in pid_paths:
+            for role, pid in json.loads(pid_path.read_text(encoding="utf-8")).items():
+                discovered_pids[f"{pid_path.parent.name}:{role}"] = pid
+
+        status, cancelled = _post_json(base_url, "/api/t3/cluster-run-cancel", {
+            "runId": run_id,
+            "requestedBy": "rd-code-editor",
+        })
+        assert status == 202
+        assert cancelled["status"] == "cancel_requested"
+
+        deadline = time.monotonic() + 15
+        final_record = None
+        while time.monotonic() < deadline:
+            final_record = next(
+                (
+                    item
+                    for item in cluster_run_module.list_cluster_runs(runtime_dir)
+                    if item["runId"] == run_id
+                ),
+                None,
+            )
+            if final_record and final_record.get("status") == "cancelled":
+                break
+            time.sleep(0.05)
+        assert final_record is not None
+        assert final_record["status"] == "cancelled"
+        assert final_record.get("goRunId")
+
+        for pid_path in runtime_dir.rglob("worker-pids.json"):
+            for role, pid in json.loads(pid_path.read_text(encoding="utf-8")).items():
+                discovered_pids[f"{pid_path.parent.name}:{role}"] = pid
+        deadline = time.monotonic() + 5
+        while (
+            any(cluster_run_module._pid_alive(pid) for pid in discovered_pids.values())
+            and time.monotonic() < deadline
+        ):
+            time.sleep(0.05)
+        assert discovered_pids
+        assert not any(
+            cluster_run_module._pid_alive(pid) for pid in discovered_pids.values()
+        )
+
+        go_result = load_go_run_result(runtime_dir, final_record["goRunId"])
+        assert go_result.status == "cancelled"
+        assert go_result.agents
+        assert all(agent.worker_status == "cancelled" for agent in go_result.agents)
+        for agent in go_result.agents:
+            report_path = Path(agent.report_path)
+            assert report_path.is_file()
+            assert "Status**: cancelled" in report_path.read_text(encoding="utf-8")
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+        import os
+        import signal
+        import subprocess
+
+        for pid in discovered_pids.values():
+            if not cluster_run_module._pid_alive(pid):
+                continue
+            if os.name == "nt":
+                subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/T", "/F"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            else:
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
 
 
 def test_dashboard_projects_endpoint_lists_registered_projects(tmp_path, monkeypatch):
@@ -408,11 +1038,10 @@ def test_dashboard_coordinator_entry_endpoint(tmp_path, monkeypatch):
         assert body["projects"] == projects["projects"]
         assert body["selectedProject"]["projectId"] == "demo-alpha"
         assert body["canStartCoordinatorGoal"] is True
-        assert body["globalCoordinatorThread"]["threadKind"] == "global_coordinator"
-        assert body["sortedShell"]["threads"][0]["id"] == "devframe-team-workbench-session"
-        assert sorted(thread["id"] for thread in body["sortedShell"]["threads"]) == [
+        assert body["globalCoordinatorThread"] is None
+        assert body["emptyStateReason"] == "missing_global_coordinator_thread"
+        assert [thread["id"] for thread in body["sortedShell"]["threads"]] == [
             "demo-beta-goal",
-            "devframe-team-workbench-session",
         ]
         assert [thread["id"] for thread in body["goalConversations"]] == ["demo-beta-goal"]
 
@@ -459,8 +1088,7 @@ def test_dashboard_coordinator_entry_endpoint_no_projects(tmp_path, monkeypatch)
         assert body["disabledReason"] == "missing_required_project"
         assert body["selectedProject"] is None
         assert body["projectCoordinatorThread"] is None
-        assert body["globalCoordinatorThread"] is not None
-        assert body["globalCoordinatorThread"]["threadKind"] == "global_coordinator"
+        assert body["globalCoordinatorThread"] is None
     finally:
         server.shutdown()
         server.server_close()
@@ -534,7 +1162,7 @@ def test_start_cluster_run_accepts_project_id_from_runtime_state(tmp_path, monke
     monkeypatch.setattr(
         cluster_run_module,
         "_run_cluster_workflow",
-        lambda rd, path, target, goal, run_id, on_prepared=None: calls.append((path, target, goal, run_id)),
+        lambda rd, path, target, goal, run_id, on_prepared=None, cancel_marker=None: calls.append((path, target, goal, run_id)),
     )
     monkeypatch.setattr(
         cluster_run_module,
@@ -551,7 +1179,7 @@ def test_start_cluster_run_accepts_project_id_from_runtime_state(tmp_path, monke
         },
     )
 
-    started = start_cluster_run(runtime, "demo-project", "coordinator", "ship the feature")
+    started = _confirmed_start(runtime, "demo-project", "coordinator", "ship the feature")
 
     assert started["projectId"] == "demo-project"
     assert started["projectPath"] == str(workspace)
@@ -682,7 +1310,7 @@ def test_start_cluster_run_accepts_leading_slash_drive_path(tmp_path, monkeypatc
     native = str(workspace)
     if len(native) >= 2 and native[1] == ":":
         url_style = "/" + native.replace("\\", "/")
-        started = start_cluster_run(runtime, url_style, "coordinator", "ship it")
+        started = _confirmed_start(runtime, url_style, "coordinator", "ship it")
         assert started["started"] is True
         deadline = time.time() + 5
         while time.time() < deadline and not calls:
@@ -831,12 +1459,14 @@ def test_classify_goal_conversation_vs_development():
     assert classify_goal("你好，请问你能做什么") == GOAL_KIND_CONVERSATION
     assert classify_goal("hello") == GOAL_KIND_CONVERSATION
     assert classify_goal("") == GOAL_KIND_CONVERSATION
+    assert classify_goal("汇报一下目前的项目进度情况") == GOAL_KIND_CONVERSATION
     # Real development goals (including a greeting that carries a real task).
     assert classify_goal("在 README 增加快速开始章节") == GOAL_KIND_DEVELOPMENT
     assert classify_goal("修复登录页的空指针报错") == GOAL_KIND_DEVELOPMENT
     assert classify_goal("你好，帮我修复登录bug") == GOAL_KIND_DEVELOPMENT
     assert classify_goal("add a date formatter to utils.ts") == GOAL_KIND_DEVELOPMENT
     assert classify_goal("refactor the auth module") == GOAL_KIND_DEVELOPMENT
+    assert classify_goal("ship the feature") == GOAL_KIND_DEVELOPMENT
 
 
 def test_conversational_goal_answers_without_running_agents(tmp_path, monkeypatch):
@@ -853,7 +1483,7 @@ def test_conversational_goal_answers_without_running_agents(tmp_path, monkeypatc
     workspace.mkdir()
 
     started = start_cluster_run(runtime, str(workspace), "coordinator", "你好，你能做什么")
-    assert started["started"] is True
+    assert started["started"] is False
     assert started["kind"] == "conversation"
     assert "主控" in started["answer"]
     assert calls == []  # never dispatched a token-spending run
@@ -870,13 +1500,13 @@ def test_development_goal_still_dispatches(tmp_path, monkeypatch):
     monkeypatch.setattr(
         cluster_run_module,
         "_run_cluster_workflow",
-        lambda rd, path, target, goal, run_id, on_prepared=None: calls.append((target, goal)),
+        lambda rd, path, target, goal, run_id, on_prepared=None, cancel_marker=None: calls.append((target, goal)),
     )
     runtime = tmp_path / "runtime"
     workspace = tmp_path / "workspace"
     workspace.mkdir()
 
-    started = start_cluster_run(runtime, str(workspace), "coordinator", "修复登录页的报错")
+    started = _confirmed_start(runtime, str(workspace), "coordinator", "修复登录页的报错")
     assert started["started"] is True
     assert started.get("kind") != "conversation"
     # Background thread should invoke the workflow seam.

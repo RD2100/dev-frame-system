@@ -7,6 +7,7 @@ import subprocess
 import uuid
 
 from jsonschema import Draft7Validator, Draft202012Validator
+import pytest
 import yaml
 
 
@@ -14,36 +15,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 CONTROL_PLANE_TEMPLATES = REPO_ROOT / "packages" / "control-plane" / "templates"
 RELEASE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release-verify.yml"
 REVIEWER_INDEX_REQUIRED_PATHS = [
-    "README.md",
-    "README.zh-CN.md",
+    "PLAN.md",
+    "AGENTS.md",
     ".github/workflows/release-verify.yml",
-    "docs/agent-runtime/rdgoal-total-control.md",
-    "docs/agent-runtime/dispatch-model-profiles.md",
-    "docs/agent-runtime/rdpaper-workflow.md",
-    "docs/agent-runtime/visual-control-plane.md",
-    "docs/agent-runtime/web-ai-adapter-contract.md",
-    "docs/status/LAUNCH_NOW.md",
-    "docs/status/release-readiness.md",
-    "docs/status/reviewer-index.md",
-    "docs/status/runtime-governance-batch-a-contract-completion.md",
-    "docs/status/runtime-governance-batch-b-read-only-run-index.md",
-    "docs/status/runtime-governance-batch-c-rdreview-prepare-only.md",
-    "docs/status/runtime-governance-batch-d-independent-gate.md",
-    "docs/status/runtime-governance-batch-e-workflow-review-pending.md",
-    "docs/status/runtime-governance-batch-e-paper-trust-fail-closed.md",
-    "docs/status/runtime-governance-batch-e-explicit-team-evidence-events.md",
-    "docs/status/runtime-governance-batch-e-team-context-refs.md",
-    "docs/status/runtime-governance-batch-e-team-review-verdict-events.md",
-    "docs/status/runtime-governance-batch-e-go-evidence-team-runtime-finalization.md",
-    "docs/status/runtime-governance-batch-e-final-verdict-lifecycle.md",
-    "docs/status/runtime-governance-batch-e-final-verdict-supersession-projection.md",
-    "docs/status/runtime-governance-batch-e-atgo-runtime-finalize-command.md",
-    "docs/status/runtime-governance-batch-e-atgo-prepare-finalizer-metadata.md",
-    "docs/status/runtime-governance-batch-e-chain-evidence-schema-compatibility.md",
-    "docs/status/runtime-governance-batch-e-ai-workflow-hub-chain-evidence-classification.md",
-    "docs/status/runtime-governance-status-vocabulary-inventory.md",
-    "packages/control-plane/README.md",
-    "packages/control-plane/QUICKSTART.md",
     "packages/control-plane/setup.py",
     "packages/control-plane/control_plane/cli/app.py",
     "packages/control-plane/control_plane/dashboard.py",
@@ -112,45 +86,18 @@ REVIEWER_INDEX_REQUIRED_PATHS = [
     "scripts/verify-release.ps1",
 ]
 PUBLIC_MARKDOWN_DOCS = [
-    REPO_ROOT / "README.md",
-    REPO_ROOT / "README.zh-CN.md",
-    REPO_ROOT / "packages" / "control-plane" / "QUICKSTART.md",
-    REPO_ROOT / "packages" / "control-plane" / "README.md",
-    REPO_ROOT / "docs" / "agent-runtime" / "rdgoal-total-control.md",
-    REPO_ROOT / "docs" / "agent-runtime" / "dispatch-model-profiles.md",
-    REPO_ROOT / "docs" / "agent-runtime" / "rdpaper-workflow.md",
-    REPO_ROOT / "docs" / "agent-runtime" / "visual-control-plane.md",
-    REPO_ROOT / "docs" / "agent-runtime" / "web-ai-adapter-contract.md",
-    REPO_ROOT / "docs" / "agent-runtime" / "runtime-invariants.md",
-    REPO_ROOT / "docs" / "agent-runtime" / "project-local-skill-bindings.md",
-    REPO_ROOT / "docs" / "status" / "release-readiness.md",
-    REPO_ROOT / "docs" / "status" / "reviewer-index.md",
-    REPO_ROOT / "docs" / "status" / "runtime-governance-batch-a-contract-completion.md",
-    REPO_ROOT / "docs" / "status" / "runtime-governance-status-vocabulary-inventory.md",
+    REPO_ROOT / "PLAN.md",
+    REPO_ROOT / "AGENTS.md",
+    REPO_ROOT / "rules" / "core.md",
+    REPO_ROOT / "rules" / "orchestration.md",
     REPO_ROOT / "rules" / "web-ai-adapters.md",
 ]
 DOC_LINK_CHECK_MARKDOWN_DOCS = [
-    REPO_ROOT / "docs" / "README.md",
-    REPO_ROOT / "docs" / "status" / "status-document-inventory.md",
-    REPO_ROOT / "docs" / "status" / "reviewer-index.md",
-    REPO_ROOT / "docs" / "status" / "release-readiness.md",
-    REPO_ROOT / "docs" / "status" / "review-governance-kernel-completion-20260706.md",
-    REPO_ROOT / "docs" / "status" / "runtime-governance-batch-a-contract-completion.md",
-    REPO_ROOT / "docs" / "status" / "runtime-governance-status-vocabulary-inventory.md",
+    REPO_ROOT / "PLAN.md",
+    REPO_ROOT / "AGENTS.md",
 ]
 LIFECYCLE_REQUIRED_STATUS_DOCS = [
-    REPO_ROOT / "docs" / "status" / "status-document-inventory.md",
-    REPO_ROOT / "docs" / "status" / "governance-spine-and-document-coordination.md",
-    REPO_ROOT / "docs" / "status" / "reviewer-index.md",
-    REPO_ROOT / "docs" / "status" / "release-readiness.md",
-    REPO_ROOT / "docs" / "status" / "workflow-consolidation-and-command-plan.md",
-    REPO_ROOT / "docs" / "status" / "context-management-architecture-plan.md",
-    REPO_ROOT / "docs" / "status" / "context-led-model-performance-control-plan.md",
-    REPO_ROOT / "docs" / "status" / "runtime-governance-batch-a-contract-completion.md",
-    REPO_ROOT / "docs" / "status" / "runtime-governance-status-vocabulary-inventory.md",
-    REPO_ROOT / "docs" / "status" / "documentation-management-audit-and-plan.md",
-    REPO_ROOT / "docs" / "status" / "documentation-management-detailed-rollout-plan.md",
-    REPO_ROOT / "docs" / "status" / "review-governance-kernel-completion-20260706.md",
+    REPO_ROOT / "PLAN.md",
 ]
 MARKDOWN_LINK_PATTERN = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 FENCED_CODE_BLOCK_PATTERN = re.compile(r"```.*?```", re.DOTALL)
@@ -196,16 +143,10 @@ def _write_minimal_public_snapshot_fixture(root):
         (root / relative).mkdir(parents=True, exist_ok=True)
 
     files = {
-        "README.md": "",
-        "README.zh-CN.md": "",
-        "AGENTS.md": "rules/recon.md",
+        "PLAN.md": "# Plan\n\nCurrent verdict: **candidate**\n\n## 15. Documentation Policy\n",
+        "AGENTS.md": "Read PLAN.md; rules/recon.md; only human development authority",
         ".github/workflows/release-verify.yml": "",
-        "docs/assets/devframe-system-banner.svg": "",
-        "docs/module-sources.md": "",
-        "docs/status/release-readiness.md": "",
-        "docs/status/reviewer-index.md": "",
-        "docs/agent-runtime/negative-test-fixtures/NEG-031-missing-recon-receipt.json": '{"name": "Missing Recon Receipt"}',
-        "rules/README.md": "recon.md",
+        "packages/agent-acceptance/fixtures/negative-acceptance/NEG-031-missing-recon-receipt.json": '{"name": "Missing Recon Receipt"}',
         "rules/open-source-reuse.md": "rules/recon.md",
         "rules/recon.md": "RULE recon-001: Recon Gate Before Write-Capable Work",
         "scripts/verify-control-plane-wheel.ps1": "",
@@ -221,22 +162,484 @@ def _write_minimal_public_snapshot_fixture(root):
     )
 
 
-def _run_public_snapshot(root, *args):
+def _powershell_command_argument(value):
+    value = str(value)
+    if re.fullmatch(r"-[A-Za-z][A-Za-z0-9]*", value):
+        return value
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _run_public_snapshot(root, *args, cwd=None, script_root=None, env=None):
+    script_root = root if script_root is None else script_root
+    script_path = script_root / "scripts" / "verify-public-snapshot.ps1"
+    command = " ".join(
+        [
+            "[Console]::OutputEncoding = "
+            "[System.Text.UTF8Encoding]::new($false);",
+            "&",
+            _powershell_command_argument(script_path),
+            *(_powershell_command_argument(arg) for arg in args),
+            "; exit $LASTEXITCODE",
+        ]
+    )
     return subprocess.run(
         [
             "powershell",
+            "-NoProfile",
             "-ExecutionPolicy",
             "Bypass",
-            "-File",
-            str(root / "scripts" / "verify-public-snapshot.ps1"),
-            *args,
+            "-Command",
+            command,
         ],
-        cwd=root,
+        cwd=root if cwd is None else cwd,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="strict",
         timeout=60,
         check=False,
+        env=env,
     )
+
+
+def _make_directory_junction(link_path, target_path):
+    result = subprocess.run(
+        ["cmd", "/d", "/c", "mklink", "/J", str(link_path), str(target_path)],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_public_snapshot_defaults_to_checkout_containing_script(tmp_path):
+    snapshot_root = tmp_path / "clean export"
+    caller_root = tmp_path / "caller"
+    snapshot_root.mkdir()
+    caller_root.mkdir()
+    (caller_root / ".agents").mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+
+    result = _run_public_snapshot(snapshot_root, cwd=caller_root)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "[OK] Public snapshot required paths are present." in output
+    assert ".agents" not in output
+
+
+def test_public_snapshot_explicit_root_overrides_script_checkout(tmp_path):
+    script_home = tmp_path / "script home"
+    explicit_root = tmp_path / "explicit root"
+    caller_root = tmp_path / "caller"
+    (script_home / "scripts").mkdir(parents=True)
+    explicit_root.mkdir()
+    caller_root.mkdir()
+    _write_minimal_public_snapshot_fixture(explicit_root)
+    shutil.copy2(
+        REPO_ROOT / "scripts" / "verify-public-snapshot.ps1",
+        script_home / "scripts" / "verify-public-snapshot.ps1",
+    )
+
+    result = _run_public_snapshot(
+        explicit_root,
+        "-Root",
+        str(explicit_root),
+        cwd=caller_root,
+        script_root=script_home,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "[OK] Public snapshot required paths are present." in output
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows junction contract")
+def test_public_snapshot_rejects_explicit_root_junction(tmp_path):
+    script_home = tmp_path / "script home"
+    snapshot_target = tmp_path / "snapshot target"
+    root_junction = tmp_path / "snapshot-link"
+    (script_home / "scripts").mkdir(parents=True)
+    snapshot_target.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_target)
+    shutil.copy2(
+        REPO_ROOT / "scripts" / "verify-public-snapshot.ps1",
+        script_home / "scripts" / "verify-public-snapshot.ps1",
+    )
+    _make_directory_junction(root_junction, snapshot_target)
+
+    result = _run_public_snapshot(
+        snapshot_target,
+        "-Root",
+        str(root_junction),
+        cwd=tmp_path,
+        script_root=script_home,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert "[PUBLIC-SNAPSHOT-FAIL] root contains reparse point" in output
+    assert str(snapshot_target) not in output
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows junction contract")
+def test_public_snapshot_rejects_directory_junction_without_scanning_target(tmp_path):
+    snapshot_root = tmp_path / "clean export"
+    outside_root = tmp_path / "outside"
+    snapshot_root.mkdir()
+    outside_root.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    (outside_root / "outside-payload.zip").write_bytes(b"synthetic-outside-bytes")
+    junction_path = snapshot_root / "linked-external"
+    _make_directory_junction(junction_path, outside_root)
+
+    result = _run_public_snapshot(snapshot_root)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert "[PUBLIC-SNAPSHOT-FAIL] reparse point: linked-external" in output
+    assert "outside-payload.zip" not in output
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows symlink contract")
+def test_public_snapshot_rejects_file_symlink_without_reading_target(tmp_path):
+    snapshot_root = tmp_path / "clean export"
+    outside_file = tmp_path / "outside-private.txt"
+    snapshot_root.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    outside_file.write_text("synthetic-private-target", encoding="utf-8")
+    link_path = snapshot_root / "linked-file.txt"
+    try:
+        link_path.symlink_to(outside_file)
+    except OSError as exc:
+        pytest.skip(f"file symlink unavailable: {exc.winerror}")
+
+    result = _run_public_snapshot(snapshot_root)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert "[PUBLIC-SNAPSHOT-FAIL] reparse point: linked-file.txt" in output
+    assert "synthetic-private-target" not in output
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows junction contract")
+def test_public_snapshot_rejects_git_junction_before_invoking_git(tmp_path):
+    snapshot_root = tmp_path / "clean export"
+    outside_git = tmp_path / "outside-git"
+    snapshot_root.mkdir()
+    outside_git.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    _make_directory_junction(snapshot_root / ".git", outside_git)
+
+    result = _run_public_snapshot(snapshot_root)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert "[PUBLIC-SNAPSHOT-FAIL] reparse point: .git" in output
+    assert "unable to verify tracked sensitive config metadata" not in output
+
+
+def test_public_snapshot_redacts_invalid_git_metadata_failure(tmp_path):
+    snapshot_root = tmp_path / "clean export"
+    snapshot_root.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    (snapshot_root / ".git").mkdir()
+
+    result = _run_public_snapshot(snapshot_root)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert output.strip() == (
+        "[PUBLIC-SNAPSHOT-FAIL] unable to verify tracked sensitive config metadata"
+    )
+    assert str(snapshot_root) not in output
+    assert "fatal:" not in output
+
+
+def test_public_snapshot_redacts_missing_git_invocation_failure(tmp_path):
+    snapshot_root = tmp_path / "clean export"
+    empty_bin = tmp_path / "empty-bin"
+    snapshot_root.mkdir()
+    empty_bin.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    (snapshot_root / ".git").mkdir()
+    env = os.environ.copy()
+    env["PATH"] = str(empty_bin)
+
+    result = _run_public_snapshot(snapshot_root, env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert output.strip() == (
+        "[PUBLIC-SNAPSHOT-FAIL] unable to verify tracked sensitive config metadata"
+    )
+    assert str(snapshot_root) not in output
+    assert "git" not in output.lower()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows native Git failure contract")
+def test_public_snapshot_redacts_strict_git_metadata_failure(tmp_path):
+    snapshot_root = tmp_path / "clean export"
+    fake_bin = tmp_path / "fake-bin"
+    snapshot_root.mkdir()
+    fake_bin.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    (snapshot_root / ".git").mkdir()
+    (fake_bin / "git.cmd").write_text(
+        "@echo off\n"
+        "echo %* | %SystemRoot%\\System32\\findstr.exe "
+        '"opencode.config.json" >nul\n'
+        "if not errorlevel 1 exit /b 0\n"
+        "echo SYNTHETIC_GIT_STDOUT\n"
+        ">&2 echo SYNTHETIC_GIT_STDERR\n"
+        "exit /b 7\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+
+    result = _run_public_snapshot(
+        snapshot_root,
+        "-FailOnTrackedForbidden",
+        env=env,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert output.strip() == (
+        "[PUBLIC-SNAPSHOT-FAIL] unable to verify tracked sensitive config metadata"
+    )
+    assert "SYNTHETIC_GIT_STDOUT" not in output
+    assert "SYNTHETIC_GIT_STDERR" not in output
+    assert str(snapshot_root) not in output
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows native Git output contract")
+@pytest.mark.parametrize(
+    ("record_length", "expected_error"),
+    [
+        (
+            4096,
+            "[PUBLIC-SNAPSHOT-FAIL] tracked sensitive config: opencode.config.json",
+        ),
+        (
+            4097,
+            "[PUBLIC-SNAPSHOT-FAIL] unable to verify tracked sensitive config metadata",
+        ),
+    ],
+)
+def test_public_snapshot_bounds_sensitive_git_record_length(
+    tmp_path,
+    record_length,
+    expected_error,
+):
+    snapshot_root = tmp_path / "clean export"
+    fake_bin = tmp_path / "fake-bin"
+    snapshot_root.mkdir()
+    fake_bin.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    (snapshot_root / ".git").mkdir()
+    (fake_bin / "git.cmd").write_text(
+        "@echo off\n"
+        "%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe "
+        "-NoProfile -Command \"[Console]::OutputEncoding = "
+        "[System.Text.UTF8Encoding]::new($false); "
+        f"[Console]::Out.WriteLine(('x' * {record_length}))\"\n"
+        "exit /b 0\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+
+    result = _run_public_snapshot(snapshot_root, env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert output.strip() == expected_error
+    assert "x" * 100 not in output
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows native Git output contract")
+def test_public_snapshot_rejects_late_oversized_strict_git_record(tmp_path):
+    snapshot_root = tmp_path / "clean export"
+    fake_bin = tmp_path / "fake-bin"
+    snapshot_root.mkdir()
+    fake_bin.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    (snapshot_root / ".git").mkdir()
+    (fake_bin / "git.cmd").write_text(
+        "@echo off\n"
+        "echo %* | %SystemRoot%\\System32\\findstr.exe "
+        '"opencode.config.json" >nul\n'
+        "if not errorlevel 1 exit /b 0\n"
+        "%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe "
+        "-NoProfile -Command \"[Console]::OutputEncoding = "
+        "[System.Text.UTF8Encoding]::new($false); "
+        "1..65 | ForEach-Object { "
+        "[Console]::Out.WriteLine(('products/item-{0:D3}.txt' -f $_)) }; "
+        "[Console]::Out.WriteLine(('SYNTHETIC_LATE_GIT_SECRET' + "
+        "('x' * 5000)))\"\n"
+        "exit /b 0\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+
+    result = _run_public_snapshot(
+        snapshot_root,
+        "-FailOnTrackedForbidden",
+        env=env,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert output.strip() == (
+        "[PUBLIC-SNAPSHOT-FAIL] unable to verify tracked sensitive config metadata"
+    )
+    assert "products/item-001.txt" not in output
+    assert "SYNTHETIC_LATE_GIT_SECRET" not in output
+    assert "x" * 100 not in output
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows native Git output contract")
+def test_public_snapshot_preserves_sensitive_whitespace_output_truth(tmp_path):
+    snapshot_root = tmp_path / "clean export"
+    fake_bin = tmp_path / "fake-bin"
+    snapshot_root.mkdir()
+    fake_bin.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    (snapshot_root / ".git").mkdir()
+    (fake_bin / "git.cmd").write_text(
+        "@echo off\n"
+        "%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe "
+        "-NoProfile -Command \"[Console]::Out.WriteLine('   ')\"\n"
+        "exit /b 0\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+
+    result = _run_public_snapshot(snapshot_root, env=env)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert output.strip() == (
+        "[PUBLIC-SNAPSHOT-FAIL] tracked sensitive config: opencode.config.json"
+    )
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows native Git output contract")
+def test_public_snapshot_excludes_whitespace_from_strict_git_retention(tmp_path):
+    snapshot_root = tmp_path / "clean export"
+    fake_bin = tmp_path / "fake-bin"
+    snapshot_root.mkdir()
+    fake_bin.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    (snapshot_root / ".git").mkdir()
+    (fake_bin / "git.cmd").write_text(
+        "@echo off\n"
+        "echo %* | %SystemRoot%\\System32\\findstr.exe "
+        '"opencode.config.json" >nul\n'
+        "if not errorlevel 1 exit /b 0\n"
+        "%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe "
+        "-NoProfile -Command \"1..70 | ForEach-Object { "
+        "[Console]::Out.WriteLine('   ') }; "
+        "[Console]::Out.WriteLine('products/after-whitespace.txt')\"\n"
+        "exit /b 0\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+
+    result = _run_public_snapshot(
+        snapshot_root,
+        "-FailOnTrackedForbidden",
+        env=env,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert output.strip() == (
+        "[PUBLIC-SNAPSHOT-FAIL] tracked bundled product: "
+        "products/after-whitespace.txt"
+    )
+    assert "additional tracked path failures omitted" not in output
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows junction contract")
+def test_public_snapshot_rejects_required_directory_junction_before_reading_target(tmp_path):
+    snapshot_root = tmp_path / "clean export"
+    outside_rules = tmp_path / "outside-rules"
+    snapshot_root.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    shutil.copytree(snapshot_root / "rules", outside_rules)
+    shutil.rmtree(snapshot_root / "rules")
+    _make_directory_junction(snapshot_root / "rules", outside_rules)
+
+    result = _run_public_snapshot(snapshot_root)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert "[PUBLIC-SNAPSHOT-FAIL] reparse point: rules" in output
+    assert str(outside_rules) not in output
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows junction contract")
+def test_public_snapshot_rejects_required_text_junction_before_reading_target(tmp_path):
+    snapshot_root = tmp_path / "clean export"
+    outside_fixtures = tmp_path / "outside-fixtures"
+    snapshot_root.mkdir()
+    outside_fixtures.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    fixture_dir = (
+        snapshot_root
+        / "packages"
+        / "agent-acceptance"
+        / "fixtures"
+        / "negative-acceptance"
+    )
+    shutil.rmtree(fixture_dir)
+    (outside_fixtures / "NEG-031-missing-recon-receipt.json").write_text(
+        "synthetic-private-target",
+        encoding="utf-8",
+    )
+    _make_directory_junction(fixture_dir, outside_fixtures)
+
+    result = _run_public_snapshot(snapshot_root)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert (
+        "[PUBLIC-SNAPSHOT-FAIL] reparse point: "
+        "packages\\agent-acceptance\\fixtures\\negative-acceptance"
+    ) in output
+    assert "[TEXT-FAIL]" not in output
+    assert "synthetic-private-target" not in output
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows device-path contract")
+def test_public_snapshot_rejects_device_root_before_filesystem_access(tmp_path):
+    script_home = tmp_path / "script home"
+    (script_home / "scripts").mkdir(parents=True)
+    shutil.copy2(
+        REPO_ROOT / "scripts" / "verify-public-snapshot.ps1",
+        script_home / "scripts" / "verify-public-snapshot.ps1",
+    )
+    device_root = r"\\?\C:\devframe-public-snapshot-probe"
+
+    result = _run_public_snapshot(
+        tmp_path,
+        "-Root",
+        device_root,
+        cwd=tmp_path,
+        script_root=script_home,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert output.strip() == "[PUBLIC-SNAPSHOT-FAIL] invalid root"
+    assert device_root not in output
 
 
 def test_public_snapshot_rejects_tracked_opencode_config_before_content_scan(tmp_path):
@@ -253,6 +656,23 @@ def test_public_snapshot_rejects_tracked_opencode_config_before_content_scan(tmp
     assert "tracked sensitive config: opencode.config.json" in output
     assert "[JSON-FAIL]" not in output
     assert "synthetic-invalid-json-placeholder" not in output
+
+
+def test_public_snapshot_ignores_local_claude_worktrees_but_rejects_tracked_state(tmp_path):
+    _write_minimal_public_snapshot_fixture(tmp_path)
+    state_path = tmp_path / ".claude" / "worktrees" / "local" / "state.json"
+    state_path.parent.mkdir(parents=True)
+    state_path.write_text('{"local": true}', encoding="utf-8")
+
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
+    untracked_result = _run_public_snapshot(tmp_path)
+    assert untracked_result.returncode == 0, untracked_result.stdout + untracked_result.stderr
+
+    subprocess.run(["git", "add", "--", state_path.relative_to(tmp_path)], cwd=tmp_path, check=True)
+    tracked_result = _run_public_snapshot(tmp_path)
+    output = tracked_result.stdout + tracked_result.stderr
+    assert tracked_result.returncode == 1, output
+    assert output.strip() == "[PUBLIC-SNAPSHOT-FAIL] tracked local agent state: .claude"
 
 
 def test_gitignore_keeps_root_opencode_config_local(tmp_path):
@@ -664,6 +1084,224 @@ def test_public_snapshot_rejects_root_review_artifacts():
             reply_file.write_bytes(original_reply)
 
 
+@pytest.mark.parametrize(
+    ("file_name", "content", "expected_error"),
+    [
+        (
+            "forbidden-\u2028status.zip",
+            "synthetic archive bytes",
+            "[PUBLIC-SNAPSHOT-FAIL] forbidden extension: forbidden-?status.zip",
+        ),
+        (
+            "private-\u2028status.md",
+            "C:\\Users\\RD\\synthetic-private",
+            "[PUBLIC-SNAPSHOT-FAIL] private-?status.md: contains "
+            "private RD user home path",
+        ),
+    ],
+)
+def test_public_snapshot_sanitizes_path_derived_diagnostics(
+    tmp_path,
+    file_name,
+    content,
+    expected_error,
+):
+    snapshot_root = tmp_path / "clean export"
+    snapshot_root.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    (snapshot_root / file_name).write_text(content, encoding="utf-8")
+
+    result = _run_public_snapshot(snapshot_root)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert output.strip() == expected_error
+    assert len(output.splitlines()) == 1
+    assert "\u2028" not in output
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows native Git output contract")
+@pytest.mark.parametrize(
+    ("git_path_expression", "expected_error"),
+    [
+        (
+            "'products/forged-' + [char]0x2028 + 'status.txt'",
+            "[PUBLIC-SNAPSHOT-FAIL] tracked bundled product: "
+            "products/forged-?status.txt",
+        ),
+        (
+            "'../forged.txt'",
+            "[PUBLIC-SNAPSHOT-FAIL] tracked forbidden review artifact: "
+            "<unavailable>",
+        ),
+        (
+            "'products/' + ('x' * 300) + '.txt'",
+            "[PUBLIC-SNAPSHOT-FAIL] tracked bundled product: "
+            + "products/"
+            + ("x" * 231),
+        ),
+    ],
+)
+def test_public_snapshot_sanitizes_tracked_path_diagnostic(
+    tmp_path,
+    git_path_expression,
+    expected_error,
+):
+    snapshot_root = tmp_path / "clean export"
+    fake_bin = tmp_path / "fake-bin"
+    snapshot_root.mkdir()
+    fake_bin.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    (snapshot_root / ".git").mkdir()
+    (fake_bin / "git.cmd").write_text(
+        "@echo off\n"
+        "echo %* | %SystemRoot%\\System32\\findstr.exe "
+        '"opencode.config.json" >nul\n'
+        "if not errorlevel 1 exit /b 0\n"
+        "%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe "
+        "-NoProfile -Command \"[Console]::OutputEncoding = "
+        "[System.Text.UTF8Encoding]::new($false); "
+        f"$p={git_path_expression}; "
+        '[Console]::Out.WriteLine($p)"\n'
+        "exit /b 0\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+
+    result = _run_public_snapshot(
+        snapshot_root,
+        "-FailOnTrackedForbidden",
+        env=env,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert output.strip() == expected_error
+    assert len(output.splitlines()) == 1
+    assert "\u2028" not in output
+
+
+@pytest.mark.parametrize(
+    ("failure_kind", "expected_prefix", "expected_summary"),
+    [
+        (
+            "violation",
+            "[PUBLIC-SNAPSHOT-FAIL] forbidden extension: bounded-",
+            "[PUBLIC-SNAPSHOT-FAIL] additional snapshot violations omitted",
+        ),
+        (
+            "private-text",
+            "[PUBLIC-SNAPSHOT-FAIL] private-bounded-",
+            "[PUBLIC-SNAPSHOT-FAIL] additional private text failures omitted",
+        ),
+    ],
+)
+def test_public_snapshot_bounds_filesystem_diagnostic_records(
+    tmp_path,
+    failure_kind,
+    expected_prefix,
+    expected_summary,
+):
+    snapshot_root = tmp_path / "clean export"
+    snapshot_root.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    for index in range(70):
+        if failure_kind == "violation":
+            relative = f"bounded-{index:03d}.zip"
+            content = "synthetic archive bytes"
+        else:
+            relative = f"private-bounded-{index:03d}.md"
+            content = "C:\\Users\\RD\\synthetic-private"
+        (snapshot_root / relative).write_text(content, encoding="utf-8")
+
+    result = _run_public_snapshot(snapshot_root)
+
+    output = result.stdout + result.stderr
+    lines = output.splitlines()
+    assert result.returncode == 1, output
+    assert len(lines) == 65
+    assert all(line.startswith(expected_prefix) for line in lines[:64])
+    if failure_kind == "violation":
+        assert lines[0].endswith("bounded-000.zip")
+        assert lines[63].endswith("bounded-063.zip")
+        assert "bounded-069.zip" not in output
+    else:
+        assert "private-bounded-000.md:" in lines[0]
+        assert "private-bounded-063.md:" in lines[63]
+        assert "private-bounded-069.md" not in output
+    assert lines[-1] == expected_summary
+    assert len(output.encode("utf-8")) <= 24_000
+
+
+def test_public_snapshot_omits_no_records_at_diagnostic_limit(tmp_path):
+    snapshot_root = tmp_path / "clean export"
+    snapshot_root.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    for index in range(64):
+        (snapshot_root / f"at-limit-{index:03d}.zip").write_text(
+            "synthetic archive bytes",
+            encoding="utf-8",
+        )
+
+    result = _run_public_snapshot(snapshot_root)
+
+    output = result.stdout + result.stderr
+    lines = output.splitlines()
+    assert result.returncode == 1, output
+    assert len(lines) == 64
+    assert lines[0].endswith("at-limit-000.zip")
+    assert lines[-1].endswith("at-limit-063.zip")
+    assert "additional snapshot violations omitted" not in output
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows native Git output contract")
+def test_public_snapshot_bounds_tracked_diagnostic_records(tmp_path):
+    snapshot_root = tmp_path / "clean export"
+    fake_bin = tmp_path / "fake-bin"
+    snapshot_root.mkdir()
+    fake_bin.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    (snapshot_root / ".git").mkdir()
+    (fake_bin / "git.cmd").write_text(
+        "@echo off\n"
+        "echo %* | %SystemRoot%\\System32\\findstr.exe "
+        '"opencode.config.json" >nul\n'
+        "if not errorlevel 1 exit /b 0\n"
+        "%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe "
+        "-NoProfile -Command \"[Console]::OutputEncoding = "
+        "[System.Text.UTF8Encoding]::new($false); "
+        "1..70 | ForEach-Object { "
+        "[Console]::Out.WriteLine(('products/item-{0:D3}.txt' -f $_)) }\"\n"
+        "exit /b 0\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+
+    result = _run_public_snapshot(
+        snapshot_root,
+        "-FailOnTrackedForbidden",
+        env=env,
+    )
+
+    output = result.stdout + result.stderr
+    lines = output.splitlines()
+    assert result.returncode == 1, output
+    assert len(lines) == 65
+    assert all(
+        line.startswith("[PUBLIC-SNAPSHOT-FAIL] tracked bundled product: products/")
+        for line in lines[:64]
+    )
+    assert lines[0].endswith("products/item-001.txt")
+    assert lines[63].endswith("products/item-064.txt")
+    assert "products/item-070.txt" not in output
+    assert lines[-1] == (
+        "[PUBLIC-SNAPSHOT-FAIL] additional tracked path failures omitted"
+    )
+    assert len(output.encode("utf-8")) <= 24_000
+
+
 def test_public_snapshot_rejects_private_text_markers():
     probe_file = REPO_ROOT / f"public-snapshot-private-path-probe-{uuid.uuid4().hex}.md"
     concrete_conversation_url = (
@@ -705,6 +1343,304 @@ def test_public_snapshot_rejects_private_text_markers():
         assert "mojibake replacement marker" in output
     finally:
         probe_file.unlink(missing_ok=True)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows exclusive file handle contract")
+@pytest.mark.parametrize(
+    ("file_name", "display_name"),
+    [
+        ("locked-private.md", "locked-private.md"),
+        ("locked-\u2028forged-status.md", "locked-?forged-status.md"),
+    ],
+)
+def test_public_snapshot_fails_closed_when_private_text_file_cannot_be_read(
+    tmp_path,
+    file_name,
+    display_name,
+):
+    import ctypes
+    from ctypes import wintypes
+
+    snapshot_root = tmp_path / "clean export"
+    snapshot_root.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    locked_path = snapshot_root / file_name
+    locked_path.write_text("C:\\Users\\RD\\synthetic-private", encoding="utf-8")
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    create_file.restype = wintypes.HANDLE
+    handle = create_file(
+        str(locked_path),
+        0x80000000,
+        0,
+        None,
+        3,
+        0,
+        None,
+    )
+    if handle == wintypes.HANDLE(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        result = _run_public_snapshot(snapshot_root)
+    finally:
+        kernel32.CloseHandle(handle)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert output.strip() == (
+        f"[PUBLIC-SNAPSHOT-FAIL] unable to inspect text: {display_name}"
+    )
+    assert len(output.splitlines()) == 1
+    assert str(snapshot_root) not in output
+    assert "synthetic-private" not in output
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows exclusive file handle contract")
+def test_public_snapshot_redacts_required_text_read_failure(tmp_path):
+    import ctypes
+    from ctypes import wintypes
+
+    snapshot_root = tmp_path / "clean export"
+    snapshot_root.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    locked_path = snapshot_root / "rules" / "open-source-reuse.md"
+    locked_path.write_text(
+        "recon.md SYNTHETIC_REQUIRED_TEXT_SECRET",
+        encoding="utf-8",
+    )
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    create_file.restype = wintypes.HANDLE
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [wintypes.HANDLE]
+    close_handle.restype = wintypes.BOOL
+    handle = create_file(
+        str(locked_path),
+        0x80000000,
+        0,
+        None,
+        3,
+        0,
+        None,
+    )
+    if handle == wintypes.HANDLE(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        result = _run_public_snapshot(snapshot_root)
+    finally:
+        if not close_handle(handle):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert output.strip() == (
+        "[TEXT-FAIL] rules\\open-source-reuse.md: unable to inspect required text"
+    )
+    assert len(output.splitlines()) == 1
+    assert str(snapshot_root) not in output
+    assert "Get-Content" not in output
+    assert "CategoryInfo" not in output
+    assert "FullyQualifiedErrorId" not in output
+    assert "IOException" not in output
+    assert "being used by another process" not in output
+    assert "SYNTHETIC_REQUIRED_TEXT_SECRET" not in output
+
+
+@pytest.mark.parametrize(
+    ("fixture_state", "expected_error"),
+    [
+        ("missing", "[TEXT-FAIL] rules\\open-source-reuse.md: file missing"),
+        ("empty", "[TEXT-FAIL] rules\\open-source-reuse.md: missing 'rules/recon.md'"),
+        ("mismatch", "[TEXT-FAIL] rules\\open-source-reuse.md: missing 'rules/recon.md'"),
+    ],
+)
+def test_public_snapshot_preserves_required_text_failure_categories(
+    tmp_path,
+    fixture_state,
+    expected_error,
+):
+    snapshot_root = tmp_path / "clean export"
+    snapshot_root.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    required_text_path = snapshot_root / "rules" / "open-source-reuse.md"
+    if fixture_state == "missing":
+        required_text_path.unlink()
+    elif fixture_state == "empty":
+        required_text_path.write_text("", encoding="utf-8")
+    else:
+        required_text_path.write_text("not the required literal", encoding="utf-8")
+
+    result = _run_public_snapshot(snapshot_root)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert output.strip() == expected_error
+    assert len(output.splitlines()) == 1
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows exclusive directory handle contract")
+@pytest.mark.parametrize(
+    ("directory_name", "expected_error"),
+    [
+        (
+            "locked-\u2028directory",
+            "[PUBLIC-SNAPSHOT-FAIL] unable to enumerate snapshot path: "
+            "locked-?directory",
+        ),
+        (".pytest_cache", None),
+    ],
+)
+def test_public_snapshot_redacts_directory_enumeration_failure(
+    tmp_path,
+    directory_name,
+    expected_error,
+):
+    import ctypes
+    from ctypes import wintypes
+
+    snapshot_root = tmp_path / "clean export"
+    snapshot_root.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    locked_dir = snapshot_root / directory_name
+    locked_dir.mkdir()
+    (locked_dir / "safe.txt").write_text(
+        "C:\\Users\\RD\\synthetic-enumeration-private",
+        encoding="utf-8",
+    )
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    create_file.restype = wintypes.HANDLE
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [wintypes.HANDLE]
+    close_handle.restype = wintypes.BOOL
+    handle = create_file(
+        str(locked_dir),
+        0x80000000,
+        0,
+        None,
+        3,
+        0x02000000,
+        None,
+    )
+    if handle == wintypes.HANDLE(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        result = _run_public_snapshot(snapshot_root)
+    finally:
+        if not close_handle(handle):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+    output = result.stdout + result.stderr
+    assert "synthetic-enumeration-private" not in output
+    if expected_error is None:
+        assert result.returncode == 0, output
+        assert "[PUBLIC-SNAPSHOT-FAIL]" not in output
+        assert "[OK] JSON files parse as UTF-8." in output
+        return
+    assert result.returncode == 1, output
+    assert output.strip() == expected_error
+    assert len(output.splitlines()) == 1
+    assert str(snapshot_root) not in output
+    assert "Get-ChildItem" not in output
+    assert "CategoryInfo" not in output
+
+
+def test_public_snapshot_fails_closed_when_private_text_is_not_utf8(tmp_path):
+    snapshot_root = tmp_path / "clean export"
+    snapshot_root.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    (snapshot_root / "invalid-utf8.md").write_bytes(b"\xff")
+
+    result = _run_public_snapshot(snapshot_root)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert output.strip() == (
+        "[PUBLIC-SNAPSHOT-FAIL] unable to inspect text: invalid-utf8.md"
+    )
+    assert str(snapshot_root) not in output
+    assert "Exception" not in output
+
+
+def test_public_snapshot_rejects_readable_private_text_in_minimal_snapshot(tmp_path):
+    snapshot_root = tmp_path / "clean export"
+    snapshot_root.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    marker_path = snapshot_root / "readable-private.md"
+    marker_path.write_text("C:\\Users\\RD\\synthetic-private", encoding="utf-8")
+
+    result = _run_public_snapshot(snapshot_root)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert "readable-private.md: contains private RD user home path" in output
+    assert str(snapshot_root) not in output
+    assert "synthetic-private" not in output
+
+
+def test_public_snapshot_redacts_malformed_json_content(tmp_path):
+    snapshot_root = tmp_path / "clean export"
+    snapshot_root.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    (snapshot_root / "malformed-\u2028secret.json").write_text(
+        "SYNTHETIC_JSON_SECRET",
+        encoding="utf-8",
+    )
+
+    result = _run_public_snapshot(snapshot_root)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert output.strip() == "[JSON-FAIL] malformed-?secret.json: unable to parse JSON"
+    assert len(output.splitlines()) == 1
+    assert str(snapshot_root) not in output
+    assert "SYNTHETIC_JSON_SECRET" not in output
+    assert "Invalid JSON primitive" not in output
+
+
+def test_public_snapshot_checks_private_text_before_json_parse(tmp_path):
+    snapshot_root = tmp_path / "clean export"
+    snapshot_root.mkdir()
+    _write_minimal_public_snapshot_fixture(snapshot_root)
+    (snapshot_root / "private-malformed.json").write_text(
+        "C:\\Users\\RD\\synthetic-private",
+        encoding="utf-8",
+    )
+
+    result = _run_public_snapshot(snapshot_root)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert "private-malformed.json: contains private RD user home path" in output
+    assert "[JSON-FAIL]" not in output
+    assert "synthetic-private" not in output
 
 
 def test_control_plane_packaged_templates_do_not_reference_private_paths():
@@ -836,69 +1772,37 @@ def test_current_entry_markdown_links_resolve_to_repo_files():
     assert missing == []
 
 
-def test_current_status_entry_docs_have_lifecycle_state():
-    missing = [
-        path.relative_to(REPO_ROOT).as_posix()
-        for path in LIFECYCLE_REQUIRED_STATUS_DOCS
-        if not re.search(r"(?m)^Lifecycle state:\s+\S", path.read_text(encoding="utf-8-sig"))
-    ]
+def test_plan_contains_one_verdict_next_action_and_at_most_one_active_milestone():
+    text = (REPO_ROOT / "PLAN.md").read_text(encoding="utf-8-sig")
 
-    assert missing == []
+    assert len(re.findall(r"(?m)^Current verdict:", text)) == 1
+    assert len(re.findall(r"(?m)^## Next Action\s*$", text)) == 1
+    active_count = len(re.findall(r"(?m)^\| M\d+ .*\| active \|", text))
+    assert active_count <= 1
+    if active_count == 0:
+        verdict = next(
+            line for line in text.splitlines() if line.startswith("Current verdict:")
+        )
+        assert "HUMAN_REQUIRED" in verdict
 
 
-def test_runtime_governance_status_inventory_records_unsafe_promotions():
-    path = REPO_ROOT / "docs" / "status" / "runtime-governance-status-vocabulary-inventory.md"
-    text = path.read_text(encoding="utf-8-sig")
-    required_terms = [
-        "queued",
-        "pending",
-        "prepared",
-        "ready",
-        "draft",
-        "started",
-        "running",
+def test_plan_records_fail_closed_status_semantics():
+    text = (REPO_ROOT / "PLAN.md").read_text(encoding="utf-8-sig")
+
+    for term in [
+        "planned",
         "active",
-        "leased",
-        "dispatched",
-        "completed",
-        "passed",
-        "verified",
-        "executed",
-        "skipped",
-        "warning",
-        "open",
-        "info",
-        "missing",
-        "unknown",
-        "unreadable",
-        "insufficient_evidence",
-        "human_required",
-        "waiting_for_you",
-        "needs_human",
-        "blocked",
-        "failed",
-        "fail",
-        "error",
-        "cancelled",
-        "continue",
-        "revise",
-        "stop",
-        "approved",
+        "candidate",
         "accepted",
-        "proceed",
-    ]
-    required_phrases = [
-        "final_ready",
-        "chain_trusted",
-        "fail-open legacy behavior",
-        "codeReview=PASS",
-        "independent review pass",
-    ]
-
-    for term in required_terms:
-        assert re.search(rf"`?{re.escape(term)}`?", text), f"missing status term: {term}"
-    for phrase in required_phrases:
-        assert phrase in text
+        "blocked",
+        "human_required",
+        "failed",
+        "deferred",
+        "FinalVerdict",
+    ]:
+        assert term in text, f"PLAN.md missing status term: {term}"
+    assert "Worker `success`" in text
+    assert "不自动等于 `accepted`" in text
 
 
 def test_markdown_link_check_ignores_non_file_link_shapes():
@@ -911,16 +1815,16 @@ def test_markdown_link_check_ignores_non_file_link_shapes():
             "```",
             "[fenced](missing-fenced.md)",
             "```",
-            "[local](docs/README.md#section)",
-            "[titled](docs/status/reviewer-index.md \"Reviewer Index\")",
-            "[angled](<docs/status/status-document-inventory.md>)",
+            "[local](PLAN.md#section)",
+            "[titled](rules/core.md \"Core rules\")",
+            "[angled](<schemas/project_contract.schema.json>)",
         ])
     ))
 
     assert links == [
-        "docs/README.md",
-        "docs/status/reviewer-index.md",
-        "docs/status/status-document-inventory.md",
+        "PLAN.md",
+        "rules/core.md",
+        "schemas/project_contract.schema.json",
     ]
 
 
@@ -941,12 +1845,6 @@ def test_public_scripts_and_adapters_exclude_private_machine_paths():
         text = path.read_text(encoding="utf-8-sig")
         for pattern in forbidden:
             assert pattern not in text, f"{path} contains private path pattern {pattern!r}"
-
-
-def test_dispatch_model_profiles_doc_is_ascii_only():
-    path = REPO_ROOT / "docs" / "agent-runtime" / "dispatch-model-profiles.md"
-    raw = path.read_bytes()
-    assert all(byte <= 127 for byte in raw), f"{path} contains non-ASCII byte"
 
 
 def test_release_workflow_installs_deps_and_invokes_single_release_gate():
@@ -983,6 +1881,22 @@ def test_release_gate_enables_git_index_artifact_check():
     assert "tracked bundled product" in snapshot_script
 
 
+def test_release_gate_supports_explicit_offline_wheel_smoke():
+    release_script = (REPO_ROOT / "scripts" / "verify-release.ps1").read_text(
+        encoding="utf-8"
+    )
+    wheel_script = (
+        REPO_ROOT / "scripts" / "verify-control-plane-wheel.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert "[switch]$Offline" in release_script
+    assert '$wheelSmokeArguments += "-Offline"' in release_script
+    assert "[switch]$Offline" in wheel_script
+    assert '"--no-build-isolation"' in wheel_script
+    assert '"--system-site-packages"' in wheel_script
+    assert '"--no-deps"' in wheel_script
+
+
 def test_release_gate_runs_docs_drift_validator_through_pytest():
     release_script = (REPO_ROOT / "scripts" / "verify-release.ps1").read_text(
         encoding="utf-8",
@@ -996,169 +1910,50 @@ def test_release_gate_runs_docs_drift_validator_through_pytest():
     assert "validate_docs_drift(payload)" in docs_drift_test
 
 
-def test_release_readiness_documents_strict_gate_blockers():
-    path = REPO_ROOT / "docs" / "status" / "release-readiness.md"
-    text = path.read_text(encoding="utf-8-sig")
+def test_plan_keeps_release_state_fail_closed_after_document_reset():
+    text = (REPO_ROOT / "PLAN.md").read_text(encoding="utf-8-sig")
 
-    assert "scripts\\verify-public-snapshot.ps1 -FailOnTrackedForbidden" in text
-    assert "commit `15a9d78d` removed the tracked root review artifacts" in text
-    assert "ordinary public snapshot gate and the strict" in text
-    assert "`-FailOnTrackedForbidden` public snapshot gate pass" in text
-    assert "public snapshot gate pass locally" in text
-    assert "Commit `2725227d`" in text
-    assert "status commit" in text
-    assert "`bd73d6bc` received local GPT-equivalent branch-level review PASS" in text
-    assert "strict snapshot gate now checks that they do not" in text
-    assert "P3-2 graph projection has local GPT-equivalent review PASS" in text
+    assert "本次大规模迁移后必须重新运行" in text
+    assert "旧数字不能证明当前树" in text
+    assert "RELEASE-001" in text
+    assert "blocked" in text
+    assert "独立审阅" in text
+    assert "精确 accepted-slice Git gate" in text
 
 
-def test_current_entry_docs_keep_p3_2_local_review_pass_non_release_ready():
-    expected = {
-        REPO_ROOT / "docs" / "README.md": [
-            "local GPT-equivalent review PASS, committed in `2725227d`",
-            "local branch-level review PASS at `bd73d6bc`",
-            "not a release-ready record",
-        ],
-        REPO_ROOT / "docs" / "status" / "reviewer-index.md": [
-            "local GPT-equivalent review PASS",
-            "not treated as release-ready",
-        ],
-        REPO_ROOT / "docs" / "status" / "status-document-inventory.md": [
-            "projection has local GPT-equivalent review PASS and landed in commit",
-            "local branch-level review PASS at `bd73d6bc`",
-            "current release route now has PR CI, main CI, merge, and GitHub Release evidence",
-            "PyPI publication remains outside this repository's defined workflow",
-        ],
-    }
-
-    for path, literals in expected.items():
-        text = path.read_text(encoding="utf-8-sig")
-        missing = [literal for literal in literals if literal not in text]
-        assert missing == [], f"{path} missing P3-2 local-review/release-readiness literals: {missing}"
-
-
-def test_post_release_docs_do_not_reopen_pr_publication_holds():
-    launch_now = (REPO_ROOT / "docs" / "status" / "LAUNCH_NOW.md").read_text(
-        encoding="utf-8-sig",
-    )
-    batch_map = (
-        REPO_ROOT / "docs" / "status" / "current-dirty-tree-batch-map-20260708.md"
-    ).read_text(encoding="utf-8-sig")
-
-    assert "GITHUB RELEASED as `v0.1.0`" in launch_now
-    assert "Post-Release Remaining Decisions" in launch_now
-    assert "approve-pr-route" not in launch_now
-    assert "Keep PR #4 as the review surface" not in launch_now
-    assert "HOLD for merge and publication until owner approval" not in batch_map
-    assert "not authorize merge or public release" not in batch_map
-    assert "historical execution evidence" in batch_map
-    assert "GitHub Release `v0.1.0`" in batch_map
-
-
-def test_launch_now_is_frozen_release_snapshot():
-    launch_now = (REPO_ROOT / "docs" / "status" / "LAUNCH_NOW.md").read_text(
-        encoding="utf-8-sig",
-    )
-
-    assert "FROZEN RELEASE SNAPSHOT" in launch_now
-    assert "Initial Owner-Gate Snapshot" in launch_now
-    assert "historical owner-gate snapshot head, not the current" in launch_now
-    assert "This was the launch-control entrypoint for the recorded release snapshot" in launch_now
-
-
-def test_handoff_is_the_single_current_execution_root():
-    handoff = (REPO_ROOT / "docs" / "status" / "HANDOFF.md").read_text(
-        encoding="utf-8-sig",
-    )
-    inventory = (
-        REPO_ROOT / "docs" / "status" / "status-document-inventory.md"
-    ).read_text(encoding="utf-8-sig")
-    docs_readme = (REPO_ROOT / "docs" / "README.md").read_text(
-        encoding="utf-8-sig",
-    )
+def test_plan_is_the_single_current_execution_root():
+    plan = (REPO_ROOT / "PLAN.md").read_text(encoding="utf-8-sig")
     agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8-sig")
-    supporting_paths = [
-        REPO_ROOT / "docs" / "status" / "LAUNCH_NOW.md",
-        REPO_ROOT / "docs" / "status" / "release-readiness.md",
-        REPO_ROOT / "docs" / "status" / "reviewer-index.md",
-    ]
+    docs_root = REPO_ROOT / "docs"
+    docs_files = [path for path in docs_root.rglob("*") if path.is_file()]
 
-    assert "CANONICAL EXECUTION ROOT" in handoff
-    assert "Do not create another master plan" in handoff
-    assert "| `current-entry` | `HANDOFF.md` |" in inventory
-    assert "| `current-entry` | `LAUNCH_NOW.md`" not in inventory
-    assert "Active plans may set direction" not in inventory
-    assert "unless the master plan is updated" not in inventory
-    assert "newer coordination record" not in inventory
-    assert "only document that selects the active milestone" in docs_readme
-    assert "## Current Planning Docs" not in docs_readme
-    assert "single current execution root" in agents
-    for path in supporting_paths:
-        text = path.read_text(encoding="utf-8-sig")
-        assert "HANDOFF.md" in text, path
-
-    launch_now = supporting_paths[0].read_text(encoding="utf-8-sig")
-    assert "## Current Decision" not in launch_now
-    assert "## Next 3 Actions" not in launch_now
-
-    for path in (REPO_ROOT / "docs" / "status").glob("*.md"):
-        if path.name == "HANDOFF.md":
-            continue
-        text = path.read_text(encoding="utf-8-sig")
-        lifecycle_lines = [
-            line for line in text.splitlines()
-            if line.lower().startswith("lifecycle state:")
-        ]
-        assert not any(
-            re.search(r"\bactive\b", line, flags=re.IGNORECASE)
-            for line in lifecycle_lines
-        ), path
-
-
-def test_reviewer_index_mentions_new_public_files():
-    reviewer_index = (REPO_ROOT / "docs" / "status" / "reviewer-index.md").read_text(
-        encoding="utf-8",
+    assert "本文件是项目唯一的人类开发权威" in plan
+    assert "## Next Action" in plan
+    assert "## 15. Documentation Policy" in plan
+    assert "PLAN.md is the only human development authority" in " ".join(
+        agents.replace("`", "").split()
     )
-    missing = [
-        path
-        for path in REVIEWER_INDEX_REQUIRED_PATHS
-        if path not in reviewer_index
-    ]
+    assert docs_files == []
+    for name in ["README.md", "README.zh-CN.md", "AGENT_HANDOFF.md"]:
+        assert not (REPO_ROOT / name).exists(), name
 
-    for path in REVIEWER_INDEX_REQUIRED_PATHS:
-        assert (REPO_ROOT / path).exists(), path
+
+def test_public_surface_required_paths_exist_without_reviewer_index():
+    missing = [path for path in REVIEWER_INDEX_REQUIRED_PATHS if not (REPO_ROOT / path).exists()]
     assert missing == []
 
 
-def test_reviewer_index_mentions_governance_validators_and_tests():
-    reviewer_index = (REPO_ROOT / "docs" / "status" / "reviewer-index.md").read_text(
-        encoding="utf-8",
-    )
-    source_dir = REPO_ROOT / "packages" / "control-plane" / "control_plane"
-    tests_dir = REPO_ROOT / "packages" / "control-plane" / "tests"
-    source_files = sorted(
-        path.relative_to(REPO_ROOT).as_posix()
-        for path in source_dir.glob("*validator.py")
-    )
-    source_files.append(
-        "packages/control-plane/control_plane/client_governance_projection.py"
-    )
-    source_files.append("packages/control-plane/control_plane/document_authority.py")
-    test_files = sorted(
-        path.relative_to(REPO_ROOT).as_posix()
-        for path in tests_dir.glob("test_*validator.py")
-    )
-    test_files.append(
-        "packages/control-plane/tests/test_client_governance_projection.py"
-    )
-    test_files.append("packages/control-plane/tests/test_document_authority.py")
+def test_plan_records_machine_assets_and_review_boundary():
+    text = (REPO_ROOT / "PLAN.md").read_text(encoding="utf-8-sig")
 
-    missing = [
-        path
-        for path in sorted(set(source_files + test_files))
-        if path not in reviewer_index
-    ]
-    assert missing == []
+    for literal in [
+        "rules/",
+        "schemas/",
+        "运行时结构化存储",
+        "产品审阅先于技术 P0–P3 审阅",
+        "Human Gates",
+    ]:
+        assert literal in text
 
 
 def test_default_web_ai_adapter_template_matches_schema():
@@ -1178,6 +1973,7 @@ def test_default_web_ai_adapter_template_matches_schema():
     Draft7Validator(schema).validate(template)
     assert template["browser"]["provider"] == "chrome"
     assert template["web_ai"]["provider"] == "chatgpt"
+    assert template["browser"]["profile_policy"] == "dsh_managed"
     assert template["safety"]["allow_browser_profile_export"] is False
     assert template["manual_fallback"]["enabled"] is True
 
@@ -1670,63 +2466,19 @@ def test_final_verdict_schema_keeps_blocked_producer_roles_for_superseding_recor
         assert any(list(error.path) == ["producer_role"] for error in errors)
 
 
-def test_public_docs_mention_release_gate_and_visual_control_plane_surfaces():
-    expected = {
-        REPO_ROOT / "README.md": [
-            ".\\scripts\\verify-release.ps1",
-            "devframe visual-state --runtime-dir <dir>",
-            "devframe dashboard serve --runtime-dir <dir>",
-            "devframe actions --runtime-dir <dir>",
-            "/actions.json",
-            "/actions.md",
-            "--action-id",
-            "--allow-remote",
-        ],
-        REPO_ROOT / "README.zh-CN.md": [
-            ".\\scripts\\verify-release.ps1",
-            "devframe visual-state --runtime-dir <dir>",
-            "devframe dashboard serve --runtime-dir <dir>",
-            "devframe actions --runtime-dir <dir>",
-            "/actions.json",
-            "/actions.md",
-            "--action-id",
-            "--allow-remote",
-        ],
-        REPO_ROOT / "packages" / "control-plane" / "QUICKSTART.md": [
-            "powershell -ExecutionPolicy Bypass -File scripts\\verify-release.ps1",
-            "devframe visual-state --runtime-dir C:\\Users\\you\\.devframe-runtime",
-            "devframe dashboard serve --runtime-dir C:\\Users\\you\\.devframe-runtime",
-            "devframe actions --runtime-dir C:\\Users\\you\\.devframe-runtime",
-            "/actions.json",
-            "/actions.md",
-            "--action-id",
-            "--fail-on-match",
-            "--allow-remote",
-        ],
-        REPO_ROOT / "packages" / "control-plane" / "README.md": [
-            "powershell -ExecutionPolicy Bypass -File scripts\\verify-release.ps1",
-            "devframe visual-state --runtime-dir C:\\Users\\you\\.devframe-runtime",
-            "devframe dashboard serve --runtime-dir C:\\Users\\you\\.devframe-runtime",
-            "devframe actions --runtime-dir C:\\Users\\you\\.devframe-runtime",
-            "/actions.json",
-            "/actions.md",
-            "--action-id",
-            "--fail-on-match",
-            "--allow-remote",
-        ],
-    }
+def test_plan_records_release_gate_and_control_plane_capabilities():
+    text = (REPO_ROOT / "PLAN.md").read_text(encoding="utf-8-sig")
 
-    for path, literals in expected.items():
-        text = path.read_text(encoding="utf-8-sig")
-        missing = [literal for literal in literals if literal not in text]
-        assert missing == [], f"{path} missing documented literals: {missing}"
-
-
-def test_release_readiness_mentions_action_queue_and_dashboard_safety_flags():
-    path = REPO_ROOT / "docs" / "status" / "release-readiness.md"
-    text = path.read_text(encoding="utf-8-sig")
-    for literal in ["--action-id", "--fail-on-match", "--allow-remote"]:
-        assert literal in text, f"{path} missing required literal: {literal}"
+    for literal in [
+        "scripts/verify-public-snapshot.ps1",
+        "工作台",
+        "Task Board",
+        "Evidence",
+        "Review",
+        "HumanGate",
+        "M7 发布收口",
+    ]:
+        assert literal in text, f"PLAN.md missing required literal: {literal}"
 
 
 def test_public_schemas_docs_and_fixtures_exclude_private_paths():
@@ -1802,9 +2554,9 @@ def test_public_schemas_docs_and_fixtures_exclude_private_paths():
         REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "run-record-paper-human-required-valid.json",
         REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "run-record-paper-blocked-chain-trusted-valid.json",
         REPO_ROOT / "schemas" / "examples" / "runtime-governance" / "run-record-unknown-domain-status-valid.json",
-        REPO_ROOT / "docs" / "agent-runtime" / "negative-test-fixtures" / "NEG-024-path-traversal-read.json",
-        REPO_ROOT / "docs" / "agent-runtime" / "negative-test-fixtures" / "NEG-017-write-outside-scope.json",
-        REPO_ROOT / "docs" / "agent-runtime" / "integration-contracts.md",
+        REPO_ROOT / "packages" / "agent-acceptance" / "fixtures" / "negative-acceptance" / "NEG-024-path-traversal-read.json",
+        REPO_ROOT / "packages" / "agent-acceptance" / "fixtures" / "negative-acceptance" / "NEG-017-write-outside-scope.json",
+        REPO_ROOT / "PLAN.md",
     ]
     for path in paths:
         text = path.read_text(encoding="utf-8-sig")

@@ -23,6 +23,12 @@ from control_plane.client_launcher import (
 from control_plane.dashboard import build_dashboard_server
 
 
+def _create_smoke_project(tmp_path: Path) -> Path:
+    project = tmp_path / "smoke-project"
+    project.mkdir()
+    return project
+
+
 def test_client_launch_plan_maps_t3_bridge_and_opencode_executor(tmp_path, monkeypatch):
     def fake_which(command):
         paths = {
@@ -96,9 +102,9 @@ def test_client_launch_plan_maps_t3_bridge_and_opencode_executor(tmp_path, monke
         "/api/t3/writeback-propose",
     ]
     assert "web_gpt_task_intake_dispatch" in plan["writePolicy"]["allowedActionKinds"]
-    assert plan["governance"]["reconReceipt"] == "docs/status/recon-receipt-local-agent-client-mainline.md"
+    assert plan["governance"]["reconReceipt"] == "PLAN.md"
     assert plan["governance"]["rkrRulePath"] == "rules/recon.md"
-    assert plan["governance"]["reuseAssessment"] == "docs/status/t3code-client-mainline-reuse-assessment.md"
+    assert plan["governance"]["reuseAssessment"] == "PLAN.md"
     assert "devframe code" in plan["governance"]["primaryClientDecision"]
     assert "T3Code" in plan["governance"]["primaryClientDecision"]
     assert "OpenCode" in plan["governance"]["workerDecision"]
@@ -187,7 +193,7 @@ def test_client_plan_json_output(tmp_path, monkeypatch, capsys):
     assert data["endpoints"]["clientPlan"].endswith("/client-plan.json")
     assert data["endpoints"]["t3Bridge"].endswith("/t3-bridge.json")
     assert data["endpoints"]["goDispatch"].endswith("/go/dispatch")
-    assert data["governance"]["reconReceipt"] == "docs/status/recon-receipt-local-agent-client-mainline.md"
+    assert data["governance"]["reconReceipt"] == "PLAN.md"
     assert data["governance"]["primaryClientDecision"]
     assert data["governance"]["workerDecision"]
 
@@ -252,6 +258,18 @@ def test_client_t3desktop_installs_bundle_and_prints_launch_plan(tmp_path, monke
     assert "wrote" in output
     assert (t3_root / "devframe.t3desktop.mjs").exists()
     assert (t3_root / "apps/web/src/devframe/devframeShellBridge.ts").exists()
+    env_text = (t3_root / ".env.devframe.local").read_text(encoding="utf-8")
+    assert "VITE_DEVFRAME_T3_SHELL_URL=http://127.0.0.1:8788/t3-shell.json" in env_text
+    assert "VITE_DEVFRAME_CLIENT_PLAN_URL=http://127.0.0.1:8788/client-plan.json" in env_text
+    assert "VITE_DEVFRAME_CLIENT_MANIFEST_URL=http://127.0.0.1:8788/client-manifest.json" in env_text
+    for launcher_name in ("devframe.t3web.mjs", "devframe.t3desktop.mjs", "devframe.t3desktop.prod.mjs"):
+        launcher_text = (t3_root / launcher_name).read_text(encoding="utf-8")
+        assert '"VITE_DEVFRAME_T3_SHELL_URL": "http://127.0.0.1:8788/t3-shell.json"' in launcher_text
+        assert '"VITE_DEVFRAME_CLIENT_PLAN_URL": "http://127.0.0.1:8788/client-plan.json"' in launcher_text
+        assert (
+            '"VITE_DEVFRAME_CLIENT_MANIFEST_URL": "http://127.0.0.1:8788/client-manifest.json"'
+            in launcher_text
+        )
 
 
 def test_client_t3desktop_overwrite_bridge_does_not_request_process_cleanup(tmp_path, monkeypatch):
@@ -527,6 +545,7 @@ def test_client_t3desktop_missing_t3_root_does_not_start_dashboard(tmp_path, mon
 
 
 def test_client_smoke_text_success(tmp_path, monkeypatch, capsys):
+    project = _create_smoke_project(tmp_path)
     monkeypatch.setattr("control_plane.client_launcher.shutil.which", lambda command: f"C:\\Tools\\{command}.cmd")
     monkeypatch.setattr(sys, "argv", [
         "devframe",
@@ -536,6 +555,8 @@ def test_client_smoke_text_success(tmp_path, monkeypatch, capsys):
         str(tmp_path / "runtime"),
         "--port",
         "0",
+        "--paper-project",
+        str(project),
         "--format",
         "text",
     ])
@@ -553,6 +574,7 @@ def test_client_smoke_text_success(tmp_path, monkeypatch, capsys):
 
 
 def test_client_smoke_json_success(tmp_path, monkeypatch, capsys):
+    project = _create_smoke_project(tmp_path)
     monkeypatch.setattr("control_plane.client_launcher.shutil.which", lambda command: f"C:\\Tools\\{command}.cmd")
     monkeypatch.setattr(sys, "argv", [
         "devframe",
@@ -562,6 +584,8 @@ def test_client_smoke_json_success(tmp_path, monkeypatch, capsys):
         str(tmp_path / "runtime"),
         "--port",
         "0",
+        "--paper-project",
+        str(project),
         "--format",
         "json",
     ])
@@ -580,6 +604,7 @@ def test_client_smoke_json_success(tmp_path, monkeypatch, capsys):
 
 
 def test_client_smoke_invalid_t3_root(tmp_path, monkeypatch, capsys):
+    project = _create_smoke_project(tmp_path)
     invalid_root = tmp_path / "invalid"
     invalid_root.mkdir()
     (invalid_root / "README.md").write_text("not a t3 checkout", encoding="utf-8")
@@ -591,6 +616,8 @@ def test_client_smoke_invalid_t3_root(tmp_path, monkeypatch, capsys):
         "smoke",
         "--runtime-dir",
         str(tmp_path / "runtime"),
+        "--paper-project",
+        str(project),
         "--t3-root",
         str(invalid_root),
     ])
@@ -602,6 +629,7 @@ def test_client_smoke_invalid_t3_root(tmp_path, monkeypatch, capsys):
 
 
 def test_client_smoke_t3_root_bridge_file_checks(tmp_path, monkeypatch, capsys):
+    project = _create_smoke_project(tmp_path)
     t3_root = tmp_path / "t3code"
     (t3_root / "apps/web").mkdir(parents=True)
     (t3_root / "package.json").write_text("{}", encoding="utf-8")
@@ -615,6 +643,8 @@ def test_client_smoke_t3_root_bridge_file_checks(tmp_path, monkeypatch, capsys):
         str(tmp_path / "runtime"),
         "--port",
         "0",
+        "--paper-project",
+        str(project),
         "--t3-root",
         str(t3_root),
     ])
@@ -627,6 +657,7 @@ def test_client_smoke_t3_root_bridge_file_checks(tmp_path, monkeypatch, capsys):
 
 
 def test_client_smoke_port_zero_writes_real_port_to_env(tmp_path, monkeypatch, capsys):
+    project = _create_smoke_project(tmp_path)
     t3_root = tmp_path / "t3code"
     (t3_root / "apps/web").mkdir(parents=True)
     (t3_root / "package.json").write_text("{}", encoding="utf-8")
@@ -640,6 +671,8 @@ def test_client_smoke_port_zero_writes_real_port_to_env(tmp_path, monkeypatch, c
         str(tmp_path / "runtime"),
         "--port",
         "0",
+        "--paper-project",
+        str(project),
         "--t3-root",
         str(t3_root),
     ])
@@ -650,6 +683,10 @@ def test_client_smoke_port_zero_writes_real_port_to_env(tmp_path, monkeypatch, c
     assert env_file.exists()
     env_text = env_file.read_text(encoding="utf-8")
     assert ":0/" not in env_text
+    env_values = dict(line.split("=", 1) for line in env_text.splitlines() if "=" in line)
+    assert env_values["VITE_DEVFRAME_T3_SHELL_URL"].endswith("/t3-shell.json")
+    assert env_values["VITE_DEVFRAME_CLIENT_PLAN_URL"].endswith("/client-plan.json")
+    assert env_values["VITE_DEVFRAME_CLIENT_MANIFEST_URL"].endswith("/client-manifest.json")
     for line in env_text.splitlines():
         if "=" in line:
             value = line.split("=", 1)[1]

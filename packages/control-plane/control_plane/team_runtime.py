@@ -7,9 +7,9 @@ dedicated append-only JSONL journal kept outside the repository, reusing the
 same persistence shape and outside-repo safety guard as
 `control_plane/runtime_store.py`.
 
-Scope (recon-receipt-team-runtime.md): Event Log + Message Bus + a minimal Task
-lifecycle. Agent Registry, Evidence Store, Review Gate, and Conflict Control
-stay projected for now and are recorded in the receipt as deferred.
+Scope (``PLAN.md`` and ``rules/recon.md``): Event Log + Message Bus + a minimal
+Task lifecycle. Agent Registry, Evidence Store, Review Gate, and Conflict
+Control stay projected for now and are recorded in the plan as deferred.
 
 Design: this module is executor-agnostic. It records *what the team did*, not how
 any one executor works. The read side (`build_team_runtime_view`) folds recorded

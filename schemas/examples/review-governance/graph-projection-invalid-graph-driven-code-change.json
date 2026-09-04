@@ -1,0 +1,15 @@
+{
+  "graph_projection_id": "graph-projection-invalid-code-change",
+  "project_id": "project-contract-demo",
+  "nodes": [
+    {
+      "id": "module-1",
+      "type": "artifact",
+      "authority": "governance_recorded"
+    }
+  ],
+  "edges": [],
+  "operations": [
+    "graph_driven_code_change"
+  ]
+}

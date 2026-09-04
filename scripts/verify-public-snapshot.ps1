@@ -1,23 +1,215 @@
 param(
-    [string]$Root = (Get-Location).Path,
+    [string]$Root = (Split-Path -Parent $PSScriptRoot),
     [switch]$FailOnTrackedForbidden
 )
 
 $ErrorActionPreference = "Stop"
-$rootPath = [System.IO.Path]::GetFullPath($Root)
+$MaxPublicSnapshotFailureRecords = 64
+$MaxGitOutputRecords = $MaxPublicSnapshotFailureRecords + 1
+$MaxGitOutputLineCharacters = 4096
+
+function Stop-PublicSnapshot {
+    param(
+        [string]$Message
+    )
+
+    Write-Output "[PUBLIC-SNAPSHOT-FAIL] $Message"
+    exit 1
+}
+
+function Add-PublicSnapshotFailure {
+    param(
+        [System.Collections.Generic.List[string]]$Failures,
+        [ref]$Overflow,
+        [string]$Message
+    )
+
+    if ($Failures.Count -lt $MaxPublicSnapshotFailureRecords) {
+        $Failures.Add($Message)
+        return
+    }
+    $Overflow.Value = $true
+}
+
+function Test-IsRemoteOrDevicePath {
+    param(
+        [string]$Path
+    )
+
+    return ($Path.StartsWith('\\') -or $Path.StartsWith('//'))
+}
+
+function Test-IsReparsePoint {
+    param(
+        [System.IO.FileSystemInfo]$Item
+    )
+
+    return (($Item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)
+}
+
+function Get-SnapshotRootPath {
+    param(
+        [string]$Path
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or (Test-IsRemoteOrDevicePath -Path $Path)) {
+        Stop-PublicSnapshot -Message "invalid root"
+    }
+
+    try {
+        $fullPath = [System.IO.Path]::GetFullPath($Path)
+    } catch {
+        Stop-PublicSnapshot -Message "invalid root"
+    }
+
+    if (Test-IsRemoteOrDevicePath -Path $fullPath) {
+        Stop-PublicSnapshot -Message "invalid root"
+    }
+
+    $pathRoot = [System.IO.Path]::GetPathRoot($fullPath)
+    if ([string]::IsNullOrWhiteSpace($pathRoot)) {
+        Stop-PublicSnapshot -Message "invalid root"
+    }
+
+    $currentPath = $pathRoot
+    $currentItem = $null
+    $parts = $fullPath.Substring($pathRoot.Length) -split '[\\/]' | Where-Object {
+        -not [string]::IsNullOrWhiteSpace($_)
+    }
+    foreach ($part in $parts) {
+        $currentPath = Join-Path $currentPath $part
+        try {
+            $currentItem = Get-Item -LiteralPath $currentPath -Force -ErrorAction Stop
+        } catch {
+            Stop-PublicSnapshot -Message "invalid root"
+        }
+        if (Test-IsReparsePoint -Item $currentItem) {
+            Stop-PublicSnapshot -Message "root contains reparse point"
+        }
+    }
+
+    if ($null -eq $currentItem) {
+        try {
+            $currentItem = Get-Item -LiteralPath $currentPath -Force -ErrorAction Stop
+        } catch {
+            Stop-PublicSnapshot -Message "invalid root"
+        }
+    }
+    if (-not $currentItem.PSIsContainer) {
+        Stop-PublicSnapshot -Message "invalid root"
+    }
+
+    return $fullPath
+}
+
+function Test-ContainedSnapshotPath {
+    param(
+        [string]$RootPath,
+        [string]$RelativePath
+    )
+
+    $currentPath = $RootPath
+    $visitedParts = New-Object System.Collections.Generic.List[string]
+    foreach ($part in ($RelativePath -split '[\\/]')) {
+        if ([string]::IsNullOrWhiteSpace($part)) {
+            continue
+        }
+        $visitedParts.Add($part)
+        $currentPath = Join-Path $currentPath $part
+        try {
+            $item = Get-Item -LiteralPath $currentPath -Force -ErrorAction Stop
+        } catch {
+            return $false
+        }
+        if (Test-IsReparsePoint -Item $item) {
+            $displayPath = [string]::Join('\', $visitedParts)
+            Stop-PublicSnapshot -Message "reparse point: $displayPath"
+        }
+    }
+
+    return $true
+}
+
+function Invoke-GitLsFiles {
+    param(
+        [string]$RootPath,
+        [string[]]$Pathspecs
+    )
+
+    $output = New-Object System.Collections.Generic.List[string]
+    $captureState = [PSCustomObject]@{
+        HasAnyOutput = $false
+        OutputValid = $true
+    }
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Stop"
+        & git -C $RootPath ls-files -- @Pathspecs 2>$null | ForEach-Object {
+            $captureState.HasAnyOutput = $true
+            $line = [string]$_
+            if ($line.Length -gt $MaxGitOutputLineCharacters) {
+                $captureState.OutputValid = $false
+                return
+            }
+            if (
+                -not [string]::IsNullOrWhiteSpace($line) -and
+                $output.Count -lt $MaxGitOutputRecords
+            ) {
+                $output.Add($line)
+            }
+        }
+        $exitCode = $LASTEXITCODE
+    } catch {
+        $captureState.OutputValid = $false
+        $exitCode = 1
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
+    if ($null -eq $exitCode) {
+        $exitCode = 1
+    }
+    if ($exitCode -ne 0 -or -not $captureState.OutputValid) {
+        $output.Clear()
+    }
+    return [PSCustomObject]@{
+        Output = @($output)
+        ExitCode = $exitCode
+        HasAnyOutput = $captureState.HasAnyOutput
+        OutputValid = $captureState.OutputValid
+    }
+}
+
+$rootPath = Get-SnapshotRootPath -Path $Root
 $sensitiveConfigPath = "opencode.config.json"
 
-if (Test-Path -LiteralPath (Join-Path $rootPath ".git")) {
-    $trackedSensitiveConfig = @(
-        & git -C $rootPath ls-files -- $sensitiveConfigPath 2>$null
+$gitMetadataPresent = Test-ContainedSnapshotPath -RootPath $rootPath -RelativePath ".git"
+if ($gitMetadataPresent) {
+    $gitResult = Invoke-GitLsFiles -RootPath $rootPath -Pathspecs @(
+        $sensitiveConfigPath,
+        ".claude/*",
+        ".aiworkflow/*",
+        ".hypothesis/*"
     )
-    if ($LASTEXITCODE -ne 0) {
-        Write-Output "[PUBLIC-SNAPSHOT-FAIL] unable to verify tracked sensitive config metadata"
-        exit 1
+    if ($gitResult.ExitCode -ne 0 -or -not $gitResult.OutputValid) {
+        Stop-PublicSnapshot -Message "unable to verify tracked sensitive config metadata"
     }
-    if ($trackedSensitiveConfig.Count -gt 0) {
-        Write-Output "[PUBLIC-SNAPSHOT-FAIL] tracked sensitive config: $sensitiveConfigPath"
-        exit 1
+    $trackedLocalAgentState = @(
+        $gitResult.Output | Where-Object { $_ -like ".claude/*" }
+    )
+    if ($trackedLocalAgentState.Count -gt 0) {
+        Stop-PublicSnapshot -Message "tracked local agent state: .claude"
+    }
+    $trackedGeneratedState = @(
+        $gitResult.Output | Where-Object {
+            $_ -like ".aiworkflow/*" -or $_ -like ".hypothesis/*"
+        }
+    )
+    if ($trackedGeneratedState.Count -gt 0) {
+        Stop-PublicSnapshot -Message "tracked local generated state"
+    }
+    if ($gitResult.HasAnyOutput) {
+        Stop-PublicSnapshot -Message "tracked sensitive config: $sensitiveConfigPath"
     }
 }
 
@@ -37,17 +229,31 @@ function Get-RelativeSnapshotPath {
     return $targetFull
 }
 
+function Get-SafeSnapshotDisplayPath {
+    param(
+        [string]$RelativePath
+    )
+
+    if (
+        [string]::IsNullOrWhiteSpace($RelativePath) -or
+        [System.IO.Path]::IsPathRooted($RelativePath) -or
+        (($RelativePath -split '[\\/]') -contains '..')
+    ) {
+        return "<unavailable>"
+    }
+    $displayPath = [regex]::Replace($RelativePath, '[\p{C}\p{Zl}\p{Zp}]', '?')
+    if ($displayPath.Length -gt 240) {
+        return $displayPath.Substring(0, 240)
+    }
+    return $displayPath
+}
+
 $requiredPaths = @(
-    "README.md",
-    "README.zh-CN.md",
+    "PLAN.md",
     "AGENTS.md",
     ".github\workflows\release-verify.yml",
-    "docs\agent-runtime",
-    "docs\assets\devframe-system-banner.svg",
-    "docs\module-sources.md",
-    "docs\status\release-readiness.md",
-    "docs\status\reviewer-index.md",
     "packages\agent-acceptance",
+    "packages\agent-acceptance\fixtures\negative-acceptance\NEG-031-missing-recon-receipt.json",
     "packages\ai-workflow-hub",
     "packages\control-plane",
     "packages\test-frame",
@@ -139,8 +345,11 @@ $textScanAllowlist = @(
 
 $ignoredGeneratedDirs = @(
     "__pycache__",
+    ".aiworkflow",
+    ".claude",
     ".codegraph",
     ".devframe-runtime",
+    ".hypothesis",
     ".kiro",
     ".vscode",
     ".pytest_cache",
@@ -172,41 +381,69 @@ function Get-PublicSnapshotItems {
         [string]$RootPath
     )
 
-    Get-ChildItem -LiteralPath $Path -Force | ForEach-Object {
-        if (-not ($_ -is [System.IO.FileSystemInfo]) -or [string]::IsNullOrWhiteSpace($_.FullName)) {
-            return
-        }
-        if ($_.PSIsContainer) {
-            $relative = Get-RelativeSnapshotPath -BasePath $RootPath -TargetPath $_.FullName
-
-            if ($relative -like ".git*") {
+    $enumerationErrors = @()
+    Get-ChildItem -LiteralPath $Path -Force `
+        -ErrorAction SilentlyContinue -ErrorVariable +enumerationErrors | ForEach-Object {
+            if (-not ($_ -is [System.IO.FileSystemInfo]) -or [string]::IsNullOrWhiteSpace($_.FullName)) {
+                return
+            }
+            if (Test-IsReparsePoint -Item $_) {
+                $_
                 return
             }
 
-            $parts = $relative -split '[\\/]'
-            $isIgnored = $false
-            foreach ($part in $parts) {
-                if ($ignoredGeneratedDirs -contains $part) {
-                    $isIgnored = $true
-                    break
+            if ($_.PSIsContainer) {
+                $relative = Get-RelativeSnapshotPath -BasePath $RootPath -TargetPath $_.FullName
+
+                if ($relative -like ".git*") {
+                    return
+                }
+
+                $parts = $relative -split '[\\/]'
+                $isIgnored = $false
+                foreach ($part in $parts) {
+                    if ($ignoredGeneratedDirs -contains $part) {
+                        $isIgnored = $true
+                        break
+                    }
+                }
+                if (-not $isIgnored) {
+                    $_
+                    Get-PublicSnapshotItems -Path $_.FullName -RootPath $RootPath
+                }
+            } else {
+                $relative = Get-RelativeSnapshotPath -BasePath $RootPath -TargetPath $_.FullName
+                if ($relative -ne $sensitiveConfigPath) {
+                    $_
                 }
             }
-            if (-not $isIgnored) {
-                $_
-                Get-PublicSnapshotItems -Path $_.FullName -RootPath $RootPath
-            }
-        } else {
-            $relative = Get-RelativeSnapshotPath -BasePath $RootPath -TargetPath $_.FullName
-            if ($relative -ne $sensitiveConfigPath) {
-                $_
-            }
-        }
     }
+    if ($enumerationErrors.Count -gt 0) {
+        $relativePath = Get-RelativeSnapshotPath -BasePath $RootPath -TargetPath $Path
+        $displayPath = Get-SafeSnapshotDisplayPath -RelativePath $relativePath
+        throw [System.InvalidOperationException]::new(
+            "DEVFRAME_PUBLIC_SNAPSHOT_ENUMERATION:$displayPath"
+        )
+    }
+}
+
+function Stop-PublicSnapshotEnumerationFailure {
+    param(
+        [System.Management.Automation.ErrorRecord]$ErrorRecord
+    )
+
+    $prefix = "DEVFRAME_PUBLIC_SNAPSHOT_ENUMERATION:"
+    $message = $ErrorRecord.Exception.Message
+    if ([string]::IsNullOrWhiteSpace($message) -or -not $message.StartsWith($prefix)) {
+        throw $ErrorRecord
+    }
+    $displayPath = $message.Substring($prefix.Length)
+    Stop-PublicSnapshot -Message "unable to enumerate snapshot path: $displayPath"
 }
 
 $missing = New-Object System.Collections.Generic.List[string]
 foreach ($path in $requiredPaths) {
-    if (-not (Test-Path -LiteralPath (Join-Path $rootPath $path))) {
+    if (-not (Test-ContainedSnapshotPath -RootPath $rootPath -RelativePath $path)) {
         $missing.Add($path)
     }
 }
@@ -218,12 +455,20 @@ if ($missing.Count -gt 0) {
 
 $requiredTextChecks = @(
     @{
-        Path = "AGENTS.md"
-        Text = "rules/recon.md"
+        Path = "PLAN.md"
+        Text = "Current verdict:"
     },
     @{
-        Path = "rules\README.md"
-        Text = "recon.md"
+        Path = "PLAN.md"
+        Text = "## 15. Documentation Policy"
+    },
+    @{
+        Path = "AGENTS.md"
+        Text = "PLAN.md"
+    },
+    @{
+        Path = "AGENTS.md"
+        Text = "rules/recon.md"
     },
     @{
         Path = "rules\open-source-reuse.md"
@@ -234,7 +479,7 @@ $requiredTextChecks = @(
         Text = "RULE recon-001: Recon Gate Before Write-Capable Work"
     },
     @{
-        Path = "docs\agent-runtime\negative-test-fixtures\NEG-031-missing-recon-receipt.json"
+        Path = "packages\agent-acceptance\fixtures\negative-acceptance\NEG-031-missing-recon-receipt.json"
         Text = "Missing Recon Receipt"
     }
 )
@@ -242,12 +487,18 @@ $requiredTextChecks = @(
 $textFailures = New-Object System.Collections.Generic.List[string]
 foreach ($check in $requiredTextChecks) {
     $path = Join-Path $rootPath $check.Path
-    if (-not (Test-Path -LiteralPath $path)) {
+    if (-not (Test-ContainedSnapshotPath -RootPath $rootPath -RelativePath $check.Path)) {
         $textFailures.Add("$($check.Path): file missing")
         continue
     }
-    $content = Get-Content -LiteralPath $path -Raw
-    if (-not $content.Contains($check.Text)) {
+    try {
+        $content = Get-Content -LiteralPath $path -Raw -ErrorAction Stop
+    } catch {
+        $displayPath = Get-SafeSnapshotDisplayPath -RelativePath $check.Path
+        Write-Output "[TEXT-FAIL] ${displayPath}: unable to inspect required text"
+        exit 1
+    }
+    if ($null -eq $content -or -not $content.Contains($check.Text)) {
         $textFailures.Add("$($check.Path): missing '$($check.Text)'")
     }
 }
@@ -257,19 +508,32 @@ if ($textFailures.Count -gt 0) {
     exit 1
 }
 
-if ($FailOnTrackedForbidden -and (Test-Path -LiteralPath (Join-Path $rootPath ".git"))) {
+if ($FailOnTrackedForbidden -and $gitMetadataPresent) {
     $trackedFailures = New-Object System.Collections.Generic.List[string]
-    $trackedForbidden = & git -C $rootPath ls-files -- `
-        "chatgpt-review-reply.txt" `
-        "review-bundle-*" `
-        "products/*" 2>$null
+    $trackedFailuresOverflow = $false
+    $gitResult = Invoke-GitLsFiles -RootPath $rootPath -Pathspecs @(
+        "chatgpt-review-reply.txt",
+        "review-bundle-*",
+        "products/*"
+    )
+    if ($gitResult.ExitCode -ne 0 -or -not $gitResult.OutputValid) {
+        Stop-PublicSnapshot -Message "unable to verify tracked sensitive config metadata"
+    }
+    $trackedForbidden = @($gitResult.Output)
 
     foreach ($path in $trackedForbidden) {
         if (-not [string]::IsNullOrWhiteSpace($path)) {
+            $displayPath = Get-SafeSnapshotDisplayPath -RelativePath $path
             if ($path -like "products/*") {
-                $trackedFailures.Add("tracked bundled product: $path")
+                Add-PublicSnapshotFailure `
+                    -Failures $trackedFailures `
+                    -Overflow ([ref]$trackedFailuresOverflow) `
+                    -Message "tracked bundled product: $displayPath"
             } else {
-                $trackedFailures.Add("tracked forbidden review artifact: $path")
+                Add-PublicSnapshotFailure `
+                    -Failures $trackedFailures `
+                    -Overflow ([ref]$trackedFailuresOverflow) `
+                    -Message "tracked forbidden review artifact: $displayPath"
             }
         }
     }
@@ -278,17 +542,31 @@ if ($FailOnTrackedForbidden -and (Test-Path -LiteralPath (Join-Path $rootPath ".
         $trackedFailures | ForEach-Object {
             Write-Output "[PUBLIC-SNAPSHOT-FAIL] $_"
         }
+        if ($trackedFailuresOverflow) {
+            Write-Output "[PUBLIC-SNAPSHOT-FAIL] additional tracked path failures omitted"
+        }
         exit 1
     }
 }
 
 $violations = New-Object System.Collections.Generic.List[string]
-Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | ForEach-Object {
+$violationsOverflow = $false
+try {
+    Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | ForEach-Object {
     if ($_.FullName -like (Join-Path $rootPath ".git*")) {
         return
     }
 
     $relative = Get-RelativeSnapshotPath -BasePath $rootPath -TargetPath $_.FullName
+    $displayPath = Get-SafeSnapshotDisplayPath -RelativePath $relative
+
+    if (Test-IsReparsePoint -Item $_) {
+        Add-PublicSnapshotFailure `
+            -Failures $violations `
+            -Overflow ([ref]$violationsOverflow) `
+            -Message "reparse point: $displayPath"
+        return
+    }
 
     if (Test-IsUnderIgnoredGeneratedDir -BasePath $rootPath -TargetPath $_.FullName) {
         return
@@ -297,38 +575,61 @@ Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | ForEach-Object {
     $relativeParts = $relative -split '[\\/]'
     if ($relativeParts.Count -eq 1) {
         if ($forbiddenRootNames -contains $_.Name) {
-            $violations.Add("forbidden root review artifact: $relative")
+            Add-PublicSnapshotFailure `
+                -Failures $violations `
+                -Overflow ([ref]$violationsOverflow) `
+                -Message "forbidden root review artifact: $displayPath"
         }
 
         foreach ($pattern in $forbiddenRootNamePatterns) {
             if ($_.Name -like $pattern) {
-                $violations.Add("forbidden root review artifact: $relative")
+                Add-PublicSnapshotFailure `
+                    -Failures $violations `
+                    -Overflow ([ref]$violationsOverflow) `
+                    -Message "forbidden root review artifact: $displayPath"
                 break
             }
         }
     }
 
     if ($forbiddenNames -contains $_.Name) {
-        $violations.Add("forbidden name: $relative")
+        Add-PublicSnapshotFailure `
+            -Failures $violations `
+            -Overflow ([ref]$violationsOverflow) `
+            -Message "forbidden name: $displayPath"
     }
 
     if (-not $_.PSIsContainer -and ($forbiddenExtensions -contains $_.Extension)) {
-        $violations.Add("forbidden extension: $relative")
+        Add-PublicSnapshotFailure `
+            -Failures $violations `
+            -Overflow ([ref]$violationsOverflow) `
+            -Message "forbidden extension: $displayPath"
     }
 
     if (-not $_.PSIsContainer -and $_.Length -gt 5MB) {
-        $violations.Add("file exceeds 5MB: $relative")
+        Add-PublicSnapshotFailure `
+            -Failures $violations `
+            -Overflow ([ref]$violationsOverflow) `
+            -Message "file exceeds 5MB: $displayPath"
     }
+    }
+} catch {
+    Stop-PublicSnapshotEnumerationFailure -ErrorRecord $_
 }
 
 if ($violations.Count -gt 0) {
     $violations | ForEach-Object { Write-Output "[PUBLIC-SNAPSHOT-FAIL] $_" }
+    if ($violationsOverflow) {
+        Write-Output "[PUBLIC-SNAPSHOT-FAIL] additional snapshot violations omitted"
+    }
     exit 1
 }
 
 $privateTextFailures = New-Object System.Collections.Generic.List[string]
+$privateTextFailuresOverflow = $false
 $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
-Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | Where-Object {
+try {
+    Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | Where-Object {
     $_ -is [System.IO.FileSystemInfo] -and -not $_.PSIsContainer -and
         -not [string]::IsNullOrWhiteSpace($_.FullName) -and
         ($textScanExtensions -contains $_.Extension)
@@ -341,29 +642,39 @@ Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | Where-Object {
     if ($textScanAllowlist -contains $relative) {
         return
     }
+    $displayPath = Get-SafeSnapshotDisplayPath -RelativePath $relative
 
     try {
         $content = [System.IO.File]::ReadAllText($_.FullName, $utf8)
     } catch {
-        return
+        Stop-PublicSnapshot -Message "unable to inspect text: $displayPath"
     }
 
     foreach ($pattern in $forbiddenTextPatterns) {
         if ($content -match $pattern.Pattern) {
-            $privateTextFailures.Add("${relative}: contains $($pattern.Name)")
+            Add-PublicSnapshotFailure `
+                -Failures $privateTextFailures `
+                -Overflow ([ref]$privateTextFailuresOverflow) `
+                -Message "${displayPath}: contains $($pattern.Name)"
         }
     }
+    }
+} catch {
+    Stop-PublicSnapshotEnumerationFailure -ErrorRecord $_
 }
 
 if ($privateTextFailures.Count -gt 0) {
     $privateTextFailures | ForEach-Object {
         Write-Output "[PUBLIC-SNAPSHOT-FAIL] $_"
     }
+    if ($privateTextFailuresOverflow) {
+        Write-Output "[PUBLIC-SNAPSHOT-FAIL] additional private text failures omitted"
+    }
     exit 1
 }
 
-$jsonFailures = New-Object System.Collections.Generic.List[string]
-Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | Where-Object {
+try {
+    Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | Where-Object {
     $_ -is [System.IO.FileSystemInfo] -and -not $_.PSIsContainer -and
         -not [string]::IsNullOrWhiteSpace($_.FullName) -and $_.Extension -eq ".json"
 } | ForEach-Object {
@@ -381,16 +692,16 @@ Get-PublicSnapshotItems -Path $rootPath -RootPath $rootPath | Where-Object {
         }
         $jsonText | ConvertFrom-Json | Out-Null
     } catch {
-        $jsonFailures.Add("${relative}: $($_.Exception.Message)")
+        $displayPath = Get-SafeSnapshotDisplayPath -RelativePath $relative
+        Write-Output "[JSON-FAIL] ${displayPath}: unable to parse JSON"
+        exit 1
     }
-}
-
-if ($jsonFailures.Count -gt 0) {
-    $jsonFailures | ForEach-Object { Write-Output "[JSON-FAIL] $_" }
-    exit 1
+    }
+} catch {
+    Stop-PublicSnapshotEnumerationFailure -ErrorRecord $_
 }
 
 Write-Output "[OK] Public snapshot required paths are present."
 Write-Output "[OK] Governance rule references are present."
-Write-Output "[OK] No submodules, local agent state, evidence archives, generated packages, oversized files, or private text markers found."
+Write-Output "[OK] Ignored local runtime caches were excluded; scanned public files contain no forbidden state, archives, oversized files, or private text markers."
 Write-Output "[OK] JSON files parse as UTF-8."

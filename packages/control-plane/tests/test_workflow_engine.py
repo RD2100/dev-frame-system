@@ -10,14 +10,17 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 from jsonschema.validators import validator_for
 
+from control_plane import workflow_engine as workflow_engine_module
 from control_plane.team_runtime import TEAM_EVENTS_FILE, build_team_runtime_view
 from control_plane.visual_state import build_visual_control_plane_state
 from control_plane.workflow_engine import (
     VERDICT_AWAITING_REVIEW,
     VERDICT_REVISE,
+    VERDICT_STOP,
     WorkflowEngine,
 )
 
@@ -37,6 +40,101 @@ def _pass_command() -> list[str]:
 def _fail_command() -> list[str]:
     # Exits non-zero and writes no passing report -> worker status failed.
     return [sys.executable, "-c", "import sys; sys.exit(3)"]
+
+
+def test_workflow_projects_cancelled_status_and_stop_verdict(tmp_path):
+    runtime_dir = tmp_path / "runtime"
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    cancel_marker = runtime_dir / "cluster-run-cancellations" / "g-test.json"
+
+    def cancel_after_plan(_go_run_id: str) -> None:
+        cancel_marker.parent.mkdir(parents=True, exist_ok=True)
+        cancel_marker.write_text('{"requested": true}', encoding="utf-8")
+
+    result = WorkflowEngine(runtime_dir).run_coding_workflow(
+        project_root,
+        "Implement a safe cancellation path",
+        agents=1,
+        worker_command=_pass_command(),
+        on_prepared=cancel_after_plan,
+        cancel_marker=cancel_marker,
+    )
+
+    assert result.status == "cancelled"
+    assert result.verdict == VERDICT_STOP
+    assert [phase.status for phase in result.phases] == ["completed", "cancelled", "stop"]
+    assert result.agent_count == 1
+    assert result.passed_agents == 0
+    assert result.failed_agents == 0
+
+
+def test_workflow_cancelled_before_plan_does_not_prepare_go_run(
+    tmp_path,
+    monkeypatch,
+):
+    runtime_dir = tmp_path / "runtime"
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    cancel_marker = runtime_dir / "cluster-run-cancellations" / "g-test.json"
+    cancel_marker.parent.mkdir(parents=True)
+    cancel_marker.write_text('{"requested": true}', encoding="utf-8")
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        workflow_engine_module,
+        "run_go_dispatch",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+
+    result = WorkflowEngine(runtime_dir).run_coding_workflow(
+        project_root,
+        "Implement a safe cancellation path",
+        cancel_marker=cancel_marker,
+    )
+
+    assert calls == []
+    assert result.go_run_id == ""
+    assert result.status == "cancelled"
+    assert result.verdict == VERDICT_STOP
+    assert [(phase.name, phase.status) for phase in result.phases] == [
+        ("plan", "cancelled"),
+    ]
+
+
+def test_workflow_late_run_cancellation_overrides_passed_worker_verdict(
+    tmp_path,
+    monkeypatch,
+):
+    prepared = SimpleNamespace(
+        go_run_id="go-late-cancel",
+        project_id="project",
+        agents=[SimpleNamespace(worker_status="")],
+    )
+    executed = SimpleNamespace(
+        go_run_id="go-late-cancel",
+        project_id="project",
+        status="cancelled",
+        agents=[SimpleNamespace(worker_status="passed")],
+    )
+    monkeypatch.setattr(
+        workflow_engine_module,
+        "run_go_dispatch",
+        lambda *args, **kwargs: prepared,
+    )
+    monkeypatch.setattr(
+        workflow_engine_module,
+        "execute_go_run",
+        lambda *args, **kwargs: executed,
+    )
+
+    result = WorkflowEngine(tmp_path / "runtime").run_coding_workflow(
+        tmp_path,
+        "A cancellation that wins after worker completion",
+    )
+
+    assert result.status == "cancelled"
+    assert result.verdict == VERDICT_STOP
+    assert result.phases[-1].status == VERDICT_STOP
 
 
 def _validate_state(state: dict) -> None:

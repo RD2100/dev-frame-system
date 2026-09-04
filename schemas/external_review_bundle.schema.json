@@ -57,12 +57,44 @@
           "authority": { "type": "string" },
           "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
           "size_bytes": { "type": "integer", "minimum": 0 },
+          "source_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "original_size_bytes": { "type": "integer", "minimum": 0 },
+          "compression": { "type": "string", "enum": ["none", "line_excerpt"] },
+          "truncated": { "type": "boolean" },
           "generated": { "type": "boolean" },
           "source_path": { "type": "string" },
           "why": { "type": "string" }
         },
         "additionalProperties": false
       }
+    },
+    "compression": {
+      "type": "object",
+      "required": [
+        "policy",
+        "max_source_bytes",
+        "max_total_source_bytes",
+        "original_source_bytes",
+        "included_source_bytes",
+        "truncated_sources",
+        "omitted_sources"
+      ],
+      "properties": {
+        "policy": { "type": "string", "const": "deterministic_line_excerpt_v1" },
+        "max_source_bytes": { "type": "integer", "minimum": 1 },
+        "max_total_source_bytes": { "type": "integer", "minimum": 1 },
+        "original_source_bytes": { "type": "integer", "minimum": 0 },
+        "included_source_bytes": { "type": "integer", "minimum": 0 },
+        "truncated_sources": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "omitted_sources": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
     },
     "trust_statement": { "type": "string", "minLength": 1 },
     "zip_path": { "type": "string" },

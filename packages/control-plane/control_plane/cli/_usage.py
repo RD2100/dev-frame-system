@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 HELP_TEXT = """DevFrame Code CLI
-  Primary workflow: use devframe code as an OpenCode-first local coding tool.
+  Primary workflow: use devframe code through a provider-neutral executor.
+  Pi selection    : add --driver pi after the goal to choose the Pi adapter explicitly.
 
   Daily coding loop
   1. Prepare : devframe code [[<goal>] | --prompt-file <path>]
@@ -33,6 +34,7 @@ HELP_TEXT = """DevFrame Code CLI
   devframe web-ai ...               - Web AI binding, review, and task-intake helpers
   devframe pack validate ...        - validate an evidence pack
   devframe adapter verify ...       - compare canonical executor projections offline
+  devframe executor readiness ...   - list registered drivers or check one selected executor
   devframe toolchain preview ...    - validate a compiler/test manifest without executing it
   devframe toolchain run ...        - preview or explicitly run one validated manifest action
   devframe toolchain status ...     - inspect one governed toolchain result without mutating it
@@ -48,6 +50,10 @@ HELP_TEXT = """DevFrame Code CLI
 """
 
 RUN_USAGE = "Usage: devframe run --pipeline <path> [--execute] [--project <dir>]"
+EXECUTOR_READINESS_USAGE = (
+    "Usage: devframe executor readiness (--driver pi | --list) "
+    "[--project <dir>] [--format text|json]"
+)
 PAPER_FINALIZE_USAGE = (
     "Usage: devframe paper finalize --project <dir> "
     "--review <independent-review.json> --review-sha256 <sha256> "
@@ -70,12 +76,13 @@ TOOLCHAIN_STATUS_USAGE = (
     "[--runtime-dir <dir>] [--format text|json]"
 )
 DASHBOARD_USAGE = "Usage: devframe dashboard serve [--runtime-dir <dir>] [--paper-project <dir>] [--host 127.0.0.1] [--port 8765] [--allow-remote]"
-GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--worker opencode] [--model provider/model]"
+GO_USAGE = "Usage: devframe go <project> <goal> [--agents 2|auto] [--max-agents 4] [--target <path>] [--changed] [--since <git-ref>] [--preview] [--execute] [--driver command|acp|pi] [--worker opencode] [--model provider/model]"
 ATGO_USAGE = "Usage: devframe atgo \"<goal>\" [--project <dir>] [--runtime-dir <dir>] [--target <path>] [--execute] [--auto-finalize]"
 CODE_USAGE = (
     "Usage: devframe code [[\"<goal>\"] | --prompt-file <path>] [--project <dir>] "
     "[--agents 1|auto] [--max-agents 4] [--target <path>] [--changed] "
-    "[--since <git-ref>] [--preview] [--execute] [--worker opencode] "
+    "[--since <git-ref>] [--preview] [--execute] [--driver command|acp|pi] "
+    "[--worker opencode] "
     "[--workflow-canary]\n"
     "  --workflow-canary is an explicit @go read canary-only path with no worker or ACP.\n"
     "  Start optional diagnostics separately with devframe dashboard serve."
@@ -94,7 +101,7 @@ WEB_AI_ENSURE_BROWSER_USAGE = "Usage: devframe web-ai ensure-browser [--runtime-
 WEB_AI_BIND_CHROME_USAGE = "Usage: devframe web-ai bind-chrome [--runtime-dir <dir>] [--project <id>] [--cdp-endpoint http://127.0.0.1:9222] [--dry-run] [--format text|json]"
 WEB_AI_BIND_CONVERSATION_USAGE = "Usage: devframe web-ai bind-conversation --conversation <https://chatgpt.com/c/id> [--runtime-dir <dir>] [--project <id>] [--project-root <dir>] [--binding-root <dir>] [--output-name <file>] [--format text|json]"
 WEB_AI_SUBMIT_REVIEW_USAGE = "Usage: devframe web-ai submit-review --zip <path> --prompt-file <path> (UTF-8/UTF-8-SIG or UTF-16 BOM) --conversation <url-or-id> [--cdp-endpoint http://127.0.0.1:9222] [--execute]"
-WEB_AI_PREPARE_REVIEW_BUNDLE_USAGE = "Usage: devframe web-ai prepare-review-bundle --question <text> --source role=path [--source role=path ...] [--required-role role] [--project-root <dir>] [--runtime-dir <dir>] [--profile external_review] [--output-id <id>]"
+WEB_AI_PREPARE_REVIEW_BUNDLE_USAGE = "Usage: devframe web-ai prepare-review-bundle --question <text> --source role=path [--source role=path ...] [--required-role role] [--project-root <dir>] [--runtime-dir <dir>] [--profile external_review] [--output-id <id>] [--max-source-bytes <n>] [--max-total-source-bytes <n>]"
 WEB_AI_VALIDATE_REVIEW_BUNDLE_USAGE = "Usage: devframe web-ai validate-review-bundle --zip <path>"
 WEB_AI_RECORD_MCP_RESULT_USAGE = "Usage: devframe web-ai record-mcp-result --conversation <url> --tool-name <name> --status completed|blocked|failed|web_host_completed|web_host_no_result|local_mcp_completed [--origin web_host|local_mcp] [--outcome completed|blocked|failed|no_result] [--provider chatgpt] [--project dev-frame-system] [--connector-name <name>] [--connector-app-id <id>] [--marker <text>] --result <summary> [--output-id <id>] [--output-name <name>] [--runtime-dir <dir>]"
 WEB_AI_RECORD_TASK_INTAKE_USAGE = "Usage: devframe web-ai record-task-intake --conversation <url> --task-title <text> --task-summary <text> [--provider chatgpt] [--project dev-frame-system] [--connector-name <name>] [--connector-app-id <id>] [--priority high|medium|low] [--suggested-agent opencode|codex|custom] [--marker <text>] [--runtime-dir <dir>]"

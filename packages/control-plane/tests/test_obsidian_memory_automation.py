@@ -44,9 +44,8 @@ def _vault(root: Path) -> Path:
 
 def _project(root: Path, runtime: Path) -> tuple[Path, str]:
     root.mkdir(parents=True)
-    handoff = root / "docs" / "status" / "HANDOFF.md"
-    handoff.parent.mkdir(parents=True)
-    handoff.write_text("# Execution Root\n\nCurrent slice.\n", encoding="utf-8")
+    plan = root / "PLAN.md"
+    plan.write_text("# Project Plan\n\nCurrent slice.\n", encoding="utf-8")
     resolved = resolve_session_project(cwd=root, runtime_dir=runtime)
     return root, str(resolved["projectId"])
 
@@ -226,7 +225,7 @@ def test_project_lesson_survives_handoff_change_and_is_searchable(tmp_path):
         tags=["idempotency", "memory"],
         global_candidate=True,
     )
-    (project / "docs" / "status" / "HANDOFF.md").write_text(
+    (project / "PLAN.md").write_text(
         "# Execution Root\n\nA different slice.\n",
         encoding="utf-8",
     )

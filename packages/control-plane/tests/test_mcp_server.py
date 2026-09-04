@@ -5,6 +5,7 @@ loopback server, proving initialize -> tools/list -> tools/call end to end.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -15,8 +16,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import control_plane.codegraph_fresh_context as fresh_context_module  # noqa: E402
 import control_plane.dashboard as dashboard_module  # noqa: E402
 import control_plane.mcp_consent as mcp_consent  # noqa: E402
+from control_plane.obsidian_memory import resolve_session_project  # noqa: E402
 from control_plane.dashboard import build_dashboard_server  # noqa: E402
 from control_plane.mcp_live_probe import mcp_live_probe  # noqa: E402
 from control_plane.mcp_server import TOOLS, handle_mcp_jsonrpc  # noqa: E402
@@ -31,6 +34,10 @@ def _isolate_devframe_mcp_token(monkeypatch):
 def _authorize(session_id, runtime_dir):
     mcp_consent.register_connection(session_id, "test-client", runtime_dir=runtime_dir)
     mcp_consent.decide(session_id, "allow_once", runtime_dir=runtime_dir)
+
+
+def _codex_sandbox_meta(cwd: Path) -> dict[str, object]:
+    return {"codex/sandbox-state-meta": {"sandboxCwd": cwd.resolve().as_uri()}}
 
 
 def test_initialize_returns_protocol_and_session():
@@ -55,6 +62,13 @@ def test_tools_list_advertises_tools():
     response, _ = handle_mcp_jsonrpc({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
     names = {t["name"] for t in response["result"]["tools"]}
     assert {"server_config", "read_project_shell", "propose_writeback", "list_pending_writebacks"} <= names
+    codegraph = next(tool for tool in response["result"]["tools"] if tool["name"] == "query_codegraph_context")
+    assert codegraph["annotations"] == {
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    }
     assert names == {t["name"] for t in TOOLS}
 
 
@@ -144,6 +158,143 @@ def test_server_config_tool_call(tmp_path):
     assert response["result"]["isError"] is False
     text = response["result"]["content"][0]["text"]
     assert "devframe-mcp" in text
+
+
+def _codegraph_call(
+    project: Path,
+    project_id: str,
+    runtime_dir: Path,
+    session_id: str,
+    *,
+    task: str = "inspect",
+    max_nodes: int | None = None,
+):
+    arguments: dict[str, object] = {"projectId": project_id, "task": task}
+    if max_nodes is not None:
+        arguments["maxNodes"] = max_nodes
+    return handle_mcp_jsonrpc(
+        {
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {
+                "name": "query_codegraph_context",
+                "_meta": _codex_sandbox_meta(project),
+                "arguments": arguments,
+            },
+        },
+        runtime_dir=runtime_dir,
+        session_id=session_id,
+    )[0]
+
+
+def _capture_codegraph_projection(captured: dict[str, object]):
+    def fake_query(**kwargs):
+        captured.update(kwargs)
+        return {
+            "graph_projection_id": kwargs["graph_projection_id"],
+            "project_id": kwargs["project_id"],
+            "nodes": [],
+            "edges": [],
+            "source_adapter": {
+                "freshness_attestation": {
+                    "index_status": "stale",
+                    "index_freshness": "stale",
+                    "trusted_for_current_run": False,
+                }
+            },
+        }
+
+    return fake_query
+
+
+def test_query_codegraph_context_uses_current_project_and_fresh_helper(
+    tmp_path, monkeypatch
+):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    project = tmp_path / "project"
+    project.mkdir()
+    project_id = str(resolve_session_project(cwd=project, runtime_dir=runtime_dir)["projectId"])
+    mcp_consent._reset_for_tests()
+    _authorize("sess-codegraph", runtime_dir)
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        fresh_context_module,
+        "query_codegraph_context_with_status",
+        _capture_codegraph_projection(captured),
+    )
+    response = _codegraph_call(
+        project,
+        project_id,
+        runtime_dir,
+        "sess-codegraph",
+        task="find the controller entry point",
+        max_nodes=7,
+    )
+    assert response["result"]["isError"] is False
+    payload = json.loads(response["result"]["content"][0]["text"])
+    assert payload["project_id"] == project_id
+    binding_digest = hashlib.sha256(project_id.encode("utf-8")).hexdigest()[:16]
+    assert captured == {
+        "project_root": str(project.resolve()),
+        "task": "find the controller entry point",
+        "graph_projection_id": f"graph-codegraph-mcp-{binding_digest}",
+        "project_id": project_id,
+        "resource_id": f"codegraph-resource-{binding_digest}",
+        "index_name": f"codegraph-index-{binding_digest}",
+        "privacy_class": "local_path_only",
+        "max_nodes": 7,
+    }
+    assert str(project) not in response["result"]["content"][0]["text"]
+
+
+def test_query_codegraph_context_rejects_cross_project_scope(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    project_a = tmp_path / "project-a"
+    project_b = tmp_path / "project-b"
+    project_a.mkdir()
+    project_b.mkdir()
+    project_a_id = str(resolve_session_project(cwd=project_a, runtime_dir=runtime_dir)["projectId"])
+    project_b_id = str(resolve_session_project(cwd=project_b, runtime_dir=runtime_dir)["projectId"])
+    mcp_consent._reset_for_tests()
+    _authorize("sess-codegraph-scope", runtime_dir)
+    monkeypatch.setattr(
+        fresh_context_module,
+        "query_codegraph_context_with_status",
+        lambda **_kwargs: pytest.fail("cross-project scope reached CodeGraph"),
+    )
+    response = _codegraph_call(
+        project_a, project_b_id, runtime_dir, "sess-codegraph-scope"
+    )
+    assert response["result"]["isError"] is True
+    assert "project_scope_rejected" in response["result"]["content"][0]["text"]
+    assert project_a_id not in response["result"]["content"][0]["text"]
+
+
+def test_query_codegraph_context_sanitizes_transport_failure(tmp_path, monkeypatch):
+    from control_plane.codegraph_status_transport import CodeGraphStatusTransportError
+
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    project = tmp_path / "project"
+    project.mkdir()
+    project_id = str(resolve_session_project(cwd=project, runtime_dir=runtime_dir)["projectId"])
+    mcp_consent._reset_for_tests()
+    _authorize("sess-codegraph-error", runtime_dir)
+
+    def fail_query(**_kwargs):
+        raise CodeGraphStatusTransportError("command_failed", f"{project}/secret-token")
+
+    monkeypatch.setattr(fresh_context_module, "query_codegraph_context_with_status", fail_query)
+    response = _codegraph_call(project, project_id, runtime_dir, "sess-codegraph-error")
+    text = response["result"]["content"][0]["text"]
+    assert response["result"]["isError"] is True
+    assert "codegraph_context_rejected" in text
+    assert "secret-token" not in text
+    assert str(project) not in text
 
 
 def test_tools_call_requires_authorization(tmp_path):

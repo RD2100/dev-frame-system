@@ -2,29 +2,31 @@
 
 `&<target> <goal>` must not spin up token-spending coding agents for a
 conversational message like "你好" or "你能做什么". This classifies a goal as
-either an actionable **development** task (run the coding workflow) or a
+either an actionable **development** task (eligible for an execution proposal) or a
 **conversation** message (the coordinator answers directly — no agents, no
 tokens).
 
-The classifier is intentionally conservative: it returns ``"conversation"``
-only when the goal clearly looks conversational AND carries no development
-signal, so a real goal is never silently downgraded into chat. When in doubt it
-returns ``"development"`` (the goal runs).
+The classifier is intentionally conservative about execution: only an explicit
+development signal returns ``"development"``. Ambiguous text remains a
+``"conversation"`` and can at most produce a proposal; classification never
+grants execution authority.
 """
 from __future__ import annotations
 
 import re
+from typing import Mapping
 
 GOAL_KIND_DEVELOPMENT = "development"
 GOAL_KIND_CONVERSATION = "conversation"
 
-# Imperative development verbs (substring match). English entries bias toward
-# "development" on partial matches, which is the safe direction (the goal runs).
+# Imperative development verbs (substring match). Classification only selects
+# the proposal path; a separate server-issued confirmation still gates execution.
 _DEV_VERBS_EN = (
     "add", "create", "implement", "build", "fix", "refactor", "remove", "delete",
     "rename", "update", "change", "write", "test", "debug", "optimize", "migrate",
     "integrate", "configure", "setup", "install", "generate", "support", "replace",
     "wire", "expose", "render", "parse", "handle", "validate", "format", "lint",
+    "ship",
 )
 _DEV_VERBS_ZH = (
     "实现", "创建", "新建", "添加", "增加", "修复", "修改", "重构", "删除", "移除",
@@ -48,6 +50,7 @@ _CONVERSATIONAL_EN_RE = re.compile(
 )
 
 _FILE_RE = re.compile(r"[\w./\\-]+\.[a-z]{1,6}\b", re.IGNORECASE)
+_PROJECT_STATUS_REQUESTS = frozenset({"汇报一下目前的项目进度情况"})
 
 
 def classify_goal(goal: str) -> str:
@@ -71,11 +74,35 @@ def classify_goal(goal: str) -> str:
     )
     if is_conversational or len(text) <= 3:
         return GOAL_KIND_CONVERSATION
-    return GOAL_KIND_DEVELOPMENT
+    return GOAL_KIND_CONVERSATION
 
 
-def coordinator_conversation_reply(goal: str) -> str:
+def is_project_status_request(goal: str) -> bool:
+    return (goal or "").strip() in _PROJECT_STATUS_REQUESTS
+
+
+def coordinator_conversation_reply(
+    goal: str,
+    *,
+    project_id: str = "",
+    project_status: Mapping[str, str] | None = None,
+) -> str:
     """A direct, no-token coordinator reply for a conversational goal."""
+    if is_project_status_request(goal):
+        project_label = project_id.strip() or "当前未绑定具体项目"
+        status = dict(project_status or {})
+        verdict = status.get("verdict") or "未找到 PLAN.md 中可读取的 Current verdict。"
+        next_action = status.get("nextAction") or "未找到 PLAN.md 中可读取的 Next Action。"
+        run_summary = status.get("runSummary") or "未找到该项目已有的 cluster run 记录。"
+        return "\n".join(
+            [
+                f"当前项目：{project_label}",
+                f"Current verdict：{verdict}",
+                f"Next Action：{next_action}",
+                f"Cluster runs：{run_summary}",
+                "本次请求是只读进度汇报；未启动智能体、工作流或执行运行。",
+            ]
+        )
     return (
         "你好，我是项目主控。我可以接管一个开发目标：规划任务、协调编码智能体执行，"
         "再汇总并复核结果。\n\n"
@@ -83,6 +110,6 @@ def coordinator_conversation_reply(goal: str) -> str:
         "· &主控 在 README 增加快速开始章节\n"
         "· &主控 修复登录页的空指针报错\n"
         "· &主控 给 utils 添加一个日期格式化函数并补测试\n\n"
-        "目标发出后，你可以在这里看到「主控 → 智能体」的派发与执行过程，"
-        "并点开任一智能体查看它的详细执行。"
+        "目标发出后，主控会先展示绑定的项目、目标和执行对象；你明确确认后才会"
+        "启动智能体。执行期间可查看派发过程、点开智能体详情，也可以随时停止。"
     )

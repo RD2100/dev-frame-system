@@ -1,0 +1,20 @@
+{
+  "graph_projection_id": "graph-projection-invalid-completion",
+  "project_id": "project-contract-demo",
+  "nodes": [
+    {
+      "id": "run-1",
+      "type": "artifact",
+      "authority": "test_verified"
+    }
+  ],
+  "edges": [],
+  "operations": [
+    "project"
+  ],
+  "projection": {
+    "run_status": "succeeded",
+    "work_item_status": "completed",
+    "computed_status": "completed"
+  }
+}

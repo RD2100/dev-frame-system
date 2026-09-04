@@ -29,6 +29,7 @@ def test_visual_client_manifest_matches_public_schema():
     manifest = build_visual_client_manifest()
 
     validate_schema(schema, manifest)
+    assert manifest["version"] == 2
     assert manifest["reuse"]["client"] == "t3code"
     assert manifest["reuse"]["client_role"] == "primary-native-client-shell"
     assert manifest["reuse"]["executor"] == "opencode"
@@ -54,7 +55,15 @@ def test_visual_client_manifest_matches_public_schema():
         {
             "method": "POST",
             "path": "/api/t3/approval-response",
-            "requires": ["loopback-client", "loopback-origin", "approval.requested", "approve-or-reject"],
+            "requires": [
+                "loopback-client",
+                "loopback-origin",
+                "approval.requested",
+                "request-id-and-thread-id",
+                "approve-or-reject",
+                "ctp-server-reloads-durable-proposal",
+                "server-only-execution-capability",
+            ],
         },
         {
             "method": "POST",
@@ -63,13 +72,44 @@ def test_visual_client_manifest_matches_public_schema():
         },
         {
             "method": "POST",
+            "path": "/api/t3/cluster-run-proposal",
+            "requires": [
+                "loopback-client",
+                "loopback-origin",
+                "canonical-environment-id",
+                "registered-project-root",
+                "valid-cluster-target",
+                "not-rd-code-conversation-bridge",
+            ],
+        },
+        {
+            "method": "POST",
             "path": "/api/t3/cluster-run",
-            "requires": ["loopback-client", "loopback-origin", "valid-cluster-target", "human-inline-confirm-in-conversation"],
+            "requires": [
+                "loopback-client",
+                "loopback-origin",
+                "server-issued-confirmation",
+                "exact-binding",
+                "unexpired",
+                "single-use",
+                "decision=execute",
+                "not-rd-code-conversation-bridge",
+            ],
         },
         {
             "method": "POST",
             "path": "/api/t3/conversation-intake",
-            "requires": ["loopback-client", "loopback-origin", "canonical-environment-id", "known-thread", "project-binding"],
+            "requires": [
+                "loopback-client",
+                "loopback-origin",
+                "canonical-environment-id",
+                "known-thread",
+                "project-binding",
+                "single-canonical-global-project",
+                "stable-client-request-id",
+                "exact-replay-or-conflict",
+                "development-proposal-does-not-execute",
+            ],
         },
         {
             "method": "POST",
@@ -95,6 +135,17 @@ def test_visual_client_manifest_matches_public_schema():
             "method": "POST",
             "path": "/api/t3/memory",
             "requires": ["loopback-client", "loopback-origin", "validated-memory"],
+        },
+        {
+            "method": "POST",
+            "path": "/api/t3/cluster-run-cancel",
+            "requires": [
+                "loopback-client",
+                "loopback-origin",
+                "existing-active-run",
+                "canonical-g-run-id",
+                "minimal-public-response",
+            ],
         },
         {
             "method": "POST",
@@ -152,7 +203,7 @@ def test_visual_client_manifest_matches_public_schema():
             "contract": "t3_approval_response",
             "object_types": ["Action", "Run", "DevFrameSession"],
             "mutates": True,
-            "description": "Loopback-only approval callback used by T3 approval.requested activities to execute controlled actions.",
+            "description": "Loopback-only native approval callback. For ctp proposals the client sends only requestId, threadId, and approve/reject; DevFrame reloads the durable proposal and issues and consumes any execution capability server-side without returning its token.",
         },
         {
             "id": "t3-writeback-propose",
@@ -164,13 +215,22 @@ def test_visual_client_manifest_matches_public_schema():
             "description": "Loopback-only write-back proposal staging; nothing is written until a human approves the proposal via /api/t3/approval-response.",
         },
         {
+            "id": "t3-cluster-run-proposal",
+            "path": "/api/t3/cluster-run-proposal",
+            "method": "POST",
+            "contract": "t3_cluster_run_proposal",
+            "object_types": ["Run", "Project"],
+            "mutates": True,
+            "description": "Auxiliary M13A proposal endpoint for a project-bound cluster run. It is not called by the RD-Code conversation bridge and does not start work.",
+        },
+        {
             "id": "t3-cluster-run",
             "path": "/api/t3/cluster-run",
             "method": "POST",
             "contract": "t3_cluster_run",
             "object_types": ["Agent", "Run", "Project"],
             "mutates": True,
-            "description": "Loopback-only cluster run start for a &-mentioned target. Authorized by the human's inline confirm in the conversation; starts a project-coordinator run. No dashboard approval is involved.",
+            "description": "Auxiliary M13A cluster-run start endpoint. It consumes an exact-bound single-use server confirmation and is not called directly by the RD-Code conversation bridge.",
         },
         {
             "id": "t3-conversation-intake",
@@ -179,7 +239,7 @@ def test_visual_client_manifest_matches_public_schema():
             "contract": "t3_conversation_intake",
             "object_types": ["DevFrameSession"],
             "mutates": True,
-            "description": "Loopback-only durable human message intake for the global coordinator or a project-bound goal conversation.",
+            "description": "Loopback-only durable idempotent human-message intake with one exact canonical global-project binding. Ordinary turns do not execute; development turns may create a secret-free semantic proposal but never start work.",
         },
         {
             "id": "t3-cluster-roster-save",
@@ -227,6 +287,15 @@ def test_visual_client_manifest_matches_public_schema():
             "description": "Loopback-only save of global preferences or project memory at the targeted layer.",
         },
         {
+            "id": "t3-cluster-run-cancel",
+            "path": "/api/t3/cluster-run-cancel",
+            "method": "POST",
+            "contract": "t3_cluster_run_cancel",
+            "object_types": ["Run"],
+            "mutates": True,
+            "description": "Loopback-only durable cancellation request for an active cluster run. It returns only cancelRequested, runId, and status and never rolls project changes back.",
+        },
+        {
             "id": "t3-cluster-run-delete",
             "path": "/api/t3/cluster-run-delete",
             "method": "POST",
@@ -253,6 +322,8 @@ def test_visual_client_manifest_matches_public_schema():
         "/state.json",
         "/t3-shell.json",
         "/api/t3/coordinator-entry",
+        "/api/t3/cluster-run-proposal",
+        "/api/t3/cluster-run-cancel",
         "/sessions.json",
         "/sessions/{session_id}.json",
         "/web-ai-sessions.json",
@@ -264,9 +335,9 @@ def test_visual_client_manifest_matches_public_schema():
         "/api/t3/approval-response",
         "/api/t3/conversation-intake",
     }
-    assert manifest["governance"]["reconReceipt"] == "docs/status/recon-receipt-local-agent-client-mainline.md"
+    assert manifest["governance"]["reconReceipt"] == "PLAN.md"
     assert manifest["governance"]["rkrRulePath"] == "rules/recon.md"
-    assert manifest["governance"]["reuseAssessment"] == "docs/status/t3code-client-mainline-reuse-assessment.md"
+    assert manifest["governance"]["reuseAssessment"] == "PLAN.md"
     assert "devframe code" in manifest["governance"]["primaryClientDecision"]
     assert "T3Code" in manifest["governance"]["primaryClientDecision"]
     assert "OpenCode" in manifest["governance"]["workerDecision"]
@@ -304,6 +375,7 @@ def test_dashboard_serves_client_manifest_as_read_only_contract(tmp_path):
             manifest = json.loads(response.read().decode("utf-8"))
 
         validate_schema(schema, manifest)
+        assert manifest["version"] == 2
         assert manifest["transport"]["manifest_endpoint"] == "/client-manifest.json"
         assert manifest["transport"]["client_plan_endpoint"] == "/client-plan.json"
         assert manifest["transport"]["t3_bridge_endpoint"] == "/t3-bridge.json"
@@ -324,9 +396,39 @@ def test_dashboard_serves_client_manifest_as_read_only_contract(tmp_path):
         assert any(endpoint["id"] == "go-dispatch-submit" for endpoint in manifest["endpoints"])
         assert any(endpoint["id"] == "controlled-action-page" for endpoint in manifest["endpoints"])
         assert any(endpoint["id"] == "controlled-action-execute" for endpoint in manifest["endpoints"])
+        assert any(endpoint["id"] == "t3-cluster-run-proposal" for endpoint in manifest["endpoints"])
+        assert any(endpoint["id"] == "t3-cluster-run-cancel" for endpoint in manifest["endpoints"])
+        mutation_requirements = {
+            endpoint["path"]: endpoint["requires"]
+            for endpoint in manifest["write_policy"]["allowed_mutation_endpoints"]
+        }
+        assert mutation_requirements["/api/t3/cluster-run"] == [
+            "loopback-client",
+            "loopback-origin",
+            "server-issued-confirmation",
+            "exact-binding",
+            "unexpired",
+            "single-use",
+            "decision=execute",
+            "not-rd-code-conversation-bridge",
+        ]
+        assert mutation_requirements["/api/t3/conversation-intake"][-3:] == [
+            "stable-client-request-id",
+            "exact-replay-or-conflict",
+            "development-proposal-does-not-execute",
+        ]
+        assert (
+            "single-canonical-global-project"
+            in mutation_requirements["/api/t3/conversation-intake"]
+        )
+        assert mutation_requirements["/api/t3/approval-response"][-2:] == [
+            "ctp-server-reloads-durable-proposal",
+            "server-only-execution-capability",
+        ]
+        assert "human-inline-confirm-in-conversation" not in json.dumps(manifest)
         assert mappings["go-dispatch"]["client_surface"] == "auxiliary-dashboard-project-level-go-dispatch"
         assert mappings["web-gpt-review-gate"]["client_surface"] == "external-web-gpt-review-gate"
-        assert manifest["governance"]["reconReceipt"] == "docs/status/recon-receipt-local-agent-client-mainline.md"
+        assert manifest["governance"]["reconReceipt"] == "PLAN.md"
         assert manifest["governance"]["primaryClientDecision"]
         assert manifest["governance"]["workerDecision"]
 

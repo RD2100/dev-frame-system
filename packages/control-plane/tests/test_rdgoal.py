@@ -3,6 +3,8 @@ import json
 import os
 import shutil
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
 from threading import Thread
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -1266,6 +1268,165 @@ def test_command_worker_runs_command_and_ingests_report(tmp_path):
     assert worker_result.summary.status == "passed"
     assert worker_result.summary.changed_files == ["src/app.py"]
     assert (Path(result.packet.packet_dir) / "worker-output.txt").exists()
+
+
+def test_command_worker_cancellation_reports_cancelled_and_stops_process_tree(
+    tmp_path,
+    request,
+):
+    from control_plane.cluster_run import _pid_alive
+
+    pids: dict[str, int] = {}
+
+    def cleanup_processes() -> None:
+        import signal
+        import subprocess
+
+        for pid in pids.values():
+            if not _pid_alive(pid):
+                continue
+            if os.name == "nt":
+                subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/T", "/F"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            else:
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+
+    request.addfinalizer(cleanup_processes)
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    contract_path = write_contract(tmp_path)
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    orchestrator.register(contract_path, project_root)
+    result = orchestrator.dispatch(
+        project_id="demo-project",
+        requirement="Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+    packet_dir = Path(result.packet.packet_dir)
+    cancel_marker = tmp_path / "cancel-requested.json"
+    pid_path = packet_dir / "worker-pids.json"
+    script_path = tmp_path / "sleeping-worker.py"
+    script_path.write_text(
+        "import json, os, pathlib, subprocess, sys, time\n"
+        "packet = pathlib.Path(os.environ['RDGOAL_PACKET_DIR'])\n"
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'])\n"
+        "(packet / 'worker-pids.json').write_text("
+        "json.dumps({'parent': os.getpid(), 'child': child.pid}), encoding='utf-8')\n"
+        "time.sleep(120)\n",
+        encoding="utf-8",
+    )
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(
+            CommandWorker(runtime_dir=runtime_dir, timeout_seconds=3).run_packet,
+            packet_dir,
+            [sys.executable, str(script_path)],
+            env_overrides={"DEVFRAME_CANCEL_MARKER": str(cancel_marker)},
+        )
+        deadline = time.monotonic() + 10
+        while not pid_path.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert pid_path.exists(), "real worker process did not start"
+        pids.update(json.loads(pid_path.read_text(encoding="utf-8")))
+        cancel_marker.write_text('{"requested": true}', encoding="utf-8")
+        worker_result = future.result(timeout=15)
+
+    deadline = time.monotonic() + 5
+    while any(_pid_alive(pid) for pid in pids.values()) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert not any(_pid_alive(pid) for pid in pids.values())
+    assert worker_result.summary.status == "cancelled"
+    assert worker_result.summary.changed_files == []
+    report_text = Path(worker_result.report_path).read_text(encoding="utf-8")
+    output_text = (packet_dir / "worker-output.txt").read_text(encoding="utf-8")
+    assert "Status**: cancelled" in report_text
+    assert "partial project changes may exist" in report_text
+    assert "CANCELLED" in output_text
+    assert str(pids["parent"]) in output_text
+
+
+@pytest.mark.skipif(os.name != "nt", reason="covers the Windows exited-root process-tree edge")
+def test_command_worker_cancellation_stops_child_after_parent_exits(
+    tmp_path,
+    request,
+):
+    from control_plane.cluster_run import _pid_alive
+
+    pids: dict[str, int] = {}
+
+    def cleanup_processes() -> None:
+        import subprocess
+
+        for pid in pids.values():
+            if not _pid_alive(pid):
+                continue
+            subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+    request.addfinalizer(cleanup_processes)
+    project_root = tmp_path / "project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    contract_path = write_contract(tmp_path)
+    orchestrator = Orchestrator(runtime_dir=runtime_dir, repo_root=tmp_path / "repo")
+    orchestrator.register(contract_path, project_root)
+    result = orchestrator.dispatch(
+        project_id="demo-project",
+        requirement="Build a working MVP prototype.",
+        operation="choose architecture direction",
+    )
+    packet_dir = Path(result.packet.packet_dir)
+    cancel_marker = tmp_path / "cancel-requested.json"
+    pid_path = packet_dir / "worker-pids.json"
+    script_path = tmp_path / "exited-parent-worker.py"
+    script_path.write_text(
+        "import json, os, pathlib, subprocess, sys\n"
+        "packet = pathlib.Path(os.environ['RDGOAL_PACKET_DIR'])\n"
+        "child = subprocess.Popen("
+        "[sys.executable, '-c', 'import time; time.sleep(120)'], "
+        "stdout=sys.stdout, stderr=sys.stderr)\n"
+        "(packet / 'worker-pids.json').write_text("
+        "json.dumps({'parent': os.getpid(), 'child': child.pid}), encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(
+            CommandWorker(runtime_dir=runtime_dir, timeout_seconds=3).run_packet,
+            packet_dir,
+            [sys.executable, str(script_path)],
+            env_overrides={"DEVFRAME_CANCEL_MARKER": str(cancel_marker)},
+        )
+        deadline = time.monotonic() + 10
+        while not pid_path.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert pid_path.exists(), "real worker process did not start"
+        pids.update(json.loads(pid_path.read_text(encoding="utf-8")))
+        deadline = time.monotonic() + 5
+        while _pid_alive(pids["parent"]) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert not _pid_alive(pids["parent"])
+        assert _pid_alive(pids["child"])
+        cancel_marker.write_text('{"requested": true}', encoding="utf-8")
+        worker_result = future.result(timeout=15)
+
+    deadline = time.monotonic() + 5
+    while _pid_alive(pids["child"]) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert not _pid_alive(pids["child"])
+    assert worker_result.summary.status == "cancelled"
 
 
 def _review_claim_command(review_status: str = "- **Review Status**: pass") -> list[str]:

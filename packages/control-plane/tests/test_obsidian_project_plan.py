@@ -40,9 +40,9 @@ from control_plane.writeback import (  # noqa: E402
 
 def _project(tmp_path: Path) -> Path:
     project = tmp_path / "project"
-    handoff = project / "docs" / "status" / "HANDOFF.md"
-    handoff.parent.mkdir(parents=True)
-    handoff.write_text("# Execution Root\n\nCurrent milestone: memory MVP.\n", encoding="utf-8")
+    plan = project / "PLAN.md"
+    plan.parent.mkdir(parents=True)
+    plan.write_text("# Project Plan\n\nCurrent milestone: memory MVP.\n", encoding="utf-8")
     return project
 
 
@@ -299,7 +299,7 @@ def test_redacted_resolver_response_hides_root_identity(tmp_path):
     assert "workspace_root_identity" not in result
 
 
-def test_approval_rejects_handoff_change_before_vault_write(tmp_path):
+def test_approval_rejects_plan_change_before_vault_write(tmp_path):
     project = _project(tmp_path)
     vault = _vault(tmp_path)
     runtime = tmp_path / "runtime"
@@ -310,7 +310,7 @@ def test_approval_rejects_handoff_change_before_vault_write(tmp_path):
         project_id="demo",
         plan_markdown="## Next\n\nDo the bounded slice.",
     )
-    (project / "docs" / "status" / "HANDOFF.md").write_text("# New authority\n", encoding="utf-8")
+    (project / "PLAN.md").write_text("# New authority\n", encoding="utf-8")
     with pytest.raises(WritebackError, match="source changed after proposal"):
         resolve_writeback_proposal(runtime, staged["request_id"], "approve")
     assert not (vault / staged["relative_path"]).exists()
@@ -342,7 +342,7 @@ def test_approval_rejects_replaced_vault_root(tmp_path):
         _restore_swapped_directory(vault, moved_vault)
 
 
-def test_approval_rechecks_handoff_at_publish_boundary(tmp_path, monkeypatch):
+def test_approval_rechecks_plan_at_publish_boundary(tmp_path, monkeypatch):
     project = _project(tmp_path)
     vault = _vault(tmp_path)
     runtime = tmp_path / "runtime"
@@ -354,11 +354,11 @@ def test_approval_rechecks_handoff_at_publish_boundary(tmp_path, monkeypatch):
         plan_markdown="Do not publish after the authority changes.",
     )
     target = vault / staged["relative_path"]
-    handoff = project / "docs" / "status" / "HANDOFF.md"
+    plan_path = project / "PLAN.md"
     original_apply = writeback_module.apply_writeback_with_audit
 
     def change_source_then_apply(*args, **kwargs):
-        handoff.write_text("# Changed during approval\n", encoding="utf-8")
+        plan_path.write_text("# Changed during approval\n", encoding="utf-8")
         return original_apply(*args, **kwargs)
 
     monkeypatch.setattr(
@@ -416,7 +416,7 @@ def test_recall_fails_closed_when_plan_body_changes(tmp_path):
         recall_project_plan(vault_root=vault, project_root=project, project_id="demo")
 
 
-def test_recall_rechecks_handoff_at_response_boundary(tmp_path, monkeypatch):
+def test_recall_rechecks_plan_at_response_boundary(tmp_path, monkeypatch):
     project = _project(tmp_path)
     vault = _vault(tmp_path)
     runtime = tmp_path / "runtime"
@@ -428,7 +428,7 @@ def test_recall_rechecks_handoff_at_response_boundary(tmp_path, monkeypatch):
         plan_markdown="The source must still match after the note read.",
     )
     resolve_writeback_proposal(runtime, staged["request_id"], "approve")
-    handoff = project / "docs" / "status" / "HANDOFF.md"
+    plan_path = project / "PLAN.md"
     original_read = obsidian_memory_module._read_bounded
     changed = False
 
@@ -437,7 +437,7 @@ def test_recall_rechecks_handoff_at_response_boundary(tmp_path, monkeypatch):
         data = original_read(root, path, max_bytes=max_bytes, kind=kind)
         if kind == "managed plan" and not changed:
             changed = True
-            handoff.write_text("# Changed while recalling\n", encoding="utf-8")
+            plan_path.write_text("# Changed while recalling\n", encoding="utf-8")
         return data
 
     monkeypatch.setattr(obsidian_memory_module, "_read_bounded", change_source_during_note_read)
@@ -459,8 +459,8 @@ def test_recall_rechecks_handoff_at_response_boundary(tmp_path, monkeypatch):
         ('authority: "working_only"', 'authority: "project_authority"'),
         ('status: "active"', 'status: "accepted"'),
         (
-            'source_path: "docs/status/HANDOFF.md"',
-            'source_path: "docs/status/OTHER.md"',
+            'source_path: "PLAN.md"',
+            'source_path: "OTHER.md"',
         ),
     ],
 )

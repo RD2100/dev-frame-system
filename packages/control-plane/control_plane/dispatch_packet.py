@@ -19,6 +19,10 @@ from jsonschema.validators import validator_for
 from .agent_adapter import SubAgentObjective
 from .backup_guard import default_runtime_dir, is_inside
 from .decision_engine import Decision
+from .graph_context_packet_integration import (
+    canonicalize_graph_context_selection,
+    integrate_graph_context_selection,
+)
 from .project_contract import ProjectContract
 
 
@@ -42,6 +46,7 @@ class DispatchPacket:
     context_ledger_path: str = ""
     packet_dir: str = ""
     created_at: str = field(default_factory=_utc_now)
+    graph_context_selection: dict[str, Any] | None = None
 
 
 @dataclass
@@ -69,8 +74,14 @@ class DispatchPacketStore:
                      requirement: str, operation: str, targets: list[str],
                      decision: Decision, objective: SubAgentObjective,
                      dispatch_ready: bool, work_type: str | None = None,
-                     workflow_profile: dict[str, Any] | None = None) -> DispatchPacket:
+                     workflow_profile: dict[str, Any] | None = None,
+                     graph_context_selection: dict[str, Any] | None = None) -> DispatchPacket:
         self._ensure_runtime_outside_repo()
+        canonical_selection = None
+        if graph_context_selection is not None:
+            canonical_selection = canonicalize_graph_context_selection(
+                graph_context_selection, project_id=contract.project_id
+            )
         packet_id = f"rdgoal-{contract.project_id}-{int(time.time() * 1000)}-{uuid.uuid4().hex[:6]}"
         packet_dir = self.outbox / contract.project_id / packet_id
         packet_dir.mkdir(parents=True, exist_ok=True)
@@ -100,9 +111,10 @@ class DispatchPacketStore:
             context_packet_path=str(context_packet_path),
             context_ledger_path=str(context_ledger_path),
             packet_dir=str(packet_dir),
+            graph_context_selection=canonical_selection,
         )
         (packet_dir / "packet.json").write_text(
-            json.dumps(asdict(packet), indent=2, ensure_ascii=True),
+            json.dumps(_packet_payload(packet), indent=2, ensure_ascii=True),
             encoding="utf-8",
         )
         (packet_dir / "TASKSPEC.json").write_text(
@@ -124,7 +136,7 @@ class DispatchPacketStore:
         packet.context_packet_path = str(target_dir / "context-packet.json")
         packet.context_ledger_path = str(target_dir / "context-ledger.json")
         (target_dir / "packet.json").write_text(
-            json.dumps(asdict(packet), indent=2, ensure_ascii=True),
+            json.dumps(_packet_payload(packet), indent=2, ensure_ascii=True),
             encoding="utf-8",
         )
         self._write_context_artifacts(packet)
@@ -146,7 +158,7 @@ class DispatchPacketStore:
         packet.context_packet_path = str(target_dir / "context-packet.json")
         packet.context_ledger_path = str(target_dir / "context-ledger.json")
         (target_dir / "packet.json").write_text(
-            json.dumps(asdict(packet), indent=2, ensure_ascii=True),
+            json.dumps(_packet_payload(packet), indent=2, ensure_ascii=True),
             encoding="utf-8",
         )
         (target_dir / "TASKSPEC.md").write_text(self._task_spec_markdown(packet), encoding="utf-8")
@@ -205,7 +217,7 @@ class DispatchPacketStore:
                 "trigger_reason": "rdgoal generated a worker dispatch packet.",
                 "inventory_evidence": {
                     "queried_sources": [
-                        "docs/agent-runtime/sub-agent-dispatch-protocol.md",
+                        "PLAN.md",
                         "rules/orchestration.md",
                     ],
                     "matched_capabilities": ["SADP", "rdgoal"],
@@ -417,6 +429,23 @@ class DispatchPacketStore:
             json.dumps(context_ledger, indent=2, ensure_ascii=True),
             encoding="utf-8",
         )
+        if packet.graph_context_selection is not None:
+            amended = integrate_graph_context_selection(
+                context_packet,
+                context_ledger,
+                packet.graph_context_selection,
+                actor_id="rdgoal-dispatch",
+                actor_role="coordinator",
+                occurred_at=created_at,
+            )
+            context_packet_path.write_text(
+                json.dumps(amended["context_packet"], indent=2, ensure_ascii=True),
+                encoding="utf-8",
+            )
+            context_ledger_path.write_text(
+                json.dumps(amended["context_ledger"], indent=2, ensure_ascii=True),
+                encoding="utf-8",
+            )
 
 
 def _is_protected_target(target: str) -> bool:
@@ -429,6 +458,14 @@ def _is_protected_target(target: str) -> bool:
         "rules/core.md",
     }
     return any(normalized.endswith(name) for name in protected_names)
+
+
+def _packet_payload(packet: DispatchPacket) -> dict[str, Any]:
+    """Serialize packets without adding optional graph metadata to old paths."""
+    payload = asdict(packet)
+    if payload.get("graph_context_selection") is None:
+        payload.pop("graph_context_selection", None)
+    return payload
 
 
 def _packet_source_refs(packet: DispatchPacket) -> list[dict[str, Any]]:
@@ -663,6 +700,8 @@ def _normalize_report_status(value: str) -> str:
     status = token[0].strip("`*:,.;")
     if status in {"pass", "passed", "completed", "success", "succeeded"}:
         return "passed"
+    if status in {"cancelled", "canceled"}:
+        return "cancelled"
     if status in {"blocked", "failed", "fail", "human_required"}:
         return status
     return ""

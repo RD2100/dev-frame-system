@@ -24,6 +24,7 @@ from typing import Any, Callable
 
 from .backup_guard import default_runtime_dir
 from .go_dispatch import execute_go_run, run_go_dispatch
+from .project_contract import slugify_project_id
 from .team_runtime import TeamRuntime
 
 # Controller verdict vocabulary. continue/revise/stop remain legacy next-action
@@ -80,9 +81,21 @@ class WorkflowEngine:
         driver: str = "command",
         acp_command: list[str] | None = None,
         on_prepared: Callable[[str], None] | None = None,
+        cancel_marker: str | Path | None = None,
     ) -> WorkflowResult:
         if driver not in {"command", "acp"}:
             raise ValueError(f"unknown driver: {driver!r} (expected 'command' or 'acp')")
+        marker_path = Path(cancel_marker) if cancel_marker is not None else None
+        if marker_path is not None and marker_path.is_file():
+            summary = "Workflow cancelled before the coordinator prepared a go run."
+            return WorkflowResult(
+                go_run_id="",
+                project_id=slugify_project_id(Path(project_path).resolve()),
+                status="cancelled",
+                verdict=VERDICT_STOP,
+                phases=[WorkflowPhase("plan", "coordinator", "cancelled", summary)],
+                runtime_dir=str(self.runtime_dir),
+            )
         team = TeamRuntime(runtime_dir=self.runtime_dir)
         phases: list[WorkflowPhase] = []
 
@@ -139,19 +152,37 @@ class WorkflowEngine:
             go_run_id, phase="execute", status="started", role="executor",
             summary=f"Executing {len(prepared.agents)} agent task(s) for run {go_run_id}.",
         )
-        executed = execute_go_run(self.runtime_dir, go_run_id, timeout_seconds=timeout_seconds)
+        executed = execute_go_run(
+            self.runtime_dir,
+            go_run_id,
+            timeout_seconds=timeout_seconds,
+            cancel_marker=cancel_marker,
+        )
         passed = sum(1 for a in executed.agents if (a.worker_status or "").lower() in _SUCCESS)
         failed = sum(1 for a in executed.agents if (a.worker_status or "").lower() in {"failed", "fail", "error"})
-        exec_summary = f"Execute phase finished: {passed} passed, {failed} failed of {len(executed.agents)}."
+        cancelled = sum(
+            1
+            for agent in executed.agents
+            if (agent.worker_status or "").lower() in {"cancelled", "canceled"}
+        )
+        exec_summary = (
+            f"Execute phase finished: {passed} passed, {failed} failed, "
+            f"{cancelled} cancelled of {len(executed.agents)}."
+        )
+        execute_status = "cancelled" if executed.status == "cancelled" else "completed"
         team.record_workflow_event(
-            go_run_id, phase="execute", status="completed", role="executor",
+            go_run_id, phase="execute", status=execute_status, role="executor",
             summary=exec_summary,
         )
-        phases.append(WorkflowPhase("execute", "executor", "completed", exec_summary))
+        phases.append(WorkflowPhase("execute", "executor", execute_status, exec_summary))
 
         # Phase 3: review gate state. Worker results are execution outcomes only;
         # they cannot create an independent review verdict.
-        verdict = _verdict_for(executed.agents)
+        verdict = (
+            VERDICT_STOP
+            if executed.status in {"cancelled", "canceled"}
+            else _verdict_for(executed.agents)
+        )
         if verdict == VERDICT_AWAITING_REVIEW:
             review_summary = (
                 f"Worker execution passed for run {go_run_id}; independent review is required "
@@ -160,7 +191,8 @@ class WorkflowEngine:
         else:
             review_summary = (
                 f"Controller next action for run {go_run_id}: {verdict} "
-                f"({passed} passed, {failed} failed of {len(executed.agents)})."
+                f"({passed} passed, {failed} failed, {cancelled} cancelled "
+                f"of {len(executed.agents)})."
             )
         team.record_workflow_event(
             go_run_id, phase="review", status=verdict, role="controller",
@@ -184,6 +216,8 @@ class WorkflowEngine:
 def _verdict_for(agents: list[Any]) -> str:
     statuses = [str(getattr(a, "worker_status", "") or "").lower() for a in agents]
     if not statuses:
+        return VERDICT_STOP
+    if any(status in {"cancelled", "canceled"} for status in statuses):
         return VERDICT_STOP
     if all(status in _SUCCESS for status in statuses):
         return VERDICT_AWAITING_REVIEW

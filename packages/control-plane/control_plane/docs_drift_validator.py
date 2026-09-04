@@ -1,17 +1,8 @@
-"""P1-3: documentation drift validator.
+"""Validate the repository's single-plan documentation model.
 
-Per design-coverage-gap-remediation-plan.md:194-212:
-
-  1. Verify every docs/status/*.md file appears in status-document-inventory.md.
-  2. Check that master-plan companion docs appear in reviewer-index.md
-     when they affect implementation.
-  3. Keep warnings targeted; do not require docs/README.md to list every
-     historical status file.
-
-Acceptance:
-  - adding a public subsystem, evidence record, or deferred module without
-    inventory/reviewer visibility fails a local check or produces a clear
-    warning.
+Human-facing planning content has one authority: ``PLAN.md`` at the repository
+root. Markdown used as a rule, contract, prompt, template, skill, or fixture is
+code-like input and is outside this validator's authority check.
 """
 from __future__ import annotations
 
@@ -29,188 +20,154 @@ class ValidationResult:
         return self.valid
 
 
-_STATUS_DOC_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*\.md")
+MAX_PLAN_BYTES = 1_000_000
+LEGACY_ROOT_DOCS = (
+    "README.md",
+    "README.zh-CN.md",
+    "AGENT_HANDOFF.md",
+)
+REQUIRED_PLAN_HEADINGS = (
+    "Next Action",
+    "Authority",
+    "Product Decision",
+    "Verified Baseline",
+    "Current Risk Register",
+    "Delivery Roadmap",
+    "Execution Protocol",
+    "Human Gates",
+    "Documentation Policy",
+    "Decision Log",
+)
 
 
-def _extract_markdown_filenames(text: str) -> set[str]:
-    """Return markdown basenames referenced in public docs."""
-    return {Path(match.group(0)).name for match in _STATUS_DOC_PATTERN.finditer(text)}
+def _read_utf8(path: Path) -> tuple[bool, str, str | None]:
+    if not path.is_file():
+        return False, "", None
+    try:
+        return True, path.read_text(encoding="utf-8-sig"), None
+    except (OSError, UnicodeError) as exc:
+        return True, "", f"{type(exc).__name__}: {exc}"
 
 
-def _extract_inventory_state_files(text: str, states: set[str]) -> set[str]:
-    """Extract filenames from the status inventory classification table."""
-    files: set[str] = set()
-    for line in text.splitlines():
-        if not line.startswith("| `"):
-            continue
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        if len(cells) < 2:
-            continue
-        state = cells[0].strip("`")
-        if state in states:
-            files.update(_extract_markdown_filenames(cells[1]))
-    return files
+def _heading_count(text: str, heading: str) -> int:
+    pattern = rf"^##(?:\s+\d+\.)?\s+{re.escape(heading)}\s*$"
+    return len(re.findall(pattern, text, flags=re.MULTILINE))
 
 
 def build_docs_drift_payload(repo_root: str | Path) -> dict:
-    """Build a docs drift payload from this repository's public docs.
-
-    This is the real repo-path entrypoint for the P1-3 drift check. It keeps
-    the validator pure while letting tests and gates exercise the actual
-    docs/status inventory, docs/README.md, and reviewer index files.
-    """
+    """Read the real repository paths needed by the single-plan gate."""
     root = Path(repo_root)
-    status_dir = root / "docs" / "status"
-    inventory_path = status_dir / "status-document-inventory.md"
-    reviewer_index_path = status_dir / "reviewer-index.md"
-    docs_readme_path = root / "docs" / "README.md"
-
-    disk_files = {
-        path.name for path in status_dir.glob("*.md") if path.is_file()
-    }
-    inventory_text = inventory_path.read_text(encoding="utf-8-sig")
-    reviewer_index_text = reviewer_index_path.read_text(encoding="utf-8-sig")
-    docs_readme_text = docs_readme_path.read_text(encoding="utf-8-sig")
+    plan_path = root / "PLAN.md"
+    agents_path = root / "AGENTS.md"
+    plan_exists, plan_text, plan_read_error = _read_utf8(plan_path)
+    agents_exists, agents_text, agents_read_error = _read_utf8(agents_path)
+    docs_root = root / "docs"
+    docs_files = (
+        sorted(
+            path.relative_to(root).as_posix()
+            for path in docs_root.rglob("*")
+            if path.is_file()
+        )
+        if docs_root.exists()
+        else []
+    )
 
     return {
-        "disk_files": sorted(disk_files),
-        "inventory_entries": sorted(_extract_markdown_filenames(inventory_text)),
-        "reviewer_index_entries": sorted(
-            _extract_markdown_filenames(reviewer_index_text)
-        ),
-        "active_plan_files": sorted(
-            _extract_inventory_state_files(
-                inventory_text,
-                {"active-plan", "deferred-module-plan"},
-            )
-        ),
-        "docs_readme_entries": sorted(_extract_markdown_filenames(docs_readme_text)),
+        "plan_exists": plan_exists,
+        "plan_text": plan_text,
+        "plan_size": plan_path.stat().st_size if plan_exists else 0,
+        "plan_read_error": plan_read_error,
+        "agents_exists": agents_exists,
+        "agents_text": agents_text,
+        "agents_read_error": agents_read_error,
+        "docs_files": docs_files,
+        "legacy_root_files": [
+            name for name in LEGACY_ROOT_DOCS if (root / name).exists()
+        ],
     }
 
 
-def _check_consistency(
-    disk_files: set[str],
-    inventory_entries: set[str],
-    active_plan_files: set[str],
-    reviewer_index_entries: set[str],
-    docs_readme_entries: set[str],
-    collect_errors: bool = False,
-) -> tuple[bool, list[str]]:
-    """Shared drift-check logic used by both validator and projection."""
+def _check_single_plan(payload: dict) -> list[str]:
     errors: list[str] = []
+    plan_exists = bool(payload.get("plan_exists"))
+    plan_text = str(payload.get("plan_text") or "")
+    plan_size = int(payload.get("plan_size") or 0)
+    plan_read_error = payload.get("plan_read_error")
+    agents_exists = bool(payload.get("agents_exists"))
+    agents_text = str(payload.get("agents_text") or "")
+    agents_read_error = payload.get("agents_read_error")
+    docs_files = sorted(str(item) for item in (payload.get("docs_files") or []))
+    legacy_root_files = sorted(
+        str(item) for item in (payload.get("legacy_root_files") or [])
+    )
 
-    # (1) Every disk file must appear in inventory.
-    missing_from_inventory = disk_files - inventory_entries
-    for f in sorted(missing_from_inventory):
-        if collect_errors:
+    if not plan_exists:
+        errors.append("docs_drift: root PLAN.md is missing")
+    if plan_read_error:
+        errors.append(f"docs_drift: PLAN.md is not readable UTF-8: {plan_read_error}")
+    if plan_exists and not plan_text.strip() and not plan_read_error:
+        errors.append("docs_drift: PLAN.md is empty")
+    if plan_size > MAX_PLAN_BYTES:
+        errors.append(
+            f"docs_drift: PLAN.md is {plan_size} bytes; limit is {MAX_PLAN_BYTES}"
+        )
+
+    verdict_count = len(re.findall(r"^Current verdict:", plan_text, re.MULTILINE))
+    if plan_exists and verdict_count != 1:
+        errors.append(
+            "docs_drift: PLAN.md must contain exactly one 'Current verdict:' line "
+            f"(found {verdict_count})"
+        )
+    for heading in REQUIRED_PLAN_HEADINGS:
+        count = _heading_count(plan_text, heading)
+        if plan_exists and count != 1:
             errors.append(
-                f"docs_drift: {f!r} exists on disk but is missing from "
-                f"status-document-inventory.md"
+                f"docs_drift: PLAN.md must contain exactly one '## {heading}' "
+                f"heading (found {count})"
             )
-        else:
-            return False, errors
 
-    # (2) Active plan files referencing something not on disk is inconsistent.
-    active_not_on_disk = active_plan_files - disk_files
-    for f in sorted(active_not_on_disk):
-        if collect_errors:
-            errors.append(
-                f"docs_drift: {f!r} listed as active_plan but not found on disk "
-                f"(inconsistent caller data)"
-            )
-        else:
-            return False, errors
+    if not agents_exists:
+        errors.append("docs_drift: root AGENTS.md entrypoint is missing")
+    if agents_read_error:
+        errors.append(f"docs_drift: AGENTS.md is not readable UTF-8: {agents_read_error}")
+    if agents_exists and "PLAN.md" not in agents_text:
+        errors.append("docs_drift: AGENTS.md does not point to PLAN.md")
+    if agents_exists and "only human development authority" not in agents_text:
+        errors.append(
+            "docs_drift: AGENTS.md does not declare PLAN.md as the only human "
+            "development authority"
+        )
 
-    # (3) Active plan files must appear in docs/README.md.
-    #     Only master-plan companion docs — NOT every historical file.
-    missing_from_readme = active_plan_files - docs_readme_entries
-    for f in sorted(missing_from_readme):
-        if collect_errors:
-            errors.append(
-                f"docs_drift: {f!r} is an active-plan / master-plan companion "
-                f"doc but is missing from docs/README.md"
-            )
-        else:
-            return False, errors
-
-    # (4) Active plan files must appear in reviewer-index.
-    missing_from_reviewer = active_plan_files - reviewer_index_entries
-    for f in sorted(missing_from_reviewer):
-        if collect_errors:
-            errors.append(
-                f"docs_drift: {f!r} is an active-plan / master-plan companion "
-                f"doc but is missing from reviewer-index.md"
-            )
-        else:
-            return False, errors
-
-    return True, errors
+    for path in docs_files:
+        errors.append(f"docs_drift: retired docs/ tree still contains {path!r}")
+    for path in legacy_root_files:
+        errors.append(f"docs_drift: retired root document still exists: {path!r}")
+    return errors
 
 
 def validate_docs_drift(payload: dict) -> ValidationResult:
-    """Validate documentation consistency.
-
-    payload keys:
-      - disk_files: list[str] — all docs/status/*.md filenames on disk
-      - inventory_entries: list[str] — filenames appearing in inventory
-      - reviewer_index_entries: list[str] — filenames in reviewer-index
-      - active_plan_files: list[str] — active-plan / master-plan companion
-        filenames that MUST appear in reviewer-index
-    """
-    errors: list[str] = []
-
-    disk_files = set(payload.get("disk_files") or [])
-    inventory_entries = set(payload.get("inventory_entries") or [])
-    reviewer_index_entries = set(payload.get("reviewer_index_entries") or [])
-    active_plan_files = set(payload.get("active_plan_files") or [])
-    docs_readme_entries = set(payload.get("docs_readme_entries") or [])
-
-    _, drift_errors = _check_consistency(
-        disk_files, inventory_entries, active_plan_files,
-        reviewer_index_entries, docs_readme_entries,
-        collect_errors=True,
-    )
-    errors.extend(drift_errors)
-
-    return ValidationResult(valid=len(errors) == 0, errors=errors)
+    """Validate that the single-plan authority is complete and unique."""
+    errors = _check_single_plan(payload)
+    return ValidationResult(valid=not errors, errors=errors)
 
 
 def derive_docs_drift(payload: dict) -> dict:
-    """Read-only projection: uses shared _check_consistency() so projection
-    cannot report clean when validator would fail.
-
-    Returns derived counts plus all drift errors (pass-through from the
-    shared check, same as validator sees).
-    """
-    disk_files = set(payload.get("disk_files") or [])
-    inventory_entries = set(payload.get("inventory_entries") or [])
-    reviewer_index_entries = set(payload.get("reviewer_index_entries") or [])
-    active_plan_files = set(payload.get("active_plan_files") or [])
-    docs_readme_entries = set(payload.get("docs_readme_entries") or [])
-
-    valid, consistency_errors = _check_consistency(
-        disk_files, inventory_entries, active_plan_files,
-        reviewer_index_entries, docs_readme_entries,
-        collect_errors=True,
-    )
-
-    valid = len(consistency_errors) == 0
-
-    untracked = sorted(disk_files - inventory_entries)
-    missing_from_reviewer = sorted(active_plan_files - reviewer_index_entries)
-    missing_from_readme = sorted(active_plan_files - docs_readme_entries)
-    active_not_on_disk = sorted(active_plan_files - disk_files)
-
+    """Return a read-only projection of the same checks used by validation."""
+    plan_text = str(payload.get("plan_text") or "")
+    errors = _check_single_plan(payload)
+    heading_counts = {
+        heading: _heading_count(plan_text, heading)
+        for heading in REQUIRED_PLAN_HEADINGS
+    }
     return {
-        "disk_count": len(disk_files),
-        "valid": valid,
-        "errors": consistency_errors,
-        "untracked_count": len(untracked),
-        "untracked": untracked,
-        "missing_from_reviewer_index_count": len(missing_from_reviewer),
-        "missing_from_reviewer_index": missing_from_reviewer,
-        "missing_from_readme_count": len(missing_from_readme),
-        "missing_from_readme": missing_from_readme,
-        "active_not_on_disk_count": len(active_not_on_disk),
-        "active_not_on_disk": active_not_on_disk,
+        "valid": not errors,
+        "errors": errors,
+        "plan_exists": bool(payload.get("plan_exists")),
+        "plan_size": int(payload.get("plan_size") or 0),
+        "current_verdict_count": len(
+            re.findall(r"^Current verdict:", plan_text, re.MULTILINE)
+        ),
+        "heading_counts": heading_counts,
+        "docs_file_count": len(payload.get("docs_files") or []),
+        "legacy_root_file_count": len(payload.get("legacy_root_files") or []),
     }

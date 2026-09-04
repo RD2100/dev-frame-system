@@ -17,8 +17,7 @@ DevFrame browser automation is currently CDP-family only. Any action that tests
 a ChatGPT page, submits a prompt, reads a provider response, discovers an open
 tab, or validates that a conversation is reachable must use an existing or
 explicitly started Chrome DevTools Protocol compatible endpoint. Future
-multi-browser transports are deferred to
-`docs/status/browser-automation-transport-roadmap.md`.
+multi-browser transports remain deferred in `PLAN.md`.
 
 Allowed stable transport:
 

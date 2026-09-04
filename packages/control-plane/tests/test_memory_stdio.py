@@ -49,9 +49,9 @@ def _run_stdio(
 
 def _project(tmp_path: Path) -> Path:
     project = tmp_path / "project"
-    handoff = project / "docs" / "status" / "HANDOFF.md"
-    handoff.parent.mkdir(parents=True)
-    handoff.write_text("# Execution Root\n\nCurrent milestone: stdio memory.\n", encoding="utf-8")
+    plan = project / "PLAN.md"
+    plan.parent.mkdir(parents=True)
+    plan.write_text("# Project Plan\n\nCurrent milestone: stdio memory.\n", encoding="utf-8")
     return project
 
 

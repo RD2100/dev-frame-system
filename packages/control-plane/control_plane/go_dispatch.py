@@ -24,9 +24,10 @@ from .methodology_dispatch import (
     verify_workflow_canary_binding,
 )
 from .project_contract import slugify_project_id
-from .model_providers import resolve_model_provider
+from .model_providers import ModelProvider, resolve_model_provider
 from .opencode_events import parse_opencode_run_jsonl
 from .orchestrator import Orchestrator
+from .pi_executor_adapter import create_pi_environment_executor_adapter
 from .rdgoal import rdgoal
 from .team_runtime import TeamRuntime
 from .worker import CommandWorker, WorkerResult
@@ -75,6 +76,7 @@ class GoAgentDispatch:
     packet_dir: str
     task_spec_path: str
     worker_command: list[str]
+    command_origin: str = ""
     executor_adapter_id: str = ""
     executor_protocol: str = ""
     status: str = "queued"
@@ -116,6 +118,29 @@ class GoDispatchResult:
     toolchain: dict[str, str] | None = None
     workflow_profile: dict[str, Any] | None = None
     workflow_canary: dict[str, Any] | None = None
+
+
+def resolve_go_model_selection(
+    model_provider: str | None,
+    model: str | None,
+) -> tuple[ModelProvider, str | None]:
+    """Resolve one truthful provider/model pair before creating runnable state."""
+
+    provider = resolve_model_provider(model_provider)
+    explicit_model = (model or "").strip()
+    if provider.provider_id == "local-ollama":
+        if not explicit_model:
+            raise ValueError(
+                "model provider 'local-ollama' requires an explicit "
+                "--model ollama/<model>; refusing fallback to the paid default model"
+            )
+        provider_id, separator, model_id = explicit_model.partition("/")
+        if provider_id != "ollama" or not separator or not model_id.strip():
+            raise ValueError(
+                "model provider 'local-ollama' must use the OpenCode model form "
+                "ollama/<model>; refusing a mismatched provider route"
+            )
+    return provider, explicit_model or provider.model or None
 
 
 @dataclass(frozen=True)
@@ -256,18 +281,26 @@ def run_go_dispatch(
             raise ValueError("agents must be <= 16")
         _default_executor_registry().resolve(driver)
 
-        # Resolve the model provider before any packet is created so an unknown id
-        # fails with no side effects (no fake green, no partial dispatch).
-        provider = resolve_model_provider(model_provider)
-        if execute and provider.live_backend == "deferred":
-            raise ValueError(
-                f"model provider {provider.provider_id!r} has a deferred live backend; "
-                "preparing packets is allowed, but --execute is refused so the 'free' "
-                "profile cannot silently run the paid default worker. Use a ready "
-                "provider (opencode-api or local-ollama) to execute."
-            )
-        effective_model = model if model else (provider.model or None)
-        provider_id = provider.provider_id
+        # Only the command adapter owns the legacy command/model configuration.
+        # Protocol adapters resolve their own runtime without constructing an
+        # unrelated provider command.
+        if driver == "command":
+            if worker_command:
+                effective_model = None
+                provider_id = ""
+            else:
+                provider, effective_model = resolve_go_model_selection(model_provider, model)
+                if execute and provider.live_backend == "deferred":
+                    raise ValueError(
+                        f"model provider {provider.provider_id!r} has a deferred live backend; "
+                        "preparing packets is allowed, but --execute is refused so the 'free' "
+                        "profile cannot silently run the paid default worker. Use a ready "
+                        "provider (opencode-api or local-ollama) to execute."
+                    )
+                provider_id = provider.provider_id
+        else:
+            effective_model = None
+            provider_id = ""
 
         runtime_root = Path(runtime_dir).resolve() if runtime_dir else default_runtime_dir()
         project_root = Path(project_path).resolve()
@@ -309,13 +342,17 @@ def run_go_dispatch(
         packet = dispatch_result.dispatch.packet
         if packet is None:
             continue
-        command = [] if workflow_canary else build_go_worker_command(
-            worker_command=worker_command,
-            worker=worker,
-            model=effective_model,
-            opencode_agent=opencode_agent,
-            shard_number=shard_number,
-            shard_count=agents,
+        command = (
+            []
+            if workflow_canary or driver != "command"
+            else build_go_worker_command(
+                worker_command=worker_command,
+                worker=worker,
+                model=effective_model,
+                opencode_agent=opencode_agent,
+                shard_number=shard_number,
+                shard_count=agents,
+            )
         )
         dispatches.append(GoAgentDispatch(
             agent_id=f"coding-agent-{shard_number}",
@@ -326,6 +363,13 @@ def run_go_dispatch(
             packet_dir=packet.packet_dir,
             task_spec_path=str(Path(packet.packet_dir) / "TASKSPEC.json"),
             worker_command=command,
+            command_origin=(
+                "custom"
+                if driver == "command" and worker_command
+                else "builtin"
+                if driver == "command" and not workflow_canary
+                else ""
+            ),
             methodology=methodology,
             model_provider=provider_id,
             isolated=isolate,
@@ -470,6 +514,7 @@ def execute_go_run(
     *,
     timeout_seconds: int = 900,
     rerun_passed: bool = False,
+    cancel_marker: str | Path | None = None,
 ) -> GoDispatchResult:
     """Execute a prepared go-run without creating new rdgoal packets."""
 
@@ -477,6 +522,7 @@ def execute_go_run(
     result = load_go_run_result(runtime_root, run_id)
     _default_executor_registry().resolve(result.driver or "command")
     result.runtime_dir = str(runtime_root)
+    _validate_go_run_provider_for_execution(result)
     if result.workflow_canary is not None:
         _execute_workflow_canary(result)
     else:
@@ -490,11 +536,93 @@ def execute_go_run(
                 result,
                 timeout_seconds=timeout_seconds,
                 agents=runnable_agents,
+                cancel_marker=cancel_marker,
             )
     result.execute = True
     result.status = _result_status(result)
     result.metadata_path = str(_write_metadata(result))
     return result
+
+
+def _validate_go_run_provider_for_execution(result: GoDispatchResult) -> None:
+    if (result.driver or "command") != "command":
+        return
+    provider_id = str(result.model_provider or "").strip()
+    agent_provider_ids = [
+        str(agent.model_provider or "").strip()
+        for agent in result.agents
+    ]
+    command_origins = [
+        str(agent.command_origin or "").strip()
+        for agent in result.agents
+    ]
+    invalid_origins = [
+        origin
+        for origin in command_origins
+        if origin not in {"", "builtin", "custom"}
+    ]
+    if invalid_origins:
+        raise ValueError(f"prepared command run has unknown command_origin: {invalid_origins[0]!r}")
+    if "custom" in command_origins:
+        if any(origin != "custom" for origin in command_origins):
+            raise ValueError("prepared command run mixes custom and built-in command origins")
+        if provider_id or any(agent_provider_ids):
+            raise ValueError("prepared custom command run must not claim a model_provider")
+        return
+    builtin_agents = [
+        agent
+        for agent, origin in zip(result.agents, command_origins)
+        if origin == "builtin"
+        or (not origin and _is_builtin_opencode_command(agent.worker_command))
+    ]
+    has_provider_metadata = bool(provider_id or any(agent_provider_ids))
+    if not has_provider_metadata:
+        if builtin_agents:
+            raise ValueError(
+                "prepared built-in OpenCode run is missing model_provider; "
+                "re-prepare the run before execution"
+            )
+        return
+    if not provider_id:
+        raise ValueError(
+            "prepared built-in OpenCode run is missing model_provider; "
+            "refusing an unbound provider route"
+        )
+    provider = resolve_model_provider(provider_id)
+    for agent_provider_id in agent_provider_ids:
+        if agent_provider_id != provider.provider_id:
+            raise ValueError(
+                "prepared built-in OpenCode run has inconsistent model_provider "
+                f"metadata: run={provider.provider_id!r}, "
+                f"agent={agent_provider_id or '<missing>'!r}"
+            )
+    if provider.live_backend == "deferred":
+        raise ValueError(
+            f"model provider {provider.provider_id!r} has a deferred live backend; "
+            "the prepared run cannot be resumed until that backend exists"
+        )
+    if provider.provider_id != "local-ollama":
+        return
+    for agent in result.agents:
+        resolve_go_model_selection(provider.provider_id, _worker_command_model(agent.worker_command))
+
+
+def _is_builtin_opencode_command(command: list[str]) -> bool:
+    if not command:
+        return False
+    executable = Path(str(command[0])).name.casefold()
+    return executable in {"opencode", "opencode.exe", "opencode.cmd", "opencode.bat"}
+
+
+def _worker_command_model(command: list[str]) -> str | None:
+    for flag in ("-m", "--model"):
+        try:
+            index = command.index(flag)
+        except ValueError:
+            continue
+        if index + 1 < len(command):
+            return command[index + 1]
+    return None
 
 
 def load_go_run_result(runtime_dir: str | Path, run_id: str = "latest") -> GoDispatchResult:
@@ -557,7 +685,11 @@ def render_go_dispatch_text(result: GoDispatchResult) -> str:
             f"  targets: {', '.join(agent.targets) if agent.targets else '(project scope)'}",
             "  run    : canary-only (no worker/ACP)"
             if result.workflow_canary
-            else f"  run    : {_worker_command_preview(result.runtime_dir, agent)}",
+            else (
+                f"  run    : executor driver={result.driver}"
+                if result.driver != "command"
+                else f"  run    : {_worker_command_preview(result.runtime_dir, agent)}"
+            ),
         ])
         if agent.report_path:
             lines.append(f"  report : {agent.report_path}")
@@ -723,6 +855,7 @@ def _execute_parallel(
     timeout_seconds: int,
     agents: list[GoAgentDispatch] | None = None,
     acp_command: list[str] | None = None,
+    cancel_marker: str | Path | None = None,
 ) -> None:
     agents_to_run = agents if agents is not None else result.agents
     if not agents_to_run:
@@ -742,7 +875,8 @@ def _execute_parallel(
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = [
             pool.submit(_run_group, result.runtime_dir, result.project_root, result.go_run_id,
-                        group, timeout_seconds, team, adapter, acp_command, participant_ids)
+                        group, timeout_seconds, team, adapter, acp_command, participant_ids,
+                        cancel_marker)
             for group in groups
         ]
         for future in as_completed(futures):
@@ -753,21 +887,26 @@ def _run_group(runtime_dir: str, project_root: str, go_run_id: str,
                group: list[GoAgentDispatch], timeout_seconds: int,
                team: TeamRuntime | None, adapter: ExecutorAdapter,
                acp_command: list[str] | None = None,
-               participant_ids: set[str] | None = None) -> None:
+               participant_ids: set[str] | None = None,
+               cancel_marker: str | Path | None = None) -> None:
     for agent in group:
         _run_agent_in_place(runtime_dir, project_root, go_run_id, agent, timeout_seconds,
-                            team, adapter, acp_command, participant_ids)
+                            team, adapter, acp_command, participant_ids, cancel_marker)
 
 
 def _run_agent_in_place(runtime_dir: str, project_root: str, go_run_id: str,
                         agent: GoAgentDispatch, timeout_seconds: int,
                         team: TeamRuntime | None, adapter: ExecutorAdapter,
                         acp_command: list[str] | None = None,
-                        participant_ids: set[str] | None = None) -> None:
+                        participant_ids: set[str] | None = None,
+                        cancel_marker: str | Path | None = None) -> None:
     try:
         agent.executor_adapter_id = adapter.adapter_id
         agent.executor_protocol = adapter.protocol
         cwd, env_overrides = _resolve_isolation(runtime_dir, project_root, go_run_id, agent)
+        if cancel_marker is not None:
+            env_overrides = dict(env_overrides or {})
+            env_overrides["DEVFRAME_CANCEL_MARKER"] = str(Path(cancel_marker).resolve())
         _ensure_agent_context_artifacts(runtime_dir, agent)
         if team is not None:
             context_refs = _agent_context_refs(agent)
@@ -781,7 +920,7 @@ def _run_agent_in_place(runtime_dir: str, project_root: str, go_run_id: str,
         worker_result = adapter.execute(
             ExecutorInvocation(
                 runtime_dir=runtime_dir,
-                project_root=project_root,
+                project_root=cwd or project_root,
                 go_run_id=go_run_id,
                 agent=agent,
                 timeout_seconds=timeout_seconds,
@@ -791,7 +930,12 @@ def _run_agent_in_place(runtime_dir: str, project_root: str, go_run_id: str,
                 team=team,
             )
         )
-        agent.status = "completed"
+        if worker_result.summary.status in {"cancelled", "canceled"}:
+            agent.status = "cancelled"
+        elif worker_result.summary.status in SUCCESS_WORKER_STATUSES:
+            agent.status = "completed"
+        else:
+            agent.status = "failed"
         agent.worker_status = worker_result.summary.status
         agent.report_path = worker_result.report_path
         agent.changed_files = worker_result.summary.changed_files
@@ -968,6 +1112,7 @@ def _default_executor_registry() -> ExecutorAdapterRegistry:
             protocol="acp-stdio-v1",
             _execute=_execute_acp_adapter,
         ),
+        create_pi_environment_executor_adapter(),
     ))
 
 
@@ -1112,6 +1257,8 @@ def _result_status(result: GoDispatchResult) -> str:
     if not result.agents:
         return "queued"
     worker_statuses = [agent.worker_status for agent in result.agents]
+    if any(status in {"cancelled", "canceled"} for status in worker_statuses):
+        return "cancelled"
     if all(status in SUCCESS_WORKER_STATUSES for status in worker_statuses):
         return "passed"
     if any(status in {"failed", "fail"} for status in worker_statuses):
@@ -1197,6 +1344,7 @@ def _go_result_from_metadata(data: dict[str, Any], *, fallback_runtime_dir: Path
             packet_dir=str(agent.get("packet_dir", "")),
             task_spec_path=str(agent.get("task_spec_path", "")),
             worker_command=_string_list(agent.get("worker_command", [])),
+            command_origin=str(agent.get("command_origin", "")),
             executor_adapter_id=str(agent.get("executor_adapter_id", "")),
             executor_protocol=str(agent.get("executor_protocol", "")),
             status=str(agent.get("status", "queued") or "queued"),

@@ -1,7 +1,7 @@
 """Total-control multi-project orchestrator for rdgoal."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +9,7 @@ from .agent_adapter import SadpAdapter, SubAgentObjective
 from .backup_guard import BackupGuard, GuardResult
 from .decision_engine import Decision, DecisionEngine, OperationRequest
 from .dispatch_packet import DispatchPacket, DispatchPacketStore, ExecutionReportSummary
+from .graph_context_packet_integration import canonicalize_graph_context_selection
 from .project_contract import ProjectContract, load_contract
 from .runtime_store import JournalEvent, RuntimeStore
 from .state_machine import validate_transition
@@ -91,9 +92,15 @@ class Orchestrator:
     def dispatch(self, *, project_id: str, requirement: str, operation: str,
                  targets: list[str] | None = None, summary: str = "",
                  work_type: str | None = None,
-                 workflow_profile: dict[str, Any] | None = None) -> DispatchResult:
+                 workflow_profile: dict[str, Any] | None = None,
+                 graph_context_selection: dict[str, Any] | None = None) -> DispatchResult:
         targets = targets or []
         project = self.projects[project_id]
+        canonical_selection = None
+        if graph_context_selection is not None:
+            canonical_selection = canonicalize_graph_context_selection(
+                graph_context_selection, project_id=project.contract.project_id
+            )
         request = OperationRequest(operation=operation, targets=targets, summary=summary)
         decision = self.engine.decide(project.contract, request)
         guard = BackupGuard(
@@ -118,6 +125,7 @@ class Orchestrator:
             dispatch_ready=guard.allowed and objective.dispatch_ready,
             work_type=work_type,
             workflow_profile=workflow_profile,
+            graph_context_selection=canonical_selection,
         )
         result = DispatchResult(
             project_id=project_id,

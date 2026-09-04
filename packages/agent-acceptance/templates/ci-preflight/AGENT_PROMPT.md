@@ -190,6 +190,7 @@ exit 0
 # Governance expected files — add your project's governance-critical file patterns.
 # Glob patterns resolved via Get-ChildItem -Recurse.
 rules/*.md
+PLAN.md
 AGENTS.md
 .ai/policy.yaml
 hooks/*.ps1
@@ -198,7 +199,7 @@ hooks/*.json
 scripts/**/*.ps1
 scripts/**/*.psm1
 governance/*.txt
-docs/**/*.md
+.devframe/contracts/*.md
 ```
 
 #### governance/manifest-ignore.txt

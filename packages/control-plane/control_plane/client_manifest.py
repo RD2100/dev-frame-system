@@ -188,7 +188,7 @@ def build_visual_client_manifest() -> dict[str, Any]:
             "contract": "t3_approval_response",
             "object_types": ["Action", "Run", "DevFrameSession"],
             "mutates": True,
-            "description": "Loopback-only approval callback used by T3 approval.requested activities to execute controlled actions.",
+            "description": "Loopback-only native approval callback. For ctp proposals the client sends only requestId, threadId, and approve/reject; DevFrame reloads the durable proposal and issues and consumes any execution capability server-side without returning its token.",
         },
         {
             "id": "t3-writeback-propose",
@@ -281,13 +281,22 @@ def build_visual_client_manifest() -> dict[str, Any]:
             "description": "Loopback read of global preferences and project memory for the visual editor (two distinct layers; project memory requires a project id).",
         },
         {
+            "id": "t3-cluster-run-proposal",
+            "path": "/api/t3/cluster-run-proposal",
+            "method": "POST",
+            "contract": "t3_cluster_run_proposal",
+            "object_types": ["Run", "Project"],
+            "mutates": True,
+            "description": "Auxiliary M13A proposal endpoint for a project-bound cluster run. It is not called by the RD-Code conversation bridge and does not start work.",
+        },
+        {
             "id": "t3-cluster-run",
             "path": "/api/t3/cluster-run",
             "method": "POST",
             "contract": "t3_cluster_run",
             "object_types": ["Agent", "Run", "Project"],
             "mutates": True,
-            "description": "Loopback-only cluster run start for a &-mentioned target. Authorized by the human's inline confirm in the conversation; starts a project-coordinator run. No dashboard approval is involved.",
+            "description": "Auxiliary M13A cluster-run start endpoint. It consumes an exact-bound single-use server confirmation and is not called directly by the RD-Code conversation bridge.",
         },
         {
             "id": "t3-conversation-intake",
@@ -296,7 +305,7 @@ def build_visual_client_manifest() -> dict[str, Any]:
             "contract": "t3_conversation_intake",
             "object_types": ["DevFrameSession"],
             "mutates": True,
-            "description": "Loopback-only durable human message intake for the global coordinator or a project-bound goal conversation.",
+            "description": "Loopback-only durable idempotent human-message intake with one exact canonical global-project binding. Ordinary turns do not execute; development turns may create a secret-free semantic proposal but never start work.",
         },
         {
             "id": "t3-cluster-roster-save",
@@ -344,6 +353,15 @@ def build_visual_client_manifest() -> dict[str, Any]:
             "description": "Loopback-only save of global preferences or project memory at the targeted layer.",
         },
         {
+            "id": "t3-cluster-run-cancel",
+            "path": "/api/t3/cluster-run-cancel",
+            "method": "POST",
+            "contract": "t3_cluster_run_cancel",
+            "object_types": ["Run"],
+            "mutates": True,
+            "description": "Loopback-only durable cancellation request for an active cluster run. It returns only cancelRequested, runId, and status and never rolls project changes back.",
+        },
+        {
             "id": "t3-cluster-run-delete",
             "path": "/api/t3/cluster-run-delete",
             "method": "POST",
@@ -363,7 +381,7 @@ def build_visual_client_manifest() -> dict[str, Any]:
         },
     ]
     return {
-        "version": 1,
+        "version": 2,
         "name": "devframe-local-agent-client-adapter",
         "reuse": {
             "client": "t3code",
@@ -473,7 +491,15 @@ def build_visual_client_manifest() -> dict[str, Any]:
                 {
                     "method": "POST",
                     "path": "/api/t3/approval-response",
-                    "requires": ["loopback-client", "loopback-origin", "approval.requested", "approve-or-reject"],
+                    "requires": [
+                        "loopback-client",
+                        "loopback-origin",
+                        "approval.requested",
+                        "request-id-and-thread-id",
+                        "approve-or-reject",
+                        "ctp-server-reloads-durable-proposal",
+                        "server-only-execution-capability",
+                    ],
                 },
                 {
                     "method": "POST",
@@ -482,13 +508,44 @@ def build_visual_client_manifest() -> dict[str, Any]:
                 },
                 {
                     "method": "POST",
+                    "path": "/api/t3/cluster-run-proposal",
+                    "requires": [
+                        "loopback-client",
+                        "loopback-origin",
+                        "canonical-environment-id",
+                        "registered-project-root",
+                        "valid-cluster-target",
+                        "not-rd-code-conversation-bridge",
+                    ],
+                },
+                {
+                    "method": "POST",
                     "path": "/api/t3/cluster-run",
-                    "requires": ["loopback-client", "loopback-origin", "valid-cluster-target", "human-inline-confirm-in-conversation"],
+                    "requires": [
+                        "loopback-client",
+                        "loopback-origin",
+                        "server-issued-confirmation",
+                        "exact-binding",
+                        "unexpired",
+                        "single-use",
+                        "decision=execute",
+                        "not-rd-code-conversation-bridge",
+                    ],
                 },
                 {
                     "method": "POST",
                     "path": "/api/t3/conversation-intake",
-                    "requires": ["loopback-client", "loopback-origin", "canonical-environment-id", "known-thread", "project-binding"],
+                    "requires": [
+                        "loopback-client",
+                        "loopback-origin",
+                        "canonical-environment-id",
+                        "known-thread",
+                        "project-binding",
+                        "single-canonical-global-project",
+                        "stable-client-request-id",
+                        "exact-replay-or-conflict",
+                        "development-proposal-does-not-execute",
+                    ],
                 },
                 {
                     "method": "POST",
@@ -514,6 +571,17 @@ def build_visual_client_manifest() -> dict[str, Any]:
                     "method": "POST",
                     "path": "/api/t3/memory",
                     "requires": ["loopback-client", "loopback-origin", "validated-memory"],
+                },
+                {
+                    "method": "POST",
+                    "path": "/api/t3/cluster-run-cancel",
+                    "requires": [
+                        "loopback-client",
+                        "loopback-origin",
+                        "existing-active-run",
+                        "canonical-g-run-id",
+                        "minimal-public-response",
+                    ],
                 },
                 {
                     "method": "POST",
@@ -549,9 +617,9 @@ def build_visual_client_manifest() -> dict[str, Any]:
             for entry in METHODOLOGY_DISPATCH.values()
         ],
         "governance": {
-            "reconReceipt": "docs/status/recon-receipt-local-agent-client-mainline.md",
+            "reconReceipt": "PLAN.md",
             "rkrRulePath": "rules/recon.md",
-            "reuseAssessment": "docs/status/t3code-client-mainline-reuse-assessment.md",
+            "reuseAssessment": "PLAN.md",
             "primaryClientDecision": "devframe code: primary product loop; T3Code: secondary native-client shell; DevFrame owns governance",
             "workerDecision": "OpenCode: local coding-agent worker runtime",
             "webAiAdapterDecision": "CodexPro/DevSpace: Web AI MCP bridge patterns; ZIP/report is fallback only",

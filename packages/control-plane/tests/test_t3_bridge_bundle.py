@@ -46,7 +46,7 @@ def test_t3_bridge_bundle_matches_public_schema(tmp_path):
     assert bundle["target"]["license"] == "MIT"
     assert bundle["environment"]["VITE_DEVFRAME_REALTIME_MODE"] == "polling"
     assert bundle["environment"]["VITE_HOSTED_APP_CHANNEL"] == "nightly"
-    assert "VITE_DEVFRAME_T3_SHELL_URL" not in bundle["environment"]
+    assert bundle["environment"]["VITE_DEVFRAME_T3_SHELL_URL"] == plan["endpoints"]["t3Shell"]
     assert bundle["launch"]["t3DesktopCommand"] == "pnpm dev:desktop"
     assert bundle["launch"]["t3DesktopProdCommand"].endswith("devframe.t3desktop.prod.mjs")
     assert bundle["launch"]["t3WebCommand"].endswith("devframe.t3web.mjs")
@@ -130,14 +130,22 @@ def test_write_t3_bridge_bundle_creates_installable_files(tmp_path):
     env_source = (tmp_path / "bundle" / ".env.devframe.local").read_text(encoding="utf-8")
     assert "VITE_DEVFRAME_REALTIME_MODE=polling" in env_source
     assert "VITE_HOSTED_APP_CHANNEL=nightly" in env_source
+    assert (
+        f'VITE_DEVFRAME_T3_SHELL_URL={bundle["environment"]["VITE_DEVFRAME_T3_SHELL_URL"]}'
+        in env_source
+    )
     launcher_source = (tmp_path / "bundle" / "devframe.t3web.mjs").read_text(encoding="utf-8")
     assert '"--filter", "@t3tools/web", "dev"' in launcher_source
-    assert '"VITE_DEVFRAME_T3_SHELL_URL":' not in launcher_source
+    assert '"VITE_DEVFRAME_T3_SHELL_URL":' in launcher_source
+    assert '"VITE_DEVFRAME_CLIENT_PLAN_URL":' in launcher_source
+    assert '"VITE_DEVFRAME_CLIENT_MANIFEST_URL":' in launcher_source
     assert '"VITE_HOSTED_APP_CHANNEL": "nightly"' in launcher_source
     assert "VITE_HTTP_URL" not in launcher_source
     desktop_launcher_source = (tmp_path / "bundle" / "devframe.t3desktop.mjs").read_text(encoding="utf-8")
     assert '"dev:desktop"' in desktop_launcher_source
-    assert '"VITE_DEVFRAME_T3_SHELL_URL":' not in desktop_launcher_source
+    assert '"VITE_DEVFRAME_T3_SHELL_URL":' in desktop_launcher_source
+    assert '"VITE_DEVFRAME_CLIENT_PLAN_URL":' in desktop_launcher_source
+    assert '"VITE_DEVFRAME_CLIENT_MANIFEST_URL":' in desktop_launcher_source
     assert '"VITE_HOSTED_APP_CHANNEL": "nightly"' in desktop_launcher_source
     assert "VITE_HTTP_URL" not in desktop_launcher_source
     assert "devframe.t3desktop.prod.mjs" in written_paths
@@ -146,9 +154,11 @@ def test_write_t3_bridge_bundle_creates_installable_files(tmp_path):
     assert '"start:desktop"' in prod_launcher_source
     assert '"dev:desktop"' not in prod_launcher_source
     # The hosted-app channel must NOT be baked into the desktop production build;
-    # it would force isHostedStaticApp() into the read-only onboarding surface.
+    # it would force isHostedStaticApp() into the onboarding surface.
     assert "VITE_HOSTED_APP_CHANNEL" not in prod_launcher_source
+    assert "VITE_DEVFRAME_T3_SHELL_URL" in prod_launcher_source
     assert "VITE_DEVFRAME_CLIENT_PLAN_URL" in prod_launcher_source
+    assert "VITE_DEVFRAME_CLIENT_MANIFEST_URL" in prod_launcher_source
     assert "T3CODE_DESKTOP_REMOTE_DEBUGGING_PORT" in desktop_launcher_source
     assert "writeFileSync" not in desktop_launcher_source
     assert "DesktopWindow.ts" not in desktop_launcher_source
@@ -247,7 +257,7 @@ def test_dashboard_serves_t3_bridge_bundle_endpoint(tmp_path):
         assert bundle["name"] == "devframe-t3code-local-bridge"
         assert bundle["environment"]["VITE_DEVFRAME_REALTIME_MODE"] == "polling"
         assert bundle["environment"]["VITE_HOSTED_APP_CHANNEL"] == "nightly"
-        assert "VITE_DEVFRAME_T3_SHELL_URL" not in bundle["environment"]
+        assert bundle["environment"]["VITE_DEVFRAME_T3_SHELL_URL"].endswith("/t3-shell.json")
         assert bundle["integration"]["strategy"] == "reuse-t3-client-runtime-shell-and-thread-detail"
         assert bundle["acceptance"]["t3Desktop"].endswith("devframe.t3desktop.mjs")
         assert bundle["acceptance"]["t3Web"].endswith("devframe.t3web.mjs")
@@ -362,6 +372,15 @@ def test_bridge_source_includes_fetch_envelope_function():
     assert "export async function fetchDevFrameCoordinatorShellEntry" in source
 
 
+def test_bridge_source_requires_client_plan_or_manifest_for_control_plane_base():
+    source = render_bridge_source()
+
+    assert "const source = clientPlanUrl || manifestUrl;" in source
+    assert "deriveControlPlaneBaseUrl(clientPlanUrl, manifestUrl)" in source
+    assert "shellUrl || clientPlanUrl" not in source
+    assert "...(shellUrl ? { shellUrl } : {})" in source
+
+
 def test_bridge_source_envelope_includes_devframe_team():
     source = render_bridge_source()
 
@@ -398,6 +417,10 @@ def test_bridge_readme_includes_team_contract_docs():
     assert "startDevFrameCoordinatorGoal()" in readme
     assert "sortDevFrameThreadsForDisplay()" in readme
     assert "fetchDevFrameCoordinatorShellEntry()" in readme
+    assert bundle["environment"]["VITE_DEVFRAME_T3_SHELL_URL"] in readme
+    assert "controlled conversation" in readme
+    assert "off by default" not in readme
+    assert "legacy read-only" not in readme
 
 
 def test_catalog_source_disables_websocket_connection():
@@ -461,7 +484,9 @@ def test_environment_enables_hosted_static_mode_and_excludes_native_backend_urls
     assert "VITE_HTTP_URL" not in bundle["environment"]
     assert "VITE_WS_URL" not in bundle["environment"]
     assert bundle["environment"]["VITE_DEVFRAME_REALTIME_MODE"] == "polling"
-    assert "VITE_DEVFRAME_T3_SHELL_URL" not in bundle["environment"]
+    assert bundle["environment"]["VITE_DEVFRAME_T3_SHELL_URL"].endswith("/t3-shell.json")
+    assert bundle["environment"]["VITE_DEVFRAME_CLIENT_PLAN_URL"].endswith("/client-plan.json")
+    assert bundle["environment"]["VITE_DEVFRAME_CLIENT_MANIFEST_URL"].endswith("/client-manifest.json")
 
 
 def test_environment_excludes_backend_urls():
@@ -521,7 +546,9 @@ def test_thread_state_guards_every_non_approval_mutation_in_bridge_mode():
 
     assert "devFrameReadOnlyThreadEnvironment" in source
     assert ": { ...nativeThreadEnvironment" not in source
-    assert ": devFrameReadOnlyThreadEnvironment;" in source
+    assert "devFrameReadOnlyThreadEnvironment" in source
+    assert 'resolveDevFrameThreadBridgeMode' in source
+    assert 'createDevFrameThreadEnvironment' in source
     guarded_commands = {
         "create",
         "delete",
@@ -534,27 +561,83 @@ def test_thread_state_guards_every_non_approval_mutation_in_bridge_mode():
         "updateMetadata",
         "setRuntimeMode",
         "setInteractionMode",
-        "startTurn",
-        "interruptTurn",
         "respondToUserInput",
         "revertCheckpoint",
         "stopSession",
     }
     for command in guarded_commands:
         assert f'{command}: devFrameReadOnlyCommand("{command}")' in source
-    assert source.index("const devFrameRespondToApproval") < source.index("export const threadEnvironment")
-    assert "api/t3/approval-response" in source
+    assert source.index("function devFrameRespondToApprovalCommand") < source.index("export const threadEnvironment")
+    assert "respondToDevFrameApproval(config" in source
     assert "readDevFrameShellBridgeConfig" in source
+    assert "readDevFrameControlPlaneConfig" in source
     assert "label: " in source and "devframe:thread:respond-to-approval" in source
-    assert "run: (_registry" in source or "run(_registry" in source
+    assert (
+        "run: (_registry" in source
+        or "run: async (_registry" in source
+        or "run(_registry" in source
+    )
     assert "AsyncResult.success" in source
-    assert "value.input.requestId" in source
-    assert "value.input.threadId" in source
-    assert "value.input.decision" in source
+    assert "input.requestId" in source
+    assert "input.threadId" in source
+    assert "input.decision" in source
     assert 'threadId: ""' not in source
     assert "execute:" not in source
-    assert "Effect.tryPromise" not in source.split("const devFrameRespondToApproval")[1]
+    assert "Effect.tryPromise" not in source.split("function devFrameRespondToApprovalCommand")[1]
     assert "approved" not in source or '"approve"' in source
+
+
+def test_thread_state_routes_bounded_conversation_start_and_interrupt_commands():
+    from control_plane.t3_bridge_bundle import render_thread_state_source
+
+    source = render_thread_state_source()
+
+    assert "startTurn: devFrameStartTurnCommand" in source
+    assert "interruptTurn: devFrameInterruptTurnCommand" in source
+    assert "startDevFrameConversationTurn(config" in source
+    assert "cancelDevFrameClusterRun(config" in source
+    assert "messageId: message.messageId" in source
+    assert "message: message.text" in source
+    assert "projectId" in source
+    assert "resolveDevFrameConversationProjectId" in source
+    assert "cancelDevFrameClusterRun(config" in source
+    assert "confirmationToken" not in source
+    assert "stableRunId" not in source
+    assert "sourceProposalId" not in source
+    assert "sourceTurnId" not in source
+
+
+def test_thread_state_requires_one_exact_canonical_project_before_conversation_write():
+    from control_plane.t3_bridge_bundle import render_thread_state_source
+
+    source = render_thread_state_source()
+
+    assert "function resolveDevFrameConversationProjectId(" in source
+    assert "snapshot.projects.length !== 1" in source
+    assert "isUnknownRecord(snapshot.projects[0])" in source
+    assert "projectId !== projectId.trim()" in source
+    assert "thread?.projectId === projectId" in source
+    assert (
+        "const projectId = resolveDevFrameConversationProjectId(snapshot, threadId);"
+        in source
+    )
+
+
+def test_thread_state_fails_closed_on_session_approval_and_malformed_responses():
+    from control_plane.t3_bridge_bundle import render_thread_state_source
+
+    source = render_thread_state_source()
+    approval_source = source.split("function devFrameRespondToApprovalCommand", 1)[1]
+
+    assert 'input.decision === "accept"' in approval_source
+    assert 'input.decision === "decline" || input.decision === "cancel"' in approval_source
+    assert "respondToDevFrameApproval(config" in approval_source
+    assert "isCanonicalDevFrameProposalId(input.requestId)" in approval_source
+    assert "AsyncResult.failure" in approval_source
+    assert "console.warn" not in approval_source
+    assert "startDevFrameConversationTurn" in source
+    assert "cancelDevFrameClusterRun" in source
+    assert "isCanonicalDevFrameRunId" in source
 
 
 def test_shell_state_uses_swr_with_revalidate_on_mount_and_refresh():
@@ -582,4 +665,4 @@ def test_thread_state_uses_swr_with_revalidate_on_mount_and_refresh():
     assert "revalidateOnMount: true" in source
     assert "Atom.withRefresh(" in source
     assert "loadDevFrameThreadState" in source
-    assert "Atom.make(loadDevFrameThreadState(ref.threadId))" in source
+    assert "Atom.make(loadDevFrameThreadState(ref.environmentId, ref.threadId))" in source

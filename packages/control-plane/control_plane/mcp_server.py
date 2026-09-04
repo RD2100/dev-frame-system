@@ -12,6 +12,7 @@ Targets the same protocol DevFrame's own ``mcp_live_probe`` client speaks
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -24,6 +25,8 @@ from urllib.request import url2pathname
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_INFO = {"name": "devframe-mcp", "version": "0.1"}
 MCP_SANDBOX_STATE_META_CAPABILITY = "codex/sandbox-state-meta"
+CODEGRAPH_MAX_NODES = 128
+_CODEGRAPH_PROJECT_ID_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,127}")
 
 # JSON-RPC error codes
 _METHOD_NOT_FOUND = -32601
@@ -62,6 +65,30 @@ TOOLS: list[dict[str, Any]] = [
         "name": "read_project_shell",
         "description": "Read-only DevFrame project/thread shell snapshot (governed read model).",
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+    {
+        "name": "query_codegraph_context",
+        "description": (
+            "Read-only CodeGraph context for the current Codex project. "
+            "The server checks index freshness first and returns a bounded, "
+            "non-authoritative projection."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "projectId": {"type": "string", "description": "Current DevFrame project id"},
+                "task": {"type": "string", "description": "Bounded context question"},
+                "maxNodes": {"type": "integer", "minimum": 1, "maximum": CODEGRAPH_MAX_NODES},
+            },
+            "required": ["projectId", "task"],
+            "additionalProperties": False,
+        },
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
     },
     {
         "name": "propose_writeback",
@@ -112,7 +139,7 @@ TOOLS: list[dict[str, Any]] = [
         "name": "recall_project_plan",
         "description": (
             "Recall the bounded project working plan only when it still matches "
-            "the authoritative HANDOFF.md bytes."
+            "the authoritative PLAN.md bytes."
         ),
         "inputSchema": {
             "type": "object",
@@ -378,6 +405,89 @@ def _sandbox_cwd_from_request_meta(request_meta: Any) -> str:
     return str(candidate)
 
 
+def _parse_codegraph_arguments(arguments: dict[str, Any]) -> tuple[str, str, int]:
+    if set(arguments) - {"projectId", "task", "maxNodes"}:
+        raise ValueError("unsupported CodeGraph arguments")
+    project_id = arguments.get("projectId")
+    task = arguments.get("task")
+    max_nodes = arguments.get("maxNodes", 50)
+    if (
+        not isinstance(project_id, str)
+        or not _CODEGRAPH_PROJECT_ID_RE.fullmatch(project_id)
+        or not isinstance(task, str)
+        or not task.strip()
+        or isinstance(max_nodes, bool)
+        or not isinstance(max_nodes, int)
+        or not 1 <= max_nodes <= CODEGRAPH_MAX_NODES
+    ):
+        raise ValueError("invalid CodeGraph arguments")
+    return project_id, task, max_nodes
+
+
+def _resolve_codegraph_project(
+    project_id: str, *, runtime_dir, request_meta: Any
+) -> str | None:
+    from .obsidian_memory import ObsidianMemoryError, resolve_session_project
+
+    try:
+        sandbox_cwd = _sandbox_cwd_from_request_meta(request_meta)
+        project_context = resolve_session_project(cwd=sandbox_cwd, runtime_dir=runtime_dir)
+        if project_context.get("projectId") != project_id:
+            raise ObsidianMemoryError("project scope mismatch")
+        return str(project_context["projectRoot"])
+    except (ObsidianMemoryError, ValueError, KeyError, TypeError):
+        return None
+
+
+def _codegraph_context_tool(
+    arguments: dict[str, Any],
+    *,
+    runtime_dir,
+    req_id: Any,
+    request_meta: Any,
+) -> dict[str, Any]:
+    from .codegraph_fresh_context import query_codegraph_context_with_status
+
+    try:
+        project_id, task, max_nodes = _parse_codegraph_arguments(arguments)
+    except ValueError:
+        return _tool_text(req_id, {"error": "invalid_codegraph_arguments"}, is_error=True)
+    project_root = _resolve_codegraph_project(
+        project_id, runtime_dir=runtime_dir, request_meta=request_meta
+    )
+    if project_root is None:
+        return _tool_text(
+            req_id,
+            {
+                "error": "project_scope_rejected",
+                "detail": "CodeGraph access requires the current Codex project scope.",
+            },
+            is_error=True,
+        )
+    try:
+        binding_digest = hashlib.sha256(project_id.encode("utf-8")).hexdigest()[:16]
+        projection = query_codegraph_context_with_status(
+            project_root=project_root,
+            task=task,
+            graph_projection_id=f"graph-codegraph-mcp-{binding_digest}",
+            project_id=project_id,
+            resource_id=f"codegraph-resource-{binding_digest}",
+            index_name=f"codegraph-index-{binding_digest}",
+            privacy_class="local_path_only",
+            max_nodes=max_nodes,
+        )
+    except ValueError:
+        return _tool_text(
+            req_id,
+            {
+                "error": "codegraph_context_rejected",
+                "detail": "CodeGraph context is unavailable or failed validation.",
+            },
+            is_error=True,
+        )
+    return _tool_text(req_id, projection)
+
+
 def _project_shell_summary(runtime_dir, paper_project_dirs, base_url) -> dict[str, Any]:
     from .t3_adapter import build_t3_client_shell
 
@@ -520,6 +630,14 @@ def _call_tool(
 
     if name == "read_project_shell":
         return _tool_text(req_id, _project_shell_summary(runtime_dir, paper_project_dirs, base_url))
+
+    if name == "query_codegraph_context":
+        return _codegraph_context_tool(
+            arguments,
+            runtime_dir=runtime_dir,
+            req_id=req_id,
+            request_meta=request_meta,
+        )
 
     if name == "propose_writeback":
         from .dashboard import _resolve_writeback_workspace_root

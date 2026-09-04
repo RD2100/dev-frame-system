@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rd2100.devframe/schemas/paperlab-external-evidence-v1",
+  "title": "PaperLab External Source Evidence Contract",
+  "description": "Non-authoritative bounded projection of one already received DSH Polaris MCP result.",
+  "type": "object",
+  "required": ["artifact", "candidate"],
+  "additionalProperties": false,
+  "properties": {
+    "artifact": {"$ref": "#/$defs/artifact"},
+    "candidate": {"$ref": "#/$defs/candidate"}
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "identifier": {"type": "string", "minLength": 1, "maxLength": 128},
+    "jsonValue": {
+      "oneOf": [
+        {"type": "string", "maxLength": 4000},
+        {"type": "boolean"},
+        {"type": "integer"},
+        {"type": "number", "not": {"type": "integer"}},
+        {"type": "null"},
+        {"type": "array", "items": {"$ref": "#/$defs/jsonValue"}},
+        {"type": "object", "additionalProperties": {"$ref": "#/$defs/jsonValue"}}
+      ]
+    },
+    "artifact": {
+      "type": "object",
+      "required": [
+        "contract_version",
+        "artifact_id",
+        "kind",
+        "status",
+        "local_project_id",
+        "operation",
+        "subject",
+        "payload",
+        "binding",
+        "source",
+        "provenance",
+        "remote_freshness",
+        "remote_truncated",
+        "local_truncated",
+        "truncated",
+        "content_is_untrusted",
+        "correlation_id",
+        "idempotency_key",
+        "retrieved_at",
+        "binding_fingerprint",
+        "arguments_hash",
+        "request_hash",
+        "result_hash"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "contract_version": {"const": "paperlab-external-evidence-v1"},
+        "artifact_id": {"type": "string", "pattern": "^paperlab-candidate-[0-9a-f]{32}$"},
+        "kind": {"const": "ExternalSourceArtifact"},
+        "status": {"const": "candidate"},
+        "local_project_id": {"$ref": "#/$defs/identifier"},
+        "operation": {"enum": ["search_papers", "search_chunks", "get_paper", "lookup_paper", "read_fulltext", "get_paper_citation", "get_references", "get_citations"]},
+        "subject": {"type": "object", "additionalProperties": {"$ref": "#/$defs/jsonValue"}},
+        "payload": {"type": "object", "additionalProperties": {"$ref": "#/$defs/jsonValue"}},
+        "binding": {
+          "type": "object",
+          "required": ["local_project_id", "remote_project_id", "provider_echoed_remote_project_id"],
+          "additionalProperties": false,
+          "properties": {
+            "local_project_id": {"$ref": "#/$defs/identifier"},
+            "remote_project_id": {"$ref": "#/$defs/identifier"},
+            "provider_echoed_remote_project_id": {"type": "boolean"}
+          }
+        },
+        "source": {
+          "type": "object",
+          "required": ["provider", "server_alias", "release_commit", "profile"],
+          "additionalProperties": false,
+          "properties": {
+            "provider": {"const": "polaris"},
+            "server_alias": {"const": "polaris"},
+            "release_commit": {"$ref": "#/$defs/identifier"},
+            "profile": {"const": "dsh-readonly-v1"}
+          }
+        },
+        "provenance": {"type": "object", "additionalProperties": {"$ref": "#/$defs/jsonValue"}},
+        "remote_freshness": {"enum": ["unknown", "current", "stale", "historical"]},
+        "remote_truncated": {"oneOf": [{"type": "boolean"}, {"const": "unknown"}]},
+        "local_truncated": {"const": false},
+        "truncated": {"enum": ["none", "remote", "local", "both", "unknown"]},
+        "content_is_untrusted": {"const": true},
+        "correlation_id": {"$ref": "#/$defs/identifier"},
+        "idempotency_key": {"$ref": "#/$defs/identifier"},
+        "retrieved_at": {"type": "string", "minLength": 1, "maxLength": 64, "format": "date-time"},
+        "binding_fingerprint": {"$ref": "#/$defs/hash"},
+        "arguments_hash": {"$ref": "#/$defs/hash"},
+        "request_hash": {"$ref": "#/$defs/hash"},
+        "result_hash": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "required": ["contract_version", "candidate_id", "kind", "status", "artifact_id", "local_project_id", "promotion", "supports"],
+      "additionalProperties": false,
+      "properties": {
+        "contract_version": {"const": "paperlab-external-evidence-v1"},
+        "candidate_id": {"type": "string", "pattern": "^paperlab-candidate-[0-9a-f]{32}$"},
+        "kind": {"const": "EvidenceCandidate"},
+        "status": {"const": "candidate"},
+        "artifact_id": {"type": "string", "pattern": "^paperlab-candidate-[0-9a-f]{32}$"},
+        "local_project_id": {"$ref": "#/$defs/identifier"},
+        "promotion": {"const": "requires_devframe_review"},
+        "supports": {"const": "unreviewed"}
+      }
+    }
+  }
+}

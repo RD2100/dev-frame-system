@@ -6,7 +6,9 @@ from pathlib import Path
 
 from ._common import _print_help, _wants_help
 from ._usage import *  # noqa: F401,F403 - usage strings referenced by main() below
+from ._usage import EXECUTOR_READINESS_USAGE
 from ._client import cmd_client
+from ._executor import cmd_executor_readiness
 from ._coding import (
     cmd_atgo,
     cmd_code,
@@ -121,6 +123,16 @@ def main() -> int:
                 return 0
             return cmd_toolchain_status(sys.argv[3:])
         print(TOOLCHAIN_PREVIEW_USAGE)
+        return 0 if _wants_help(sys.argv[2:]) else 1
+
+    if cmd == "executor":
+        sub = sys.argv[2] if len(sys.argv) > 2 else ""
+        if sub == "readiness":
+            if _wants_help(sys.argv[3:]):
+                print(EXECUTOR_READINESS_USAGE)
+                return 0
+            return cmd_executor_readiness(sys.argv[3:])
+        print(EXECUTOR_READINESS_USAGE)
         return 0 if _wants_help(sys.argv[2:]) else 1
 
     if cmd == "code":

@@ -1,0 +1,15 @@
+{
+  "graph_projection_id": "graph-projection-invalid-store-authority",
+  "project_id": "project-contract-demo",
+  "nodes": [
+    {
+      "id": "graph-store-1",
+      "type": "decision",
+      "authority": "graph_store"
+    }
+  ],
+  "edges": [],
+  "operations": [
+    "query"
+  ]
+}

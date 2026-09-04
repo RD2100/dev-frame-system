@@ -18,7 +18,7 @@
     {
       "ref_id": "runtime-plan",
       "kind": "file",
-      "uri": "docs/status/runtime-governance-and-evidence-closure-transformation-plan.md",
+      "uri": "PLAN.md",
       "included": true,
       "required": true,
       "freshness_state": "current"

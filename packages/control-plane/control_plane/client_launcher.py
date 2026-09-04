@@ -186,9 +186,9 @@ def build_client_launch_plan(
             for entry in METHODOLOGY_DISPATCH.values()
         ],
         "governance": {
-            "reconReceipt": "docs/status/recon-receipt-local-agent-client-mainline.md",
+            "reconReceipt": "PLAN.md",
             "rkrRulePath": "rules/recon.md",
-            "reuseAssessment": "docs/status/t3code-client-mainline-reuse-assessment.md",
+            "reuseAssessment": "PLAN.md",
             "primaryClientDecision": "devframe code: primary product loop; T3Code: secondary native-client shell; DevFrame owns governance",
             "workerDecision": "OpenCode: local coding-agent worker runtime",
             "webAiAdapterDecision": "CodexPro/DevSpace: Web AI MCP bridge patterns; ZIP/report is fallback only",

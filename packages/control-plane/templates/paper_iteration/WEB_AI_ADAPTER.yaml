@@ -7,9 +7,9 @@ version: 1
 browser:
   provider: chrome
   mode: cdp
-  profile_policy: user_selected
+  profile_policy: dsh_managed
   endpoint: http://127.0.0.1:9222
-  notes: "Users may replace this with edge, playwright, manual, or custom."
+  notes: "DSH owns browser startup, login state, profile, and session lifecycle."
 
 web_ai:
   provider: chatgpt

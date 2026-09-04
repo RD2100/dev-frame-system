@@ -1,8 +1,8 @@
 """Hermetic test that go-run agents absorb OpenCode JSONL execution data.
 
 Verifies the wiring from worker-output.txt -> structured agent fields without
-spending OpenCode tokens. Real-value confirmation is a documented manual step in
-docs/status/recon-receipt-opencode-event-integration.md.
+spending OpenCode tokens. Real-value confirmation remains a manual probe under
+the current ``PLAN.md`` slice.
 """
 from control_plane.go_dispatch import GoAgentDispatch, _apply_opencode_events
 

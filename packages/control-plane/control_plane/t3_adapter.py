@@ -171,17 +171,24 @@ def build_t3_client_shell_from_state(
         for run in cluster_runs
         if str(run.get("runId") or "") and str(run.get("runId") or "") not in projected_thread_ids
     )
-    first_project = next((project for project in projects if isinstance(project, dict)), {})
-    project_id = _text(first_project.get("project_id"), "project")
-    thread_shells.append(
-        _team_workbench_thread_shell(
-            team if isinstance(team, dict) else {},
-            _clean_base_url(base_url),
-            updated_at,
-            project_id=project_id,
-            actions=actions,
+    canonical_projects = [
+        project
+        for project in projects
+        if isinstance(project, dict) and _text(project.get("project_id"), "")
+    ]
+    if len(canonical_projects) == 1:
+        project_id = _text(canonical_projects[0].get("project_id"), "")
+        thread_shells.append(
+            _team_workbench_thread_shell(
+                team if isinstance(team, dict) else {},
+                _clean_base_url(base_url),
+                updated_at,
+                project_id=project_id,
+                actions=actions,
+                runtime_dir=runtime_dir,
+                cluster_runs=cluster_runs,
+            )
         )
-    )
     thread_details = [
         _cluster_run_thread_detail(thread_shell, runtime_dir, updated_at)
         if _is_cluster_goal_thread(thread_shell)
@@ -321,14 +328,12 @@ def build_t3_coordinator_entry(
 
     empty_state_reason = None
     disabled_reason = None
-    if not shell_threads:
-        empty_state_reason = "no_threads"
-        if is_malformed_response:
-            empty_state_reason = "malformed_entry_response"
+    if is_malformed_response:
+        empty_state_reason = "malformed_entry_response"
+    elif not shell_threads:
+        empty_state_reason = "no_projects" if not project_options else "no_threads"
     elif not global_thread:
         empty_state_reason = "missing_global_coordinator_thread"
-    elif is_malformed_response:
-        empty_state_reason = "malformed_entry_response"
 
     goal_binding_required = bool(conversation_model.get("goalProjectBindingRequired"))
     if goal_binding_required and not project_options:
@@ -982,6 +987,8 @@ def _thread_list_summary(
 def _cluster_run_status_to_session_status(status: str) -> str:
     return {
         "answered": "stopped",
+        "cancel_requested": "running",
+        "cancelled": "stopped",
         "completed": "stopped",
         "failed": "error",
         "interrupted": "error",
@@ -1016,6 +1023,11 @@ def _cluster_run_thread_shell(
     status = _text(run.get("status"), "running")
     pending_action = bool(action_ids)
     session_status = _cluster_run_status_to_session_status(status)
+    active_turn_id = (
+        run_id
+        if status in {"running", "started", "cancel_requested"}
+        else None
+    )
     return {
         "id": run_id,
         "projectId": project_id,
@@ -1045,7 +1057,7 @@ def _cluster_run_thread_shell(
         "interactionMode": "plan",
         "branch": None,
         "worktreePath": project_path or None,
-        "latestTurn": None,
+        "latestTurn": {"turnId": active_turn_id} if active_turn_id else None,
         "createdAt": _text(run.get("startedAt"), updated_at),
         "updatedAt": _text(run.get("finishedAt"), _text(run.get("startedAt"), updated_at)),
         "archivedAt": None,
@@ -1054,7 +1066,7 @@ def _cluster_run_thread_shell(
             "status": session_status,
             "providerName": "devframe",
             "runtimeMode": "approval-required" if pending_action or status in {"failed", "interrupted"} else "full-access",
-            "activeTurnId": None,
+            "activeTurnId": active_turn_id,
             "lastError": "Goal conversation failed or was interrupted." if status in {"failed", "interrupted"} else None,
             "updatedAt": _text(run.get("finishedAt"), _text(run.get("startedAt"), updated_at)),
         },
@@ -1293,12 +1305,51 @@ def _render_web_ai_team_activity_lines(
     return lines
 
 
+def _global_coordinator_active_turn_id(
+    runtime_dir: str | Path | None,
+    cluster_runs: list[dict[str, Any]],
+) -> str | None:
+    if runtime_dir is None:
+        return None
+    try:
+        from .conversation_intake import get_conversation_proposal
+    except Exception:  # pragma: no cover - import failure falls back read-only
+        return None
+    for run in cluster_runs:
+        if not isinstance(run, dict):
+            continue
+        if _text(run.get("status"), "").lower() not in {
+            "running",
+            "cancel_requested",
+        }:
+            continue
+        run_id = _text(run.get("runId"), "")
+        proposal_id = _text(run.get("sourceProposalId"), "")
+        source_turn_id = _text(run.get("sourceTurnId"), "")
+        if not run_id or not proposal_id or not source_turn_id:
+            continue
+        try:
+            proposal = get_conversation_proposal(runtime_dir, proposal_id)
+        except Exception:  # noqa: BLE001 - projection fallback only
+            continue
+        if (
+            _text(proposal.get("threadId"), "")
+            == _GLOBAL_COORDINATOR_THREAD_ID
+            and _text(proposal.get("stableRunId"), "") == run_id
+            and _text(proposal.get("sourceTurnId"), "") == source_turn_id
+        ):
+            return run_id
+    return None
+
+
 def _team_workbench_thread_shell(
     team: dict[str, Any],
     base_url: str,
     updated_at: str,
     project_id: str = "project",
     actions: list[dict[str, Any]] | None = None,
+    runtime_dir: str | Path | None = None,
+    cluster_runs: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     all_messages = [
         {
@@ -1392,6 +1443,10 @@ def _team_workbench_thread_shell(
     web_ai_evidence = [e for e in all_evidence if _is_web_ai_local_agent_item(e)][:5]
     web_ai_gates = [g for g in all_gates if _is_web_ai_local_agent_item(g)][:5]
     web_ai_events = [e for e in all_events if _is_web_ai_local_agent_item(e)][:5]
+    active_turn_id = _global_coordinator_active_turn_id(
+        runtime_dir,
+        cluster_runs or [],
+    )
 
     return {
         "id": _GLOBAL_COORDINATOR_THREAD_ID,
@@ -1417,16 +1472,16 @@ def _team_workbench_thread_shell(
         "interactionMode": "plan",
         "branch": None,
         "worktreePath": None,
-        "latestTurn": None,
+        "latestTurn": {"turnId": active_turn_id} if active_turn_id else None,
         "createdAt": updated_at,
         "updatedAt": updated_at,
         "archivedAt": None,
         "session": {
             "threadId": _GLOBAL_COORDINATOR_THREAD_ID,
-            "status": "idle",
+            "status": "running" if active_turn_id else "idle",
             "providerName": "devframe",
             "runtimeMode": "approval-required",
-            "activeTurnId": None,
+            "activeTurnId": active_turn_id,
             "lastError": None,
             "updatedAt": updated_at,
         },
@@ -2166,6 +2221,144 @@ def _review_board_summary(
     return lines
 
 
+def _conversation_turn_projection(
+    runtime_dir: str | Path | None,
+    thread_id: str,
+    updated_at: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Project durable coordinator turns without exposing private bindings."""
+    if runtime_dir is None:
+        return [], [], []
+    try:
+        from .conversation_intake import (
+            get_conversation_proposal,
+            get_thread_intakes,
+        )
+
+        turns = get_thread_intakes(runtime_dir, thread_id)
+    except Exception:  # noqa: BLE001 - projection fallback only
+        return [], [], []
+
+    messages: list[dict[str, Any]] = []
+    plans: list[dict[str, Any]] = []
+    activities: list[dict[str, Any]] = []
+    for turn in turns:
+        if not isinstance(turn, dict):
+            continue
+        for key in ("userMessage", "assistantMessage"):
+            stored = turn.get(key)
+            if not isinstance(stored, dict):
+                continue
+            message_id = _text(stored.get("id"), "")
+            if not message_id:
+                continue
+            messages.append({
+                "id": message_id,
+                "role": _text(stored.get("role"), "assistant"),
+                "text": _text(stored.get("text"), ""),
+                "turnId": _text(stored.get("turnId"), "") or None,
+                "streaming": False,
+                "createdAt": _text(stored.get("createdAt"), updated_at),
+                "updatedAt": _text(stored.get("updatedAt"), updated_at),
+            })
+
+        proposal_id = _text(turn.get("proposalId"), "")
+        if not proposal_id:
+            continue
+        try:
+            proposal = get_conversation_proposal(runtime_dir, proposal_id)
+        except Exception:  # noqa: BLE001 - omit corrupt/private proposal state
+            continue
+        if _text(proposal.get("threadId"), "") != thread_id:
+            continue
+        source_turn_id = _text(proposal.get("sourceTurnId"), "")
+        status = _text(proposal.get("status"), "pending")
+        goal = _text(proposal.get("goal"), "")
+        target = _text(proposal.get("target"), "coordinator")
+        project_id = _text(proposal.get("projectId"), "")
+        resolved_at = _text(proposal.get("resolvedAt"), "")
+        stable_run_id = _text(proposal.get("stableRunId"), "")
+        plan_markdown = "\n".join([
+            "# DevFrame Coordinator Proposal",
+            "",
+            f"- Goal: {goal}",
+            f"- Project: {project_id or 'unbound'}",
+            f"- Target: {target}",
+            f"- Status: {status}",
+        ])
+        if status in {"pending", "started"}:
+            proposal_updated_at = _text(
+                proposal.get("updatedAt"),
+                updated_at,
+            )
+            plans.append({
+                "id": proposal_id,
+                "turnId": source_turn_id or None,
+                "planMarkdown": plan_markdown,
+                "implementedAt": (
+                    resolved_at or proposal_updated_at
+                    if status == "started"
+                    else None
+                ),
+                "implementationThreadId": (
+                    stable_run_id
+                    if status == "started" and stable_run_id
+                    else None
+                ),
+                "createdAt": _text(proposal.get("createdAt"), updated_at),
+                "updatedAt": proposal_updated_at,
+            })
+
+        public_payload: dict[str, Any] = {
+            "requestId": proposal_id,
+            "threadId": thread_id,
+            "projectId": project_id,
+            "target": target,
+            "goal": goal,
+            "status": status,
+            "writePolicy": "approval-required",
+        }
+        if status == "pending":
+            requested_payload = {
+                **public_payload,
+                "requestKind": "command",
+            }
+            activities.append({
+                "id": f"{thread_id}-approval-{proposal_id}",
+                "tone": "approval",
+                "kind": "approval.requested",
+                "summary": f"Approve or reject coordinator proposal {proposal_id}.",
+                "payload": requested_payload,
+                "turnId": source_turn_id or None,
+                "sequence": 0,
+                "createdAt": _text(proposal.get("updatedAt"), updated_at),
+            })
+        elif status in {
+            "rejected",
+            "approval_claimed",
+            "capability_issued",
+            "starting",
+            "started",
+            "start_failed",
+            "recovery_required",
+        }:
+            decision = "reject" if status == "rejected" else "approve"
+            resolved_payload = {**public_payload, "decision": decision}
+            if status == "started" and stable_run_id:
+                resolved_payload["runId"] = stable_run_id
+            activities.append({
+                "id": f"{thread_id}-approval-{proposal_id}-resolved",
+                "tone": "info" if status in {"rejected", "started"} else "warning",
+                "kind": "approval.resolved",
+                "summary": f"Coordinator proposal {proposal_id} is {status}.",
+                "payload": resolved_payload,
+                "turnId": source_turn_id or None,
+                "sequence": 0,
+                "createdAt": _text(proposal.get("updatedAt"), updated_at),
+            })
+    return messages, plans, activities
+
+
 def _thread_detail(
     thread_shell: dict[str, Any],
     updated_at: str,
@@ -2393,8 +2586,37 @@ def _thread_detail(
         if runtime_dir is not None
         else []
     )
+    (
+        conversation_messages,
+        conversation_plans,
+        conversation_approval_activities,
+    ) = _conversation_turn_projection(runtime_dir, thread_id, updated_at)
+    has_semantic_approval = any(
+        activity.get("kind") == "approval.requested"
+        for activity in conversation_approval_activities
+    )
+    if _is_team_workbench_session(thread_id):
+        thread_shell["hasPendingApprovals"] = bool(
+            thread_shell.get("hasPendingApprovals") or has_semantic_approval
+        )
+        thread_shell["hasPendingUserInput"] = bool(
+            thread_shell.get("hasPendingUserInput") or has_semantic_approval
+        )
+        thread_shell["hasActionableProposedPlan"] = bool(
+            thread_shell.get("hasActionableProposedPlan") or has_semantic_approval
+        )
+    else:
+        thread_shell["hasPendingApprovals"] = bool(
+            approval_activities or has_semantic_approval
+        )
     next_sequence = 3 + len(approval_activities)
-    for activity in evidence_activities + gate_activities + team_context_activities + intake_activities:
+    for activity in (
+        evidence_activities
+        + gate_activities
+        + team_context_activities
+        + conversation_approval_activities
+        + intake_activities
+    ):
         activity["sequence"] = next_sequence
         next_sequence += 1
     return {
@@ -2432,7 +2654,8 @@ def _thread_detail(
                 "streaming": False,
                 "createdAt": updated_at,
                 "updatedAt": updated_at,
-            }
+            },
+            *conversation_messages,
         ],
         "proposedPlans": [
             {
@@ -2443,7 +2666,8 @@ def _thread_detail(
                 "implementationThreadId": None,
                 "createdAt": updated_at,
                 "updatedAt": updated_at,
-            }
+            },
+            *conversation_plans,
         ],
         "activities": [
             {
@@ -2486,6 +2710,7 @@ def _thread_detail(
             *evidence_activities,
             *gate_activities,
             *team_context_activities,
+            *conversation_approval_activities,
             *intake_activities,
         ],
         "checkpoints": [],

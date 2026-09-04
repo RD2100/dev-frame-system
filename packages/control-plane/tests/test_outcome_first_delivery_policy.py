@@ -1,10 +1,7 @@
 import json
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
 from jsonschema import Draft202012Validator
 
 
@@ -17,20 +14,17 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8-sig")
 
 
-def test_outcome_first_policy_is_public_and_indexed():
+def test_outcome_first_policy_is_a_package_owned_machine_asset() -> None:
     policy = POLICY_DIR / "OUTCOME_FIRST_DELIVERY_POLICY.md"
-    guide = REPO_ROOT / "docs" / "agent-runtime" / "outcome-first-delivery.md"
+    plan = _read(REPO_ROOT / "PLAN.md")
 
     assert policy.is_file()
-    assert guide.is_file()
-    assert policy.name in _read(POLICY_DIR / "README.md")
-    assert "OUTCOME_FIRST_DELIVERY_POLICY.md" in _read(guide)
-    assert "outcome-first delivery" in _read(
-        REPO_ROOT / "packages" / "agent-acceptance" / "README.md"
-    ).lower()
+    assert "Outcome-First" in _read(policy)
+    assert "机器消费的 rule/schema/policy/contract" in plan
+    assert "它们不调度项目" in plan
 
 
-def test_terminal_semantics_are_bounded_without_inventing_a_milestone():
+def test_terminal_semantics_are_bounded_without_inventing_a_milestone() -> None:
     policy_names = [
         "TERMINAL_STATE_POLICY.md",
         "RUN_UNTIL_TERMINAL_POLICY.md",
@@ -52,20 +46,19 @@ def test_terminal_semantics_are_bounded_without_inventing_a_milestone():
     )
     assert not re.search(r"^\| accepted_done \|", dispatcher, flags=re.MULTILINE)
 
-    schema_names = [
+    for name in [
         "FLOW_OUTCOME.schema.json",
         "DISPATCH_RESULT.schema.json",
         "RUNNER_STATE.schema.json",
         "RUNNER_CONTRACT.schema.json",
         "RUNNER_STEP_RESULT.schema.json",
-    ]
-    for name in schema_names:
+    ]:
         contract = CONTRACT_DIR / name
         json.loads(_read(contract))
         assert "bounded" in _read(contract), name
 
 
-def test_accepted_milestone_closure_matches_existing_machine_contracts():
+def test_accepted_milestone_closure_matches_machine_contracts() -> None:
     flow_schema = json.loads(_read(CONTRACT_DIR / "FLOW_OUTCOME.schema.json"))
     dispatch_schema = json.loads(_read(CONTRACT_DIR / "DISPATCH_RESULT.schema.json"))
     flow_validator = Draft202012Validator(flow_schema)
@@ -92,17 +85,14 @@ def test_accepted_milestone_closure_matches_existing_machine_contracts():
 
     flow_validator.validate(flow)
     dispatch_validator.validate(dispatch)
-
     flow["business_decision"] = "accepted_done"
     assert list(flow_validator.iter_errors(flow))
 
 
-def test_risk_profiles_preserve_hard_gates_and_reduce_repeated_work():
+def test_risk_profiles_preserve_hard_gates_and_reduce_repeated_work() -> None:
     policy = _read(POLICY_DIR / "OUTCOME_FIRST_DELIVERY_POLICY.md")
-
     for profile in ("critical", "high", "medium", "low", "read_only"):
         assert f"`{profile}`" in policy
-
     assert "Independent review required" in policy
     assert "focused" in policy.lower()
     assert "three to five" in policy
@@ -110,42 +100,21 @@ def test_risk_profiles_preserve_hard_gates_and_reduce_repeated_work():
     assert "no-fake-green" in policy
 
 
-def test_verification_entrypoints_apply_risk_profiles_without_a_fixed_full_cycle():
-    gates = _read(REPO_ROOT / "docs" / "agent-runtime" / "verification-gates.md")
-    handoff = _read(REPO_ROOT / "docs" / "status" / "HANDOFF.md")
-    execution_protocol = handoff.split("## Execution Protocol", 1)[1].split(
-        "## Documentation Policy", 1
+def test_plan_execution_protocol_preserves_outcome_first_boundaries() -> None:
+    plan = _read(REPO_ROOT / "PLAN.md")
+    protocol = plan.split("## 12. Execution Protocol", 1)[1].split(
+        "## 13. Human Gates", 1
     )[0]
-    normalized_gates = " ".join(gates.split())
-    normalized_execution_protocol = " ".join(execution_protocol.split())
 
-    assert "OUTCOME_FIRST_DELIVERY_POLICY.md" in gates
-    for profile in ("`read_only`", "`low`", "`medium`", "`high`", "`critical`"):
-        assert profile in gates
-    for lane in ("L0", "L1", "L2", "L3"):
-        assert re.search(rf"^\| {lane} \|", gates, flags=re.MULTILINE)
-    assert "Root review; no code reviewer" in normalized_gates
-    assert "Root review unless a stricter rule applies" in normalized_gates
-    assert "one broad regression at the milestone or PR boundary" in normalized_gates
-    assert "Independent review required" in normalized_gates
-    assert "Do not dispatch an independent reviewer" in normalized_gates
-    assert "every agent execution must pass through" not in gates
-
-    assert "OUTCOME_FIRST_DELIVERY_POLICY.md" in normalized_execution_protocol
-    assert "selected profile" in normalized_execution_protocol
-    assert "reserve broad/full suites" in normalized_execution_protocol
-    assert "high/critical gate" in normalized_execution_protocol
-    assert "natural milestone boundary" in normalized_execution_protocol
-    for fixed_cycle_text in (
-        "Every milestone follows this loop",
-        "Produce a real-path RED",
-        "public snapshot gate",
-        "Perform independent review and record",
-    ):
-        assert fixed_cycle_text not in execution_protocol
+    assert "任何时刻只允许一个 `active` 里程碑" in plan
+    assert "focused 验证" in protocol
+    assert "affected/broad gate" in protocol
+    assert "产品审阅先于技术 P0–P3 审阅" in protocol
+    assert "只有全部通过才更新本文件的状态和 Next Action" in protocol
+    assert "Worker 成功不会被误写成项目完成" in plan
 
 
-def test_project_rules_expose_outcome_first_decision_points():
+def test_project_rules_expose_outcome_first_decision_points() -> None:
     orchestration = _read(REPO_ROOT / "rules" / "orchestration.md")
     normalized_orchestration = " ".join(orchestration.split()).lower()
     review = _read(REPO_ROOT / "rules" / "review.md")
@@ -161,62 +130,27 @@ def test_project_rules_expose_outcome_first_decision_points():
     assert "must not design an ordinary next milestone" in normalized_orchestration
 
 
-def test_runtime_bootstrap_exposes_and_copies_outcome_first_guide():
-    template_roots = [
+def test_bootstrap_exposes_single_plan_instead_of_a_parallel_guide() -> None:
+    for root in [
         REPO_ROOT / "templates" / "runtime-bootstrap",
         REPO_ROOT / "packages" / "control-plane" / "templates" / "runtime-bootstrap",
-    ]
-
-    for root in template_roots:
+    ]:
         agents = _read(root / "AGENTS.template.md")
         bootstrap = _read(root / "bootstrap.ps1")
-        readme = _read(root / "README.md")
+        plan = _read(root / "PLAN.template.md")
 
-        assert "## Outcome-First Delivery" in agents
-        assert "outcome-first-delivery.md" in agents
-        assert "outcome-first-delivery.md" in bootstrap
-        assert "Outcome-First Delivery" in readme
-
-
-def test_runtime_bootstrap_really_copies_outcome_first_guide(tmp_path):
-    if not shutil.which("powershell"):
-        pytest.skip("PowerShell is required for the runtime bootstrap probe")
-
-    project_root = tmp_path / "outcome-probe"
-    result = subprocess.run(
-        [
-            "powershell",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            str(REPO_ROOT / "templates" / "runtime-bootstrap" / "bootstrap.ps1"),
-            "-ProjectName",
-            "outcome-probe",
-            "-ProjectRoot",
-            str(project_root),
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert (project_root / "docs" / "agent-runtime" / "outcome-first-delivery.md").is_file()
-    assert "Outcome-First Delivery" in (project_root / "AGENTS.md").read_text(
-        encoding="utf-8-sig"
-    )
+        assert "only human development authority" in " ".join(agents.split())
+        assert '"PLAN.template.md" "PLAN.md"' in bootstrap
+        assert "## Execution Protocol" in plan
+        assert "outcome-first-delivery.md" not in bootstrap
 
 
-def test_delivery_goal_continues_without_master_micro_management():
+def test_delivery_goal_continues_without_master_micro_management() -> None:
     policy = _read(POLICY_DIR / "OUTCOME_FIRST_DELIVERY_POLICY.md")
-    guide = _read(REPO_ROOT / "docs" / "agent-runtime" / "outcome-first-delivery.md")
-    normalized_guide = " ".join(guide.split())
+    plan = _read(REPO_ROOT / "PLAN.md")
 
     assert "finite Delivery Goal" in policy
     assert "frozen candidate set" in policy
     assert "project root coordinator" in policy
     assert "MUST NOT prescribe ordinary milestone order" in policy
-    assert "generic resume directive" in guide
-    assert "does not name that milestone" in normalized_guide
+    assert "后续条目是有序 backlog" in plan

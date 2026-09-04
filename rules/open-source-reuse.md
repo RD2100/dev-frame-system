@@ -104,10 +104,14 @@ first produce a Recon Receipt, then record the open-source reuse decision.
 - **Priority**: P2
 - **Trigger**: Claiming progress on a reused visual product slice.
 - **Rule**: Verification must include a zero-configuration way to open the
-  visual surface and inspect the current product state. CLI-only checks can
-  support the claim, but they cannot be the only acceptance evidence for a
-  visual control-plane milestone.
-- **Verification**: The status note includes the local launch command or URL and
-  a browser-based acceptance result.
+  visual surface and inspect the current product state. Before implementation,
+  record the latest user-visible contract: the single intended entry point,
+  where it appears, what must no longer appear, and the interaction that must
+  work. CLI-only checks can support the claim, but they cannot be the only
+  acceptance evidence for a visual control-plane milestone.
+- **Verification**: The status note includes the local launch command or URL,
+  the user-visible contract, and a browser-based result for every positive and
+  negative item. A product reviewer applies this contract before the technical
+  code reviewer applies the P0-P3 rubric.
 - **Conflict Handling**: If browser verification is impossible, mark the visual
   milestone as blocked or partial instead of complete.

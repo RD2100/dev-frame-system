@@ -20,17 +20,17 @@ it.
    Examples: coding agent, external web AI reviewer, evidence reviewer,
    release reviewer, or future handoff agent.
 
-2. Start from navigation docs.
-   Use `docs/README.md`, `docs/status/status-document-inventory.md`, and the
-   task-specific active plan before reading broad historical material.
+2. Start from the single project authority.
+   Read `PLAN.md`, then select only the machine contracts, source, tests, and
+   runtime evidence needed for the current decision.
 
 3. Classify candidate files.
-   Separate stable contracts, active plans, recon receipts, evidence records,
-   handoffs, historical stages, generated exports, and private runtime state.
+   Separate stable contracts, the active `PLAN.md` slice, evidence records,
+   generated exports, and private runtime state.
 
 4. Select the smallest sufficient set.
    Include only files that affect the requested decision. Prefer exact paths,
-   schema files, tests, and current plans over narrative recaps.
+   schema files, tests, and the current plan over narrative recaps.
 
 5. Record omitted important context.
    If a relevant source is stale, private, too broad, conflicting, or excluded

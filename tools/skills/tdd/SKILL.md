@@ -89,4 +89,4 @@ findings:
 | 6 | No pass without independent `review.yaml` |
 | 7 | No pass with unresolved P0/P1 findings |
 
-Full protocol: `docs/agent-runtime/sub-agent-dispatch-protocol.md`
+Full protocol: `rules/orchestration.md` plus the active milestone in `PLAN.md`.

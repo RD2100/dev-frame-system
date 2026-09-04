@@ -71,8 +71,7 @@ keyboard/mouse simulation as normal runtime transport.
      --project-root <repo> `
      --runtime-dir <runtime> `
      --question "<exact review question>" `
-     --source map=docs/README.md `
-     --source plan=docs/status/document-driven-transformation-master-plan.md `
+     --source plan=PLAN.md `
      --required-role map `
      --required-role plan
    ```

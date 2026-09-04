@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/RD2100/dev-frame-system/schemas/dsh-upstream-lock.schema.json",
+  "title": "DevFrame DSH upstream lock",
+  "description": "Pins the official DSH source and describes the DevFrame overlay boundary.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schemaVersion", "upstream", "baseline", "overlay", "generated"],
+  "properties": {
+    "$schema": {"type": "string", "minLength": 1},
+    "schemaVersion": {"const": 1},
+    "upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "target"],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^https://github\\.com/deepseek-ai/deepseek-harness(?:\\.git)?$"
+        },
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ref", "commit"],
+          "properties": {
+            "ref": {"type": "string", "minLength": 1},
+            "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+          }
+        }
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["knownUpstreamCommit", "capturedHeadCommit", "capturedAt", "worktreeStatus"],
+      "properties": {
+        "knownUpstreamCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "capturedHeadCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "capturedAt": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "worktreeStatus": {"enum": ["clean", "dirty"]}
+      }
+    },
+    "overlay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "roots", "patches"],
+      "properties": {
+        "mode": {"enum": ["pending-inventory", "patch-stack"]},
+        "roots": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "patches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "path", "sha256"],
+            "properties": {
+              "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+              "path": {"type": "string", "minLength": 1},
+              "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+            }
+          }
+        }
+      }
+    },
+    "generated": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceOfTruth", "paths"],
+      "properties": {
+        "sourceOfTruth": {"const": "source"},
+        "paths": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

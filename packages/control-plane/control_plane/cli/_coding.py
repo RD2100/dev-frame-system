@@ -34,6 +34,7 @@ def cmd_go() -> int:
         estimate_target_bytes,
         render_go_dispatch_text,
         render_command,
+        resolve_go_model_selection,
         resolve_methodology,
         run_go_dispatch,
         split_targets_by_size,
@@ -57,9 +58,12 @@ def cmd_go() -> int:
     parser.add_argument("--opencode-agent", default=DEFAULT_OPENCODE_AGENT, help="OpenCode agent name")
     parser.add_argument(
         "--driver",
-        choices=["command", "acp"],
+        choices=["command", "acp", "pi"],
         default="command",
-        help="Executor driver: command (default CLI worker) or acp (governed live ACP session)",
+        help=(
+            "Executor driver: command (default CLI worker), acp (governed live ACP "
+            "session), or pi (local JSONL RPC through the neutral adapter)"
+        ),
     )
     parser.add_argument(
         "--isolate",
@@ -81,6 +85,13 @@ def cmd_go() -> int:
         return 2
     effective_requirement, methodology = resolve_methodology(args.requirement)
     if args.preview:
+        preview_model = args.model
+        if args.driver == "command" and not args.command:
+            try:
+                _, preview_model = resolve_go_model_selection(args.model_provider, args.model)
+            except ValueError as exc:
+                print(f"ERROR: {exc}", file=sys.stderr)
+                return 2
         print(_render_coding_preview(
             entrypoint="devframe go",
             project_path=args.project_path,
@@ -91,7 +102,7 @@ def cmd_go() -> int:
             runtime_dir=args.runtime_dir,
             worker_command=args.command or None,
             worker=args.worker,
-            model=args.model,
+            model=preview_model,
             opencode_agent=args.opencode_agent,
             build_worker_command=build_go_worker_command,
             describe_worker=describe_go_worker,
@@ -99,6 +110,7 @@ def cmd_go() -> int:
             split_targets=split_targets_by_size,
             estimate_target_bytes=estimate_target_bytes,
             methodology=methodology,
+            driver=args.driver,
         ), end="")
         return 0
 
@@ -413,6 +425,7 @@ def cmd_code() -> int:
         describe_go_worker,
         estimate_target_bytes,
         render_command,
+        resolve_go_model_selection,
         resolve_methodology,
         run_go_dispatch,
         split_targets_by_size,
@@ -445,9 +458,12 @@ def cmd_code() -> int:
     parser.add_argument("--opencode-agent", default=DEFAULT_OPENCODE_AGENT, help="OpenCode agent name")
     parser.add_argument(
         "--driver",
-        choices=["command", "acp"],
+        choices=["command", "acp", "pi"],
         default="command",
-        help="Executor driver: command (default CLI worker) or acp (governed live ACP session)",
+        help=(
+            "Executor driver: command (default CLI worker), acp (governed live ACP "
+            "session), or pi (local JSONL RPC through the neutral adapter)"
+        ),
     )
     parser.add_argument(
         "--isolate",
@@ -507,6 +523,13 @@ def cmd_code() -> int:
         methodology = canary_context.methodology
         workflow_canary = canary_context.binding
     if args.preview:
+        preview_model = args.model
+        if args.driver == "command" and not args.command and workflow_canary is None:
+            try:
+                _, preview_model = resolve_go_model_selection(args.model_provider, args.model)
+            except ValueError as exc:
+                print(f"ERROR: {exc}", file=sys.stderr)
+                return 2
         print(_render_coding_preview(
             entrypoint="devframe code",
             project_path=args.project,
@@ -517,7 +540,7 @@ def cmd_code() -> int:
             runtime_dir=args.runtime_dir,
             worker_command=args.command or None,
             worker=args.worker,
-            model=args.model,
+            model=preview_model,
             opencode_agent=args.opencode_agent,
             build_worker_command=build_go_worker_command,
             describe_worker=describe_go_worker,
@@ -526,6 +549,7 @@ def cmd_code() -> int:
             estimate_target_bytes=estimate_target_bytes,
             methodology=methodology,
             workflow_canary=workflow_canary,
+            driver=args.driver,
         ), end="")
         return 0
 
@@ -552,7 +576,11 @@ def cmd_code() -> int:
         return 2
 
     print("DevFrame Code session")
-    print("Tool shape   : OpenCode-first local coding CLI")
+    print(
+        "Tool shape   : provider-neutral local executor CLI"
+        if args.driver != "command"
+        else "Tool shape   : OpenCode-first local coding CLI"
+    )
     print("Backend      : /go concurrent coding-agent dispatch")
     print("Default mode : prepare first, inspect, then execute when you choose")
     print("")
@@ -797,6 +825,8 @@ def _render_code_dispatch_text(result) -> str:
         lines.append(f"  targets: {', '.join(agent.targets) if agent.targets else '(project scope)'}")
         if result.workflow_canary:
             lines.append("  run    : canary-only (no worker/ACP)")
+        elif result.driver != "command":
+            lines.append(f"  run    : executor driver={result.driver}")
         else:
             lines.append(
                 f"  run    : {_render_code_worker_command(result.runtime_dir, agent)}"
@@ -1120,6 +1150,7 @@ def _render_coding_preview(
     estimate_target_bytes,
     methodology: dict | None = None,
     workflow_canary: dict | None = None,
+    driver: str = "command",
 ) -> str:
     from ..backup_guard import default_runtime_dir
 
@@ -1163,11 +1194,15 @@ def _render_coding_preview(
 
     shards = split_targets(project_root, targets, agents)
     target_sizes = {target: estimate_target_bytes(project_root, target) for target in targets}
-    worker_label = describe_worker(
-        worker_command=worker_command,
-        worker=worker,
-        model=model,
-        opencode_agent=opencode_agent,
+    worker_label = (
+        describe_worker(
+            worker_command=worker_command,
+            worker=worker,
+            model=model,
+            opencode_agent=opencode_agent,
+        )
+        if driver == "command"
+        else f"executor driver={driver}"
     )
     lines = [
         "DevFrame coding preview",
@@ -1189,21 +1224,24 @@ def _render_coding_preview(
         "Shards",
     ])
     for index, shard_targets in enumerate(shards, start=1):
-        command = build_worker_command(
-            worker_command=worker_command,
-            worker=worker,
-            model=model,
-            opencode_agent=opencode_agent,
-            shard_number=index,
-            shard_count=agents,
-        )
         shard_bytes = sum(target_sizes.get(target, 0) for target in shard_targets)
         lines.append(f"- coding-agent-{index} shard={index}/{agents} bytes={shard_bytes}")
         if shard_targets:
             lines.extend(f"  - {target}" for target in shard_targets)
         else:
             lines.append("  - (project scope)")
-        lines.append(f"  command: {render_worker_command(command)}")
+        if driver == "command":
+            command = build_worker_command(
+                worker_command=worker_command,
+                worker=worker,
+                model=model,
+                opencode_agent=opencode_agent,
+                shard_number=index,
+                shard_count=agents,
+            )
+            lines.append(f"  command: {render_worker_command(command)}")
+        else:
+            lines.append(f"  executor: driver={driver}")
     lines.extend([
         "",
         "Next",

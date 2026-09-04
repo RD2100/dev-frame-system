@@ -54,7 +54,7 @@
 - **Priority**: P1 (Scope Control)
 - **Trigger**: Any research task
 - **Scope**: Phase 0-5
-- **Rule**: Confirm at task start that research is read-only. List the tools to be used. All must be from the Permitted: Read-Only category in `docs/agent-runtime/tool-policy.md`.
+- **Rule**: Confirm at task start that research is read-only. List the tools to be used. All must be from the Permitted: Read-Only category in `.devframe/contracts/tool-policy.md` when that generated contract exists; otherwise use `rules/` and the active TaskSpec.
 - **Verification**: Task plan includes tool list; all tools are read-only.
 - **Conflict Handling**: If task requires a restricted tool for research, flag before starting, get approval.
 

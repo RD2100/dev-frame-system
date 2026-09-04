@@ -2,9 +2,8 @@
 
 These tests verify the parser's extraction logic against representative OpenCode
 `run --format json` event shapes. They do not spend worker tokens. The claim
-that real OpenCode output matches these shapes is verified separately by running
-OpenCode against a throwaway repo (see
-docs/status/recon-receipt-opencode-event-integration.md).
+that real OpenCode output matches these shapes must be verified separately by
+running OpenCode against a throwaway repo under the current ``PLAN.md`` slice.
 """
 from control_plane.opencode_events import parse_opencode_run_jsonl
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "DRAFT — NOT ACTIVE. For future activation only. See docs/agent-runtime/inactive-frame-registry.md for activation triggers.",
+  "$comment": "DRAFT — NOT ACTIVE. For future activation only. See PLAN.md for activation gates.",
   "title": "FrameManifest",
   "description": "Self-declaration of a frame project. Declares capabilities, NOT grants authority. Authority is determined by the runtime compatibility lock.",
   "type": "object",

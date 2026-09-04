@@ -109,5 +109,5 @@ opencode run -s <session_id> -c "continue instruction"
 
 The finalizer is deterministic. It may summarize and validate artifact presence, but it must not make code-quality judgments or override the reviewer. If reviewer evidence is missing or invalid, final status is `blocked`.
 
-Full protocol: `docs/agent-runtime/sub-agent-dispatch-protocol.md`
+Full protocol: `rules/orchestration.md` plus the active milestone in `PLAN.md`.
 Policy rules: `.ai/policy.yaml` enforced by `tools/ai_guard.py`

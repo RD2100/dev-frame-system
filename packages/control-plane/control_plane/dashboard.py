@@ -501,6 +501,18 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     body = json.dumps({"error": "invalid_json_body"}, indent=2, ensure_ascii=True)
                     self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
                     return
+                if not isinstance(payload, dict):
+                    body = json.dumps(
+                        {"accepted": False, "error": "invalid_payload"},
+                        indent=2,
+                        ensure_ascii=True,
+                    )
+                    self._send_text(
+                        HTTPStatus.BAD_REQUEST,
+                        "application/json; charset=utf-8",
+                        body,
+                    )
+                    return
                 from .conversation_intake import IntakeError, record_intake
 
                 try:
@@ -511,11 +523,14 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                         payload.get("clientRequestId"),
                         payload.get("message"),
                         environment_id=payload.get("environmentId"),
+                        paper_project_dirs=paper_project_dirs,
                     )
                 except IntakeError as exc:
                     detail = str(exc)
                     if detail == "unknown_thread":
                         status = HTTPStatus.NOT_FOUND
+                    elif detail == "intake_conflict":
+                        status = HTTPStatus.CONFLICT
                     elif detail in {"resolution_failed", "journal_corrupt"}:
                         status = HTTPStatus.INTERNAL_SERVER_ERROR
                     else:
@@ -626,12 +641,79 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     body = json.dumps({"error": "invalid_json_body"}, indent=2, ensure_ascii=True)
                     self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
                     return
+                if not isinstance(payload, dict):
+                    body = json.dumps(
+                        {"error": "invalid_payload"},
+                        indent=2,
+                        ensure_ascii=True,
+                    )
+                    self._send_text(
+                        HTTPStatus.BAD_REQUEST,
+                        "application/json; charset=utf-8",
+                        body,
+                    )
+                    return
                 request_id = str(payload.get("requestId") or "").strip()
                 thread_id = str(payload.get("threadId") or "").strip()
                 decision = str(payload.get("decision") or "").strip().lower()
                 if not request_id or not thread_id or decision not in {"approve", "reject"}:
                     body = json.dumps({"error": "missing_or_invalid_params", "required": ["requestId", "threadId", "decision"]}, indent=2, ensure_ascii=True)
                     self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                if request_id.startswith("ctp-"):
+                    from .conversation_intake import (
+                        IntakeError,
+                        resolve_conversation_proposal,
+                    )
+
+                    try:
+                        result = resolve_conversation_proposal(
+                            runtime_dir,
+                            request_id,
+                            thread_id,
+                            decision,
+                            paper_project_dirs=paper_project_dirs,
+                        )
+                    except IntakeError as exc:
+                        detail = str(exc)
+                        status = (
+                            HTTPStatus.CONFLICT
+                            if detail in {
+                                "approval_conflict",
+                                "approval_in_progress",
+                                "start_failed",
+                                "recovery_required",
+                            }
+                            else HTTPStatus.BAD_REQUEST
+                        )
+                        body = json.dumps(
+                            {
+                                "responded": False,
+                                "error": detail,
+                                "requestId": request_id,
+                            },
+                            indent=2,
+                            ensure_ascii=True,
+                        )
+                        self._send_text(
+                            status,
+                            "application/json; charset=utf-8",
+                            body,
+                        )
+                        return
+                    from .t3_adapter import invalidate_t3_shell_cache
+
+                    invalidate_t3_shell_cache(runtime_dir)
+                    self._send_text(
+                        (
+                            HTTPStatus.ACCEPTED
+                            if result.get("decision") == "approve"
+                            and not result.get("replayed")
+                            else HTTPStatus.OK
+                        ),
+                        "application/json; charset=utf-8",
+                        json.dumps(result, indent=2, ensure_ascii=True),
+                    )
                     return
                 if request_id.startswith("wb-"):
                     from .obsidian_memory import (
@@ -802,6 +884,61 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                 }, indent=2, ensure_ascii=True)
                 self._send_text(HTTPStatus.ACCEPTED, "application/json; charset=utf-8", body)
                 return
+            if parsed_url.path == "/api/t3/cluster-run-proposal":
+                if not _client_is_loopback(self.client_address[0]):
+                    body = json.dumps({"error": "loopback_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                if not _loopback_origin_allowed(self):
+                    body = json.dumps({"error": "loopback_origin_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                raw_body = self._read_body()
+                try:
+                    payload = json.loads(raw_body) if raw_body else {}
+                except json.JSONDecodeError:
+                    body = json.dumps({"error": "invalid_json_body"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                required = ("environmentId", "projectId", "target", "goal")
+                if (
+                    not isinstance(payload, dict)
+                    or any(not isinstance(payload.get(key), str) or not payload[key].strip() for key in required)
+                    or (
+                        "proposedBy" in payload
+                        and not isinstance(payload.get("proposedBy"), str)
+                    )
+                ):
+                    body = json.dumps(
+                        {"error": "missing_or_invalid_params", "required": list(required)},
+                        indent=2,
+                        ensure_ascii=True,
+                    )
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                from .cluster_run import ClusterRunError, propose_cluster_run
+
+                try:
+                    proposal = propose_cluster_run(
+                        runtime_dir,
+                        payload["environmentId"].strip(),
+                        payload["projectId"].strip(),
+                        payload["target"].strip(),
+                        payload["goal"].strip(),
+                        proposed_by=str(payload.get("proposedBy") or "rd-code-editor").strip(),
+                        paper_project_dirs=paper_project_dirs,
+                    )
+                except ClusterRunError as exc:
+                    body = json.dumps(
+                        {"error": "cluster_run_proposal_rejected", "detail": str(exc)},
+                        indent=2,
+                        ensure_ascii=True,
+                    )
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                body = json.dumps(proposal, indent=2, ensure_ascii=True)
+                self._send_text(HTTPStatus.CREATED, "application/json; charset=utf-8", body)
+                return
             if parsed_url.path == "/api/t3/cluster-run":
                 if not _client_is_loopback(self.client_address[0]):
                     body = json.dumps({"error": "loopback_required"}, indent=2, ensure_ascii=True)
@@ -818,10 +955,25 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     body = json.dumps({"error": "invalid_json_body"}, indent=2, ensure_ascii=True)
                     self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
                     return
-                project_id = str(payload.get("projectId") or "").strip()
-                target = str(payload.get("target") or "").strip()
-                goal = str(payload.get("goal") or "").strip()
-                proposed_by = str(payload.get("proposedBy") or "rd-code-editor").strip()
+                if not isinstance(payload, dict):
+                    body = json.dumps({"error": "invalid_json_body"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                project_id = payload.get("projectId")
+                target = payload.get("target")
+                goal = payload.get("goal")
+                proposed_by = payload.get("proposedBy", "rd-code-editor")
+                if any(
+                    not isinstance(value, str)
+                    for value in (project_id, target, goal, proposed_by)
+                ):
+                    body = json.dumps({"error": "missing_or_invalid_params", "required": ["projectId", "target", "goal"]}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                project_id = project_id.strip()
+                target = target.strip()
+                goal = goal.strip()
+                proposed_by = proposed_by.strip()
                 if not project_id or not target or not goal:
                     body = json.dumps({"error": "missing_or_invalid_params", "required": ["projectId", "target", "goal"]}, indent=2, ensure_ascii=True)
                     self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
@@ -835,17 +987,30 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                         target,
                         goal,
                         proposed_by=proposed_by,
+                        environment_id=payload.get("environmentId"),
+                        proposal_id=payload.get("proposalId"),
+                        confirmation_token=payload.get("confirmationToken"),
+                        decision=payload.get("decision"),
+                        paper_project_dirs=paper_project_dirs,
                     )
                 except ClusterRunError as exc:
-                    body = json.dumps({"error": "cluster_run_rejected", "detail": str(exc)}, indent=2, ensure_ascii=True)
-                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    body = json.dumps(
+                        {"error": exc.error_code, "detail": str(exc)},
+                        indent=2,
+                        ensure_ascii=True,
+                    )
+                    self._send_text(
+                        HTTPStatus(exc.status_code),
+                        "application/json; charset=utf-8",
+                        body,
+                    )
                     return
                 except Exception as exc:  # noqa: BLE001 - never reset the connection; return a readable error
                     body = json.dumps({"error": "cluster_run_failed", "detail": str(exc)}, indent=2, ensure_ascii=True)
                     self._send_text(HTTPStatus.INTERNAL_SERVER_ERROR, "application/json; charset=utf-8", body)
                     return
                 body = json.dumps({
-                    "started": True,
+                    "started": bool(started.get("started")),
                     "runId": started.get("runId"),
                     "projectId": started.get("projectId"),
                     "target": started.get("target"),
@@ -856,9 +1021,15 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     "projectBinding": started.get("projectBinding"),
                     **({"kind": started["kind"]} if started.get("kind") else {}),
                     **({"answer": started["answer"]} if started.get("answer") else {}),
-                    "note": "Coordinator run started. Progress streams into the conversation; the dashboard only monitors.",
+                    "note": (
+                        "Coordinator run started. Progress streams into the conversation; "
+                        "the dashboard only monitors."
+                        if started.get("started")
+                        else "Coordinator answered without starting a governed run."
+                    ),
                 }, indent=2, ensure_ascii=True)
-                self._send_text(HTTPStatus.ACCEPTED, "application/json; charset=utf-8", body)
+                response_status = HTTPStatus.ACCEPTED if started.get("started") else HTTPStatus.OK
+                self._send_text(response_status, "application/json; charset=utf-8", body)
                 return
             if parsed_url.path in (
                 "/api/t3/cluster-roster",
@@ -1089,6 +1260,75 @@ def _handler_for(runtime_dir: str | Path | None, paper_project_dirs: list[str | 
                     ensure_ascii=True,
                 )
                 self._send_text(HTTPStatus.OK, "application/json; charset=utf-8", body)
+                return
+            if parsed_url.path == "/api/t3/cluster-run-cancel":
+                if not _client_is_loopback(self.client_address[0]):
+                    body = json.dumps({"error": "loopback_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                if not _loopback_origin_allowed(self):
+                    body = json.dumps({"error": "loopback_origin_required"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.FORBIDDEN, "application/json; charset=utf-8", body)
+                    return
+                raw_body = self._read_body()
+                try:
+                    payload = json.loads(raw_body) if raw_body else {}
+                except json.JSONDecodeError:
+                    body = json.dumps({"error": "invalid_json_body"}, indent=2, ensure_ascii=True)
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                if (
+                    not isinstance(payload, dict)
+                    or not isinstance(payload.get("runId"), str)
+                    or not payload["runId"].strip()
+                    or (
+                        "requestedBy" in payload
+                        and not isinstance(payload.get("requestedBy"), str)
+                    )
+                ):
+                    body = json.dumps(
+                        {"error": "missing_or_invalid_params", "required": ["runId"]},
+                        indent=2,
+                        ensure_ascii=True,
+                    )
+                    self._send_text(HTTPStatus.BAD_REQUEST, "application/json; charset=utf-8", body)
+                    return
+                from .cluster_run import ClusterRunError, cancel_cluster_run
+
+                try:
+                    record = cancel_cluster_run(
+                        runtime_dir,
+                        payload["runId"].strip(),
+                        requested_by=str(payload.get("requestedBy") or "rd-code-editor").strip(),
+                    )
+                except ClusterRunError as exc:
+                    body = json.dumps(
+                        {"error": exc.error_code, "detail": str(exc)},
+                        indent=2,
+                        ensure_ascii=True,
+                    )
+                    self._send_text(
+                        HTTPStatus(exc.status_code),
+                        "application/json; charset=utf-8",
+                        body,
+                    )
+                    return
+                status = str(record.get("status") or "")
+                body = json.dumps(
+                    {
+                        "cancelRequested": status == "cancel_requested",
+                        "runId": record.get("runId"),
+                        "status": status,
+                    },
+                    indent=2,
+                    ensure_ascii=True,
+                )
+                response_status = (
+                    HTTPStatus.ACCEPTED
+                    if status == "cancel_requested"
+                    else HTTPStatus.OK
+                )
+                self._send_text(response_status, "application/json; charset=utf-8", body)
                 return
             if parsed_url.path in ("/api/t3/cluster-run-delete", "/api/t3/cluster-run-rename"):
                 if not _client_is_loopback(self.client_address[0]):

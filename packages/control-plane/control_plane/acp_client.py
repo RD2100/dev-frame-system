@@ -5,7 +5,7 @@ wire format: newline-delimited JSON-RPC 2.0 over a child process's stdin/stdout
 (verified: agentclientprotocol.com/protocol/transports — messages are delimited
 by `\n` and MUST NOT contain embedded newlines).
 
-Scope (recon-receipt-acp-backbone.md): this is the transport + handshake seam,
+Scope (``PLAN.md`` and ``rules/recon.md``): this is the transport + handshake seam,
 NOT yet a live OpenCode/Gemini driver and NOT yet wrapped in DevFrame governance.
 It exists so later slices can drive real agents uniformly and map ACP's
 permission/fs requests onto DevFrame gates. It is verified against a mock ACP

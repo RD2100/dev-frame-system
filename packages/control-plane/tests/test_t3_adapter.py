@@ -3,7 +3,7 @@ import os
 import copy
 import time
 from pathlib import Path
-from threading import Thread
+from threading import Event, Thread
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -37,6 +37,33 @@ def validate_schema(schema: dict, data: dict) -> None:
     validator_class = validator_for(schema)
     validator_class.check_schema(schema)
     validator_class(schema).validate(data)
+
+
+def _minimal_state(project_id: str = "project-alpha") -> dict:
+    return {
+        "version": 1,
+        "projects": [{
+            "project_id": project_id,
+            "display_name": project_id,
+            "goal": "Exercise the coordinator projection.",
+            "status": "active",
+            "risk_state": "low",
+            "contract_path": "rules/project-contracts/test.md",
+        }],
+        "provider_bindings": [],
+        "sessions": [],
+        "gates": [],
+        "next_actions": [],
+        "team": {
+            "agent_registry": [],
+            "task_board": [],
+            "message_bus": [],
+            "event_log": [],
+            "evidence_store": [],
+            "review_gates": [],
+            "conflict_control": [],
+        },
+    }
 
 
 def test_t3_client_shell_projects_mcp_live_session():
@@ -1026,6 +1053,336 @@ def test_global_coordinator_thread_exists_even_without_team_or_sessions():
     assert detail["threadKind"] == "global_coordinator"
     assert "### DevFrame Global Coordinator" in detail["messages"][0]["text"]
     assert "Agents: 0" in detail["messages"][0]["text"]
+
+
+def test_global_coordinator_projects_durable_turn_and_sanitized_pending_proposal(
+    tmp_path,
+):
+    from control_plane.conversation_intake import (
+        GLOBAL_COORDINATOR_THREAD_ID,
+        get_thread_intakes,
+        record_intake,
+    )
+
+    runtime_dir = tmp_path / "runtime"
+    project = tmp_path / "project-alpha"
+    project.mkdir()
+    record_intake(
+        runtime_dir,
+        GLOBAL_COORDINATOR_THREAD_ID,
+        project.name,
+        "ordinary-turn",
+        "Hello, what can you do?",
+        environment_id="devframe-local",
+        paper_project_dirs=[project],
+    )
+    proposal_response = record_intake(
+        runtime_dir,
+        GLOBAL_COORDINATOR_THREAD_ID,
+        project.name,
+        "development-turn",
+        "Implement one bounded development change.",
+        environment_id="devframe-local",
+        paper_project_dirs=[project],
+    )
+
+    shell = build_t3_client_shell_from_state(
+        _minimal_state(),
+        runtime_dir=runtime_dir,
+        cluster_runs=[],
+    )
+
+    validate_schema(load_schema(), shell)
+    detail = next(
+        item
+        for item in shell["t3"]["threadDetails"]
+        if item["id"] == GLOBAL_COORDINATOR_THREAD_ID
+    )
+    stored_turns = get_thread_intakes(runtime_dir, GLOBAL_COORDINATOR_THREAD_ID)
+    stored_messages = {
+        message["id"]: message
+        for turn in stored_turns
+        for message in (turn["userMessage"], turn["assistantMessage"])
+    }
+    projected_messages = {
+        message["id"]: message
+        for message in detail["messages"]
+        if message["id"] in stored_messages
+    }
+    assert projected_messages.keys() == stored_messages.keys()
+    assert all(
+        projected_messages[message_id]["text"] == stored["text"]
+        and projected_messages[message_id]["turnId"] == stored["turnId"]
+        for message_id, stored in stored_messages.items()
+    )
+    proposal_plan = next(
+        plan
+        for plan in detail["proposedPlans"]
+        if plan["id"] == proposal_response["proposalId"]
+    )
+    assert proposal_plan["turnId"] == "development-turn"
+    assert "Implement one bounded development change." in proposal_plan["planMarkdown"]
+    [approval] = [
+        activity
+        for activity in detail["activities"]
+        if activity["kind"] == "approval.requested"
+        and activity["payload"].get("requestId") == proposal_response["proposalId"]
+    ]
+    assert approval["turnId"] == "development-turn"
+    assert approval["payload"]["status"] == "pending"
+    assert approval["payload"]["requestKind"] == "command"
+    public_proposal_projection = json.dumps(
+        {"plan": proposal_plan, "activity": approval},
+        ensure_ascii=False,
+    )
+    assert str(project.resolve()) not in public_proposal_projection
+    assert all(
+        secret not in public_proposal_projection
+        for secret in (
+            "projectPath",
+            "fingerprint",
+            "capabilityId",
+            "capabilityExpiresAt",
+            "confirmationToken",
+            "token",
+            "stableRunId",
+            "runId",
+        )
+    )
+    assert str(project.resolve()) not in json.dumps(shell, ensure_ascii=False)
+    assert str(project.resolve()) not in json.dumps(detail, ensure_ascii=False)
+    global_thread = next(
+        item
+        for item in shell["t3"]["threads"]
+        if item["id"] == GLOBAL_COORDINATOR_THREAD_ID
+    )
+    assert global_thread["hasPendingApprovals"] is True
+    assert global_thread["hasPendingUserInput"] is True
+    assert global_thread["hasActionableProposedPlan"] is True
+    assert not [
+        item
+        for item in shell["t3"]["threads"]
+        if item["threadKind"] == "goal_conversation"
+    ]
+
+
+def test_rejected_coordinator_proposal_projects_resolved_without_pending_approval(
+    tmp_path,
+):
+    from control_plane.conversation_intake import (
+        GLOBAL_COORDINATOR_THREAD_ID,
+        record_intake,
+        resolve_conversation_proposal,
+    )
+
+    runtime_dir = tmp_path / "runtime"
+    project = tmp_path / "project-alpha"
+    project.mkdir()
+    intake = record_intake(
+        runtime_dir,
+        GLOBAL_COORDINATOR_THREAD_ID,
+        project.name,
+        "rejected-turn",
+        "Implement one bounded development change.",
+        environment_id="devframe-local",
+        paper_project_dirs=[project],
+    )
+    resolve_conversation_proposal(
+        runtime_dir,
+        intake["proposalId"],
+        GLOBAL_COORDINATOR_THREAD_ID,
+        "reject",
+    )
+
+    shell = build_t3_client_shell_from_state(
+        _minimal_state(),
+        runtime_dir=runtime_dir,
+        cluster_runs=[],
+    )
+
+    detail = next(
+        item
+        for item in shell["t3"]["threadDetails"]
+        if item["id"] == GLOBAL_COORDINATOR_THREAD_ID
+    )
+    assert not [
+        activity
+        for activity in detail["activities"]
+        if activity["kind"] == "approval.requested"
+        and activity["payload"].get("requestId") == intake["proposalId"]
+    ]
+    [resolved] = [
+        activity
+        for activity in detail["activities"]
+        if activity["kind"] == "approval.resolved"
+        and activity["payload"].get("requestId") == intake["proposalId"]
+    ]
+    assert resolved["payload"]["decision"] == "reject"
+    assert resolved["payload"]["status"] == "rejected"
+    assert not [
+        plan
+        for plan in detail["proposedPlans"]
+        if plan["id"] == intake["proposalId"]
+    ]
+    global_thread = next(
+        item
+        for item in shell["t3"]["threads"]
+        if item["id"] == GLOBAL_COORDINATOR_THREAD_ID
+    )
+    assert global_thread["hasPendingApprovals"] is False
+    assert global_thread["hasPendingUserInput"] is False
+    assert global_thread["hasActionableProposedPlan"] is False
+    assert str(project.resolve()) not in json.dumps(detail, ensure_ascii=False)
+
+
+def test_source_linked_run_projects_active_turn_through_cancel_lifecycle(
+    tmp_path,
+    monkeypatch,
+):
+    from control_plane.conversation_intake import (
+        GLOBAL_COORDINATOR_THREAD_ID,
+        record_intake,
+        resolve_conversation_proposal,
+    )
+
+    runtime_dir = tmp_path / "runtime"
+    project = tmp_path / "project-alpha"
+    project.mkdir()
+    launched = Event()
+    release = Event()
+
+    def blocking_workflow(*_args, **_kwargs):
+        launched.set()
+        release.wait(timeout=5)
+
+    monkeypatch.setattr(
+        cluster_run_module,
+        "_run_cluster_workflow",
+        blocking_workflow,
+    )
+    intake = record_intake(
+        runtime_dir,
+        GLOBAL_COORDINATOR_THREAD_ID,
+        project.name,
+        "started-turn",
+        "Implement one bounded development change.",
+        environment_id="devframe-local",
+        paper_project_dirs=[project],
+    )
+    approved = resolve_conversation_proposal(
+        runtime_dir,
+        intake["proposalId"],
+        GLOBAL_COORDINATOR_THREAD_ID,
+        "approve",
+    )
+    assert launched.wait(timeout=5)
+    run_id = approved["runId"]
+
+    running_shell = build_t3_client_shell_from_state(
+        _minimal_state(),
+        runtime_dir=runtime_dir,
+        cluster_runs=cluster_run_module.list_cluster_runs(runtime_dir),
+    )
+    global_thread = next(
+        item
+        for item in running_shell["t3"]["threads"]
+        if item["id"] == GLOBAL_COORDINATOR_THREAD_ID
+    )
+    goal_thread = next(
+        item for item in running_shell["t3"]["threads"] if item["id"] == run_id
+    )
+    assert global_thread["session"]["activeTurnId"] == run_id
+    assert global_thread["session"]["status"] == "running"
+    assert global_thread["latestTurn"] == {"turnId": run_id}
+    assert goal_thread["session"]["activeTurnId"] == run_id
+    assert goal_thread["session"]["status"] == "running"
+    assert goal_thread["latestTurn"] == {"turnId": run_id}
+    global_detail = next(
+        item
+        for item in running_shell["t3"]["threadDetails"]
+        if item["id"] == GLOBAL_COORDINATOR_THREAD_ID
+    )
+    [resolved] = [
+        activity
+        for activity in global_detail["activities"]
+        if activity["kind"] == "approval.resolved"
+        and activity["payload"].get("requestId") == intake["proposalId"]
+    ]
+    assert resolved["payload"]["decision"] == "approve"
+    assert resolved["payload"]["status"] == "started"
+    assert resolved["payload"]["runId"] == run_id
+    [implemented_plan] = [
+        plan
+        for plan in global_detail["proposedPlans"]
+        if plan["id"] == intake["proposalId"]
+    ]
+    assert implemented_plan["implementedAt"] is not None
+    assert implemented_plan["implementationThreadId"] == run_id
+    serialized_global_detail = json.dumps(global_detail, ensure_ascii=False)
+    assert str(project.resolve()) not in serialized_global_detail
+    assert all(
+        private_field not in serialized_global_detail
+        for private_field in (
+            "projectPath",
+            "fingerprint",
+            "capabilityId",
+            "capabilityExpiresAt",
+            "confirmationToken",
+            "tokenHash",
+        )
+    )
+
+    cluster_run_module.cancel_cluster_run(
+        runtime_dir,
+        run_id,
+        requested_by="test",
+    )
+    cancelling_shell = build_t3_client_shell_from_state(
+        _minimal_state(),
+        runtime_dir=runtime_dir,
+        cluster_runs=cluster_run_module.list_cluster_runs(runtime_dir),
+    )
+    cancelling_global = next(
+        item
+        for item in cancelling_shell["t3"]["threads"]
+        if item["id"] == GLOBAL_COORDINATOR_THREAD_ID
+    )
+    cancelling_goal = next(
+        item for item in cancelling_shell["t3"]["threads"] if item["id"] == run_id
+    )
+    assert cancelling_global["session"]["activeTurnId"] == run_id
+    assert cancelling_global["session"]["status"] == "running"
+    assert cancelling_global["latestTurn"] == {"turnId": run_id}
+    assert cancelling_goal["session"]["activeTurnId"] == run_id
+    assert cancelling_goal["session"]["status"] == "running"
+    assert cancelling_goal["latestTurn"] == {"turnId": run_id}
+
+    release.set()
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        record = cluster_run_module._load_run_record(runtime_dir, run_id)
+        if record and record.get("status") == "cancelled":
+            break
+        time.sleep(0.02)
+    terminal_shell = build_t3_client_shell_from_state(
+        _minimal_state(),
+        runtime_dir=runtime_dir,
+        cluster_runs=cluster_run_module.list_cluster_runs(runtime_dir),
+    )
+    terminal_global = next(
+        item
+        for item in terminal_shell["t3"]["threads"]
+        if item["id"] == GLOBAL_COORDINATOR_THREAD_ID
+    )
+    terminal_goal = next(
+        item for item in terminal_shell["t3"]["threads"] if item["id"] == run_id
+    )
+    assert terminal_global["session"]["activeTurnId"] is None
+    assert terminal_global["session"]["status"] == "idle"
+    assert terminal_global["latestTurn"] is None
+    assert terminal_goal["session"]["activeTurnId"] is None
+    assert terminal_goal["session"]["status"] == "stopped"
+    assert terminal_goal["latestTurn"] is None
 
 
 def test_build_t3_client_shell_projects_cluster_runs_as_goal_conversations(tmp_path, monkeypatch):
@@ -2847,6 +3204,49 @@ def test_team_workbench_uses_first_valid_project_id():
 
     assert shell["t3"]["threads"][0]["id"] == "devframe-team-workbench-session"
     assert shell["t3"]["threads"][0]["projectId"] == "p"
+
+
+@pytest.mark.parametrize(
+    "projects",
+    [
+        [],
+        [
+            {
+                "project_id": "project-alpha",
+                "display_name": "Alpha",
+                "goal": "g",
+                "status": "active",
+                "risk_state": "low",
+                "contract_path": "/alpha",
+            },
+            {
+                "project_id": "project-beta",
+                "display_name": "Beta",
+                "goal": "g",
+                "status": "active",
+                "risk_state": "low",
+                "contract_path": "/beta",
+            },
+        ],
+    ],
+    ids=["no-project", "multiple-projects"],
+)
+def test_global_coordinator_fails_closed_without_one_canonical_project(projects):
+    state = {
+        "version": 1,
+        "projects": projects,
+        "provider_bindings": [],
+        "sessions": [],
+        "gates": [],
+        "next_actions": [],
+        "team": {},
+    }
+
+    shell = build_t3_client_shell_from_state(state)
+    validate_schema(load_schema(), shell)
+
+    assert shell["t3"]["threads"] == []
+    assert shell["t3"]["threadDetails"] == []
 
 
 def test_large_team_data_is_bounded_in_team_workbench():

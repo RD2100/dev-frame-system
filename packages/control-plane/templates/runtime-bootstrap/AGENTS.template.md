@@ -1,115 +1,23 @@
-# AGENTS.md -- {{PROJECT_NAME}}
+# {{PROJECT_NAME}} Agent Entry
 
-> Canonical root: {{PROJECT_ROOT}}
-> Phase: {{PHASE}} (bootstrap) | Generated: {{CURRENT_DATE}}
-> Platform: {{PLATFORM}} | Bootstrap v1.0
+Read `PLAN.md` completely before repository work. `PLAN.md` is the only human
+development authority for direction, status, milestones, risks, acceptance,
+and the next action.
 
-## Quick Start
+Mandatory execution rules:
 
-1. [Operating Model](docs/agent-runtime/operating-model.md)
-2. [Integration Contracts](docs/agent-runtime/integration-contracts.md)
-3. [Verification Gates](docs/agent-runtime/verification-gates.md)
-4. [Outcome-First Delivery](docs/agent-runtime/outcome-first-delivery.md)
+- Follow `PLAN.md`, `rules/`, schemas, tests, and source truth.
+- Preserve unrelated user changes and the captured dirty baseline.
+- Use bounded TaskSpecs, exact write sets, rollback, and evidence-backed gates.
+- Worker success is not acceptance; independent review and FinalVerdict remain
+  separate.
+- Do not create parallel PRDs, roadmaps, handoffs, or status documents.
+- Do not push, merge, release, deploy, install globally, use credentials, or
+  perform destructive Git work without an explicit human gate.
+- Runtime evidence belongs outside the public repository.
 
-## Default Development Process: Sub-Agent Dispatch
+Machine contracts live under `.devframe/contracts/`; negative fixtures live
+under `packages/agent-acceptance/fixtures/negative-acceptance/`. These assets
+do not schedule work and cannot override `PLAN.md`.
 
-This project uses the [Sub-Agent Dispatch Protocol](docs/agent-runtime/sub-agent-dispatch-protocol.md) (SADP):
-
-- **Codex Goal Agent** (planning tier): Decomposes goals, dispatches [TaskSpecs](docs/agent-runtime/sub-agent-dispatch-protocol.md#1-taskspec-format), evaluates [ExecutionReports](docs/agent-runtime/sub-agent-dispatch-protocol.md#2-executionreport-format), updates plans.
-- **Claude Code Agent** (execution tier): Receives self-contained TaskSpec, implements, collects evidence, returns ExecutionReport.
-- All capabilities used must be registered in [capability-inventory.md](docs/agent-runtime/capability-inventory.md) (core-007).
-
-## Outcome-First Delivery
-
-- The project-local finite Delivery Goal, authoritative HANDOFF, and active
-  milestone record are business truth. Goal and dashboard state are scheduling
-  projections.
-- The project root coordinator freezes the in-scope candidate set, chooses and
-  executes natural milestones, and continues across milestone boundaries while
-  safe local goal work remains. It does not wait for a global controller to
-  design ordinary batches.
-- Check committed `HEAD` and existing tests before declaring a capability gap
-  or dispatching remediation.
-- Match verification to risk. Use focused checks for low-risk batches and run
-  broad checks at the milestone, PR, or high-risk boundary.
-- Group related low-risk changes into one coherent batch. Keep one PR to one
-  product or risk theme.
-- Formal high-risk acceptance keeps real-path evidence and independent review.
-- Close a natural milestone with `accepted_done`; if the parent Delivery Goal
-  remains active, select the next eligible candidate. Do not create work outside
-  the finite candidate set solely to avoid idle.
-- Await long-running commands to exit, timeout, or an explicit external wait
-  state in the session that started them.
-
-See `rules/orchestration.md` orch-006 through orch-012 and
-`rules/review.md` review-007 through review-009.
-
-## Hard Stops (P0)
-
-| # | Rule | Source |
-|---|------|--------|
-| 1 | No destructive git without human approval | `rules/core.md` core-001 |
-| 2 | No secrets in code, logs, or reports | `rules/security.md` sec-001 |
-| 3 | No command injection or path traversal | `rules/security.md` sec-002, sec-003 |
-| 4 | No fake green (FAILED/BLOCKED != PASS) | `rules/review.md` review-001 |
-| 5 | No write to files outside approved scope | `rules/core.md` core-005 |
-| 6 | No capability without inventory registration | `rules/core.md` core-007 |
-
-## Document Map
-
-```
-docs/agent-runtime/
-  operating-model.md          <- Execution layers, tiers, lifecycle
-  integration-contracts.md    <- 8 core data contracts
-  verification-gates.md       <- P0-P3 gate hierarchy
-  tool-policy.md              <- Phase-aware tool policy (generated)
-  capability-inventory.md     <- Cross-platform capability inventory
-  runtime-invariants.md       <- Runtime invariants
-  outcome-first-delivery.md   <- Risk-proportional milestones and quiet gates
-  reviewer-playbook.md        <- Reviewer guide + decision tree
-  negative-acceptance-tests.md <- 30 negative test definitions
-  negative-test-fixtures/     <- 30 JSON
-  sub-agent-dispatch-protocol.md <- Default dev workflow: SADP TaskSpec + ExecutionReport
-  dispatch-model-profiles.md    <- Per-model capability limits + failure patterns
-  lessons-learned.md             <- Operational knowledge log + Knowledge Metabolism
-  sub-agent-dispatch-protocol.md <- Default dev workflow: TaskSpec + ExecutionReport test fixtures
-
-rules/
-  README.md, core.md, coding.md, security.md, review.md, git.md, research.md, frontend.md
-
-templates/runtime-bootstrap/  <- Self-contained bootstrap (re-runnable)
-```
-
-## Accepted Slice Git Lifecycle
-
-- Coding workers may edit, test, and report, but must not stage, commit, or set
-  `root_accepted`.
-- Only the root coordinator may set `root_accepted`, after independent review,
-  required evidence, and actual-diff reconciliation pass.
-- Every `root_accepted` slice receives exactly one local logical commit. The
-  root coordinator stages only accepted paths and verifies the cached path set
-  and content exactly match the slice. Failed, blocked, rejected, or unreviewed
-  slices are not committed.
-- Broad staging, broad restore, stash, reset, and clean are not part of this
-  lifecycle. Push, pull request creation, merge, release, history rewrite, hook
-  registration, and global Git or agent configuration require an explicit
-  human gate. Force-push to `main` or `master` remains forbidden.
-
-## Phase {{PHASE}} Boundary
-
-NOT active in Phase {{PHASE}}:
-- External skills: not installed, not executed
-- Memory writes: read-only
-- Package install: forbidden
-- MCP config changes: forbidden
-- Git mutations: workers do not stage or commit; only the root coordinator performs the exact-path local commit required after `root_accepted`
-- Capability registration: all new capabilities must be registered and reviewer-approved before enablement
-
-See [tool-policy.md](docs/agent-runtime/tool-policy.md).
-
-## Project Context
-
-- Project: {{PROJECT_NAME}} | Root: {{PROJECT_ROOT}}
-- Git: {{GIT_REMOTE}} | Platform: {{PLATFORM}}
-
-> Generated from `templates/runtime-bootstrap/AGENTS.template.md`. Re-run bootstrap.ps1 -Force to regenerate.
+Use `tools/devframe-go.ps1` for the governed code entrypoint.

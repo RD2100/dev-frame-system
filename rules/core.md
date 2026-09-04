@@ -75,7 +75,7 @@
 - **Priority**: P0 (Hard Stop)
 - **Trigger**: Installing a plugin, registering a hook, enabling MCP, loading a skill, authorizing script execution -- any action that introduces or activates a new capability
 - **Scope**: All phases, both platforms (Claude Code + Codex)
-- **Rule**: Any capability must be registered in `docs/agent-runtime/capability-inventory.md` and receive reviewer approval BEFORE it is enabled. The `Platform` field in the inventory entry determines which platform(s) the capability is available on. A capability that does not appear in the inventory does not exist -- it must not be used, even if technically callable.
+- **Rule**: Any capability must be registered in `.devframe/contracts/capability-inventory.md` and receive reviewer approval BEFORE it is enabled. The `Platform` field in the inventory entry determines which platform(s) the capability is available on. A capability that does not appear in the inventory does not exist -- it must not be used, even if technically callable.
 - **Registration Procedure**:
   1. Propose the capability in `capability-inventory.md` with `Status: proposed`
   2. Reviewer approves 锟?change to `Status: approved`

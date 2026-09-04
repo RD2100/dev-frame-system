@@ -688,6 +688,9 @@ def _team_event_entries(runtime: Path) -> list[dict[str, Any]]:
     for run_id, events in sorted(events_by_run.items()):
         latest = events[-1]
         result_events = [event for event in events if event.get("event_type") == "task_result"]
+        workflow_events = [
+            event for event in events if event.get("event_type") == "workflow_event"
+        ]
         context_refs = _team_context_refs(events)
         worker_agent_ids = _team_worker_agent_ids(result_events)
         review_refs, review_failures = _team_review_refs(events, worker_agent_ids)
@@ -698,7 +701,7 @@ def _team_event_entries(runtime: Path) -> list[dict[str, Any]]:
             context_refs,
         )
         failure_refs = review_failures + final_failures
-        status = _aggregate_team_status(result_events)
+        status = _aggregate_team_status(result_events, workflow_events)
         entries.append(_entry(
             adapter_id="team_events",
             source_type="team_event_journal",
@@ -2617,19 +2620,33 @@ def _worker_status(status: str) -> str:
         return "completed"
     if token == "verified":
         return "verified"
-    if token in {"blocked", "failed", "error", "cancelled"}:
+    if token in {"cancelled", "canceled"}:
+        return "cancelled"
+    if token in {"blocked", "failed", "error"}:
         return token
     return "unknown"
 
 
-def _aggregate_team_status(result_events: list[dict[str, Any]]) -> str:
-    if not result_events:
+def _aggregate_team_status(
+    result_events: list[dict[str, Any]],
+    workflow_events: list[dict[str, Any]] | None = None,
+) -> str:
+    if not result_events and not workflow_events:
         return "running"
     statuses = [
         str(_as_dict(event.get("payload")).get("status") or "unknown")
         for event in result_events
     ]
     tokens = {_safe_token(status) for status in statuses}
+    workflow_tokens = {
+        _safe_token(_as_dict(event.get("payload")).get("status"))
+        for event in workflow_events or []
+    }
+    tokens.update(workflow_tokens & {"cancelled", "canceled"})
+    if not tokens:
+        return "running"
+    if tokens & {"cancelled", "canceled"}:
+        return "cancelled"
     if tokens & {"failed", "fail", "error"}:
         return "failed"
     if "blocked" in tokens:

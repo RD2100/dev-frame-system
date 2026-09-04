@@ -1,10 +1,10 @@
-"""Start + track cluster runs from the editor (B inline-confirm → run).
+"""Propose, confirm, start, cancel, and track editor cluster runs.
 
-A human typing ``&target <goal>`` and confirming inline in the conversation is
-the authorization. There is NO dashboard-approval / proposal-staging step: this
-module starts a real project-coordinator run (reusing ``WorkflowEngine``) in the
-background, records a durable run entry the editor can poll, and updates that
-entry as the run progresses. The dashboard is monitoring only.
+Conversational input is non-executing by default. A development goal starts only
+after the client returns a server-issued, exact-binding, expiring, single-use
+confirmation with ``decision=execute``. Started work can be cancelled through a
+durable marker that propagates to the command worker; cancellation stops work
+but never rolls project changes back.
 
 The actual workflow invocation is isolated behind ``_run_cluster_workflow`` so
 tests can verify the start/track path without spawning a real, token-spending
@@ -12,12 +12,15 @@ run.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import secrets
 import threading
 import time
-from datetime import datetime, timezone
+import weakref
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -28,7 +31,16 @@ from .visual_state import build_visual_control_plane_state
 
 
 class ClusterRunError(Exception):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_code: str = "cluster_run_rejected",
+        status_code: int = 400,
+    ) -> None:
+        super().__init__(message)
+        self.error_code = error_code
+        self.status_code = status_code
 
 
 def _normalize_local_path(raw: str) -> str:
@@ -53,12 +65,26 @@ def _normalize_local_path(raw: str) -> str:
     return text
 
 
-_ACTIVE_STATUSES = {"running", "started"}
+_ACTIVE_STATUSES = {"running", "started", "cancel_requested"}
+_RUN_LOCKS_GUARD = threading.Lock()
+_RUN_LOCKS: weakref.WeakValueDictionary[str, Any] = weakref.WeakValueDictionary()
+
+
+def _run_lock(run_id: str) -> Any:
+    rid = _slug(run_id)
+    with _RUN_LOCKS_GUARD:
+        lock = _RUN_LOCKS.get(rid)
+        if lock is None:
+            lock = threading.RLock()
+            _RUN_LOCKS[rid] = lock
+        return lock
 
 
 def _resolve_project_reference(
     runtime_dir: str | Path | None,
     project_ref: str,
+    *,
+    paper_project_dirs: list[str | Path] | None = None,
 ) -> tuple[str, str]:
     """Resolve a client-supplied project reference to (workspace path, project id).
 
@@ -81,7 +107,14 @@ def _resolve_project_reference(
             normalized_dir = str(candidate.resolve())
 
     try:
-        state = build_visual_control_plane_state(runtime_dir)
+        state = (
+            build_visual_control_plane_state(runtime_dir)
+            if paper_project_dirs is None
+            else build_visual_control_plane_state(
+                runtime_dir,
+                paper_project_dirs=paper_project_dirs,
+            )
+        )
         for project in state.get("projects", []):
             if not isinstance(project, dict):
                 continue
@@ -143,7 +176,29 @@ def _reconcile_orphaned_run(
     that thread, so on read we honestly downgrade such orphaned runs to
     "interrupted" instead of showing a frozen "running" state.
     """
+    run_id = str(record.get("runId") or "")
     status = str(record.get("status") or "").lower()
+    if (
+        status in _ACTIVE_STATUSES
+        and not record.get("finishedAt")
+        and _cancellation_marker_path(runtime_dir, run_id).is_file()
+        and not (
+            isinstance(record.get("ownerPid"), int)
+            and _pid_alive(record["ownerPid"])
+        )
+    ):
+        updated = dict(record)
+        updated["status"] = "cancelled"
+        updated["summary"] = (
+            "Run cancelled. Cancellation is not rollback; inspect the project diff "
+            "for partial changes."
+        )
+        updated["finishedAt"] = _now()
+        try:
+            _write_run_record(runtime_dir, updated)
+        except OSError:
+            pass
+        return updated
     if status not in _ACTIVE_STATUSES or record.get("finishedAt"):
         return record
     owner = record.get("ownerPid")
@@ -168,7 +223,11 @@ def _now() -> str:
 
 
 def _new_run_id() -> str:
-    return "g-" + secrets.token_hex(3)
+    return "g-" + secrets.token_hex(8)
+
+
+def _new_proposal_id() -> str:
+    return "crp-" + secrets.token_hex(8)
 
 
 def _runs_dir(runtime_dir: str | Path | None) -> Path:
@@ -176,6 +235,21 @@ def _runs_dir(runtime_dir: str | Path | None) -> Path:
 
     base = Path(runtime_dir).resolve() if runtime_dir else default_runtime_dir()
     return base / "cluster-runs"
+
+
+def _proposals_dir(runtime_dir: str | Path | None) -> Path:
+    return _runs_dir(runtime_dir).parent / "cluster-run-proposals"
+
+
+def _cancellations_dir(runtime_dir: str | Path | None) -> Path:
+    return _runs_dir(runtime_dir).parent / "cluster-run-cancellations"
+
+
+def _cancellation_marker_path(
+    runtime_dir: str | Path | None,
+    run_id: str,
+) -> Path:
+    return _cancellations_dir(runtime_dir) / f"{_slug(run_id)}.json"
 
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
@@ -195,7 +269,247 @@ def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
 
 
 def _write_run_record(runtime_dir: str | Path | None, record: dict[str, Any]) -> None:
-    _atomic_write(_runs_dir(runtime_dir) / f"{record['runId']}.json", record)
+    run_id = str(record["runId"])
+    with _run_lock(run_id):
+        path = _runs_dir(runtime_dir) / f"{run_id}.json"
+        marker_exists = _cancellation_marker_path(runtime_dir, run_id).is_file()
+        existing: dict[str, Any] = {}
+        if marker_exists and path.is_file():
+            try:
+                loaded = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    existing = loaded
+            except (OSError, json.JSONDecodeError):
+                existing = {}
+        incoming = dict(record)
+        existing_status = str(existing.get("status") or "").lower()
+        incoming_status = str(incoming.get("status") or "").lower()
+        if (
+            marker_exists
+            and existing_status in {"cancel_requested", "cancelled"}
+            and incoming_status not in {"cancel_requested", "cancelled"}
+        ):
+            incoming["status"] = (
+                "cancelled" if incoming.get("finishedAt") else existing_status
+            )
+            for key in ("cancelRequestedAt", "cancelRequestedBy"):
+                if existing.get(key) and not incoming.get(key):
+                    incoming[key] = existing[key]
+        _atomic_write(path, incoming)
+
+
+def propose_cluster_run(
+    runtime_dir: str | Path | None,
+    environment_id: str,
+    project_path: str,
+    target: str,
+    goal: str,
+    *,
+    proposed_by: str = "rd-code-editor",
+    ttl_seconds: int = 300,
+    stable_run_id: str | None = None,
+    source_proposal_id: str | None = None,
+    source_turn_id: str | None = None,
+    paper_project_dirs: list[str | Path] | None = None,
+) -> dict[str, Any]:
+    """Create a bound, expiring execution proposal without starting work."""
+    from .conversation_intake import DEVFRAME_LOCAL_ENVIRONMENT_ID
+
+    if not isinstance(environment_id, str) or environment_id != DEVFRAME_LOCAL_ENVIRONMENT_ID:
+        raise ClusterRunError("invalid environment id")
+    project_ref = project_path.strip() if isinstance(project_path, str) else ""
+    text = goal.strip() if isinstance(goal, str) else ""
+    tid = _slug(target) if isinstance(target, str) else ""
+    path, project_id = _resolve_project_reference(
+        runtime_dir,
+        project_ref,
+        paper_project_dirs=paper_project_dirs,
+    )
+    if not path:
+        raise ClusterRunError("projectId is required")
+    if not tid:
+        raise ClusterRunError("target is required")
+    if not text:
+        raise ClusterRunError("goal is required")
+    if not is_valid_cluster_target(runtime_dir, tid):
+        raise ClusterRunError(f"unknown cluster target: {target}")
+    stable_id = str(stable_run_id or "").strip()
+    source_proposal = str(source_proposal_id or "").strip()
+    source_turn = str(source_turn_id or "").strip()
+    if any((stable_id, source_proposal, source_turn)) and not all(
+        (stable_id, source_proposal, source_turn)
+    ):
+        raise ClusterRunError("incomplete stable run binding")
+    if stable_id and (
+        _slug(stable_id) != stable_id
+        or not stable_id.startswith("g-")
+        or _slug(source_proposal) != source_proposal
+        or not source_proposal.startswith("ctp-")
+        or not source_turn
+    ):
+        raise ClusterRunError("invalid stable run binding")
+
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(seconds=max(0, int(ttl_seconds)))
+    proposal_id = _new_proposal_id()
+    token = secrets.token_urlsafe(32)
+    record = {
+        "proposalId": proposal_id,
+        "environmentId": environment_id,
+        "projectRef": project_ref,
+        "projectId": project_id,
+        "projectPath": path,
+        "target": tid,
+        "goal": text,
+        "proposedBy": str(proposed_by or "rd-code-editor"),
+        "stableRunId": stable_id,
+        "sourceProposalId": source_proposal,
+        "sourceTurnId": source_turn,
+        "tokenHash": hashlib.sha256(token.encode("utf-8")).hexdigest(),
+        "createdAt": now.isoformat(),
+        "expiresAt": expires.isoformat(),
+        "status": "unused",
+    }
+    _atomic_write(_proposals_dir(runtime_dir) / f"{proposal_id}.json", record)
+    return {
+        "proposed": True,
+        "started": False,
+        "proposalId": proposal_id,
+        "confirmationToken": token,
+        "expiresAt": record["expiresAt"],
+        "decisionRequired": "execute",
+        **({"stableRunId": stable_id} if stable_id else {}),
+        "binding": {
+            "environmentId": environment_id,
+            "projectId": project_ref,
+            "resolvedProjectId": project_id,
+            "projectPath": path,
+            "target": tid,
+            "goal": text,
+        },
+    }
+
+
+def _consume_cluster_run_confirmation(
+    runtime_dir: str | Path | None,
+    *,
+    environment_id: Any,
+    project_ref: str,
+    project_id: str,
+    project_path: str,
+    target: str,
+    goal: str,
+    proposal_id: Any,
+    confirmation_token: Any,
+    decision: Any,
+    stable_run_id: str,
+    source_proposal_id: str,
+    source_turn_id: str,
+) -> None:
+    from .conversation_intake import DEVFRAME_LOCAL_ENVIRONMENT_ID
+
+    if (
+        not isinstance(environment_id, str)
+        or environment_id != DEVFRAME_LOCAL_ENVIRONMENT_ID
+        or not isinstance(proposal_id, str)
+        or not proposal_id.startswith("crp-")
+        or not isinstance(confirmation_token, str)
+        or not confirmation_token
+        or not isinstance(decision, str)
+        or decision != "execute"
+    ):
+        raise ClusterRunError(
+            "invalid execution confirmation",
+            error_code="invalid_execution_confirmation",
+        )
+
+    directory = _proposals_dir(runtime_dir)
+    safe_id = _slug(proposal_id)
+    if safe_id != proposal_id:
+        raise ClusterRunError(
+            "execution confirmation rejected",
+            error_code="execution_confirmation_rejected",
+            status_code=409,
+        )
+    proposal_path = directory / f"{safe_id}.json"
+    claim_path = directory / f"{safe_id}.used"
+    if claim_path.exists():
+        raise ClusterRunError(
+            "execution confirmation already consumed",
+            error_code="execution_confirmation_consumed",
+            status_code=409,
+        )
+    try:
+        proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        raise ClusterRunError(
+            "execution confirmation rejected",
+            error_code="execution_confirmation_rejected",
+            status_code=409,
+        ) from None
+    expected = {
+        "environmentId": environment_id,
+        "projectRef": project_ref,
+        "projectId": project_id,
+        "projectPath": project_path,
+        "target": target,
+        "goal": goal,
+        "stableRunId": stable_run_id,
+        "sourceProposalId": source_proposal_id,
+        "sourceTurnId": source_turn_id,
+    }
+    if any(proposal.get(key) != value for key, value in expected.items()):
+        raise ClusterRunError(
+            "execution confirmation rejected",
+            error_code="execution_confirmation_rejected",
+            status_code=409,
+        )
+    token_hash = hashlib.sha256(confirmation_token.encode("utf-8")).hexdigest()
+    if not hmac.compare_digest(str(proposal.get("tokenHash") or ""), token_hash):
+        raise ClusterRunError(
+            "execution confirmation rejected",
+            error_code="execution_confirmation_rejected",
+            status_code=409,
+        )
+    try:
+        expires_at = datetime.fromisoformat(str(proposal.get("expiresAt") or ""))
+    except ValueError:
+        raise ClusterRunError(
+            "execution confirmation rejected",
+            error_code="execution_confirmation_rejected",
+            status_code=409,
+        ) from None
+    if expires_at.tzinfo is None or datetime.now(timezone.utc) >= expires_at:
+        raise ClusterRunError(
+            "execution confirmation expired",
+            error_code="execution_confirmation_expired",
+            status_code=409,
+        )
+
+    claim_payload = {
+        "proposalId": proposal_id,
+        "consumedAt": _now(),
+        "decision": "execute",
+    }
+    try:
+        file_descriptor = os.open(
+            claim_path,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            0o600,
+        )
+    except FileExistsError:
+        raise ClusterRunError(
+            "execution confirmation already consumed",
+            error_code="execution_confirmation_consumed",
+            status_code=409,
+        ) from None
+    with os.fdopen(file_descriptor, "w", encoding="utf-8") as handle:
+        json.dump(claim_payload, handle, ensure_ascii=True)
+        handle.flush()
+        os.fsync(handle.fileno())
+    proposal["status"] = "consumed"
+    proposal["consumedAt"] = claim_payload["consumedAt"]
+    _atomic_write(proposal_path, proposal)
 
 
 def _load_run_record(runtime_dir: str | Path | None, run_id: str) -> dict[str, Any] | None:
@@ -221,6 +535,75 @@ def list_cluster_runs(runtime_dir: str | Path | None) -> list[dict[str, Any]]:
             continue
     runs.sort(key=lambda r: str(r.get("startedAt") or ""), reverse=True)
     return runs
+
+
+def cancel_cluster_run(
+    runtime_dir: str | Path | None,
+    run_id: str,
+    *,
+    requested_by: str = "rd-code-editor",
+) -> dict[str, Any]:
+    """Request cancellation for an active run without rolling project changes back."""
+    raw_id = str(run_id or "").strip()
+    rid = _slug(raw_id)
+    if not rid or rid != raw_id:
+        raise ClusterRunError("invalid runId")
+    with _run_lock(rid):
+        record = _load_run_record(runtime_dir, rid)
+        if record is None:
+            raise ClusterRunError(
+                "cluster run not found",
+                error_code="cluster_run_not_found",
+                status_code=404,
+            )
+        status = str(record.get("status") or "").lower()
+        if status in {"cancel_requested", "cancelled"}:
+            return record
+        if status not in {"running", "started"}:
+            raise ClusterRunError(
+                f"cluster run is already terminal: {status or 'unknown'}",
+                error_code="cluster_run_terminal",
+                status_code=409,
+            )
+        go_run_id = str(record.get("goRunId") or "").strip()
+        if go_run_id:
+            try:
+                from .go_dispatch import load_go_run_result
+
+                go_status = str(
+                    load_go_run_result(runtime_dir, go_run_id).status or ""
+                ).lower()
+            except (OSError, ValueError):
+                go_status = ""
+            if go_status == "cancelled":
+                record["status"] = "cancelled"
+                record["finishedAt"] = record.get("finishedAt") or _now()
+                _write_run_record(runtime_dir, record)
+                return record
+            if go_status in {"passed", "failed", "blocked", "completed"}:
+                raise ClusterRunError(
+                    f"cluster run is already terminal: {go_status}",
+                    error_code="cluster_run_terminal",
+                    status_code=409,
+                )
+        requested_at = _now()
+        requested_by_text = str(requested_by or "rd-code-editor").strip() or "rd-code-editor"
+        marker = {
+            "runId": rid,
+            "status": "cancel_requested",
+            "requestedAt": requested_at,
+            "requestedBy": requested_by_text,
+        }
+        _atomic_write(_cancellation_marker_path(runtime_dir, rid), marker)
+        record["status"] = "cancel_requested"
+        record["cancelRequestedAt"] = requested_at
+        record["cancelRequestedBy"] = requested_by_text
+        record["summary"] = (
+            "Cancellation requested; stopping active workers. Partial project changes "
+            "may exist because cancellation is not rollback."
+        )
+        _write_run_record(runtime_dir, record)
+        return record
 
 
 def delete_cluster_run(runtime_dir: str | Path | None, run_id: str) -> bool:
@@ -277,19 +660,23 @@ def _run_cluster_workflow(
     goal: str,
     run_id: str,
     on_prepared: Any = None,
+    cancel_marker: str | Path | None = None,
 ) -> Any:
     """Real project-coordinator run. Module seam so tests can patch it.
 
     Runs the recorded plan -> execute -> review workflow and returns the
     ``WorkflowResult``. ``on_prepared(go_run_id)`` fires as soon as the
     coordinator has planned, so the run's events can be located live. This
-    executes agents and can spend tokens; it only runs after the human confirmed
-    the goal inline.
+    executes agents and can spend tokens; it only runs after consuming the
+    matching server-issued confirmation.
     """
     from .workflow_engine import WorkflowEngine
 
     return WorkflowEngine(runtime_dir).run_coding_workflow(
-        project_path, goal, on_prepared=on_prepared
+        project_path,
+        goal,
+        on_prepared=on_prepared,
+        cancel_marker=cancel_marker,
     )
 
 
@@ -300,6 +687,8 @@ def _run_and_record(
     goal: str,
     run_id: str,
 ) -> None:
+    cancel_marker = _cancellation_marker_path(runtime_dir, run_id)
+
     def _on_prepared(go_run_id: str) -> None:
         rec = _load_run_record(runtime_dir, run_id)
         if rec is None:
@@ -314,7 +703,13 @@ def _run_and_record(
     }
     try:
         result = _run_cluster_workflow(
-            runtime_dir, project_path, target, goal, run_id, on_prepared=_on_prepared
+            runtime_dir,
+            project_path,
+            target,
+            goal,
+            run_id,
+            on_prepared=_on_prepared,
+            cancel_marker=cancel_marker,
         )
         record = _load_run_record(runtime_dir, run_id) or record
         record["status"] = str(getattr(result, "status", None) or "completed")
@@ -334,6 +729,15 @@ def _run_and_record(
         record = _load_run_record(runtime_dir, run_id) or record
         record["status"] = "failed"
         record["summary"] = f"Run failed: {exc}"
+    if (
+        cancel_marker.is_file()
+        or str(record.get("status") or "").lower() == "cancel_requested"
+    ):
+        record["status"] = "cancelled"
+        record["summary"] = (
+            "Run cancelled. Cancellation is not rollback; inspect the project diff "
+            "for partial changes."
+        )
     record["finishedAt"] = _now()
     _write_run_record(runtime_dir, record)
 
@@ -520,9 +924,21 @@ def start_cluster_run(
     goal: str,
     *,
     proposed_by: str = "rd-code-editor",
+    environment_id: str | None = None,
+    proposal_id: str | None = None,
+    confirmation_token: str | None = None,
+    decision: str | None = None,
+    stable_run_id: str | None = None,
+    source_proposal_id: str | None = None,
+    source_turn_id: str | None = None,
+    paper_project_dirs: list[str | Path] | None = None,
 ) -> dict[str, Any]:
     """Validate + start a background project-coordinator run. Returns immediately."""
-    path, project_id = _resolve_project_reference(runtime_dir, project_path)
+    path, project_id = _resolve_project_reference(
+        runtime_dir,
+        project_path,
+        paper_project_dirs=paper_project_dirs,
+    )
     text = str(goal or "").strip()
     tid = _slug(target)
     if not path:
@@ -533,7 +949,75 @@ def start_cluster_run(
         raise ClusterRunError("goal is required")
     if not is_valid_cluster_target(runtime_dir, tid):
         raise ClusterRunError(f"unknown cluster target: {target}")
-    run_id = _new_run_id()
+    stable_id = str(stable_run_id or "").strip()
+    source_proposal = str(source_proposal_id or "").strip()
+    source_turn = str(source_turn_id or "").strip()
+    if any((stable_id, source_proposal, source_turn)) and not all(
+        (stable_id, source_proposal, source_turn)
+    ):
+        raise ClusterRunError(
+            "incomplete stable run binding",
+            error_code="stable_run_binding_rejected",
+            status_code=409,
+        )
+    if stable_id and (
+        _slug(stable_id) != stable_id
+        or not stable_id.startswith("g-")
+        or _slug(source_proposal) != source_proposal
+        or not source_proposal.startswith("ctp-")
+        or not source_turn
+    ):
+        raise ClusterRunError(
+            "invalid stable run binding",
+            error_code="stable_run_binding_rejected",
+            status_code=409,
+        )
+    run_id = stable_id or _new_run_id()
+    if stable_id:
+        existing = _load_run_record(runtime_dir, stable_id)
+        if existing is not None:
+            expected = {
+                "runId": stable_id,
+                "target": tid,
+                "goal": text,
+                "projectId": project_id,
+                "projectPath": path,
+            }
+            if any(existing.get(key) != value for key, value in expected.items()):
+                raise ClusterRunError(
+                    "stable run binding conflict",
+                    error_code="stable_run_conflict",
+                    status_code=409,
+                )
+            for key, value in (
+                ("sourceProposalId", source_proposal),
+                ("sourceTurnId", source_turn),
+            ):
+                if existing.get(key) not in {None, "", value}:
+                    raise ClusterRunError(
+                        "stable run source conflict",
+                        error_code="stable_run_conflict",
+                        status_code=409,
+                    )
+                existing[key] = value
+            _write_run_record(runtime_dir, existing)
+            return {
+                "started": existing.get("kind") != "conversation",
+                "replayed": True,
+                "runId": stable_id,
+                "target": tid,
+                "goal": text,
+                "projectId": project_id,
+                "projectPath": path,
+                "conversationKind": "goal_conversation",
+                "coordinatorScope": "project",
+                "projectBinding": {
+                    "mode": "required",
+                    "projectId": project_id,
+                    "projectPath": path,
+                    "status": "bound",
+                },
+            }
 
     # Phase C triage: a conversational goal (e.g. "你好" / "你能做什么") is
     # answered directly by the coordinator — no coding agents, no token spend.
@@ -543,7 +1027,11 @@ def start_cluster_run(
         coordinator_conversation_reply,
     )
 
-    if classify_goal(text) == GOAL_KIND_CONVERSATION:
+    confirmation_supplied = any(
+        value is not None
+        for value in (environment_id, proposal_id, confirmation_token, decision)
+    )
+    if classify_goal(text) == GOAL_KIND_CONVERSATION and not confirmation_supplied:
         conversation_kind = "global_coordinator" if tid == "coordinator" else "native_chat"
         reply = coordinator_conversation_reply(text)
         record = {
@@ -563,7 +1051,7 @@ def start_cluster_run(
         }
         _write_run_record(runtime_dir, record)
         return {
-            "started": True,
+            "started": False,
             "runId": run_id,
             "target": tid,
             "goal": text,
@@ -580,6 +1068,29 @@ def start_cluster_run(
             },
             "answer": reply,
         }
+    if not confirmation_supplied:
+        raise ClusterRunError(
+            "execution confirmation required",
+            error_code="execution_confirmation_required",
+            status_code=409,
+        )
+    project_ref = project_path.strip() if isinstance(project_path, str) else ""
+    _consume_cluster_run_confirmation(
+        runtime_dir,
+        environment_id=environment_id,
+        project_ref=project_ref,
+        project_id=project_id,
+        project_path=path,
+        target=tid,
+        goal=text,
+        proposal_id=proposal_id,
+        confirmation_token=confirmation_token,
+        decision=decision,
+        stable_run_id=stable_id,
+        source_proposal_id=source_proposal,
+        source_turn_id=source_turn,
+    )
+
     # Resolve the methodology (built-in @trigger or a user-created custom skill)
     # that governs this run, so it is recorded and shown in the detail view.
     # go_dispatch re-resolves the same way (runtime-aware), so the executor
@@ -613,6 +1124,8 @@ def start_cluster_run(
         "status": "running",
         "summary": "Coordinator received the goal; starting…",
         "startedAt": _now(),
+        **({"sourceProposalId": source_proposal} if source_proposal else {}),
+        **({"sourceTurnId": source_turn} if source_turn else {}),
         **({"methodology": methodology_summary} if methodology_summary else {}),
     }
     _write_run_record(runtime_dir, record)
@@ -625,6 +1138,7 @@ def start_cluster_run(
     thread.start()
     return {
         "started": True,
+        "replayed": False,
         "runId": run_id,
         "target": tid,
         "goal": text,

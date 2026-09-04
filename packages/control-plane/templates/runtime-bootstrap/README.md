@@ -19,6 +19,7 @@ A one-command bootstrap that initializes the RD2100 Agent Runtime governance fra
 | `/go` wrapper | Generated | `tools/devframe-go.ps1` |
 | Reviewer Docs | Copied (universal) | 5 files |
 | Outcome-First Delivery | Copied (universal) | Milestones, risk profiles, quiet gates |
+| Obsidian Memory Contract | Copied (universal) | Optional project-scoped recall/write governance |
 | Negative Test Fixtures | Copied (universal) | 30 fixtures |
 
 ## Quick Start
@@ -73,3 +74,13 @@ bounded transcript tail, stores high-signal fields rather than raw chat, is
 idempotent per session/turn event, suppresses private output, and fails open.
 The optional loopback service start is asynchronous, so service startup or
 failure cannot hold the SessionStart recall path.
+
+## Optional Project Memory
+
+Every bootstrapped project receives the governed Obsidian memory contract. It
+uses the existing DevFrame Memory Gateway and the native Obsidian Markdown/CLI
+surface; it does not install a second memory database or a custom Obsidian
+plugin. The bridge is fail-open: a project without Obsidian continues normally
+and reports `memory degraded` when memory is requested. The shipped
+`devframe-memory.mcp.json` is a reference manifest only; activating or
+registering MCP remains a separate project and client policy decision.

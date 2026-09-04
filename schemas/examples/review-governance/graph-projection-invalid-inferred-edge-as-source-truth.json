@@ -1,0 +1,28 @@
+{
+  "graph_projection_id": "graph-projection-invalid-inferred-truth",
+  "project_id": "project-contract-demo",
+  "nodes": [
+    {
+      "id": "artifact-1",
+      "type": "artifact",
+      "authority": "governance_recorded"
+    },
+    {
+      "id": "evidence-1",
+      "type": "evidence",
+      "authority": "test_verified"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-inferred-truth-1",
+      "source": "artifact-1",
+      "target": "evidence-1",
+      "type": "inferred",
+      "is_source_truth": true
+    }
+  ],
+  "operations": [
+    "query"
+  ]
+}

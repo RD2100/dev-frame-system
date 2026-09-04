@@ -1,4 +1,4 @@
-"""P3-2: graph projection and knowledge canvas contract validator.
+"""Graph projection and knowledge canvas contract validator.
 
 Per design-coverage-gap-remediation-plan.md:318-336:
 
@@ -14,6 +14,8 @@ Repair strategy:
   2. Block writeback and graph-driven changes in the first slice.
   3. Enforce authority labeling on context-seeding nodes.
   4. Keep edges inferred-only unless cited from authoritative source.
+  5. Keep a successful run from being projected as completed work without a
+     passing, explicitly identified gate decision.
 """
 from __future__ import annotations
 
@@ -107,11 +109,11 @@ def _is_valid_graph_node_shape(
     nid = node.get("id", "")
     prefix = f"node[{nid or '<missing>'}]"
 
-    for field in ("id", "type", "authority"):
-        val = str(node.get(field, "")).strip()
+    for field_name in ("id", "type", "authority"):
+        val = str(node.get(field_name, "")).strip()
         if not val:
             if collect_errors:
-                errors.append(f"{prefix}: {field} is required")
+                errors.append(f"{prefix}: {field_name} is required")
             else:
                 return False, errors
 
@@ -145,11 +147,11 @@ def _is_valid_graph_edge_shape(
     eid = edge.get("id", "")
     prefix = f"edge[{eid or '<missing>'}]"
 
-    for field in ("id", "source", "target", "type"):
-        val = str(edge.get(field, "")).strip()
+    for field_name in ("id", "source", "target", "type"):
+        val = str(edge.get(field_name, "")).strip()
         if not val:
             if collect_errors:
-                errors.append(f"{prefix}: {field} is required")
+                errors.append(f"{prefix}: {field_name} is required")
             else:
                 return False, errors
 
@@ -205,13 +207,13 @@ def _authority_edge_reference_errors(
     prefix = f"edge[{eid or '<missing>'}]"
     errors: list[str] = []
 
-    for field in ("source", "target"):
-        node_id = str(edge.get(field, "")).strip()
+    for field_name in ("source", "target"):
+        node_id = str(edge.get(field_name, "")).strip()
         if not node_id:
             continue
         if node_id not in node_by_id:
             errors.append(
-                f"{prefix}: authority-bearing edge {field}={node_id!r} "
+                f"{prefix}: authority-bearing edge {field_name}={node_id!r} "
                 f"must reference a shape-valid existing node"
             )
 
@@ -250,6 +252,35 @@ def _has_authoritative_cited_incoming_edge(
         if source_authority in AUTHORITATIVE_SOURCES:
             return True
     return False
+
+
+def _completion_boundary_errors(payload: dict) -> list[str]:
+    """Return errors for a projection that confuses runs with completion."""
+    projection = payload.get("projection")
+    if projection is None:
+        return []
+    if not isinstance(projection, dict):
+        return ["projection must be an object when present"]
+
+    work_item_status = str(projection.get("work_item_status", "")).strip()
+    computed_status = str(projection.get("computed_status", "")).strip()
+    if work_item_status != "completed" and computed_status != "completed":
+        return []
+
+    errors: list[str] = []
+    gate_outcome = str(projection.get("gate_outcome", "")).strip()
+    gate_decision_id = str(projection.get("gate_decision_id", "")).strip()
+    if gate_outcome != "pass":
+        errors.append(
+            "completed graph projection requires a passing gate decision; "
+            "run success is not completion"
+        )
+    if not gate_decision_id:
+        errors.append(
+            "completed graph projection requires a non-empty "
+            "gate_decision_id"
+        )
+    return errors
 
 
 def _check_graph_boundary_rules(
@@ -374,6 +405,15 @@ def _check_graph_boundary_rules(
                 )
             else:
                 return False, errors
+
+    # A run result is not a completion decision.  Keep this optional so
+    # existing node/edge-only projections remain backward compatible.
+    completion_errors = _completion_boundary_errors(payload)
+    if completion_errors:
+        if collect_errors:
+            errors.extend(completion_errors)
+        else:
+            return False, errors
 
     return True, errors
 

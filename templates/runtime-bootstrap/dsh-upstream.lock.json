@@ -1,0 +1,39 @@
+{
+  "$schema": "../../schemas/dsh-upstream-lock.schema.json",
+  "schemaVersion": 1,
+  "upstream": {
+    "repository": "https://github.com/deepseek-ai/deepseek-harness.git",
+    "target": {
+      "ref": "dsh-v0.1.1-rc.2",
+      "commit": "b150a551b8d465e31e418e1b2eaf5e79bbb7d28e"
+    }
+  },
+  "baseline": {
+    "knownUpstreamCommit": "47f943859bef60e4160492346772ded9b24f765a",
+    "capturedHeadCommit": "7f9c6d2fb485890854cbae19a9914a5a617432e0",
+    "capturedAt": "2026-08-25",
+    "worktreeStatus": "dirty"
+  },
+  "overlay": {
+    "mode": "patch-stack",
+    "roots": [
+      "packages/devframe",
+      "packages/bundle/devframe",
+      "packages/client/ui-devframe-control-session",
+      "packages/core/agent-runtime-codex",
+      "packages/client/schema-form",
+      "packages/client/web-react"
+    ],
+    "patches": [
+      {
+        "id": "devframe-overlay-20260829",
+        "path": "patches/dsh/devframe-overlay.patch",
+        "sha256": "7d16c69077ac1a7e0cc4dcaa9753af541312f1590717460dff6da69880e6de23"
+      }
+    ]
+  },
+  "generated": {
+    "sourceOfTruth": "source",
+    "paths": ["**/lib/**", "**/dist/**", "**/*.d.ts"]
+  }
+}

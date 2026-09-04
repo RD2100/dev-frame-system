@@ -164,9 +164,9 @@ def generate_review_prepare_bundle(
     review_packet = generate_review_packet(work_item_id, intent, project_id)
     source_refs = [
         {
-            "ref_id": "runtime-governance-plan",
+            "ref_id": "project-plan",
             "kind": "file",
-            "uri": "docs/status/runtime-governance-and-evidence-closure-transformation-plan.md",
+            "uri": "PLAN.md",
             "included": True,
             "required": True,
             "freshness_state": "current",
@@ -176,7 +176,7 @@ def generate_review_prepare_bundle(
         {
             "ref_id": "agent-coding-discipline",
             "kind": "file",
-            "uri": "docs/agent-runtime/agent-coding-discipline.md",
+            "uri": "rules/coding.md",
             "included": True,
             "required": True,
             "freshness_state": "current",

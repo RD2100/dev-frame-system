@@ -1,0 +1,15 @@
+{
+  "graph_projection_id": "graph-projection-invalid-export",
+  "project_id": "project-contract-demo",
+  "nodes": [
+    {
+      "id": "evidence-1",
+      "type": "evidence",
+      "authority": "test_verified"
+    }
+  ],
+  "edges": [],
+  "operations": [
+    "export_canvas"
+  ]
+}

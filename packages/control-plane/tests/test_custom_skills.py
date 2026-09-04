@@ -130,7 +130,24 @@ def test_cluster_run_records_governing_methodology(tmp_path, monkeypatch):
         "id": "doc-first", "title": "Docs First", "triggers": ["@doc-first"], "readOnly": True,
     }])
 
-    started = crm.start_cluster_run(runtime, str(workspace), "coordinator", "@doc-first 修复登录报错")
+    goal = "@doc-first 修复登录报错"
+    proposal = crm.propose_cluster_run(
+        runtime,
+        "devframe-local",
+        str(workspace),
+        "coordinator",
+        goal,
+    )
+    started = crm.start_cluster_run(
+        runtime,
+        str(workspace),
+        "coordinator",
+        goal,
+        environment_id="devframe-local",
+        proposal_id=proposal["proposalId"],
+        confirmation_token=proposal["confirmationToken"],
+        decision="execute",
+    )
     detail = crm.cluster_run_detail(runtime, started["runId"])
     assert detail.get("methodology")
     assert detail["methodology"]["id"] == "doc-first"

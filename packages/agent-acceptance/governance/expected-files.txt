@@ -10,6 +10,7 @@ scripts/**/*.ps1
 scripts/**/*.psm1
 governance/*.txt
 schemas/agent-runtime/*.json
-docs/agent-runtime/*.md
+PLAN.md
+packages/agent-acceptance/fixtures/negative-acceptance/*.json
 batches/*.json
 AGENTS.md

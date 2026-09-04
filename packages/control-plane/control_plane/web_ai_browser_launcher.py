@@ -1,11 +1,13 @@
-"""Persistent browser launcher for browser-hosted Web AI sessions."""
+"""Bind browser-hosted Web AI sessions to the browser owned by DSH.
+
+DevFrame deliberately does not launch a browser or own a persistent browser
+profile.  DSH owns login state and browser lifecycle; this module only probes
+the DSH-provided CDP endpoint and can open a provider URL in an already-running
+DSH browser.
+"""
 from __future__ import annotations
 
 import json
-import os
-import subprocess
-import sys
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -14,7 +16,7 @@ from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
 from .backup_guard import default_runtime_dir
-from .chrome_binding_probe import ChromeBindingError, _safe_cdp_endpoint
+from .chrome_binding_probe import _safe_cdp_endpoint
 
 
 DEFAULT_CDP_ENDPOINT = "http://127.0.0.1:9222"
@@ -28,10 +30,9 @@ class BrowserLaunchError(RuntimeError):
 @dataclass(frozen=True)
 class BrowserLaunchConfig:
     browser: str
-    browser_exe: str
     cdp_endpoint: str
-    profile_dir: str
     url: str
+    profile_policy: str = "dsh_managed"
 
 
 def default_browser_config_path(runtime_dir: str | Path | None = None) -> Path:
@@ -39,21 +40,18 @@ def default_browser_config_path(runtime_dir: str | Path | None = None) -> Path:
     return root / "browser-profiles" / "web-ai-browser.json"
 
 
-def default_browser_profile_dir(runtime_dir: str | Path | None = None) -> Path:
-    root = Path(runtime_dir).expanduser().resolve() if runtime_dir else default_runtime_dir()
-    return root / "browser-profiles" / "chatgpt-chrome-cdp"
-
-
 def load_browser_launch_config(
     *,
     runtime_dir: str | Path | None = None,
     config_path: str | Path | None = None,
-    browser_exe: str | None = None,
     cdp_endpoint: str | None = None,
-    profile_dir: str | Path | None = None,
     url: str | None = None,
 ) -> BrowserLaunchConfig:
-    """Load local launcher config and apply explicit CLI overrides."""
+    """Load only the endpoint/URL portion of local DSH binding config.
+
+    Older config files may still contain browser executable or profile fields.
+    They are intentionally ignored and are never materialized or used.
+    """
 
     resolved_config_path = Path(config_path).expanduser().resolve() if config_path else default_browser_config_path(runtime_dir)
     data: dict[str, Any] = {}
@@ -63,18 +61,17 @@ def load_browser_launch_config(
         except (OSError, json.JSONDecodeError) as exc:
             raise BrowserLaunchError(f"Unable to read browser config: {exc}") from exc
 
-    resolved_browser_exe = str(browser_exe or data.get("browser_exe") or _default_chrome_path())
     resolved_endpoint = _safe_cdp_endpoint(str(cdp_endpoint or data.get("cdp_endpoint") or DEFAULT_CDP_ENDPOINT))
-    resolved_profile_dir = str(Path(profile_dir or data.get("profile_dir") or default_browser_profile_dir(runtime_dir)).expanduser().resolve())
     resolved_url = _safe_web_ai_url(str(url or data.get("url") or DEFAULT_WEB_AI_URL))
-    browser = str(data.get("browser") or "chrome")
+    # The browser owner is always DSH, even when an older config still carries
+    # a provider-specific browser label.
+    browser = "dsh"
 
     return BrowserLaunchConfig(
         browser=browser,
-        browser_exe=resolved_browser_exe,
         cdp_endpoint=resolved_endpoint,
-        profile_dir=resolved_profile_dir,
         url=resolved_url,
+        profile_policy="dsh_managed",
     )
 
 
@@ -83,16 +80,14 @@ def write_browser_launch_config(config: BrowserLaunchConfig, *, config_path: str
     destination.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "schema_version": "1.0.0",
-        "browser": config.browser,
-        "browser_exe": config.browser_exe,
+        "browser": "dsh",
         "cdp_endpoint": config.cdp_endpoint,
-        "profile_dir": config.profile_dir,
         "url": config.url,
-        "profile_policy": "dedicated_persistent_profile",
-        "login_policy": "login_once_then_reuse_profile",
+        "profile_policy": "dsh_managed",
+        "login_policy": "dsh_owned",
         "notes": [
-            "This is local runtime config. Do not commit browser profiles, cookies, or session data.",
-            "First use may require logging in inside the launched browser window.",
+            "DSH owns browser startup, login state, profile, and session lifecycle.",
+            "DevFrame only probes the DSH-provided CDP endpoint and may open a URL.",
         ],
     }
     destination.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
@@ -103,23 +98,17 @@ def ensure_web_ai_browser(
     *,
     runtime_dir: str | Path | None = None,
     config_path: str | Path | None = None,
-    browser_exe: str | None = None,
     cdp_endpoint: str | None = None,
-    profile_dir: str | Path | None = None,
     url: str | None = None,
     open_url: bool = True,
     write_config: bool = False,
-    wait_seconds: float = 8.0,
-    launcher: Any | None = None,
 ) -> dict[str, Any]:
-    """Ensure the dedicated Web AI browser is reachable through CDP."""
+    """Probe the DSH-owned browser; never launch a browser or profile."""
 
     config = load_browser_launch_config(
         runtime_dir=runtime_dir,
         config_path=config_path,
-        browser_exe=browser_exe,
         cdp_endpoint=cdp_endpoint,
-        profile_dir=profile_dir,
         url=url,
     )
     config_written = ""
@@ -137,32 +126,14 @@ def ensure_web_ai_browser(
             opened_url=opened,
             config_written=config_written,
         )
-
-    _start_browser(config, open_url=open_url, launcher=launcher)
-    deadline = time.time() + wait_seconds
-    probe = probe_cdp(config.cdp_endpoint)
-    while not probe["reachable"] and time.time() < deadline:
-        time.sleep(0.5)
-        probe = probe_cdp(config.cdp_endpoint)
-
-    if not probe["reachable"]:
-        return _result(
-            status="blocked",
-            config=config,
-            probe=probe,
-            started=True,
-            opened_url=open_url,
-            config_written=config_written,
-            reason="cdp_endpoint_unreachable_after_launch",
-        )
-
     return _result(
-        status="started",
+        status="blocked",
         config=config,
-        probe=probe,
-        started=True,
-        opened_url=open_url,
+        probe=before,
+        started=False,
+        opened_url=False,
         config_written=config_written,
+        reason="dsh_cdp_endpoint_unreachable",
     )
 
 
@@ -195,8 +166,8 @@ def render_browser_launch_text(result: dict[str, Any]) -> str:
         "DevFrame Web AI browser",
         f"status       : {result.get('status', '')}",
         f"browser      : {result.get('browser', '')}",
+        f"profile_policy: {result.get('profile_policy', '')}",
         f"cdp_endpoint : {result.get('cdp_endpoint', '')}",
-        f"profile_dir  : {result.get('profile_dir', '')}",
         f"url          : {result.get('url', '')}",
         f"started      : {str(result.get('started', False)).lower()}",
         f"opened_url   : {str(result.get('opened_url', False)).lower()}",
@@ -224,44 +195,16 @@ def _result(
     return {
         "status": status,
         "browser": config.browser,
-        "browser_exe": config.browser_exe,
         "cdp_endpoint": config.cdp_endpoint,
-        "profile_dir": config.profile_dir,
+        "profile_policy": config.profile_policy,
         "url": config.url,
         "started": started,
         "opened_url": opened_url,
         "config_written": config_written,
         "reason": reason,
         "probe": probe,
-        "first_use_note": "First use may require logging in once inside this dedicated browser profile.",
+        "first_use_note": "DSH owns browser startup, login state, profile, and session lifecycle.",
     }
-
-
-def _start_browser(config: BrowserLaunchConfig, *, open_url: bool, launcher: Any | None = None) -> None:
-    browser_path = Path(config.browser_exe)
-    if not browser_path.exists():
-        raise BrowserLaunchError(f"Browser executable not found: {browser_path}")
-    profile_dir = Path(config.profile_dir)
-    profile_dir.mkdir(parents=True, exist_ok=True)
-    args = [
-        str(browser_path),
-        f"--remote-debugging-port={_port_from_endpoint(config.cdp_endpoint)}",
-        f"--user-data-dir={profile_dir}",
-    ]
-    if open_url:
-        args.append(config.url)
-    if launcher is not None:
-        launcher(args)
-        return
-    kwargs: dict[str, Any] = {
-        "stdin": subprocess.DEVNULL,
-        "stdout": subprocess.DEVNULL,
-        "stderr": subprocess.DEVNULL,
-        "close_fds": True,
-    }
-    if os.name == "nt":
-        kwargs["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-    subprocess.Popen(args, **kwargs)  # noqa: S603 - executable and args are explicit, no shell.
 
 
 def _open_url_via_cdp(cdp_endpoint: str, url: str) -> bool:
@@ -287,13 +230,6 @@ def _summarize_targets(tabs: list[object]) -> list[dict[str, str]]:
     return targets
 
 
-def _port_from_endpoint(cdp_endpoint: str) -> int:
-    parsed = urlparse(cdp_endpoint)
-    if parsed.port is None:
-        raise BrowserLaunchError("CDP endpoint must include an explicit port")
-    return parsed.port
-
-
 def _safe_web_ai_url(value: str) -> str:
     parsed = urlparse(value.strip())
     if parsed.scheme != "https":
@@ -301,18 +237,3 @@ def _safe_web_ai_url(value: str) -> str:
     if parsed.username or parsed.password:
         raise BrowserLaunchError("Web AI URL must not include credentials")
     return value.strip()
-
-
-def _default_chrome_path() -> str:
-    env = os.environ.get("DEVFRAME_CHROME_EXE")
-    if env:
-        return env
-    if sys.platform.startswith("win"):
-        candidates = [
-            Path(os.environ.get("PROGRAMFILES", "C:/Program Files")) / "Google/Chrome/Application/chrome.exe",
-            Path(os.environ.get("PROGRAMFILES(X86)", "C:/Program Files (x86)")) / "Google/Chrome/Application/chrome.exe",
-        ]
-        for candidate in candidates:
-            if candidate.exists():
-                return str(candidate)
-    return "chrome"

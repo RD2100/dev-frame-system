@@ -1,0 +1,28 @@
+{
+  "graph_projection_id": "graph-projection-invalid-annotation",
+  "project_id": "project-contract-demo",
+  "nodes": [
+    {
+      "id": "decision-1",
+      "type": "decision",
+      "authority": "human_decided"
+    },
+    {
+      "id": "artifact-1",
+      "type": "artifact",
+      "authority": "none"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-annotated-1",
+      "source": "decision-1",
+      "target": "artifact-1",
+      "type": "annotated",
+      "promoted_to_decision": true
+    }
+  ],
+  "operations": [
+    "query"
+  ]
+}

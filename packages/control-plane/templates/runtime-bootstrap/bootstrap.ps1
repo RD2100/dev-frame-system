@@ -2,8 +2,8 @@
 .SYNOPSIS
     Bootstrap the RD2100 Agent Runtime governance framework in any project.
 .DESCRIPTION
-    Copies universal assets (rules, schemas, reviewer docs) and generates
-    project-specific files from templates.
+    Copies universal machine assets and generates one project plan plus the
+    minimal agent/runtime entry files.
 .PARAMETER ProjectName
     Auto-detected from directory or git remote if omitted.
 .PARAMETER ProjectRoot
@@ -101,18 +101,7 @@ function Get-Sha256($path) {
 Write-Output "`n=== Step 1: Universal Assets ==="
 Copy-Universal "rules" "rules" "Public rule catalog"
 Copy-Universal "schemas" "schemas" "18 JSON Schema files"
-Copy-Universal "docs/agent-runtime/operating-model.md" "docs/agent-runtime/operating-model.md" "Operating model"
-Copy-Universal "docs/agent-runtime/integration-contracts.md" "docs/agent-runtime/integration-contracts.md" "Integration contracts"
-Copy-Universal "docs/agent-runtime/verification-gates.md" "docs/agent-runtime/verification-gates.md" "Verification gates"
-Copy-Universal "docs/agent-runtime/runtime-invariants.md" "docs/agent-runtime/runtime-invariants.md" "Runtime invariants"
-Copy-Universal "docs/agent-runtime/outcome-first-delivery.md" "docs/agent-runtime/outcome-first-delivery.md" "Outcome-first delivery"
-Copy-Universal "docs/agent-runtime/reviewer-playbook.md" "docs/agent-runtime/reviewer-playbook.md" "Reviewer playbook"
-Copy-Universal "docs/agent-runtime/sub-agent-dispatch-protocol.md" "docs/agent-runtime/sub-agent-dispatch-protocol.md" "SADP protocol"
-Copy-Universal "docs/agent-runtime/dispatch-model-profiles.md" "docs/agent-runtime/dispatch-model-profiles.md" "Model profiles"
-Copy-Universal "docs/agent-runtime/lessons-learned.md" "docs/agent-runtime/lessons-learned.md" "Lessons learned"
-Copy-Universal "docs/agent-runtime/sub-agent-dispatch-protocol.md" "docs/agent-runtime/sub-agent-dispatch-protocol.md" "Sub-agent dispatch protocol"
-Copy-Universal "docs/agent-runtime/negative-acceptance-tests.md" "docs/agent-runtime/negative-acceptance-tests.md" "Negative tests"
-Copy-Universal "docs/agent-runtime/negative-test-fixtures" "docs/agent-runtime/negative-test-fixtures" "30 fixtures"
+Copy-Universal "packages/agent-acceptance/fixtures/negative-acceptance" "packages/agent-acceptance/fixtures/negative-acceptance" "30 negative fixtures"
 # Self-copy templates for re-bootstrap (skip in dry-run)
 if (-not $DryRun) {
     $tplDest = Join-Path $ProjectRoot "templates\runtime-bootstrap"
@@ -124,13 +113,14 @@ if (-not $DryRun) {
 }
 
 Write-Output "`n=== Step 2: Project-Specific Files ==="
+New-FromTemplate "PLAN.template.md" "PLAN.md" "Single project plan"
 New-FromTemplate "AGENTS.template.md" "AGENTS.md" "Agent entry point"
-New-FromTemplate "capability-inventory.template.md" "docs/agent-runtime/capability-inventory.md" "Capability inventory"
-New-FromTemplate "tool-policy.template.md" "docs/agent-runtime/tool-policy.md" "Tool policy"
+New-FromTemplate "capability-inventory.template.md" ".devframe/contracts/capability-inventory.md" "Capability inventory"
+New-FromTemplate "tool-policy.template.md" ".devframe/contracts/tool-policy.md" "Tool policy"
 New-FromTemplate "devframe-go.template.ps1" "tools/devframe-go.ps1" "/go coding-agent wrapper"
 
 if ($DryRun) {
-    Write-Output "[DRY-RUN] Generate: governance-manifest.template.md -> docs/agent-runtime/governance-manifest.md (Governance manifest (hash-locked))"
+    Write-Output "[DRY-RUN] Generate: governance-manifest.template.md -> .devframe/contracts/governance-manifest.md (Governance manifest (hash-locked))"
     Write-Output "`n=== Step 3: Verification ==="
     Write-Output "[DRY-RUN] Done."
     exit 0
@@ -138,7 +128,7 @@ if ($DryRun) {
 
 # --- Governance Manifest (hash-locked, generated after all files exist) ---
 $p0Hash = Get-Sha256 (Join-Path $ProjectRoot "rules\core.md")
-$sadpHash = Get-Sha256 (Join-Path $ProjectRoot "docs\agent-runtime\sub-agent-dispatch-protocol.md")
+$sadpHash = Get-Sha256 (Join-Path $ProjectRoot "rules\orchestration.md")
 $agentsHash = Get-Sha256 (Join-Path $ProjectRoot "AGENTS.md")
 $ManifestPlaceholders = @{
     "{{P0_HASH}}" = $p0Hash
@@ -147,17 +137,16 @@ $ManifestPlaceholders = @{
     "{{PROTECTED_HASH}}" = $agentsHash
     "{{CUMULATIVE_HASH}}" = $sadpHash
 }
-New-FromTemplate "governance-manifest.template.md" "docs/agent-runtime/governance-manifest.md" "Governance manifest (hash-locked)"
+New-FromTemplate "governance-manifest.template.md" ".devframe/contracts/governance-manifest.md" "Governance manifest (hash-locked)"
 
 Write-Output "`n=== Step 3: Verification ==="
 
 $unresolved = Select-String -Path (Join-Path $ProjectRoot "AGENTS.md") -Pattern "\{\{" -SimpleMatch 2>$null
 if ($unresolved) { Write-Error "FAIL: Unresolved placeholders in AGENTS.md" } else { Write-Output "[OK] AGENTS.md: clean" }
 
-$inv = Join-Path $ProjectRoot "docs\agent-runtime\capability-inventory.md"
+$inv = Join-Path $ProjectRoot ".devframe\contracts\capability-inventory.md"
 $n = (Select-String -Path $inv -Pattern "^## \d+\." 2>$null).Count
 if ($n -ge 10) { Write-Output "[OK] Capabilities: $n" } else { Write-Error "FAIL: Only $n capabilities" }
 
 Write-Output "`n=== Bootstrap Complete ==="
-Write-Output "Next: 1) Register project capabilities (#11+) 2) Configure platform assets 3) Reviewer sign-off"
-Write-Output "See INSTANTIATION.md for details."
+Write-Output "Next: 1) Complete PLAN.md 2) Register project capabilities (#11+) 3) Reviewer sign-off"

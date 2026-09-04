@@ -15,7 +15,7 @@ Auto-detects project name from directory or git remote. Override: `.\bootstrap.p
 cat AGENTS.md | Select-String "{{"   # Must return nothing
 dir rules\                           # 8 files
 dir schemas\                         # 18 files
-cat docs\agent-runtime\capability-inventory.md | Select-String "^## \d+\."  # >= 10
+Get-Content .devframe\contracts\capability-inventory.md | Select-String "^## \d+\."  # >= 10
 ```
 
 
@@ -44,7 +44,7 @@ See `governance-manifest.md` for the full drift detection policy.
 
 ## Step 3: Register Project Resources
 
-1. Open `docs/agent-runtime/capability-inventory.md`
+1. Open `.devframe/contracts/capability-inventory.md`
 2. Add entries #11+ for project-specific resources
 3. Set `Status: proposed`, submit to reviewer, change to `Status: approved` after sign-off
 

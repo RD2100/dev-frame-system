@@ -844,6 +844,63 @@ def test_run_index_blocks_non_equivalent_run_and_worker_statuses(tmp_path):
     assert "worker result conflict" in diagnostic
 
 
+def test_run_index_merges_cancelled_go_and_team_truth(tmp_path):
+    runtime = tmp_path / "runtime"
+    _write_physical_go_run(
+        runtime,
+        team_project_id="demo-project",
+        go_status="cancelled",
+        go_worker_status="cancelled",
+        team_worker_status="cancelled",
+    )
+
+    index = build_run_index(runtime)
+
+    raw_entries = {entry["adapter_id"]: entry["record"] for entry in index["runs"]}
+    assert raw_entries["go_run"]["outcome"] == "cancelled"
+    assert raw_entries["team_events"]["outcome"] == "cancelled"
+    canonical_record = index["canonical_runs"][0]["record"]
+    _run_record_validator().validate(canonical_record)
+    assert canonical_record["outcome"] == "cancelled"
+    assert canonical_record["worker_results"][0]["status"] == "cancelled"
+    diagnostic = str(canonical_record["domain_refs"].get("diagnostic") or "").lower()
+    assert "status conflict" not in diagnostic
+
+
+def test_run_index_merges_late_run_cancellation_with_completed_worker_evidence(
+    tmp_path,
+):
+    runtime = tmp_path / "runtime"
+    _write_physical_go_run(
+        runtime,
+        team_project_id="demo-project",
+        go_status="cancelled",
+        go_worker_status="passed",
+        team_worker_status="passed",
+    )
+    TeamRuntime(runtime_dir=runtime).record_workflow_event(
+        "go-canonical",
+        phase="execute",
+        status="cancelled",
+        role="executor",
+        summary="Cancellation won before the run result was committed.",
+    )
+
+    index = build_run_index(runtime)
+
+    raw_entries = {entry["adapter_id"]: entry["record"] for entry in index["runs"]}
+    assert raw_entries["go_run"]["outcome"] == "cancelled"
+    assert raw_entries["team_events"]["outcome"] == "cancelled"
+    assert raw_entries["go_run"]["worker_results"][0]["status"] == "passed"
+    assert raw_entries["team_events"]["worker_results"][0]["status"] == "passed"
+    canonical_record = index["canonical_runs"][0]["record"]
+    _run_record_validator().validate(canonical_record)
+    assert canonical_record["outcome"] == "cancelled"
+    diagnostic = str(canonical_record["domain_refs"].get("diagnostic") or "").lower()
+    assert "status conflict" not in diagnostic
+    assert "worker result conflict" not in diagnostic
+
+
 def test_run_index_keeps_valid_canonical_final_verdict_final_ready(tmp_path):
     runtime = tmp_path / "runtime"
     result_event_id = _write_physical_go_run(

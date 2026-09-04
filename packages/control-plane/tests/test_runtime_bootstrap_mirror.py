@@ -5,6 +5,8 @@ from pathlib import Path
 def test_runtime_bootstrap_contract_mirror_matches_public_template():
     root = Path(__file__).resolve().parents[3]
     names = [
+        "PLAN.template.md",
+        "AGENTS.template.md",
         "INSTANTIATION.md",
         "README.md",
         "capability-inventory.template.md",

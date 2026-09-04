@@ -9,16 +9,11 @@ from control_plane.web_ai_browser_launcher import (
 )
 
 
-def test_browser_launch_config_roundtrip_preserves_profile_dir(tmp_path):
+def test_browser_binding_config_roundtrip_is_dsh_managed(tmp_path):
     runtime_dir = tmp_path / "runtime"
-    profile_dir = tmp_path / "existing-login-profile"
-    browser_exe = tmp_path / "chrome.exe"
-    browser_exe.write_text("", encoding="utf-8")
     config = BrowserLaunchConfig(
-        browser="chrome",
-        browser_exe=str(browser_exe),
+        browser="dsh",
         cdp_endpoint="http://127.0.0.1:9222",
-        profile_dir=str(profile_dir),
         url="https://chatgpt.com/",
     )
 
@@ -26,16 +21,40 @@ def test_browser_launch_config_roundtrip_preserves_profile_dir(tmp_path):
     loaded = load_browser_launch_config(runtime_dir=runtime_dir)
 
     assert path == runtime_dir / "browser-profiles" / "web-ai-browser.json"
-    assert loaded.profile_dir == str(profile_dir.resolve())
-    assert loaded.browser_exe == str(browser_exe)
+    assert loaded.profile_policy == "dsh_managed"
+    assert loaded.browser == "dsh"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert "browser_exe" not in payload
+    assert "profile_dir" not in payload
+    assert payload["login_policy"] == "dsh_owned"
+
+
+def test_legacy_profile_fields_are_ignored_and_not_exposed(tmp_path):
+    runtime_dir = tmp_path / "runtime"
+    config_path = runtime_dir / "browser-profiles" / "web-ai-browser.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        json.dumps(
+            {
+                "browser": "chrome",
+                "browser_exe": "C:/private/chrome.exe",
+                "profile_dir": "C:/private/profile",
+                "cdp_endpoint": "http://127.0.0.1:9222",
+                "url": "https://chatgpt.com/",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = load_browser_launch_config(runtime_dir=runtime_dir)
+
+    assert loaded.browser == "dsh"
+    assert loaded.profile_policy == "dsh_managed"
+    assert not (runtime_dir / "profile").exists()
 
 
 def test_ensure_browser_reuses_existing_cdp_without_launching(tmp_path, monkeypatch):
     import control_plane.web_ai_browser_launcher as launcher_module
-
-    browser_exe = tmp_path / "chrome.exe"
-    browser_exe.write_text("", encoding="utf-8")
-    launched = []
 
     monkeypatch.setattr(
         launcher_module,
@@ -51,53 +70,37 @@ def test_ensure_browser_reuses_existing_cdp_without_launching(tmp_path, monkeypa
 
     result = ensure_web_ai_browser(
         runtime_dir=tmp_path / "runtime",
-        browser_exe=str(browser_exe),
-        profile_dir=tmp_path / "profile",
-        launcher=lambda args: launched.append(args),
     )
 
     assert result["status"] == "already_running"
     assert result["started"] is False
     assert result["opened_url"] is True
-    assert launched == []
+    assert result["profile_policy"] == "dsh_managed"
 
 
-def test_ensure_browser_starts_dedicated_profile_when_cdp_missing(tmp_path, monkeypatch):
+def test_ensure_browser_fails_closed_without_starting_when_dsh_cdp_missing(tmp_path, monkeypatch):
     import control_plane.web_ai_browser_launcher as launcher_module
 
-    browser_exe = tmp_path / "chrome.exe"
-    browser_exe.write_text("", encoding="utf-8")
-    profile_dir = tmp_path / "profile"
-    probes = iter([
-        {"reachable": False, "endpoint": "http://127.0.0.1:9222", "error": "refused", "browser": "", "targets": []},
-        {"reachable": True, "endpoint": "http://127.0.0.1:9222", "browser": "Chrome/149", "targets": []},
-    ])
-    launched = []
-
-    monkeypatch.setattr(launcher_module, "probe_cdp", lambda _endpoint: next(probes))
+    monkeypatch.setattr(
+        launcher_module,
+        "probe_cdp",
+        lambda endpoint: {"reachable": False, "endpoint": endpoint, "error": "refused", "browser": "", "targets": []},
+    )
 
     result = ensure_web_ai_browser(
         runtime_dir=tmp_path / "runtime",
-        browser_exe=str(browser_exe),
-        profile_dir=profile_dir,
-        launcher=lambda args: launched.append(args),
-        wait_seconds=0,
     )
 
-    assert result["status"] == "started"
-    assert result["started"] is True
-    assert profile_dir.exists()
-    assert launched
-    assert f"--user-data-dir={profile_dir.resolve()}" in launched[0]
-    assert "--remote-debugging-port=9222" in launched[0]
-    assert "taskkill" not in " ".join(launched[0]).lower()
+    assert result["status"] == "blocked"
+    assert result["started"] is False
+    assert result["opened_url"] is False
+    assert result["reason"] == "dsh_cdp_endpoint_unreachable"
+    assert not (tmp_path / "runtime" / "browser-profiles").exists()
 
 
-def test_ensure_browser_write_config_records_login_once_policy(tmp_path, monkeypatch):
+def test_ensure_browser_write_config_records_dsh_owned_policy(tmp_path, monkeypatch):
     import control_plane.web_ai_browser_launcher as launcher_module
 
-    browser_exe = tmp_path / "chrome.exe"
-    browser_exe.write_text("", encoding="utf-8")
     monkeypatch.setattr(
         launcher_module,
         "probe_cdp",
@@ -107,11 +110,11 @@ def test_ensure_browser_write_config_records_login_once_policy(tmp_path, monkeyp
 
     result = ensure_web_ai_browser(
         runtime_dir=tmp_path / "runtime",
-        browser_exe=str(browser_exe),
-        profile_dir=tmp_path / "profile",
         write_config=True,
     )
 
     config = json.loads(Path(result["config_written"]).read_text(encoding="utf-8"))
-    assert config["profile_policy"] == "dedicated_persistent_profile"
-    assert config["login_policy"] == "login_once_then_reuse_profile"
+    assert config["profile_policy"] == "dsh_managed"
+    assert config["login_policy"] == "dsh_owned"
+    assert "browser_exe" not in config
+    assert "profile_dir" not in config

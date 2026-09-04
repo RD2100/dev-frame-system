@@ -1,310 +1,99 @@
-"""Tests for P1-3: documentation drift validator.
-
-Per design-coverage-gap-remediation-plan.md:194-212:
-
-  1. Verify every docs/status/*.md file appears in status-document-inventory.md.
-  2. Check that master-plan companion docs appear in reviewer-index.md
-     when they affect implementation.
-  3. Keep warnings targeted; do not require docs/README.md to list every
-     historical status file.
-
-Acceptance:
-  - adding a public subsystem, evidence record, or deferred module without
-    inventory/reviewer visibility fails a local check or produces a clear
-    warning.
-"""
+"""Tests for the root PLAN.md single-authority gate."""
 from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from control_plane.docs_drift_validator import (
-    ValidationResult,
+    REQUIRED_PLAN_HEADINGS,
     build_docs_drift_payload,
-    validate_docs_drift,
     derive_docs_drift,
+    validate_docs_drift,
 )
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+def _plan_text() -> str:
+    headings = "\n\n".join(
+        f"## {heading}\n\ncontent" for heading in REQUIRED_PLAN_HEADINGS
+    )
+    return f"# Plan\n\nCurrent verdict: **candidate**\n\n{headings}\n"
 
-def _payload(disk_files=None, inventory_entries=None,
-             reviewer_index_entries=None, active_plan_files=None,
-             docs_readme_entries=None):
-    return {
-        "disk_files": disk_files or [],
-        "inventory_entries": inventory_entries or [],
-        "reviewer_index_entries": reviewer_index_entries or [],
-        "active_plan_files": active_plan_files or [],
-        "docs_readme_entries": docs_readme_entries or [],
+
+def _payload(**overrides: object) -> dict:
+    plan_text = _plan_text()
+    payload = {
+        "plan_exists": True,
+        "plan_text": plan_text,
+        "plan_size": len(plan_text.encode("utf-8")),
+        "plan_read_error": None,
+        "agents_exists": True,
+        "agents_text": "PLAN.md is the only human development authority.",
+        "agents_read_error": None,
+        "docs_files": [],
+        "legacy_root_files": [],
     }
+    payload.update(overrides)
+    return payload
 
 
-# ---------------------------------------------------------------------------
-# validate_docs_drift
-# ---------------------------------------------------------------------------
-
-class TestValidateDocsDrift:
-    def test_empty_passes(self):
-        result = validate_docs_drift(_payload())
-        assert result.valid
-
-    def test_all_disk_files_in_inventory_passes(self):
-        result = validate_docs_drift(_payload(
-            disk_files=["plan-a.md", "evidence-x.md"],
-            inventory_entries=["plan-a.md", "evidence-x.md", "old-stage.md"],
-            reviewer_index_entries=["plan-a.md"],
-            active_plan_files=["plan-a.md"],
-            docs_readme_entries=["plan-a.md"],
-        ))
-        assert result.valid
-
-    def test_disk_file_missing_from_inventory_fails(self):
-        result = validate_docs_drift(_payload(
-            disk_files=["plan-a.md", "unlisted.md"],
-            inventory_entries=["plan-a.md"],
-        ))
-        assert not result.valid
-        assert any("unlisted.md" in e and "inventory" in e for e in result.errors)
-
-    def test_active_plan_missing_from_reviewer_index_fails(self):
-        result = validate_docs_drift(_payload(
-            disk_files=["plan-a.md", "plan-b.md"],
-            inventory_entries=["plan-a.md", "plan-b.md"],
-            reviewer_index_entries=["plan-a.md"],
-            active_plan_files=["plan-a.md", "plan-b.md"],
-        ))
-        assert not result.valid
-        assert any("plan-b.md" in e and "reviewer-index" in e for e in result.errors)
-
-    def test_active_plan_not_in_disk_files_is_consistency_error(self):
-        """If active_plan_files references a file not on disk, that's a
-        consistency error — the caller provided inconsistent data."""
-        result = validate_docs_drift(_payload(
-            disk_files=["plan-a.md"],
-            inventory_entries=["plan-a.md", "ghost.md"],
-            reviewer_index_entries=["ghost.md"],
-            active_plan_files=["ghost.md"],
-        ))
-        assert not result.valid
-        assert any("ghost.md" in e and "disk" in e for e in result.errors)
-
-    def test_historical_file_missing_from_reviewer_index_ok(self):
-        """Historical files are NOT required in reviewer-index — only active
-        plans need reviewer visibility."""
-        result = validate_docs_drift(_payload(
-            disk_files=["plan-a.md", "old-stage-3.md"],
-            inventory_entries=["plan-a.md", "old-stage-3.md"],
-            reviewer_index_entries=["plan-a.md"],
-            active_plan_files=["plan-a.md"],
-            docs_readme_entries=["plan-a.md"],
-        ))
-        assert result.valid
-
-    def test_historical_file_missing_from_inventory_still_fails(self):
-        """Even historical files must appear in inventory — every disk file
-        must be inventoried."""
-        result = validate_docs_drift(_payload(
-            disk_files=["plan-a.md", "old-stage-3.md"],
-            inventory_entries=["plan-a.md"],
-            reviewer_index_entries=["plan-a.md"],
-            active_plan_files=["plan-a.md"],
-        ))
-        assert not result.valid
-        assert any("old-stage-3.md" in e for e in result.errors)
-
-    def test_multiple_errors_accumulated(self):
-        result = validate_docs_drift(_payload(
-            disk_files=["plan-a.md", "unlisted-1.md", "unlisted-2.md"],
-            inventory_entries=["plan-a.md"],
-            reviewer_index_entries=[],
-            active_plan_files=["plan-a.md", "unlisted-1.md"],
-        ))
-        assert not result.valid
-        # unlisted-1: inventory + reviewer-index, unlisted-2: inventory, plan-a: reviewer-index
-        assert len(result.errors) >= 3
-
-    def test_reviewer_index_extra_entries_not_an_error(self):
-        """Having extra entries in reviewer-index beyond active plans is fine —
-        the index may list more than just active plans."""
-        result = validate_docs_drift(_payload(
-            disk_files=["plan-a.md"],
-            inventory_entries=["plan-a.md"],
-            reviewer_index_entries=["plan-a.md", "extra-ref.md"],
-            active_plan_files=["plan-a.md"],
-            docs_readme_entries=["plan-a.md"],
-        ))
-        assert result.valid
-
-    def test_inventory_extra_entries_not_an_error(self):
-        """Inventory may list files that no longer exist on disk (historical
-        traceability)."""
-        result = validate_docs_drift(_payload(
-            disk_files=["plan-a.md"],
-            inventory_entries=["plan-a.md", "retired-plan.md"],
-            reviewer_index_entries=["plan-a.md"],
-            active_plan_files=["plan-a.md"],
-            docs_readme_entries=["plan-a.md"],
-        ))
-        assert result.valid
-
-    def test_deferred_module_missing_from_reviewer_index_fails(self):
-        """Deferred modules are 'master-plan companion docs' — they affect
-        the roadmap and should appear in reviewer-index."""
-        result = validate_docs_drift(_payload(
-            disk_files=["deferred-x.md"],
-            inventory_entries=["deferred-x.md"],
-            reviewer_index_entries=[],
-            active_plan_files=["deferred-x.md"],
-        ))
-        assert not result.valid
-        assert any("deferred-x.md" in e for e in result.errors)
-
-    def test_evidence_record_missing_from_inventory_fails(self):
-        """Evidence records must appear in inventory — adding without
-        visibility is a failure."""
-        result = validate_docs_drift(_payload(
-            disk_files=["evidence-run-20260706.md"],
-            inventory_entries=[],
-        ))
-        assert not result.valid
-        assert any("evidence-run-20260706.md" in e for e in result.errors)
-
-    def test_active_plan_missing_from_readme_fails(self):
-        """Active plan docs must appear in docs/README.md — per P1-3 spec
-        line 202."""
-        result = validate_docs_drift(_payload(
-            disk_files=["plan-a.md"],
-            inventory_entries=["plan-a.md"],
-            reviewer_index_entries=["plan-a.md"],
-            active_plan_files=["plan-a.md"],
-            docs_readme_entries=[],
-        ))
-        assert not result.valid
-        assert any("plan-a.md" in e and "README" in e for e in result.errors)
-
-    def test_historical_file_not_in_readme_is_ok(self):
-        """Historical files are NOT required in docs/README.md — only active
-        plans / master-plan companion docs."""
-        result = validate_docs_drift(_payload(
-            disk_files=["plan-a.md", "old-stage-3.md"],
-            inventory_entries=["plan-a.md", "old-stage-3.md"],
-            reviewer_index_entries=["plan-a.md"],
-            active_plan_files=["plan-a.md"],
-            docs_readme_entries=["plan-a.md"],
-        ))
-        assert result.valid
+def test_valid_single_plan_payload_passes() -> None:
+    result = validate_docs_drift(_payload())
+    assert result.valid, result.errors
 
 
-    def test_current_repo_docs_status_inventory_is_visible(self):
-        """Real public-doc path: current docs/status files must be inventoried."""
-        payload = build_docs_drift_payload(REPO_ROOT)
-        result = validate_docs_drift(payload)
-        assert result.valid, "\n".join(result.errors)
-        assert "review-governance-kernel-completion-20260706.md" in payload["disk_files"]
-        assert "review-governance-kernel-completion-20260706.md" in (
-            payload["inventory_entries"]
+def test_missing_plan_fails() -> None:
+    result = validate_docs_drift(
+        _payload(plan_exists=False, plan_text="", plan_size=0)
+    )
+    assert not result.valid
+    assert any("PLAN.md is missing" in error for error in result.errors)
+
+
+def test_duplicate_verdict_and_missing_heading_fail() -> None:
+    text = _plan_text().replace("## Human Gates\n\ncontent", "")
+    text += "\nCurrent verdict: **duplicate**\n"
+    result = validate_docs_drift(_payload(plan_text=text))
+    assert not result.valid
+    assert any("Current verdict" in error for error in result.errors)
+    assert any("Human Gates" in error for error in result.errors)
+
+
+def test_retired_docs_tree_and_root_docs_fail() -> None:
+    result = validate_docs_drift(
+        _payload(
+            docs_files=["docs/status/old-plan.md"],
+            legacy_root_files=["README.md", "AGENT_HANDOFF.md"],
         )
-        assert "LAUNCH_NOW.md" in payload["disk_files"]
-        assert "LAUNCH_NOW.md" in payload["inventory_entries"]
+    )
+    assert not result.valid
+    assert any("docs/status/old-plan.md" in error for error in result.errors)
+    assert any("README.md" in error for error in result.errors)
 
 
-# ---------------------------------------------------------------------------
-# derive_docs_drift
-# ---------------------------------------------------------------------------
+def test_agents_entrypoint_must_declare_authority() -> None:
+    result = validate_docs_drift(_payload(agents_text="Read PLAN.md."))
+    assert not result.valid
+    assert any("only human development authority" in error for error in result.errors)
 
-class TestDeriveDocsDrift:
-    def test_empty_packet(self):
-        result = derive_docs_drift(_payload())
-        assert result["disk_count"] == 0
-        assert result["untracked_count"] == 0
-        assert result["missing_from_reviewer_index_count"] == 0
 
-    def test_all_clean(self):
-        result = derive_docs_drift(_payload(
-            disk_files=["a.md", "b.md"],
-            inventory_entries=["a.md", "b.md"],
-            reviewer_index_entries=["a.md"],
-            active_plan_files=["a.md"],
-        ))
-        assert result["disk_count"] == 2
-        assert result["untracked_count"] == 0
-        assert result["missing_from_reviewer_index_count"] == 0
+def test_projection_uses_same_fail_closed_checks_without_mutation() -> None:
+    payload = _payload(docs_files=["docs/legacy.md"])
+    original = list(payload["docs_files"])
+    projection = derive_docs_drift(payload)
+    assert not projection["valid"]
+    assert projection["docs_file_count"] == 1
+    assert projection["current_verdict_count"] == 1
+    assert payload["docs_files"] == original
 
-    def test_counts_untracked(self):
-        result = derive_docs_drift(_payload(
-            disk_files=["a.md", "orphan.md"],
-            inventory_entries=["a.md"],
-        ))
-        assert result["untracked_count"] == 1
-        assert "orphan.md" in result["untracked"]
 
-    def test_counts_missing_from_reviewer_index(self):
-        result = derive_docs_drift(_payload(
-            disk_files=["a.md", "b.md"],
-            inventory_entries=["a.md", "b.md"],
-            reviewer_index_entries=["a.md"],
-            active_plan_files=["a.md", "b.md"],
-        ))
-        assert result["missing_from_reviewer_index_count"] == 1
-        assert "b.md" in result["missing_from_reviewer_index"]
-
-    def test_projection_is_read_only(self):
-        pkt = _payload(
-            disk_files=["a.md"],
-            inventory_entries=["a.md"],
-        )
-        original = {"disk_files": list(pkt["disk_files"])}
-        derive_docs_drift(pkt)
-        assert pkt["disk_files"] == original["disk_files"]
-
-    def test_projection_reports_active_plan_not_on_disk(self):
-        """P0 fix: projection must detect active plan not on disk —
-        same as validator."""
-        result = derive_docs_drift(_payload(
-            disk_files=["plan-a.md"],
-            inventory_entries=["plan-a.md", "ghost.md"],
-            reviewer_index_entries=["ghost.md"],
-            active_plan_files=["ghost.md"],
-            docs_readme_entries=[],
-        ))
-        assert not result["valid"]
-        assert result["active_not_on_disk_count"] == 1
-        assert "ghost.md" in result["active_not_on_disk"]
-        assert any("disk" in e for e in result["errors"])
-
-    def test_projection_reports_missing_from_readme(self):
-        """Projection must report active plans missing from docs/README.md."""
-        result = derive_docs_drift(_payload(
-            disk_files=["plan-a.md"],
-            inventory_entries=["plan-a.md"],
-            reviewer_index_entries=["plan-a.md"],
-            active_plan_files=["plan-a.md"],
-            docs_readme_entries=[],
-        ))
-        assert not result["valid"]
-        assert result["missing_from_readme_count"] == 1
-        assert "plan-a.md" in result["missing_from_readme"]
-
-    def test_projection_valid_when_all_clean(self):
-        """Full clean projection: valid=true, no errors."""
-        result = derive_docs_drift(_payload(
-            disk_files=["a.md", "b.md"],
-            inventory_entries=["a.md", "b.md", "old.md"],
-            reviewer_index_entries=["a.md"],
-            active_plan_files=["a.md"],
-            docs_readme_entries=["a.md"],
-        ))
-        assert result["valid"]
-        assert result["errors"] == []
-        assert result["disk_count"] == 2
-        assert result["untracked_count"] == 0
-        assert result["missing_from_reviewer_index_count"] == 0
-        assert result["missing_from_readme_count"] == 0
-        assert result["active_not_on_disk_count"] == 0
+def test_current_repository_has_one_complete_plan_and_no_retired_docs() -> None:
+    payload = build_docs_drift_payload(REPO_ROOT)
+    result = validate_docs_drift(payload)
+    assert result.valid, "\n".join(result.errors)
+    projection = derive_docs_drift(payload)
+    assert projection["current_verdict_count"] == 1
+    assert projection["heading_counts"]["Next Action"] == 1
+    assert projection["docs_file_count"] == 0
+    assert projection["legacy_root_file_count"] == 0

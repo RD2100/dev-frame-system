@@ -99,6 +99,52 @@ def _fake_popen(*args, **kwargs):
     return _FakeProcess()
 
 
+def test_cluster_cancel_response_is_minimal_public_contract(tmp_path):
+    from control_plane.cluster_run import _write_run_record
+
+    runtime_dir = tmp_path / "runtime"
+    _write_run_record(runtime_dir, {
+        "runId": "g-cancel-contract",
+        "projectId": "project-alpha",
+        "projectPath": str(tmp_path / "project-alpha"),
+        "target": "coordinator",
+        "goal": "Exercise the bounded cancel response.",
+        "status": "running",
+        "startedAt": "2026-07-30T00:00:00Z",
+    })
+    server = build_dashboard_server(
+        runtime_dir=runtime_dir,
+        port=0,
+        refresh_seconds=0,
+    )
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        request = Request(
+            f"{base_url}/api/t3/cluster-run-cancel",
+            data=json.dumps({
+                "runId": "g-cancel-contract",
+                "requestedBy": "rd-code-editor",
+            }).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(request, timeout=5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+
+        assert response.status == 202
+        assert payload == {
+            "cancelRequested": True,
+            "runId": "g-cancel-contract",
+            "status": "cancel_requested",
+        }
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
 def test_session_detail_endpoint_returns_public_projection_and_hides_runtime_refs(tmp_path, monkeypatch):
     runtime_dir = tmp_path / "runtime"
     state = {

@@ -107,6 +107,14 @@ suggestion.
 - date:
 - planner_agent_id:
 
+## User-visible Contract
+- acceptance_sources:
+- must_appear:
+- must_disappear:
+- interactions:
+- runtime_proof:
+- product_reviewer:
+
 ## Resource Map
 - repository_roots:
 - top_level_tree:

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "DRAFT — NOT ACTIVE. For future activation only. See docs/agent-runtime/inactive-frame-registry.md for activation triggers.",
+  "$comment": "DRAFT — NOT ACTIVE. For future activation only. See PLAN.md for activation gates.",
   "title": "BoundaryEnvelope",
   "description": "Every cross-project data flow MUST be wrapped in this envelope. Separates format compatibility from authority compatibility. The payload is the actual contract (TaskSpec, EvidenceIndex, etc.); the envelope declares who produced it, under what authority, and with what freshness.",
   "type": "object",

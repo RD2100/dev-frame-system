@@ -5,7 +5,7 @@ phase to the next. It is NOT a persistent supervisor — each continuation is
 a one-shot gate decision under declared scope, policy, evidence, and context
 boundaries.
 
-Plan (document-driven-transformation-final-plan-20260705.md:224-231):
+Plan authority: ``PLAN.md`` Execution Protocol.
 "After gates work, introduce higher-power continuation only as explicit gate
 decisions under declared scope, policy, evidence, and context boundaries.
 Goal-bound continuation is not a persistent supervisor."

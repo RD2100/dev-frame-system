@@ -77,7 +77,190 @@
     "context_packet_path": { "type": "string" },
     "context_ledger_path": { "type": "string" },
     "packet_dir": { "type": "string" },
-    "created_at": { "type": "string", "format": "date-time" }
+    "created_at": { "type": "string", "format": "date-time" },
+    "graph_context_selection": {
+      "$ref": "#/$defs/graph_context_selection"
+    }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "graph_context_selection": {
+      "type": "object",
+      "required": [
+        "context_selection_id",
+        "graph_projection_id",
+        "graph_slice_ref",
+        "project_id",
+        "selected_node_ids",
+        "candidate_roles",
+        "source_refs",
+        "omitted_required_refs",
+        "omitted_context",
+        "forbidden_refs",
+        "assumption_claims",
+        "omitted_assumptions",
+        "freshness",
+        "completeness_state",
+        "privacy_state",
+        "authority_boundary"
+      ],
+      "properties": {
+        "context_selection_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "graph_projection_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "graph_slice_ref": {
+          "type": "string",
+          "pattern": "^graph://projection/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "selected_node_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 512,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+          }
+        },
+        "candidate_roles": {
+          "type": "object",
+          "maxProperties": 256,
+          "additionalProperties": {
+            "enum": ["selected", "neighbor"]
+          }
+        },
+        "source_refs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": { "$ref": "#/$defs/graph_source_ref" }
+        },
+        "omitted_required_refs": {
+          "type": "array",
+          "maxItems": 512,
+          "items": { "$ref": "#/$defs/graph_omission" }
+        },
+        "omitted_context": {
+          "type": "array",
+          "maxItems": 512,
+          "items": { "$ref": "#/$defs/graph_omission" }
+        },
+        "forbidden_refs": {
+          "type": "array",
+          "maxItems": 512,
+          "items": { "$ref": "#/$defs/graph_forbidden_ref" }
+        },
+        "assumption_claims": {
+          "type": "array",
+          "maxItems": 512,
+          "items": { "$ref": "#/$defs/graph_assumption" }
+        },
+        "omitted_assumptions": {
+          "type": "array",
+          "maxItems": 512,
+          "items": { "$ref": "#/$defs/graph_omission" }
+        },
+        "freshness": {
+          "type": "object",
+          "required": ["stale_refs", "unknown_refs"],
+          "properties": {
+            "stale_refs": { "$ref": "#/$defs/graph_id_list" },
+            "unknown_refs": { "$ref": "#/$defs/graph_id_list" }
+          },
+          "additionalProperties": false
+        },
+        "completeness_state": { "const": "incomplete" },
+        "privacy_state": { "const": "redacted" },
+        "authority_boundary": {
+          "type": "object",
+          "required": [
+            "can_execute",
+            "can_review",
+            "can_claim_final_acceptance",
+            "final_verdict_required"
+          ],
+          "properties": {
+            "can_execute": { "const": false },
+            "can_review": { "const": true },
+            "can_claim_final_acceptance": { "const": false },
+            "final_verdict_required": { "const": true }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "graph_source_ref": {
+      "type": "object",
+      "required": ["ref_id", "kind", "uri", "included", "required", "freshness_state"],
+      "properties": {
+        "ref_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "kind": {
+          "enum": ["file", "directory", "url", "artifact", "evidence", "review", "final_verdict", "note"]
+        },
+        "uri": {
+          "type": "string",
+          "pattern": "^(artifact|code|decision|doc|evidence|graph|paper|project|repo|review|run|skill)://[A-Za-z0-9][A-Za-z0-9._~:/#?&=+\\-]{0,511}$"
+        },
+        "content_hash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "included": { "type": "boolean" },
+        "required": { "type": "boolean" },
+        "freshness_state": { "enum": ["current", "stale", "unknown", "omitted"] }
+      },
+      "additionalProperties": false
+    },
+    "graph_id_list": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+      }
+    },
+    "graph_omission": {
+      "type": "object",
+      "required": ["ref", "omission_reason", "impact"],
+      "properties": {
+        "ref": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "omission_reason": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "impact": { "type": "string", "minLength": 1, "maxLength": 512 }
+      },
+      "additionalProperties": false
+    },
+    "graph_forbidden_ref": {
+      "type": "object",
+      "required": ["ref", "reason"],
+      "properties": {
+        "ref": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 512 }
+      },
+      "additionalProperties": false
+    },
+    "graph_assumption": {
+      "type": "object",
+      "required": ["edge_id", "source", "target", "kind", "authority"],
+      "properties": {
+        "edge_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$" },
+        "source": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$" },
+        "target": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$" },
+        "kind": { "enum": ["inferred", "annotated"] },
+        "authority": { "const": "assumption" }
+      },
+      "additionalProperties": false
+    }
+  }
 }

@@ -24,6 +24,13 @@ LEDGER_NAME = "CONTEXT_LEDGER.md"
 REDACTION_NAME = "REDACTION_REPORT.md"
 VERIFICATION_NAME = "VERIFICATION.md"
 
+# These are transport-oriented byte ceilings, not token-count claims.  The
+# caller can lower them for a narrower review, but never raise the defaults
+# past the explicit positive integer validation below.
+DEFAULT_MAX_SOURCE_BYTES = 100_000
+DEFAULT_MAX_TOTAL_SOURCE_BYTES = 400_000
+COMPRESSION_POLICY = "deterministic_line_excerpt_v1"
+
 READY = "ready_for_review"
 INCOMPLETE = "context_incomplete"
 BLOCKED = "blocked"
@@ -87,6 +94,8 @@ def prepare_external_review_bundle(
     runtime_dir: str | Path | None = None,
     output_id: str | None = None,
     profile: str = "external_review",
+    max_source_bytes: int = DEFAULT_MAX_SOURCE_BYTES,
+    max_total_source_bytes: int = DEFAULT_MAX_TOTAL_SOURCE_BYTES,
 ) -> dict[str, Any]:
     """Create a prepare-only ZIP bundle plus manifest in the runtime dir."""
 
@@ -98,6 +107,12 @@ def prepare_external_review_bundle(
     if not sources:
         raise ReviewBundleError("at least one explicit source is required")
 
+    max_source_bytes = _positive_budget(max_source_bytes, "max_source_bytes")
+    max_total_source_bytes = _positive_budget(
+        max_total_source_bytes,
+        "max_total_source_bytes",
+    )
+
     required_roles = [role.strip() for role in (required_roles or []) if role.strip()]
     runtime_root = Path(runtime_dir).resolve() if runtime_dir else default_runtime_dir()
     bundle_id = _safe_id(output_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-external-review"))
@@ -106,9 +121,22 @@ def prepare_external_review_bundle(
 
     source_entries: list[dict[str, Any]] = []
     blocking_issues: list[str] = []
+    included_source_bytes = 0
     for source in sources:
+        remaining_source_bytes = max_total_source_bytes - included_source_bytes
+        if remaining_source_bytes <= 0:
+            blocking_issues.append(
+                f"context_budget_exhausted:{_display_source_path(root, source.path)}"
+            )
+            continue
         try:
-            source_entries.append(_source_entry(root, source))
+            entry = _source_entry(
+                root,
+                source,
+                max_source_bytes=min(max_source_bytes, remaining_source_bytes),
+            )
+            source_entries.append(entry)
+            included_source_bytes += entry["size_bytes"]
         except ReviewBundleError as exc:
             blocking_issues.append(str(exc))
 
@@ -149,6 +177,10 @@ def prepare_external_review_bundle(
             "authority": entry["authority"],
             "sha256": entry["sha256"],
             "size_bytes": entry["size_bytes"],
+            "source_sha256": entry["source_sha256"],
+            "original_size_bytes": entry["original_size_bytes"],
+            "compression": entry["compression"],
+            "truncated": entry["truncated"],
             "generated": False,
             "source_path": entry["source_path"],
             "why": entry["why"],
@@ -167,6 +199,25 @@ def prepare_external_review_bundle(
         "missing_required_roles": missing_roles,
         "blocking_issues": blocking_issues,
         "package_files": package_files,
+        "compression": {
+            "policy": COMPRESSION_POLICY,
+            "max_source_bytes": max_source_bytes,
+            "max_total_source_bytes": max_total_source_bytes,
+            "original_source_bytes": sum(
+                entry["original_size_bytes"] for entry in source_entries
+            ),
+            "included_source_bytes": included_source_bytes,
+            "truncated_sources": [
+                entry["bundle_path"]
+                for entry in source_entries
+                if entry["truncated"]
+            ],
+            "omitted_sources": [
+                issue.split(":", 1)[1]
+                for issue in blocking_issues
+                if issue.startswith("context_budget_exhausted:")
+            ],
+        },
         "trust_statement": _trust_statement(status),
     }
 
@@ -176,7 +227,7 @@ def prepare_external_review_bundle(
         for path, content in generated.items():
             zf.writestr(path, content)
         for entry in source_entries:
-            zf.write(entry["absolute_path"], entry["bundle_path"])
+            zf.writestr(entry["bundle_path"], entry["bundle_bytes"])
         zf.writestr(MANIFEST_NAME, manifest_bytes)
 
     manifest_path = out_dir / MANIFEST_NAME
@@ -226,6 +277,76 @@ def validate_external_review_bundle(zip_path: str | Path) -> dict[str, Any]:
                     actual_hash = _sha256_bytes(zf.read(path))
                     if actual_hash != expected_hash:
                         issues.append(f"sha256_mismatch:{path}")
+                if path in names and isinstance(entry.get("size_bytes"), int):
+                    actual_size = len(zf.read(path))
+                    if actual_size != entry["size_bytes"]:
+                        issues.append(f"size_mismatch:{path}")
+                if not entry.get("generated", True):
+                    original_size = entry.get("original_size_bytes")
+                    truncated = entry.get("truncated")
+                    compression = entry.get("compression")
+                    if not isinstance(original_size, int) or original_size < 0:
+                        issues.append(f"invalid_original_size:{path}")
+                    if not isinstance(truncated, bool):
+                        issues.append(f"invalid_truncation_flag:{path}")
+                    if compression not in {"none", "line_excerpt"}:
+                        issues.append(f"invalid_compression:{path}")
+                    if isinstance(original_size, int) and path in names:
+                        bundled_size = len(zf.read(path))
+                        if not truncated and original_size != bundled_size:
+                            issues.append(f"unmarked_compression:{path}")
+                        if truncated and original_size <= bundled_size:
+                            issues.append(f"invalid_truncation_size:{path}")
+
+            compression = manifest.get("compression")
+            if compression is not None:
+                if not isinstance(compression, dict):
+                    issues.append("manifest_compression_invalid")
+                else:
+                    max_source = compression.get("max_source_bytes")
+                    max_total = compression.get("max_total_source_bytes")
+                    included_total = compression.get("included_source_bytes")
+                    original_total = compression.get("original_source_bytes")
+                    if not all(
+                        isinstance(value, int) and value > 0
+                        for value in (max_source, max_total)
+                    ):
+                        issues.append("manifest_compression_budget_invalid")
+                    source_entries = [
+                        entry for entry in package_files if not entry.get("generated", True)
+                    ]
+                    actual_included = sum(
+                        int(entry.get("size_bytes", 0))
+                        for entry in source_entries
+                        if isinstance(entry.get("size_bytes"), int)
+                    )
+                    actual_original = sum(
+                        int(entry.get("original_size_bytes", 0))
+                        for entry in source_entries
+                        if isinstance(entry.get("original_size_bytes"), int)
+                    )
+                    if included_total != actual_included:
+                        issues.append("manifest_included_source_bytes_mismatch")
+                    if original_total != actual_original:
+                        issues.append("manifest_original_source_bytes_mismatch")
+                    if isinstance(max_source, int) and any(
+                        entry.get("size_bytes", 0) > max_source
+                        for entry in source_entries
+                        if isinstance(entry.get("size_bytes"), int)
+                    ):
+                        issues.append("source_budget_exceeded")
+                    if isinstance(max_total, int) and actual_included > max_total:
+                        issues.append("total_source_budget_exceeded")
+                    truncated_paths = compression.get("truncated_sources")
+                    if not isinstance(truncated_paths, list) or any(
+                        not isinstance(path, str) for path in truncated_paths
+                    ):
+                        issues.append("manifest_truncated_sources_invalid")
+                    omitted_paths = compression.get("omitted_sources")
+                    if not isinstance(omitted_paths, list) or any(
+                        not isinstance(path, str) for path in omitted_paths
+                    ):
+                        issues.append("manifest_omitted_sources_invalid")
     except (OSError, zipfile.BadZipFile, UnicodeDecodeError, json.JSONDecodeError) as exc:
         return {"valid": False, "status": BLOCKED, "issues": [f"zip_validation_error:{exc}"]}
 
@@ -242,7 +363,12 @@ def validate_external_review_bundle(zip_path: str | Path) -> dict[str, Any]:
     }
 
 
-def _source_entry(project_root: Path, source: ReviewSource) -> dict[str, Any]:
+def _source_entry(
+    project_root: Path,
+    source: ReviewSource,
+    *,
+    max_source_bytes: int,
+) -> dict[str, Any]:
     candidate = (project_root / source.path).resolve() if not Path(source.path).is_absolute() else Path(source.path).resolve()
     try:
         relative = candidate.relative_to(project_root)
@@ -258,6 +384,11 @@ def _source_entry(project_root: Path, source: ReviewSource) -> dict[str, Any]:
     raw = candidate.read_bytes()
     if _looks_sensitive(raw):
         raise ReviewBundleError(f"sensitive_content_detected:{relative.as_posix()}")
+    bundled, compression, truncated = _bounded_source_bytes(
+        raw,
+        max_source_bytes=max_source_bytes,
+        source_path=relative.as_posix(),
+    )
     rel_text = relative.as_posix()
     return {
         "source_path": rel_text,
@@ -267,9 +398,105 @@ def _source_entry(project_root: Path, source: ReviewSource) -> dict[str, Any]:
         "authority": source.authority or "unspecified",
         "required": bool(source.required),
         "why": source.why,
-        "sha256": _sha256_bytes(raw),
-        "size_bytes": len(raw),
+        # `source_sha256` identifies the source the caller selected; `sha256`
+        # identifies the bounded bytes that the reviewer actually receives.
+        "source_sha256": _sha256_bytes(raw),
+        "sha256": _sha256_bytes(bundled),
+        "original_size_bytes": len(raw),
+        "size_bytes": len(bundled),
+        "compression": compression,
+        "truncated": truncated,
+        "bundle_bytes": bundled,
     }
+
+
+def _positive_budget(value: int, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ReviewBundleError(f"{name} must be a positive integer")
+    return value
+
+
+def _display_source_path(project_root: Path, source_path: str | Path) -> str:
+    candidate = Path(source_path)
+    if candidate.is_absolute():
+        try:
+            return candidate.resolve().relative_to(project_root).as_posix()
+        except ValueError:
+            return candidate.name
+    return candidate.as_posix()
+
+
+def _bounded_source_bytes(
+    raw: bytes,
+    *,
+    max_source_bytes: int,
+    source_path: str,
+) -> tuple[bytes, str, bool]:
+    """Return a deterministic, UTF-8-safe excerpt when a source is oversized."""
+
+    if len(raw) <= max_source_bytes:
+        return raw, "none", False
+
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ReviewBundleError(
+            f"oversized_binary_source:{source_path}"
+        ) from exc
+
+    marker = (
+        "\n\n[DevFrame context excerpt truncated; "
+        f"source={source_path}; original_bytes={len(raw)}; "
+        f"budget_bytes={max_source_bytes}]\n\n"
+    )
+    marker_bytes = len(marker.encode("utf-8"))
+    if marker_bytes >= max_source_bytes:
+        raise ReviewBundleError(
+            f"source_budget_too_small:{source_path}"
+        )
+
+    available = max_source_bytes - marker_bytes
+    head_budget = available // 2
+    tail_budget = available - head_budget
+    head = _utf8_prefix_on_line(text, head_budget)
+    tail = _utf8_suffix_on_line(text, tail_budget)
+    excerpt = f"{head}{marker}{tail}".encode("utf-8")
+
+    # Line trimming can still leave a byte-rounding edge.  Keep the marker and
+    # deterministically trim the two sides until the hard budget is satisfied.
+    while len(excerpt) > max_source_bytes and (head or tail):
+        if len(head.encode("utf-8")) >= len(tail.encode("utf-8")) and head:
+            head = _utf8_prefix_on_line(head, max(0, len(head.encode("utf-8")) - 1))
+        elif tail:
+            tail = _utf8_suffix_on_line(tail, max(0, len(tail.encode("utf-8")) - 1))
+        excerpt = f"{head}{marker}{tail}".encode("utf-8")
+    if len(excerpt) > max_source_bytes:
+        raise ReviewBundleError(f"source_budget_too_small:{source_path}")
+    return excerpt, "line_excerpt", True
+
+
+def _utf8_prefix_on_line(text: str, byte_limit: int) -> str:
+    if byte_limit <= 0:
+        return ""
+    encoded = text.encode("utf-8")
+    if len(encoded) <= byte_limit:
+        return text
+    prefix = encoded[:byte_limit].decode("utf-8", errors="ignore")
+    if "\n" in prefix:
+        prefix = prefix.rsplit("\n", 1)[0] + "\n"
+    return prefix
+
+
+def _utf8_suffix_on_line(text: str, byte_limit: int) -> str:
+    if byte_limit <= 0:
+        return ""
+    encoded = text.encode("utf-8")
+    if len(encoded) <= byte_limit:
+        return text
+    suffix = encoded[-byte_limit:].decode("utf-8", errors="ignore")
+    if "\n" in suffix:
+        suffix = suffix.split("\n", 1)[1]
+    return suffix
 
 
 def _looks_sensitive(raw: bytes) -> bool:
@@ -301,7 +528,13 @@ def _render_prompt(review_question: str, sources: list[dict[str, Any]], status: 
         "Selected sources:",
     ]
     for entry in sources:
-        lines.append(f"- {entry['bundle_path']} | role={entry['role']} | authority={entry['authority']} | why={entry['why'] or 'not stated'}")
+        lines.append(
+            f"- {entry['bundle_path']} | role={entry['role']} | "
+            f"authority={entry['authority']} | "
+            f"bytes={entry['size_bytes']}/{entry['original_size_bytes']} | "
+            f"truncated={'yes' if entry['truncated'] else 'no'} | "
+            f"why={entry['why'] or 'not stated'}"
+        )
     if issues:
         lines.extend(["", "Known blocking or context issues:"])
         lines.extend(f"- {issue}" for issue in issues)
@@ -334,7 +567,14 @@ def _render_ledger(
         "Selected sources:",
     ]
     for entry in sources:
-        lines.append(f"- {entry['bundle_path']} | role={entry['role']} | authority={entry['authority']} | sha256={entry['sha256']} | why={entry['why'] or 'not stated'}")
+        lines.append(
+            f"- {entry['bundle_path']} | role={entry['role']} | "
+            f"authority={entry['authority']} | sha256={entry['sha256']} | "
+            f"source_sha256={entry['source_sha256']} | "
+            f"bytes={entry['size_bytes']}/{entry['original_size_bytes']} | "
+            f"truncated={'yes' if entry['truncated'] else 'no'} | "
+            f"why={entry['why'] or 'not stated'}"
+        )
     lines.extend(["", "Omitted or missing relevant sources:"])
     if missing_roles:
         lines.extend(f"- required role missing: {role}" for role in missing_roles)

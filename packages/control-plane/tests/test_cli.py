@@ -37,7 +37,7 @@ def test_root_help_is_available(monkeypatch, capsys):
 
     output = capsys.readouterr().out
     assert "DevFrame Code CLI" in output
-    assert "OpenCode-first local coding tool" in output
+    assert "provider-neutral executor" in output
     assert "Daily coding loop" in output
     assert "1. Prepare : devframe code" in output
     assert "2. Status  : devframe code status" in output
@@ -1476,6 +1476,76 @@ def test_code_preview_shows_custom_worker_command(tmp_path, monkeypatch, capsys)
     assert not runtime_dir.exists()
 
 
+def test_code_preview_refuses_local_provider_without_explicit_model(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "Preview a local model.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/app.py",
+        "--model-provider",
+        "local-ollama",
+        "--preview",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "requires an explicit --model ollama/<model>" in output.err
+    assert "stepfun/step-3.7-flash" not in output.out
+    assert not runtime_dir.exists()
+
+
+def test_code_preview_custom_command_ignores_local_provider_model_requirement(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "code",
+        "Preview custom local command.",
+        "--project",
+        str(project_root),
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/app.py",
+        "--model-provider",
+        "local-ollama",
+        "--preview",
+        "--command",
+        sys.executable,
+        "-c",
+        "print('worker')",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr()
+
+    assert exit_code == 0
+    assert output.err == ""
+    assert "worker       : custom command" in output.out
+    assert f"command: {sys.executable}" in output.out
+    assert "opencode run" not in output.out
+    assert not runtime_dir.exists()
+
+
 def test_code_agents_rejects_invalid_value(tmp_path, monkeypatch, capsys):
     project_root = tmp_path / "demo-project"
     runtime_dir = tmp_path / "runtime"
@@ -1729,6 +1799,37 @@ def test_go_preview_respects_shard_plan_without_runtime(tmp_path, monkeypatch, c
     assert "- coding-agent-2 shard=2/2" in output
     assert "  - src/b.py" in output
     assert "You are coding shard 2/2." in output
+    assert not runtime_dir.exists()
+
+
+def test_go_preview_refuses_local_provider_without_explicit_model(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    project_root = tmp_path / "demo-project"
+    runtime_dir = tmp_path / "runtime"
+    project_root.mkdir()
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "go",
+        str(project_root),
+        "Preview a local model.",
+        "--runtime-dir",
+        str(runtime_dir),
+        "--target",
+        "src/app.py",
+        "--model-provider",
+        "local-ollama",
+        "--preview",
+    ])
+
+    exit_code = devframe_cli_main()
+    output = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "requires an explicit --model ollama/<model>" in output.err
+    assert "stepfun/step-3.7-flash" not in output.out
     assert not runtime_dir.exists()
 
 
@@ -2309,7 +2410,7 @@ def test_web_ai_ensure_browser_help(monkeypatch, capsys):
 
     output = capsys.readouterr().out
     assert "Usage: devframe web-ai ensure-browser" in output
-    assert "--profile-dir" in output
+    assert "--cdp-endpoint" in output
     assert "--write-config" in output
 
 
@@ -2317,17 +2418,16 @@ def test_web_ai_ensure_browser_json(monkeypatch, capsys, tmp_path):
     def fake_ensure_web_ai_browser(**kwargs):
         return {
             "status": "already_running",
-            "browser": "chrome",
-            "browser_exe": "C:/Chrome/chrome.exe",
+            "browser": "dsh",
             "cdp_endpoint": "http://127.0.0.1:9222",
-            "profile_dir": str(tmp_path / "profile"),
+            "profile_policy": "dsh_managed",
             "url": "https://chatgpt.com/",
             "started": False,
             "opened_url": True,
             "config_written": "",
             "reason": "",
             "probe": {"reachable": True},
-            "first_use_note": "First use may require logging in once inside this dedicated browser profile.",
+            "first_use_note": "DSH owns browser startup, login state, profile, and session lifecycle.",
             "kwargs": kwargs,
         }
 
@@ -2340,8 +2440,6 @@ def test_web_ai_ensure_browser_json(monkeypatch, capsys, tmp_path):
         "ensure-browser",
         "--runtime-dir",
         str(tmp_path / "runtime"),
-        "--profile-dir",
-        str(tmp_path / "profile"),
         "--format",
         "json",
     ])
@@ -2349,7 +2447,7 @@ def test_web_ai_ensure_browser_json(monkeypatch, capsys, tmp_path):
     assert devframe_cli_main() == 0
     data = json.loads(capsys.readouterr().out)
     assert data["status"] == "already_running"
-    assert data["profile_dir"] == str(tmp_path / "profile")
+    assert data["profile_policy"] == "dsh_managed"
 
 
 def test_web_ai_bind_conversation_help(monkeypatch, capsys):
@@ -2432,9 +2530,9 @@ def test_web_ai_prepare_review_bundle_help(monkeypatch, capsys):
 def test_web_ai_prepare_review_bundle_cli_creates_valid_bundle(tmp_path, monkeypatch, capsys):
     project = tmp_path / "project"
     runtime = tmp_path / "runtime"
-    (project / "docs").mkdir(parents=True)
-    (project / "docs" / "README.md").write_text("# Map\n", encoding="utf-8")
-    (project / "docs" / "PLAN.md").write_text("# Plan\n", encoding="utf-8")
+    (project / "rules").mkdir(parents=True)
+    (project / "PLAN.md").write_text("# Plan\n", encoding="utf-8")
+    (project / "rules" / "core.md").write_text("# Core rule\n", encoding="utf-8")
     monkeypatch.setattr(sys, "argv", [
         "devframe",
         "web-ai",
@@ -2448,11 +2546,11 @@ def test_web_ai_prepare_review_bundle_cli_creates_valid_bundle(tmp_path, monkeyp
         "--question",
         "Can Web GPT review this plan?",
         "--source",
-        "map=docs/README.md",
+        "rule=rules/core.md",
         "--source",
-        "plan=docs/PLAN.md",
+        "plan=PLAN.md",
         "--required-role",
-        "map",
+        "rule",
         "--required-role",
         "plan",
     ])
@@ -2466,6 +2564,48 @@ def test_web_ai_prepare_review_bundle_cli_creates_valid_bundle(tmp_path, monkeyp
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert data["status"] == "ready_for_review"
     assert Path(data["zip_path"]).exists()
+
+
+def test_web_ai_prepare_review_bundle_cli_passes_budgets(tmp_path, monkeypatch, capsys):
+    project = tmp_path / "project"
+    runtime = tmp_path / "runtime"
+    project.mkdir()
+    (project / "large.md").write_text(
+        "".join(f"line-{index}\n" for index in range(100)),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sys, "argv", [
+        "devframe",
+        "web-ai",
+        "prepare-review-bundle",
+        "--project-root",
+        str(project),
+        "--runtime-dir",
+        str(runtime),
+        "--output-id",
+        "cli-bounded-review",
+        "--question",
+        "Can the CLI bound this context?",
+        "--source",
+        "context=large.md",
+        "--required-role",
+        "context",
+        "--max-source-bytes",
+        "240",
+        "--max-total-source-bytes",
+        "240",
+    ])
+
+    assert devframe_cli_main() == 0
+    capsys.readouterr()
+    manifest = json.loads(
+        (runtime / "external-review-bundles" / "cli-bounded-review" / "PACK_MANIFEST.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert manifest["compression"]["max_source_bytes"] == 240
+    assert manifest["compression"]["included_source_bytes"] <= 240
+    assert manifest["compression"]["truncated_sources"] == ["sources/large.md"]
 
 
 def test_web_ai_validate_review_bundle_cli_reports_incomplete(tmp_path, monkeypatch, capsys):

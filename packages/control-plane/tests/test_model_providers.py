@@ -58,6 +58,7 @@ def test_render_lists_all_providers_with_labels():
     assert "tos risk: elevated" in text
     assert "live backend: deferred" in text
     assert "warn    :" in text
+    assert "--model-provider local-ollama --model ollama/<model> --preview" in text
 
 
 def test_to_dict_is_json_friendly():

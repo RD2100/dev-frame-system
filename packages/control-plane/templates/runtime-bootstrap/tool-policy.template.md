@@ -13,12 +13,13 @@
 | Search (rg, Grep, Select-String) | Read-only |
 | JSON validation | Read-only schema audit |
 | CodeGraph search/context/explore | Read-only; reindex = human gate |
+| Memory recall | Read-only, project-scoped, through the approved DevFrame adapter; fail-open when unavailable |
 | Generate files | Only within approved output paths |
 
 ## Approved Output Paths
 
 ```
-docs/agent-runtime/
+.devframe/contracts/
 rules/
 schemas/
 reports/
@@ -35,7 +36,7 @@ templates/
 | Packages | npm/pip/yarn/pnpm/cargo install |
 | MCP | enable, register, modify config |
 | Scripts | execute .ps1/.py/.sh without ScriptSafetyRecord + human gate |
-| Memory | write, modify, compress, delete |
+| Memory | direct write, modify, compress, move, or delete; proposals must use the governed DevFrame path |
 | Skills | install, execute, auto-load, evolve |
 | WorkQueue | consume, modify, reorder |
 | External | clone, fetch, pull, install |
@@ -45,7 +46,7 @@ templates/
 
 ## Capability Use Rules
 
-1. Every capability must be in `docs/agent-runtime/capability-inventory.md` with Status: approved (core-007)
+1. Every capability must be in `.devframe/contracts/capability-inventory.md` with Status: approved (core-007)
 2. Platform field must match executing platform
 3. Phase constraints (Access, Human gate, Forbidden) must be respected
 4. Missing capability -> stop and propose registration, do not use first

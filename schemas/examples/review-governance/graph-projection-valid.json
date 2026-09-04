@@ -1,0 +1,64 @@
+{
+  "graph_projection_id": "graph-projection-contract-1",
+  "project_id": "project-contract-demo",
+  "source_snapshot_refs": [
+    "artifact://review-report-1",
+    "decision://gate-1"
+  ],
+  "nodes": [
+    {
+      "id": "decision-1",
+      "type": "decision",
+      "authority": "human_decided"
+    },
+    {
+      "id": "evidence-1",
+      "type": "evidence",
+      "authority": "test_verified"
+    },
+    {
+      "id": "seed-1",
+      "type": "context_seed",
+      "authority": "external_reviewed"
+    },
+    {
+      "id": "artifact-1",
+      "type": "artifact",
+      "authority": "governance_recorded"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-cited-1",
+      "source": "decision-1",
+      "target": "seed-1",
+      "type": "cited",
+      "citation_source": "decision-1"
+    },
+    {
+      "id": "edge-cited-2",
+      "source": "evidence-1",
+      "target": "seed-1",
+      "type": "cited",
+      "citation_source": "evidence-1"
+    },
+    {
+      "id": "edge-inferred-1",
+      "source": "artifact-1",
+      "target": "evidence-1",
+      "type": "inferred"
+    }
+  ],
+  "operations": [
+    "project",
+    "query",
+    "seed_context"
+  ],
+  "projection": {
+    "run_status": "succeeded",
+    "work_item_status": "completed",
+    "computed_status": "completed",
+    "gate_outcome": "pass",
+    "gate_decision_id": "decision-gate-1"
+  }
+}

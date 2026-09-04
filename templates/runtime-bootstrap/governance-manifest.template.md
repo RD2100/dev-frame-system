@@ -21,10 +21,10 @@ local override is treated as `governance_drift` and must be escalated to human r
 | Section ID | File | Description | Hash |
 |------------|------|-------------|------|
 | P0_RULES | `rules/core.md` | All P0 rules (core-001 ~ core-008) | {{P0_HASH}} |
-| GATE_0 | `docs/agent-runtime/sub-agent-dispatch-protocol.md` sections 0-0.2 | Gate 0 + Cumulative Trigger + Ledger | {{GATE0_HASH}} |
-| VETO_CONTRACT | `docs/agent-runtime/sub-agent-dispatch-protocol.md` (core-008 Veto section) | Execute agent veto rights and anti-abuse | {{VETO_HASH}} |
+| GATE_0 | `rules/orchestration.md` | Dispatch, cumulative trigger, and evidence gates | {{GATE0_HASH}} |
+| VETO_CONTRACT | `rules/orchestration.md` | Executor veto rights and anti-abuse | {{VETO_HASH}} |
 | PROTECTED_FILES | `AGENTS.md` (Hard Stops section) | File protection list | {{PROTECTED_HASH}} |
-| CUMULATIVE_TRIGGER | `docs/agent-runtime/sub-agent-dispatch-protocol.md` section 0.0a | Anti-gaming cumulative trigger window | {{CUMULATIVE_HASH}} |
+| CUMULATIVE_TRIGGER | `rules/orchestration.md` | Anti-gaming cumulative trigger window | {{CUMULATIVE_HASH}} |
 
 ## Local Override Policy
 
@@ -92,6 +92,6 @@ imported_resource_policy:
 
 ```powershell
 # Run from target project root:
-Get-FileHash rules/core.md, docs/agent-runtime/sub-agent-dispatch-protocol.md, AGENTS.md -Algorithm SHA256 |
+Get-FileHash rules/core.md, rules/orchestration.md, AGENTS.md -Algorithm SHA256 |
   ForEach-Object { "$($_.Hash)  $($_.Algorithm)  $([System.IO.Path]::GetFileName($_.Path))" }
 ```

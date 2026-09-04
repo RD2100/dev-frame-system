@@ -47,9 +47,9 @@ def _vault(root: Path) -> Path:
 
 def _project(root: Path, *, git: bool = False) -> Path:
     project = root
-    handoff = project / "docs" / "status" / "HANDOFF.md"
-    handoff.parent.mkdir(parents=True)
-    handoff.write_text("# Execution Root\n\nCurrent milestone: session memory.\n", encoding="utf-8")
+    plan = project / "PLAN.md"
+    plan.parent.mkdir(parents=True, exist_ok=True)
+    plan.write_text("# Project Plan\n\nCurrent milestone: session memory.\n", encoding="utf-8")
     if git:
         subprocess.run(
             ["git", "init", "--quiet", str(project)],

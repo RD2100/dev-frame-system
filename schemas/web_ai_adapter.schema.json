@@ -24,7 +24,7 @@
         },
         "profile_policy": {
           "type": "string",
-          "enum": ["user_selected", "isolated", "manual_only"]
+          "enum": ["dsh_managed", "user_selected", "isolated", "manual_only"]
         },
         "endpoint": {
           "type": "string",

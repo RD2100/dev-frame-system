@@ -171,13 +171,11 @@ def cmd_web_ai_ensure_browser(*, prog: str = "devframe web-ai ensure-browser") -
 
     parser = argparse.ArgumentParser(prog=prog)
     parser.add_argument("--runtime-dir", default=None, help="Local devframe runtime directory")
-    parser.add_argument("--config", default=None, help="Local browser launcher config JSON")
-    parser.add_argument("--browser-exe", default=None, help="Browser executable path")
-    parser.add_argument("--profile-dir", default=None, help="Dedicated persistent browser profile directory")
-    parser.add_argument("--cdp-endpoint", default=None, help="Loopback CDP endpoint")
-    parser.add_argument("--url", default=None, help="Web AI URL to open")
-    parser.add_argument("--no-open", action="store_true", help="Ensure CDP only; do not open a URL")
-    parser.add_argument("--write-config", action="store_true", help="Write the resolved local browser config")
+    parser.add_argument("--config", default=None, help="Local DSH browser binding config JSON")
+    parser.add_argument("--cdp-endpoint", default=None, help="DSH-provided loopback CDP endpoint")
+    parser.add_argument("--url", default=None, help="Web AI URL to open in the DSH browser")
+    parser.add_argument("--no-open", action="store_true", help="Probe DSH CDP only; do not open a URL")
+    parser.add_argument("--write-config", action="store_true", help="Write a DSH-only binding config (no profile or credentials)")
     parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format")
     args = parser.parse_args(sys.argv[3:])
 
@@ -186,9 +184,7 @@ def cmd_web_ai_ensure_browser(*, prog: str = "devframe web-ai ensure-browser") -
         result = ensure_web_ai_browser(
             runtime_dir=runtime_dir,
             config_path=args.config,
-            browser_exe=args.browser_exe,
             cdp_endpoint=args.cdp_endpoint,
-            profile_dir=args.profile_dir,
             url=args.url,
             open_url=not args.no_open,
             write_config=args.write_config,
@@ -201,13 +197,12 @@ def cmd_web_ai_ensure_browser(*, prog: str = "devframe web-ai ensure-browser") -
         print(_json_output(result))
     else:
         print(render_browser_launch_text(result), end="")
-    return 0 if result["status"] in {"already_running", "started"} else 1
+    return 0 if result["status"] == "already_running" else 1
 
 
 def cmd_web_ai_submit_review(*, prog: str = "devframe web-ai submit-review") -> int:
     import argparse
 
-    from ..backup_guard import default_runtime_dir
     from ..playwright_bridge import BridgeConfig, BridgeMode, health_check as bridge_health, submit_via_bridge, _read_prompt_text
     from ..submission_result import SubmissionRequest
 
@@ -279,6 +274,18 @@ def cmd_web_ai_prepare_review_bundle(*, prog: str = "devframe web-ai prepare-rev
     parser.add_argument("--required-role", action="append", default=[], help="Role that must be present for ready_for_review")
     parser.add_argument("--profile", default="external_review", help="Context profile label")
     parser.add_argument("--output-id", default=None, help="Stable output id for the bundle directory")
+    parser.add_argument(
+        "--max-source-bytes",
+        type=_positive_int_argument,
+        default=100_000,
+        help="Maximum bytes included for one source (default: 100000)",
+    )
+    parser.add_argument(
+        "--max-total-source-bytes",
+        type=_positive_int_argument,
+        default=400_000,
+        help="Maximum bytes included across sources (default: 400000)",
+    )
     args = parser.parse_args(sys.argv[3:])
 
     try:
@@ -291,6 +298,8 @@ def cmd_web_ai_prepare_review_bundle(*, prog: str = "devframe web-ai prepare-rev
             required_roles=args.required_role,
             profile=args.profile,
             output_id=args.output_id,
+            max_source_bytes=args.max_source_bytes,
+            max_total_source_bytes=args.max_total_source_bytes,
         )
     except ReviewBundleError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
@@ -304,6 +313,16 @@ def cmd_web_ai_prepare_review_bundle(*, prog: str = "devframe web-ai prepare-rev
         for issue in result["blocking_issues"]:
             print(f"    - {issue}")
     return 0 if result["status"] == "ready_for_review" else 1
+
+
+def _positive_int_argument(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise ValueError("must be a positive integer") from exc
+    if parsed <= 0:
+        raise ValueError("must be a positive integer")
+    return parsed
 
 
 def cmd_web_ai_validate_review_bundle(*, prog: str = "devframe web-ai validate-review-bundle") -> int:
@@ -323,7 +342,6 @@ def cmd_web_ai_validate_review_bundle(*, prog: str = "devframe web-ai validate-r
 def cmd_web_ai_record_mcp_result(*, prog: str = "devframe web-ai record-mcp-result") -> int:
     import argparse
 
-    from ..backup_guard import default_runtime_dir
     from ..web_ai_mcp_recorder import record_mcp_result
 
     parser = argparse.ArgumentParser(prog=prog)
@@ -374,7 +392,6 @@ def cmd_web_ai_record_mcp_result(*, prog: str = "devframe web-ai record-mcp-resu
 def cmd_web_ai_record_task_intake(*, prog: str = "devframe web-ai record-task-intake") -> int:
     import argparse
 
-    from ..backup_guard import default_runtime_dir
     from ..web_ai_mcp_recorder import record_task_intake
 
     parser = argparse.ArgumentParser(prog=prog)
@@ -419,7 +436,6 @@ def cmd_web_ai_record_task_intake(*, prog: str = "devframe web-ai record-task-in
 def cmd_web_ai_import_task_intakes(*, prog: str = "devframe web-ai import-task-intakes") -> int:
     import argparse
 
-    from ..backup_guard import default_runtime_dir
     from ..web_ai_mcp_recorder import import_task_intakes
 
     parser = argparse.ArgumentParser(prog=prog)

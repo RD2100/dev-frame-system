@@ -4,6 +4,7 @@
 #
 # Minimum recommended:
 rules/*.md
+PLAN.md
 AGENTS.md
 .ai/policy.yaml
 
@@ -24,5 +25,5 @@ governance/*.txt
 # Schemas (if applicable):
 schemas/**/*.json
 
-# Documentation:
-docs/**/*.md
+# Project-local machine contracts:
+.devframe/contracts/*.md

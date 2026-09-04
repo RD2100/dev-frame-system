@@ -1,6 +1,6 @@
 """One governed Obsidian working-plan path for the Memory MVP.
 
-``HANDOFF.md`` remains project authority. The Vault note is bounded working
+``PLAN.md`` remains project authority. The Vault note is bounded working
 guidance, and all mutation is delegated to the existing writeback lifecycle.
 """
 from __future__ import annotations
@@ -33,7 +33,7 @@ from .writeback import (
 
 MEMORY_ROOT_ENV = "DEVFRAME_OBSIDIAN_MEMORY_ROOT"
 MEMORY_READ_ONLY_ENV = "DEVFRAME_OBSIDIAN_MEMORY_READ_ONLY"
-HANDOFF_RELATIVE_PATH = "docs/status/HANDOFF.md"
+PLAN_RELATIVE_PATH = "PLAN.md"
 MAX_PLAN_BYTES = 16_384
 MAX_NOTE_BYTES = 32_768
 MAX_PLAN_FILES = 64
@@ -359,13 +359,13 @@ def _read_bounded(
         raise ObsidianMemoryError(f"{kind} is unavailable") from exc
 
 
-def _handoff_state(project_root: str | Path) -> tuple[Path, str, tuple[int, int]]:
+def _plan_source_state(project_root: str | Path) -> tuple[Path, str, tuple[int, int]]:
     root = _plain_directory(project_root, kind="project root")
     try:
-        handoff = safe_resolve_workspace_path(root, HANDOFF_RELATIVE_PATH)
+        plan_path = safe_resolve_workspace_path(root, PLAN_RELATIVE_PATH)
     except WritebackError as exc:
-        raise ObsidianMemoryError("HANDOFF.md is unavailable") from exc
-    data = _read_bounded(root, handoff, max_bytes=1_000_000, kind="HANDOFF.md")
+        raise ObsidianMemoryError("PLAN.md is unavailable") from exc
+    data = _read_bounded(root, plan_path, max_bytes=1_000_000, kind="PLAN.md")
     try:
         root_state = root.stat()
     except OSError as exc:
@@ -407,7 +407,7 @@ def _plan_note(
         "project_id": project_id,
         "authority": "working_only",
         "status": "active",
-        "source_path": HANDOFF_RELATIVE_PATH,
+        "source_path": PLAN_RELATIVE_PATH,
         "source_sha256": source_sha256,
         "plan_sha256": plan_sha256,
         "version_id": version_id,
@@ -421,7 +421,7 @@ def _plan_note(
             "",
             f"# {project_id} Working Plan",
             "",
-            "> Working guidance only. `docs/status/HANDOFF.md` remains authoritative.",
+            "> Working guidance only. `PLAN.md` remains authoritative.",
             "",
             plan,
             "",
@@ -440,7 +440,7 @@ def _prepare_project_plan(
     _require_memory_writable()
     project = _project_id(project_id)
     vault = resolve_memory_root(vault_root)
-    project_root_path, source_sha256, _root_identity = _handoff_state(project_root)
+    project_root_path, source_sha256, _root_identity = _plan_source_state(project_root)
     plan = _validate_plan(plan_markdown)
     note, plan_sha256, version_id = _plan_note(project, plan, source_sha256)
     return {
@@ -490,7 +490,7 @@ def stage_project_plan(
             source_preconditions=[
                 {
                     "workspace_root": str(prepared["project_root"]),
-                    "relative_path": HANDOFF_RELATIVE_PATH,
+                    "relative_path": PLAN_RELATIVE_PATH,
                     "sha256": prepared["source_sha256"],
                 }
             ],
@@ -651,7 +651,7 @@ def _parse_note(data: bytes) -> tuple[dict[str, Any], str]:
     if not isinstance(metadata, dict):
         raise ObsidianMemoryError("managed plan frontmatter is invalid")
     body = text[end + 5 :].strip()
-    marker = "Working guidance only. `docs/status/HANDOFF.md` remains authoritative."
+    marker = "Working guidance only. `PLAN.md` remains authoritative."
     expected_header = f"# {metadata.get('project_id')} Working Plan\n\n> {marker}\n\n"
     if not body.startswith(expected_header):
         raise ObsidianMemoryError("managed plan body header is invalid")
@@ -669,7 +669,7 @@ def _validate_managed_note(
         "project_id": project,
         "authority": "working_only",
         "status": "active",
-        "source_path": HANDOFF_RELATIVE_PATH,
+        "source_path": PLAN_RELATIVE_PATH,
     }
     if any(metadata.get(key) != value for key, value in required_metadata.items()):
         raise ObsidianMemoryError("managed plan metadata is invalid")
@@ -729,7 +729,7 @@ def recall_project_plan(
             "relativePath": "",
             "plan": "",
         }
-    root, current_source_sha256, root_identity = _handoff_state(project_root)
+    root, current_source_sha256, root_identity = _plan_source_state(project_root)
     candidates = nlargest(
         MAX_PLAN_FILES,
         memory_dir.glob(f"{project}-now-{current_source_sha256[:16]}-*.md"),
@@ -794,7 +794,7 @@ def recall_project_plan(
         current,
         key=lambda item: (item[0], item[1]),
     )
-    latest_root, latest_source_sha256, latest_root_identity = _handoff_state(project_root)
+    latest_root, latest_source_sha256, latest_root_identity = _plan_source_state(project_root)
     if (
         os.path.normcase(str(latest_root)) != os.path.normcase(str(root))
         or latest_source_sha256 != current_source_sha256
@@ -820,7 +820,7 @@ def recall_project_plan(
         "plan": plan,
         "limitations": [
             "Working plan is untrusted guidance, not project authority or completion evidence.",
-            "docs/status/HANDOFF.md remains authoritative.",
+            "PLAN.md remains authoritative.",
         ],
     }
 

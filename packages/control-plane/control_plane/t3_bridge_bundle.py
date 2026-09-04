@@ -50,23 +50,13 @@ def build_t3_bridge_bundle(plan: dict[str, Any] | None = None) -> dict[str, Any]
             "t3DesktopProdCommand": f"node {BRIDGE_T3_DESKTOP_PROD_LAUNCHER_RELATIVE_PATH}",
             "t3WebCommand": f"node {BRIDGE_T3_WEB_LAUNCHER_RELATIVE_PATH}",
         },
-        # NOTE: VITE_DEVFRAME_T3_SHELL_URL is intentionally NOT injected here.
-        #
-        # That variable is the single switch that puts RD-Code into the
-        # DevFrame read-only bridge mode: when present, the generated
-        # catalog/shell/threads sources replace the native writable environment
-        # with a synthetic read-only `devframe-local` view, and the provider,
-        # source-control, and archive settings render read-only bridge notices.
-        # In that mode the editor cannot add local project folders, configure
-        # provider/API-key driven LLM backends, or edit projects.
-        #
-        # RD-Code is meant to be a fully usable native editor, so the bridge
-        # overlay stays off by default and DevFrame's read model is surfaced
-        # through the dashboard and MCP orchestration surface instead. The
-        # DevFrame shell/team contract source is still generated for the
-        # dashboard and future, explicitly opt-in re-integration.
+        # M13B controlled conversation requires both the shell snapshot URL and
+        # an independently derived control-plane base from client plan/manifest.
+        # The generated client fails closed to read-only mode when either side
+        # of that pair is missing.
         "environment": {
             "VITE_DEVFRAME_REALTIME_MODE": "polling",
+            "VITE_DEVFRAME_T3_SHELL_URL": endpoints["t3Shell"],
             "VITE_DEVFRAME_CLIENT_PLAN_URL": endpoints["clientPlan"],
             "VITE_DEVFRAME_CLIENT_MANIFEST_URL": endpoints["manifest"],
             "VITE_HOSTED_APP_CHANNEL": "nightly",
@@ -117,19 +107,19 @@ def build_t3_bridge_bundle(plan: dict[str, Any] | None = None) -> dict[str, Any]
             {
                 "path": BRIDGE_CATALOG_RELATIVE_PATH,
                 "action": "patch",
-                "role": "Falls back to T3's native writable environment catalog by default; only registers the read-only DevFrame environment when the (now opt-in) bridge shell URL is set.",
+                "role": "Registers the DevFrame local environment when the launcher supplies the shell URL; catalog mutations remain read-only.",
                 "status": "ready",
             },
             {
                 "path": BRIDGE_SHELL_STATE_RELATIVE_PATH,
                 "action": "patch",
-                "role": "Uses T3's native shell state by default; switches to DevFrame's read-only shell endpoint only when VITE_DEVFRAME_T3_SHELL_URL is set.",
+                "role": "Loads DevFrame shell snapshots when the launcher supplies VITE_DEVFRAME_T3_SHELL_URL.",
                 "status": "ready",
             },
             {
                 "path": BRIDGE_THREAD_STATE_RELATIVE_PATH,
                 "action": "patch",
-                "role": "Uses T3's native thread detail state by default; switches to DevFrame's read-only threadDetails projection only when the bridge shell URL is set.",
+                "role": "Loads DevFrame thread details and enables only the bounded M13B conversation, approval, and cancellation commands when shell and control configuration are both present.",
                 "status": "ready",
             },
         ],
@@ -145,9 +135,10 @@ def build_t3_bridge_bundle(plan: dict[str, Any] | None = None) -> dict[str, Any]
             "t3Desktop": f"node {BRIDGE_T3_DESKTOP_LAUNCHER_RELATIVE_PATH}",
             "t3Web": f"node {BRIDGE_T3_WEB_LAUNCHER_RELATIVE_PATH}",
             "expected": [
-                "T3 Code (RD-Code) launches as a fully usable native editor: add local project folders, configure provider/API-key LLM backends, and edit projects.",
+                "T3 Code (RD-Code) launches with the DevFrame local shell and native Global Coordinator conversation entry enabled.",
                 "OpenCode remains the executor surfaced by DevFrame sessions.",
-                "DevFrame read model and orchestration are reached through the dashboard and MCP surface; the in-editor read-only overlay stays off unless VITE_DEVFRAME_T3_SHELL_URL is explicitly set.",
+                "The launcher supplies shell plus client-plan/manifest control configuration; missing either side fails closed instead of enabling conversation writes.",
+                "The T3 adapter keeps its default mutation surface read-only and permits only durable conversation intake, approval response, and active-run cancellation.",
             ],
         },
     }
@@ -163,7 +154,8 @@ def render_t3_bridge_bundle_text(bundle: dict[str, Any]) -> str:
         "DevFrame T3 Code bridge bundle",
         f"name        : {bundle['name']}",
         f"client      : {bundle['target']['client']} ({bundle['target']['license']})",
-        f"mode        : native editor (DevFrame read-only overlay off by default)",
+        "mode        : M13B controlled conversation (shell + control)",
+        f"shell       : {env['VITE_DEVFRAME_T3_SHELL_URL']}",
         f"manifest    : {env['VITE_DEVFRAME_CLIENT_MANIFEST_URL']}",
         f"client plan : {env['VITE_DEVFRAME_CLIENT_PLAN_URL']}",
         f"strategy    : {bundle['integration']['strategy']}",
@@ -350,6 +342,55 @@ export interface DevFrameControlPlaneConfig {
   readonly pollIntervalMs?: number;
 }
 
+export interface DevFrameConversationTurnInput {
+  readonly environmentId: string;
+  readonly threadId: string;
+  readonly projectId: string;
+  readonly messageId: string;
+  readonly message: string;
+}
+
+export interface DevFrameConversationTurnResponse {
+  readonly accepted: true;
+  readonly replayed: boolean;
+  readonly threadId: string;
+  readonly projectId: string;
+  readonly eventId: string;
+  readonly turnId: string;
+  readonly status: "answered" | "proposal_pending";
+  readonly assistantMessageId: string;
+  readonly proposalId?: string;
+}
+
+export type DevFrameApprovalDecision = "approve" | "reject";
+
+export interface DevFrameApprovalResponseInput {
+  readonly requestId: string;
+  readonly threadId: string;
+  readonly decision: DevFrameApprovalDecision;
+}
+
+export interface DevFrameApprovalResponse {
+  readonly responded: true;
+  readonly decision: DevFrameApprovalDecision;
+  readonly requestId: string;
+  readonly threadId: string;
+  readonly executed: boolean;
+  readonly status: "started" | "rejected";
+  readonly replayed: boolean;
+  readonly runId?: string;
+}
+
+export interface DevFrameClusterRunCancelInput {
+  readonly runId: string;
+}
+
+export interface DevFrameClusterRunCancelResponse {
+  readonly cancelRequested: boolean;
+  readonly runId: string;
+  readonly status: "cancel_requested" | "cancelled";
+}
+
 interface DevFrameBridgeEnv {
   readonly VITE_DEVFRAME_T3_SHELL_URL?: string;
   readonly VITE_DEVFRAME_CLIENT_PLAN_URL?: string;
@@ -390,11 +431,10 @@ function trimOptionalUrl(value: string | undefined): string | undefined {
 }
 
 function deriveControlPlaneBaseUrl(
-  shellUrl?: string,
   clientPlanUrl?: string,
   manifestUrl?: string,
 ): string | null {
-  const source = shellUrl || clientPlanUrl || manifestUrl;
+  const source = clientPlanUrl || manifestUrl;
   if (!source) return null;
   return new URL("/", source).toString();
 }
@@ -405,7 +445,7 @@ export function readDevFrameControlPlaneConfig(
   const shellUrl = trimOptionalUrl(env.VITE_DEVFRAME_T3_SHELL_URL);
   const clientPlanUrl = trimOptionalUrl(env.VITE_DEVFRAME_CLIENT_PLAN_URL);
   const manifestUrl = trimOptionalUrl(env.VITE_DEVFRAME_CLIENT_MANIFEST_URL);
-  const controlPlaneBaseUrl = deriveControlPlaneBaseUrl(shellUrl, clientPlanUrl, manifestUrl);
+  const controlPlaneBaseUrl = deriveControlPlaneBaseUrl(clientPlanUrl, manifestUrl);
   if (!controlPlaneBaseUrl) return null;
   return {
     controlPlaneBaseUrl,
@@ -421,6 +461,212 @@ export function readDevFrameShellBridgeConfig(
   const shellUrl = trimOptionalUrl(env.VITE_DEVFRAME_T3_SHELL_URL);
   if (!shellUrl) return null;
   return { shellUrl };
+}
+
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function isCanonicalDevFrameRunId(value: unknown): value is string {
+  return typeof value === "string" && /^g-[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
+}
+
+export function isCanonicalDevFrameProposalId(value: unknown): value is string {
+  return typeof value === "string" && /^ctp-[0-9a-f]{24}$/.test(value);
+}
+
+function hasExactKeys(value: Record<string, unknown>, allowedKeys: ReadonlySet<string>): boolean {
+  const keys = Object.keys(value);
+  return keys.length === allowedKeys.size && keys.every((key) => allowedKeys.has(key));
+}
+
+function parseDevFrameConversationTurnResponse(
+  value: unknown,
+  input: DevFrameConversationTurnInput,
+): DevFrameConversationTurnResponse {
+  const status =
+    isUnknownRecord(value) && (value.status === "answered" || value.status === "proposal_pending")
+      ? value.status
+      : null;
+  const allowedKeys = new Set([
+    "accepted",
+    "replayed",
+    "threadId",
+    "projectId",
+    "eventId",
+    "turnId",
+    "status",
+    "assistantMessageId",
+    ...(status === "proposal_pending" ? ["proposalId"] : []),
+  ]);
+  if (
+    !isUnknownRecord(value) ||
+    status === null ||
+    !hasExactKeys(value, allowedKeys) ||
+    value.accepted !== true ||
+    typeof value.replayed !== "boolean" ||
+    value.threadId !== input.threadId ||
+    value.projectId !== input.projectId ||
+    typeof value.eventId !== "string" ||
+    !/^ci-[0-9a-f]{24}$/.test(value.eventId) ||
+    value.turnId !== input.messageId ||
+    typeof value.assistantMessageId !== "string" ||
+    !/^cam-[0-9a-f]{24}$/.test(value.assistantMessageId) ||
+    (status === "proposal_pending" && !isCanonicalDevFrameProposalId(value.proposalId))
+  ) {
+    throw new Error("DevFrame conversation intake response is invalid.");
+  }
+  return {
+    accepted: true,
+    replayed: value.replayed,
+    threadId: value.threadId,
+    projectId: value.projectId,
+    eventId: value.eventId,
+    turnId: value.turnId,
+    status,
+    assistantMessageId: value.assistantMessageId,
+    ...(status === "proposal_pending" ? { proposalId: value.proposalId as string } : {}),
+  };
+}
+
+export async function startDevFrameConversationTurn(
+  config: DevFrameControlPlaneConfig,
+  input: DevFrameConversationTurnInput,
+): Promise<DevFrameConversationTurnResponse> {
+  const response = await fetch(
+    new URL("/api/t3/conversation-intake", config.controlPlaneBaseUrl).toString(),
+    {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        environmentId: input.environmentId,
+        threadId: input.threadId,
+        projectId: input.projectId,
+        clientRequestId: input.messageId,
+        message: input.message,
+      }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`DevFrame conversation intake request failed: ${response.status}`);
+  }
+  return parseDevFrameConversationTurnResponse(await response.json(), input);
+}
+
+function parseDevFrameApprovalResponse(
+  value: unknown,
+  input: DevFrameApprovalResponseInput,
+): DevFrameApprovalResponse {
+  const approving = input.decision === "approve";
+  const allowedKeys = new Set([
+    "responded",
+    "decision",
+    "requestId",
+    "threadId",
+    "executed",
+    "status",
+    "replayed",
+    ...(approving ? ["runId"] : []),
+  ]);
+  if (
+    !isUnknownRecord(value) ||
+    !hasExactKeys(value, allowedKeys) ||
+    value.responded !== true ||
+    value.decision !== input.decision ||
+    value.requestId !== input.requestId ||
+    value.threadId !== input.threadId ||
+    typeof value.replayed !== "boolean" ||
+    (approving
+      ? value.executed !== true ||
+        value.status !== "started" ||
+        !isCanonicalDevFrameRunId(value.runId)
+      : value.executed !== false || value.status !== "rejected")
+  ) {
+    throw new Error("DevFrame approval response is invalid.");
+  }
+  return {
+    responded: true,
+    decision: input.decision,
+    requestId: input.requestId,
+    threadId: input.threadId,
+    executed: approving,
+    status: approving ? "started" : "rejected",
+    replayed: value.replayed,
+    ...(approving ? { runId: value.runId as string } : {}),
+  };
+}
+
+export async function respondToDevFrameApproval(
+  config: DevFrameControlPlaneConfig,
+  input: DevFrameApprovalResponseInput,
+): Promise<DevFrameApprovalResponse> {
+  if (!isCanonicalDevFrameProposalId(input.requestId)) {
+    throw new Error("DevFrame semantic proposal id is invalid.");
+  }
+  const response = await fetch(
+    new URL("/api/t3/approval-response", config.controlPlaneBaseUrl).toString(),
+    {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(input),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`DevFrame approval response request failed: ${response.status}`);
+  }
+  return parseDevFrameApprovalResponse(await response.json(), input);
+}
+
+export async function cancelDevFrameClusterRun(
+  config: DevFrameControlPlaneConfig,
+  input: DevFrameClusterRunCancelInput,
+): Promise<DevFrameClusterRunCancelResponse> {
+  if (!isCanonicalDevFrameRunId(input.runId)) {
+    throw new Error("DevFrame cluster run id is invalid.");
+  }
+  const response = await fetch(
+    new URL("/api/t3/cluster-run-cancel", config.controlPlaneBaseUrl).toString(),
+    {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        runId: input.runId,
+        requestedBy: "rd-code-editor",
+      }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`DevFrame cluster run cancel request failed: ${response.status}`);
+  }
+  const value: unknown = await response.json();
+  if (
+    !isUnknownRecord(value) ||
+    !hasExactKeys(value, new Set(["cancelRequested", "runId", "status"])) ||
+    value.runId !== input.runId ||
+    !(
+      (value.cancelRequested === true && value.status === "cancel_requested") ||
+      (value.cancelRequested === false && value.status === "cancelled")
+    )
+  ) {
+    throw new Error("DevFrame cluster run cancel response is invalid.");
+  }
+  return {
+    cancelRequested: value.cancelRequested,
+    runId: value.runId,
+    status: value.status,
+  };
 }
 
 export async function fetchDevFrameT3ShellEnvelope(
@@ -768,18 +1014,21 @@ def render_bridge_readme(bundle: dict[str, Any]) -> str:
 This directory is generated by `devframe client bridge`.
 
 The bridge keeps T3 Code as the visual client and points it at DevFrame's
-read-only local Agent Control Plane. DevFrame does not expose a WebSocket
-endpoint, so the T3 client runs in polling mode using HTTP snapshots only.
+local Agent Control Plane. DevFrame does not expose a WebSocket endpoint, so
+the T3 client runs in polling mode using HTTP snapshots and bounded HTTP
+commands.
 
 ## Runtime URLs
 
 - realtime mode: `{env["VITE_DEVFRAME_REALTIME_MODE"]}`
+- shell: `{env["VITE_DEVFRAME_T3_SHELL_URL"]}`
 - client plan: `{env["VITE_DEVFRAME_CLIENT_PLAN_URL"]}`
 - manifest: `{env["VITE_DEVFRAME_CLIENT_MANIFEST_URL"]}`
 
-> The read-only DevFrame shell overlay is off by default. RD-Code runs as a
-> fully native editor. To opt into the legacy read-only bridge view, set
-> `VITE_DEVFRAME_T3_SHELL_URL` to the DevFrame `/t3-shell.json` endpoint.
+The generated launchers enable M13B controlled conversation by supplying the
+shell URL together with client-plan and manifest URLs. Shell-only or
+control-only partial configuration fails closed: it never enables conversation
+writes.
 
 ## Launch
 
@@ -788,16 +1037,16 @@ Run `node {BRIDGE_T3_DESKTOP_LAUNCHER_RELATIVE_PATH}` from the T3 checkout root 
 ## Wiring point
 
 `apps/web/src/state/shell.ts` and `apps/web/src/state/threads.ts` are generated
-as the T3-side wiring points. They keep T3's native commands available, but
-when `VITE_DEVFRAME_T3_SHELL_URL` is present they load shell snapshots and
-thread detail snapshots from DevFrame instead of the native orchestration
-streams. `apps/web/src/connection/catalog.ts` is also generated so T3's project
-and thread views can see the DevFrame local environment in the catalog. The
-desktop app can then reuse the web shell through the existing T3 desktop
-wrapper.
+as the T3-side wiring points. With the complete shell-plus-control
+configuration they load DevFrame snapshots and expose the native Global
+Coordinator conversation entry. `apps/web/src/connection/catalog.ts` registers
+the DevFrame local environment, and the desktop app reuses that web shell
+through the existing T3 desktop wrapper.
 
-The bridge is intentionally read-only. Future write actions must stay behind a
-DevFrame human gate.
+The bridge remains read-only by default. Its controlled thread adapter permits
+only durable conversation intake, proposal approval/rejection, and active-run
+cancellation. All other mutations stay blocked, and partial configuration
+selects the read-only adapter.
 
 ## DevFrame Team Contract
 
@@ -822,10 +1071,11 @@ to access the full envelope including the `devframe.team` payload.
 Use `fetchDevFrameConversationModel()` for the coordinator conversation contract
 and `fetchDevFrameProjectOptions()` for the project-binding picker that powers
 new coordinator-owned goals.
-When the read-only shell overlay is off, use `readDevFrameControlPlaneConfig()`
-plus `fetchDevFrameClusterTargets()` and `startDevFrameCoordinatorGoal()` to
-drive coordinator goal creation against the loopback control plane without
-depending on `VITE_DEVFRAME_T3_SHELL_URL`.
+Use `readDevFrameControlPlaneConfig()` for the independently configured control
+base and `readDevFrameShellBridgeConfig()` for snapshots. The controlled
+conversation adapter is enabled only when both return a configuration.
+`fetchDevFrameClusterTargets()` and `startDevFrameCoordinatorGoal()` remain
+available for explicitly governed coordinator actions.
 Use `sortDevFrameThreadsForDisplay()` to present the inbox in product order:
 global coordinator first, then goal conversations, then ordinary chats.
 Use `fetchDevFrameCoordinatorShellEntry()` when the shell wants one directly
@@ -954,7 +1204,7 @@ const args = ["--filter", "@t3tools/web", "dev"];
 const childEnv = {{ ...process.env, ...devframeEnv }};
 
 console.log("[devframe] Starting T3 Web with DevFrame local control plane.");
-console.log(`[devframe] DevFrame env applied (native editor mode; client plan ${{devframeEnv.VITE_DEVFRAME_CLIENT_PLAN_URL}}).`);
+console.log(`[devframe] M13B controlled conversation enabled (shell ${{devframeEnv.VITE_DEVFRAME_T3_SHELL_URL}}; client plan ${{devframeEnv.VITE_DEVFRAME_CLIENT_PLAN_URL}}).`);
 
 const child = spawn(command, args, {{
   cwd: root,
@@ -998,7 +1248,7 @@ childEnv.T3CODE_DESKTOP_REMOTE_DEBUGGING_PORT =
     "{T3_RENDERER_CDP_DEFAULT_PORT}";
 
 console.log("[devframe] Starting T3 Desktop with DevFrame local control plane.");
-console.log(`[devframe] DevFrame env applied (native editor mode; client plan ${{devframeEnv.VITE_DEVFRAME_CLIENT_PLAN_URL}}).`);
+console.log(`[devframe] M13B controlled conversation enabled (shell ${{devframeEnv.VITE_DEVFRAME_T3_SHELL_URL}}; client plan ${{devframeEnv.VITE_DEVFRAME_CLIENT_PLAN_URL}}).`);
 
 const child = spawn(command, args, {{
   cwd: root,
@@ -1032,7 +1282,8 @@ def render_t3_desktop_prod_launcher_source(bundle: dict[str, Any]) -> str:
 
     - If no build is present (or ``--build`` / ``DEVFRAME_T3_FORCE_BUILD=1`` is
       set) it runs ``pnpm build:desktop`` once with the DevFrame Vite variables
-      set, so the client-plan/manifest URLs are inlined into the built bundle.
+      set, so the shell/client-plan/manifest URLs are inlined into the built
+      bundle.
     - It then runs ``pnpm start:desktop``, which launches Electron against the
       built renderer with no dev server and no watchers.
     """
@@ -1040,7 +1291,7 @@ def render_t3_desktop_prod_launcher_source(bundle: dict[str, Any]) -> str:
     # The production renderer connects to the desktop's own spawned local
     # server. VITE_HOSTED_APP_CHANNEL must NOT be baked into the desktop build:
     # `isHostedStaticApp()` treats any configured hosted channel as "this is the
-    # hosted browser app" and short-circuits into the read-only onboarding
+    # hosted browser app" and short-circuits into the onboarding
     # surface ("Connect an environment to get started"), which hides local
     # projects and the native editor. In dev that var is harmless because the
     # dev server injects VITE_HTTP_URL (a configured backend) which takes
@@ -1106,7 +1357,7 @@ if (needsBuild) {{
 }}
 
 console.log("[devframe] Starting T3 Desktop (production build; no dev server, low memory).");
-console.log(`[devframe] DevFrame env baked at build time (client plan ${{devframeEnv.VITE_DEVFRAME_CLIENT_PLAN_URL}}).`);
+console.log(`[devframe] M13B controlled conversation baked at build time (shell ${{devframeEnv.VITE_DEVFRAME_T3_SHELL_URL}}; client plan ${{devframeEnv.VITE_DEVFRAME_CLIENT_PLAN_URL}}).`);
 
 const startCode = await run(["start:desktop"]);
 process.exit(startCode);
@@ -1326,8 +1577,15 @@ import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 
 import {
+  cancelDevFrameClusterRun,
   fetchDevFrameT3Shell,
+  isCanonicalDevFrameProposalId,
+  isCanonicalDevFrameRunId,
+  readDevFrameControlPlaneConfig,
   readDevFrameShellBridgeConfig,
+  respondToDevFrameApproval,
+  startDevFrameConversationTurn,
+  type DevFrameControlPlaneConfig,
   type DevFrameT3ShellSnapshot,
 } from "../devframe/devframeShellBridge";
 import { environmentCatalog } from "../connection/catalog";
@@ -1338,6 +1596,32 @@ import { parseThreadKey, threadKey } from "@t3tools/client-runtime/state/entitie
 const nativeThreadEnvironment = createThreadEnvironmentAtoms(connectionAtomRuntime);
 const nativeEnvironmentThreads = createEnvironmentThreadStateAtoms(connectionAtomRuntime);
 const devFrameConfig = readDevFrameShellBridgeConfig();
+const devFrameControlPlaneConfig = readDevFrameControlPlaneConfig();
+const DEVFRAME_ENVIRONMENT_ID = "devframe-local";
+const DEVFRAME_GLOBAL_COORDINATOR_THREAD_ID = "devframe-team-workbench-session";
+const devFrameProjectIdByThreadId = new Map<string, string>();
+
+export function resolveDevFrameThreadBridgeMode(
+  shellConfig: object | null,
+  controlPlaneConfig: object | null,
+): "native" | "read-only" | "conversation" {
+  if (shellConfig === null && controlPlaneConfig === null) {
+    return "native";
+  }
+  if (shellConfig !== null && controlPlaneConfig !== null) {
+    return "conversation";
+  }
+  return "read-only";
+}
+
+const devFrameThreadBridgeMode = resolveDevFrameThreadBridgeMode(
+  devFrameConfig,
+  devFrameControlPlaneConfig,
+);
+
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 class DevFrameThreadLoadError extends Error {
   override readonly name = "DevFrameThreadLoadError";
@@ -1380,13 +1664,39 @@ function findDevFrameThreadDetail(
   } as unknown as OrchestrationThread;
 }
 
+export function resolveDevFrameConversationProjectId(
+  snapshot: DevFrameT3ShellSnapshot,
+  threadId: string,
+): string | null {
+  if (snapshot.projects.length !== 1 || !isUnknownRecord(snapshot.projects[0])) {
+    return null;
+  }
+  const projectId = snapshot.projects[0].id;
+  if (
+    typeof projectId !== "string" ||
+    !projectId.trim() ||
+    projectId !== projectId.trim()
+  ) {
+    return null;
+  }
+  const thread = findDevFrameThreadDetail(snapshot, threadId as ThreadId);
+  return thread?.projectId === projectId ? projectId : null;
+}
+
 function devFrameThreadState(
   snapshot: DevFrameT3ShellSnapshot,
   threadId: ThreadId,
 ): EnvironmentThreadState {
   const thread = findDevFrameThreadDetail(snapshot, threadId);
   if (thread === null) {
+    devFrameProjectIdByThreadId.delete(threadId);
     return EMPTY_ENVIRONMENT_THREAD_STATE;
+  }
+  const projectId = resolveDevFrameConversationProjectId(snapshot, threadId);
+  if (projectId !== null) {
+    devFrameProjectIdByThreadId.set(threadId, projectId);
+  } else {
+    devFrameProjectIdByThreadId.delete(threadId);
   }
   return {
     data: Option.some(thread),
@@ -1404,7 +1714,10 @@ function devFrameThreadErrorState(error: unknown): EnvironmentThreadState {
   };
 }
 
-function loadDevFrameThreadState(threadId: ThreadId): Effect.Effect<EnvironmentThreadState> {
+function loadDevFrameThreadState(
+  _environmentId: EnvironmentId,
+  threadId: ThreadId,
+): Effect.Effect<EnvironmentThreadState> {
   if (devFrameConfig === null) {
     return Effect.succeed(EMPTY_ENVIRONMENT_THREAD_STATE);
   }
@@ -1420,7 +1733,7 @@ function loadDevFrameThreadState(threadId: ThreadId): Effect.Effect<EnvironmentT
 function createDevFrameEnvironmentThreadStateAtoms() {
   const family = Atom.family((key: string) => {
     const ref = parseThreadKey(key);
-    return Atom.make(loadDevFrameThreadState(ref.threadId)).pipe(
+    return Atom.make(loadDevFrameThreadState(ref.environmentId, ref.threadId)).pipe(
       Atom.swr({
         staleTime: 0,
         revalidateOnMount: true,
@@ -1437,43 +1750,6 @@ function createDevFrameEnvironmentThreadStateAtoms() {
   };
 }
 
-const devFrameRespondToApproval = {
-  label: "devframe:thread:respond-to-approval",
-  run: (_registry: unknown, value: { readonly input: { readonly requestId: string; readonly threadId: string; readonly decision: string } }) =>
-    (async () => {
-      const config = readDevFrameShellBridgeConfig();
-      if (config === null) {
-        return AsyncResult.success({ sequence: 0 });
-      }
-      const nativeDecision = value.input.decision;
-      const mapped = ((["accept", "acceptForSession"] as readonly string[]).includes(nativeDecision)) ? "approve"
-        : ((["decline", "cancel"] as readonly string[]).includes(nativeDecision)) ? "reject"
-        : "reject";
-      try {
-        const base = new URL("/", config.shellUrl);
-        const url = new URL("/api/t3/approval-response", base);
-        const response = await fetch(url.toString(), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            requestId: value.input.requestId,
-            threadId: value.input.threadId,
-            decision: mapped,
-          }),
-        });
-        if (!response.ok) {
-          const errorBody = await response.text();
-          throw new Error(`DevFrame approval response failed: ${response.status} ${errorBody}`);
-        }
-        await response.json();
-        return AsyncResult.success({ sequence: 0 });
-      } catch (error) {
-        console.warn("[devframe] respondToApproval failed:", error);
-        return AsyncResult.success({ sequence: 0 });
-      }
-    })(),
-};
-
 function devFrameReadOnlyCommand(label: string) {
   return {
     label: `devframe:thread:read-only:${label}`,
@@ -1484,9 +1760,159 @@ function devFrameReadOnlyCommand(label: string) {
   };
 }
 
+function devFrameRespondToApprovalCommand(config: DevFrameControlPlaneConfig) {
+  return {
+    label: "devframe:thread:respond-to-approval",
+    run: async (_registry: unknown, value: unknown) => {
+      if (!isUnknownRecord(value) || !isUnknownRecord(value.input)) {
+        return AsyncResult.failure(
+          Cause.fail(new Error("DevFrame approval response binding is invalid.")),
+        );
+      }
+      const input = value.input;
+      const decision =
+        input.decision === "accept"
+          ? "approve"
+          : input.decision === "decline" || input.decision === "cancel"
+            ? "reject"
+            : null;
+      if (
+        value.environmentId !== DEVFRAME_ENVIRONMENT_ID ||
+        input.threadId !== DEVFRAME_GLOBAL_COORDINATOR_THREAD_ID ||
+        !isCanonicalDevFrameProposalId(input.requestId) ||
+        decision === null
+      ) {
+        return AsyncResult.failure(
+          Cause.fail(new Error("DevFrame approval response binding is invalid.")),
+        );
+      }
+      try {
+        await respondToDevFrameApproval(config, {
+          requestId: input.requestId,
+          threadId: input.threadId,
+          decision,
+        });
+        return AsyncResult.success({ sequence: 0 });
+      } catch (error) {
+        return AsyncResult.failure(Cause.fail(error));
+      }
+    },
+  };
+}
+
+function devFrameStartTurnCommand(
+  config: DevFrameControlPlaneConfig,
+  resolveProjectId: (threadId: string) => string | null,
+) {
+  return {
+    label: "devframe:thread:start-turn",
+    run: async (_registry: unknown, value: unknown) => {
+      if (!isUnknownRecord(value) || !isUnknownRecord(value.input)) {
+        return AsyncResult.failure(
+          Cause.fail(new Error("DevFrame Global Coordinator turn binding is invalid.")),
+        );
+      }
+      const input = value.input;
+      const allowedInputKeys = new Set([
+        "threadId",
+        "message",
+        "modelSelection",
+        "titleSeed",
+        "runtimeMode",
+        "interactionMode",
+        "createdAt",
+        "commandId",
+      ]);
+      const message = input.message;
+      const allowedMessageKeys = new Set(["messageId", "role", "text", "attachments"]);
+      if (
+        value.environmentId !== DEVFRAME_ENVIRONMENT_ID ||
+        input.threadId !== DEVFRAME_GLOBAL_COORDINATOR_THREAD_ID ||
+        Object.keys(input).some((key) => !allowedInputKeys.has(key)) ||
+        !isUnknownRecord(message) ||
+        Object.keys(message).length !== allowedMessageKeys.size ||
+        Object.keys(message).some((key) => !allowedMessageKeys.has(key)) ||
+        message.role !== "user" ||
+        typeof message.messageId !== "string" ||
+        !message.messageId.trim() ||
+        typeof message.text !== "string" ||
+        !message.text.trim() ||
+        !Array.isArray(message.attachments) ||
+        message.attachments.length !== 0
+      ) {
+        return AsyncResult.failure(
+          Cause.fail(new Error("DevFrame Global Coordinator turn binding is invalid.")),
+        );
+      }
+      const projectId = resolveProjectId(input.threadId);
+      if (!projectId) {
+        return AsyncResult.failure(
+          Cause.fail(new Error("DevFrame Global Coordinator project binding is missing.")),
+        );
+      }
+      try {
+        await startDevFrameConversationTurn(config, {
+          environmentId: value.environmentId,
+          threadId: input.threadId,
+          projectId,
+          messageId: message.messageId,
+          message: message.text,
+        });
+        return AsyncResult.success({ sequence: 0 });
+      } catch (error) {
+        return AsyncResult.failure(Cause.fail(error));
+      }
+    },
+  };
+}
+
+function devFrameInterruptTurnCommand(config: DevFrameControlPlaneConfig) {
+  return {
+    label: "devframe:thread:interrupt-turn",
+    run: async (_registry: unknown, value: unknown) => {
+      if (!isUnknownRecord(value) || !isUnknownRecord(value.input)) {
+        return AsyncResult.failure(
+          Cause.fail(new Error("DevFrame cluster run cancel binding is invalid.")),
+        );
+      }
+      const input = value.input;
+      if (
+        value.environmentId !== DEVFRAME_ENVIRONMENT_ID ||
+        input.threadId !== DEVFRAME_GLOBAL_COORDINATOR_THREAD_ID ||
+        !isCanonicalDevFrameRunId(input.turnId)
+      ) {
+        return AsyncResult.failure(
+          Cause.fail(new Error("DevFrame cluster run cancel binding is invalid.")),
+        );
+      }
+      try {
+        await cancelDevFrameClusterRun(config, { runId: input.turnId });
+        return AsyncResult.success({ sequence: 0 });
+      } catch (error) {
+        return AsyncResult.failure(Cause.fail(error));
+      }
+    },
+  };
+}
+
+function devFrameGlobalThreadNoopCommand(label: string) {
+  return {
+    label: `devframe:thread:bounded-noop:${label}`,
+    run: async (_registry: unknown, value: unknown) =>
+      isUnknownRecord(value) &&
+      isUnknownRecord(value.input) &&
+      value.environmentId === DEVFRAME_ENVIRONMENT_ID &&
+      value.input.threadId === DEVFRAME_GLOBAL_COORDINATOR_THREAD_ID
+        ? AsyncResult.success({ sequence: 0 })
+        : AsyncResult.failure(
+            Cause.fail(new Error(`DevFrame ${label} binding is invalid.`)),
+          ),
+  };
+}
+
 // Keep this surface explicit: spreading nativeThreadEnvironment here would
-// silently expose current or future native mutations through the read-only
-// DevFrame bridge. Approval response is the sole allowed writeback.
+// silently expose current or future native mutations through the DevFrame
+// bridge.
 const devFrameReadOnlyThreadEnvironment = {
   create: devFrameReadOnlyCommand("create"),
   delete: devFrameReadOnlyCommand("delete"),
@@ -1501,18 +1927,39 @@ const devFrameReadOnlyThreadEnvironment = {
   setInteractionMode: devFrameReadOnlyCommand("setInteractionMode"),
   startTurn: devFrameReadOnlyCommand("startTurn"),
   interruptTurn: devFrameReadOnlyCommand("interruptTurn"),
-  respondToApproval: devFrameRespondToApproval,
+  respondToApproval: devFrameReadOnlyCommand("respondToApproval"),
   respondToUserInput: devFrameReadOnlyCommand("respondToUserInput"),
   revertCheckpoint: devFrameReadOnlyCommand("revertCheckpoint"),
   stopSession: devFrameReadOnlyCommand("stopSession"),
 };
 
+export function createDevFrameThreadEnvironment(
+  config: DevFrameControlPlaneConfig,
+  resolveProjectId: (threadId: string) => string | null = (threadId) =>
+    devFrameProjectIdByThreadId.get(threadId) ?? null,
+) {
+  return {
+    ...devFrameReadOnlyThreadEnvironment,
+    updateMetadata: devFrameGlobalThreadNoopCommand("updateMetadata"),
+    setRuntimeMode: devFrameGlobalThreadNoopCommand("setRuntimeMode"),
+    setInteractionMode: devFrameGlobalThreadNoopCommand("setInteractionMode"),
+    startTurn: devFrameStartTurnCommand(config, resolveProjectId),
+    interruptTurn: devFrameInterruptTurnCommand(config),
+    respondToApproval: devFrameRespondToApprovalCommand(config),
+  };
+}
+
 export const threadEnvironment =
-  devFrameConfig === null
+  devFrameThreadBridgeMode === "native"
     ? nativeThreadEnvironment
-    : devFrameReadOnlyThreadEnvironment;
+    : devFrameThreadBridgeMode === "conversation" &&
+        devFrameControlPlaneConfig !== null
+      ? createDevFrameThreadEnvironment(devFrameControlPlaneConfig)
+      : devFrameReadOnlyThreadEnvironment;
 export const environmentThreads =
-  devFrameConfig === null ? nativeEnvironmentThreads : createDevFrameEnvironmentThreadStateAtoms();
+  devFrameThreadBridgeMode === "native"
+    ? nativeEnvironmentThreads
+    : createDevFrameEnvironmentThreadStateAtoms();
 export const environmentThreadDetails = createEnvironmentThreadDetailAtoms(
   environmentThreads.stateAtom,
 );

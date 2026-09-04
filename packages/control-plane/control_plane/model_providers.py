@@ -71,7 +71,10 @@ _REGISTRY: tuple[ModelProvider, ...] = (
         task_weight="any",
         live_backend="ready",
         model="",
-        notes="No API key. Speed/quality depend on the local model and hardware.",
+        notes=(
+            "No API key. Requires an explicit --model ollama/<model>; "
+            "speed/quality depend on the local model and hardware."
+        ),
     ),
     ModelProvider(
         provider_id="web-chatgpt-shim",
@@ -122,12 +125,17 @@ def render_model_providers_text(providers: list[ModelProvider]) -> str:
     for provider in providers:
         key = "key required" if provider.requires_key else "no key"
         backend = provider.live_backend
+        model_option = (
+            " --model ollama/<model>"
+            if provider.provider_id == "local-ollama"
+            else ""
+        )
         lines.extend([
             f"- {provider.provider_id} [{provider.kind}] {provider.display}",
             f"  task    : {provider.task_weight}",
             f"  speed   : {provider.speed}   cost: {provider.cost}   reliability: {provider.reliability}",
             f"  key     : {key}   tos risk: {provider.tos_risk}   live backend: {backend}",
-            f"  use     : devframe code \"<goal>\" --model-provider {provider.provider_id} --preview",
+            f"  use     : devframe code \"<goal>\" --model-provider {provider.provider_id}{model_option} --preview",
             f"  note    : {provider.notes}",
         ])
         for degradation in provider.degradation_notes:
