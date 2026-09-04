@@ -230,6 +230,45 @@ describe('goal projection unit', () => {
     expect(bench.tailValues().goal).toBeNull()
   })
 
+  it('replays receipts without changing projected state and latches invalid ones', () => {
+    const completed: GoalProjection = {
+      goal: { id: GoalId('g1'), revision: 2, objective: 'x', phase: 'complete', maxGoalRounds: 4 },
+      roundsStarted: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const state: GoalProjectionState = {
+      current: completed,
+      seenGoalIds: [completed.goal.id],
+      failure: null,
+    }
+    const receiptData = {
+      kind: 'goal/change',
+      version: 1,
+      operation: 'receipt',
+      ref: { id: 'g1', revision: 2 },
+      evidence: [{ kind: 'test-run', summary: 'all green', at: 2 }],
+      recordedAt: 2,
+    }
+    const receipt = { type: 'goal/change', seq: 1, time: 2, data: receiptData } as never
+    const afterReceipt = applyGoalProjection(state, receipt)
+    expect(afterReceipt.current).toEqual(completed)
+    expect(afterReceipt.seenGoalIds).toEqual([completed.goal.id])
+    expect(afterReceipt.failure).toBeNull()
+
+    const stale = {
+      type: 'goal/change', seq: 2, time: 3,
+      data: { ...receiptData, ref: { id: 'g1', revision: 1 } },
+    } as never
+    expect(applyGoalProjection(state, stale).failure).toMatch(/goal receipt must reference the current revision/)
+
+    const incomplete = {
+      type: 'goal/change', seq: 2, time: 3,
+      data: { ...receiptData, evidence: [] },
+    } as never
+    expect(applyGoalProjection(state, incomplete).failure).toMatch(/goal receipt evidence must be a non-empty array/)
+  })
+
   it('has no goal key when the goal service is not composed', async () => {
     const bench = await harness(false)
     seedMessage(bench.session)

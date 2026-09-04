@@ -71,14 +71,14 @@ interface GoalView extends GoalSnapshot {
 
 ## 持久变更
 
-每次变更都是持久的 `goal/change` 会话事件，其载荷要么是变更后的完整快照，要么是清除墓碑。严格折叠与持久投影只从这些事件派生生命周期状态；inbox 变更不会影响 goal 状态。
+每项生命周期变更都是持久的 `goal/change` 会话事件，其载荷要么是变更后的完整快照，要么是清除墓碑；完成回执是第三个变体，它记录证据但不改变生命周期状态。严格折叠与持久投影只从这些事件派生生命周期状态；inbox 变更不会影响 goal 状态。
 
 ```ts type-equiv
 /** Full-snapshot goal mutation committed by a durable `goal/change` event. */
 interface GoalSnapshotChangeMeta {
   readonly kind: 'goal/change'
   readonly version: 1
-  readonly operation: Exclude<GoalOperation, 'clear'>
+  readonly operation: Exclude<GoalOperation, 'clear' | 'receipt'>
   readonly goal: GoalSnapshot
   readonly roundsStarted: number
   readonly createdAt: number
@@ -94,6 +94,40 @@ interface GoalClearChangeMeta {
   readonly operation: 'clear'
   readonly cleared: GoalRef
   readonly clearedAt: number
+}
+```
+
+完成回执以非空的 evidence 数组标注处于 `complete` 阶段的 goal 的当前确切修订；它不推进修订，同一修订的多条回执按日志顺序保留，回放先对照当前 goal 校验回执，再将其排除在折叠状态之外。
+
+```ts type-equiv
+/** One recorded piece of goal-completion evidence. */
+interface GoalEvidenceEntry {
+  /** Stable lower-kebab-case evidence classification, such as `test-run`. */
+  readonly kind: string
+  /** Non-empty normalized result summary shown to humans and models. */
+  readonly summary: string
+  /** Epoch milliseconds when the evidence was captured. */
+  readonly at: number
+  /** Durable location of the full test or log record; absent when none exists. */
+  readonly ref?: string
+}
+```
+
+```ts type-equiv
+/**
+ * Completion receipt recorded against one exact goal revision. The receipt
+ * annotates the revision without advancing it, so it is not a lifecycle
+ * mutation; duplicate receipts for one revision remain an append-only stream.
+ */
+interface GoalReceiptChangeMeta {
+  readonly kind: 'goal/change'
+  readonly version: 1
+  readonly operation: 'receipt'
+  /** Exact current revision the receipt acknowledges. */
+  readonly ref: GoalRef
+  /** At least one recorded evidence entry. */
+  readonly evidence: readonly GoalEvidenceEntry[]
+  readonly recordedAt: number
 }
 ```
 

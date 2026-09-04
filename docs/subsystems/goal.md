@@ -71,14 +71,14 @@ interface GoalView extends GoalSnapshot {
 
 ## Durable changes
 
-Every mutation is a durable `goal/change` session event whose payload is either a complete post-mutation snapshot or a clear tombstone. The strict fold and persisted projection derive lifecycle state only from these events; inbox mutations do not affect goal state.
+Every lifecycle change is a durable `goal/change` session event whose payload is either a complete post-mutation snapshot or a clear tombstone; a completion receipt is a third variant that records evidence without changing lifecycle state. The strict fold and persisted projection derive lifecycle state only from these events; inbox mutations do not affect goal state.
 
 ```ts type-equiv
 /** Full-snapshot goal mutation committed by a durable `goal/change` event. */
 interface GoalSnapshotChangeMeta {
   readonly kind: 'goal/change'
   readonly version: 1
-  readonly operation: Exclude<GoalOperation, 'clear'>
+  readonly operation: Exclude<GoalOperation, 'clear' | 'receipt'>
   readonly goal: GoalSnapshot
   readonly roundsStarted: number
   readonly createdAt: number
@@ -94,6 +94,40 @@ interface GoalClearChangeMeta {
   readonly operation: 'clear'
   readonly cleared: GoalRef
   readonly clearedAt: number
+}
+```
+
+A completion receipt annotates the exact current revision of a `complete` goal with a non-empty evidence array; it does not advance the revision, duplicate receipts for one revision stay ordered in the log, and replay validates the receipt against the current goal before ignoring it for fold state.
+
+```ts type-equiv
+/** One recorded piece of goal-completion evidence. */
+interface GoalEvidenceEntry {
+  /** Stable lower-kebab-case evidence classification, such as `test-run`. */
+  readonly kind: string
+  /** Non-empty normalized result summary shown to humans and models. */
+  readonly summary: string
+  /** Epoch milliseconds when the evidence was captured. */
+  readonly at: number
+  /** Durable location of the full test or log record; absent when none exists. */
+  readonly ref?: string
+}
+```
+
+```ts type-equiv
+/**
+ * Completion receipt recorded against one exact goal revision. The receipt
+ * annotates the revision without advancing it, so it is not a lifecycle
+ * mutation; duplicate receipts for one revision remain an append-only stream.
+ */
+interface GoalReceiptChangeMeta {
+  readonly kind: 'goal/change'
+  readonly version: 1
+  readonly operation: 'receipt'
+  /** Exact current revision the receipt acknowledges. */
+  readonly ref: GoalRef
+  /** At least one recorded evidence entry. */
+  readonly evidence: readonly GoalEvidenceEntry[]
+  readonly recordedAt: number
 }
 ```
 

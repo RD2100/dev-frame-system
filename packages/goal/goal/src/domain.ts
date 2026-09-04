@@ -19,12 +19,13 @@ export type GoalOperation =
   | 'complete'
   | 'block'
   | 'clear'
+  | 'receipt'
 
 /** Full-snapshot goal mutation committed by a durable `goal/change` event. */
 export interface GoalSnapshotChangeMeta {
   readonly kind: 'goal/change'
   readonly version: 1
-  readonly operation: Exclude<GoalOperation, 'clear'>
+  readonly operation: Exclude<GoalOperation, 'clear' | 'receipt'>
   readonly goal: GoalSnapshot
   readonly roundsStarted: number
   readonly createdAt: number
@@ -40,8 +41,45 @@ export interface GoalClearChangeMeta {
   readonly clearedAt: number
 }
 
+/** One recorded piece of goal-completion evidence. */
+export interface GoalEvidenceEntry {
+  /** Stable lower-kebab-case evidence classification, such as `test-run`. */
+  readonly kind: string
+  /** Non-empty normalized result summary shown to humans and models. */
+  readonly summary: string
+  /** Epoch milliseconds when the evidence was captured. */
+  readonly at: number
+  /** Durable location of the full test or log record; absent when none exists. */
+  readonly ref?: string
+}
+
+/**
+ * Completion receipt recorded against one exact goal revision. The receipt
+ * annotates the revision without advancing it, so it is not a lifecycle
+ * mutation; duplicate receipts for one revision remain an append-only stream.
+ */
+export interface GoalReceiptChangeMeta {
+  readonly kind: 'goal/change'
+  readonly version: 1
+  readonly operation: 'receipt'
+  /** Exact current revision the receipt acknowledges. */
+  readonly ref: GoalRef
+  /** At least one recorded evidence entry. */
+  readonly evidence: readonly GoalEvidenceEntry[]
+  readonly recordedAt: number
+}
+
 /** Durable change union carried by the goal domain's own session event. */
-export type GoalChangeMeta = GoalSnapshotChangeMeta | GoalClearChangeMeta
+export type GoalChangeMeta = GoalSnapshotChangeMeta | GoalClearChangeMeta | GoalReceiptChangeMeta
+
+/** Committed completion receipt returned by the recording service. */
+export interface GoalReceipt {
+  /** Exact goal revision the receipt annotates. */
+  readonly ref: GoalRef
+  /** Recorded evidence entries in log order. */
+  readonly evidence: readonly GoalEvidenceEntry[]
+  readonly recordedAt: number
+}
 
 /** Message attribution for admitted continuation rounds. */
 export interface GoalMessageSource {
@@ -61,7 +99,8 @@ declare module '@deepseek-ai/dsh-llm' {
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
     /**
-     * Complete post-mutation goal state or clear tombstone.
+     * Complete post-mutation goal state, a clear tombstone, or a completion
+     * receipt.
      */
     'goal/change': GoalChangeMeta
   }
@@ -99,6 +138,7 @@ export type GoalErrorCode =
   | 'GOAL_INVALID_MAX_ROUNDS'
   | 'GOAL_INVALID_BLOCK_REASON'
   | 'GOAL_INVALID_EDIT'
+  | 'GOAL_INVALID_EVIDENCE'
   | 'GOAL_INVALID_TRANSITION'
 
 declare module '@deepseek-ai/cordis' {

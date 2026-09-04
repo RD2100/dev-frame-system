@@ -8,12 +8,14 @@ import type {
   FoldedGoal,
   GoalChangeMeta,
   GoalClearChangeMeta,
+  GoalEvidenceEntry,
   GoalMessageSource,
   GoalOperation,
+  GoalReceiptChangeMeta,
   GoalSnapshotChangeMeta,
 } from './domain.ts'
 
-const SNAPSHOT_OPERATIONS: ReadonlySet<Exclude<GoalOperation, 'clear'>> = new Set([
+const SNAPSHOT_OPERATIONS: ReadonlySet<Exclude<GoalOperation, 'clear' | 'receipt'>> = new Set([
   'create',
   'edit',
   'pause',
@@ -115,14 +117,53 @@ function decodeSnapshot(value: unknown): GoalSnapshot {
 }
 
 /** Decode and validate one ref. */
-function decodeRef(value: unknown): GoalRef {
+function decodeRef(value: unknown, label: string): GoalRef {
   if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'id,revision') {
-    throw new Error('goal clear tombstone must have exactly id and revision fields')
+    throw new Error(`goal ${label} must have exactly id and revision fields`)
   }
   if (typeof value['id'] !== 'string' || value['id'].length === 0) {
-    throw new Error('goal clear tombstone id must be a non-empty string')
+    throw new Error(`goal ${label} id must be a non-empty string`)
   }
-  return { id: GoalId(value['id']), revision: positiveInteger(value['revision'], 'cleared.revision') }
+  return { id: GoalId(value['id']), revision: positiveInteger(value['revision'], `${label}.revision`) }
+}
+
+/** Require one non-negative safe integer evidence timestamp. */
+function decodeEvidenceAt(value: unknown): number {
+  return nonNegativeInteger(value, 'receipt evidence at')
+}
+
+/** Decode and validate one evidence entry. */
+function decodeEvidenceEntry(value: unknown): GoalEvidenceEntry {
+  if (!isRecord(value)) throw new Error('goal receipt evidence entry must be a record')
+  const keys = Object.keys(value).sort().join(',')
+  if (keys !== 'at,kind,summary' && keys !== 'at,kind,ref,summary') {
+    throw new Error('goal receipt evidence entry must have exactly kind, summary, at, and optional ref fields')
+  }
+  if (typeof value['kind'] !== 'string' || !/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value['kind'])) {
+    throw new Error('goal receipt evidence entry kind must be lower-kebab-case')
+  }
+  if (typeof value['summary'] !== 'string' || value['summary'].trim().length === 0
+    || value['summary'] !== value['summary'].trim()) {
+    throw new Error('goal receipt evidence entry summary must be non-empty and normalized')
+  }
+  if (value['ref'] !== undefined
+    && (typeof value['ref'] !== 'string' || value['ref'].trim().length === 0 || value['ref'] !== value['ref'].trim())) {
+    throw new Error('goal receipt evidence entry ref must be a non-empty normalized string')
+  }
+  return {
+    kind: value['kind'],
+    summary: value['summary'],
+    at: decodeEvidenceAt(value['at']),
+    ...value['ref'] === undefined ? {} : { ref: value['ref'] },
+  }
+}
+
+/** Decode and validate the receipt evidence array. */
+function decodeEvidence(value: unknown): GoalEvidenceEntry[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error('goal receipt evidence must be a non-empty array')
+  }
+  return value.map(decodeEvidenceEntry)
 }
 
 /**
@@ -145,12 +186,26 @@ export function decodeGoalChange(value: unknown): GoalChangeMeta | undefined {
       kind: 'goal/change',
       version: GOAL_CHANGE_VERSION,
       operation: 'clear',
-      cleared: decodeRef(value['cleared']),
+      cleared: decodeRef(value['cleared'], 'clear tombstone'),
       clearedAt: nonNegativeInteger(value['clearedAt'], 'clearedAt'),
     } satisfies GoalClearChangeMeta
   }
+  if (value['operation'] === 'receipt') {
+    const allowed = ['evidence', 'kind', 'operation', 'recordedAt', 'ref', 'version']
+    if (Object.keys(value).sort().join(',') !== allowed.sort().join(',')) {
+      throw new Error(`goal receipt change must have exactly ${allowed.sort().join(',')} fields`)
+    }
+    return {
+      kind: 'goal/change',
+      version: GOAL_CHANGE_VERSION,
+      operation: 'receipt',
+      ref: decodeRef(value['ref'], 'receipt ref'),
+      evidence: decodeEvidence(value['evidence']),
+      recordedAt: nonNegativeInteger(value['recordedAt'], 'recordedAt'),
+    } satisfies GoalReceiptChangeMeta
+  }
   if (typeof value['operation'] !== 'string'
-    || !SNAPSHOT_OPERATIONS.has(value['operation'] as Exclude<GoalOperation, 'clear'>)) {
+    || !SNAPSHOT_OPERATIONS.has(value['operation'] as Exclude<GoalOperation, 'clear' | 'receipt'>)) {
     throw new Error('goal change operation is invalid')
   }
   const allowed = ['createdAt', 'goal', 'kind', 'operation', 'roundsStarted', 'updatedAt', 'version']
@@ -163,7 +218,7 @@ export function decodeGoalChange(value: unknown): GoalChangeMeta | undefined {
   return {
     kind: 'goal/change',
     version: GOAL_CHANGE_VERSION,
-    operation: value['operation'] as Exclude<GoalOperation, 'clear'>,
+    operation: value['operation'] as Exclude<GoalOperation, 'clear' | 'receipt'>,
     goal: decodeSnapshot(value['goal']),
     roundsStarted: nonNegativeInteger(value['roundsStarted'], 'roundsStarted'),
     createdAt,
@@ -260,7 +315,9 @@ function validateSnapshotTransition(
 export function goalChangeRef(change: GoalChangeMeta): GoalRef {
   return change.operation === 'clear'
     ? change.cleared
-    : { id: change.goal.id, revision: change.goal.revision }
+    : change.operation === 'receipt'
+      ? change.ref
+      : { id: change.goal.id, revision: change.goal.revision }
 }
 
 /**
@@ -284,6 +341,22 @@ export function applyGoalChange(state: GoalFoldState, change: GoalChangeMeta): v
     state.createdAt = undefined
     state.updatedAt = undefined
     state.lastRef = ref
+    return
+  }
+  if (change.operation === 'receipt') {
+    const current = state.goal
+    if (current === undefined) throw new Error('goal receipt requires a current goal')
+    if (change.ref.id !== current.id || change.ref.revision !== current.revision) {
+      throw new Error(`goal receipt must reference the current revision of goal "${current.id}"`)
+    }
+    if (current.phase !== 'complete') {
+      throw new Error(`goal receipt requires a complete goal, not phase "${current.phase}"`)
+    }
+    /* v8 ignore next -- a current goal established by this fold always has an updatedAt */
+    if (state.updatedAt === undefined) throw new Error('current goal fold lacks updatedAt')
+    if (change.recordedAt < state.updatedAt) {
+      throw new Error('goal receipt timestamp cannot precede the current goal update')
+    }
     return
   }
   if (change.operation === 'create') {

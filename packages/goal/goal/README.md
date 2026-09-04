@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-goal` keeps one durable completion objective per agent session: the goal's text, phase, round count, and revision history live in the session log, so they survive session resume, fork, and process restarts. You can create, edit, pause, resume, complete, block, and clear a goal, and every mutation is compare-and-set, so a stale view cannot clobber newer state. A goal carries a round cap (default 256) that bounds automatic continuation, and a blocked goal keeps a stable policy code plus a human explanation. It is state, not a scheduler: the service decides nothing about when work continues, and continuation permission is process-local and never persisted. Choose it when one long-running objective should span many turns; skip it for routine single-turn work.
+`dsh-goal` keeps one durable completion objective per agent session: the goal's text, phase, round count, and revision history live in the session log, so they survive session resume, fork, and process restarts. You can create, edit, pause, resume, complete, block, and clear a goal, record a completion receipt with evidence on a completed goal, and every mutation is compare-and-set, so a stale view cannot clobber newer state. A goal carries a round cap (default 256) that bounds automatic continuation, and a blocked goal keeps a stable policy code plus a human explanation. It is state, not a scheduler: the service decides nothing about when work continues, and continuation permission is process-local and never persisted. Choose it when one long-running objective should span many turns; skip it for routine single-turn work.
 
 ## Table of Contents
 
@@ -64,8 +64,9 @@ A goal moves through four durable phases — `active`, `paused`, `blocked`, `com
 | `complete` | Marks the goal achieved and stops continuation |
 | `block` | Records a stable blocker code and explanation |
 | `clear` | Removes the current goal; its history stays in the session log |
+| `recordReceipt` | Appends a completion receipt with evidence to a completed goal without advancing its revision |
 
-Pause, completion, blocking, and clear all disarm continuation. Blocking is the one phase that keeps a policy-owned lower-kebab-case code and a free-form explanation, so provider limits, exhausted budgets, execution errors, and requests for human input share a single durable phase instead of multiplying lifecycle states. Resume accepts a stopped goal, or an active but disarmed one, only while the round cap has remaining capacity, and it clears any former blocker reason.
+Pause, completion, blocking, and clear all disarm continuation. Blocking is the one phase that keeps a policy-owned lower-kebab-case code and a free-form explanation, so provider limits, exhausted budgets, execution errors, and requests for human input share a single durable phase instead of multiplying lifecycle states. Resume accepts a stopped goal, or an active but disarmed one, only while the round cap has remaining capacity, and it clears any former blocker reason. A completed goal accepts completion receipts: `recordReceipt` takes the exact `{ id, revision }` of the completed goal plus at least one evidence entry (`kind`, `summary`, `at`, optional `ref`), appends the receipt as a `goal/change` event, and leaves the phase and revision unchanged.
 
 ### What survives and what does not
 
@@ -94,10 +95,10 @@ This section explains how the service realizes the behavior above; the observabl
 
 ### Design
 
-- **Event-sourced state.** Every mutation appends a durable `goal/change` event (version 1) carrying the complete post-mutation snapshot; `clear` writes a revisioned tombstone. The session log is the only durable authority.
+- **Event-sourced state.** Every mutation appends a durable `goal/change` event (version 1) carrying the complete post-mutation snapshot; `clear` writes a revisioned tombstone; `recordReceipt` appends an evidence-carrying receipt variant that leaves lifecycle state unchanged. The session log is the only durable authority.
 - **Compare-and-set mutations.** `ctx.goals` accepts only the exact live `Agent` registered under its id. `get()` returns a detached `GoalView`; mutations take a `GoalRef { id, revision }` and reject stale refs. Creation resolves the deployment default internally before committing.
 - **Activation is process-local.** `armed` and `disarmed` live in a per-session cache and are never persisted. A fresh cache and every `agent/session-start` edge disarm continuation even when replay finds an active durable phase; `disarm()` removes authority without writing a revision or emitting a mutation.
-- **Strict replay.** The fold derives lifecycle mutations only from `goal/change` and rejects malformed shapes, discontinuous revisions, illegal phase transitions, non-monotonic per-goal timestamps, and non-sequential admitted rounds. Positive rounds advance only on admitted goal-sourced `user/message` events, and mutation timestamps clamp against the preceding update when wall time moves backward.
+- **Strict replay.** The fold derives lifecycle mutations only from `goal/change` and rejects malformed shapes, discontinuous revisions, illegal phase transitions, non-monotonic per-goal timestamps, and non-sequential admitted rounds. Positive rounds advance only on admitted goal-sourced `user/message` events, and mutation timestamps clamp against the preceding update when wall time moves backward. Receipts replay only against the exact current revision of a complete goal and change no fold state.
 - **Projection unit.** The package requires the projection registry and registers a strict `goal` unit. Its host state retains replay validation data and the first failure, while its client view exposes the latest valid whole goal or `null`; `GoalService` rejects access after a retained replay failure.
 
 ### Source map
@@ -113,7 +114,7 @@ This section explains how the service realizes the behavior above; the observabl
 
 ### Events and attribution
 
-`goal/changed` fires after the durable event commits, with listener failures contained; the payload carries the operation, the exact ref, and the fresh view (absent for a clear tombstone). Admitted continuation rounds are attributed through `GoalMessageSource { goalId, revision, round }` on the `user/message` event, which the strict fold validates as the next admitted round of the current goal.
+`goal/changed` fires after the durable event commits, with listener failures contained; the payload carries the operation, the exact ref, and the fresh view (absent for a clear tombstone). A receipt commits its `goal/change` event and notifies with `operation: 'receipt'` and the unchanged current view. Admitted continuation rounds are attributed through `GoalMessageSource { goalId, revision, round }` on the `user/message` event, which the strict fold validates as the next admitted round of the current goal.
 
 </details>
 

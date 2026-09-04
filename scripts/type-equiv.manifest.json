@@ -214,6 +214,16 @@
     },
     {
       "doc": "docs/subsystems/goal.md",
+      "symbol": "GoalEvidenceEntry",
+      "source": "packages/goal/goal/src/domain.ts"
+    },
+    {
+      "doc": "docs/subsystems/goal.md",
+      "symbol": "GoalReceiptChangeMeta",
+      "source": "packages/goal/goal/src/domain.ts"
+    },
+    {
+      "doc": "docs/subsystems/goal.md",
       "symbol": "GoalMessageSource",
       "source": "packages/goal/goal/src/domain.ts"
     },

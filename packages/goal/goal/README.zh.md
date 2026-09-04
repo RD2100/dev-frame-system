@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-goal` 为每个 agent 会话保留一个持久的完成目标：目标的文本、phase、Round 数量与 revision 历史都保存在会话日志中，因此会话 resume（恢复）、fork 与进程重启后依然存在。你可以 create、edit、pause、resume、complete、block 和 clear 一个 goal，且每次变更都是比较并设置，陈旧的视图不会覆盖更新的状态。goal 带有 Round 上限（默认 256）以约束自动续行，被阻塞的 goal 会保留稳定的策略代码和面向人的说明。它是状态而非调度器：服务不决定工作何时继续，续行权限是进程本地的且绝不持久化。当单个长期目标需要横跨多轮时选择它；常规单轮工作不要使用。
+`dsh-goal` 为每个 agent 会话保留一个持久的完成目标：目标的文本、phase、Round 数量与 revision 历史都保存在会话日志中，因此会话 resume（恢复）、fork 与进程重启后依然存在。你可以 create、edit、pause、resume、complete、block 和 clear 一个 goal，为已完成的 goal 记录带证据的完成回执，且每次变更都是比较并设置，陈旧的视图不会覆盖更新的状态。goal 带有 Round 上限（默认 256）以约束自动续行，被阻塞的 goal 会保留稳定的策略代码和面向人的说明。它是状态而非调度器：服务不决定工作何时继续，续行权限是进程本地的且绝不持久化。当单个长期目标需要横跨多轮时选择它；常规单轮工作不要使用。
 
 ## 目录
 
@@ -64,8 +64,9 @@ goal 经历四种持久 phase——`active`、`paused`、`blocked`、`complete`�
 | `complete` | 标记 goal 已完成并停止续行 |
 | `block` | 记录稳定的 blocker 代码与说明 |
 | `clear` | 移除当前 goal；其历史保留在会话日志中 |
+| `recordReceipt` | 为已完成的 goal 追加一条带证据的完成回执，不推进其 revision |
 
-pause、complete、block 和 clear 都会停用续行。block 是唯一保留策略自有 lower-kebab-case 代码与自由文本说明的 phase，因此提供方限制、预算耗尽、执行错误与请求人工输入共用一种持久 phase，而不是扩增生命周期状态。resume 只在 Round 上限仍有剩余容量时接受已停止的 goal，或 active 但已停用续行的 goal，并清除任何先前的 blocker reason。
+pause、complete、block 和 clear 都会停用续行。block 是唯一保留策略自有 lower-kebab-case 代码与自由文本说明的 phase，因此提供方限制、预算耗尽、执行错误与请求人工输入共用一种持久 phase，而不是扩增生命周期状态。resume 只在 Round 上限仍有剩余容量时接受已停止的 goal，或 active 但已停用续行的 goal，并清除任何先前的 blocker reason。已完成的 goal 接受完成回执：`recordReceipt` 携带该完成 goal 的精确 `{ id, revision }` 与至少一条 evidence 条目（`kind`、`summary`、`at`、可选 `ref`），把回执作为 `goal/change` 事件追加，并保持 phase 与 revision 不变。
 
 ### 什么会保留，什么不会
 
@@ -94,10 +95,10 @@ view.activation                        // 'armed' | 'disarmed' — not persisted
 
 ### 设计
 
-- **事件溯源状态。** 每次变更都追加持久的 `goal/change` 事件（版本 1），携带变更后的完整快照；clear 写入带 revision 的 tombstone。会话日志是唯一的持久权威。
+- **事件溯源状态。** 每次变更都追加持久的 `goal/change` 事件（版本 1），携带变更后的完整快照；clear 写入带 revision 的 tombstone；`recordReceipt` 追加携带证据的回执变体，不改变生命周期状态。会话日志是唯一的持久权威。
 - **比较并设置的变更。** `ctx.goals` 只接受以对应 id 注册的完全相同的活跃 `Agent` 实例。`get()` 返回脱离状态的 `GoalView`；变更携带 `GoalRef { id, revision }` 并拒绝陈旧引用。创建在提交前于内部解析部署默认值。
 - **续行启用状态是进程本地的。** `armed` 与 `disarmed` 保存在每会话缓存中，绝不持久化。新缓存与每次 `agent/session-start` 边界都会停用续行，即使回放发现持久 phase 为 active；`disarm()` 移除续行权限，不写入 revision 也不发出变更事件。
-- **严格回放。** 折叠只从 `goal/change` 派生生命周期变更，并拒绝形状错误、不连续 revision、非法 phase 转换、每目标时间戳非单调，以及不连续的已准入 Round。只有已准入的来源为 goal 的 `user/message` 事件会推进正数 Round；挂钟时间倒退时，变更时间戳会限制在不早于上一次更新的值。
+- **严格回放。** 折叠只从 `goal/change` 派生生命周期变更，并拒绝形状错误、不连续 revision、非法 phase 转换、每目标时间戳非单调，以及不连续的已准入 Round。只有已准入的来源为 goal 的 `user/message` 事件会推进正数 Round；挂钟时间倒退时，变更时间戳会限制在不早于上一次更新的值。回执只对处于 complete 阶段的 goal 的确切当前 revision 重放，且不改变任何折叠状态。
 - **投影单元。** 本包要求提供投影注册表，并注册一个严格的 `goal` 单元。其宿主状态保留回放校验数据与第一次失败，客户端 view 提供最新有效的完整 goal 或 `null`；保留回放失败后，`GoalService` 会拒绝访问。
 
 ### 源码地图
@@ -113,7 +114,7 @@ view.activation                        // 'armed' | 'disarmed' — not persisted
 
 ### 事件与归属
 
-`goal/changed` 在持久事件提交后触发，监听器失败会被隔离；载荷携带操作、精确 ref 与最新视图（clear tombstone 时省略）。已准入的续行 Round 通过 `user/message` 事件上的 `GoalMessageSource { goalId, revision, round }` 归属，严格折叠会将其验证为当前 goal 的下一个已准入 Round。
+`goal/changed` 在持久事件提交后触发，监听器失败会被隔离；载荷携带操作、精确 ref 与最新视图（clear tombstone 时省略）。回执提交其 `goal/change` 事件，并以 `operation: 'receipt'` 与不变的当前视图发出通知。已准入的续行 Round 通过 `user/message` 事件上的 `GoalMessageSource { goalId, revision, round }` 归属，严格折叠会将其验证为当前 goal 的下一个已准入 Round。
 
 </details>
 

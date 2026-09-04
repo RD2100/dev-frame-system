@@ -43,7 +43,10 @@ import type {
   GoalChangeMeta,
   GoalChanged,
   GoalClearChangeMeta,
+  GoalEvidenceEntry,
   GoalOperation,
+  GoalReceipt,
+  GoalReceiptChangeMeta,
   GoalSnapshotChangeMeta,
 } from './domain.ts'
 
@@ -236,6 +239,43 @@ function resolveBlockReason(reason: unknown): GoalBlockReason {
   return { code, message: message.trim() }
 }
 
+/** Validate and normalize one caller-owned evidence entry. */
+function resolveEvidenceEntry(entry: unknown, index: number): GoalEvidenceEntry {
+  const record = typeof entry === 'object' && entry !== null && !Array.isArray(entry)
+    ? entry as Record<string, unknown>
+    : undefined
+  const kind = record?.['kind']
+  const summary = record?.['summary']
+  const at = record?.['at']
+  const ref = record?.['ref']
+  if (typeof kind !== 'string' || !/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(kind)) {
+    throw new GoalError(`evidence entry ${index} kind must be lower-kebab-case`, 'GOAL_INVALID_EVIDENCE')
+  }
+  if (typeof summary !== 'string' || summary.trim().length === 0) {
+    throw new GoalError(`evidence entry ${index} summary must be a non-empty string`, 'GOAL_INVALID_EVIDENCE')
+  }
+  if (typeof at !== 'number' || !Number.isSafeInteger(at) || at < 0) {
+    throw new GoalError(`evidence entry ${index} at must be a non-negative safe integer`, 'GOAL_INVALID_EVIDENCE')
+  }
+  if (ref !== undefined && (typeof ref !== 'string' || ref.trim().length === 0)) {
+    throw new GoalError(`evidence entry ${index} ref must be a non-empty string`, 'GOAL_INVALID_EVIDENCE')
+  }
+  return {
+    kind,
+    summary: summary.trim(),
+    at,
+    ...ref === undefined ? {} : { ref: ref.trim() },
+  }
+}
+
+/** Validate and normalize the receipt evidence array. */
+function resolveEvidence(evidence: readonly unknown[]): GoalEvidenceEntry[] {
+  if (evidence.length === 0) {
+    throw new GoalError('goal receipt requires at least one evidence entry', 'GOAL_INVALID_EVIDENCE')
+  }
+  return evidence.map(resolveEvidenceEntry)
+}
+
 /** Goal service (`ctx.goals`) backed exclusively by the owning session log. */
 export class GoalService extends TypertRemoteService {
   static inject = ['agents', 'sessionProjections']
@@ -398,6 +438,38 @@ export class GoalService extends TypertRemoteService {
   }
 
   /**
+   * Record one completion receipt with evidence on the current complete goal.
+   * The receipt annotates the exact revision without advancing it, so refs
+   * held by the completing caller stay valid; duplicate receipts for one
+   * revision are allowed and stay ordered in the log.
+   * @param agent - owning live agent.
+   * @param ref - expected current revision.
+   * @param evidence - at least one evidence entry; summaries and refs are normalized.
+   * @returns the committed receipt.
+   */
+  recordReceipt(agent: Agent, ref: GoalRef, evidence: readonly GoalEvidenceEntry[]): GoalReceipt {
+    const [state, runtime] = this.prepareMutation(agent)
+    const currentState = this.expectCurrent(state, ref)
+    const current = currentState.goal
+    if (current.phase !== 'complete') {
+      throw new GoalError(
+        `cannot record a receipt on goal "${current.id}" from phase "${current.phase}"; expected complete`,
+        'GOAL_INVALID_TRANSITION',
+      )
+    }
+    const change: GoalReceiptChangeMeta = {
+      kind: 'goal/change',
+      version: GOAL_CHANGE_VERSION,
+      operation: 'receipt',
+      ref: { id: current.id, revision: current.revision },
+      evidence: resolveEvidence(evidence),
+      recordedAt: this.nextMutationTime(currentState),
+    }
+    this.commit(agent, runtime, change, 'disarmed')
+    return { ref: { ...change.ref }, evidence: change.evidence, recordedAt: change.recordedAt }
+  }
+
+  /**
    * Mark an active goal blocked and disarm it.
    * @param agent - owning live agent.
    * @param ref - expected current revision.
@@ -505,7 +577,7 @@ export class GoalService extends TypertRemoteService {
   private transition(
     agent: Agent,
     ref: GoalRef,
-    operation: Exclude<GoalOperation, 'create' | 'edit' | 'clear'>,
+    operation: Exclude<GoalOperation, 'create' | 'edit' | 'clear' | 'receipt'>,
     allowed: readonly GoalPhase[],
     phase: GoalPhase,
     activation: GoalActivation,
@@ -530,7 +602,7 @@ export class GoalService extends TypertRemoteService {
     agent: Agent,
     state: GoalProjection,
     runtime: GoalRuntimeState,
-    operation: Exclude<GoalOperation, 'create' | 'clear'>,
+    operation: Exclude<GoalOperation, 'create' | 'clear' | 'receipt'>,
     goal: GoalSnapshot,
     activation: GoalActivation,
   ): GoalView {
@@ -555,7 +627,7 @@ export class GoalService extends TypertRemoteService {
   private commitSnapshot(
     agent: Agent,
     runtime: GoalRuntimeState,
-    operation: Exclude<GoalOperation, 'clear'>,
+    operation: Exclude<GoalOperation, 'clear' | 'receipt'>,
     goal: GoalSnapshot,
     roundsStarted: number,
     createdAt: number,
