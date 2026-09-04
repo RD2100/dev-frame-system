@@ -123,6 +123,27 @@ export function apply(ctx: Context): void {
     }
   }
 
+  /**
+   * Remove one queued reservation whose wake has not replayed yet. A wake
+   * latched behind host-owned maintenance leaves the reservation pending while
+   * the agent still reports idle, so teardown can observe it there. Removing
+   * only this round's message leaves unrelated pending input in place; the
+   * latched wake then replays into that input alone, or opens an empty turn
+   * boundary without a model call when nothing else is pending.
+   */
+  function discardQueuedReservation(state: DriverState, attempt: RoundAttempt): void {
+    try {
+      state.agent.inbox.remove(attempt.messageId)
+    } catch (error: unknown) {
+      // The removal commits a durable splice; a failed append leaves the
+      // queued prompt in place, so report it instead of failing the teardown.
+      ctx.logger.warn(
+        `goal-round-driver: could not discard queued round ${attempt.round} for agent "${state.agent.id}" `
+        + `during teardown: ${renderThrown(error)}`,
+      )
+    }
+  }
+
   /** Preserve claimed step context when this driver drops only its own round. */
   function restoreOtherClaimed(agent: Agent, messages: UserMessage[], messageId: MessageId): void {
     const retained = messages.filter(message => message.id !== messageId
@@ -430,10 +451,11 @@ export function apply(ctx: Context): void {
         const attempt = state.attempt
         if (attempt !== undefined) {
           attempt.stale = true
-          /* v8 ignore next -- followup reserves the live agent before publishing a queued attempt */
           if (state.agent.status === 'running') {
             state.agent.cancel({ kind: 'parent' })
             waits.push(state.agent.whenIdle())
+          } else {
+            discardQueuedReservation(state, attempt)
           }
         }
         if (state.run !== undefined) waits.push(state.run)
