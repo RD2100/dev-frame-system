@@ -285,6 +285,8 @@ export class TeamRoster {
         request: {
           prompt: request.prompt,
           parent: root,
+          ...request.persona === undefined ? {} : { persona: request.persona },
+          ...request.toolFilter === undefined ? {} : { toolFilter: request.toolFilter },
         },
         signal,
       })

@@ -3,6 +3,7 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 
 /** Identifies the implicit team rooted at one top-level Session. */
 export type TeamId = Branded<'TeamId'>
@@ -148,6 +149,10 @@ export interface SpawnTeammateRequest {
   readonly prompt: ContentBlock[]
   readonly context: 'fresh' | 'fork'
   readonly provider: string
+  /** Optional persona installed only in the teammate's scoped composition. */
+  readonly persona?: string
+  /** Optional restriction over inherited global tools in the teammate's scope. */
+  readonly toolFilter?: SubagentStartRequest['toolFilter']
   readonly signal: AbortSignal
 }
 
