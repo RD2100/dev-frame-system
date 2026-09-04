@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { ReactElement } from 'react'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -139,6 +140,101 @@ describe('session row Session-ID menu item', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
     openSessionIdDialog('Title session-one')
     expect(screen.getByRole('dialog').textContent).toContain('session-one')
+  })
+
+  it('keeps the open dialog on the same session when the keyed rows reorder', () => {
+    const { rerender } = render(
+      <>
+        <SessionNodeItem key="one" node={node('session-one')} currentId={undefined} now={0} onOpen={vi.fn()}
+          onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />
+        <SessionNodeItem key="two" node={node('session-two')} currentId={undefined} now={0} onOpen={vi.fn()}
+          onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />
+      </>,
+    )
+    openSessionIdDialog('Title session-two')
+    expect(screen.getByRole('dialog').textContent).toContain('session-two')
+
+    // Production rows carry stable session-id keys, so a list reorder moves
+    // the keyed row instead of unmounting it, and the open dialog follows.
+    rerender(
+      <>
+        <SessionNodeItem key="two" node={node('session-two')} currentId={undefined} now={0} onOpen={vi.fn()}
+          onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />
+        <SessionNodeItem key="one" node={node('session-one')} currentId={undefined} now={0} onOpen={vi.fn()}
+          onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />
+      </>,
+    )
+    expect(screen.getByRole('dialog').textContent).toContain('session-two')
+    expect(screen.getByRole('dialog').textContent).not.toContain('session-one')
+  })
+
+  it('closes the open dialog without a close event when its row leaves the list', () => {
+    const { rerender } = render(
+      <>
+        <SessionNodeItem key="one" node={node('session-one')} currentId={undefined} now={0} onOpen={vi.fn()}
+          onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />
+        <SessionNodeItem key="two" node={node('session-two')} currentId={undefined} now={0} onOpen={vi.fn()}
+          onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />
+      </>,
+    )
+    openSessionIdDialog('Title session-two')
+    expect(screen.getByRole('dialog')).toBeDefined()
+
+    // The showId state lives on the row, so a list change that unmounts the
+    // row (archive echo, group fold, cross-group move) closes its dialog with
+    // no close event. Accepted status quo, pinned so lifting the dialog to a
+    // browser owner — as the rename dialogs already are — is a deliberate
+    // change with this test updated in the same commit.
+    rerender(
+      <SessionNodeItem key="one" node={node('session-one')} currentId={undefined} now={0} onOpen={vi.fn()}
+        onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />,
+    )
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('reopens showing the same node-sourced id after rerenders and a remount', async () => {
+    const id = 'session-epsilon'
+    const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    const restore = installClipboard(writeText)
+    try {
+      const row = (): ReactElement => (
+        <SessionNodeItem key="epsilon" node={node(id, 'Epsilon')} currentId={undefined} now={0} onOpen={vi.fn()}
+          onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />
+      )
+      const { rerender } = render(row())
+      openSessionIdDialog('Epsilon')
+      expect(screen.getByRole('dialog').textContent).toContain(id)
+      fireEvent.click(screen.getByRole('button', { name: zh['sessionId.close'] }))
+      expect(screen.queryByRole('dialog')).toBeNull()
+
+      // A refreshed list derivation rebuilds every node object, and switching
+      // sessions away and back unmounts the row: the reopened dialog must
+      // source the id from the node it is handed, never from retained state.
+      rerender(<></>)
+      const remounted = node(id, 'Epsilon')
+      rerender(
+        <SessionNodeItem key="epsilon" node={remounted} currentId={undefined} now={0} onOpen={vi.fn()}
+          onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />,
+      )
+      openSessionIdDialog('Epsilon')
+      expect(screen.getByRole('dialog').textContent).toContain(remounted.id)
+
+      // Another fresh node object while the dialog stays open: the shown id
+      // still comes from the current node, so nothing caches it in between.
+      const refreshed = node(id, 'Epsilon')
+      rerender(
+        <SessionNodeItem key="epsilon" node={refreshed} currentId={undefined} now={0} onOpen={vi.fn()}
+          onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} t={t} />,
+      )
+      expect(screen.getByRole('dialog').textContent).toContain(refreshed.id)
+
+      fireEvent.click(copyControls()[1]!)
+      await waitFor(() => expect(screen.getByRole('status').textContent).toBe(zh['sessionId.copied']))
+      expect(writeText).toHaveBeenCalledTimes(1)
+      expect(writeText).toHaveBeenCalledWith(id)
+    } finally {
+      restore()
+    }
   })
 
   it('keeps the English dictionary key-identical for the new keys', () => {
