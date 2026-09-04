@@ -35,15 +35,18 @@ describe('DevFrame public entry points', () => {
     })
     expect(manifest.exports['./reliability']).toEqual({
       types: './lib/types/reliability/index.d.ts',
-      default: './lib/types/reliability/index.js',
+      default: './lib/reliability/index.js',
     })
     expect(manifest.exports['./shared']).toEqual({
       types: './lib/types/shared/index.d.ts',
-      default: './lib/types/shared/index.js',
+      default: './lib/shared/index.js',
     })
     expect(manifest.files).toEqual([
       'lib/index.js',
-      'lib/types/**/*.js',
+      'lib/types/controller/**/*.js',
+      'lib/types/permissions/**/*.js',
+      'lib/reliability/**/*.js',
+      'lib/shared/**/*.js',
       'lib/types/**/*.d.ts',
     ])
     expect(KNOWN_SESSION_EVENT_TYPES.has('devframe/role-policy')).toBe(true)
