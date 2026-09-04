@@ -400,6 +400,10 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
   const primaryStatus = statuses[0]
   const showStatus = primaryStatus.state !== 'done' || row.completed
   const [menuOpen, setMenuOpen] = useState(false)
+  // The Session-ID dialog's lifetime is this row's fiber: a list change that
+  // unmounts the row (archive echo, group fold, cross-group move) closes the
+  // dialog without a close event, while a keyed reorder keeps it open.
+  // session-id-dialog.client.spec.tsx pins both.
   const [showId, setShowId] = useState(false)
   // Archive hides the row through the registry-global archive set and never
   // touches the session log, so it is not styled as destructive and needs no
