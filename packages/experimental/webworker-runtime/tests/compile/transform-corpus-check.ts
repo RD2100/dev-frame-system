@@ -38,6 +38,7 @@ const BASELINE_EXEMPT: ReadonlyMap<string, string> = new Map([
   ['packages/client/web/lib/index.js', 'imports .css, which bare Node cannot load'],
   ['packages/subprocess/win32-process/lib/index.js', 'koffi type-name collision on a second load'],
   ['packages/test-support/client-runtime/lib/index.js', "needs vitest's internal state"],
+  ['packages/test-support/composition-smoke/lib/index.js', "needs vitest's internal state"],
 ])
 
 let failures = 0
