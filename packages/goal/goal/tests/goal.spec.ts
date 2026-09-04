@@ -11,7 +11,7 @@ import GoalService, {
   decodeGoalChange,
   foldGoal,
 } from '@deepseek-ai/dsh-goal'
-import type { GoalChangeMeta, GoalRef, GoalSnapshotChangeMeta } from '@deepseek-ai/dsh-goal'
+import type { GoalChangeMeta, GoalReceiptChangeMeta, GoalRef, GoalSnapshotChangeMeta } from '@deepseek-ai/dsh-goal'
 
 interface StubAgent {
   agent: Agent
@@ -503,6 +503,145 @@ describe('GoalService mutations', () => {
 
 })
 
+describe('GoalService completion receipts', () => {
+  const EVIDENCE = [
+    {
+      kind: 'test-run',
+      summary: 'vitest packages/goal: all green',
+      at: 1_700_000_000_500,
+      ref: 'packages/goal/goal/tests/goal.spec.ts',
+    },
+    { kind: 'typecheck', summary: 'tsc -b tsconfig.host.json: clean', at: 1_700_000_000_600 },
+  ]
+
+  /** A session whose goal is complete at revision 2. */
+  async function completedHarness() {
+    const bench = await harness()
+    const created = bench.ctx.goals.create(bench.agent, { objective: 'receipt me', maxGoalRounds: 4 })
+    const completed = bench.ctx.goals.complete(bench.agent, created)
+    return { ...bench, created, completed }
+  }
+
+  it('commits a receipt event, keeps the revision, and notifies with operation receipt', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_700_000_000_000)
+    try {
+      const { ctx, agent, session, completed } = await completedHarness()
+      // completedHarness() already committed create and complete; this listener
+      // observes only the receipt notification.
+      const seen: string[] = []
+      ctx.on('goal/changed', ({ change }) => { seen.push(change.operation) })
+
+      const receipt = ctx.goals.recordReceipt(agent, completed, EVIDENCE)
+
+      expect(receipt).toMatchObject({
+        ref: { id: completed.id, revision: completed.revision },
+        recordedAt: 1_700_000_000_000,
+      })
+      expect(receipt.evidence).toEqual(EVIDENCE)
+      expect(seen).toEqual(['receipt'])
+      const changes = session.snapshotEvents().filter(event => event.type === 'goal/change')
+      expect(changes).toHaveLength(3)
+      const change = decodeGoalChange(changes[2]!.data)
+      if (change === undefined || change.operation !== 'receipt') throw new Error('expected a receipt change')
+      expect(change.ref).toEqual({ id: completed.id, revision: 2 })
+      expect(change.evidence).toEqual(EVIDENCE)
+      expect(ctx.goals.get(agent)).toMatchObject({
+        phase: 'complete',
+        revision: completed.revision,
+        activation: 'disarmed',
+      })
+      expect(foldGoal(session.snapshotEvents())).toMatchObject({
+        goal: { id: completed.id, revision: 2, phase: 'complete' },
+        roundsStarted: 0,
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('enforces compare-and-set refs and the complete phase before recording', async () => {
+    const { ctx, agent, created, completed } = await completedHarness()
+    expect(() => ctx.goals.recordReceipt(agent, created, EVIDENCE)).toThrow(expect.objectContaining({
+      code: 'GOAL_STALE_REVISION',
+    }))
+    expect(() => ctx.goals.recordReceipt(agent, {
+      id: GoalId('goal-other'), revision: completed.revision,
+    }, EVIDENCE)).toThrow(expect.objectContaining({ code: 'GOAL_STALE_REVISION' }))
+
+    const fresh = await harness()
+    const active = fresh.ctx.goals.create(fresh.agent, { objective: 'still active' })
+    expect(() => fresh.ctx.goals.recordReceipt(fresh.agent, active, EVIDENCE)).toThrow(expect.objectContaining({
+      code: 'GOAL_INVALID_TRANSITION',
+    }))
+    const paused = fresh.ctx.goals.pause(fresh.agent, active)
+    expect(() => fresh.ctx.goals.recordReceipt(fresh.agent, paused, EVIDENCE)).toThrow(expect.objectContaining({
+      code: 'GOAL_INVALID_TRANSITION',
+    }))
+
+    const cleared = await completedHarness()
+    cleared.ctx.goals.clear(cleared.agent, cleared.completed)
+    expect(() => cleared.ctx.goals.recordReceipt(cleared.agent, cleared.completed, EVIDENCE)).toThrow(
+      expect.objectContaining({ code: 'GOAL_NOT_FOUND' }),
+    )
+  })
+
+  it('validates evidence entries, normalizes summaries and refs, and appends only valid receipts', async () => {
+    const { ctx, agent, session, completed } = await completedHarness()
+    expect(() => ctx.goals.recordReceipt(agent, completed, [])).toThrow(expect.objectContaining({
+      code: 'GOAL_INVALID_EVIDENCE',
+    }))
+    const invalid: unknown[] = [
+      null,
+      [],
+      { kind: 'Test-Run', summary: 'ok', at: 1 },
+      { kind: 'test run', summary: 'ok', at: 1 },
+      { kind: 'test-run', summary: '   ', at: 1 },
+      { kind: 'test-run', summary: 'ok', at: -1 },
+      { kind: 'test-run', summary: 'ok', at: 1.5 },
+      { kind: 'test-run', summary: 'ok', at: 1, ref: '   ' },
+    ]
+    for (const entry of invalid) {
+      expect(() => ctx.goals.recordReceipt(agent, completed, [entry as never])).toThrow(expect.objectContaining({
+        code: 'GOAL_INVALID_EVIDENCE',
+      }))
+    }
+    expect(session.snapshotEvents().filter(event => event.type === 'goal/change')).toHaveLength(2)
+
+    const receipt = ctx.goals.recordReceipt(agent, completed, [{
+      kind: 'log', summary: '  padded summary  ', at: 3, ref: '  logs/run.txt  ',
+    }])
+    expect(receipt.evidence).toEqual([{ kind: 'log', summary: 'padded summary', at: 3, ref: 'logs/run.txt' }])
+    expect(session.snapshotEvents().filter(event => event.type === 'goal/change')).toHaveLength(3)
+  })
+
+  it('allows repeated receipts for one revision and replays them without state change', async () => {
+    const { ctx, agent, session, completed } = await completedHarness()
+    ctx.goals.recordReceipt(agent, completed, [{ kind: 'test-run', summary: 'first', at: 10 }])
+    ctx.goals.recordReceipt(agent, completed, [{ kind: 'log', summary: 'second', at: 11, ref: 'logs/a.txt' }])
+    expect(session.snapshotEvents().filter(event => event.type === 'goal/change')).toHaveLength(4)
+    expect(() => foldGoal(session.snapshotEvents())).not.toThrow()
+    expect(foldGoal(session.snapshotEvents())).toMatchObject({
+      goal: { id: completed.id, revision: 2, phase: 'complete' },
+      roundsStarted: 0,
+      lastRef: { id: completed.id, revision: 2 },
+    })
+  })
+
+  it('keeps receipts compatible with goal replacement after completion', async () => {
+    const { ctx, agent, session, completed } = await completedHarness()
+    ctx.goals.recordReceipt(agent, completed, [{ kind: 'test-run', summary: 'verified', at: 5 }])
+    const replacement = ctx.goals.create(agent, { objective: 'next objective' })
+    expect(replacement.revision).toBe(1)
+    expect(() => foldGoal(session.snapshotEvents())).not.toThrow()
+    expect(foldGoal(session.snapshotEvents())).toMatchObject({ goal: { id: replacement.id, revision: 1 } })
+    expect(() => ctx.goals.recordReceipt(agent, completed, EVIDENCE)).toThrow(expect.objectContaining({
+      code: 'GOAL_STALE_REVISION',
+    }))
+  })
+
+})
+
 describe('goal replay validation', () => {
   function snapshotChange(overrides: Partial<GoalSnapshotChangeMeta> = {}): GoalSnapshotChangeMeta {
     return {
@@ -557,6 +696,21 @@ describe('goal replay validation', () => {
     }
   }
 
+  function receiptChange(
+    current: GoalSnapshotChangeMeta,
+    overrides: Partial<GoalReceiptChangeMeta> = {},
+  ): GoalReceiptChangeMeta {
+    return {
+      kind: 'goal/change',
+      version: 1,
+      operation: 'receipt',
+      ref: { id: current.goal.id, revision: current.goal.revision },
+      evidence: [{ kind: 'test-run', summary: 'all green', at: current.updatedAt + 1 }],
+      recordedAt: current.updatedAt + 1,
+      ...overrides,
+    }
+  }
+
   it('keeps durable goal state independent from inbox changes', () => {
     const change = snapshotChange()
     const session = Session.create(SessionId('inbox-independent-change'))
@@ -576,6 +730,12 @@ describe('goal replay validation', () => {
     const session = Session.create(SessionId(`validation-pair-${Math.random()}`))
     appendChange(session, first)
     appendChange(session, second)
+    return foldGoal(session.snapshotEvents())
+  }
+
+  function changeSequence(...changes: GoalChangeMeta[]): ReturnType<typeof foldGoal> {
+    const session = Session.create(SessionId(`validation-seq-${Math.random()}`))
+    for (const change of changes) appendChange(session, change)
     return foldGoal(session.snapshotEvents())
   }
 
@@ -788,5 +948,83 @@ describe('goal replay validation', () => {
       roundsStarted: 0,
       lastRef: { id: change.goal.id, revision: 2 },
     })
+  })
+
+  it('folds a receipt after a complete snapshot without changing fold state', () => {
+    const base = snapshotChange()
+    const complete = mutation(base, 'complete', 'complete')
+    const receipt = receiptChange(complete)
+    expect(changeSequence(base, complete, receipt)).toEqual(changeSequence(base, complete))
+    const second = receiptChange(complete, {
+      evidence: [{ kind: 'log', summary: 'second receipt', at: complete.updatedAt + 2, ref: 'logs/b.txt' }],
+      recordedAt: complete.updatedAt + 2,
+    })
+    expect(changeSequence(base, complete, second)).toEqual(changeSequence(base, complete))
+    expect(changeSequence(base, complete)).toEqual({
+      goal: complete.goal,
+      roundsStarted: 0,
+      createdAt: complete.createdAt,
+      updatedAt: complete.updatedAt,
+      lastRef: { id: complete.goal.id, revision: 2 },
+    })
+  })
+
+  it('rejects malformed receipt payloads', () => {
+    const base = snapshotChange()
+    const receipt = receiptChange(base)
+    expect(() => decodeGoalChange({ ...receipt, extra: true })).toThrow('receipt change must have exactly')
+    expect(() => decodeGoalChange({ ...receipt, evidence: [] })).toThrow('evidence must be a non-empty array')
+    expect(() => decodeGoalChange({ ...receipt, evidence: 'all green' })).toThrow('non-empty array')
+    expect(() => decodeGoalChange({
+      ...receipt, evidence: [{ kind: 'test-run', summary: 'all green', at: 11, extra: true }],
+    })).toThrow('exactly kind, summary, at, and optional ref fields')
+    expect(() => decodeGoalChange({
+      ...receipt, evidence: [{ kind: 'Test-Run', summary: 'all green', at: 11 }],
+    })).toThrow('kind must be lower-kebab-case')
+    expect(() => decodeGoalChange({
+      ...receipt, evidence: [{ kind: 'test-run', summary: ' padded ', at: 11 }],
+    })).toThrow('summary must be non-empty and normalized')
+    expect(() => decodeGoalChange({
+      ...receipt, evidence: [{ kind: 'test-run', summary: 'all green', at: -1 }],
+    })).toThrow('evidence at')
+    expect(() => decodeGoalChange({
+      ...receipt, evidence: [{ kind: 'test-run', summary: 'all green', at: 11, ref: ' padded ' }],
+    })).toThrow('ref must be a non-empty normalized string')
+    expect(() => decodeGoalChange({ ...receipt, ref: null })).toThrow('receipt ref must have exactly')
+    expect(() => decodeGoalChange({ ...receipt, ref: { id: base.goal.id, revision: 0 } })).toThrow(
+      'positive safe integer',
+    )
+    expect(() => decodeGoalChange({ ...receipt, recordedAt: -1 })).toThrow('recordedAt')
+  })
+
+  it('rejects receipts without a current complete goal at the exact revision', () => {
+    const base = snapshotChange()
+    const receipt = receiptChange(base)
+    expect(() => foldGoal(oneChange(receipt))).toThrow('goal receipt requires a current goal')
+
+    const otherGoal = receiptChange(base, { ref: { id: GoalId('goal-other'), revision: 1 } })
+    expect(() => foldPair(base, otherGoal)).toThrow('must reference the current revision')
+
+    const staleRevision = receiptChange(base, { ref: { id: base.goal.id, revision: 2 } })
+    expect(() => foldPair(base, staleRevision)).toThrow('must reference the current revision')
+
+    const activeGoal = receiptChange(base)
+    expect(() => foldPair(base, activeGoal)).toThrow('requires a complete goal')
+
+    const complete = mutation(base, 'complete', 'complete')
+    const early = receiptChange(complete, { recordedAt: complete.updatedAt - 1, evidence: [{
+      kind: 'test-run', summary: 'all green', at: complete.updatedAt - 1,
+    }] })
+    expect(() => changeSequence(base, complete, early)).toThrow('timestamp cannot precede the current goal update')
+
+    const clear: GoalChangeMeta = {
+      kind: 'goal/change', version: 1, operation: 'clear', cleared: { id: base.goal.id, revision: 3 }, clearedAt: 12,
+    }
+    const completeThenClear = Session.create(SessionId('receipt-after-clear'))
+    appendChange(completeThenClear, base)
+    appendChange(completeThenClear, complete)
+    appendChange(completeThenClear, clear)
+    appendChange(completeThenClear, receiptChange(complete))
+    expect(() => foldGoal(completeThenClear.snapshotEvents())).toThrow('goal receipt requires a current goal')
   })
 })
