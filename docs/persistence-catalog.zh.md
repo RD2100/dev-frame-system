@@ -395,6 +395,74 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 来源：[`packages/compaction/compaction/src/types.ts:34`](../packages/compaction/compaction/src/types.ts)
 
+### `devframe/*`
+
+<a id="devframegoal-binding--log-only"></a>
+
+#### `devframe/goal-binding` — log-only
+
+```ts persistence-catalog
+/** Complete Goal-to-task binding and admission budget for one project Goal. */
+'devframe/goal-binding': GoalBinding
+```
+
+来源：[`packages/experimental/devframe/src/events.ts:251`](../packages/experimental/devframe/src/events.ts)
+
+<a id="devframelifecycle--log-only"></a>
+
+#### `devframe/lifecycle` — log-only
+
+```ts persistence-catalog
+/** Whole lifecycle observation used to recover stop and writer ownership state. */
+'devframe/lifecycle': DevFrameLifecycleEventData
+```
+
+来源：[`packages/experimental/devframe/src/events.ts:259`](../packages/experimental/devframe/src/events.ts)
+
+<a id="devframereview--log-only"></a>
+
+#### `devframe/review` — log-only
+
+```ts persistence-catalog
+/** Independent reviewer decision and bounded findings for one source snapshot. */
+'devframe/review': DevFrameReviewEventData
+```
+
+来源：[`packages/experimental/devframe/src/events.ts:257`](../packages/experimental/devframe/src/events.ts)
+
+<a id="devframerole-policy--log-only"></a>
+
+#### `devframe/role-policy` — log-only
+
+```ts persistence-catalog
+/** Complete role policy and live Agent assignments used for cold guard restoration. */
+'devframe/role-policy': DevFrameRolePolicyEventData
+```
+
+来源：[`packages/experimental/devframe/src/events.ts:249`](../packages/experimental/devframe/src/events.ts)
+
+<a id="devframeusage--log-only"></a>
+
+#### `devframe/usage` — log-only
+
+```ts persistence-catalog
+/** Reservation or settlement of one bounded project execution attempt. */
+'devframe/usage': DevFrameUsageEventData
+```
+
+来源：[`packages/experimental/devframe/src/events.ts:253`](../packages/experimental/devframe/src/events.ts)
+
+<a id="devframeverification--log-only"></a>
+
+#### `devframe/verification` — log-only
+
+```ts persistence-catalog
+/** Real configured-check results for one exact source snapshot. */
+'devframe/verification': DevFrameVerificationEventData
+```
+
+来源：[`packages/experimental/devframe/src/events.ts:255`](../packages/experimental/devframe/src/events.ts)
+
 ### `feedback/*`
 
 <a id="feedbackrecord--log-only"></a>
@@ -783,7 +851,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 类型：[TeamId](subsystems/agent-team.zh.md) · [TeamMemberSnapshot](subsystems/agent-team.zh.md)
 
-来源：[`packages/experimental/agent-team/src/types.ts:206`](../packages/experimental/agent-team/src/types.ts)
+来源：[`packages/experimental/agent-team/src/types.ts:228`](../packages/experimental/agent-team/src/types.ts)
 
 <a id="teammessagedelivered--log-only"></a>
 
@@ -801,7 +869,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 类型：[TeamId](subsystems/agent-team.zh.md) · [TeamMessageId](subsystems/agent-team.zh.md)
 
-来源：[`packages/experimental/agent-team/src/types.ts:212`](../packages/experimental/agent-team/src/types.ts)
+来源：[`packages/experimental/agent-team/src/types.ts:234`](../packages/experimental/agent-team/src/types.ts)
 
 <a id="teammessagequeued--log-only"></a>
 
@@ -814,7 +882,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 类型：[TeamId](subsystems/agent-team.zh.md) · [TeamMessageSnapshot](subsystems/agent-team.zh.md)
 
-来源：[`packages/experimental/agent-team/src/types.ts:210`](../packages/experimental/agent-team/src/types.ts)
+来源：[`packages/experimental/agent-team/src/types.ts:232`](../packages/experimental/agent-team/src/types.ts)
 
 <a id="teamtask--log-only"></a>
 
@@ -827,7 +895,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 类型：[TeamId](subsystems/agent-team.zh.md) · [TeamTaskSnapshot](subsystems/agent-team.zh.md)
 
-来源：[`packages/experimental/agent-team/src/types.ts:208`](../packages/experimental/agent-team/src/types.ts)
+来源：[`packages/experimental/agent-team/src/types.ts:230`](../packages/experimental/agent-team/src/types.ts)
 
 ### `todo/*`
 

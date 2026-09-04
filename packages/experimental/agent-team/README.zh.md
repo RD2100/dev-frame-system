@@ -64,6 +64,8 @@ roster 显示每个成员的职责（`lead` 或 `teammate`）与当前状态：`
 
 只有 Lead 可以创建 teammate 或中断它们。
 
+每个创建请求都可以可选地提供 teammate 局部 `persona`，以及作用于继承的部署全局工具的 `toolFilter`。runtime 会在 child 发布前安装两者，将其持久化到 continuable descriptor，并在冷恢复时重新安装。
+
 ### teammate 之间的消息
 
 任何成员都可以向任何其他成员或 Lead 发送消息。live 成员会立即收到；离线成员的消息会排队，并在其恢复后到达。消息不会丢失，也绝不会重复投递。

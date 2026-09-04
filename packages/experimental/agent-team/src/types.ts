@@ -148,6 +148,15 @@ export interface SpawnTeammateRequest {
   readonly prompt: ContentBlock[]
   readonly context: 'fresh' | 'fork'
   readonly provider: string
+  /** Optional persona installed only in the teammate's scoped composition. */
+  readonly persona?: string
+  /** Optional restriction over inherited global tools in the teammate's scope. */
+  readonly toolFilter?: {
+    /** Global tool names that stay visible; everything else is removed. */
+    readonly allow?: readonly string[]
+    /** Global tool names removed from visibility. */
+    readonly deny?: readonly string[]
+  }
   readonly signal: AbortSignal
 }
 
