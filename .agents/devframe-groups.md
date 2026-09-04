@@ -69,8 +69,8 @@
 | 文件责任范围 | snapshots/**、apps/web/tests/**（新增组合用例）、docs/**（文档同步） |
 | 验收标准 | 产出组合测试计划与验收清单；为已合并功能补组合用例；快照只做针对性刷新（禁止无差别刷新）；`pnpm run test:docs` 绿 |
 | 测试命令 | `pnpm run test:docs`；`pnpm run test:gui`；`pnpm run test:snapshot`（POSIX 项记录为 CI 信号） |
-| 状态 | 未启动 |
-| 下一步动作 | 先产出验收清单模板与本机已知环境限制清单 |
+| 状态 | **merged**（G5 submitted：5751e8b25c + 81288dc286；main 合并提交 5f888763cb；合并后 composition-smoke 5/5 绿、test:docs 15/15、typecheck 绿、双语配对 1132 对一致）。交付：@deepseek-ai/dsh-composition-smoke 组合冒烟包（装配层三行流程 + 槽位账目）、acceptance-checklist、Agent Note 三件套 |
+| 下一步动作 | 无（已合并）。全部合并后的收口命令见 acceptance-checklist.md；test:snapshot/test:web 记 CI 信号 |
 
 ## 合并与验收规则
 
