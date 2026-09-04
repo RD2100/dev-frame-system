@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The workflow group lets an agent run a model-authored orchestration script that fans work out across many subagents and returns a final value. The `workflow` package provides the run service, the worker-thread package executes scripts in isolated threads, and two model-facing tools expose orchestration: the general `workflow` tool for scripted fan-out and the fixed `ralph` tool for fresh-agent iterative loops. The script coordinates agents with hooks while the agents do the actual work. The engine keeps a script's synchronous work off the host event loop but is containment, not a security boundary.
+The workflow group lets an agent run a model-authored orchestration script that fans work out across many subagents and returns a final value. The `workflow` package provides the run service, the worker-thread package executes scripts in isolated threads, and two model-facing tools expose orchestration: the general `workflow` tool for scripted fan-out and the fixed `ralph` tool for fresh-agent iterative loops. The script coordinates agents with hooks while the agents do the actual work. The engine keeps a script's synchronous work off the host event loop but is containment, not a security boundary. The group also hosts `worktree-registry`: a per-workspace durable registry of git worktrees over the subprocess seam, with no model-facing surface yet.
 
 ## Table of Contents
 
@@ -28,6 +28,7 @@ The workflow group lets an agent run a model-authored orchestration script that 
 | [`workflow-worker-thread`](workflow-worker-thread/README.md) | Executes each workflow script in its own worker thread, off the host event loop | registers on `ctx.workflowEngine` |
 | [`tool-workflow`](tool-workflow/README.md) | Gives the model the `workflow` tool for scripted multi-agent orchestration | registers on `ctx.tools` |
 | [`tool-ralph`](tool-ralph/README.md) | Gives the model the `ralph` tool for fresh-agent iterative loops | registers on `ctx.tools` |
+| [`worktree-registry`](worktree-registry/README.md) | Per-workspace durable registry of git worktrees with create/list/status/remove | `ctx.worktreeRegistry` |
 
 -----
 
@@ -35,6 +36,7 @@ The workflow group lets an agent run a model-authored orchestration script that 
 ## Related documentation
 
 - [Workflow subsystem](../../docs/subsystems/workflow.md) — the seam's types, start request, and `workflow/*` events.
+- [Worktree registry subsystem](../../docs/subsystems/worktree-registry.md) — the per-workspace worktree registration seam and its service.
 - [Generated tool catalog](../../docs/tool-catalog.md#deepseek-aidsh-tool-workflow) — the `workflow` tool schema the model receives.
 - [Generated tool catalog](../../docs/tool-catalog.md#deepseek-aidsh-tool-ralph) — the `ralph` tool schema the model receives.
 - [Generated configuration catalog](../../docs/config-catalog.md#deepseek-aidsh-workflow-worker-thread) — every accepted engine config field.

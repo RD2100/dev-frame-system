@@ -61,6 +61,11 @@
     - id: workspace
       name: '@deepseek-ai/dsh-workspace'
 
+    # Per-workspace git worktree registrations over the storage domain; the
+    # model-facing tool consumer is future work (no prompt or token effect).
+    - id: worktree-registry
+      name: '@deepseek-ai/dsh-worktree-registry'
+
     - id: session-reference
       name: '@deepseek-ai/dsh-session-reference'
 

@@ -2870,6 +2870,37 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
     ],
   },
+  {
+    key: 'worktreeRegistry',
+    summary: 'Abstract worktree registry service.',
+    description: 'Abstract worktree registry service. Subclass, implement the abstract methods, and load the subclass as a plugin — it registers as `ctx.worktreeRegistry` (one implementation per context; loading a second throws, which is cordis\' standard duplicate-service behavior).\n\nImplementations must honor these semantics:\n\n- Operations resolve the owner workspace through `ctx.workspaceRegistry` and fail loud on an unknown `WorkspaceId`; the anchor is never stored unvalidated.\n- Records reflect observed facts: canonical paths after the directory exists, branches read back from the worktree, never caller assumptions.\n- `list` answers from durable rows only; the registry, not git metadata, is the authority for what this product registered.\n- `status` reports a missing directory as an observation (`directoryExists: false`) without invoking git; git failures on a present directory reject.\n- `remove` deletes the durable row only after the provider\'s worktree removal succeeded, so a failed remove never hides an existing worktree.',
+    methods: [
+      {
+        signature: 'abstract create(request: WorktreeCreateRequest): Promise<Worktree>',
+        description: 'Create a linked worktree for one workspace and register it durably.',
+        parameters: [{ name: 'request', description: 'Owner workspace, target directory, and optional new branch name.' }],
+        returns: 'the registered worktree with observed path and branch.',
+      },
+      {
+        signature: 'abstract list(workspaceId: WorkspaceId): readonly Worktree[]',
+        description: 'The workspace\'s registered worktrees in the stable (createdAt, id) order.',
+        parameters: [{ name: 'workspaceId', description: 'Owner workspace; unknown ids reject.' }],
+        returns: 'a fresh ordered array of registered worktrees.',
+      },
+      {
+        signature: 'abstract status(id: WorktreeId): Promise<WorktreeStatus>',
+        description: 'Observe one registered worktree\'s live state.',
+        parameters: [{ name: 'id', description: 'Registered worktree id; unknown ids reject.' }],
+        returns: 'the observation; optional fields are absent when the recorded directory no longer exists.',
+      },
+      {
+        signature: 'abstract remove(id: WorktreeId, options?: WorktreeRemoveOptions): Promise<void>',
+        description: 'Remove one worktree through git and delete its registration. The row is deleted only after the removal succeeded.',
+        parameters: [{ name: 'id', description: 'Registered worktree id; unknown ids reject.' }, { name: 'options', description: 'Pass `force` to allow removing dirty worktrees.' }],
+        returns: 'resolution after the worktree is gone and the row deleted.',
+      },
+    ],
+  },
 ]
 
 /** Every harness event, sorted by name. */
@@ -5384,7 +5415,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SpawnTeammateRequest',
-    declaration: 'export interface SpawnTeammateRequest {\n    readonly name: string;\n    readonly description: string;\n    readonly prompt: ContentBlock[];\n    readonly context: \'fresh\' | \'fork\';\n    readonly provider: string;\n    readonly persona?: string;\n    readonly toolFilter?: SubagentStartRequest[\'toolFilter\'];\n    readonly signal: AbortSignal;\n}',
+    declaration: 'export interface SpawnTeammateRequest {\n    readonly name: string;\n    readonly description: string;\n    readonly prompt: ContentBlock[];\n    readonly context: \'fresh\' | \'fork\';\n    readonly provider: string;\n    readonly persona?: string;\n    readonly toolFilter?: {\n        readonly allow?: readonly string[];\n        readonly deny?: readonly string[];\n    };\n    readonly signal: AbortSignal;\n}',
   },
   {
     name: 'SpawnTeammateResult',
@@ -6177,6 +6208,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkspaceView',
     declaration: 'export interface WorkspaceView {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly sessionIds: readonly SessionId[];\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
+  },
+  {
+    name: 'Worktree',
+    declaration: 'export interface Worktree {\n    readonly id: WorktreeId;\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly branch: string;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
+  },
+  {
+    name: 'WorktreeCreateRequest',
+    declaration: 'export interface WorktreeCreateRequest {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly branch?: string | undefined;\n}',
+  },
+  {
+    name: 'WorktreeRemoveOptions',
+    declaration: 'export interface WorktreeRemoveOptions {\n    readonly force?: boolean | undefined;\n}',
+  },
+  {
+    name: 'WorktreeStatus',
+    declaration: 'export interface WorktreeStatus {\n    readonly directoryExists: boolean;\n    readonly branch?: string | undefined;\n    readonly clean?: boolean | undefined;\n}',
   },
 ]
 
