@@ -254,6 +254,18 @@ create(agent: Agent, request: CreateGoalRequest): GoalView
 @Remote('complete') complete(agent: Agent, ref: GoalRef): GoalView
 
 /**
+ * Record one completion receipt with evidence on the current complete goal.
+ * The receipt annotates the exact revision without advancing it, so refs
+ * held by the completing caller stay valid; duplicate receipts for one
+ * revision are allowed and stay ordered in the log.
+ * @param agent - owning live agent.
+ * @param ref - expected current revision.
+ * @param evidence - at least one evidence entry; summaries and refs are normalized.
+ * @returns the committed receipt.
+ */
+recordReceipt(agent: Agent, ref: GoalRef, evidence: readonly GoalEvidenceEntry[]): GoalReceipt
+
+/**
  * Mark an active goal blocked and disarm it.
  * @param agent - owning live agent.
  * @param ref - expected current revision.

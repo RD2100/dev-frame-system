@@ -984,6 +984,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the completed view.',
       },
       {
+        signature: 'recordReceipt(agent: Agent, ref: GoalRef, evidence: readonly GoalEvidenceEntry[]): GoalReceipt',
+        description: 'Record one completion receipt with evidence on the current complete goal. The receipt annotates the exact revision without advancing it, so refs held by the completing caller stay valid; duplicate receipts for one revision are allowed and stay ordered in the log.',
+        parameters: [{ name: 'agent', description: 'owning live agent.' }, { name: 'ref', description: 'expected current revision.' }, { name: 'evidence', description: 'at least one evidence entry; summaries and refs are normalized.' }],
+        returns: 'the committed receipt.',
+      },
+      {
         signature: 'block(agent: Agent, ref: GoalRef, reason: GoalBlockReason): GoalView',
         description: 'Mark an active goal blocked and disarm it.',
         parameters: [{ name: 'agent', description: 'owning live agent.' }, { name: 'ref', description: 'expected current revision.' }, { name: 'reason', description: 'policy-owned stable code and human-readable explanation.' }],
@@ -4091,16 +4097,24 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface GoalChanged {\n    readonly operation: GoalOperation;\n    readonly ref: GoalRef;\n    readonly goal?: GoalView;\n}',
   },
   {
+    name: 'GoalEvidenceEntry',
+    declaration: 'export interface GoalEvidenceEntry {\n    readonly kind: string;\n    readonly summary: string;\n    readonly at: number;\n    readonly ref?: string;\n}',
+  },
+  {
     name: 'GoalId',
     declaration: 'export type GoalId = Branded<\'GoalId\'>;',
   },
   {
     name: 'GoalOperation',
-    declaration: 'export type GoalOperation = \'create\' | \'edit\' | \'pause\' | \'resume\' | \'complete\' | \'block\' | \'clear\';',
+    declaration: 'export type GoalOperation = \'create\' | \'edit\' | \'pause\' | \'resume\' | \'complete\' | \'block\' | \'clear\' | \'receipt\';',
   },
   {
     name: 'GoalPhase',
     declaration: 'export type GoalPhase = \'active\' | \'paused\' | \'blocked\' | \'complete\';',
+  },
+  {
+    name: 'GoalReceipt',
+    declaration: 'export interface GoalReceipt {\n    readonly ref: GoalRef;\n    readonly evidence: readonly GoalEvidenceEntry[];\n    readonly recordedAt: number;\n}',
   },
   {
     name: 'GoalRef',
@@ -5384,7 +5398,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SpawnTeammateRequest',
-    declaration: 'export interface SpawnTeammateRequest {\n    readonly name: string;\n    readonly description: string;\n    readonly prompt: ContentBlock[];\n    readonly context: \'fresh\' | \'fork\';\n    readonly provider: string;\n    readonly persona?: string;\n    readonly toolFilter?: SubagentStartRequest[\'toolFilter\'];\n    readonly signal: AbortSignal;\n}',
+    declaration: 'export interface SpawnTeammateRequest {\n    readonly name: string;\n    readonly description: string;\n    readonly prompt: ContentBlock[];\n    readonly context: \'fresh\' | \'fork\';\n    readonly provider: string;\n    readonly persona?: string;\n    readonly toolFilter?: {\n        readonly allow?: readonly string[];\n        readonly deny?: readonly string[];\n    };\n    readonly signal: AbortSignal;\n}',
   },
   {
     name: 'SpawnTeammateResult',
