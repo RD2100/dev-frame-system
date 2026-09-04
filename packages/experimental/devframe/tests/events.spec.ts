@@ -229,7 +229,7 @@ describe('DevFrame durable event vocabulary', () => {
   it('serializes concurrent appends and returns only after a durable flush', async () => {
     const current = session()
     const observed: number[] = []
-    const journal = new DevFrameSessionJournal((value) => {
+    const journal = new DevFrameSessionJournal(async (value) => {
       observed.push(value.seq)
       return true
     })

@@ -68,6 +68,7 @@ const binding: ProjectWorkBinding = {
 ## 理解实现
 
 <details>
+
 <summary>实现细节——点击展开</summary>
 
 `stopProject` 是有界编排辅助函数。它使用调用方提供的原生 Agent、Goal、Job、subprocess 和 timeout 接缝。它在取消前记录 `stopping`，在排空后记录 `quiesced` 或 `needs_attention`，然后刷新，最后释放写入权。它不会根据丢失的进程内 mutex 或未验证的进程身份推断已经静默。
@@ -84,6 +85,8 @@ const binding: ProjectWorkBinding = {
 | [`src/shared/types.ts`](src/shared/types.ts) | 带 brand 的工作身份和绑定持久化接口 |
 | [`tests/reliability/stop.spec.ts`](tests/reliability/stop.spec.ts) | 单元测试和真实已拥有进程停止覆盖 |
 | [`../../experimental/agent-team/tests/devframe-composition.spec.ts`](../agent-team/tests/devframe-composition.spec.ts) | Team、Goal、dispatcher 和 JSONL 的真实组合基线 |
+
+不发布运行时不变量 companion，因为本包不注册 Cordis 插件，也不拥有可由独立观察者检查的运行时关系；事件、投影和生命周期测试直接覆盖库操作。
 
 </details>
 

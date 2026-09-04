@@ -70,7 +70,7 @@ describe('project stop', () => {
       stderr: undefined,
       collected: {},
       terminate: vi.fn(),
-      done: Promise.resolve({ code: null, signal: 'SIGTERM' as const, timedOut: false }),
+      done: Promise.resolve({ exitCode: null, signal: 'SIGTERM' as const }),
       waitForExit: vi.fn(async () => true),
     } satisfies SubprocessHandle
     const second = {
@@ -80,7 +80,7 @@ describe('project stop', () => {
       stderr: undefined,
       collected: {},
       terminate: vi.fn(),
-      done: Promise.resolve({ code: null, signal: 'SIGTERM' as const, timedOut: false }),
+      done: Promise.resolve({ exitCode: null, signal: 'SIGTERM' as const }),
       waitForExit: vi.fn(async () => true),
     } satisfies SubprocessHandle
     const result = await stopProject({

@@ -68,6 +68,7 @@ The host owns validation and persistence. A changed acceptance or source value i
 ## Understand the implementation
 
 <details>
+
 <summary>Implementation internals — click to expand</summary>
 
 `stopProject` is a bounded orchestration helper. It uses the native Agent, Goal, Job, subprocess, and timeout seams supplied by the caller. It records `stopping` before cancellation, records either `quiesced` or `needs_attention` after draining, then flushes before releasing the writer. It never infers quiescence from a lost in-memory mutex or from an unverified process identity.
@@ -84,6 +85,8 @@ The shared types keep the project binding, configuration confirmation, lifecycle
 | [`src/shared/types.ts`](src/shared/types.ts) | Branded work identities and binding persistence interfaces |
 | [`tests/reliability/stop.spec.ts`](tests/reliability/stop.spec.ts) | Unit and real owned-process stop coverage |
 | [`../../experimental/agent-team/tests/devframe-composition.spec.ts`](../agent-team/tests/devframe-composition.spec.ts) | Real Team, Goal, dispatcher, and JSONL composition baseline |
+
+No runtime invariant companion is published because this package registers no Cordis plugin and owns no independently observable runtime relation; direct event, projection, and lifecycle tests cover its library operations.
 
 </details>
 

@@ -13,11 +13,11 @@
     },
     "./reliability": {
       "types": "./lib/types/reliability/index.d.ts",
-      "default": "./lib/reliability/index.js"
+      "default": "./lib/types/reliability/index.js"
     },
     "./shared": {
       "types": "./lib/types/shared/index.d.ts",
-      "default": "./lib/shared/index.js"
+      "default": "./lib/types/shared/index.js"
     },
     "./controller": {
       "types": "./lib/types/controller/goal-binding.d.ts",
@@ -32,10 +32,7 @@
   },
   "files": [
     "lib/index.js",
-    "lib/types/controller/**/*.js",
-    "lib/types/permissions/**/*.js",
-    "lib/reliability/**/*.js",
-    "lib/shared/**/*.js",
+    "lib/types/**/*.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
