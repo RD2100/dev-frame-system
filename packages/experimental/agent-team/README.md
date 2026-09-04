@@ -64,6 +64,8 @@ The roster shows every member with its role (`lead` or `teammate`) and current s
 
 Only the Lead can create teammates or interrupt them.
 
+Each creation request may optionally supply a teammate-local `persona` and a `toolFilter` over inherited deployment-global tools. The runtime installs both before the child is published, persists them in the continuable descriptor, and reinstalls them on cold resume.
+
 ### Messages between teammates
 
 Any member can send a message to any other member or to the Lead. A live member receives it immediately; an offline member's messages queue and arrive when it resumes. Messages are never lost and never delivered twice.

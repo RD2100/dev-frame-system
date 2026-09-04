@@ -128,6 +128,9 @@ describe('Team role composition recovery', () => {
     expect(['accepted', 'queued']).toContain(resumed.status)
     const coldChild = await waitRunning(ctx, started.member.id)
     expect(coldChild).not.toBe(child)
+    const resumedAssembly = await ctx.systemPrompt.assemble({ scope: coldChild })
+    expect(resumedAssembly.sections.find(section => section.name === 'deployment:persona')?.text)
+      .toBe('You are the read-only reviewer.')
     expect(ctx.tools.schemas(coldChild).map(schema => schema.name)).toEqual(['project_read'])
     const resumedSession = await ctx.sessionPersistence.inspect(started.member.id)
     expect(resumedSession.events.some(event => event.type === 'user/message'
