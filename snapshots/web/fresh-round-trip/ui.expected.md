@@ -2,7 +2,9 @@
   - navigation "Session hierarchy":
     - button "Use the bash tool to" [disabled]
   - img
-  - text: Standard mode
+  - text: Standard mode session-{{uuid}}
+  - button "Copy session ID":
+    - img
   - button "Session log":
     - text: Session log
     - img

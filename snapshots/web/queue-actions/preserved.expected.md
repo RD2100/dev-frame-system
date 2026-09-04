@@ -2,7 +2,9 @@
   - navigation "Session hierarchy":
     - button "Reply with a one-sentence description" [disabled]
   - img
-  - text: Standard mode
+  - text: Standard mode session-{{uuid}}
+  - button "Copy session ID":
+    - img
   - button "Session log":
     - text: Session log
     - img
