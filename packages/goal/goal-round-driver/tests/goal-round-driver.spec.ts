@@ -870,6 +870,73 @@ describe('same-session goal driving', () => {
     expect(test.adapter.requests).toHaveLength(0)
   })
 
+  it('discards a round queued behind a latched wake so no round runs after unload', async () => {
+    const test = await harness([])
+    let discarded = false
+    test.ctx.on('session/event', (_session, event) => {
+      if (event.type === 'agent/inbox/spliced' && event.data.outcome === 'canceled') discarded = true
+    })
+    let releaseMaintenance: (() => void) | undefined
+    const maintenance = test.agent.runMaintenance(async () => {
+      await new Promise<void>((resolve) => { releaseMaintenance = resolve })
+    })
+    test.ctx.goals.create(test.agent, { objective: 'never run after unload' })
+    // The reservation is queued while the wake stays latched behind maintenance.
+    await vi.waitFor(() => { expect(test.agent.inbox.nextTurn).toHaveLength(1) })
+
+    const dispose = Promise.resolve(test.driver.dispose())
+    await vi.waitFor(() => { expect(discarded).toBe(true) })
+    releaseMaintenance?.()
+    await dispose
+    await maintenance
+    await test.agent.whenIdle()
+
+    expect(test.adapter.requests).toHaveLength(0)
+    expect(test.agent.session.snapshotEvents().some(event => event.type === 'user/message'
+      && event.data.source.kind === 'goal' && event.data.source.round > 0)).toBe(false)
+    expect(test.ctx.goals.get(test.agent)).toMatchObject({
+      phase: 'active',
+      activation: 'disarmed',
+      roundsStarted: 0,
+    })
+  })
+
+  it('teardown discards only the latched round and leaves unrelated pending input intact', async () => {
+    const test = await harness([textResponse('pinned context answered')])
+    let discarded = false
+    test.ctx.on('session/event', (_session, event) => {
+      if (event.type === 'agent/inbox/spliced' && event.data.outcome === 'canceled') discarded = true
+    })
+    let releaseMaintenance: (() => void) | undefined
+    const maintenance = test.agent.runMaintenance(async () => {
+      await new Promise<void>((resolve) => { releaseMaintenance = resolve })
+    })
+    test.agent.inject(createUserMessage({
+      content: [{ type: 'text', text: 'pinned human context' }],
+      source: { kind: 'plugin', plugin: 'test' },
+    }))
+    test.ctx.goals.create(test.agent, { objective: 'keep unrelated work' })
+    await vi.waitFor(() => { expect(test.agent.inbox.nextTurn).toHaveLength(1) })
+
+    const dispose = Promise.resolve(test.driver.dispose())
+    await vi.waitFor(() => { expect(discarded).toBe(true) })
+    releaseMaintenance?.()
+    await dispose
+    await maintenance
+    await test.agent.whenIdle()
+
+    expect(test.adapter.requests).toHaveLength(1)
+    expect(requestText(test.adapter.requests[0]!)).toContain('pinned human context')
+    expect(requestText(test.adapter.requests[0]!)).not.toContain('<goal_round>')
+    expect(test.agent.session.snapshotEvents().some(event => event.type === 'user/message'
+      && event.data.source.kind === 'goal' && event.data.source.round > 0)).toBe(false)
+    expect(test.ctx.goals.get(test.agent)).toMatchObject({
+      phase: 'active',
+      activation: 'disarmed',
+      roundsStarted: 0,
+    })
+  })
+
   it('resets process-local scheduling state at a session-start edge', async () => {
     const test = await harness([textResponse('after explicit resume')])
     const created = test.ctx.goals.create(test.agent, { objective: 'restart safely', maxGoalRounds: 1 })
