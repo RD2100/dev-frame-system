@@ -13,8 +13,8 @@
 | 文件责任范围 | packages/client/ui-workspace/**（rows、locales、tests） |
 | 验收标准 | 三个点菜单含“Session ID”；对话框显示完整 ID；点击 ID 或复制按钮均可复制；成功/失败均有明确反馈；重启、冷恢复后 ID 稳定；`pnpm run test:gui` 绿 |
 | 测试命令 | `pnpm exec vitest run packages/client/ui-workspace` ；`pnpm run test:gui` |
-| 状态 | 基线切片已在 main 提交（45599c666c）：菜单项 + SessionIdDialog + zh/en 文案 + 测试 + 徽章包移除 |
-| 下一步动作 | 冷恢复/重启稳定性证据；补充缺口测试 |
+| 状态 | **merged**（G1 submitted：b9edbb3924；main 合并提交 01eb0d288a；合并后 ui-workspace 155 tests 绿）。基线切片 45599c666c；实机验证全绿（2026-09-05 01:24，第二实例 :3081 + Playwright：行菜单 → Session ID → 完整 ID `session-714e9f00-…` 原样显示 → 复制按钮 → “已复制” → 剪贴板内容与完整 ID 一致，截图 apps/web/tmp-verify/sessionid-check.png）；该实例为全新启动进程，同一 SessionID 跨进程一致，即重启/冷恢复稳定性的直接证据 |
+| 下一步动作 | 无（已合并）。遗留可选项：对话框上提为浏览器 owner 级需同步改 G1 钉住的两个测试（注释已互指） |
 
 ## G2 — Thread / Agent / Worktree 关联与状态
 
