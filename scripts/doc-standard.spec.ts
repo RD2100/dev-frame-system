@@ -70,6 +70,7 @@ const PACKAGE_LIBRARIES: Readonly<Record<string, string>> = {
   'packages/test-support/session-snapshot': 'Test infrastructure; mounts nothing into a product composition.',
   'packages/test-support/agent-loop-testkit': 'Test helper library; mounts nothing into a product composition.',
   'packages/test-support/client-runtime': 'Browser-side test infrastructure.',
+  'packages/test-support/composition-smoke': 'Browser-side test bench assembler; plain function exports.',
   'packages/test-support/llm-mock-server': 'Test server library; substitutes provider wire behavior.',
   'packages/test-support/loader-smoke': 'Test harness library; mounts nothing into a product composition.',
   'packages/typert/generator': 'Build-time generator run outside any agent runtime.',
