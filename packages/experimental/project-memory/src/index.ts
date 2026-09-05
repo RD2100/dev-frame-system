@@ -17,6 +17,10 @@ export {
 export { createMemoryReceiptStore } from './receipt.ts'
 export { screenNoteBody, type ScreeningRuleId } from './screen.ts'
 export { ProjectMemoryService, type ProjectMemoryReceipts } from './memory.ts'
+// The Cordis loader resolves the package name to this entry and reads the
+// plugin-protocol exports `name`, `inject`, `Config`, and `apply` by their
+// exact names; `createMemoryTools` is the testable tool factory behind them.
+export { apply, Config, createMemoryTools, inject, name } from './plugin.ts'
 export {
   NOTE_SCHEMA_VERSION,
   type AssertionStatus,

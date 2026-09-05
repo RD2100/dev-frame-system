@@ -6,6 +6,10 @@
   },
   "include": ["src"],
   "references": [
+    { "path": "../../../vendor/cosmokit" },
+    { "path": "../../../vendor/schemastery" },
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../core/tools" },
     { "path": "../../util/brand" }
   ]
 }
