@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-experimental-devframe` provides the small library contracts used by a DSH-native project controller. A caller can carry one workspace, Goal, acceptance, and source identity across dispatch, evidence, and completion. A caller can also stop owned agents, jobs, and process handles while retaining writer ownership until cleanup and the final persistence flush finish. The package is a private experimental library: it registers no Cordis plugin and does not provide a model-facing tool.
+`dsh-experimental-devframe` provides the small library contracts used by a DSH-native project controller. A caller can carry one workspace, Goal, acceptance, and source identity across dispatch, evidence, and completion. A caller can also stop owned agents, jobs, and process handles while retaining writer ownership until cleanup and the final persistence flush finish. It also fixes the three-tier spawn policy — controller builds leads, a lead builds workers, a worker builds nothing — as detached delegation-request overrides. The package is a private experimental library: it registers no Cordis plugin and does not provide a model-facing tool.
 
 ## Table of Contents
 
@@ -62,6 +62,19 @@ const binding: ProjectWorkBinding = {
 
 The host owns validation and persistence. A changed acceptance or source value is a different binding and must not reuse earlier evidence.
 
+### Assemble the three-tier spawn policy
+
+Spread `devframeSpawnOverrides(tier)` into the delegation request when a DevFrame parent spawns a child. A lead carries only the depth budget; a worker also loses the delegation tool, and the child's own executor refuses it (`UNKNOWN_TOOL`) while the durable descriptor reapplies the filter on cold resume.
+
+```ts
+import { devframeSpawnOverrides } from '@deepseek-ai/dsh-experimental-devframe'
+
+// { maxDepth: 2, toolFilter: { deny: ['subagent'] } } spread into the
+// delegation request; devframeSpawnOverrides('lead') is { maxDepth: 2 }.
+const overrides = devframeSpawnOverrides('worker')
+const request = { prompt: [], parent: leadAgent, ...overrides }
+```
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -80,9 +93,11 @@ The shared types keep the project binding, configuration confirmation, lifecycle
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Library entry for stop and shared contracts |
+| [`src/hierarchy/index.ts`](src/hierarchy/index.ts) | Per-tier spawn overrides for the controller → lead → worker tree |
 | [`src/permissions/events.ts`](src/permissions/events.ts) | Persisted role and policy identity event contract |
 | [`src/reliability/stop.ts`](src/reliability/stop.ts) | Admission cutoff, owned cancellation, bounded drain, and writer release |
 | [`src/shared/types.ts`](src/shared/types.ts) | Branded work identities and binding persistence interfaces |
+| [`tests/hierarchy-roles.spec.ts`](tests/hierarchy-roles.spec.ts) | Per-tier spawn-override policy coverage |
 | [`tests/reliability/stop.spec.ts`](tests/reliability/stop.spec.ts) | Unit and real owned-process stop coverage |
 | [`../../experimental/agent-team/tests/devframe-composition.spec.ts`](../agent-team/tests/devframe-composition.spec.ts) | Real Team, Goal, dispatcher, and JSONL composition baseline |
 

@@ -460,6 +460,7 @@ spawn 和 fork 后端通过 `parent.ctx` 创建一个普通的单次 agent，将
 
 - **委派深度**由持久 `SessionHeader.delegationDepth` 与可合并扩展的运行时字段 `AgentOptions.subagentDepth` 共同表示；缺失表示顶层深度为零，存在的较大值具有权威性。两个字段都归该 seam 所有——循环既不设置也不读取它们——因此进程内子 agent 会持久保存 parent 深度 + 1，冷恢复无法降低深度，而且每次 start 都会拒绝超出安全整数域、或高于已定义绝对 `request.maxDepth` 上限的派生深度。
 - **Fork 种子注入**使用 [`CreateAgentOptions.seed`](core.zh.md#creation-and-ownership)（一个 `SessionEvent[]` 前缀，经由 `AgentLoop.createAgent` → `ctx.sessions.prepare({ seed })` 传递，与 `ctx.agents.resume()` 使用的原语相同）。fork 后端传入父级日志的一段*平衡的已完成轮次前缀*——父级事件直到并包括其最后一个 `turn/end`——因此种子从 0 连续，[invariants](../../packages/runtime-diagnostics/invariants) 回放可以接受它（进行中的、未平衡的轮次被排除在外）。
+- **角色化 spawn 策略**把同样的两个字段组装成 DevFrame 的产品规则「总控建组长，组长建执行 Agent，执行 Agent 禁建子 Agent」：每次 DevFrame spawn 都把 `request.maxDepth` 钉在树预算（`2`）上，执行 Agent 的 spawn 还通过 `request.toolFilter` 拒绝委托工具——由子 Agent 作用域在执行时强制（`UNKNOWN_TOOL`，而非仅提示面缺席），并在冷恢复时从持久描述符重新应用。各档覆盖值位于 [`packages/experimental/devframe/src/hierarchy/index.ts`](../../packages/experimental/devframe/src/hierarchy/index.ts)。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
