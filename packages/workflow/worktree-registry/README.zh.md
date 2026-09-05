@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-worktree-registry` 给 host 一个持久的、每工作区的 git worktree 注册表：由产品创建、跟踪、并可再次删除的工作区仓库第二检出。有了它，消费方可以为某个 workspace 创建干净或隔离的检出、跨重启列出每个 workspace 名下的检出、观察每个检出是否干净及其所在分支，并删除它——删除先经 git 删检出，再删登记，顺序永不颠倒。本包只在 host 侧：模型、工具与 agent loop 都看不见它，因此不增加任何 token、提示词或请求上下文。它需要 workspace registry、subprocess provider 和存储行一并挂载；组装只需几行配置。
+`dsh-worktree-registry` 给 host 一个持久的、每工作区的 git worktree 注册表：由产品创建、跟踪、并可再次删除的工作区仓库第二检出。有了它，消费方可以为某个 workspace 创建干净或隔离的检出、跨重启列出每个 workspace 名下的检出、观察每个检出是否干净及其所在分支、删除它——删除先经 git 删检出，再删登记，顺序永不颠倒——并把登记与 `git worktree list` 报告的状态对账。本包只在 host 侧：模型、工具与 agent loop 都看不见它，因此不增加任何 token、提示词或请求上下文。它需要 workspace registry、subprocess provider 和存储行一并挂载；组装只需几行配置。
 
 ## 目录
 
@@ -64,6 +64,17 @@ await ctx.worktreeRegistry.status(worktree.id) // { directoryExists, branch, cle
 
 检出不再需要时删除登记：本包先运行 `git worktree remove`，git 成功之后才删持久化行。有改动或未跟踪文件的检出拒绝删除，除非传 `force: true`（对 git 传 `--force`）。删除绝不触碰 workspace 记录或仓库历史。
 
+### 对账登记与 git
+
+登记行与 git 自身的元数据可能漂移：目录在产品之外被删会留下没有检出的行，绕过 git 的删除会让 git 跟踪一条死路径，产品之外创建的 worktree 对注册表一无所知。`reconcile(workspaceId)` 把 workspace 的行与 `git worktree list` 对比并报告差异——`dangling` 行（`directory-missing` 或 `git-unknown`）与 `unregistered` 的 git 跟踪 worktree——默认不做任何修改：
+
+```text
+const report = await ctx.worktreeRegistry.reconcile(workspaceId)
+// { dangling: [{ id, path, reason }], unregistered: [{ path, branch? }], removedRows: [], adoptedPaths: [] }
+```
+
+两个可选动作作用于报告。`pruneRows: true` 删除悬空行（绝不删目录或文件），并在被删行的目录缺失时运行一次 `git worktree prune`，让 git 不再列出死的 admin 条目。`adoptUnregistered: true` 以规范路径与观测到的分支（detached 时为 `HEAD`）登记每个未注册 worktree——仓库主检出与已登记在另一 workspace 名下的 worktree 永不会被采纳或报告。检测是即时的，并与 create/remove 一起在 provider 的操作链上串行。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -79,7 +90,8 @@ await ctx.worktreeRegistry.status(worktree.id) // { directoryExists, branch, cle
 - **uuid 是锚点，路径是事实。** worktree 路径会被规范化与 git 本身改写，所以行以生成的 `WorktreeId` 为 key，存储创建之后观测到的规范路径。
 - **独立的域，不挂 WorkspaceRecord 字段。** worktree 生命周期是 git 机制，不是 workspace 的 session 记账；行存在本包的 `worktree_registry` 域，归属关联是一个 `workspaceId` 字段，在操作时经 `ctx.workspaceRegistry` 校验。
 - **观测事实优先于假设。** 存储的分支是从新 worktree 读回的，存储的路径是创建后的 `fs.realpath`，`status` 只报告 git 当下报告的内容。
-- **注册表是登记的权威。** `list` 从持久化行作答；与 git 自身元数据对账——包括产品之外创建的 worktree——是延后的 prune 的职责。
+- **注册表是登记的权威。** `list` 从持久化行作答；git 自身元数据与之相悖时，`reconcile` 报告差异并仅在被要求时修复。
+- **对账默认只动登记侧。** 删行绝不删目录或文件，采纳绝不改写 worktree——动作只把产品的记录对齐到已存在的事实上。
 - **删除 git 优先。** `git worktree remove` 成功之后才删持久化行，所以失败的删除绝不会掩盖一个真实存在的检出。
 
 ### API 行为
@@ -92,9 +104,10 @@ seam 拆成抽象的 `WorktreeRegistry` Service Definition 与组合加载的 `G
 |---|---|
 | [`src/index.ts`](src/index.ts) | 包入口：导出、`WorktreeId` 工厂、provider 的 default export |
 | [`src/registry.ts`](src/registry.ts) | 抽象 Service Definition 与 `ctx.worktreeRegistry` key |
-| [`src/git-provider.ts`](src/git-provider.ts) | 本地 git provider：配置校验、经 `ctx.subprocess` 跑 git、四个操作 |
+| [`src/git-provider.ts`](src/git-provider.ts) | 本地 git provider：配置校验、经 `ctx.subprocess` 跑 git、五个操作 |
+| [`src/porcelain.ts`](src/porcelain.ts) | `git worktree list --porcelain -z` 解析与对账用的路径比较 |
 | [`src/spec.ts`](src/spec.ts) | 域声明：记录 schema 与 `defineDomain` spec |
-| [`src/types.ts`](src/types.ts) | 公共词汇：`WorktreeId`、请求、worktree 与 status 类型 |
+| [`src/types.ts`](src/types.ts) | 公共词汇：`WorktreeId`、请求、worktree、status 与对账类型 |
 
 ### 持久形态
 
@@ -106,7 +119,7 @@ provider 打开 `worktree_registry` 域（version 1）：一张以 `WorktreeId` 
 
 ### 失败与恢复
 
-未知 workspace、非 git 的 workspace 目录、已登记路径、git 自身的拒绝，全部带着 git 的 stderr 拒绝；没有任何东西被吞掉。两步删除有一个已知的窗口——git 已删 worktree 但行删除失败——表现为指明两个事实的响亮错误，同时 `status` 报告目录缺失。
+未知 workspace、非 git 的 workspace 目录、已登记路径、git 自身的拒绝，全部带着 git 的 stderr 拒绝；没有任何东西被吞掉。两步删除有一个已知的窗口——git 已删 worktree 但行删除失败——表现为指明两个事实的响亮错误，同时 `status` 报告目录缺失；用 `reconcile` 加 `pruneRows` 可回收悬空行。
 
 ### 不变量
 
@@ -150,10 +163,10 @@ provider 打开 `worktree_registry` 域（version 1）：一张以 `WorktreeId` 
 这些限制定义了注册表何时不适用或需要特殊运维关注。它们是当前包约束，不是任务积压。
 
 - **还没有消费方**——模型可见的 `worktree_*` 工具与任何 host UI 都是后续工作；已交付组合挂载了 provider，但没有任何东西调用它，所以服务 API 之外没有产品面。
-- **没有 prune**——目录在产品之外消失的 worktree 无法注销：`remove` 会响亮失败并指明 git 元数据悬空，行保留到 prune 带着对账策略落地为止。
-- **删除需要归属方**——删除 worktree 时归属 workspace 登记必须仍存在；删除 workspace 会卡住其 worktree 行的删除，直到 workspace 重新登记或由未来 prune 处理该行。
-- **外部创建不可见**——产品之外创建的 worktree 永远不出现在 `list`；看见它们需要延后的对账。
-- **一个删除失败窗口**——git 已删 worktree 而行删除失败时，行保留并报告目录缺失；恢复等待 prune。
+- **对账从不删除树**——删行与采纳登记是仅有的动作；需要物理删除的 worktree 仍走 `remove`（或用户自己动手）。
+- **删除需要归属方**——删除 worktree 时归属 workspace 登记必须仍存在；删除 workspace 会卡住其 worktree 行的删除，直到 workspace 重新登记或该行经 reconcile 删除。
+- **采纳信任 git 的列表**——被采纳的 worktree 记录观测到的分支；detached HEAD 记为 `HEAD`，注册表不解析 detached HEAD 指向什么。
+- **一个删除失败窗口**——git 已删 worktree 而行删除失败时，行保留并报告目录缺失；之后用 `reconcile` 加 `pruneRows` 可回收。
 
 <a id="dev-note"></a>
 ### 开发备注

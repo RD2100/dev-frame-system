@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-worktree-registry` gives a host a durable, per-workspace registry of git worktrees: second checkouts of a workspace's repository that the product created, tracked, and can remove again. With it, a consumer can create a clean or isolated checkout for one of its workspaces, list the checkouts that belong to each workspace across restarts, observe whether each checkout is clean and which branch it carries, and remove it — removal deletes the checkout through git and then the registration, never the other way round. The package is host-side only: the model, tools, and agent loop never see it, so it adds no tokens, prompts, or request context. It needs the workspace registry, a subprocess provider, and the storage rows mounted alongside it; setup is a few composition rows.
+`dsh-worktree-registry` gives a host a durable, per-workspace registry of git worktrees: second checkouts of a workspace's repository that the product created, tracked, and can remove again. With it, a consumer can create a clean or isolated checkout for one of its workspaces, list the checkouts that belong to each workspace across restarts, observe whether each checkout is clean and which branch it carries, remove it — removal deletes the checkout through git and then the registration, never the other way round — and reconcile the registrations against what `git worktree list` reports. The package is host-side only: the model, tools, and agent loop never see it, so it adds no tokens, prompts, or request context. It needs the workspace registry, a subprocess provider, and the storage rows mounted alongside it; setup is a few composition rows.
 
 ## Table of Contents
 
@@ -64,6 +64,17 @@ await ctx.worktreeRegistry.status(worktree.id) // { directoryExists, branch, cle
 
 Remove a registration when the checkout is no longer needed: the package runs `git worktree remove` first and deletes the durable row only after git succeeded. A checkout with modified or untracked files refuses to go without `force: true`, which passes `--force` to git. Removal never touches the workspace record or the repository's history.
 
+### Reconciling registry and git
+
+Registration rows and git's own metadata can drift apart: a directory deleted outside the product leaves a row without a checkout, a worktree deleted behind git's back leaves git tracking a dead path, and a worktree created outside the product is unknown to the registry. `reconcile(workspaceId)` compares the workspace's rows with `git worktree list` and reports the difference — `dangling` rows (`directory-missing` or `git-unknown`) and `unregistered` git-tracked worktrees — without changing anything:
+
+```text
+const report = await ctx.worktreeRegistry.reconcile(workspaceId)
+// { dangling: [{ id, path, reason }], unregistered: [{ path, branch? }], removedRows: [], adoptedPaths: [] }
+```
+
+Two opt-in actions act on the report. `pruneRows: true` drops the dangling rows (never directories or files) and runs `git worktree prune` once when a dropped row's directory was missing, so git stops listing the dead admin entry. `adoptUnregistered: true` registers each unregistered worktree with its canonical path and the branch observed in it (`HEAD` when detached) — a repository's main worktree and any worktree already registered under another workspace are never adopted or reported. Detection is point-in-time and serialized with create/remove on the provider's operation chain.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -79,7 +90,8 @@ This section explains the design decisions behind the feature and points at the 
 - **The uuid is the anchor, the path is a fact.** Worktree paths are rewritten by normalization and by git itself, so rows are keyed by a generated `WorktreeId` and store the canonical path observed after creation.
 - **An independent domain, not a WorkspaceRecord field.** Worktree lifecycle is git mechanics, not workspace session accounting; the rows live in this package's `worktree_registry` domain, and the ownership link is a `workspaceId` field validated at operation time through `ctx.workspaceRegistry`.
 - **Observed facts over assumptions.** The stored branch is read back from the new worktree, the stored path is the post-creation `fs.realpath`, and `status` reports only what git reports now.
-- **The registry is the authority for registrations.** `list` answers from durable rows; reconciling git's own metadata — including worktrees created outside the product — is the deferred prune's job.
+- **The registry is the authority for registrations.** `list` answers from durable rows; where git's own metadata disagrees, `reconcile` reports the difference and repairs it only on request.
+- **Reconcile is registry-side by default.** Dropping rows never deletes directories or files, and adopting never rewrites a worktree — the actions only bring the product's records in line with what already exists.
 - **Removal is git-first.** The durable row is deleted only after `git worktree remove` succeeded, so a failed removal never hides a real checkout.
 
 ### API behavior
@@ -92,9 +104,10 @@ The seam splits into the abstract `WorktreeRegistry` Service Definition and the 
 |---|---|
 | [`src/index.ts`](src/index.ts) | Package entry: exports, the `WorktreeId` factory, default export of the provider |
 | [`src/registry.ts`](src/registry.ts) | The abstract Service Definition and the `ctx.worktreeRegistry` key |
-| [`src/git-provider.ts`](src/git-provider.ts) | Local git provider: config validation, git over `ctx.subprocess`, the four operations |
+| [`src/git-provider.ts`](src/git-provider.ts) | Local git provider: config validation, git over `ctx.subprocess`, the five operations |
+| [`src/porcelain.ts`](src/porcelain.ts) | `git worktree list --porcelain -z` parsing and the reconcile path comparison |
 | [`src/spec.ts`](src/spec.ts) | Domain declaration: record schema and `defineDomain` spec |
-| [`src/types.ts`](src/types.ts) | Public vocabulary: `WorktreeId`, request, worktree, and status types |
+| [`src/types.ts`](src/types.ts) | Public vocabulary: `WorktreeId`, request, worktree, status, and reconcile types |
 
 ### Durable shape
 
@@ -106,7 +119,7 @@ On start, the provider opens its domain and ties the handle's lifetime to its fi
 
 ### Failure and recovery
 
-Unknown workspaces, non-git workspace directories, already-registered paths, and git's own refusals all reject with git's stderr attached; nothing is swallowed. The two-step remove has one acknowledged window — git removed the worktree but the row delete failed — which surfaces as a loud error naming both facts while `status` reports the missing directory.
+Unknown workspaces, non-git workspace directories, already-registered paths, and git's own refusals all reject with git's stderr attached; nothing is swallowed. The two-step remove has one acknowledged window — git removed the worktree but the row delete failed — which surfaces as a loud error naming both facts while `status` reports the missing directory; `reconcile` with `pruneRows` recovers the stale row.
 
 ### Invariant
 
@@ -147,10 +160,10 @@ Independent of live requests: the package never touches a request prefix, so it 
 These limits define when the registry is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
 
 - **No consumer yet** — the model-facing `worktree_*` tool and any host UI are future work; the shipped composition mounts the provider, but nothing calls it, so the feature has no product surface beyond the service API.
-- **No prune** — a worktree whose directory vanished outside the product cannot be unregistered: `remove` fails loud naming the stale git metadata, and the row stays until prune lands with a reconciliation policy.
-- **Remove needs its owner** — the owner workspace registration must still exist when a worktree is removed; deleting the workspace wedges its worktree rows' removal until the workspace is re-registered or the row is handled by the future prune.
-- **External creations are invisible** — worktrees created outside the product never appear in `list`; seeing them requires the deferred reconciliation.
-- **One removal failure window** — if the row delete fails after git removed the worktree, the row remains and reports a missing directory; recovery waits for prune.
+- **Reconcile never deletes trees** — dropping rows and adopting registrations are the only actions; a worktree that should be physically deleted still goes through `remove` (or the user's own hands).
+- **Remove needs its owner** — the owner workspace registration must still exist when a worktree is removed; deleting the workspace wedges its worktree rows' removal until the workspace is re-registered or the row is dropped through reconcile.
+- **Adoption trusts git's list** — an adopted worktree records the branch observed in it; a detached HEAD is recorded as `HEAD`, and the registry does not resolve what the detached HEAD points at.
+- **One removal failure window** — if the row delete fails after git removed the worktree, the row remains and reports a missing directory; a later `reconcile` with `pruneRows` recovers it.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -1,16 +1,11 @@
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { realpath, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import Storage from '@deepseek-ai/dsh-storage'
-import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
-import WorkspaceRegistry, { WorkspaceId } from '@deepseek-ai/dsh-workspace'
-import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
-import SubprocessLocal from '@deepseek-ai/dsh-subprocess-local'
-import GitWorktreeRegistry, { WorktreeId } from '../src/index.ts'
-import { git, gitStyle } from './helpers.ts'
+import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
+import { WorktreeId } from '../src/index.ts'
+import { git, gitStyle, harness } from './helpers.ts'
 
 const contexts: Context[] = []
 const roots: string[] = []
@@ -20,55 +15,17 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })))
 })
 
-interface Harness {
-  ctx: Context
-  root: string
-  createRepoWorkspace: (name: string) => Promise<{ workspaceId: WorkspaceId; repo: string }>
-  createPlainWorkspace: () => Promise<WorkspaceId>
-}
-
-/** Boot the real storage/domain/workspace/subprocess/registry composition over a temp directory. */
-async function harness(): Promise<Harness> {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-worktree-registry-'))
-  roots.push(root)
-  const pool = new MemoryMediaPool()
-  const ctx = new Context()
-  contexts.push(ctx)
-  await ctx.plugin(Storage)
-  ctx.storage.backend.register('memory', new MemoryStorageBackend(pool))
-  const facility = new DomainFacility(ctx, { backend: 'memory', routes: {} })
-  ctx.storage.mount('domain', facility)
-  ctx.provide('storageDomain', facility)
-  ctx.provide('sessionPersistence', {
-    list: async () => [],
-    load: () => { throw new Error('event bodies must not be loaded') },
-    inspect: () => { throw new Error('event bodies must not be inspected') },
-  } as never)
-  await ctx.plugin(WorkspaceRegistry)
-  await ctx.plugin(SubprocessLocal)
-  await ctx.plugin(GitWorktreeRegistry, {})
-
-  const createRepoWorkspace = async (name: string) => {
-    const repo = join(root, name)
-    await mkdir(repo)
-    await git(root, 'init', '-b', 'main', repo)
-    await git(repo, 'config', 'user.email', 'worktree-registry@test.local')
-    await git(repo, 'config', 'user.name', 'Worktree Registry Tests')
-    await git(repo, 'commit', '--allow-empty', '-m', 'init')
-    const workspace = await ctx.workspaceRegistry.create(repo)
-    return { workspaceId: workspace.id, repo }
-  }
-  const createPlainWorkspace = async () => {
-    const plain = join(root, `plain-${Math.random().toString(36).slice(2, 8)}`)
-    await mkdir(plain)
-    return (await ctx.workspaceRegistry.create(plain)).id
-  }
-  return { ctx, root, createRepoWorkspace, createPlainWorkspace }
+/** Boot the shared harness and track the context and root for cleanup. */
+async function boot(): Promise<Awaited<ReturnType<typeof harness>>> {
+  const prepared = await harness()
+  contexts.push(prepared.ctx)
+  roots.push(prepared.root)
+  return prepared
 }
 
 describe('worktree registry create', () => {
   it('registers a worktree with the git-derived branch and the canonical path', async () => {
-    const { ctx, root, createRepoWorkspace } = await harness()
+    const { ctx, root, createRepoWorkspace } = await boot()
     const { workspaceId, repo } = await createRepoWorkspace('repo')
 
     const worktree = await ctx.worktreeRegistry.create({ workspaceId, path: join(root, 'wt-a') })
@@ -82,7 +39,7 @@ describe('worktree registry create', () => {
   })
 
   it('registers a worktree with an explicit new branch', async () => {
-    const { ctx, root, createRepoWorkspace } = await harness()
+    const { ctx, root, createRepoWorkspace } = await boot()
     const { workspaceId, repo } = await createRepoWorkspace('repo')
 
     const worktree = await ctx.worktreeRegistry.create({
@@ -96,7 +53,7 @@ describe('worktree registry create', () => {
   })
 
   it('fails loud for an unknown workspace, a non-git workspace, and a registered path', async () => {
-    const { ctx, root, createRepoWorkspace, createPlainWorkspace } = await harness()
+    const { ctx, root, createRepoWorkspace, createPlainWorkspace } = await boot()
     const { workspaceId } = await createRepoWorkspace('repo')
     const plainWorkspaceId = await createPlainWorkspace()
 
@@ -113,7 +70,7 @@ describe('worktree registry create', () => {
   })
 
   it('refuses a target that is the owner workspace directory', async () => {
-    const { ctx, createRepoWorkspace } = await harness()
+    const { ctx, createRepoWorkspace } = await boot()
     const { workspaceId, repo } = await createRepoWorkspace('repo')
 
     await expect(ctx.worktreeRegistry.create({ workspaceId, path: repo }))
@@ -123,7 +80,7 @@ describe('worktree registry create', () => {
 
 describe('worktree registry list', () => {
   it('returns one workspace worktrees in a stable order and filters other workspaces', async () => {
-    const { ctx, root, createRepoWorkspace } = await harness()
+    const { ctx, root, createRepoWorkspace } = await boot()
     const first = await createRepoWorkspace('repo-a')
     const second = await createRepoWorkspace('repo-b')
 
@@ -148,7 +105,7 @@ describe('worktree registry list', () => {
 
 describe('worktree registry status', () => {
   it('observes the live branch and cleanliness, and reports a vanished directory', async () => {
-    const { ctx, root, createRepoWorkspace } = await harness()
+    const { ctx, root, createRepoWorkspace } = await boot()
     const { workspaceId } = await createRepoWorkspace('repo')
     const worktree = await ctx.worktreeRegistry.create({ workspaceId, path: join(root, 'wt-a') })
 
@@ -173,7 +130,7 @@ describe('worktree registry status', () => {
 
 describe('worktree registry remove', () => {
   it('removes the worktree through git and deletes the registration', async () => {
-    const { ctx, root, createRepoWorkspace } = await harness()
+    const { ctx, root, createRepoWorkspace } = await boot()
     const { workspaceId, repo } = await createRepoWorkspace('repo')
     const worktree = await ctx.worktreeRegistry.create({ workspaceId, path: join(root, 'wt-a') })
 
@@ -186,7 +143,7 @@ describe('worktree registry remove', () => {
   })
 
   it('refuses a dirty worktree without force and removes it with force', async () => {
-    const { ctx, root, createRepoWorkspace } = await harness()
+    const { ctx, root, createRepoWorkspace } = await boot()
     const { workspaceId } = await createRepoWorkspace('repo')
     const worktree = await ctx.worktreeRegistry.create({ workspaceId, path: join(root, 'wt-a') })
     await writeFile(join(worktree.path, 'scratch.txt'), 'untracked content')
@@ -199,7 +156,7 @@ describe('worktree registry remove', () => {
   })
 
   it('fails loud when the directory vanished externally or the owner workspace is gone', async () => {
-    const { ctx, root, createRepoWorkspace } = await harness()
+    const { ctx, root, createRepoWorkspace } = await boot()
     const { workspaceId } = await createRepoWorkspace('repo')
     const worktree = await ctx.worktreeRegistry.create({ workspaceId, path: join(root, 'wt-a') })
 
@@ -213,7 +170,7 @@ describe('worktree registry remove', () => {
 
 describe('worktree registry disposal', () => {
   it('unmounts the service from the context when the fiber is disposed', async () => {
-    const { ctx, root, createRepoWorkspace } = await harness()
+    const { ctx, root, createRepoWorkspace } = await boot()
     const { workspaceId } = await createRepoWorkspace('repo')
     await ctx.worktreeRegistry.create({ workspaceId, path: join(root, 'wt-a') })
 

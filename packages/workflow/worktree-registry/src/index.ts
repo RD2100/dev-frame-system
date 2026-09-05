@@ -14,11 +14,18 @@ export { worktreeDomainSpec, worktreeRecord } from './spec.ts'
 export type { WorktreeRecord } from './spec.ts'
 export { GitWorktreeRegistry, assertServiceableGitConfig } from './git-provider.ts'
 export type { GitWorktreeRegistryConfig } from './git-provider.ts'
+export { parseWorktreeList, sameGitPath } from './porcelain.ts'
+export type { GitWorktreeEntry } from './porcelain.ts'
 export type {
   Worktree,
   WorktreeCreateRequest,
+  WorktreeDanglingReason,
+  WorktreeDanglingRegistration,
+  WorktreeReconcileOptions,
+  WorktreeReconcileReport,
   WorktreeRemoveOptions,
   WorktreeStatus,
+  WorktreeUnregisteredWorktree,
 } from './types.ts'
 
 /** Identifies one registered git worktree (see `src/types.ts` for the brand rationale). */
