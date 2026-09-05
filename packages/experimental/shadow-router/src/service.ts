@@ -730,7 +730,9 @@ export class ShadowRouter extends Service {
   /**
    * Settle one received delivery as completed. `completed` is a controller
    * side durable fact, distinct from the `received` receipt; the host calls
-   * this, and no model tool does.
+   * this, and no model tool does. A receiver that is `stopping` or `stopped`
+   * cannot settle: the call rejects with `SHADOW_RECEIVER_CLOSED` and the row
+   * stays `received`.
    * @param workspaceId - The project the delivery belongs to.
    * @param messageId - The delivery to settle.
    * @returns the updated delivery.
@@ -745,6 +747,13 @@ export class ShadowRouter extends Service {
         throw new ShadowRouterError(
           `delivery "${messageId}" is ${delivery.state}; only a received delivery can complete`,
           'SHADOW_INVALID_REQUEST',
+        )
+      }
+      const binding = this.requireBinding(delivery.workspaceId)
+      if (binding.state === 'stopping' || binding.state === 'stopped') {
+        throw new ShadowRouterError(
+          `workspace "${delivery.workspaceId}" is ${binding.state}; a ${binding.state} receiver cannot settle deliveries`,
+          'SHADOW_RECEIVER_CLOSED',
         )
       }
       return await this.persistDelivery({

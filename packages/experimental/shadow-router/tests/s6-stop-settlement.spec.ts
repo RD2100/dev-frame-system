@@ -4,8 +4,9 @@
  * the real domain before the harness boots (a send whose acceptance never
  * landed). Stopping A cancels that residue visibly while A's accepted input
  * survives untouched, the stop replays and no-ops correctly, B stays fully
- * live, and the settlement seam's behavior on a stopped project is recorded
- * verbatim (see the S6 evidence doc for the observed outcome).
+ * live, and per the 2026-09-06 ruling the settlement seam rejects a closed
+ * receiver: `completeDelivery` on a `stopping` or `stopped` project fails
+ * with `SHADOW_RECEIVER_CLOSED` and leaves the row `received`.
  * @module tests/s6-stop-settlement
  */
 
@@ -198,23 +199,24 @@ describe('shadow-router S6 stop-path settlement contrast', () => {
       await h.router.confirmProjectStopped(workspaceAId)
       expect(h.router.findBinding(workspaceAId)?.state, '[23] A\'s binding is stopped after the host confirmation').toBe('stopped')
 
-      // OBSERVED-BEHAVIOR PROBE (recorded verbatim in the evidence doc): the
-      // mission expected this settlement to fail loud on a stopped project.
-      // The frozen source's completeDelivery guards only delivery membership
-      // and the received state, never the binding state, so the settlement of
-      // A's accepted input is observed to succeed — recorded here as-is
-      // instead of being asserted into a rejection the source does not have.
-      const settleOutcome = await h.router.completeDelivery(workspaceAId, ShadowMessageId(messageIdAText))
-      expect(settleOutcome.state, '[24] OBSERVED: the settlement of A\'s accepted input on the stopped project succeeded and the row reads completed').toBe('completed')
-      expect(settleOutcome.completedAt, '[25] OBSERVED: the settled row carries completedAt').toBeDefined()
+      // Per the 2026-09-06 ruling (supersedes the earlier OBSERVED probe):
+      // a closed receiver cannot settle. The settlement of A's accepted input
+      // on the stopped project rejects with the structured code and the row
+      // stays exactly as the stop left it — no write, no history rewrite.
+      await expect(h.router.completeDelivery(workspaceAId, ShadowMessageId(messageIdAText)),
+        '[24] the settlement of A\'s accepted input on the stopped project rejects',
+      ).rejects.toMatchObject({ code: 'SHADOW_RECEIVER_CLOSED' })
+      const preservedRow = h.router.listDeliveries(workspaceAId).find(row => row.messageId === messageIdAText)
+      expect(preservedRow?.state, '[25] the rejected settlement left the row received').toBe('received')
+      expect(preservedRow?.completedAt, '[26] the rejected settlement wrote no completedAt').toBeUndefined()
 
       // B isolation: binding ready, controller session live, queue untouched.
-      expect(h.router.findBinding(workspaceBId)?.state, '[26] B\'s binding is still ready').toBe('ready')
+      expect(h.router.findBinding(workspaceBId)?.state, '[27] B\'s binding is still ready').toBe('ready')
       const controllerBId = textOf(fieldValue(openedB, 'controllerSessionId'), 'B controllerSessionId')
       const controllerB = h.ctx.sessions.get(SessionId(controllerBId))
-      expect(controllerB, '[27] B\'s controller session is still live').toBeDefined()
-      expect(controllerB!.header.cwd, '[28] B\'s controller session still roots at its canonical path').toBe(textOf(fieldValue(openedB, 'canonicalPath'), 'B canonicalPath'))
-      expect(h.router.listDeliveries(workspaceBId).map(row => row.messageId), '[29] B still holds exactly its one accepted delivery').toEqual([messageIdBText])
+      expect(controllerB, '[28] B\'s controller session is still live').toBeDefined()
+      expect(controllerB!.header.cwd, '[29] B\'s controller session still roots at its canonical path').toBe(textOf(fieldValue(openedB, 'canonicalPath'), 'B canonicalPath'))
+      expect(h.router.listDeliveries(workspaceBId).map(row => row.messageId), '[30] B still holds exactly its one accepted delivery').toEqual([messageIdBText])
       const sentB2Outcome = await dispatch(h.ctx, h.shadow, 'project_send', {
         workspace_id: workspaceBText,
         binding_revision: revisionB,
@@ -224,11 +226,55 @@ describe('shadow-router S6 stop-path settlement contrast', () => {
         mode: 'note',
         text: 'B keeps receiving after A stopped',
       })
-      expect(sentB2Outcome.isError, '[30] a NEW project_send to B still succeeds').toBe(false)
+      expect(sentB2Outcome.isError, '[31] a NEW project_send to B still succeeds').toBe(false)
       const sentB2 = successValue(sentB2Outcome, 'project_send to B after the stop')
-      expect(textOf(fieldValue(sentB2, 'status'), 'B second send status'), '[31] B\'s new delivery is received').toBe('received')
-      expect(h.router.listDeliveries(workspaceBId), '[32] B\'s queue grew to two accepted rows').toHaveLength(2)
-      expect(failureCode(sentB2Outcome), '[33] sanity: the successful send carried no failure code').toBeUndefined()
+      expect(textOf(fieldValue(sentB2, 'status'), 'B second send status'), '[32] B\'s new delivery is received').toBe('received')
+      expect(h.router.listDeliveries(workspaceBId), '[33] B\'s queue grew to two accepted rows').toHaveLength(2)
+      expect(failureCode(sentB2Outcome), '[34] sanity: the successful send carried no failure code').toBeUndefined()
+    } finally {
+      await h.dispose()
+    }
+  })
+
+  it('S6: the intermediate stopping state also rejects completeDelivery and leaves the row received', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-s6-stopping-'))
+    const h = await harness(root, { authorizedRoots: [root] })
+    try {
+      const dir = await h.makeProjectDir('s6-stopping-project')
+      const openedOutcome = await dispatch(h.ctx, h.shadow, 'project_open', { path: dir, request_id: 's6-stopping-open' })
+      expect(openedOutcome.isError, '[1] project_open succeeds through the real dispatcher').toBe(false)
+      const opened = successValue(openedOutcome, 'project_open')
+      const workspaceText = textOf(fieldValue(opened, 'workspaceId'), 'workspaceId')
+      const workspaceId = WorkspaceId(workspaceText)
+      await h.router.setActiveGoal(workspaceId, 's6-stopping-goal', 's6-stopping-hash')
+      const revision = h.router.findBinding(workspaceId)!.bindingRevision
+      const sentOutcome = await dispatch(h.ctx, h.shadow, 'project_send', {
+        workspace_id: workspaceText,
+        binding_revision: revision,
+        goal_id: 's6-stopping-goal',
+        acceptance_hash: 's6-stopping-hash',
+        request_id: 's6-stopping-send',
+        mode: 'work',
+        text: 'accepted input before the stop',
+      })
+      expect(sentOutcome.isError, '[2] project_send succeeds and the delivery is received').toBe(false)
+      const sent = successValue(sentOutcome, 'project_send')
+      const messageIdText = textOf(fieldValue(sent, 'messageId'), 'messageId')
+      const stopOutcome = await dispatch(h.ctx, h.shadow, 'project_stop', {
+        workspace_id: workspaceText,
+        expected_revision: revision,
+        request_id: 's6-stopping-stop',
+      })
+      expect(stopOutcome.isError, '[3] project_stop succeeds').toBe(false)
+      expect(h.router.findBinding(workspaceId)?.state, '[4] the binding is stopping before the host confirmation').toBe('stopping')
+      // Per the 2026-09-06 ruling the closed-receiver guard covers the whole
+      // stop window: the intermediate `stopping` state rejects settlement too.
+      await expect(h.router.completeDelivery(workspaceId, ShadowMessageId(messageIdText)),
+        '[5] the settlement on the stopping project rejects',
+      ).rejects.toMatchObject({ code: 'SHADOW_RECEIVER_CLOSED' })
+      const row = h.router.listDeliveries(workspaceId).find(candidate => candidate.messageId === messageIdText)
+      expect(row?.state, '[6] the rejected settlement left the row received').toBe('received')
+      expect(row?.completedAt, '[7] the rejected settlement wrote no completedAt').toBeUndefined()
     } finally {
       await h.dispose()
     }
