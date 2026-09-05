@@ -122,7 +122,9 @@ async setActiveGoal(workspaceId: WorkspaceId, goalId: string, acceptanceHash: st
 /**
  * Settle one received delivery as completed. `completed` is a controller
  * side durable fact, distinct from the `received` receipt; the host calls
- * this, and no model tool does.
+ * this, and no model tool does. A receiver that is `stopping` or `stopped`
+ * cannot settle: the call rejects with `SHADOW_RECEIVER_CLOSED` and the row
+ * stays `received`.
  * @param workspaceId - The project the delivery belongs to.
  * @param messageId - The delivery to settle.
  * @returns the updated delivery.
