@@ -31,6 +31,7 @@ The experimental group contains prototype capabilities that are not part of any 
 | [`code-runtime-python`](code-runtime-python/README.md) | CPython subprocess backend for the code-execution seam | `ctx.codeRuntime` |
 | [`devframe`](devframe/README.md) | Shared contracts for the experimental single-project controller | — |
 | [`inspector`](inspector/README.md) | Cross-realm CDP hub for Host debugging, Client Runtime inspection, network capture, and Cordis trees | `ctx.inspector` |
+| [`project-contracts`](project-contracts/README.md) | Shared type vocabulary for the pluginized agent hierarchy: roles, task states, ids, records, and store seams | — |
 | [`tool-agent-team`](tool-agent-team/README.md) | Ten tools that let the model create, message, and coordinate teammates | registers scoped tools on `ctx.tools` |
 | [`webworker-packer`](webworker-packer/README.md) | Builds the gzip-compressed VFS image consumed by the browser worker preview | library and CLI — no ctx key |
 | [`webworker-runtime`](webworker-runtime/README.md) | Runs the harness plugin tree inside a dedicated browser worker | library and worker entry — no ctx key |
