@@ -1,5 +1,5 @@
 ---
-description: built-bin 全程冒烟验证证据（P22 锚点，W3 归属）：三轮记录——R1 p/builtbin@9dbf3911f0 构建失败 fail-loud；R2 p/builtbin-2@39b32f6bcb 基线过期仍红 fail-loud；R3 merge main（含 sfix 1bca752bca）后 build 绿、built bin --help/--version 绿、dump-config 6/6 绿（五插件+集成 profile，隔离 .dsh-builtbin），但快照门（lib/src 两模式）与 built-bin e2e 的 sdk/acp/headless 启动本机红灯（tool-worktree pending 缺 workspace/worktree-registry 服务行），fail-loud 未修。
+description: built-bin 全程冒烟验证证据（P22 锚点，W3 归属）：四轮记录——R1 p/builtbin@9dbf3911f0 构建失败 fail-loud；R2 p/builtbin-2@39b32f6bcb 基线过期仍红 fail-loud；R3 merge main（含 sfix 1bca752bca）后 build 绿、built bin 基本面绿、dump-config 6/6 绿，但快照门（lib/src 两模式）与 built-bin e2e 的 sdk/acp/headless 启动本机红灯（三家族：tool-worktree 组合缺口/平台门控 vs POSIX 语料/scaffold 转义），fail-loud 未修（文件级钉点见 shipped-profile-defects.md）；R4 bundlefix c42c8b4518 复验——build 双红（at2c 新测试文件 host 程序类型错误 TS2749+TS2379×2），clean 后无产物，启动级/快照 delta 复验全部阻塞，fail-loud。
 ---
 
 # built-bin 全程冒烟验证证据（P22 锚点，W3 归属）
@@ -211,3 +211,42 @@ description: built-bin 全程冒烟验证证据（P22 锚点，W3 归属）：�
 - 未触碰生产 home 与既有隔离 home（`.dsh-verify` 本轮零读写；`.dsh-integration` 只读核对 1 个 package.json；`.dsh-product` 未存在未触碰）。
 - 未改 src/tests；未修复任何缺陷（快照/e2e 红灯与 tool-worktree 组合缺口均 fail-loud 上报，修复归属 L-Foundation/产品链）。
 - 门禁：`git diff --cached --check` exit 0；`git commit --no-verify` 于 `p/builtbin-2`（SHA 见最终报告）；未 push。
+
+---
+
+# 第四轮（bundlefix c42c8b4518 复验）——build 红阻塞全部复验，fail-loud
+
+- 结论：`pnpm run build` 在 `c42c8b4518` 上**增量与 clean 重建双红**（新签名，非 R2 残留非 R3 产物问题）；clean 后 `apps/cli/lib/bin.js` 不存在（Test-Path=False）且失败重建未再生成——**built-bin e2e 三 profile 复验、快照 A 族 delta、bundlefix 启动级验证全部阻塞**。stale 产物不可用（clean 已删，且即使存在也不含 bundlefix 行，用它产证即假证据）。delta 计数：本轮不可测。
+
+## R4-1. 分支与构建
+
+| 步骤 | 退出码 | 关键输出 |
+| --- | --- | --- |
+| `git checkout -b p/builtbin-4 c42c8b4518` | 0 | `merge: integrate p/bundlefix (workspace/worktree-registry provider rows for headless, acp, sdk bundles)` |
+| `pnpm install --frozen-lockfile` | 0 | Already up to date，645ms |
+| `pnpm run build`（增量） | **1** | 日志 `build-r4.log` |
+| `pnpm run clean` | 0 | removed 277 paths |
+| `pnpm run build`（clean 重建） | **1** | 日志 `build-r4-clean.log`，**同错复现** |
+
+**失败签名（3 处，全部在 at2c 链新增测试文件，host 程序严格模式）**：
+
+1. `packages/experimental/agent-evidence/tests/at2c-04-bytask-trail-query.spec.ts(33,88): error TS2749: 'GoalId' refers to a value, but is being used as a type here.`
+2. `packages/experimental/session-identity/tests/at2c-02-cold-restore-rebind.spec.ts(57,55): error TS2379` — `BindAgentRequest` 在 `exactOptionalPropertyTypes: true` 下不接受 `parentSessionId/pluginId/taskId: T | undefined` 实参
+3. 同文件 `(68,46): error TS2379`（`taskId` 同类）
+
+**区间归因（只读 git 取证）**：R3 绿基线 `5c2530ba10`（内容=main bea230b9f9+sfix）之后 main 依次合入 `483f109a44`（p/at2c："AT2B/AT2C twelve scenario drafts materialized as 37 executable cases"，新增 experimental tests 1536 行）→ `b80b3de7fd`（devframe-exports）→ `06d6950c38`/`c42c8b4518`（bundlefix，仅 3 个 bundle patch 各 +6 行 YAML）。红来自 **at2c 新测试文件在 `tsconfig.host.json` 程序（include 拉入 tests）下的类型错误**——与第一轮 shadow-router TS2339 同类（"tests 纳入 host 程序"面），sfix 只修了彼例。at2c 当时"五包 79/79"为 vitest 运行面，host tsc 类型面此前未覆盖这批新文件。
+
+**附带**：`BindAgentRequest` 的 TS2379 是否兼涉契约类型收紧（agent-hierarchy/session-identity 契约面）由 L-Foundation 判定；`GoalId` TS2749 疑与 devframe-exports 深路径导出解析到 value 工厂相关（`73b388a119`/`e74e6a7268`），同样留裁决。
+
+## R4-2. 步骤 2-4 阻塞记录
+
+- built-bin.e2e.ts 三 profile（sdk/acp/headless）复验：**未执行**（无产物）。
+- test:snapshot built 模式 A 族 delta：**未执行**（无产物；91F 基线维持 R3 记录）。
+- 三 bundle 依赖声明缺项实证（步骤 4）：**未执行**（需 built 启动才可暴露运行时解析失败；组合级佐证可注：bundlefix 06d6950c38 仅补 patch 行，未动三个 bundle package.json 的依赖声明，`@deepseek-ai/dsh-workspace`/`@deepseek-ai/dsh-worktree-registry` 是否在安装闭包内需启动面验证——登记为后续项）。
+- 组合级旁证尝试（stale bin + 当前 patch 磁盘文件）：**不可行**——clean 已删 bin.js，失败重建未再生（`Cannot find module ...lib/bin.js`，`dumps\headless-r4.err`）。
+
+## R4-3. 本轮合规
+
+- 零修复：at2c 测试类型错误未动；bundlefix 未动；未改 src/tests/profile/语料。
+- 隔离 home 沿用 `.dsh-builtbin`（仅新增日志与 dumps）；生产与既有隔离 home 未触碰。
+- 门禁：`git diff --cached --check` exit 0；`git commit --no-verify` 于 `p/builtbin-4`（SHA 见最终报告）；未 push。
