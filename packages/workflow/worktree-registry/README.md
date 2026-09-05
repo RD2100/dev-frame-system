@@ -147,7 +147,8 @@ No runtime invariant companion is published: the provider holds no second cache 
 <a id="further-exploration"></a>
 ## Further Exploration
 
-- [Worktree registry Agent Note](../../../.agents/notes/proposed/architecture/2026-09-05-worktree-registry.md) — the seam design: identity, durable-state ownership, session-event analysis, and the git command mapping including the deferred prune.
+- [Worktree registry Agent Note](../../../.agents/notes/implemented/architecture/2026-09-05-worktree-registry.md) — the seam design: identity, durable-state ownership, session-event analysis, and the git command mapping including reconcile.
+- [Worktree tools Agent Note](../../../.agents/notes/implemented/feature/2026-09-05-worktree-tools-and-reconcile.md) — the consumer package's authorization and schema decisions.
 - [Capability seams](../../../docs/architecture.md) — the Service Definition / Service Provider / Consumer model this package follows (the "Capability seams" section).
 - [Workflow package map](../README.md) — the group's packages and their repository positions.
 

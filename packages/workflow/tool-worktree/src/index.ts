@@ -65,9 +65,7 @@ function callCard(title: string, rawInput?: string): ToolCallView {
 }
 
 export function apply(ctx: Context): void {
-  // Capture the injected services once, in apply scope: the tools close over
-  // these values instead of re-reading the scoped proxy at execute time.
-    // Usage policy ships with the tool (the master convention: tool guidance
+  // Usage policy ships with the tool (the master convention: tool guidance
   // lives in tool plugins as prompt sections, not in the deployment persona).
   ctx.systemPrompt.section({
     name: 'tool:worktree',

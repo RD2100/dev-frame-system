@@ -75,6 +75,8 @@ const report = await ctx.worktreeRegistry.reconcile(workspaceId)
 
 两个可选动作作用于报告。`pruneRows: true` 删除悬空行（绝不删目录或文件），并在被删行的目录缺失时运行一次 `git worktree prune`，让 git 不再列出死的 admin 条目。`adoptUnregistered: true` 以规范路径与观测到的分支（detached 时为 `HEAD`）登记每个未注册 worktree——仓库主检出与已登记在另一 workspace 名下的 worktree 永不会被采纳或报告。检测是即时的，并与 create/remove 一起在 provider 的操作链上串行。
 
+<a id="failure-kinds-retry-semantics-and-link-shells"></a>
+
 ### 失败类别、重试语义与链接壳
 
 provider 能识别的 git 拒绝分为四类；每个错误都是 `WorktreeGitOperationError`，携带调用事实、git 的 stderr 与补救建议：
@@ -147,7 +149,8 @@ provider 打开 `worktree_registry` 域（version 1）：一张以 `WorktreeId` 
 <a id="further-exploration"></a>
 ## 进一步探索
 
-- [Worktree registry Agent Note](../../../.agents/notes/proposed/architecture/2026-09-05-worktree-registry.zh.md)——seam 设计：身份、持久化状态归属、会话事件分析与含延后 prune 的 git 命令映射。
+- [Worktree registry Agent Note](../../../.agents/notes/implemented/architecture/2026-09-05-worktree-registry.zh.md)——seam 设计：身份、持久化状态归属、会话事件分析与含 reconcile 的 git 命令映射。
+- [Worktree 工具 Agent Note](../../../.agents/notes/implemented/feature/2026-09-05-worktree-tools-and-reconcile.zh.md)——consumer 包的授权与 schema 决策。
 - [Capability seams](../../../docs/architecture.zh.md)——本包遵循的 Service Definition / Service Provider / Consumer 模型（"能力 seam"一节）。
 - [Workflow package map](../README.zh.md)——组内各包及其仓库位置。
 
