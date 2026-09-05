@@ -28,7 +28,7 @@ import AgentHierarchy, { type AgentHierarchyConfigInput } from '../src/index.ts'
 
 /** Every probe tool the harness registers on the global surface. */
 export const PROBE_TOOLS = [
-  'project_read', 'subagent', 'fork', 'spawn_teammate', 'team_task_create', 'send_message', 'admin_panel',
+  'project_read', 'subagent', 'fork', 'spawn_teammate', 'team_task_create', 'team_task_update', 'send_message', 'admin_panel',
 ] as const
 
 /** Per-spec harness: one temp storage root and one booted real composition. */
@@ -151,7 +151,21 @@ export function executeProbe(ctx: Context, agent: Agent, name: string): Promise<
     arguments: {},
     agent,
     signal: probeSignal,
-  }) as Promise<ToolResultLike>
+  })
+}
+
+/**
+ * Execute one probe tool through the real dispatcher with no agent identity
+ * at all — the caller shape a host-side dispatch would produce.
+ */
+export function executeProbeWithoutAgent(ctx: Context, name: string): Promise<ToolResultLike> {
+  probeCounter += 1
+  return ctx.tools.execute({
+    callId: ToolCallId(`probe-${probeCounter}`),
+    name,
+    arguments: {},
+    signal: probeSignal,
+  })
 }
 
 /** The part of a materialized tool result the assertions read. */
