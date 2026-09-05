@@ -37,7 +37,7 @@ Behavioral detail lives in the design references linked per feature; this sectio
 | --- | --- | --- | --- | --- |
 | F01 | Role policy and permission enforcement | `packages/experimental/devframe/src/permissions/**`, `packages/experimental/devframe/tests/permissions.spec.ts` | — | [AT1-01, AT1-02](testAndAcceptance.md#part1) |
 | F02 | Project tools and evidence chain | `packages/experimental/devframe/src/controller/**`, new `src/project/**`, `src/events.ts`, `src/projection.ts`, `src/session-journal.ts`, matching tests; additive receipt reference in `packages/goal` | F01 | [AT1-03–AT1-06](testAndAcceptance.md#part1) |
-| F03 | `/project` human command journey | New `packages/experimental/devframe/src/commands/**` and tests | F01, F02, F04 | [AT1-10](testAndAcceptance.md#part1) |
+| F03 | `/project` human command journey | New `devframe/src/commands/**` and tests (planned) | F01, F02, F04 | [AT1-10](testAndAcceptance.md#part1) |
 | F04 | Reliability early subset | `packages/experimental/devframe/src/reliability/**`, `packages/experimental/devframe/tests/reliability/**` | F01, F02 (integration only; library work starts immediately) | [AT4-01–AT4-05, AT4-06 deadline, AT4-07 flush](testAndAcceptance.md#part4) |
 | F05 | Profile assembly and status presentation | DevFrame template rows in `packages/boot/app-boot/src/profile.ts`, `apps/cli/src/profile-boot.ts`, experimental client team status surface | F01–F03 (scaffolding starts immediately) | [AT1-07, AT1-08](testAndAcceptance.md#part1) |
 | F06 | Worktree tool consumer and prune reconciliation | `packages/workflow/worktree-registry/**` plus the consumer package it adds | — | Real git subprocess tests; `verify-cordis-catalog` |

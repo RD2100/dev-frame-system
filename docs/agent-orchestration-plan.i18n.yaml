@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/agent-orchestration-plan.md
-agent-orchestration-plan.md: eccc075facbce17202615f29bcf2809ddc247738
-agent-orchestration-plan.zh.md: 5388b52e38e20e33e0155906b96be8c37fc0d233
+agent-orchestration-plan.md: a6c1ea15b4ed0a2d0093e976cd59bcaafb8f8142
+agent-orchestration-plan.zh.md: 5afb3f1d350873746f5e72047ee0eb47aa158765

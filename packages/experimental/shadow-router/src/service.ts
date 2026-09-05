@@ -170,6 +170,7 @@ export interface ProjectOpenRequest {
   readonly requestId: string
 }
 
+/** Host-level request to deliver one message into an authorized project. */
 export interface ProjectSendRequest {
   /** Receiving project. */
   readonly workspaceId: string
@@ -187,6 +188,7 @@ export interface ProjectSendRequest {
   readonly text: string
 }
 
+/** Host-level request to stop one authorized project. */
 export interface ProjectStopRequest {
   /** Project to stop. */
   readonly workspaceId: string
@@ -369,7 +371,11 @@ export class ShadowRouter extends Service {
     this.shadowAgents.set(agent.id, installShadowTools(agent, this.ctx, this))
   }
 
-  /** Whether one agent is the designated Shadow. */
+  /**
+   * Whether one agent is the designated Shadow.
+   * @param agent - The agent to check, or `undefined` when the caller has no attached agent.
+   * @returns true when the agent is currently designated as the host's Shadow; the predicate also narrows `agent` to `Agent`.
+   */
   isShadow(agent: Agent | undefined): agent is Agent {
     return agent !== undefined && this.shadowAgents.has(agent.id)
   }
@@ -797,18 +803,29 @@ export class ShadowRouter extends Service {
     })
   }
 
-  /** Read one binding from the restored index, or `undefined`. */
+  /**
+   * Read one binding from the restored index.
+   * @param workspaceId - The project whose binding to read.
+   * @returns the binding record, or `undefined` when the workspace has no binding.
+   */
   findBinding(workspaceId: WorkspaceId): ShadowBindingRecord | undefined {
     return this.bindings.get(workspaceId)
   }
 
-  /** Read every binding in stable (createdAt, workspaceId) order. */
+  /**
+   * Read every binding in stable (createdAt, workspaceId) order.
+   * @returns every binding record in the index.
+   */
   listBindings(): readonly ShadowBindingRecord[] {
     return [...this.bindings.values()].sort((left, right) =>
       left.createdAt.localeCompare(right.createdAt) || left.workspaceId.localeCompare(right.workspaceId))
   }
 
-  /** Read every delivery of one project (or all projects), oldest first. */
+  /**
+   * Read every delivery of one project (or all projects), oldest first.
+   * @param workspaceId - Limits the result to one project; omit it to read every recorded delivery.
+   * @returns the matching delivery records in stable (createdAt, messageId) order.
+   */
   listDeliveries(workspaceId?: WorkspaceId): readonly ShadowDeliveryRecord[] {
     return [...this.deliveries.values()]
       .filter(record => workspaceId === undefined || record.workspaceId === workspaceId)

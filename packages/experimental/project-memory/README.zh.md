@@ -109,6 +109,7 @@ const recall = await memory.search({ scope: 'project', query: 'deploy script' })
 
 与实时请求无关：本包不触碰请求前缀，不会使提供方缓存复用失效。
 
+<a id="known-limitations-and-deferred-work"></a>
 ## 已知限制与未做工作
 
 这些限制界定了记忆服务何时不适配或需要特别运维关注。它们是当前包约束，不是任务清单。
