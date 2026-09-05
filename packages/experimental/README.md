@@ -36,6 +36,7 @@ The experimental group contains prototype capabilities that are not part of any 
 | [`agent-reliability`](agent-reliability/README.md) | Process-tree stop, admission cutoff, uncertain-call reconciliation, and the flush barrier as one service | `ctx.agentReliability` |
 | [`project-contracts`](project-contracts/README.md) | Shared type vocabulary for the pluginized agent hierarchy: roles, task states, ids, records, and store seams | — |
 | [`project-controller`](project-controller/README.md) | Project task board: TaskState transitions, a bounded developing budget, lifecycle, and the controller-only merge gate | `ctx.projectController` |
+| [`project-memory`](project-memory/README.md) | Bounded append-only project memory over a user-selected Obsidian Vault subtree: scoped search/read/append tools, session-log receipts, path containment, and honest failure reporting | library service — no ctx key |
 | [`session-identity`](session-identity/README.md) | Durable agent binding registry and exact-cwd native Session creation | `ctx.agentBindings` |
 | [`tool-agent-team`](tool-agent-team/README.md) | Ten tools that let the model create, message, and coordinate teammates | registers scoped tools on `ctx.tools` |
 | [`webworker-packer`](webworker-packer/README.md) | Builds the gzip-compressed VFS image consumed by the browser worker preview | library and CLI — no ctx key |

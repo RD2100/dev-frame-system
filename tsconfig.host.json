@@ -300,6 +300,7 @@
     { "path": "./packages/experimental/session-identity" },
     { "path": "./packages/experimental/agent-evidence" },
     { "path": "./packages/experimental/agent-reliability" },
+    { "path": "./packages/experimental/project-memory" },
     { "path": "./packages/experimental/project-controller" },
     { "path": "./packages/experimental/agent-hierarchy" },
     { "path": "./packages/experimental/devframe" },

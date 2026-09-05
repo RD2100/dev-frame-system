@@ -36,6 +36,7 @@ kind: "package-group"
 | [`agent-reliability`](agent-reliability/README.zh.md) | 进程树停止、准入切断、不确定调用对账与刷写屏障，集于一个服务 | `ctx.agentReliability` |
 | [`project-contracts`](project-contracts/README.zh.md) | 插件化代理层级的共享类型词汇：角色、任务状态、ID、记录与存储接缝 | — |
 | [`project-controller`](project-controller/README.zh.md) | 项目任务板：TaskState 流转、有界开发预算、生命周期与仅限 controller 的合并门禁 | `ctx.projectController` |
+| [`project-memory`](project-memory/README.zh.md) | 基于用户选定 Obsidian Vault 子树的有界追加式项目记忆：作用域化搜索/读取/追加工具、会话日志回执、路径包含与如实失败报告 | 库服务，不使用 ctx key |
 | [`session-identity`](session-identity/README.zh.md) | 持久代理绑定注册表与准确 cwd 的原生会话创建 | `ctx.agentBindings` |
 | [`tool-agent-team`](tool-agent-team/README.zh.md) | 让模型创建、发消息与协调 teammate 的十个工具 | 按作用域注册工具到 `ctx.tools` |
 | [`webworker-packer`](webworker-packer/README.zh.md) | 构建浏览器 worker 预览所消费的 gzip 压缩 VFS 镜像 | 库与 CLI，不使用 ctx key |

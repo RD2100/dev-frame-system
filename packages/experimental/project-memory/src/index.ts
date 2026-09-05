@@ -1,0 +1,40 @@
+/**
+ * Public entry of `@deepseek-ai/dsh-experimental-project-memory`: the bounded
+ * append-only project memory service over a user-selected Obsidian Vault
+ * subtree. The host wires the service to its workspace identity, consent
+ * flags, and the receipt store over the DSH session log.
+ * @module @deepseek-ai/dsh-experimental-project-memory
+ */
+
+export { ProjectMemoryError, type ProjectMemoryErrorCode } from './errors.ts'
+export { deriveNoteId, MAX_SOURCE_REF_BYTES, NoteId, validateSourceRef } from './ids.ts'
+export {
+  DEFAULT_MEMORY_LIMITS,
+  DEFAULT_MEMORY_RETRY,
+  resolveMemorySpec,
+  type MemorySpecRequest,
+} from './config.ts'
+export { createMemoryReceiptStore } from './receipt.ts'
+export { screenNoteBody, type ScreeningRuleId } from './screen.ts'
+export { ProjectMemoryService, type ProjectMemoryReceipts } from './memory.ts'
+export {
+  NOTE_SCHEMA_VERSION,
+  type AssertionStatus,
+  type MemoryAppendRequest,
+  type MemoryAppendResult,
+  type MemoryFreshness,
+  type MemoryLimits,
+  type MemoryNamespace,
+  type MemoryNote,
+  type MemoryNoteMeta,
+  type MemoryReadRequest,
+  type MemoryReadResult,
+  type MemoryReceipt,
+  type MemoryReceiptStore,
+  type MemoryRetryPolicy,
+  type MemoryScope,
+  type MemorySearchHit,
+  type MemorySearchRequest,
+  type MemorySearchResult,
+  type MemorySpec,
+} from './types.ts'
