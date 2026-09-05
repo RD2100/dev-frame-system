@@ -1,0 +1,7 @@
+{
+  "sessionId": "session-1",
+  "bindingRole": "controller",
+  "lifecycleState": "admission_open",
+  "taskState": "assigned",
+  "sessionLogExists": true
+}
