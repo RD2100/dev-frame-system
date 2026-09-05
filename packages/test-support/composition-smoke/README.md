@@ -66,6 +66,7 @@ The package copies no production or bench logic: it orders the calls the composi
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `mountComposition` assembly and the `provide` customization point |
+| — | No runtime invariant companion is published; this test-support package owns no production event stream or mutable data; consuming smoke suites exercise the assembled surface. |
 
 ### Lifecycle
 
