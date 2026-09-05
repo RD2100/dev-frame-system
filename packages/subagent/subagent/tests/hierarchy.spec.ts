@@ -161,7 +161,11 @@ async function probeSpawnTool(ctx: Context, agent: Agent): Promise<{ isError: bo
     signal: testSignal,
   })
   return result.isError
-    ? { isError: true, code: result.error.info?.code, message: result.error.message }
+    ? {
+        isError: true,
+        ...(result.error.info?.code !== undefined && { code: result.error.info.code }),
+        message: result.error.message,
+      }
     : { isError: false }
 }
 
