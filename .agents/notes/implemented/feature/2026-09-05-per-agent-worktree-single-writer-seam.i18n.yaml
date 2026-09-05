@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-05-per-agent-worktree-single-writer-seam.md
+2026-09-05-per-agent-worktree-single-writer-seam.md: 1474bc06cf973a788206985d96204364eedac3af
+2026-09-05-per-agent-worktree-single-writer-seam.zh.md: 755564927a7d8c5b01a008c552d39cbb24cc8ae1

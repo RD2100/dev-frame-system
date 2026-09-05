@@ -68,9 +68,10 @@ import VmWorkflowEngine from '@deepseek-ai/dsh-workflow-worker-thread'
 import * as ToolRalph from '@deepseek-ai/dsh-tool-ralph'
 import * as ToolWorkflow from '@deepseek-ai/dsh-tool-workflow'
 import * as ToolWorktree from '@deepseek-ai/dsh-tool-worktree'
+import * as AgentWorktreeTools from '@deepseek-ai/dsh-experimental-agent-worktree'
 import { WorktreeRegistry } from '@deepseek-ai/dsh-worktree-registry'
 import type {
-  Worktree, WorktreeCreateRequest, WorktreeId, WorktreeReconcileOptions,
+  Worktree, WorktreeCreateRequest, WorktreeId, WorktreeLockHolder, WorktreeReconcileOptions,
   WorktreeReconcileReport, WorktreeRemoveOptions, WorktreeStatus,
 } from '@deepseek-ai/dsh-worktree-registry'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace'
@@ -117,6 +118,14 @@ class CatalogWorktreeRegistry extends WorktreeRegistry {
   }
 
   override async status(_id: WorktreeId): Promise<WorktreeStatus> {
+    throw new Error('gen-tool-catalog: worktree tools are harvested, not executed')
+  }
+
+  override async bind(_id: WorktreeId, _holder: WorktreeLockHolder): Promise<Worktree> {
+    throw new Error('gen-tool-catalog: worktree tools are harvested, not executed')
+  }
+
+  override async unbind(_id: WorktreeId, _holder: WorktreeLockHolder): Promise<Worktree> {
     throw new Error('gen-tool-catalog: worktree tools are harvested, not executed')
   }
 
@@ -629,6 +638,27 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'The five tools authorize every call against the calling session workspace resolved from the immutable session cwd; a worktree id held by another workspace is reported exactly like an unknown one. The schema above does not depend on which provider backs the registry.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-experimental-agent-worktree',
+    dir: 'agent-worktree',
+    source: 'packages/experimental/agent-worktree/src/index.ts',
+    requires: [
+      'ctx.tools', 'ctx.workspaceRegistry', 'ctx.worktreeRegistry', 'ctx.systemPrompt',
+      'a calling Agent (its session cwd authorizes the workspace)',
+    ],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      // The tools register from the seam alone; the schema does not depend on
+      // which registry provider backs ctx.worktreeRegistry. Both resolvers
+      // are only read at execute time, so the harvested stand-ins satisfy the
+      // plugin's declared injections.
+      ctx.provide('workspaceRegistry', { list: () => [] } as never)
+      await ctx.plugin(CatalogWorktreeRegistry)
+      await ctx.plugin(AgentWorktreeTools)
+    },
+    note:
+      'The three tools bind every created worktree to the calling session as its single writer: other sessions observe it, only the binding holder removes it. Experimental and private: the package ships in no released bundle, and a composition mounting it alongside dsh-tool-worktree would double-register the shared tool names.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-web',

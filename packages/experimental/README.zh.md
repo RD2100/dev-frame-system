@@ -28,6 +28,7 @@ kind: "package-group"
 | [`agent-team-profile`](agent-team-profile/README.zh.md) | Agent Teams 的显式源码 checkout profile 层 | — |
 | [`agent-team`](agent-team/README.zh.md) | 具名 teammate，成员之间持久消息与共享任务板 | `ctx.agentTeams` |
 | [`agent-team-web-profile`](agent-team-web-profile/README.zh.md) | Agent Teams 的显式源码 checkout Web 层 | — |
+| [`agent-worktree`](agent-worktree/README.zh.md) | 构建在 worktree registry 之上的每 Agent worktree seam：单一写入者绑定与三个 `worktree_*` 工具 | `ctx.agentWorktree` |
 | [`client-ui-agent-team`](client-ui-agent-team/README.zh.md) | Web Team roster、任务板与 teammate 导航 | — |
 | [`code-runtime-python`](code-runtime-python/README.zh.md) | 代码执行 seam 的 CPython 子进程后端 | `ctx.codeRuntime` |
 | [`devframe`](devframe/README.zh.md) | 实验性单项目控制器的共享契约 | — |

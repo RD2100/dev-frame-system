@@ -47,7 +47,12 @@ const PATTERNS: ReadonlyArray<{ kind: WorktreeGitFailureKind; pattern: RegExp }>
   { kind: 'path-length', pattern: /filename too long|enametoolong|\$GIT_DIR'? too big/i },
 ])
 
-/** A git refusal the classifier recognized, carrying its kind and remediation. */
+/**
+ * A refusal the classifier recognized, carrying its kind and remediation.
+ * Most instances wrap a git stderr, but `create` also raises the
+ * `branch-conflict` kind from its own registry-side check, before git runs —
+ * the refusal is the same one git would produce, observed earlier.
+ */
 export class WorktreeGitOperationError extends Error {
   /** The classified refusal kind. */
   readonly kind: WorktreeGitFailureKind

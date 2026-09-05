@@ -18,6 +18,7 @@ import { WorktreeRegistry, WorktreeId } from '@deepseek-ai/dsh-worktree-registry
 import type {
   Worktree,
   WorktreeCreateRequest,
+  WorktreeLockHolder,
   WorktreeReconcileOptions,
   WorktreeReconcileReport,
   WorktreeRemoveOptions,
@@ -66,6 +67,14 @@ class FakeWorktreeRegistry extends WorktreeRegistry {
 
   async status(id: WorktreeId): Promise<WorktreeStatus> {
     return this.statusScript(id)
+  }
+
+  async bind(_id: WorktreeId, _holder: WorktreeLockHolder): Promise<Worktree> {
+    throw new Error('tool-worktree spec: binding is the per-agent seam and is never exercised here')
+  }
+
+  async unbind(_id: WorktreeId, _holder: WorktreeLockHolder): Promise<Worktree> {
+    throw new Error('tool-worktree spec: binding is the per-agent seam and is never exercised here')
   }
 
   async remove(id: WorktreeId, options?: WorktreeRemoveOptions): Promise<void> {

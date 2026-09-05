@@ -12,6 +12,7 @@ import type {
   Worktree,
   WorktreeCreateRequest,
   WorktreeId,
+  WorktreeLockHolder,
   WorktreeReconcileOptions,
   WorktreeReconcileReport,
   WorktreeRemoveOptions,
@@ -40,6 +41,13 @@ declare module '@deepseek-ai/cordis' {
  *   is the authority for what this product registered.
  * - `status` reports a missing directory as an observation (`directoryExists:
  *   false`) without invoking git; git failures on a present directory reject.
+ * - `bind`/`unbind` maintain one single-writer binding per worktree. The
+ *   holder value is opaque; equality is the entire contract. Re-binding by
+ *   the current holder is an idempotent success; any other bind, an unbind
+ *   by a non-holder, or an unbind of an unbound worktree refuses with a
+ *   `WorktreeLockError`.
+ * - `remove` refuses while the worktree is bound, whatever options say —
+ *   the lock is a product-level exclusivity promise, not a dirty-tree guard.
  * - `remove` deletes the durable row only after the provider's worktree
  *   removal succeeded, so a failed remove never hides an existing worktree.
  * - `reconcile` compares the rows with `git worktree list` and only reports by
@@ -51,12 +59,37 @@ export abstract class WorktreeRegistry extends Service {
   }
 
   /**
-   * Create a linked worktree for one workspace and register it durably.
+   * Create a linked worktree for one workspace and register it durably. The
+   * path must not collide with the owner workspace directory or any registered
+   * worktree, and an explicitly requested branch must not already be
+   * registered to another worktree of the same workspace (git itself refuses
+   * a branch that exists in the repository, whatever workspace registered it).
    * @param request - Owner workspace, target directory, and optional new
    *   branch name.
    * @returns the registered worktree with observed path and branch.
    */
   abstract create(request: WorktreeCreateRequest): Promise<Worktree>
+
+  /**
+   * Bind one worktree to a single writer. The holder is opaque to the
+   * registry; binding succeeds when the worktree is unbound or already bound
+   * to the same holder, and refuses with `WorktreeLockError`
+   * (`already-locked`) otherwise.
+   * @param id - Registered worktree id; unknown ids reject.
+   * @param holder - The single-writer marker taking or holding the binding.
+   * @returns the updated worktree with the binding stamped.
+   */
+  abstract bind(id: WorktreeId, holder: WorktreeLockHolder): Promise<Worktree>
+
+  /**
+   * Release a worktree's single-writer binding. Refuses with
+   * `WorktreeLockError` (`not-locked`) when the worktree is unbound and
+   * (`holder-mismatch`) when `holder` is not the current holder.
+   * @param id - Registered worktree id; unknown ids reject.
+   * @param holder - The single-writer marker releasing the binding.
+   * @returns the updated worktree with the binding cleared.
+   */
+  abstract unbind(id: WorktreeId, holder: WorktreeLockHolder): Promise<Worktree>
 
   /**
    * The workspace's registered worktrees in the stable (createdAt, id) order.
@@ -74,8 +107,10 @@ export abstract class WorktreeRegistry extends Service {
   abstract status(id: WorktreeId): Promise<WorktreeStatus>
 
   /**
-   * Remove one worktree through git and delete its registration. The row is
-   * deleted only after the removal succeeded.
+   * Remove one worktree through git and delete its registration. A bound
+   * worktree refuses with `WorktreeLockError` (`already-locked`) until its
+   * holder unbinds — `force` never overrides the lock. The row is deleted
+   * only after the removal succeeded.
    * @param id - Registered worktree id; unknown ids reject.
    * @param options - Pass `force` to allow removing dirty worktrees.
    * @returns resolution after the worktree is gone and the row deleted.

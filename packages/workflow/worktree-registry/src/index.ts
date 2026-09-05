@@ -7,7 +7,7 @@
  */
 
 import { GitWorktreeRegistry } from './git-provider.ts'
-import type { WorktreeId as WorktreeIdBrand } from './types.ts'
+import type { WorktreeId as WorktreeIdBrand, WorktreeLockHolder as WorktreeLockHolderBrand } from './types.ts'
 
 export { WorktreeRegistry } from './registry.ts'
 export { worktreeDomainSpec, worktreeRecord } from './spec.ts'
@@ -16,6 +16,8 @@ export { GitWorktreeRegistry, assertServiceableGitConfig } from './git-provider.
 export type { GitWorktreeRegistryConfig } from './git-provider.ts'
 export { WorktreeGitOperationError, WORKTREE_GIT_FAILURE_REMEDIATION } from './git-failures.ts'
 export type { WorktreeGitFailureKind } from './git-failures.ts'
+export { WorktreeLockError } from './lock-failures.ts'
+export type { WorktreeLockRefusalKind } from './lock-failures.ts'
 export { parseWorktreeList, sameGitPath } from './porcelain.ts'
 export type { GitWorktreeEntry } from './porcelain.ts'
 export type {
@@ -40,6 +42,18 @@ export type WorktreeId = WorktreeIdBrand
  */
 export function WorktreeId(id: string): WorktreeId {
   return id as WorktreeId
+}
+
+/** The opaque single-writer marker a worktree can be bound to (see `src/types.ts`). */
+export type WorktreeLockHolder = WorktreeLockHolderBrand
+
+/**
+ * Brand a string as a {@link WorktreeLockHolder}.
+ * @param holder - Raw holder string (typically the owning agent's session id).
+ * @returns the same string, branded at compile time.
+ */
+export function WorktreeLockHolder(holder: string): WorktreeLockHolder {
+  return holder as WorktreeLockHolder
 }
 
 export default GitWorktreeRegistry
