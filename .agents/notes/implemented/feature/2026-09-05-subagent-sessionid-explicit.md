@@ -23,6 +23,10 @@ One-shot foreground results keep `runId`: a one-shot child is not continuable, s
 - Keep `subagentId` and document it as the session id. Rejected: the label ambiguity is the defect; a registry that copies "agent id" values into a SessionID column without a type-honest field repeats the unavailable-identity hole.
 - Introduce a separate agent-identity namespace for the tools. Rejected: the tool values already are session ids; a second identity system multiplies routing keys and contradicts the one-durable-identity design of the subagent service.
 
+## Consequences
+
+Model and user surfaces now name the durable child identity SessionID, so orchestration consumers record and route child sessions without a second identity namespace. The service-level `ContinuableStart.childId` and `SubagentListEntry.id` keep their names, and `send_message`/`interrupt_agent` keep the `agent_id` parameter name while describing it as the SessionID. Recorded-session snapshot fixtures still expect the pre-rename field and description text, so `test:snapshot`/`test:web` stay red on that delta until their recorded outputs are refreshed.
+
 ## Verification
 
 `pnpm exec vitest run packages/subagent` (769 tests) covers the renamed field, render text, and the send_message/interrupt_agent descriptions; `pnpm run verify-tool-catalog` regenerates the tool catalog from source; `pnpm run verify-translation-pairing` keeps the bilingual catalog and this note's pair in sync. Recorded-session snapshot suites remain a CI signal with the tool-description change in scope.
