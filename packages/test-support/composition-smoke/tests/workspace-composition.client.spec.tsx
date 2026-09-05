@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { cleanup, fireEvent, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -46,8 +46,22 @@ afterEach(async () => {
   locale = undefined
 })
 
+/**
+ * Install the async browser clipboard and restore its prior host shape
+ * (jsdom ships no clipboard; the composed row copies through
+ * `navigator.clipboard.writeText`).
+ */
+function installClipboard(writeText: (text: string) => Promise<void>): () => void {
+  const prior = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+  return () => {
+    if (prior === undefined) Reflect.deleteProperty(navigator, 'clipboard')
+    else Object.defineProperty(navigator, 'clipboard', prior)
+  }
+}
+
 describe('workspace composition smoke', () => {
-  it('reaches the Session-ID dialog from the assembled sidebar session list through the row actions menu', async () => {
+  it('copies the Session ID directly from the assembled sidebar session list through the row actions menu', async () => {
     const runtime = await mountedWorkspace()
     await runtime.sessions.add({ id: 'session-alpha', summary: { title: 'Alpha', displayTitle: 'Alpha' } })
     await runtime.declare({ 'sidebar.workspaces': { kind: 'single', scope: 'root' } })
@@ -57,11 +71,17 @@ describe('workspace composition smoke', () => {
     // Opening the row menu is presentation-only: no session opens behind it.
     fireEvent.click(rowActions)
     expect(runtime.sessions.calls.filter(call => call.method === 'open')).toHaveLength(0)
-    fireEvent.click(screen.getByRole('menuitem', { name: zh['menu.sessionId'], hidden: true }))
-    const dialog = screen.getByRole('dialog')
-    expect(dialog.getAttribute('aria-label')).toBe(zh['sessionId.title'])
-    // The complete id survives the composed assembly verbatim.
-    expect(dialog.textContent).toContain('session-alpha')
+    const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    const restore = installClipboard(writeText)
+    try {
+      fireEvent.click(screen.getByRole('menuitem', { name: zh['menu.sessionId'], hidden: true }))
+      // The complete id reaches the clipboard verbatim through the composed assembly.
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith('session-alpha'))
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(runtime.sessions.calls.filter(call => call.method === 'open')).toHaveLength(0)
+    } finally {
+      restore()
+    }
   })
 
   it('registers the browser on the slot ledger with its locale namespace and directory-flow child hole', async () => {
