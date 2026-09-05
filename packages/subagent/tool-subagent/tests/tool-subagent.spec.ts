@@ -1235,7 +1235,7 @@ describe('dsh-tool-subagent continuable background mode', () => {
       { agent: parent },
     )
     expect(started.isError).toBe(false)
-    const match = /^started subagent (\S+)$/.exec(text(started))
+    const match = /^started continuable subagent; SessionID (\S+)$/.exec(text(started))
     expect(match).not.toBeNull()
     const [, childId] = match!
     // No Task was created for the continuable child.
@@ -1326,7 +1326,7 @@ describe('dsh-tool-subagent continuable background mode', () => {
 
     expect(succeeded.isError ? undefined : succeeded.value).toEqual({
       kind: 'continuable',
-      subagentId: survivingChildId,
+      sessionId: survivingChildId,
     })
     await vi.waitFor(() => {
       expect(ctx.agents.get(survivingChildId!)).toBeUndefined()

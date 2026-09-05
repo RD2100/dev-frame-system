@@ -28,7 +28,8 @@ export function apply(ctx: Context): void {
   ctx.tools.register(markAdjacentAgentSendMessageTool(defineTool({
     name: 'send_message',
     description:
-      'Send a message to a direct continuable child by its agent id. If you are a resident continuable child, '
+      'Send a message to a direct continuable child by its durable session id (SessionID, the `sessionId` value '
+      + 'from `list_agents` or the continuable `subagent` result). If you are a resident continuable child, '
       + 'you may also target your direct parent. If the target is still working, the message steers its nearest step; '
       + 'if it is idle, the message starts a turn. This call returns no answer from the agent — only confirmation '
       + 'that the message was delivered. A failure means the message was NOT delivered.',
@@ -36,7 +37,7 @@ export function apply(ctx: Context): void {
       agent_id: {
         type: 'string',
         required: true,
-        description: 'The agent id of your direct continuable child, or your direct parent when you are a resident continuable child.',
+        description: 'The SessionID of your direct continuable child, or your direct parent when you are a resident continuable child.',
       },
       message: {
         type: 'string',
@@ -76,7 +77,7 @@ export function apply(ctx: Context): void {
   ctx.tools.register(defineTool({
     name: 'interrupt_agent',
     description:
-      'Request cancellation of a background agent\'s current turn by its agent id. The target may be your '
+      'Request cancellation of a background agent\'s current turn by its durable session id (SessionID). The target may be your '
       + 'direct child or a deeper agent created under you. Only the current turn stops: messages already '
       + 'queued for the agent stay parked until a later send_message, agents it started keep running, and '
       + 'the agent itself stays available for follow-ups. This call returns as soon as the stop request is '
@@ -86,7 +87,7 @@ export function apply(ctx: Context): void {
       agent_id: {
         type: 'string',
         required: true,
-        description: 'The agent id of the running agent to interrupt.',
+        description: 'The SessionID of the running agent to interrupt.',
       },
     },
     output: {

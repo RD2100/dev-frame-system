@@ -186,10 +186,10 @@ describe('dsh-tool-subagent-control/list-agents', () => {
     // `ready` is the resumable counterpart to a live `running` record, not a
     // claim that the child's conversation ended with a result to collect.
     expect(text(result)).toBe(
-      `${started.childId} [ready] — real child\n`
-      + 'running-child [running] — still working\n'
-      + 'waiting-child [idle] — waiting on descendants\n'
-      + 'broken-child [diagnostic: corrupt]',
+      `SessionID=${started.childId} [ready] — real child\n`
+      + 'SessionID=running-child [running] — still working\n'
+      + 'SessionID=waiting-child [idle] — waiting on descendants\n'
+      + 'SessionID=broken-child [diagnostic: corrupt]',
     )
   })
 
@@ -223,7 +223,7 @@ describe('dsh-tool-subagent-control/list-agents', () => {
     await waitNoActivation(ctx, started.childId)
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`${started.childId} [ready] — summarize the doc`)
+    expect(text(result)).toBe(`SessionID=${started.childId} [ready] — summarize the doc`)
   })
 
   it('describes ready as resumable and pins the status vocabulary', async () => {
@@ -299,8 +299,8 @@ describe('dsh-tool-subagent-control/list-agents', () => {
     const result = await callTool(ctx, 'list_agents', { scope: 'descendants' }, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${started.childId} [idle] parent=${parent.id} depth=1 — waiting branch\n`
-      + `${grandchild.childId} [running] parent=${started.childId} depth=2 — nested leaf`,
+      `SessionID=${started.childId} [idle] parent=${parent.id} depth=1 — waiting branch\n`
+      + `SessionID=${grandchild.childId} [running] parent=${started.childId} depth=2 — nested leaf`,
     )
 
     releaseGrandchild.resolve(undefined)
@@ -344,8 +344,8 @@ describe('dsh-tool-subagent-control/list-agents', () => {
     const result = await callTool(ctx, 'list_agents', { scope: 'descendants' }, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      'deep-leaf [ready] parent=one-shot-mid depth=2 — deep leaf\n'
-      + `broken-node [diagnostic: unavailable] parent=${parent.id} depth=1`,
+      'SessionID=deep-leaf [ready] parent=one-shot-mid depth=2 — deep leaf\n'
+      + `SessionID=broken-node [diagnostic: unavailable] parent=${parent.id} depth=1`,
     )
   })
 

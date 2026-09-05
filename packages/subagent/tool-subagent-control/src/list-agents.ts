@@ -30,7 +30,7 @@ interface ListAgentsSpec {
 type ListAgentsEntry =
   | {
     readonly kind: 'child'
-    readonly id: SessionId
+    readonly sessionId: SessionId
     readonly label: string
     readonly status: 'running' | 'idle' | 'ready'
     readonly parent?: SessionId
@@ -38,7 +38,7 @@ type ListAgentsEntry =
   }
   | {
     readonly kind: 'diagnostic'
-    readonly id: SessionId
+    readonly sessionId: SessionId
     readonly reason: 'corrupt' | 'unsupported' | 'unavailable'
     readonly parent?: SessionId
     readonly depth?: number
@@ -70,14 +70,14 @@ function project(
 ): ListAgentsEntry | undefined {
   const at = position === undefined ? {} : { parent: position.parentId, depth: position.depth }
   if (entry.kind === 'diagnostic') {
-    return { kind: 'diagnostic', id: entry.id, reason: entry.reason, ...at }
+    return { kind: 'diagnostic', sessionId: entry.id, reason: entry.reason, ...at }
   }
   // One-shot children cannot be continued by send_message, so the model
   // never selects them; discovery still traversed them for descendants.
   if (entry.mode !== 'continuable') return undefined
   return {
     kind: 'child',
-    id: entry.id,
+    sessionId: entry.id,
     label: entry.label,
     status: statusOf(agents, entry.id),
     ...at,
@@ -92,8 +92,8 @@ export function apply(ctx: Context): void {
   ctx.tools.register(defineTool({
     name: 'list_agents',
     description:
-      'List your continuable background subagents by durable id and label. Use it to recall which ones '
-      + 'you started, not to poll for completion — you are told when one finishes. Status comes from the live '
+      'List your continuable background subagents by durable session id (SessionID) and label. Use it to recall '
+      + 'which ones you started, not to poll for completion — you are told when one finishes. Status comes from the live '
       + 'registry: running means the agent is working right now, idle means it is loaded but between turns '
       + '(it may be waiting on agents it started), and ready means it exists only in storage — resumable, not '
       + 'terminal, and not a result waiting to be collected; a `send_message` steers a running child at its nearest '
@@ -121,7 +121,7 @@ export function apply(ctx: Context): void {
               additionalProperties: false,
               properties: {
                 kind: { type: 'string', required: true, enum: ['child'] },
-                id: { type: 'string', required: true },
+                sessionId: { type: 'string', required: true },
                 label: { type: 'string', required: true },
                 status: { type: 'string', required: true, enum: ['running', 'idle', 'ready'] },
                 parent: { type: 'string' },
@@ -133,7 +133,7 @@ export function apply(ctx: Context): void {
               additionalProperties: false,
               properties: {
                 kind: { type: 'string', required: true, enum: ['diagnostic'] },
-                id: { type: 'string', required: true },
+                sessionId: { type: 'string', required: true },
                 reason: { type: 'string', required: true, enum: ['corrupt', 'unsupported', 'unavailable'] },
                 parent: { type: 'string' },
                 depth: { type: 'number' },
@@ -156,8 +156,8 @@ export function apply(ctx: Context): void {
                 ? ` parent=${String(entry.parent)} depth=${String(entry.depth)}`
                 : ''
               return entry.kind === 'child'
-                ? `${entry.id} [${entry.status}]${at} — ${entry.label}`
-                : `${entry.id} [diagnostic: ${entry.reason}]${at}`
+                ? `SessionID=${entry.sessionId} [${entry.status}]${at} — ${entry.label}`
+                : `SessionID=${entry.sessionId} [diagnostic: ${entry.reason}]${at}`
             }).join('\n'),
         }]
       },

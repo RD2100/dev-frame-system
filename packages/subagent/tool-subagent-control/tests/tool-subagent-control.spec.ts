@@ -118,7 +118,7 @@ describe('dsh-tool-subagent-control', () => {
     expect(schemas[0]!.description).toContain('direct continuable child')
     expect(schemas[0]!.description).toContain('If you are a resident continuable child')
     expect(props.agent_id).toMatchObject({
-      description: 'The agent id of your direct continuable child, or your direct parent when you are a resident continuable child.',
+      description: 'The SessionID of your direct continuable child, or your direct parent when you are a resident continuable child.',
     })
   })
 

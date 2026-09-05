@@ -435,7 +435,7 @@ export function apply(ctx: Context, config: Config): void {
                 additionalProperties: false,
                 properties: {
                   kind: { type: 'string', required: true, const: 'continuable' },
-                  subagentId: { type: 'string', required: true },
+                  sessionId: { type: 'string', required: true },
                 },
               },
               {
@@ -454,7 +454,7 @@ export function apply(ctx: Context, config: Config): void {
             text: value.kind === 'background'
               ? `started background subagent job ${value.jobId}`
               : value.kind === 'continuable'
-                ? `started subagent ${value.subagentId}`
+                ? `started continuable subagent; SessionID ${value.sessionId}`
                 : outputValueText(value.output),
           }],
         },
@@ -526,7 +526,7 @@ export function apply(ctx: Context, config: Config): void {
                 request,
                 signal: exec.signal,
               })
-              return { kind: 'continuable' as const, subagentId: started.childId }
+              return { kind: 'continuable' as const, sessionId: started.childId }
             }
             const jobs = runtimeCtx.get('jobs')
             if (jobs === undefined) {
