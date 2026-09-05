@@ -2,15 +2,15 @@
 
 English | [中文](worktree-registry.zh.md)
 
-The per-workspace git worktree registry — a [capability seam](../../.agents/notes/proposed/architecture/2026-09-05-worktree-registry.md) that keeps durable registrations of git worktrees owned by one workspace. The seam's roles currently live in a single package: Service Definition ([`WorktreeRegistry`](../../packages/workflow/worktree-registry), mounted as `ctx.worktreeRegistry`) and Service Provider (`GitWorktreeRegistry`, git operations over `ctx.subprocess` on the host filesystem). The Consumer role is deferred: no tool, prompt, or UI surface exists yet, so the seam is host-side only and adds nothing to model requests.
+The per-workspace git worktree registry — a [capability seam](../../.agents/notes/implemented/feature/2026-09-05-worktree-tools-and-reconcile.md) that keeps durable registrations of git worktrees owned by one workspace. The Service Definition ([`WorktreeRegistry`](../../packages/workflow/worktree-registry), mounted as `ctx.worktreeRegistry`) and the Service Provider (`GitWorktreeRegistry`, git operations over `ctx.subprocess` on the host filesystem) live in one package; the Consumer role is the [`tool-worktree`](../../packages/workflow/tool-worktree) package, which exposes the five `worktree_*` tools to the model and authorizes every call against the calling session's own workspace.
 
 Source: [`packages/workflow/worktree-registry/src/registry.ts`](../../packages/workflow/worktree-registry/src/registry.ts)
 
 ## The service
 
-`WorktreeRegistry` declares four operations. `create` resolves the owning workspace through `ctx.workspaceRegistry`, runs `git worktree add` from the workspace directory, and records the observed facts — the canonical path after `fs.realpath` and the branch read back from the new worktree. `list` answers from durable rows in stable `(createdAt, id)` order and never shells out to git. `status` is the observation surface: a missing directory reports `directoryExists: false` without calling git, while a present directory reports its live branch and cleanliness. `remove` runs `git worktree remove` first and deletes the registration only after git succeeded, so a failed removal never hides a real worktree.
+`WorktreeRegistry` declares five operations. `create` resolves the owning workspace through `ctx.workspaceRegistry`, runs `git worktree add` from the workspace directory, and records the observed facts — the canonical path after `fs.realpath` and the branch read back from the new worktree. `list` answers from durable rows in stable `(createdAt, id)` order and never shells out to git. `status` is the observation surface: a missing directory reports `directoryExists: false` without calling git, while a present directory reports its live branch and cleanliness. `remove` runs `git worktree remove` first and deletes the registration only after git succeeded, so a failed removal never hides a real worktree. `reconcile` diffs the rows against `git worktree list` and reports the difference — dangling registrations and unregistered worktrees — dropping stale rows or adopting outside-created worktrees only when the corresponding action is opted in; it never deletes directories or files.
 
-Registrations persist in the `worktree_registry` storage domain (one `worktrees` table keyed by a branded `WorktreeId`); they survive restarts and reappear on the next composition. Directory operations run with the owning workspace path as cwd — a worktree cannot remove itself as its own cwd on Windows. Reconciling rows with git's own metadata (including worktrees created outside the product and registrations whose directory vanished) is deferred prune work; see the [Agent Note](../../.agents/notes/proposed/architecture/2026-09-05-worktree-registry.md) for the seam design and the deferred surfaces.
+Registrations persist in the `worktree_registry` storage domain (one `worktrees` table keyed by a branded `WorktreeId`); they survive restarts and reappear on the next composition. Directory operations run with the owning workspace path as cwd — a worktree cannot remove itself as its own cwd on Windows. The model reaches these operations only through the `worktree_*` tools of [`tool-worktree`](../../packages/workflow/tool-worktree), whose tool descriptions carry the retry semantics for the four classified git refusal dialects (occupied path, branch conflict, dirty tree, oversized path).
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -33,6 +33,7 @@ Implementations must honor these semantics:
 - `list` answers from durable rows only; the registry, not git metadata, is the authority for what this product registered.
 - `status` reports a missing directory as an observation (`directoryExists: false`) without invoking git; git failures on a present directory reject.
 - `remove` deletes the durable row only after the provider's worktree removal succeeded, so a failed remove never hides an existing worktree.
+- `reconcile` compares the rows with `git worktree list` and only reports by default; its actions are opt-in and never delete directories or files.
 
 ```ts cordis-catalog
 /**
@@ -66,6 +67,19 @@ abstract status(id: WorktreeId): Promise<WorktreeStatus>
  * @returns resolution after the worktree is gone and the row deleted.
  */
 abstract remove(id: WorktreeId, options?: WorktreeRemoveOptions): Promise<void>
+
+/**
+ * Compare this workspace's rows with `git worktree list` and optionally
+ * reconcile the difference. Detection always runs; each action is opt-in:
+ * `pruneRows` drops stale rows (never directories or files), and
+ * `adoptUnregistered` registers git-tracked worktrees this registry holds
+ * no row for under any workspace. The repository's main worktree is never
+ * reported as unregistered.
+ * @param workspaceId - Owner workspace; unknown ids reject.
+ * @param options - The opt-in reconcile actions.
+ * @returns the observed differences and the applied changes.
+ */
+abstract reconcile(workspaceId: WorkspaceId, options?: WorktreeReconcileOptions): Promise<WorktreeReconcileReport>
 ```
 
 Types: [WorkspaceId](workspace.md)

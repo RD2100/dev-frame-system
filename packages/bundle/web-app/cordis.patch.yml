@@ -62,7 +62,7 @@
       name: '@deepseek-ai/dsh-workspace'
 
     # Per-workspace git worktree registrations over the storage domain; the
-    # model-facing tool consumer is future work (no prompt or token effect).
+    # model-facing tool consumer (tool-worktree) stays disabled on this surface.
     - id: worktree-registry
       name: '@deepseek-ai/dsh-worktree-registry'
 
@@ -424,6 +424,9 @@
   disabled: true
 
 - id: tool-ralph
+  disabled: true
+
+- id: tool-worktree
   disabled: true
 
 - id: agent-instructions

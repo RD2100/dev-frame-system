@@ -12,6 +12,8 @@ import type {
   Worktree,
   WorktreeCreateRequest,
   WorktreeId,
+  WorktreeReconcileOptions,
+  WorktreeReconcileReport,
   WorktreeRemoveOptions,
   WorktreeStatus,
 } from './types.ts'
@@ -40,6 +42,8 @@ declare module '@deepseek-ai/cordis' {
  *   false`) without invoking git; git failures on a present directory reject.
  * - `remove` deletes the durable row only after the provider's worktree
  *   removal succeeded, so a failed remove never hides an existing worktree.
+ * - `reconcile` compares the rows with `git worktree list` and only reports by
+ *   default; its actions are opt-in and never delete directories or files.
  */
 export abstract class WorktreeRegistry extends Service {
   constructor(ctx: Context) {
@@ -77,4 +81,17 @@ export abstract class WorktreeRegistry extends Service {
    * @returns resolution after the worktree is gone and the row deleted.
    */
   abstract remove(id: WorktreeId, options?: WorktreeRemoveOptions): Promise<void>
+
+  /**
+   * Compare this workspace's rows with `git worktree list` and optionally
+   * reconcile the difference. Detection always runs; each action is opt-in:
+   * `pruneRows` drops stale rows (never directories or files), and
+   * `adoptUnregistered` registers git-tracked worktrees this registry holds
+   * no row for under any workspace. The repository's main worktree is never
+   * reported as unregistered.
+   * @param workspaceId - Owner workspace; unknown ids reject.
+   * @param options - The opt-in reconcile actions.
+   * @returns the observed differences and the applied changes.
+   */
+  abstract reconcile(workspaceId: WorkspaceId, options?: WorktreeReconcileOptions): Promise<WorktreeReconcileReport>
 }

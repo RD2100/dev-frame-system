@@ -380,6 +380,11 @@
     - id: tool-workflow
       name: '@deepseek-ai/dsh-tool-workflow'
 
+    # Model-facing worktree management over ctx.worktreeRegistry; the tools
+    # authorize against the calling session's own workspace.
+    - id: tool-worktree
+      name: '@deepseek-ai/dsh-tool-worktree'
+
     - id: timeout-policy
       name: '@deepseek-ai/dsh-tool-call-timeout-policy'
 

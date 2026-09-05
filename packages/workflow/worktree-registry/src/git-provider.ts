@@ -28,7 +28,19 @@ import z from '@deepseek-ai/schemastery'
 import { worktreeDomainSpec } from './spec.ts'
 import type { WorktreeRecord } from './spec.ts'
 import { WorktreeRegistry } from './registry.ts'
-import type { Worktree, WorktreeCreateRequest, WorktreeId, WorktreeRemoveOptions, WorktreeStatus } from './types.ts'
+import { classifyGitFailure, WorktreeGitOperationError, WORKTREE_GIT_FAILURE_REMEDIATION } from './git-failures.ts'
+import { parseWorktreeList, sameGitPath } from './porcelain.ts'
+import type {
+  Worktree,
+  WorktreeCreateRequest,
+  WorktreeDanglingRegistration,
+  WorktreeId,
+  WorktreeReconcileOptions,
+  WorktreeReconcileReport,
+  WorktreeRemoveOptions,
+  WorktreeStatus,
+  WorktreeUnregisteredWorktree,
+} from './types.ts'
 
 /** Plugin config (all optional — `static Config` supplies the defaults). */
 export interface GitWorktreeRegistryConfig {
@@ -174,7 +186,7 @@ export class GitWorktreeRegistry extends WorktreeRegistry {
       if (!(await directoryExists(record.path))) {
         throw new Error(
           `cannot remove worktree '${id}': directory '${record.path}' no longer exists; `
-          + 'the git worktree metadata may be stale and pruning is not supported yet, so the registration stays',
+          + 'unregister the stale row through reconcile (pruneRows) or restore the directory',
         )
       }
       const args = options?.force === true
@@ -185,6 +197,119 @@ export class GitWorktreeRegistry extends WorktreeRegistry {
         throw new Error(`worktree '${id}' was removed from git but its registration vanished before deletion`)
       }
     })
+  }
+
+  async reconcile(
+    workspaceId: WorkspaceId,
+    options?: WorktreeReconcileOptions,
+  ): Promise<WorktreeReconcileReport> {
+    return await this.enqueue(() => this.reconcileQueued(workspaceId, options ?? {}))
+  }
+
+  /**
+   * The reconcile body, serialized behind the mutation chain so detection,
+   * row drops, and adoptions cannot interleave with create/remove.
+   * @param workspaceId - Owner workspace whose rows are reconciled.
+   * @param options - The opt-in reconcile actions.
+   * @returns the observed differences and the applied changes.
+   */
+  private async reconcileQueued(
+    workspaceId: WorkspaceId,
+    options: WorktreeReconcileOptions,
+  ): Promise<WorktreeReconcileReport> {
+    const workspace = this.requireWorkspace(workspaceId)
+    // Every observation happens in the registry's canonical-path canon so
+    // spellings git rewrote (short names, junctions, separators) still match
+    // the rows; an entry whose directory is gone keeps git's spelling.
+    const observed: WorktreeUnregisteredWorktree[] = []
+    for (const entry of await this.listGitWorktrees(workspace.path)) {
+      let path = entry.path
+      try {
+        path = await realpathNormalize(entry.path)
+      } catch (error) {
+        // ENOENT is the vanished-worktree observation; every other resolution
+        // failure (permissions, corruption) must stay loud.
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      }
+      observed.push(entry.branch === undefined ? { path } : { path, branch: entry.branch })
+    }
+    // git reports the repository's main worktree first; it is a root checkout,
+    // never a second checkout another workspace would register.
+    const linked = observed.slice(1)
+    const knownPaths = observed.map(entry => entry.path)
+
+    // A row is dangling when its directory is gone (git may still list the
+    // dead admin entry as prunable) or when git no longer tracks its path.
+    const dangling: WorktreeDanglingRegistration[] = []
+    for (const [id, record] of this.rowsOf(workspaceId)) {
+      if (!(await directoryExists(record.path))) {
+        dangling.push({ id, path: record.path, reason: 'directory-missing' })
+      } else if (!knownPaths.some(path => sameGitPath(path, record.path))) {
+        dangling.push({ id, path: record.path, reason: 'git-unknown' })
+      }
+    }
+
+    // Unregistered means git tracks a linked worktree that no row of any
+    // workspace holds; the reconciling workspace's own checkout is not a
+    // stray either, whatever position git lists it in.
+    const registeredAnywhere = [...this.requireTable().entries()].map(([, record]) => record.path)
+    const unregistered = linked
+      .filter(entry => !sameGitPath(entry.path, workspace.path))
+      .filter(entry => !registeredAnywhere.some(known => sameGitPath(known, entry.path)))
+
+    const removedRows: WorktreeId[] = []
+    if (options.pruneRows === true) {
+      for (const stale of dangling) {
+        if (!(await this.requireTable().delete(stale.id))) continue
+        removedRows.push(stale.id)
+      }
+      // git's own admin entries for the vanished directories are dead weight
+      // only git can clean; one prune covers every dropped directory-missing row.
+      if (dangling.some(stale => stale.reason === 'directory-missing')) {
+        await this.runGit(['worktree', 'prune'], workspace.path)
+      }
+    }
+
+    const adoptedPaths: string[] = []
+    if (options.adoptUnregistered === true) {
+      for (const entry of unregistered) {
+        const branch = (await this.runGit(['rev-parse', '--abbrev-ref', 'HEAD'], entry.path)).trim()
+        const id = brandString<WorktreeId>(randomUUID())
+        const now = new Date().toISOString()
+        await this.requireTable().put(id, {
+          workspaceId,
+          path: entry.path,
+          branch,
+          createdAt: now,
+          updatedAt: now,
+        })
+        adoptedPaths.push(entry.path)
+      }
+    }
+
+    return { dangling, unregistered, removedRows, adoptedPaths }
+  }
+
+  /** The stored rows of one workspace, with their ids. */
+  private rowsOf(workspaceId: WorkspaceId): [WorktreeId, WorktreeRecord][] {
+    return [...this.requireTable().entries()]
+      .filter(([, record]) => record.workspaceId === workspaceId)
+  }
+
+  /**
+   * List the worktrees git reports for the workspace's repository.
+   * @param workspacePath - The workspace checkout, which resolves the shared repository.
+   * @returns the parsed entries; truncated output rejects rather than half-reporting.
+   */
+  private async listGitWorktrees(workspacePath: string) {
+    const stdout = await this.runGitOut(['worktree', 'list', '--porcelain', '-z'], workspacePath)
+    if (stdout.truncated) {
+      throw new Error(
+        `worktree-registry: 'git worktree list' output exceeded ${this.config.maxOutputBytes} bytes per stream; `
+        + 'raise maxOutputBytes to reconcile a repository with this many worktrees',
+      )
+    }
+    return parseWorktreeList(stdout.text)
   }
 
   private async createQueued(request: WorktreeCreateRequest): Promise<Worktree> {
@@ -262,12 +387,12 @@ export class GitWorktreeRegistry extends WorktreeRegistry {
   }
 
   /**
-   * Run one git invocation to completion.
+   * Run one git invocation to completion and collect its stdout.
    * @param args - git arguments after the executable.
    * @param cwd - Working directory for the invocation.
-   * @returns the collected stdout.
+   * @returns the collected stdout, with its truncation flag.
    */
-  private async runGit(args: readonly string[], cwd: string): Promise<string> {
+  private async runGitOut(args: readonly string[], cwd: string): Promise<CollectedOutput> {
     using d = deadline(undefined, this.config.timeoutMs, 'WORKTREE_GIT_TIMEOUT')
     const handle: SubprocessHandle = this.ctx.subprocess.spawn({
       argv: [this.config.gitPath ?? 'git', ...args],
@@ -294,12 +419,27 @@ export class GitWorktreeRegistry extends WorktreeRegistry {
     }
     if (outcome.exitCode !== 0) {
       const tail = stderr.text.trim()
-      throw new Error(
-        `worktree-registry: git ${describeArgs(args)} in '${cwd}' failed with exit code ${outcome.exitCode}`
-        + (tail.length > 0 ? `: ${tail}` : ''),
-      )
+      const base = `worktree-registry: git ${describeArgs(args)} in '${cwd}' failed with exit code ${outcome.exitCode}`
+        + (tail.length > 0 ? `: ${tail}` : '')
+      const kind = classifyGitFailure(tail)
+      if (kind !== undefined) {
+        // The refusal is a recognized, actionable class: keep the invocation
+        // facts and git's evidence, and tell the caller how to proceed.
+        throw new WorktreeGitOperationError(`${base}. ${WORKTREE_GIT_FAILURE_REMEDIATION[kind]}`, kind)
+      }
+      throw new Error(base)
     }
-    return finalOutput(handle.collected.stdout).text
+    return finalOutput(handle.collected.stdout)
+  }
+
+  /**
+   * Run one git invocation to completion.
+   * @param args - git arguments after the executable.
+   * @param cwd - Working directory for the invocation.
+   * @returns the collected stdout text.
+   */
+  private async runGit(args: readonly string[], cwd: string): Promise<string> {
+    return (await this.runGitOut(args, cwd)).text
   }
 }
 

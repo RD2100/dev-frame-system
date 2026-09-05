@@ -85,3 +85,67 @@ export interface WorktreeStatus {
    */
   readonly clean?: boolean | undefined
 }
+
+/** Why one registry row no longer reflects git or disk reality. */
+export type WorktreeDanglingReason =
+  /** The recorded directory is gone from disk; git may still list it as prunable. */
+  | 'directory-missing'
+  /** The directory exists but `git worktree list` no longer tracks that path. */
+  | 'git-unknown'
+
+/** One registry row whose worktree is stale. */
+export interface WorktreeDanglingRegistration {
+  /** The stale registration's id. */
+  readonly id: WorktreeId
+
+  /** The recorded canonical path. */
+  readonly path: string
+
+  /** Why the row is stale. */
+  readonly reason: WorktreeDanglingReason
+}
+
+/** One git-tracked linked worktree that no registry row holds. */
+export interface WorktreeUnregisteredWorktree {
+  /** The path git reports (forward slashes); adopt canonicalizes it. */
+  readonly path: string
+
+  /** Branch git reports; absent when the worktree is on a detached HEAD. */
+  readonly branch?: string | undefined
+}
+
+/**
+ * Options of one `reconcile` request. Both actions default to off: a bare
+ * call only observes. `pruneRows` never deletes directories or files — it
+ * drops stale registry rows only.
+ */
+export interface WorktreeReconcileOptions {
+  /**
+   * Drop the dangling registry rows. Dropping a `directory-missing` row also
+   * runs `git worktree prune` once, so git stops listing the dead admin entry.
+   */
+  readonly pruneRows?: boolean
+
+  /** Register each unregistered worktree under the reconciled workspace. */
+  readonly adoptUnregistered?: boolean
+}
+
+/**
+ * One `reconcile` result: the differences observed at the start, and what the
+ * actions actually changed. Empty `dangling`/`unregistered` arrays mean the
+ * registry and git agree. Detection is point-in-time; applying actions to a
+ * moving tree can race, in which case a later reconcile reports the remainder.
+ */
+export interface WorktreeReconcileReport {
+  /** Stale rows detected for this workspace, before any action ran. */
+  readonly dangling: readonly WorktreeDanglingRegistration[]
+
+  /** Unregistered git worktrees detected, before any action ran. */
+  readonly unregistered: readonly WorktreeUnregisteredWorktree[]
+
+  /** Rows the `pruneRows` action dropped. */
+  readonly removedRows: readonly WorktreeId[]
+
+  /** Canonical paths the `adoptUnregistered` action registered. */
+  readonly adoptedPaths: readonly string[]
+}
