@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-subagent-control` 为可继续子级添加全局控制工具：`send_message` 在直接 parent 与 child 之间 steer，`interrupt_agent` 停止 child 当前轮次但保留其 inbox 与后代，`list_agents`（来自可单独加载的 `list-agents` 插件）按持久化 id 与标签列出可继续 child。parent 与可继续 child 继承相同的 `send_message` 定义和顺序，因此模型通信不会增加 child 专属工具 schema。是否加载这些工具不会决定委派工具是否启动可继续工作。
+`dsh-tool-subagent-control` 为可继续子级添加全局控制工具：`send_message` 在直接 parent 与 child 之间 steer，`interrupt_agent` 停止 child 当前轮次但保留其 inbox 与后代，`list_agents`（来自可单独加载的 `list-agents` 插件）按持久化 SessionID 与标签列出可继续 child。parent 与可继续 child 继承相同的 `send_message` 定义和顺序，因此模型通信不会增加 child 专属工具 schema。是否加载这些工具不会决定委派工具是否启动可继续工作。
 
 ## 目录
 
@@ -46,7 +46,7 @@ kind: "package-reference"
 
 ### send_message
 
-向 `agent_id` 指定的 Agent 发送消息：任何确切在线 Agent 都可以指定自己的直接可继续 child，而驻留的可继续 child 还可以指定自己的直接 parent。正在工作的目标通过 Steer 在最近的 step 边界接收消息；空闲目标会启动一个轮次，冷状态的直接 child 会通过继续执行生命周期恢复。调用只返回接受结果（被接受消息的稳定 `messageId`），绝不返回回复。失败——不受支持的目标、不可用的 parent、未知 child、缺少描述符而无法恢复的 child，或准入被拒——会明确说明消息未送达。
+向 `agent_id`（其持久化 SessionID）指定的 Agent 发送消息：任何确切在线 Agent 都可以指定自己的直接可继续 child，而驻留的可继续 child 还可以指定自己的直接 parent。正在工作的目标通过 Steer 在最近的 step 边界接收消息；空闲目标会启动一个轮次，冷状态的直接 child 会通过继续执行生命周期恢复。调用只返回接受结果（被接受消息的稳定 `messageId`），绝不返回回复。失败——不受支持的目标、不可用的 parent、未知 child、缺少描述符而无法恢复的 child，或准入被拒——会明确说明消息未送达。
 
 ### interrupt_agent
 
@@ -150,7 +150,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-按稳定目录顺序，每个可继续子级占一行：`<id> [<status>] — <label>`（`running` 表示 driver 活跃，`idle` 表示驻留但处于轮次之间，`ready` 表示仅存于存储，可恢复而非终态），另为无法读取的候选项渲染 `<id> [diagnostic: <reason>]`。`descendants` scope 会在每行 label 破折号之前按 pre-order 插入 ` parent=<id> depth=<n>`。一次性子级会被有意排除；`(no subagents)` 表示投影后没有留下可继续子级或 diagnostic。
+按稳定目录顺序，每个可继续子级占一行：`SessionID=<id> [<status>] — <label>`（`running` 表示 driver 活跃，`idle` 表示驻留但处于轮次之间，`ready` 表示仅存于存储，可恢复而非终态），另为无法读取的候选项渲染 `SessionID=<id> [diagnostic: <reason>]`。`descendants` scope 会在每行 label 破折号之前按 pre-order 插入 ` parent=<id> depth=<n>`。一次性子级会被有意排除；`(no subagents)` 表示投影后没有留下可继续子级或 diagnostic。
 
 #### Token 影响
 

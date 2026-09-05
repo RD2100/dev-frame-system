@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -107,6 +107,41 @@ describe('session row Session-ID menu item', () => {
       expect(screen.queryByText(zh['sessionId.copied'])).toBeNull()
     } finally {
       restore()
+    }
+  })
+
+  it('returns the copy feedback to idle when the confirmation window closes, and a re-copy restarts it', async () => {
+    vi.useFakeTimers()
+    const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    const restore = installClipboard(writeText)
+    try {
+      renderRow(node('session-zeta'))
+      openSessionIdDialog('Title session-zeta')
+      fireEvent.click(copyControls()[1]!)
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+      expect(screen.getByRole('status').textContent).toBe(zh['sessionId.copied'])
+      // One tick before the window closes the success is still shown.
+      await act(async () => { await vi.advanceTimersByTimeAsync(1_199) })
+      expect(screen.getByRole('status').textContent).toBe(zh['sessionId.copied'])
+      await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+      expect(screen.getByRole('status').textContent).toBe('')
+
+      // A re-copy inside the window clears the pending reset: the feedback
+      // stays for a full window measured from the SECOND copy, not the first.
+      fireEvent.click(copyControls()[1]!)
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+      fireEvent.click(copyControls()[1]!)
+      await act(async () => { await vi.advanceTimersByTimeAsync(600) })
+      expect(screen.getByRole('status').textContent).toBe(zh['sessionId.copied'])
+      await act(async () => { await vi.advanceTimersByTimeAsync(599) })
+      expect(screen.getByRole('status').textContent).toBe(zh['sessionId.copied'])
+      await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+      expect(screen.getByRole('status').textContent).toBe('')
+      expect(writeText).toHaveBeenCalledTimes(3)
+      expect(writeText).toHaveBeenCalledWith('session-zeta')
+    } finally {
+      restore()
+      vi.useRealTimers()
     }
   })
 

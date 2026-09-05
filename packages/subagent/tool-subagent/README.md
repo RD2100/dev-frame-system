@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-tool-subagent` is the model-facing delegation tool: it turns one configured `ctx.subagents` provider into a tool the agent can call to start a child agent. Changing the provider changes the transport without changing the execution contract, so one composition can expose several delegation tools, each bound to a different backend. Calls wait for the child by default under `one-shot` policy, or start work in the background by default under `continuable` policy, which returns a durable child id the model can message later. An eligible instance can also let the model discover and select the child's LLM provider, model, and reasoning effort. The tool's descriptions adapt to whether the child inherits the parent's completed turns, and failed runs surface as errored tool results rather than partial success.
+`dsh-tool-subagent` is the model-facing delegation tool: it turns one configured `ctx.subagents` provider into a tool the agent can call to start a child agent. Changing the provider changes the transport without changing the execution contract, so one composition can expose several delegation tools, each bound to a different backend. Calls wait for the child by default under `one-shot` policy, or start work in the background by default under `continuable` policy, which returns a durable child SessionID the model can message later. An eligible instance can also let the model discover and select the child's LLM provider, model, and reasoning effort. The tool's descriptions adapt to whether the child inherits the parent's completed turns, and failed runs surface as errored tool results rather than partial success.
 
 ## Table of Contents
 
@@ -58,7 +58,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 Under `one-shot` policy, an omitted `run_in_background` waits in the foreground and returns the child's final text; `run_in_background: true` starts a plain parent-owned background job and returns `started background subagent job <id>`, collected with `job_output` and stopped with `job_kill`.
 
-Under `continuable` policy, an omitted or `true` `run_in_background` starts a durable child and returns `started subagent <childId>` without waiting for a result; the runtime delivers one settlement notice when the child's Activation ends, and the optional `send_message` tool sends it more work. Set `run_in_background: false` to wait for the result in the foreground.
+Under `continuable` policy, an omitted or `true` `run_in_background` starts a durable child and returns `started continuable subagent; SessionID <sessionId>` without waiting for a result; the runtime delivers one settlement notice when the child's Activation ends, and the optional `send_message` tool sends it more work. Set `run_in_background: false` to wait for the result in the foreground.
 
 `maxDepth` caps recursion (default `3`; `0` forbids delegation) and requires a provider with the `depthLimit` capability; `'provider-managed'` leaves the budget to an out-of-process provider. `persona` and `toolFilter` configure every child when the provider supports them, and the tool stays visible at the cap — each attempted start checks the calling agent's current depth and rejects with an errored result.
 
@@ -192,7 +192,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-Start returns exactly `started subagent <childId>` in configured continuable mode, or `started background subagent job <id>` in configured one-shot mode. In one-shot mode the generic task surface provides later status, final output, cancellation responses, and notices; failed status detail includes the provider diagnostic when the result supplied one. In continuable mode this tool returns no result of its own: the child's settlement reaches the parent as a service-owned notice, an independently loaded `send_message` tool delivers follow-ups, and the child's transcript by its id is the source of its detailed output.
+Start returns exactly `started continuable subagent; SessionID <sessionId>` in configured continuable mode, or `started background subagent job <id>` in configured one-shot mode. In one-shot mode the generic task surface provides later status, final output, cancellation responses, and notices; failed status detail includes the provider diagnostic when the result supplied one. In continuable mode this tool returns no result of its own: the child's settlement reaches the parent as a service-owned notice, an independently loaded `send_message` tool delivers follow-ups, and the child's transcript by its SessionID is the source of its detailed output.
 
 #### Token effect
 
@@ -209,7 +209,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 These limits define what this tool does not return or enforce; they are current package constraints.
 
-- **Background runs expose no result through this tool** — a one-shot task's final output is collected through the generic task surface, and a continuable child's output stays in its own session, read by its subagent id. The settlement notice states how that child ended and carries any final assistant message, but it is not this call's return value and cannot be awaited here.
+- **Background runs expose no result through this tool** — a one-shot task's final output is collected through the generic task surface, and a continuable child's output stays in its own session, read by its SessionID. The settlement notice states how that child ended and carries any final assistant message, but it is not this call's return value and cannot be awaited here.
 - **Duplicate names across waiting one-shot instances are detected late** (`TODO(subagent-dup-toolname)`) — continuable instances reserve their prompt-section name during plugin application, but preventing provider-registration rollback for waiting one-shot instances requires a registry of intended names.
 - **Shipped fork tools cannot select a child LLM route** — they inherit the parent's provider and model to keep the copied conversation prefix eligible for KV Cache reuse. Re-enable selection only when route changes preserve reuse or expose a bounded recomputation cost.
 - **Non-routing child policy is fixed per instance** — another persona, tool filter, or depth cap requires another distinctly named tool. LLM selection requires an enabled per-Session preference and a provider that advertises `agentOptions`; both in-process providers and DSH SDK advertise it, while ACP, Codex, and Claude Code reject it rather than ignore it.
