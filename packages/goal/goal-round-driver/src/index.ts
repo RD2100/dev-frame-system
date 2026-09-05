@@ -39,6 +39,14 @@ interface DriverState {
   readonly agent: Agent
   attempt: RoundAttempt | undefined
   competingQueued: boolean
+  /**
+   * Whether an external event arrived since the last admitted goal round:
+   * pending non-goal input, a goal activation edge, or an idle edge that did
+   * not just settle a goal round. The driver reserves a round only on this
+   * budget, so a settled round with no pending event holds the armed goal
+   * instead of burning a model request.
+   */
+  eventPending: boolean
   needsCheckpoint: boolean
   requested: boolean
   run: Promise<void> | undefined
@@ -84,6 +92,7 @@ export function apply(ctx: Context): void {
       agent,
       attempt: undefined,
       competingQueued: false,
+      eventPending: false,
       needsCheckpoint: false,
       requested: false,
       run: undefined,
@@ -192,6 +201,11 @@ export function apply(ctx: Context): void {
       return
     }
 
+    // No external event justifies a round: hold the armed goal and wait for
+    // the next wake, input, or activation edge instead of burning a request.
+    // The round-limit block above already ran, so blocking stays event-independent.
+    if (!state.eventPending) return
+
     const round = goal.roundsStarted + 1
     const content = renderGoalRoundPrompt(goal, round)
     const message = createUserMessage({
@@ -275,6 +289,7 @@ export function apply(ctx: Context): void {
       const state = stateFor(agent)
       state.attempt = undefined
       state.competingQueued = false
+      state.eventPending = false
       state.needsCheckpoint = false
     })
     ctx.on('agent/status', ({ agent, status }) => {
@@ -293,12 +308,18 @@ export function apply(ctx: Context): void {
             disarm(state)
           }
         }
+        // An idle edge that did not just settle a goal round is external
+        // activity (user turn, wake, settlement): it grants one round budget.
+        if (attempt?.phase !== 'admitted') state.eventPending = true
         requestDrive(state)
       }
     })
     ctx.on('goal/changed', ({ agent }) => {
       const state = stateFor(agent)
       state.needsCheckpoint = true
+      // The activation edge itself (create, edit, resume) justifies one round.
+      const goal = currentGoal(state)
+      if (goal?.phase === 'active' && goal.activation === 'armed') state.eventPending = true
       requestDrive(state)
     })
 
@@ -309,6 +330,8 @@ export function apply(ctx: Context): void {
       if (attempt !== undefined && sameQueued(message.content, message.source, attempt)) return
       state.competingQueued = true
       if (attempt?.phase === 'queued') attempt.stale = true
+      // Pending external input is itself an event, even when it arrives quiet.
+      state.eventPending = true
     })
     ctx.on('agent/inbox/claimed', ({ agent, message }) => {
       const state = stateFor(agent)
@@ -333,6 +356,9 @@ export function apply(ctx: Context): void {
         case 'user/message':
           if (state.attempt !== undefined && event.data.id === state.attempt.messageId) {
             state.attempt.phase = 'admitted'
+            // The admitted round consumed the event budget; the next round
+            // waits for a fresh external event.
+            state.eventPending = false
           }
           return
         case 'turn/end':

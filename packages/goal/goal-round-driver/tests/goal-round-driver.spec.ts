@@ -187,8 +187,19 @@ describe('goal-round outcome policy', () => {
 
 describe('same-session goal driving', () => {
   it('admits exact numbered rounds until the durable round cap', async () => {
-    const test = await harness([textResponse('round one'), textResponse('round two')])
+    const test = await harness([
+      textResponse('round one'),
+      textResponse('human answer'),
+      textResponse('round two'),
+    ])
     const created = test.ctx.goals.create(test.agent, { objective: 'finish twice', maxGoalRounds: 2 })
+
+    // Round one runs on the creation edge; round two needs a fresh external
+    // event, so the test delivers one after the settled round holds.
+    await waitForRequests(test.adapter, 1)
+    await test.agent.whenIdle()
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
+    test.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'event between rounds' }], source: { kind: 'user' } }))
 
     const final = await waitForGoal(test.ctx, test.agent, goal => goal?.phase === 'blocked')
 
@@ -197,7 +208,7 @@ describe('same-session goal driving', () => {
       code: 'round-limit',
       message: 'Goal reached its configured limit of 2 rounds.',
     })
-    expect(test.adapter.requests).toHaveLength(2)
+    expect(test.adapter.requests).toHaveLength(3)
     const rounds: number[] = []
     for (const event of test.agent.session.snapshotEvents()) {
       // Round zero is a durable goal state change; positive rounds are the
@@ -208,9 +219,70 @@ describe('same-session goal driving', () => {
     }
     expect(rounds).toEqual([1, 2])
     expect(requestText(test.adapter.requests[0]!)).toContain('Round: 1/2')
-    expect(requestText(test.adapter.requests[1]!)).toContain('Round: 2/2')
+    expect(requestText(test.adapter.requests[1]!)).toContain('event between rounds')
+    expect(requestText(test.adapter.requests[2]!)).toContain('Round: 2/2')
     expect(test.agent.session.snapshotEvents().flatMap(event =>
       event.type === 'request/header' ? [event.data.reason] : [])).toEqual(['initial', 'series'])
+  })
+
+  it('holds the armed goal without a request when no event follows a settled round', async () => {
+    const test = await harness([textResponse('round one')])
+    const flushes: number[] = []
+    test.ctx.on('session/flush', () => { flushes.push(test.adapter.requests.length) })
+    const created = test.ctx.goals.create(test.agent, { objective: 'wait for events', maxGoalRounds: 5 })
+
+    await waitForRequests(test.adapter, 1)
+    // The settled round's own checkpoint barrier: reaching it means the
+    // reservation pass arrived at the event-gate check.
+    await vi.waitFor(() => { expect(flushes).toContain(1) })
+    await test.agent.whenIdle()
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
+
+    expect(test.adapter.requests).toHaveLength(1)
+    expect(test.ctx.goals.get(test.agent)).toMatchObject({
+      id: created.id,
+      phase: 'active',
+      activation: 'armed',
+      roundsStarted: 1,
+    })
+  })
+
+  it('grants the next round when pending input arrives after the hold', async () => {
+    const test = await harness([textResponse('round one'), textResponse('human answer'), textResponse('round two')])
+    test.ctx.goals.create(test.agent, { objective: 'resume on input', maxGoalRounds: 5 })
+
+    await waitForRequests(test.adapter, 1)
+    await test.agent.whenIdle()
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
+    expect(test.adapter.requests).toHaveLength(1)
+
+    test.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'event arrives' }], source: { kind: 'user' } }))
+    await waitForRequests(test.adapter, 3)
+    await waitForGoal(test.ctx, test.agent, goal => goal?.roundsStarted === 2)
+
+    expect(requestText(test.adapter.requests[1]!)).toContain('event arrives')
+    expect(requestText(test.adapter.requests[2]!)).toContain('Round: 2/5')
+    expect(test.ctx.goals.get(test.agent)).toMatchObject({ phase: 'active', activation: 'armed', roundsStarted: 2 })
+  })
+
+  it('grants the next round from an idle edge that settled a non-goal turn', async () => {
+    const test = await harness([textResponse('steer answer'), textResponse('round two')])
+    test.ctx.goals.create(test.agent, { objective: 'resume on a foreign turn', maxGoalRounds: 5 })
+
+    await waitForRequests(test.adapter, 1)
+    await test.agent.whenIdle()
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
+    expect(test.adapter.requests).toHaveLength(1)
+
+    // A steered turn never touches nextTurn, so its idle edge alone must
+    // grant the next round budget.
+    test.agent.steer(createUserMessage({ content: [{ type: 'text', text: 'steer while held' }], source: { kind: 'user' } }))
+    await waitForRequests(test.adapter, 3)
+    await waitForGoal(test.ctx, test.agent, goal => goal?.roundsStarted === 2)
+
+    expect(requestText(test.adapter.requests[1]!)).toContain('steer while held')
+    expect(requestText(test.adapter.requests[2]!)).toContain('Round: 2/5')
+    expect(test.ctx.goals.get(test.agent)).toMatchObject({ phase: 'active', roundsStarted: 2 })
   })
 
   it('never adopts activation from an already-live driver and waits for explicit resume', async () => {
@@ -501,16 +573,25 @@ describe('same-session goal driving', () => {
   })
 
   it('reserves the next round only after the settled round checkpoint succeeds', async () => {
-    const test = await harness([textResponse('round one'), textResponse('round two')])
+    const test = await harness([
+      textResponse('round one'),
+      textResponse('human answer'),
+      textResponse('round two'),
+    ])
     const flushes: number[] = []
     test.ctx.on('session/flush', () => { flushes.push(test.adapter.requests.length) })
     test.ctx.goals.create(test.agent, { objective: 'checkpoint between rounds', maxGoalRounds: 2 })
+
+    await waitForRequests(test.adapter, 1)
+    await test.agent.whenIdle()
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
+    test.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'event grants the next round' }], source: { kind: 'user' } }))
 
     const goal = await waitForGoal(test.ctx, test.agent, current => current?.phase === 'blocked')
 
     expect(goal?.blockedReason?.code).toBe('round-limit')
     expect(goal?.roundsStarted).toBe(2)
-    expect(test.adapter.requests).toHaveLength(2)
+    expect(test.adapter.requests).toHaveLength(3)
     // A flush was observed after round one settled and before round two
     // dispatched (recorded request count 1 at flush time).
     expect(flushes).toContain(1)
