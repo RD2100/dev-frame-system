@@ -21,6 +21,8 @@
 | （脚本墙钟 T1=22:28:46.3254605+09:00；两 agent 时间戳均落于 [T0,T1] 且同屏障执行=时间重叠证据） |
 | lane2-scenario AT2 草案 | workflow:at2-scenario-prep | huoshan-2 | glm-5.3-flash | ~22:29（探针后同回合派发，墙钟括号） | ~22:36（脚本返回） | 成功：commit `000145d089`（p/accept，9 文件 +446，8 场景草案+runner 清单） |
 | lane2-scenario AT3 草案 | workflow:at3-scenario-prep | huoshan-2 | glm-5.3-flash | ~22:29（与 AT2 同一 parallel 屏障=第二路真实并发） | ~22:36 | 成功：commit `560ccb21b0`（p/accept，5 文件 +269，4 场景草案+checklist，逐条核对 main 包契约） |
+| lane2-at3-rest 补齐五篇 | workflow:at3-scenarios-rest | huoshan-2 | glm-5.3-flash | 22:43:51（T0'） | ~22:52（脚本返回） | 成功：commit `175afd9ac9`（p/accept，6 文件 +259/−6，AT3 九篇全 drafted） |
+| lane2-jsdoc-debt P00 清零 | workflow:jsdoc-debt-fix | huoshan-2 | glm-5.3-flash | 22:43:51（与上同屏障=第二路双任务并发） | ~22:52 | 成功：commit `53ed44b4`（p/debt，2 文件 +36/−7，devframe 15→0，devframe vitest 33/33；发现 project-memory 尚有 19 处→排队 S3 给 L-Memory） |
 
 ## 排队/补位规则
 - 第二路空位由完成事件触发补位；新短切片优先入第二路。
