@@ -40,6 +40,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`, `owning Agent session` | `tool/call`, `todo/write`, `tool/result` | - | todo_write is session-owned state; UIs render the latest todo/write event as a checklist. `allowParallelInProgress` is required with no default, so the catalog states its choice: `true`, whose description invites several `in_progress` items. A deployment choosing `false` receives the same tool with a description asking for exactly one active task. |
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-worktree` | `worktree_create`, `worktree_list`, `worktree_prune`, `worktree_remove`, `worktree_status` | `ctx.tools`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry`, `ctx.systemPrompt`, `a calling Agent (its session cwd authorizes the workspace)` | `tool/call`, `tool/result` | - | The five tools authorize every call against the calling session workspace resolved from the immutable session cwd; a worktree id held by another workspace is reported exactly like an unknown one. The schema above does not depend on which provider backs the registry. |
+| `@deepseek-ai/dsh-experimental-agent-worktree` | `worktree_create`, `worktree_remove`, `worktree_status` | `ctx.tools`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry`, `ctx.systemPrompt`, `a calling Agent (its session cwd authorizes the workspace)` | `tool/call`, `tool/result` | - | The three tools bind every created worktree to the calling session as its single writer: other sessions observe it, only the binding holder removes it. Experimental and private: the package ships in no released bundle, and a composition mounting it alongside dsh-tool-worktree would double-register the shared tool names. |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
@@ -2311,6 +2312,83 @@ Observe one registered git worktree's live state by id: whether its directory st
 Source: [`packages/workflow/tool-worktree/src/index.ts`](../packages/workflow/tool-worktree/src/index.ts)
 
 The five tools authorize every call against the calling session workspace resolved from the immutable session cwd; a worktree id held by another workspace is reported exactly like an unknown one. The schema above does not depend on which provider backs the registry.
+
+<a id="deepseek-aidsh-experimental-agent-worktree"></a>
+
+## `@deepseek-ai/dsh-experimental-agent-worktree`
+
+### `worktree_create`
+
+Create a new git worktree bound to this session: a second checkout of this session's workspace repository in a separate directory that only this session may write to until it unbinds or removes it. Use it to isolate a task's changes from the workspace, or to give a parallel agent its own checkout. The target directory must not exist (git creates it); branch is optional and names a NEW branch to check out (omitted, git derives the name from the directory). Returns the worktree id, canonical path, and observed branch — keep the id for worktree_status and worktree_remove. Refusals name the cause and the fix: an existing non-empty target (path-exists), an already-taken branch name (branch-conflict), or a target path too long for git's configuration (path-length).
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Target checkout directory for the new worktree; absolute, or relative to the workspace directory. Must not exist."
+    },
+    "branch": {
+      "type": "string",
+      "description": "New branch to create and check out. Omitted, git derives the branch name from the directory name."
+    }
+  },
+  "required": [
+    "path"
+  ]
+}
+```
+
+Source: [`packages/experimental/agent-worktree/src/index.ts`](../packages/experimental/agent-worktree/src/index.ts)
+
+### `worktree_remove`
+
+Remove one registered git worktree by id: git deletes the checkout and then the registration. A worktree bound to another session refuses until that session removes it or unbinds it — this session's own binding is released automatically as part of the removal. Pass force: true to discard modified or untracked files. The workspace's own checkout and the repository's history are never touched.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "The worktree id to remove."
+    },
+    "force": {
+      "type": "boolean",
+      "description": "Pass true to allow removing a worktree with modified or untracked files, discarding them."
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+Source: [`packages/experimental/agent-worktree/src/index.ts`](../packages/experimental/agent-worktree/src/index.ts)
+
+### `worktree_status`
+
+Observe one registered git worktree's live state by id: whether its directory still exists, which branch it has checked out now, whether the tree is clean, and who holds its single-writer binding (locked plus lockedByThisSession). A missing directory is reported as directoryExists: false — an observation, not an error; the stale registration is recovered with the registry's reconcile. Get ids from the session that created the worktree or from the host.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "The worktree id, from the creating session or the host."
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+Source: [`packages/experimental/agent-worktree/src/index.ts`](../packages/experimental/agent-worktree/src/index.ts)
+
+The three tools bind every created worktree to the calling session as its single writer: other sessions observe it, only the binding holder removes it. Experimental and private: the package ships in no released bundle, and a composition mounting it alongside dsh-tool-worktree would double-register the shared tool names.
 
 <a id="deepseek-aidsh-tool-web"></a>
 

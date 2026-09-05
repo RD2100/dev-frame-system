@@ -124,6 +124,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   workspaceController: 'workspace.md',
   directoryPickerController: 'workspace.md',
   worktreeRegistry: 'worktree-registry.md',
+  agentWorktree: 'agent-worktree.md',
 }
 
 /**
@@ -614,10 +615,14 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   Worktree: 'worktree-registry.md',
   WorktreeCreateRequest: 'worktree-registry.md',
   WorktreeId: 'worktree-registry.md',
+  WorktreeLockHolder: 'worktree-registry.md',
   WorktreeReconcileOptions: 'worktree-registry.md',
   WorktreeReconcileReport: 'worktree-registry.md',
   WorktreeRemoveOptions: 'worktree-registry.md',
   WorktreeStatus: 'worktree-registry.md',
+  AgentWorktreeCreateRequest: 'agent-worktree.md',
+  AgentWorktreeStatus: 'agent-worktree.md',
+  AgentWorktreeView: 'agent-worktree.md',
   ClientArtifactBaseline: 'client-modules.md',
   WebBootGraph: 'client-modules.md',
   SessionTelemetryRecord: 'session-telemetry.md',

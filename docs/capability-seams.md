@@ -79,6 +79,11 @@ flowchart LR
   pkg_workspace["workspace"]
   svc_messageFeedback["ctx.messageFeedback<br/>Lifecycle-bound message feedback"]
   svc_workspaceRegistry["ctx.workspaceRegistry<br/>Workspace entity registry"]
+  pkg_worktree_registry["worktree-registry"]
+  svc_worktreeRegistry["ctx.worktreeRegistry<br/>Per-workspace git worktree registry"]
+  pkg_tool_worktree["tool-worktree"]
+  pkg_agent_worktree["agent-worktree"]
+  svc_agentWorktree["ctx.agentWorktree<br/>Per-agent single-writer worktrees"]
   svc_sessionQuery["ctx.sessionQuery<br/>Session reads, traces, filters, and search"]
   pkg_session_reference["session-reference"]
   pkg_tool_session_query["tool-session-query"]
@@ -222,6 +227,7 @@ flowchart LR
   pkg_agent_default_model --> svc_agentDefaultModel
   pkg_agent_loop --> svc_agentLoop
   pkg_agent_presets --> svc_agentPresets
+  pkg_agent_worktree --> svc_agentWorktree
   pkg_api_gateway --> svc_typertGateway
   pkg_api_session_controller --> svc_sessionController
   pkg_api_session_controller --> svc_sessionFileReferences
@@ -334,6 +340,7 @@ flowchart LR
   pkg_workflow --> svc_workflowEngine
   pkg_workflow_worker_thread --> svc_workflowEngine
   pkg_workspace --> svc_workspaceRegistry
+  pkg_worktree_registry --> svc_worktreeRegistry
   svc_agentDefaultModel --> pkg_api_session_controller
   svc_agentDefaultModel --> pkg_headless
   svc_agentLoop --> pkg_base
@@ -460,6 +467,8 @@ flowchart LR
   svc_workflowEngine --> pkg_tool_workflow
   svc_workspaceRegistry --> pkg_api_session_controller
   svc_workspaceRegistry --> pkg_api_workspace_controller
+  svc_worktreeRegistry --> pkg_agent_worktree
+  svc_worktreeRegistry --> pkg_tool_worktree
   svc_fs -. event gate .-> pkg_fs_observation_policy
 ```
 
@@ -491,6 +500,8 @@ flowchart LR
 | `ctx.storageDomain` | `core` | [`storage-domain`](../packages/storage/storage-domain) | - | [`workspace`](../packages/workspace/workspace), [`message-feedback`](../packages/feedback/message-feedback) | - | Waits for every configured backend, then publishes the domain form as one lifecycle-bound service for typed durable state. |
 | `ctx.messageFeedback` | `core` | [`message-feedback`](../packages/feedback/message-feedback) | - | - | - | Owns local per-assistant-message feedback, lifecycle and target validation, per-item compare-and-set, and the Host unary Remote contract without entering Session history or telemetry. |
 | `ctx.workspaceRegistry` | `core` | [`workspace`](../packages/workspace/workspace) | - | [`api-workspace-controller`](../packages/api/workspace-controller), [`api-session-controller`](../packages/api/session-controller) | - | Owns WorkspaceId-branded records over the domain facility; stable sessionIds accounts drive Host RPC and GUI projections. |
+| `ctx.worktreeRegistry` | `seam` | [`worktree-registry`](../packages/workflow/worktree-registry) | - | [`tool-worktree`](../packages/workflow/tool-worktree), `agent-worktree` | - | The Service Definition and the local git provider share one package; the durable rows carry single-writer bindings, and reconcile is the explicit drift report between rows and git state. |
+| `ctx.agentWorktree` | `seam` | `agent-worktree` | - | - | - | Binds every created worktree to the calling session as its single writer and serves the three model-facing worktree tools; experimental and private, mounts only over the worktree registry. |
 | `ctx.sessionQuery` | `seam` | [`session-query`](../packages/session-query/session-query) | [`session-query-sqlite`](../packages/session-query/session-query-sqlite) | [`session-reference`](../packages/context/session-reference), [`tool-session-query`](../packages/session-query/tool-session-query) | - | The interface supplies exact reads, filters, and traces; its concrete backend adds full-text reconciliation, ranking, snippets, and cursor generations, while the model consumer owns workspace authority and cursor-free rendering. |
 | `ctx.fileReferences` | `seam` | [`file-reference`](../packages/context/file-reference) | [`file-reference-local`](../packages/context/file-reference-local) | [`api-session-controller`](../packages/api/session-controller) | - | The interface returns path-only completion candidates within an Agent cwd; providers own namespace access and ranking without reading file contents. |
 | `ctx.sessionReferenceResolver` | `core` | [`session-reference`](../packages/context/session-reference) | - | - | - | Projects bounded current-surface conversation snapshots into durable untrusted message context; host adapters own mention syntax. |

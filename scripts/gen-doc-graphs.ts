@@ -307,6 +307,21 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns WorkspaceId-branded records over the domain facility; stable sessionIds accounts drive Host RPC and GUI projections.',
   },
   {
+    key: 'worktreeRegistry',
+    pkg: 'worktree-registry',
+    title: 'Per-workspace git worktree registry',
+    mode: 'seam',
+    consumers: ['tool-worktree', 'agent-worktree'],
+    note: 'The Service Definition and the local git provider share one package; the durable rows carry single-writer bindings, and reconcile is the explicit drift report between rows and git state.',
+  },
+  {
+    key: 'agentWorktree',
+    pkg: 'agent-worktree',
+    title: 'Per-agent single-writer worktrees',
+    mode: 'seam',
+    note: 'Binds every created worktree to the calling session as its single writer and serves the three model-facing worktree tools; experimental and private, mounts only over the worktree registry.',
+  },
+  {
     key: 'sessionQuery',
     pkg: 'session-query',
     title: 'Session reads, traces, filters, and search',

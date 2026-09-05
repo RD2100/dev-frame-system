@@ -436,6 +436,31 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'agentWorktree',
+    summary: 'Abstract per-agent worktree service.',
+    description: 'Abstract per-agent worktree service. Subclass, implement the abstract methods, and construct the subclass inside a plugin — it registers as `ctx.agentWorktree` (one implementation per context; loading a second throws, which is cordis\' standard duplicate-service behavior).\n\nImplementations must honor these semantics:\n\n- `create` registers the worktree through `ctx.worktreeRegistry` and binds it to `holder` before answering. The registry\'s git refusals (occupied path, branch conflict, oversized path) propagate as classified errors; a bind failure after a successful create surfaces loud and leaves the worktree registered and unbound.\n- `status` authorizes by workspace: an id this workspace holds no row for is reported exactly like an unknown one, and a bound row from the same workspace is observable by any session of that workspace.\n- `remove` refuses while the worktree is bound to another holder; the holder\'s own binding is released first, and an unbound worktree is removable by any authorized session.',
+    methods: [
+      {
+        signature: 'abstract create(holder: WorktreeLockHolder, request: AgentWorktreeCreateRequest): Promise<AgentWorktreeView>',
+        description: 'Create a linked worktree for the workspace and bind it to `holder` as its single writer.',
+        parameters: [{ name: 'holder', description: 'The opaque single-writer marker taking the binding.' }, { name: 'request', description: 'Owner workspace, target directory, and optional new branch name.' }],
+        returns: 'the registered, bound worktree with observed path and branch.',
+      },
+      {
+        signature: 'abstract status(workspaceId: WorkspaceId, id: WorktreeId): Promise<AgentWorktreeStatus>',
+        description: 'Observe one workspace-authorized worktree\'s live state and binding.',
+        parameters: [{ name: 'workspaceId', description: 'The caller\'s workspace; ids outside it reject.' }, { name: 'id', description: 'Registered worktree id.' }],
+        returns: 'the observation; the live fields are absent when the recorded directory no longer exists.',
+      },
+      {
+        signature: 'abstract remove( holder: WorktreeLockHolder, workspaceId: WorkspaceId, id: WorktreeId, options?: { readonly force?: boolean | undefined }, ): Promise<string>',
+        description: 'Remove one workspace-authorized worktree. A worktree bound to another holder refuses; the caller\'s own binding is released before the removal.',
+        parameters: [{ name: 'holder', description: 'The opaque single-writer marker of the caller.' }, { name: 'workspaceId', description: 'The caller\'s workspace; ids outside it reject.' }, { name: 'id', description: 'Registered worktree id.' }, { name: 'options', description: 'Pass `force` to allow removing dirty worktrees.' }],
+        returns: 'the canonical directory path of the removed worktree.',
+      },
+    ],
+  },
+  {
     key: 'approval',
     summary: 'Approval service that applies session policy before answerers and logs every ask/outcome pair to the requesting session.',
     description: 'Approval service that applies session policy before answerers and logs every ask/outcome pair to the requesting session. It exposes deterministic policy changes to the model through the runtime-context snapshot and switch notices.',
@@ -2879,13 +2904,25 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'worktreeRegistry',
     summary: 'Abstract worktree registry service.',
-    description: 'Abstract worktree registry service. Subclass, implement the abstract methods, and load the subclass as a plugin — it registers as `ctx.worktreeRegistry` (one implementation per context; loading a second throws, which is cordis\' standard duplicate-service behavior).\n\nImplementations must honor these semantics:\n\n- Operations resolve the owner workspace through `ctx.workspaceRegistry` and fail loud on an unknown `WorkspaceId`; the anchor is never stored unvalidated.\n- Records reflect observed facts: canonical paths after the directory exists, branches read back from the worktree, never caller assumptions.\n- `list` answers from durable rows only; the registry, not git metadata, is the authority for what this product registered.\n- `status` reports a missing directory as an observation (`directoryExists: false`) without invoking git; git failures on a present directory reject.\n- `remove` deletes the durable row only after the provider\'s worktree removal succeeded, so a failed remove never hides an existing worktree.\n- `reconcile` compares the rows with `git worktree list` and only reports by default; its actions are opt-in and never delete directories or files.',
+    description: 'Abstract worktree registry service. Subclass, implement the abstract methods, and load the subclass as a plugin — it registers as `ctx.worktreeRegistry` (one implementation per context; loading a second throws, which is cordis\' standard duplicate-service behavior).\n\nImplementations must honor these semantics:\n\n- Operations resolve the owner workspace through `ctx.workspaceRegistry` and fail loud on an unknown `WorkspaceId`; the anchor is never stored unvalidated.\n- Records reflect observed facts: canonical paths after the directory exists, branches read back from the worktree, never caller assumptions.\n- `list` answers from durable rows only; the registry, not git metadata, is the authority for what this product registered.\n- `status` reports a missing directory as an observation (`directoryExists: false`) without invoking git; git failures on a present directory reject.\n- `bind`/`unbind` maintain one single-writer binding per worktree. The holder value is opaque; equality is the entire contract. Re-binding by the current holder is an idempotent success; any other bind, an unbind by a non-holder, or an unbind of an unbound worktree refuses with a `WorktreeLockError`.\n- `remove` refuses while the worktree is bound, whatever options say — the lock is a product-level exclusivity promise, not a dirty-tree guard.\n- `remove` deletes the durable row only after the provider\'s worktree removal succeeded, so a failed remove never hides an existing worktree.\n- `reconcile` compares the rows with `git worktree list` and only reports by default; its actions are opt-in and never delete directories or files.',
     methods: [
       {
         signature: 'abstract create(request: WorktreeCreateRequest): Promise<Worktree>',
-        description: 'Create a linked worktree for one workspace and register it durably.',
+        description: 'Create a linked worktree for one workspace and register it durably. The path must not collide with the owner workspace directory or any registered worktree, and an explicitly requested branch must not already be registered to another worktree of the same workspace (git itself refuses a branch that exists in the repository, whatever workspace registered it).',
         parameters: [{ name: 'request', description: 'Owner workspace, target directory, and optional new branch name.' }],
         returns: 'the registered worktree with observed path and branch.',
+      },
+      {
+        signature: 'abstract bind(id: WorktreeId, holder: WorktreeLockHolder): Promise<Worktree>',
+        description: 'Bind one worktree to a single writer. The holder is opaque to the registry; binding succeeds when the worktree is unbound or already bound to the same holder, and refuses with `WorktreeLockError` (`already-locked`) otherwise.',
+        parameters: [{ name: 'id', description: 'Registered worktree id; unknown ids reject.' }, { name: 'holder', description: 'The single-writer marker taking or holding the binding.' }],
+        returns: 'the updated worktree with the binding stamped.',
+      },
+      {
+        signature: 'abstract unbind(id: WorktreeId, holder: WorktreeLockHolder): Promise<Worktree>',
+        description: 'Release a worktree\'s single-writer binding. Refuses with `WorktreeLockError` (`not-locked`) when the worktree is unbound and (`holder-mismatch`) when `holder` is not the current holder.',
+        parameters: [{ name: 'id', description: 'Registered worktree id; unknown ids reject.' }, { name: 'holder', description: 'The single-writer marker releasing the binding.' }],
+        returns: 'the updated worktree with the binding cleared.',
       },
       {
         signature: 'abstract list(workspaceId: WorkspaceId): readonly Worktree[]',
@@ -2901,7 +2938,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'abstract remove(id: WorktreeId, options?: WorktreeRemoveOptions): Promise<void>',
-        description: 'Remove one worktree through git and delete its registration. The row is deleted only after the removal succeeded.',
+        description: 'Remove one worktree through git and delete its registration. A bound worktree refuses with `WorktreeLockError` (`already-locked`) until its holder unbinds — `force` never overrides the lock. The row is deleted only after the removal succeeded.',
         parameters: [{ name: 'id', description: 'Registered worktree id; unknown ids reject.' }, { name: 'options', description: 'Pass `force` to allow removing dirty worktrees.' }],
         returns: 'resolution after the worktree is gone and the row deleted.',
       },
@@ -3504,6 +3541,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AgentStatus',
     declaration: 'export type AgentStatus = \'idle\' | \'running\';',
+  },
+  {
+    name: 'AgentWorktreeCreateRequest',
+    declaration: 'export interface AgentWorktreeCreateRequest {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly branch?: string | undefined;\n}',
+  },
+  {
+    name: 'AgentWorktreeStatus',
+    declaration: 'export interface AgentWorktreeStatus {\n    readonly id: WorktreeId;\n    readonly directoryExists: boolean;\n    readonly branch?: string | undefined;\n    readonly clean?: boolean | undefined;\n    readonly lockedBy?: WorktreeLockHolder;\n    readonly lockedAt?: string;\n}',
+  },
+  {
+    name: 'AgentWorktreeView',
+    declaration: 'export interface AgentWorktreeView {\n    readonly id: WorktreeId;\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly branch: string;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n    readonly lockedBy?: WorktreeLockHolder;\n    readonly lockedAt?: string;\n}',
   },
   {
     name: 'ApiKeyRecord',
@@ -6231,7 +6280,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'Worktree',
-    declaration: 'export interface Worktree {\n    readonly id: WorktreeId;\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly branch: string;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
+    declaration: 'export interface Worktree {\n    readonly id: WorktreeId;\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly branch: string;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n    readonly lockedBy?: WorktreeLockHolder;\n    readonly lockedAt?: string;\n}',
   },
   {
     name: 'WorktreeCreateRequest',

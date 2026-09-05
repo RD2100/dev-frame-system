@@ -44,6 +44,7 @@
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`、`owning Agent session` | `tool/call`、`todo/write`、`tool/result` | - | todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为检查清单。`allowParallelInProgress` 是没有默认值的必填项，因此本目录明确选择 `true`，对应描述允许同时存在多个 `in_progress` 项。选择 `false` 的部署会获得同一工具，但描述会要求只能有 1 个活动任务。 |
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-worktree` | `worktree_create`、`worktree_list`、`worktree_prune`、`worktree_remove`、`worktree_status` | `ctx.tools`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry`、`ctx.systemPrompt`、`a calling Agent (its session cwd authorizes the workspace)` | `tool/call`、`tool/result` | - | 五个工具把每次调用都授权到由不可变 session cwd 解析出的调用会话工作区；另一工作区持有的 worktree id 与未知 id 的报告完全一致。上方 schema 不依赖具体哪个 provider 支撑注册表。 |
+| `@deepseek-ai/dsh-experimental-agent-worktree` | `worktree_create`、`worktree_remove`、`worktree_status` | `ctx.tools`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry`、`ctx.systemPrompt`、`a calling Agent (its session cwd authorizes the workspace)` | `tool/call`、`tool/result` | - | 三个工具把每个新建 worktree 绑定为调用会话的单一写入目标：其他会话只能观察，只有绑定持有者能移除。实验性私有包：不出现在任何发布 bundle 中，且与 dsh-tool-worktree 同装一个组合会重复注册共享的工具名。 |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
@@ -2319,6 +2320,83 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
 来源：[`packages/workflow/tool-worktree/src/index.ts`](../packages/workflow/tool-worktree/src/index.ts)
 
 五个工具把每次调用都授权到由不可变 session cwd 解析出的调用会话工作区；另一工作区持有的 worktree id 与未知 id 的报告完全一致。上方 schema 不依赖具体哪个 provider 支撑注册表。
+
+<a id="deepseek-aidsh-experimental-agent-worktree"></a>
+
+## `@deepseek-ai/dsh-experimental-agent-worktree`
+
+### `worktree_create`
+
+创建一个绑定到本会话的新 git worktree：本会话工作区仓库在另一目录中的第二检出，在该会话解绑或移除它之前只有本会话可写。用它把一个任务的改动与工作区隔离，或给并行 Agent 一个独立检出。目标目录必须不存在（由 git 创建）；branch 可选，命名一个要检出的**新**分支（缺省时 git 从目录名派生分支名）。返回 worktree id、规范路径与观测到的分支——保留 id 供 worktree_status 与 worktree_remove 使用。拒绝时会说明原因与修法：目标已存在且非空（path-exists）、分支名已被占用（branch-conflict）、或目标路径超出 git 配置的长度上限（path-length）。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Target checkout directory for the new worktree; absolute, or relative to the workspace directory. Must not exist."
+    },
+    "branch": {
+      "type": "string",
+      "description": "New branch to create and check out. Omitted, git derives the branch name from the directory name."
+    }
+  },
+  "required": [
+    "path"
+  ]
+}
+```
+
+来源：[`packages/experimental/agent-worktree/src/index.ts`](../packages/experimental/agent-worktree/src/index.ts)
+
+### `worktree_remove`
+
+按 id 移除一个已登记的 git worktree：git 先删除检出，再删除登记。绑定到其他会话的 worktree 会拒绝，直到那个会话移除或解绑它——本会话自己的绑定在移除过程中自动释放。传 force: true 丢弃有改动或未跟踪文件的 worktree。工作区自身的检出与仓库历史永不触碰。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "The worktree id to remove."
+    },
+    "force": {
+      "type": "boolean",
+      "description": "Pass true to allow removing a worktree with modified or untracked files, discarding them."
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+来源：[`packages/experimental/agent-worktree/src/index.ts`](../packages/experimental/agent-worktree/src/index.ts)
+
+### `worktree_status`
+
+按 id 观察一个已登记 git worktree 的实时状态：目录是否仍存在、当前检出的分支、树是否干净、以及单一写入绑定由谁持有（locked 与 lockedByThisSession）。目录缺失报告为 directoryExists: false——这是观察，不是错误；过时登记经注册表的 reconcile 回收。id 从创建该 worktree 的会话或宿主获取。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "The worktree id, from the creating session or the host."
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+来源：[`packages/experimental/agent-worktree/src/index.ts`](../packages/experimental/agent-worktree/src/index.ts)
+
+三个工具把每个新建 worktree 绑定为调用会话的单一写入目标：其他会话只能观察，只有绑定持有者能移除。实验性私有包：不出现在任何发布 bundle 中，且与 dsh-tool-worktree 同装一个组合会重复注册共享的工具名。
 
 <a id="deepseek-aidsh-tool-web"></a>
 
