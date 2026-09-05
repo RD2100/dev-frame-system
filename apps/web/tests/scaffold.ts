@@ -950,6 +950,18 @@ export function fixtureIdentity(
 }
 
 /**
+ * Render a value as a JSON string-literal body, so substituting it into a
+ * JSON fixture line keeps the line parseable when the value contains JSON
+ * specials — backslash paths on Windows would otherwise form invalid escapes.
+ * Identity for typical POSIX paths, so authored fixtures realize byte-identically.
+ * @param value - the raw value to inject between JSON string quotes.
+ * @returns the escaped string-literal body.
+ */
+function jsonEscape(value: string): string {
+  return JSON.stringify(value).slice(1, -1)
+}
+
+/**
  * Seed a recorded session fixture into the scaffold's persistence root
  * through the REAL backend API (throwaway Context + SessionStore + JSONL
  * plugin — the semantic-checkpoint precedent), never raw file writes: no
@@ -984,11 +996,11 @@ export function realizeSeedFixture(scaffold: WebScaffold, fixtureText: string, i
     .replace(/\{\{session:([2-9]\d*)\}\}/g, (_token, ordinal: string) => `${id}-child-${ordinal}`)
     .replace(/\{\{(message|approval|workflow|command|rpc|retry|id):([1-9]\d*)\}\}/g, (_token, kind: string, ordinal: string) =>
       fixtureIdentity(kind as 'message' | 'approval' | 'workflow' | 'command' | 'rpc' | 'retry' | 'id', Number(ordinal)))
-    .split('{{cwd}}').join(scaffold.workspaceCwd)
+    .split('{{cwd}}').join(jsonEscape(scaffold.workspaceCwd))
   const fixtureCwd = (JSON.parse(realized.split('\n', 1)[0]!) as { cwd?: string }).cwd
   return fixtureCwd === undefined
     ? realized
-    : realized.split(fixtureCwd).join(scaffold.workspaceCwd)
+    : realized.split(jsonEscape(fixtureCwd)).join(jsonEscape(scaffold.workspaceCwd))
 }
 
 /**
