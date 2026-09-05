@@ -7,22 +7,22 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
-## Summary
+## 概述
 
 `dsh-experimental-agent-evidence` 挂载 `ctx.agentEvidence`，在 `agent_evidence` 存储域上记录并查询代理工作的追加式溯源台账的 Cordis 服务：任务/Goal 绑定回执（单任务视角的 DevFrame goal-result 绑定元组）、提交回执（commit 对象名、改动路径、工作起点源输入摘要）与验证快照（命令、退出码、产物路径——非零退出码原样记录）。台账只存溯源：验收判定留在 Goal 绑定与任务状态里，因此这里不存在另一个验收数据库。回执在启动时原样恢复。
 
-## Table of Contents
+## 目录
 
-- [Use this package](#use-this-package)
-- [Understand the implementation](#understand-the-implementation)
-- [Model Experience](#model-experience)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
-- [Dev Note](#dev-note)
+- [使用本包](#use-this-package)
+- [理解实现](#understand-the-implementation)
+- [模型体验](#model-experience)
+- [已知限制与延期工作](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
 
 -----
 
 <a id="use-this-package"></a>
-## Use this package
+## 使用本包
 
 在存储栈旁挂载本服务；它硬注入 `ctx.storageDomain`，存储后端缺失即在激活时失败。
 
@@ -60,7 +60,7 @@ const bindings = ctx.agentEvidence.bindingsByGoal(controllerSessionId, goalId)
 -----
 
 <a id="understand-the-implementation"></a>
-## Understand the implementation
+## 理解实现
 
 <details>
 <summary>Implementation internals — click to expand</summary>
@@ -94,7 +94,7 @@ const bindings = ctx.agentEvidence.bindingsByGoal(controllerSessionId, goalId)
 -----
 
 <a id="model-experience"></a>
-## Model Experience
+## 模型体验
 
 ### 代理证据台账
 
@@ -110,7 +110,8 @@ const bindings = ctx.agentEvidence.bindingsByGoal(controllerSessionId, goalId)
 
 与实时请求无关：本包不触碰请求前缀，因此不可能使提供方缓存复用失效。
 
-## Known Limitations and Deferred Work
+<a id="known-limitations-and-deferred-work"></a>
+## 已知限制与延期工作
 
 这些限制界定了台账在何种场景下不适用或需要特别运维关注。它们是当前包约束，不是任务清单。
 
@@ -119,7 +120,7 @@ const bindings = ctx.agentEvidence.bindingsByGoal(controllerSessionId, goalId)
 - **轨迹无界增长** —— 回执从不重写或修剪；长期运行的部署会在三张表中累积行。
 
 <a id="dev-note"></a>
-### Dev Note
+### 开发备注
 
 <details>
 <summary>Working context for maintainers — click to expand</summary>

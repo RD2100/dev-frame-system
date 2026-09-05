@@ -2,6 +2,8 @@
 
 Status: implemented
 
+English | [中文](2026-09-05-event-gated-goal-round-continuation.zh.md)
+
 ## Problem
 
 The same-session goal-round driver scheduled its next round unconditionally: every idle transition of an agent holding an active, armed goal with remaining capacity reserved and queued one more `<goal_round>` prompt. In orchestration sessions the model ends a round after delegating work to background subagents, with nothing else pending; the driver immediately burned the next round, the model could only answer that it was waiting for events, and the cycle repeated — one full model request per idle with zero progress until a settlement happened to land. The waste scaled with context size and delegation depth.

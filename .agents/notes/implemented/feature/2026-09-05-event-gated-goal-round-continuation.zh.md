@@ -2,6 +2,8 @@
 
 Status: implemented
 
+[English](2026-09-05-event-gated-goal-round-continuation.md) | 中文
+
 ## Problem
 
 同会话 goal-round 驱动器此前无条件调度下一轮：持有 active 且已启用续行、仍有容量 goal 的 agent，每次 idle 沿都会预留并排队一条新的 `<goal_round>` 提示词。在编排型会话里，模型把工作委托给后台子代理后结束轮次、再无其他待办；驱动器立即烧掉下一轮，模型只能回答"正在等待事件"，循环往复——每次 idle 消耗一次完整模型请求，直到某次结算恰好落进来才可能有进展。浪费随上下文规模与委托深度放大。

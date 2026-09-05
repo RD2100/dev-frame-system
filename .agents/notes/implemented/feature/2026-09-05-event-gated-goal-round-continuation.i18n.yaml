@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-05-event-gated-goal-round-continuation.md
-2026-09-05-event-gated-goal-round-continuation.md: 0155b6b785f93a68d6cdf5a71e81e5e41a61c37f
-2026-09-05-event-gated-goal-round-continuation.zh.md: 5fcfe4915c5eec9388f895db769cee2159cc096d
+2026-09-05-event-gated-goal-round-continuation.md: 9f7f1aea8c34bbcb7a84f9c0322ae95eee3f931e
+2026-09-05-event-gated-goal-round-continuation.zh.md: dd32bf02200e9893b1a04a7c735fa5dca900efb8

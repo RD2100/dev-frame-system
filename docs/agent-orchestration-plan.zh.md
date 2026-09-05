@@ -37,7 +37,7 @@ DSH-Project-Controller 是本轮开发的唯一总控会话：它统一规划、
 | --- | --- | --- | --- | --- |
 | F01 | 角色策略与权限执行 | `packages/experimental/devframe/src/permissions/**`、`packages/experimental/devframe/tests/permissions.spec.ts` | — | [AT1-01、AT1-02](testAndAcceptance.zh.md#part1) |
 | F02 | 项目工具与证据链 | `packages/experimental/devframe/src/controller/**`、新 `src/project/**`、`src/events.ts`、`src/projection.ts`、`src/session-journal.ts` 及配套测试；`packages/goal` 内增量回执引用 | F01 | [AT1-03–AT1-06](testAndAcceptance.zh.md#part1) |
-| F03 | `/project` 人工命令旅程 | 新 `packages/experimental/devframe/src/commands/**` 及测试 | F01、F02、F04 | [AT1-10](testAndAcceptance.zh.md#part1) |
+| F03 | `/project` 人工命令旅程 | 新 `devframe/src/commands/**` 及测试（规划中） | F01、F02、F04 | [AT1-10](testAndAcceptance.zh.md#part1) |
 | F04 | 可靠性早期子集 | `packages/experimental/devframe/src/reliability/**`、`packages/experimental/devframe/tests/reliability/**` | F01、F02（仅集成；库工作立即启动） | [AT4-01–AT4-05、AT4-06 截止、AT4-07 flush](testAndAcceptance.zh.md#part4) |
 | F05 | Profile 组装与状态呈现 | `packages/boot/app-boot/src/profile.ts` 中 DevFrame 模板行、`apps/cli/src/profile-boot.ts`、实验性 client team 状态表面 | F01–F03（脚手架立即启动） | [AT1-07、AT1-08](testAndAcceptance.zh.md#part1) |
 | F06 | Worktree 工具 Consumer 与 prune 对账 | `packages/workflow/worktree-registry/**` 及其新增的 consumer 包 | — | 真实 git 子进程测试；`verify-cordis-catalog` |
