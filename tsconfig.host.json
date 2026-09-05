@@ -301,6 +301,7 @@
     { "path": "./packages/experimental/agent-evidence" },
     { "path": "./packages/experimental/agent-reliability" },
     { "path": "./packages/experimental/project-controller" },
+    { "path": "./packages/experimental/agent-hierarchy" },
     { "path": "./packages/experimental/devframe" },
     { "path": "./packages/experimental/agent-team-profile" },
     { "path": "./packages/experimental/tool-agent-team" },
