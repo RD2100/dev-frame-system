@@ -1,11 +1,11 @@
 ---
-description: L-Integration 真实组合集成候选线的逐包 Cordis 接入盘点与缺口判定（基线 cda26762d7 + main 4bc507e332 fast-forward，工作树 D:\dsh-devframe-p-integration）。
+description: L-Integration 真实组合集成候选线的逐包 Cordis 接入盘点与缺口判定（基线 cda26762d7 → main 4bc507e332 → main e3d4d6ad02，工作树 D:\dsh-devframe-p-integration）。
 ---
 
 # 集成候选缺口清单（gaps）
 
-- 状态：清点完成（源码阅读逐包核实；行号随基线，合并 main 后为 4bc507e332 树）。
-- 基线：`p/integration` @ `cda26762d7`，本轮 fast-forward 合并 main 至 `4bc507e332`（纳入 P21-M project-memory）。
+- 状态：清点完成；第二轮组合重验完成（project-memory 插件形态纳入，S1–S3 上游落地）。
+- 基线：`p/integration` @ `cda26762d7`，先后 fast-forward 合并 main 至 `4bc507e332`（纳入 P21-M）与 `e3d4d6ad02`（纳入 p/memory-seam S1–S3 切片，merge `fb1519cd19`）。
 - 隔离 home：`C:\Users\25313\.dsh-integration`（本线专用；绝不触碰 `C:\Users\25313\.dsh`）。
 - 判定口径：机械缺口 = 缺 cordis.yml / 入口声明 / profile 挂线 / spec 挂线，可直接补齐且不改 src 语义；语义缺口 = 缺 Provider/Consumer/工具实现或产品面，归原组长，不代改。
 - 挂载约定事实：本仓库"已装插件"的形态不是每包自带 cordis.yml，而是**插件包导出 Cordis Service（default export）+ 某个 profile patch 层以 `id/name/config` 行挂载**（先例：`agent-team` 无自包 cordis.yml，由 `agent-team-profile` 的 cordis.patch.yml insert 行挂载）。故"缺自包 cordis.yml"本身不算缺口；缺的是可挂载的 Service 面或挂载层。
@@ -65,13 +65,14 @@ description: L-Integration 真实组合集成候选线的逐包 Cordis 接入盘
 - 持久化：无自有域（stop 对账身份跨重启保留归 host 语义）。
 - **判定：机械缺口仅"profile 挂载层"；devframe 子路径导出解析为装配前置条件。**
 
-### 7. project-memory（P21-M）— 未达插件形态（语义缺口在册）
-- cordis.yml：无自包文件。
-- Service Definition：**无 Cordis Service**——`ProjectMemoryService` 为普通类（src/memory.ts:186，非 `extends Service`），入口无 default export（src/index.ts），无 `declare module` Context 扩增，无 static inject。宿主需自行接线 workspace 身份/consent/回执存储。
-- 工具注册：三工具未注册 `ctx.tools`（总控通报；L-Memory 在 p/memory-seam 分支处理，本线不代改）。
-- Config schema：`resolveMemorySpec`（src/config.ts）为库级 spec 解析，非 loader Config 面。
-- 持久化：Obsidian Vault 文件面 + `MemoryReceiptStore` 接缝（src/receipt.ts），回执未落会话日志（语义缺口在册）。
-- **判定：语义缺口（Service 化 + 工具挂载 + 回执落日志），归 L-Memory；本轮不进 profile，不代改。**
+### 7. project-memory（P21-M）— 插件形态已落地（第二轮只读装配验证）
+- cordis.yml：包内自带 `cordis.patch.yml` 挂载行（S1 切片交付，merge `fb1519cd19`，main `e3d4d6ad02`）。
+- Service Definition：**已具备**——`src/plugin.ts` 函数式 Cordis 插件（`name: 'project-memory'`、`inject: ['tools']`、schemastery `Config`、`apply` 内 `ctx.provide('projectMemory', service)`），Context 扩增 `ctx.projectMemory`（S1 落地）。
+- 工具注册：三工具已注册 `ctx.tools`（S2 落地；本组合探针实测 `ctx.tools.get('memory_search'/'memory_read'/'memory_append')` 全部非 undefined）。
+- Config schema：loader `Config`（`workspaceId` load 期必填、`writeEnabled` 默认 false、`userScopeEnabled` 默认 false、`vaultRoot` 缺省即未配置只读）。
+- 持久化：`MemoryReceiptStore` 走会话日志（`src/receipt-log.ts`，S2/S3 落地）；`agent/created` 监听做回执再水化。
+- 组合级验证（本线第二轮）：只读装配（`workspaceId: integration`、`vaultRoot: dshHomePath('integration-vault')`、`writeEnabled: false`）——搜索覆盖完整、读路径真实（`memory_missing`）、写拒绝（`MEMORY_APPEND_DISABLED`）、冷启动重断言全绿。回执再水化的 agent 侧路径未驱动（无带回执 agent 可用），记剩余检查。
+- **判定：机械挂载缺口已由上游补齐（M6）；组合级四态升格见汇总表。**
 
 ### 8. 参照面（非本轮插件）
 - devframe：支持库（controller/evidence/reliability 的类型与 reliability 实现来源），无 Service default export，不挂载；其 `./reliability`、`./shared`、`./controller/goal-binding` 子路径导出须可解析（已具备）。
@@ -82,15 +83,18 @@ description: L-Integration 真实组合集成候选线的逐包 Cordis 接入盘
 ### 机械已补项（本线在集成 profile 层补齐，不改 src）
 | # | 项 | 落点 |
 | --- | --- | --- |
-| M1 | 五个已就绪插件的 profile 挂载行（session-identity / agent-hierarchy / project-controller / agent-evidence / agent-reliability，含 id/name/config） | `.agents/devframe/integration/cordis.patch.yml` → 隔离 home profile |
-| M2 | profile manifest（bundles 栈 dsh-base + dsh-headless；六包 dependencies 声明满足 resolver manifest 约束） | 隔离 home `profiles/integration/package.json` |
-| M3 | 插件包 node_modules 链接（六包 junction 进 profile node_modules，built 模式可解析） | 隔离 home profile node_modules |
+| M1 | 六个插件的 profile 挂载行（session-identity / agent-hierarchy / project-controller / agent-evidence / agent-reliability / project-memory 只读装配，含 id/name/config） | `.agents/devframe/integration/cordis.patch.yml` → 隔离 home profile |
+| M2 | profile manifest（bundles 栈 dsh-base + dsh-headless；插件与 llm-replay dependencies 声明满足 resolver manifest 约束） | 隔离 home `profiles/integration/package.json` |
+| M3 | 插件包 node_modules 链接（九包 junction 进 profile node_modules，built 模式可解析） | 隔离 home profile node_modules |
+| M4 | `workspace` + `worktree-registry` 两行补齐（base 的 tool-worktree 硬注入这两个服务；安装态由 web-app 归一化提供、自定义 profile 不携带） | 集成档案 insert 块 |
+| M5 | `session-persistence-jsonl` `compression: none` restate（sessions root 单一编码 fail-loud 约束） | 集成档案顶层 restate |
+| M6 | project-memory 只读装配行（第二轮：`workspaceId: integration` + 探针 Vault + `writeEnabled: false`） | 集成档案 insert 块 |
 
-### 语义待办项（归原组长，本线不代改）
-| # | 项 | 归属 |
-| --- | --- | --- |
-| S1 | project-memory Service 化（default export Cordis Service + Context 扩增 + inject 声明） | L-Memory（p/memory-seam） |
-| S2 | project-memory 三工具注册 `ctx.tools` | L-Memory（p/memory-seam） |
-| S3 | project-memory MemoryReceiptStore 落会话日志 | L-Memory（p/memory-seam） |
-| S4 | 五插件的模型可见工具面（controller 任务板命令、evidence 回执入口等"会话级工具"）——当前五包均为纯服务，模型/命令面待产品波次 | P04/P05 原组长 |
-| S5 | agent-reliability stop 对账身份的持久化 host 语义（跨重启保留 unresolved 身份） | P06 原组长 |
+### 语义待办项（原组长归属）
+| # | 项 | 状态 | 归属 |
+| --- | --- | --- | --- |
+| S1 | project-memory Service 化（Cordis 插件形态 + Context 扩增 + inject 声明） | **已落地**（上游 `781e2ff9e9`，本线组合验证通过） | L-Memory（已合并） |
+| S2 | project-memory 三工具注册 `ctx.tools` | **已落地**（本线探针实测三工具注册成功） | L-Memory（已合并） |
+| S3 | project-memory MemoryReceiptStore 落会话日志 | **已落地**（上游 `682c7c6008` receipt-log；agent 侧再水化路径本线未驱动，见剩余检查） | L-Memory（已合并） |
+| S4 | 五插件的模型可见工具面（controller 任务板命令、evidence 回执入口等"会话级工具"）——当前五包均为纯服务；project-memory 三工具已全局注册但未纳入 agent-hierarchy 角色允许表（部署选择，待下一波） | 未启动 | P04/P05 原组长 |
+| S5 | agent-reliability stop 对账身份的持久化 host 语义（跨重启保留 unresolved 身份） | 未启动 | P06 原组长 |
