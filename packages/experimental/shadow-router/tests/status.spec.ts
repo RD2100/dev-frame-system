@@ -14,8 +14,11 @@ describe('shadow-router status', () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-at2-08a-'))
     const h = await harness(root, { authorizedRoots: [root], statusPageSize: 2 })
     try {
-      const dirs = ['project-a', 'project-b', 'project-c'].map(name => h.makeProjectDir(name))
-      const [dirA, dirB, dirC] = await Promise.all(dirs)
+      const [dirA, dirB, dirC] = await Promise.all([
+        h.makeProjectDir('project-a'),
+        h.makeProjectDir('project-b'),
+        h.makeProjectDir('project-c'),
+      ])
       const openA = await h.router.openProject(h.shadow, { path: dirA, requestId: 'at2-08-open-a' })
       const openB = await h.router.openProject(h.shadow, { path: dirB, requestId: 'at2-08-open-b' })
       await h.router.openProject(h.shadow, { path: dirC, requestId: 'at2-08-open-c' })
@@ -24,7 +27,9 @@ describe('shadow-router status', () => {
       const page1 = await h.router.projectStatus(h.shadow, {})
       expect(page1.projects).toHaveLength(2)
       expect(page1.nextCursor).toBe(2)
-      const page2 = await h.router.projectStatus(h.shadow, { cursor: page1.nextCursor })
+      const page2 = await h.router.projectStatus(h.shadow, {
+        ...(page1.nextCursor === undefined ? {} : { cursor: page1.nextCursor }),
+      })
       expect(page2.projects).toHaveLength(1)
       expect(page2.nextCursor).toBeUndefined()
 

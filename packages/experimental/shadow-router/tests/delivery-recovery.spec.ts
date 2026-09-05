@@ -39,11 +39,12 @@ async function seedReadyBinding(seed: Awaited<ReturnType<typeof seedHarness>>, s
 }
 
 /** Seed one crash-residue delivery row through the real domain. */
-async function seedDelivery(seed: Awaited<ReturnType<typeof seedHarness>>, scenario: ScenarioSeed, overrides: Partial<ShadowDeliveryRecord> & { readonly messageId: string; readonly requestId: string; readonly state: ShadowDeliveryRecord['state'] }): Promise<void> {
+async function seedDelivery(seed: Awaited<ReturnType<typeof seedHarness>>, scenario: ScenarioSeed, overrides: Omit<Partial<ShadowDeliveryRecord>, 'messageId' | 'requestId'> & { readonly messageId: string; readonly requestId: string; readonly state: ShadowDeliveryRecord['state'] }): Promise<void> {
   const now = new Date().toISOString()
+  const { messageId, requestId, ...rest } = overrides
   const delivery: ShadowDeliveryRecord = {
-    messageId: ShadowMessageId(overrides.messageId),
-    requestId: ShadowRequestId(overrides.requestId),
+    messageId: ShadowMessageId(messageId),
+    requestId: ShadowRequestId(requestId),
     sourceSessionId: SessionId('session-shadow'),
     workspaceId: WorkspaceId(scenario.workspaceId),
     bindingRevision: 1,
@@ -53,7 +54,7 @@ async function seedDelivery(seed: Awaited<ReturnType<typeof seedHarness>>, scena
     text: 'seeded delivery text',
     createdAt: now,
     updatedAt: now,
-    ...overrides,
+    ...rest,
   }
   await seed.domain.table('deliveries').put(delivery.messageId, delivery)
 }
@@ -101,7 +102,7 @@ describe('shadow-router delivery recovery', () => {
       const deliveries = h.router.listDeliveries(WorkspaceId(scenario.workspaceId))
       expect(deliveries).toHaveLength(2)
       expect(deliveries.every(record => record.state === 'received')).toBe(true)
-      expect(h.ctx.sessions.get('session-ctrl-r1')?.header.cwd).toBe(scenario.canonicalPath)
+      expect(h.ctx.sessions.get(SessionId('session-ctrl-r1'))?.header.cwd).toBe(scenario.canonicalPath)
     } finally {
       await h.dispose()
     }

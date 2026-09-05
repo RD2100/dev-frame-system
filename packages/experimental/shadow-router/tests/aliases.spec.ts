@@ -1,13 +1,12 @@
 /** AT2-04: alias resolution consistency and physical-overlap rejection. */
 
 import { describe, expect, it } from 'vitest'
-import { mkdtemp, realpath, rm, stat, symlink } from 'node:fs/promises'
+import { mkdtemp, rm, stat, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { harness } from './helpers.ts'
 
 const isWindows = process.platform === 'win32'
-const isPosix = process.platform === 'linux' || process.platform === 'darwin'
 
 describe('shadow-router aliases and overlap', () => {
   it.skipIf(!isWindows)('AT2-04: case-alias spellings resolve to one workspace on Windows', async () => {
