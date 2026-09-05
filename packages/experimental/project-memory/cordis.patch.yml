@@ -1,0 +1,13 @@
+# Private project-memory profile layer row. Applied as a --patch overlay or a
+# bundle patch over dsh-base; edit the config values per deployment. With the
+# shipped defaults memory stays unconfigured (no vaultRoot) and read-only, so
+# loading is safe everywhere and the tools report MEMORY_UNAVAILABLE until a
+# real Vault root is configured.
+
+- insert:
+    - id: project-memory
+      name: '@deepseek-ai/dsh-experimental-project-memory'
+      config:
+        workspaceId: default
+        writeEnabled: false
+        userScopeEnabled: false

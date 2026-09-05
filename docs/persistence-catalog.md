@@ -567,6 +567,19 @@ Source: [`packages/llm/llm-retry/src/types.ts:9`](../packages/llm/llm-retry/src/
 
 Source: [`packages/llm/llm-retry/src/types.ts:11`](../packages/llm/llm-retry/src/types.ts)
 
+### `memory/*`
+
+<a id="memoryreceipt--log-only"></a>
+
+#### `memory/receipt` — log-only
+
+```ts persistence-catalog
+/** Committed append receipt for one memory note; latest event per noteId is the live receipt. */
+'memory/receipt': MemoryReceiptEventData
+```
+
+Source: [`packages/experimental/project-memory/src/receipt-log.ts:36`](../packages/experimental/project-memory/src/receipt-log.ts)
+
 ### `model/*`
 
 <a id="modelselection--log-only"></a>

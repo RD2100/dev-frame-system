@@ -12,17 +12,29 @@ import { NOTE_SCHEMA_VERSION, type MemoryNote, type MemoryNoteMeta } from './typ
 import { NoteId } from './ids.ts'
 import type { MemoryNamespace } from './types.ts'
 
-/** SHA-256 of the UTF-8 encoding of one string, as lowercase hex. */
+/**
+ * SHA-256 of the UTF-8 encoding of one string, as lowercase hex.
+ * @param value - String to digest.
+ * @returns the lowercase hex digest.
+ */
 export function sha256Hex(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex')
 }
 
-/** `sha256:<hex>` digest of one UTF-8 string, as stored in notes and receipts. */
+/**
+ * `sha256:<hex>` digest of one UTF-8 string, as stored in notes and receipts.
+ * @param value - String to digest.
+ * @returns the tagged digest.
+ */
 export function digestTag(value: string): string {
   return `sha256:${sha256Hex(value)}`
 }
 
-/** UTF-8 byte length of one string. */
+/**
+ * UTF-8 byte length of one string.
+ * @param value - String to measure.
+ * @returns the UTF-8 byte length.
+ */
 export function utf8ByteLength(value: string): number {
   return Buffer.byteLength(value, 'utf8')
 }
