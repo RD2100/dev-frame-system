@@ -81,8 +81,10 @@ L1 组长与 L2 Worker 待创建。合规创建顺序（每个 Agent）：持久
 | P07 组合冒烟更新 | composition-smoke 按直接复制断言（等用户改动提交决策） | 用户 UI 改动 | L-Foundation（暂停） | `packages/test-support/composition-smoke/**` | 冒烟转绿 | 4 |
 | P09/P12/P13/P14/P15 | 已装外部插件在隔离目标 profile 的组合验证 | — | L-Product | 隔离 profile 目录、验证报告 | 启动+持久化检查 | 5 |
 | P11 providers-ui + P16–P20 | 五仓库隔离安装、能力与兼容验证 | — | L-Verify | 独立 DSH_HOME `C:\Users\25313\.dsh-verify` | 四态分级 + SKIP_AUTH 记录 | 5 |
+| P21-S shadow-router | 跨项目 Shadow 路由：绑定存储、project_open/send/status/stop 四工具、跨根投递持久化（received≠completed）、单项目停止隔离 | P00、P04、P06 | L-Shadow（已指派，待 P04 接口或车道释放派发） | `packages/experimental/shadow-router/**` | AT2-01…08 绑定真实测试；隔离/恢复/启停/回滚验收 | 6（依赖 P04/P06） |
+| P21-M project-memory | Obsidian 有边界记忆：命名空间、记忆工具与限制、读取/追加、信任/冲突/新鲜度、失败处理 | P00、P06（恢复语义） | L-Memory | `packages/experimental/project-memory/**` | AT3-01…09 绑定真实测试；真实临时 Vault；持久化/隔离/恢复验收 | 5（独立部分可先行） |
 
-四态口径：源码存在 / profile 已安装启用 / 运行时已验证 / 达到生产可用，逐插件分别报告，不得混写。
+四态口径：源码存在 / profile 已安装启用 / 运行时已验证 / 达到生产可用，逐插件分别报告，不得混写。P21-S/P21-M 两者未完成约定功能与集成验收前不得宣布整个工程完成。
 
 ## 4a. 组长登记（W0/W2 并行）
 
@@ -92,6 +94,9 @@ L1 组长与 L2 Worker 待创建。合规创建顺序（每个 Agent）：持久
 | L-Verify | L1 | `f2f6d88e-b5e6-4d9f-b945-6e2491022180` | 同上 | `D:\dsh-devframe-p-verify`（`p/verify`） | completed（7/7 verified、0 blocked、6 SKIP；报告已合并 main `bce34b8af2`） |
 | L-Worktree | L1 | `46c1c8cb-9aa3-422b-8ace-cf9685050c07` | 同上 | `D:\dsh-devframe-p-worktree`（`p/worktree`，基点 `3ea01faa6c` 含 P00） | developing |
 | L-Product | L1 | `2e51e73e-e5ba-4ec0-a888-c54cb5451be0` | 同上 | `D:\dsh-devframe-p-product`（`p/product`） | developing |
+| L-Hierarchy | L1 | `d60f56c3-e3a5-4838-86dc-efa757578306` | 同上 | `D:\dsh-devframe-p-hierarchy`（`p/hierarchy`，基点 `c23e78a17a` 含 P00+P01） | developing |
+| L-Memory（P21-M） | L1 | 待派发（下一车道释放即启） | 同上 | `D:\dsh-devframe-p-memory`（待建） | planned |
+| L-Shadow（P21-S） | L1 | 待派发（P04 接口落地后启） | 同上 | `D:\dsh-devframe-p-shadow`（待建） | planned |
 
 并发纪律：huoshan-1 同账号最多两路生成中请求；组长内部前台串行跑 Worker；组长完成即补位下一个可执行任务。
 
@@ -109,6 +114,8 @@ L1 组长与 L2 Worker 待创建。合规创建顺序（每个 Agent）：持久
 | AT4-06/07 | 并发/队列限制、flush 失败 | P06 | 准入切断 + 刷盘失败注入测试 |
 | P16–P20 | 五插件验证 | L-Verify | 四态分级 + SKIP_AUTH/SKIP_QUOTA 记录 |
 | P09/P12–P15 | 已装插件组合 | L-Product | 隔离目标 profile 启动与持久化检查 |
+| AT2-01…08 | Shadow 跨项目路由（解析/去重/投递/停止隔离） | P21-S | 绑定存储+四工具+投递持久化真实测试；跨版本恢复 |
+| AT3-01…09 | Obsidian 记忆（召回/限制/幂等/穿越/信任/失败） | P21-M | 真实临时 Vault 工具级测试；只读退化与失败保存 |
 | AT1-11 | 真实小任务试用 | W4 | 用户单独授权后执行，用户记录 helpful/inconclusive/not_helpful |
 
 ## 7. 变更日志
@@ -122,4 +129,6 @@ L1 组长与 L2 Worker 待创建。合规创建顺序（每个 Agent）：持久
 - 2026-09-05：L-Verify 中期证据（总控抽查隔离 home）：7/7 发布包与 profile 就绪；dump-config 产物核实 dsh-llm-codex 与 dsh-llm-providers-ui 组合在 dsh-base 之上装配成功（llm-codex 行 enableSearch/enableImageTool/enableImageGeneration=false、retryPolicy normal/maxRetries 8）。此前"四个 Provider 启动失败"为写入中瞬时快照的误读，已更正。
 - 2026-09-05：总控交叉核对：dsh-ponytail-0.2.5.tgz 包内真实包名为 `dsh-ponytail`，与计划约束所称 `dsh-ponytail-skills` 不一致；已转 L-Verify 专项核实（README/Releases 证据、是否存在 skills 子包、v0.2.5 是否正确目标）。P00 全部源文件与 workspace 注册已落盘、待提交；L-Verify 7 profile dump 完成进入深度验证。
 - 2026-09-05：P00 交付并经总控独立验收（亲跑 14/14），L-Worktree（P03）基于契约并行启动；验收矩阵预先绑定（`ecec51721d`）。
-- 2026-09-05：W3 隔离验证完成（L-Verify completed，报告 `03c2b6d4f9` 已合并 main `bce34b8af2`）：7/7 目标源码存在+安装（SHA256 对 GitHub digest 校验）+装配级运行时验证；blocked=0；skipped=6（Astra/grok SKIP_AUTH、opencode-go/ollama SKIP_QUOTA、commandcode SKIP_AUTH/QUOTA、Web 真机 UI 环境性 SKIP 均不计通过）。Astra 专项：静态目录无 Astra、仅动态目录到达、五 effort 原值进请求、none/off/minimal/ultra 无静默映射。总控四项裁决：(1) LEVELS_56 minimal→low 豁免接受（官方模型显式数据表、非 Astra 路径）登记为已接受偏差；(2) 本轮维持 codex 0.3.12，0.3.13（ultra 改归一化移除）升级需重验后另行决策；(3) providers-ui=设置 UI 页归属前置、非 loader 硬依赖；(4) ponytail 包名计划约束更正为 `dsh-ponytail@0.2.5`。L-Product（P09/P12–P15 + D6 model-switch×agent-team 组合冲突核对）随即补位启动。
+- 2026-09-05：W3 隔离验证完成（L-Verify completed，报告 `03c2b6d4f9` 已合并 main `bce34b8af2`）：7/7 目标源码存在+安装（SHA256 对 GitHub digest 校验）+装配级运行时验证；blocked=0；skipped=6（均不计通过）。Astra 专项：静态目录无 Astra、仅动态目录到达、五 effort 原值进请求、none/off/minimal/ultra 无静默映射。总控四项裁决：(1) LEVELS_56 minimal→low 豁免接受；(2) 本轮维持 codex 0.3.12（0.3.13 升级需重验）；(3) providers-ui=设置 UI 页归属前置、非 loader 硬依赖；(4) ponytail 包名更正为 `dsh-ponytail@0.2.5`。
+- 2026-09-05：P01 交付并经总控独立验收（亲跑 22/22 含 P00 回归；`c23e78a17a`）——createBoundSession 以准确 cwd 创建原生 Session + 冷恢复绑定注册表，合规创建机制在服务层落地；P07 交付（`d4c402c2a3`，composition-smoke 直接复制断言 5/5，总控验收通过）。P02 解禁，L-Hierarchy 派发（worktree 基点 `c23e78a17a`）。
+- 2026-09-05：用户追加范围落入持久化计划：Shadow 与 Memory 必须本轮完整交付。定义依 docs/detailDesign-part2/3.zh.md（Proposed，Round-3 审计证实零代码混入）核实，不臆造。插件 ID：P21 拆 P21-S dsh-shadow-router（AT2-01..08，依赖 P04/P06）与 P21-M dsh-project-memory（AT3-01..09，独立部分先行）；L-Memory 下一车道释放即派，L-Shadow 待 P04 接口落地后派；两者未完成约定功能与集成验收前不宣布工程完成。总目标已更新（goal revision 6）。
