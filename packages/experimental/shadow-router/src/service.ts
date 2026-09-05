@@ -44,6 +44,13 @@ import type {
   ShadowRequestRecord,
 } from './spec.ts'
 
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** The mounted shadow router: binding store, delivery persistence, and the Shadow whitelist. */
+    shadowRouter: ShadowRouter
+  }
+}
+
 /** Plugin config (all optional — `static Config` supplies the defaults). */
 export interface ShadowRouterConfig {
   /**
