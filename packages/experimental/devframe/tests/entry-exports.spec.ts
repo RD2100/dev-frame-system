@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { KNOWN_SESSION_EVENT_TYPES } from '@deepseek-ai/dsh-session'
 import * as devframe from '../src/index.ts'
 import * as controller from '../src/controller/goal-binding.ts'
+import * as hierarchy from '../src/hierarchy/index.ts'
 import * as permissions from '../src/permissions/index.ts'
 import * as reliability from '../src/reliability/index.ts'
 import * as shared from '../src/shared/index.ts'
@@ -17,6 +18,7 @@ const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.
 describe('DevFrame public entry points', () => {
   it('resolves every runtime subpath from the package root and manifest', () => {
     expect(devframe.GoalBindingController).toBe(controller.GoalBindingController)
+    expect(devframe.devframeSpawnOverrides).toBe(hierarchy.devframeSpawnOverrides)
     expect(devframe.RolePolicy).toBe(permissions.RolePolicy)
     expect(devframe.stopProject).toBe(reliability.stopProject)
     expect(devframe.WorkspaceId).toBe(shared.WorkspaceId)
@@ -32,6 +34,10 @@ describe('DevFrame public entry points', () => {
     expect(manifest.exports['./permissions']).toEqual({
       types: './lib/types/permissions/index.d.ts',
       default: './lib/types/permissions/index.js',
+    })
+    expect(manifest.exports['./hierarchy']).toEqual({
+      types: './lib/types/hierarchy/index.d.ts',
+      default: './lib/types/hierarchy/index.js',
     })
     expect(manifest.exports['./reliability']).toEqual({
       types: './lib/types/reliability/index.d.ts',

@@ -27,6 +27,10 @@
       "types": "./lib/types/permissions/index.d.ts",
       "default": "./lib/types/permissions/index.js"
     },
+    "./hierarchy": {
+      "types": "./lib/types/hierarchy/index.d.ts",
+      "default": "./lib/types/hierarchy/index.js"
+    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
