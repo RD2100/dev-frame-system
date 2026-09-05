@@ -55,6 +55,8 @@ function text(blocks: readonly { type: string; text?: string }[]): string {
   return blocks.filter(block => block.type === 'text').map(block => block.text).join('')
 }
 
+const testToolSignal = new AbortController().signal
+
 describe('startInProcessRun', () => {
   it('returns only after publication, drives a fresh child, and disposes it', async () => {
     const { ctx, parent } = await setup([textResponse('driver answer')])
@@ -273,6 +275,22 @@ describe('startInProcessRun', () => {
       .rejects.toMatchObject({ name: 'SubagentDepthError', attemptedDepth: 3, maxDepth: 2 })
   })
 
+  it('refuses a max-depth DevFrame worker parent before publishing a child', async () => {
+    // A worker already at delegationDepth 2 may not deepen: its own
+    // maxDepth-2 spawn request dies at the depth gate with nothing published.
+    const { ctx } = await setup([textResponse('unused')])
+    const workerParent = (await ctx.agents.create({
+      sessionId: SessionId('worker-parent'),
+      meta: { delegationDepth: 2 },
+      agentOptions: { provider: 'mock', model: 'mock' },
+      signal: new AbortController().signal,
+    })).agent
+    const beforeAgents = ctx.agents.list().length
+    await expect(startInProcessRun({ ...request(workerParent), maxDepth: 2 }, {}))
+      .rejects.toMatchObject({ name: 'SubagentDepthError', attemptedDepth: 3, maxDepth: 2 })
+    expect(ctx.agents.list()).toHaveLength(beforeAgents)
+  })
+
   it('rejects invalid and exceeded depth before publication', async () => {
     const { parent } = await setup([])
     await expect(startInProcessRun({ ...request(parent), maxDepth: -1 }, {}))
@@ -349,6 +367,45 @@ describe('startInProcessRun', () => {
     }, {})).rejects.toThrow('unknown global tool')
     expect(ctx.agents.list()).toHaveLength(beforeAgents)
     expect(ctx.sessions.list()).toHaveLength(beforeSessions)
+  })
+
+  it('denies a toolFilter-denied spawn tool at the executor for the child scope only', async () => {
+    const { ctx, parent } = await setup([textResponse('child answer')])
+    const disposeSpawnProbe = ctx.tools.register(defineContentToolFixture({
+      name: 'subagent', description: 'spawn probe', parameters: {},
+      execute() { return Promise.resolve([{ type: 'text', text: 'spawned' }]) },
+    }))
+    const run = await startInProcessRun({ ...request(parent), toolFilter: { deny: ['subagent'] } }, {})
+    const child = ctx.agents.get(run.id)!
+    await run.result
+    const publishedAgents = ctx.agents.list().length
+
+    // The denied name is gone from the child's model-visible surface…
+    expect(ctx.tools.get('subagent', child)).toBeUndefined()
+    expect(ctx.tools.schemas(child).map(schema => schema.name)).not.toContain('subagent')
+    // …and the executor refuses the child's direct call as UNKNOWN_TOOL.
+    await expect(ctx.tools.execute({
+      callId: ToolCallId('spawn-denied'), name: 'subagent', arguments: {},
+      agent: child, signal: testToolSignal,
+    })).resolves.toMatchObject({
+      isError: true,
+      error: { message: 'unknown tool "subagent"', info: { name: 'ToolNotFoundError', code: 'UNKNOWN_TOOL' } },
+    })
+
+    // Control: the identical call for the parent succeeds, so the denial is
+    // child-scope-specific rather than a broken registration.
+    await expect(ctx.tools.execute({
+      callId: ToolCallId('spawn-allowed'), name: 'subagent', arguments: {},
+      agent: parent, signal: testToolSignal,
+    })).resolves.toMatchObject({
+      isError: false,
+      content: [{ type: 'text', text: 'spawned' }],
+    })
+
+    // Neither execution published a grandchild.
+    expect(ctx.agents.list()).toHaveLength(publishedAgents)
+    await run.dispose()
+    disposeSpawnProbe()
   })
 
   it('treats abort after factory publication as a cancelled run with an id', async () => {
