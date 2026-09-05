@@ -4,17 +4,13 @@
 export type AgentHierarchyErrorCode =
   /** The host configuration failed its zod validation at load. */
   | 'HIERARCHY_INVALID_CONFIG'
-  /** The native tools service was absent when the policy tried to install. */
-  | 'HIERARCHY_TOOLS_UNAVAILABLE'
-  /** The agent binding registry was absent when the policy tried to read roles. */
-  | 'HIERARCHY_BINDINGS_UNAVAILABLE'
   /** A restored binding record carried a role outside the closed union. */
   | 'HIERARCHY_ROLE_UNKNOWN'
 
 /**
  * Structured failure thrown when the hierarchy policy fails at load —
- * configuration validation, a missing required service, or an unreadable
- * role. Guard denials are plain reason strings, never this error.
+ * configuration validation or an unreadable role. Guard denials are plain
+ * reason strings, never this error.
  */
 export class AgentHierarchyError extends Error {
   /** Stable machine-routable failure classification. */

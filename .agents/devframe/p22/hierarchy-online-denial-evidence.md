@@ -58,3 +58,21 @@ S4 类别口径出自 [s4-toolface-plan.md §4.2](../integration/s4-toolface-pla
   - 组合级 dispatcher 实跑与集成 profile 冷恢复仍归集成波（[anchor-matrix](anchor-matrix.md) AT1-01/02 行缺口中"组合级"半边未动）。
   - AT2B-01 的"继承 allow face 收缩 prompt 工具列表"（模型可见 schema 收缩）本波未断言；现有覆盖为 guard.spec 的 allow-face 安装语义与 AT2B 录制草案。
   - §3 三项缺口（模型自报角色词表、死错误码、不可达纵深防御层）未实现、未改 src。
+
+## 5. P02 包内处置回填（分支 p/hier3，基点 6abfa1c709）
+
+### 5.1 死枚举缺口处置（总控登记缺口 #3；本文 §3 第 2 项）
+
+- 处置：已从 [src/errors.ts](../../../packages/experimental/agent-hierarchy/src/errors.ts) 的 `AgentHierarchyErrorCode` 联合移除 `HIERARCHY_TOOLS_UNAVAILABLE` 与 `HIERARCHY_BINDINGS_UNAVAILABLE` 两成员（含各自 JSDoc 行），类 JSDoc 同步去掉已失实的"缺必需服务"分支；保留 `HIERARCHY_INVALID_CONFIG`（config.ts 抛出）与 `HIERARCHY_ROLE_UNKNOWN`（service.ts 抛出）。提交：`4a82093f947d111ee189490875bcbba447e18dcb`（`refactor(agent-hierarchy): drop unreachable hierarchy error codes`，仅 errors.ts）。运行行为零变化：两码从未被抛出，服务 `static inject` 硬注入使缺席不可观察。
+- grep 证据：移除前全仓 `HIERARCHY_TOOLS_UNAVAILABLE|HIERARCHY_BINDINGS_UNAVAILABLE` 仅命中 src/errors.ts 两处定义行（src/service.ts 用 `HIERARCHY_ROLE_UNKNOWN`、src/config.ts 用 `HIERARCHY_INVALID_CONFIG`，tests/、README/与其他包零引用，无连带引用需更新）；移除后全仓引用数 0。门禁实测：`pnpm exec vitest run packages/experimental/agent-hierarchy` 25/25 绿、`pnpm exec tsc -b packages/experimental/agent-hierarchy` 退出码 0。
+
+### 5.2 AT1-02 三断言面映射（面 → 用例名 → 所在文件 → 新增/引用）
+
+| 断言面 | 用例名 | 所在文件 | 处置 |
+| --- | --- | --- | --- |
+| 缺角色拒绝（重启后，含非受控放行对照） | denies a never-bound session after restart with the exact missing-role text and keeps non-controlled tools open | [tests/cold-recovery.spec.ts](../../../packages/experimental/agent-hierarchy/tests/cold-recovery.spec.ts) | **新增**（提交 `54e7b09946aa15acb66742d27ecd9f2867b10149`；两轮真实存储：boot1 绑定 worker 后 keepRoot，boot2 挂载态（init-pass 路径）创建从未绑定的 stray-1 → subagent 逐字符拒绝 + 体计数 0 + 注册表不变，project_read 放行 +1。判定：online-denial 已有的重启缺角色用例 "denies a controlled tool to a role-less session after restart…" 为延迟挂载且未含放行对照，本新增补齐挂载于 boot 的路径与非受控放行半边，与其交叉引用互补） |
+| reviewer 变更保持拒绝 | fails loud at the durable boundary when a restored binding carries a retired role | [tests/online-denial.spec.ts](../../../packages/experimental/agent-hierarchy/tests/online-denial.spec.ts) | **引用（已有）**：真实存储改写 `session_identity.json` 的 role='reviewer' → 重启在持久边界 fail-loud（DomainError 'invalid-record' message/detail 逐字符），与该面语义等同，不重复添加 |
+| dispose 后无陈旧守卫（单进程面） | leaves no stale guard after disposal: the old reference is denied and a same-id successor gets its full face | [tests/online-denial.spec.ts](../../../packages/experimental/agent-hierarchy/tests/online-denial.spec.ts) | **引用（已有）** |
+| dispose 后无陈旧守卫（重启维度） | leaves no stale guard across restart: a disposed bound session keeps its binding and a same-id successor works per role | [tests/cold-recovery.spec.ts](../../../packages/experimental/agent-hierarchy/tests/cold-recovery.spec.ts) | **新增**（同提交 `54e7b09946…`；boot1 绑定 worker、探针确认 face 生效后 dispose 句柄（限制释放、绑定保留）→ keepRoot 重启 → 同 id 后继 rebind 后 `roleOf` 正确、放行面放行（project_read +1）、allow face 已重装（admin_panel 首探即隐藏、体计数 0）、越权面逐字符照拒——证明重启后无陈旧守卫/双重限制。判定：单进程 dispose 面已由 online-denial 覆盖，但"绑定存活过 agent dispose → 跨重启 → 同 id 后继按角色工作"无任何用例串联，故补重启维度） |
+
+- 计数更新：本波新增 2 条 `it()`（均 cold-recovery.spec.ts），全包 3 文件 27 条全绿（`54e7b09946` 实测两连跑稳定）；红线核查：全程无任何越权委派成功产生子代理（每处委派拒绝的探针体计数为 0）；src/ 除 errors.ts 死枚举移除外零改动。
