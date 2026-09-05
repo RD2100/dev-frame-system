@@ -457,3 +457,10 @@ $ node --import tsx/esm apps/cli/src/bin.ts "--profile" "integration" "--patch" 
   name: '@deepseek-ai/dsh-experimental-agent-evidence'
 - id: agent-reliability
   name: '@deepseek-ai/dsh-experimental-agent-reliability'
+- id: project-memory
+  name: '@deepseek-ai/dsh-experimental-project-memory'
+  config:
+    workspaceId: integration
+    vaultRoot: !!js dshHomePath('integration-vault')
+    writeEnabled: false
+    userScopeEnabled: false

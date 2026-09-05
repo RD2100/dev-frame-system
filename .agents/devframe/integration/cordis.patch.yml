@@ -1,13 +1,12 @@
-# The L-Integration pluginized-hierarchy profile layer: the five ready
-# experimental plugins over dsh-base + dsh-headless. Mount with
+# The L-Integration pluginized-hierarchy profile layer: the six experimental
+# plugins over dsh-base + dsh-headless. Mount with
 # `dsh --profile integration --patch <this file>` against the isolated home
 # C:\Users\25313\.dsh-integration. Row order carries no load semantics
 # (activation is service-availability driven); agent-hierarchy hard-injects
 # ctx.agentBindings, so session-identity must be in the tree for it to mount.
 #
-# project-memory is deliberately absent: it has no Cordis Service yet
-# (semantic gap S1-S3, owned by L-Memory). project-contracts is a type
-# vocabulary, not a plugin; it resolves as a dependency.
+# project-contracts is a type vocabulary, not a plugin; it resolves as a
+# dependency of the mounted packages.
 #
 # The base tree's tool-worktree row hard-injects workspaceRegistry and
 # worktreeRegistry; the shipped headless installation satisfies them through
@@ -130,3 +129,15 @@
 
     - id: agent-reliability
       name: '@deepseek-ai/dsh-experimental-agent-reliability'
+
+    # Read-only assembly: a probe-owned Vault root under the isolated home
+    # makes the search/read path real while appends stay disabled
+    # (writeEnabled false; user scope off). workspaceId is the integration
+    # test value, not a product workspace identity.
+    - id: project-memory
+      name: '@deepseek-ai/dsh-experimental-project-memory'
+      config:
+        workspaceId: integration
+        vaultRoot: !!js dshHomePath('integration-vault')
+        writeEnabled: false
+        userScopeEnabled: false
