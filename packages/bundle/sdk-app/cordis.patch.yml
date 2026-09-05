@@ -9,6 +9,12 @@
   disabled: true
 
 - insert:
+    - id: workspace
+      name: '@deepseek-ai/dsh-workspace'
+
+    - id: worktree-registry
+      name: '@deepseek-ai/dsh-worktree-registry'
+
     - id: sdk-app-startup
       name: '@deepseek-ai/dsh-sdk-app'
       config:

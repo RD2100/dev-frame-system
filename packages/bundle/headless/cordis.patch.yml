@@ -15,6 +15,12 @@
     mode: !!js process.env.DSH_TOOLS_MODE
 
 - insert:
+    - id: workspace
+      name: '@deepseek-ai/dsh-workspace'
+
+    - id: worktree-registry
+      name: '@deepseek-ai/dsh-worktree-registry'
+
     # PTC mode is a core execution capability, not a Web component.
     - id: code-runtime
       name: '@deepseek-ai/dsh-code-runtime-worker-thread'
