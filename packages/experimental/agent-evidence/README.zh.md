@@ -1,0 +1,129 @@
+---
+description: "持有代理工作追加式证据台账的 Cordis 服务：任务/Goal 绑定回执、提交回执与验证快照，均绑定到共享工作身份。"
+kind: "package-reference"
+---
+
+# @deepseek-ai/dsh-experimental-agent-evidence
+
+[English](README.md) | 中文
+
+## Summary
+
+`dsh-experimental-agent-evidence` 挂载 `ctx.agentEvidence`，在 `agent_evidence` 存储域上记录并查询代理工作的追加式溯源台账的 Cordis 服务：任务/Goal 绑定回执（单任务视角的 DevFrame goal-result 绑定元组）、提交回执（commit 对象名、改动路径、工作起点源输入摘要）与验证快照（命令、退出码、产物路径——非零退出码原样记录）。台账只存溯源：验收判定留在 Goal 绑定与任务状态里，因此这里不存在另一个验收数据库。回执在启动时原样恢复。
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Understand the implementation](#understand-the-implementation)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+<a id="use-this-package"></a>
+## Use this package
+
+在存储栈旁挂载本服务；它硬注入 `ctx.storageDomain`，存储后端缺失即在激活时失败。
+
+```yaml
+- name: '@deepseek-ai/dsh-storage'
+- name: '@deepseek-ai/dsh-storage-json'
+- name: '@deepseek-ai/dsh-storage-domain'
+- name: '@deepseek-ai/dsh-experimental-agent-evidence'
+```
+
+### 记录并读取证据轨迹
+
+每次记录调用经持久化 schema 校验并返回冻结回执；查询按记录顺序返回追加式轨迹。
+
+```ts
+await ctx.agentEvidence.recordTaskGoalBinding({
+  taskId, controllerSessionId, goalId, goalRevision: 3,
+  workspaceId: WorkspaceId('ws-default'),
+  acceptanceHash: AcceptanceHash('acceptance:sha256:abc'),
+  sourceFingerprint: SourceFingerprint('source:sha256:def'),
+})
+await ctx.agentEvidence.recordSubmission({
+  taskId, submittedBy, commit, changedPaths, inputDigest,
+})
+await ctx.agentEvidence.recordVerification({
+  taskId, command: 'pnpm exec vitest run packages/a', exitCode: 0, artifactPaths,
+})
+
+const trail = ctx.agentEvidence.byTask(taskId)
+const bindings = ctx.agentEvidence.bindingsByGoal(controllerSessionId, goalId)
+```
+
+畸形回执以 `AGENT_EVIDENCE_INVALID_RECEIPT` 大声失败；存储拒绝以 `AGENT_EVIDENCE_PERSISTENCE` 呈现。
+
+-----
+
+<a id="understand-the-implementation"></a>
+## Understand the implementation
+
+<details>
+<summary>Implementation internals — click to expand</summary>
+
+本节解释设计决策并指向实现代码；可观察行为已在 [Use this package](#use-this-package) 完整覆盖。
+
+### 设计决策
+
+- **复用身份，而非重新声明。** 绑定回执携带 DevFrame goal-result 绑定词汇——`ControllerSessionId`、`GoalId`、`AcceptanceHash`、`SourceFingerprint`、`WorkspaceId`——直接从实验 DevFrame 包导入，使证据解析到派发与完成已使用的同一工作身份。
+- **只存溯源。** 台账不持验收判定：失败的验证快照是记录在案的事实，验收决策留在 Goal 绑定（DevFrame）与任务状态（project-controller）里。这正是"不另建验收数据库"的原因。
+- **持久边界由 schema 负责品牌化。** 记录时用与存储域恢复校验相同的 zod schema 解析每条回执，品牌施加与校验共用一个定义；存储拒绝以 `AGENT_EVIDENCE_PERSISTENCE` 带原始原因呈现。
+- **追加式轨迹。** 在新 Goal 修订下重录绑定即追加回执；任何回执都不会被重写或删除。`byTask` 与 `bindingsByGoal` 按记录顺序返回完整轨迹。
+
+### Source map
+
+| File | Role |
+|---|---|
+| [`src/ledger.ts`](src/ledger.ts) | `ctx.agentEvidence` 服务：记录、查询、冷恢复 |
+| [`src/spec.ts`](src/spec.ts) | `agent_evidence` 域声明与 zod 回执 schema |
+| [`src/types.ts`](src/types.ts) | 建立在共享工作身份上的回执记录类型 |
+| [`src/ids.ts`](src/ids.ts) | `EvidenceReceiptId` 与 `CommitSha` 品牌工厂 |
+| [`src/errors.ts`](src/errors.ts) | `AgentEvidenceError` 及其稳定错误码联合 |
+| [`src/index.ts`](src/index.ts) | 包入口与默认导出 |
+
+### Invariant
+
+不发布运行时 invariant 伴随物：回执是追加式单表行、无跨表派生，JSON 后端拒绝同一单元的第二个活动句柄，查询读的是写入所填充的同批进程内映射，因此不存在可能分叉的独立观察。
+
+</details>
+
+-----
+
+<a id="model-experience"></a>
+## Model Experience
+
+### 代理证据台账
+
+#### What the model sees
+
+没有任何内容。本包不注册工具、提示词段落或会话事件——任何 `TaskGoalBindingReceipt`、`SubmissionReceipt` 或 `VerificationSnapshot` 值都不会到达模型请求——因此没有请求字段携带其数据。
+
+#### Token effect
+
+对每次请求的直接 token 影响为零。
+
+#### KV Cache effect
+
+与实时请求无关：本包不触碰请求前缀，因此不可能使提供方缓存复用失效。
+
+## Known Limitations and Deferred Work
+
+这些限制界定了台账在何种场景下不适用或需要特别运维关注。它们是当前包约束，不是任务清单。
+
+- **回执是受信溯源，不是已核实事实** —— 改动路径与产物路径按调用方所报记录；台账不检查仓库来确认它们。
+- **台账不校验任务或 Goal 的存在性** —— 回执引用调用方提供的 id；引用完整性由项目控制器与 Goal 绑定负责。
+- **轨迹无界增长** —— 回执从不重写或修剪；长期运行的部署会在三张表中累积行。
+
+<a id="dev-note"></a>
+### Dev Note
+
+<details>
+<summary>Working context for maintainers — click to expand</summary>
+
+None.
+
+</details>

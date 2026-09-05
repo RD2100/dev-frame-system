@@ -229,6 +229,11 @@
       "@deepseek-ai/dsh-util-time": ["./packages/util/time/src"],
       // The feature package keeps its experimental group prefix in the npm
       // name, so its source alias cannot be derived from the directory name.
+      "@deepseek-ai/dsh-experimental-project-contracts": ["./packages/experimental/project-contracts/src"],
+      "@deepseek-ai/dsh-experimental-session-identity": ["./packages/experimental/session-identity/src"],
+      "@deepseek-ai/dsh-experimental-agent-evidence": ["./packages/experimental/agent-evidence/src"],
+      "@deepseek-ai/dsh-experimental-agent-reliability": ["./packages/experimental/agent-reliability/src"],
+      "@deepseek-ai/dsh-experimental-project-controller": ["./packages/experimental/project-controller/src"],
       "@deepseek-ai/dsh-experimental-devframe": ["./packages/experimental/devframe/src"],
       "@deepseek-ai/dsh-experimental-devframe/*": ["./packages/experimental/devframe/src/*"],
       // BEGIN generated package aliases — pnpm run gen-tsconfig-paths
