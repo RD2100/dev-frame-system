@@ -1,5 +1,5 @@
 ---
-description: "Shared Workspace browser and picker plugin for the dsh web client: grouped or flat session rows, add/rename/reorder, search, fork, archive, and the directory-flow picking hole."
+description: "Shared Workspace browser and picker plugin for the dsh web client: the project agent tree, grouped or flat session rows, add/rename/reorder, search, fork, archive, and the directory-flow picking hole."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-client-ui-workspace` is the shared Workspace browser and picker of the dsh web client: users browse grouped or flat Session rows in the sidebar, pick a Workspace for a new session from the Session Intent hero, and manage Workspaces and Sessions with add, rename, reorder, search, fork, and archive actions; the same Workspace menu and add flow serve both surfaces. Pending user interactions surface as amber warning dots, active Schedule projections surface as non-interactive alarm markers in ordinary and search rows, and the shared sidebar projection hides subagent-origin sessions. Distinct canonical paths remain separate id-keyed Workspaces, and adding a folder goes through a directory-flow child hole that a composed picker package's client half fills.
+`dsh-client-ui-workspace` is the shared Workspace browser and picker of the dsh web client: users browse grouped or flat Session rows in the sidebar, pick a Workspace for a new session from the Session Intent hero, and manage Workspaces and Sessions with add, rename, reorder, search, fork, and archive actions; the same Workspace menu and add flow serve both surfaces. Pending user interactions surface as amber warning dots, active Schedule projections surface as non-interactive alarm markers in ordinary and search rows, and the grouped browser arranges every visible Session with its subagent descendants into the project agent tree. Distinct canonical paths remain separate id-keyed Workspaces, and adding a folder goes through a directory-flow child hole that a composed picker package's client half fills.
 
 ## Table of Contents
 
@@ -49,6 +49,10 @@ Grouped and flat Session rows, plus search results, show an outline alarm when `
 
 The value is intentionally best effort for cold Sessions. An identity-matching usable projection-cache row can prewarm the alarm without opening the Session; a missing or stale cache may briefly omit or retain it. The marker means only that the current list value contains an undispatched or undeleted Schedule record. It does not report whether a Schedule runtime is live or able to wake the Session.
 
+### Project agent tree
+
+In the grouped browser every visible Session is a project agent-tree row showing its name, live status, durable Session ID, bound working directory when one is bound, and the relative time of its latest activity; the ID meta line repeats the id only when the id is not already the row's primary text. Agents with children render an expand chevron and start expanded, so the tree shows the controller, its delegated leads, and their executors without gestures; a childless agent renders no expand control. The chevron toggles exactly one level of direct children, and activating a row opens that agent's Session while also toggling its children. Subagent children open through their exact direct-parent address once the parent's catalog has resolved and fall back to the listed-Session open before that. Expanded rows consume live catalog membership, so durable creation labels and delegation modes reach the tree while it is open; until then, children show their summary titles.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -65,7 +69,7 @@ Each registration declares a **directory-flow child hole** (`single` kind: `conv
 
 ### View state
 
-Once the Workspace list baseline is ready, browser-persisted expansion and Session-order records retain only current Workspace ids plus Ungrouped and the flat-list account. Real Workspaces initialize from `WorkspaceView.sessionIds`, while Ungrouped and the cross-Workspace flat list initialize from recency. The shared sidebar projection hides rows whose durable Session summary has `origin: 'subagent'`, and each visible ordinary row inherits the blue activity indicator while any descendant reached through uninterrupted subagent-origin lineage is running. The same pure derivation reads the Schedule key from list projection values for grouped, flat, and search nodes; the package uses only the type-only `@deepseek-ai/dsh-schedule/client` dependency and does not import the Schedule runtime or `ui-schedule`.
+Once the Workspace list baseline is ready, browser-persisted expansion and Session-order records retain only current Workspace ids plus Ungrouped and the flat-list account. Real Workspaces initialize from `WorkspaceView.sessionIds`, while Ungrouped and the cross-Workspace flat list initialize from recency. Grouped rows derive the project agent tree: each visible Session anchors its subagent-origin descendants by `parentId` — direct children only, newest first, cycle-guarded — enriched by the direct-child subagent catalog's durable labels and delegation modes, while archived and orphaned subagent rows stay hidden. Each visible ordinary row inherits the blue activity indicator while any descendant reached through uninterrupted subagent-origin lineage is running. The same pure derivation reads the Schedule key from list projection values for grouped, flat, and search nodes; the package uses only the type-only `@deepseek-ai/dsh-schedule/client` dependency and does not import the Schedule runtime or `ui-schedule`.
 
 ### Hover cards
 

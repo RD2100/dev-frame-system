@@ -41,8 +41,8 @@ const SEARCH_QUERY_MAX_CODE_UNITS = 500
 const COLLAPSED_SESSION_LIMIT = 5
 
 /** Fold one Workspace without charging its provisional New Session against the ordinary-row limit. */
-function collapsedSessionRows(sessions: readonly SessionNode[]): {
-  rows: readonly SessionNode[]
+function collapsedSessionRows(sessions: readonly AgentNode[]): {
+  rows: readonly AgentNode[]
   hiddenCount: number
 } {
   let ordinaryCount = 0
