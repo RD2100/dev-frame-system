@@ -36,6 +36,8 @@
   "dependencies": {
     "@deepseek-ai/dsh-acp": "workspace:^",
     "@deepseek-ai/dsh-cmdline": "workspace:^",
+    "@deepseek-ai/dsh-workspace": "workspace:^",
+    "@deepseek-ai/dsh-worktree-registry": "workspace:^",
     "commander": "^15.0.0"
   },
   "peerDependencies": {
