@@ -359,6 +359,105 @@
   color: var(--dsw-alias-label-caption);
 }
 
+/* Agent-tree row: one treeitem with a main line and an id/worktree meta line.
+   Indentation for nested levels arrives inline (marginInlineStart per depth).
+   Selected and menu-open states reuse the flat rows' hover fill. */
+.agentRow {
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--dsw-alias-label-primary);
+  animation: row-in 150ms var(--ds-ease-in-out);
+}
+
+.agentRow:hover,
+.agentRow.selected,
+.agentRow.menuOpen {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.agentMain {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+}
+
+.agentMain .title {
+  flex: 1;
+  margin: 0 6px 0 4px;
+}
+
+.agentRow.dropBefore,
+.agentRow.dropAfter {
+  position: relative;
+}
+
+.agentRow.dropBefore::before,
+.agentRow.dropAfter::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 4px;
+  height: 12px;
+  background:
+    linear-gradient(
+      55deg,
+      transparent calc(50% - 1px),
+      var(--dsw-alias-state-business-primary) calc(50% - 1px) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    ) 0 0 / 5px 7px no-repeat,
+    linear-gradient(
+      125deg,
+      transparent calc(50% - 1px),
+      var(--dsw-alias-state-business-primary) calc(50% - 1px) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    ) 0 5px / 5px 7px no-repeat,
+    linear-gradient(
+      var(--dsw-alias-state-business-primary) 0 0
+    ) 4px 5px / calc(100% - 4px) 2px no-repeat;
+  pointer-events: none;
+}
+
+.agentRow.dropBefore::before {
+  top: -7px;
+}
+
+.agentRow.dropAfter::after {
+  bottom: -7px;
+}
+
+.agentRow:hover .rowActions,
+.agentRow.menuOpen .rowActions {
+  display: inline-flex;
+}
+
+.agentRow:hover .time,
+.agentRow.menuOpen .time {
+  display: none;
+}
+
+/* Meta line: durable Session ID plus the bound working directory, one muted
+   run aligned under the title. */
+.agentMeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0 8px 3px 44px;
+  font-size: 10px;
+  line-height: 12px;
+  color: var(--dsw-alias-label-caption);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agentRow {
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sessionRow,
   .arrow {
