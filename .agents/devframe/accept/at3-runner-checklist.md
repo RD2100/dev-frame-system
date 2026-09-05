@@ -15,13 +15,13 @@ kind: "acceptance-scenario-draft"
 |---|---|---|---|
 | AT3-01 / R3.1 | 授权追加 + 新会话召回带 provenance；他项目 note 不可见；原生日志记录到达模型的上下文（双工作区隔离） | drafted | [AT3-01-workspace-isolation.md](../../../packages/experimental/project-memory/scenarios/AT3-01-workspace-isolation.md) |
 | AT3-02 / R3.1 | 中英混排超字节/条数/候选上限；输出不破字符；截断与部分覆盖显式 | drafted | [AT3-02-byte-limit-truncation.md](../../../packages/experimental/project-memory/scenarios/AT3-02-byte-limit-truncation.md) |
-| AT3-03 / R3.2 | 并发同源追加；幂等重试/冲突不覆盖；中断写被排除并上报 | 待起草 | — |
-| AT3-04 / R3.2 | 穿越探测、越权命名空间 id、symlink/reparse 逃逸；不支持的安全创建使 append 停用而非 shell 回退 | 待起草 | — |
+| AT3-03 / R3.2 | 并发同源追加；幂等重试/冲突不覆盖；中断写被排除并上报 | drafted | [AT3-03-concurrent-append-idempotency.md](../../../packages/experimental/project-memory/scenarios/AT3-03-concurrent-append-idempotency.md) |
+| AT3-04 / R3.2 | 穿越探测、越权命名空间 id、symlink/reparse 逃逸；不支持的安全创建使 append 停用而非 shell 回退 | drafted | [AT3-04-path-containment-rejection.md](../../../packages/experimental/project-memory/scenarios/AT3-04-path-containment-rejection.md) |
 | AT3-05 / R3.3 | note 内嵌指令仍为带标签数据；运行时策略不变；越权操作被拒 | drafted | [AT3-05-trust-label-carry.md](../../../packages/experimental/project-memory/scenarios/AT3-05-trust-label-carry.md) |
-| AT3-06 / R3.3 | 推断偏好不自动转 confirmed；冲突/陈旧可见；授权 supersession 保留旧 note | 待起草 | — |
-| AT3-07 / R3.4 | Vault 停用/只读/移除；编码任务可带警告完成，失败保存不得报成功 | 待起草 | — |
+| AT3-06 / R3.3 | 推断偏好不自动转 confirmed；冲突/陈旧可见；授权 supersession 保留旧 note | drafted | [AT3-06-trust-promotion-contradiction.md](../../../packages/experimental/project-memory/scenarios/AT3-06-trust-promotion-contradiction.md) |
+| AT3-07 / R3.4 | Vault 停用/只读/移除；编码任务可带警告完成，失败保存不得报成功 | drafted | [AT3-07-vault-unavailable-degradation.md](../../../packages/experimental/project-memory/scenarios/AT3-07-vault-unavailable-degradation.md) |
 | AT3-08 / R3.4 | 畸形与凭据形 fixture 拒绝且不落原文明文；重试停在配置上界；稳定可恢复候选引用 | drafted | [AT3-08-secret-screening-rejection.md](../../../packages/experimental/project-memory/scenarios/AT3-08-secret-screening-rejection.md) |
-| AT3-09 / R3.2 | 外部改/移/删后的变更与缺失如实上报；内联 digest 不替代会话回执；仅显式确认更正产生新 note | 待起草 | — |
+| AT3-09 / R3.2 | 外部改/移/删后的变更与缺失如实上报；内联 digest 不替代会话回执；仅显式确认更正产生新 note | drafted | [AT3-09-external-change-honest-reporting.md](../../../packages/experimental/project-memory/scenarios/AT3-09-external-change-honest-reporting.md) |
 
 ## 执行流程（每个 AT3-0x 一轮）
 
@@ -51,5 +51,5 @@ kind: "acceptance-scenario-draft"
 ## 已知开放问题（录制前定案）
 
 - Vault 期望树不属于 `workspace.expected/`：宿主装配面需提供 Vault 比较或独立断言（各草案"开放问题"节）。
-- 瞬态故障注入点（AT3-08 步骤 5）依赖宿主文件层 fault 包装，尚未存在。
+- fault 注入点（瞬态失败、半写文件、ENOSYS、只读/回执 seam 注错；见 AT3-03/04/07/08 各草案"前提"节）依赖宿主文件层 fault 包装，尚未存在。
 - 多 `workspaceId` 的录制形态（多次启动 vs 单会话多实例）待宿主装配面定型。
