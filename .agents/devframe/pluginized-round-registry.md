@@ -4,6 +4,8 @@ description: DSH 插件化开发总计划的控制器差异清单与执行登记
 
 # DSH 插件化执行登记与差异清单 — Round P
 
+> **交接横幅（2026-09-06，最高优先级）**：本文开头段的早期状态与并发限制结论（2/5 上限、车道假设、常规裁定挂授权等）已由用户后续指令**作废**，以 [dsh-controller-v1.2-handoff-2026-09-06.zh.md](../../docs/working/dsh-controller-v1.2-handoff-2026-09-06.zh.md) "已作废结论"节与最新用户指令为准。并发无固定上限；huoshan-1/2 常态双车道按实测容量；可验证可回滚的常规裁定默认执行；40 轮规则维持原样、8 分钟节奏属外部自动化非项目配置。
+
 本文件是本轮项目总控的活登记表：冻结输入、经核实的现状证据、计划与现状的差异清单、Agent/任务登记和波次推进记录。基线与验收权威分别属于 [agent-orchestration-plan](../docs/agent-orchestration-plan.zh.md)、[testAndAcceptance](../docs/testAndAcceptance.zh.md) 与 [交接文档](../docs/working/dsh-pluginized-development-handoff-2026-09-05.zh.md)。
 
 ## 1. 冻结输入
