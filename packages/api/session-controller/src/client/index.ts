@@ -31,6 +31,8 @@ export type {
   SessionSearchResultItem,
   SubagentCatalogSnapshot,
 } from './sessions/manager.ts'
+/** Re-exported so UI surfaces address catalog children without a direct subagent-package dependency. */
+export type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 export type { Session } from './sessions/session.ts'
 export type {
   ProjectionsBaseline,
