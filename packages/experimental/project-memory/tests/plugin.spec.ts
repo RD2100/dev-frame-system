@@ -9,11 +9,14 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import * as projectMemory from '../src/index.ts'
+import { NoteId } from '../src/ids.ts'
 import type { Config } from '../src/index.ts'
 
 const ROOTS: string[] = []
@@ -45,13 +48,22 @@ async function boot(config: Config): Promise<Context> {
   return ctx
 }
 
+/**
+ * One structural stand-in for a dispatching agent: the append tool needs only
+ * the live session whose log receives the receipt.
+ */
+function stubAgent(sessionId: string): Agent {
+  return { session: Session.create(SessionId(sessionId)) } as unknown as Agent
+}
+
 /** Dispatch one tool call through the live registry pipeline. */
-async function dispatch(ctx: Context, name: string, args: unknown, callNumber: number) {
+async function dispatch(ctx: Context, name: string, args: unknown, callNumber: number, agent?: Agent) {
   return await ctx.tools.execute({
     callId: ToolCallId(`pm-plugin-${callNumber}`),
     name,
     arguments: args,
     signal: new AbortController().signal,
+    ...(agent === undefined ? {} : { agent }),
   })
 }
 
@@ -100,12 +112,13 @@ describe('memory tool dispatch', () => {
       vaultRoot: makeVault(),
       writeEnabled: true,
     })
+    const agent = stubAgent('pm-e2e-agent')
     const append = await dispatch(ctx, 'memory_append', {
       scope: 'project',
       source_ref: 'session-alpha#event-1',
       kind: 'fact',
       body: 'The deploy script lives in scripts/deploy.ps1.',
-    }, 1)
+    }, 1, agent)
     expect(append.isError).toBe(false)
     if (append.isError) return
     expect(append.value).toMatchObject({ status: 'created' })
@@ -139,21 +152,22 @@ describe('memory tool dispatch', () => {
       vaultRoot: makeVault(),
       writeEnabled: true,
     })
+    const agent = stubAgent('pm-idempotent-agent')
     const request = {
       scope: 'project',
       source_ref: 'session-alpha#event-2',
       kind: 'lesson',
       body: 'Always run the typecheck before committing.',
     }
-    const first = await dispatch(ctx, 'memory_append', request, 4)
-    const retry = await dispatch(ctx, 'memory_append', request, 5)
+    const first = await dispatch(ctx, 'memory_append', request, 4, agent)
+    const retry = await dispatch(ctx, 'memory_append', request, 5, agent)
     expect(first.isError).toBe(false)
     expect(retry.isError).toBe(false)
     if (first.isError || retry.isError) return
     expect(first.value).toMatchObject({ status: 'created' })
     expect(retry.value).toMatchObject({ status: 'already_exists' })
 
-    const conflict = await dispatch(ctx, 'memory_append', { ...request, body: 'A different lesson.' }, 6)
+    const conflict = await dispatch(ctx, 'memory_append', { ...request, body: 'A different lesson.' }, 6, agent)
     expect(conflict.isError).toBe(false)
     if (conflict.isError) return
     expect(conflict.value).toMatchObject({ status: 'memory_conflict' })
@@ -166,12 +180,13 @@ describe('memory tool dispatch', () => {
       writeEnabled: true,
       userScopeEnabled: true,
     })
+    const agent = stubAgent('pm-observe-agent')
     const append = await dispatch(ctx, 'memory_append', {
       scope: 'user',
       source_ref: 'session-alpha#event-3',
       kind: 'preference',
       body: 'The user prefers concise summaries.',
-    }, 7)
+    }, 7, agent)
     expect(append.isError).toBe(false)
     if (append.isError) return
     const created = append.value as { status: string; noteId: string }
@@ -198,5 +213,53 @@ describe('memory tool dispatch', () => {
     expect(result.isError).toBe(true)
     if (!result.isError) return
     expect(JSON.stringify(result.error)).toContain('not configured')
+  })
+
+  it('commits the receipt into the calling session log before the tool result is created', async () => {
+    const ctx = await boot({
+      workspaceId: 'ws-alpha',
+      vaultRoot: makeVault(),
+      writeEnabled: true,
+    })
+    const agent = stubAgent('pm-receipt-agent')
+    const append = await dispatch(ctx, 'memory_append', {
+      scope: 'project',
+      source_ref: 'session-alpha#event-4',
+      kind: 'fact',
+      body: 'The receipt must reach the session log.',
+    }, 11, agent)
+    expect(append.isError).toBe(false)
+    if (append.isError) return
+    const created = append.value as { status: string; noteId: string }
+    expect(created.status).toBe('created')
+
+    const event = agent.session.snapshotEvents().findLast(item => item.type === 'memory/receipt')
+    expect(event).toBeDefined()
+    expect(event?.data).toMatchObject({ noteId: created.noteId })
+
+    // Cold recovery: a replayed log rehydrates a fresh receipt index.
+    const recovered = Session.create(SessionId('pm-receipt-agent-2'), agent.session.snapshotEvents())
+    const freshIndex = projectMemory.createMemoryReceiptStore()
+    await projectMemory.rehydrateMemoryReceipts(freshIndex, recovered)
+    const receipt = await freshIndex.read(NoteId(created.noteId))
+    expect(receipt).toBeDefined()
+    expect(receipt?.relativePath).toContain('devframe-memory/projects/ws-alpha/')
+  })
+
+  it('refuses an append without a calling agent: the receipt could not reach a session log', async () => {
+    const ctx = await boot({
+      workspaceId: 'ws-alpha',
+      vaultRoot: makeVault(),
+      writeEnabled: true,
+    })
+    const result = await dispatch(ctx, 'memory_append', {
+      scope: 'project',
+      source_ref: 'session-alpha#event-5',
+      kind: 'fact',
+      body: 'No agent, no durable receipt.',
+    }, 12)
+    expect(result.isError).toBe(true)
+    if (!result.isError) return
+    expect(JSON.stringify(result.error)).toContain('calling agent')
   })
 })

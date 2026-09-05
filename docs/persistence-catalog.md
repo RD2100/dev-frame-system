@@ -485,12 +485,13 @@ Source: [`packages/feedback/command-feedback/src/index.ts:62`](../packages/feedb
 
 ```ts persistence-catalog
 /**
- * Complete post-mutation goal state or clear tombstone.
+ * Complete post-mutation goal state, a clear tombstone, or a completion
+ * receipt.
  */
 'goal/change': GoalChangeMeta
 ```
 
-Source: [`packages/goal/goal/src/domain.ts:66`](../packages/goal/goal/src/domain.ts)
+Source: [`packages/goal/goal/src/domain.ts:105`](../packages/goal/goal/src/domain.ts)
 
 ### `hook/*`
 
@@ -565,6 +566,19 @@ Source: [`packages/llm/llm-retry/src/types.ts:9`](../packages/llm/llm-retry/src/
 ```
 
 Source: [`packages/llm/llm-retry/src/types.ts:11`](../packages/llm/llm-retry/src/types.ts)
+
+### `memory/*`
+
+<a id="memoryreceipt--log-only"></a>
+
+#### `memory/receipt` — log-only
+
+```ts persistence-catalog
+/** Committed append receipt for one memory note; latest event per noteId is the live receipt. */
+'memory/receipt': MemoryReceiptEventData
+```
+
+Source: [`packages/experimental/project-memory/src/receipt-log.ts:36`](../packages/experimental/project-memory/src/receipt-log.ts)
 
 ### `model/*`
 
@@ -849,7 +863,7 @@ Source: [`packages/subagent/tool-subagent/src/model-selection-state.ts:17`](../p
 
 Types: [TeamId](subsystems/agent-team.md) · [TeamMemberSnapshot](subsystems/agent-team.md)
 
-Source: [`packages/experimental/agent-team/src/types.ts:228`](../packages/experimental/agent-team/src/types.ts)
+Source: [`packages/experimental/agent-team/src/types.ts:232`](../packages/experimental/agent-team/src/types.ts)
 
 <a id="teammessagedelivered--log-only"></a>
 
@@ -867,7 +881,7 @@ Source: [`packages/experimental/agent-team/src/types.ts:228`](../packages/experi
 
 Types: [TeamId](subsystems/agent-team.md) · [TeamMessageId](subsystems/agent-team.md)
 
-Source: [`packages/experimental/agent-team/src/types.ts:234`](../packages/experimental/agent-team/src/types.ts)
+Source: [`packages/experimental/agent-team/src/types.ts:238`](../packages/experimental/agent-team/src/types.ts)
 
 <a id="teammessagequeued--log-only"></a>
 
@@ -880,7 +894,7 @@ Source: [`packages/experimental/agent-team/src/types.ts:234`](../packages/experi
 
 Types: [TeamId](subsystems/agent-team.md) · [TeamMessageSnapshot](subsystems/agent-team.md)
 
-Source: [`packages/experimental/agent-team/src/types.ts:232`](../packages/experimental/agent-team/src/types.ts)
+Source: [`packages/experimental/agent-team/src/types.ts:236`](../packages/experimental/agent-team/src/types.ts)
 
 <a id="teamtask--log-only"></a>
 
@@ -893,7 +907,7 @@ Source: [`packages/experimental/agent-team/src/types.ts:232`](../packages/experi
 
 Types: [TeamId](subsystems/agent-team.md) · [TeamTaskSnapshot](subsystems/agent-team.md)
 
-Source: [`packages/experimental/agent-team/src/types.ts:230`](../packages/experimental/agent-team/src/types.ts)
+Source: [`packages/experimental/agent-team/src/types.ts:234`](../packages/experimental/agent-team/src/types.ts)
 
 ### `todo/*`
 

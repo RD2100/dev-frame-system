@@ -16,7 +16,8 @@ import { resolveMemorySpec } from './config.ts'
 import { NoteId } from './ids.ts'
 import { ProjectMemoryService } from './memory.ts'
 import { createMemoryReceiptStore } from './receipt.ts'
-import type { AssertionStatus, MemoryNote, MemorySpec, NoteKind } from './types.ts'
+import { appendMemoryReceipt, rehydrateMemoryReceipts } from './receipt-log.ts'
+import type { AssertionStatus, MemoryNote, MemoryReceiptStore, MemorySpec, NoteKind } from './types.ts'
 
 /** Cordis plugin name. */
 export const name = 'project-memory'
@@ -116,7 +117,7 @@ function noteDto(note: MemoryNote): {
 }
 
 /** Build the three memory tool definitions bound to one service instance. */
-export function createMemoryTools(service: ProjectMemoryService, spec: MemorySpec): ToolDefinition[] {
+export function createMemoryTools(service: ProjectMemoryService, spec: MemorySpec, receipts: MemoryReceiptStore): ToolDefinition[] {
   return [
     defineTool({
       name: 'memory_search',
@@ -277,7 +278,11 @@ export function createMemoryTools(service: ProjectMemoryService, spec: MemorySpe
         },
         render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
       },
-      async execute(args) {
+      async execute(args, exec) {
+        const agent = exec.agent
+        if (agent === undefined) {
+          throw new Error('memory_append requires a calling agent: the receipt must reach that session log before the result is created')
+        }
         const result = await service.append({
           scope: args.scope,
           sourceRef: args.source_ref,
@@ -289,6 +294,16 @@ export function createMemoryTools(service: ProjectMemoryService, spec: MemorySpe
           ...spec.currentSnapshot === undefined ? {} : { snapshot: spec.currentSnapshot },
           ...args.supersedes_note_id === undefined ? {} : { supersedes: NoteId(args.supersedes_note_id) },
         })
+        if (result.status !== 'created') {
+          return { status: result.status, noteId: result.noteId, relativePath: result.relativePath }
+        }
+        const receipt = await receipts.read(result.noteId)
+        if (receipt === undefined) {
+          throw new Error('memory_append: the service reported created without committing a receipt')
+        }
+        // Durable before the tool result reaches the caller: the design requires
+        // the session-log receipt to precede `created`.
+        appendMemoryReceipt(agent.session, receipt)
         return { status: result.status, noteId: result.noteId, relativePath: result.relativePath }
       },
     }),
@@ -299,6 +314,12 @@ export function createMemoryTools(service: ProjectMemoryService, spec: MemorySpe
  * Plugin entry: resolve the spec, provide the service, register the tools.
  * Misconfiguration fails loud at load — the loader schema rejects a missing
  * workspace id, and the plugin refuses write consent without a Vault root.
+ *
+ * Receipt durability: the service commits each receipt into a process-wide
+ * index; the `memory_append` tool then writes the same receipt into the
+ * calling agent's session log before the tool result is created. Every
+ * agent created after mount rehydrates the index by folding that agent's
+ * session log, so a cold restart recovers the receipts from replayed logs.
  * @param ctx - the mounting context.
  * @param config - validated loader config.
  * @returns the plugin disposer.
@@ -319,10 +340,18 @@ export function apply(ctx: Context, config: Config): () => void {
   if (spec.writeEnabled && spec.vaultRoot === undefined) {
     throw new Error('project-memory: writeEnabled requires an explicit vaultRoot — refuse to enable appends into an unconfigured Vault')
   }
-  const service = new ProjectMemoryService(spec, createMemoryReceiptStore())
-  const disposers: Array<() => unknown> = [ctx.provide('projectMemory', service)]
+  const receipts = createMemoryReceiptStore()
+  const service = new ProjectMemoryService(spec, receipts)
+  const disposers: Array<() => unknown> = [
+    ctx.provide('projectMemory', service),
+    ctx.on('agent/created', ({ agent }) => {
+      void rehydrateMemoryReceipts(receipts, agent.session).catch((error: unknown) => {
+        ctx.logger.error('project-memory: receipt rehydration failed', error)
+      })
+    }),
+  ]
   try {
-    for (const definition of createMemoryTools(service, spec)) {
+    for (const definition of createMemoryTools(service, spec, receipts)) {
       disposers.push(ctx.tools.register(definition))
     }
   } catch (error: unknown) {
