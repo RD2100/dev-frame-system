@@ -23,6 +23,10 @@
       "types": "./lib/types/controller/goal-binding.d.ts",
       "default": "./lib/types/controller/goal-binding.js"
     },
+    "./controller/goal-binding": {
+      "types": "./lib/types/controller/goal-binding.d.ts",
+      "default": "./lib/types/controller/goal-binding.js"
+    },
     "./permissions": {
       "types": "./lib/types/permissions/index.d.ts",
       "default": "./lib/types/permissions/index.js"
