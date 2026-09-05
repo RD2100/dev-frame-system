@@ -136,3 +136,5 @@ L1 组长与 L2 Worker 待创建。合规创建顺序（每个 Agent）：持久
 - 2026-09-05：L-Hierarchy 恢复事件：P02 检出后静默约 11 分钟、状态查询 5 分钟无回应，按恢复协议 interrupt 当前 turn 并重新唤起（要求先落盘已有所得、逐文件落盘、说明中断点）；原因与处置已记录，非证据性失败。
 - 2026-09-05：目标轮上限 30 到达（phase blocked, round-limit），经用户"继续"人工回合延长至 80 并重新 arm（revision 9）——调度缺口闭环：轮上限耗尽需人工回合才能 edit/resume，已如实上报并处理。
 - 2026-09-05：P04 交付并经总控独立验收（亲跑 31/31 含 P00/P01 回归；`4a515afda7`）：TaskState 九态全序流转+blocked/failed 恢复三元组强制、有界并发（maxActiveTasks 默认 2）、生命周期准入/停止/Quiescence、controller-only 合并门禁（一次性进程内标记）、project_tasks 域持久化+冷恢复。派发路径 L-Shadow 的 P04 接口前提就此满足；L-Shadow/L-Memory 按车道释放顺序派发。L-Foundation 转 P05。
+- 2026-09-05：模型车道策略（用户指令）：平时 huoshan-1，仅遇问题（限流/故障）才切换 huoshan-2——故障转移式，不改默认配置；替代早前 D9 的"子 Agent 全走 huoshan-1"静态描述。
+- 2026-09-05：P05 交付并经总控独立验收（亲跑 13/13 含 P04 回归；`c8992f8154`）：agent-evidence 台账——任务/Goal 绑定回执（复用 DevFrame goal-binding 语义）、提交回执（CommitSha 品牌）、验证快照（原样记录退出码）、三轨迹追加式持久化+冷恢复；"不另建验收数据库"落点明确（只存溯源不持判定）。L-Foundation 转 P06（最后一项）。L-Hierarchy P02 恢复后已进入门禁（tsbuildinfo），L-Worktree P03 consumer 测试收尾中。
