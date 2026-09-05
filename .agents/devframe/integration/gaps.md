@@ -4,8 +4,8 @@ description: L-Integration 真实组合集成候选线的逐包 Cordis 接入盘
 
 # 集成候选缺口清单（gaps）
 
-- 状态：清点完成；第二轮（project-memory）与第三轮（shadow-router）组合重验完成。
-- 基线：`p/integration` @ `cda26762d7`，先后 fast-forward 合并 main 至 `4bc507e332`（纳入 P21-M）、`e3d4d6ad02`（纳入 p/memory-seam S1–S3 切片，merge `fb1519cd19`）与 `b78f54ebfc`（纳入 shadow-router merge `eff2e5b6af` 及 AT2 场景对齐）。
+- 状态：清点完成；第二（project-memory）、三（shadow-router）、四（hierarchy 在线拒绝）、五（shadow 组合面）轮组合重验完成。
+- 基线：`p/integration` @ `cda26762d7`，先后 fast-forward 合并 main 至 `4bc507e332`（纳入 P21-M）、`e3d4d6ad02`（纳入 p/memory-seam S1–S3 切片，merge `fb1519cd19`）、`b78f54ebfc`（纳入 shadow-router merge `eff2e5b6af` 及 AT2 场景对齐）；第四、五轮分别以 `07569a65be`、`c42c8b4518` 为基开分支 `p/integration-2`、`p/integration-3`（后者含 p/bundlefix `06d6950c38`）。
 - 隔离 home：`C:\Users\25313\.dsh-integration`（本线专用；绝不触碰 `C:\Users\25313\.dsh`）。
 - 判定口径：机械缺口 = 缺 cordis.yml / 入口声明 / profile 挂线 / spec 挂线，可直接补齐且不改 src 语义；语义缺口 = 缺 Provider/Consumer/工具实现或产品面，归原组长，不代改。
 - 挂载约定事实：本仓库"已装插件"的形态不是每包自带 cordis.yml，而是**插件包导出 Cordis Service（default export）+ 某个 profile patch 层以 `id/name/config` 行挂载**（先例：`agent-team` 无自包 cordis.yml，由 `agent-team-profile` 的 cordis.patch.yml insert 行挂载）。故"缺自包 cordis.yml"本身不算缺口；缺的是可挂载的 Service 面或挂载层。
@@ -83,6 +83,7 @@ description: L-Integration 真实组合集成候选线的逐包 Cordis 接入盘
 - Config schema：`static Config`（schemastery；`authorizedRoots` fail-closed 默认空、`controllerProfile`、三条限额默认）——`authorizedRoots` 每项须为装载期已存在的绝对目录，否则激活 fail loud（探针 boot 即该校验通过的实证）。
 - 持久化：`shadow_router` 域三表（bindings/deliveries/requests），init 冷恢复全表 + 中途态对账（reserving/provisioning 收敛）。
 - 组合级验证（本线第三轮）：只读装配（`authorizedRoots: [dshHomePath('integration-shadow-roots')]`，不标记任何 Shadow agent）——四工具全局零泄漏、未标记调用方 fail-closed（`SHADOW_CALLER_FORBIDDEN`）、冷启动重断言成立。`markShadow` 的 agent 侧安装与绑定行级冷恢复未驱动（需真实 Shadow agent），记剩余检查。
+- 组合级验证（本线第五轮，分支 `p/integration-3`）：组合面补位——宿主经公开 `markShadow` seam 标记真实组合 agent（S6 包级标记方式升到组合级；cordis.yml 无声明式标记面，装配为探针驱动、不虚构档案行）：标记 agent 作用域四工具全可解析（`tools.get(name, scope)` + `schemas(scope)` 枚举），controller 角色绑定不遮蔽作用域自有层；未标记组合 agent 作用域零解析零枚举；标记 agent 真实绑定行 write-through 落绑定存储并冷恢复角色一致。**S6 剩余检查项（markShadow agent 侧安装）自此在组合级驱动闭环；剩余收口为真实 `project_open`/投递流（需真实投递目标与双项目根，归下一波）。**
 - 配套机械缺口：`tsconfig.base.json` 源面 alias 合入时缺失（生成器无法推导），`b83964210f` 手写补齐。
 - **判定：机械缺口仅"profile 挂载层 + authorizedRoots 行 + alias"；组合级四态升格见汇总表。**
 
@@ -98,11 +99,12 @@ description: L-Integration 真实组合集成候选线的逐包 Cordis 接入盘
 | M1 | 七个插件的 profile 挂载行（session-identity / agent-hierarchy / project-controller / agent-evidence / agent-reliability / project-memory 只读装配 / shadow-router 只读装配，含 id/name/config） | `.agents/devframe/integration/cordis.patch.yml` → 隔离 home profile |
 | M2 | profile manifest（bundles 栈 dsh-base + dsh-headless；插件与 llm-replay dependencies 声明满足 resolver manifest 约束） | 隔离 home `profiles/integration/package.json` |
 | M3 | 插件包 node_modules 链接（十包 junction 进 profile node_modules，built 模式可解析） | 隔离 home profile node_modules |
-| M4 | `workspace` + `worktree-registry` 两行补齐（base 的 tool-worktree 硬注入这两个服务；安装态由 web-app 归一化提供、自定义 profile 不携带；shadow-router 亦硬注入 workspaceRegistry） | 集成档案 insert 块 |
+| M4 | `workspace` + `worktree-registry` 两行补齐（base 的 tool-worktree 硬注入这两个服务；安装态由 web-app 归一化提供、自定义 profile 不携带；shadow-router 亦硬注入 workspaceRegistry）。**第五轮 supersede**：`p/bundlefix`（`06d6950c38`）使 shipped headless 自带同形两行（镜像自本行原 insert），档案层移除该两行避免含 headless 栈内重复 id（F10）；base-only 探针栈由探针自带两行补位 | 原：集成档案 insert 块 → 现：shipped headless 原生 + 探针自带 |
 | M5 | `session-persistence-jsonl` `compression: none` restate（sessions root 单一编码 fail-loud 约束） | 集成档案顶层 restate |
 | M6 | project-memory 只读装配行（第二轮：`workspaceId: integration` + 探针 Vault + `writeEnabled: false`） | 集成档案 insert 块 |
 | M7 | shadow-router 只读装配行（第三轮：fail-closed `authorizedRoots` 指向隔离 home 下探针专属目录 + 目录预建 + junction/manifest 增补）与 `tsconfig.base.json` 源面 alias 手写补齐（`b83964210f`） | 集成档案 insert 块 + 隔离 home + 根 tsconfig |
 | M8 | hierarchy 在线拒绝探针补位（第四轮：探针 hierarchy 面三断言 + 冷恢复重断言）及其实测修正——`roleToolPolicies` 三角色名单 `bash` → `pwsh`（F9，allow-face 装置 fail-loud 揪出） | `probe-cold-recovery.ts` + 集成档案 roleToolPolicies |
+| M9 | shadow 组合面补位（第五轮：宿主 seam 标记真实组合 agent + 作用域四工具可见 + 未标记零泄漏 + 绑定行 write-through 落盘 + 冷恢复）及 F10 修正——档案层移除 workspace/worktree-registry insert、探针自带两行 | `probe-cold-recovery.ts` + 集成档案 |
 
 ### 语义待办项（原组长归属）
 | # | 项 | 状态 | 归属 |
@@ -112,4 +114,4 @@ description: L-Integration 真实组合集成候选线的逐包 Cordis 接入盘
 | S3 | project-memory MemoryReceiptStore 落会话日志 | **已落地**（上游 `682c7c6008` receipt-log；agent 侧再水化路径本线未驱动，见剩余检查） | L-Memory（已合并） |
 | S4 | 五插件的模型可见工具面（controller 任务板命令、evidence 回执入口等"会话级工具"）——当前五包均为纯服务；project-memory 三工具已全局注册但未纳入 agent-hierarchy 角色允许表（部署选择，待下一波） | 未启动 | P04/P05 原组长 |
 | S5 | agent-reliability stop 对账身份的持久化 host 语义（跨重启保留 unresolved 身份） | 未启动 | P06 原组长 |
-| S6 | shadow-router `markShadow` agent 侧安装与绑定行级冷恢复（需宿主指定真实 Shadow agent；本线只验证全局零泄漏 + 调用方 fail-closed） | 未驱动（接口已就绪） | P21-S 原组长 |
+| S6 | shadow-router 真实 `project_open`/投递流组合驱动（真实投递目标 + 双项目根；属只读装配边界外的生产流） | markShadow agent 侧安装已闭环（第五轮组合面：作用域四工具可见 + 绑定行落盘 + 冷恢复）；投递流未驱动 | P21-S 原组长 |

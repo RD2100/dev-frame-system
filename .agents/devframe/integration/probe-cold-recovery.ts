@@ -71,12 +71,28 @@ if (phase !== 'write' && phase !== 'verify') {
 
 const profile = prepareProfile('integration')
 await healProfilesModuleFallback({ installAnchor: INSTALL_ANCHOR, profile })
+// Base bundle layers only: the probe is not a one-shot task run, so the
+// headless app surface (which pends on `headlessStartup` without a task)
+// stays out. The base tree's tool-worktree row hard-injects
+// workspaceRegistry/worktreeRegistry, and the headless bundle — which
+// normally provides them (p/bundlefix) — is absent here, so the probe
+// carries the two provider rows itself, after the archive.
 const bundlePatches = profile.layers
   .filter(layer => layer.packageName === '@deepseek-ai/dsh-base')
   .flatMap(layer => layer.patches)
 const homePatches = loadOptionalPatches(NAME, homePatchPath()) ?? []
 const overlays = loadOverlayPatches(NAME, ARCHIVE)
-const patches = structuredClone([...bundlePatches, ...profile.patches, ...homePatches, ...overlays])
+// The probe-stack replacement for the headless bundle's provider rows
+// (p/bundlefix): same ids and names, scoped to this base-only composition.
+const probeProviderEntries = [
+  {
+    insert: [
+      { id: 'workspace', name: '@deepseek-ai/dsh-workspace' },
+      { id: 'worktree-registry', name: '@deepseek-ai/dsh-worktree-registry' },
+    ],
+  },
+]
+const patches = structuredClone([...bundlePatches, ...profile.patches, ...homePatches, ...overlays, ...probeProviderEntries])
 
 const identity = await ensureProfileIdentity(NAME, 'integration')
 const environment = loadLayeredEnv('dsh')
@@ -227,6 +243,64 @@ async function probeHierarchyFace(suffix: string): Promise<{
   return { controllerReadAllowed: true, leadDelegationDenied: true, unboundControlledDenied: true }
 }
 
+/**
+ * The shadow-router composition face over a real agent session: the host
+ * designates one live composition agent as its Shadow through the public
+ * `markShadow` seam (the S6 in-package marking pattern, at composition
+ * level), the four project tools become visible in that agent's scope while
+ * an unmarked composition agent's scope stays clean, and the marked agent's
+ * real binding row persists through the write-through binding registry.
+ * Marking is a runtime host seam — cordis.yml carries no declarative
+ * marking face — so the assembly is probe-driven by design, not fabricated
+ * into the archive layer.
+ */
+async function probeShadowCompositionFace(suffix: string): Promise<{
+  markedScopeSeesTools: boolean
+  unmarkedScopeClean: boolean
+  bindingRowPersisted: boolean
+}> {
+  const marked = (await ctx.agents.create({ sessionId: SessionId(`session-shadow-marked-${suffix}`) })).agent
+  ctx.shadowRouter.markShadow(marked)
+  if (!ctx.shadowRouter.isShadow(marked)) {
+    throw new Error('the host-designated agent is not marked as Shadow')
+  }
+  for (const toolName of SHADOW_TOOL_NAMES) {
+    if (ctx.tools.get(toolName, marked) === undefined) {
+      throw new Error(`the marked scope does not resolve "${toolName}"`)
+    }
+  }
+  if (!ctx.tools.schemas(marked).some(schema => schema.name === 'project_open')) {
+    throw new Error('the marked scope enumeration does not list the project tools')
+  }
+
+  const unmarked = (await ctx.agents.create({ sessionId: SessionId(`session-shadow-unmarked-${suffix}`) })).agent
+  for (const toolName of SHADOW_TOOL_NAMES) {
+    if (ctx.tools.get(toolName, unmarked) !== undefined) {
+      throw new Error(`the unmarked scope resolves "${toolName}"`)
+    }
+  }
+  if (ctx.tools.schemas(unmarked).some(schema => SHADOW_TOOL_NAMES.includes(schema.name as never))) {
+    throw new Error('the unmarked scope enumeration lists a project tool')
+  }
+
+  await ctx.agentBindings.bind({ agentId: marked.id, role: 'controller' })
+  const persisted = ctx.agentBindings.find(marked.id)
+  if (persisted === undefined || persisted.role !== 'controller') {
+    throw new Error(`the marked agent's binding row did not persist: ${JSON.stringify(persisted)}`)
+  }
+  for (const toolName of SHADOW_TOOL_NAMES) {
+    if (ctx.tools.get(toolName, marked) === undefined) {
+      throw new Error(`the role restriction hid the scope-local "${toolName}"`)
+    }
+  }
+
+  return {
+    markedScopeSeesTools: true,
+    unmarkedScopeClean: true,
+    bindingRowPersisted: existsSync(join(process.env.DSH_HOME ?? '', 'storages', 'session_identity.json')),
+  }
+}
+
 try {
   if (phase === 'write') {
     const workspace = mkdtempSync(join(tmpdir(), 'dsh-integration-probe-'))
@@ -261,6 +335,7 @@ try {
     const memory = await probeMemoryFace()
     const shadow = await probeShadowFace()
     const hierarchy = await probeHierarchyFace('w')
+    const shadowComposition = await probeShadowCompositionFace('w')
     const state = {
       sessionId: session.id,
       bindingRole: record.role,
@@ -277,6 +352,9 @@ try {
       hierarchyControllerReadAllowed: hierarchy.controllerReadAllowed,
       hierarchyLeadDelegationDenied: hierarchy.leadDelegationDenied,
       hierarchyUnboundControlledDenied: hierarchy.unboundControlledDenied,
+      shadowCompMarkedScopeSeesTools: shadowComposition.markedScopeSeesTools,
+      shadowCompUnmarkedScopeClean: shadowComposition.unmarkedScopeClean,
+      shadowCompBindingRowPersisted: shadowComposition.bindingRowPersisted,
     }
     writeFileSync(STATE, JSON.stringify(state, undefined, 2) + '\n')
     console.log('WRITE PHASE OK', JSON.stringify(state))
@@ -310,15 +388,20 @@ try {
     for (const [agentId, expectedRole] of [
       ['session-hier-controller-w', 'controller'],
       ['session-hier-lead-w', 'lead'],
+      ['session-shadow-marked-w', 'controller'],
     ] as const) {
       const restored = ctx.agentBindings.find(SessionId(agentId))
       if (restored === undefined || restored.role !== expectedRole) {
-        throw new Error(`hierarchy binding for "${agentId}" did not cold-restore: ${JSON.stringify(restored)}`)
+        throw new Error(`binding for "${agentId}" did not cold-restore: ${JSON.stringify(restored)}`)
       }
     }
     const hierarchy = await probeHierarchyFace('v')
     if (!hierarchy.controllerReadAllowed || !hierarchy.leadDelegationDenied || !hierarchy.unboundControlledDenied) {
       throw new Error(`hierarchy face did not survive the cold boot: ${JSON.stringify(hierarchy)}`)
+    }
+    const shadowComposition = await probeShadowCompositionFace('v')
+    if (!shadowComposition.markedScopeSeesTools || !shadowComposition.unmarkedScopeClean) {
+      throw new Error(`shadow composition face did not survive the cold boot: ${JSON.stringify(shadowComposition)}`)
     }
     console.log('RESTORE OK', JSON.stringify({
       sessionId: state.sessionId,
@@ -336,6 +419,9 @@ try {
       hierarchyControllerReadAllowed: hierarchy.controllerReadAllowed,
       hierarchyLeadDelegationDenied: hierarchy.leadDelegationDenied,
       hierarchyUnboundControlledDenied: hierarchy.unboundControlledDenied,
+      shadowCompMarkedScopeSeesTools: shadowComposition.markedScopeSeesTools,
+      shadowCompUnmarkedScopeClean: shadowComposition.unmarkedScopeClean,
+      shadowCompBindingRowPersisted: shadowComposition.bindingRowPersisted,
     }))
   }
 } finally {

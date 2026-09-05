@@ -11,6 +11,7 @@ description: L-Integration 集成线的端到端无钥匙验证证据：装配�
 - 第二轮（main `e3d4d6ad02`）：project-memory 三切片（S1 工具装配 / S2 回执落日志 / S3 JSDoc，merge `fb1519cd19`）已具备插件形态，本线以只读装配纳入 profile 并完成组合重验（1–3 节均为重验后结果）。
 - 第三轮（main `b78f54ebfc`）：shadow-router（merge `eff2e5b6af`；AT2 场景对齐 `b78f54ebfc`）以只读装配纳入 profile 并完成组合重验；配套机械修复 `tsconfig.base.json` 补其源面 alias（`b83964210f`）。
 - 第四轮（main `07569a65be`，分支 `p/integration-2`）：agent-hierarchy 组合级在线拒绝探针补位——探针新增 hierarchy 面经真实分派器驱动现役角色允许/拒绝断言；该面实测揪出档案层 `roleToolPolicies` 的 `bash` 幽灵工具名缺陷（F9），修正后三件重验全绿。
+- 第五轮（main `c42c8b4518`，分支 `p/integration-3`）：P21-S 组合级生产缺口补位——探针新增 shadow 组合面（宿主经公开 `markShadow` seam 标记真实组合 agent，S6 包级标记方式升到组合级）；`p/bundlefix`（`06d6950c38`）使 shipped headless 自带 workspace/worktree-registry 两行，档案层相应移除该两行 insert（F10 重复 id 修正），base-only 探针栈改由探针自带两行。
 
 ## 1. 装配验证（dump-config，exit 0）
 
@@ -23,7 +24,7 @@ pnpm dsh --profile integration --patch D:\dsh-devframe-p-integration\.agents\dev
 
 - 退出码 0，无 "not found" 警告；完整组合树落盘于 [dump-config.output.txt](dump-config.output.txt)（461 行）。
 - 装载清单（patch 层段，行号对应 dump 文件）：
-  - `workspace` + `worktree-registry`（insert；base 的 tool-worktree 硬注入这两个服务，自定义 profile 无安装态 web-app 层，须显式补齐）
+  - `workspace` + `worktree-registry`（自第五轮起由 shipped headless 原生提供，`p/bundlefix` `06d6950c38`；档案层原 M4 insert 已移除以避免含 headless 栈内重复 id——F10。base 的 tool-worktree 硬注入的这两个服务在 dump 组合中仍由这两行满足）
   - `session-identity`（`@deepseek-ai/dsh-experimental-session-identity`）
   - `agent-hierarchy`（含 `roleToolPolicies` 三态 × 26 工具名、`delegationToolNames: [subagent, subagent_fork]`、`leadPluginScopes: {}`）
   - `project-controller`（含 `maxActiveTasks: 2`）
@@ -55,6 +56,7 @@ write 相（进程 1，exit 0）真实服务调用路径：
 | ctx.projectMemory + ctx.tools（project-memory，第二轮） | `tools.get('memory_search'/'memory_read'/'memory_append')` 均非 undefined；`search({scope:'project',query:'probe'})` 扫真实 Vault；`read` 缺席 note id → `memory_missing`；`append` 被拒 | 三工具注册 ✅ / 搜索覆盖完整 ✅ / 读路径真实 ✅ / 只读拒绝 ✅（`MEMORY_APPEND_DISABLED`） |
 | ctx.shadowRouter + ctx.tools（shadow-router，第三轮） | `tools.get('project_open'/'project_send'/'project_status'/'project_stop')` 全局全部 undefined（工具仅入宿主标记的 Shadow agent 作用域）；`openProject(undefined, ...)` 被拒 | 白名单不泄漏全局 ✅ / 调用方 fail-closed ✅（`SHADOW_CALLER_FORBIDDEN`）；`authorizedRoots` 装载期目录校验随激活通过 |
 | ctx.agents + ctx.tools guard（agent-hierarchy，第四轮） | 真实 live agent + 真实绑定 + `ctx.tools.execute` 真实分派器：controller 绑定后 `read` 真身执行成功（allow 面 + guard 均放行）；lead（无 pluginId）执行 `subagent` 被 guard 拒（委派 plugin-scope 词表）；未绑定 agent 执行 `subagent` 被拒（missing-role 词表，受控工具 fail-closed） | 现役角色允许 ✅ / 委派越权拒绝 ✅（`no plugin scope binding`）/ 未注册拒绝 ✅（`no role binding`）；union 外角色分支为 registry schema 同 union 的防御面，绑定路径不可驱动（如实登记，不虚构） |
+| ctx.shadowRouter.markShadow + 作用域 registry（shadow-router 组合面，第五轮） | 宿主经公开 seam 标记一个真实组合 agent（S6 包级标记方式升到组合级；cordis.yml 无声明式标记面，装配为探针驱动、不虚构档案行）：标记 agent 作用域 `tools.get(name, scope)` 四工具全可解析 + `schemas(scope)` 枚举含 project 工具，且 controller 角色绑定（allow-face restrict 装置）不遮蔽作用域自有层；未标记组合 agent 作用域四工具零解析零枚举；标记 agent 真实绑定行写入绑定存储（write-through）且冷恢复角色一致 | 标记作用域可见四工具 ✅ / 未标记零泄漏 ✅（组合级，区别于 S6 包级 registry 断言）/ 绑定行落盘 ✅；markShadow agent 侧安装自此在组合级驱动（S6 剩余检查项推进，剩真实 project_open/投递流归下一波） |
 
 探针重跑前须清 `storages\`、`sessions\`、`integration-vault\` 与 probe-state.json（本轮曾因遗留 storages 得到预期的 `PROJECT_CONTROLLER_TASK_EXISTS`——防重面再次实测，非故障）。shadow-router 的 `shadow_router` 域在只读装配下零行落盘：存储后端按写入逐次发布介质文件，空域无文件属预期观测（probe-state 中 `shadowDomainFileOnDisk: false` 仅记录、不作断言）。
 
@@ -67,7 +69,7 @@ verify 相（进程 2 = 冷重启，exit 0）：
 RESTORE OK {"sessionId":"session-1","role":"controller","taskState":"assigned","bindings":1,"verifications":1,"memoryToolsRegistered":true,"memorySearchCoverageComplete":true,"memoryReadAbsent":true,"memoryAppendDenied":true,"shadowToolsScopeIsolated":true,"shadowCallerForbidden":true,"shadowDomainFileOnDisk":false}
 ```
 
-三个持久化域（session_identity / project_tasks / agent_evidence）跨进程逐行恢复一致；project-memory、shadow-router、agent-hierarchy 三个只读面在冷启动后重新断言全部成立（memory：工具注册 / 搜索覆盖 / 读路径 / 写拒绝；shadow：白名单不泄漏 / 调用方 fail-closed；hierarchy：controller 允许 / lead 委派拒绝 / 未绑定拒绝，且写相的 controller/lead 绑定行冷恢复后角色一致）。**恢复失败登记：无。**
+三个持久化域（session_identity / project_tasks / agent_evidence）跨进程逐行恢复一致；project-memory、shadow-router、agent-hierarchy 三个只读面在冷启动后重新断言全部成立（memory：工具注册 / 搜索覆盖 / 读路径 / 写拒绝；shadow：白名单不泄漏 / 调用方 fail-closed / 组合面标记作用域与零泄漏；hierarchy：controller 允许 / lead 委派拒绝 / 未绑定拒绝，且写相的 controller/lead/shadow-marked 绑定行冷恢复后角色一致）。**恢复失败登记：无。**
 
 ## 3. recorded-session 无钥匙回放（真实启动 + 真实工具调用，exit 0）
 
@@ -95,7 +97,7 @@ pnpm dsh --profile integration `
   - `tool/call` → `{"name":"pwsh","arguments":"{\"command\": \"[Console]::Out.Write('PWSH_OK')\", …}"}`
   - `tool/result` → `{"type":"text","text":"PWSH_OK"},"isError":false`（真实 pwsh 进程执行，非回放文本）
   - `assistant/message`（step 2）→ `DONE`；`turn/end` reason `completed`
-- 即：真实 profile 启动 → 九行集成插件装配激活（含 project-memory 与 shadow-router 只读装配）→ 至少一条工具调用路径（pwsh）全绿，无钥匙。第二（`e3d4d6ad02`）、三（`b78f54ebfc`）、四（`07569a65be`，F9 修正后）轮重验同命令同结果（推理两段 + `DONE`，exit 0）。
+- 即：真实 profile 启动 → 七行集成插件 insert 装配激活（含 project-memory 与 shadow-router 只读装配；workspace/worktree-registry 由 headless 原生提供）→ 至少一条工具调用路径（pwsh）全绿，无钥匙。第二（`e3d4d6ad02`）、三（`b78f54ebfc`）、四（`07569a65be`）、五（`c42c8b4518`，F10 修正后）轮重验同命令同结果（推理两段 + `DONE`，exit 0）。
 
 ## 4. 过程中登记的失败（均已定位闭环，非遗留）
 
@@ -110,6 +112,7 @@ pnpm dsh --profile integration `
 | F7 | `session artifact … .jsonl.zstd … compression "none"` fail-loud | 探针默认 zstd 与回放组合 none 混用同一 sessions root | 档案层统一 restate `compression: none`（属 F4 同文件） |
 | F8 | 探针 `ERR_MODULE_NOT_FOUND: @deepseek-ai/dsh-experimental-shadow-router`；`gen-tsconfig-paths` 报该包别名须手写 | shadow-router 合入 main 时未补 `tsconfig.base.json` 源面 alias（生成器无法从目录名推导，需手写条目） | `b83964210f` 手写补一行 alias（比照 P00–P06 块）；生成器复跑通过该包检查 |
 | F9 | hierarchy 面首跑：绑定 controller 后 `read` 报 `tools.restrict() names unknown global tool "bash"` fail-loud | **档案层配置缺陷（本线自查自纠）**：`roleToolPolicies` 三角色 allow 名单取自早期快照目录，含本组合不存在的 `bash`（shell 工具实际为 `pwsh`）；此前无绑定 agent 真实执行工具的路径，故未暴露；hierarchy 面首次以绑定 agent 走真实分派器即命中 allow-face 装置 | 档案层三角色名单 `bash` → `pwsh`（最小修正；worktree_*/memory_* 等新全局工具是否纳入角色 allow 名单属部署策略，记部署选择）；修正后三件重验全绿 |
+| F10 | 第五轮回放 boot fail-loud：`duplicate loader entry id: workspace`（dump-config 不复现——其不应用 bundle 层 include，回放栈才是权威） | `p/bundlefix`（`06d6950c38`）使 shipped headless 自带 workspace/worktree-registry 两行（镜像自本档案原 M4 insert），档案层同 id insert 在含 headless 的栈内重复 | 档案层移除该两行 insert（headless 已原生提供）；base-only 探针栈因滤除 headless 应用面（其 pend 于 `headlessStartup`，任务面所需），改由探针自带同形两行补位；修正后三件重验全绿 |
 
 ## 5. 真实模型调用（SKIP_AUTH 登记）
 

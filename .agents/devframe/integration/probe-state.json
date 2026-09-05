@@ -13,5 +13,8 @@
   "shadowDomainFileOnDisk": false,
   "hierarchyControllerReadAllowed": true,
   "hierarchyLeadDelegationDenied": true,
-  "hierarchyUnboundControlledDenied": true
+  "hierarchyUnboundControlledDenied": true,
+  "shadowCompMarkedScopeSeesTools": true,
+  "shadowCompUnmarkedScopeClean": true,
+  "shadowCompBindingRowPersisted": true
 }

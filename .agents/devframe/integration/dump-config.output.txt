@@ -347,6 +347,10 @@ $ node --import tsx/esm apps/cli/src/bin.ts "--profile" "integration" "--patch" 
 - id: llm-deepseek
   name: '@deepseek-ai/dsh-llm-deepseek'
 # == @deepseek-ai/dsh-headless
+- id: workspace
+  name: '@deepseek-ai/dsh-workspace'
+- id: worktree-registry
+  name: '@deepseek-ai/dsh-worktree-registry'
 - id: code-runtime
   name: '@deepseek-ai/dsh-code-runtime-worker-thread'
 - id: headless-startup
@@ -358,10 +362,6 @@ $ node --import tsx/esm apps/cli/src/bin.ts "--profile" "integration" "--patch" 
   config:
     task: !!js ctx.headlessStartup.task
 # == D:\dsh-devframe-p-integration\.agents\devframe\integration\cordis.patch.yml
-- id: workspace
-  name: '@deepseek-ai/dsh-workspace'
-- id: worktree-registry
-  name: '@deepseek-ai/dsh-worktree-registry'
 - id: session-identity
   name: '@deepseek-ai/dsh-experimental-session-identity'
 - id: agent-hierarchy

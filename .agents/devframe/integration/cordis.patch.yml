@@ -9,10 +9,12 @@
 # dependency of the mounted packages.
 #
 # The base tree's tool-worktree row hard-injects workspaceRegistry and
-# worktreeRegistry; the shipped headless installation satisfies them through
-# the installation-owned web-app bundle layer, which a custom profile does
-# not carry — so the integration layer mounts both providers explicitly
-# (same row ids and names as the web-app bundle's).
+# worktreeRegistry. The shipped headless bundle now carries the two provider
+# rows itself (p/bundlefix `06d6950c38`, mirrored from this archive's
+# original M4 inserts), so the archive no longer mounts them — keeping them
+# here would duplicate the loader entry ids in every headless-bearing stack.
+# The base-only probe composition covers the gap with its own probe-owned
+# provider rows instead (see probe-cold-recovery.ts).
 
 # One compression per sessions root is enforced fail-loud; the integration
 # line standardizes on uncompressed JSONL so persisted sessions stay
@@ -26,12 +28,6 @@
     compression: none
 
 - insert:
-    - id: workspace
-      name: '@deepseek-ai/dsh-workspace'
-
-    - id: worktree-registry
-      name: '@deepseek-ai/dsh-worktree-registry'
-
     - id: session-identity
       name: '@deepseek-ai/dsh-experimental-session-identity'
 
