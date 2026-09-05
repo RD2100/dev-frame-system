@@ -163,3 +163,4 @@ L1 组长与 L2 Worker 待创建。合规创建顺序（每个 Agent）：持久
 - 2026-09-05：**L-Shadow 故障恢复**：P21-S 在 provisioning test 5 改造（close() 不删根重启）时 turn 故障中断（非证据性失败）；已 send_message 从断点续起（完成改造→剩余 AT2 测试→门禁→交付）。
 - 2026-09-05：**L-Shadow 二次故障（无遗言）**→ 按破滞协议升级处置：最小三步任务（一行进度自述→逐文件落盘确认→完成 test 5 改造并报一行结果），完成后再继续剩余工作。恢复过程持续登记。
 - 2026-09-05：**L-Integration 故障（空遗言）**→ 同破滞协议最小三步（一行进度→落盘→dump-config 一行 exit）。两组长接连空遗言失败，疑似通道级不稳（与高频空转轮同期），登记为观察项；若再现则降并发并轮换组长重启节奏。
+- 2026-09-05：**L-Integration 最小步确认**：merge main（ff e3d4d6ad02）+tsdown 补产 exit 0；集成 profile 已加 project-memory 行（只读、vaultRoot integration-vault）；dump-config 六插件行 exit 0（memory 行 dump:460）；探针遇遗留 storages TASK_EXISTS（预期内）清盘重跑；改动已落盘待提交。**L-Shadow 三次故障但持续进展**（遗言="15 过 5 挂，取失败清单"）——恢复=逐用例修复+单文件确认+中断后按工作树状态续起不重做。
