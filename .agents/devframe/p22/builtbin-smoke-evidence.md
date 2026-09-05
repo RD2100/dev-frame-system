@@ -1,5 +1,5 @@
 ---
-description: built-bin 全程冒烟验证证据（P22 锚点，W3 归属）：第一轮 p/builtbin@9dbf3911f0 构建失败 fail-loud 未修；第二轮 p/builtbin-2@39b32f6bcb（buildfix 后）clean 重建仍在 gen:typert 失败，fail-loud 未修；built bin 两轮均不可用，后续验证未执行。
+description: built-bin 全程冒烟验证证据（P22 锚点，W3 归属）：三轮记录——R1 p/builtbin@9dbf3911f0 构建失败 fail-loud；R2 p/builtbin-2@39b32f6bcb 基线过期仍红 fail-loud；R3 merge main（含 sfix 1bca752bca）后 build 绿、built bin --help/--version 绿、dump-config 6/6 绿（五插件+集成 profile，隔离 .dsh-builtbin），但快照门（lib/src 两模式）与 built-bin e2e 的 sdk/acp/headless 启动本机红灯（tool-worktree pending 缺 workspace/worktree-registry 服务行），fail-loud 未修。
 ---
 
 # built-bin 全程冒烟验证证据（P22 锚点，W3 归属）
@@ -140,3 +140,74 @@ description: built-bin 全程冒烟验证证据（P22 锚点，W3 归属）：�
 - 判定：确定性树内缺陷，非残留状态（clean 重建复现）、非环境原因（install 绿、无网络参与）。gen:typert 的扫描面包含 shadow-router 的 tests/helpers.ts，而该 helper 使用的 `ctx.shadowRouter` 能力面在其扫描的 Context 类型上不存在——与第一轮缺陷 2/3（shadow-router 未进 host references + tests 类型错误）同根因族的残留面。
 - 影响面：与前轮相同，built bin 冒烟全部目标无法执行；本轮未复用也未下载任何 tgz 资产，未触碰生产 home 与既有隔离 home（`.dsh-builtbin` 仅存放两个 build 日志）。
 - 提交：本节追加后 `git diff --cached --check` + `git commit --no-verify` 于 `p/builtbin-2`（SHA 见最终报告）。
+
+---
+
+# 第三轮（总控裁定后：merge main + sfix，任务继续）
+
+- 裁定输入：第二轮红 = 基线过期（39b32f6bcb 早于 sfix `1bca752bca`，Context.shadowRouter 声明合并即 helpers.ts TS2339 修复；主树 bea230b9f9 权威 clean build 绿）。
+- 结论：**build 绿，dump-config 6/6 绿，built bin 基本面可用；快照门（lib 与 src 两模式）与 built-bin e2e 的 sdk/acp/headless 启动在本机红灯，fail-loud 上报未修**（详见 §R3-4/R3-5，为超出"build 仍红"预设路径的新发现）。
+
+## R3-1. merge main（总控指定）
+
+| 命令 | 退出码 | 关键输出 |
+| --- | --- | --- |
+| `git merge main --no-edit` | 0 | 合并 `bea230b9f9`（含 sfix）；改动 `packages/experimental/shadow-router/src/service.ts +7` 等；合并提交 `5c2530ba10`；28e72efbcf 保留在链上 |
+
+## R3-2. install + build——绿
+
+- `pnpm install --frozen-lockfile` exit 0（Already up to date，665ms）。
+- `pnpm run build` **exit 0**（日志 `C:\Users\25313\.dsh-builtbin\build-r3.log`；末尾 `build: recorded 220 client artifact(s) with 2 public value(s)`）。
+- `apps/cli/lib/bin.js` 存在（Test-Path=True）。
+
+## R3-3. built bin 定位与 --help/--version（步骤 4）
+
+- 入口：`node D:\dsh-devframe-p-builtbin\apps\cli\lib\bin.js`（依据 apps/cli `bin` 字段 + built-bin.e2e `runBuiltBin`）。
+- `--version` exit 0 → `0.1.2-alpha.4`；`--help` exit 0（Usage 页正常）。
+
+## R3-4. test:snapshot built 模式（步骤 5）——红
+
+- 开关依据（只读）：`packages/test-support/loader-smoke`——`DSH_EXAMPLE_MODE=lib` 即 built 模式（CI 由 run-gates 设 lib；未设 = src；其他值 fail loud）；`vitest.snapshot.config.ts` 仅在 lib 模式纳入 `apps/web/tests/**/*.snapshot.ts`。
+- `$env:DSH_EXAMPLE_MODE='lib'; pnpm run test:snapshot` → **exit 1**（日志 `snapshot-lib.log`）：Test Files 5 failed / 1 passed (6)，Tests **91 failed / 17 passed / 11 skipped**（119）。
+- 失败三类签名：
+  1. `Error: dsh: plugin tree failed to load: dsh: 1 entry did not activate` + `@deepseek-ai/dsh-tool-worktree: pending (waiting for services: workspaceRegistry, worktreeRegistry)` —— headless/sdk/acp 全部场景阻断（含 ACP 桥 dispose、jsonrpc inactive context 下游错误）。
+  2. Web 持久化回放断言失败：minimal-preset `persisted replay` 含 `Error: unknown tool "bash"`（`ToolNotFoundError/UNKNOWN_TOOL`）——tool 行在但调用期 unknown tool。
+  3. `SyntaxError: Bad escaped character in JSON at position 99` 一处。
+- **src 模式对照**（同树，未设 DSH_EXAMPLE_MODE）→ **exit 1**：89 failed / 16 passed / 10 skipped——同类失败面，**非 built 模式特有**。
+- 环境排除：Playwright 浏览器在位（`%LOCALAPPDATA%\ms-playwright`：chromium-1228 + headless shell + ffmpeg）；失败非"缺浏览器"形态。平台注意：本机 Windows，CI 矩阵为 Linux；仓库存在已知 Windows 失败的诊断机制（`check:windows-wine`），**本地无法区分"Windows 平台已知失败"与"树回归"，不判定，如实上报**。
+
+## R3-5. built-bin e2e 子集（等效 built 入口）
+
+- `pnpm exec vitest run --config vitest.e2e.config.ts apps/cli/tests/built-bin.e2e.ts`（DSH_EXAMPLE_MODE=lib）→ **exit 1**：22 用例 3 失败（`sdk`、`acp`、`headless` 三个 profile 启动），签名与快照完全一致（tool-worktree pending）；其余 19 用例通过（含 web dump 面）。
+- 决定性取证：`node <bin> --profile headless --dump-config` exit 0，组合树含 `- id: tool-worktree`（`@deepseek-ai/dsh-tool-worktree`）但**无任何 `workspace` / `worktree-registry` 服务提供者行**（dump 全文 `C:\Users\25313\.dsh-builtbin\dumps\headless.txt`）——pending 的直接原因是组合树缺这两个服务行。参考：集成线证据曾记录"workspace + worktree-registry（insert；base 的 tool-worktree 硬注入这两个服务，自定义 profile 无安装态 web-app 层，须显式补齐）"。是否属 CI(Linux) 同样缺失/门禁已红，本地无 CI 数据，不判定。
+
+## R3-6. 无钥匙组合验证 dump-config（步骤 6）——6/6 绿（built bin）
+
+- 隔离 home：`C:\Users\25313\.dsh-builtbin`（生产与既有隔离 home 未触碰；本轮 5 个 tgz 全新下载自 GitHub release URL 至 `.dsh-builtbin\downloads`，SHA256 全部 match=True：codex 0b441b…、providers-ui be72be…、opencode-go 0cce7e…、ollama ffafc6…、grok c88a7c…）。
+- 五插件 profile 组成（同第一链）：codex/opencode-go/ollama/grok 各 = base + 目标 + providers-ui（providers-ui 依赖已装入各 profile）+ providers-ui 单独 profile；`pnpm --dir <profile> add <tgz>` 9 次**全部 exit=0**。
+- 集成 profile：只读核对 `C:\Users\25313\.dsh-integration\profiles\integration\package.json`（bundles `[base, headless]`）后等价重建，patch overlay 用本树 `.agents/devframe/integration/cordis.patch.yml`（9 insert + 1 restate）。**复刻口径：dump 级**——其 workspace 实验包依赖为 `workspace:^` 链接（指向集成链树），不在本链跨树链接；boot 期模块闭包不在本步验证面。
+- built bin dump 结果（`$env:DSH_HOME` 隔离）：
+
+| profile | exit | 行数 | stderr | 关键行 |
+| --- | --- | --- | --- | --- |
+| dsh-llm-codex | 0 | 351 | 0 字节 | `- id: llm-codex`、`# == dsh-llm-providers-ui` |
+| dsh-llm-providers-ui | 0 | 341 | 0 字节 | `- id: llm-providers-ui` |
+| dsh-llm-opencode-go | 0 | 348 | 0 字节 | `- id: llm-opencode-go` |
+| dsh-llm-ollama | 0 | 348 | 0 字节 | `- id: llm-ollama` |
+| dsh-llm-grok | 0 | 348 | 0 字节 | `- id: llm-grok` |
+| integration（--patch 档案层） | 0 | 470 | 0 字节 | `agent-hierarchy`、`project-memory`、shadow-router 面等（行数 vs 集成线源 dump 461：树演进差异） |
+
+- 对照 shipped headless dump（R3-5 取证用）：exit 0，层树正常但如上缺 worktree 服务行。
+
+## R3-7. 与 source 模式差异观察
+
+1. built bin（`node lib/bin.js`）dump-config 的 **stderr 为 0 字节**，而源码 tsx 模式 stderr 回显 `$ node --import tsx/esm …` 命令行——built 入口更干净。
+2. `test:snapshot` 的模式开关是 `DSH_EXAMPLE_MODE=lib`（非 'built'）；lib 模式额外纳入 `apps/web` 浏览器快照（src 模式 4 文件 115 用例 vs lib 模式 6 文件 119 用例），两模式在本机同红且失败族一致 → 快照红与 built 产物装配无特异性关联（tool-worktree 签名两模式同现）。
+3. `built-bin.e2e.ts` 的 `describe.skipIf(!existsSync(dshBin))` 在无产物轮整体跳过、本轮真实执行——22 用例中 19 绿说明 built bin 对 web/dump 类面完全可用，红面集中在 sdk/acp/headless 三个 profile 启动。
+4. 集成线 dump 行数 470（built bin + 当前树） vs 其记录 461（源 CLI + 当时的树）：行数差异来自树演进，非 built/源差异信号。
+
+## R3-8. 本轮合规
+
+- 未触碰生产 home 与既有隔离 home（`.dsh-verify` 本轮零读写；`.dsh-integration` 只读核对 1 个 package.json；`.dsh-product` 未存在未触碰）。
+- 未改 src/tests；未修复任何缺陷（快照/e2e 红灯与 tool-worktree 组合缺口均 fail-loud 上报，修复归属 L-Foundation/产品链）。
+- 门禁：`git diff --cached --check` exit 0；`git commit --no-verify` 于 `p/builtbin-2`（SHA 见最终报告）；未 push。
