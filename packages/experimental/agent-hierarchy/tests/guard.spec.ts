@@ -13,8 +13,11 @@ interface Roster {
   readonly worker: Agent
 }
 
+/** Partial top-level config overrides merged over {@link baseConfig}; full input stays required at the service boundary. */
+type HarnessConfigOverrides = Partial<AgentHierarchyConfigInput>
+
 /** Boot one harness with lead-1 approved for plugin-a and the full three-role roster bound. */
-async function rosterHarness(config: AgentHierarchyConfigInput = {}): Promise<Roster> {
+async function rosterHarness(config: HarnessConfigOverrides = {}): Promise<Roster> {
   const h = await harness({ config: { ...baseConfig(), leadPluginScopes: { 'lead-1': ['plugin-a'] }, ...config } })
   const controller = await createAgent(h.ctx, 'controller-1')
   await bindAgent(h.ctx, controller, 'controller')
