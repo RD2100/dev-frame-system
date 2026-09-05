@@ -298,6 +298,7 @@
     { "path": "./packages/experimental/agent-team" },
     { "path": "./packages/experimental/project-contracts" },
     { "path": "./packages/experimental/session-identity" },
+    { "path": "./packages/experimental/shadow-router" },
     { "path": "./packages/experimental/agent-evidence" },
     { "path": "./packages/experimental/agent-reliability" },
     { "path": "./packages/experimental/project-memory" },
