@@ -47,11 +47,11 @@
 
 | 组 | 组长 Agent | SessionID | Worktree（分支） | 状态 | 最近提交 | 下一步 |
 | --- | --- | --- | --- | --- | --- | --- |
-| G1 Session 与 Agent 身份 | DSH-G1-SessionIdentity-Lead | `5e7138d6-9e6a-4442-9f7a-b32c55bcb46a` | `D:\dsh-devframe-r3-g1`（`r3/g1-session-identity`） | merged | 3784ead820 | 已合并 `1c24e8e49f`，无遗留 |
-| G2 Agent 层级与权限 | DSH-G2-Hierarchy-Lead（后继） | `93a4ed58-73f1-481a-8f1d-d1e74e5b7128`（前任 `ca378724-…` 三次异常终止，保留于存储） | `D:\dsh-devframe-r3-g2`（`r3/g2-hierarchy`） | developing | 259b041162 | 文档提交 + 活体验证补全 |
-| G3 项目 Agent 树和界面 | 待创建 | — | `D:\dsh-devframe-r3-g3`（`r3/g3-agent-tree-ui`） | planned | — | 槽位释放后激活 |
-| G4 Worktree 产品化 | DSH-G4-Worktree-Lead | `75f59aff-d25c-4b16-a4fd-7d9a65bb3e0f` | `D:\dsh-devframe-r3-g4`（`r3/g4-worktree`） | developing | — | 工具 Consumer + prune 对账 |
-| G5 调度、状态、合并与质量 | 待创建 | — | `D:\dsh-devframe-r3-g5`（`r3/g5-quality`） | planned | — | 最后激活 |
+| G1 Session 与 Agent 身份 | DSH-G1-SessionIdentity-Lead | `5e7138d6-9e6a-4442-9f7a-b32c55bcb46a` | `D:\dsh-devframe-r3-g1`（`r3/g1-session-identity`） | merged | 1c24e8e49f | 无遗留 |
+| G2 Agent 层级与权限 | DSH-G2-Hierarchy-Lead（后继） | `93a4ed58-73f1-481a-8f1d-d1e74e5b7128`（前任 `ca378724-…` 三次异常终止，保留于存储） | `D:\dsh-devframe-r3-g2`（`r3/g2-hierarchy`） | merged | 9c473dd98c | 无遗留（E1 锚定经 `6ba3e5f824` 并入 main） |
+| G3 项目 Agent 树和界面 | DSH-G3-AgentTree-Lead | `143b05d9-5e57-4b55-a203-cee99e94443e` | `D:\dsh-devframe-r3-g3`（`r3/g3-agent-tree-ui`） | developing | — | 首单元（树派生纯函数+单测）30 分钟内提交 |
+| G4 Worktree 产品化 | DSH-G4-Worktree-Lead | `75f59aff-d25c-4b16-a4fd-7d9a65bb3e0f` | `D:\dsh-devframe-r3-g4`（`r3/g4-worktree`） | developing | — | reconcile 单元落盘中（8 文件在写） |
+| G5 调度、状态、合并与质量 | 待创建 | — | `D:\dsh-devframe-r3-g5`（`r3/g5-quality`，已 ff 至 main `c836328632`） | planned | — | 阶段 C 激活（任务书 §八 已备） |
 
 ## 八、G5 任务书草稿（阶段 C 就绪件，激活时展开为完整提示词）
 
