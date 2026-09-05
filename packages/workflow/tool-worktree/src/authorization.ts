@@ -11,6 +11,7 @@
 import { realpathNormalize } from '@deepseek-ai/dsh-workspace'
 import type { Workspace, WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import type { Worktree, WorktreeId, WorktreeRegistry } from '@deepseek-ai/dsh-worktree-registry'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 
 /** The authorized calling context every worktree tool executes under. */

@@ -102,7 +102,7 @@ export function apply(ctx: Context): void {
         text: `Created worktree ${value.id} at '${value.path}' on branch '${value.branch}'.`,
       }],
     },
-    isConcurrencySafe: false,
+    isConcurrencySafe: () => false,
     async execute(args, exec) {
       const caller = await resolveCaller(exec.agent, ctx.workspaceRegistry.list())
       const target = resolveTarget(caller.workspace.path, requireNonEmpty(args.path, 'path'))
@@ -150,7 +150,7 @@ export function apply(ctx: Context): void {
             + value.worktrees.map(w => `- ${w.id} at '${w.path}' on branch '${w.branch}' (created ${w.createdAt})`).join('\n'),
       }],
     },
-    isConcurrencySafe: true,
+    isConcurrencySafe: () => true,
     async execute(_args, exec) {
       const caller = await resolveCaller(exec.agent, ctx.workspaceRegistry.list())
       return {
@@ -188,7 +188,7 @@ export function apply(ctx: Context): void {
           : `Worktree ${value.id}: its directory no longer exists; recover the stale registration with worktree_prune.`,
       }],
     },
-    isConcurrencySafe: true,
+    isConcurrencySafe: () => true,
     async execute(args, exec) {
       const caller = await resolveCaller(exec.agent, ctx.workspaceRegistry.list())
       const id = brandString<WorktreeId>(requireNonEmpty(args.id, 'id'))
@@ -229,7 +229,7 @@ export function apply(ctx: Context): void {
         text: `Removed worktree ${value.id} at '${value.path}'.`,
       }],
     },
-    isConcurrencySafe: false,
+    isConcurrencySafe: () => false,
     async execute(args, exec) {
       const caller = await resolveCaller(exec.agent, ctx.workspaceRegistry.list())
       const id = brandString<WorktreeId>(requireNonEmpty(args.id, 'id'))
@@ -293,7 +293,7 @@ export function apply(ctx: Context): void {
         text: renderPrune(value.dangling, value.unregistered, value.removedCount, value.adoptedCount),
       }],
     },
-    isConcurrencySafe: false,
+    isConcurrencySafe: () => false,
     async execute(args, exec) {
       const caller = await resolveCaller(exec.agent, ctx.workspaceRegistry.list())
       const report = await ctx.worktreeRegistry.reconcile(caller.workspace.id, {

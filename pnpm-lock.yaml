@@ -1256,6 +1256,9 @@ importers:
       '@deepseek-ai/dsh-tool-workflow':
         specifier: workspace:^
         version: link:../../workflow/tool-workflow
+      '@deepseek-ai/dsh-tool-worktree':
+        specifier: workspace:^
+        version: link:../../workflow/tool-worktree
       '@deepseek-ai/dsh-tools':
         specifier: workspace:^
         version: link:../../core/tools
@@ -9642,6 +9645,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:^
+        version: link:../../core/agent
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
         version: link:../../llm/llm
