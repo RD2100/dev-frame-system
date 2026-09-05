@@ -66,6 +66,7 @@ await runtime.dispose()
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `mountComposition` 装配与 `provide` 定制点 |
+| — | 不发布运行时不变式伴生入口；本测试支持包不拥有生产事件流或可变数据，装配后的表面由消费它的冒烟套件检验。 |
 
 ### 生命周期
 
