@@ -89,9 +89,9 @@ L1 组长与 L2 Worker 待创建。合规创建顺序（每个 Agent）：持久
 | Agent | 层级 | SessionID | 父 SessionID | Worktree | 状态 |
 | --- | --- | --- | --- | --- | --- |
 | L-Foundation | L1 | `55979618-6bd7-4bc7-badc-8a3b13079158` | `session-724834c2-9ff4-49e5-9b0a-4ce5f68d2c2d` | `D:\dsh-devframe-p-foundation`（`p/foundation`） | developing（P00 已交付，转 P01） |
-| L-Verify | L1 | `f2f6d88e-b5e6-4d9f-b945-6e2491022180` | 同上 | `D:\dsh-devframe-p-verify`（`p/verify`） | developing |
+| L-Verify | L1 | `f2f6d88e-b5e6-4d9f-b945-6e2491022180` | 同上 | `D:\dsh-devframe-p-verify`（`p/verify`） | completed（7/7 verified、0 blocked、6 SKIP；报告已合并 main `bce34b8af2`） |
 | L-Worktree | L1 | `46c1c8cb-9aa3-422b-8ace-cf9685050c07` | 同上 | `D:\dsh-devframe-p-worktree`（`p/worktree`，基点 `3ea01faa6c` 含 P00） | developing |
-| L-Product | L1 | 待创建（车道释放后补位） | 同上 | `D:\dsh-devframe-p-product`（`p/product`） | planned |
+| L-Product | L1 | `2e51e73e-e5ba-4ec0-a888-c54cb5451be0` | 同上 | `D:\dsh-devframe-p-product`（`p/product`） | developing |
 
 并发纪律：huoshan-1 同账号最多两路生成中请求；组长内部前台串行跑 Worker；组长完成即补位下一个可执行任务。
 
@@ -121,4 +121,5 @@ L1 组长与 L2 Worker 待创建。合规创建顺序（每个 Agent）：持久
 - 2026-09-05：P00 契约冻结（L-Foundation 确认无偏离）：AgentRole = controller/lead/worker；TaskState 九态含 blocked/failed、无 idle；PluginId=Branded&lt;'PluginId'&gt;、TaskId=Branded&lt;'ProjectTaskId'&gt;（避开 devframe 的 TeamTaskId 防跨包混用）；agentId/sessionId 统一用 dsh-session SessionId 品牌（本地代理恒等、远端 provider 可能分叉）；WorktreeId 复用 dsh-worktree-registry 品牌；BindingStore/TaskStore 最小 read/write/list 接缝；ProjectContractsError{code: CONTRACTS_INVALID_ID|INVALID_RECORD|CONFLICT|STORE_UNAVAILABLE}；ID 工厂非空 trim 校验；状态穷尽用冻结元组计数+全成员遍历+局部 assertNever 三重保障。下游（L-Worktree/L-Hierarchy）以此契约为准并行。
 - 2026-09-05：L-Verify 中期证据（总控抽查隔离 home）：7/7 发布包与 profile 就绪；dump-config 产物核实 dsh-llm-codex 与 dsh-llm-providers-ui 组合在 dsh-base 之上装配成功（llm-codex 行 enableSearch/enableImageTool/enableImageGeneration=false、retryPolicy normal/maxRetries 8）。此前"四个 Provider 启动失败"为写入中瞬时快照的误读，已更正。
 - 2026-09-05：总控交叉核对：dsh-ponytail-0.2.5.tgz 包内真实包名为 `dsh-ponytail`，与计划约束所称 `dsh-ponytail-skills` 不一致；已转 L-Verify 专项核实（README/Releases 证据、是否存在 skills 子包、v0.2.5 是否正确目标）。P00 全部源文件与 workspace 注册已落盘、待提交；L-Verify 7 profile dump 完成进入深度验证。
-- 2026-09-05：Ponytail 包名差异结案（L-Verify 三源交叉）：`dsh-ponytail-skills` 为 v0.2.2 之前旧名（v0.2.2 release note "Unify package name to dsh-ponytail"）；v0.2.5 正确目标 `dsh-ponytail`，npm unscoped 名被第三方占用故禁用 npm 发布、仅 GitHub release 分发；附带核实模式 off/lite/full(默认)/ultra、六捆绑技能与包内 skills/ 一致、子 Agent 默认继承父会话模式且可用 PONYTAIL_SUBAGENT_MATCHER 正则收窄（大小写不敏感、非锚定、对 agentPreset，非法正则加载/保存时报错）、兼容 0.1.2-alpha.4/rc.1。计划中该行约束以本次核实为准修正。
+- 2026-09-05：P00 交付并经总控独立验收（亲跑 14/14），L-Worktree（P03）基于契约并行启动；验收矩阵预先绑定（`ecec51721d`）。
+- 2026-09-05：W3 隔离验证完成（L-Verify completed，报告 `03c2b6d4f9` 已合并 main `bce34b8af2`）：7/7 目标源码存在+安装（SHA256 对 GitHub digest 校验）+装配级运行时验证；blocked=0；skipped=6（Astra/grok SKIP_AUTH、opencode-go/ollama SKIP_QUOTA、commandcode SKIP_AUTH/QUOTA、Web 真机 UI 环境性 SKIP 均不计通过）。Astra 专项：静态目录无 Astra、仅动态目录到达、五 effort 原值进请求、none/off/minimal/ultra 无静默映射。总控四项裁决：(1) LEVELS_56 minimal→low 豁免接受（官方模型显式数据表、非 Astra 路径）登记为已接受偏差；(2) 本轮维持 codex 0.3.12，0.3.13（ultra 改归一化移除）升级需重验后另行决策；(3) providers-ui=设置 UI 页归属前置、非 loader 硬依赖；(4) ponytail 包名计划约束更正为 `dsh-ponytail@0.2.5`。L-Product（P09/P12–P15 + D6 model-switch×agent-team 组合冲突核对）随即补位启动。
