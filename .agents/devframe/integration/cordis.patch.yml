@@ -141,3 +141,14 @@
         vaultRoot: !!js dshHomePath('integration-vault')
         writeEnabled: false
         userScopeEnabled: false
+
+    # Read-only assembly: authorizedRoots is fail-closed (every entry must be
+    # an existing absolute directory at load) and points at one probe-owned
+    # workspace directory under the isolated home. No Shadow agent is marked,
+    # so the four project tools stay scope-isolated and every service call
+    # fails closed with SHADOW_CALLER_FORBIDDEN.
+    - id: shadow-router
+      name: '@deepseek-ai/dsh-experimental-shadow-router'
+      config:
+        authorizedRoots:
+          - !!js dshHomePath('integration-shadow-roots')

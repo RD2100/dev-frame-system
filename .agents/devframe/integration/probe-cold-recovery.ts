@@ -7,11 +7,12 @@
  *
  * Phase `write`: boot → createBoundSession → startProject/createTask/assign →
  * recordTaskGoalBinding → recordVerification → openAdmission/assertAdmitted →
- * memory tool registration + real read path + write-deny face → print state →
+ * memory tool registration + real read path + write-deny face → shadow
+ * scope-isolation + caller fail-closed + domain file → print state →
  * persist probe-state.json → dispose (flush).
  * Phase `verify`: fresh boot → read the same rows back from the restored
- * domains → re-assert the memory face → compare against probe-state.json →
- * print RESTORE OK or exit 1.
+ * domains → re-assert the memory and shadow faces → compare against
+ * probe-state.json → print RESTORE OK or exit 1.
  *
  * Run from the p/integration work tree root with the isolated home:
  *   $env:DSH_HOME='C:\Users\25313\.dsh-integration'
@@ -40,6 +41,7 @@ import { INSTALL_ANCHOR, homePatchPath, prepareProfile } from '../../../apps/cli
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import { NoteId, ProjectMemoryError } from '@deepseek-ai/dsh-experimental-project-memory'
+import { SHADOW_TOOL_NAMES, ShadowRouterError } from '@deepseek-ai/dsh-experimental-shadow-router'
 import type { GoalId } from '@deepseek-ai/dsh-goal/types'
 import type { Context } from '@deepseek-ai/cordis'
 
@@ -49,6 +51,8 @@ const NAME = 'dsh'
 /** A well-formed but never-issued note id: read must answer `memory_missing`. */
 const ABSENT_NOTE_ID = 'a'.repeat(64)
 const MEMORY_TOOL_NAMES = ['memory_search', 'memory_read', 'memory_append'] as const
+/** The probe-owned workspace root the shadow-router row authorizes; must exist at load. */
+const SHADOW_ROOT = dshHomePath('integration-shadow-roots')
 
 const phaseIndex = process.argv.indexOf('--phase')
 const phase = phaseIndex >= 0 ? process.argv[phaseIndex + 1] : undefined
@@ -68,6 +72,10 @@ const patches = structuredClone([...bundlePatches, ...profile.patches, ...homePa
 
 const identity = await ensureProfileIdentity(NAME, 'integration')
 const environment = loadLayeredEnv('dsh')
+
+// The shadow-router row's authorizedRoots entries must exist at load
+// (fail-closed validation fails the activation otherwise).
+mkdirSync(SHADOW_ROOT, { recursive: true })
 
 const ctx = await boot(NAME, join(profile.dir, 'cordis.yml'), patches, (hostCtx) => {
   hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, environment)
@@ -122,6 +130,40 @@ async function probeMemoryFace(): Promise<{
   }
 }
 
+/**
+ * The shadow-router read-only face over the real mounted service: the four
+ * project tools stay out of the global registry (they install only into a
+ * host-marked Shadow agent's scope) and every service call fails closed
+ * against an unmarked caller. The `shadow_router` domain opens at init with
+ * zero rows in this assembly — the storage backend publishes the medium file
+ * on the first write-through, so its absence is the expected empty-domain
+ * observation, not an assert.
+ */
+async function probeShadowFace(): Promise<{
+  toolsScopeIsolated: boolean
+  callerForbidden: boolean
+  domainFileOnDisk: boolean
+}> {
+  const leaked = SHADOW_TOOL_NAMES.filter(toolName => ctx.tools.get(toolName) !== undefined)
+  if (leaked.length > 0) {
+    throw new Error(`shadow tools leaked into the global registry: ${leaked.join(', ')}`)
+  }
+  let callerForbidden = false
+  try {
+    await ctx.shadowRouter.openProject(undefined, { path: SHADOW_ROOT, requestId: 'probe-shadow-deny-1' })
+  } catch (error: unknown) {
+    callerForbidden = error instanceof ShadowRouterError && error.code === 'SHADOW_CALLER_FORBIDDEN'
+  }
+  if (!callerForbidden) {
+    throw new Error('shadow openProject did not fail closed against an unmarked caller')
+  }
+  return {
+    toolsScopeIsolated: true,
+    callerForbidden,
+    domainFileOnDisk: existsSync(join(process.env.DSH_HOME ?? '', 'storages', 'shadow_router.json')),
+  }
+}
+
 try {
   if (phase === 'write') {
     const workspace = mkdtempSync(join(tmpdir(), 'dsh-integration-probe-'))
@@ -154,6 +196,7 @@ try {
     ctx.agentReliability.openAdmission({ controllerSessionId: session.id as never, goalId })
     ctx.agentReliability.assertAdmitted({ controllerSessionId: session.id as never, goalId })
     const memory = await probeMemoryFace()
+    const shadow = await probeShadowFace()
     const state = {
       sessionId: session.id,
       bindingRole: record.role,
@@ -164,6 +207,9 @@ try {
       memorySearchCoverageComplete: memory.searchCoverageComplete,
       memoryReadAbsent: memory.readAbsent,
       memoryAppendDenied: memory.appendDenied,
+      shadowToolsScopeIsolated: shadow.toolsScopeIsolated,
+      shadowCallerForbidden: shadow.callerForbidden,
+      shadowDomainFileOnDisk: shadow.domainFileOnDisk,
     }
     writeFileSync(STATE, JSON.stringify(state, undefined, 2) + '\n')
     console.log('WRITE PHASE OK', JSON.stringify(state))
@@ -190,7 +236,10 @@ try {
     if (!memory.toolsRegistered || !memory.readAbsent) {
       throw new Error(`memory face did not survive the cold boot: ${JSON.stringify(memory)}`)
     }
-    console.log('RESTORE OK', JSON.stringify({
+    const shadow = await probeShadowFace()
+    if (!shadow.toolsScopeIsolated || !shadow.callerForbidden) {
+      throw new Error(`shadow face did not survive the cold boot: ${JSON.stringify(shadow)}`)
+    }    console.log('RESTORE OK', JSON.stringify({
       sessionId: state.sessionId,
       role: binding.role,
       taskState: tasks[0].state,
@@ -200,6 +249,9 @@ try {
       memorySearchCoverageComplete: memory.searchCoverageComplete,
       memoryReadAbsent: memory.readAbsent,
       memoryAppendDenied: memory.appendDenied,
+      shadowToolsScopeIsolated: shadow.toolsScopeIsolated,
+      shadowCallerForbidden: shadow.callerForbidden,
+      shadowDomainFileOnDisk: shadow.domainFileOnDisk,
     }))
   }
 } finally {

@@ -7,5 +7,8 @@
   "memoryToolsRegistered": true,
   "memorySearchCoverageComplete": true,
   "memoryReadAbsent": true,
-  "memoryAppendDenied": true
+  "memoryAppendDenied": true,
+  "shadowToolsScopeIsolated": true,
+  "shadowCallerForbidden": true,
+  "shadowDomainFileOnDisk": false
 }

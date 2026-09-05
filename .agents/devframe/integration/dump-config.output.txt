@@ -464,3 +464,8 @@ $ node --import tsx/esm apps/cli/src/bin.ts "--profile" "integration" "--patch" 
     vaultRoot: !!js dshHomePath('integration-vault')
     writeEnabled: false
     userScopeEnabled: false
+- id: shadow-router
+  name: '@deepseek-ai/dsh-experimental-shadow-router'
+  config:
+    authorizedRoots:
+      - !!js dshHomePath('integration-shadow-roots')
