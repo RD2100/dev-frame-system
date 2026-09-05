@@ -16,7 +16,10 @@
 
 import { expect, describe, it } from 'vitest'
 import { TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
-import { GoalId } from '@deepseek-ai/dsh-goal'
+// dsh-goal exports the GoalId factory as a value and the GoalId brand as a
+// type from its types face — dual imports mirror the devframe controller precedent.
+import { GoalId as makeGoalId } from '@deepseek-ai/dsh-goal'
+import type { GoalId } from '@deepseek-ai/dsh-goal/types'
 import { AcceptanceHash, SourceFingerprint, WorkspaceId } from '@deepseek-ai/dsh-experimental-devframe/shared'
 import { ControllerSessionId } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -26,8 +29,8 @@ const T1 = TaskId('t-1')
 const T2 = TaskId('t-2')
 const T3 = TaskId('t-3')
 const CONTROLLER1 = ControllerSessionId('controller-1')
-const GOAL1 = GoalId('goal-1')
-const GOAL2 = GoalId('goal-2')
+const GOAL1 = makeGoalId('goal-1')
+const GOAL2 = makeGoalId('goal-2')
 
 /** Record one binding receipt for a task/goal/revision triple. */
 function recordBinding(h: Awaited<ReturnType<typeof harness>>, taskId: TaskId, goalId: GoalId, goalRevision: number) {

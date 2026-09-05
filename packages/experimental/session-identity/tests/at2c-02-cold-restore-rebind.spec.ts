@@ -54,19 +54,22 @@ describe('AT2C-02 cold restore rebind', () => {
       // The session store is in-memory, so run B recreates the live session
       // under the recorded id before binding (see the file-header note).
       const liveLead = h2.ctx.sessions.create(SessionId(lead.record.agentId), { meta: { cwd: CWD(h2) } })
+      // Rebind carries exactly the recorded content; optional record fields
+      // enter the request only when defined (exactOptionalPropertyTypes).
       const rebound = await h2.ctx.agentBindings.bind({
         agentId: liveLead.id,
         role: 'lead',
-        parentSessionId: lead.record.parentSessionId,
-        pluginId: lead.record.pluginId,
-        taskId: lead.record.taskId,
+        ...(lead.record.parentSessionId !== undefined ? { parentSessionId: lead.record.parentSessionId } : {}),
+        ...(lead.record.pluginId !== undefined ? { pluginId: lead.record.pluginId } : {}),
+        ...(lead.record.taskId !== undefined ? { taskId: lead.record.taskId } : {}),
       })
       expect(rebound).toEqual(lead.record)
       expect(h2.ctx.agentBindings.list()).toHaveLength(3)
 
       // Conflicting rebind: different content fails loud, zero rewrite.
       await expect(h2.ctx.agentBindings.bind({
-        agentId: liveLead.id, role: 'worker', taskId: lead.record.taskId,
+        agentId: liveLead.id, role: 'worker',
+        ...(lead.record.taskId !== undefined ? { taskId: lead.record.taskId } : {}),
       })).rejects.toMatchObject({
         code: 'SESSION_IDENTITY_ALREADY_BOUND',
         message: `agent "${lead.record.agentId}" is already bound with different content`,
