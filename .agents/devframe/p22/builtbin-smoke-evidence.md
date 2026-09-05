@@ -1,5 +1,5 @@
 ---
-description: built-bin 全程冒烟验证证据（P22 锚点，W3 归属）：在 p/builtbin 基线 9dbf3911f0 上构建失败，fail-loud 未修，built bin 不可用，后续验证未执行。
+description: built-bin 全程冒烟验证证据（P22 锚点，W3 归属）：第一轮 p/builtbin@9dbf3911f0 构建失败 fail-loud 未修；第二轮 p/builtbin-2@39b32f6bcb（buildfix 后）clean 重建仍在 gen:typert 失败，fail-loud 未修；built bin 两轮均不可用，后续验证未执行。
 ---
 
 # built-bin 全程冒烟验证证据（P22 锚点，W3 归属）
@@ -102,3 +102,41 @@ description: built-bin 全程冒烟验证证据（P22 锚点，W3 归属）：�
 ### 观察（非缺陷定级）：pnpm 循环 workspace 依赖告警
 
 - `pnpm install` 报 cyclic workspace dependencies（`packages/client/locale`、`test-support/client-runtime`、`ui-chat`/`ui-layout`/`ui-theme`、`ui-conversation`/`ui-workspace`、`e2b`/`fs-e2b`、`sandbox-local`/`sandbox-windows-acl`、`subagent-spawn-in-process`/`tool-subagent`、`vendor/cordis`/`vendor/include`）。仅记录，不判定为缺陷，不评估修复。
+
+---
+
+# 第二轮重验（buildfix 39b32f6bcb，p/builtbin-2）——仍 fail-loud
+
+- 执行者：L-Verify 亲自执行（L0 指令"自行 pnpm install + pnpm run build"）；未创建下级 Agent。
+- 结论：**build 仍红，立即 fail-loud，未修复（build 链归 L-Foundation）**。步骤 4-6（built bin 定位与 --help、test:snapshot built 模式、五插件/集成 profile dump-config）全部未执行——`apps/cli/lib/bin.js` 不存在（`Test-Path` = False）。
+
+## R2-1. 分支切换（L0 指定）
+
+| 命令 | 退出码 | 关键输出 |
+| --- | --- | --- |
+| `git status --short` | 0 | （干净） |
+| `git cat-file -t 39b32f6bcb` | 0 | `commit` |
+| `git checkout -b p/builtbin-2 39b32f6bcb` | 0 | `Switched to a new branch 'p/builtbin-2'` |
+| `git log --oneline -1` | 0 | `39b32f6bcb merge: integrate p/buildfix (typert remote contracts pre-generation + host reference)` |
+| 证据文件继承 | exit 0 | `cat-file -e 39b32f6bcb:.agents/devframe/p22/builtbin-smoke-evidence.md` 通过；`merge-base --is-ancestor b93e91b198 39b32f6bcb` 通过（第一轮证据提交在 buildfix 链祖先上） |
+
+## R2-2. `pnpm install --frozen-lockfile`
+
+- 退出码 0：`Scope: all 280 workspace projects` / `Already up to date` / `Done in 596ms`。
+
+## R2-3. `pnpm run build`——失败（两次：增量与 clean 重建）
+
+- 第一次（存在上轮残留产物的树上）：exit 1，失败点提前到 `build:lib:host` 的第一步 `gen:typert`（`tsx scripts/gen-typert.ts`），错误唯一且与第一轮缺陷 3 同族：`packages/experimental/shadow-router/tests/helpers.ts(77,22): error TS2339: Property 'shadowRouter' does not exist on type 'Context'.`
+- 为排除增量残留干扰，按 clean 树语义执行 `pnpm run clean`（exit 0，`clean: removed 243 paths`）后重建：**同点同错**，`Error: build: build:lib exited with 2`（`scripts/build.ts:27`），tsc 主体与 tsdown 均未到达。
+- 完整日志存档：`C:\Users\25313\.dsh-builtbin\build-retry.log`、`C:\Users\25313\.dsh-builtbin\build-clean.log`（隔离 home 内）。
+- 失败源码行（只读摘录，`packages/experimental/shadow-router/tests/helpers.ts` L77 上下文）：
+
+  ```ts
+  const router = ctx.shadowRouter
+  router.markShadow(shadow)
+  const worker = await ctx.agentLoop.create(SessionId('session-worker'), { provider: 'mock', model: 'mock' })
+  ```
+
+- 判定：确定性树内缺陷，非残留状态（clean 重建复现）、非环境原因（install 绿、无网络参与）。gen:typert 的扫描面包含 shadow-router 的 tests/helpers.ts，而该 helper 使用的 `ctx.shadowRouter` 能力面在其扫描的 Context 类型上不存在——与第一轮缺陷 2/3（shadow-router 未进 host references + tests 类型错误）同根因族的残留面。
+- 影响面：与前轮相同，built bin 冒烟全部目标无法执行；本轮未复用也未下载任何 tgz 资产，未触碰生产 home 与既有隔离 home（`.dsh-builtbin` 仅存放两个 build 日志）。
+- 提交：本节追加后 `git diff --cached --check` + `git commit --no-verify` 于 `p/builtbin-2`（SHA 见最终报告）。
