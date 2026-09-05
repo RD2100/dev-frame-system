@@ -1,5 +1,5 @@
 ---
-description: built-bin 全程冒烟验证证据（P22 锚点，W3 归属）：四轮记录——R1 p/builtbin@9dbf3911f0 构建失败 fail-loud；R2 p/builtbin-2@39b32f6bcb 基线过期仍红 fail-loud；R3 merge main（含 sfix 1bca752bca）后 build 绿、built bin 基本面绿、dump-config 6/6 绿，但快照门（lib/src 两模式）与 built-bin e2e 的 sdk/acp/headless 启动本机红灯（三家族：tool-worktree 组合缺口/平台门控 vs POSIX 语料/scaffold 转义），fail-loud 未修（文件级钉点见 shipped-profile-defects.md）；R4 bundlefix c42c8b4518 复验——build 双红（at2c 新测试文件 host 程序类型错误 TS2749+TS2379×2），clean 后无产物，启动级/快照 delta 复验全部阻塞，fail-loud。
+description: built-bin 全程冒烟验证证据（P22 锚点，W3 归属）：五轮记录——R1/R2 构建失败 fail-loud；R3 build 绿+dump 6/6 绿，快照三家族红灯 fail-loud；R4 bundlefix 复验被 at2c 类型红阻塞 fail-loud；R5（at2c-fix c79da5d895）build 绿、built-bin e2e 22/22 全绿（A 族 tool-worktree pending 启动级消除）、快照 90F（A 族 130→0，残余=B 族根传播 bash 平台门控 vs pinned 头 + C 族 scaffold 转义在途），三 bundle 依赖声明缺项实证登记（安装闭包兜底走通）。
 ---
 
 # built-bin 全程冒烟验证证据（P22 锚点，W3 归属）
@@ -250,3 +250,46 @@ description: built-bin 全程冒烟验证证据（P22 锚点，W3 归属）：�
 - 零修复：at2c 测试类型错误未动；bundlefix 未动；未改 src/tests/profile/语料。
 - 隔离 home 沿用 `.dsh-builtbin`（仅新增日志与 dumps）；生产与既有隔离 home 未触碰。
 - 门禁：`git diff --cached --check` exit 0；`git commit --no-verify` 于 `p/builtbin-4`（SHA 见最终报告）；未 push。
+
+---
+
+# 第五轮（at2c-fix c79da5d895 复验）——build 绿；A 族启动级消除；残余 90F = B 族根传播 + C 族
+
+- 结论：**build 绿，built-bin e2e 22/22 全绿（A 族 tool-worktree pending 启动级消除，bundlefix 行生效）**；快照 built 模式 90F/18P/11S（总 119 与 R3 持平）——A 族签名 **130→0**，残余 90F 主族为 B 族根传播（base/minimal 的 bash 平台门控 vs pinned 头期待 bash 工具），C 族（scaffold JSON 转义）1 处维持（webfix 在途）。三 bundle 依赖声明缺项实证登记（boot 当前经安装闭包兜底走通，补声明归后续）。
+
+## R5-1. 分支与构建——绿
+
+| 步骤 | 退出码 | 关键输出 |
+| --- | --- | --- |
+| `git checkout -b p/builtbin-5 c79da5d895` | 0 | main HEAD="merge: integrate p/at2c-fix (at2c host-tsc type corrections, build green)" |
+| `pnpm install --frozen-lockfile` | 0 | Already up to date，542ms |
+| `pnpm run build` | **0** | 日志 `build-r5.log`；`build: recorded 220 client artifact(s) with 2 public value(s)`；`bin.js=True` |
+
+（对照 R4：at2c 三处类型错误（TS2749+TS2379×2）已由 p/at2c-fix 消除，host 程序类型面过。）
+
+## R5-2. built-bin.e2e 三 profile 启动复验——全绿（A 族消除）
+
+- `DSH_EXAMPLE_MODE='lib'; pnpm exec vitest run --config vitest.e2e.config.ts apps/cli/tests/built-bin.e2e.ts` → **exit 0**：Test Files 1 passed (1)，**Tests 22 passed (22)**（R3 基线 3 败 = sdk/acp/headless 启动）。
+- 全日志 `did not activate` / `pending (waiting` 命中 **0 处**——R4 阻塞的启动级复验完成：bundlefix `06d6950c38`（headless/acp-app/sdk-app 各 +6 行 provider 行）启动级生效。
+
+## R5-3. 快照 built 模式 A 族 delta
+
+- `$env:DSH_EXAMPLE_MODE='lib'; pnpm run test:snapshot` → exit 1（日志 `snapshot-lib-r5.log`）：Test Files 5 failed / 1 passed (6)，**Tests 90 failed / 18 passed / 11 skipped (119)**。
+- **对 R3 基线（91F/17P/11S）delta**：A 族签名（`did not activate`/pending）**130→0**；`unknown tool` 提及 2→17；`Bad escaped character` 1→1；净 -1F（91→90）。
+- 机理：boot 解锁后此前被 `plugin tree failed to load` 整体阻断的场景真正跑到内容层，暴露下一层失败面——残余 90F 分解：
+  1. **B 族根传播（主族）**：pinned replay 断言 `request/header #1 diverged from the pinned header`——pinned 头 tools 含 `"name": "bash"`（描述 "Execute a bash command (bash -c)…"），实收头无该行。根在平台门控：`packages/bundle/base/cordis.patch.yml` **L252-254** `- id: tool-bash` `disabled: !!js process.platform === 'win32'`（L256-258 tool-pwsh 反向门控）+ minimal preset L36-38 同门控——与 shipped-profile-defects.md 缺陷二同根因（有意平台设计 vs POSIX 语义语料），非 bundlefix/snapshot 链回归。受面：headless "matches the expected outputs" 套件、`snapshots/sdk/sdk.snapshot.ts` 16/16F、acp 套件等。CI(Linux) 判别不变：预期绿。
+  2. **web minimal-preset 2F**：`sends the exact RL prompt and schemas…`（26ms，schema 断言同 B 族根）、`expands the completed persistent Bash call…`（31300ms waitFor 超时，同根 UI 层下游）。
+  3. **C 族 1 处**：`message-feedback-protocol.snapshot.ts` 套件级 `Bad escaped character`——webfix 在途，维持 R3 钉行（scaffold L987/L668）。
+- 失败测试行计数：snapshot-lib-r5.log 中 90 × `×` 行，无任何 A 族签名残留。
+
+## R5-4. 三 bundle 依赖声明缺项实证（步骤 5）
+
+- 提供者包在树：`packages/workspace/workspace`（`@deepseek-ai/dsh-workspace`）、`packages/workflow/worktree-registry`（`@deepseek-ai/dsh-worktree-registry`）。
+- **声明缺项**：`packages/bundle/headless/acp-app/sdk-app` 三个 package.json 的 dependencies/devDependencies **均未声明**这两个包（bundlefix 仅补 patch 行）；对照 `packages/bundle/web-app/package.json` **两者皆有声明**；`apps/cli/package.json` 亦未直接声明（仅 dsh-web-app）。
+- **启动面实证**：boot 当前**走通**（e2e 22/22）——解析经安装闭包兜底（launcher.ts L394 注释 "The package may instead belong to the dsh installation; profile boot heals those links"；pnpm nodeLinker hoisted 工作区闭包供链）。风险登记：若消费侧安装闭包缺这两个包（如打包 release 裁剪），boot 将在模块解析失败——补依赖声明归属 bundle owner（后续项，本链不动）。
+
+## R5-5. 本轮合规
+
+- 零修复：未改 src/tests/profile/语料/依赖声明；B/C 族残余如实上报（B 属产品平台设计面裁决、C 属 webfix 在途）。
+- 隔离 home 沿用 `.dsh-builtbin`（新增 build-r5.log、snapshot-lib-r5.log、builtbin-e2e-r5.log）；生产与既有隔离 home 未触碰。
+- 门禁：`git diff --cached --check` exit 0；`git commit --no-verify` 于 `p/builtbin-5`（SHA 见最终报告）；未 push。
