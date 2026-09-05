@@ -10,6 +10,7 @@ description: L-Integration 集成线的端到端无钥匙验证证据：装配�
 - 插件面构成：`packages/bundle/base` + `packages/bundle/headless` 两 bundle 层，叠加本线档案 `.agents/devframe/integration/cordis.patch.yml`（9 个 insert 行 + 1 个 id-targeted restate）。
 - 第二轮（main `e3d4d6ad02`）：project-memory 三切片（S1 工具装配 / S2 回执落日志 / S3 JSDoc，merge `fb1519cd19`）已具备插件形态，本线以只读装配纳入 profile 并完成组合重验（1–3 节均为重验后结果）。
 - 第三轮（main `b78f54ebfc`）：shadow-router（merge `eff2e5b6af`；AT2 场景对齐 `b78f54ebfc`）以只读装配纳入 profile 并完成组合重验；配套机械修复 `tsconfig.base.json` 补其源面 alias（`b83964210f`）。
+- 第四轮（main `07569a65be`，分支 `p/integration-2`）：agent-hierarchy 组合级在线拒绝探针补位——探针新增 hierarchy 面经真实分派器驱动现役角色允许/拒绝断言；该面实测揪出档案层 `roleToolPolicies` 的 `bash` 幽灵工具名缺陷（F9），修正后三件重验全绿。
 
 ## 1. 装配验证（dump-config，exit 0）
 
@@ -53,6 +54,7 @@ write 相（进程 1，exit 0）真实服务调用路径：
 | ctx.agentHierarchy | 挂载即校验（三态守卫安装；load 期无孤儿工具名报错） | 激活成功 |
 | ctx.projectMemory + ctx.tools（project-memory，第二轮） | `tools.get('memory_search'/'memory_read'/'memory_append')` 均非 undefined；`search({scope:'project',query:'probe'})` 扫真实 Vault；`read` 缺席 note id → `memory_missing`；`append` 被拒 | 三工具注册 ✅ / 搜索覆盖完整 ✅ / 读路径真实 ✅ / 只读拒绝 ✅（`MEMORY_APPEND_DISABLED`） |
 | ctx.shadowRouter + ctx.tools（shadow-router，第三轮） | `tools.get('project_open'/'project_send'/'project_status'/'project_stop')` 全局全部 undefined（工具仅入宿主标记的 Shadow agent 作用域）；`openProject(undefined, ...)` 被拒 | 白名单不泄漏全局 ✅ / 调用方 fail-closed ✅（`SHADOW_CALLER_FORBIDDEN`）；`authorizedRoots` 装载期目录校验随激活通过 |
+| ctx.agents + ctx.tools guard（agent-hierarchy，第四轮） | 真实 live agent + 真实绑定 + `ctx.tools.execute` 真实分派器：controller 绑定后 `read` 真身执行成功（allow 面 + guard 均放行）；lead（无 pluginId）执行 `subagent` 被 guard 拒（委派 plugin-scope 词表）；未绑定 agent 执行 `subagent` 被拒（missing-role 词表，受控工具 fail-closed） | 现役角色允许 ✅ / 委派越权拒绝 ✅（`no plugin scope binding`）/ 未注册拒绝 ✅（`no role binding`）；union 外角色分支为 registry schema 同 union 的防御面，绑定路径不可驱动（如实登记，不虚构） |
 
 探针重跑前须清 `storages\`、`sessions\`、`integration-vault\` 与 probe-state.json（本轮曾因遗留 storages 得到预期的 `PROJECT_CONTROLLER_TASK_EXISTS`——防重面再次实测，非故障）。shadow-router 的 `shadow_router` 域在只读装配下零行落盘：存储后端按写入逐次发布介质文件，空域无文件属预期观测（probe-state 中 `shadowDomainFileOnDisk: false` 仅记录、不作断言）。
 
@@ -65,7 +67,7 @@ verify 相（进程 2 = 冷重启，exit 0）：
 RESTORE OK {"sessionId":"session-1","role":"controller","taskState":"assigned","bindings":1,"verifications":1,"memoryToolsRegistered":true,"memorySearchCoverageComplete":true,"memoryReadAbsent":true,"memoryAppendDenied":true,"shadowToolsScopeIsolated":true,"shadowCallerForbidden":true,"shadowDomainFileOnDisk":false}
 ```
 
-三个持久化域（session_identity / project_tasks / agent_evidence）跨进程逐行恢复一致；project-memory 只读面与 shadow-router 只读面在冷启动后重新断言全部成立（memory：工具注册 / 搜索覆盖 / 读路径 / 写拒绝；shadow：白名单不泄漏 / 调用方 fail-closed）。**恢复失败登记：无。**
+三个持久化域（session_identity / project_tasks / agent_evidence）跨进程逐行恢复一致；project-memory、shadow-router、agent-hierarchy 三个只读面在冷启动后重新断言全部成立（memory：工具注册 / 搜索覆盖 / 读路径 / 写拒绝；shadow：白名单不泄漏 / 调用方 fail-closed；hierarchy：controller 允许 / lead 委派拒绝 / 未绑定拒绝，且写相的 controller/lead 绑定行冷恢复后角色一致）。**恢复失败登记：无。**
 
 ## 3. recorded-session 无钥匙回放（真实启动 + 真实工具调用，exit 0）
 
@@ -93,7 +95,7 @@ pnpm dsh --profile integration `
   - `tool/call` → `{"name":"pwsh","arguments":"{\"command\": \"[Console]::Out.Write('PWSH_OK')\", …}"}`
   - `tool/result` → `{"type":"text","text":"PWSH_OK"},"isError":false`（真实 pwsh 进程执行，非回放文本）
   - `assistant/message`（step 2）→ `DONE`；`turn/end` reason `completed`
-- 即：真实 profile 启动 → 九行集成插件装配激活（含 project-memory 与 shadow-router 只读装配）→ 至少一条工具调用路径（pwsh）全绿，无钥匙。第二轮重验（main `e3d4d6ad02` 组合）与第三轮重验（main `b78f54ebfc` 组合）同命令同结果（输出逐字节同前：推理两段 + `DONE`，exit 0）。
+- 即：真实 profile 启动 → 九行集成插件装配激活（含 project-memory 与 shadow-router 只读装配）→ 至少一条工具调用路径（pwsh）全绿，无钥匙。第二（`e3d4d6ad02`）、三（`b78f54ebfc`）、四（`07569a65be`，F9 修正后）轮重验同命令同结果（推理两段 + `DONE`，exit 0）。
 
 ## 4. 过程中登记的失败（均已定位闭环，非遗留）
 
@@ -107,6 +109,7 @@ pnpm dsh --profile integration `
 | F6 | `plugin-package-inventory-deepseek: cannot resolve "@deepseek-ai/dsh-llm-replay"` | 回放插件包不在 profile resolver manifest | profile package.json 增补该依赖 + node_modules junction |
 | F7 | `session artifact … .jsonl.zstd … compression "none"` fail-loud | 探针默认 zstd 与回放组合 none 混用同一 sessions root | 档案层统一 restate `compression: none`（属 F4 同文件） |
 | F8 | 探针 `ERR_MODULE_NOT_FOUND: @deepseek-ai/dsh-experimental-shadow-router`；`gen-tsconfig-paths` 报该包别名须手写 | shadow-router 合入 main 时未补 `tsconfig.base.json` 源面 alias（生成器无法从目录名推导，需手写条目） | `b83964210f` 手写补一行 alias（比照 P00–P06 块）；生成器复跑通过该包检查 |
+| F9 | hierarchy 面首跑：绑定 controller 后 `read` 报 `tools.restrict() names unknown global tool "bash"` fail-loud | **档案层配置缺陷（本线自查自纠）**：`roleToolPolicies` 三角色 allow 名单取自早期快照目录，含本组合不存在的 `bash`（shell 工具实际为 `pwsh`）；此前无绑定 agent 真实执行工具的路径，故未暴露；hierarchy 面首次以绑定 agent 走真实分派器即命中 allow-face 装置 | 档案层三角色名单 `bash` → `pwsh`（最小修正；worktree_*/memory_* 等新全局工具是否纳入角色 allow 名单属部署策略，记部署选择）；修正后三件重验全绿 |
 
 ## 5. 真实模型调用（SKIP_AUTH 登记）
 
