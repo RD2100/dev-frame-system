@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-experimental-devframe` 提供 DSH 原生项目控制器使用的少量库契约。调用方可以在派发、证据和完成之间携带同一个工作区、Goal、验收和源代码身份。调用方也可以停止已拥有的 agent、job 和进程句柄，并在清理和最后一次持久化刷新完成前保留写入权。本包是私有实验性库：不注册 Cordis 插件，也不提供面向模型的工具。
+`dsh-experimental-devframe` 提供 DSH 原生项目控制器使用的少量库契约。调用方可以在派发、证据和完成之间携带同一个工作区、Goal、验收和源代码身份。调用方也可以停止已拥有的 agent、job 和进程句柄，并在清理和最后一次持久化刷新完成前保留写入权。它还把三层 spawn 策略——总控建组长、组长建执行 Agent、执行 Agent 禁建子 Agent——固化为分离的委托请求覆盖值。本包是私有实验性库：不注册 Cordis 插件，也不提供面向模型的工具。
 
 ## 目录
 
@@ -62,6 +62,19 @@ const binding: ProjectWorkBinding = {
 
 宿主负责验证和持久化。验收值或源代码值发生变化就构成不同绑定，不能复用早先的证据。
 
+### 组装三层 spawn 策略
+
+DevFrame 父 Agent spawn 子 Agent 时，把 `devframeSpawnOverrides(tier)` 展开进委托请求。组长只携带深度预算；执行 Agent 还会失去委托工具，由子 Agent 自己的执行器拒绝（`UNKNOWN_TOOL`），并且持久描述符会在冷恢复时重新应用过滤器。
+
+```ts
+import { devframeSpawnOverrides } from '@deepseek-ai/dsh-experimental-devframe'
+
+// { maxDepth: 2, toolFilter: { deny: ['subagent'] } } spread into the
+// delegation request; devframeSpawnOverrides('lead') is { maxDepth: 2 }.
+const overrides = devframeSpawnOverrides('worker')
+const request = { prompt: [], parent: leadAgent, ...overrides }
+```
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -80,9 +93,11 @@ const binding: ProjectWorkBinding = {
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 停止操作和共享契约的库入口 |
+| [`src/hierarchy/index.ts`](src/hierarchy/index.ts) | 总控 → 组长 → 执行树各档的 spawn 覆盖值 |
 | [`src/permissions/events.ts`](src/permissions/events.ts) | 持久化角色和策略身份事件契约 |
 | [`src/reliability/stop.ts`](src/reliability/stop.ts) | 接收截止、已拥有取消、有界排空和写入权释放 |
 | [`src/shared/types.ts`](src/shared/types.ts) | 带 brand 的工作身份和绑定持久化接口 |
+| [`tests/hierarchy-roles.spec.ts`](tests/hierarchy-roles.spec.ts) | 各档 spawn 覆盖值策略覆盖 |
 | [`tests/reliability/stop.spec.ts`](tests/reliability/stop.spec.ts) | 单元测试和真实已拥有进程停止覆盖 |
 | [`../../experimental/agent-team/tests/devframe-composition.spec.ts`](../agent-team/tests/devframe-composition.spec.ts) | Team、Goal、dispatcher 和 JSONL 的真实组合基线 |
 
