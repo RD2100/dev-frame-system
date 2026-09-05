@@ -237,6 +237,7 @@ function sameResultTuple(binding: GoalBinding, result: GoalResultBinding): boole
     && binding.taskIds.every((taskId, index) => taskId === result.taskIds[index])
     && binding.acceptanceHash === result.acceptanceHash
     && binding.sourceFingerprint === result.sourceFingerprint
+    && binding.snapshotId === result.snapshotId
 }
 
 /** Find one historical binding by its stable Goal identity. */
@@ -424,6 +425,10 @@ function applyReview(state: DevFrameProjectionState, review: DevFrameReviewEvent
   assertResultBinding(state, review.binding)
   if (state.rolePolicy === null || state.rolePolicy.policyVersion !== review.policyVersion) {
     throw new Error(`DevFrame review "${review.reviewId}" uses an unavailable role policy version`)
+  }
+  if (!state.rolePolicy.assignments.some(assignment =>
+    assignment.role === 'reviewer' && assignment.sessionId === review.reviewerSessionId)) {
+    throw new Error(`DevFrame review "${review.reviewId}" was submitted by Session "${review.reviewerSessionId}" without the reviewer role`)
   }
   if (!state.verifications.some(record => record.snapshotId === review.snapshotId
     && record.binding.goalId === review.binding.goalId)) {

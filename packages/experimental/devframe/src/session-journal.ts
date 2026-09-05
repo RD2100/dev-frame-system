@@ -4,6 +4,7 @@ import type {
   Session,
   SessionEvent,
   SessionEventMap,
+  SessionId,
 } from '@deepseek-ai/dsh-session'
 import {
   decodeDevFramePayload,
@@ -17,6 +18,22 @@ type AppendDevFrameEvent = <T extends DevFrameEventType>(
 
 /** Native durability callback used by the DevFrame event writer. */
 export type DevFrameFlush = (session: Session) => Promise<boolean | void>
+
+/**
+ * Reviewer authorization seam consulted before any `devframe/review` append.
+ * Implementations resolve the submitted `reviewerSessionId` against the
+ * deployed DevFrame role authority (the live role policy or the durable
+ * role-policy assignments) and must reject any Session the policy has not
+ * assigned the reviewer role with a stable machine-routable error.
+ */
+export interface DevFrameReviewGate {
+  /**
+   * Reject a review submission whose Session holds no reviewer role.
+   * @param sessionId - Reviewer Session identity carried by the review payload.
+   * @returns Nothing; a rejection throws before the event reaches the Session log.
+   */
+  requireReviewer(sessionId: SessionId): void
+}
 
 /** Structured failure that blocks later DevFrame mutations after a flush error. */
 export class DevFramePersistenceError extends Error {
@@ -42,7 +59,9 @@ export class DevFramePersistenceError extends Error {
 /**
  * Native Session writer for DevFrame records. One writer serializes appends per
  * Session and latches a failed durability checkpoint so callers cannot continue
- * admitting work against state that may not be on disk.
+ * admitting work against state that may not be on disk. Review events are
+ * additionally cross-authorized through the required review gate, so a writer
+ * cannot be built without wiring the deployed reviewer role authority.
  */
 export class DevFrameSessionJournal {
   private readonly tails = new WeakMap<Session, Promise<void>>()
@@ -50,17 +69,23 @@ export class DevFrameSessionJournal {
 
   /**
    * @param flush - Native `ctx.sessions.flush`-compatible durability callback.
+   * @param reviewGate - Reviewer role authority consulted for every review append.
    */
-  constructor(private readonly flush: DevFrameFlush) {}
+  constructor(
+    private readonly flush: DevFrameFlush,
+    private readonly reviewGate: DevFrameReviewGate,
+  ) {}
 
   /**
-   * Validate, append, and durably flush one DevFrame event in order.
+   * Validate, cross-authorize, append, and durably flush one DevFrame event in order.
    * @param session - Controller Session that owns the event.
    * @param type - DevFrame event name.
    * @param data - Event payload to validate before appending.
    * @returns The accepted event after the durability checkpoint completes.
    * @throws {@link DevFramePersistenceError} when persistence is unavailable,
    * failed, or was previously latched failed for this Session.
+   * @throws The review gate's rejection when a review names a Session without
+   * the reviewer role; the event is not appended and the failure does not latch.
    */
   append<T extends DevFrameEventType>(
     session: Session,
@@ -79,6 +104,11 @@ export class DevFrameSessionJournal {
         )
       }
       const decoded = decodeDevFramePayload(type, data)
+      if (type === 'devframe/review') {
+        // The discriminant check proves the decoded payload is a review event.
+        const review = decoded as SessionEventMap['devframe/review']
+        this.reviewGate.requireReviewer(review.reviewerSessionId)
+      }
       // DevFrameEventType is a closed non-surface subset, but Session.append's
       // generic conditional cannot prove that fact through this class method.
       const append = session.append.bind(session) as unknown as AppendDevFrameEvent

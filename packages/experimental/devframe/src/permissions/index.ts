@@ -138,6 +138,18 @@ export class RolePolicy {
   }
 
   /**
+   * Resolve the role for one Session identity, without requiring the live Agent
+   * object. This is the SessionId-keyed read face for seams that only carry the
+   * identity (for example review-event authorization); exact live-identity
+   * checks keep using {@link RolePolicy.roleOf}.
+   * @param sessionId - Session identity to resolve.
+   * @returns The assigned role, or undefined when the Session holds no assignment.
+   */
+  roleOfSession(sessionId: SessionId): DevFrameRole | undefined {
+    return this.assignments.get(sessionId)?.role
+  }
+
+  /**
    * Remove one exact assignment and lift its inherited restriction.
    * @param agent - Agent being disposed by the host lifecycle.
    */

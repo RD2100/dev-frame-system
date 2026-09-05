@@ -13,6 +13,9 @@ export type AcceptanceHash = Branded<'AcceptanceHash'>
 /** Fingerprint of the source inputs used by verification and review. */
 export type SourceFingerprint = Branded<'SourceFingerprint'>
 
+/** Stable identifier for one captured source tree. */
+export type DevFrameSnapshotId = Branded<'DevFrameSnapshotId'>
+
 /** Stable identifier for one human-confirmed configuration preview. */
 export type ConfigurationConfirmationId = Branded<'ConfigurationConfirmationId'>
 
@@ -41,6 +44,15 @@ export function AcceptanceHash(value: string): AcceptanceHash {
  */
 export function SourceFingerprint(value: string): SourceFingerprint {
   return value as SourceFingerprint
+}
+
+/**
+ * Brand one source snapshot identifier after its producer has validated it.
+ * @param value - non-empty source snapshot identifier.
+ * @returns the branded snapshot identifier.
+ */
+export function DevFrameSnapshotId(value: string): DevFrameSnapshotId {
+  return value as DevFrameSnapshotId
 }
 
 /**
