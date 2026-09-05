@@ -370,7 +370,7 @@ $ node --import tsx/esm apps/cli/src/bin.ts "--profile" "integration" "--patch" 
     roleToolPolicies:
       controller:
         inheritedTools:
-          - bash
+          - pwsh
           - create_goal
           - edit
           - exit_plan_mode
@@ -398,7 +398,7 @@ $ node --import tsx/esm apps/cli/src/bin.ts "--profile" "integration" "--patch" 
           - write
       lead:
         inheritedTools:
-          - bash
+          - pwsh
           - create_goal
           - edit
           - exit_plan_mode
@@ -426,7 +426,7 @@ $ node --import tsx/esm apps/cli/src/bin.ts "--profile" "integration" "--patch" 
           - write
       worker:
         inheritedTools:
-          - bash
+          - pwsh
           - create_goal
           - edit
           - get_goal

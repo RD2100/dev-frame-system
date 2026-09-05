@@ -41,7 +41,7 @@
         roleToolPolicies:
           controller:
             inheritedTools:
-              - bash
+              - pwsh
               - create_goal
               - edit
               - exit_plan_mode
@@ -69,7 +69,7 @@
               - write
           lead:
             inheritedTools:
-              - bash
+              - pwsh
               - create_goal
               - edit
               - exit_plan_mode
@@ -97,7 +97,7 @@
               - write
           worker:
             inheritedTools:
-              - bash
+              - pwsh
               - create_goal
               - edit
               - get_goal

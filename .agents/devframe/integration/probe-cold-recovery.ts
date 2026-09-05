@@ -8,11 +8,13 @@
  * Phase `write`: boot → createBoundSession → startProject/createTask/assign →
  * recordTaskGoalBinding → recordVerification → openAdmission/assertAdmitted →
  * memory tool registration + real read path + write-deny face → shadow
- * scope-isolation + caller fail-closed + domain file → print state →
- * persist probe-state.json → dispose (flush).
+ * scope-isolation + caller fail-closed + domain file → hierarchy guard allow
+ * (controller read) and deny (lead plugin scope, unbound controlled) through
+ * the real dispatcher → print state → persist probe-state.json → dispose
+ * (flush).
  * Phase `verify`: fresh boot → read the same rows back from the restored
- * domains → re-assert the memory and shadow faces → compare against
- * probe-state.json → print RESTORE OK or exit 1.
+ * domains → re-assert the memory, shadow, and hierarchy faces → compare
+ * against probe-state.json → print RESTORE OK or exit 1.
  *
  * Run from the p/integration work tree root with the isolated home:
  *   $env:DSH_HOME='C:\Users\25313\.dsh-integration'
@@ -42,6 +44,9 @@ import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import { NoteId, ProjectMemoryError } from '@deepseek-ai/dsh-experimental-project-memory'
 import { SHADOW_TOOL_NAMES, ShadowRouterError } from '@deepseek-ai/dsh-experimental-shadow-router'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import type { GoalId } from '@deepseek-ai/dsh-goal/types'
 import type { Context } from '@deepseek-ai/cordis'
 
@@ -53,6 +58,9 @@ const ABSENT_NOTE_ID = 'a'.repeat(64)
 const MEMORY_TOOL_NAMES = ['memory_search', 'memory_read', 'memory_append'] as const
 /** The probe-owned workspace root the shadow-router row authorizes; must exist at load. */
 const SHADOW_ROOT = dshHomePath('integration-shadow-roots')
+/** Execution signal for the probe's real tool executions; the probe never aborts them. */
+const probeSignal = new AbortController().signal
+let hierarchyProbeCounter = 0
 
 const phaseIndex = process.argv.indexOf('--phase')
 const phase = phaseIndex >= 0 ? process.argv[phaseIndex + 1] : undefined
@@ -164,6 +172,61 @@ async function probeShadowFace(): Promise<{
   }
 }
 
+/** The part of a canonical tool result the hierarchy face reads. */
+interface ProbeToolResult {
+  readonly isError?: boolean
+  readonly error?: { readonly message?: string }
+}
+
+/** Execute one real tool through the real dispatcher as a live agent. */
+async function executeAsAgent(agent: Agent, name: string, args: Record<string, unknown>): Promise<ProbeToolResult> {
+  hierarchyProbeCounter += 1
+  return await ctx.tools.execute({
+    callId: ToolCallId(`probe-hier-${hierarchyProbeCounter}`),
+    name,
+    arguments: args,
+    agent,
+    signal: probeSignal,
+  })
+}
+
+/**
+ * The agent-hierarchy read-only face over the real guard path: live agents
+ * (real registry identities), real bindings, real `ctx.tools.execute`
+ * dispatch. `subagent` is controlled (delegation seam) and resolvable for
+ * every face agent, so each denial comes from the hierarchy guard itself and
+ * the tool body never runs; the allow assertion runs the real `read` body.
+ * The suffix separates write- and verify-phase identities so cold-restored
+ * session records never collide.
+ */
+async function probeHierarchyFace(suffix: string): Promise<{
+  controllerReadAllowed: boolean
+  leadDelegationDenied: boolean
+  unboundControlledDenied: boolean
+}> {
+  const controller = (await ctx.agents.create({ sessionId: SessionId(`session-hier-controller-${suffix}`) })).agent
+  await ctx.agentBindings.bind({ agentId: controller.id, role: 'controller' })
+  const allowed = await executeAsAgent(controller, 'read', { file_path: ARCHIVE })
+  if (allowed.isError !== false) {
+    throw new Error(`controller read through the real guard path did not succeed: ${JSON.stringify(allowed)}`)
+  }
+
+  const lead = (await ctx.agents.create({ sessionId: SessionId(`session-hier-lead-${suffix}`) })).agent
+  await ctx.agentBindings.bind({ agentId: lead.id, role: 'lead' })
+  const leadDenial = await executeAsAgent(lead, 'subagent', {})
+  if (leadDenial.isError !== true || !/no plugin scope binding/.test(leadDenial.error?.message ?? '')) {
+    throw new Error(`lead delegation was not denied by the plugin-scope face: ${JSON.stringify(leadDenial)}`)
+  }
+
+  const unbound = (await ctx.agents.create({ sessionId: SessionId(`session-hier-unbound-${suffix}`) })).agent
+  const unboundDenial = await executeAsAgent(unbound, 'subagent', {})
+  if (unboundDenial.isError !== true || !/no role binding/.test(unboundDenial.error?.message ?? '')) {
+    throw new Error(`unbound controlled execution was not denied by the missing-role face: ${JSON.stringify(unboundDenial)}`)
+  }
+
+  return { controllerReadAllowed: true, leadDelegationDenied: true, unboundControlledDenied: true }
+}
+
 try {
   if (phase === 'write') {
     const workspace = mkdtempSync(join(tmpdir(), 'dsh-integration-probe-'))
@@ -197,6 +260,7 @@ try {
     ctx.agentReliability.assertAdmitted({ controllerSessionId: session.id as never, goalId })
     const memory = await probeMemoryFace()
     const shadow = await probeShadowFace()
+    const hierarchy = await probeHierarchyFace('w')
     const state = {
       sessionId: session.id,
       bindingRole: record.role,
@@ -210,6 +274,9 @@ try {
       shadowToolsScopeIsolated: shadow.toolsScopeIsolated,
       shadowCallerForbidden: shadow.callerForbidden,
       shadowDomainFileOnDisk: shadow.domainFileOnDisk,
+      hierarchyControllerReadAllowed: hierarchy.controllerReadAllowed,
+      hierarchyLeadDelegationDenied: hierarchy.leadDelegationDenied,
+      hierarchyUnboundControlledDenied: hierarchy.unboundControlledDenied,
     }
     writeFileSync(STATE, JSON.stringify(state, undefined, 2) + '\n')
     console.log('WRITE PHASE OK', JSON.stringify(state))
@@ -239,7 +306,21 @@ try {
     const shadow = await probeShadowFace()
     if (!shadow.toolsScopeIsolated || !shadow.callerForbidden) {
       throw new Error(`shadow face did not survive the cold boot: ${JSON.stringify(shadow)}`)
-    }    console.log('RESTORE OK', JSON.stringify({
+    }
+    for (const [agentId, expectedRole] of [
+      ['session-hier-controller-w', 'controller'],
+      ['session-hier-lead-w', 'lead'],
+    ] as const) {
+      const restored = ctx.agentBindings.find(SessionId(agentId))
+      if (restored === undefined || restored.role !== expectedRole) {
+        throw new Error(`hierarchy binding for "${agentId}" did not cold-restore: ${JSON.stringify(restored)}`)
+      }
+    }
+    const hierarchy = await probeHierarchyFace('v')
+    if (!hierarchy.controllerReadAllowed || !hierarchy.leadDelegationDenied || !hierarchy.unboundControlledDenied) {
+      throw new Error(`hierarchy face did not survive the cold boot: ${JSON.stringify(hierarchy)}`)
+    }
+    console.log('RESTORE OK', JSON.stringify({
       sessionId: state.sessionId,
       role: binding.role,
       taskState: tasks[0].state,
@@ -252,6 +333,9 @@ try {
       shadowToolsScopeIsolated: shadow.toolsScopeIsolated,
       shadowCallerForbidden: shadow.callerForbidden,
       shadowDomainFileOnDisk: shadow.domainFileOnDisk,
+      hierarchyControllerReadAllowed: hierarchy.controllerReadAllowed,
+      hierarchyLeadDelegationDenied: hierarchy.leadDelegationDenied,
+      hierarchyUnboundControlledDenied: hierarchy.unboundControlledDenied,
     }))
   }
 } finally {

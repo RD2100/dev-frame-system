@@ -10,5 +10,8 @@
   "memoryAppendDenied": true,
   "shadowToolsScopeIsolated": true,
   "shadowCallerForbidden": true,
-  "shadowDomainFileOnDisk": false
+  "shadowDomainFileOnDisk": false,
+  "hierarchyControllerReadAllowed": true,
+  "hierarchyLeadDelegationDenied": true,
+  "hierarchyUnboundControlledDenied": true
 }

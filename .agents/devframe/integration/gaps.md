@@ -35,7 +35,8 @@ description: L-Integration 真实组合集成候选线的逐包 Cordis 接入盘
 - effect/监听：`ctx.tools.guard(...)`（service.ts:71）、`ctx.on('agent/created')`、`ctx.on('agent/disposed')`（72-82）、`ctx.effect(teardown)`（83）。
 - 工具注册：无新工具（对既有工具链装守卫与 restrict）。
 - Config schema：zod `agentHierarchyConfigSchema`，构造函数第二参（service.ts:60-63）——cordis.yml 行 `config:` 可传。
-- **判定：机械缺口仅"profile 挂载层 + config 行"。**
+- 组合级验证（本线第四轮，分支 `p/integration-2`）：在线拒绝探针经真实分派器（live agent + 真实绑定 + `ctx.tools.execute`）驱动——controller 绑定后 `read` 真身成功（allow）；lead 无 pluginId 委派 `subagent` 被 guard 拒（`no plugin scope binding`）；未绑定 agent 受控工具被拒（`no role binding` fail-closed）；冷启动三断言重立 + 绑定行恢复。union 外角色分支为防御面（registry schema 同 union），绑定路径不可驱动，如实登记。该面实测揪出并修正档案层 `bash` 幽灵工具名缺陷（F9，见 e2e-evidence）。
+- **判定：机械缺口仅"profile 挂载层 + config 行"；在线拒绝剩余检查项已闭环。**
 
 ### 4. project-controller（P04）— 已就绪插件
 - cordis.yml：无自包文件。
@@ -101,6 +102,7 @@ description: L-Integration 真实组合集成候选线的逐包 Cordis 接入盘
 | M5 | `session-persistence-jsonl` `compression: none` restate（sessions root 单一编码 fail-loud 约束） | 集成档案顶层 restate |
 | M6 | project-memory 只读装配行（第二轮：`workspaceId: integration` + 探针 Vault + `writeEnabled: false`） | 集成档案 insert 块 |
 | M7 | shadow-router 只读装配行（第三轮：fail-closed `authorizedRoots` 指向隔离 home 下探针专属目录 + 目录预建 + junction/manifest 增补）与 `tsconfig.base.json` 源面 alias 手写补齐（`b83964210f`） | 集成档案 insert 块 + 隔离 home + 根 tsconfig |
+| M8 | hierarchy 在线拒绝探针补位（第四轮：探针 hierarchy 面三断言 + 冷恢复重断言）及其实测修正——`roleToolPolicies` 三角色名单 `bash` → `pwsh`（F9，allow-face 装置 fail-loud 揪出） | `probe-cold-recovery.ts` + 集成档案 roleToolPolicies |
 
 ### 语义待办项（原组长归属）
 | # | 项 | 状态 | 归属 |
