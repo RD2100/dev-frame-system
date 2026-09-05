@@ -79,13 +79,13 @@ DSH-Project-Controller 是本轮开发的唯一总控会话：它统一规划、
 
 | Agent | agentId | SessionID | Worktree（分支） | 状态 | 最后活动 | 提交 |
 | --- | --- | --- | --- | --- | --- | --- |
-| DSH-F01-RolePolicy-Owner | 待创建 | unavailable | `D:\dsh-devframe-f01`（`feature/f01-role-policy`） | planned | — | — |
-| DSH-F02-ProjectTools-Owner | 待创建 | unavailable | `D:\dsh-devframe-f02`（`feature/f02-project-tools`） | planned | — | — |
-| DSH-F03-ProjectCommands-Owner | 待创建 | unavailable | `D:\dsh-devframe-f03`（`feature/f03-project-commands`） | planned | — | — |
-| DSH-F04-Reliability-Owner | 待创建 | unavailable | `D:\dsh-devframe-f04`（`feature/f04-reliability`） | planned | — | — |
-| DSH-F05-ProfileAssembly-Owner | 待创建 | unavailable | `D:\dsh-devframe-f05`（`feature/f05-profile-assembly`） | planned | — | — |
-| DSH-F06-WorktreeTool-Owner | 待创建 | unavailable | `D:\dsh-devframe-f06`（`feature/f06-worktree-tool`） | planned | — | — |
-| DSH-F07-Integration-Owner | 待创建 | unavailable | `D:\dsh-devframe-f07`（`feature/f07-integration-qa`） | planned | — | — |
+| DSH-F01-RolePolicy-Owner | cbb87195-4eea-4eaf-aff3-438f55b7785f | unavailable | `D:\dsh-devframe-f01`（`feature/f01-role-policy`） | assigned | 2026-09-05 创建并派发 | — |
+| DSH-F02-ProjectTools-Owner | eafba7de-c57a-4bb9-b652-e7dac528b960 | unavailable | `D:\dsh-devframe-f02`（`feature/f02-project-tools`） | assigned | 2026-09-05 创建并派发 | — |
+| DSH-F03-ProjectCommands-Owner | 672d8085-e3bd-4a2f-ade5-36e0f6a399ea | unavailable | `D:\dsh-devframe-f03`（`feature/f03-project-commands`） | assigned | 2026-09-05 创建并派发 | — |
+| DSH-F04-Reliability-Owner | 6a89b5ff-bf0c-487a-bde2-2c0846bf5742 | unavailable | `D:\dsh-devframe-f04`（`feature/f04-reliability`） | assigned | 2026-09-05 创建并派发 | — |
+| DSH-F05-ProfileAssembly-Owner | f5e1ff2c-c0cc-49ee-81a5-8f939f8c53e4 | unavailable | `D:\dsh-devframe-f05`（`feature/f05-profile-assembly`） | assigned | 2026-09-05 创建并派发 | — |
+| DSH-F06-WorktreeTool-Owner | b95b5bf6-63c3-4f5b-91a6-8a37fd25cff9 | unavailable | `D:\dsh-devframe-f06`（`feature/f06-worktree-tool`） | assigned | 2026-09-05 创建并派发 | — |
+| DSH-F07-Integration-Owner | 571d0c3f-6497-479d-8e72-a52bc098811d | unavailable | `D:\dsh-devframe-f07`（`feature/f07-integration-qa`） | assigned | 2026-09-05 创建并派发 | — |
 
 本文件的 `main` 副本是活登记表；worktree 副本仅作负责人入职的时点快照。
 
@@ -130,3 +130,4 @@ Windows 主机，仅有 `pnpm`、`pwsh`、Node 24.19 与 git 2.53；无 npm、�
 ## 登记表变更日志
 
 - 2026-09-05：计划写成；F01–F07 登记为 `planned`；worktree 与负责人待创建。
+- 2026-09-05：计划以 `2be4a074c2` 提交；在该提交上创建七个 worktree；七个负责人全部以宿主返回的真实 agentId 创建并派发完整任务；依赖安装在后台进行。

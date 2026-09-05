@@ -79,13 +79,13 @@ Identifier policy: `agentId` values are the durable ids returned by the host sub
 
 | Agent | agentId | SessionID | Worktree (branch) | Status | Last activity | Commits |
 | --- | --- | --- | --- | --- | --- | --- |
-| DSH-F01-RolePolicy-Owner | pending creation | unavailable | `D:\dsh-devframe-f01` (`feature/f01-role-policy`) | planned | — | — |
-| DSH-F02-ProjectTools-Owner | pending creation | unavailable | `D:\dsh-devframe-f02` (`feature/f02-project-tools`) | planned | — | — |
-| DSH-F03-ProjectCommands-Owner | pending creation | unavailable | `D:\dsh-devframe-f03` (`feature/f03-project-commands`) | planned | — | — |
-| DSH-F04-Reliability-Owner | pending creation | unavailable | `D:\dsh-devframe-f04` (`feature/f04-reliability`) | planned | — | — |
-| DSH-F05-ProfileAssembly-Owner | pending creation | unavailable | `D:\dsh-devframe-f05` (`feature/f05-profile-assembly`) | planned | — | — |
-| DSH-F06-WorktreeTool-Owner | pending creation | unavailable | `D:\dsh-devframe-f06` (`feature/f06-worktree-tool`) | planned | — | — |
-| DSH-F07-Integration-Owner | pending creation | unavailable | `D:\dsh-devframe-f07` (`feature/f07-integration-qa`) | planned | — | — |
+| DSH-F01-RolePolicy-Owner | cbb87195-4eea-4eaf-aff3-438f55b7785f | unavailable | `D:\dsh-devframe-f01` (`feature/f01-role-policy`) | assigned | created and dispatched 2026-09-05 | — |
+| DSH-F02-ProjectTools-Owner | eafba7de-c57a-4bb9-b652-e7dac528b960 | unavailable | `D:\dsh-devframe-f02` (`feature/f02-project-tools`) | assigned | created and dispatched 2026-09-05 | — |
+| DSH-F03-ProjectCommands-Owner | 672d8085-e3bd-4a2f-ade5-36e0f6a399ea | unavailable | `D:\dsh-devframe-f03` (`feature/f03-project-commands`) | assigned | created and dispatched 2026-09-05 | — |
+| DSH-F04-Reliability-Owner | 6a89b5ff-bf0c-487a-bde2-2c0846bf5742 | unavailable | `D:\dsh-devframe-f04` (`feature/f04-reliability`) | assigned | created and dispatched 2026-09-05 | — |
+| DSH-F05-ProfileAssembly-Owner | f5e1ff2c-c0cc-49ee-81a5-8f939f8c53e4 | unavailable | `D:\dsh-devframe-f05` (`feature/f05-profile-assembly`) | assigned | created and dispatched 2026-09-05 | — |
+| DSH-F06-WorktreeTool-Owner | b95b5bf6-63c3-4f5b-91a6-8a37fd25cff9 | unavailable | `D:\dsh-devframe-f06` (`feature/f06-worktree-tool`) | assigned | created and dispatched 2026-09-05 | — |
+| DSH-F07-Integration-Owner | 571d0c3f-6497-479d-8e72-a52bc098811d | unavailable | `D:\dsh-devframe-f07` (`feature/f07-integration-qa`) | assigned | created and dispatched 2026-09-05 | — |
 
 The live registry is the `main` copy of this file; worktree copies are point-in-time snapshots for owner onboarding.
 
@@ -130,3 +130,4 @@ Windows host with `pnpm`, `pwsh`, Node 24.19, and git 2.53 only; no npm, no bash
 ## Registry change log
 
 - 2026-09-05: plan written; F01–F07 registered as `planned`; worktrees and owners pending creation.
+- 2026-09-05: plan committed as `2be4a074c2`; seven worktrees created at that commit; all seven owners created with host-returned agent ids and dispatched with full task assignments; dependency installs running in the background.
