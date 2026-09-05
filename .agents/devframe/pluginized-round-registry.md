@@ -95,7 +95,7 @@ L1 组长与 L2 Worker 待创建。合规创建顺序（每个 Agent）：持久
 | L-Worktree | L1 | `46c1c8cb-9aa3-422b-8ace-cf9685050c07` | 同上 | `D:\dsh-devframe-p-worktree`（`p/worktree`，基点 `3ea01faa6c` 含 P00） | developing |
 | L-Product | L1 | `2e51e73e-e5ba-4ec0-a888-c54cb5451be0` | 同上 | `D:\dsh-devframe-p-product`（`p/product`） | developing |
 | L-Hierarchy | L1 | `d60f56c3-e3a5-4838-86dc-efa757578306` | 同上 | `D:\dsh-devframe-p-hierarchy`（`p/hierarchy`，基点 `c23e78a17a` 含 P00+P01） | developing |
-| L-Memory（P21-M） | L1 | 待派发（下一车道释放即启） | 同上 | `D:\dsh-devframe-p-memory`（待建） | planned |
+| L-Memory（P21-M） | L1 | `aae0829a-410b-4578-b244-916c9c6f107e` | 同上 | `D:\dsh-devframe-p-memory`（`p/memory`，基点 `c8992f8154` 含 P00–P05+P07） | developing |
 | L-Shadow（P21-S） | L1 | 待派发（P04 接口落地后启） | 同上 | `D:\dsh-devframe-p-shadow`（待建） | planned |
 
 并发纪律：huoshan-1 同账号最多两路生成中请求；组长内部前台串行跑 Worker；组长完成即补位下一个可执行任务。
@@ -137,4 +137,5 @@ L1 组长与 L2 Worker 待创建。合规创建顺序（每个 Agent）：持久
 - 2026-09-05：目标轮上限 30 到达（phase blocked, round-limit），经用户"继续"人工回合延长至 80 并重新 arm（revision 9）——调度缺口闭环：轮上限耗尽需人工回合才能 edit/resume，已如实上报并处理。
 - 2026-09-05：P04 交付并经总控独立验收（亲跑 31/31 含 P00/P01 回归；`4a515afda7`）：TaskState 九态全序流转+blocked/failed 恢复三元组强制、有界并发（maxActiveTasks 默认 2）、生命周期准入/停止/Quiescence、controller-only 合并门禁（一次性进程内标记）、project_tasks 域持久化+冷恢复。派发路径 L-Shadow 的 P04 接口前提就此满足；L-Shadow/L-Memory 按车道释放顺序派发。L-Foundation 转 P05。
 - 2026-09-05：模型车道策略（用户指令）：平时 huoshan-1，仅遇问题（限流/故障）才切换 huoshan-2——故障转移式，不改默认配置；替代早前 D9 的"子 Agent 全走 huoshan-1"静态描述。
-- 2026-09-05：P05 交付并经总控独立验收（亲跑 13/13 含 P04 回归；`c8992f8154`）：agent-evidence 台账——任务/Goal 绑定回执（复用 DevFrame goal-binding 语义）、提交回执（CommitSha 品牌）、验证快照（原样记录退出码）、三轨迹追加式持久化+冷恢复；"不另建验收数据库"落点明确（只存溯源不持判定）。L-Foundation 转 P06（最后一项）。L-Hierarchy P02 恢复后已进入门禁（tsbuildinfo），L-Worktree P03 consumer 测试收尾中。
+- 2026-09-05：P05 交付并经总控独立验收（亲跑 13/13 含 P04 回归；`c8992f8154`）：agent-evidence 台账——任务/Goal 绑定回执（复用 DevFrame goal-binding 语义）、提交回执（CommitSha 品牌）、验证快照（原样记录退出码）、三轨迹追加式持久化+冷恢复；"不另建验收数据库"落点明确（只存溯源不持判定）。L-Foundation 转 P06（最后一项）。
+- 2026-09-05：L-Product 交付并验收（`7e8666916b`）：5/5 目标 verified（源码+SHA256 安装+装配级运行时）、0 blocked、6 SKIP；B 组合 153 行无 id 冲突/双挂载；D6 专项=装配级无冲突，唯一语义叠加为 model-switch 中央路由接管 agent-team 成员模型选择（follow-main 默认）。总控四项裁决：(1) D6 采用 follow-main 默认语义，本轮合规树不依赖逐成员模型选择，无需豁免，W2 文档标注行为；(2) model-switch 升级跟踪以 NOirBRight fork release 为准（上游不发布）；(3) pairing 的 blockExoticSubdeps:false 为 profile 本地放行先例，暂不入生产模板（pairing 保持已验证隔离态，收编另行决策）；(4) usage-monitor 与 providers-ui 同源独立实现，W4/P22 用同一份真实会话日志做一次数字对账。L-Memory 随即补位上车。
