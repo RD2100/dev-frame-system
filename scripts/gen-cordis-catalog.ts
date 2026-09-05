@@ -614,6 +614,8 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   Worktree: 'worktree-registry.md',
   WorktreeCreateRequest: 'worktree-registry.md',
   WorktreeId: 'worktree-registry.md',
+  WorktreeReconcileOptions: 'worktree-registry.md',
+  WorktreeReconcileReport: 'worktree-registry.md',
   WorktreeRemoveOptions: 'worktree-registry.md',
   WorktreeStatus: 'worktree-registry.md',
   ClientArtifactBaseline: 'client-modules.md',

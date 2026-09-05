@@ -67,6 +67,13 @@ import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
 import VmWorkflowEngine from '@deepseek-ai/dsh-workflow-worker-thread'
 import * as ToolRalph from '@deepseek-ai/dsh-tool-ralph'
 import * as ToolWorkflow from '@deepseek-ai/dsh-tool-workflow'
+import * as ToolWorktree from '@deepseek-ai/dsh-tool-worktree'
+import { WorktreeRegistry } from '@deepseek-ai/dsh-worktree-registry'
+import type {
+  Worktree, WorktreeCreateRequest, WorktreeId, WorktreeReconcileOptions,
+  WorktreeReconcileReport, WorktreeRemoveOptions, WorktreeStatus,
+} from '@deepseek-ai/dsh-worktree-registry'
+import type { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { githubSlug } from './verify-md-links.ts'
 
 /** Attachment seam marker that makes the attachments-conditional `read_image` schema harvestable. */
@@ -95,6 +102,35 @@ class CatalogAttachmentStore extends AttachmentStore {
 
 const root = resolve(import.meta.dirname, '..')
 const OUT = 'docs/tool-catalog.md'
+
+/**
+ * In-memory worktree registry standing in for schema harvest. The tools are
+ * harvested, never executed; every operation rejects loud if it ever ran.
+ */
+class CatalogWorktreeRegistry extends WorktreeRegistry {
+  override async create(_request: WorktreeCreateRequest): Promise<Worktree> {
+    throw new Error('gen-tool-catalog: worktree tools are harvested, not executed')
+  }
+
+  override list(_workspaceId: WorkspaceId): readonly Worktree[] {
+    throw new Error('gen-tool-catalog: worktree tools are harvested, not executed')
+  }
+
+  override async status(_id: WorktreeId): Promise<WorktreeStatus> {
+    throw new Error('gen-tool-catalog: worktree tools are harvested, not executed')
+  }
+
+  override async remove(_id: WorktreeId, _options?: WorktreeRemoveOptions): Promise<void> {
+    throw new Error('gen-tool-catalog: worktree tools are harvested, not executed')
+  }
+
+  override async reconcile(
+    _workspaceId: WorkspaceId,
+    _options?: WorktreeReconcileOptions,
+  ): Promise<WorktreeReconcileReport> {
+    throw new Error('gen-tool-catalog: worktree tools are harvested, not executed')
+  }
+}
 
 /**
  * Register the descriptor needed to mount schema-producing consumers. Declares
@@ -572,6 +608,27 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(VmWorkflowEngine, { provider: 'mock' })
       await ctx.plugin(ToolWorkflow)
     },
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-worktree',
+    dir: 'tool-worktree',
+    source: 'packages/workflow/tool-worktree/src/index.ts',
+    requires: [
+      'ctx.tools', 'ctx.workspaceRegistry', 'ctx.worktreeRegistry', 'ctx.systemPrompt',
+      'a calling Agent (its session cwd authorizes the workspace)',
+    ],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      // The tools register from the seam alone; the schema does not depend on
+      // which registry provider backs ctx.worktreeRegistry. The workspace
+      // resolver is only read at execute time, so a minimal stand-in satisfies
+      // the plugin's declared injection.
+      ctx.provide('workspaceRegistry', { list: () => [] } as never)
+      await ctx.plugin(CatalogWorktreeRegistry)
+      await ctx.plugin(ToolWorktree)
+    },
+    note:
+      'The five tools authorize every call against the calling session workspace resolved from the immutable session cwd; a worktree id held by another workspace is reported exactly like an unknown one. The schema above does not depend on which provider backs the registry.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-web',

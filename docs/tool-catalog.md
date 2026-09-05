@@ -39,6 +39,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-experimental-tool-agent-team` | `followup_task`, `interrupt_agent`, `list_agents`, `send_message`, `spawn_teammate`, `team_task_create`, `team_task_get`, `team_task_list`, `team_task_update`, `wait_agent` | `ctx.tools`, `ctx.systemPrompt`, `ctx.agentTeams`, `an exact live Team member Agent` | `tool/call`, `team/member`, `team/message/queued`, `team/message/delivered`, `team/task`, `tool/result` | - | All ten tools are scoped to implicit Team Leads and durable teammates. The shipped dsh-base bundle keeps the package disabled; the documented Agent Teams profile patch enables it while disabling the legacy continuable-child control names. |
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`, `owning Agent session` | `tool/call`, `todo/write`, `tool/result` | - | todo_write is session-owned state; UIs render the latest todo/write event as a checklist. `allowParallelInProgress` is required with no default, so the catalog states its choice: `true`, whose description invites several `in_progress` items. A deployment choosing `false` receives the same tool with a description asking for exactly one active task. |
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
+| `@deepseek-ai/dsh-tool-worktree` | `worktree_create`, `worktree_list`, `worktree_prune`, `worktree_remove`, `worktree_status` | `ctx.tools`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry`, `ctx.systemPrompt`, `a calling Agent (its session cwd authorizes the workspace)` | `tool/call`, `tool/result` | - | The five tools authorize every call against the calling session workspace resolved from the immutable session cwd; a worktree id held by another workspace is reported exactly like an unknown one. The schema above does not depend on which provider backs the registry. |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
@@ -2198,6 +2199,118 @@ Constraints: concurrency and total-agent caps apply; no filesystem, network, tim
 ```
 
 Source: [`packages/workflow/tool-workflow/src/index.ts`](../packages/workflow/tool-workflow/src/index.ts)
+
+<a id="deepseek-aidsh-tool-worktree"></a>
+
+## `@deepseek-ai/dsh-tool-worktree`
+
+### `worktree_create`
+
+Create a new git worktree: a second checkout of this session's workspace repository in a separate directory, registered durably. Use it to build or test in a clean tree while the workspace holds uncommitted work, to isolate an experiment, or to run a parallel task. The target directory must not exist (git creates it) and must not be the workspace directory itself; branch is optional and names a NEW branch to check out (omitted, git derives the name from the directory). Returns the worktree id, canonical path, and observed branch — keep the id for worktree_status and worktree_remove. Refusals name the cause and the fix: an existing non-empty target (path-exists), an already-taken branch name (branch-conflict), or a target path too long for git's configuration (path-length).
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Target checkout directory for the new worktree; absolute, or relative to the workspace directory. Must not exist."
+    },
+    "branch": {
+      "type": "string",
+      "description": "New branch to create and check out. Omitted, git derives the branch name from the directory name."
+    }
+  },
+  "required": [
+    "path"
+  ]
+}
+```
+
+Source: [`packages/workflow/tool-worktree/src/index.ts`](../packages/workflow/tool-worktree/src/index.ts)
+
+### `worktree_list`
+
+List the git worktrees registered for this session's workspace: id, canonical path, branch, and creation time for each, in stable order. Registrations survive restarts. Worktrees created outside the product never appear here — use worktree_prune to see and adopt them.
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+Source: [`packages/workflow/tool-worktree/src/index.ts`](../packages/workflow/tool-worktree/src/index.ts)
+
+### `worktree_prune`
+
+Reconcile the workspace's worktree registrations with what git actually reports. The report names dangling registrations (directory-missing: the directory is gone; git-unknown: git no longer tracks the path) and unregistered worktrees (git-tracked checkouts created outside the product). By default this only reports. Pass pruneDangling: true to drop the stale registrations — registry rows only, never directories or files — and adoptUnregistered: true to register the outside-created worktrees. Run this when worktree_status reports a missing directory, worktree_remove refuses on a vanished worktree, or you suspect worktrees were created or deleted outside the product.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "pruneDangling": {
+      "type": "boolean",
+      "description": "Drop the dangling registrations (registry rows only; never directories or files)."
+    },
+    "adoptUnregistered": {
+      "type": "boolean",
+      "description": "Register the unregistered git-tracked worktrees under this workspace."
+    }
+  }
+}
+```
+
+Source: [`packages/workflow/tool-worktree/src/index.ts`](../packages/workflow/tool-worktree/src/index.ts)
+
+### `worktree_remove`
+
+Remove one registered git worktree by id: git deletes the checkout, and only then is the registration dropped. A worktree with modified or untracked files refuses to go unless force is true, which discards them. The workspace's own checkout and the repository's history are never touched. Get ids from worktree_list; if the directory already vanished outside the product, use worktree_prune instead.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "The worktree id, from worktree_list."
+    },
+    "force": {
+      "type": "boolean",
+      "description": "Pass true to allow removing a worktree with modified or untracked files, discarding them."
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+Source: [`packages/workflow/tool-worktree/src/index.ts`](../packages/workflow/tool-worktree/src/index.ts)
+
+### `worktree_status`
+
+Observe one registered git worktree's live state by id: whether its directory still exists, which branch it has checked out now, and whether the tree is clean (no modified or untracked files). A missing directory is reported as directoryExists: false — an observation, not an error; recover the stale registration with worktree_prune. Get ids from worktree_list.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "The worktree id, from worktree_list."
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+Source: [`packages/workflow/tool-worktree/src/index.ts`](../packages/workflow/tool-worktree/src/index.ts)
+
+The five tools authorize every call against the calling session workspace resolved from the immutable session cwd; a worktree id held by another workspace is reported exactly like an unknown one. The schema above does not depend on which provider backs the registry.
 
 <a id="deepseek-aidsh-tool-web"></a>
 

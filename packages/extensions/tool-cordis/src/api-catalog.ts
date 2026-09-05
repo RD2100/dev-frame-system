@@ -2879,7 +2879,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'worktreeRegistry',
     summary: 'Abstract worktree registry service.',
-    description: 'Abstract worktree registry service. Subclass, implement the abstract methods, and load the subclass as a plugin — it registers as `ctx.worktreeRegistry` (one implementation per context; loading a second throws, which is cordis\' standard duplicate-service behavior).\n\nImplementations must honor these semantics:\n\n- Operations resolve the owner workspace through `ctx.workspaceRegistry` and fail loud on an unknown `WorkspaceId`; the anchor is never stored unvalidated.\n- Records reflect observed facts: canonical paths after the directory exists, branches read back from the worktree, never caller assumptions.\n- `list` answers from durable rows only; the registry, not git metadata, is the authority for what this product registered.\n- `status` reports a missing directory as an observation (`directoryExists: false`) without invoking git; git failures on a present directory reject.\n- `remove` deletes the durable row only after the provider\'s worktree removal succeeded, so a failed remove never hides an existing worktree.',
+    description: 'Abstract worktree registry service. Subclass, implement the abstract methods, and load the subclass as a plugin — it registers as `ctx.worktreeRegistry` (one implementation per context; loading a second throws, which is cordis\' standard duplicate-service behavior).\n\nImplementations must honor these semantics:\n\n- Operations resolve the owner workspace through `ctx.workspaceRegistry` and fail loud on an unknown `WorkspaceId`; the anchor is never stored unvalidated.\n- Records reflect observed facts: canonical paths after the directory exists, branches read back from the worktree, never caller assumptions.\n- `list` answers from durable rows only; the registry, not git metadata, is the authority for what this product registered.\n- `status` reports a missing directory as an observation (`directoryExists: false`) without invoking git; git failures on a present directory reject.\n- `remove` deletes the durable row only after the provider\'s worktree removal succeeded, so a failed remove never hides an existing worktree.\n- `reconcile` compares the rows with `git worktree list` and only reports by default; its actions are opt-in and never delete directories or files.',
     methods: [
       {
         signature: 'abstract create(request: WorktreeCreateRequest): Promise<Worktree>',
@@ -2904,6 +2904,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Remove one worktree through git and delete its registration. The row is deleted only after the removal succeeded.',
         parameters: [{ name: 'id', description: 'Registered worktree id; unknown ids reject.' }, { name: 'options', description: 'Pass `force` to allow removing dirty worktrees.' }],
         returns: 'resolution after the worktree is gone and the row deleted.',
+      },
+      {
+        signature: 'abstract reconcile(workspaceId: WorkspaceId, options?: WorktreeReconcileOptions): Promise<WorktreeReconcileReport>',
+        description: 'Compare this workspace\'s rows with `git worktree list` and optionally reconcile the difference. Detection always runs; each action is opt-in: `pruneRows` drops stale rows (never directories or files), and `adoptUnregistered` registers git-tracked worktrees this registry holds no row for under any workspace. The repository\'s main worktree is never reported as unregistered.',
+        parameters: [{ name: 'workspaceId', description: 'Owner workspace; unknown ids reject.' }, { name: 'options', description: 'The opt-in reconcile actions.' }],
+        returns: 'the observed differences and the applied changes.',
       },
     ],
   },
@@ -6232,12 +6238,32 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface WorktreeCreateRequest {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly branch?: string | undefined;\n}',
   },
   {
+    name: 'WorktreeDanglingReason',
+    declaration: 'export type WorktreeDanglingReason = \'directory-missing\' | \'git-unknown\';',
+  },
+  {
+    name: 'WorktreeDanglingRegistration',
+    declaration: 'export interface WorktreeDanglingRegistration {\n    readonly id: WorktreeId;\n    readonly path: string;\n    readonly reason: WorktreeDanglingReason;\n}',
+  },
+  {
+    name: 'WorktreeReconcileOptions',
+    declaration: 'export interface WorktreeReconcileOptions {\n    readonly pruneRows?: boolean;\n    readonly adoptUnregistered?: boolean;\n}',
+  },
+  {
+    name: 'WorktreeReconcileReport',
+    declaration: 'export interface WorktreeReconcileReport {\n    readonly dangling: readonly WorktreeDanglingRegistration[];\n    readonly unregistered: readonly WorktreeUnregisteredWorktree[];\n    readonly removedRows: readonly WorktreeId[];\n    readonly adoptedPaths: readonly string[];\n}',
+  },
+  {
     name: 'WorktreeRemoveOptions',
     declaration: 'export interface WorktreeRemoveOptions {\n    readonly force?: boolean | undefined;\n}',
   },
   {
     name: 'WorktreeStatus',
     declaration: 'export interface WorktreeStatus {\n    readonly directoryExists: boolean;\n    readonly branch?: string | undefined;\n    readonly clean?: boolean | undefined;\n}',
+  },
+  {
+    name: 'WorktreeUnregisteredWorktree',
+    declaration: 'export interface WorktreeUnregisteredWorktree {\n    readonly path: string;\n    readonly branch?: string | undefined;\n}',
   },
 ]
 

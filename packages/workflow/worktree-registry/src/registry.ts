@@ -93,8 +93,5 @@ export abstract class WorktreeRegistry extends Service {
    * @param options - The opt-in reconcile actions.
    * @returns the observed differences and the applied changes.
    */
-  abstract reconcile(
-    workspaceId: WorkspaceId,
-    options?: WorktreeReconcileOptions,
-  ): Promise<WorktreeReconcileReport>
+  abstract reconcile(workspaceId: WorkspaceId, options?: WorktreeReconcileOptions): Promise<WorktreeReconcileReport>
 }

@@ -43,6 +43,7 @@
 | `@deepseek-ai/dsh-experimental-tool-agent-team` | `followup_task`、`interrupt_agent`、`list_agents`、`send_message`、`spawn_teammate`、`team_task_create`、`team_task_get`、`team_task_list`、`team_task_update`、`wait_agent` | `ctx.tools`、`ctx.systemPrompt`、`ctx.agentTeams`、`an exact live Team member Agent` | `tool/call`、`team/member`、`team/message/queued`、`team/message/delivered`、`team/task`、`tool/result` | - | 这 10 个工具限定于隐式 Team Lead 与持久 teammate 作用域。随产品发布的 dsh-base bundle 默认禁用该包；文档中的 Agent Teams profile patch 会启用它，并禁用旧 continuable child 的同名控制工具。 |
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`、`owning Agent session` | `tool/call`、`todo/write`、`tool/result` | - | todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为检查清单。`allowParallelInProgress` 是没有默认值的必填项，因此本目录明确选择 `true`，对应描述允许同时存在多个 `in_progress` 项。选择 `false` 的部署会获得同一工具，但描述会要求只能有 1 个活动任务。 |
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
+| `@deepseek-ai/dsh-tool-worktree` | `worktree_create`、`worktree_list`、`worktree_prune`、`worktree_remove`、`worktree_status` | `ctx.tools`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry`、`ctx.systemPrompt`、`a calling Agent (its session cwd authorizes the workspace)` | `tool/call`、`tool/result` | - | 五个工具把每次调用都授权到由不可变 session cwd 解析出的调用会话工作区；另一工作区持有的 worktree id 与未知 id 的报告完全一致。上方 schema 不依赖具体哪个 provider 支撑注册表。 |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
@@ -2206,6 +2207,118 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
 ```
 
 来源：[`packages/workflow/tool-workflow/src/index.ts`](../packages/workflow/tool-workflow/src/index.ts)
+
+<a id="deepseek-aidsh-tool-worktree"></a>
+
+## `@deepseek-ai/dsh-tool-worktree`
+
+### `worktree_create`
+
+创建一个新的 git worktree：本会话工作区仓库在另一目录中的第二检出，并持久登记。当工作区留有未提交改动时，可用它在干净树中构建或测试、隔离一个实验、或运行并行任务。目标目录必须不存在（由 git 创建），也不能就是工作区目录本身；branch 可选，命名一个要检出的**新**分支（缺省时 git 从目录名派生分支名）。返回 worktree id、规范路径与观测到的分支——保留 id 供 worktree_status 与 worktree_remove 使用。拒绝时会说明原因与修法：目标已存在且非空（path-exists）、分支名已被占用（branch-conflict）、或目标路径超出 git 配置的长度上限（path-length）。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Target checkout directory for the new worktree; absolute, or relative to the workspace directory. Must not exist."
+    },
+    "branch": {
+      "type": "string",
+      "description": "New branch to create and check out. Omitted, git derives the branch name from the directory name."
+    }
+  },
+  "required": [
+    "path"
+  ]
+}
+```
+
+来源：[`packages/workflow/tool-worktree/src/index.ts`](../packages/workflow/tool-worktree/src/index.ts)
+
+### `worktree_list`
+
+列出本会话工作区已登记的 git worktree：每条的 id、规范路径、分支与创建时间，顺序稳定。登记跨重启存活。产品之外创建的 worktree 不会出现在这里——用 worktree_prune 去查看并采纳它们。
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+来源：[`packages/workflow/tool-worktree/src/index.ts`](../packages/workflow/tool-worktree/src/index.ts)
+
+### `worktree_prune`
+
+把工作区的 worktree 登记与 git 实际报告的状态对账。报告会点名悬空登记（directory-missing：目录已消失；git-unknown：git 已不再跟踪该路径）与未注册的 worktree（产品之外创建的 git 跟踪检出）。默认只报告。传 pruneDangling: true 丢弃过时登记——只删登记行，绝不删目录或文件——传 adoptUnregistered: true 登记外部创建的 worktree。当 worktree_status 报告目录缺失、worktree_remove 因 worktree 已消失而拒绝、或你怀疑有 worktree 在产品之外被创建或删除时，运行此工具。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "pruneDangling": {
+      "type": "boolean",
+      "description": "Drop the dangling registrations (registry rows only; never directories or files)."
+    },
+    "adoptUnregistered": {
+      "type": "boolean",
+      "description": "Register the unregistered git-tracked worktrees under this workspace."
+    }
+  }
+}
+```
+
+来源：[`packages/workflow/tool-worktree/src/index.ts`](../packages/workflow/tool-worktree/src/index.ts)
+
+### `worktree_remove`
+
+按 id 删除一个已登记的 git worktree：先由 git 删除检出，然后才删除登记。有改动或未跟踪文件的 worktree 拒绝删除，除非 force 为 true（此时会丢弃它们）。工作区自身的检出与仓库历史绝不会被触碰。id 从 worktree_list 获取；若目录已在产品之外消失，改用 worktree_prune。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "The worktree id, from worktree_list."
+    },
+    "force": {
+      "type": "boolean",
+      "description": "Pass true to allow removing a worktree with modified or untracked files, discarding them."
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+来源：[`packages/workflow/tool-worktree/src/index.ts`](../packages/workflow/tool-worktree/src/index.ts)
+
+### `worktree_status`
+
+按 id 观察一个已登记 git worktree 的实时状态：目录是否仍存在、当前检出的分支、树是否干净（无改动或未跟踪文件）。目录缺失报告为 directoryExists: false——这是观察，不是错误；用 worktree_prune 回收过时登记。id 从 worktree_list 获取。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "The worktree id, from worktree_list."
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+来源：[`packages/workflow/tool-worktree/src/index.ts`](../packages/workflow/tool-worktree/src/index.ts)
+
+五个工具把每次调用都授权到由不可变 session cwd 解析出的调用会话工作区；另一工作区持有的 worktree id 与未知 id 的报告完全一致。上方 schema 不依赖具体哪个 provider 支撑注册表。
 
 <a id="deepseek-aidsh-tool-web"></a>
 
