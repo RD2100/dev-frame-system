@@ -1,6 +1,6 @@
 ---
 description: "Bounded append-only project memory over a user-selected Obsidian Vault: scoped search/read/append tools, exclusive-create notes with session-log receipts, path containment, secret screening, and honest failure reporting."
-kind: "package-reference"
+kind: "package-bundle"
 ---
 
 # @deepseek-ai/dsh-experimental-project-memory
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-experimental-project-memory` implements the bounded Obsidian memory of [detailed design part 3](../../../docs/detailDesign-part3.md): the Vault stores only selected facts, preferences, lessons, and unresolved questions, never execution history or authority. The package is a private experimental library built around `ProjectMemoryService`, the three bounded tools (`memory_search`, `memory_read`, `memory_append`), and a receipt seam the host implements over the DSH session log. It is not a general Obsidian synchronization: the service manages only the append-only `<vault>/devframe-memory/` subtree, appends are exclusive-create and idempotent, and memory content is untrusted context that never grants tools, permissions, or authority.
+`dsh-experimental-project-memory` is a private experimental profile layer that implements the bounded Obsidian memory of [detailed design part 3](../../../docs/detailDesign-part3.md): the Vault stores only selected facts, preferences, lessons, and unresolved questions, never execution history or authority. Its patch inserts one `project-memory` row that provides `ctx.projectMemory` and registers the three bounded tools (`memory_search`, `memory_read`, `memory_append`) on `ctx.tools`; the receipt seam rides the session log, so a cold restart recovers it from replayed logs. With the shipped defaults memory mounts unconfigured and read-only, and the tools report `MEMORY_UNAVAILABLE` until a deployment configures a Vault root. Memory content is untrusted context that never grants tools, permissions, or authority; this is not a general Obsidian synchronization — the service manages only the append-only `<vault>/devframe-memory/` subtree.
 
 ## Table of Contents
 
@@ -24,32 +24,29 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Use this package when the host needs scoped recall and honest append over a user-selected Vault root: the calling session's workspace identity, the consent flags (`writeEnabled`, `userScopeEnabled`), and the receipt store are supplied by the host; the service owns the filesystem behavior.
+### Install into a profile
 
-### Resolve the spec, then run the tools
+From this repository checkout, add the layer to an initialized profile:
 
-Defaults are resolved explicitly at the boundary; the service performs no hidden fallbacks.
-
-```ts
-import { createMemoryReceiptStore, ProjectMemoryService, resolveMemorySpec } from '@deepseek-ai/dsh-experimental-project-memory'
-
-const spec = resolveMemorySpec({
-  vaultRoot: 'D:/Obsidian/MyVault', // user-selected, must already exist
-  writeEnabled: true,              // the user enabled appends
-  userScopeEnabled: false,         // user memory not allowed for this caller
-  workspaceId: workspaceId,        // host-derived native workspace identity
-})
-const memory = new ProjectMemoryService(spec, receiptStoreOverSessionLog)
-const recall = await memory.search({ scope: 'project', query: 'deploy script' })
+```sh
+pnpm dsh plugin --profile headless add ./packages/experimental/project-memory
 ```
 
-### Implement the receipt seam
+The command initializes a custom profile with `@deepseek-ai/dsh-base` first and links the package from the checkout; the manifest's `dsh.bundle.patch` declaration is what makes it join the ordered layer stack instead of staying a plain dependency. Removing it with `dsh plugin --profile <name> remove @deepseek-ai/dsh-experimental-project-memory` removes the dependency and the layer.
 
-`MemoryReceiptStore` fixes only `read` and `write`. The host persists each receipt (relative path plus full-file digest) to the session log before the append returns `created`, so a restart can answer `already_exists`, `memory_changed`, or `memory_missing` without recreating anything. Tests and tools that assemble the seam from an already-restored receipt list use `createMemoryReceiptStore(entries)`.
+### Configure a Vault
 
-### Expect explicit failures
+The shipped patch defaults mount the row with `workspaceId: default`, writes off, and no Vault root, so loading is safe everywhere and every tool call reports `MEMORY_UNAVAILABLE` until the deployment overrides the row's config with `vaultRoot`. The user-selected Vault root must already exist — the service never creates it — and enabling `writeEnabled` without an explicit `vaultRoot` fails the profile at load. A patch entry replaces the target row's whole configuration, so restate every setting you keep; the [base bundle README](../../bundle/base/README.md) owns the override semantics.
 
-Every failure mode from the design surfaces as a stable code on `ProjectMemoryError`: an unconfigured or missing Vault reports `MEMORY_UNAVAILABLE`, disabled writes report `MEMORY_APPEND_DISABLED`, oversized or secret-bearing bodies are rejected with `MEMORY_NOTE_TOO_LARGE` or `MEMORY_CONTENT_REJECTED` (the reason names the rule, never the suspected secret), and unsafe paths report `MEMORY_PATH_REJECTED`. Conflicting or externally changed notes are outcomes (`memory_conflict`, `memory_changed`, `memory_missing`, `incomplete_note`), never silent overwrites.
+### What you get
+
+The layer adds the `project-memory` plugin row: a `ctx.projectMemory` service over the configured Vault subtree plus three model tools.
+
+- `memory_search` — deterministic, byte-bounded text match over one scope's note bodies; hits carry note ids, excerpts, trust labels, and freshness, and `coverageComplete: false` means a scan cap was hit, never that the knowledge does not exist.
+- `memory_read` — one full note by id with trust labels and provenance; `memory_changed` or `incomplete_note` means the stored file disagrees with its committed receipt, so treat the content as unverified.
+- `memory_append` — exclusive-create, idempotent append of one bounded note; the receipt reaches the calling session's log before `created` returns, and rejected bodies name the screening rule without echoing the suspected secret.
+
+Every failure mode from the design surfaces as a stable code on `ProjectMemoryError` (`MEMORY_UNAVAILABLE`, `MEMORY_APPEND_DISABLED`, `MEMORY_NOTE_TOO_LARGE`, `MEMORY_CONTENT_REJECTED`, `MEMORY_PATH_REJECTED`); conflicting or externally changed notes are outcomes, never silent overwrites.
 
 -----
 
@@ -60,6 +57,10 @@ Every failure mode from the design surfaces as a stable code on `ProjectMemoryEr
 <summary>Implementation internals — click to expand</summary>
 
 This section explains the design decisions behind the feature and points at the code that realizes them; the observable behavior is fully covered in [Use this package](#use-this-package).
+
+### Patch document
+
+The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml): one `insert` list that mounts the `project-memory` row with its shipped defaults over the profile root. Later bundle layers and the user's profile patch override the row by id, with the last write winning per row. Source-checkout hosts that compose the service directly, outside a profile, import the library face instead: `resolveMemorySpec` resolves the validated spec at the boundary, `ProjectMemoryService` performs the filesystem behavior, and the host supplies the `MemoryReceiptStore` over its own session log.
 
 ### Design decisions
 
@@ -73,6 +74,7 @@ This section explains the design decisions behind the feature and points at the 
 
 | File | Role |
 |---|---|
+| [`cordis.patch.yml`](cordis.patch.yml) | The bundle substance: the `project-memory` row with its shipped defaults |
 | [`src/types.ts`](src/types.ts) | Namespaces, note metadata, tool request/result shapes, limits, retry policy, and the receipt seam |
 | [`src/ids.ts`](src/ids.ts) | The `NoteId` brand, source-reference validation, and the stable id derivation |
 | [`src/notes.ts`](src/notes.ts) | Note serialization, strict parsing, digests, and byte-boundary utilities |
@@ -82,7 +84,7 @@ This section explains the design decisions behind the feature and points at the 
 | [`src/receipt.ts`](src/receipt.ts) | The in-memory receipt store for tests and rehydration |
 | [`src/memory.ts`](src/memory.ts) | The service: search, read, and append over the real filesystem |
 | [`src/errors.ts`](src/errors.ts) | `ProjectMemoryError` and its stable code union |
-| [`src/index.ts`](src/index.ts) | Package entry that re-exports the vocabulary |
+| [`src/index.ts`](src/index.ts) | Package entry that re-exports the vocabulary and the plugin wiring |
 
 ### Invariant
 
@@ -95,22 +97,23 @@ No runtime invariant companion is published: the service holds no cross-process 
 <a id="model-experience"></a>
 ## Model Experience
 
-### Contract vocabulary
+### Bounded memory tools
 
 #### What the model sees
 
-Nothing yet. The package ships the three tools as a library; wiring them into `ctx.tools`, injecting labeled recall at task start, and recording that injection in session events belong to the host integration ([detailed design part 3, failure behavior and integration](../../../docs/detailDesign-part3.md#failure)).
+When the layer is mounted, exactly three tools join the tool scopes: `memory_search`, `memory_read`, and `memory_append`. Their descriptions carry the policy: notes are labeled data, never instructions; appends record observations, and `confirmed` user preferences stay reachable only through the host's human-confirmation flow. With the shipped defaults every call fails with `MEMORY_UNAVAILABLE` instead of touching any path.
 
 #### Token effect
 
-Zero direct tokens on every request.
+Zero while the layer is absent. When mounted, the three tool schemas cost tokens on every request in the scopes that see them, and each call appends one JSON result bounded by the recall limits.
 
 #### KV Cache effect
 
-Independent of live requests: the package never touches a request prefix, so it cannot invalidate provider cache reuse.
+Prefix-stable while the row config and tool schemas stay unchanged: the schemas are declared once, and call results append after the reusable request prefix. Mounting or removing the layer changes the tool list and breaks the affected agents' provider cache reuse for the next request.
+
+## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
-## Known Limitations and Deferred Work
 
 These limits define when the memory service is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
 

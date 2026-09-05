@@ -7,22 +7,22 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
-## Summary
+## 概述
 
 `dsh-experimental-shadow-router` 挂载 `ctx.shadowRouter`，是插件化代理层级的 Shadow 侧路由器。它在自己的 `shadow_router` 存储域（组合 storages 根下的 JSON 文档）中为每个工作区保存一条控制器绑定；为每个项目创建带精确 `cwd` 元数据的独立控制器根会话；把每条跨根投递持久化两次——发送方的 `queued` 意图与目标已接受的 `received` 输入——并将 `completed` 作为一个独立的持久状态；且只向宿主指定为 Shadow 的那一个代理作用域安装四个项目工具（`project_open`、`project_send`、`project_status`、`project_stop`）。停止按项目隔离：其他绑定、它们的控制器与队列都不受影响。本包是私有的实验性宿主侧服务；它不注册提示词分区与会话事件，TypeScript 与 Python SDK 投影不受影响。
 
-## Table of Contents
+## 目录
 
-- [Use this package](#use-this-package)
-- [Understand the implementation](#understand-the-implementation)
-- [Model Experience](#model-experience)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
-- [Dev Note](#dev-note)
+- [使用本包](#use-this-package)
+- [理解实现](#understand-the-implementation)
+- [模型体验](#model-experience)
+- [已知限制与延期工作](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
 
 -----
 
 <a id="use-this-package"></a>
-## Use this package
+## 使用本包
 
 在已经挂载存储栈、会话存储、工作区注册表与会话身份绑定注册表的组合中挂载本服务；它硬注入 `ctx.sessions`、`ctx.storageDomain`、`ctx.workspaceRegistry` 与 `ctx.agentBindings`，任一缺失即在激活时报错。
 
@@ -42,7 +42,7 @@ kind: "package-reference"
     authorizedRoots: [dshHomePath('projects')]
 ```
 
-### Config
+### 配置
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
@@ -52,7 +52,7 @@ kind: "package-reference"
 | `maxMessageChars` | `20000` | 单条投递文本的长度上限。 |
 | `statusPageSize` | `20` | `project_status` 每页项目与投递的最大条数。 |
 
-### Designate the Shadow and call the tools
+### 指定 Shadow 并调用工具
 
 `markShadow(agent)` 只把四个工具装进该代理的作用域，其他作用域一个都解析不到。宿主调用与工具相同的 Service 方法，外加模型永远接触不到的宿主专用缝：`setActiveGoal` 为项目授权一次运行，`completeDelivery` 结清 received 投递，`confirmProjectStopped` 收尾一次停止，`recoverDeliveries` 在重启时收敛中断的行。
 
@@ -71,14 +71,14 @@ const receipt = await ctx.shadowRouter.sendToProject(shadow, {
 -----
 
 <a id="understand-the-implementation"></a>
-## Understand the implementation
+## 理解实现
 
 <details>
 <summary>实现内部——点击展开</summary>
 
-本节解释特性背后的设计决策并指向实现它们的代码；可观察行为已在 [Use this package](#use-this-package) 完整覆盖。
+本节解释特性背后的设计决策并指向实现它们的代码；可观察行为已在[使用本包](#use-this-package)中完整覆盖。
 
-### Design decisions
+### 设计决策
 
 - **每个项目一条 provisioning 状态机。** `reserving → provisioning → ready` 在每一步动作前先持久化，任何时点崩溃都会留下一条后续 open 或宿主 reconcile 可收敛的行：保留的会话 id 绝不二次铸造，创建失败把行滚到可见的 `failed`，cwd 不匹配则停为 `needs_attention` 而不是出现第二个写入者。
 - **两次写入的投递，三个持久状态。** `sendToProject` 先把发送方意图持久化为 `queued`，再把目标已接受的输入标记为 `received`；`completed` 是由宿主另行结清的控制器侧事实，回执绝不声称工作已执行。`queued → received` 与 `received → completed` 是仅有的前进转移；被取消的 queued 行连同原因保持可见。
@@ -86,7 +86,7 @@ const receipt = await ctx.shadowRouter.sendToProject(shadow, {
 - **复用注册表事实，而非邮箱语义。** 路由复用工作区注册表的规范路径事实（`fs.realpath` 规范、别名折叠、按段的重叠检查）；有意不复用 agent-team 邮箱的成员校验，因为 Shadow 的目标由绑定存储授权，而非团队成员身份。
 - **单项目停止隔离。** 停止只取消该绑定的 `queued` 投递（连同 `project-stopped` 原因保持可见），把绑定停为 `stopping`，其他绑定、控制器会话与队列一律不动；已接受的投递在随后的停止中依然存活。
 
-### Source map
+### 源码地图
 
 | 文件 | 角色 |
 |---|---|
@@ -97,7 +97,7 @@ const receipt = await ctx.shadowRouter.sendToProject(shadow, {
 | [`src/errors.ts`](src/errors.ts) | `ShadowRouterError` 及其稳定错误码联合 |
 | [`src/index.ts`](src/index.ts) | 包入口与默认导出 |
 
-### Invariant
+### 不变式
 
 未发布运行时不变量伴生包：内存索引是单张域表的 write-through 投影并在启动时由其重建，且 JSON 后端拒绝同一存储单元上的第二个存活句柄，因此不存在可能分叉的独立观察。
 
@@ -106,23 +106,25 @@ const receipt = await ctx.shadowRouter.sendToProject(shadow, {
 -----
 
 <a id="model-experience"></a>
-## Model Experience
+## 模型体验
 
-### Shadow project tools
+### Shadow 项目工具
 
-#### What the model sees
+#### 模型看到什么
 
 被指定的 Shadow 作用域恰好多出四个工具。`project_open` 把一个已授权的既有目录解析为工作区与控制器根；`project_send` 投递一条有界的 `work`/`note` 消息并返回绝不声称已完成的 `received` 回执；`project_status` 读取单个项目或有界分页，包括逐条投递状态与阻塞原因；`project_stop` 精确停止一个项目并报告 stopping 直到宿主确认。失败返回结构化 `SHADOW_*` 错误码（过期 revision、未知工作区、未授权调用方、超长文本、队列已满），绝不暴露原始存储错误。
 
-#### Token effect
+#### Token 影响
 
 四个工具的模式常驻 Shadow 作用域的工具列表，每次请求都在；每次工具调用追加一轮结果，规模受投递与状态分页上限约束。
 
-#### KV Cache effect
+#### KV Cache 影响
 
 工具模式只声明一次且字节稳定，因此第一次项目调用之前的请求前缀可复用供应商缓存；每次调用的结果追加在其后，不会使共享前缀失效。
 
-## Known Limitations and Deferred Work
+## 已知限制与延期工作
+
+<a id="known-limitations-and-deferred-work"></a>
 
 这些限制界定了路由器何时不适配或需要特别的运维注意。它们是当前包约束，不是任务清单。
 
@@ -132,7 +134,7 @@ const receipt = await ctx.shadowRouter.sendToProject(shadow, {
 - **每个存储根一个存活进程** —— JSON 后端拒绝同一存储单元上的第二个存活句柄，因此对同一根启动第二个路由进程会响亮失败而不是竞态。
 
 <a id="dev-note"></a>
-### Dev Note
+### 开发备注
 
 <details>
 <summary>维护者工作上下文——点击展开</summary>
