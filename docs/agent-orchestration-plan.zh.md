@@ -10,7 +10,7 @@ description: DevFrame 单项目试点的总控编排计划、功能登记表与 
 
 DSH-Project-Controller 是本轮开发的唯一总控会话：它统一规划、创建、派发、监督和集成所有 Agent。其宿主生成的会话 ID 为 `session-9f2fb633-25a9-4464-8c9b-c257b0c1ab4f`，读取自 `DSH_SESSION_ID`。只有总控创建 Agent、把功能分支合并进 `main`、更新本登记表；功能负责人及其子 Agent 只向总控汇报，跨功能接口问题一律经总控转发。
 
-用户于 2026-09-05 记录的决策：交付按[验收交付表](testAndAcceptance.zh.md#delivery)的"受控单项目试点"行执行，拆分为下文 F01–F07；七个功能负责人全部并行启动，各自使用独立 git worktree。[Shadow 路由](detailDesign-part2.zh.md)与 [Obsidian 记忆](detailDesign-part3.zh.md)保持为延后的候选扩展。本轮不推送、不部署、不使用任何凭据。
+用户于 2026-09-05 记录的决策：交付按[验收交付表](testAndAcceptance.zh.md#delivery)的"受控单项目试点"行执行，拆分为下文 F01–F07；每个功能拥有独立 git worktree，七个全部预先创建，负责人按最多两路并发的梯次调度激活（模型提供方的账户级请求频率限制不允许七路并发 turn；证据见变更日志）。[Shadow 路由](detailDesign-part2.zh.md)与 [Obsidian 记忆](detailDesign-part3.zh.md)保持为延后的候选扩展。本轮不推送、不部署、不使用任何凭据。
 
 ## 现状评估
 
@@ -97,7 +97,7 @@ Agent 停顿时，总控读取其最后输出与 worktree，判定为已提交�
 
 ## 开发与合并顺序
 
-开发：七个负责人按用户决策在各自 worktree 同时启动。`packages/experimental/devframe` 内的共享文件——`src/index.ts`、`src/shared/types.ts`、`package.json`、`README.md` 与 tsconfig 聚合——只接受属主的增量编辑；合并时的冲突由总控解决。
+开发：七个 worktree 与负责人全部预先就位，但负责人按梯次激活——同时最多两路、按合并顺序优先——因为模型提供方执行账户级请求频率限制，曾终止七路并发 turn（429 证据见变更日志）。`packages/experimental/devframe` 内的共享文件——`src/index.ts`、`src/shared/types.ts`、`package.json`、`README.md` 与 tsconfig 聚合——只接受属主的增量编辑；合并时的冲突由总控解决。
 
 合并：总控按 F01 → F02 → F04 → F03 → F05 → F06 的顺序合入 `main`，随后以 F07 收口。每次合并先跑下表该功能的针对性命令，凡改动 docs、README 或 `.agents/` 内容即加跑 `pnpm run test:docs`。最终收口跑 typecheck、build、组合冒烟、针对性矩阵并记录集成报告。只有总控合并；负责人永不触碰 `main`。
 
@@ -131,3 +131,5 @@ Windows 主机，仅有 `pnpm`、`pwsh`、Node 24.19 与 git 2.53；无 npm、�
 
 - 2026-09-05：计划写成；F01–F07 登记为 `planned`；worktree 与负责人待创建。
 - 2026-09-05：计划以 `2be4a074c2` 提交；在该提交上创建七个 worktree；七个负责人全部以宿主返回的真实 agentId 创建并派发完整任务；依赖安装在后台进行。
+- 2026-09-05：F04–F07 在产生任何编辑前异常停止（已核实各 worktree 停在基线）；总控已送达恢复消息令各自续作；F01–F03 持续运行；f01–f06 依赖安装完成，f07 收尾中。
+- 2026-09-05：七个负责人全部异常停止且各 worktree 零编辑，无工作丢失。会话日志证据显示 `429 AccountRateLimitExceeded` 且重试耗尽——七路并发 turn 触发提供方账户级限流。总控把执行修正为最多两路并发的梯次激活（先 F01 与 F06）；七个 worktree 的依赖安装全部完成。同时禁用 shell 递归遍历 `node_modules`（pnpm junction 环）；负责人改用限定范围的 glob 模式或 `git ls-files`。

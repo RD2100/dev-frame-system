@@ -10,7 +10,7 @@ English | [中文](agent-orchestration-plan.zh.md)
 
 DSH-Project-Controller is the single controller session for this development round: it plans, creates, dispatches, supervises, and integrates every agent. Its host-generated session id is `session-9f2fb633-25a9-4464-8c9b-c257b0c1ab4f`, read from `DSH_SESSION_ID`. Only the controller creates agents, merges feature branches into `main`, and updates this registry; feature owners and their sub-agents report to the controller, and cross-feature interface questions route through it.
 
-User decisions recorded on 2026-09-05: delivery follows the "Controlled single-project pilot" row of the [acceptance delivery table](testAndAcceptance.md#delivery), split into features F01–F07 below; and all seven feature owners start in parallel, each in a dedicated git worktree. [Shadow routing](detailDesign-part2.md) and [Obsidian memory](detailDesign-part3.md) stay deferred candidate extensions. This round pushes nothing, deploys nothing, and uses no credentials.
+User decisions recorded on 2026-09-05: delivery follows the "Controlled single-project pilot" row of the [acceptance delivery table](testAndAcceptance.md#delivery), split into features F01–F07 below; every feature owns a dedicated git worktree, with all seven created up front and their owners activated on a staggered schedule of at most two concurrent owners (the model provider's account-level request-rate limit prevents seven concurrent turns; evidence in the change log). [Shadow routing](detailDesign-part2.md) and [Obsidian memory](detailDesign-part3.md) stay deferred candidate extensions. This round pushes nothing, deploys nothing, and uses no credentials.
 
 ## Current state assessment
 
@@ -97,7 +97,7 @@ When an agent stalls, the controller reads its last output and worktree, and cla
 
 ## Development and merge order
 
-Development: all seven owners start in parallel in their worktrees (user decision). Shared files inside `packages/experimental/devframe` — `src/index.ts`, `src/shared/types.ts`, `package.json`, `README.md`, and tsconfig aggregates — accept additive-only edits from their owners; the controller resolves any conflict at merge.
+Development: all seven worktrees and owners exist up front, but owner activation is staggered — at most two owners run at a time, in merge-order priority — because the model provider enforces an account-level request-rate limit that terminated seven concurrent turns (429 evidence in the change log). Shared files inside `packages/experimental/devframe` — `src/index.ts`, `src/shared/types.ts`, `package.json`, `README.md`, and tsconfig aggregates — accept additive-only edits from their owners; the controller resolves any conflict at merge.
 
 Merge: the controller merges into `main` in the order F01 → F02 → F04 → F03 → F05 → F06, then closes out with F07. Each merge runs that feature's targeted commands from the table below, plus `pnpm run test:docs` whenever docs, READMEs, or `.agents/` content changed. The final close-out runs typecheck, build, composition-smoke, the targeted matrix, and records the integration report. Only the controller merges; owners never touch `main`.
 
@@ -131,3 +131,5 @@ Windows host with `pnpm`, `pwsh`, Node 24.19, and git 2.53 only; no npm, no bash
 
 - 2026-09-05: plan written; F01–F07 registered as `planned`; worktrees and owners pending creation.
 - 2026-09-05: plan committed as `2be4a074c2`; seven worktrees created at that commit; all seven owners created with host-returned agent ids and dispatched with full task assignments; dependency installs running in the background.
+- 2026-09-05: F04–F07 stopped abnormally before any edit landed (worktrees verified clean at the baseline); the controller delivered recovery messages resuming each assignment; F01–F03 kept running; dependency installs completed for f01–f06 with f07 finishing.
+- 2026-09-05: all seven owners stopped abnormally with no worktree edits, so no work was lost. Session-log evidence shows `429 AccountRateLimitExceeded` with retry exhaustion — the provider's account-level rate limit under seven concurrent turns. The controller amended execution to staggered activation of at most two owners at a time (F01 and F06 first); installs for all seven worktrees completed. Shell recursion into `node_modules` also pinned as forbidden (pnpm junction cycles); owners use scoped glob patterns or `git ls-files` instead.
