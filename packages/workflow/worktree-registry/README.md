@@ -75,6 +75,21 @@ const report = await ctx.worktreeRegistry.reconcile(workspaceId)
 
 Two opt-in actions act on the report. `pruneRows: true` drops the dangling rows (never directories or files) and runs `git worktree prune` once when a dropped row's directory was missing, so git stops listing the dead admin entry. `adoptUnregistered: true` registers each unregistered worktree with its canonical path and the branch observed in it (`HEAD` when detached) — a repository's main worktree and any worktree already registered under another workspace are never adopted or reported. Detection is point-in-time and serialized with create/remove on the provider's operation chain.
 
+### Failure kinds, retry semantics, and link shells
+
+git refusals the provider recognizes are classified into four kinds; each error is a `WorktreeGitOperationError` carrying the invocation facts, git's stderr, and the remediation:
+
+| Kind | git refuses because | Remediation the error carries |
+|---|---|---|
+| `path-exists` | the target directory exists and is not empty | choose a different target, or reuse or clear the existing one |
+| `branch-conflict` | a branch with the requested name already exists | choose a different branch name, or reuse the branch without `-b` |
+| `dirty-tree` | the worktree holds modified or untracked files | repeat the removal with `force: true`, or clean the worktree |
+| `path-length` | the path exceeds this git configuration's path-length limit | choose a shorter path, or `git config core.longpaths true` |
+
+Retry semantics: nothing auto-retries. A refused operation is deterministic — retrying without changing the parameters fails again. A failed attempt never leaves a registration row and never leaves a worktree behind (`remove` deletes its row only after git succeeded), so a corrected retry starts clean. On a `path-length` refusal git may leave empty leading directories on disk; the registry never records them and never deletes them.
+
+Link-shell contract (symlinks and junctions): the registry never creates symlinks or junctions. Every path it records is canonicalized through `fs.realpath` after the directory exists, so a worktree reached through a junction or symlink spelling is registered under its physical target, and the same directory through two spellings is one registration — creating a worktree through the alias of an existing one fails as already registered instead of doubling. `reconcile` canonicalizes git-reported paths the same way before comparing, so metadata that stored a link spelling still matches its row. Windows path comparisons fold case; git's forward-slash output compares equal to the recorded backslash paths.
+
 -----
 
 <a id="understand-the-implementation"></a>

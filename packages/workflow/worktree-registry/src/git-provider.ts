@@ -28,6 +28,7 @@ import z from '@deepseek-ai/schemastery'
 import { worktreeDomainSpec } from './spec.ts'
 import type { WorktreeRecord } from './spec.ts'
 import { WorktreeRegistry } from './registry.ts'
+import { classifyGitFailure, WorktreeGitOperationError, WORKTREE_GIT_FAILURE_REMEDIATION } from './git-failures.ts'
 import { parseWorktreeList, sameGitPath } from './porcelain.ts'
 import type {
   Worktree,
@@ -418,10 +419,15 @@ export class GitWorktreeRegistry extends WorktreeRegistry {
     }
     if (outcome.exitCode !== 0) {
       const tail = stderr.text.trim()
-      throw new Error(
-        `worktree-registry: git ${describeArgs(args)} in '${cwd}' failed with exit code ${outcome.exitCode}`
-        + (tail.length > 0 ? `: ${tail}` : ''),
-      )
+      const base = `worktree-registry: git ${describeArgs(args)} in '${cwd}' failed with exit code ${outcome.exitCode}`
+        + (tail.length > 0 ? `: ${tail}` : '')
+      const kind = classifyGitFailure(tail)
+      if (kind !== undefined) {
+        // The refusal is a recognized, actionable class: keep the invocation
+        // facts and git's evidence, and tell the caller how to proceed.
+        throw new WorktreeGitOperationError(`${base}. ${WORKTREE_GIT_FAILURE_REMEDIATION[kind]}`, kind)
+      }
+      throw new Error(base)
     }
     return finalOutput(handle.collected.stdout)
   }

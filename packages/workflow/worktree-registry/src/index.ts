@@ -14,6 +14,8 @@ export { worktreeDomainSpec, worktreeRecord } from './spec.ts'
 export type { WorktreeRecord } from './spec.ts'
 export { GitWorktreeRegistry, assertServiceableGitConfig } from './git-provider.ts'
 export type { GitWorktreeRegistryConfig } from './git-provider.ts'
+export { WorktreeGitOperationError, WORKTREE_GIT_FAILURE_REMEDIATION } from './git-failures.ts'
+export type { WorktreeGitFailureKind } from './git-failures.ts'
 export { parseWorktreeList, sameGitPath } from './porcelain.ts'
 export type { GitWorktreeEntry } from './porcelain.ts'
 export type {

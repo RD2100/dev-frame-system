@@ -75,6 +75,21 @@ const report = await ctx.worktreeRegistry.reconcile(workspaceId)
 
 两个可选动作作用于报告。`pruneRows: true` 删除悬空行（绝不删目录或文件），并在被删行的目录缺失时运行一次 `git worktree prune`，让 git 不再列出死的 admin 条目。`adoptUnregistered: true` 以规范路径与观测到的分支（detached 时为 `HEAD`）登记每个未注册 worktree——仓库主检出与已登记在另一 workspace 名下的 worktree 永不会被采纳或报告。检测是即时的，并与 create/remove 一起在 provider 的操作链上串行。
 
+### 失败类别、重试语义与链接壳
+
+provider 能识别的 git 拒绝分为四类；每个错误都是 `WorktreeGitOperationError`，携带调用事实、git 的 stderr 与补救建议：
+
+| Kind | git 拒绝的原因 | 错误携带的补救 |
+|---|---|---|
+| `path-exists` | 目标目录已存在且非空 | 换一个目标目录，或复用/清理已有目录 |
+| `branch-conflict` | 同名分支已存在 | 换分支名，或不带 `-b` 复用已有分支 |
+| `dirty-tree` | worktree 有改动或未跟踪文件 | 以 `force: true` 重试删除，或先清理 worktree |
+| `path-length` | 路径超出当前 git 配置的路径长度上限 | 换更短路径，或 `git config core.longpaths true` |
+
+重试语义：任何东西都不会自动重试。被拒绝的操作是确定性的——不改变参数的重试会再次失败。失败的尝试绝不留下登记行，也绝不留下 worktree（`remove` 只在 git 成功后才删行），所以修正后的重试从干净状态开始。`path-length` 拒绝时 git 可能在磁盘上留下空的前导目录；注册表既不登记也不删除它们。
+
+链接壳契约（symlink 与 junction）：注册表从不创建 symlink 或 junction。它记录的每个路径都在目录存在之后经 `fs.realpath` 规范化，所以经由 junction 或 symlink 拼写到达的 worktree 以其物理目标登记，同一目录的两种拼写就是同一登记——经由别名创建已有 worktree 的尝试以已登记失败，而不是重复登记。`reconcile` 以同样方式规范化 git 报告的路径再比较，所以存储了链接拼写的 git 元数据仍能匹配到行。Windows 路径比较折叠大小写；git 的正斜杠输出与登记的反斜杠路径视为相等。
+
 -----
 
 <a id="understand-the-implementation"></a>
