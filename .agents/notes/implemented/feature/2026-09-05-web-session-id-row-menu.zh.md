@@ -39,3 +39,7 @@ Status: implemented
 **找到 ID 现在需要两次激活**（行菜单，再对话框），这是移除常驻芯片的接受成本。会话列表重排导致某行卸载时，其打开的对话框一并关闭——与行菜单已有的生命周期一致。
 
 **复制仍是尽力而为。** 同时拒绝异步 Clipboard API 与 `execCommand('copy')` 的宿主会让 ID 保持可选但无法复制，状态行明确陈述失败而不是声称成功。
+
+## Related
+
+本 Note 描述的复制交互已由[从行操作菜单直接复制 Session ID](2026-09-05-web-session-id-direct-copy.zh.md)取代。行菜单的位置与 Session ID 归属仍然有效。

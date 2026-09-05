@@ -39,3 +39,7 @@ Alternatives to full removal were considered and declined: keeping both surfaces
 **Discovering the id now takes two activations** (row menu, then the dialog) instead of zero; that is the accepted cost of removing the persistent chip. A session-list reorder that unmounts a row also closes its open dialog — the same lifetime the row menu already has.
 
 **Copy stays best-effort.** A host that refuses both the async Clipboard API and `execCommand('copy')` leaves the id selectable but not copied, and the status line states the failure explicitly instead of claiming success.
+
+## Related
+
+The copy interaction described here is superseded by [Direct Session ID copying from row actions](2026-09-05-web-session-id-direct-copy.md). The row-menu placement and Session ID ownership remain current.

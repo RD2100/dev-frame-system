@@ -349,14 +349,13 @@ function SessionTree({
     }),
     [list, orderedWorkspaces, archivedSessionIds, pendingInteractions, expandedGroups, sessionOrderByAccount],
   )
-  // Agent-tree expansion: agents with children start expanded (the project
-  // tree shows 总控 → 组长 → 执行 without gestures) and the user collapses
-  // rows explicitly; the ids are browser-local transient state.
-  const [collapsedAgents, setCollapsedAgents] = useState<string[]>([])
+  // Agent-tree expansion starts collapsed so the sidebar stays compact; the
+  // ids of rows the user opens are browser-local transient state.
+  const [expandedAgents, setExpandedAgents] = useState<string[]>([])
   const agentExpanded = (node: AgentNode): boolean =>
-    node.children.length > 0 && !collapsedAgents.includes(node.id)
+    node.children.length > 0 && expandedAgents.includes(node.id)
   const toggleAgent = (id: SessionNode['id']): void => {
-    setCollapsedAgents(keys => toggled(keys, id))
+    setExpandedAgents(keys => toggled(keys, id))
   }
   // Row activation: catalog-resolved children open through their exact
   // direct-parent address; everything else opens as a listed Session.
@@ -374,7 +373,7 @@ function SessionTree({
     const ids: SessionId[] = []
     const walk = (nodes: readonly AgentNode[]): void => {
       for (const node of nodes) {
-        if (node.children.length > 0 && !collapsedAgents.includes(node.id)) {
+        if (node.children.length > 0 && expandedAgents.includes(node.id)) {
           ids.push(node.id)
           walk(node.children)
         }
@@ -382,7 +381,7 @@ function SessionTree({
     }
     for (const group of groups) walk(group.sessions)
     return ids
-  }, [groups, collapsedAgents])
+  }, [groups, expandedAgents])
   const announcedCatalogs = useRef<readonly SessionId[]>([])
   useEffect(() => {
     const previous = announcedCatalogs.current

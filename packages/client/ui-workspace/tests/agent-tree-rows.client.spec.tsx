@@ -163,15 +163,6 @@ describe('AgentNodeItem', () => {
     expect(onToggle).toHaveBeenCalledTimes(1)
   })
 
-  it('opens the Session-ID dialog from the row menu with the full durable id', () => {
-    const id = 'session-agent-0123456789abcdef0123456789abcdef'
-    renderAgent(agentNode(id, { title: 'Lead row' }), { expanded: new Set(), onToggle: vi.fn() })
-    fireEvent.click(screen.getByRole('button', { name: '会话“Lead row”的操作' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: zh['menu.sessionId'] }))
-    const dialog = screen.getByRole('dialog')
-    expect(dialog.textContent).toContain(id)
-  })
-
   it('keeps the meta line for a title-less session to its worktree only (the id is the title)', () => {
     // title === id: the id is already the row's primary text, so the meta
     // line would only repeat it — it stays off entirely without a worktree.

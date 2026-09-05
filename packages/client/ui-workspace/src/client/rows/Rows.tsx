@@ -2,22 +2,21 @@
  * Workspace browser tree row components (figma Cell set 14:3080): pure presentational —
  * all data and callbacks arrive via props. Hover swaps (folder->chevron,
  * time->ellipsis, action buttons) are CSS-only. Row ... menus are visual-only
- * except workspace Rename/Delete and session Rename/Fork/Archive; the session
- * and workspace hover cards are suppressed while a menu is open.
+ * except workspace Rename/Delete and session Rename/Fork/Archive/Session-ID copy;
+ * the session and workspace hover cards are suppressed while a menu is open.
  */
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   HoverCard, IconAlarmClockOutline16, IconArchiveOutline20, IconBranchOutline16,
-  IconCopyOutline16, IconEditOutline16, IconEllipsisOutline16, IconFolderClose16, IconFolderOpen16,
-  IconPlusOutline16, IconTrashOutline16, IconTriangleRightFill14, Menu, relativeTime,
-  StateDot,
+  IconCheckOutline16, IconCopyOutline16, IconEditOutline16, IconEllipsisOutline16,
+  IconFolderClose16, IconFolderOpen16, IconPlusOutline16, IconTrashOutline16,
+  IconTriangleRightFill14, IconWarningOutline16, Menu, relativeTime, StateDot, Toast, writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
 import type { WorkspaceBrowserProps } from '../contract/slots.ts'
 import type { AgentNode, GroupNode, SearchResultNode, SessionNode } from '../tree.ts'
-import { SessionIdDialog } from './SessionIdDialog.tsx'
 import css from './Rows.module.css'
 
 /** The standard locale seat, prop-passed from the browser root. */
@@ -43,6 +42,62 @@ function sessionRowMenuItems(t: RowTranslate) {
     { id: 'archive', label: t('menu.archiveSession'), icon: <IconArchiveOutline20 size={16} /> },
     { id: 'sessionId', label: t('menu.sessionId'), icon: <IconCopyOutline16 /> },
   ]
+}
+
+/** The result of a direct Session ID clipboard action. */
+type SessionIdCopyNotice = {
+  seq: number
+  success: boolean
+}
+
+/**
+ * Copy a row's durable Session ID without introducing a modal interaction.
+ * The request is single-flight per row, and an unmounted row invalidates an
+ * in-flight result so a stale clipboard response cannot update detached UI.
+ * @param sessionId - the branded id shown by the row.
+ * @returns the copy callback, transient result, and result-dismiss callback.
+ */
+function useSessionIdCopy(sessionId: SessionNode['id']) {
+  const [notice, setNotice] = useState<SessionIdCopyNotice | null>(null)
+  const pending = useRef(false)
+  const epoch = useRef(0)
+
+  useEffect(() => () => {
+    epoch.current += 1
+    pending.current = false
+  }, [])
+
+  const copy = useCallback(() => {
+    if (pending.current) return
+    pending.current = true
+    const request = ++epoch.current
+    void writeClipboard(String(sessionId)).then(success => {
+      if (request !== epoch.current) return
+      pending.current = false
+      setNotice({ seq: request, success })
+    })
+  }, [sessionId])
+
+  const dismiss = useCallback((seq: number) => {
+    setNotice(current => current?.seq === seq ? null : current)
+  }, [])
+
+  return { copy, notice, dismiss }
+}
+
+/** Render the non-modal result of a direct Session ID copy. */
+function SessionIdCopyToast({ notice, dismiss, t }: {
+  notice: SessionIdCopyNotice
+  dismiss: (seq: number) => void
+  t: RowTranslate
+}) {
+  return (
+    <Toast
+      text={notice.success ? t('sessionId.copied') : t('sessionId.copyFailed')}
+      icon={notice.success ? <IconCheckOutline16 /> : <IconWarningOutline16 />}
+      onDone={() => { dismiss(notice.seq) }}
+    />
+  )
 }
 
 /** Hover-card variant: distances wrap in the ago template; the now bucket stays bare (no "now ago"). */
@@ -385,7 +440,7 @@ export function SearchResultItem({ result, currentId, onOpen, t }: {
  * @param props.drag - optional draggable-row wiring.
  * @param props.flat - omit the empty status slot in the hierarchy-free flat list.
  * @param props.t - the browser root's locale seat.
- * @returns the session row.
+ * @returns the session row; selecting Session ID copies the durable id directly.
  */
 export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork, onArchive, drag, flat = false, t }: {
   node: SessionNode
@@ -411,15 +466,11 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
   const primaryStatus = statuses[0]
   const showStatus = primaryStatus.state !== 'done' || row.completed
   const [menuOpen, setMenuOpen] = useState(false)
-  // The Session-ID dialog's lifetime is this row's fiber: a list change that
-  // unmounts the row (archive echo, group fold, cross-group move) closes the
-  // dialog without a close event, while a keyed reorder keeps it open.
-  // session-id-dialog.client.spec.tsx pins both.
-  const [showId, setShowId] = useState(false)
   // Archive hides the row through the registry-global archive set and never
   // touches the session log, so it is not styled as destructive and needs no
   // confirmation dialog.
   const sessionMenuItems = sessionRowMenuItems(t)
+  const { copy: copySessionId, notice: sessionIdNotice, dismiss: dismissSessionIdNotice } = useSessionIdCopy(node.id)
   // Figma session cell: pad 8, status slot 16, then a 4px title gap.
   const ownRow = (
     <div
@@ -482,7 +533,7 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
               if (id === 'rename') onRename(node.id, row.title)
               if (id === 'fork') onFork(node.id)
               if (id === 'archive') onArchive(node.id)
-              if (id === 'sessionId') setShowId(true)
+              if (id === 'sessionId') copySessionId()
             }}
             portal
             closeOnPointerLeave
@@ -511,7 +562,9 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
         copyLabel={t('copy')}
         copiedLabel={t('hover.copied')}
       />
-      {showId && <SessionIdDialog sessionId={node.id} onClose={() => { setShowId(false) }} t={t} />}
+      {sessionIdNotice !== null && (
+        <SessionIdCopyToast notice={sessionIdNotice} dismiss={dismissSessionIdNotice} t={t} />
+      )}
     </>
   )
 }
@@ -539,7 +592,8 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
  * @param props.home - host account home for POSIX meta-path abbreviation.
  * @param props.drag - optional draggable-row wiring (top-level rows only).
  * @param props.t - the browser root's locale seat.
- * @returns the agent row with its expanded direct children.
+ * @returns the agent row with its expanded direct children; selecting Session ID
+ *   copies the durable id directly.
  */
 export function AgentNodeItem({
   node, depth, currentId, now, expandedOf, onToggle, onOpen, onRename, onFork, onArchive, home, drag, t,
@@ -574,9 +628,7 @@ export function AgentNodeItem({
   const showStatus = primaryStatus.state !== 'done' || node.completed
   const hasChildren = node.children.length > 0
   const [menuOpen, setMenuOpen] = useState(false)
-  // The Session-ID dialog's lifetime is this row's fiber, mirroring the flat
-  // session rows: a list change that unmounts the row closes the dialog.
-  const [showId, setShowId] = useState(false)
+  const { copy: copySessionId, notice: sessionIdNotice, dismiss: dismissSessionIdNotice } = useSessionIdCopy(node.id)
   // A title-less session displays its id as the primary text; the meta line
   // then carries only the bound directory instead of repeating the id.
   const showIdMeta = !node.blank && node.title !== node.id
@@ -657,7 +709,7 @@ export function AgentNodeItem({
                 if (id === 'rename') onRename(node.id, node.title)
                 if (id === 'fork') onFork(node.id)
                 if (id === 'archive') onArchive(node.id)
-                if (id === 'sessionId') setShowId(true)
+                if (id === 'sessionId') copySessionId()
               }}
               portal
               closeOnPointerLeave
@@ -698,7 +750,9 @@ export function AgentNodeItem({
         copyLabel={t('copy')}
         copiedLabel={t('hover.copied')}
       />
-      {showId && <SessionIdDialog sessionId={node.id} onClose={() => { setShowId(false) }} t={t} />}
+      {sessionIdNotice !== null && (
+        <SessionIdCopyToast notice={sessionIdNotice} dismiss={dismissSessionIdNotice} t={t} />
+      )}
       {expanded && hasChildren && (
         <div role="group" aria-label={t('agent.children.aria')}>
           {node.children.map(child => (

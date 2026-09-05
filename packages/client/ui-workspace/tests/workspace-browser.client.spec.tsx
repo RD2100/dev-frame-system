@@ -1331,7 +1331,7 @@ describe('project agent tree in the assembled browser', () => {
     [sid(parentId)]: { entries, parentAvailable: true, state: 'ready', error: null },
   })
 
-  it('shows subagent children by default and opens them through the catalog address', () => {
+  it('starts agent rows collapsed and opens children through the catalog address', () => {
     const open = vi.fn()
     const openSubagent = vi.fn()
     const setSubagentCatalogOpen = vi.fn()
@@ -1345,10 +1345,14 @@ describe('project agent tree in the assembled browser', () => {
       open, openSubagent, setSubagentCatalogOpen,
     })
 
-    // Expanding the Workspace group reveals the controller row already
-    // expanded: the catalog-labelled lead hangs below it with its worktree
-    // and live status.
+    // Expanding the Workspace group reveals the controller row while its
+    // direct children stay folded until the row's chevron is activated.
     fireEvent.click(screen.getByText('alpha'))
+    expect(screen.getByText('master')).toBeTruthy()
+    expect(screen.queryByText('DSH-G1-Lead')).toBeNull()
+    expect(setSubagentCatalogOpen).not.toHaveBeenCalledWith(sid('master'), true)
+
+    fireEvent.click(screen.getByRole('button', { name: '展开或收起“master”的直接下级' }))
     expect(screen.getByText('DSH-G1-Lead')).toBeTruthy()
     const meta = document.querySelector('[class*="agentMeta"]') as HTMLElement
     expect(meta.textContent).toContain('lead')
@@ -1379,6 +1383,7 @@ describe('project agent tree in the assembled browser', () => {
       open, openSubagent,
     })
     fireEvent.click(screen.getByText('alpha'))
+    fireEvent.click(screen.getByRole('button', { name: '展开或收起“master”的直接下级' }))
     // The summary title is the fallback row name while the catalog is absent.
     fireEvent.click(screen.getByText('lead'))
     expect(open).toHaveBeenCalledWith(sid('lead'))
@@ -1398,6 +1403,7 @@ describe('project agent tree in the assembled browser', () => {
       open, setSubagentCatalogOpen,
     })
     fireEvent.click(screen.getByText('alpha'))
+    fireEvent.click(screen.getByRole('button', { name: '展开或收起“master”的直接下级' }))
     expect(screen.getByText('DSH-G1-Lead')).toBeTruthy()
     expect(setSubagentCatalogOpen).toHaveBeenCalledWith(sid('master'), true)
 
