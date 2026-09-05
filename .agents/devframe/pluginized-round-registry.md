@@ -95,6 +95,22 @@ L1 组长与 L2 Worker 待创建。合规创建顺序（每个 Agent）：持久
 
 并发纪律：huoshan-1 同账号最多两路生成中请求；组长内部前台串行跑 Worker；组长完成即补位下一个可执行任务。
 
+## 6b. P22 验收矩阵绑定（AT → 责任插件，验收时逐项回填真实测试与证据）
+
+| AT | 内容 | 责任 | 计划绑定 |
+| --- | --- | --- | --- |
+| AT1-01/02 | 角色拒绝、冷恢复守卫 | P02 | role/hierarchy 探针测试（真实 dispatcher + 冷恢复） |
+| AT1-03/04 | 证据链、单一写入者 | P05/P04 | 证据回执与 writer 租约测试 |
+| AT1-05/06 | 假完成/审查/重复完成防护 | P05 | evidence 拒绝矩阵测试 |
+| AT1-07/08 | profile 组装、修复上限 | profile（L-Foundation） | devframe 目标 profile 启动 + 成员上限测试 |
+| AT1-09 | A/B 隔离、预算跨重启 | P04 | controller 生命周期测试（mock 模型） |
+| AT1-10 | /project 人工命令旅程 | P04（命令面归 P04） | 命令适配器测试：configure/confirm/start/stop/resume/result/abandon + 陈旧预览拒绝 |
+| AT4-01–05 | 重启/终止/写入者/预算/截止 | P06 | reliability 停止与恢复测试（真实进程树） |
+| AT4-06/07 | 并发/队列限制、flush 失败 | P06 | 准入切断 + 刷盘失败注入测试 |
+| P16–P20 | 五插件验证 | L-Verify | 四态分级 + SKIP_AUTH/SKIP_QUOTA 记录 |
+| P09/P12–P15 | 已装插件组合 | L-Product | 隔离目标 profile 启动与持久化检查 |
+| AT1-11 | 真实小任务试用 | W4 | 用户单独授权后执行，用户记录 helpful/inconclusive/not_helpful |
+
 ## 7. 变更日志
 
 - 2026-09-05：Round P 登记写成；冻结输入盘点完成；差异清单 D1–D10 记录；聚焦回归实测 289/290 通过、唯一失败为 composition-smoke 对话框断言。
