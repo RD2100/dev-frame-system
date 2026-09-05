@@ -82,6 +82,21 @@ describe('DevFrame role policy', () => {
     }))
   })
 
+  it('resolves roles by Session identity without requiring the live Agent object', () => {
+    const fake = fakeContext()
+    const reviewer = fakeAgent('session-reviewer', fake.context)
+    fake.agents.set(reviewer.id, reviewer)
+    const policy = installRolePolicy(fake.context, config())
+
+    expect(policy.roleOfSession(reviewer.id)).toBeUndefined()
+    policy.assign(reviewer, 'reviewer')
+    expect(policy.roleOfSession(reviewer.id)).toBe('reviewer')
+    expect(policy.roleOfSession(SessionId('session-404'))).toBeUndefined()
+
+    fake.disposedListeners[0]!({ agent: reviewer })
+    expect(policy.roleOfSession(reviewer.id)).toBeUndefined()
+  })
+
   it('applies exact identities, restrictions, monotonic denials, and disposal', () => {
     const fake = fakeContext()
     const lead = fakeAgent('permission-lead', fake.context)

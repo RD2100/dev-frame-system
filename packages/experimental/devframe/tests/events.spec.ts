@@ -22,6 +22,7 @@ import {
   DevFrameVerificationId,
 } from '../src/events.ts'
 import { DevFrameSessionJournal } from '../src/session-journal.ts'
+import type { DevFrameReviewGate } from '../src/session-journal.ts'
 import type {
   DevFrameLifecycleEventData,
   DevFrameReviewEventData,
@@ -55,10 +56,21 @@ const HEADER = {
 const WORKSPACE = WorkspaceId('workspace-one')
 const ACCEPTANCE = AcceptanceHash('acceptance-one')
 const SOURCE = SourceFingerprint('source-one')
+const SNAPSHOT = DevFrameSnapshotId('snapshot-one')
 const TASK = TaskId('task-1')
+const REVIEWER = SessionId('reviewer-one')
 
 function session(id: SessionId = CONTROLLER): Session {
   return Session.create(id, undefined, { ...HEADER, id })
+}
+
+/** The reviewer-role authority the journal consults; only REVIEWER passes. */
+function reviewGate(): DevFrameReviewGate {
+  return {
+    requireReviewer(sessionId: SessionId): void {
+      if (sessionId !== REVIEWER) throw new Error(`Session "${sessionId}" holds no reviewer role`)
+    },
+  }
 }
 
 function binding(overrides: Partial<GoalBinding> = {}): GoalBinding {
@@ -71,6 +83,7 @@ function binding(overrides: Partial<GoalBinding> = {}): GoalBinding {
     taskIds: [TASK],
     acceptanceHash: ACCEPTANCE,
     sourceFingerprint: SOURCE,
+    snapshotId: SNAPSHOT,
     confirmation: {
       id: ConfigurationConfirmationId('confirmation-one'),
       acceptanceHash: ACCEPTANCE,
@@ -90,6 +103,7 @@ function resultBinding(value: GoalBinding = binding()): GoalResultBinding {
     acceptanceHash: value.acceptanceHash,
     workspaceId: value.workspaceId,
     sourceFingerprint: value.sourceFingerprint,
+    snapshotId: value.snapshotId,
   }
 }
 
@@ -104,7 +118,10 @@ function rolePolicy(overrides: Partial<DevFrameRolePolicyEventData> = {}): DevFr
       worker: { inheritedTools: ['read', 'write'], denyScopedTools: [] },
       reviewer: { inheritedTools: ['read'], denyScopedTools: ['write', 'shell'] },
     },
-    assignments: [{ role: 'controller', sessionId: CONTROLLER }],
+    assignments: [
+      { role: 'controller', sessionId: CONTROLLER },
+      { role: 'reviewer', sessionId: REVIEWER },
+    ],
     ...overrides,
   }
 }
@@ -219,6 +236,18 @@ describe('DevFrame durable event vocabulary', () => {
       ...fullEventSet().usageReserved,
       tokenUsage: { kind: 'unknown', total: 1 },
     })).toThrow(/payload is invalid/)
+    expect(() => decodeDevFramePayload('devframe/verification', {
+      ...fullEventSet().verification,
+      snapshotId: DevFrameSnapshotId('snapshot-other'),
+    })).toThrow(/payload is invalid/)
+    expect(() => decodeDevFramePayload('devframe/review', {
+      ...fullEventSet().review,
+      snapshotId: DevFrameSnapshotId('snapshot-other'),
+    })).toThrow(/payload is invalid/)
+    expect(() => decodeDevFramePayload('devframe/verification', {
+      ...fullEventSet().verification,
+      snapshotId: undefined,
+    } as never)).toThrow(/payload is invalid/)
     expect(() => decodeDevFramePayload('devframe/lifecycle', {
       ...fullEventSet().quiesced,
       state: 'stopped',
@@ -232,7 +261,7 @@ describe('DevFrame durable event vocabulary', () => {
     const journal = new DevFrameSessionJournal(async (value) => {
       observed.push(value.seq)
       return true
-    })
+    }, reviewGate())
 
     const first = journal.append(current, 'devframe/role-policy', rolePolicy())
     const second = journal.append(current, 'devframe/goal-binding', binding())
@@ -249,7 +278,7 @@ describe('DevFrame durable event vocabulary', () => {
   it('latches a failed flush and never admits a later DevFrame mutation', async () => {
     const current = session()
     const flush = vi.fn(async () => false)
-    const journal = new DevFrameSessionJournal(flush)
+    const journal = new DevFrameSessionJournal(flush, reviewGate())
 
     await expect(journal.append(current, 'devframe/role-policy', rolePolicy()))
       .rejects.toMatchObject({ name: 'DevFramePersistenceError', code: 'unavailable' })
@@ -258,6 +287,31 @@ describe('DevFrame durable event vocabulary', () => {
     expect(flush).toHaveBeenCalledTimes(1)
     expect(journal.isBlocked(current)).toBe(true)
     expect(current.seq).toBe(1)
+  })
+
+  it('rejects a review whose submitter holds no reviewer role and keeps the journal writable', async () => {
+    const current = session()
+    const flush = vi.fn(async () => true)
+    const journal = new DevFrameSessionJournal(flush, reviewGate())
+    const events = fullEventSet()
+
+    await expect(journal.append(current, 'devframe/review', {
+      ...events.review,
+      reviewerSessionId: SessionId('worker-one'),
+    })).rejects.toThrow(/holds no reviewer role/)
+    expect(current.snapshotEvents().some(event => event.type === 'devframe/review')).toBe(false)
+    expect(flush).not.toHaveBeenCalled()
+    expect(journal.isBlocked(current)).toBe(false)
+
+    await expect(journal.append(current, 'devframe/review', {
+      ...events.review,
+      reviewerSessionId: SessionId('session-404'),
+    })).rejects.toThrow(/holds no reviewer role/)
+    expect(current.seq).toBe(0)
+
+    await journal.append(current, 'devframe/review', events.review)
+    expect(current.snapshotEvents().filter(event => event.type === 'devframe/review')).toHaveLength(1)
+    expect(flush).toHaveBeenCalledTimes(1)
   })
 
   it('round-trips all DevFrame event classes through the native Session restore path', () => {
@@ -328,6 +382,52 @@ describe('DevFrame durable event vocabulary', () => {
       .toMatch(/unavailable role policy version/)
   })
 
+  it('rejects reviews from sessions without the reviewer role and snapshot swaps during replay', () => {
+    const impostor = session()
+    const events = fullEventSet()
+    impostor.append('devframe/role-policy', rolePolicy())
+    impostor.append('devframe/goal-binding', binding())
+    impostor.append('devframe/verification', events.verification)
+    impostor.append('devframe/review', {
+      ...events.review,
+      reviewerSessionId: SessionId('worker-one'),
+    })
+    expect(foldDevFrameState(impostor.snapshotEvents(), impostor.header).failure)
+      .toMatch(/without the reviewer role/)
+
+    const swapped = session()
+    swapped.append('devframe/role-policy', rolePolicy())
+    swapped.append('devframe/goal-binding', binding())
+    swapped.append('devframe/verification', events.verification)
+    // The swapped pair is schema-consistent (event snapshot matches its
+    // binding), so the projection's result-tuple assertion rejects it against
+    // the stored Goal binding.
+    swapped.append('devframe/review', {
+      ...events.review,
+      snapshotId: DevFrameSnapshotId('snapshot-other'),
+      binding: {
+        ...events.review.binding,
+        snapshotId: DevFrameSnapshotId('snapshot-other'),
+      },
+    })
+    expect(foldDevFrameState(swapped.snapshotEvents(), swapped.header).failure)
+      .toMatch(/does not match its binding/)
+
+    const swappedVerification = session()
+    swappedVerification.append('devframe/role-policy', rolePolicy())
+    swappedVerification.append('devframe/goal-binding', binding())
+    swappedVerification.append('devframe/verification', {
+      ...events.verification,
+      snapshotId: DevFrameSnapshotId('snapshot-other'),
+      binding: {
+        ...events.verification.binding,
+        snapshotId: DevFrameSnapshotId('snapshot-other'),
+      },
+    })
+    expect(foldDevFrameState(swappedVerification.snapshotEvents(), swappedVerification.header).failure)
+      .toMatch(/does not match its binding/)
+  })
+
   it('resets the current lifecycle projection for a subsequent Goal', () => {
     const current = session()
     const first = binding()
@@ -388,7 +488,7 @@ describe('DevFrame host projection', () => {
       await ctx.plugin(SessionStore)
       await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
       const current = ctx.sessions.create(CONTROLLER, { meta: { createdAt: 0 } })
-      const journal = new DevFrameSessionJournal(value => ctx.sessions.flush(value))
+      const journal = new DevFrameSessionJournal(value => ctx.sessions.flush(value), reviewGate())
 
       await journal.append(current, 'devframe/role-policy', rolePolicy())
       await journal.append(current, 'devframe/goal-binding', binding())

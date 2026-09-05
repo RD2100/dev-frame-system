@@ -19,9 +19,10 @@ import type {
   SourceFingerprint,
   WorkspaceId,
 } from './shared/types.ts'
+import { DevFrameSnapshotId } from './shared/types.ts'
 
-/** Stable identifier for one captured source tree. */
-export type DevFrameSnapshotId = Branded<'DevFrameSnapshotId'>
+/** Stable identifier for one captured source tree; declared with the shared binding contracts. */
+export { DevFrameSnapshotId } from './shared/types.ts'
 
 /** Stable identifier for one host-recorded verification. */
 export type DevFrameVerificationId = Branded<'DevFrameVerificationId'>
@@ -31,15 +32,6 @@ export type DevFrameReviewId = Branded<'DevFrameReviewId'>
 
 /** Stable identifier for one charged model or tool operation. */
 export type DevFrameOperationId = Branded<'DevFrameOperationId'>
-
-/**
- * Brand one source snapshot identifier after its producer has validated it.
- * @param value - Non-empty source snapshot identifier.
- * @returns The branded snapshot identifier.
- */
-export function DevFrameSnapshotId(value: string): DevFrameSnapshotId {
-  return brandString<DevFrameSnapshotId>(value)
-}
 
 /**
  * Brand one verification identifier after its producer has validated it.
@@ -335,6 +327,7 @@ const goalBindingSchema = z.object({
   taskIds: z.array(taskIdSchema).min(1).refine(values => new Set(values).size === values.length, 'must contain unique task ids'),
   acceptanceHash: acceptanceHashSchema,
   sourceFingerprint: sourceFingerprintSchema,
+  snapshotId: snapshotIdSchema,
   confirmation: z.object({
     id: confirmationIdSchema,
     acceptanceHash: acceptanceHashSchema,
@@ -361,6 +354,7 @@ const goalResultBindingSchema = z.object({
   acceptanceHash: acceptanceHashSchema,
   workspaceId: workspaceIdSchema,
   sourceFingerprint: sourceFingerprintSchema,
+  snapshotId: snapshotIdSchema,
 }).strict() as z.ZodType<GoalResultBinding>
 
 const tokenUsageSchema = z.object({
@@ -416,6 +410,9 @@ const verificationEventSchema = z.object({
   status: z.enum(['passed', 'failed']),
   checks: z.array(checkResultSchema).min(1).refine(values => new Set(values.map(value => value.checkId)).size === values.length, 'check ids must be unique'),
 }).strict().superRefine((value, context) => {
+  if (value.snapshotId !== value.binding.snapshotId) {
+    context.addIssue({ code: 'custom', path: ['snapshotId'], message: 'must match the binding snapshot' })
+  }
   const allPassed = value.checks.every(check => check.status === 'passed')
   if (value.status === 'passed' && !allPassed) {
     context.addIssue({ code: 'custom', path: ['status'], message: 'passed evidence requires every check to pass' })
@@ -443,6 +440,9 @@ const reviewEventSchema = z.object({
   decision: z.enum(['pass', 'changes_required']),
   findings: z.array(reviewFindingSchema).refine(values => new Set(values.map(value => value.id)).size === values.length, 'finding ids must be unique'),
 }).strict().superRefine((value, context) => {
+  if (value.snapshotId !== value.binding.snapshotId) {
+    context.addIssue({ code: 'custom', path: ['snapshotId'], message: 'must match the binding snapshot' })
+  }
   const blocking = value.findings.some(finding => finding.severity === 'blocking')
   if (value.decision === 'pass' && blocking) {
     context.addIssue({ code: 'custom', path: ['decision'], message: 'a passing review cannot retain blocking findings' })

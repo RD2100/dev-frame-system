@@ -15,10 +15,12 @@ import type { Branded } from '@deepseek-ai/dsh-brand'
 import {
   AcceptanceHash as makeAcceptanceHash,
   ConfigurationConfirmationId as makeConfirmationId,
+  DevFrameSnapshotId as makeSnapshotId,
   SourceFingerprint as makeSourceFingerprint,
 } from '../shared/types.ts'
 import type {
   AcceptanceHash,
+  DevFrameSnapshotId,
   ProjectBindingPersistence,
   ProjectBindingRecord,
   ProjectWorkBinding,
@@ -75,6 +77,8 @@ export interface GoalBinding extends ProjectBindingRecord {
   readonly version: 1
   readonly taskIds: readonly TaskId[]
   readonly budget: GoalBudget
+  /** Snapshot whose content the source fingerprint describes. */
+  readonly snapshotId: DevFrameSnapshotId
 }
 
 /** Tuple required when a result or evidence record is associated with a Goal. */
@@ -85,6 +89,8 @@ export interface GoalResultBinding extends GoalBindingIdentity {
   readonly acceptanceHash: AcceptanceHash
   readonly workspaceId: WorkspaceId
   readonly sourceFingerprint: SourceFingerprint
+  /** Snapshot whose content the source fingerprint describes. */
+  readonly snapshotId: DevFrameSnapshotId
 }
 
 /** Durable storage needed by the controller. Implementations may use JSONL, SQLite, or memory. */
@@ -205,6 +211,8 @@ export interface StartGoalRequest {
   readonly taskIds: readonly TaskId[]
   readonly acceptanceHash: AcceptanceHash
   readonly sourceFingerprint: SourceFingerprint
+  /** Captured source tree the fingerprint describes; recorded with the binding. */
+  readonly snapshotId: DevFrameSnapshotId
   readonly budget: GoalBudgetInput
   readonly authorization: HumanAuthorization
   readonly maxGoalRounds?: number
@@ -341,6 +349,7 @@ export class GoalBindingController {
         taskIds: input.taskIds,
         acceptanceHash: input.acceptanceHash,
         sourceFingerprint: input.sourceFingerprint,
+        snapshotId: input.snapshotId,
         confirmation: {
           id: makeConfirmationId(nonEmptyId(request.authorization.confirmationId, 'confirmationId')),
           acceptanceHash: input.acceptanceHash,
@@ -592,6 +601,7 @@ function resolveStartRequest(request: StartGoalRequest): {
   readonly taskIds: readonly TaskId[]
   readonly acceptanceHash: AcceptanceHash
   readonly sourceFingerprint: SourceFingerprint
+  readonly snapshotId: DevFrameSnapshotId
   readonly budget: GoalBudget
   readonly maxGoalRounds?: number
 } {
@@ -608,6 +618,7 @@ function resolveStartRequest(request: StartGoalRequest): {
   }
   const acceptance = makeAcceptanceHash(nonEmptyId(request.acceptanceHash, 'acceptanceHash'))
   const sourceFingerprint = makeSourceFingerprint(nonEmptyId(request.sourceFingerprint, 'sourceFingerprint'))
+  const snapshotId = makeSnapshotId(nonEmptyId(request.snapshotId, 'snapshotId'))
   const budget = resolveBudget(request.budget)
   const maxGoalRounds = request.maxGoalRounds
   if (maxGoalRounds !== undefined && (!Number.isSafeInteger(maxGoalRounds) || maxGoalRounds < 1)) {
@@ -618,6 +629,7 @@ function resolveStartRequest(request: StartGoalRequest): {
     taskIds,
     acceptanceHash: acceptance,
     sourceFingerprint,
+    snapshotId,
     budget,
     ...maxGoalRounds === undefined ? {} : { maxGoalRounds },
   }
@@ -685,6 +697,7 @@ function sameBinding(left: GoalBinding, right: GoalBinding): boolean {
     && left.workspaceId === right.workspaceId
     && left.acceptanceHash === right.acceptanceHash
     && left.sourceFingerprint === right.sourceFingerprint
+    && left.snapshotId === right.snapshotId
     && left.confirmation.id === right.confirmation.id
     && left.confirmation.acceptanceHash === right.confirmation.acceptanceHash
     && left.budget.maxAttempts === right.budget.maxAttempts
@@ -734,10 +747,11 @@ function copyProjectBindingRecord(record: ProjectBindingRecord): ProjectBindingR
   }
 }
 
-/** Reject a result that carries another Goal's task or acceptance tuple. */
+/** Reject a result that carries another Goal's task, acceptance, or snapshot tuple. */
 function assertResultTuple(binding: GoalBinding, reference: GoalResultBinding): void {
   if (binding.workspaceId !== reference.workspaceId
     || binding.sourceFingerprint !== reference.sourceFingerprint
+    || binding.snapshotId !== reference.snapshotId
     || binding.goalRevision !== reference.goalRevision
     || binding.acceptanceHash !== reference.acceptanceHash
     || binding.taskIds.length !== reference.taskIds.length
@@ -760,6 +774,7 @@ function copyBinding(binding: GoalBinding): GoalBinding {
     taskIds: [...binding.taskIds],
     acceptanceHash: binding.acceptanceHash,
     sourceFingerprint: binding.sourceFingerprint,
+    snapshotId: binding.snapshotId,
     confirmation: { ...binding.confirmation },
     lifecycle: binding.lifecycle,
     budget: {
