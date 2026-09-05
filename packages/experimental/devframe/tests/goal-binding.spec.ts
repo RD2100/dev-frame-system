@@ -6,7 +6,7 @@ import { GoalId } from '@deepseek-ai/dsh-goal'
 import GoalService from '@deepseek-ai/dsh-goal'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { AcceptanceHash, SourceFingerprint, WorkspaceId } from '../src/shared/types.ts'
+import { AcceptanceHash, DevFrameSnapshotId, SourceFingerprint, WorkspaceId } from '../src/shared/types.ts'
 import {
   ControllerSessionId,
   GoalBindingController,
@@ -119,6 +119,7 @@ function request(overrides: Partial<Parameters<GoalBindingController['start']>[0
     taskIds: [TaskId('task-1')],
     acceptanceHash: AcceptanceHash('acceptance-a'),
     sourceFingerprint: SourceFingerprint('source-a'),
+    snapshotId: DevFrameSnapshotId('snapshot-a'),
     budget: { maxAttempts: 3 },
     authorization: createHumanAuthorization('confirm-a'),
     ...overrides,
@@ -134,6 +135,7 @@ function resultReference(binding: GoalBinding): GoalResultBinding {
     acceptanceHash: binding.acceptanceHash,
     workspaceId: binding.workspaceId,
     sourceFingerprint: binding.sourceFingerprint,
+    snapshotId: binding.snapshotId,
   }
 }
 
@@ -260,10 +262,32 @@ describe('GoalBindingController', () => {
       taskIds: a.taskIds,
       acceptanceHash: a.acceptanceHash,
     })).toThrow(expect.objectContaining({ code: 'GOAL_BINDING_IDENTITY_MISMATCH' }))
+    expect(() => controller.resolveResultBinding({
+      ...resultReference(a),
+      snapshotId: DevFrameSnapshotId('snapshot-OTHER'),
+    })).toThrow(expect.objectContaining({ code: 'GOAL_BINDING_IDENTITY_MISMATCH' }))
     expect(goalsTrace.filter(value => value.startsWith('goal:create'))).toEqual([
       'goal:create:implement task',
       'goal:create:implement task B',
     ])
+  })
+
+  it('rejects missing or blank snapshot ids before any native Goal mutation', async () => {
+    const trace: string[] = []
+    const goals = fakeGoals(trace)
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-snapshot'),
+      controllerSessionId: ControllerSessionId('controller-snapshot'),
+      goals,
+      store: new MemoryGoalBindingStore(),
+    })
+
+    await expect(controller.start(request({ snapshotId: undefined as unknown as DevFrameSnapshotId })))
+      .rejects.toMatchObject({ code: 'GOAL_BINDING_INVALID_REQUEST' })
+    await expect(controller.start(request({ snapshotId: DevFrameSnapshotId('  ') })))
+      .rejects.toMatchObject({ code: 'GOAL_BINDING_INVALID_REQUEST' })
+    expect(trace).toEqual([])
+    expect(controller.admissionState).toBe('closed')
   })
 
   it('resumes an exact persisted Goal identity after restoration', async () => {

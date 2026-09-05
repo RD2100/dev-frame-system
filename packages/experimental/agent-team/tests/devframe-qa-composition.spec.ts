@@ -21,7 +21,7 @@ import {
   createHumanAuthorization,
 } from '../../devframe/src/controller/goal-binding.ts'
 import type { NativeGoalPort } from '../../devframe/src/controller/goal-binding.ts'
-import { AcceptanceHash, SourceFingerprint, WorkspaceId } from '../../devframe/src/shared/types.ts'
+import { AcceptanceHash, DevFrameSnapshotId, SourceFingerprint, WorkspaceId } from '../../devframe/src/shared/types.ts'
 
 const roots: string[] = []
 const contexts: Context[] = []
@@ -86,6 +86,7 @@ describe('DevFrame QA composition', () => {
       taskIds: [TaskId(task.id)],
       acceptanceHash: AcceptanceHash('qa-acceptance-a'),
       sourceFingerprint: SourceFingerprint('qa-source-a'),
+      snapshotId: DevFrameSnapshotId('qa-snapshot-a'),
       budget: { maxAttempts: 1 },
       authorization: createHumanAuthorization('qa-confirm-a'),
     })
@@ -114,6 +115,7 @@ describe('DevFrame QA composition', () => {
       acceptanceHash: binding.acceptanceHash,
       workspaceId: binding.workspaceId,
       sourceFingerprint: binding.sourceFingerprint,
+      snapshotId: binding.snapshotId,
     })
     expect(resultBinding).toEqual(binding)
 

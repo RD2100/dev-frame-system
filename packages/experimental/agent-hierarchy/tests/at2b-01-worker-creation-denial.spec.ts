@@ -18,7 +18,7 @@ import { baseConfig, bindAgent, createAgent, executeProbe, harness, PROBE_TOOLS,
 import type { AgentHierarchyConfigInput } from '../src/index.ts'
 
 /** Team face members beyond the helpers' probe list, plus the host-declared creation surface. */
-const EXTRA_TOOLS = ['team_task_update', 'followup_task', 'interrupt_agent', 'sdk_bridge_create'] as const
+const EXTRA_TOOLS = ['followup_task', 'interrupt_agent', 'sdk_bridge_create'] as const
 
 /** Every deny-face probe the draft names, in replay order. */
 const DENY_PROBES = [

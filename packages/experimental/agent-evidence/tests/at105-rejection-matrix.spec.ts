@@ -1,9 +1,10 @@
 /**
  * AT1-05 证据拒绝矩阵 + AT1-06 证据引用解析 — 收口自
- * `.agents/devframe/p22/anchor-matrix.md` AT1-05/AT1-06 行（草案：AT1-05 六个
- * 拒绝变体 0/6 具名用例；AT1-06 "重复完成请求无害"与"证据引用解析"无直接
- * 用例）与 `docs/testAndAcceptance.md` Part 1 两行断言面。诚实映射：只落有
- * 真实实现锚点的用例，其余登记 GAP/语义差异，不虚构拒绝路径。
+ * `.agents/devframe/p22/anchor-matrix.md` AT1-05/AT1-06 行（P05 src 波后：六个
+ * 拒绝变体中四个已有具名用例——伪造成功、失败/跳过检查、错审查者、错快照；
+ * "审查后改未跟踪文件"与"削弱必需检查"仍为 GAP）与 `docs/testAndAcceptance.md`
+ * Part 1 两行断言面。诚实映射：只落有真实实现锚点的用例，其余登记 GAP/语义
+ * 差异，不虚构拒绝路径。
  *
  * 逐变体对照（变体 → 实现面结论 → 落点）：
  *
@@ -15,14 +16,20 @@
  * | 失败/跳过检查 | 实现路径存在：skipped 是 check status 一等值；failed/
  *   skipped check 可作为 failed evidence 诚实入账，但永不能支撑 passed 声明
  *   | 本文件 "records failed and skipped checks ..." |
- * | 错审查者 | GAP：reviewEventSchema 只校验 reviewerSessionId 形状；审查者
- *   角色授权消费面（review 请求者 ⇄ role-policy assignment 交叉校验）未实现
- *   | GAP，归 P05 src 波 |
- * | 错快照 | 拒绝路径存在于 devframe goal-binding：resolveResultBinding 全
- *   元组断言（sourceFingerprint/goalRevision 不匹配 → GOAL_BINDING_
- *   IDENTITY_MISMATCH）；snapshotId 与 sourceFingerprint 的跨字段绑定未实现
- *   （部分缺口） | 本文件 "rejects a result bound to a different source
- *   snapshot"；bindingsByGoal 双键过滤已由 at2c-04 锚定 |
+ * | 错审查者 | 已落盘（P05 src 波，设计见 .agents/devframe/p22/p05harden-design.md）：
+ *   devframe journal 写入缝构造器强制 DevFrameReviewGate，devframe/review 在
+ *   schema 解码后按 reviewerSessionId 交叉授权；evidence 侧 EvidenceReviewGate
+ *   （SessionId 键角色目录）抛稳定码 AGENT_EVIDENCE_REVIEWER_UNAUTHORIZED；
+ *   投影重放层对 durable role-policy assignments 二次校验。读取面=DevFrame 角色
+ *   词表（hierarchy/session-identity 的 AgentRole=controller|lead|worker 无
+ *   reviewer，不可授权） | 本文件 "rejects a review submitted by a Session
+ *   without the reviewer role"；残余：生产组合接线归 P23/S4 工具面 |
+ * | 错快照 | 已落盘（P05 src 波）：GoalBinding/GoalResultBinding/StartGoalRequest
+ *   同录 required snapshotId（request→make→record 全链，品牌工厂+非空校验）；
+ *   resolveResultBinding 全元组断言含 snapshotId（不一致 → GOAL_BINDING_
+ *   IDENTITY_MISMATCH，既有族扩展、只多拒）；durable schema 交叉校验 + 投影重放
+ *   双层 fail-closed | 本文件 "rejects a result bound to a different source
+ *   snapshot"（snapshotId 探针已入）；bindingsByGoal 双键过滤已由 at2c-04 锚定 |
  * | 审查后改未跟踪文件 | GAP：无 worktree/HEAD/未跟踪文件检查面；
  *   sourceFingerprint 是绑定时调用方自报值，从不重算（README：台账不检查
  *   仓库，changed paths 按上报记录） | GAP，归 P05 src 波（需真实指纹重算） |
@@ -50,10 +57,11 @@
 
 import { describe, expect, it } from 'vitest'
 import { GoalId } from '@deepseek-ai/dsh-goal'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import { TaskId as EvidenceTaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import { AcceptanceHash, SourceFingerprint, WorkspaceId } from '@deepseek-ai/dsh-experimental-devframe/shared'
-import { decodeDevFramePayload, DevFrameSnapshotId, DevFrameVerificationId } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
+import { decodeDevFramePayload, DevFrameReviewId, DevFrameSnapshotId, DevFrameVerificationId } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
+import { DevFrameSessionJournal } from '@deepseek-ai/dsh-experimental-devframe/src/session-journal.ts'
 import {
   ControllerSessionId,
   GoalBindingController,
@@ -67,6 +75,8 @@ import type {
   NativeGoalPort,
   NativeGoalState,
 } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
+import { EvidenceReviewGate } from '../src/review-gate.ts'
+import type { EvidenceReviewerDirectory } from '../src/review-gate.ts'
 import { harness } from './helpers.ts'
 
 const WORKSPACE = WorkspaceId('ws-at105')
@@ -84,6 +94,7 @@ const RESULT_BINDING: GoalResultBinding = {
   acceptanceHash: ACCEPTANCE,
   workspaceId: WORKSPACE,
   sourceFingerprint: SOURCE,
+  snapshotId: DevFrameSnapshotId('snapshot-at105'),
 }
 
 /** One configured-check result with a realistic host-captured shape. */
@@ -143,6 +154,7 @@ function startRequest() {
     taskIds: [StartTaskId(TASK_RAW)],
     acceptanceHash: ACCEPTANCE,
     sourceFingerprint: SOURCE,
+    snapshotId: DevFrameSnapshotId('snapshot-at105'),
     budget: { maxAttempts: 3 },
     authorization: createHumanAuthorization('confirm-at105'),
   }
@@ -158,6 +170,7 @@ function resultReference(binding: GoalBinding): GoalResultBinding {
     acceptanceHash: binding.acceptanceHash,
     workspaceId: binding.workspaceId,
     sourceFingerprint: binding.sourceFingerprint,
+    snapshotId: binding.snapshotId,
   }
 }
 
@@ -203,7 +216,8 @@ describe('AT1-05 evidence rejection matrix', () => {
       const owner = controller()
       const started = await owner.start(startRequest())
 
-      // The exact tuple resolves; a foreign snapshot fingerprint or revision cannot.
+      // The exact tuple resolves; a foreign snapshot fingerprint, revision, or
+      // snapshot identity cannot.
       expect(owner.resolveResultBinding(resultReference(started))).toEqual(started)
       expect(() => owner.resolveResultBinding({
         ...resultReference(started),
@@ -213,12 +227,81 @@ describe('AT1-05 evidence rejection matrix', () => {
         ...resultReference(started),
         goalRevision: started.goalRevision + 1,
       })).toThrow(expect.objectContaining({ code: 'GOAL_BINDING_IDENTITY_MISMATCH' }))
+      expect(() => owner.resolveResultBinding({
+        ...resultReference(started),
+        snapshotId: DevFrameSnapshotId('snapshot-OTHER'),
+      })).toThrow(expect.objectContaining({ code: 'GOAL_BINDING_IDENTITY_MISMATCH' }))
 
       // The rejection happens before any evidence is recorded.
       expect(h.ctx.agentEvidence.byTask(EvidenceTaskId(TASK_RAW)).bindings).toEqual([])
     } finally {
       await h.dispose()
     }
+  })
+
+  it('rejects a review submitted by a Session without the reviewer role with AGENT_EVIDENCE_REVIEWER_UNAUTHORIZED', async () => {
+    const reviewer = SessionId('reviewer-at105')
+    const directory: EvidenceReviewerDirectory = {
+      roleOf: sessionId => sessionId === reviewer ? 'reviewer' : 'worker',
+    }
+    const current = Session.create(SessionId('controller-at105-review'), undefined, {
+      version: 0,
+      id: SessionId('controller-at105-review'),
+      createdAt: 0,
+      isSeeded: false,
+    })
+    const journal = new DevFrameSessionJournal(async () => true, new EvidenceReviewGate(directory))
+    const reviewPayload = {
+      version: 1 as const,
+      reviewId: DevFrameReviewId('review-at105'),
+      binding: RESULT_BINDING,
+      snapshotId: DevFrameSnapshotId('snapshot-at105'),
+      reviewerSessionId: SessionId('worker-at105'),
+      policyVersion: 'policy-at105',
+      decision: 'pass' as const,
+      findings: [],
+    }
+
+    // A worker cannot submit a review: the gate rejects with the stable code
+    // before the event reaches the Session log.
+    await expect(journal.append(current, 'devframe/review', reviewPayload))
+      .rejects.toMatchObject({ name: 'AgentEvidenceError', code: 'AGENT_EVIDENCE_REVIEWER_UNAUTHORIZED' })
+
+    // An unbound Session identity is rejected the same way.
+    await expect(journal.append(current, 'devframe/review', {
+      ...reviewPayload,
+      reviewerSessionId: SessionId('session-404'),
+    })).rejects.toMatchObject({ code: 'AGENT_EVIDENCE_REVIEWER_UNAUTHORIZED' })
+
+    expect(current.snapshotEvents().some(event => event.type === 'devframe/review')).toBe(false)
+  })
+
+  it('records a review submitted by the authorized reviewer Session through the same gate', async () => {
+    const reviewer = SessionId('reviewer-at105')
+    const directory: EvidenceReviewerDirectory = {
+      roleOf: sessionId => sessionId === reviewer ? 'reviewer' : 'worker',
+    }
+    const current = Session.create(SessionId('controller-at105-review'), undefined, {
+      version: 0,
+      id: SessionId('controller-at105-review'),
+      createdAt: 0,
+      isSeeded: false,
+    })
+    const journal = new DevFrameSessionJournal(async () => true, new EvidenceReviewGate(directory))
+
+    const event = await journal.append(current, 'devframe/review', {
+      version: 1,
+      reviewId: DevFrameReviewId('review-at105'),
+      binding: RESULT_BINDING,
+      snapshotId: DevFrameSnapshotId('snapshot-at105'),
+      reviewerSessionId: reviewer,
+      policyVersion: 'policy-at105',
+      decision: 'pass',
+      findings: [],
+    })
+
+    expect(event.data.reviewerSessionId).toBe(reviewer)
+    expect(current.snapshotEvents().filter(logged => logged.type === 'devframe/review')).toHaveLength(1)
   })
 })
 
