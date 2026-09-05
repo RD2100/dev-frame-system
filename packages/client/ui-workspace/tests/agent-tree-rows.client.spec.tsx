@@ -155,10 +155,10 @@ describe('AgentNodeItem', () => {
       </>,
     )
     fireEvent.click(screen.getByText('Title master'))
-    expect(onOpen).toHaveBeenCalledWith(root.id)
+    expect(onOpen).toHaveBeenCalledWith(root)
     expect(onToggle).toHaveBeenCalledWith(root.id)
     fireEvent.click(screen.getByText('Title lead'))
-    expect(onOpen).toHaveBeenCalledWith(child.id)
+    expect(onOpen).toHaveBeenCalledWith(child)
     // A childless activation never toggles.
     expect(onToggle).toHaveBeenCalledTimes(1)
   })

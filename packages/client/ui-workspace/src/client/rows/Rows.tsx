@@ -531,7 +531,8 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
  * @param props.now - epoch ms for relative-time formatting.
  * @param props.expandedOf - the owner's expansion predicate per row id.
  * @param props.onToggle - toggle one row's direct-children expansion.
- * @param props.onOpen - open the row's Session (address-aware at the owner).
+ * @param props.onOpen - open the row's Session; receives the full row so the
+ *   owner can resolve a subagent child's direct-parent address.
  * @param props.onRename - open the session rename dialog (row menu action).
  * @param props.onFork - fork the row's Session (row menu action).
  * @param props.onArchive - archive the row's Session (row menu action).
@@ -551,7 +552,8 @@ export function AgentNodeItem({
   expandedOf: (node: AgentNode) => boolean
   /** Toggle one row's direct-children expansion. */
   onToggle: (id: AgentNode['id']) => void
-  onOpen: (id: AgentNode['id']) => void
+  /** Open the row's Session; receives the full row so the owner can resolve a subagent child's direct-parent address. */
+  onOpen: (node: AgentNode) => void
   /** Open the browser-owned session rename dialog (row menu action). */
   onRename: (id: AgentNode['id'], currentTitle: string) => void
   /** Fork this Session at its last completed turn (row menu action). */
@@ -580,7 +582,7 @@ export function AgentNodeItem({
   const showIdMeta = !node.blank && node.title !== node.id
   const metaPath = node.cwd === undefined ? undefined : abbreviateHomePath(node.cwd, home)
   const openRow = (): void => {
-    onOpen(node.id)
+    onOpen(node)
     // Activation reveals the next agent level; the chevron is the pure toggle.
     if (hasChildren) onToggle(node.id)
   }

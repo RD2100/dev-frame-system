@@ -100,6 +100,8 @@ export function apply(ctx: Context): void {
     // the current Session Workspace before the recent-Workspace fallback.
     startSession: (workspaceId) => { uiWorkspace.startSession(workspaceId) },
     open: (sessionId) => { sessions.open(sessionId) },
+    openSubagent: (address) => { sessions.openSubagent(address) },
+    setSubagentCatalogOpen: (parentSessionId, open) => { sessions.setSubagentCatalogOpen(parentSessionId, open) },
     searchSessions,
     searchResultLimit: sessions.searchResultLimit,
     renameSession: async (sessionId, title) => {
