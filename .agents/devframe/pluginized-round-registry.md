@@ -88,9 +88,10 @@ L1 组长与 L2 Worker 待创建。合规创建顺序（每个 Agent）：持久
 
 | Agent | 层级 | SessionID | 父 SessionID | Worktree | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| L-Foundation | L1 | `55979618-6bd7-4bc7-badc-8a3b13079158` | `session-724834c2-9ff4-49e5-9b0a-4ce5f68d2c2d` | `D:\dsh-devframe-p-foundation`（`p/foundation`） | developing |
+| L-Foundation | L1 | `55979618-6bd7-4bc7-badc-8a3b13079158` | `session-724834c2-9ff4-49e5-9b0a-4ce5f68d2c2d` | `D:\dsh-devframe-p-foundation`（`p/foundation`） | developing（P00 已交付，转 P01） |
 | L-Verify | L1 | `f2f6d88e-b5e6-4d9f-b945-6e2491022180` | 同上 | `D:\dsh-devframe-p-verify`（`p/verify`） | developing |
-| L-Product | L1 | 待创建（同上） | 同上 | `D:\dsh-devframe-p-product`（`p/product`） | planned（梯次补位） |
+| L-Worktree | L1 | `46c1c8cb-9aa3-422b-8ace-cf9685050c07` | 同上 | `D:\dsh-devframe-p-worktree`（`p/worktree`，基点 `3ea01faa6c` 含 P00） | developing |
+| L-Product | L1 | 待创建（车道释放后补位） | 同上 | `D:\dsh-devframe-p-product`（`p/product`） | planned |
 
 并发纪律：huoshan-1 同账号最多两路生成中请求；组长内部前台串行跑 Worker；组长完成即补位下一个可执行任务。
 
