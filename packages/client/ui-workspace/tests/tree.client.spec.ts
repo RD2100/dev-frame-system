@@ -4,6 +4,9 @@ import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-
 import type { SessionPendingInteractionBase } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { ScheduleId, ScheduleRecord } from '@deepseek-ai/dsh-schedule/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type {
+  AgentNode,
+} from '../src/client/tree.ts'
 import {
   deriveFlat, deriveGroups, deriveSearchResults, workspaceLabel,
   UNGROUPED_KEY,
@@ -514,6 +517,154 @@ describe('createWorkspaceViewStore', () => {
     expect(snapshot.groupExpansion).toEqual({ '': true, alpha: true })
     expect(snapshot.sessionOrderByAccount).toEqual({ alpha: ['alpha-session'] })
     expect(snapshot.sessionUpdatedAtByAccount).toEqual({ alpha: { 'alpha-session': 2 } })
+  })
+})
+
+describe('project agent tree derivation', () => {
+  const subagent = (id: string, updatedAt: number, parentId: string, overrides: Partial<SessionSummary> = {}): SessionSummary => ({
+    ...summary(id, updatedAt), parentId: sid(parentId), origin: 'subagent' as const, ...overrides,
+  })
+  const catalogChild = (id: string, label: string, mode: 'one-shot' | 'continuable' = 'continuable') => ({
+    kind: 'child' as const, id: sid(id), mode, label, activity: 'inactive' as const, hasChildren: false,
+  })
+  const catalogFor = (parent: string, entries: ReturnType<typeof catalogChild>[]): SessionListState['subagentsByParent'] => ({
+    [sid(parent)]: { entries, parentAvailable: true, state: 'ready', error: null },
+  })
+
+  it('hangs direct subagent children under their parent; ordinary forks stay top-level', () => {
+    const master = summary('master', 1)
+    const leadOld = subagent('lead-old', 2, 'master')
+    const leadNew = subagent('lead-new', 9, 'master')
+    const executor = subagent('executor', 4, 'lead-old')
+    const fork = { ...summary('fork', 5), parentId: master.id }
+    const groups = deriveGroups(
+      list(master, leadOld, leadNew, executor, fork),
+      [workspace('p', ['master', 'fork'])],
+      noArchive, noAttention, view(['p']),
+    )
+
+    expect(groups[0]!.sessions.map(node => node.id)).toEqual([master.id, fork.id])
+    const masterNode = groups[0]!.sessions[0]!
+    // Direct children only, newest first: the executor hangs under its own
+    // parent one level down, never under the root.
+    expect(masterNode.children.map(node => node.id)).toEqual([sid('lead-new'), sid('lead-old')])
+    expect(masterNode.children[1]!.children.map(node => node.id)).toEqual([sid('executor')])
+    expect(masterNode.children[1]!.children[0]!.children).toEqual([])
+    expect(groups[0]!.sessions[1]!.children).toEqual([])
+  })
+
+  it('enriches subagent rows with catalog labels, modes, and parent ids', () => {
+    const master = summary('master', 1)
+    const lead = subagent('lead', 2, 'master')
+    const oneshot = subagent('oneshot', 3, 'master')
+    const sessions = {
+      ...list(master, lead, oneshot),
+      subagentsByParent: catalogFor('master', [
+        catalogChild('lead', 'DSH-G1-Lead'),
+        catalogChild('oneshot', 'Probe', 'one-shot'),
+      ]),
+    }
+    const masterNode = deriveGroups(
+      sessions, [workspace('p', ['master'])], noArchive, noAttention, view(['p']),
+    )[0]!.sessions[0]!
+
+    // Children are newest-first: the one-shot row (updatedAt 3) leads.
+    expect(masterNode.children[0]).toMatchObject({
+      id: sid('oneshot'), title: 'Probe', mode: 'one-shot', parentId: master.id,
+    })
+    expect(masterNode.children[1]).toMatchObject({
+      id: sid('lead'), title: 'DSH-G1-Lead', mode: 'continuable', parentId: master.id,
+    })
+    // Top-level rows carry no catalog facts and no parentId.
+    expect(masterNode.title).toBe('master')
+    expect(masterNode.parentId).toBeUndefined()
+    expect(masterNode.mode).toBeUndefined()
+  })
+
+  it('keeps summary titles when the catalog is not loaded', () => {
+    const master = summary('master', 1)
+    const lead = subagent('lead', 2, 'master')
+    const masterNode = deriveGroups(
+      list(master, lead), [workspace('p', ['master'])], noArchive, noAttention, view(['p']),
+    )[0]!.sessions[0]!
+    expect(masterNode.children[0]).toMatchObject({ id: sid('lead'), title: 'lead', parentId: master.id })
+    expect(masterNode.children[0]!.mode).toBeUndefined()
+  })
+
+  it('hides archived children and hides the whole subtree of an archived parent', () => {
+    const master = summary('master', 1)
+    const lead = subagent('lead', 2, 'master')
+    const executor = subagent('executor', 3, 'lead')
+    const base = list(master, lead, executor)
+
+    const withoutExecutor = deriveGroups(
+      base, [workspace('p', ['master'])], archived('executor'), noAttention, view(['p']),
+    )[0]!.sessions[0]!
+    expect(withoutExecutor.children.map(node => node.id)).toEqual([sid('lead')])
+    expect(withoutExecutor.children[0]!.children).toEqual([])
+
+    const groups = deriveGroups(
+      base, [workspace('p', ['master'])], archived('lead'), noAttention, view(['p']),
+    )
+    expect(groups[0]!.sessions.map(node => node.id)).toEqual([master.id])
+  })
+
+  it('drops blank and orphaned subagent rows from the agent tree', () => {
+    const master = summary('master', 1)
+    const blankChild = subagent('blank-child', 2, 'master', { blank: true })
+    const orphan = subagent('orphan', 3, 'missing')
+    const groups = deriveGroups(
+      list(master, blankChild, orphan), [workspace('p', ['master'])], noArchive, noAttention, view(['p']),
+    )
+    expect(groups[0]!.sessions[0]!.children).toEqual([])
+  })
+
+  it('survives a malformed parentId cycle among subagent rows without hanging or leaking rows', () => {
+    const master = summary('master', 1)
+    const cycleA = subagent('cycle-a', 2, 'cycle-b')
+    const cycleB = subagent('cycle-b', 3, 'cycle-a')
+    const groups = deriveGroups(
+      list(master, cycleA, cycleB), [workspace('p', ['master'])], noArchive, noAttention, view(['p']),
+    )
+    // Neither cycle member is reachable from the visible root: both stay hidden.
+    expect(groups[0]!.sessions.map(node => node.id)).toEqual([master.id])
+    expect(groups[0]!.sessions[0]!.children).toEqual([])
+  })
+
+  it('projects cwd, running state, and status facts onto child rows', () => {
+    const master = summary('master', 1)
+    const lead = subagent('lead', 2, 'master', { cwd: 'D:\\wt\\lead', running: true, completed: true })
+    const leadNode = deriveGroups(
+      list(master, lead), [workspace('p', ['master'])], noArchive, noAttention, view(['p']),
+    )[0]!.sessions[0]!.children[0]!
+
+    expect(leadNode).toMatchObject({
+      id: sid('lead'), cwd: 'D:\\wt\\lead', running: true, completed: true, updatedAt: 2,
+    })
+  })
+
+  it('flattens the derived tree depth-first through every agent level', () => {
+    const master = summary('master', 1)
+    const leadA = subagent('lead-a', 2, 'master')
+    const leadB = subagent('lead-b', 3, 'master')
+    const execA1 = subagent('exec-a1', 4, 'lead-a')
+    const execA2 = subagent('exec-a2', 5, 'lead-a')
+    const walk = (nodes: readonly AgentNode[], depth = 0): string[] => nodes.flatMap(node => [
+      `${node.id}@${depth}`,
+      ...walk(node.children, depth + 1),
+    ])
+    const rows = walk(deriveGroups(
+      list(master, leadA, leadB, execA1, execA2),
+      [workspace('p', ['master'])], noArchive, noAttention, view(['p']),
+    )[0]!.sessions)
+
+    expect(rows).toEqual([
+      'master@0',
+      'lead-b@1',
+      'lead-a@1',
+      'exec-a2@2',
+      'exec-a1@2',
+    ])
   })
 })
 

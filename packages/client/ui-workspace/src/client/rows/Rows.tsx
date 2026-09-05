@@ -16,7 +16,7 @@ import {
 import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
 import type { WorkspaceBrowserProps } from '../contract/slots.ts'
-import type { GroupNode, SearchResultNode, SessionNode } from '../tree.ts'
+import type { AgentNode, GroupNode, SearchResultNode, SessionNode } from '../tree.ts'
 import { SessionIdDialog } from './SessionIdDialog.tsx'
 import css from './Rows.module.css'
 
@@ -32,6 +32,17 @@ function displayTitle(node: SessionNode, t: RowTranslate): string {
 function timeLabel(updatedAt: number, now: number, t: RowTranslate): string {
   const { unit, n } = relativeTime(updatedAt, now)
   return unit === 'now' ? t('time.now') : t(`time.${unit}`, { n })
+}
+
+/** Row actions menu shared by the flat session rows and the agent-tree rows. */
+function sessionRowMenuItems(t: RowTranslate) {
+  return [
+    { id: 'rename', label: t('rename'), icon: <IconEditOutline16 /> },
+    { id: 'fork', label: t('menu.fork'), icon: <IconBranchOutline16 /> },
+    // 20-native glyph in the menu's 16px icon slot (Menu.module.css .itemIcon).
+    { id: 'archive', label: t('menu.archiveSession'), icon: <IconArchiveOutline20 size={16} /> },
+    { id: 'sessionId', label: t('menu.sessionId'), icon: <IconCopyOutline16 /> },
+  ]
 }
 
 /** Hover-card variant: distances wrap in the ago template; the now bucket stays bare (no "now ago"). */
@@ -408,13 +419,7 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
   // Archive hides the row through the registry-global archive set and never
   // touches the session log, so it is not styled as destructive and needs no
   // confirmation dialog.
-  const sessionMenuItems = [
-    { id: 'rename', label: t('rename'), icon: <IconEditOutline16 /> },
-    { id: 'fork', label: t('menu.fork'), icon: <IconBranchOutline16 /> },
-    // 20-native glyph in the menu's 16px icon slot (Menu.module.css .itemIcon).
-    { id: 'archive', label: t('menu.archiveSession'), icon: <IconArchiveOutline20 size={16} /> },
-    { id: 'sessionId', label: t('menu.sessionId'), icon: <IconCopyOutline16 /> },
-  ]
+  const sessionMenuItems = sessionRowMenuItems(t)
   // Figma session cell: pad 8, status slot 16, then a 4px title gap.
   const ownRow = (
     <div
@@ -507,6 +512,214 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
         copiedLabel={t('hover.copied')}
       />
       {showId && <SessionIdDialog sessionId={node.id} onClose={() => { setShowId(false) }} t={t} />}
+    </>
+  )
+}
+
+/**
+ * One project agent-tree row: name, live status, durable Session ID, bound
+ * working directory (when the summary carries one), and recent progress on
+ * every row. Agents with children render an expand chevron and — while
+ * expanded — their direct children below them, one indentation level deeper;
+ * childless agents render no expand control. Activating the row opens the
+ * row's Session and toggles its children; the chevron toggles without
+ * navigating. The ID meta line repeats the id only when it is not already the
+ * row's primary text (title-less sessions display their id as the title).
+ * @param props.node - derived agent-tree row with its direct subtree.
+ * @param props.depth - nesting level (0 = top-level row under the group).
+ * @param props.currentId - selected session id (row highlight).
+ * @param props.now - epoch ms for relative-time formatting.
+ * @param props.expandedOf - the owner's expansion predicate per row id.
+ * @param props.onToggle - toggle one row's direct-children expansion.
+ * @param props.onOpen - open the row's Session; receives the full row so the
+ *   owner can resolve a subagent child's direct-parent address.
+ * @param props.onRename - open the session rename dialog (row menu action).
+ * @param props.onFork - fork the row's Session (row menu action).
+ * @param props.onArchive - archive the row's Session (row menu action).
+ * @param props.home - host account home for POSIX meta-path abbreviation.
+ * @param props.drag - optional draggable-row wiring (top-level rows only).
+ * @param props.t - the browser root's locale seat.
+ * @returns the agent row with its expanded direct children.
+ */
+export function AgentNodeItem({
+  node, depth, currentId, now, expandedOf, onToggle, onOpen, onRename, onFork, onArchive, home, drag, t,
+}: {
+  node: AgentNode
+  depth: number
+  currentId: string | undefined
+  now: number
+  /** The owner's expansion predicate: true renders this row's direct children. */
+  expandedOf: (node: AgentNode) => boolean
+  /** Toggle one row's direct-children expansion. */
+  onToggle: (id: AgentNode['id']) => void
+  /** Open the row's Session; receives the full row so the owner can resolve a subagent child's direct-parent address. */
+  onOpen: (node: AgentNode) => void
+  /** Open the browser-owned session rename dialog (row menu action). */
+  onRename: (id: AgentNode['id'], currentTitle: string) => void
+  /** Fork this Session at its last completed turn (row menu action). */
+  onFork: (id: AgentNode['id']) => void
+  /** Archive this Session (row menu action; commits without a dialog). */
+  onArchive: (id: AgentNode['id']) => void
+  /** Host account home; POSIX home-rooted meta paths display as `~`. */
+  home?: string | undefined
+  /** Present only on draggable top-level rows. */
+  drag?: RowDragProps | undefined
+  t: RowTranslate
+}) {
+  const expanded = expandedOf(node)
+  const title = displayTitle(node, t)
+  const selected = node.id === currentId
+  const statuses = sessionStatuses(node, t)
+  const primaryStatus = statuses[0]
+  const showStatus = primaryStatus.state !== 'done' || node.completed
+  const hasChildren = node.children.length > 0
+  const [menuOpen, setMenuOpen] = useState(false)
+  // The Session-ID dialog's lifetime is this row's fiber, mirroring the flat
+  // session rows: a list change that unmounts the row closes the dialog.
+  const [showId, setShowId] = useState(false)
+  // A title-less session displays its id as the primary text; the meta line
+  // then carries only the bound directory instead of repeating the id.
+  const showIdMeta = !node.blank && node.title !== node.id
+  const metaPath = node.cwd === undefined ? undefined : abbreviateHomePath(node.cwd, home)
+  const openRow = (): void => {
+    onOpen(node)
+    // Activation reveals the next agent level; the chevron is the pure toggle.
+    if (hasChildren) onToggle(node.id)
+  }
+  const ownRow = (
+    <div
+      className={clsx(
+        css.agentRow, selected && css.selected, menuOpen && css.menuOpen,
+        drag?.marker === 'before' && css.dropBefore, drag?.marker === 'after' && css.dropAfter,
+      )}
+      role="treeitem"
+      aria-selected={selected}
+      aria-expanded={hasChildren ? expanded : undefined}
+      style={depth === 0 ? undefined : { marginInlineStart: depth * 14 }}
+      onClick={openRow}
+      draggable={drag !== undefined}
+      onDragStart={drag === undefined
+        ? undefined
+        : (e) => {
+          e.dataTransfer.effectAllowed = 'move'
+          e.dataTransfer.setData('text/plain', node.id)
+          drag.start()
+        }}
+      onDragEnd={drag?.end}
+      onDragOver={drag === undefined
+        ? undefined
+        : (e) => {
+          if (!drag.active) return
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'move'
+          drag.hover(rowHalf(e))
+        }}
+      onDrop={drag === undefined
+        ? undefined
+        : (e) => {
+          if (!drag.active) return
+          e.preventDefault()
+          drag.drop(rowHalf(e))
+        }}
+    >
+      <div className={css.agentMain}>
+        {hasChildren
+          ? (
+            <button
+              type="button"
+              className={clsx(css.iconButton, css.chevron)}
+              aria-label={t('agent.toggle.aria', { name: title })}
+              aria-expanded={expanded}
+              onClick={(e) => { e.stopPropagation(); onToggle(node.id) }}
+            >
+              <IconTriangleRightFill14 className={clsx(css.arrow, expanded && css.arrowOpen)} />
+            </button>
+          )
+          : <span className={css.slot} />}
+        {showStatus && (
+          <span className={css.slot}>
+            <SessionStatusDots statuses={statuses} />
+          </span>
+        )}
+        <span className={css.title}>{title}</span>
+        {node.hasActiveSchedule && <ActiveScheduleIndicator t={t} />}
+        {/* The placeholder rules of the flat rows carry over: a blank row has
+            no progress stamp and no row verbs yet. */}
+        {!node.blank && <span className={css.time}>{timeLabel(node.updatedAt, now, t)}</span>}
+        {!node.blank && (
+          <span className={css.rowActions}>
+            <Menu
+              open={menuOpen}
+              onClose={() => { setMenuOpen(false) }}
+              items={sessionRowMenuItems(t)}
+              onSelect={(id) => {
+                setMenuOpen(false)
+                if (id === 'rename') onRename(node.id, node.title)
+                if (id === 'fork') onFork(node.id)
+                if (id === 'archive') onArchive(node.id)
+                if (id === 'sessionId') setShowId(true)
+              }}
+              portal
+              closeOnPointerLeave
+              anchor={(
+                <button
+                  type="button"
+                  className={css.iconButton}
+                  aria-label={t('actions.session.aria', { name: title })}
+                  onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v) }}
+                >
+                  <IconEllipsisOutline16 />
+                </button>
+              )}
+            />
+          </span>
+        )}
+      </div>
+      {(!node.blank && (showIdMeta || metaPath !== undefined)) && (
+        // One composed text run keeps the durable id readable (and copyable
+        // from the row menu) without competing with the row title.
+        <div className={css.agentMeta} title={metaPath === undefined ? node.id : `${node.id} · ${node.cwd}`}>
+          <span className={css.visuallyHidden}>{t('menu.sessionId')} </span>
+          {showIdMeta && node.id}
+          {showIdMeta && metaPath !== undefined && ' · '}
+          {metaPath !== undefined && <span className={css.visuallyHidden}>{t('agent.worktree')} </span>}
+          {metaPath}
+        </div>
+      )}
+    </div>
+  )
+  return (
+    <>
+      <HoverCard
+        anchor={ownRow}
+        content={<SessionHoverContent node={node} now={now} t={t} />}
+        disabled={menuOpen || drag?.active === true}
+        copyText={node.blank ? undefined : node.title}
+        copyLabel={t('copy')}
+        copiedLabel={t('hover.copied')}
+      />
+      {showId && <SessionIdDialog sessionId={node.id} onClose={() => { setShowId(false) }} t={t} />}
+      {expanded && hasChildren && (
+        <div role="group" aria-label={t('agent.children.aria')}>
+          {node.children.map(child => (
+            <AgentNodeItem
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              currentId={currentId}
+              now={now}
+              expandedOf={expandedOf}
+              onToggle={onToggle}
+              onOpen={onOpen}
+              onRename={onRename}
+              onFork={onFork}
+              onArchive={onArchive}
+              home={home}
+              t={t}
+            />
+          ))}
+        </div>
+      )}
     </>
   )
 }

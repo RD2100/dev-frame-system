@@ -27,7 +27,7 @@ import type { HostObservable, PropsHooks, PropsLocale, PropsRenderSlots, PropsRu
 // runtime shares below.
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { SessionSearchResultItem } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { SessionSearchResultItem, SubagentAddress } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -105,6 +105,19 @@ export type WorkspaceBrowserInjected = {
   startSession: (workspaceId?: WorkspaceId) => void
   /** Open a real Session. */
   open: (sessionId: SessionId) => void
+  /**
+   * Open a durable subagent child through its exact direct-parent address
+   * (the catalog-derived route the Session Controller validates). The agent
+   * tree resolves the address from the loaded parent catalog; unknown or
+   * unloaded rows fall back to {@link open}.
+   */
+  openSubagent: (address: SubagentAddress) => void
+  /**
+   * Mark whether the agent tree is consuming live catalog updates for one
+   * parent (expanded) or not (collapsed/unmounted), the same currency the
+   * header lineage menu uses.
+   */
+  setSubagentCatalogOpen: (parentSessionId: SessionId, open: boolean) => void
   /**
    * Search current visible conversation messages. The Host fixes the result
    * bound; `hasMore` means the query needs narrowing.

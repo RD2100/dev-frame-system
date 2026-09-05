@@ -21,9 +21,9 @@ import type {
 import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceBrowserProps } from '../contract/slots.ts'
-import type { SessionNode, SessionOrderBy } from '../tree.ts'
+import type { AgentNode, SessionNode, SessionOrderBy } from '../tree.ts'
 import { deriveFlat, deriveGroups, deriveSearchResults, UNGROUPED_KEY } from '../tree.ts'
-import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './Rows.tsx'
+import { ProjectRowItem, SearchResultItem, AgentNodeItem, SessionNodeItem } from './Rows.tsx'
 import { FLAT_SESSION_ORDER_KEY } from '../stores.ts'
 import { WorkspacePickFlow } from '../WorkspacePicker.tsx'
 import css from './WorkspaceBrowser.module.css'
@@ -41,8 +41,8 @@ const SEARCH_QUERY_MAX_CODE_UNITS = 500
 const COLLAPSED_SESSION_LIMIT = 5
 
 /** Fold one Workspace without charging its provisional New Session against the ordinary-row limit. */
-function collapsedSessionRows(sessions: readonly SessionNode[]): {
-  rows: readonly SessionNode[]
+function collapsedSessionRows(sessions: readonly AgentNode[]): {
+  rows: readonly AgentNode[]
   hiddenCount: number
 } {
   let ordinaryCount = 0
@@ -232,7 +232,8 @@ function workspaceGroupHalf(e: { clientY: number; currentTarget: HTMLElement }):
 
 type SessionTreeProps = Pick<
   WorkspaceBrowserProps,
-  'useSessions' | 'useSessionPendingInteraction' | 'startSession' | 'open' | 'forkSession'
+  'useSessions' | 'useSessionPendingInteraction' | 'startSession' | 'open' | 'openSubagent'
+  | 'setSubagentCatalogOpen' | 'forkSession'
   | 'insertWorkspaceBefore' | 'insertSessionBefore' | 't'
 > & {
   /** Host account home for POSIX hover-path abbreviation. */
@@ -266,7 +267,8 @@ type SessionTreeProps = Pick<
 
 /** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
 function SessionTree({
-  useSessions, useSessionPendingInteraction, startSession, open, forkSession, workspaces, archivedSessionIds,
+  useSessions, useSessionPendingInteraction, startSession, open, openSubagent, setSubagentCatalogOpen,
+  forkSession, workspaces, archivedSessionIds,
   onRenameRequest, onDeleteRequest, onSessionRename, onSessionArchive,
   insertWorkspaceBefore, insertSessionBefore, orderBy,
   groupExpansion, setGroupExpanded,
@@ -347,6 +349,54 @@ function SessionTree({
     }),
     [list, orderedWorkspaces, archivedSessionIds, pendingInteractions, expandedGroups, sessionOrderByAccount],
   )
+  // Agent-tree expansion: agents with children start expanded (the project
+  // tree shows 总控 → 组长 → 执行 without gestures) and the user collapses
+  // rows explicitly; the ids are browser-local transient state.
+  const [collapsedAgents, setCollapsedAgents] = useState<string[]>([])
+  const agentExpanded = (node: AgentNode): boolean =>
+    node.children.length > 0 && !collapsedAgents.includes(node.id)
+  const toggleAgent = (id: SessionNode['id']): void => {
+    setCollapsedAgents(keys => toggled(keys, id))
+  }
+  // Row activation: catalog-resolved children open through their exact
+  // direct-parent address; everything else opens as a listed Session.
+  const openAgent = (node: AgentNode): void => {
+    if (node.parentId !== undefined && node.mode !== undefined) {
+      openSubagent({ parentSessionId: node.parentId, childSessionId: node.id, mode: node.mode })
+      return
+    }
+    open(node.id)
+  }
+  // Expanded agent rows consume live catalog membership the same way the
+  // header lineage menu does: announced on expand, withdrawn on collapse and
+  // on unmount.
+  const expandedAgentIds = useMemo(() => {
+    const ids: SessionId[] = []
+    const walk = (nodes: readonly AgentNode[]): void => {
+      for (const node of nodes) {
+        if (node.children.length > 0 && !collapsedAgents.includes(node.id)) {
+          ids.push(node.id)
+          walk(node.children)
+        }
+      }
+    }
+    for (const group of groups) walk(group.sessions)
+    return ids
+  }, [groups, collapsedAgents])
+  const announcedCatalogs = useRef<readonly SessionId[]>([])
+  useEffect(() => {
+    const previous = announcedCatalogs.current
+    for (const id of previous) {
+      if (!expandedAgentIds.includes(id)) setSubagentCatalogOpen(id, false)
+    }
+    for (const id of expandedAgentIds) {
+      if (!previous.includes(id)) setSubagentCatalogOpen(id, true)
+    }
+    announcedCatalogs.current = expandedAgentIds
+  }, [expandedAgentIds, setSubagentCatalogOpen])
+  useEffect(() => () => {
+    for (const id of announcedCatalogs.current) setSubagentCatalogOpen(id, false)
+  }, [setSubagentCatalogOpen])
   const now = Date.now()
   const commitSessionDrag = (activeDrag: DragState, over: NonNullable<DragState['over']>): void => {
     if (sessionDropCommitted.current) return
@@ -555,15 +605,19 @@ function SessionTree({
                   },
                 }
                 return (
-                  <SessionNodeItem
+                  <AgentNodeItem
                     key={node.id}
                     node={node}
+                    depth={0}
                     currentId={current}
                     now={now}
-                    onOpen={open}
+                    expandedOf={agentExpanded}
+                    onToggle={toggleAgent}
+                    onOpen={openAgent}
                     onRename={onSessionRename}
                     onFork={forkSession}
                     onArchive={onSessionArchive}
+                    home={home}
                     drag={dragProps}
                     t={t}
                   />
@@ -809,6 +863,8 @@ export function WorkspaceBrowser({
   actions,
   startSession,
   open,
+  openSubagent,
+  setSubagentCatalogOpen,
   renameSession,
   forkSession,
   renameWorkspace,
@@ -1247,6 +1303,8 @@ export function WorkspaceBrowser({
                 archivedSessionIds={archivedSessionIds}
                 startSession={startSession}
                 open={open}
+                openSubagent={openSubagent}
+                setSubagentCatalogOpen={setSubagentCatalogOpen}
                 insertWorkspaceBefore={insertWorkspaceBefore}
                 insertSessionBefore={insertSessionBefore}
                 orderBy={orderBy}

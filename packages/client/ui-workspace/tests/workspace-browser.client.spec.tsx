@@ -73,6 +73,8 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     actions: store.actions,
     startSession: vi.fn(),
     open: vi.fn(),
+    openSubagent: vi.fn(),
+    setSubagentCatalogOpen: vi.fn(),
     searchSessions: vi.fn(async () => ({ items: [], hasMore: false })),
     searchResultLimit: 20,
     renameSession: vi.fn(async () => {}),
@@ -1314,5 +1316,95 @@ describe('WorkspaceBrowser', () => {
     fireEvent.change(screen.getByPlaceholderText('搜索会话…'), { target: { value: 'needle' } })
     const row = screen.getByText('Needle A').closest('[role="treeitem"]') as HTMLElement
     expect(row.hasAttribute('draggable')).toBe(false)
+  })
+})
+
+describe('project agent tree in the assembled browser', () => {
+  const subagentSummary = (id: string, parentId: string, overrides: Partial<SessionSummary> = {}): SessionSummary => ({
+    ...summary(id, 2), parentId: sid(parentId), origin: 'subagent' as const, ...overrides,
+  })
+  const catalogChild = (id: string, label: string) => ({
+    kind: 'child' as const, id: sid(id), mode: 'continuable' as const, label,
+    activity: 'inactive' as const, hasChildren: false,
+  })
+  const catalog = (parentId: string, entries: ReturnType<typeof catalogChild>[]): SessionListState['subagentsByParent'] => ({
+    [sid(parentId)]: { entries, parentAvailable: true, state: 'ready', error: null },
+  })
+
+  it('shows subagent children by default and opens them through the catalog address', () => {
+    const open = vi.fn()
+    const openSubagent = vi.fn()
+    const setSubagentCatalogOpen = vi.fn()
+    const sessions = sessionState(
+      [summary('master', 1), subagentSummary('lead', 'master', { cwd: 'D:\\wt\\g1', running: true })],
+      { subagentsByParent: catalog('master', [catalogChild('lead', 'DSH-G1-Lead')]) },
+    )
+    mount({
+      useSessions: hook(sessions),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['master'])])),
+      open, openSubagent, setSubagentCatalogOpen,
+    })
+
+    // Expanding the Workspace group reveals the controller row already
+    // expanded: the catalog-labelled lead hangs below it with its worktree
+    // and live status.
+    fireEvent.click(screen.getByText('alpha'))
+    expect(screen.getByText('DSH-G1-Lead')).toBeTruthy()
+    const meta = document.querySelector('[class*="agentMeta"]') as HTMLElement
+    expect(meta.textContent).toContain('lead')
+    expect(meta.textContent).toContain('D:\\wt\\g1')
+    expect(screen.getByText('DSH-G1-Lead').closest('[role="treeitem"]')!
+      .querySelector('[data-state="ongoing"]')).toBeTruthy()
+    // The expanded tree consumes live catalog membership like the lineage menu.
+    expect(setSubagentCatalogOpen).toHaveBeenCalledWith(sid('master'), true)
+
+    // Activating the lead opens its exact direct-parent address, never a
+    // plain listed-Session open.
+    fireEvent.click(screen.getByText('DSH-G1-Lead'))
+    expect(openSubagent).toHaveBeenCalledWith({
+      parentSessionId: sid('master'), childSessionId: sid('lead'), mode: 'continuable',
+    })
+    expect(open).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the listed-Session open when no catalog has loaded for the parent', () => {
+    const open = vi.fn()
+    const openSubagent = vi.fn()
+    const sessions = sessionState(
+      [summary('master', 1), subagentSummary('lead', 'master')],
+    )
+    mount({
+      useSessions: hook(sessions),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['master'])])),
+      open, openSubagent,
+    })
+    fireEvent.click(screen.getByText('alpha'))
+    // The summary title is the fallback row name while the catalog is absent.
+    fireEvent.click(screen.getByText('lead'))
+    expect(open).toHaveBeenCalledWith(sid('lead'))
+    expect(openSubagent).not.toHaveBeenCalled()
+  })
+
+  it('collapses an agent on row activation and withdraws its catalog announcement', () => {
+    const open = vi.fn()
+    const setSubagentCatalogOpen = vi.fn()
+    const sessions = sessionState(
+      [summary('master', 1), subagentSummary('lead', 'master')],
+      { subagentsByParent: catalog('master', [catalogChild('lead', 'DSH-G1-Lead')]) },
+    )
+    mount({
+      useSessions: hook(sessions),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['master'])])),
+      open, setSubagentCatalogOpen,
+    })
+    fireEvent.click(screen.getByText('alpha'))
+    expect(screen.getByText('DSH-G1-Lead')).toBeTruthy()
+    expect(setSubagentCatalogOpen).toHaveBeenCalledWith(sid('master'), true)
+
+    // Row activation on the controller opens it and collapses its children.
+    fireEvent.click(screen.getByText('master'))
+    expect(open).toHaveBeenCalledWith(sid('master'))
+    expect(screen.queryByText('DSH-G1-Lead')).toBeNull()
+    expect(setSubagentCatalogOpen).toHaveBeenCalledWith(sid('master'), false)
   })
 })

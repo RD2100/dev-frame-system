@@ -1,10 +1,14 @@
 /**
  * Derives the workspace browser tree from Host Workspace order and membership.
  * Unassigned Sessions trail under Ungrouped; only the selected blank Session
- * remains visible.
+ * remains visible. Each visible top-level Session anchors the project agent
+ * tree: its subagent-origin descendants hang below it as {@link AgentNode}
+ * rows (总控 → 组长 → 执行), keyed by `parentId` and enriched by the direct-child
+ * subagent catalog.
  */
 import {
   type SessionListState, type SessionSearchResultItem, type SessionSummary,
+  type SubagentCatalogSnapshot,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {
@@ -40,7 +44,23 @@ export interface SessionNode {
   completed: boolean
   /** The current list projection contains at least one active Schedule record. */
   hasActiveSchedule: boolean
+  /** The Session's bound working directory, when the list summary carries one. */
+  cwd?: string
   updatedAt: number
+}
+
+/**
+ * One project agent-tree row: session facts plus the direct subagent subtree.
+ * Top-level Sessions are the roots (总控); each subagent-origin descendant
+ * (组长/执行 Agent) is a child of exactly its `parentId` row.
+ */
+export interface AgentNode extends SessionNode {
+  /** Direct subagent-origin children, newest first; empty for leaf agents. */
+  children: readonly AgentNode[]
+  /** Durable parent id for subagent-origin rows; absent for top-level rows. */
+  parentId?: SessionId
+  /** Catalog-resolved delegation mode for subagent-origin rows (addressed opening). */
+  mode?: 'one-shot' | 'continuable'
 }
 
 /** Session order selected by the Workspace browser. */
@@ -61,8 +81,8 @@ export interface GroupNode {
   expanded: boolean
   /** The group contains the selected session (active folder tint; supplied here so the renderer never scans). */
   containsCurrent: boolean
-  /** Visible session rows (empty while the group is folded). */
-  sessions: readonly SessionNode[]
+  /** Visible agent-tree rows (empty while the group is folded). */
+  sessions: readonly AgentNode[]
 }
 
 /** One flat search row combining list metadata with an optional content match. */
@@ -255,19 +275,97 @@ function sessionNode(
     runningSubagentCount: descendants.get(s.id)?.runningCount ?? 0,
     completed: s.completed === true,
     hasActiveSchedule: hasActiveSchedule(s),
+    ...(s.cwd === undefined ? {} : { cwd: s.cwd }),
     updatedAt: s.updatedAt,
     ...(pendingInteraction === undefined ? {} : { pendingInteraction }),
   }
 }
 
+/** Catalog facts one subagent row inherits from its parent's direct-child catalog. */
+interface CatalogChildFacts {
+  label?: string
+  mode?: 'one-shot' | 'continuable'
+}
+
 /**
- * Derive the workspace browser groups with every session as a top-level row.
+ * Resolve the durable creation label and delegation mode for one subagent row
+ * from its parent's loaded direct-child catalog. An unloaded catalog leaves
+ * both facts absent — the row then renders its summary title and opens
+ * without an exact address.
+ */
+function catalogChildFacts(
+  summary: SessionSummary,
+  catalogs: Readonly<Record<SessionId, SubagentCatalogSnapshot>>,
+): CatalogChildFacts {
+  if (summary.parentId === undefined) return {}
+  for (const entry of catalogs[summary.parentId]?.entries ?? []) {
+    if (entry.kind !== 'child' || entry.id !== summary.id) continue
+    return { ...(entry.label === undefined ? {} : { label: entry.label }), mode: entry.mode }
+  }
+  return {}
+}
+
+/**
+ * Index direct subagent-origin children per parent id, newest first. Archived
+ * and blank rows never become agent-tree children; an orphan whose parent
+ * summary is absent stays invisible (the same rule the top-level filter
+ * applies to subagent rows).
+ */
+function subagentChildrenIndex(
+  byId: SessionListState['byId'],
+  archived: ReadonlySet<SessionId>,
+): ReadonlyMap<SessionId, readonly SessionSummary[]> {
+  const index = new Map<SessionId, SessionSummary[]>()
+  for (const summary of Object.values(byId)) {
+    if (summary.origin !== 'subagent' || summary.parentId === undefined) continue
+    if (summary.blank || archived.has(summary.id)) continue
+    if (byId[summary.parentId] === undefined) continue
+    const siblings = index.get(summary.parentId)
+    if (siblings === undefined) index.set(summary.parentId, [summary])
+    else siblings.push(summary)
+  }
+  for (const siblings of index.values()) siblings.sort(byRecency)
+  return index
+}
+
+/**
+ * Build one agent-tree row with its full direct-subagent subtree. The `seen`
+ * set stops a malformed `parentId` cycle from recursing forever; cycle
+ * members unreachable from a visible root stay hidden.
+ */
+function agentNode(
+  summary: SessionSummary,
+  childIndex: ReadonlyMap<SessionId, readonly SessionSummary[]>,
+  descendants: ReadonlyMap<SessionId, SubagentDescendantSummary>,
+  pendingInteractions: SessionPendingInteractions,
+  catalogs: Readonly<Record<SessionId, SubagentCatalogSnapshot>>,
+  seen: ReadonlySet<SessionId>,
+): AgentNode {
+  const facts = summary.origin === 'subagent' ? catalogChildFacts(summary, catalogs) : {}
+  const walked = new Set(seen)
+  walked.add(summary.id)
+  const children = (childIndex.get(summary.id) ?? [])
+    .filter(child => !walked.has(child.id))
+    .map(child => agentNode(child, childIndex, descendants, pendingInteractions, catalogs, walked))
+  return {
+    ...sessionNode(summary, descendants, pendingInteractions),
+    ...(facts.label === undefined ? {} : { title: facts.label }),
+    children,
+    ...(summary.parentId === undefined ? {} : { parentId: summary.parentId }),
+    ...(facts.mode === undefined ? {} : { mode: facts.mode }),
+  }
+}
+
+/**
+ * Derive the workspace browser groups with every visible Session as an
+ * agent-tree root row.
  *
  * Every group shows; sessions populate under expanded groups in the selected
- * local order. Blank sessions are excluded except for the selected
- * provisional New Session row; archived sessions are excluded everywhere.
- * Content search lives outside this derivation
- * (see {@link deriveSearchResults}).
+ * local order, each carrying its direct subagent-origin subtree as
+ * {@link AgentNode.children}. Blank sessions are excluded except for the
+ * selected provisional New Session row; archived sessions are excluded
+ * everywhere, and archiving a parent hides its whole subtree. Content search
+ * lives outside this derivation (see {@link deriveSearchResults}).
  * @param list - sessions list snapshot (`current` feeds containsCurrent).
  * @param workspaces - real workspaces in stable Host order.
  * @param archivedSessionIds - registry-global archive set.
@@ -285,6 +383,8 @@ export function deriveGroups(
   const archived = new Set(archivedSessionIds)
   const expandedGroups = new Set(view.expandedGroups)
   const descendants = indexSubagentDescendants(list.byId)
+  const childIndex = subagentChildrenIndex(list.byId, archived)
+  const noWalked: ReadonlySet<SessionId> = new Set()
   const currentGroup = list.current === undefined
     ? undefined
     : (workspaces.find(w => w.sessionIds.includes(list.current as SessionId))?.workspaceId as string | undefined)
@@ -302,7 +402,9 @@ export function deriveGroups(
       expanded,
       containsCurrent: g.key === currentGroup,
       sessions: expanded
-        ? g.sessions.map(session => sessionNode(session, descendants, pendingInteractions))
+        ? g.sessions.map(session => agentNode(
+          session, childIndex, descendants, pendingInteractions, list.subagentsByParent, noWalked,
+        ))
         : [],
     })
   }
