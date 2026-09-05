@@ -35,12 +35,20 @@ export type TaskId = Branded<'TeamTaskId'>
 /** Shared branded fingerprint of approved acceptance configuration. */
 export type { AcceptanceHash } from '../shared/types.ts'
 
-/** Brand one non-empty controller Session identifier. */
+/**
+ * Brand one non-empty controller Session identifier.
+ * @param value - non-empty trimmed identifier text.
+ * @returns the branded controller Session identifier.
+ */
 export function ControllerSessionId(value: string): ControllerSessionId {
   return SessionId(nonEmptyId(value, 'controllerSessionId'))
 }
 
-/** Brand one non-empty native Team task identifier. */
+/**
+ * Brand one non-empty native Team task identifier.
+ * @param value - non-empty trimmed identifier text.
+ * @returns the branded Team task identifier.
+ */
 export function TaskId(value: string): TaskId {
   return nonEmptyId(value, 'taskId') as TaskId
 }
@@ -216,6 +224,7 @@ export type GoalBindingErrorCode =
 
 /** Structured failure from binding validation or admission. */
 export class GoalBindingError extends Error {
+  /** Stable machine-routable classification of this binding failure. */
   readonly code: GoalBindingErrorCode
 
   /**
@@ -469,7 +478,11 @@ export class GoalBindingController {
     return binding
   }
 
-  /** Whether a result identity belongs to the currently admitted Goal. */
+  /**
+   * Whether a result identity belongs to the currently admitted Goal.
+   * @param identity - result identity to test against the active binding.
+   * @returns true only while admission is open and the identity matches the active binding.
+   */
   isCurrent(identity: GoalBindingIdentity): boolean {
     return this.admission === 'open'
       && this.activeIdentity !== undefined
