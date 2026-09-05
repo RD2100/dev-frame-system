@@ -43,10 +43,11 @@ import { INSTALL_ANCHOR, homePatchPath, prepareProfile } from '../../../apps/cli
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import { NoteId, ProjectMemoryError } from '@deepseek-ai/dsh-experimental-project-memory'
-import { SHADOW_TOOL_NAMES, ShadowRouterError } from '@deepseek-ai/dsh-experimental-shadow-router'
+import { SHADOW_TOOL_NAMES, ShadowMessageId, ShadowRouterError } from '@deepseek-ai/dsh-experimental-shadow-router'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import type { GoalId } from '@deepseek-ai/dsh-goal/types'
 import type { Context } from '@deepseek-ai/cordis'
 
@@ -188,17 +189,38 @@ async function probeShadowFace(): Promise<{
   }
 }
 
-/** The part of a canonical tool result the hierarchy face reads. */
+/** The part of a canonical tool result the probe faces read. */
 interface ProbeToolResult {
   readonly isError?: boolean
   readonly error?: { readonly message?: string }
+  readonly value?: unknown
+}
+
+/** Read one key off a rendered JSON object value. */
+function fieldValue(record: unknown, key: string): unknown {
+  if (typeof record !== 'object' || record === null) {
+    throw new Error(`expected a JSON object while reading "${key}": ${JSON.stringify(record)}`)
+  }
+  const value = (record as Record<string, unknown>)[key]
+  if (value === undefined) throw new Error(`the rendered value carries no "${key}"`)
+  return value
+}
+
+function textOf(value: unknown, label: string): string {
+  if (typeof value !== 'string') throw new Error(`${label} is not a string: ${JSON.stringify(value)}`)
+  return value
+}
+
+function numberOf(value: unknown, label: string): number {
+  if (typeof value !== 'number') throw new Error(`${label} is not a number: ${JSON.stringify(value)}`)
+  return value
 }
 
 /** Execute one real tool through the real dispatcher as a live agent. */
 async function executeAsAgent(agent: Agent, name: string, args: Record<string, unknown>): Promise<ProbeToolResult> {
   hierarchyProbeCounter += 1
   return await ctx.tools.execute({
-    callId: ToolCallId(`probe-hier-${hierarchyProbeCounter}`),
+    callId: ToolCallId(`probe-tool-${hierarchyProbeCounter}`),
     name,
     arguments: args,
     agent,
@@ -301,6 +323,138 @@ async function probeShadowCompositionFace(suffix: string): Promise<{
   }
 }
 
+/** The recorded delivery-journey facts one phase hands to the next. */
+interface ShadowDeliveryState {
+  workspaceId: string
+  controllerSessionId: string
+  messageId: string
+  receivedAt: string
+  completedAt: string
+  goalId: string
+  acceptanceHash: string
+}
+
+function successValue(outcome: ProbeToolResult, label: string): unknown {
+  if (outcome.isError !== false) throw new Error(`${label} failed: ${JSON.stringify(outcome)}`)
+  return outcome.value
+}
+
+/**
+ * The shadow-router delivery-journey face at composition level, closing the
+ * S6 production gap: the marked Shadow agent drives project_open and
+ * project_send through the real dispatcher (queued → received two-write
+ * history), the host drives the settlement seam (completeDelivery →
+ * completed) and the stop contrast (project_stop → stopping, then
+ * confirmProjectStopped → stopped), and the cold phase re-reads every
+ * durable field from the restored router. `recorded` switches the face into
+ * its verify mode: no new rows, only field-by-field restoration checks plus
+ * one model-face status read-back through a freshly marked agent.
+ */
+async function probeShadowDeliveryFace(suffix: string, recorded?: ShadowDeliveryState): Promise<ShadowDeliveryState> {
+  const marked = (await ctx.agents.create({ sessionId: SessionId(`session-shadow-flow-${suffix}`) })).agent
+  ctx.shadowRouter.markShadow(marked)
+
+  if (recorded !== undefined) {
+    const workspaceId = WorkspaceId(recorded.workspaceId)
+    const binding = ctx.shadowRouter.findBinding(workspaceId)
+    if (binding === undefined || binding.state !== 'stopped' || binding.activeGoalId !== recorded.goalId || binding.activeAcceptanceHash !== recorded.acceptanceHash) {
+      throw new Error(`the shadow binding did not cold-restore field-by-field: ${JSON.stringify(binding)}`)
+    }
+    const row = ctx.shadowRouter.listDeliveries(workspaceId).find(candidate => candidate.messageId === ShadowMessageId(recorded.messageId))
+    if (row === undefined || row.state !== 'completed' || row.receivedAt !== recorded.receivedAt || row.completedAt !== recorded.completedAt) {
+      throw new Error(`the delivery row did not cold-restore field-by-field: ${JSON.stringify(row)}`)
+    }
+    if (ctx.agentBindings.find(SessionId(recorded.controllerSessionId))?.role !== 'controller') {
+      throw new Error(`the project controller binding for "${recorded.controllerSessionId}" did not cold-restore`)
+    }
+    const status = await executeAsAgent(marked, 'project_status', { workspace_id: recorded.workspaceId })
+    const projects = fieldValue(successValue(status, 'project_status'), 'projects')
+    if (!Array.isArray(projects)) throw new Error('project_status rendered no projects array')
+    const entry = projects.find(candidate => textOf(fieldValue(candidate, 'workspaceId'), 'status workspaceId') === recorded.workspaceId)
+    if (entry === undefined) throw new Error('project_status did not render the recorded workspace')
+    const deliveries = fieldValue(entry, 'deliveries')
+    if (!Array.isArray(deliveries)) throw new Error('the rendered entry carries no deliveries array')
+    const rendered = deliveries.find(candidate => textOf(fieldValue(candidate, 'messageId'), 'status messageId') === recorded.messageId)
+    if (rendered === undefined || textOf(fieldValue(rendered, 'state'), 'status delivery state') !== 'completed') {
+      throw new Error(`the rendered delivery did not read completed after the cold boot: ${JSON.stringify(rendered)}`)
+    }
+    return recorded
+  }
+
+  const projectDir = join(SHADOW_ROOT, `delivery-project-${suffix}`)
+  mkdirSync(projectDir, { recursive: true })
+  const opened = successValue(await executeAsAgent(marked, 'project_open', { path: projectDir, request_id: `probe-open-${suffix}-1` }), 'project_open')
+  if (textOf(fieldValue(opened, 'state'), 'open state') !== 'ready') {
+    throw new Error(`project_open did not report a ready association: ${JSON.stringify(opened)}`)
+  }
+  const workspaceIdText = textOf(fieldValue(opened, 'workspaceId'), 'workspaceId')
+  const controllerSessionId = textOf(fieldValue(opened, 'controllerSessionId'), 'controllerSessionId')
+  const workspaceId = WorkspaceId(workspaceIdText)
+  const controller = ctx.sessions.get(SessionId(controllerSessionId))
+  if (controller === undefined || controller.header.cwd !== textOf(fieldValue(opened, 'canonicalPath'), 'canonicalPath')) {
+    throw new Error(`the opened controller session is not real/rooted: ${JSON.stringify(controller?.header)}`)
+  }
+  if (ctx.agentBindings.find(SessionId(controllerSessionId))?.role !== 'controller') {
+    throw new Error(`the opened controller session "${controllerSessionId}" is not durably bound as controller`)
+  }
+
+  const goalId = `probe-goal-${suffix}`
+  const acceptanceHash = `probe-hash-${suffix}`
+  await ctx.shadowRouter.setActiveGoal(workspaceId, goalId, acceptanceHash)
+  const authorized = ctx.shadowRouter.findBinding(workspaceId)
+  if (authorized?.activeGoalId !== goalId || authorized?.activeAcceptanceHash !== acceptanceHash) {
+    throw new Error(`the host goal authorization was not recorded: ${JSON.stringify(authorized)}`)
+  }
+
+  const sent = successValue(await executeAsAgent(marked, 'project_send', {
+    workspace_id: workspaceIdText,
+    // The open receipt's revision can already be stale (provisioning
+    // convergence bumps it); the send must observe the current one.
+    binding_revision: ctx.shadowRouter.findBinding(workspaceId)!.bindingRevision,
+    goal_id: goalId,
+    acceptance_hash: acceptanceHash,
+    request_id: `probe-send-${suffix}-1`,
+    mode: 'work',
+    text: 'L-Integration composition delivery journey',
+  }), 'project_send')
+  if (textOf(fieldValue(sent, 'status'), 'send status') !== 'received') {
+    throw new Error(`project_send did not report received: ${JSON.stringify(sent)}`)
+  }
+  const messageId = textOf(fieldValue(sent, 'messageId'), 'messageId')
+  const deliveries = ctx.shadowRouter.listDeliveries(workspaceId)
+  if (deliveries.length !== 1 || deliveries[0]!.state !== 'received' || deliveries[0]!.receivedAt === undefined || deliveries[0]!.completedAt !== undefined) {
+    throw new Error(`the delivery row after the send is not a received two-write state: ${JSON.stringify(deliveries)}`)
+  }
+  const receivedAt = deliveries[0]!.receivedAt!
+
+  const settled = await ctx.shadowRouter.completeDelivery(workspaceId, ShadowMessageId(messageId))
+  if (settled.state !== 'completed' || settled.completedAt === undefined || settled.receivedAt !== receivedAt) {
+    throw new Error(`the host settlement did not complete the delivery: ${JSON.stringify(settled)}`)
+  }
+
+  const stop = successValue(await executeAsAgent(marked, 'project_stop', {
+    workspace_id: workspaceIdText,
+    expected_revision: ctx.shadowRouter.findBinding(workspaceId)!.bindingRevision,
+    request_id: `probe-stop-${suffix}-1`,
+  }), 'project_stop')
+  if (textOf(fieldValue(stop, 'status'), 'stop status') !== 'stopping') {
+    throw new Error(`project_stop did not report stopping: ${JSON.stringify(stop)}`)
+  }
+  await ctx.shadowRouter.confirmProjectStopped(workspaceId)
+  if (ctx.shadowRouter.findBinding(workspaceId)?.state !== 'stopped') {
+    throw new Error('the host quiescence confirmation did not stop the binding')
+  }
+  return {
+    workspaceId: workspaceIdText,
+    controllerSessionId,
+    messageId,
+    receivedAt,
+    completedAt: settled.completedAt!,
+    goalId,
+    acceptanceHash,
+  }
+}
+
 try {
   if (phase === 'write') {
     const workspace = mkdtempSync(join(tmpdir(), 'dsh-integration-probe-'))
@@ -336,6 +490,7 @@ try {
     const shadow = await probeShadowFace()
     const hierarchy = await probeHierarchyFace('w')
     const shadowComposition = await probeShadowCompositionFace('w')
+    const shadowDelivery = await probeShadowDeliveryFace('w')
     const state = {
       sessionId: session.id,
       bindingRole: record.role,
@@ -355,6 +510,15 @@ try {
       shadowCompMarkedScopeSeesTools: shadowComposition.markedScopeSeesTools,
       shadowCompUnmarkedScopeClean: shadowComposition.unmarkedScopeClean,
       shadowCompBindingRowPersisted: shadowComposition.bindingRowPersisted,
+      shadowDelivery: {
+        workspaceId: shadowDelivery.workspaceId,
+        controllerSessionId: shadowDelivery.controllerSessionId,
+        messageId: shadowDelivery.messageId,
+        receivedAt: shadowDelivery.receivedAt,
+        completedAt: shadowDelivery.completedAt,
+        goalId: shadowDelivery.goalId,
+        acceptanceHash: shadowDelivery.acceptanceHash,
+      },
     }
     writeFileSync(STATE, JSON.stringify(state, undefined, 2) + '\n')
     console.log('WRITE PHASE OK', JSON.stringify(state))
@@ -364,6 +528,7 @@ try {
       bindingRole: string
       lifecycleState: string
       taskState: string
+      shadowDelivery?: ShadowDeliveryState
     }
     const binding = ctx.agentBindings.find(state.sessionId as never)
     if (binding === undefined || binding.role !== state.bindingRole) {
@@ -403,6 +568,10 @@ try {
     if (!shadowComposition.markedScopeSeesTools || !shadowComposition.unmarkedScopeClean) {
       throw new Error(`shadow composition face did not survive the cold boot: ${JSON.stringify(shadowComposition)}`)
     }
+    if (state.shadowDelivery === undefined) {
+      throw new Error('probe-state.json carries no shadowDelivery record from the write phase')
+    }
+    await probeShadowDeliveryFace('v', state.shadowDelivery)
     console.log('RESTORE OK', JSON.stringify({
       sessionId: state.sessionId,
       role: binding.role,
@@ -422,6 +591,7 @@ try {
       shadowCompMarkedScopeSeesTools: shadowComposition.markedScopeSeesTools,
       shadowCompUnmarkedScopeClean: shadowComposition.unmarkedScopeClean,
       shadowCompBindingRowPersisted: shadowComposition.bindingRowPersisted,
+      shadowDeliveryRestored: true,
     }))
   }
 } finally {

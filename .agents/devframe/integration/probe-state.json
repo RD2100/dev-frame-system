@@ -16,5 +16,14 @@
   "hierarchyUnboundControlledDenied": true,
   "shadowCompMarkedScopeSeesTools": true,
   "shadowCompUnmarkedScopeClean": true,
-  "shadowCompBindingRowPersisted": true
+  "shadowCompBindingRowPersisted": true,
+  "shadowDelivery": {
+    "workspaceId": "32874dfd-bf9a-40d8-9023-b82bc28d5eb7",
+    "controllerSessionId": "shadow-c3b735a3-3af3-41a7-bb8c-940c8999445b",
+    "messageId": "msg-probe-send-w-1",
+    "receivedAt": "2026-09-05T19:15:45.503Z",
+    "completedAt": "2026-09-05T19:15:45.511Z",
+    "goalId": "probe-goal-w",
+    "acceptanceHash": "probe-hash-w"
+  }
 }
