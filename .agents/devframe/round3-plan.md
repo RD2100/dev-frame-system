@@ -102,7 +102,15 @@ Agent 名称 / Agent 类型 / SessionID / 工作树路径 / 当前状态 / 已�
 - 429 防复发：≤2 组长并发；组长派工串行优先；遇限流记录原因、降并发、按最后安全位置恢复。
 - 历史工作树 `D:\dsh-devframe-g1..g5`、`f01..f07` 与 `stash@{0}` 保留不动；不推送任何远程。
 
-## 六、注册表 changelog
+## 六、值班交接（自动续期轮次耗尽时，恢复回合按此执行）
+
+1. `list_agents`（scope descendants）核对 G1/G2 组长状态；`git -C D:\dsh-devframe-r3-g1 log --oneline -3` 与 `git -C D:\dsh-devframe-r3-g2 log --oneline -3` 核对提交。
+2. 若组长已提交：按 §三 targeted 命令跑该组测试 → 人工审 diff（边界遵守：G1 不碰 G2/G3/G4 范围，G2 不碰 UI/worktree）→ 合并入 main → 本表登记 → 激活下一组长（顺序 G4 → G3 → G5）。
+3. 若组长已 settle 且无提交：发恢复信标（按 §四 模板，指明最后安全位置）。
+4. 若仍在运行：继续等待，勿打扰。
+5. 全组合并后：G5 收口（typecheck、test、composition-smoke、已知 Windows 红名单记录）+ 最终汇报（含未完成项）。
+
+## 七、注册表 changelog
 
 - 2026-09-05：审计完成（git/worktree/Agent/能力四线核验）；本文档创建；G1–G5 登记 planned；worktree 待创建。
 - 2026-09-05：六个 r3 工作树建成（foundation + g1–g5）；总控完成基础能力修复 `1ed2c783d4`（subagent 工具与 list_agents 显式暴露持久 SessionID，rename subagentId/id → sessionId；Agent Note 三元组；769 subagent 测试绿；tool-catalog 再生；双语配对 1136 对绿；test:docs 15/15），已 ff 合并入 main；五个组工作树快进至新基线；组工作树依赖安装进行中。
