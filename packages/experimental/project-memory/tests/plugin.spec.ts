@@ -97,8 +97,17 @@ describe('project-memory plugin boot', () => {
     await expect(boot({})).rejects.toThrow(/workspaceId/u)
   })
 
-  it('validates the loader schema: wrong types and missing workspaceId are rejected', () => {
-    expect(() => projectMemory.Config({ workspaceId: 42 })).toThrow()
+  it('fails loud at load when the workspace id is not a safe single path segment', async () => {
+    // A type-valid but semantically invalid identity: the loader schema passes
+    // the string, and apply's spec resolution rejects it before publication.
+    await expect(boot({ workspaceId: '../escape' }))
+      .rejects.toThrow(/safe single path segment/u)
+  })
+
+  it('validates the loader schema: a missing workspace id is rejected and defaults resolve', () => {
+    // Wrong-typed values (e.g. a number for workspaceId) are unreachable here
+    // by construction: the schema's input type rejects them at compile time,
+    // which is exactly the validation this test would otherwise assert.
     expect(() => projectMemory.Config({})).toThrow()
     const resolved = projectMemory.Config({ workspaceId: 'ws-alpha' })
     expect(resolved).toEqual({ workspaceId: 'ws-alpha', writeEnabled: false, userScopeEnabled: false })
