@@ -75,6 +75,8 @@ function fsErrorCode(error: unknown): string | undefined {
  * errors propagate raw for create-only handling, `permanent` errors fail
  * immediately, everything else (including unknown codes) is transient.
  * Exported for the bounded-retry behavior tests.
+ * @param error - The caught filesystem failure.
+ * @returns the retry classification of the failure.
  */
 export function classifyFsError(error: unknown): 'transient' | 'conflict' | 'permanent' {
   const code = fsErrorCode(error)
@@ -107,6 +109,11 @@ function sleep(ms: number): Promise<void> {
  * errors are rethrown raw (the caller distinguishes create races);
  * `ProjectMemoryError` passes through untouched. Exported for the
  * bounded-retry behavior tests.
+ * @param policy - The configured attempt count and backoff schedule.
+ * @param label - Operation label used in the wrapped failure message.
+ * @param code - Explicit failure code the operation's errors map onto.
+ * @param operation - The filesystem operation to run.
+ * @returns the operation's first successful result.
  */
 export async function withRetry<T>(
   policy: MemoryRetryPolicy,
@@ -296,6 +303,8 @@ export class ProjectMemoryService {
    * reporting. Scope checks run before any note content is read; notes that
    * disagree with their receipt, are incomplete, or are superseded inside
    * the same namespace are excluded from automatic recall.
+   * @param request - Scope, query text, and optional result cap.
+   * @returns the bounded hits with coverage and truncation facts.
    */
   async search(request: MemorySearchRequest): Promise<MemorySearchResult> {
     this.assertScope(request.scope)
@@ -376,6 +385,8 @@ export class ProjectMemoryService {
    * Read one note by host-issued id within one allowed namespace. Unknown
    * ids, missing files, changed files, and incomplete files are each
    * reported honestly; nothing is chased across namespaces.
+   * @param request - Scope and the host-issued note id.
+   * @returns the honest read outcome for the note.
    */
   async read(request: MemoryReadRequest): Promise<MemoryReadResult> {
     this.assertScope(request.scope)
@@ -415,6 +426,9 @@ export class ProjectMemoryService {
    * committed receipt, then create the file exclusively and commit the
    * receipt before returning `created`. The candidate body is never
    * regenerated; conflicting or externally changed files are never modified.
+   * @param request - Scope, stable source reference, kind, candidate body,
+   *   assertion status, optional snapshot, and optional superseded note.
+   * @returns the append outcome with the note id and expected path.
    */
   async append(request: MemoryAppendRequest): Promise<MemoryAppendResult> {
     if (!this.spec.writeEnabled) {

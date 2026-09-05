@@ -116,7 +116,14 @@ function noteDto(note: MemoryNote): {
   }
 }
 
-/** Build the three memory tool definitions bound to one service instance. */
+/**
+ * Build the three memory tool definitions bound to one service instance.
+ * @param service - The process-wide memory service the tools dispatch to.
+ * @param spec - The resolved spec the tool policy reads (current snapshot).
+ * @param receipts - The process-wide receipt index the append tool reads the
+ *   committed receipt from before logging it into the calling session.
+ * @returns the registry-ready tool definitions.
+ */
 export function createMemoryTools(service: ProjectMemoryService, spec: MemorySpec, receipts: MemoryReceiptStore): ToolDefinition[] {
   return [
     defineTool({
