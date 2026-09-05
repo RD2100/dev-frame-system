@@ -53,6 +53,20 @@
 | G4 Worktree 产品化 | DSH-G4-Worktree-Lead | `75f59aff-d25c-4b16-a4fd-7d9a65bb3e0f` | `D:\dsh-devframe-r3-g4`（`r3/g4-worktree`） | developing | — | 工具 Consumer + prune 对账 |
 | G5 调度、状态、合并与质量 | 待创建 | — | `D:\dsh-devframe-r3-g5`（`r3/g5-quality`） | planned | — | 最后激活 |
 
+## 八、G5 任务书草稿（阶段 C 就绪件，激活时展开为完整提示词）
+
+范围与交付：
+1. **统一状态机登记**：核对五组与全部执行 Agent 均映射至七态之一（planned/developing/blocked/review/committed/merged/completed），无长时无理由 idle；输出登记表。
+2. **合并前验收清单固化**：clean 树 / 提交完整 / 针对性测试绿 / 职责边界合规 / 无伪造状态与 SessionID，形成可执行清单文档。
+3. **影子功能核对**：detailDesign-part2.md 中 Proposed 项与已实现面逐条对照（试点独立），输出「已实现 / 按设计延后」两列。
+4. **快照夹具债务决策**：40+ 夹具旧文案三选一——CI 上 keyless `DSH_SNAPSHOT=refresh` 再生（POSIX）/ 有 key 重录 / 记录为已知红并给出 CI 义务说明；产出决策与操作指引（本地 Windows 不跑）。
+5. **短命令证据提取**：E1 会话日志（`C:\Users\25313\.dsh\sessions\--D-dsh-devframe--\66e9cb16-…\session.jsonl.zstd`）node zstdDecompressSync 摘 spawn 尝试原文。
+6. **preset 挂载 CLI 活体演示（可选，非合并前置）**：前提 `DEEPSEEK_API_KEY` 存在检查，缺席自跳。
+7. **最终回归**：先 build 一次（新树 typert 产物时序），逐组合并矩阵 + composition-smoke + test:docs；记录 Windows 红名单（codex real-product 抖动、cache flush 超时、claude-code 时序）。
+8. **最终未完成项报告**（用户模板全字段）。
+
+约束：G5 只做检查与文档，不改其他组代码——发现问题报总控调度；≤1 执行 Agent 串行；小步提交纪律。
+
 总控 SessionID：`session-52f2ff3c-52b0-4ef5-821d-d5e1b49352e2`（由子会话 header 的 `parentSession` 实证，list_agents descendants 输出）。身份约定：host 创建的会话 id 带 `session-` 前缀；agent 通过 spawn 工具创建的子会话 id 为裸 UUID（continuation manager `randomUUID()`）——两类都是真实持久 SessionID，注册表按实际返回值原样记录，不添加或去除前缀。
 
 各组执行 Agent 由组长创建后由组长登记到自己的小节（总控汇总时同步）。
