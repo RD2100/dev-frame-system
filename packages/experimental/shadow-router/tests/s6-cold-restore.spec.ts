@@ -12,7 +12,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { harness } from './helpers.ts'
-import type { ProjectOpenResult, ShadowBindingRecord } from '../src/index.ts'
 
 describe('shadow-router S6 binding row-level cold recovery', () => {
   it('S6: provisioned bindings and received deliveries restore row-for-row after a cold restart on the same root', async () => {

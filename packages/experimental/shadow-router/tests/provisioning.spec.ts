@@ -10,15 +10,18 @@ import { harness, seedHarness, seedWorkspaceFact } from './helpers.ts'
 import type { ShadowBindingRecord } from '../src/index.ts'
 
 /** A schema-valid crash-residue binding row. */
-function seedRow(overrides: Partial<ShadowBindingRecord> & { readonly workspaceId: string; readonly canonicalPath: string; readonly controllerSessionId: string; readonly state: ShadowBindingRecord['state'] }): ShadowBindingRecord {
+function seedRow(overrides: Omit<Partial<ShadowBindingRecord>, 'workspaceId' | 'controllerSessionId'> & { readonly workspaceId: string; readonly controllerSessionId: string; readonly canonicalPath: string; readonly state: ShadowBindingRecord['state'] }): ShadowBindingRecord {
   const now = new Date().toISOString()
+  const { workspaceId, controllerSessionId, ...rest } = overrides
   return {
     profileKey: 'devframe',
     bindingRevision: 1,
     requestId: 'seed-open-1',
     createdAt: now,
     updatedAt: now,
-    ...overrides,
+    ...rest,
+    workspaceId: WorkspaceId(workspaceId),
+    controllerSessionId: SessionId(controllerSessionId),
   }
 }
 
@@ -70,9 +73,9 @@ describe('shadow-router provisioning', () => {
       expect(reopened.state).toBe('ready')
       expect(reopened.workspaceId).toBe('ws-seed-1')
       expect(reopened.controllerSessionId).toBe('session-reserved-1')
-      const session = h.ctx.sessions.get('session-reserved-1')
+      const session = h.ctx.sessions.get(SessionId('session-reserved-1'))
       expect(session?.header.cwd).toBe(canonical)
-      expect(h.ctx.agentBindings.find('session-reserved-1')?.role).toBe('controller')
+      expect(h.ctx.agentBindings.find(SessionId('session-reserved-1'))?.role).toBe('controller')
       expect(h.router.listBindings()).toHaveLength(1)
     } finally {
       await h.dispose()
@@ -121,7 +124,7 @@ describe('shadow-router provisioning', () => {
         const completed = await h.router.reconcileProject(WorkspaceId('ws-seed-2'))
         expect(completed.state).toBe('ready')
         expect(completed.controllerSessionId).toBe('session-reserved-2')
-        expect(h.ctx.agentBindings.find('session-reserved-2')?.role).toBe('controller')
+        expect(h.ctx.agentBindings.find(SessionId('session-reserved-2'))?.role).toBe('controller')
       } finally {
         await h.dispose()
       }
@@ -166,7 +169,7 @@ describe('shadow-router provisioning', () => {
         const failed = h.router.findBinding(WorkspaceId('ws-bad-path'))
         expect(failed?.state).toBe('failed')
         expect(failed?.failureReason).toContain('rejected the controller creation')
-        expect(h.ctx.sessions.get('session-reserved-4')).toBeUndefined()
+        expect(h.ctx.sessions.get(SessionId('session-reserved-4'))).toBeUndefined()
 
         // The failed row over a usable root re-provisions: new reservation,
         // same workspace, bumped revision, old reserved id left untouched.
