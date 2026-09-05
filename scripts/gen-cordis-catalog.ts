@@ -125,6 +125,13 @@ export const SERVICE_PAGE: Record<string, string> = {
   directoryPickerController: 'workspace.md',
   worktreeRegistry: 'worktree-registry.md',
   agentWorktree: 'agent-worktree.md',
+  agentBindings: 'session-identity.md',
+  agentEvidence: 'agent-evidence.md',
+  agentHierarchy: 'agent-hierarchy.md',
+  agentReliability: 'agent-reliability.md',
+  projectController: 'project-controller.md',
+  projectMemory: 'project-memory.md',
+  shadowRouter: 'shadow-router.md',
 }
 
 /**
