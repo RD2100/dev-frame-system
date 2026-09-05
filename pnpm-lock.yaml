@@ -4581,6 +4581,15 @@ importers:
         specifier: workspace:^
         version: link:../../storage/storage-domain
 
+  packages/experimental/agent-reliability:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-experimental-devframe':
+        specifier: workspace:^
+        version: link:../devframe
+
   packages/experimental/agent-team:
     dependencies:
       '@deepseek-ai/dsh-brand':

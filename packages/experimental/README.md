@@ -32,6 +32,7 @@ The experimental group contains prototype capabilities that are not part of any 
 | [`devframe`](devframe/README.md) | Shared contracts for the experimental single-project controller | — |
 | [`inspector`](inspector/README.md) | Cross-realm CDP hub for Host debugging, Client Runtime inspection, network capture, and Cordis trees | `ctx.inspector` |
 | [`agent-evidence`](agent-evidence/README.md) | Append-only evidence ledger for agent work: task/Goal binding receipts, submission receipts, and verification snapshots | `ctx.agentEvidence` |
+| [`agent-reliability`](agent-reliability/README.md) | Process-tree stop, admission cutoff, uncertain-call reconciliation, and the flush barrier as one service | `ctx.agentReliability` |
 | [`project-contracts`](project-contracts/README.md) | Shared type vocabulary for the pluginized agent hierarchy: roles, task states, ids, records, and store seams | — |
 | [`project-controller`](project-controller/README.md) | Project task board: TaskState transitions, a bounded developing budget, lifecycle, and the controller-only merge gate | `ctx.projectController` |
 | [`session-identity`](session-identity/README.md) | Durable agent binding registry and exact-cwd native Session creation | `ctx.agentBindings` |

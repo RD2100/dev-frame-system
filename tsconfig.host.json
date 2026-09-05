@@ -299,6 +299,7 @@
     { "path": "./packages/experimental/project-contracts" },
     { "path": "./packages/experimental/session-identity" },
     { "path": "./packages/experimental/agent-evidence" },
+    { "path": "./packages/experimental/agent-reliability" },
     { "path": "./packages/experimental/project-controller" },
     { "path": "./packages/experimental/devframe" },
     { "path": "./packages/experimental/agent-team-profile" },
