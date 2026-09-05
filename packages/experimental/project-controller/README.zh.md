@@ -7,22 +7,22 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
-## Summary
+## 概述
 
 `dsh-experimental-project-controller` 挂载 `ctx.projectController`，拥有项目任务板的 Cordis 服务。它让任务沿共享 `TaskState` 顺序流转（`planned → assigned → developing → reviewing → submitted → integrated → completed`），为每次 `blocked` 或 `failed` 流转强制要求原因、下一步与唤醒条件，通过经校验的 `maxActiveTasks` 配置（默认 2，与"同账号最多两路模型请求"约束对齐）限定并发 `developing` 任务数，运行 DevFrame 项目生命周期（`admission_open → stop_requested → quiescence_confirmed → stopped`，旁路状态 `needs_attention` 与 `ambiguous`），并设置主树合并门禁：只有绑定为 `controller` 的会话可以铸造合并标记，`integrate` 恰好消耗一次该标记。任务记录经 `project_tasks` 存储域持久化并在启动时原样恢复；生命周期本身是进程内运行态，新进程以 `startProject` 显式开启。
 
-## Table of Contents
+## 目录
 
-- [Use this package](#use-this-package)
-- [Understand the implementation](#understand-the-implementation)
-- [Model Experience](#model-experience)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
-- [Dev Note](#dev-note)
+- [使用本包](#use-this-package)
+- [理解实现](#understand-the-implementation)
+- [模型体验](#model-experience)
+- [已知限制与延期工作](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
 
 -----
 
 <a id="use-this-package"></a>
-## Use this package
+## 使用本包
 
 在存储栈与 session-identity 注册表旁挂载本服务；它硬注入 `ctx.agentBindings`（合并门禁用其校验角色）与 `ctx.storageDomain`，任一缺失即在激活时失败。
 
@@ -55,12 +55,12 @@ await controller.complete(taskId)
 -----
 
 <a id="understand-the-implementation"></a>
-## Understand the implementation
+## 理解实现
 
 <details>
-<summary>Implementation internals — click to expand</summary>
+<summary>实现细节——点击展开</summary>
 
-本节解释设计决策并指向实现代码；可观察行为已在 [Use this package](#use-this-package) 完整覆盖。
+本节解释设计决策并指向实现代码；可观察行为已在[使用本包](#use-this-package)中完整覆盖。
 
 ### 设计决策
 
@@ -69,16 +69,16 @@ await controller.complete(taskId)
 - **派发与记录分离。** 派发路径流转（`assign`、`startDevelopment`、`beginReview`、`submit`、合并、`resume`、`createTask`）要求 `admission_open`；记录性流转（`block`、`fail`、`complete`）在项目未停止前始终可用，使停止过程仍能记录工作为何结束。
 - **原样冷恢复。** 任务板按持久化内容原样返回；进行中的记录需要宿主关注，因为其活动 worker 已随旧进程消亡。合并标记是进程内回执，永不恢复。
 
-### Source map
+### 源码地图
 
-| File | Role |
+| 文件 | 职责 |
 |---|---|
 | [`src/controller.ts`](src/controller.ts) | `ctx.projectController` 服务：生命周期、任务流转、预算、合并门禁、恢复 |
 | [`src/spec.ts`](src/spec.ts) | `project_tasks` 域声明与绑定到共享契约类型的 zod 记录 schema |
 | [`src/errors.ts`](src/errors.ts) | `ProjectControllerError` 及其稳定错误码联合 |
 | [`src/index.ts`](src/index.ts) | 包入口与默认导出 |
 
-### Invariant
+### 不变式
 
 不发布运行时 invariant 伴随物：任务板是一张域表的写穿投影并在启动时重建，JSON 后端拒绝同一单元的第二个活动句柄，生命周期是进程内状态且无第二观察者，因此不存在可能分叉的独立观察。
 
@@ -87,23 +87,25 @@ await controller.complete(taskId)
 -----
 
 <a id="model-experience"></a>
-## Model Experience
+## 模型体验
 
 ### 项目控制器
 
-#### What the model sees
+#### 模型看到什么
 
 没有任何内容。本包不注册工具、提示词段落或会话事件——任何 `TaskRecord` 值都不会到达模型请求——因此没有请求字段携带其数据。
 
-#### Token effect
+#### Token 影响
 
 对每次请求的直接 token 影响为零。
 
-#### KV Cache effect
+#### KV Cache 影响
 
 与实时请求无关：本包不触碰请求前缀，因此不可能使提供方缓存复用失效。
 
-## Known Limitations and Deferred Work
+## 已知限制与延期工作
+
+<a id="known-limitations-and-deferred-work"></a>
 
 这些限制界定了控制器在何种场景下不适用或需要特别运维关注。它们是当前包约束，不是任务清单。
 
@@ -112,11 +114,11 @@ await controller.complete(taskId)
 - **预算限定任务状态，而非活动模型请求** —— `maxActiveTasks` 限制可处于 `developing` 的任务数；实际模型请求上限仍是部署的账号级约束。
 
 <a id="dev-note"></a>
-### Dev Note
+### 开发备注
 
 <details>
-<summary>Working context for maintainers — click to expand</summary>
+<summary>维护者的工作上下文——点击展开</summary>
 
-None.
+无。
 
 </details>

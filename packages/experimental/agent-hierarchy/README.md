@@ -94,7 +94,7 @@ No runtime invariant companion is published: every denial is derived from the si
 
 #### What the model sees
 
-A denied tool call returns a pre-execution error result naming the reason (role, missing role, plugin scope, or depth); the tool body never runs, and no post-execute listener can overturn the denial. A tool restricted away by the inherited allow face disappears from the prompt and reads as an unknown tool.
+A denied tool call returns a pre-execution error result naming the reason — the bound `controller` / `lead` / `worker` role, `missing role`, the plugin scope, or the depth budget — and the tool body never runs; no post-execute listener can overturn the denial. A tool restricted away by the inherited allow face disappears from the prompt and reads as an unknown tool.
 
 #### Token effect
 
