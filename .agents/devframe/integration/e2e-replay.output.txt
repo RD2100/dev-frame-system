@@ -1,0 +1,6 @@
+$ node --import tsx/esm apps/cli/src/bin.ts "--profile" "integration" "--patch" "D:\\dsh-devframe-p-integration\\.agents\\devframe\\integration\\cordis.patch.yml" "--patch" "D:\\dsh-devframe-p-integration\\snapshots\\session\\text-turn\\cordis.yml" "--patch" "D:\\dsh-devframe-p-integration\\snapshots\\session\\pwsh-tool-turn\\cordis.snapshot.yml" "--patch" "D:\\dsh-devframe-p-integration\\snapshots\\session\\text-turn\\model.cordis.yml" "Use the pwsh tool to run exactly: [Console]::Out.Write('PWSH_OK'). Then reply with the single word DONE and stop."
+dsh: reasoning:
+The user wants me to run a PowerShell command and then reply with "DONE". Let me execute it.
+dsh: reasoning:
+The command executed successfully and printed "PWSH_OK". Now I need to reply with "DONE" and stop.
+DONE
