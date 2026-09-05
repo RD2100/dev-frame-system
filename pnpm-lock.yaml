@@ -4821,6 +4821,37 @@ importers:
         specifier: workspace:^
         version: link:../../workflow/worktree-registry
 
+  packages/experimental/project-controller:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-experimental-devframe':
+        specifier: workspace:^
+        version: link:../devframe
+      '@deepseek-ai/dsh-experimental-project-contracts':
+        specifier: workspace:^
+        version: link:../project-contracts
+      '@deepseek-ai/dsh-experimental-session-identity':
+        specifier: workspace:^
+        version: link:../session-identity
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:^
+        version: link:../../core/session
+      '@deepseek-ai/dsh-storage-domain':
+        specifier: workspace:^
+        version: link:../../storage/storage-domain
+      '@deepseek-ai/dsh-worktree-registry':
+        specifier: workspace:^
+        version: link:../../workflow/worktree-registry
+
   packages/experimental/session-identity:
     dependencies:
       zod:

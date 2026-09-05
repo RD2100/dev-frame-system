@@ -131,11 +131,12 @@ export class AgentBindingRegistry extends Service {
     this.ctx.effect(() => () => domain.close(), 'session-identity.domainClose')
     this.table = domain.table('bindings')
     // Cold restore: rebuild the whole query index from the durable table.
-    // Order (createdAt, agentId) keeps list() stable across restarts.
+    // Order (createdAt, agentId) keeps list() stable across restarts. The map
+    // holds a detached frozen copy so the durable row stays untouched.
     const entries = [...this.table.entries()]
       .sort(([leftId, left], [rightId, right]) =>
         left.createdAt.localeCompare(right.createdAt) || String(leftId).localeCompare(String(rightId)))
-    for (const [id, record] of entries) this.records.set(id, Object.freeze(record))
+    for (const [id, record] of entries) this.records.set(id, Object.freeze({ ...record }))
   }
 
   /**
