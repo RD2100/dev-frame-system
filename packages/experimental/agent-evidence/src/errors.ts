@@ -4,6 +4,8 @@
 export type AgentEvidenceErrorCode =
   /** A receipt request failed validation: an empty field, a malformed commit name, or a non-integer exit code. */
   | 'AGENT_EVIDENCE_INVALID_RECEIPT'
+  /** A review named a reviewer Session that the deployed role policy has not assigned the reviewer role. */
+  | 'AGENT_EVIDENCE_REVIEWER_UNAUTHORIZED'
   /** The storage domain refused a write, or the record on disk failed its schema. */
   | 'AGENT_EVIDENCE_PERSISTENCE'
 

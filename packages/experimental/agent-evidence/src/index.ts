@@ -12,4 +12,6 @@ export { agentEvidenceDomainSpec, submissionReceiptSchema, taskGoalBindingReceip
 export { CommitSha, EvidenceReceiptId } from './ids.ts'
 export { AgentEvidenceLedger } from './ledger.ts'
 export type { SubmissionRequest, TaskEvidence, TaskGoalBindingRequest, VerificationRequest } from './ledger.ts'
+export { EvidenceReviewGate } from './review-gate.ts'
+export type { EvidenceReviewerDirectory } from './review-gate.ts'
 export { AgentEvidenceLedger as default } from './ledger.ts'
