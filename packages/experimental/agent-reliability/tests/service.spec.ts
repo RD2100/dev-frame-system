@@ -2,10 +2,12 @@
 
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import { GoalId } from '@deepseek-ai/dsh-goal'
+import { ControllerSessionId } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
 import AgentReliability, { AgentReliabilityError } from '../src/index.ts'
 import type { StopProjectOptions } from '../src/index.ts'
 
-const IDENTITY = { controllerSessionId: 'session-ctrl' as const, goalId: 'goal-1' as const }
+const IDENTITY = { controllerSessionId: ControllerSessionId('session-ctrl'), goalId: GoalId('goal-1') }
 
 /** One booted context with the reliability service mounted. */
 async function reliabilityHarness(): Promise<{ ctx: Context; service: AgentReliability; dispose: () => Promise<void> }> {
@@ -31,9 +33,9 @@ describe('admission cutoff', () => {
       service.openAdmission(IDENTITY)
       expect(service.admissionState).toBe('open')
       expect(() => service.assertAdmitted(IDENTITY)).not.toThrow()
-      expect(() => service.assertAdmitted({ controllerSessionId: 'session-ctrl' as const, goalId: 'goal-2' as const }))
+      expect(() => service.assertAdmitted({ controllerSessionId: ControllerSessionId('session-ctrl'), goalId: GoalId('goal-2') }))
         .toThrowError(/does not match the admitted identity/)
-      expect(() => service.assertAdmitted({ controllerSessionId: 'session-other' as const, goalId: 'goal-1' as const }))
+      expect(() => service.assertAdmitted({ controllerSessionId: ControllerSessionId('session-other'), goalId: GoalId('goal-1') }))
         .toThrowError(/does not match the admitted identity/)
     } finally {
       await dispose()
@@ -44,7 +46,7 @@ describe('admission cutoff', () => {
     const { service, dispose } = await reliabilityHarness()
     try {
       service.openAdmission(IDENTITY)
-      const next = { controllerSessionId: 'session-ctrl' as const, goalId: 'goal-2' as const }
+      const next = { controllerSessionId: ControllerSessionId('session-ctrl'), goalId: GoalId('goal-2') }
       service.openAdmission(next)
       expect(() => service.assertAdmitted(next)).not.toThrow()
       expect(() => service.assertAdmitted(IDENTITY)).toThrow(AgentReliabilityError)
@@ -155,8 +157,10 @@ describe('process-tree stop productization', () => {
       const options: StopProjectOptions = {
         agents: [],
         registry: { get: () => { throw new Error('unused without agents') } },
-        goals: { disarm: () => undefined, pause: () => undefined },
-        jobs: { list: () => [], kill: () => undefined, wait: async () => { throw new Error('unused') } },
+        // The stop never reaches goal or job seams without agents; the stubs
+        // fail loud instead of fabricating GoalView or settlement values.
+        goals: { disarm: () => undefined, pause: () => { throw new Error('pause is not expected without agents') } },
+        jobs: { list: () => [], kill: () => { throw new Error('kill is not expected without jobs') }, wait: async () => { throw new Error('unused') } },
         processes: () => [],
         graceMs: 1000,
         closeAdmission: () => { order.push('closeAdmission') },

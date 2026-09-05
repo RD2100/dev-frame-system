@@ -16,6 +16,14 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 export type WorktreeId = Branded<'WorktreeId'>
 
 /**
+ * The opaque single-writer marker a worktree is bound to. The registry never
+ * interprets the value — callers mint it from whatever identity owns the
+ * write target (typically an agent session id) — and equality is the entire
+ * contract: the same value may re-bind or unbind, any other value is refused.
+ */
+export type WorktreeLockHolder = Branded<'WorktreeLockHolder'>
+
+/**
  * One `create` request. The service resolves `workspaceId` through
  * `ctx.workspaceRegistry` and runs git from the owner workspace directory;
  * the target directory is created by git.
@@ -64,6 +72,16 @@ export interface Worktree {
 
   /** ISO-8601 instant of the last durable mutation (create counts as one). */
   readonly updatedAt: string
+
+  /**
+   * The single writer the worktree is bound to, present exactly together with
+   * {@link lockedAt}. A bound worktree refuses removal until its holder
+   * unbinds.
+   */
+  readonly lockedBy?: WorktreeLockHolder
+
+  /** ISO-8601 instant the current binding was acquired; absent when unlocked. */
+  readonly lockedAt?: string
 }
 
 /**

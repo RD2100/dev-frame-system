@@ -1,0 +1,143 @@
+# The L-Integration pluginized-hierarchy profile layer: the six experimental
+# plugins over dsh-base + dsh-headless. Mount with
+# `dsh --profile integration --patch <this file>` against the isolated home
+# C:\Users\25313\.dsh-integration. Row order carries no load semantics
+# (activation is service-availability driven); agent-hierarchy hard-injects
+# ctx.agentBindings, so session-identity must be in the tree for it to mount.
+#
+# project-contracts is a type vocabulary, not a plugin; it resolves as a
+# dependency of the mounted packages.
+#
+# The base tree's tool-worktree row hard-injects workspaceRegistry and
+# worktreeRegistry; the shipped headless installation satisfies them through
+# the installation-owned web-app bundle layer, which a custom profile does
+# not carry — so the integration layer mounts both providers explicitly
+# (same row ids and names as the web-app bundle's).
+
+# One compression per sessions root is enforced fail-loud; the integration
+# line standardizes on uncompressed JSONL so persisted sessions stay
+# readable as evidence (same convention as the snapshot compositions).
+# session-persistence-jsonl exists in the base tree, so this is an
+# id-targeted restate, not an insert.
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+
+- insert:
+    - id: workspace
+      name: '@deepseek-ai/dsh-workspace'
+
+    - id: worktree-registry
+      name: '@deepseek-ai/dsh-worktree-registry'
+
+    - id: session-identity
+      name: '@deepseek-ai/dsh-experimental-session-identity'
+
+    - id: agent-hierarchy
+      name: '@deepseek-ai/dsh-experimental-agent-hierarchy'
+      config:
+        roleToolPolicies:
+          controller:
+            inheritedTools:
+              - bash
+              - create_goal
+              - edit
+              - exit_plan_mode
+              - get_goal
+              - glob
+              - grep
+              - interrupt_agent
+              - job_kill
+              - job_list
+              - job_output
+              - list_agents
+              - ralph
+              - read
+              - read_image
+              - send_message
+              - skill
+              - str_replace_editor
+              - subagent
+              - subagent_fork
+              - todo_write
+              - update_goal
+              - web_fetch
+              - web_search
+              - workflow
+              - write
+          lead:
+            inheritedTools:
+              - bash
+              - create_goal
+              - edit
+              - exit_plan_mode
+              - get_goal
+              - glob
+              - grep
+              - interrupt_agent
+              - job_kill
+              - job_list
+              - job_output
+              - list_agents
+              - ralph
+              - read
+              - read_image
+              - send_message
+              - skill
+              - str_replace_editor
+              - subagent
+              - subagent_fork
+              - todo_write
+              - update_goal
+              - web_fetch
+              - web_search
+              - workflow
+              - write
+          worker:
+            inheritedTools:
+              - bash
+              - create_goal
+              - edit
+              - get_goal
+              - glob
+              - grep
+              - job_kill
+              - job_list
+              - job_output
+              - read
+              - read_image
+              - send_message
+              - skill
+              - str_replace_editor
+              - todo_write
+              - update_goal
+              - web_fetch
+              - web_search
+              - write
+        delegationToolNames: [subagent, subagent_fork]
+        leadPluginScopes: {}
+
+    - id: project-controller
+      name: '@deepseek-ai/dsh-experimental-project-controller'
+      config:
+        maxActiveTasks: 2
+
+    - id: agent-evidence
+      name: '@deepseek-ai/dsh-experimental-agent-evidence'
+
+    - id: agent-reliability
+      name: '@deepseek-ai/dsh-experimental-agent-reliability'
+
+    # Read-only assembly: a probe-owned Vault root under the isolated home
+    # makes the search/read path real while appends stay disabled
+    # (writeEnabled false; user scope off). workspaceId is the integration
+    # test value, not a product workspace identity.
+    - id: project-memory
+      name: '@deepseek-ai/dsh-experimental-project-memory'
+      config:
+        workspaceId: integration
+        vaultRoot: !!js dshHomePath('integration-vault')
+        writeEnabled: false
+        userScopeEnabled: false

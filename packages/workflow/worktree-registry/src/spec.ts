@@ -19,7 +19,8 @@ const workspaceId = z.string().transform(value => brandString<WorkspaceId>(value
  * Durable shape of one worktree record. `path` is the canonical directory
  * observed after `git worktree add` succeeded; `branch` is the HEAD branch
  * read back from the new worktree at create time; timestamps are ISO-8601
- * strings.
+ * strings. `lockedBy`/`lockedAt` carry the single-writer binding and are
+ * present exactly together.
  */
 export const worktreeRecord = z.object({
   workspaceId,
@@ -27,7 +28,12 @@ export const worktreeRecord = z.object({
   branch: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
-})
+  lockedBy: z.string().optional(),
+  lockedAt: z.string().optional(),
+}).refine(
+  record => (record.lockedBy === undefined) === (record.lockedAt === undefined),
+  { message: 'lockedBy and lockedAt must be present together' },
+)
 
 /** One stored worktree record, inferred from {@link worktreeRecord}. */
 export type WorktreeRecord = z.infer<typeof worktreeRecord>
@@ -35,10 +41,12 @@ export type WorktreeRecord = z.infer<typeof worktreeRecord>
 /**
  * The worktree registry domain spec: one `worktrees` table keyed by
  * {@link WorktreeId}. No global state — `list` order is derived from record
- * fields, so the registry stays a single-table reader and writer.
+ * fields, so the registry stays a single-table reader and writer. Version 2
+ * added the lock fields; a medium stamped with version 1 rejects at open, so
+ * a stored registry is re-created rather than half-read under the new schema.
  */
 export const worktreeDomainSpec = defineDomain({
   name: 'worktree_registry',
-  version: 1,
+  version: 2,
   tables: { worktrees: domainTable<WorktreeId, WorktreeRecord>(worktreeRecord) },
 })

@@ -28,6 +28,7 @@ The experimental group contains prototype capabilities that are not part of any 
 | [`agent-team-profile`](agent-team-profile/README.md) | Explicit source-checkout profile layer for Agent Teams | — |
 | [`agent-team`](agent-team/README.md) | Named teammates with durable messages and a shared task board | `ctx.agentTeams` |
 | [`agent-team-web-profile`](agent-team-web-profile/README.md) | Explicit source-checkout Web layer for Agent Teams | — |
+| [`agent-worktree`](agent-worktree/README.md) | Per-agent worktree seam over the worktree registry: single-writer bindings and the three `worktree_*` tools | `ctx.agentWorktree` |
 | [`client-ui-agent-team`](client-ui-agent-team/README.md) | Team roster, task board, and teammate navigation for Web | — |
 | [`code-runtime-python`](code-runtime-python/README.md) | CPython subprocess backend for the code-execution seam | `ctx.codeRuntime` |
 | [`devframe`](devframe/README.md) | Shared contracts for the experimental single-project controller | — |

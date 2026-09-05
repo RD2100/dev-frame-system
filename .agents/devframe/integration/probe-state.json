@@ -1,0 +1,11 @@
+{
+  "sessionId": "session-1",
+  "bindingRole": "controller",
+  "lifecycleState": "admission_open",
+  "taskState": "assigned",
+  "sessionLogExists": true,
+  "memoryToolsRegistered": true,
+  "memorySearchCoverageComplete": true,
+  "memoryReadAbsent": true,
+  "memoryAppendDenied": true
+}

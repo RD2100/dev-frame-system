@@ -3,7 +3,8 @@
  * operation spawns `git` through `ctx.subprocess` — bounded output collection,
  * tree-scoped termination, and deadline fusion are the subprocess service's
  * mechanics — and the provider owns config defaulting, failure
- * classification, and the durable `worktree_registry` domain rows.
+ * classification, the single-writer bindings, and the durable
+ * `worktree_registry` domain rows.
  *
  * git is never invoked with the target worktree as its working directory for
  * mutating commands: on Windows a process cannot delete the directory tree
@@ -29,12 +30,14 @@ import { worktreeDomainSpec } from './spec.ts'
 import type { WorktreeRecord } from './spec.ts'
 import { WorktreeRegistry } from './registry.ts'
 import { classifyGitFailure, WorktreeGitOperationError, WORKTREE_GIT_FAILURE_REMEDIATION } from './git-failures.ts'
+import { WorktreeLockError } from './lock-failures.ts'
 import { parseWorktreeList, sameGitPath } from './porcelain.ts'
 import type {
   Worktree,
   WorktreeCreateRequest,
   WorktreeDanglingRegistration,
   WorktreeId,
+  WorktreeLockHolder,
   WorktreeReconcileOptions,
   WorktreeReconcileReport,
   WorktreeRemoveOptions,
@@ -158,6 +161,44 @@ export class GitWorktreeRegistry extends WorktreeRegistry {
     return await this.enqueue(() => this.createQueued(request))
   }
 
+  async bind(id: WorktreeId, holder: WorktreeLockHolder): Promise<Worktree> {
+    return await this.enqueue(async () => {
+      const record = this.requireRecord(id)
+      if (record.lockedBy !== undefined && record.lockedBy !== holder) {
+        throw new WorktreeLockError(
+          `cannot bind worktree '${id}': it is already bound to writer '${record.lockedBy}'; `
+          + 'one worktree has one writer — coordinate with the holder or use another worktree',
+          'already-locked',
+        )
+      }
+      if (record.lockedBy === holder) return toWorktree(id, record)
+      const bound: WorktreeRecord = { ...record, lockedBy: holder, lockedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+      await this.requireTable().put(id, bound)
+      return toWorktree(id, bound)
+    })
+  }
+
+  async unbind(id: WorktreeId, holder: WorktreeLockHolder): Promise<Worktree> {
+    return await this.enqueue(async () => {
+      const record = this.requireRecord(id)
+      if (record.lockedBy === undefined) {
+        throw new WorktreeLockError(
+          `cannot unbind worktree '${id}': it is not bound to any writer`,
+          'not-locked',
+        )
+      }
+      if (record.lockedBy !== holder) {
+        throw new WorktreeLockError(
+          `cannot unbind worktree '${id}': it is bound to writer '${record.lockedBy}', not to '${holder}'`,
+          'holder-mismatch',
+        )
+      }
+      const unbound: WorktreeRecord = { ...record, lockedBy: undefined, lockedAt: undefined, updatedAt: new Date().toISOString() }
+      await this.requireTable().put(id, unbound)
+      return toWorktree(id, unbound)
+    })
+  }
+
   list(workspaceId: WorkspaceId): readonly Worktree[] {
     this.requireWorkspace(workspaceId)
     return [...this.requireTable().entries()]
@@ -180,6 +221,15 @@ export class GitWorktreeRegistry extends WorktreeRegistry {
   async remove(id: WorktreeId, options?: WorktreeRemoveOptions): Promise<void> {
     await this.enqueue(async () => {
       const record = this.requireRecord(id)
+      // The lock is the product's exclusivity promise: even --force never
+      // overrides it. Only the holder's own unbind opens the way to removal.
+      if (record.lockedBy !== undefined) {
+        throw new WorktreeLockError(
+          `cannot remove worktree '${id}': it is bound to writer '${record.lockedBy}'; `
+          + 'the holder must unbind it first (force does not override the binding)',
+          'already-locked',
+        )
+      }
       // The owner workspace supplies the git working directory, so it resolves
       // before the directory observation; a missing owner wedges the row on purpose.
       const workspace = this.requireWorkspace(record.workspaceId)
@@ -322,6 +372,21 @@ export class GitWorktreeRegistry extends WorktreeRegistry {
     if (known !== undefined) {
       throw new Error(`cannot create a worktree at '${target}': worktree '${known}' is already registered there`)
     }
+    if (request.branch !== undefined) {
+      // Registry-level branch uniqueness for the workspace's own rows, raised
+      // as the same classified refusal git would produce — observed at the
+      // earliest resolvable point, before git runs. git stays the backstop
+      // for branches that exist in the repository but hold no row here.
+      const branchHolder = this.rowsOf(request.workspaceId).find(([, record]) => record.branch === request.branch)
+      if (branchHolder !== undefined) {
+        throw new WorktreeGitOperationError(
+          `worktree-registry: cannot create a worktree on branch '${request.branch}' at '${target}': `
+          + `worktree '${branchHolder[0]}' of this workspace is already registered on that branch. `
+          + WORKTREE_GIT_FAILURE_REMEDIATION['branch-conflict'],
+          'branch-conflict',
+        )
+      }
+    }
     const args = request.branch === undefined
       ? ['worktree', 'add', target]
       : ['worktree', 'add', '-b', request.branch, target]
@@ -456,6 +521,11 @@ function toWorktree(id: WorktreeId, record: WorktreeRecord): Worktree {
     branch: record.branch,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
+    // The domain schema refuses half-stamped rows at the durable boundary, so
+    // the projection keys off lockedBy and never fabricates a lock timestamp.
+    ...record.lockedBy !== undefined && record.lockedAt !== undefined
+      ? { lockedBy: brandString<WorktreeLockHolder>(record.lockedBy), lockedAt: record.lockedAt }
+      : {},
   }
 }
 
