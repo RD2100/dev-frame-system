@@ -1,11 +1,11 @@
 ---
-description: P05 sourceFingerprint 重算引擎设计（AT1-05 变体 5"审查后改未跟踪文件"的依据面）：指纹构成/规范化算法/错误码族/输入输出形状/平台不变性、未跟踪文件与热路径两条边界登记、引擎接入点裁定请求（p/fprecompute @ 526e773b23）。
+description: P05 sourceFingerprint 重算引擎设计（AT1-05 变体 5"审查后改未跟踪文件"的依据面）：指纹构成/规范化算法/错误码族/输入输出形状/平台不变性、未跟踪文件与热路径两条边界登记、引擎接入点裁定请求及 2026-09-06 总控裁定（案 B 独立 verify 面先行，已落地；案 A 定性为案 B 的前移使用，留 controller 波）。
 ---
 
 # P05 sourceFingerprint 重算引擎设计（纯计算引擎波）
 
 - 基点：`p/fprecompute` @ `526e773b23`（=main HEAD）。范围：`packages/experimental/devframe/src/source-fingerprint.ts`（新）、`packages/experimental/devframe/src/index.ts`（出口一行）、`tests/source-fingerprint.spec.ts`（新）、本文档。**不改** `controller/goal-binding.ts`、`events.ts`、`session-journal.ts`、schemas、agent-evidence/agent-hierarchy/session-identity（裁定未批，见文末裁定请求）。
-- 权威断言面：[anchor-matrix AT1-05](anchor-matrix.md)（"审查后改未跟踪文件"行，现登记为 GAP）与 [p05harden-design.md 残余缺口](p05harden-design.md)（"审查后改未跟踪文件（真实指纹重算）"仍为 GAP）。本波交付该变体的**依据面**：一个可从 GoalBindingController 域调用的纯计算引擎——给定 worktree 目录，产出可与 `ProjectWorkBinding.sourceFingerprint` 比对的品牌化指纹。比对面/集成面等总控批复后另行实现。
+- 权威断言面：[anchor-matrix AT1-05](anchor-matrix.md)（"审查后改未跟踪文件"行，现登记为 GAP）与 [p05harden-design.md 残余缺口](p05harden-design.md)（"审查后改未跟踪文件（真实指纹重算）"仍为 GAP）。本波交付该变体的**依据面**：一个可从 GoalBindingController 域调用的纯计算引擎——给定 worktree 目录，产出可与 `ProjectWorkBinding.sourceFingerprint` 比对的品牌化指纹。比对面已按 2026-09-06 总控裁定随案 B 落地（见裁定节）；集成面/controller 波待后续裁定。
 - 总控骨架采纳：最小真实引擎 = HEAD 提交哈希 + tracked 文件状态规范化哈希；fail-loud 结构化错误；性能边界 = 显式 verify 调用入口、不进热路径。
 
 ## 指纹构成与规范化算法
@@ -80,7 +80,7 @@ interface ComputedSourceFingerprint {
 1. **未跟踪文件面**：本指纹**不覆盖**未跟踪文件集合。`ls-files -s` 只读 index：纯 untracked 文件（未 add 未 commit）不改变指纹。AT1-05 变体 5"审查后改未跟踪文件"的覆盖方式是**间接且部分的**：改动一旦被 `git add`（staged）或 commit 即进 index/HEAD，指纹必变、verify 可拒；仅停留在 untracked 态的改动本指纹不可见——此为**已裁定边界**，由本设计登记，待总控确认是否在集成面以 untracked 集合补强（例如 `ls-files --others` 的第二指纹分量）或接受"证据链要求改动入库"的纪律约束。本波用例以"untracked 不变指纹 + staged 即变指纹"两条真实行为把该边界钉成可执行事实。
 2. **热路径性能面**：绑定记录后 `resolveResultBinding` 的重算比对**不在热路径自动发生**。引擎只有一个显式异步入口 `computeSourceFingerprint`（三次 git 子进程，非热路径成本）；控制器内既有比对仍是存储的 fingerprint 字符串等值比较，零子进程。verify 何时调用（绑定前/结果路由时/审查时）属接入点裁定，见下节。
 
-## 裁定请求项（等总控批复，本轮不实现）
+## 裁定请求项（2026-09-06 已批复：案 B，见下节）
 
 **引擎接入点两案对比**：
 
@@ -94,6 +94,20 @@ interface ComputedSourceFingerprint {
 | 风险 | start 时序已严格（close admission → create → disarm → persist → resume），插入重算点选错会扰动失败回滚面 | 比对面落点（journal 事件/独立断言）仍需单独裁定，但不动生命周期 |
 
 **建议**：**案 B 先行**。理由：本轮硬边界已禁改 controller/events/schemas（裁定未批），案 B 与该边界完全同构；变体 5 的直接诉求是"重算并给出可信拒绝依据"，独立 verify 面以最小 blast radius 交付该依据；案 A 的 admission 时点校验可在案 B 落地且总控批准 controller 波后叠加（两者不互斥，A 是 B 的前移使用）。落点建议：比对面与引擎同模块（`source-fingerprint.ts` 内 `verifySourceFingerprint`），避免新增模块边界；journal 事件面不进。
+
+## 裁定（2026-09-06 总控）
+
+**批准案 B：独立 verify 面先行，本轮落地。** `verifySourceFingerprint(worktreePath, recorded): Promise<VerifyVerdict>` 与引擎同模块落地（`source-fingerprint.ts` 内追加，`index.ts` 既有 `export *` 自动出口）。`VerifyVerdict` 为 `kind` 判别联合：`match`（记录值与现算值品牌串等值=通过，携带通过值 `fingerprint`）；`mismatch`（双值呈现：`recordedFingerprint`=原样记录主张（不可信侧），`computed`=新鲜 `ComputedSourceFingerprint` 全摘要（可信侧），JSDoc 写明各臂可信取值）。理由：
+
+1. **零扩散**：`controller/goal-binding.ts`、`events.ts`、schemas、`session-journal.ts` 全部零 diff；`ProjectWorkBinding.sourceFingerprint` 消费方语义不变。
+2. **热路径边界天然成立**：verify 是显式异步入口，三次 git 子进程成本只在被调用时发生，绑定/结果路由热路径零改动，无需 opt-in 机制——与边界登记②一致。
+3. **直接交付 AT1-05 变体 5 审计诉求**：重算并给出可信拒绝依据，mismatch 双值证据链（记录主张 vs 现算全摘要）可审计，不等 controller 波。
+
+**recorded 输入类型裁定**：裸 `SourceFingerprint` 品牌串（非 `ComputedSourceFingerprint`）——持久记录 `ProjectWorkBinding.sourceFingerprint` 就是该品牌串，verify 面镜像记录形态，调用方原样传存储值；判等语义=品牌字符串等值（与既有比对一致），headCommit 等派生摘要字段不参与判等，避免派生字段过期造成假 mismatch；mismatch 时新鲜全摘要有 `computed` 一侧完整呈现，无证据损失（持有全摘要的调用方传 `.fingerprint` 即可）。
+
+**错误面**：引擎 5 码经 verify 原样冒泡（verify 内部就是同一次 `computeSourceFingerprint` 调用，无包装无吞）；verify 面不设 `gitCommand` 注入缝（它验证的就是生产引擎面），`GIT_UNAVAILABLE`/`GIT_FAILED` 的分类证据留在引擎用例，verify 用例钉真实可达的 `NOT_A_WORKTREE`/`NO_COMMIT`/`INVALID_REQUEST` 三码。
+
+**案 A 定性：案 B 的前移使用，留 controller 波叠加，本轮不实现。** 绑定时点 admission 校验待总控批准 controller 波后叠加（两者不互斥），届时复用本 verify 入口；verify 结果的 journal 事件/断言落点仍属后续集成裁定。
 
 ## 放弃的替代案（一行各记）
 
@@ -116,6 +130,6 @@ interface ComputedSourceFingerprint {
 
 ## 残余/未竟
 
-- 接入点裁定（文末裁定请求）未批：比对面/集成面/controller 波全部待批复后另行实现。
+- 案 B 比对面已按 2026-09-06 裁定落地（见裁定节）；verify 结果的 journal 事件/断言落点与案 A controller 波仍待后续裁定与实现。
 - EACCES（不可执行）分类臂无平台可复现用例（POSIX-only 语义），以 ENOENT 用例覆盖同分类臂；如需 POSIX 强证据需 CI Linux lane 补充。
 - 大仓库（>64 MiB index 流）行为只有上限注入用例（`maxOutputBytes: 1`）钉分类，未做真实大仓库压测。
