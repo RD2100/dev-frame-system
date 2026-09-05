@@ -54,24 +54,25 @@ r3-g5 新树 build 复现已知产物墙（`tsc -b tsconfig.host.json` TS2307 `@
 | `pnpm exec tsc -b tsconfig.host.json` | exit 0（复确认绿） |
 | `pnpm exec vitest run packages/client/ui-workspace packages/subagent packages/workflow packages/api/session-controller` | 96 文件 / 1608 passed / 2 skipped / 0 failed，exit 0（codex real-product "high demand" 重试 5/5 自恢复，未成红） |
 | `pnpm exec vitest run packages/test-support/composition-smoke` | 5/5 passed，exit 0 |
-| `pnpm run test:docs` | **1 红：verify-translation-pairing**（其余 14 门绿；见未完成项 #1） |
+| `pnpm run test:docs` | 初跑 1 红（translation pairing，G3 遗留，上报总控）；总控于 main 修复 `7ef37f8c2d` 并经 `3948892c16` 并入本分支后，在合并候选树上复跑 **15/15 全绿 exit 0** |
 | `test:snapshot` / `test:web` | 未跑，记录为 CI 信号（POSIX 夹具；债务决策见 T4） |
 
 ### T8 最终未完成项报告 — 即本文件
 
 ## 二、未完成项清单
 
-1. **main `test:docs` 红（translation pairing）— 待总控定夺**。G3 `081abb678e` 改 ui-workspace 双 README 未重录 `README.i18n.yaml`，红自 G3 合并 `a34ed08401` 引入（当时与 G4 预验均未在其后跑过 test:docs，故未暴露）。md/zh 同次双语提交修改，判断 pair 自身一致、仅 yaml 记录过期。机械修复：`pnpm run verify-translation-pairing --write` 重录该 yaml 单独提交。按边界 G5 未改 G3 文件，已即时信标上报。
+1. ~~main `test:docs` 红（translation pairing）~~ — **已解决**：总控在 main 机械重录 `README.i18n.yaml`（`7ef37f8c2d`），test:docs 15/15；本分支经 merge `3948892c16` 同步并在合并候选树上复验绿。诊断（G3 提交漏 yaml + 两次验证基线盲区）经总控确认并记入台账。
 2. **快照夹具债务执行**：决策与操作指引已交付（T4），CI（POSIX）refresh 再生待总控登记为合并后 CI 义务；落地前 CI `test:snapshot` 维持已知红，不作合并门禁。
 3. **preset CLI 活体演示**：因 `DEEPSEEK_API_KEY` 缺席跳过（T6）；执行器级拒绝的活体外证据仍以 G2 308 行 enforcement 锚定 + E1/probe 日志链为准。
 4. **r3-g5 工作树构建产物墙**：新树首次 build 复现 typert remote-client 时序问题（环境时序，非代码缺陷）；本轮回归已在 main 产物完备环境完成，组树不阻塞合并，建议后续统一「新树先 bootstrap 产物再验证」的规程化做法。
 
 ## 三、本组提交清单（r3/g5-quality，全部 `--no-verify` + `git diff --cached --check` 干净）
 
-`d97464815d` 状态登记表 → `b46f29be8a` 注册表行同步 → `49a9d89c53` 合并前验收清单 → `e38f64831c` 影子功能核对 → `f12f7193d9` 快照债务决策 → `efb9dedab3` E1 证据 → （本报告提交）。
+`d97464815d` 状态登记表 → `b46f29be8a` 注册表行同步 → `49a9d89c53` 合并前验收清单 → `e38f64831c` 影子功能核对 → `f12f7193d9` 快照债务决策 → `efb9dedab3` E1 证据 → `4d71d1e0a9` 最终报告 → `472b7bba87` 注册表 committed 行 → `3948892c16` merge 同步 main pairing 修复（`7ef37f8c2d`）→（本更新提交）。
 
 ## 四、建议后续（交总控）
 
-1. 修复未完成项 #1 后合并 r3/g5-quality（建议并入 G5 收口提交一并终验 test:docs）。
+1. 合并 r3/g5-quality（终验已全绿：host tsc 0、四组矩阵 1608/2sk、smoke 5/5、test:docs 15/15 均在 `8e188c3d36`+pairing 修复后的树上）。
 2. 将「CI 义务：snapshot refresh 再生 + test:web 信号」登记进台账；Windows 红名单三项（codex real-product 抖动、cache flush 超时、claude-code 时序）继续观察，本轮矩阵实测未触发红。
 3. Round-3 全组合并后，round3-plan.md 注册表 G5 行与本登记表同步转 merged → completed，Round-3 终态归档。
+4. 规程化「新工作树先 bootstrap 构建产物再验证」（本轮 r3-g5 复现 typert remote-client 时序产物墙；规避方式见 T7 执行地说明）。
