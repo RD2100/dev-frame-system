@@ -4553,6 +4553,34 @@ importers:
         specifier: workspace:^
         version: link:../../util/timeout
 
+  packages/experimental/agent-evidence:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:^
+        version: link:../../util/brand
+      '@deepseek-ai/dsh-experimental-devframe':
+        specifier: workspace:^
+        version: link:../devframe
+      '@deepseek-ai/dsh-experimental-project-contracts':
+        specifier: workspace:^
+        version: link:../project-contracts
+      '@deepseek-ai/dsh-goal':
+        specifier: workspace:^
+        version: link:../../goal/goal
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:^
+        version: link:../../core/session
+      '@deepseek-ai/dsh-storage-domain':
+        specifier: workspace:^
+        version: link:../../storage/storage-domain
+
   packages/experimental/agent-team:
     dependencies:
       '@deepseek-ai/dsh-brand':

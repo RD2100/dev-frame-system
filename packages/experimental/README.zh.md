@@ -31,6 +31,7 @@ kind: "package-group"
 | [`code-runtime-python`](code-runtime-python/README.zh.md) | 代码执行 seam 的 CPython 子进程后端 | `ctx.codeRuntime` |
 | [`devframe`](devframe/README.zh.md) | 实验性单项目控制器的共享契约 | — |
 | [`inspector`](inspector/README.zh.md) | 用于 Host 调试、Client Runtime 检查、网络采集与 Cordis 树的跨 realm CDP hub | `ctx.inspector` |
+| [`agent-evidence`](agent-evidence/README.zh.md) | 代理工作的追加式证据台账：任务/Goal 绑定回执、提交回执与验证快照 | `ctx.agentEvidence` |
 | [`project-contracts`](project-contracts/README.zh.md) | 插件化代理层级的共享类型词汇：角色、任务状态、ID、记录与存储接缝 | — |
 | [`project-controller`](project-controller/README.zh.md) | 项目任务板：TaskState 流转、有界开发预算、生命周期与仅限 controller 的合并门禁 | `ctx.projectController` |
 | [`session-identity`](session-identity/README.zh.md) | 持久代理绑定注册表与准确 cwd 的原生会话创建 | `ctx.agentBindings` |

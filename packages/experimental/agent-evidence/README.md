@@ -1,0 +1,129 @@
+---
+description: "Cordis service holding the append-only evidence ledger for agent work: task/Goal binding receipts, submission receipts, and verification snapshots tied to the shared work identities."
+kind: "package-reference"
+---
+
+# @deepseek-ai/dsh-experimental-agent-evidence
+
+English | [中文](README.zh.md)
+
+## Summary
+
+`dsh-experimental-agent-evidence` mounts `ctx.agentEvidence`, the Cordis service that records and serves the append-only provenance trail of agent work over the `agent_evidence` storage domain: task/Goal binding receipts (the DevFrame goal-result binding tuple for one task), submission receipts (commit object name, changed paths, and the digest of the source inputs the work started from), and verification snapshots (command, exit code, and artifact paths — a non-zero exit code is recorded as-is). The ledger stores provenance only: acceptance stays with the Goal binding and task states, so no separate acceptance database exists here. Receipts are restored verbatim on start.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Understand the implementation](#understand-the-implementation)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+<a id="use-this-package"></a>
+## Use this package
+
+Mount the service beside the storage stack; it hard-injects `ctx.storageDomain` and fails at activation when the storage backend is absent.
+
+```yaml
+- name: '@deepseek-ai/dsh-storage'
+- name: '@deepseek-ai/dsh-storage-json'
+- name: '@deepseek-ai/dsh-storage-domain'
+- name: '@deepseek-ai/dsh-experimental-agent-evidence'
+```
+
+### Record and read the evidence trail
+
+Every recording call validates through the durable schema and returns the frozen receipt; queries serve append-only trails in recorded order.
+
+```ts
+await ctx.agentEvidence.recordTaskGoalBinding({
+  taskId, controllerSessionId, goalId, goalRevision: 3,
+  workspaceId: WorkspaceId('ws-default'),
+  acceptanceHash: AcceptanceHash('acceptance:sha256:abc'),
+  sourceFingerprint: SourceFingerprint('source:sha256:def'),
+})
+await ctx.agentEvidence.recordSubmission({
+  taskId, submittedBy, commit, changedPaths, inputDigest,
+})
+await ctx.agentEvidence.recordVerification({
+  taskId, command: 'pnpm exec vitest run packages/a', exitCode: 0, artifactPaths,
+})
+
+const trail = ctx.agentEvidence.byTask(taskId)
+const bindings = ctx.agentEvidence.bindingsByGoal(controllerSessionId, goalId)
+```
+
+Malformed receipts fail loud with `AGENT_EVIDENCE_INVALID_RECEIPT`; storage refusals surface as `AGENT_EVIDENCE_PERSISTENCE`.
+
+-----
+
+<a id="understand-the-implementation"></a>
+## Understand the implementation
+
+<details>
+<summary>Implementation internals — click to expand</summary>
+
+This section explains the design decisions behind the feature and points at the code that realizes them; the observable behavior is fully covered in [Use this package](#use-this-package).
+
+### Design decisions
+
+- **Identity reuse, not re-declaration.** Binding receipts carry the DevFrame goal-result binding vocabulary — `ControllerSessionId`, `GoalId`, `AcceptanceHash`, `SourceFingerprint`, `WorkspaceId` — imported from the experimental DevFrame packages, so evidence resolves to the same work identity dispatch and completion already use.
+- **Provenance only.** The ledger holds no acceptance verdict: a failing verification snapshot is a recorded fact, and acceptance decisions stay with the Goal binding (DevFrame) and task states (project-controller). This is why no separate acceptance database exists.
+- **Schema-owned branding at the durable boundary.** Recording parses each receipt through the same zod schema the storage domain validates restores with, so brand application and validation share one definition; storage refusals surface as `AGENT_EVIDENCE_PERSISTENCE` with the original cause.
+- **Append-only trails.** Re-recording a binding under a new Goal revision adds a receipt; nothing rewrites or deletes a receipt. `byTask` and `bindingsByGoal` return the full trail in recorded order.
+
+### Source map
+
+| File | Role |
+|---|---|
+| [`src/ledger.ts`](src/ledger.ts) | The `ctx.agentEvidence` service: record, query, cold restore |
+| [`src/spec.ts`](src/spec.ts) | The `agent_evidence` domain spec and the zod receipt schemas |
+| [`src/types.ts`](src/types.ts) | Receipt record types over the shared work identities |
+| [`src/ids.ts`](src/ids.ts) | `EvidenceReceiptId` and `CommitSha` brand factories |
+| [`src/errors.ts`](src/errors.ts) | `AgentEvidenceError` and its stable code union |
+| [`src/index.ts`](src/index.ts) | Package entry and default export |
+
+### Invariant
+
+No runtime invariant companion is published: receipts are append-only single-table rows with no cross-table derivation, the JSON backend refuses a second live handle on the same unit, and queries read the same in-process maps the writes populate, so no independent observation exists that could diverge.
+
+</details>
+
+-----
+
+<a id="model-experience"></a>
+## Model Experience
+
+### Agent evidence ledger
+
+#### What the model sees
+
+Nothing. The package registers no tools, no prompt sections, and no session events — no `TaskGoalBindingReceipt`, `SubmissionReceipt`, or `VerificationSnapshot` value ever reaches a model request — so no request field carries its data.
+
+#### Token effect
+
+Zero direct tokens on every request.
+
+#### KV Cache effect
+
+Independent of live requests: the package never touches a request prefix, so it cannot invalidate provider cache reuse.
+
+## Known Limitations and Deferred Work
+
+These limits define when the ledger is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
+
+- **Receipts are trusted provenance, not verified truth** — changed paths and artifact paths are recorded as the caller reports them; the ledger does not inspect the repository to confirm them.
+- **The ledger does not validate task or Goal existence** — receipts reference the ids their caller supplies; referential integrity stays with the project controller and the Goal binding.
+- **Trails grow unbounded** — receipts are never rewritten or pruned; long-running deployments accumulate rows in the three tables.
+
+<a id="dev-note"></a>
+### Dev Note
+
+<details>
+<summary>Working context for maintainers — click to expand</summary>
+
+None.
+
+</details>
