@@ -88,8 +88,8 @@ L1 组长与 L2 Worker 待创建。合规创建顺序（每个 Agent）：持久
 
 | Agent | 层级 | SessionID | 父 SessionID | Worktree | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| L-Foundation | L1 | 待创建（宿主返回真实值后回填） | `session-724834c2-9ff4-49e5-9b0a-4ce5f68d2c2d` | `D:\dsh-devframe-p-foundation`（`p/foundation`） | assigned |
-| L-Verify | L1 | 待创建（同上） | 同上 | `D:\dsh-devframe-p-verify`（`p/verify`） | assigned |
+| L-Foundation | L1 | `55979618-6bd7-4bc7-badc-8a3b13079158` | `session-724834c2-9ff4-49e5-9b0a-4ce5f68d2c2d` | `D:\dsh-devframe-p-foundation`（`p/foundation`） | developing |
+| L-Verify | L1 | `f2f6d88e-b5e6-4d9f-b945-6e2491022180` | 同上 | `D:\dsh-devframe-p-verify`（`p/verify`） | developing |
 | L-Product | L1 | 待创建（同上） | 同上 | `D:\dsh-devframe-p-product`（`p/product`） | planned（梯次补位） |
 
 并发纪律：huoshan-1 同账号最多两路生成中请求；组长内部前台串行跑 Worker；组长完成即补位下一个可执行任务。
@@ -97,3 +97,7 @@ L1 组长与 L2 Worker 待创建。合规创建顺序（每个 Agent）：持久
 ## 7. 变更日志
 
 - 2026-09-05：Round P 登记写成；冻结输入盘点完成；差异清单 D1–D10 记录；聚焦回归实测 289/290 通过、唯一失败为 composition-smoke 对话框断言。
+- 2026-09-05：经用户授权把 UI 直接复制/默认折叠实现提交 `58a82fe913`；三个组长 worktree 建立；L-Foundation（`55979618-…`）与 L-Verify（`f2f6d88e-…`）派发。
+- 2026-09-05：调度缺口定位并修复——目标在续跑指令后处于 `disarmed`，自动续跑不会触发；已 `update_goal resume` 重新 arm（revision 3）。功能性缺口登记：settings.yaml 无 subagent 路由策略段，全部子 Agent 模型请求走 huoshan-1 单账号，同账号两路上限即全局上限；多账号子 Agent 车道路由归 P06/P12 修复（model-switch subagent-route-policy 接入目标 profile）。
+- 2026-09-05：L-Verify 证据：隔离 home `C:\Users\25313\.dsh-verify\downloads` 已有 6 个发布包（codex 0.3.12、grok 0.3.10、ollama 0.6.17、opencode-go 0.1.20、providers-ui 0.1.9、ponytail 0.2.5），commandcode 未下载；profiles 下已建 7 项。L-Foundation 已合并 `58a82fe913`、依赖安装完成、P00 实现中。
+- 2026-09-05：拆分计划：P00 交付后总控立即派发 L-Worktree（P03）；P01 交付后派发 L-Hierarchy（P02）；车道空出即补位 L-Product（P09/P12–P15）。已向 L-Foundation 下达 P00 先行纪律（绿了立即报，不等整组）。
