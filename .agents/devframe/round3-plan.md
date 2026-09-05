@@ -51,7 +51,7 @@
 | G2 Agent 层级与权限 | DSH-G2-Hierarchy-Lead（后继） | `93a4ed58-73f1-481a-8f1d-d1e74e5b7128`（前任 `ca378724-…` 三次异常终止，保留于存储） | `D:\dsh-devframe-r3-g2`（`r3/g2-hierarchy`） | merged | 9c473dd98c | 无遗留（E1 锚定经 `6ba3e5f824` 并入 main） |
 | G3 项目 Agent 树和界面 | DSH-G3-AgentTree-Lead | `143b05d9-5e57-4b55-a203-cee99e94443e` | `D:\dsh-devframe-r3-g3`（`r3/g3-agent-tree-ui`） | merged | a34ed08401 | 无遗留（阶段 C 由 G5 收口） |
 | G4 Worktree 产品化 | DSH-G4-Worktree-Lead | `75f59aff-d25c-4b16-a4fd-7d9a65bb3e0f` | `D:\dsh-devframe-r3-g4`（`r3/g4-worktree`） | merged | 749795ba98 | 无遗留（阶段 C 由 G5 收口） |
-| G5 调度、状态、合并与质量 | DSH-G5-Quality-Lead | `533a3416-4956-4f4f-b5b3-d14e36ec0d0d` | `D:\dsh-devframe-r3-g5`（`r3/g5-quality`，已 ff 至 main `8e188c3d36`） | developing | d97464815d | 阶段 C 收口八项进行中（任务书 §八；统一状态登记表 `.agents/devframe/round3-status-registry.md`） |
+| G5 调度、状态、合并与质量 | DSH-G5-Quality-Lead | `533a3416-4956-4f4f-b5b3-d14e36ec0d0d` | `D:\dsh-devframe-r3-g5`（`r3/g5-quality`，已 ff 至 main `8e188c3d36`） | committed | 4d71d1e0a9 | 可合并；待总控终验（先修 main test:docs pairing 红，见 `.agents/devframe/round3-final-report.md`） |
 
 ## 八、G5 任务书草稿（阶段 C 就绪件，激活时展开为完整提示词）
 
