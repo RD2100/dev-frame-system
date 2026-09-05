@@ -12,25 +12,26 @@ Status: implemented
 - 没有任何东西把 worktree 关联到 `WorkspaceId`。workspace 实体是"用户工作的目录"这个产品锚点；worktree 是 per-workspace 事实，模型可见面需要这条关联才能呈现并约束它们。
 - 没有任何东西支持换执行世界。经沙箱或远端 provider 创建的 worktree 必须遵守与本地的同一个注册表契约。
 
-本 note 拥有承载这些事实的 seam：一个 per-workspace 的 git worktree 注册表，含 create/list/status/remove/reconcile、一个本地 git provider、这些行的持久化归宿，以及面向模型的 consumer 包。
+本 note 拥有承载这些事实的 seam：一个 per-workspace 的 git worktree 注册表，含 create/bind/list/status/remove/reconcile、一个本地 git provider、这些行的持久化归宿，以及面向模型的 consumer 包。
 
 ## Decision
 
-包 `packages/workflow/worktree-registry`（`@deepseek-ai/dsh-worktree-registry`）承载 Service Definition 与 Service Provider；包 `packages/workflow/tool-worktree`（`@deepseek-ai/dsh-tool-worktree`）是 Consumer，持有[工具决策](../feature/2026-09-05-worktree-tools-and-reconcile.zh.md)。registry 沿用 `dsh-shell` 模板：抽象 Service Definition 声明接口，具体 provider 类实现它，包的 default export 是 Loader 挂载的 provider。
+包 `packages/workflow/worktree-registry`（`@deepseek-ai/dsh-worktree-registry`）承载 Service Definition 与 Service Provider；包 `packages/workflow/tool-worktree`（`@deepseek-ai/dsh-tool-worktree`）是面向 workspace 的 Consumer，持有[工具决策](../feature/2026-09-05-worktree-tools-and-reconcile.zh.md)；实验性包 `packages/experimental/agent-worktree` 是每 Agent 的 Consumer，把每个新建 worktree 绑定到唯一写入者，持有[单一写入者绑定决策](../feature/2026-09-05-per-agent-worktree-single-writer-seam.zh.md)。registry 沿用 `dsh-shell` 模板：抽象 Service Definition 声明接口，具体 provider 类实现它，包的 default export 是 Loader 挂载的 provider。
 
 | 角色 | 元素 | 说明 |
 | --- | --- | --- |
-| Service Definition | `WorktreeRegistry`（抽象类，具名导出） | 声明 create/list/status/remove/reconcile、记录词汇表和 `ctx.worktreeRegistry` 这个 key。 |
+| Service Definition | `WorktreeRegistry`（抽象类，具名导出） | 声明 create/bind/list/status/remove/reconcile、记录词汇表和 `ctx.worktreeRegistry` 这个 key。 |
 | Service Provider | `GitWorktreeRegistry`（default export） | 经 `ctx.subprocess` 运行 `git`，拥有持久化行。每个 context 一个 provider；二次注册经 cordis 的重复服务规则 fail loud。 |
-| Consumer | `tool-worktree` | 模型可见的 `worktree_*` 工具；授权与 schema 决策见[工具与对账 Agent Note](../feature/2026-09-05-worktree-tools-and-reconcile.zh.md)。 |
+| Consumer | `tool-worktree` | 面向 workspace 的 `worktree_*` 工具；授权与 schema 决策见[工具与对账 Agent Note](../feature/2026-09-05-worktree-tools-and-reconcile.zh.md)。 |
+| Consumer | `agent-worktree`（实验性，私有） | 建立在单一写入者绑定之上的每 Agent `worktree_create`/`worktree_status`/`worktree_remove` 工具；见[绑定 Agent Note](../feature/2026-09-05-per-agent-worktree-single-writer-seam.zh.md)。 |
 
 ### 身份
 
-`WorktreeId = Branded<'WorktreeId'>` 来自 `@deepseek-ai/dsh-brand`，取值为生成的 uuid。路径绝不作 key：worktree 路径会被规范化、被 git 本身改写，引用锚点必须稳定——与 `WorkspaceId` 用 uuid 的理由相同。品牌放在本包，因为铸造和使用它的是本包。
+`WorktreeId = Branded<'WorktreeId'>` 来自 `@deepseek-ai/dsh-brand`，取值为生成的 uuid。路径绝不作 key：worktree 路径会被规范化、被 git 本身改写，引用锚点必须稳定——与 `WorkspaceId` 用 uuid 的理由相同。品牌放在本包，因为铸造和使用它的是本包。单一写入者的绑定标记以同样方式加品牌（`WorktreeLockHolder = Branded<'WorktreeLockHolder'>`）；注册表只存储与比较它、从不解释它，所以铸造它始终是调用方的决定。
 
 ### 持久化状态：独立 KvTable，不挂 WorkspaceRecord
 
-注册表打开自己的存储域 `worktree_registry`（version 1），一张表 `worktrees`，以 `WorktreeId` 为 key。记录携带 `workspaceId`（归属锚点）、`path`（规范路径，来自 `git worktree add` 成功后观测的 `fs.realpath`）、`branch`（create 时观测到的 HEAD，不是调用方的假设）、`createdAt`、`updatedAt`。
+注册表打开自己的存储域 `worktree_registry`（version 2），一张表 `worktrees`，以 `WorktreeId` 为 key。记录携带 `workspaceId`（归属锚点）、`path`（规范路径，来自 `git worktree add` 成功后观测的 `fs.realpath`）、`branch`（create 时观测到的 HEAD，不是调用方的假设）、`createdAt`、`updatedAt`，以及可选的 `lockedBy`/`lockedAt` 绑定字段对——record schema 要求它们成对出现，绑定作为一个事实整体写入读取。version 2 新增绑定字段对；version 1 盖章的介质按预发布立场在打开时拒绝，绝不在新 schema 下半读。
 
 这些行刻意不扩展 `WorkspaceRecord`：
 
@@ -59,6 +60,8 @@ export interface Worktree {
   readonly branch: string    // observed HEAD branch at create time
   readonly createdAt: string
   readonly updatedAt: string
+  readonly lockedBy?: WorktreeLockHolder  // present exactly with lockedAt
+  readonly lockedAt?: string
 }
 
 export interface WorktreeStatus {
@@ -76,6 +79,8 @@ export interface WorktreeReconcileReport {
 
 export abstract class WorktreeRegistry extends Service {
   create(request: WorktreeCreateRequest): Promise<Worktree>
+  bind(id: WorktreeId, holder: WorktreeLockHolder): Promise<Worktree>
+  unbind(id: WorktreeId, holder: WorktreeLockHolder): Promise<Worktree>
   list(workspaceId: WorkspaceId): readonly Worktree[]
   status(id: WorktreeId): Promise<WorktreeStatus>
   remove(id: WorktreeId, options?: { force?: boolean }): Promise<void>
@@ -85,11 +90,12 @@ export abstract class WorktreeRegistry extends Service {
 
 每个 provider 遵守的语义：
 
-- **create** 经 `ctx.workspaceRegistry` 解析归属 workspace，对未知 `workspaceId` fail loud。先拒绝本注册表已持有的路径，再运行 git；git 的拒绝被分类为四类类型化失败（路径被占用、分支冲突、脏树、路径超长），错误文本自带修复指引。返回的记录反映观测事实——目录存在后经 `fs.realpath` 得到的规范路径、从新 worktree 读回的分支。
+- **create** 经 `ctx.workspaceRegistry` 解析归属 workspace，对未知 `workspaceId` fail loud。先拒绝本注册表已持有的路径，拒绝同一 workspace 的另一个 worktree 已持有的显式分支（已分类的 `branch-conflict` 类别，在 git 运行之前抛出），再运行 git；git 的拒绝被分类为四类类型化失败（路径被占用、分支冲突、脏树、路径超长），错误文本自带修复指引。返回的记录反映观测事实——目录存在后经 `fs.realpath` 得到的规范路径、从新 worktree 读回的分支。
+- **bind/unbind** 维护单一写入者绑定：`bind` 对当前持有者幂等，其余任何绑定以 `already-locked` 拒绝；`unbind` 在未绑定时以 `not-locked` 拒绝，其他持有者请求时以 `holder-mismatch` 拒绝。两者都返回新记录，拒绝都是 `WorktreeLockError`——产品决策，绝不是 git stderr。
 - **list** 以同样方式校验 workspace id，返回该 workspace 的行，按 `createdAt` 再按 id 排序。它只读持久化行；不 shell out 到 `git worktree list`，因为本产品登记了什么，权威是注册表而不是 git 元数据。与 git 的对账是 reconcile 的职责。
 - **status** 是观测面：目录缺失时报告 `directoryExists: false` 且不调用 git（这是观测，不是失败）；目录存在时报告实时分支与干净度，git 自身报错则 fail loud。
-- **remove** 运行 `git worktree remove`（按请求加 `--force`），git 成功之后才删除行，所以失败的 remove 永远不会掩盖一个真实存在的 worktree。目录缺失时 fail loud，并指明 reconcile 的 `pruneRows` 动作是这条过时行的恢复路径。
-- **reconcile** 把行与 `git worktree list --porcelain -z` 作差，默认只报告。`pruneRows` 丢弃过时行（目录已消失的行、或 git 已不再跟踪的行），并在真的丢了 directory-missing 行时运行一次 `git worktree prune`——绝不删除 worktree 文件；`adoptUnregistered` 把任何 workspace 都没有登记行的 git 跟踪 worktree 登记进来，记录 git 观测到的分支（detached 时为 `HEAD`）。仓库主 worktree 与对账 workspace 自己的路径绝不会被报为未注册。
+- **remove** 在 worktree 处于绑定状态时拒绝——`force` 绝不覆盖绑定——然后运行 `git worktree remove`（按请求加 `--force`），git 成功之后才删除行，所以失败的 remove 永远不会掩盖一个真实存在的 worktree。目录缺失时 fail loud，并指明 reconcile 的 `pruneRows` 动作是这条过时行的恢复路径。
+- **reconcile** 把行与 `git worktree list --porcelain -z` 作差，默认只报告。`pruneRows` 丢弃过时行（目录已消失的行、或 git 已不再跟踪的行）并连同其绑定一起丢弃——绑定守护的是活着的 checkout，不是消失的目录——并在真的丢了 directory-missing 行时运行一次 `git worktree prune`，绝不删除 worktree 文件；`adoptUnregistered` 把任何 workspace 都没有登记行的 git 跟踪 worktree 登记进来，记录 git 观测到的分支（detached 时为 `HEAD`）。仓库主 worktree 与对账 workspace 自己的路径绝不会被报为未注册。
 
 注册表变更在 provider 内部的单条操作链上运行，行写入走域的写链，并发操作按 `dsh-workspace` 同样的方式串行化。
 
@@ -138,6 +144,6 @@ seam 给 harness 带来一个持久、以 workspace 为锚、跨重启存活的 
 
 ## Verification
 
-- `pnpm exec vitest run packages/workflow/worktree-registry` 在内存后端上用真实 git 子进程覆盖 create/list/status/remove、reconcile 的一致/检出/丢弃/采纳矩阵、四类 git 失败方言对捕获 stderr 的分类、以及 win32 上的 Windows 长路径拒绝（`packages/workflow/worktree-registry/tests/`）。
+- `pnpm exec vitest run packages/workflow/worktree-registry` 在内存后端上用真实 git 子进程覆盖 create/bind/list/status/remove、绑定生命周期及其拒绝类别、reconcile 的一致/检出/丢弃/采纳矩阵、四类 git 失败方言对捕获 stderr 的分类、以及 win32 上的 Windows 长路径拒绝（`packages/workflow/worktree-registry/tests/`）。
 - 处置：dispose provider 的 fiber 关闭存储域，之后的操作 fail loud 而不是悄悄重开（`loader-composition.spec.ts`）；行经 json 存储后端在冷重启后存活。
-- `pnpm run gen-cordis-catalog` 保持五个抽象方法的生成 Cordis API 页面新鲜。
+- `pnpm run gen-cordis-catalog` 保持七个抽象方法的生成 Cordis API 页面新鲜。

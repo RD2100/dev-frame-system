@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-worktree-registry` gives a host a durable, per-workspace registry of git worktrees: second checkouts of a workspace's repository that the product created, tracked, and can remove again. With it, a consumer can create a clean or isolated checkout for one of its workspaces, list the checkouts that belong to each workspace across restarts, observe whether each checkout is clean and which branch it carries, remove it — removal deletes the checkout through git and then the registration, never the other way round — and reconcile the registrations against what `git worktree list` reports. The package is host-side only: the model, tools, and agent loop never see it, so it adds no tokens, prompts, or request context. It needs the workspace registry, a subprocess provider, and the storage rows mounted alongside it; setup is a few composition rows.
+`dsh-worktree-registry` gives a host a durable, per-workspace registry of git worktrees: second checkouts of a workspace's repository that the product created, tracked, and can remove again. With it, a consumer can create a clean or isolated checkout for one of its workspaces, list the checkouts that belong to each workspace across restarts, observe whether each checkout is clean and which branch it carries, bind a checkout to a single writer so no other consumer may remove it, remove it — removal deletes the checkout through git and then the registration, never the other way round — and reconcile the registrations against what `git worktree list` reports. The package is host-side only: the model, tools, and agent loop never see it, so it adds no tokens, prompts, or request context. It needs the workspace registry, a subprocess provider, and the storage rows mounted alongside it; setup is a few composition rows.
 
 ## Table of Contents
 
@@ -60,9 +60,20 @@ ctx.worktreeRegistry.list(workspaceId) // that workspace's registrations, stable
 await ctx.worktreeRegistry.status(worktree.id) // { directoryExists, branch, clean }
 ```
 
+### Binding a worktree to a single writer
+
+A worktree that backs an agent's task needs an exclusivity promise: one writer at a time. `bind(id, holder)` stamps a durable binding onto the row; the holder is an opaque marker the registry never interprets — typically the owning session's durable id — and equality is the entire contract. Re-binding by the current holder is an idempotent success; any other bind refuses with `already-locked`. `unbind(id, holder)` clears the binding, refusing with `not-locked` when nothing is bound and `holder-mismatch` when another holder asks:
+
+```text
+await ctx.worktreeRegistry.bind(worktree.id, WorktreeLockHolder(sessionId))
+await ctx.worktreeRegistry.unbind(worktree.id, WorktreeLockHolder(sessionId))
+```
+
+The binding is a product-level promise, not a git lock: git commands the registry does not run are unaffected. While bound, `remove` refuses — `force` never overrides it — until the holder unbinds. A stale row dropped through `reconcile` with `pruneRows` takes its binding along, because a binding guards a live checkout, not a vanished directory.
+
 ### Removing worktrees
 
-Remove a registration when the checkout is no longer needed: the package runs `git worktree remove` first and deletes the durable row only after git succeeded. A checkout with modified or untracked files refuses to go without `force: true`, which passes `--force` to git. Removal never touches the workspace record or the repository's history.
+Remove a registration when the checkout is no longer needed: the package runs `git worktree remove` first and deletes the durable row only after git succeeded. A checkout with modified or untracked files refuses to go without `force: true`, which passes `--force` to git, and a bound checkout refuses until its holder unbinds. Removal never touches the workspace record or the repository's history.
 
 ### Reconciling registry and git
 
@@ -77,7 +88,7 @@ Two opt-in actions act on the report. `pruneRows: true` drops the dangling rows 
 
 ### Failure kinds, retry semantics, and link shells
 
-git refusals the provider recognizes are classified into four kinds; each error is a `WorktreeGitOperationError` carrying the invocation facts, git's stderr, and the remediation:
+git refusals the provider recognizes are classified into four kinds; each error is a `WorktreeGitOperationError` carrying the invocation facts, git's stderr, and the remediation. The `create` branch-uniqueness check raises the same `branch-conflict` kind from the registry's own rows, before git runs:
 
 | Kind | git refuses because | Remediation the error carries |
 |---|---|---|
@@ -85,6 +96,8 @@ git refusals the provider recognizes are classified into four kinds; each error 
 | `branch-conflict` | a branch with the requested name already exists | choose a different branch name, or reuse the branch without `-b` |
 | `dirty-tree` | the worktree holds modified or untracked files | repeat the removal with `force: true`, or clean the worktree |
 | `path-length` | the path exceeds this git configuration's path-length limit | choose a shorter path, or `git config core.longpaths true` |
+
+Lock refusals are a separate error class: `WorktreeLockError` carries a closed refusal kind (`already-locked`, `not-locked`, `holder-mismatch`) and names the holder facts and the way out. They are product decisions — git never saw the request — so they never flow through the git stderr classifier.
 
 Retry semantics: nothing auto-retries. A refused operation is deterministic — retrying without changing the parameters fails again. A failed attempt never leaves a registration row and never leaves a worktree behind (`remove` deletes its row only after git succeeded), so a corrected retry starts clean. On a `path-length` refusal git may leave empty leading directories on disk; the registry never records them and never deletes them.
 
@@ -105,6 +118,7 @@ This section explains the design decisions behind the feature and points at the 
 - **The uuid is the anchor, the path is a fact.** Worktree paths are rewritten by normalization and by git itself, so rows are keyed by a generated `WorktreeId` and store the canonical path observed after creation.
 - **An independent domain, not a WorkspaceRecord field.** Worktree lifecycle is git mechanics, not workspace session accounting; the rows live in this package's `worktree_registry` domain, and the ownership link is a `workspaceId` field validated at operation time through `ctx.workspaceRegistry`.
 - **Observed facts over assumptions.** The stored branch is read back from the new worktree, the stored path is the post-creation `fs.realpath`, and `status` reports only what git reports now.
+- **The binding is a promise between consumers, not a mechanism.** The registry stores and enforces one holder per worktree but never interprets the marker; enforcement lives at the registry's own `remove`, and the holder's identity belongs to the caller that minted it.
 - **The registry is the authority for registrations.** `list` answers from durable rows; where git's own metadata disagrees, `reconcile` reports the difference and repairs it only on request.
 - **Reconcile is registry-side by default.** Dropping rows never deletes directories or files, and adopting never rewrites a worktree — the actions only bring the product's records in line with what already exists.
 - **Removal is git-first.** The durable row is deleted only after `git worktree remove` succeeded, so a failed removal never hides a real checkout.
@@ -117,16 +131,17 @@ The seam splits into the abstract `WorktreeRegistry` Service Definition and the 
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Package entry: exports, the `WorktreeId` factory, default export of the provider |
+| [`src/index.ts`](src/index.ts) | Package entry: exports, the `WorktreeId`/`WorktreeLockHolder` factories, default export of the provider |
 | [`src/registry.ts`](src/registry.ts) | The abstract Service Definition and the `ctx.worktreeRegistry` key |
-| [`src/git-provider.ts`](src/git-provider.ts) | Local git provider: config validation, git over `ctx.subprocess`, the five operations |
+| [`src/git-provider.ts`](src/git-provider.ts) | Local git provider: config validation, git over `ctx.subprocess`, the seven operations |
+| [`src/lock-failures.ts`](src/lock-failures.ts) | `WorktreeLockError` and the closed lock-refusal kind union |
 | [`src/porcelain.ts`](src/porcelain.ts) | `git worktree list --porcelain -z` parsing and the reconcile path comparison |
 | [`src/spec.ts`](src/spec.ts) | Domain declaration: record schema and `defineDomain` spec |
-| [`src/types.ts`](src/types.ts) | Public vocabulary: `WorktreeId`, request, worktree, status, and reconcile types |
+| [`src/types.ts`](src/types.ts) | Public vocabulary: `WorktreeId`, `WorktreeLockHolder`, request, worktree, status, and reconcile types |
 
 ### Durable shape
 
-The provider opens the `worktree_registry` domain (version 1): one `worktrees` table keyed by `WorktreeId`, with `workspaceId`, canonical `path`, observed `branch`, and ISO-8601 timestamps. There is no global state — the list order is derived from record fields on every read.
+The provider opens the `worktree_registry` domain (version 2): one `worktrees` table keyed by `WorktreeId`, with `workspaceId`, canonical `path`, observed `branch`, ISO-8601 timestamps, and the optional `lockedBy`/`lockedAt` binding pair, which the record schema requires together. Version 2 added the binding fields; a medium stamped with version 1 rejects at open rather than half-reading under the new schema. There is no global state — the list order is derived from record fields on every read.
 
 ### Lifecycle
 
@@ -134,7 +149,7 @@ On start, the provider opens its domain and ties the handle's lifetime to its fi
 
 ### Failure and recovery
 
-Unknown workspaces, non-git workspace directories, already-registered paths, and git's own refusals all reject with git's stderr attached; nothing is swallowed. The two-step remove has one acknowledged window — git removed the worktree but the row delete failed — which surfaces as a loud error naming both facts while `status` reports the missing directory; `reconcile` with `pruneRows` recovers the stale row.
+Unknown workspaces, non-git workspace directories, already-registered paths, lock refusals, and git's own refusals all reject with the evidence attached; nothing is swallowed. The two-step remove has one acknowledged window — git removed the worktree but the row delete failed — which surfaces as a loud error naming both facts while `status` reports the missing directory; `reconcile` with `pruneRows` recovers the stale row.
 
 ### Invariant
 
@@ -175,7 +190,8 @@ Independent of live requests: the package never touches a request prefix, so it 
 
 These limits define when the registry is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
 
-- **No consumer yet** — the model-facing `worktree_*` tool and any host UI are future work; the shipped composition mounts the provider, but nothing calls it, so the feature has no product surface beyond the service API.
+- **A stale binding wedges removal** — a holder that never unbinds keeps its worktree unremovable until the holder returns, another authority unbinds with the holder value, or the row is dropped through reconcile after its directory vanished; the registry has no timeout or third-party break-lock operation.
+- **The binding gates only the registry** — it is a product-level exclusivity promise enforced at this registry's `remove`; git commands run outside the registry ignore it entirely.
 - **Reconcile never deletes trees** — dropping rows and adopting registrations are the only actions; a worktree that should be physically deleted still goes through `remove` (or the user's own hands).
 - **Remove needs its owner** — the owner workspace registration must still exist when a worktree is removed; deleting the workspace wedges its worktree rows' removal until the workspace is re-registered or the row is dropped through reconcile.
 - **Adoption trusts git's list** — an adopted worktree records the branch observed in it; a detached HEAD is recorded as `HEAD`, and the registry does not resolve what the detached HEAD points at.

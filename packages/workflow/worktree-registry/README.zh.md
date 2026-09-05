@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-worktree-registry` 给 host 一个持久的、每工作区的 git worktree 注册表：由产品创建、跟踪、并可再次删除的工作区仓库第二检出。有了它，消费方可以为某个 workspace 创建干净或隔离的检出、跨重启列出每个 workspace 名下的检出、观察每个检出是否干净及其所在分支、删除它——删除先经 git 删检出，再删登记，顺序永不颠倒——并把登记与 `git worktree list` 报告的状态对账。本包只在 host 侧：模型、工具与 agent loop 都看不见它，因此不增加任何 token、提示词或请求上下文。它需要 workspace registry、subprocess provider 和存储行一并挂载；组装只需几行配置。
+`dsh-worktree-registry` 给 host 一个持久的、每工作区的 git worktree 注册表：由产品创建、跟踪、并可再次删除的工作区仓库第二检出。有了它，消费方可以为某个 workspace 创建干净或隔离的检出、跨重启列出每个 workspace 名下的检出、观察每个检出是否干净及其所在分支、把一个检出绑定到唯一写入者使其他消费方无法删除、删除它——删除先经 git 删检出，再删登记，顺序永不颠倒——并把登记与 `git worktree list` 报告的状态对账。本包只在 host 侧：模型、工具与 agent loop 都看不见它，因此不增加任何 token、提示词或请求上下文。它需要 workspace registry、subprocess provider 和存储行一并挂载；组装只需几行配置。
 
 ## 目录
 
@@ -60,9 +60,20 @@ ctx.worktreeRegistry.list(workspaceId) // that workspace's registrations, stable
 await ctx.worktreeRegistry.status(worktree.id) // { directoryExists, branch, clean }
 ```
 
+### 把 worktree 绑定到唯一写入者
+
+支撑某个 Agent 任务的 worktree 需要排他承诺：同一时刻只有一个写入者。`bind(id, holder)` 把持久绑定盖到行上；holder 是注册表从不解释的不透明标记——通常是归属会话的持久 id——相等即全部契约。当前 holder 重复绑定是幂等成功；其他任何绑定以 `already-locked` 拒绝。`unbind(id, holder)` 清除绑定，未绑定时以 `not-locked` 拒绝，其他 holder 请求时以 `holder-mismatch` 拒绝：
+
+```text
+await ctx.worktreeRegistry.bind(worktree.id, WorktreeLockHolder(sessionId))
+await ctx.worktreeRegistry.unbind(worktree.id, WorktreeLockHolder(sessionId))
+```
+
+绑定是产品层的承诺，不是 git 锁：注册表不运行的 git 命令不受影响。绑定期间 `remove` 拒绝——`force` 绝不覆盖它——直到 holder 解绑。经 `reconcile` 加 `pruneRows` 丢弃的过时行连同其绑定一起丢弃，因为绑定守护的是活着的 checkout，不是消失的目录。
+
 ### 删除 worktree
 
-检出不再需要时删除登记：本包先运行 `git worktree remove`，git 成功之后才删持久化行。有改动或未跟踪文件的检出拒绝删除，除非传 `force: true`（对 git 传 `--force`）。删除绝不触碰 workspace 记录或仓库历史。
+检出不再需要时删除登记：本包先运行 `git worktree remove`，git 成功之后才删持久化行。有改动或未跟踪文件的检出拒绝删除，除非传 `force: true`（对 git 传 `--force`）；处于绑定状态的检出拒绝删除，直到其 holder 解绑。删除绝不触碰 workspace 记录或仓库历史。
 
 ### 对账登记与 git
 
@@ -79,7 +90,7 @@ const report = await ctx.worktreeRegistry.reconcile(workspaceId)
 
 ### 失败类别、重试语义与链接壳
 
-provider 能识别的 git 拒绝分为四类；每个错误都是 `WorktreeGitOperationError`，携带调用事实、git 的 stderr 与补救建议：
+provider 能识别的 git 拒绝分为四类；每个错误都是 `WorktreeGitOperationError`，携带调用事实、git 的 stderr 与补救建议。`create` 的分支唯一性检查从注册表自身的行出发、在 git 运行之前抛出同样的 `branch-conflict` 类别：
 
 | Kind | git 拒绝的原因 | 错误携带的补救 |
 |---|---|---|
@@ -87,6 +98,8 @@ provider 能识别的 git 拒绝分为四类；每个错误都是 `WorktreeGitOp
 | `branch-conflict` | 同名分支已存在 | 换分支名，或不带 `-b` 复用已有分支 |
 | `dirty-tree` | worktree 有改动或未跟踪文件 | 以 `force: true` 重试删除，或先清理 worktree |
 | `path-length` | 路径超出当前 git 配置的路径长度上限 | 换更短路径，或 `git config core.longpaths true` |
+
+锁定拒绝是另一个错误类：`WorktreeLockError` 携带封闭的拒绝类别（`already-locked`、`not-locked`、`holder-mismatch`），并指明 holder 事实与出路。它们是产品决策——git 从未见到请求——所以绝不流入 git stderr 分类器。
 
 重试语义：任何东西都不会自动重试。被拒绝的操作是确定性的——不改变参数的重试会再次失败。失败的尝试绝不留下登记行，也绝不留下 worktree（`remove` 只在 git 成功后才删行），所以修正后的重试从干净状态开始。`path-length` 拒绝时 git 可能在磁盘上留下空的前导目录；注册表既不登记也不删除它们。
 
@@ -107,6 +120,7 @@ provider 能识别的 git 拒绝分为四类；每个错误都是 `WorktreeGitOp
 - **uuid 是锚点，路径是事实。** worktree 路径会被规范化与 git 本身改写，所以行以生成的 `WorktreeId` 为 key，存储创建之后观测到的规范路径。
 - **独立的域，不挂 WorkspaceRecord 字段。** worktree 生命周期是 git 机制，不是 workspace 的 session 记账；行存在本包的 `worktree_registry` 域，归属关联是一个 `workspaceId` 字段，在操作时经 `ctx.workspaceRegistry` 校验。
 - **观测事实优先于假设。** 存储的分支是从新 worktree 读回的，存储的路径是创建后的 `fs.realpath`，`status` 只报告 git 当下报告的内容。
+- **绑定是消费方之间的承诺，不是机制。** 注册表存储并执行每个 worktree 至多一个 holder，但从不解释标记本身；执行点在注册表自己的 `remove`，holder 的身份属于铸造它的调用方。
 - **注册表是登记的权威。** `list` 从持久化行作答；git 自身元数据与之相悖时，`reconcile` 报告差异并仅在被要求时修复。
 - **对账默认只动登记侧。** 删行绝不删目录或文件，采纳绝不改写 worktree——动作只把产品的记录对齐到已存在的事实上。
 - **删除 git 优先。** `git worktree remove` 成功之后才删持久化行，所以失败的删除绝不会掩盖一个真实存在的检出。
@@ -119,16 +133,17 @@ seam 拆成抽象的 `WorktreeRegistry` Service Definition 与组合加载的 `G
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 包入口：导出、`WorktreeId` 工厂、provider 的 default export |
+| [`src/index.ts`](src/index.ts) | 包入口：导出、`WorktreeId`/`WorktreeLockHolder` 工厂、provider 的 default export |
 | [`src/registry.ts`](src/registry.ts) | 抽象 Service Definition 与 `ctx.worktreeRegistry` key |
-| [`src/git-provider.ts`](src/git-provider.ts) | 本地 git provider：配置校验、经 `ctx.subprocess` 跑 git、五个操作 |
+| [`src/git-provider.ts`](src/git-provider.ts) | 本地 git provider：配置校验、经 `ctx.subprocess` 跑 git、七个操作 |
+| [`src/lock-failures.ts`](src/lock-failures.ts) | `WorktreeLockError` 与封闭的锁定拒绝类别联合 |
 | [`src/porcelain.ts`](src/porcelain.ts) | `git worktree list --porcelain -z` 解析与对账用的路径比较 |
 | [`src/spec.ts`](src/spec.ts) | 域声明：记录 schema 与 `defineDomain` spec |
-| [`src/types.ts`](src/types.ts) | 公共词汇：`WorktreeId`、请求、worktree、status 与对账类型 |
+| [`src/types.ts`](src/types.ts) | 公共词汇：`WorktreeId`、`WorktreeLockHolder`、请求、worktree、status 与对账类型 |
 
 ### 持久形态
 
-provider 打开 `worktree_registry` 域（version 1）：一张以 `WorktreeId` 为 key 的 `worktrees` 表，带 `workspaceId`、规范 `path`、观测的 `branch` 和 ISO-8601 时间戳。没有 global 状态——list 顺序每次读取时从记录字段推导。
+provider 打开 `worktree_registry` 域（version 2）：一张以 `WorktreeId` 为 key 的 `worktrees` 表，带 `workspaceId`、规范 `path`、观测的 `branch`、ISO-8601 时间戳，以及成对必需的可选 `lockedBy`/`lockedAt` 绑定字段。version 2 新增绑定字段；version 1 盖章的介质在打开时拒绝，而不是在新 schema 下半读。没有 global 状态——list 顺序每次读取时从记录字段推导。
 
 ### 生命周期
 
@@ -136,7 +151,7 @@ provider 打开 `worktree_registry` 域（version 1）：一张以 `WorktreeId` 
 
 ### 失败与恢复
 
-未知 workspace、非 git 的 workspace 目录、已登记路径、git 自身的拒绝，全部带着 git 的 stderr 拒绝；没有任何东西被吞掉。两步删除有一个已知的窗口——git 已删 worktree 但行删除失败——表现为指明两个事实的响亮错误，同时 `status` 报告目录缺失；用 `reconcile` 加 `pruneRows` 可回收悬空行。
+未知 workspace、非 git 的 workspace 目录、已登记路径、锁定拒绝、git 自身的拒绝，全部带着证据拒绝；没有任何东西被吞掉。两步删除有一个已知的窗口——git 已删 worktree 但行删除失败——表现为指明两个事实的响亮错误，同时 `status` 报告目录缺失；用 `reconcile` 加 `pruneRows` 可回收悬空行。
 
 ### 不变量
 
@@ -180,7 +195,8 @@ provider 打开 `worktree_registry` 域（version 1）：一张以 `WorktreeId` 
 
 这些限制定义了注册表何时不适用或需要特殊运维关注。它们是当前包约束，不是任务积压。
 
-- **还没有消费方**——模型可见的 `worktree_*` 工具与任何 host UI 都是后续工作；已交付组合挂载了 provider，但没有任何东西调用它，所以服务 API 之外没有产品面。
+- **过时绑定卡住删除**——从不解绑的 holder 使其 worktree 不可删除，直到 holder 回来、其他权威以 holder 值解绑、或其目录消失后该行经 reconcile 丢弃；注册表没有超时或第三方破锁操作。
+- **绑定只约束注册表**——它是产品层的排他承诺，执行点在本注册表的 `remove`；注册表之外运行的 git 命令完全无视它。
 - **对账从不删除树**——删行与采纳登记是仅有的动作；需要物理删除的 worktree 仍走 `remove`（或用户自己动手）。
 - **删除需要归属方**——删除 worktree 时归属 workspace 登记必须仍存在；删除 workspace 会卡住其 worktree 行的删除，直到 workspace 重新登记或该行经 reconcile 删除。
 - **采纳信任 git 的列表**——被采纳的 worktree 记录观测到的分支；detached HEAD 记为 `HEAD`，注册表不解析 detached HEAD 指向什么。

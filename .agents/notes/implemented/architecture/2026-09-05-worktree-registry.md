@@ -12,25 +12,26 @@ An agent working inside a workspace needs second checkouts of the same repositor
 - Nothing ties a worktree to a `WorkspaceId`. The workspace entity is the product's anchor for "the directory the user works in"; worktrees are per-workspace facts, and a model-facing surface needs that link to present and bound them.
 - Nothing swaps the execution world. A worktree created through a sandboxed or remote provider must obey the same registry contract as a local one.
 
-This note owns the seam that holds those facts: a per-workspace registry of git worktrees with create/list/status/remove/reconcile, a local git provider, a durable home for the rows, and the model-facing consumer package.
+This note owns the seam that holds those facts: a per-workspace registry of git worktrees with create/bind/list/status/remove/reconcile, a local git provider, a durable home for the rows, and the model-facing consumer packages.
 
 ## Decision
 
-Package `packages/workflow/worktree-registry` (`@deepseek-ai/dsh-worktree-registry`) hosts the Service Definition and the Service Provider; package `packages/workflow/tool-worktree` (`@deepseek-ai/dsh-tool-worktree`) is the Consumer and owns the [tool decisions](../feature/2026-09-05-worktree-tools-and-reconcile.md). The registry follows the `dsh-shell` template: an abstract Service Definition declares the interface, a concrete provider class implements it, and the package's default export is the provider the Loader mounts.
+Package `packages/workflow/worktree-registry` (`@deepseek-ai/dsh-worktree-registry`) hosts the Service Definition and the Service Provider; package `packages/workflow/tool-worktree` (`@deepseek-ai/dsh-tool-worktree`) is the workspace-facing Consumer and owns the [tool decisions](../feature/2026-09-05-worktree-tools-and-reconcile.md); the experimental package `packages/experimental/agent-worktree` is the per-agent Consumer that binds each created worktree to one writer and owns the [single-writer binding decisions](../feature/2026-09-05-per-agent-worktree-single-writer-seam.md). The registry follows the `dsh-shell` template: an abstract Service Definition declares the interface, a concrete provider class implements it, and the package's default export is the provider the Loader mounts.
 
 | Role | Element | Notes |
 | --- | --- | --- |
 | Service Definition | `WorktreeRegistry` (abstract, named export) | Declares create/list/status/remove/reconcile, the record vocabulary, and the `ctx.worktreeRegistry` key. |
 | Service Provider | `GitWorktreeRegistry` (default export) | Runs `git` through `ctx.subprocess` and owns the durable rows. One provider per context; a second registration fails loud through cordis' duplicate-service rule. |
-| Consumer | `tool-worktree` | The model-facing `worktree_*` tools; see the [tools and reconcile Agent Note](../feature/2026-09-05-worktree-tools-and-reconcile.md) for the authorization and schema decisions. |
+| Consumer | `tool-worktree` | The workspace-facing `worktree_*` tools; see the [tools and reconcile Agent Note](../feature/2026-09-05-worktree-tools-and-reconcile.md) for the authorization and schema decisions. |
+| Consumer | `agent-worktree` (experimental, private) | The per-agent `worktree_create`/`worktree_status`/`worktree_remove` tools over single-writer bindings; see the [binding Agent Note](../feature/2026-09-05-per-agent-worktree-single-writer-seam.md). |
 
 ### Identity
 
-`WorktreeId = Branded<'WorktreeId'>` from `@deepseek-ai/dsh-brand`, minted as a generated uuid. The path is never the key: worktree paths are rewritten by normalization and by git itself, and a reference anchor must stay stable — the same rationale that gave `WorkspaceId` its uuid. The brand lives in this package because this package mints and consumes it.
+`WorktreeId = Branded<'WorktreeId'>` from `@deepseek-ai/dsh-brand`, minted as a generated uuid. The path is never the key: worktree paths are rewritten by normalization and by git itself, and a reference anchor must stay stable — the same rationale that gave `WorkspaceId` its uuid. The brand lives in this package because this package mints and consumes it. The single-writer binding marker is branded the same way (`WorktreeLockHolder = Branded<'WorktreeLockHolder'>`); the registry stores and compares it but never interprets it, so minting it stays the caller's decision.
 
 ### Durable state: an independent KvTable, not WorkspaceRecord
 
-The registry opens its own storage domain `worktree_registry` (version 1) with one table `worktrees` keyed by `WorktreeId`. A record carries `workspaceId` (the owner anchor), `path` (canonical, from `fs.realpath` observed after `git worktree add` succeeds), `branch` (observed HEAD at create, not the caller's assumption), `createdAt`, and `updatedAt`.
+The registry opens its own storage domain `worktree_registry` (version 2) with one table `worktrees` keyed by `WorktreeId`. A record carries `workspaceId` (the owner anchor), `path` (canonical, from `fs.realpath` observed after `git worktree add` succeeds), `branch` (observed HEAD at create, not the caller's assumption), `createdAt`, `updatedAt`, and the optional `lockedBy`/`lockedAt` binding pair, which the record schema requires together — a binding is written and read as one fact. Version 2 added the binding pair; a medium stamped version 1 rejects at open per the pre-release stance, with no half-reads under the new schema.
 
 Rows deliberately do not extend `WorkspaceRecord`:
 
@@ -59,6 +60,8 @@ export interface Worktree {
   readonly branch: string    // observed HEAD branch at create time
   readonly createdAt: string
   readonly updatedAt: string
+  readonly lockedBy?: WorktreeLockHolder  // present exactly with lockedAt
+  readonly lockedAt?: string
 }
 
 export interface WorktreeStatus {
@@ -76,6 +79,8 @@ export interface WorktreeReconcileReport {
 
 export abstract class WorktreeRegistry extends Service {
   create(request: WorktreeCreateRequest): Promise<Worktree>
+  bind(id: WorktreeId, holder: WorktreeLockHolder): Promise<Worktree>
+  unbind(id: WorktreeId, holder: WorktreeLockHolder): Promise<Worktree>
   list(workspaceId: WorkspaceId): readonly Worktree[]
   status(id: WorktreeId): Promise<WorktreeStatus>
   remove(id: WorktreeId, options?: { force?: boolean }): Promise<void>
@@ -85,11 +90,12 @@ export abstract class WorktreeRegistry extends Service {
 
 Semantics every provider honors:
 
-- **create** resolves the owner workspace through `ctx.workspaceRegistry` and fails loud on an unknown `workspaceId`. It rejects a path this registry already holds, then runs git; git's refusals are classified into the four typed failure kinds (occupied path, branch conflict, dirty tree, oversized path) with remediation text in the error. The returned record reflects observed facts — canonical path via `fs.realpath` after the directory exists, branch read back from the new worktree.
+- **create** resolves the owner workspace through `ctx.workspaceRegistry` and fails loud on an unknown `workspaceId`. It rejects a path this registry already holds, refuses an explicit branch another worktree of the same workspace already holds (the classified `branch-conflict` kind, raised before git runs), then runs git; git's refusals are classified into the four typed failure kinds (occupied path, branch conflict, dirty tree, oversized path) with remediation text in the error. The returned record reflects observed facts — canonical path via `fs.realpath` after the directory exists, branch read back from the new worktree.
+- **bind/unbind** maintain the single-writer binding: `bind` is idempotent for the current holder and refuses every other bind with `already-locked`; `unbind` refuses with `not-locked` when nothing is bound and `holder-mismatch` when another holder asks. Both return the fresh record, and refusals are `WorktreeLockError`s — product decisions, never git stderr.
 - **list** validates the workspace id the same way and returns that workspace's rows ordered by `createdAt` then id. It reads durable rows only; it does not shell out to `git worktree list`, because the registry — not the git metadata — is the authority for what this product registered. Reconciliation against git is reconcile's job.
 - **status** is the observation surface: a missing directory reports `directoryExists: false` without invoking git (an observation, not a failure); a present directory reports the live branch and cleanliness and fails loud if git itself errors.
-- **remove** runs `git worktree remove` (with `--force` when requested) and deletes the row only after git succeeded, so a failed remove never hides an existing worktree. A missing directory fails loud and names reconcile's `pruneRows` action as the recovery for the stale row.
-- **reconcile** diffs the rows against `git worktree list --porcelain -z` and only reports by default. `pruneRows` drops stale rows (a row whose directory vanished, or one git no longer tracks) and runs `git worktree prune` once when a directory-missing row was dropped — never deleting worktree files; `adoptUnregistered` registers git-tracked worktrees no row claims under any workspace, recording the branch git observes (`HEAD` when detached). The repository's main worktree and the reconciling workspace's own path are never reported as unregistered.
+- **remove** refuses while the worktree is bound — `force` never overrides the binding — then runs `git worktree remove` (with `--force` when requested) and deletes the row only after git succeeded, so a failed remove never hides an existing worktree. A missing directory fails loud and names reconcile's `pruneRows` action as the recovery for the stale row.
+- **reconcile** diffs the rows against `git worktree list --porcelain -z` and only reports by default. `pruneRows` drops stale rows (a row whose directory vanished, or one git no longer tracks) together with their bindings — a binding guards a live checkout, not a vanished directory — and runs `git worktree prune` once when a directory-missing row was dropped, never deleting worktree files; `adoptUnregistered` registers git-tracked worktrees no row claims under any workspace, recording the branch git observes (`HEAD` when detached). The repository's main worktree and the reconciling workspace's own path are never reported as unregistered.
 
 Registry mutations run on one operation chain inside the provider, and row writes go through the domain's write chain, so concurrent operations serialize exactly as in `dsh-workspace`.
 
@@ -138,6 +144,6 @@ The seam gives the harness a durable, workspace-anchored worktree vocabulary tha
 
 ## Verification
 
-- `pnpm exec vitest run packages/workflow/worktree-registry` covers create/list/status/remove over the memory backend with real git subprocesses, the reconcile agreement/detection/prune/adopt matrix, the four git failure dialects against captured stderr, and the Windows long-path refusal on win32 (`packages/workflow/worktree-registry/tests/`).
+- `pnpm exec vitest run packages/workflow/worktree-registry` covers create/bind/list/status/remove over the memory backend with real git subprocesses, the binding lifecycle and its refusal kinds, the reconcile agreement/detection/prune/adopt matrix, the four git failure dialects against captured stderr, and the Windows long-path refusal on win32 (`packages/workflow/worktree-registry/tests/`).
 - Disposal closes the storage domain, and a later operation fails loud instead of silently reopening (`loader-composition.spec.ts`); rows survive a cold restart over the json storage backend.
-- `pnpm run gen-cordis-catalog` keeps the generated Cordis API page fresh for the five abstract methods.
+- `pnpm run gen-cordis-catalog` keeps the generated Cordis API page fresh for the seven abstract methods.
