@@ -71,7 +71,9 @@ historical worktrees, any push/PR/publish, deletion of user files.
 - taskId: `P21-S-markshadow-host-wiring`.
 - worktreeId: `D:\dsh-devframe-v14-shadow-w1` / branch `p/v14-shadow-w1` @ base `c93b86c43e`.
 - Constraint: worker must NOT create agents; worker commits locally only.
-- Nine-state: assigned.
+- Nine-state: assigned → developing → **submitted** → reviewed → **integrated** (merge `0c0cdaf1e8`
+  into `codex/v14-shadow-lead`, --no-ff, L1-approved per `v14-p21s-review.md`). Completion at main
+  level is 主控's merge decision. Worker lane: huoshan-1 factual lane (native child).
 
 ## Hook-skip ledger and substitute verification (per 主控 directive ②)
 
