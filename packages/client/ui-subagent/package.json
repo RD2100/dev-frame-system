@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-subagent",
-  "description": "Subagent conversation catalog, continuation routing UI, and '@' reference source",
+  "description": "Subagent conversation catalog, continuation routing UI, and the '@subagent' provider-mention source",
   "version": "0.1.2-alpha.4",
   "publishConfig": {
     "access": "public"

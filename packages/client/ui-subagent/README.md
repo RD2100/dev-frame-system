@@ -1,5 +1,5 @@
 ---
-description: "Subagent conversation catalog, continuation routing UI, and '@' reference source for the dsh web client."
+description: "Subagent conversation catalog, continuation routing UI, and the '@subagent' provider-mention source for the dsh web client."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-client-ui-subagent` is the web client's subagent conversation feature: users browse and open subagent conversations from the parent session's header, continue them through reason-specific read-only composer states, and reference running children with the `@` source. From the parent session's header, users browse the complete subagent-origin descendant lineage — each row shows mode, running activity, token usage, and active-turn duration — and open any depth with the child's exact address. A one-shot child always opens a read-only composer identifying the transcript as a completed execution record; a continuable child routes follow-up prompts through its FIFO inbox while it runs. Subagent-origin Session rows are omitted from the ordinary sidebar, so the parent header catalog is their navigation entry point.
+`dsh-client-ui-subagent` is the web client's subagent conversation feature: users browse and open subagent conversations from the parent session's header, continue them through reason-specific read-only composer states, and mention mounted subagent providers with the `@subagent` source. From the parent session's header, users browse the complete subagent-origin descendant lineage — each row shows mode, running activity, token usage, and active-turn duration — and open any depth with the child's exact address. A one-shot child always opens a read-only composer identifying the transcript as a completed execution record; a continuable child routes follow-up prompts through its FIFO inbox while it runs. Subagent-origin Session rows are omitted from the ordinary sidebar, so the parent header catalog is their navigation entry point.
 
 ## Table of Contents
 
@@ -35,9 +35,9 @@ Rows display mode plus `running`/`inactive` activity and an optional log-backed 
 
 A continuable child with a live parent keeps the ordinary input chrome: typing and Send stay available while the child runs because every follow-up joins the child's FIFO inbox, and an independent Stop routes through `subagents/interruptByParent`. A continuable child whose exact parent is unavailable and which is not running elects a read-only composer explaining the recovery path; while such a child still runs, the selector yields to the ordinary composer with input and Send disabled but its independent Stop usable.
 
-### The `@` reference source
+### The `@subagent` mention source
 
-The `@` source remains deliberately separate and inert: candidates are zero-RPC running children from `ctx.sessions.list`, picking one inserts literal `@label ` text, and the codec projects `@label`. It has no command-adjudication hooks and does not resolve labels into continuation addresses.
+The `@subagent` source mentions the mounted Host subagent providers: candidates come from the `subagents/providers` Remote directory, which serves the live `ctx.subagents` registry, and picking one inserts literal `@<provider> ` text. It has no command-adjudication hooks and never starts a child — a mention is ordinary prompt text.
 
 -----
 
@@ -85,11 +85,11 @@ These pages cover the conversation surface, the host seam, and the design notes.
 
 #### What the model sees
 
-Only the `@` reference source affects model input: a picked candidate reaches the ordinary user message as literal `@label`, without a dedicated block or host-side resolution. Catalog browsing, child navigation, and persisted transcript viewing add no prompt section; accepted continuation content becomes a normal FIFO user message through the host subagent adapter.
+Only the `@subagent` mention source affects model input: a picked candidate reaches the ordinary user message as literal `@<provider>`, without a dedicated block or host-side resolution. Catalog browsing, child navigation, and persisted transcript viewing add no prompt section; accepted continuation content becomes a normal FIFO user message through the host subagent adapter.
 
 #### Token effect
 
-Conditional and append-only: the literal `@label` or a human follow-up adds tokens only to its new user message. Catalog and transcript operations add zero model tokens.
+Conditional and append-only: the literal `@<provider>` or a human follow-up adds tokens only to its new user message. Catalog and transcript operations add zero model tokens.
 
 #### KV Cache effect
 
@@ -100,10 +100,10 @@ Append-only. This package never edits earlier request tokens.
 <a id="known-limitations-and-deferred-work"></a>
 
 
-These limits define what the catalog can show and what `@` references mean; they are current package constraints.
+These limits define what the catalog can show and what `@` mentions mean; they are current package constraints.
 
 - **The catalog has no durable outcome** — activity and timing do not distinguish completion, failure, or cancellation, and the UI exposes no Activation identity; stopping is limited to the composer's current-turn Stop for a running continuable child.
-- **`@` references remain display-title text** — duplicate or renamed labels are ambiguous, so they intentionally do not acquire continuation semantics.
+- **`@subagent` mentions are prompt text** — a mention names a mounted provider but intentionally starts no child and acquires no continuation semantics.
 
 <a id="dev-note"></a>
 ### Dev Note
@@ -115,4 +115,4 @@ None.
 
 </details>
 
-**Runtime invariant:** No companion is published. A single slash-source registration whose disposal is proven by the HMR-safety spec — it emits no cordis events and owns no cross-plugin mutable state.
+**Runtime invariant:** No companion is published. The `@subagent` mention source's registration and disposal are covered by the browser-plugin spec — it emits no cordis events and owns no cross-plugin mutable state.

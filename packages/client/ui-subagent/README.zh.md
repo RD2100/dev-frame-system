@@ -1,5 +1,5 @@
 ---
-description: "dsh Web 客户端的 subagent 对话目录、续接路由 UI 与 '@' 引用 source。"
+description: "dsh Web 客户端的 subagent 对话目录、续接路由 UI 与 '@subagent' provider 提及 source。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-client-ui-subagent` 是 Web 客户端的 subagent 对话功能：用户从父会话的页头浏览并打开 subagent 对话，通过按原因区分的只读编辑器状态续接对话，并用 `@` source 引用运行中的 child。用户从父会话的页头浏览完整的 subagent 来源后代谱系——每一行显示 mode、运行活动、token 用量与活跃轮次耗时——并能以子会话的确切地址打开任意深度。one-shot child 始终打开一个把 transcript 说明为已完成执行记录的只读编辑器；可继续 child 在运行期间把后续提示词经其 FIFO inbox 路由。普通侧边栏会省略带 subagent origin 的会话行，因此父级页头目录是它们的导航入口。
+`dsh-client-ui-subagent` 是 Web 客户端的 subagent 对话功能：用户从父会话的页头浏览并打开 subagent 对话，通过按原因区分的只读编辑器状态续接对话，并用 `@subagent` source 提及已挂载的 subagent provider。用户从父会话的页头浏览完整的 subagent 来源后代谱系——每一行显示 mode、运行活动、token 用量与活跃轮次耗时——并能以子会话的确切地址打开任意深度。one-shot child 始终打开一个把 transcript 说明为已完成执行记录的只读编辑器；可继续 child 在运行期间把后续提示词经其 FIFO inbox 路由。普通侧边栏会省略带 subagent origin 的会话行，因此父级页头目录是它们的导航入口。
 
 ## 目录
 
@@ -35,9 +35,9 @@ kind: "package-reference"
 
 确切 parent 存活时，可继续 child 保留普通输入 chrome：child 运行期间输入和 Send 保持可用，因为每条后续消息都会进入 child 的 FIFO inbox，而独立的 Stop 经由 `subagents/interruptByParent` 路由。确切 parent 不可用且 child 未在运行的可继续 child 会选用说明恢复路径的只读编辑器；此类 child 仍在运行期间，selector 会让位给普通编辑器——输入区与 Send 被禁用，但独立的 Stop 保持可用。
 
-### `@` 引用 source
+### `@subagent` 提及 source
 
-`@` source 仍然刻意保持独立且惰性：候选是从 `ctx.sessions.list` 零 RPC 得到的运行中 child；pick 会插入字面文本 `@label `，codec 投影为 `@label`。它不参与命令裁决，也不会把 label 解析成继续执行地址。
+`@subagent` source 提及已挂载的宿主 subagent provider：候选来自 `subagents/providers` Remote 目录——它提供 `ctx.subagents` 的实时注册表；pick 会插入字面文本 `@<provider> `。它不参与命令裁决，也绝不启动 child——提及只是普通提示词文本。
 
 -----
 
@@ -85,11 +85,11 @@ one-shot child 始终选用只读编辑器。可继续 child 仅在其确切 par
 
 #### 模型看到的内容
 
-只有 `@` 引用 source 会影响模型输入：pick 的候选以字面文本 `@label` 进入普通用户消息，没有专用内容块或宿主侧解析。浏览目录、导航 child 与查看持久化 transcript 都不会添加提示词 section；已接收的继续交互内容会经宿主 subagent 适配器成为普通 FIFO 用户消息。
+只有 `@subagent` 提及 source 会影响模型输入：pick 的候选以字面文本 `@<provider>` 进入普通用户消息，没有专用内容块或宿主侧解析。浏览目录、导航 child 与查看持久化 transcript 都不会添加提示词 section；已接收的继续交互内容会经宿主 subagent 适配器成为普通 FIFO 用户消息。
 
 #### Token 影响
 
-有条件且仅追加：字面 `@label` 或用户后续消息只会向对应的新用户消息增加 token。目录与 transcript 操作增加零模型 token。
+有条件且仅追加：字面 `@<provider>` 或用户后续消息只会向对应的新用户消息增加 token。目录与 transcript 操作增加零模型 token。
 
 #### KV Cache 影响
 
@@ -100,10 +100,10 @@ one-shot child 始终选用只读编辑器。可继续 child 仅在其确切 par
 <a id="known-limitations-and-deferred-work"></a>
 
 
-这些限制定义目录能显示什么、`@` 引用意味着什么；它们是当前包约束。
+这些限制定义目录能显示什么、`@` 提及意味着什么；它们是当前包约束。
 
 - **目录没有持久化结果**：活动状态与计时无法区分完成、失败或取消，且 UI 不公开 Activation 身份；停止能力仅限编辑器上针对运行中可继续 child 的当前轮次 Stop。
-- **`@` 引用仍是显示标题文本**：重复或改名后的 label 会有歧义，因此它们刻意不获得继续执行语义。
+- **`@subagent` 提及只是提示词文本**：提及只指名一个已挂载 provider，刻意不启动 child，也不获得继续执行语义。
 
 <a id="dev-note"></a>
 ### 开发备注
@@ -115,4 +115,4 @@ one-shot child 始终选用只读编辑器。可继续 child 仅在其确切 par
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。插件只注册一个 slash source，HMR 测试覆盖释放；它不发出 Cordis 事件，也不持有跨插件可变状态。
+**运行时不变式：** 不发布伴生入口。`@subagent` 提及 source 的注册与释放由 browser-plugin 规格覆盖；它不发出 Cordis 事件，也不持有跨插件可变状态。
