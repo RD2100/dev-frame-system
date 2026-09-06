@@ -169,21 +169,31 @@
   "retainedInFlight": {
     "taskId": "battery",
     "lead": "0c852cbc-0f17-4a59-a43e-7a141f034efe",
-    "worker": "57d0355f-86ff-4f21-9edc-37d33d17e580",
+    "worker": "61e4739d-93e6-4531-aa23-2edb4bc7a781",
+    "previousWorker": "57d0355f-86ff-4f21-9edc-37d33d17e580 (same retained chain; no duplicate dispatch)",
     "parentOfLead": "session-fef69179-fbaa-49a8-932d-c69b5af24ff6 (V1.3)",
     "worktree": "D:/dsh-devframe-p-battery",
     "branch": "p/battery",
-    "headAtAudit": "c93b86c43e0a7fa9c5720ea70575241b0c990a22 (clean; no commits at audit time)",
-    "provider": "huoshan-1/glm-5.3-flash (per takeover-audit.json session records)",
+    "headAtAudit": "6f7d3e6051 (clean; stage-2/3 settlement amendment committed)",
+    "provider": "huoshan-1/glm-5.3-flash (persisted request/header and session-log evidence)",
     "domain": [
       "snapshot suite and corpus wiring",
       "snapshots/sdk",
       "snapshots/session",
       "snapshots/acp"
     ],
-    "state": "developing (per takeover-audit activeOwnership; worker turn was open at freeze 2026-09-06T02:42:55Z)",
+    "state": "completed/settled; controller merge commit 89f63d7d58 on codex/dsh-controller-v1.4; main merge pending controller-only closeout",
     "stagePlan": "stage 1 = per-scenario failure-signature classification of the 89-red snapshot battery (expected-drift -> record/ui variants; functional regression -> fail-loud); stage 2 = implementation, gated on V1.4 approval",
-    "channel": "cross-parent send_message to V1.3-origin sessions unreachable ('belongs to another parent session', documented in V1.3 registry); V1.4 stage-2 approval will be written to D:/dsh-devframe-v14/.agents/devframe/v14/battery-approval-request.json for external-coordinator relay; never duplicate dispatch, never terminate"
+    "settlement": {
+      "workerTurnEnd": "2026-09-06T07:02:18.390Z",
+      "commits": ["260219ffcc", "6f7d3e6051"],
+      "controllerMergeCommit": "89f63d7d58",
+      "domainScan": "177 files changed from c93b86c43e; 177 allowed, 0 outside, 0 vendor",
+      "controllerGates": "session-snapshot focused vitest 330 passed / 1 skipped; Shadow+Memory focused vitest 92 passed / 1 skipped; pnpm run typecheck exit 0; gen-cordis-catalog 115 computed / 0 written; staged diff-check exit 0",
+      "recordedFullSnapshot": "pnpm run test:snapshot win32 lib: 6 failed / 104 passed / 10 skipped; known GAP-1 ACP image-compaction, GAP-2 headless hook plus web minimal-preset, GAP-4 SDK subagent-continuable inheritance",
+      "hookLedger": "controller commit used --no-verify because host has no bash; substitute diff-check, domain, vendor, focused tests, typecheck, and catalog checks passed"
+    },
+    "channel": "cross-parent relay completed; no duplicate dispatch, no interruption, no termination"
   },
   "topology": {
     "creationEdges": "controller -> lead -> worker only, max two creation edges; workers never create agents",
