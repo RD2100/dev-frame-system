@@ -666,8 +666,38 @@ describe('tokenizeSessionFixtureCwd', () => {
     expect(tokenizeSessionFixtureCwd(out)).toBe(out)
   })
 
-  it('collapses a residual macOS realpath prefix around an existing cwd token', () => {
+  it('tokenizes the forward-separator spelling of a win32 native cwd at write time', () => {
+    const nativeCwd = 'C:\\Users\\runner\\AppData\\Local\\Temp\\dsh-log-snap-ab4NWy'
     const raw = [
+      JSON.stringify({ type: 'session', id: 's', createdAt: 1, cwd: nativeCwd }),
+      JSON.stringify({
+        type: 'tool/result',
+        seq: 1,
+        time: 2,
+        data: {
+          message: {
+            role: 'user',
+            content: [{
+              type: 'tool-result',
+              toolCallId: 't1',
+              content: [{ type: 'text', text: `<path>${nativeCwd.replaceAll('\\', '/')}/deleted.txt</path>` }],
+            }],
+          },
+        },
+      }),
+      '',
+    ].join('\n')
+
+    const out = tokenizeSessionFixtureCwd(raw)
+    const result = JSON.parse(out.split('\n')[1] as string) as {
+      data: { message: { content: { content: { text: string }[] }[] } }
+    }
+    const resultText = result.data.message.content[0]?.content[0]?.text
+
+    expect(resultText).toBe('<path>{{cwd}}/deleted.txt</path>')
+  })
+
+  it('collapses a residual macOS realpath prefix around an existing cwd token', () => {    const raw = [
       JSON.stringify({ type: 'session', id: 's', createdAt: 1, cwd: '{{cwd}}' }),
       JSON.stringify({
         type: 'tool/result',

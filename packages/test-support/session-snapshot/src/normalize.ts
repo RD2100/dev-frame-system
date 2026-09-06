@@ -304,7 +304,11 @@ export function tokenizeSessionFixtureCwd(rawLog: string): string {
   if (basename === undefined || basename.length === 0) {
     throw new Error('acp-snapshot: cannot tokenize a cwd without a basename')
   }
-  const ctx: NormalizeContext = { sessionIds: [], cwd }
+  // Tools may render the win32 native cwd with forward separators (file-URI
+  // style) even though the session header records the native form; cover that
+  // spelling at write time so the committed fixture carries the token instead
+  // of a run-specific absolute path. Identity on POSIX.
+  const ctx: NormalizeContext = { sessionIds: [], cwd, cwdAliases: [cwd.replaceAll('\\', '/')] }
   return lines.map((line) => {
     if (line.trim().length === 0) return line
     return JSON.stringify(tokenizeFixtureValue(JSON.parse(line), ctx, basename))
