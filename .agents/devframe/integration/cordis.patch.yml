@@ -148,13 +148,19 @@
         writeEnabled: true
         userScopeEnabled: false
 
-    # Read-only assembly: authorizedRoots is fail-closed (every entry must be
-    # an existing absolute directory at load) and points at one probe-owned
-    # workspace directory under the isolated home. No Shadow agent is marked,
-    # so the four project tools stay scope-isolated and every service call
-    # fails closed with SHADOW_CALLER_FORBIDDEN.
+    # Declarative designation face: this row declares the Shadow session id
+    # (shadowSessionId), and the service performs the real markShadow
+    # invocation itself — immediately when an agent with that id is already
+    # live at activation, otherwise when the host creates it. The marking
+    # stays inert until a host creates an agent with that id; with the field
+    # unconfigured or the id never created, the four project tools stay
+    # scope-isolated and every service call fails closed with
+    # SHADOW_CALLER_FORBIDDEN. authorizedRoots remains fail-closed (every
+    # entry must be an existing absolute directory at load) and points at one
+    # probe-owned workspace directory under the isolated home.
     - id: shadow-router
       name: '@deepseek-ai/dsh-experimental-shadow-router'
       config:
         authorizedRoots:
           - !!js dshHomePath('integration-shadow-roots')
+        shadowSessionId: session-shadow
