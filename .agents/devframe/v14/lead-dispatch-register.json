@@ -776,6 +776,15 @@
         "Recovery ledger complete: all four chains from the user candidate list are now live or settled - compos recovering, accept executing, gap4 settled+integrated, b2acp resuming. No chain remains failed."
       ],
       "status": "recovery complete (4/4 chains live or settled)"
+    },
+    {
+      "entry": "b2acp recovery confirmed ahead of controller snapshot: classification + design committed, fix shape single-point verified, worker tree next",
+      "facts": [
+        "Lead 293a2eeb corrected the controller snapshot: classification committed d82cbfd5fa (includes a refresh-cascade reproduction experiment in its own tree, reverted clean) and design committed b915db85ee (fix shape single-point verified: image-compaction manifest win32 variants + symlink declaration -> focused replay full-chain green exit 0). Both commits --no-verify + staged diff --check exit 0 receipts; tree clean at b915db85ee.",
+        "Acceptance baseline handled correctly: the lead branch base 5e5a706f0a predates the GAP-4 merge 92825045d0 and merging main is forbidden, so its in-tree full-suite expectation is honestly recorded as image-compaction green + both-mode/ptc recording-tree-root reds + subagent-continuable GAP-4 red (inherited base state) - zero new failures remains the hard gate; after controller merge the combined main result will be image-compaction green + two tree-root reds.",
+        "Next: create the w1 worker tree from b915db85ee, single worker dispatch via workflow explicit huoshan-2/glm-5.3-flash, then review+settle per the original brief."
+      ],
+      "status": "b2acp live (worker dispatch in flight)"
     }
   ]
 }
