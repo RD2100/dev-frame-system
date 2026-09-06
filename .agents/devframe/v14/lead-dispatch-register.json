@@ -414,6 +414,31 @@
         "After true worker turn/end: verify commits, test exit codes, domain boundaries, stdoutVariants extension; run controller gates (domain scan, diff --check, focused vitest, full build with invalidated tsbuildinfo for new test files); then sole main merge --no-ff --no-verify with documented message.",
         "F3 review already merged - do not re-review; only its A+B implementation status is in scope via the battery checklist."
       ]
+    },
+    {
+      "entry": "USER DIRECTIVE: provider-skew correction + dual-provider parallel routing fixed; real dispatch v14-p05assemble",
+      "userDirective": [
+        "Retained battery chain 0c852cbc->57d0355f stays on huoshan-1: never interrupt, re-dispatch, or replace.",
+        "The next independent low-conflict substantive task MUST be explicitly routed to huoshan-2/glm-5.3-flash via the verified real workflow agent(prompt,{provider:'huoshan-2',model:'glm-5.3-flash'}) schema - never UI labels or model names alone.",
+        "Record real request/header, first successful response, turn/end time, SessionID, parent-child hierarchy, worktree, file domain; compute real overlap with huoshan-1 in-flight windows.",
+        "If a unique L2 already exists and cannot change provider, keep it; use huoshan-2 for the next independent task. No rebuild, no terminate, no blind retry; backoff recorded only on real capacity errors.",
+        "Dual-provider parallel is the fixed ongoing efficiency routing; this correction is recorded in the v14 ledger/dispatch register."
+      ],
+      "taskSelection": [
+        "Candidate 1 (snapshot 88-red classification + suite.ts wiring + corpus vocabulary) = battery chain's active domain - conflict, excluded.",
+        "Candidates 2/3/4/6 blocked (Linux CI gate / no DEEPSEEK_API_KEY / product ruling pending / real data root missing).",
+        "Candidate 5 selected: P05 admission production assembly (P23/S4 first slice) - wire the merged evaluateCompletionAdmission three-predicate face (fingerprint -> required-checks -> review) into the native Goal lifecycle production call site; devframe domain, zero overlap with battery, no dependency, development scope authorized."
+      ],
+      "dispatch": {
+        "taskId": "v14-p05assemble",
+        "task": "P05 admission production assembly: design-first minimal production wiring of evaluateCompletionAdmission into the native Goal lifecycle with full test matrix and real gate receipts",
+        "worktree": "D:/dsh-devframe-v14-p05asm (controller-created, branch codex/v14-p05asm @ 2aaec82d24, clean)",
+        "topology": "1-edge direct controller dispatch via workflow agent() - within the <=2 creation-edge cap; worker forbidden to create any agent; deviation from the 2-edge lead pattern justified by the single bounded task and the user's immediate-dispatch order; worktree pre-created by controller",
+        "lane": "workflow agent(prompt, {provider:'huoshan-2', model:'glm-5.3-flash'})",
+        "writeDomains": "source edits only in the P05/goal-lifecycle seam files pre-declared in worker design.md; evidence/design in D:/dsh-devframe-v14-p05asm/.agents/devframe/v14-p05asm/worker/**; forbidden: snapshots/**, packages/test-support/session-snapshot/**, scripts/session-snapshot-corpus*, vendor/**, main tree writes",
+        "evidencePlan": "controller extracts the worker session log frame-by-frame (request/header provider, first success, turn/end) via read-session-log.mjs and computes real overlap with battery worker huoshan-1 in-flight window",
+        "status": "dispatching"
+      }
     }
   ]
 }
