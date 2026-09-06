@@ -101,6 +101,8 @@ export type RequiredChecksErrorCode =
   | 'REQUIRED_CHECKS_NOT_PASSED'
   /** A digest was resolved against the configuration store without a registration. */
   | 'REQUIRED_CHECKS_CONFIG_NOT_FOUND'
+  /** A file-backed registration ledger was unreadable as the expected JSON document. */
+  | 'REQUIRED_CHECKS_STORE_CORRUPT'
 
 /**
  * Structured failure from required-checks parsing and configuration storage,
