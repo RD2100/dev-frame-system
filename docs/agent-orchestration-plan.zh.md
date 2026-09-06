@@ -97,7 +97,7 @@ Agent 停顿时，总控读取其最后输出与 worktree，判定为已提交�
 
 ## 开发与合并顺序
 
-开发：七个 worktree 与负责人全部预先就位，但负责人按梯次激活——同时最多两路、按合并顺序优先——因为模型提供方执行账户级请求频率限制，曾终止七路并发 turn（429 证据见变更日志）。`packages/experimental/devframe` 内的共享文件——`src/index.ts`、`src/shared/types.ts`、`package.json`、`README.md` 与 tsconfig 聚合——只接受属主的增量编辑；合并时的冲突由总控解决。
+开发：七个 worktree 与负责人全部预先就位，但负责人激活改为串行——同一时间只有一名活跃负责人，按有界增量推进，每个增量以一次提交和一份简短中期报告收轮——因为模型提供方的账户级限流在七路并发与两路并发下都终止过 turn（429 证据见变更日志）。`packages/experimental/devframe` 内的共享文件——`src/index.ts`、`src/shared/types.ts`、`package.json`、`README.md` 与 tsconfig 聚合——只接受属主的增量编辑；合并时的冲突由总控解决。
 
 合并：总控按 F01 → F02 → F04 → F03 → F05 → F06 的顺序合入 `main`，随后以 F07 收口。每次合并先跑下表该功能的针对性命令，凡改动 docs、README 或 `.agents/` 内容即加跑 `pnpm run test:docs`。最终收口跑 typecheck、build、组合冒烟、针对性矩阵并记录集成报告。只有总控合并；负责人永不触碰 `main`。
 
@@ -133,3 +133,4 @@ Windows 主机，仅有 `pnpm`、`pwsh`、Node 24.19 与 git 2.53；无 npm、�
 - 2026-09-05：计划以 `2be4a074c2` 提交；在该提交上创建七个 worktree；七个负责人全部以宿主返回的真实 agentId 创建并派发完整任务；依赖安装在后台进行。
 - 2026-09-05：F04–F07 在产生任何编辑前异常停止（已核实各 worktree 停在基线）；总控已送达恢复消息令各自续作；F01–F03 持续运行；f01–f06 依赖安装完成，f07 收尾中。
 - 2026-09-05：七个负责人全部异常停止且各 worktree 零编辑，无工作丢失。会话日志证据显示 `429 AccountRateLimitExceeded` 且重试耗尽——七路并发 turn 触发提供方账户级限流。总控把执行修正为最多两路并发的梯次激活（先 F01 与 F06）；七个 worktree 的依赖安装全部完成。同时禁用 shell 递归遍历 `node_modules`（pnpm junction 环）；负责人改用限定范围的 glob 模式或 `git ls-files`。
+- 2026-09-05：两路并发同样死于 429 限流（F06 于第 2 轮第 47 步；F01 于第 14 步设计中被切断；均无提交，零丢失）。执行再次修正为单一活跃负责人的有界增量模式——每个增量提交并以中期报告收轮；活跃槽位由 F01 持有。主工作区出现来自本编排之外并行 Agent 的未提交变更（`AGENTS.md` 修改、新交接文档、`src/` 下编译产物）；此处仅记录，一律不动——本编排只暂存自己的文件。
