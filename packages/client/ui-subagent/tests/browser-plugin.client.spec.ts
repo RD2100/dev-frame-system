@@ -123,7 +123,7 @@ describe('apply', () => {
   it('registers the @subagent mention source over the provider directory and disposes it with the fiber', async () => {
     const { triggers, pluginFiber } = await fullBench(FAMILY)
     expect(triggers.registered).toHaveLength(1)
-    const source = triggers.registered[0]
+    const source = triggers.registered[0]!
     expect(source.trigger).toBe('@')
     expect(source.name).toBe('subagent')
     await expect(source.candidates(

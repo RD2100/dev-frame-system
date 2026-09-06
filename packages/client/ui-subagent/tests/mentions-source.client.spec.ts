@@ -13,7 +13,7 @@ function candidateRequest(query: string, signal: AbortSignal = new AbortControll
 }
 
 function sourceOver(registry: () => readonly string[]): InputTriggerSource {
-  return createSubagentMentionSource(registry as ReadProviders)
+  return createSubagentMentionSource(registry as unknown as ReadProviders)
 }
 
 describe('@subagent mention source', () => {
