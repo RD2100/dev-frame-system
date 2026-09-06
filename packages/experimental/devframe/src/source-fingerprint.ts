@@ -9,10 +9,10 @@
  * {@link SourceFingerprint} from the HEAD commit id plus a sha256 over the
  * canonical `ls-files -s -z` index byte stream. The fingerprint covers
  * tracked (index) state only — untracked files are a registered boundary
- * (.agents/devframe/p22/fprecompute-design.md). There is deliberately no
- * automatic recomputation on the binding hot path: comparison against a
- * recorded binding is an explicit verify-surface decision awaiting the
- * integration adjudication.
+ * (.agents/devframe/p22/fprecompute-design.md). Both entries —
+ * {@link computeSourceFingerprint} and the {@link verifySourceFingerprint}
+ * comparison — are explicit, off-hot-path calls: nothing recomputes or
+ * compares automatically on the binding path.
  * @module @deepseek-ai/dsh-experimental-devframe/source-fingerprint
  */
 
@@ -94,6 +94,34 @@ export interface ComputedSourceFingerprint {
    */
   readonly algorithm: 'v1'
 }
+
+/** Pass arm of a verify verdict: the recorded fingerprint was re-derived from the worktree. */
+export interface SourceFingerprintMatch {
+  /** Discriminant tag of the discriminated {@link VerifyVerdict} union. */
+  readonly kind: 'match'
+  /**
+   * The verified value — equal to the recorded fingerprint and to the fresh
+   * computation, so it can stand in for either in downstream evidence.
+   */
+  readonly fingerprint: SourceFingerprint
+}
+
+/** Reject arm of a verify verdict: the fresh computation diverged from the record. */
+export interface SourceFingerprintMismatch {
+  /** Discriminant tag of the discriminated {@link VerifyVerdict} union. */
+  readonly kind: 'mismatch'
+  /**
+   * The recorded value exactly as passed in — evidence of what was claimed,
+   * never a description of the current worktree state; the trustworthy side
+   * of this arm is {@link SourceFingerprintMismatch.computed}.
+   */
+  readonly recordedFingerprint: SourceFingerprint
+  /** Fresh computation read from the worktree at verify time; `computed.fingerprint` is the current value. */
+  readonly computed: ComputedSourceFingerprint
+}
+
+/** Discriminated union returned by {@link verifySourceFingerprint}. */
+export type VerifyVerdict = SourceFingerprintMatch | SourceFingerprintMismatch
 
 const DEFAULT_GIT_COMMAND = 'git'
 const DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024 * 1024
@@ -200,6 +228,44 @@ export async function computeSourceFingerprint(
     trackedEntryCount: countIndexEntries(listing.stdout),
     algorithm: 'v1',
   })
+}
+
+/**
+ * Explicit verify surface: recompute the worktree fingerprint and compare it
+ * with a recorded value under branded-string equality — the same semantics as
+ * the stored `ProjectWorkBinding.sourceFingerprint` comparison, which is why
+ * `recorded` is that bare branded string rather than a full
+ * {@link ComputedSourceFingerprint}: the durable record holds exactly that
+ * string, and digest fields besides the value must not vote in the equality.
+ * Read-only and off the binding hot path: the git subprocess cost is paid
+ * only when this function is called.
+ *
+ * Which side to trust per arm: on `match`, `fingerprint` is both the recorded
+ * claim and the fresh reading; on `mismatch`, `recordedFingerprint` is only
+ * the stale claim and `computed` is the fresh, trustworthy digest.
+ *
+ * @param worktreePath - absolute path to any directory inside the target git worktree.
+ * @param recorded - the previously recorded branded fingerprint (e.g. `ProjectWorkBinding.sourceFingerprint`).
+ * @returns a {@link SourceFingerprintMatch} when the fresh value equals
+ *   `recorded`; otherwise a {@link SourceFingerprintMismatch} carrying both sides.
+ * @throws {@link SourceFingerprintError} with one of the documented
+ *   {@link SourceFingerprintErrorCode} values, passed through unmodified from
+ *   {@link computeSourceFingerprint} (never wrapped, never swallowed):
+ *   - `SOURCE_FINGERPRINT_INVALID_REQUEST` — `worktreePath` is empty or relative;
+ *   - `SOURCE_FINGERPRINT_NOT_A_WORKTREE` — path missing or not a directory, outside any git worktree, or a bare repository;
+ *   - `SOURCE_FINGERPRINT_NO_COMMIT` — the repository has an unborn HEAD (no commits);
+ *   - `SOURCE_FINGERPRINT_GIT_UNAVAILABLE` — the git executable is missing (ENOENT) or not executable (EACCES);
+ *   - `SOURCE_FINGERPRINT_GIT_FAILED` — any other git failure, including index corruption and output-cap overflow.
+ */
+export async function verifySourceFingerprint(
+  worktreePath: string,
+  recorded: SourceFingerprint,
+): Promise<VerifyVerdict> {
+  const computed = await computeSourceFingerprint({ worktreePath })
+  if (computed.fingerprint === recorded) {
+    return { kind: 'match', fingerprint: computed.fingerprint }
+  }
+  return { kind: 'mismatch', recordedFingerprint: recorded, computed }
 }
 
 /**

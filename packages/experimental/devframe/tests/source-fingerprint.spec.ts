@@ -13,8 +13,9 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
-import { computeSourceFingerprint, SourceFingerprintError } from '../src/source-fingerprint.ts'
-import type { SourceFingerprintErrorCode } from '../src/source-fingerprint.ts'
+import { computeSourceFingerprint, SourceFingerprintError, verifySourceFingerprint } from '../src/source-fingerprint.ts'
+import type { SourceFingerprintErrorCode, VerifyVerdict } from '../src/source-fingerprint.ts'
+import { SourceFingerprint as makeSourceFingerprint } from '../src/shared/types.ts'
 
 const execFileAsync = promisify(execFile)
 
@@ -106,6 +107,14 @@ async function expectErrorCode(
   const error = caught as SourceFingerprintError
   expect(error.code).toBe(code)
   return error
+}
+
+/** Assert the verification rejects the record and return the mismatch arm. */
+async function expectMismatch(verification: Promise<VerifyVerdict>): Promise<Extract<VerifyVerdict, { kind: 'mismatch' }>> {
+  const verdict = await verification
+  expect(verdict.kind).toBe('mismatch')
+  if (verdict.kind !== 'mismatch') throw new Error('expected a mismatch verdict')
+  return verdict
 }
 
 describe('computeSourceFingerprint', { timeout: 30_000 }, () => {
@@ -335,5 +344,94 @@ describe('computeSourceFingerprint', { timeout: 30_000 }, () => {
       computeSourceFingerprint({ worktreePath: root, maxOutputBytes: 0 }),
       'SOURCE_FINGERPRINT_INVALID_REQUEST',
     )
+  })
+})
+
+describe('verifySourceFingerprint', { timeout: 30_000 }, () => {
+  // Same real-git fixture discipline as the engine suite above. The verify
+  // face has no gitCommand injection seam (it verifies the production face),
+  // so its pass-through evidence is the codes reachable from real fixtures;
+  // GIT_UNAVAILABLE/GIT_FAILED stay covered at the engine face.
+
+  it('matches when the recorded fingerprint equals the fresh computation of the same tree', async () => {
+    const fixture = await createRepository()
+    await fixture.write('src/main.ts', 'export {}\n')
+    await commitAll(fixture, 'initial')
+    const recorded = (await computeSourceFingerprint({ worktreePath: fixture.root })).fingerprint
+
+    const verdict = await verifySourceFingerprint(fixture.root, recorded)
+
+    expect(verdict).toEqual({ kind: 'match', fingerprint: recorded })
+  })
+
+  it('reports both sides when a tracked change is committed after the record', async () => {
+    const fixture = await createRepository()
+    await fixture.write('src/main.ts', 'export {}\n')
+    await commitAll(fixture, 'initial')
+    const baseline = await computeSourceFingerprint({ worktreePath: fixture.root })
+
+    await fixture.write('src/added.ts', 'export const added = true\n')
+    await commitAll(fixture, 'after record')
+    const verdict = await expectMismatch(verifySourceFingerprint(fixture.root, baseline.fingerprint))
+
+    // Dual-value presentation: the recorded side stays the stale claim, the
+    // computed side carries the fresh full digest, and the two diverge.
+    expect(verdict.recordedFingerprint).toBe(baseline.fingerprint)
+    expect(verdict.computed.fingerprint).not.toBe(baseline.fingerprint)
+    expect(verdict.computed.headCommit).not.toBe(baseline.headCommit)
+  })
+
+  it('reports a mismatch when a new file is staged without committing', async () => {
+    const fixture = await createRepository()
+    await fixture.write('src/main.ts', 'export {}\n')
+    await commitAll(fixture, 'initial')
+    const baseline = await computeSourceFingerprint({ worktreePath: fixture.root })
+
+    await fixture.write('src/staged.ts', 'export const staged = true\n')
+    await fixture.git(['add', 'src/staged.ts'])
+    const verdict = await expectMismatch(verifySourceFingerprint(fixture.root, baseline.fingerprint))
+
+    // Negative control: only the index moved (HEAD unchanged), so an
+    // implementation ignoring index state would return a match here.
+    expect(verdict.recordedFingerprint).toBe(baseline.fingerprint)
+    expect(verdict.computed.headCommit).toBe(baseline.headCommit)
+    expect(verdict.computed.fingerprint).not.toBe(baseline.fingerprint)
+  })
+
+  it('passes engine errors through with their original codes and shape', async () => {
+    const root = await createTempRoot()
+    const recorded = makeSourceFingerprint('dsh-source-fp-v1-verify-probe')
+
+    // Non-repository directory: the engine's own classification, not a wrap.
+    await expect(verifySourceFingerprint(root, recorded)).rejects.toThrow(SourceFingerprintError)
+    await expect(verifySourceFingerprint(root, recorded)).rejects.toMatchObject({
+      code: 'SOURCE_FINGERPRINT_NOT_A_WORKTREE',
+    })
+
+    // Repository with an unborn HEAD: NO_COMMIT bubbles unchanged.
+    const unborn = await createRepository()
+    await expect(verifySourceFingerprint(unborn.root, recorded)).rejects.toMatchObject({
+      code: 'SOURCE_FINGERPRINT_NO_COMMIT',
+    })
+
+    // Pre-validation input shape: INVALID_REQUEST bubbles unchanged too.
+    await expect(verifySourceFingerprint('relative/path', recorded)).rejects.toMatchObject({
+      code: 'SOURCE_FINGERPRINT_INVALID_REQUEST',
+    })
+  })
+
+  it('still matches when only untracked files appeared (untracked-invisible boundary)', async () => {
+    const fixture = await createRepository()
+    await fixture.write('src/main.ts', 'export {}\n')
+    await commitAll(fixture, 'initial')
+    const recorded = (await computeSourceFingerprint({ worktreePath: fixture.root })).fingerprint
+
+    // Registered boundary (fprecompute-design.md): a purely untracked file is
+    // invisible to the HEAD+index fingerprint, so verify passes until the
+    // change is staged or committed — the same edge the engine suite pins.
+    await fixture.write('scratch/untracked.txt', 'unreviewed change\n')
+    const verdict = await verifySourceFingerprint(fixture.root, recorded)
+
+    expect(verdict).toEqual({ kind: 'match', fingerprint: recorded })
   })
 })
