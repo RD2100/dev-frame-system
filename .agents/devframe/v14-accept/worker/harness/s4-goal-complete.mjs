@@ -100,7 +100,25 @@ async function run(_tree, outDir) {
     [CommandRuntime],
     [GoalService],
     [commandGoal],
-    [commandGoalBinding, { workspaceId: 'ws-v14-accept', workspaceRoot: worktree }],
+    // Post-compos adaptation (controller, mirrors the adjudicated R1 shape):
+    // the composition config now requires checks/taskIds/maxAttempts at mount;
+    // the boot-probe check runs as a real subprocess so /goal-complete can read
+    // real start evidence instead of the pre-compos NO_VERIFICATION_TEXT pin.
+    [commandGoalBinding, {
+      workspaceId: 'ws-v14-accept',
+      workspaceRoot: worktree,
+      checks: {
+        version: 1,
+        checks: [{
+          checkId: 'boot-probe',
+          executable: 'node',
+          arguments: ['-e', 'process.exit(0)'],
+          cwd: worktree,
+        }],
+      },
+      taskIds: [TaskId('task-v14-accept')],
+      maxAttempts: 3,
+    }],
   ], root)
   registerMockAdapter(ctx)
   const agent = ctx.agentLoop.create(SessionId(SESSION_ID), { provider: 'mock', model: 'mock' })
@@ -244,7 +262,7 @@ async function run(_tree, outDir) {
     }),
     check({
       id: 's4-5-no-verification-text-pinned',
-      expectation: 'after startBinding succeeds, /goal-complete answers the error text NO_VERIFICATION_TEXT verbatim (pinned: production composition has no producer wiring; v14-compos in flight)',
+      expectation: 'after startBinding succeeds, /goal-complete answers the error text NO_VERIFICATION_TEXT verbatim (the startBinding lane lands the binding only and has no verification producer by design; verification evidence lands via the /devframe-start host lane delivered by the v14-compos wave)',
       pass: rClearForStart.kind === 'success' && binding !== undefined && r6.kind === 'error' && r6.text === NO_VERIFICATION_TEXT,
       observed: {
         intermediateClear: { kind: rClearForStart.kind, text: rClearForStart.text },
