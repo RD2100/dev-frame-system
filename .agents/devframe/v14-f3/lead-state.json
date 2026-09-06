@@ -12,7 +12,27 @@
     "branch": "codex/v14-f3-lead",
     "fileDomain": ".agents/devframe/v14-f3/**"
   },
-  "state": "submitted",
+  "state": "integrated",
+  "integration": {
+    "rulingSource": "controller send_message (2026-09-06, after settlement)",
+    "mergeCommit": "5c7e57d146 (codex/v14-f3-lead merged to main by controller; all four lead commits ac4f1c3493/e58cdad866/b6895beeec/3e05a4de72 in chain)",
+    "controllerGates": "6 files all inside .agents/devframe/v14-f3/, 0 outside-domain, 0 vendor, 0 production/snapshot touches, diff --check exit 0; proposal-type delivery, no vitest/build gates applicable",
+    "ruling": "A+B handed to battery chain per battery-approval-request.json addendum revision 3 (snapshots/corpus owner); C rejected stands; F3 GAP settled by battery after A lands and V1/V2 pass",
+    "laneEvidenceAccepted": "huoshan-2 real request/response + 6992ms overlap adjudicated by controller"
+  },
+  "coordinationAddenda": {
+    "turn1_429_attribution": {
+      "fact": "External coordinator relayed user directive: the lead session's turn-1 real 429 came from the huoshan-1 route (persisted on coordinator side), must NOT be attributed to huoshan-2",
+      "leadAction": "Registered as-is; lead never observed a 429 on the huoshan-2 route and performed no blind retry on any route (huoshan-2 succeeded on probe 1, substantive worker run, and probe 2)"
+    },
+    "directiveCompliance": {
+      "workflowSchemaVerification": "done (probe 1 LANE-OK, probe 2 LANE-OK-2; persisted JSON provider fields verified)",
+      "independentL2Worker": "done exactly once (unique worker per original task): session c376aa04, worktree D:/dsh-devframe-v14-f3-w1, branch codex/v14-f3-w1-semverify, commit a573d7609f, integrated as b6895beeec; no repeated source audit before dispatch",
+      "workerDerivationForbidden": true,
+      "writeDomain": ".agents/devframe/v14-f3/** only (lead + worker trees)",
+      "productionAndSnapshots": "untouched"
+    }
+  },
   "stateHistory": [
     {
       "state": "planned",
@@ -33,6 +53,11 @@
       "state": "submitted",
       "at": "2026-09-06T13:00:38+09:00",
       "note": "review accepted 12/12 spot-checks (1 line-range nit hedged by worker); lead-review.md written; settlement reported to controller"
+    },
+    {
+      "state": "integrated",
+      "at": "2026-09-06T13:05:13+09:00",
+      "note": "controller merged codex/v14-f3-lead to main as 5c7e57d146, ruled A+B to battery chain (addendum rev 3) and C rejected, accepted lane evidence (6992ms overlap); coordinator 429-attribution addendum registered; fresh probe-2 evidence appended below"
     }
   ],
   "leadBriefing": {
@@ -63,6 +88,23 @@
         "turnEnd": "completed",
         "qualification": "Connectivity probe only, not substantive F3 worker delivery"
       }
+    },
+    "probe2": {
+      "workflow": "f3-lane-probe-2",
+      "script": "agent('...LANE-OK-2 probe...', { provider: 'huoshan-2', model: 'glm-5.3-flash', label: 'f3-lane-probe-2' })",
+      "resultVerbatim": "workflow \"f3-lane-probe-2\" completed (1 agent). Return value: { \"probeReply\": \"LANE-OK-2\" }",
+      "at": "2026-09-06T13:04:11+09:00",
+      "persistedSessionEvidence": {
+        "probeSession": "3b457ab4-68ee-4b7e-8a87-1764f94b3fbf",
+        "source": "session.jsonl.zstd decoded by lead with frame-loop decoder (14 magic offsets, 14 frames, 36 events)",
+        "header": "parentSession=77e4a9a2-db3f-4eb2-916c-dce8cfd615f9, origin=subagent, delegationDepth=2, createdAt epoch ms 1788667451767",
+        "requestTime": "request/header seq13 @ epoch ms 1788667451810 = 2026-09-06T13:04:11.810+09:00, config.provider=huoshan-2, config.model=glm-5.3-flash (request/context seq14 confirms provider/model, contextWindow 262144)",
+        "responseTime": "assistant/chunk finish @ epoch ms 1788667455162 = 2026-09-06T13:04:15.162+09:00 with wire response responseId=021788667454424e5604ce51ad3a2545ae54a532380ddce8ac13e, provider=huoshan-2, model=glm-5.3-flash, responseModel=glm-5-3-flash",
+        "turnEnd": "turn/end seq176 @ epoch ms 1788667455163 = 2026-09-06T13:04:15.163+09:00, reason completed",
+        "window": "2026-09-06T13:04:11.810+09:00 .. 13:04:15.163+09:00 (about 3.35 s)",
+        "huoshan1OverlapObservation": "no first-party huoshan-1 write observed inside this specific window (Shadow L2 0b883d36 idle since 12:44:06+09:00); the accepted dual-path overlap record remains the controller-adjudicated 6992ms on the substantive worker window plus Integration-chain evidence held by the controller"
+      },
+      "purpose": "Fresh lane data point requested by coordinator relay after 429-attribution clarification; not a retry of any failed route"
     },
     "workerEvidence": {
       "workerSession": "c376aa04-d710-4e0d-9971-ffb6a9731067",
@@ -120,5 +162,5 @@
     "decodeSession": ".agents/devframe/v14-f3/tools/decode-session.mjs - session.jsonl.zstd is an append stream of zstd frames; node:zlib sync decompress returns only the first frame; multi-frame reads decode per-frame at 0x28B52FFD magic offsets (verified: probe file 9 magic offsets, worker file 2825 frames all decoded)",
     "globNote": "glob tool returned a false negative for the exact path scripts/session-snapshot-corpus.corpus.ts; existence confirmed via pwsh Test-Path (file present, 9427 bytes)"
   },
-  "updatedAt": "2026-09-06T13:00:38+09:00"
+  "updatedAt": "2026-09-06T13:05:13+09:00"
 }
