@@ -530,9 +530,12 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /**
-   * List registered provider names in insertion order.
+   * List registered provider names in insertion order. The `subagents/providers`
+   * Remote face serves this exact read as the mentionable-provider directory:
+   * client `@` mention sources render the live registry, never a static roster.
    * @returns the registered names.
    */
+  @Remote('providers')
   list(): string[] {
     return [...this.providers.keys()]
   }
