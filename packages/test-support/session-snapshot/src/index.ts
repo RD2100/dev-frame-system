@@ -39,6 +39,7 @@ export {
 } from './launcher.ts'
 export {
   extractSnapshotSpillPaths,
+  jsonEscape,
   normalizeSessionLog,
   normalizeSessionSnapshot,
   normalizeSessionSnapshots,

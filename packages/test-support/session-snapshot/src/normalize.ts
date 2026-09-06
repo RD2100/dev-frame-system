@@ -108,6 +108,18 @@ export interface NormalizeOptions {
   identityMode?: 'legacy' | 'preserve'
 }
 
+/**
+ * Render a value as a JSON string-literal body, so substituting it into a JSON
+ * fixture line keeps the line parseable when the value contains JSON specials
+ * — backslash paths on Windows would otherwise form invalid escapes. Identity
+ * for typical POSIX paths, so authored fixtures realize byte-identically.
+ * @param value - the raw value to inject between JSON string quotes.
+ * @returns the escaped string-literal body.
+ */
+export function jsonEscape(value: string): string {
+  return JSON.stringify(value).slice(1, -1)
+}
+
 /** Return every known spelling of the generated cwd, most specific first. */
 function cwdSpellings(ctx: NormalizeContext): string[] {
   const spellings = [...new Set([ctx.cwd, ...ctx.cwdAliases ?? []])]
@@ -115,7 +127,12 @@ function cwdSpellings(ctx: NormalizeContext): string[] {
   const macAliases = spellings
     .filter(spelling => spelling.startsWith('/') && !spelling.startsWith('/private/'))
     .map(spelling => `/private${spelling}`)
-  return [...new Set([...spellings, ...macAliases])]
+  const raw = [...new Set([...spellings, ...macAliases])]
+  // Plugin texts serialize embedded content through JSON.stringify, so a win32
+  // cwd also appears JSON-escaped (`C:\\...`); cover that spelling of every raw
+  // form too. Identity for paths without JSON specials, so POSIX is unchanged.
+  const escaped = raw.filter(spelling => jsonEscape(spelling) !== spelling).map(spelling => jsonEscape(spelling))
+  return [...new Set([...raw, ...escaped])]
     .sort((left, right) => right.length - left.length)
 }
 

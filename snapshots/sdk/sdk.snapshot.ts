@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest'
 import {
   captureExpectedWorkspaceSnapshot,
   captureWorkspaceSnapshot,
+  jsonEscape,
   normalizeSessionLog,
   normalizeSessionSnapshots,
   normalizeStdout,
@@ -308,7 +309,10 @@ async function hydrateReplayFixtures(scenario: CorpusScenario, cwd: string): Pro
   await mkdir(root, { recursive: true })
   return Promise.all((await fixtureFiles(scenario)).map(async (source) => {
     const destination = join(root, basename(source))
-    await writeFile(destination, (await readFile(source, 'utf8')).replaceAll('{{cwd}}', cwd))
+    // {{cwd}} sits inside JSON string values, so inject the cwd as a JSON
+    // string-literal body: a raw win32 path would form invalid escape
+    // sequences and the runtime's llm-replay would fail to parse the fixture.
+    await writeFile(destination, (await readFile(source, 'utf8')).split('{{cwd}}').join(jsonEscape(cwd)))
     return destination
   }))
 }

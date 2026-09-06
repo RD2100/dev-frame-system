@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   type NormalizeContext,
   extractSnapshotSpillPaths,
+  jsonEscape,
   normalizeSessionLog,
   normalizeSessionSnapshot,
   normalizeSessionSnapshots,
@@ -649,6 +650,71 @@ describe('tokenizeSessionFixtureCwd', () => {
     expect(() => tokenizeSessionFixtureCwd('')).toThrow(
       'acp-snapshot: cannot tokenize a cwd without a basename',
     )
+  })
+})
+
+describe('win32 JSON-escaped cwd spelling', () => {
+  const winCwd = String.raw`C:\Users\runner\AppData\Local\Temp\acp-snap-cwd-abc123`
+  // The JSON string-literal body of the cwd: what embedded serialization
+  // (double backslashes) leaves in string values on win32.
+  const escapedCwd = jsonEscape(winCwd)
+
+  function logWithEmbeddedText(): string {
+    return [
+      JSON.stringify({ type: 'session', id: 's', createdAt: 1, cwd: winCwd }),
+      JSON.stringify({
+        type: 'user/message',
+        seq: 1,
+        time: 2,
+        data: { content: [{ type: 'text', text: `workspace: "${escapedCwd}". More context follows.` }] },
+      }),
+      '',
+    ].join('\n')
+  }
+
+  function embeddedTextOf(jsonl: string): string {
+    const record = JSON.parse(jsonl.split('\n').find(line => line.includes('user/message')) as string) as {
+      data: { content: { text: string }[] }
+    }
+    return (record.data.content[0] as { text: string }).text
+  }
+
+  it('tokenizes the escaped spelling in the comparison direction', () => {
+    const out = normalizeSessionLog(logWithEmbeddedText(), { sessionIds: [], cwd: winCwd })
+    expect(embeddedTextOf(out)).toBe('workspace: "{{cwd}}". More context follows.')
+    expect(out).not.toContain(winCwd)
+    expect(out).not.toContain(escapedCwd)
+  })
+
+  it('tokenizes the escaped spelling in the fixture-stabilization direction', () => {
+    const out = tokenizeSessionFixtureCwd(logWithEmbeddedText())
+    expect(out).toContain('"cwd":"{{cwd}}"')
+    expect(embeddedTextOf(out)).toBe('workspace: "{{cwd}}". More context follows.')
+    expect(out).not.toContain(winCwd)
+    expect(out).not.toContain(escapedCwd)
+    expect(tokenizeSessionFixtureCwd(out)).toBe(out)
+  })
+
+  it('keeps the POSIX spelling identity under JSON escaping', () => {
+    const posixCwd = '/tmp/acp-snap-cwd-abc123'
+    expect(jsonEscape(posixCwd)).toBe(posixCwd)
+    const raw = [
+      JSON.stringify({ type: 'session', id: 's', createdAt: 1, cwd: posixCwd }),
+      JSON.stringify({
+        type: 'user/message',
+        seq: 1,
+        time: 2,
+        data: { content: [{ type: 'text', text: `at ${posixCwd}/x and "${posixCwd}" ends` }] },
+      }),
+      '',
+    ].join('\n')
+    const out = normalizeSessionLog(raw, { sessionIds: [], cwd: posixCwd })
+    const record = JSON.parse(out.split('\n').find(line => line.includes('user/message')) as string) as {
+      data: { content: { text: string }[] }
+    }
+    expect((record.data.content[0] as { text: string }).text).toBe(`at {{cwd}}/x and "{{cwd}}" ends`)
+    expect(out).toContain('"cwd":"{{cwd}}"')
+    expect(out).not.toContain(posixCwd)
   })
 })
 
