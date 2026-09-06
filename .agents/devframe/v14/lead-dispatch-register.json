@@ -739,6 +739,15 @@
         "Dispatch freeze: no new chains until at least two chains are healthy again; concurrency ceiling for this account recalibrated downward from 6 toward 3-4 mixed sessions per the corrected dynamic rule."
       ],
       "status": "capacity event recorded; recovery armed, awaiting cooling window"
+    },
+    {
+      "entry": "Staggered recovery step 1 executed: compos2 resumed; gap4 chain confirmed self-recovering",
+      "facts": [
+        "Cooling verified: the gap4 chain served requests continuously through and after the storm - lead 695bcaf0 alive (tool/call at 14:45:22Z), committed classification+design (1a22444f6f, message confirms the subagent-continuable hang is root-caused), and its worker 64e8c551 (huoshan-2/glm-5.3-flash, depth 2) reached turn/end at 14:42:39Z inside the storm window; the lead is continuing autonomously - untouched by the controller.",
+        "Staggered step 1: compos2 lead 85ad815d resumed with a state-aware brief - audit compos-w1 dirty=10 (interrupted worker partial), commit honestly-attributed WIP if coherent, continue via a fresh workflow worker from that baseline, then review+settle per the original brief; it is the ONLY chain resumed this round; if another retry storm hits, record and stop.",
+        "Held for next steps: accept2 (step 2) and b2acp (step 3) resume after compos2 shows healthy; dispatch freeze continues until two chains are healthy."
+      ],
+      "status": "recovery in progress (1 of 4 chains resumed)"
     }
   ]
 }
