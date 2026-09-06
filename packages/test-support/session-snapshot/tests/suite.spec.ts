@@ -860,6 +860,7 @@ describe('refreshFixtureReplacements', () => {
     expect(refreshFixtureReplacements(logs, fixtures)).toEqual([
       { from: nativeCwd, to: '{{cwd}}' },
       { from: forwardCwd, to: '{{cwd}}' },
+      { from: nativeCwd.replaceAll('\\', '\\\\'), to: '{{cwd}}' },
     ])
   })
 
