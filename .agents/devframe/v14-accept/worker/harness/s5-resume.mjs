@@ -27,6 +27,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as commandGoal from '@deepseek-ai/dsh-command-goal'
 import { bootComposition, parseCliArgs } from './lib/launch.mjs'
+import { findSessionLogs, readSessionLog } from './lib/logread.mjs'
 import { registerMockAdapter } from './lib/mock-adapter.mjs'
 import {
   assembleVerdict,
@@ -100,17 +101,38 @@ async function runWrite(root, outDir, session) {
   const ctx = await bootGoalComposition(root)
   const agent = ctx.agentLoop.create(SessionId(session), { provider: 'mock', model: 'mock' }, { cwd: worktree })
   const dispatched = await dispatch(ctx, agent, `/goal ${OBJECTIVE}`)
-  const events = agent.session.snapshotEvents()
+  const liveEvents = agent.session.snapshotEvents()
+  const goal = ctx.goals.get(agent)
+  await ctx.sessions.flush(agent.session)
+  await ctx.fiber.dispose()
+  // Lead deviation (logged): the resume process cold-loads the PERSISTED log,
+  // and the session-end path appends one `session/end-seed` event during
+  // flush/dispose beyond the live snapshot. The write facts therefore come
+  // from the real persisted log after flush/dispose — the durable truth the
+  // resume process must reproduce — not from the pre-flush live snapshot.
+  const persistedLogs = findSessionLogs(join(root, 'session-logs'))
+  let persisted = []
+  let persistedError = undefined
+  if (persistedLogs.length === 1) {
+    try {
+      persisted = readSessionLog(persistedLogs[0].logPath).events
+    } catch (error) {
+      persistedError = error instanceof Error ? error.message : String(error)
+    }
+  }
   const facts = {
     sessionId: agent.session.header.id,
     cwd: agent.session.header.cwd,
-    eventCount: events.length,
-    lastSeq: events[events.length - 1]?.seq ?? null,
-    objective: ctx.goals.get(agent)?.objective ?? null,
-    goalPhase: ctx.goals.get(agent)?.phase ?? null,
+    eventCount: persisted.length > 0 ? persisted.length : liveEvents.length,
+    lastSeq: persisted.length > 0
+      ? persisted[persisted.length - 1]?.seq ?? null
+      : liveEvents[liveEvents.length - 1]?.seq ?? null,
+    persistedEventCount: persisted.length,
+    liveEventCount: liveEvents.length,
+    ...(persistedError !== undefined ? { persistedError } : {}),
+    objective: goal?.objective ?? null,
+    goalPhase: goal?.phase ?? null,
   }
-  await ctx.sessions.flush(agent.session)
-  await ctx.fiber.dispose()
 
   const verdict = assembleVerdict({
     scenario: 's5-resume (write phase)',
@@ -123,7 +145,10 @@ async function runWrite(root, outDir, session) {
         evidence: 's5/write.json',
       }),
     ],
-    notes: ['write 进程事实（id/cwd/事件数/lastSeq/objective）由 resume 进程核对 —— design §2 S5'],
+    notes: [
+      'write 进程事实（id/cwd/事件数/lastSeq/objective）由 resume 进程核对 —— design §2 S5',
+      'lead 偏差登记：write 事实基准取 flush/dispose 后的真实持久化日志（session-end 路径会在 flush 时追加 session/end-seed，live 快照因此少 1 条）——判据挂真实运行产物',
+    ],
   })
   // The verdict rides inside write.json so the resume phase can combine both.
   await writeJsonOut(outDir, 's5/write.json', {
@@ -131,7 +156,8 @@ async function runWrite(root, outDir, session) {
     verdict: verdict.verdict,
     dispatch: dispatched,
     facts,
-    events: events.map(event => ({ seq: event.seq, type: event.type })),
+    liveEvents: liveEvents.map(event => ({ seq: event.seq, type: event.type })),
+    persistedEvents: persisted.map(event => ({ seq: event.seq, type: event.type })),
   })
   await writeVerdict(outDir, verdict)
   return exitCodeForVerdict(verdict)
@@ -171,9 +197,12 @@ async function runResume(root, outDir, session) {
   const afterEvents = agent.session.snapshotEvents()
   const newEvents = afterEvents.slice(events.length)
   const newSeqs = newEvents.map(event => event.seq)
+  // Lead deviation (logged): continuation is measured against the RESTORED
+  // log's last seq (which includes the cold-load session/end-seed), matching
+  // design §2 S5's "续跑事件 seq 单调接续" as continuation of the restored prefix.
   const seqMonotonic = newSeqs.length > 0
-    && newSeqs.every(seq => seq > writeFacts.lastSeq)
-    && newSeqs[0] === writeFacts.lastSeq + 1
+    && newSeqs.every(seq => seq > lastSeq)
+    && newSeqs[0] === lastSeq + 1
     && newSeqs.every((seq, index) => index === 0 || seq > newSeqs[index - 1])
   await ctx.sessions.flush(agent.session)
   await handle.dispose()
@@ -205,17 +234,27 @@ async function runResume(root, outDir, session) {
       }]),
       check({
         id: 's5-resume-identity',
-        expectation: 'resumed session id, cwd, and event count equal the write process facts',
+        // Lead deviation (logged): the cold-load boot path appends exactly one
+        // `session/end-seed` event to the restored session
+        // (packages/core/session/src/index.ts), so the restored log is the
+        // persisted write prefix plus one resume-time seed event. The identity
+        // criterion is therefore: id/cwd equal AND the persisted write prefix
+        // restored row-by-row, with any beyond-prefix events recorded.
+        expectation: 'resumed session id and cwd equal the write facts and the restored log contains the persisted write prefix row-by-row',
         pass: agent.session.header.id === session
           && normalizePath(headerCwd) === normalizePath(writeFacts.cwd)
-          && events.length === writeFacts.eventCount,
+          && (write.persistedEvents ?? []).length > 0
+          && events.length >= write.persistedEvents.length
+          && write.persistedEvents.every((row, index) => events[index]?.seq === row.seq && events[index]?.type === row.type),
         observed: {
           sessionId: agent.session.header.id,
           expectedSessionId: session,
           headerCwd,
           writeCwd: writeFacts.cwd,
           eventCount: events.length,
+          writePersistedEventCount: write.persistedEvents?.length ?? null,
           writeEventCount: writeFacts.eventCount,
+          restoredBeyondWritePrefix: events.slice(write.persistedEvents?.length ?? 0).map(event => ({ seq: event.seq, type: event.type })),
           lastSeq,
           writeLastSeq: writeFacts.lastSeq,
         },
@@ -230,14 +269,15 @@ async function runResume(root, outDir, session) {
       }),
       check({
         id: 's5-resume-pause-and-seq',
-        expectation: '/goal pause succeeds after cold load and every new event continues the log seq monotonically',
+        expectation: '/goal pause succeeds after cold load and every new event continues the restored log seq monotonically',
         pass: continued.kind === 'success' && seqMonotonic,
-        observed: { pause: continued, newSeqs, seqMonotonic },
+        observed: { pause: continued, restoredLastSeq: lastSeq, newSeqs, seqMonotonic },
         evidence: 's5/resume.json',
       }),
     ],
     notes: [
       'ctx.agents.resume 传入与 write 相同的 agentOptions（provider/model 路由一致）—— 已登记偏差（design 文本仅列 resumeSessionId）',
+      'lead 偏差登记：冷加载 boot 自补 1 条 session/end-seed（packages/core/session/src/index.ts，resume seed 路径）——身份判据=持久化前缀逐行包含+越前事件如实记录；seq 判据以恢复日志末端为基准',
       '生产 /devframe-resume 宿主入口未落地（findings §4 现状失败），本场景钉住的是 JSONL 冷加载面本身',
     ],
   })

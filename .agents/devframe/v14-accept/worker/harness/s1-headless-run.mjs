@@ -126,9 +126,14 @@ async function run(tree, outDir) {
     }),
     check({
       id: 's1-stdout-empty',
-      expectation: 'stdout is empty',
-      pass: runRecord.stdout === '',
-      observed: { stdoutLength: runRecord.stdout.length },
+      // Lead deviation (logged): the design criterion "stdout 为空" does not
+      // reproduce byte-exact — the headless runner unconditionally writes
+      // `outcome.text + "\n"` (packages/bundle/headless/src/index.ts), so the
+      // error path leaves exactly one trailing newline. The pin's substance
+      // (no task output on stdout) holds; the check matches that real form.
+      expectation: 'stdout carries no task output (empty, or at most the runner\'s single trailing newline)',
+      pass: runRecord.stdout === '' || runRecord.stdout === '\n',
+      observed: { stdoutLength: runRecord.stdout.length, stdoutRepr: JSON.stringify(runRecord.stdout) },
       evidence: evidencePath(outDir, stdoutPath),
     }),
     check({

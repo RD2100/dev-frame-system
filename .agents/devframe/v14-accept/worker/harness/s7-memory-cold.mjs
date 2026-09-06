@@ -209,8 +209,8 @@ async function runRead(root, outDir) {
   await handle.dispose()
   await ctx.fiber.dispose()
 
-  const fieldEqual = (note, request, namespace) => note !== undefined
-    && note.noteId === (namespace === 'project' ? projectNoteId : userNoteId)
+  const fieldEqual = (note, request, expectedNoteId, namespace) => note !== undefined
+    && note.noteId === expectedNoteId
     && note.body === request.body
     && note.kind === request.kind
     && note.status === request.assertionStatus
@@ -242,8 +242,8 @@ async function runRead(root, outDir) {
       check({
         id: 's7-read-found-verified-equal',
         expectation: 'read by noteId → found + verified:true + note fields equal the write-time request (project and user domain)',
-        pass: projectRead.status === 'found' && projectVerified === true && fieldEqual(projectNote, PROJECT_NOTE, 'projects/ws-accept')
-          && userRead.status === 'found' && userVerified === true && fieldEqual(userNote, USER_NOTE, 'user'),
+        pass: projectRead.status === 'found' && projectVerified === true && fieldEqual(projectNote, PROJECT_NOTE, projectNoteId, 'projects/ws-accept')
+          && userRead.status === 'found' && userVerified === true && fieldEqual(userNote, USER_NOTE, userNoteId, 'user'),
         observed: {
           project: { status: projectRead.status, verified: projectVerified, note: projectNote },
           user: { status: userRead.status, verified: userVerified, note: userNote },
