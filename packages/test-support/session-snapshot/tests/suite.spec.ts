@@ -478,6 +478,16 @@ describe('stdoutExpectedVariants', () => {
       { file: 'stdout.expected.jsonl', cwdPathMode: 'canonical' },
     ])
   })
+
+  it('replaces the shared golden with a declared stdout variant on its platform', () => {
+    const declared: Scenario = { ...scenario, stdoutVariants: { win32: true } }
+    expect(stdoutExpectedVariants(declared, 'win32')).toEqual([
+      { file: 'stdout.win32.expected.jsonl', cwdPathMode: 'native' },
+    ])
+    expect(stdoutExpectedVariants(declared, 'linux')).toEqual([
+      { file: 'stdout.expected.jsonl', cwdPathMode: 'canonical' },
+    ])
+  })
 })
 
 describe('scenarioSkipped', () => {
@@ -838,6 +848,20 @@ describe('refreshFixtureReplacements', () => {
     expect(refreshFixtureReplacements(logs, fixtures)).toEqual([
       { from: 'new-parent', to: 'old-parent' },
       { from: '/new', to: '/old' },
+    ])
+  })
+
+  it('maps the forward-separator spelling of a fresh win32 cwd to the fixture value too', () => {
+    const log = (content: string): HarvestedLog => ({ id: 'diagnostic', createdAt: 1, content })
+    const nativeCwd = 'C:\\Users\\runner\\AppData\\Local\\Temp\\dsh-log-snap-ab4NWy'
+    const forwardCwd = nativeCwd.replaceAll('\\', '/')
+    const logs = [log(`${JSON.stringify({ type: 'session', id: 's', cwd: nativeCwd })}\n${JSON.stringify({ type: 'tool/result', data: { content: [{ type: 'text', text: `<path>${forwardCwd}/deleted.txt</path>` }] } })}\n`)]
+    const fixtures = ['{"type":"session","id":"s","cwd":"{{cwd}}"}\n']
+    expect(refreshFixtureReplacements(logs, fixtures)).toEqual([
+      { from: nativeCwd, to: '{{cwd}}' },
+      { from: forwardCwd, to: '{{cwd}}' },
+      { from: nativeCwd.replaceAll('\\', '\\\\'), to: '{{cwd}}' },
+      { from: nativeCwd.replaceAll('\\', '\\\\').replaceAll('\\', '\\\\'), to: '{{cwd}}' },
     ])
   })
 

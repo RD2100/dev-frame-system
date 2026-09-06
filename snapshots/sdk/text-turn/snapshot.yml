@@ -6,3 +6,8 @@ recording: live
 header:
   class: sdk-upload
   pin: true
+sessionVariants:
+  win32: true
+expectations:
+  variants:
+    win32: [system-prompt, tool-schemas]

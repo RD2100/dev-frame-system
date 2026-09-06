@@ -1,0 +1,187 @@
+{
+  "initial": [
+    {
+      "name": "bash",
+      "description": "Run commands in a bash shell\n* When invoking this tool, the contents of the \"command\" parameter does NOT need to be XML-escaped.\n* You don't have access to the internet via this tool.\n* You do have access to a mirror of common linux and python packages via apt and pip.\n* State is persistent across command calls and discussions with the user.\n* To inspect a particular line range of a file, e.g. lines 10-25, try 'sed -n 10,25p /path/to/the/file'.\n* Please avoid commands that may produce a very large amount of output.\n* Please run long lived commands in the background, e.g. 'sleep 10 &' or start a server in the background.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "The bash command to run. Relative path is preferred in the command."
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "str_replace_editor",
+      "description": "Custom editing tool for viewing, creating and editing files\n* State is persistent across command calls and discussions with the user\n* If `path` is a file, `view` displays the result of applying `cat -n`. If `path` is a directory, `view` lists non-hidden files and directories up to 2 levels deep\n* The `create` command cannot be used if the specified `path` already exists as a file\n* If a `command` generates a long output, it will be truncated and marked with `<response clipped>`\n* A null placeholder for a parameter unused by the selected command is treated as omitted. Required parameters still need values; omit `str_replace.new_str` rather than setting it to null when deleting a match\n\nNotes for using the `str_replace` command:\n* The `old_str` parameter should match EXACTLY one or more consecutive lines from the original file. Be mindful of whitespaces!\n* If the `old_str` parameter is not unique in the file, the replacement will not be performed. Make sure to include enough context in `old_str` to make it unique\n* The `new_str` parameter should contain the edited lines that should replace the `old_str`",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "The commands to run. Allowed options are: `view`, `create`, `str_replace`, `insert`.",
+            "enum": [
+              "view",
+              "create",
+              "str_replace",
+              "insert"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "description": "Absolute path to file or directory, e.g. `/repo/file.py` or `/repo`."
+          },
+          "file_text": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required string parameter of `create` command, with the content of the file to be created. A null placeholder is treated as omitted by commands that do not use this parameter."
+          },
+          "insert_line": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required integer parameter of `insert` command. The `new_str` will be inserted AFTER the line `insert_line` of `path`. A null placeholder is treated as omitted by commands that do not use this parameter."
+          },
+          "new_str": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional string parameter of `str_replace` command containing the new string (if omitted, no string will be added). Required string parameter of `insert` command containing the string to insert. A null placeholder is accepted only by commands that do not use this parameter."
+          },
+          "old_str": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required string parameter of `str_replace` command containing the string in `path` to replace. A null placeholder is treated as omitted by commands that do not use this parameter."
+          },
+          "view_range": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional parameter of `view` command when `path` points to a file. If omitted or null, the full file is shown. If provided, the file will be shown in the indicated line number range, e.g. [11, 12] will show lines 11 and 12. Indexing at 1 to start. Setting `[start_line, -1]` shows all lines from `start_line` to the end of the file."
+          }
+        },
+        "required": [
+          "command",
+          "path"
+        ]
+      }
+    },
+    {
+      "name": "worktree_create",
+      "description": "Create a new git worktree: a second checkout of this session's workspace repository in a separate directory, registered durably. Use it to build or test in a clean tree while the workspace holds uncommitted work, to isolate an experiment, or to run a parallel task. The target directory must not exist (git creates it) and must not be the workspace directory itself; branch is optional and names a NEW branch to check out (omitted, git derives the name from the directory). Returns the worktree id, canonical path, and observed branch — keep the id for worktree_status and worktree_remove. Refusals name the cause and the fix: an existing non-empty target (path-exists), an already-taken branch name (branch-conflict), or a target path too long for git's configuration (path-length).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Target checkout directory for the new worktree; absolute, or relative to the workspace directory. Must not exist."
+          },
+          "branch": {
+            "type": "string",
+            "description": "New branch to create and check out. Omitted, git derives the branch name from the directory name."
+          }
+        },
+        "required": [
+          "path"
+        ]
+      }
+    },
+    {
+      "name": "worktree_list",
+      "description": "List the git worktrees registered for this session's workspace: id, canonical path, branch, and creation time for each, in stable order. Registrations survive restarts. Worktrees created outside the product never appear here — use worktree_prune to see and adopt them.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "worktree_prune",
+      "description": "Reconcile the workspace's worktree registrations with what git actually reports. The report names dangling registrations (directory-missing: the directory is gone; git-unknown: git no longer tracks the path) and unregistered worktrees (git-tracked checkouts created outside the product). By default this only reports. Pass pruneDangling: true to drop the stale registrations — registry rows only, never directories or files — and adoptUnregistered: true to register the outside-created worktrees. Run this when worktree_status reports a missing directory, worktree_remove refuses on a vanished worktree, or you suspect worktrees were created or deleted outside the product.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pruneDangling": {
+            "type": "boolean",
+            "description": "Drop the dangling registrations (registry rows only; never directories or files)."
+          },
+          "adoptUnregistered": {
+            "type": "boolean",
+            "description": "Register the unregistered git-tracked worktrees under this workspace."
+          }
+        }
+      }
+    },
+    {
+      "name": "worktree_remove",
+      "description": "Remove one registered git worktree by id: git deletes the checkout, and only then is the registration dropped. A worktree with modified or untracked files refuses to go unless force is true, which discards them. The workspace's own checkout and the repository's history are never touched. Get ids from worktree_list; if the directory already vanished outside the product, use worktree_prune instead.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The worktree id, from worktree_list."
+          },
+          "force": {
+            "type": "boolean",
+            "description": "Pass true to allow removing a worktree with modified or untracked files, discarding them."
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "worktree_status",
+      "description": "Observe one registered git worktree's live state by id: whether its directory still exists, which branch it has checked out now, and whether the tree is clean (no modified or untracked files). A missing directory is reported as directoryExists: false — an observation, not an error; recover the stale registration with worktree_prune. Get ids from worktree_list.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The worktree id, from worktree_list."
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    }
+  ],
+  "changes": []
+}
