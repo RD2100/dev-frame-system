@@ -36,6 +36,24 @@ export interface SnapshotReplayManifest {
 /** Host requirements for a scenario's process-level controller. */
 export type SnapshotPlatform = 'posix' | 'pwsh'
 
+/** Pinned expected sidecar that a platform variant can replace. */
+export type SnapshotExpectationKind = 'system-prompt' | 'tool-schemas'
+
+/**
+ * Host platform family that selects a scenario's expected-file variant, derived
+ * from the reading host's `process.platform` (`win32`, otherwise `posix`).
+ * Unlike `SnapshotPlatform` — a scenario-level host requirement that skips the
+ * run on unsuitable hosts — this vocabulary classifies which committed expected
+ * file each host platform reads; it never skips anything.
+ */
+export type SnapshotExpectationPlatform = 'win32' | 'posix'
+
+/** Platform-keyed expected-file variant declarations for a pinned scenario. */
+export interface SnapshotExpectationsManifest {
+  /** Expected sidecar kinds that carry a variant file for each declared platform family. */
+  variants: Partial<Record<SnapshotExpectationPlatform, SnapshotExpectationKind[]>>
+}
+
 /** Deployment permission preset selected before the scenario starts. */
 export type SnapshotPermission = 'read-only' | 'workspace-write' | 'danger-full-access'
 
@@ -87,6 +105,12 @@ export interface SnapshotManifest {
   recording?: SnapshotRecording
   /** Request-header class and sidecar ownership. */
   header?: SnapshotHeaderManifest
+  /**
+   * Platform-variant expected files for the pinned sidecars, read by the host
+   * platform instead of the base sidecar; every declared variant file must be
+   * committed. Only meaningful on a pinned header.
+   */
+  expectations?: SnapshotExpectationsManifest
   /** Exceptional replay metadata absent for ordinary successful recordings. */
   replay?: SnapshotReplayManifest
   /** Optional host requirement; portable scenarios omit it. */
@@ -107,6 +131,8 @@ const PROFILES = new Set<SnapshotProfile>(['headless', 'sdk', 'acp', 'web'])
 const RECORDINGS = new Set<SnapshotRecording>(['live', 'authored'])
 const PLATFORMS = new Set<SnapshotPlatform>(['posix', 'pwsh'])
 const PERMISSIONS = new Set<SnapshotPermission>(['read-only', 'workspace-write', 'danger-full-access'])
+const EXPECTATION_PLATFORMS = ['win32', 'posix'] as const
+const EXPECTATION_KINDS = new Set<SnapshotExpectationKind>(['system-prompt', 'tool-schemas'])
 const NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 function record(value: unknown, label: string): Record<string, unknown> {
@@ -167,6 +193,7 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       'composition',
       'recording',
       'header',
+      'expectations',
       'replay',
       'platform',
       'permission',
@@ -227,6 +254,33 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
           : { childToolSchemas: positiveIndexes(value.childToolSchemas, 'manifest.header.childToolSchemas') }),
         ...(value.changes === undefined ? {} : { changes: Number(value.changes) }),
       }
+    }
+
+    let expectations: SnapshotExpectationsManifest | undefined
+    if (root.expectations !== undefined) {
+      if (header?.pin !== true) throw new Error('manifest.expectations must be declared on a pinned header')
+      const value = record(root.expectations, 'manifest.expectations')
+      exactKeys(value, ['variants'], 'manifest.expectations')
+      const variants = record(value.variants, 'manifest.expectations.variants')
+      exactKeys(variants, EXPECTATION_PLATFORMS, 'manifest.expectations.variants')
+      if (Object.keys(variants).length === 0) {
+        throw new Error('manifest.expectations.variants must declare at least one platform')
+      }
+      const parsed: Partial<Record<SnapshotExpectationPlatform, SnapshotExpectationKind[]>> = {}
+      for (const [variant, kinds] of Object.entries(variants)) {
+        const label = `manifest.expectations.variants.${variant}`
+        if (!Array.isArray(kinds) || kinds.length === 0) {
+          throw new Error(`${label} must be a non-empty array of expectation kinds`)
+        }
+        if (kinds.some(kind => typeof kind !== 'string' || !EXPECTATION_KINDS.has(kind as SnapshotExpectationKind))) {
+          throw new Error(`${label} must list system-prompt or tool-schemas kinds`)
+        }
+        if (new Set(kinds).size !== kinds.length) {
+          throw new Error(`${label} must not repeat expectation kinds`)
+        }
+        parsed[variant as SnapshotExpectationPlatform] = [...kinds as SnapshotExpectationKind[]]
+      }
+      expectations = { variants: parsed }
     }
 
     let replay: SnapshotReplayManifest | undefined
@@ -339,6 +393,7 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       ...(composition === undefined ? {} : { composition }),
       ...(recording === undefined ? {} : { recording }),
       ...(header === undefined ? {} : { header }),
+      ...(expectations === undefined ? {} : { expectations }),
       ...(replay === undefined ? {} : { replay }),
       ...(platform === undefined ? {} : { platform }),
       ...(permission === undefined ? {} : { permission }),

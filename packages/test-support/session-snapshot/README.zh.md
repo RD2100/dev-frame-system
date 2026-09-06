@@ -80,6 +80,8 @@ defineAcpSnapshotSuite({
 
 每个 pin 默认拥有其生成的 `system-prompt.expected.md` 或 `tool-schemas.expected.json` 伴随文件；当完整的对应序列相同时，`systemPromptSource` 与 `toolSchemasSource` 指定另一个 pin 作为来源，因此每个不同版本只提交一次。该 pin 的 `session.jsonl` 存储 `"system":"{{system}}","tools":"{{tools}}"`，同时保留配置、原因与任何模型可见前缀。自身作用域组合出不同请求的子会话按 fixture 索引以 `pinsChildToolSchemas` 与 `pinsChildSystemPrompts` 单独声明。运行中改变请求 header 的场景声明 `expectedHeaderChanges`。
 
+当某个 pin 的伴随文件内容因宿主平台而合理分化时，场景在 manifest 中声明分化而不是削弱 pin：`expectations.variants` 把每个平台族（`win32`，或代表其余宿主的 `posix`）映射到在基础伴随文件旁携带 `<stem>.<平台族>.expected.<ext>` 变体文件的伴随类别（`system-prompt`、`tool-schemas`），场景通道在声明了当前宿主的变体时比较变体文件，否则比较基础文件——web 通道今天即按此消费。声明了变体但文件缺失时，fixture 清单守卫在所有宿主上失败，匹配宿主上的比较立即失败。
+
 ### 平台与组合变体
 
 需要非 Windows 主机的场景声明 `posixOnly`，在 Windows 上跳过运行测试，但 fixture 保护仍在所有平台覆盖其已提交文件；组合需要可用 `pwsh` 的场景声明 `pwshOnly`。当临时目录授权自身待测时，`workspaceParent` 将生成子级 cwd 移出平台临时区域；场景签入的 `workspace/` 会先复制到该子级，随后 `prepareWorkspace` 在 agent 启动前针对生成 cwd 运行。默认生成的 workspace 在会话 fixture 中存储为 `{{cwd}}`，使平台临时根目录与随机 basename 不影响录制。
@@ -111,6 +113,7 @@ defineAcpSnapshotSuite({
 | [`src/launcher.ts`](src/launcher.ts) | 子进程/客户端启动器与关闭所有权 |
 | [`src/harness.ts`](src/harness.ts) | 脚本化场景驱动与会话日志收集 |
 | [`src/manifest.ts`](src/manifest.ts) | 封闭 `snapshot.yml` schema、收集与归属规则 |
+| [`src/expectations.ts`](src/expectations.ts) | pinned 场景的平台变体期望文件解析 |
 | [`src/identity.ts`](src/identity.ts) | 跨父子日志的类型化首次出现身份 token 化 |
 | [`src/normalize.ts`](src/normalize.ts) | 纯规范化器与擦除辅助 |
 | [`src/workspace.ts`](src/workspace.ts) | 场景 workspace 设置与完整预期状态比较 |
