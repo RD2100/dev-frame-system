@@ -599,6 +599,26 @@
         "mergeAuthority": "controller only, after review of lead settlement",
         "status": "dispatched"
       }
+    },
+    {
+      "entry": "Parallel fill-in wave: v14-batteryfix (Battery GAP-1/2/4 root-cause repair) via plugin lead",
+      "ownershipVerification": [
+        "Snapshot domain free: p/battery settled at 6f7d3e6051 (merged via 89f63d7d58); no active chain owns snapshots/**, packages/test-support/session-snapshot/**, or corpus wiring; v14-next reservation is .agents/devframe/v14/next/** records only (productionSourceOwned=0).",
+        "Domain disjoint from in-flight EvJournal (devframe/agent-evidence): zero file overlap, no coordination dependency.",
+        "Candidate 2 (durable GoalBindingStore) deferred to the next wave: it shares devframe exports/README with EvJournal - partition after EvJournal declares its exact files, per the no-whole-package-lockout rule."
+      ],
+      "dispatch": {
+        "taskId": "v14-batteryfix",
+        "task": "Battery GAP-1 (ACP image-compaction) / GAP-2 (headless hook + web minimal-preset) / GAP-4 (SDK subagent-continuable inheritance): targeted reproduction FIRST with real exit codes and stderr signatures read from the in-main settlement (.agents/devframe/battery/stage2-3-settlement.md, read-only) and fresh replay runs, per-scenario root-cause classification (expectation drift vs functional regression), then minimal fix - win32 variant authoring ONLY for drift-class per the established sessionVariants mechanism; functional regressions fail loud and are reported as product findings, never masked by re-recording (no blind re-record)",
+        "topology": "corrected strict topology: controller -> plugin lead (continuable subagent, independent worktree codex/v14-batteryfix-lead) -> worker dispatched BY THE LEAD via workflow agent(prompt, provider huoshan-2, model glm-5.3-flash) into lead-created worker worktree codex/v14-batteryfix-w1",
+        "leadWorktree": "D:/dsh-devframe-v14-batteryfix-lead (controller-created @ 24b7db9189, clean)",
+        "workerWriteDomain": "lead-declared snapshots/session-snapshot/corpus files + .agents/devframe/v14-batteryfix/worker/**; forbidden: .agents/devframe/v14/next/**, vendor/**, devframe/agent-evidence/command-goal-binding/shadow-router/project-memory zero-diff, main-tree writes, EvJournal interaction",
+        "gateTable": "focused vitest + targeted test:snapshot replays (before/after per scenario) + invalidated-tsbuildinfo build + gen-cordis-catalog if types change + diff --check + single trailing newline + test:docs (mandatory)",
+        "ledgerDiscipline": "per-task independent records; shared ledger single-writer by controller with ConvertFrom-Json validation before every commit (corruption recurrence prevention)",
+        "evidencePlan": "controller extracts worker session evidence (parentSession=lead session, depth 2) from persisted logs; dual-provider lanes explicit per wave",
+        "mergeAuthority": "controller only, after lead settlement review and cross-plugin checks on same-SHA evidence",
+        "status": "dispatched"
+      }
     }
   ]
 }
