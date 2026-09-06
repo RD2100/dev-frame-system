@@ -861,6 +861,15 @@
       ],
       "laneDiscipline": "workers via workflow explicit {provider, model: glm-5.3-flash} split across both recovered accounts, start <=2 substantive workers per account, stagger lead reporting, record actual request provider/model per task; shared contract/manifest/profile single-writer = B lead; same-commit same-environment passing results reused",
       "status": "four line-leads live; controller on coordination/acceptance/integration"
+    },
+    {
+      "entry": "Worker-lane split correction delivered to all four line-leads: A+C workers pinned to huoshan-1, B+D workers pinned to huoshan-2",
+      "facts": [
+        "Scheduler audit finding: all four phase-2 leads inherited the controller spawn lane (huoshan-2/glm-5.3-flash) - lead requests showed no dual-account split.",
+        "Correction delivered via send_message to all four: worker dispatches now pin provider explicitly - A defects (629bed0c) and C product (da5d10f3) workers = huoshan-1/glm-5.3-flash; B delivery (6a8c25cb) and D llm-verify (311590fd) workers = huoshan-2/glm-5.3-flash; adjustable by real-time health but never all four defaulting to one account; adjustments must be recorded.",
+        "Leads keep their own current lane; no shared-config changes for switching. Sequencing rule reinforced: finish the in-hand analysis first, then dispatch independent workers - do not stall at the reading-files stage. Every settlement receipt must register per-worker dispatch parameters, actual request provider/model, and results."
+      ],
+      "status": "lane split active; four lines continuing analysis phase"
     }
   ]
 }
