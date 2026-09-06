@@ -11,6 +11,7 @@ import ts from 'typescript'
 import {
   captureExpectedWorkspaceSnapshot,
   captureWorkspaceSnapshot,
+  declaredExpectationVariantFiles,
   fixtureContext,
   formatSystemPromptSnapshot,
   formatToolSchemasSnapshot,
@@ -23,10 +24,13 @@ import {
   parseToolSchemasSnapshot,
   redactSessionSnapshotIds,
   refreshFixtureReplacements,
+  resolveExpectationPath,
+  resolveSessionFixturePath,
   restorePinnedToolSchemas,
   scrubSessionSnapshot,
   scrubSystemPrompts,
   scrubToolSchemas,
+  sessionFixtureFileName,
   sessionFixtureNames,
   snapshotSpillRoot,
   stabilizeFixtureMessageIds,
@@ -171,9 +175,24 @@ async function persistedSessions(cwd: string): Promise<SessionLog[]> {
   })
 }
 
+/**
+ * The scenario's session-fixture inventory with manifest-declared
+ * platform-variant files removed: variant recordings are manifest-owned
+ * expected files, not child sessions, and `sessionFixtureNames` rejects any
+ * `session.<platform>.jsonl` shape it did not filter out first.
+ */
+function baseFixtureNames(manifest: SnapshotManifest, names: readonly string[]): string[] {
+  const variants = new Set(declaredExpectationVariantFiles(manifest))
+  return sessionFixtureNames(names.filter(name => !variants.has(name)))
+}
+
 async function fixtureSessions(scenario: HeadlessScenario): Promise<string[]> {
-  const files = sessionFixtureNames(await readdir(scenario.dir))
-  return Promise.all(files.map(file => readFile(join(scenario.dir, file), 'utf8')))
+  const names = baseFixtureNames(scenario.manifest, await readdir(scenario.dir))
+  const primaryPath = resolveSessionFixturePath({ dir: scenario.dir, manifest: scenario.manifest, platform: process.platform })
+  return Promise.all([
+    readFile(primaryPath, 'utf8'),
+    ...names.slice(1).map(file => readFile(join(scenario.dir, file), 'utf8')),
+  ])
 }
 
 async function writeSessionFixtures(
@@ -183,7 +202,7 @@ async function writeSessionFixtures(
   ctx: NormalizeContext,
 ): Promise<string[]> {
   const names = [
-    'session.jsonl',
+    sessionFixtureFileName(scenario.manifest, process.platform),
     ...Array.from({ length: actualLogs.length - 1 }, (_, index) => `session.${index + 1}.jsonl`),
   ]
   const prior = names.map((_, index) => existing[index] ?? '')
@@ -216,13 +235,13 @@ async function writeSessionFixtures(
     const schemaOwner = scenario.manifest.header.toolSchemasSource ?? scenario.name
     if (promptOwner === scenario.name) {
       await writeFile(
-        join(scenario.dir, 'system-prompt.expected.md'),
+        resolveExpectationPath({ dir: scenario.dir, kind: 'system-prompt', manifest: scenario.manifest, platform: process.platform }),
         formatSystemPromptSnapshot(prompts[0] as string, prompts.slice(1)),
       )
     }
     if (schemaOwner === scenario.name) {
       await writeFile(
-        join(scenario.dir, 'tool-schemas.expected.json'),
+        resolveExpectationPath({ dir: scenario.dir, kind: 'tool-schemas', manifest: scenario.manifest, platform: process.platform }),
         formatToolSchemasSnapshot(schemas[0] as unknown[], schemas.slice(1)),
       )
     }
@@ -495,7 +514,10 @@ function pinOf(scenario: HeadlessScenario): HeadlessScenario {
 
 async function verifyHeaders(scenario: HeadlessScenario, actualLogs: readonly SessionLog[], ctx: NormalizeContext): Promise<void> {
   const pin = pinOf(scenario)
-  const fixture = await readFile(join(pin.dir, 'session.jsonl'), 'utf8')
+  const fixture = await readFile(
+    resolveSessionFixturePath({ dir: pin.dir, manifest: pin.manifest, platform: process.platform }),
+    'utf8',
+  )
   const pinned = normalizedHeaders(fixture, fixtureContext(fixture))
   const changes = pin.manifest.header.changes ?? 0
   expect(pinned, `${scenario.name}: pin header count`).toHaveLength(1 + changes)
@@ -505,8 +527,14 @@ async function verifyHeaders(scenario: HeadlessScenario, actualLogs: readonly Se
   if (promptOwner === undefined || schemaOwner === undefined) {
     throw new Error(`${scenario.name}: header sidecar source is not a headless scenario`)
   }
-  const prompt = await readFile(join(promptOwner.dir, 'system-prompt.expected.md'), 'utf8')
-  const schemas = parseToolSchemasSnapshot(await readFile(join(schemaOwner.dir, 'tool-schemas.expected.json'), 'utf8'))
+  const prompt = await readFile(
+    resolveExpectationPath({ dir: promptOwner.dir, kind: 'system-prompt', manifest: promptOwner.manifest, platform: process.platform }),
+    'utf8',
+  )
+  const schemas = parseToolSchemasSnapshot(await readFile(
+    resolveExpectationPath({ dir: schemaOwner.dir, kind: 'tool-schemas', manifest: schemaOwner.manifest, platform: process.platform }),
+    'utf8',
+  ))
   const schemaSets = [schemas.initial, ...schemas.changes]
   expect(schemaSets, `${scenario.name}: pin tool-schema count`).toHaveLength(pinned.length)
   const reconstructed = pinned.map((header, index) => restorePinnedToolSchemas(
@@ -656,12 +684,15 @@ describe('headless recorded-session snapshots', () => {
       try {
         model = modelFromSession(primaryFixture)
       } catch {
-        model = modelFromSession(await readFile(join(pin.dir, 'session.jsonl'), 'utf8'))
+        model = modelFromSession(await readFile(
+          resolveSessionFixturePath({ dir: pin.dir, manifest: pin.manifest, platform: process.platform }),
+          'utf8',
+        ))
       }
       const composition = ownerOf(scenario)
       const baseComposition = compositionOwners.get('default')
       if (baseComposition === undefined) throw new Error('headless corpus has no default composition')
-      const fixtureFiles = sessionFixtureNames(await readdir(scenario.dir))
+      const fixtureFiles = baseFixtureNames(scenario.manifest, await readdir(scenario.dir))
       const replaying = mode !== 'record'
       const compositionPatch = join(composition.dir, replaying ? 'cordis.snapshot.yml' : 'cordis.yml')
       const patchSources = [
@@ -702,7 +733,7 @@ describe('headless recorded-session snapshots', () => {
             DSH_SNAPSHOT_PROVIDER: model.provider,
             DSH_SNAPSHOT_MODEL: model.model,
             DSH_SNAPSHOT_SPILL_ROOT: spillRoot,
-            DSH_SNAPSHOT_FILE: join(scenario.dir, 'session.jsonl'),
+            DSH_SNAPSHOT_FILE: resolveSessionFixturePath({ dir: scenario.dir, manifest: scenario.manifest, platform: process.platform }),
             ...(replaying && fixtureFiles.length > 1
               ? { DSH_SNAPSHOT_CHILD_FILES: fixtureFiles.slice(1).map(file => join(scenario.dir, file)).join(delimiter) }
               : {}),
