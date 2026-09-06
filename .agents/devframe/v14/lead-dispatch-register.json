@@ -942,6 +942,16 @@
         "Main integration state: verify-cordis-config 133 files + build 220 artifacts green post B/C merges; snapshot two-scenario verification pending user file cleanup (clean-tree green stands)."
       ],
       "status": "A closed (pending user 85-file adjudication for main-tree re-runs); B real chain in progress; C2 implementation started by successor; D standby"
+    },
+    {
+      "entry": "B1 boot failure root-caused and fixed (acb2a2956b): duplicate cordis-host-runner insert in shipped overlay; real boot probe now binds port 3081",
+      "facts": [
+        "Failure: after the B closure merge, boot1 process exited before port bind. Root cause MEASURED, not guessed: composed tree contained cordis-host-runner x2 (web-app bundle layer inserts it; the shipped example overlay pre-existing content inserted it again). dump-config is lenient (exit 0) while real boot hits the duplicate-id loader error - exactly the semantics documented in the B-lead design.md L25-26.",
+        "Minimal fix committed on main (acb2a2956b): removed the duplicate insert row from apps/cli/config/examples/cordis/cordis.yml (one row + comment). Post-fix evidence: dump 152 rows zero duplicates; real boot probe under isolated DSH_HOME binds port 3081 LISTENING=True with token URL; verify-cordis-config 133 files exit 0. Controller probe residue (.dsh-bootprobe) removed; dirty count verified back to 376.",
+        "B-lead directed to sync main, re-run dump probe, then B4 huoshan explicit-routing real request (request-level seq evidence) and the 12-station real chain (isolated DSH_HOME + isolated launch dir, per-station command+exit-code+log evidence). B1/B2/B3 flip to running/acceptance only on real process chain + log response + restart recovery.",
+        "Record corrections: A normalize fix already merged (64625d8268, clean-tree both-scenarios green; main-tree runs blocked by user 85 files); C2 implementation assigned to successor lead c6ed119d (contract delivered, work started)."
+      ],
+      "status": "B1 boot path restored; chain execution resuming; A closed pending user 85-file adjudication; C2 in progress"
     }
   ]
 }
