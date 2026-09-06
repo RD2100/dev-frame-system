@@ -40,9 +40,9 @@ import {
 import * as commandGoalBinding from '../../../../../packages/experimental/command-goal-binding/src/index.ts'
 import { AcceptanceHash, DevFrameSnapshotId, SourceFingerprint } from '../../../../../packages/experimental/devframe/src/shared/types.ts'
 import { TaskId } from '../../../../../packages/experimental/devframe/src/controller/goal-binding.ts'
-import { bootComposition, isolatedRoot, parseCliArgs } from './lib/launch.mjs'
-import { findSessionLogs, readSessionLog } from './lib/logread.mjs'
-import { registerMockAdapter } from './lib/mock-adapter.mjs'
+import { bootComposition, isolatedRoot, parseCliArgs } from './helpers/launch.mjs'
+import { findSessionLogs, readSessionLog } from './helpers/logread.mjs'
+import { registerMockAdapter } from './helpers/mock-adapter.mjs'
 import {
   assembleVerdict,
   check,
@@ -51,7 +51,7 @@ import {
   recordHarnessError,
   writeJsonOut,
   writeVerdict,
-} from './lib/evidence.mjs'
+} from './helpers/evidence.mjs'
 
 const USAGE = 'usage: node --import tsx/esm s4-goal-complete.mjs --tree <worktree> --out <dir>'
 const SESSION_ID = 'accept-s4-goal-complete'

@@ -16,8 +16,8 @@
 
 import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { isolatedRoot, launchHeadless, parseCliArgs } from './lib/launch.mjs'
-import { listLogsRoot } from './lib/logread.mjs'
+import { isolatedRoot, launchHeadless, parseCliArgs } from './helpers/launch.mjs'
+import { listLogsRoot } from './helpers/logread.mjs'
 import {
   assembleVerdict,
   check,
@@ -27,7 +27,7 @@ import {
   writeJsonOut,
   writeTextOut,
   writeVerdict,
-} from './lib/evidence.mjs'
+} from './helpers/evidence.mjs'
 
 const USAGE = 'usage: node --import tsx/esm s1-headless-run.mjs --tree <worktree> --out <dir>'
 const TASK = 'reply with the single word ok'

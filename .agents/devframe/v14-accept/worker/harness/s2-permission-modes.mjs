@@ -15,8 +15,8 @@
 
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { isolatedRoot, launchHeadless, parseCliArgs } from './lib/launch.mjs'
-import { findSessionLogs, readSessionLog } from './lib/logread.mjs'
+import { isolatedRoot, launchHeadless, parseCliArgs } from './helpers/launch.mjs'
+import { findSessionLogs, readSessionLog } from './helpers/logread.mjs'
 import {
   assembleVerdict,
   check,
@@ -26,7 +26,7 @@ import {
   writeJsonOut,
   writeTextOut,
   writeVerdict,
-} from './lib/evidence.mjs'
+} from './helpers/evidence.mjs'
 
 const USAGE = 'usage: node --import tsx/esm s2-permission-modes.mjs --tree <worktree> --out <dir>'
 const TASK = 'reply with the single word ok'

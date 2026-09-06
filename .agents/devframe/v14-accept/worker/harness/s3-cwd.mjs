@@ -14,8 +14,8 @@
 import { mkdirSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { isolatedRoot, launchHeadless, parseCliArgs } from './lib/launch.mjs'
-import { findSessionLogs, readSessionLog } from './lib/logread.mjs'
+import { isolatedRoot, launchHeadless, parseCliArgs } from './helpers/launch.mjs'
+import { findSessionLogs, readSessionLog } from './helpers/logread.mjs'
 import {
   assembleVerdict,
   check,
@@ -25,7 +25,7 @@ import {
   writeJsonOut,
   writeTextOut,
   writeVerdict,
-} from './lib/evidence.mjs'
+} from './helpers/evidence.mjs'
 
 const USAGE = 'usage: node --import tsx/esm s3-cwd.mjs --tree <worktree> --out <dir>'
 const TASK = 'reply with the single word ok'

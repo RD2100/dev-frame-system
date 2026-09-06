@@ -26,9 +26,9 @@ import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as commandGoal from '@deepseek-ai/dsh-command-goal'
-import { bootComposition, parseCliArgs } from './lib/launch.mjs'
-import { findSessionLogs, readSessionLog } from './lib/logread.mjs'
-import { registerMockAdapter } from './lib/mock-adapter.mjs'
+import { bootComposition, parseCliArgs } from './helpers/launch.mjs'
+import { findSessionLogs, readSessionLog } from './helpers/logread.mjs'
+import { registerMockAdapter } from './helpers/mock-adapter.mjs'
 import {
   assembleVerdict,
   check,
@@ -37,7 +37,7 @@ import {
   recordHarnessError,
   writeJsonOut,
   writeVerdict,
-} from './lib/evidence.mjs'
+} from './helpers/evidence.mjs'
 
 const USAGE
   = 'usage: node --import tsx/esm s5-resume.mjs --tree <worktree> --out <dir> --phase write|resume --root <sharedRoot> --session <id>'

@@ -32,8 +32,8 @@ import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
 import AgentBindingRegistry from '@deepseek-ai/dsh-experimental-session-identity'
 import ShadowRouter, { ShadowRouterError } from '@deepseek-ai/dsh-experimental-shadow-router'
-import { bootComposition, isolatedRoot, parseCliArgs } from './lib/launch.mjs'
-import { registerMockAdapter } from './lib/mock-adapter.mjs'
+import { bootComposition, isolatedRoot, parseCliArgs } from './helpers/launch.mjs'
+import { registerMockAdapter } from './helpers/mock-adapter.mjs'
 import {
   assembleVerdict,
   check,
@@ -42,7 +42,7 @@ import {
   recordHarnessError,
   writeJsonOut,
   writeVerdict,
-} from './lib/evidence.mjs'
+} from './helpers/evidence.mjs'
 
 const USAGE
   = 'usage: node --import tsx/esm s6-shadow-routing.mjs --tree <worktree> --out <dir> [--phase cold --root <root>]'

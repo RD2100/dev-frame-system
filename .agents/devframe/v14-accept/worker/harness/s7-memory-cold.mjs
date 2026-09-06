@@ -32,8 +32,8 @@ import {
   rehydrateMemoryReceipts,
   resolveMemorySpec,
 } from '@deepseek-ai/dsh-experimental-project-memory'
-import { bootComposition, parseCliArgs } from './lib/launch.mjs'
-import { registerMockAdapter } from './lib/mock-adapter.mjs'
+import { bootComposition, parseCliArgs } from './helpers/launch.mjs'
+import { registerMockAdapter } from './helpers/mock-adapter.mjs'
 import {
   assembleVerdict,
   check,
@@ -43,7 +43,7 @@ import {
   writeJsonOut,
   writeTextOut,
   writeVerdict,
-} from './lib/evidence.mjs'
+} from './helpers/evidence.mjs'
 
 const USAGE
   = 'usage: node --import tsx/esm s7-memory-cold.mjs --tree <worktree> --out <dir> --phase write|read --root <sharedRoot>'
