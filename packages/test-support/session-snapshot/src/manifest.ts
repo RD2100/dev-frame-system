@@ -505,7 +505,7 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       if (Object.keys(value).length === 0) {
         throw new Error('manifest.workspaceVariants must declare at least one platform')
       }
-      if (root.workspace?.final !== true) {
+      if (root.workspace === undefined || record(root.workspace, 'manifest.workspace').final !== true) {
         throw new Error('manifest.workspaceVariants requires manifest.workspace.final')
       }
       const parsed: SnapshotWorkspaceVariantsManifest = {}
