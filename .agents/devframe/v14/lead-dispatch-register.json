@@ -390,6 +390,30 @@
       "controllerActions": [
         "F3 chain marked closed (integrated, terminal records merged); no further messages to the finished lead; battery semantic clarifications remain available on request."
       ]
+    },
+    {
+      "entry": "Battery original-chain closure monitoring resumed (scope + pending list, no polling)",
+      "monitoringBaseline": {
+        "anchoredAt": "controller one-time read-only anchor (not polling)",
+        "branchTip": "p/battery @ de355a4f1a (test(acp): land the escalation-rejected win32 session and stdout variants)",
+        "commitsOverBase": "10 (c93b86c43e..p/battery)",
+        "recentSequence": "24cd5ebbae ACP suite via variant-aware fixture seam -> 7c5c50f75b platform-agnostic acp-diagnostic mock + attachment-path override -> f219800a32 win32 recording + pin variants (default header class) -> 56ccff073a platform stdout-variant projections declared -> 1203cc0b40 escalation-approved win32 session + stdout variants -> de355a4f1a escalation-rejected win32 session + stdout variants",
+        "worktreeAlive": "D:/dsh-devframe-p-battery exists; worker 57d0355f still in turn-5 real execution (coordinator external verification: ACP image-compaction in progress)",
+        "discipline": "never rebuild/replace/re-dispatch the worker; never merge its branch before true turn/end; no high-frequency text polling - coordinator notifies via file-change event on real turn/end; stage receipts handled as real events when they arrive"
+      },
+      "pendingDeliverablesChecklist": [
+        "1. Full commit enumeration c93b86c43e..p/battery with per-commit gate receipts (no-bash hook skips + substitute verification results).",
+        "2. Test exit codes: focused snapshot suite incl. battery red-count delta and the per-case classification persisted per stage-2 approval precondition.",
+        "3. Domain boundary scan: registered battery domain only (snapshots/** incl. sdk/acp, packages/test-support/session-snapshot/**, corpus wiring) + approved expansion; 0 files outside, vendor 0, production source untouched outside approved seams.",
+        "4. stdoutVariants contract extension verification: projection declaration (56ccff073a) vs actual fixture-seam usage; SESSION_FORMAT_VERSION unchanged unless a structural format change is claimed.",
+        "5. F3 A+B addendum rev-3 implementation check if battery picked it up: A rows in persistent-pwsh-tool-turn cordis.snapshot.yml+cordis.yml (same commit, both files), B shell-family invariant in scripts/session-snapshot-corpus.corpus.ts, V1/V2 discriminating verification results.",
+        "6. Relay receipt for battery-approval-request.json addendum rev 3 - coordinator is relaying via the old V1.3 original parent chain (0c852cbc); receipt pending.",
+        "7. Standing evidence preserved: Shadow/Memory composition acceptance gate, dual-provider overlap (6992ms worker window) + probe sessions."
+      ],
+      "controllerMergePlan": [
+        "After true worker turn/end: verify commits, test exit codes, domain boundaries, stdoutVariants extension; run controller gates (domain scan, diff --check, focused vitest, full build with invalidated tsbuildinfo for new test files); then sole main merge --no-ff --no-verify with documented message.",
+        "F3 review already merged - do not re-review; only its A+B implementation status is in scope via the battery checklist."
+      ]
     }
   ]
 }
