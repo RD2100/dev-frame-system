@@ -9,6 +9,10 @@ header:
   systemPromptSource: session/text-turn
   toolSchemasSource: session/text-turn
 permission: workspace-write
+sessionVariants:
+  win32: true
+stdoutVariants:
+  win32: true
 expectations:
   variants:
     win32:
