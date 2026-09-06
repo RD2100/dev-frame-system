@@ -16,7 +16,8 @@
 
 | ID | 用户功能/项 | 源码 | profile | 运行 | 生产验收 | 证据 | 真实依赖 | 下一步 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| B1 | 真实 dsh profile 全链：启动→总控→组长→Worker（真实 huoshan 调用）→产出→审查→合并→停止重启恢复 | **收口+boot 修复已并 main**（b6971bfb6c+acb2a2956b：重复 cordis-host-runner insert 删除） | **shipped 已挂载** | **boot 探针绿**（dump 152 行零重复+port LISTENING+PID 溯源，a0dbd7e22e 收口）；12 站真实链进行中 | 待 12 站完成（翻转只认真实进程链+日志+重启恢复） | boot-evidence 证据+B 组长实测 | 无 | B4 后逐站收证 |
+| B1 | 真实 dsh profile 全链：启动→总控→组长→Worker（真实 huoshan 调用）→产出→审查→合并→停止重启恢复 | **部分站实证后阻塞**（boot/goal-bind/task-deliver 绿；12 站阻塞于工具调用面） | **shipped 已挂载**（acb2a2956b boot 修复在 main） | chain1-4：driver JSONL+chain3 会话证据在案；**判定=huoshan-1 流式 tool-call args 碎片损坏**（`\\\"` 双重转义+标识符碎裂→"input must be object"×N→无第二次模型请求自愈）；录播快照同路径正常 | **阻塞**（恢复路径已立：新切片 HuoshanStreamArgs） | boot-evidence.md+chain-evidence.md（组长落盘中） | B4 已证 huoshan 非流式路径正常（seq=10/49） | HuoshanStreamArgs 修复→最小真实重放→重启 12 站 |
+| C2b | **新切片：HuoshanStreamArgs**——provider 流式 tool-call 参数 delta 累积契约 | 待开工（总控登记） | n/a | chain3 实证：tool-call-chunks seq0=1082/2365/2416/4046 显示 `\\\"` 与碎裂片段 | 待修复 | chain3 session-87444f2d 日志+录播解析器对照 | B1 阻塞恢复路径 | 定位 provider 适配层→修复+单测（malformed delta fixture）→最小真实重放验证→重启 B1 链 |
 | B2 | Shadow 跨项目投递/隔离进真实用户路径 | 已有（shadow-router；S6 机制 B PASS） | shipped 待挂/待证 | 机制 B 限范围 | 待 shipped 证据 | S6 判定书（隔离域路径+SHADOW_REQUEST_CONFLICT） | B1 | 随 B1 链跑真实跨项目站 |
 | B3 | Memory 写/读/冷恢复进真实用户路径 | 已有（project-memory；S7 机制 B PASS） | shipped 待挂/待证 | 机制 B 限范围 | 待 shipped 证据 | S7 判定书（Vault 恰 2 真实 .md） | B1 | 随 B1 链跑真实 Memory 站 |
 | B4 | S1 真实凭据重测（隔离 profile） | **PASS**（bb5d514d0f：harness exit 0、7/7 checks） | 隔离 profile | **keyless BLOCKED→真实凭据 PASS 翻转**（请求级 seq=10 huoshan-1/glm-5.3-flash 逐字+wire 响应 seq=49"ok"；凭据零记录） | **通过** | b4 证据+三层证据分列 | 无 | 已关闭 |
