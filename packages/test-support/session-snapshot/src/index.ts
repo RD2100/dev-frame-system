@@ -54,17 +54,26 @@ export {
   type NormalizeOptions,
 } from './normalize.ts'
 export {
+  childExpectationFileName,
+  childSessionFixtureFileName,
   declaredExpectationVariantFiles,
   expectationFileName,
   platformExpectationVariant,
+  resolveChildExpectationPath,
+  resolveChildSessionFixturePath,
   resolveExpectationPath,
   resolveSessionFixturePath,
   sessionFixtureFileName,
+  type ResolveChildExpectationPathOptions,
+  type ResolveChildSessionFixturePathOptions,
   type ResolveExpectationPathOptions,
   type ResolveSessionFixturePathOptions,
 } from './expectations.ts'
 export {
   parseSnapshotManifest,
+  type SnapshotChildExpectationKind,
+  type SnapshotChildExpectationsManifest,
+  type SnapshotChildSessionVariantsManifest,
   type SnapshotExpectationKind,
   type SnapshotExpectationsManifest,
   type SnapshotExpectationPlatform,

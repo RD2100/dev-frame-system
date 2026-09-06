@@ -11,6 +11,8 @@ import ts from 'typescript'
 import {
   captureExpectedWorkspaceSnapshot,
   captureWorkspaceSnapshot,
+  childExpectationFileName,
+  childSessionFixtureFileName,
   declaredExpectationVariantFiles,
   fixtureContext,
   formatSystemPromptSnapshot,
@@ -22,8 +24,11 @@ import {
   normalizedToolSchemas,
   parseSnapshotManifest,
   parseToolSchemasSnapshot,
+  platformExpectationVariant,
   redactSessionSnapshotIds,
   refreshFixtureReplacements,
+  resolveChildExpectationPath,
+  resolveChildSessionFixturePath,
   resolveExpectationPath,
   resolveSessionFixturePath,
   restorePinnedToolSchemas,
@@ -191,8 +196,26 @@ async function fixtureSessions(scenario: HeadlessScenario): Promise<string[]> {
   const primaryPath = resolveSessionFixturePath({ dir: scenario.dir, manifest: scenario.manifest, platform: process.platform })
   return Promise.all([
     readFile(primaryPath, 'utf8'),
-    ...names.slice(1).map(file => readFile(join(scenario.dir, file), 'utf8')),
+    ...names.slice(1).map((name, position) => readFile(resolveChildSessionFixturePath({
+      dir: scenario.dir,
+      manifest: scenario.manifest,
+      index: position + 1,
+      platform: process.platform,
+    }), 'utf8')),
   ])
+}
+
+/**
+ * The committed file name of one child-indexed sidecar write target: the
+ * declared platform variant name on a variant-declaring host platform, the
+ * base name otherwise. Never consults the filesystem, so refresh write-backs
+ * can name a variant target that does not exist yet.
+ */
+function childSidecarTarget(scenario: HeadlessScenario, kind: 'system-prompt' | 'tool-schemas', index: number): string {
+  const variant = platformExpectationVariant(process.platform)
+  return scenario.manifest.childExpectations?.variants[variant]?.includes(kind) === true
+    ? childExpectationFileName(kind, index, variant)
+    : childExpectationFileName(kind, index)
 }
 
 async function writeSessionFixtures(
@@ -203,7 +226,8 @@ async function writeSessionFixtures(
 ): Promise<string[]> {
   const names = [
     sessionFixtureFileName(scenario.manifest, process.platform),
-    ...Array.from({ length: actualLogs.length - 1 }, (_, index) => `session.${index + 1}.jsonl`),
+    ...Array.from({ length: actualLogs.length - 1 }, (_, index) =>
+      childSessionFixtureFileName(scenario.manifest, index + 1, process.platform)),
   ]
   const prior = names.map((_, index) => existing[index] ?? '')
   const replacements = mode === 'refresh'
@@ -251,7 +275,7 @@ async function writeSessionFixtures(
     if (child === undefined) throw new Error(`${scenario.name}: write-back has no child ${index} prompt`)
     const prompts = normalizedSystemPrompts(child.content, ctx)
     await writeFile(
-      join(scenario.dir, `system-prompt.${index}.expected.md`),
+      join(scenario.dir, childSidecarTarget(scenario, 'system-prompt', index)),
       formatSystemPromptSnapshot(prompts[0] as string, prompts.slice(1)),
     )
   }
@@ -260,7 +284,7 @@ async function writeSessionFixtures(
     if (child === undefined) throw new Error(`${scenario.name}: write-back has no child ${index} schemas`)
     const schemas = normalizedToolSchemas(child.content, ctx)
     await writeFile(
-      join(scenario.dir, `tool-schemas.${index}.expected.json`),
+      join(scenario.dir, childSidecarTarget(scenario, 'tool-schemas', index)),
       formatToolSchemasSnapshot(schemas[0] as unknown[], schemas.slice(1)),
     )
   }
@@ -545,10 +569,16 @@ async function verifyHeaders(scenario: HeadlessScenario, actualLogs: readonly Se
   const childPrompts = new Map<number, string>()
   const childSchemas = new Map<number, unknown[][]>()
   for (const index of scenario.manifest.header.childSystemPrompts ?? []) {
-    childPrompts.set(index, await readFile(join(scenario.dir, `system-prompt.${index}.expected.md`), 'utf8'))
+    childPrompts.set(index, await readFile(
+      resolveChildExpectationPath({ dir: scenario.dir, kind: 'system-prompt', index, manifest: scenario.manifest, platform: process.platform }),
+      'utf8',
+    ))
   }
   for (const index of scenario.manifest.header.childToolSchemas ?? []) {
-    const child = parseToolSchemasSnapshot(await readFile(join(scenario.dir, `tool-schemas.${index}.expected.json`), 'utf8'))
+    const child = parseToolSchemasSnapshot(await readFile(
+      resolveChildExpectationPath({ dir: scenario.dir, kind: 'tool-schemas', index, manifest: scenario.manifest, platform: process.platform }),
+      'utf8',
+    ))
     childSchemas.set(index, [child.initial, ...child.changes])
   }
 
@@ -735,7 +765,15 @@ describe('headless recorded-session snapshots', () => {
             DSH_SNAPSHOT_SPILL_ROOT: spillRoot,
             DSH_SNAPSHOT_FILE: resolveSessionFixturePath({ dir: scenario.dir, manifest: scenario.manifest, platform: process.platform }),
             ...(replaying && fixtureFiles.length > 1
-              ? { DSH_SNAPSHOT_CHILD_FILES: fixtureFiles.slice(1).map(file => join(scenario.dir, file)).join(delimiter) }
+              ? {
+                DSH_SNAPSHOT_CHILD_FILES: fixtureFiles.slice(1).map((name, position) =>
+                  resolveChildSessionFixturePath({
+                    dir: scenario.dir,
+                    manifest: scenario.manifest,
+                    index: position + 1,
+                    platform: process.platform,
+                  })).join(delimiter),
+              }
               : {}),
             ...(replaying && scenario.manifest.replay?.override === true
               ? { DSH_SNAPSHOT_OVERRIDE: join(scenario.dir, 'replay.override.json') }

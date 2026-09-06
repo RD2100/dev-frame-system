@@ -3,9 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  childExpectationFileName,
+  childSessionFixtureFileName,
   declaredExpectationVariantFiles,
   expectationFileName,
   platformExpectationVariant,
+  resolveChildExpectationPath,
+  resolveChildSessionFixturePath,
   resolveExpectationPath,
   resolveSessionFixturePath,
   sessionFixtureFileName,
@@ -33,6 +37,24 @@ const SESSION_VARIANT_OWNER = parseSnapshotManifest([
   'profile: web',
   'sessionVariants:',
   '  win32: true',
+  '',
+].join('\n'))
+const CHILD_VARIANT_OWNER = parseSnapshotManifest([
+  'version: 1',
+  'profile: headless',
+  'childSessionVariants:',
+  '  win32: [1, 2]',
+  '',
+].join('\n'))
+const CHILD_SIDECAR_VARIANT_OWNER = parseSnapshotManifest([
+  'version: 1',
+  'profile: headless',
+  'header:',
+  '  class: default',
+  '  childToolSchemas: [1]',
+  'childExpectations:',
+  '  variants:',
+  '    win32: [tool-schemas]',
   '',
 ].join('\n'))
 
@@ -102,6 +124,69 @@ describe('platform expectation variants', () => {
       .toThrow(`session-snapshot: ${root}: declared platform session fixture variant file is missing: session.win32.jsonl`)
   })
 
+  it('consumes a declared child session variant on its host platform', async () => {
+    const root = await scenarioDir()
+    await writeFile(join(root, 'session.jsonl'), 'parent\n')
+    await writeFile(join(root, 'session.1.jsonl'), 'child 1 base\n')
+    await writeFile(join(root, 'session.1.win32.jsonl'), 'child 1 win32\n')
+    expect(resolveChildSessionFixturePath({ dir: root, manifest: CHILD_VARIANT_OWNER, index: 1, platform: 'win32' }))
+      .toBe(join(root, 'session.1.win32.jsonl'))
+  })
+
+  it('falls back to the base child fixture for undeclared indexes and platforms', async () => {
+    const root = await scenarioDir()
+    await writeFile(join(root, 'session.jsonl'), 'parent\n')
+    await writeFile(join(root, 'session.1.jsonl'), 'child 1 base\n')
+    await writeFile(join(root, 'session.2.jsonl'), 'child 2 base\n')
+    // Undeclared child index on the declaring platform.
+    expect(resolveChildSessionFixturePath({ dir: root, manifest: CHILD_VARIANT_OWNER, index: 3, platform: 'win32' }))
+      .toBe(join(root, 'session.3.jsonl'))
+    // POSIX hosts keep the base child fixtures even where win32 variants are declared.
+    expect(resolveChildSessionFixturePath({ dir: root, manifest: CHILD_VARIANT_OWNER, index: 1, platform: 'linux' }))
+      .toBe(join(root, 'session.1.jsonl'))
+    // No declaration at all keeps the base name on every platform.
+    expect(resolveChildSessionFixturePath({ dir: root, manifest: PLAIN_PIN, index: 1, platform: process.platform }))
+      .toBe(join(root, 'session.1.jsonl'))
+  })
+
+  it('fails loud when a declared child session variant file is missing', async () => {
+    const root = await scenarioDir()
+    await writeFile(join(root, 'session.jsonl'), 'parent\n')
+    await writeFile(join(root, 'session.1.jsonl'), 'child 1 base\n')
+    expect(() => resolveChildSessionFixturePath({ dir: root, manifest: CHILD_VARIANT_OWNER, index: 2, platform: 'win32' }))
+      .toThrow(`session-snapshot: ${root}: declared platform child session fixture variant file is missing: session.2.win32.jsonl`)
+  })
+
+  it('names child session fixture write targets without requiring the files to exist', () => {
+    expect(childSessionFixtureFileName(CHILD_VARIANT_OWNER, 1, 'win32')).toBe('session.1.win32.jsonl')
+    expect(childSessionFixtureFileName(CHILD_VARIANT_OWNER, 3, 'win32')).toBe('session.3.jsonl')
+    expect(childSessionFixtureFileName(CHILD_VARIANT_OWNER, 1, 'linux')).toBe('session.1.jsonl')
+    expect(childSessionFixtureFileName(PLAIN_PIN, 1, process.platform)).toBe('session.1.jsonl')
+  })
+
+  it('names base and child-indexed expected files with the variant vocabulary', () => {
+    expect(childExpectationFileName('tool-schemas', 1)).toBe('tool-schemas.1.expected.json')
+    expect(childExpectationFileName('system-prompt', 2)).toBe('system-prompt.2.expected.md')
+    expect(childExpectationFileName('tool-schemas', 1, 'win32')).toBe('tool-schemas.1.win32.expected.json')
+  })
+
+  it('resolves a declared child sidecar variant on its host platform and the base otherwise', async () => {
+    const root = await scenarioDir()
+    await writeFile(join(root, 'tool-schemas.1.expected.json'), 'base\n')
+    await writeFile(join(root, 'tool-schemas.1.win32.expected.json'), 'win32\n')
+    expect(resolveChildExpectationPath({ dir: root, kind: 'tool-schemas', index: 1, manifest: CHILD_SIDECAR_VARIANT_OWNER, platform: 'win32' }))
+      .toBe(join(root, 'tool-schemas.1.win32.expected.json'))
+    expect(resolveChildExpectationPath({ dir: root, kind: 'tool-schemas', index: 1, manifest: CHILD_SIDECAR_VARIANT_OWNER, platform: 'linux' }))
+      .toBe(join(root, 'tool-schemas.1.expected.json'))
+  })
+
+  it('fails loud when a declared child sidecar variant file is missing', async () => {
+    const root = await scenarioDir()
+    await writeFile(join(root, 'tool-schemas.1.expected.json'), 'base\n')
+    expect(() => resolveChildExpectationPath({ dir: root, kind: 'tool-schemas', index: 1, manifest: CHILD_SIDECAR_VARIANT_OWNER, platform: 'win32' }))
+      .toThrow(`session-snapshot: ${root}: declared platform child expectation variant file is missing: tool-schemas.1.win32.expected.json`)
+  })
+
   it('selects a declared variant file on its host platform', async () => {
     const root = await scenarioDir()
     await writeFile(join(root, 'tool-schemas.expected.json'), '["bash"]\n')
@@ -154,5 +239,9 @@ describe('platform expectation variants', () => {
     ])
     expect(declaredExpectationVariantFiles(PLAIN_PIN)).toEqual([])
     expect(declaredExpectationVariantFiles(SESSION_VARIANT_OWNER)).toEqual(['session.win32.jsonl'])
+    expect(declaredExpectationVariantFiles(CHILD_VARIANT_OWNER)).toEqual([
+      'session.1.win32.jsonl',
+      'session.2.win32.jsonl',
+    ])
   })
 })

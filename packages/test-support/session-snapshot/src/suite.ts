@@ -25,7 +25,9 @@ import { describe, expect, it } from 'vitest'
 import { type AgentUnderTest, type HarvestedLog, type InputScript, runScenario } from './harness.ts'
 import { type SnapshotManifest, type SnapshotStdoutVariantsManifest, parseSnapshotManifest } from './manifest.ts'
 import {
+  childSessionFixtureFileName,
   declaredExpectationVariantFiles,
+  resolveChildSessionFixturePath,
   resolveExpectationPath,
   resolveSessionFixturePath,
   sessionFixtureFileName,
@@ -1285,10 +1287,21 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
         // from the harvested live logs, so it must also work for a brand-new
         // scenario with no session.jsonl yet. The primary comparison name is
         // the platform-resolved recording: a declared variant file replaces
-        // the base name as both replay script and expected output.
+        // the base name as both replay script and expected output. Child
+        // fixtures resolve per index through the same variant vocabulary.
+        const baseFixtureNames = RECORDING ? [] : await sessionFixtures(dir, manifest)
         let fixtureFiles = RECORDING
           ? []
-          : [basename(resolveSessionFixturePath({ dir, manifest, platform: process.platform })), ...(await sessionFixtures(dir, manifest)).slice(1)]
+          : [
+            basename(resolveSessionFixturePath({ dir, manifest, platform: process.platform })),
+            ...baseFixtureNames.slice(1).map((_, position) =>
+              basename(resolveChildSessionFixturePath({
+                dir,
+                manifest,
+                index: position + 1,
+                platform: process.platform,
+              }))),
+          ]
         const childFixtureFiles = fixtureFiles.slice(1)
         const comparesLog = scenario.comparesLog ?? scenario.hasModelTurn
         const result = await runScenario(input, {
@@ -1343,7 +1356,8 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
           }
           const outputFixtureFiles = [
             sessionFixtureFileName(manifest, process.platform),
-            ...Array.from({ length: result.sessionLogs.length - 1 }, (_, i) => `session.${i + 1}.jsonl`),
+            ...Array.from({ length: result.sessionLogs.length - 1 }, (_, i) =>
+              childSessionFixtureFileName(manifest, i + 1, process.platform)),
           ]
           const existingFixtures = await Promise.all(outputFixtureFiles.map(async (file) => {
             const path = join(dir, file)
@@ -1673,7 +1687,11 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
         /* v8 ignore next -- registration guarantees every pin has resolved sources. */
         const schemaSource = schemaSourceByClass.get(classOf(scenario)) ?? scenario
         const fixture = await readFile(
-          resolveSessionFixturePath({ dir: join(snapshotsDir, scenario.name), manifest: await manifestOf(scenario.name), platform: process.platform }),
+          resolveSessionFixturePath({
+            dir: join(snapshotsDir, scenario.name),
+            manifest: await manifestOf(scenario.name),
+            platform: process.platform,
+          }),
           'utf8',
         )
         const headers = pinningHeaderPayloads(fixture, fixtureContext(fixture))

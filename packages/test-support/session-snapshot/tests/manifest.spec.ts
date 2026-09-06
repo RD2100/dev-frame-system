@@ -154,6 +154,28 @@ describe('snapshot manifest', () => {
     })
   })
 
+  it('parses child session and child sidecar variants on an owning scenario', () => {
+    expect(parseSnapshotManifest([
+      'version: 1',
+      'profile: headless',
+      'header:',
+      '  class: default',
+      '  childToolSchemas: [1, 2]',
+      'childSessionVariants:',
+      '  win32: [1, 2]',
+      'childExpectations:',
+      '  variants:',
+      '    win32: [tool-schemas]',
+      '',
+    ].join('\n'))).toEqual({
+      version: 1,
+      profile: 'headless',
+      header: { class: 'default', childToolSchemas: [1, 2] },
+      childSessionVariants: { win32: [1, 2] },
+      childExpectations: { variants: { win32: ['tool-schemas'] } },
+    })
+  })
+
   it('parses stdout projection variants on any scenario', () => {
     expect(parseSnapshotManifest([
       'version: 1',
@@ -193,6 +215,15 @@ describe('snapshot manifest', () => {
     ['version: 1\nprofile: acp\nsessionVariants: {}\n', 'manifest.sessionVariants must declare at least one platform'],
     ['version: 1\nprofile: acp\nsessionVariants:\n  windows: true\n', 'manifest.sessionVariants has unknown field(s): windows'],
     ['version: 1\nprofile: acp\nsessionVariants:\n  win32: false\n', 'manifest.sessionVariants.win32 must equal true when present'],
+    ['version: 1\nprofile: acp\nchildSessionVariants:\n  win32: true\nsession:\n  source: ../x/session.jsonl\n', 'manifest.childSessionVariants cannot be declared by a session borrower'],
+    ['version: 1\nprofile: acp\nchildSessionVariants: {}\n', 'manifest.childSessionVariants must declare at least one platform'],
+    ['version: 1\nprofile: acp\nchildSessionVariants:\n  windows: [1]\n', 'manifest.childSessionVariants has unknown field(s): windows'],
+    ['version: 1\nprofile: acp\nchildSessionVariants:\n  win32: [0]\n', 'manifest.childSessionVariants.win32 must be an array of unique positive integers'],
+    ['version: 1\nprofile: acp\nchildSessionVariants:\n  win32: [1, 1]\n', 'manifest.childSessionVariants.win32 must be an array of unique positive integers'],
+    ['version: 1\nprofile: acp\nchildExpectations:\n  variants: {}\n', 'manifest.childExpectations.variants must declare at least one platform'],
+    ['version: 1\nprofile: acp\nchildExpectations:\n  variants:\n    win32: [ui]\n', 'manifest.childExpectations.variants.win32 must list system-prompt or tool-schemas kinds'],
+    ['version: 1\nprofile: acp\nchildExpectations:\n  variants:\n    win32: [tool-schemas]\n', 'manifest.childExpectations.variants.win32 declares tool-schemas without a child tool-schemas sidecar index'],
+    ['version: 1\nprofile: acp\nheader:\n  class: base\nchildExpectations:\n  variants:\n    win32: [system-prompt]\n', 'manifest.childExpectations.variants.win32 declares system-prompt without a child system-prompt sidecar index'],
     ['version: 1\nprofile: acp\nstdoutVariants: {}\n', 'manifest.stdoutVariants must declare at least one platform'],
     ['version: 1\nprofile: acp\nstdoutVariants:\n  windows: true\n', 'manifest.stdoutVariants has unknown field(s): windows'],
     ['version: 1\nprofile: acp\nstdoutVariants:\n  win32: false\n', 'manifest.stdoutVariants.win32 must equal true when present'],

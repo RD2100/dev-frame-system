@@ -3,6 +3,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type {
+  SnapshotChildExpectationKind,
   SnapshotExpectationKind,
   SnapshotExpectationPlatform,
   SnapshotManifest,
@@ -44,12 +45,17 @@ export function expectationFileName(kind: SnapshotExpectationKind, variant?: Sna
  * @param manifest - the parsed scenario manifest (its declarations are already validated).
  * @returns deduplicated, sorted variant file names; empty without declarations.
  */
-export function declaredExpectationVariantFiles(manifest: Pick<SnapshotManifest, 'expectations' | 'sessionVariants'>): string[] {
+export function declaredExpectationVariantFiles(
+  manifest: Pick<SnapshotManifest, 'childSessionVariants' | 'expectations' | 'sessionVariants'>,
+): string[] {
   const declared = manifest.expectations?.variants ?? {}
   const entries = Object.entries(declared) as Array<[SnapshotExpectationPlatform, SnapshotExpectationKind[]]>
   const names = entries.flatMap(([variant, kinds]) => kinds.map(kind => expectationFileName(kind, variant)))
   for (const variant of Object.keys(manifest.sessionVariants ?? {})) {
     names.push(`session.${variant}.jsonl`)
+  }
+  for (const [variant, indexes] of Object.entries(manifest.childSessionVariants ?? {})) {
+    for (const index of indexes) names.push(`session.${index}.${variant}.jsonl`)
   }
   return [...new Set(names)].sort()
 }
@@ -136,4 +142,113 @@ export function resolveSessionFixturePath(options: ResolveSessionFixturePathOpti
     throw new Error(`session-snapshot: ${dir}: declared platform session fixture variant file is missing: ${fileName}`)
   }
   return variantPath
+}
+
+/**
+ * Build the committed file name of child session fixture `index`, preferring
+ * the declared child-variant name for the host's platform family. Like
+ * {@link sessionFixtureFileName} this never consults the filesystem, so
+ * refresh write-backs can name a child-variant target that does not exist yet.
+ * @param manifest - the parsed scenario manifest carrying optional child-variant declarations.
+ * @param index - 1-based child fixture index.
+ * @param platform - the writing host's `process.platform`, injected so any variant stays pinnable on any host.
+ * @returns the file name (not a path) inside the scenario directory.
+ */
+export function childSessionFixtureFileName(
+  manifest: Pick<SnapshotManifest, 'childSessionVariants'>,
+  index: number,
+  platform: NodeJS.Platform,
+): string {
+  const variant = platformExpectationVariant(platform)
+  return manifest.childSessionVariants?.[variant]?.includes(index) === true
+    ? `session.${index}.${variant}.jsonl`
+    : `session.${index}.jsonl`
+}
+
+/** Inputs for {@link resolveChildSessionFixturePath}. */
+export interface ResolveChildSessionFixturePathOptions {
+  /** Absolute scenario directory that owns the committed session fixtures. */
+  dir: string
+  /** The scenario's parsed manifest carrying optional child-variant declarations. */
+  manifest: Pick<SnapshotManifest, 'childSessionVariants'>
+  /** 1-based child fixture index to resolve. */
+  index: number
+  /** The reading host's `process.platform`; injected so any variant is pinnable on any host. */
+  platform: NodeJS.Platform
+}
+
+/**
+ * Resolve the child session fixture `index` the current host platform must use
+ * for replay: a declared child variant for the host's platform family selects
+ * `session.<index>.<variant>.jsonl`, every other case falls back to the base
+ * child fixture `session.<index>.jsonl` (whose absence the caller's own read
+ * reports).
+ * @param options - scenario directory, manifest, child index, and injected host platform.
+ * @returns the absolute path of the child session fixture to read.
+ * @throws when the host platform has a declared child variant for `index` but the variant file is missing.
+ */
+export function resolveChildSessionFixturePath(options: ResolveChildSessionFixturePathOptions): string {
+  const { dir, manifest, index, platform } = options
+  const fileName = childSessionFixtureFileName(manifest, index, platform)
+  if (fileName === `session.${index}.jsonl`) return join(dir, fileName)
+  const variantPath = join(dir, fileName)
+  if (!existsSync(variantPath)) {
+    throw new Error(`session-snapshot: ${dir}: declared platform child session fixture variant file is missing: ${fileName}`)
+  }
+  return variantPath
+}
+
+/**
+ * Build the committed file name of one child-indexed expected sidecar.
+ * @param kind - which pinned child sidecar to name.
+ * @param index - 1-based child fixture index the sidecar belongs to.
+ * @param variant - platform family for a variant file; omit for the base file.
+ * @returns the file name (not a path) inside the scenario directory.
+ */
+export function childExpectationFileName(
+  kind: SnapshotChildExpectationKind,
+  index: number,
+  variant?: SnapshotExpectationPlatform,
+): string {
+  const { stem, extension } = EXPECTATION_FILES[kind]
+  return variant === undefined
+    ? `${stem}.${index}.expected.${extension}`
+    : `${stem}.${index}.${variant}.expected.${extension}`
+}
+
+/** Inputs for {@link resolveChildExpectationPath}. */
+export interface ResolveChildExpectationPathOptions {
+  /** Absolute scenario directory that owns the committed child sidecar. */
+  dir: string
+  /** Which pinned child sidecar to resolve. */
+  kind: SnapshotChildExpectationKind
+  /** 1-based child fixture index the sidecar belongs to. */
+  index: number
+  /** The scenario's parsed manifest carrying optional child-expectation declarations. */
+  manifest: Pick<SnapshotManifest, 'childExpectations'>
+  /** The reading host's `process.platform`; injected so any variant is pinnable on any host. */
+  platform: NodeJS.Platform
+}
+
+/**
+ * Resolve the child sidecar `kind`/`index` the current host platform must
+ * compare against: a declared child-expectation variant for the host's
+ * platform family selects the variant file, every other case falls back to the
+ * base child sidecar.
+ * @param options - scenario directory, sidecar kind, child index, manifest, and injected host platform.
+ * @returns the absolute path of the child sidecar to read.
+ * @throws when the host platform has a declared child variant for `kind` but the variant file is missing.
+ */
+export function resolveChildExpectationPath(options: ResolveChildExpectationPathOptions): string {
+  const { dir, kind, index, manifest, platform } = options
+  const variant = platformExpectationVariant(platform)
+  if (manifest.childExpectations?.variants[variant]?.includes(kind) === true) {
+    const fileName = childExpectationFileName(kind, index, variant)
+    const variantPath = join(dir, fileName)
+    if (!existsSync(variantPath)) {
+      throw new Error(`session-snapshot: ${dir}: declared platform child expectation variant file is missing: ${fileName}`)
+    }
+    return variantPath
+  }
+  return join(dir, childExpectationFileName(kind, index))
 }

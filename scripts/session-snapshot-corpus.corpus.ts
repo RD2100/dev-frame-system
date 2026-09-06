@@ -6,6 +6,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { expect, it } from 'vitest'
 import {
   captureExpectedWorkspaceSnapshot,
+  childExpectationFileName,
   declaredExpectationVariantFiles,
   EMPTY_WORKSPACE_MARKER,
   parseSnapshotManifest,
@@ -13,6 +14,7 @@ import {
   scrubSystemPrompts,
   scrubToolSchemas,
   sessionFixtureNames,
+  type SnapshotExpectationPlatform,
   type SnapshotManifest,
 } from '@deepseek-ai/dsh-session-snapshot'
 
@@ -179,6 +181,23 @@ it('keeps every recorded session owned, pinned, redacted, and header-scrubbed', 
       expect(redactSessionSnapshotIds([fixture]), `${key}/${file}: typed identity fixed point`).toEqual([fixture])
       expect(scrubSystemPrompts(fixture), `${key}/${file}: system prompt must be a sidecar`).toBe(fixture)
       expect(scrubToolSchemas(fixture), `${key}/${file}: tool schemas must be a sidecar`).toBe(fixture)
+    }
+    // Declared child session variants must name committed variant files whose
+    // indexes exist in the base child inventory.
+    for (const [variant, indexes] of Object.entries(manifest.childSessionVariants ?? {})) {
+      for (const index of indexes) {
+        expect(names[index], `${key}: child variant ${variant} index ${index}`).toBeDefined()
+      }
+    }
+    // Every declared child sidecar variant must be committed beside the base
+    // sidecars it replaces on its platform.
+    for (const [variant, kinds] of Object.entries(manifest.childExpectations?.variants ?? {})) {
+      for (const kind of kinds) {
+        for (const index of (kind === 'system-prompt' ? manifest.header.childSystemPrompts : manifest.header.childToolSchemas) ?? []) {
+          expect(existsSync(join(dir, childExpectationFileName(kind, index, variant as SnapshotExpectationPlatform))),
+            `${key}: child ${kind} sidecar variant ${index}/${variant}`).toBe(true)
+        }
+      }
     }
     for (const index of manifest.header.childSystemPrompts ?? []) {
       expect(names[index], `${key}: child prompt index ${index}`).toBeDefined()
