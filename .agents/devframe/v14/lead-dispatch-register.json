@@ -725,6 +725,20 @@
         "acceptance": "image-compaction green in the full snapshot suite, zero new failures, base-fixture audit clean",
         "status": "dispatched"
       }
+    },
+    {
+      "entry": "huoshan-2 capacity saturation event: six concurrent sessions retry-stormed, three leads failed; staggered recovery sequence armed",
+      "event": [
+        "14:42-14:43Z window: all six active sessions (2 workers, 3 leads, gap4 lead) emitted llm/retry bursts simultaneously - compos worker 16, accept worker 12, compos2 lead 5, accept2 lead 4, gap4 lead 2, b2acp lead 5 (retry policy maxRetries=5 covering EMPTY_RESPONSE/RATE_LIMIT/SERVER/TIMEOUT/TRANSPORT). Diagnosis: account-level saturation from six concurrent sessions on one huoshan-2 account, not per-task faults.",
+        "Outcomes: leads 85ad815d (compos2), 7eda453a (accept2), 293a2eeb (b2acp) failed with turns ended; gap4 lead 695bcaf0 last seen reasoning (possibly alive - left untouched); workers 4140f6c0/5a63f5c8 reached turn/end WITHOUT delivering commits.",
+        "Preserved state: compos2-lead design commit cafaf58c83 (composition closure + /devframe-start + /devframe-resume design, clean); compos-w1 dirty=10 (worker partial implementation, uncommitted); accept-w1 dirty=1 on the inherited lineage 2893337b37 (original lead findings) -> 4fce69f194 (original lead design) - lineage verified intact, no history rewrite; b2acp-lead clean at 5e5a706f0a (classification was in-progress, nothing committed)."
+      ],
+      "recoverySequence": [
+        "ZERO immediate resumes - the storm was minutes old; immediate re-entry would reproduce the saturation (blind-retry prohibition).",
+        "Staggered order after a cooling window, one chain at a time with a health check between: (1) compos2 lead resume - audit the 10 dirty worker files, commit the interrupted partial under an honestly-attributed WIP commit if coherent, then continue design->worker continuation; (2) accept2 lead resume - same pattern for the 1 dirty harness file; (3) b2acp lead resume - classification restart from its in-progress state; (4) gap4 lead only if observed failed - it was last alive.",
+        "Dispatch freeze: no new chains until at least two chains are healthy again; concurrency ceiling for this account recalibrated downward from 6 toward 3-4 mixed sessions per the corrected dynamic rule."
+      ],
+      "status": "capacity event recorded; recovery armed, awaiting cooling window"
     }
   ]
 }
