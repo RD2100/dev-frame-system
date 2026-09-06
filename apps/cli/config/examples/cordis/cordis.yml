@@ -22,8 +22,9 @@
 # command-goal-binding: binds the launch directory as the goal worktree;
 # /devframe-start executes the required checks below as real subprocesses.
 - insert:
-    - id: cordis-host-runner
-      name: '@deepseek-ai/dsh-cordis-host-runner'
+    # cordis-host-runner is already inserted by the web-app bundle layer; a
+    # second insert here is a duplicate-id loader error at boot, so this
+    # overlay only adds the rows below.
     - id: tool-cordis
       name: '@deepseek-ai/dsh-tool-cordis'
     - id: session-identity
