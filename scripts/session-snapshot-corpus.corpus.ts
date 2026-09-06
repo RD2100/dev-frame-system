@@ -199,6 +199,11 @@ it('keeps every recorded session owned, pinned, redacted, and header-scrubbed', 
         }
       }
     }
+    // Declared SDK wire-golden variants must be committed as a complete pair.
+    for (const variant of Object.keys(manifest.wireVariants ?? {})) {
+      expect(existsSync(join(dir, `notifications.${variant}.expected.jsonl`)), `${key}: notifications.${variant} golden`).toBe(true)
+      expect(existsSync(join(dir, `result.${variant}.expected.json`)), `${key}: result.${variant} golden`).toBe(true)
+    }
     for (const index of manifest.header.childSystemPrompts ?? []) {
       expect(names[index], `${key}: child prompt index ${index}`).toBeDefined()
       expect(existsSync(join(dir, `system-prompt.${index}.expected.md`)), `${key}: child prompt sidecar ${index}`).toBe(true)

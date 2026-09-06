@@ -88,6 +88,7 @@ export {
   type SnapshotReplayManifest,
   type SnapshotSessionReference,
   type SnapshotSessionVariantsManifest,
+  type SnapshotWireVariantsManifest,
   type SnapshotWorkspaceManifest,
 } from './manifest.ts'
 export {

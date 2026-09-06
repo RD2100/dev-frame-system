@@ -96,6 +96,16 @@ export interface SnapshotChildExpectationsManifest {
  */
 export type SnapshotStdoutVariantsManifest = Partial<Record<SnapshotExpectationPlatform, true>>
 
+/**
+ * Platform-keyed declarations that the scenario's SDK wire goldens
+ * (`notifications.expected.jsonl` and `result.expected.json`) carry variant
+ * files (`notifications.<platform>.expected.jsonl`,
+ * `result.<platform>.expected.json`) for a platform family. A
+ * platform-specific recording may diverge in the SDK-visible event stream and
+ * run result, so the platform reads exactly one golden pair.
+ */
+export type SnapshotWireVariantsManifest = Partial<Record<SnapshotExpectationPlatform, true>>
+
 /** Deployment permission preset selected before the scenario starts. */
 export type SnapshotPermission = 'read-only' | 'workspace-write' | 'danger-full-access'
 
@@ -179,6 +189,12 @@ export interface SnapshotManifest {
    * must be committed.
    */
   stdoutVariants?: SnapshotStdoutVariantsManifest
+  /**
+   * Platform-variant SDK wire goldens, replacing the base
+   * `notifications.expected.jsonl` / `result.expected.json` pair on their
+   * platform; every declared variant file must be committed.
+   */
+  wireVariants?: SnapshotWireVariantsManifest
   /** Exceptional replay metadata absent for ordinary successful recordings. */
   replay?: SnapshotReplayManifest
   /** Optional host requirement; portable scenarios omit it. */
@@ -267,6 +283,7 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       'childSessionVariants',
       'childExpectations',
       'stdoutVariants',
+      'wireVariants',
       'replay',
       'platform',
       'permission',
@@ -446,6 +463,23 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       stdoutVariants = parsed
     }
 
+    let wireVariants: SnapshotWireVariantsManifest | undefined
+    if (root.wireVariants !== undefined) {
+      const value = record(root.wireVariants, 'manifest.wireVariants')
+      exactKeys(value, EXPECTATION_PLATFORMS, 'manifest.wireVariants')
+      if (Object.keys(value).length === 0) {
+        throw new Error('manifest.wireVariants must declare at least one platform')
+      }
+      const parsed: SnapshotWireVariantsManifest = {}
+      for (const [variant, declared] of Object.entries(value)) {
+        if (declared !== true) {
+          throw new Error(`manifest.wireVariants.${variant} must equal true when present`)
+        }
+        parsed[variant as SnapshotExpectationPlatform] = true
+      }
+      wireVariants = parsed
+    }
+
     let replay: SnapshotReplayManifest | undefined
     if (root.replay !== undefined) {
       const value = record(root.replay, 'manifest.replay')
@@ -561,6 +595,7 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       ...(childSessionVariants === undefined ? {} : { childSessionVariants }),
       ...(childExpectations === undefined ? {} : { childExpectations }),
       ...(stdoutVariants === undefined ? {} : { stdoutVariants }),
+      ...(wireVariants === undefined ? {} : { wireVariants }),
       ...(replay === undefined ? {} : { replay }),
       ...(platform === undefined ? {} : { platform }),
       ...(permission === undefined ? {} : { permission }),
