@@ -63,11 +63,14 @@ export {
   resolveChildSessionFixturePath,
   resolveExpectationPath,
   resolveSessionFixturePath,
+  resolveWorkspaceExpectedDir,
   sessionFixtureFileName,
+  workspaceExpectedDirName,
   type ResolveChildExpectationPathOptions,
   type ResolveChildSessionFixturePathOptions,
   type ResolveExpectationPathOptions,
   type ResolveSessionFixturePathOptions,
+  type ResolveWorkspaceExpectedDirOptions,
 } from './expectations.ts'
 export {
   parseSnapshotManifest,
@@ -90,6 +93,7 @@ export {
   type SnapshotSessionVariantsManifest,
   type SnapshotWireVariantsManifest,
   type SnapshotWorkspaceManifest,
+  type SnapshotWorkspaceVariantsManifest,
 } from './manifest.ts'
 export {
   formatSystemPromptSnapshot,

@@ -145,6 +145,53 @@ export function resolveSessionFixturePath(options: ResolveSessionFixturePathOpti
 }
 
 /**
+ * Build the committed directory name of the complete final workspace
+ * expectation, preferring the declared platform-variant directory for the
+ * host's platform family. Like {@link sessionFixtureFileName} this never
+ * consults the filesystem.
+ * @param manifest - the parsed scenario manifest carrying optional workspace-variant declarations.
+ * @param platform - the reading host's `process.platform`, injected so any variant stays pinnable on any host.
+ * @returns the directory name (not a path) inside the scenario directory.
+ */
+export function workspaceExpectedDirName(
+  manifest: Pick<SnapshotManifest, 'workspaceVariants'>,
+  platform: NodeJS.Platform,
+): string {
+  const variant = platformExpectationVariant(platform)
+  return manifest.workspaceVariants?.[variant] === true ? `workspace.${variant}.expected` : 'workspace.expected'
+}
+
+/** Inputs for {@link resolveWorkspaceExpectedDir}. */
+export interface ResolveWorkspaceExpectedDirOptions {
+  /** Absolute scenario directory that owns the committed workspace expectations. */
+  dir: string
+  /** The scenario's parsed manifest carrying optional workspace-variant declarations. */
+  manifest: Pick<SnapshotManifest, 'workspaceVariants'>
+  /** The reading host's `process.platform`; injected so any variant is pinnable on any host. */
+  platform: NodeJS.Platform
+}
+
+/**
+ * Resolve the complete final workspace expectation directory the current host
+ * platform must compare against: a declared variant for the host's platform
+ * family selects `workspace.<variant>.expected/`, every other case falls back
+ * to `workspace.expected/` (whose absence the caller's own capture reports).
+ * @param options - scenario directory, manifest, and injected host platform.
+ * @returns the absolute path of the workspace expectation directory to capture.
+ * @throws when the host platform has a declared workspace variant but the variant directory is missing.
+ */
+export function resolveWorkspaceExpectedDir(options: ResolveWorkspaceExpectedDirOptions): string {
+  const { dir, manifest, platform } = options
+  const dirName = workspaceExpectedDirName(manifest, platform)
+  if (dirName === 'workspace.expected') return join(dir, dirName)
+  const variantPath = join(dir, dirName)
+  if (!existsSync(variantPath)) {
+    throw new Error(`session-snapshot: ${dir}: declared platform workspace expectation directory is missing: ${dirName}`)
+  }
+  return variantPath
+}
+
+/**
  * Build the committed file name of child session fixture `index`, preferring
  * the declared child-variant name for the host's platform family. Like
  * {@link sessionFixtureFileName} this never consults the filesystem, so

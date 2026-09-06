@@ -106,6 +106,16 @@ export type SnapshotStdoutVariantsManifest = Partial<Record<SnapshotExpectationP
  */
 export type SnapshotWireVariantsManifest = Partial<Record<SnapshotExpectationPlatform, true>>
 
+/**
+ * Platform-keyed declarations that the scenario's complete final workspace
+ * expectation carries a variant directory (`workspace.<platform>.expected/`)
+ * for a platform family. The variant replaces the base `workspace.expected/`
+ * comparison target on its platform; every declared variant directory must be
+ * committed. Meaningful only when `workspace.final` is `true`, because the
+ * variant selects which committed tree owns the complete final world state.
+ */
+export type SnapshotWorkspaceVariantsManifest = Partial<Record<SnapshotExpectationPlatform, true>>
+
 /** Deployment permission preset selected before the scenario starts. */
 export type SnapshotPermission = 'read-only' | 'workspace-write' | 'danger-full-access'
 
@@ -195,6 +205,13 @@ export interface SnapshotManifest {
    * platform; every declared variant file must be committed.
    */
   wireVariants?: SnapshotWireVariantsManifest
+  /**
+   * Platform-variant complete final workspace expectation directories,
+   * replacing the base `workspace.expected/` comparison target on their
+   * platform; every declared variant directory must be committed. Requires
+   * `workspace.final` to be `true`.
+   */
+  workspaceVariants?: SnapshotWorkspaceVariantsManifest
   /** Exceptional replay metadata absent for ordinary successful recordings. */
   replay?: SnapshotReplayManifest
   /** Optional host requirement; portable scenarios omit it. */
@@ -284,6 +301,7 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       'childExpectations',
       'stdoutVariants',
       'wireVariants',
+      'workspaceVariants',
       'replay',
       'platform',
       'permission',
@@ -480,6 +498,26 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       wireVariants = parsed
     }
 
+    let workspaceVariants: SnapshotWorkspaceVariantsManifest | undefined
+    if (root.workspaceVariants !== undefined) {
+      const value = record(root.workspaceVariants, 'manifest.workspaceVariants')
+      exactKeys(value, EXPECTATION_PLATFORMS, 'manifest.workspaceVariants')
+      if (Object.keys(value).length === 0) {
+        throw new Error('manifest.workspaceVariants must declare at least one platform')
+      }
+      if (root.workspace?.final !== true) {
+        throw new Error('manifest.workspaceVariants requires manifest.workspace.final')
+      }
+      const parsed: SnapshotWorkspaceVariantsManifest = {}
+      for (const [variant, declared] of Object.entries(value)) {
+        if (declared !== true) {
+          throw new Error(`manifest.workspaceVariants.${variant} must equal true when present`)
+        }
+        parsed[variant as SnapshotExpectationPlatform] = true
+      }
+      workspaceVariants = parsed
+    }
+
     let replay: SnapshotReplayManifest | undefined
     if (root.replay !== undefined) {
       const value = record(root.replay, 'manifest.replay')
@@ -596,6 +634,7 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       ...(childExpectations === undefined ? {} : { childExpectations }),
       ...(stdoutVariants === undefined ? {} : { stdoutVariants }),
       ...(wireVariants === undefined ? {} : { wireVariants }),
+      ...(workspaceVariants === undefined ? {} : { workspaceVariants }),
       ...(replay === undefined ? {} : { replay }),
       ...(platform === undefined ? {} : { platform }),
       ...(permission === undefined ? {} : { permission }),

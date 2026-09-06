@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -12,7 +12,9 @@ import {
   resolveChildSessionFixturePath,
   resolveExpectationPath,
   resolveSessionFixturePath,
+  resolveWorkspaceExpectedDir,
   sessionFixtureFileName,
+  workspaceExpectedDirName,
 } from '../src/expectations.ts'
 import { parseSnapshotManifest } from '../src/manifest.ts'
 
@@ -55,6 +57,15 @@ const CHILD_SIDECAR_VARIANT_OWNER = parseSnapshotManifest([
   'childExpectations:',
   '  variants:',
   '    win32: [tool-schemas]',
+  '',
+].join('\n'))
+const WORKSPACE_VARIANT_OWNER = parseSnapshotManifest([
+  'version: 1',
+  'profile: headless',
+  'workspace:',
+  '  final: true',
+  'workspaceVariants:',
+  '  win32: true',
   '',
 ].join('\n'))
 
@@ -229,6 +240,37 @@ describe('platform expectation variants', () => {
     await writeFile(join(root, 'system-prompt.expected.md'), 'base\n')
     expect(() => resolveExpectationPath({ dir: root, kind: 'system-prompt', manifest: VARIANT_PIN, platform: 'linux' }))
       .toThrow('system-prompt.posix.expected.md')
+  })
+
+  it('names the workspace expectation directory without requiring it to exist', () => {
+    expect(workspaceExpectedDirName(WORKSPACE_VARIANT_OWNER, 'win32')).toBe('workspace.win32.expected')
+    expect(workspaceExpectedDirName(WORKSPACE_VARIANT_OWNER, 'linux')).toBe('workspace.expected')
+    expect(workspaceExpectedDirName(PLAIN_PIN, process.platform)).toBe('workspace.expected')
+  })
+
+  it('resolves a declared workspace variant directory on its host platform', async () => {
+    const root = await scenarioDir()
+    await mkdir(join(root, 'workspace.expected'))
+    await mkdir(join(root, 'workspace.win32.expected'))
+    expect(resolveWorkspaceExpectedDir({ dir: root, manifest: WORKSPACE_VARIANT_OWNER, platform: 'win32' }))
+      .toBe(join(root, 'workspace.win32.expected'))
+  })
+
+  it('resolves the base workspace expectation directory for undeclared platforms', async () => {
+    const root = await scenarioDir()
+    await mkdir(join(root, 'workspace.expected'))
+    await mkdir(join(root, 'workspace.win32.expected'))
+    expect(resolveWorkspaceExpectedDir({ dir: root, manifest: WORKSPACE_VARIANT_OWNER, platform: 'linux' }))
+      .toBe(join(root, 'workspace.expected'))
+    expect(resolveWorkspaceExpectedDir({ dir: root, manifest: PLAIN_PIN, platform: process.platform }))
+      .toBe(join(root, 'workspace.expected'))
+  })
+
+  it('fails loud when a declared workspace variant directory is missing', async () => {
+    const root = await scenarioDir()
+    await mkdir(join(root, 'workspace.expected'))
+    expect(() => resolveWorkspaceExpectedDir({ dir: root, manifest: WORKSPACE_VARIANT_OWNER, platform: 'win32' }))
+      .toThrow(`session-snapshot: ${root}: declared platform workspace expectation directory is missing: workspace.win32.expected`)
   })
 
   it('lists declared variant files for inventory guards', () => {
