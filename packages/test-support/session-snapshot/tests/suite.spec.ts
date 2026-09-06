@@ -5,8 +5,10 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
 import {
+  assertDeclaredVariantFiles,
   captureExpectedWorkspaceSnapshot,
   defineAcpSnapshotSuite,
+  expectationWriteName,
   stabilizeFixtureMessageIds,
   tokenizeSessionFixtureCwd,
   resolveWorkspaceExpectedDir,
@@ -57,6 +59,7 @@ const AGENT = {
 }
 
 const REPLAY_DIR = fileURLToPath(new URL('./fixtures/suite', import.meta.url))
+const VARIANT_REFRESH_SRC = fileURLToPath(new URL('./fixtures/suite-refresh', import.meta.url))
 
 function stabilize(
   fresh: string,
@@ -125,9 +128,18 @@ if (!BOOTSTRAP) {
 const refreshDir = mkdtempSync(join(tmpdir(), 'acp-snap-refresh-suite-'))
 cpSync(REPLAY_DIR, refreshDir, { recursive: true })
 staleRefreshFixtures(refreshDir)
+// The variant refresh suite runs its own single-scenario fixture root whose
+// manifest declares sidecar variants committed in neither spelling: refresh
+// must bootstrap the host platform's variant file on first write.
+const VARIANT_SCENARIOS: Scenario[] = [
+  { name: 'variant-pin', hasModelTurn: true, recorded: true, pinsHeader: true, expectedHeaderChanges: 1, headerClass: 'variant-pin' },
+]
+const variantRefreshDir = mkdtempSync(join(tmpdir(), 'acp-snap-refresh-variant-'))
+cpSync(VARIANT_REFRESH_SRC, variantRefreshDir, { recursive: true })
 afterAll(async () => {
   if (!BOOTSTRAP) await rm(recordDir, { recursive: true, force: true })
   await rm(refreshDir, { recursive: true, force: true })
+  await rm(variantRefreshDir, { recursive: true, force: true })
 })
 
 function staleRefreshFixtures(dir: string): void {
@@ -168,6 +180,15 @@ describe('defineAcpSnapshotSuite: refresh mode', () => {
   defineAcpSnapshotSuite({ agent: AGENT, snapshotsDir: refreshDir, scenarios: REPLAY_SCENARIOS, mode: 'refresh' })
 })
 
+describe('defineAcpSnapshotSuite: refresh mode sidecar variant bootstrap', () => {
+  defineAcpSnapshotSuite({
+    agent: AGENT,
+    snapshotsDir: variantRefreshDir,
+    scenarios: VARIANT_SCENARIOS,
+    mode: 'refresh',
+  })
+})
+
 describe('defineAcpSnapshotSuite: refresh write-back', () => {
   it('rewrites stdout and comparable logs from a replay-mode child run', () => {
     const stdout = readFileSync(join(refreshDir, 'plain-turn', 'stdout.expected.jsonl'), 'utf8')
@@ -206,6 +227,16 @@ describe('defineAcpSnapshotSuite: refresh write-back', () => {
 
     const pinSession = readFileSync(join(refreshDir, 'pin-turn', 'session.jsonl'), 'utf8')
     expect(pinSession).toContain('"cwd":"{{cwd}}"')
+  })
+})
+
+describe('defineAcpSnapshotSuite: refresh variant write-back', () => {
+  it('bootstraps the declared sidecar variant from this run and leaves the base sidecar untouched', () => {
+    const dir = join(variantRefreshDir, 'variant-pin')
+    const manifest = parseSnapshotManifest(readFileSync(join(dir, 'snapshot.yml'), 'utf8'))
+    const base = readFileSync(join(dir, 'system-prompt.expected.md'), 'utf8')
+    expect(readFileSync(join(dir, expectationWriteName(manifest, 'system-prompt', process.platform)), 'utf8'))
+      .toBe(base)
   })
 })
 
@@ -439,6 +470,44 @@ describe('workspace expectation variants', () => {
     const baseEntries = await captureExpectedWorkspaceSnapshot(join(dir, 'workspace.expected'))
     expect(textContents(win32Entries)).toContain('prepared at runtime (win32 variant)')
     expect(textContents(baseEntries)).toContain('prepared at runtime')
+  })
+})
+
+describe('assertDeclaredVariantFiles', () => {
+  it('exempts a declared but missing sidecar variant only in refresh mode', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'acp-snap-guard-'))
+    try {
+      writeFileSync(join(dir, 'session.jsonl'), '')
+      const manifest = parseSnapshotManifest([
+        'version: 1',
+        'profile: acp',
+        'header:',
+        '  class: guard-pin',
+        '  pin: true',
+        'expectations:',
+        '  variants:',
+        '    win32:',
+        '      - system-prompt',
+        '',
+      ].join('\n'))
+      expect(() => assertDeclaredVariantFiles(dir, 'guard-pin', manifest, false))
+        .toThrow('guard-pin/system-prompt.win32.expected.md declared platform variant must exist')
+      expect(() => assertDeclaredVariantFiles(dir, 'guard-pin', manifest, true)).not.toThrow()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps declared session fixture variants fail-loud in refresh mode', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'acp-snap-guard-'))
+    try {
+      writeFileSync(join(dir, 'session.jsonl'), '')
+      const manifest = parseSnapshotManifest('version: 1\nprofile: acp\nsessionVariants:\n  win32: true\n')
+      expect(() => assertDeclaredVariantFiles(dir, 'guard-session', manifest, true))
+        .toThrow('guard-session/session.win32.jsonl declared platform variant must exist')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 
@@ -1385,5 +1454,62 @@ describe('stabilizeRefreshLog', () => {
     const outputIds = stabilize(log(freshNames), log(existingNames)).trim().split('\n').slice(1)
       .map(line => (JSON.parse(line) as { data: { id: string } }).data.id)
     expect(outputIds).toEqual(freshNames.map(name => ids[name as keyof typeof ids]))
+  })
+
+  it('keeps the fixture spelling of sourceEventSeqs when decoded sequences are equal', () => {
+    const fresh = [
+      '{"type":"session","id":"same","createdAt":200}',
+      '{"type":"assistant/message","seq":5,"time":220,"sourceEventSeqs":[[12,15]],"data":{}}',
+      '',
+    ].join('\n')
+    const existing = [
+      '{"type":"session","id":"same","createdAt":100}',
+      '{"type":"assistant/message","seq":5,"time":104,"sourceEventSeqs":[12,13,14,15],"data":{}}',
+      '',
+    ].join('\n')
+
+    expect(stabilize(fresh, existing)).toBe([
+      '{"type":"session","id":"same","createdAt":100}',
+      '{"type":"assistant/message","seq":5,"time":104,"sourceEventSeqs":[12,13,14,15],"data":{}}',
+      '',
+    ].join('\n'))
+  })
+
+  it('keeps the fixture spelling of sourceEventSeqs when the fixture stores ranges', () => {
+    const fresh = [
+      '{"type":"session","id":"same","createdAt":200}',
+      '{"type":"assistant/message","seq":5,"time":220,"sourceEventSeqs":[12,13,14,15],"data":{}}',
+      '',
+    ].join('\n')
+    const existing = [
+      '{"type":"session","id":"same","createdAt":100}',
+      '{"type":"assistant/message","seq":5,"time":104,"sourceEventSeqs":[[12,15]],"data":{}}',
+      '',
+    ].join('\n')
+
+    expect(stabilize(fresh, existing)).toBe([
+      '{"type":"session","id":"same","createdAt":100}',
+      '{"type":"assistant/message","seq":5,"time":104,"sourceEventSeqs":[[12,15]],"data":{}}',
+      '',
+    ].join('\n'))
+  })
+
+  it('keeps fresh sourceEventSeqs when decoded sequences differ', () => {
+    const fresh = [
+      '{"type":"session","id":"same","createdAt":200}',
+      '{"type":"assistant/message","seq":5,"time":220,"sourceEventSeqs":[[20,23]],"data":{}}',
+      '',
+    ].join('\n')
+    const existing = [
+      '{"type":"session","id":"same","createdAt":100}',
+      '{"type":"assistant/message","seq":5,"time":104,"sourceEventSeqs":[12,13,14,15],"data":{}}',
+      '',
+    ].join('\n')
+
+    expect(stabilize(fresh, existing)).toBe([
+      '{"type":"session","id":"same","createdAt":100}',
+      '{"type":"assistant/message","seq":5,"time":104,"sourceEventSeqs":[[20,23]],"data":{}}',
+      '',
+    ].join('\n'))
   })
 })

@@ -20,13 +20,21 @@
 import { readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
+import { decodeSeqRanges } from '@deepseek-ai/dsh-session'
 import { isSurfaceEligibleType } from '@deepseek-ai/dsh-session/surface'
 import { describe, expect, it } from 'vitest'
 import { type AgentUnderTest, type HarvestedLog, type InputScript, runScenario } from './harness.ts'
-import { type SnapshotManifest, type SnapshotStdoutVariantsManifest, parseSnapshotManifest } from './manifest.ts'
+import {
+  type SnapshotManifest,
+  type SnapshotExpectationPlatform,
+  type SnapshotStdoutVariantsManifest,
+  parseSnapshotManifest,
+} from './manifest.ts'
 import {
   childSessionFixtureFileName,
   declaredExpectationVariantFiles,
+  expectationFileName,
+  expectationWriteName,
   resolveChildSessionFixturePath,
   resolveExpectationPath,
   resolveSessionFixturePath,
@@ -261,6 +269,36 @@ export function stdoutExpectedVariants(
   }
   if (platform !== 'win32' || scenario.pinsNativeWindowsStdout !== true) return [canonical]
   return [canonical, { file: WINDOWS_STDOUT_SNAPSHOT, cwdPathMode: 'native' }]
+}
+
+/**
+ * Guard the presence of every declared platform-variant file in one scenario
+ * directory. Refresh mode exempts declared expectation-sidecar variants only:
+ * this run's own pin write creates them after the guard, so demanding them
+ * first would make a correct declaration unbootable (first-write, then-verify).
+ * Declared session and child-session variants stay fail-loud in refresh mode
+ * because refresh never writes new ones, and replay/record stay fail-loud
+ * everywhere.
+ * @param dir - the scenario directory being guarded.
+ * @param name - the scenario name used in the failure label.
+ * @param manifest - the parsed scenario manifest carrying variant declarations.
+ * @param refreshing - whether this suite run is refresh mode.
+ * @returns Nothing; the first missing non-exempt variant fails the assertion.
+ */
+export function assertDeclaredVariantFiles(
+  dir: string,
+  name: string,
+  manifest: SnapshotManifest,
+  refreshing: boolean,
+): void {
+  const writtenByThisRefresh = new Set(
+    Object.entries(manifest.expectations?.variants ?? {})
+      .flatMap(([variant, kinds]) => kinds.map(kind => expectationFileName(kind, variant as SnapshotExpectationPlatform))),
+  )
+  for (const file of declaredExpectationVariantFiles(manifest)) {
+    if (refreshing && !existsSync(join(dir, file)) && writtenByThisRefresh.has(file)) continue
+    expect(existsSync(join(dir, file)), `${name}/${file} declared platform variant must exist`).toBe(true)
+  }
 }
 
 /** One suite's inputs: the agent to boot, where its fixtures live, and its scenario table. */
@@ -870,6 +908,15 @@ function preserveFixtureVolatiles(record: Record<string, unknown>, existing: Rec
     return
   }
   if ('time' in record && 'time' in existing) record.time = existing.time
+  // The storage codec re-encodes sourceEventSeqs into ranges, so a fixture's
+  // expanded spelling would flip on every refresh even though both spellings
+  // normalize to the same value; decoded equality keeps the fixture's bytes.
+  if (
+    Array.isArray(record.sourceEventSeqs) && Array.isArray(existing.sourceEventSeqs)
+    && canonicalJson(decodeSeqRanges(record.sourceEventSeqs)) === canonicalJson(decodeSeqRanges(existing.sourceEventSeqs))
+  ) {
+    record.sourceEventSeqs = existing.sourceEventSeqs
+  }
   if (record.type !== 'hook/result') return
   const data = record.data
   const existingData = existing.data
@@ -1399,12 +1446,11 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
             const promptSnapshot = formatSystemPromptSnapshot(prompts[0] as string, prompts.slice(1))
             /* v8 ignore next -- registration guarantees every scenario class has resolved sources. */
             const promptSource = promptSourceByClass.get(classOf(scenario)) ?? scenario
-            const promptPath = resolveExpectationPath({
-              dir: join(snapshotsDir, promptSource.name),
-              kind: 'system-prompt',
-              manifest: await manifestOf(promptSource.name),
-              platform: process.platform,
-            })
+            const promptPath = join(
+              snapshotsDir,
+              promptSource.name,
+              expectationWriteName(await manifestOf(promptSource.name), 'system-prompt', process.platform),
+            )
             claimSharedSnapshot(promptClaims, promptPath, scenario.name, promptSnapshot)
             await writeFile(promptPath, promptSnapshot)
 
@@ -1418,12 +1464,11 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
             )
             /* v8 ignore next -- registration guarantees every scenario class has resolved sources. */
             const schemaSource = schemaSourceByClass.get(classOf(scenario)) ?? scenario
-            const schemaPath = resolveExpectationPath({
-              dir: join(snapshotsDir, schemaSource.name),
-              kind: 'tool-schemas',
-              manifest: await manifestOf(schemaSource.name),
-              platform: process.platform,
-            })
+            const schemaPath = join(
+              snapshotsDir,
+              schemaSource.name,
+              expectationWriteName(await manifestOf(schemaSource.name), 'tool-schemas', process.platform),
+            )
             claimSharedSnapshot(schemaClaims, schemaPath, scenario.name, toolSchemasSnapshot)
             await writeFile(schemaPath, toolSchemasSnapshot)
           }
@@ -1649,9 +1694,7 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
           `${name}/${WINDOWS_STDOUT_SNAPSHOT} presence must match \`pinsNativeWindowsStdout\``,
         ).toBe(pinsNativeWindowsStdout === true)
         expect(existsSync(join(dir, 'session.jsonl')), `${name}/session.jsonl`).toBe(true)
-        for (const file of declaredExpectationVariantFiles(manifest)) {
-          expect(existsSync(join(dir, file)), `${name}/${file} declared platform variant must exist`).toBe(true)
-        }
+        assertDeclaredVariantFiles(dir, name, manifest, REFRESHING)
         for (const variant of Object.keys(manifest.stdoutVariants ?? {})) {
           const file = `stdout.${variant}.expected.jsonl`
           expect(existsSync(join(dir, file)), `${name}/${file} declared platform variant must exist`).toBe(true)

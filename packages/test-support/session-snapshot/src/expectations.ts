@@ -96,6 +96,28 @@ export function resolveExpectationPath(options: ResolveExpectationPathOptions): 
 }
 
 /**
+ * Build the committed file name of one expected sidecar write target,
+ * preferring the declared platform-variant name for the writing host's
+ * platform family. Unlike {@link resolveExpectationPath} this never consults
+ * the filesystem, so refresh write-backs can name a variant target that does
+ * not exist yet.
+ * @param manifest - the parsed scenario manifest carrying optional variant declarations.
+ * @param kind - which pinned sidecar to name.
+ * @param platform - the writing host's `process.platform`, injected so any variant stays pinnable on any host.
+ * @returns the file name (not a path) inside the scenario directory.
+ */
+export function expectationWriteName(
+  manifest: Pick<SnapshotManifest, 'expectations'>,
+  kind: SnapshotExpectationKind,
+  platform: NodeJS.Platform,
+): string {
+  const variant = platformExpectationVariant(platform)
+  return manifest.expectations?.variants[variant]?.includes(kind) === true
+    ? expectationFileName(kind, variant)
+    : expectationFileName(kind)
+}
+
+/**
  * Build the committed file name of the canonical session fixture, preferring
  * the declared platform-variant name for the host's platform family. Unlike
  * {@link resolveSessionFixturePath} this never consults the filesystem, so

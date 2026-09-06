@@ -8,6 +8,10 @@ header:
   pin: true
   systemPromptSource: session/read-image
   toolSchemasSource: escalation-approved
+expectations:
+  variants:
+    win32:
+      - system-prompt
 permission: danger-full-access
 input:
   attachments:

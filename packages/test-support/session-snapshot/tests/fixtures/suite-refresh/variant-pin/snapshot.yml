@@ -1,0 +1,11 @@
+version: 1
+profile: acp
+header:
+  class: variant-pin
+  pin: true
+expectations:
+  variants:
+    win32:
+      - system-prompt
+    posix:
+      - system-prompt

@@ -58,6 +58,7 @@ export {
   childSessionFixtureFileName,
   declaredExpectationVariantFiles,
   expectationFileName,
+  expectationWriteName,
   platformExpectationVariant,
   resolveChildExpectationPath,
   resolveChildSessionFixturePath,
@@ -96,6 +97,7 @@ export {
   type SnapshotWorkspaceVariantsManifest,
 } from './manifest.ts'
 export {
+  assertDeclaredVariantFiles,
   formatSystemPromptSnapshot,
   formatToolSchemasSnapshot,
   fixtureContext,
