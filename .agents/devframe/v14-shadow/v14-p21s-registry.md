@@ -62,9 +62,12 @@ historical worktrees, any push/PR/publish, deletion of user files.
 
 ### L2 Worker (created by L1)
 
-- SessionID: _(filled after delegation)_
+- SessionID: `0b883d36-5612-40ae-8954-f6da2ef17bbe` (continuable subagent; created 2026-09-06)
 - Parent ID: L1 Shadow session (above).
-- Provider/model: DeepSeek Harness native — glm-5.3-flash.
+- Provider/model: DeepSeek Harness native child — the `subagent` tool schema carries no
+  provider/model override parameter, so the lane was not selectable at creation time; recorded
+  honestly per the 主控 routing directive (huoshan-2 reserved for the next independent low-conflict
+  task, task surface to be reported to 主控 before it starts).
 - taskId: `P21-S-markshadow-host-wiring`.
 - worktreeId: `D:\dsh-devframe-v14-shadow-w1` / branch `p/v14-shadow-w1` @ base `c93b86c43e`.
 - Constraint: worker must NOT create agents; worker commits locally only.
