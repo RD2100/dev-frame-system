@@ -707,6 +707,24 @@
         "status": "dispatched"
       },
       "staggerNote": "Battery B-2 fixture-lane successor held for the next capacity window per the user's stagger directive; current concurrency = controller + 3 leads (compos2/accept2/gap4), all file-disjoint domains, huoshan-2 API healthy"
+    },
+    {
+      "entry": "Controlled expansion check passed; B-2 ACP pipeline successor dispatched",
+      "expansionCheck": [
+        "All five active sessions verified on real request/header huoshan-2/glm-5.3-flash: compos2 lead 85ad815d (dispatched worker), accept2 lead 7eda453a (dispatched worker), gap4 lead 695bcaf0 (investigating), compos worker 4140f6c0, accept worker 5a63f5c8 - both workers' parentage confirmed from persisted logs.",
+        "Zero observed API rate-limit errors: the two 429=YES flags in lead logs were false positives (brief text quoting the predecessor stop reason + an iso timestamp substring 16.429Z); discriminated by context extraction.",
+        "Old huoshan-1 sessions (173895e1/dd23ebdd/9fa566f7) sealed with no new writes; worker worktrees compos-w1/accept-w1 exist and clean.",
+        "Domains disjoint: compos=command-goal-binding, accept=records/harness, gap4=SDK product, battery B-2=acp/sidecar pipeline - no overlap; capacity satisfied."
+      ],
+      "dispatch": {
+        "taskId": "v14-b2acp",
+        "lead": "293a2eeb-8fde-4783-8a54-7daa3b02afcc",
+        "worktree": "D:/dsh-devframe-v14-b2acp-lead (codex/v14-b2acp-lead @ 5e5a706f0a)",
+        "scope": "ACP variant/sidecar pipeline ONLY: pin-sidecar variant resolution in the acp/authored harvest path (cross-scenario source sidecars must write variant targets, never base), manifest strict-validation ordering vs harvest (declared-but-missing variant files), session.jsonl authored-fixture rewrite root cause; base fixtures of every scenario hard-zero-modification; worker via workflow explicit huoshan-2/glm-5.3-flash",
+        "forbidden": "GAP-4 SDK domain, compos/accept domains, other chains worktrees, main tree, .agents/devframe/v14/next/**, vendor",
+        "acceptance": "image-compaction green in the full snapshot suite, zero new failures, base-fixture audit clean",
+        "status": "dispatched"
+      }
     }
   ]
 }
