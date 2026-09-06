@@ -437,7 +437,22 @@
         "lane": "workflow agent(prompt, {provider:'huoshan-2', model:'glm-5.3-flash'})",
         "writeDomains": "source edits only in the P05/goal-lifecycle seam files pre-declared in worker design.md; evidence/design in D:/dsh-devframe-v14-p05asm/.agents/devframe/v14-p05asm/worker/**; forbidden: snapshots/**, packages/test-support/session-snapshot/**, scripts/session-snapshot-corpus*, vendor/**, main tree writes",
         "evidencePlan": "controller extracts the worker session log frame-by-frame (request/header provider, first success, turn/end) via read-session-log.mjs and computes real overlap with battery worker huoshan-1 in-flight window",
-        "status": "dispatching"
+        "workerIdentity": {
+          "sessionId": "fcfc01fd-783f-462c-9107-ef4888f7f475",
+          "parentSession": "session-c1668d60-b936-45fd-84bc-77f121241cfe (controller direct)",
+          "delegationDepth": 1,
+          "origin": "workflow agent(prompt,{provider:'huoshan-2',model:'glm-5.3-flash'}) - session header origin=subagent recorded by harness",
+          "requestHeader": "seq 13 @ 05:24:24.207Z config.provider=huoshan-2/glm-5.3-flash (real wire lane, multiple request/header events across the run all huoshan-2)",
+          "firstSuccessfulResponse": "seq 696 @ 05:24:37.102Z",
+          "turnEnd": "06:09:59.495Z (session window ~45m35s)",
+          "dualProviderOverlap": "huoshan-2 window [05:24:24.207Z, 06:09:59.495Z] fully contained in battery-chain huoshan-1 worker 61e4739d in-flight window [05:11:15.913Z, 06:10:27.067Z open] (request/header seq 14 @ 05:11:15.913Z provider=huoshan-1) = ~45.6min real parallel; battery original worker 57d0355f chain untouched on huoshan-1",
+          "deliverable": "commits 069587b2ae (design) + 5ee23870c5 (impl+tests, 10 files +810/-178) + 84c10cef19 (Agent Note + receipts); evaluateCompletionAdmission wired into native Goal lifecycle via GoalBindingController.complete -> NativeGoalPort.complete -> GoalService.complete; three-predicate order unchanged; SessionEventMap/SESSION_FORMAT_VERSION untouched"
+        },
+        "controllerGates": "domain scan 15 files 0 forbidden zone, diff --check 0; focused vitest rerun: devframe 118/118 + agent-evidence/agent-team 88/88 = 206 green (worker reported 208/23 files - include-set variance, both counts zero-failure, recorded honestly); full build after removing 283 tsbuildinfo: exit 0 / 220 artifacts / 3 public values; gen-cordis-catalog rerun: 115 artifacts 0 written exit 0",
+        "rulingsAccepted": "1) complete() requires no HumanAuthorization - the three-predicate evidence chain is the completion authorization (completion=disarm direction; host command face may add human confirmation in P23/S4); 2) rejected completion keeps admission closed (fail-closed; recovery via human resume); 3) port verb required not optional (construction failure over call failure, p05harden precedent)",
+        "gapRouting": "P23/S4 remainder recorded by worker: host command face / cordis profile composition of GoalServicePort, verdict receipt logging, deep evidence attribution (revision/snapshot/taskIds tuple), required-checks store still memory-only, required-checks-wiring proposal Risk#1 cross-link fix belongs to its owner chain",
+        "status": "integrated",
+        "mergeCommit": "f5c680cacd (codex/v14-p05asm merged into main; user dirty files 376 untouched)"
       }
     }
   ]
