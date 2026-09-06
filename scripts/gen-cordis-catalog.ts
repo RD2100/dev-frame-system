@@ -760,6 +760,7 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   VerificationRequest: 'evidence ledger contract is owned by packages/experimental/agent-evidence/README.md',
   VerificationSnapshot: 'evidence ledger contract is owned by packages/experimental/agent-evidence/README.md',
   CreationDecision: 'creation-guard contract is owned by packages/experimental/agent-hierarchy/README.md',
+  AdmissionCutoff: 'reliability service contract is owned by packages/experimental/agent-reliability/README.md',
   FlushBarrierResult: 'reliability service contract is owned by packages/experimental/agent-reliability/README.md',
   ReconciledOutcome: 'reliability service contract is owned by packages/experimental/agent-reliability/README.md',
   UncertainCallPlan: 'reliability service contract is owned by packages/experimental/agent-reliability/README.md',
