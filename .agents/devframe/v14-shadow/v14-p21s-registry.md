@@ -72,8 +72,13 @@ historical worktrees, any push/PR/publish, deletion of user files.
 - worktreeId: `D:\dsh-devframe-v14-shadow-w1` / branch `p/v14-shadow-w1` @ base `c93b86c43e`.
 - Constraint: worker must NOT create agents; worker commits locally only.
 - Nine-state: assigned → developing → **submitted** → reviewed → **integrated** (merge `0c0cdaf1e8`
-  into `codex/v14-shadow-lead`, --no-ff, L1-approved per `v14-p21s-review.md`). Completion at main
-  level is 主控's merge decision. Worker lane: huoshan-1 factual lane (native child).
+  into `codex/v14-shadow-lead`, --no-ff, L1-approved per `v14-p21s-review.md`) → **completed**:
+  主控 merged to main as `d7534edf3e` (lead tip `b0d0e80a38`; 主控 gates: 12-file domain scan 0
+  out-of-domain, vendor 0, diff --check 0, focused vitest 14 files/32 pass/1 POSIX skip exit 0,
+  full build exit 0 / 220 artifacts / zero TS6059-TS6307; deviation rulings accepted; four-plane
+  registered as source/enabled/composition PROVEN, production NOT CLAIMED). Worker lane: huoshan-1
+  factual lane (native child). Chain closed 2026-09-06; further work (integration-profile live dump
+  smoke) only on an explicit new 主控 dispatch.
 
 ## Hook-skip ledger and substitute verification (per 主控 directive ②)
 
