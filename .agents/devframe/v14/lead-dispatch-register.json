@@ -921,6 +921,16 @@
         "Worklist C1 row flipped (change-only). C lead dispatched 5 workflow agents total across the line (4 returned, 1 wrapper outstanding at diagnosis time)."
       ],
       "status": "A restart in progress; C2/C3/C4 pipeline flowing; B blocker closure and D consolidation continuing"
+    },
+    {
+      "entry": "FIRST substantive merge to main: D-line six-package verification (ea82e93e44); D line closed to standby; B lead failed mid-turn and revived with closure edits intact",
+      "facts": [
+        "Controller review-merged codex/v14-llmverify-lead commit d0f7148758 into main (ea82e93e44): .agents/devframe/v14-llmverify/verification.md, 194 lines - D1-D6 four-states (source/profile/isolated-run/BLOCKED classified), huoshan host labels tier-2 only, ark transport-compat probe in separate section explicitly NOT OpenCode service verification, BLOCKED items with precise missing credentials + wake conditions, codex/Astra registry reconciliation (pi-ai upstream 0.85.1 vs intentional host pin 0.84.2 recorded), isolation home path, full command/exit-code ledger, R1 clean-tree-build defect candidate recorded for A-line. Review checks: single file, diff --check 0, three-tier discipline embedded, four-element production-acceptance rule applied.",
+        "D line CLOSED to standby (lead 311590fd acknowledged; wake condition: R1 evidence support if A claims it).",
+        "B lead (6a8c25cb) failed mid-turn (background subagent failure). Worktree recovery found all four closure edits intact and uncommitted: M cordis.yml (plugin mounts), M apps/cli/package.json (dependencies), M pnpm-lock.yaml, M tsconfig.base.json (paths). Lead revived via send_message with serial order: finish install -> verify-cordis-config + build with real exit codes -> single closure commit including all receipt report files -> controller review-merge. B4 harness and shadow-router project_open assembly check ordered AFTER the closure commit.",
+        "Worker slots remain closed across all lines; a46cab71 remains marked failed; no investigation workers."
+      ],
+      "status": "D closed; B reviving for closure commit; A personal-fix in progress; C2-C4 gap-fill flowing"
     }
   ]
 }
