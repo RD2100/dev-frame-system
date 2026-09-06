@@ -9,3 +9,10 @@ header:
   childToolSchemas: [1, 2]
 replay:
   override: true
+sessionVariants:
+  win32: true
+childSessionVariants:
+  win32: [1, 2]
+childExpectations:
+  variants:
+    win32: [system-prompt, tool-schemas]
