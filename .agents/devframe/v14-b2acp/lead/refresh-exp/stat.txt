@@ -1,0 +1,3 @@
+ snapshots/acp/image-compaction/session.jsonl           | 4 ++--
+ snapshots/session/read-image/system-prompt.expected.md | 4 +++-
+ 2 files changed, 5 insertions(+), 3 deletions(-)
