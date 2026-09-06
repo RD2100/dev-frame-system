@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-09-06-snapshot-session-recording-and-ui-variants.md
+2026-09-06-snapshot-session-recording-and-ui-variants.md: 9b0b726c37aea1fb90c0dee0e2c1939b35e978fe
+2026-09-06-snapshot-session-recording-and-ui-variants.zh.md: 68ff36472077fe95cb9c2bb78592a6154e450489
