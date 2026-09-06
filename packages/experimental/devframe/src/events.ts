@@ -10,6 +10,12 @@ import type {
   GoalResultBinding,
   TaskId,
 } from './controller/goal-binding.ts'
+import {
+  requiredChecksConfigSchema,
+  requiredChecksDigest,
+  sameRequiredCheckCommand,
+} from './required-checks.ts'
+import type { DevFrameRequiredChecksConfig, RequiredChecksDigest } from './required-checks.ts'
 import type { RolePolicyConfig } from './permissions/index.ts'
 import type { StopIssue } from './reliability/stop.ts'
 import type {
@@ -164,6 +170,21 @@ export interface DevFrameCheckResult {
   readonly outputRef?: string
 }
 
+/**
+ * The approved required-checks checklist one verification evidence claims to
+ * fully cover. The payload is self-describing: `digest` pins the canonical
+ * identity of `config`, and the event schema rejects the payload unless every
+ * declared check is exactly executed by the recorded `checks` — so a weakened
+ * verification (a dropped check or a swapped command under a required name)
+ * can no longer decode at all.
+ */
+export interface DevFrameVerificationCoverage {
+  /** The human-approved configuration this evidence declares. */
+  readonly config: DevFrameRequiredChecksConfig
+  /** Canonical digest of `config`; schema-checked for self-consistency. */
+  readonly digest: RequiredChecksDigest
+}
+
 /** Complete evidence produced for one exact source snapshot and work tuple. */
 export interface DevFrameVerificationEventData {
   /** Payload schema version. */
@@ -176,6 +197,8 @@ export interface DevFrameVerificationEventData {
   readonly snapshotId: DevFrameSnapshotId
   /** Aggregate result derived from the listed real check executions. */
   readonly status: 'passed' | 'failed'
+  /** The approved checklist this evidence declares and must exactly execute. */
+  readonly requiredChecks: DevFrameVerificationCoverage
   /** All required checks executed for the snapshot. */
   readonly checks: readonly DevFrameCheckResult[]
 }
@@ -268,6 +291,7 @@ const snapshotIdSchema = trimmedString.transform(value => brandString<DevFrameSn
 const verificationIdSchema = trimmedString.transform(value => brandString<DevFrameVerificationId>(value))
 const reviewIdSchema = trimmedString.transform(value => brandString<DevFrameReviewId>(value))
 const operationIdSchema = trimmedString.transform(value => brandString<DevFrameOperationId>(value))
+const requiredChecksDigestSchema = trimmedString.transform(value => brandString<RequiredChecksDigest>(value))
 
 const lifecycleStateSchema = z.enum([
   'admission_open',
@@ -402,12 +426,18 @@ const checkResultSchema = z.object({
   outputRef: trimmedString.optional(),
 }).strict()
 
+const verificationCoverageSchema = z.object({
+  config: requiredChecksConfigSchema,
+  digest: requiredChecksDigestSchema,
+}).strict()
+
 const verificationEventSchema = z.object({
   version: z.literal(1),
   verificationId: verificationIdSchema,
   binding: goalResultBindingSchema,
   snapshotId: snapshotIdSchema,
   status: z.enum(['passed', 'failed']),
+  requiredChecks: verificationCoverageSchema,
   checks: z.array(checkResultSchema).min(1).refine(values => new Set(values.map(value => value.checkId)).size === values.length, 'check ids must be unique'),
 }).strict().superRefine((value, context) => {
   if (value.snapshotId !== value.binding.snapshotId) {
@@ -419,6 +449,34 @@ const verificationEventSchema = z.object({
   }
   if (value.status === 'failed' && allPassed) {
     context.addIssue({ code: 'custom', path: ['status'], message: 'failed evidence requires a non-passing check' })
+  }
+  // Required-checks coverage rule: the evidence self-declares the approved
+  // checklist it covers, and the schema rejects a payload whose declaration
+  // does not hash to its claimed identity or whose checks do not exactly
+  // execute every declared check (same checkId, exact command). A weakened
+  // verification — a required check dropped or run under an altered command —
+  // is therefore rejected at decode time; a declared check that ran exactly
+  // but failed stays decodable as honest failed evidence, and the completion
+  // admission (not this schema) rejects it for not passing. Executed checks
+  // outside the declaration are still ignored: the config declares what is
+  // required, not what is permitted.
+  if (value.requiredChecks.digest !== requiredChecksDigest(value.requiredChecks.config)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['requiredChecks', 'digest'],
+      message: 'must be the canonical digest of the declared required-checks configuration',
+    })
+  }
+  for (const required of value.requiredChecks.config.checks) {
+    const exactlyExecuted = value.checks.some(check =>
+      check.checkId === required.checkId && sameRequiredCheckCommand(check, required))
+    if (!exactlyExecuted) {
+      context.addIssue({
+        code: 'custom',
+        path: ['requiredChecks', 'config', 'checks'],
+        message: `required check "${required.checkId}" is not exactly executed by the recorded checks`,
+      })
+    }
   }
 }) as z.ZodType<DevFrameVerificationEventData>
 

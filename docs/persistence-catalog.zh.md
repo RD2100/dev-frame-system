@@ -406,7 +406,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'devframe/goal-binding': GoalBinding
 ```
 
-来源：[`packages/experimental/devframe/src/events.ts:251`](../packages/experimental/devframe/src/events.ts)
+来源：[`packages/experimental/devframe/src/events.ts:266`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframelifecycle--log-only"></a>
 
@@ -417,7 +417,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'devframe/lifecycle': DevFrameLifecycleEventData
 ```
 
-来源：[`packages/experimental/devframe/src/events.ts:259`](../packages/experimental/devframe/src/events.ts)
+来源：[`packages/experimental/devframe/src/events.ts:274`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframereview--log-only"></a>
 
@@ -428,7 +428,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'devframe/review': DevFrameReviewEventData
 ```
 
-来源：[`packages/experimental/devframe/src/events.ts:257`](../packages/experimental/devframe/src/events.ts)
+来源：[`packages/experimental/devframe/src/events.ts:272`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframerole-policy--log-only"></a>
 
@@ -439,7 +439,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'devframe/role-policy': DevFrameRolePolicyEventData
 ```
 
-来源：[`packages/experimental/devframe/src/events.ts:249`](../packages/experimental/devframe/src/events.ts)
+来源：[`packages/experimental/devframe/src/events.ts:264`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframeusage--log-only"></a>
 
@@ -450,7 +450,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'devframe/usage': DevFrameUsageEventData
 ```
 
-来源：[`packages/experimental/devframe/src/events.ts:253`](../packages/experimental/devframe/src/events.ts)
+来源：[`packages/experimental/devframe/src/events.ts:268`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframeverification--log-only"></a>
 
@@ -461,7 +461,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'devframe/verification': DevFrameVerificationEventData
 ```
 
-来源：[`packages/experimental/devframe/src/events.ts:255`](../packages/experimental/devframe/src/events.ts)
+来源：[`packages/experimental/devframe/src/events.ts:270`](../packages/experimental/devframe/src/events.ts)
 
 ### `feedback/*`
 

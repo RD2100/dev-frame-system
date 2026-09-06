@@ -1,19 +1,23 @@
 /**
  * Required-checks completion policy: schema rejections at the parse boundary,
  * digest determinism, and pure comparison verdicts against real
- * `DevFrameCheckResult` evidence — including a durable `devframe/verification`
- * payload decoded through the production schema face to prove composition
- * without modifying the frozen event module. Durable enforcement points
- * (coverage inside the event schema, journal wiring, completion admission,
- * configuration storage) have no implementation anchor in this wave and stay
- * GAP-registered (.agents/devframe/p22/required-checks-design.md).
+ * `DevFrameCheckResult` evidence. The durable composition cases drive a real
+ * `devframe/verification` payload through the production schema face, whose
+ * coverage rule now rejects a weakened payload at decode time (self-declared
+ * `requiredChecks` must hash to its claimed digest and be exactly executed by
+ * the recorded checks) while the comparison face rejects the same executed
+ * set independently — the two rejection layers are pinned side by side. The
+ * configuration store cases cover the digest → configuration registration the
+ * completion admission reads.
  * @module dsh-experimental-devframe/tests/required-checks
  */
 
 import { describe, expect, it } from 'vitest'
 import {
+  acceptanceCheckComponent,
   decodeRequiredChecksConfig,
   evaluateRequiredChecks,
+  MemoryRequiredChecksConfigStore,
   RequiredChecksError,
   requiredChecksDigest,
   type DevFrameRequiredCheck,
@@ -261,8 +265,16 @@ describe('evaluateRequiredChecks verdicts', () => {
 })
 
 describe('composition with the durable verification payload', () => {
+  /** The self-declared coverage for one approved configuration. */
+  function coverageFor(config: DevFrameRequiredChecksConfig) {
+    return { config, digest: requiredChecksDigest(config) }
+  }
+
   /** One untrusted `devframe/verification` payload carrying the executed checks. */
-  function verificationPayload(checks: readonly DevFrameCheckResult[]): Record<string, unknown> {
+  function verificationPayload(
+    checks: readonly DevFrameCheckResult[],
+    coverage: ReturnType<typeof coverageFor> = coverageFor(CONFIG),
+  ): Record<string, unknown> {
     return {
       version: 1,
       verificationId: 'verification-p05checks',
@@ -278,6 +290,7 @@ describe('composition with the durable verification payload', () => {
       },
       snapshotId: 'snapshot-p05checks',
       status: checks.every(check => check.status === 'passed') ? 'passed' : 'failed',
+      requiredChecks: coverage,
       checks,
     }
   }
@@ -285,21 +298,55 @@ describe('composition with the durable verification payload', () => {
   it('evaluates checks decoded from a real devframe/verification payload', () => {
     const payload = verificationPayload(CONFIG.checks.map(check => executionFor(check)))
     const decoded = decodeDevFramePayload('devframe/verification', payload)
+    expect(decoded.requiredChecks.digest).toBe(requiredChecksDigest(CONFIG))
     expect(evaluateRequiredChecks(CONFIG, decoded.checks))
       .toEqual({ kind: 'satisfied', digest: requiredChecksDigest(CONFIG) })
   })
 
-  it('rejects a weakened payload the event schema alone accepts', () => {
+  it('rejects a weakened payload at the durable schema level', () => {
     const weakened = [
       executionFor(UNIT, 'passed', { arguments: ['exec', 'vitest', 'run', '--silent'] }),
       executionFor(LINT),
     ]
-    const decoded = decodeDevFramePayload('devframe/verification', verificationPayload(weakened))
-    // The GAP made executable: the durable schema has no coverage rule, so the
-    // weakened payload decodes cleanly — the evaluation face is what rejects it.
-    expect(decoded.checks).toHaveLength(2)
-    const verdict = evaluateRequiredChecks(CONFIG, decoded.checks)
-    expect(violationsOf(verdict)).toEqual([
+    let caught: unknown
+    try {
+      decodeDevFramePayload('devframe/verification', verificationPayload(weakened))
+    } catch (error) {
+      caught = error
+    }
+    expect((caught as Error).message).toMatch(/DevFrame devframe\/verification payload is invalid/)
+    // The coverage rule names both deviations: the swapped command under the
+    // required name and the required check that never ran.
+    expect(String((caught as Error).cause)).toContain('is not exactly executed')
+    expect(String((caught as Error).cause)).toContain('typecheck')
+  })
+
+  it('keeps honest failed evidence decodable when every declared check ran exactly', () => {
+    const failed = [executionFor(UNIT, 'failed'), executionFor(LINT), executionFor(TYPECHECK)]
+    const decoded = decodeDevFramePayload('devframe/verification', verificationPayload(failed))
+    expect(decoded.status).toBe('failed')
+    // The schema enforces exact execution, not pass status: a declared check
+    // that ran exactly and failed is honest failed evidence here. Passing is
+    // the completion admission's judgment, not the schema's.
+    expect(decoded.checks.map(check => check.status)).toEqual(['failed', 'passed', 'passed'])
+  })
+
+  it('rejects a coverage declaration whose digest does not match its configuration', () => {
+    // The declared set is the full CONFIG, but the claimed identity is the
+    // digest of a different (single-check) configuration — a fabricated
+    // self-description the schema refuses to decode.
+    const fabricated = { config: CONFIG, digest: requiredChecksDigest({ version: 1, checks: [UNIT] }) }
+    const payload = verificationPayload(CONFIG.checks.map(check => executionFor(check)), fabricated)
+    expect(() => decodeDevFramePayload('devframe/verification', payload))
+      .toThrow(/DevFrame devframe\/verification payload is invalid/)
+  })
+
+  it('still rejects the same weakened executed set at the comparison face', () => {
+    const weakened = [
+      executionFor(UNIT, 'passed', { arguments: ['exec', 'vitest', 'run', '--silent'] }),
+      executionFor(LINT),
+    ]
+    expect(violationsOf(evaluateRequiredChecks(CONFIG, weakened))).toEqual([
       {
         reason: 'REQUIRED_CHECKS_COMMAND_MISMATCH',
         checkId: UNIT.checkId,
@@ -308,5 +355,38 @@ describe('composition with the durable verification payload', () => {
       },
       { reason: 'REQUIRED_CHECKS_MISSING', checkId: TYPECHECK.checkId },
     ])
+  })
+})
+
+describe('required-checks configuration storage', () => {
+  it('registers a configuration under its canonical digest and decodes it back', async () => {
+    const store = new MemoryRequiredChecksConfigStore()
+    const digest = await store.save(CONFIG)
+    expect(digest).toBe(requiredChecksDigest(CONFIG))
+    await expect(store.load(digest)).resolves.toEqual(CONFIG)
+  })
+
+  it('treats a repeated registration of the same set as the same registration', async () => {
+    const store = new MemoryRequiredChecksConfigStore()
+    const first = await store.save(CONFIG)
+    const reordered: DevFrameRequiredChecksConfig = { version: 1, checks: [...CONFIG.checks].reverse() }
+    const second = await store.save(reordered)
+    expect(second).toBe(first)
+    await expect(store.load(first)).resolves.toEqual(CONFIG)
+  })
+
+  it('fails loud when resolving an unregistered digest', async () => {
+    const store = new MemoryRequiredChecksConfigStore()
+    await expect(store.load(requiredChecksDigest(CONFIG))).rejects.toMatchObject({
+      name: 'RequiredChecksError',
+      code: 'REQUIRED_CHECKS_CONFIG_NOT_FOUND',
+    })
+  })
+})
+
+describe('acceptance composition component', () => {
+  it('contributes the canonical digest as the check-configuration component', () => {
+    expect(acceptanceCheckComponent(CONFIG)).toBe(requiredChecksDigest(CONFIG))
+    expect(acceptanceCheckComponent(CONFIG)).toMatch(/^dsh-required-checks-v1-[0-9a-f]{64}$/)
   })
 })
