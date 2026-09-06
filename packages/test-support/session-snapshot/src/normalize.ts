@@ -21,6 +21,7 @@ const MESSAGE_ID = '{{messageId}}'
 const USED_TOKENS = '{{usedTokens}}'
 const CWD = '{{cwd}}'
 const FILE_POLICY = '{{filePolicy}}'
+const WORKER_ERROR_STACK = '{{workerErrorStack}}'
 const SYSTEM = '{{system}}'
 const TOOLS = '{{tools}}'
 const EVENT_TIME = '{{eventTime}}'
@@ -53,6 +54,9 @@ const FILE_URI_PATH_PREFIX_RE = /(?:^|[^a-z0-9+.-])file:\/\/\/?$/i
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
 /** The file-policy value inside the runtime-context projection's policy sentence. */
 const FILE_POLICY_RE = /Current DSH file policy: [a-z-]+/g
+/** A code-run failure message line followed by at least one worker-side stack frame. */
+const CODE_RUN_FAILURE_STACK_RE
+  = /^(Error: code run failed \(exception\): [^\r\n]*)(?:\r?\n[ \t]+at [^\r\n]*)+/gm
 const LOCAL_SPILL_PATH_RE = new RegExp(
   String.raw`\{\{cwd\}\}[\\/]\.spill[\\/]session-[0-9a-f]{12}[\\/][0-9a-f]{12}-([A-Za-z0-9._~-]+?)`
   + String.raw`(?=\. Use read with offset/limit|[\s)]|$)`,
@@ -193,6 +197,12 @@ function scrubString(
   // verbatim. The policy is a host environment attribute, not tested
   // semantics, so tokenize the value the same way volatile paths are.
   out = out.replace(FILE_POLICY_RE, `Current DSH file policy: ${FILE_POLICY}`)
+  // A failed code run renders the worker's thrown exception with its stack
+  // (packages/core/tools/src/ptc.ts). The frames — worker entry path, tree
+  // root, worker module format (built CJS vs source ESM), node-internal
+  // loader frames, and their line numbers — are recording-host attributes,
+  // not tested semantics; the exception kind and message stay pinned.
+  out = out.replace(CODE_RUN_FAILURE_STACK_RE, `$1\n${WORKER_ERROR_STACK}`)
   // Filesystem APIs can report one directory with several spellings. Replace
   // every known spelling longest-first so a shorter alias cannot corrupt a
   // longer one before it is tokenized. macOS additionally symlinks

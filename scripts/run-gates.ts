@@ -263,6 +263,7 @@ export function gatesForMode(selected: Mode): Gate[] {
         pnpmScript('client-domain-graph', 'verify-client-domain-graph', { label: 'client domain graph' }),
         pnpmScript('test', 'test'),
         pnpmScript('issue-management', 'test:issue-management', { label: 'Issue management policy' }),
+        pnpmScript('no-source-js', 'verify-no-source-js', { label: 'no source js' }),
         pnpmScript('duplication', 'duplication'),
         snapshotGate(),
         expectedOutputGate(),
@@ -298,6 +299,7 @@ function ciSharedStaticGates(): Gate[] {
     pnpmScript('package-dependencies', 'verify-package-dependencies', { label: 'package dependencies' }),
     pnpmScript('dsh-package-licenses', 'verify-dsh-package-licenses', { label: 'DSH package licenses' }),
     pnpmScript('package-invariants', 'verify-package-invariants', { label: 'package invariants' }),
+    pnpmScript('no-source-js', 'verify-no-source-js', { label: 'no source js' }),
     pnpmScript('cordis-config', 'verify-cordis-config', { label: 'Cordis config' }),
     pnpmScript('optional-dependency-imports', 'verify-optional-dependency-imports', {
       label: 'optional dependency imports',
