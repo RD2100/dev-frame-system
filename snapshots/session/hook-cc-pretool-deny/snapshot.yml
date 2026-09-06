@@ -5,3 +5,5 @@ composition: default
 recording: live
 header:
   class: default
+sessionVariants:
+  win32: true
