@@ -474,6 +474,44 @@ describe('normalizeSessionLog', () => {
     expect(out).toContain('"decision":"allow"')
     expect(out).not.toContain('durationMs')
   })
+
+  describe('runtime-context file policy tokenization', () => {
+    const policyRow = (policy: string) => JSON.stringify({
+      type: 'user/message', seq: 4, time: 9,
+      data: {
+        content: [{
+          type: 'text',
+          text: `Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent DSH file policy: ${policy}. Details follow.`,
+        }],
+        source: { kind: 'system' },
+      },
+    })
+
+    it.each(['danger-full-access', 'workspace-write', 'read-only'])('tokenizes the %s policy value', (policy) => {
+      const out = normalizeSessionLog(`${header({})}\n${policyRow(policy)}\n`, ctx)
+      expect(out).toContain('Current DSH file policy: {{filePolicy}}.')
+      expect(out).not.toContain(`Current DSH file policy: ${policy}`)
+    })
+
+    it('makes rows differing only in the policy value normalize identically', () => {
+      const sentence = (policy: string) => `Current DSH file policy: ${policy}. Details follow.`
+      const rowFor = (policy: string) => policyRow(policy).replace(sentence(policy), `sentinel ${sentence(policy)}`)
+      const outA = normalizeSessionLog(`${header({})}\n${rowFor('danger-full-access')}\n`, ctx)
+      const outB = normalizeSessionLog(`${header({})}\n${rowFor('workspace-write')}\n`, ctx)
+      expect(outA).toBe(outB)
+      expect(outA).toContain('sentinel Current DSH file policy: {{filePolicy}}.')
+    })
+
+    it('leaves text without the policy sentence untouched', () => {
+      const ev = JSON.stringify({
+        type: 'user/message', seq: 4, time: 9,
+        data: { content: [{ type: 'text', text: 'the file policy page explains more' }], source: { kind: 'user' } },
+      })
+      const out = normalizeSessionLog(`${header({})}\n${ev}\n`, ctx)
+      expect(out).toContain('the file policy page explains more')
+      expect(out).not.toContain('{{filePolicy}}')
+    })
+  })
 })
 
 describe('normalizeSessionSnapshot', () => {
