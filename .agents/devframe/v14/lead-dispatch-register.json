@@ -378,6 +378,18 @@
       "controllerActions": [
         "battery-approval-request.json addendum revision 3 written for coordinator relay; F3 lead entry -> integrated; merge notice sent to lead 77e4a9a2; ledger commit on codex/dsh-controller-v1.4."
       ]
+    },
+    {
+      "entry": "F3 terminal addendum merged; chain closed",
+      "facts": [
+        "Terminal record 3b34aece05 merged as 2aaec82d24 (true delta vs merge base 3e05a4de72: lead-state.json only, +44/-2; sentinel files verified present post-merge: shadow host-designation.spec.ts, integration l2-evidence.md, shadow registry, F3 lead-state.json; an initial 32-file diff alarm was a scan-base mistake, not a content loss).",
+        "429 attribution clarification registered by lead: turn1 429 belongs to the huoshan-1 route (persisted), NOT huoshan-2; no blind retries anywhere; huoshan-2 route three-for-three (probe 1 / substantive worker / probe 2).",
+        "Fresh lane data point probe-2: session 3b457ab4-68ee-4b7e-8a87-1764f94b3fbf, 14 frames/36 events decoded; request/header @ 04:04:11.810Z provider=huoshan-2/glm-5.3-flash, finish @ 04:04:15.162Z with wire responseId=021788667454424e5604ce51ad3a2545ae54a532380ddce8ac13e, turn/end completed @ 04:04:15.163Z (window ~3.35s, no first-party huoshan-1 writes in window); dual-provider overlap record remains the 6992ms worker window.",
+        "Instruction checklist all verified in-record: schema verification, unique L2 worker, independent worktree, F3-only write domain, worker no-derivation, production/snapshots untouched."
+      ],
+      "controllerActions": [
+        "F3 chain marked closed (integrated, terminal records merged); no further messages to the finished lead; battery semantic clarifications remain available on request."
+      ]
     }
   ]
 }
