@@ -1,0 +1,125 @@
+{
+  "round": "v1.4-L1-combo-acceptance",
+  "agent": {
+    "role": "L1 lead (组合验收组长)",
+    "sessionId": "f705f2bf-b339-4fa1-bcb2-abfd88f2bc78",
+    "parentSessionId": "session-c1668d60-b936-45fd-84bc-77f121241cfe",
+    "provider": "DeepSeek Harness continuable subagent runtime / model glm-5.3-flash",
+    "taskId": "v14-l1-combo-accept",
+    "worktreeId": "D:\\dsh-devframe-v14-integration-lead",
+    "branch": "codex/v14-integration-lead",
+    "baseCommit": "c93b86c43e",
+    "taskStateNine": "submitted",
+    "taskStateNote": "九态词表：验收任务自评 submitted（等总控审查合并）；探针内 task-probe-1 记录 assigned"
+  },
+  "worker": {
+    "role": "L2 worker",
+    "sessionId": "024d6ecb-3fcd-4cb2-85d1-a3191bc2f13d",
+    "parentSessionId": "f705f2bf-b339-4fa1-bcb2-abfd88f2bc78",
+    "provider": "DeepSeek Harness continuable subagent runtime / model glm-5.3-flash",
+    "taskId": "v14-l2-combo-accept",
+    "worktreeId": "D:\\dsh-devframe-v14-integration-l2",
+    "branch": "codex/v14-integration-l2",
+    "baseCommit": "c93b86c43e",
+    "taskStateNine": "see l2 evidence (worker-owned)",
+    "agentCreationByWorker": "forbidden and not observed"
+  },
+  "reuseProvenance": {
+    "archive": ".agents/devframe/integration/cordis.patch.yml",
+    "probe": ".agents/devframe/integration/probe-cold-recovery.ts",
+    "copyPolicy": "byte-identical copies (Get-FileHash SHA256 match) placed at repo-root 3-level depth .agents/devframe/v14-integration/ because probe-cold-recovery.ts L42 hardcodes '../../../apps/cli/src/profile-boot.ts'; zero source edits",
+    "sha256": {
+      "cordis.patch.yml": "08417F4374F681B66F54EAB34E1E562428BBFA04E3479E230E3B6FFD3FE65161",
+      "probe-cold-recovery.ts": "B36F742934ACDE54980CF30A6DC5EA3280665E87F912FB586A8CA711FED30682"
+    }
+  },
+  "isolatedHome": {
+    "DSH_HOME": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-v14-lead-home",
+    "createdFresh": true,
+    "retainedAsEvidence": true,
+    "sharedHomesUntouched": ["C:\\Users\\25313\\.dsh", "C:\\Users\\25313\\.dsh-integration"]
+  },
+  "commands": [
+    { "step": 1, "cmd": "pnpm install", "exitCode": 0, "note": "worktree run infra; untracked, not committed" },
+    { "step": 2, "cmd": "pnpm dsh plugin --profile integration add @deepseek-ai/dsh-experimental-project-memory", "exitCode": 1, "note": "documented expectation: ERR_PNPM_FETCH_404 at install step (no registry auth); profile skeleton persisted (cordis.patch.yml/package.json/pnpm-workspace.yaml)" },
+    { "step": 3, "cmd": "node --import tsx/esm apps/cli/src/bin.ts --profile integration --patch <write-domain>cordis.patch.yml --dump-config", "exitCode": 0, "note": "458 lines -> lead-dump-config.output.txt" },
+    { "step": 4, "cmd": "pnpm exec tsx .agents/devframe/v14-integration/lead/probe-cold-recovery.ts --phase write (4-level deep copy)", "exitCode": 1, "note": "FINDING F1: ERR_MODULE_NOT_FOUND .agents\\apps\\cli\\src\\profile-boot.ts — probe import depth hardcoded (see findings)" },
+    { "step": 5, "cmd": "pnpm exec tsx .agents/devframe/v14-integration/probe-cold-recovery.ts --phase write (3-level, pre-build)", "exitCode": 1, "note": "FINDING F2: typert-loader 4 contributors failed — lib/typert.host.js missing for dsh-llm/dsh-commands/dsh-goal/dsh-subagent; full stderr -> lead-obs-boot-fail-typert.txt" },
+    { "step": 6, "cmd": "pnpm run build", "exitCode": 0, "note": "host face (tsc -b tsconfig.host.json + tsdown) + client face (tsc -b tsconfig.client.json + tsdown + web frontend vite); artifacts untracked" },
+    { "step": 7, "cmd": "pnpm exec tsx .agents/devframe/v14-integration/probe-cold-recovery.ts --phase write", "exitCode": 0, "note": "WRITE PHASE OK; stdout -> lead-probe-write.output.txt" },
+    { "step": 8, "cmd": "pnpm exec tsx .agents/devframe/v14-integration/probe-cold-recovery.ts --phase verify (separate OS process, same DSH_HOME)", "exitCode": 0, "note": "RESTORE OK; stdout -> lead-probe-verify.output.txt" }
+  ],
+  "configEnablement": {
+    "dumpFile": ".agents/devframe/v14-integration/lead/lead-dump-config.output.txt",
+    "lines": 458,
+    "facts": {
+      "projectMemoryRow": "L447-453: workspaceId integration, vaultRoot !!js dshHomePath('integration-vault'), writeEnabled true, userScopeEnabled false",
+      "roleToolPoliciesMemoryTools": "controller L363-365, lead L394-396, worker L422-424 (memory_append/memory_read/memory_search)",
+      "delegationToolNames": "L435-437: subagent, subagent_fork",
+      "shadowRouter": "L454-458: authorizedRoots [!!js dshHomePath('integration-shadow-roots')]",
+      "sessionPersistence": "L60-64: compression none"
+    }
+  },
+  "diskReceipts": {
+    "vaultNote": {
+      "path": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-v14-lead-home\\integration-vault\\devframe-memory\\projects\\integration\\fd4a0cb3932478ae5a57fd5a84c1ce442c52d7ede4a50b5b552ab1e07994fc8d.md",
+      "bytes": 396,
+      "sha256": "CEFECAB42395672DD558ED177F48E19A324756D12261A84F19658F6C60D786F9",
+      "contentMatchesProbeBody": true
+    },
+    "writerSessionLog": {
+      "path": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-v14-lead-home\\sessions\\_no-cwd\\session-memory-write-w\\session.jsonl",
+      "bytes": 855,
+      "memoryReceiptRows": 1,
+      "receiptNoteIdMatches": true
+    },
+    "storages": {
+      "agent_evidence.json": 1078,
+      "project_tasks.json": 458,
+      "session_identity.json": 2696,
+      "workspace.json": 595,
+      "shadow_router.json": 2919
+    }
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "kind": "probe-portability (not product source)",
+      "location": ".agents/devframe/integration/probe-cold-recovery.ts L42",
+      "detail": "import '../../../apps/cli/src/profile-boot.ts' hardcodes repo-root 3-level depth; running a copy from any other depth throws ERR_MODULE_NOT_FOUND (.agents\\apps\\cli\\src\\profile-boot.ts). Workaround used: byte-identical copy at 3-level depth, zero edits. Controller disposition: P22 candidate debt, not fixed in this round's write domain.",
+      "minimalRepro": "copy probe-cold-recovery.ts to .agents/devframe/<a>/<b>/<c>/ (4 levels) and run with tsx --phase write"
+    },
+    {
+      "id": "F2",
+      "kind": "run-prerequisite (documented built-artifact face, not a defect)",
+      "location": "packages/typert/loader/src/index.ts:349,432 via vendor/loader/src/config/entry.ts",
+      "detail": "boot applies typert-loader which imports lib/typert.host.js of @deepseek-ai/dsh-llm, @deepseek-ai/dsh-commands, @deepseek-ai/dsh-goal, @deepseek-ai/dsh-subagent; a fresh install-only worktree fails activation with 4 ERR_MODULE_NOT_FOUND until pnpm run build. dump-config (no tree application) exits 0 without the artifacts — empirical proof that config dump does not substitute a real run.",
+      "minimalRepro": "fresh worktree + pnpm install only, then probe --phase write"
+    }
+  ],
+  "modelParticipation": {
+    "verdict": "隔离组合证据（无模型参与）",
+    "detail": "the probe drives real services/tools via ctx.tools.execute directly; no llm stream is opened and no model adapter is invoked anywhere in the journey. No online-auth operation was attempted, so no SKIP_AUTH item arises. Credential resolution path verified in source for completeness: provider rows carry apiKeyEnv (credential-ref); resolution goes through the credentials seam (credentials.resolve(apiKeyEnv)) with documented ambient-env fallback (packages/web/web-search-deepseek/src/index.ts L104-106; llm-pi-ai adapter tests: named-but-missing apiKeyEnv fails loud). Fresh home credential store empty and DEEPSEEK_API_KEY absent; huoshan-1/huoshan-2 are harness-runtime ambient providers outside this composition and were not exercised."
+  },
+  "workspaceIntegrity": {
+    "controller-write-probe.txt": "existed at session start (untracked), absent later; controller confirmed it created and removed these probes across v14/shadow-lead/integration-lead trees; no deletion by this agent; case closed by controller"
+  },
+  "evidenceFiles": [
+    ".agents/devframe/v14-integration/cordis.patch.yml",
+    ".agents/devframe/v14-integration/probe-cold-recovery.ts",
+    ".agents/devframe/v14-integration/probe-state.json",
+    ".agents/devframe/v14-integration/lead/lead-dump-config.output.txt",
+    ".agents/devframe/v14-integration/lead/lead-probe-write.output.txt",
+    ".agents/devframe/v14-integration/lead/lead-probe-verify.output.txt",
+    ".agents/devframe/v14-integration/lead/lead-obs-boot-fail-typert.txt",
+    ".agents/devframe/v14-integration/lead/lead-run-manifest.json",
+    ".agents/devframe/v14-integration/lead/l1-evidence.md"
+  ],
+  "acceptance": {
+    "configEnablement": "PASS",
+    "realToolReceipts": "PASS",
+    "persistenceOnDisk": "PASS",
+    "crossProcessColdRecovery": "PASS",
+    "sourceGapsBlocking": "none"
+  }
+}
