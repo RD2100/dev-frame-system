@@ -767,6 +767,15 @@
         "Recovery ledger state: compos2 = recovering (continuation worker in flight); accept2 = alive (executing); gap4 = settled and integrated; b2acp = still failed, held (step 3) - the only chain awaiting recovery."
       ],
       "status": "goal candidate list A/B/C all delivered or executing; suite red ledger 3 with two pre-attributed + one fixture-lane open (b2acp in flight)"
+    },
+    {
+      "entry": "Staggered recovery step 3: b2acp resumed with updated acceptance baseline; all four candidate chains now live or settled",
+      "facts": [
+        "Health verified before resume: compos2 continuation worker actively writing (compos-w1 head=691e4c4ed6 dirty=5, new work on the WIP baseline); accept2 executing S1-S7 personally (accept-w1 head=d6e3f9d534 dirty=2); the precondition of two healthy chains is met.",
+        "b2acp lead 293a2eeb resumed with: confirmation its tree is clean at 5e5a706f0a (classification not yet persisted, nothing lost); updated full-suite acceptance baseline after the GAP-4 merge (92825045d0): image-compaction green + the two recording-tree-root reds unchanged + zero new failures; storm policy repeat (record and stop on retry storms); the original brief's classification -> design -> w1 -> worker (workflow explicit huoshan-2/glm-5.3-flash) -> review -> settle sequence continues.",
+        "Recovery ledger complete: all four chains from the user candidate list are now live or settled - compos recovering, accept executing, gap4 settled+integrated, b2acp resuming. No chain remains failed."
+      ],
+      "status": "recovery complete (4/4 chains live or settled)"
     }
   ]
 }
