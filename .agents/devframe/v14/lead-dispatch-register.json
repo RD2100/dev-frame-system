@@ -694,6 +694,19 @@
         "The earlier 7-red controller run was NOT a new regression: it equals the worker's disclosed G4 list exactly (3 x B-1 hook workspace comparison - now fixed and verified green x3; 1 x B-2 pin sidecar - fixture-lane residual; 2 x recording-tree-root embedding - pre-existing, red at base commit 614a2d2085 per worker attribution logs; 1 x GAP-4 functional regression). Cross-plugin catalog check post-merge: 115 up to date, exit 0; user dirty files 376 preserved."
       ],
       "status": "succession live (2 replacement leads running), battery write domain released, pending: compos/accept settlements + battery B-2 handoff to a successor"
+    },
+    {
+      "entry": "Candidate C dispatched: v14-gap4 product lead for the SDK subagent-continuable functional regression",
+      "dispatch": {
+        "taskId": "v14-gap4",
+        "lead": "695bcaf0-1b46-4469-af9b-824ec3560583",
+        "worktree": "D:/dsh-devframe-v14-gap4-lead (codex/v14-gap4-lead @ 24bb18fe4f)",
+        "preconditionMet": "BatteryFix classification merged in main (a06c4ebffb within 345ca1443c): GAP-4 = subagent-continuable via dsh --profile sdk, timeout at sdk.snapshot.ts:858 during the run itself (120017ms), deterministic x3, repro log committed; the scenario was zero-touch in the battery wave per fail-loud discipline",
+        "leadPlan": "reproduce + discriminate product hang vs environment artifact with file:line evidence (env-only = stop and report, no timeout-threshold masking); pin the product source owner; minimal fix + regression unit test independent of the 120s snapshot budget; worker dispatch via workflow explicit huoshan-2/glm-5.3-flash; integration acceptance = scenario green + zero new reds in the full suite",
+        "workerWriteDomain": "lead-declared SDK/session product+test files + .agents/devframe/v14-gap4/worker/**; snapshots/** zero-touch this wave",
+        "status": "dispatched"
+      },
+      "staggerNote": "Battery B-2 fixture-lane successor held for the next capacity window per the user's stagger directive; current concurrency = controller + 3 leads (compos2/accept2/gap4), all file-disjoint domains, huoshan-2 API healthy"
     }
   ]
 }
