@@ -19,6 +19,8 @@ interface PartialBlock {
   toolCallId?: ToolCallId
   toolCallName?: string
   toolCallArguments: string
+  /** Diagnosed provider misbehavior for this index: fragments dropped instead of corrupting the call. */
+  conflicts?: string[]
   /** Set by `block-end` — authoritative, and freezes the partial. */
   block?: ContentBlock
 }
@@ -69,7 +71,22 @@ export class BlockAssembler {
       case 'tool-call-delta': {
         const partial = this.ensure(chunk.index, 'tool-call')
         if (partial.block) return // closed by block-end; ignore stragglers
-        partial.toolCallId = chunk.id
+        const incomingId = typeof chunk.id === 'string' ? chunk.id : ''
+        if (incomingId !== '' && partial.toolCallId !== undefined && partial.toolCallId !== ''
+          && incomingId !== partial.toolCallId) {
+          // A provider reusing one index for two calls would splice their
+          // argument fragments into unparseable JSON; keep the first call
+          // intact and surface the dropped fragment instead of corrupting it.
+          // Id-less and empty-id deltas continue the owning call; a late real
+          // id only fills the identity fields.
+          ;(partial.conflicts ??= []).push(
+            `index ${chunk.index}: id ${incomingId} fragment dropped; call ${partial.toolCallId} already owns this index`,
+          )
+          return
+        }
+        // Id-less and empty-id deltas continue the owning call; a late real
+        // id only fills the identity fields.
+        if (incomingId !== '') partial.toolCallId = chunk.id
         if (chunk.name) partial.toolCallName = chunk.name
         partial.toolCallArguments += chunk.argumentsDelta
         return
@@ -181,6 +198,16 @@ export class BlockAssembler {
   /** Usage from the `usage` chunk; undefined until one arrives. */
   get usage(): TokenUsage | undefined {
     return this._usage
+  }
+
+  /**
+   * Provider misbehavior diagnosed during assembly: index-reuse fragments that
+   * were dropped to keep the owning call's arguments uncorrupted. Empty for a
+   * well-behaved stream.
+   */
+  get indexConflicts(): readonly string[] {
+    return this.order
+      .flatMap(index => this.partials.get(index)?.conflicts ?? [])
   }
 
   /** Finish reason from the `finish` chunk; `{kind: 'stop'}` when the stream ended without one. */
