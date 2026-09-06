@@ -11,6 +11,11 @@
  *   {@link AgentReliability.assertAdmitted} rejects every operation whose
  *   work binding does not match the currently admitted identity, so a stale
  *   or mismatched dispatch fails before any model or tool work starts.
+ * - **Deadline-bounded admission**: {@link AgentReliability.openAdmission}
+ *   may bound a generation with an epoch deadline ({@link AdmissionCutoff});
+ *   from that instant (inclusive) the pre-step rejects with
+ *   `AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED`, and recovery is only an
+ *   explicit reopen (a new generation).
  * - **Uncertain-call reconciliation**: when a call's outcome is unknown, the
  *   probe runs first — an operation is retried only after the external state
  *   check proves its effect absent. There is no blind-retry path.
@@ -37,6 +42,12 @@ declare module '@deepseek-ai/cordis' {
 
 /** Whether dispatch may start work for the admitted identity. */
 export type ReliabilityAdmission = 'closed' | 'open'
+
+/** The admission cutoff request: dispatch is rejected from the `deadline` instant (inclusive) onward. */
+export interface AdmissionCutoff {
+  /** Epoch milliseconds; the instant the admission window closes (inclusive). */
+  readonly deadline: number
+}
 
 /** External-state answer a reconciliation probe must return. */
 export type ReconciliationProbe = {
@@ -92,6 +103,7 @@ export interface FlushBarrierResult {
 export class AgentReliability extends Service {
   private admission: ReliabilityAdmission = 'closed'
   private admittedWork: GoalBindingIdentity | undefined
+  private admittedCutoff: number | undefined
 
   constructor(ctx: Context) {
     super(ctx, 'agentReliability')
@@ -99,11 +111,26 @@ export class AgentReliability extends Service {
 
   /**
    * Open dispatch admission for exactly one work binding identity. Opening
-   * replaces a previously admitted identity — a new dispatch generation.
+   * replaces the whole generation — the identity AND the cutoff: passing no
+   * `cutoff` clears a previous generation's deadline. A generation whose
+   * deadline is already past opens fine; its first pre-step call rejects.
    * @param identity - The work binding every pre-step will require.
+   * @param cutoff - Optional deadline bound for this generation, a wall-clock
+   * epoch millisecond instant the pre-step reads via `Date.now()`.
+   * @throws {@link AgentReliabilityError} with code
+   * `AGENT_RELIABILITY_ADMISSION_DEADLINE_INVALID` when `cutoff.deadline`
+   * is defined but not a finite epoch millisecond instant; nothing is
+   * mutated in that case.
    */
-  openAdmission(identity: GoalBindingIdentity): void {
+  openAdmission(identity: GoalBindingIdentity, cutoff?: AdmissionCutoff): void {
+    if (cutoff?.deadline !== undefined && !Number.isFinite(cutoff.deadline)) {
+      throw new AgentReliabilityError(
+        'admission deadline must be a finite epoch millisecond instant',
+        'AGENT_RELIABILITY_ADMISSION_DEADLINE_INVALID',
+      )
+    }
     this.admittedWork = { controllerSessionId: identity.controllerSessionId, goalId: identity.goalId }
+    this.admittedCutoff = cutoff?.deadline
     this.admission = 'open'
   }
 
@@ -118,17 +145,34 @@ export class AgentReliability extends Service {
   }
 
   /**
+   * The stored cutoff instant of the current generation; `undefined` when the
+   * generation has no cutoff. Note: `admissionState` stays the stored
+   * generation decision (`'closed' | 'open'` — the union does not change);
+   * the deadline is enforced at the pre-step, the single dispatch gate.
+   */
+  get admissionCutoff(): number | undefined {
+    return this.admittedCutoff
+  }
+
+  /**
    * The dispatch pre-step: reject any operation whose work binding does not
    * match the currently admitted identity. Call this before dispatching
    * model or tool work; a rejection means the work never starts.
    * @param identity - Work binding carried by the proposed operation.
    * @throws {@link AgentReliabilityError} with code
    * `AGENT_RELIABILITY_ADMISSION_CLOSED` when admission is closed,
+   * `AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED` when the current
+   * generation's cutoff instant has passed, or
    * `AGENT_RELIABILITY_IDENTITY_MISMATCH` when another identity is admitted.
+   * The checks run in that order: a passed deadline is a statement about the
+   * window, not the identity, so it precedes the identity check.
    */
   assertAdmitted(identity: GoalBindingIdentity): void {
     if (this.admission !== 'open' || this.admittedWork === undefined) {
       throw new AgentReliabilityError('admission is closed', 'AGENT_RELIABILITY_ADMISSION_CLOSED')
+    }
+    if (this.admittedCutoff !== undefined && Date.now() >= this.admittedCutoff) {
+      throw new AgentReliabilityError('admission deadline has passed; dispatch rejected', 'AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED')
     }
     const admitted = this.admittedWork
     if (admitted.controllerSessionId !== identity.controllerSessionId || admitted.goalId !== identity.goalId) {

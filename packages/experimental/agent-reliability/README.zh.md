@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-experimental-agent-reliability` 挂载 `ctx.agentReliability`，把代理工作接缝所需的防御性模式实践化为 Cordis 服务：DevFrame 进程树停止以一次序列化调用呈现——先关准入、只取消已知后代、刷写完成前不释放写者；派发前置步骤（`assertAdmitted`）拒绝一切工作绑定与当前准入身份不匹配的操作；不确定调用对账先查外部状态、最多重试一次且仅在探测证明效果缺失后重试；刷写屏障在刷写失败时关闭准入并保留写权。准入是默认关闭的进程内状态。
+`dsh-experimental-agent-reliability` 挂载 `ctx.agentReliability`，把代理工作接缝所需的防御性模式实践化为 Cordis 服务：DevFrame 进程树停止以一次序列化调用呈现——先关准入、只取消已知后代、刷写完成前不释放写者；派发前置步骤（`assertAdmitted`）拒绝一切工作绑定与当前准入身份不匹配的操作，且当代际附有 epoch 截止时，从截止时刻（含）起拒绝一切派发；不确定调用对账先查外部状态、最多重试一次且仅在探测证明效果缺失后重试；刷写屏障在刷写失败时关闭准入并保留写权。准入是默认关闭的进程内状态。
 
 ## 目录
 
@@ -38,6 +38,15 @@ kind: "package-reference"
 ctx.agentReliability.openAdmission({ controllerSessionId, goalId })
 // inside the dispatch path, before any work:
 ctx.agentReliability.assertAdmitted(identity)
+```
+
+### 以截止时刻限定准入
+
+打开准入时附上 epoch 毫秒截止时刻即可限定派发代际：前置步骤在每次派发时读取墙钟（`Date.now()`），从 `deadline` 时刻（含）起以 `AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED` 拒绝。恢复唯显式重开新代际；非有限截止在打开处明确失败，不触碰当前代际。
+
+```ts
+ctx.agentReliability.openAdmission({ controllerSessionId, goalId }, { deadline: Date.now() + 60_000 })
+// from `deadline` (inclusive) the pre-step rejects with AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED
 ```
 
 ### 对账一次不确定调用
@@ -77,6 +86,7 @@ if (!barrier.flushed) reportFlushFailure(barrier.failure)
 - **默认关闭的准入。** 新进程准入从关闭开始，只为一个显式身份打开；前置步骤以不同的稳定错误码区分"关闭"与"身份不匹配"，派发接线得以分辨"从未准入"与"错误代际"。
 - **探测拥有重试决定权。** `reconcileUncertainCall` 构造上不存在盲目重试路径：重试最多调用一次，且仅在探测返回 `absent` 之后。`confirmed` 仅凭探测即可结算；`still_uncertain` 返回未解决且不重发——未 resolve 的调用由调用方决定含义。
 - **刷写屏障保留写者。** 失败的刷写立即关闭准入并报告 `writerRetained: true`；释放写权是宿主的动作，本接缝使"在未刷写日志上释放"无法发生。
+- **截止缝在前置步骤强制执行，而非存储态。** `openAdmission` 可附截止，非有限截止在打开处明确失败且不触碰当前代际；从截止时刻（含）起，前置步骤先于身份检查以 `AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED` 拒绝——截止已过是对窗口的陈述，非对身份的陈述。`admissionState` 仍报告存储的代际决定（`'closed' | 'open'`）；截止只活在派发闸门里，恢复唯显式重开新代际。
 
 ### 源码地图
 
@@ -120,6 +130,7 @@ if (!barrier.flushed) reportFlushFailure(barrier.failure)
 - **准入是进程内且默认关闭的** —— 重启丢失已准入身份，宿主显式重新打开准入前所有前置步骤都会拒绝。
 - **对账器信任其探测** —— `absent` 与 `confirmed` 的答案只与调用方提供的外部状态检查同等可靠；服务无法核实探测检查的是对的资源。
 - **停止原样转发 DevFrame 契约** —— 未解决身份、写者保留与重启对账遵循 DevFrame 停止语义；本服务不添加自己的持久停止状态。
+- **截止不取消在途工作** —— 已通过前置步骤的工作在截止时刻后仍继续运行；AT4-06 的有界取消半边待语义裁定。
 
 <a id="dev-note"></a>
 ### 开发备注

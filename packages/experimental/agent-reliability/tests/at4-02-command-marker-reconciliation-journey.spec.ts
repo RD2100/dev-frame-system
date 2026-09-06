@@ -12,7 +12,7 @@
  * | --- | --- | --- |
  * | AT4-02 | `reconcileUncertainCall` 的 probe/retry 执行缝存在 | 本文件：真实 node 子进程写标记 + 文件/存活观测注入 |
  * | AT4-03 | `StopProcess.handle` 缝存在；`spawnSubprocess` 提供生产树终止（POSIX 组信号 / Windows taskkill /T） | tests/at4-03-process-tree-stop-journey.spec.ts |
- * | AT4-06 | 短截止过期→闭准入+有界取消：agent-reliability src 无截止实现缝（唯一 deadline 是 devframe stop 的内部 grace 界，不接准入），anchor-matrix 亦注"无用例，归 P06" | GAP：不虚构用例，仅登记报告 |
+ * | AT4-06 | 截止关闭缝已收口：截止（含）起 assertAdmitted 以 DEADLINE_CLOSED 拒绝，恢复唯显式重开 | tests/at4-06-admission-deadline-closed.spec.ts；有界取消半边仍 GAP 待裁定 |
  *
  * 断言面：probe 从真实文件证实命令效果 → settled 且永不重放、标记不重复；
  * probe 证实缺席 → 恰好重试一次；writer 仍在飞 → unresolved（ambiguous）

@@ -11,6 +11,7 @@ export type { AgentReliabilityErrorCode } from './errors.ts'
 export type { StopIssue, StopObservation, StopProcess, StopProjectOptions, StopResult } from '@deepseek-ai/dsh-experimental-devframe/reliability'
 export { AgentReliability } from './service.ts'
 export type {
+  AdmissionCutoff,
   FlushBarrierResult,
   ReconciliationProbe,
   ReconciledOutcome,
