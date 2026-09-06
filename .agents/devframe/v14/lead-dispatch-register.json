@@ -881,6 +881,16 @@
         "B-line 2 workers continuing (shipped-profile read-only assembly probe + B5 matrix shard); production profile still untouched."
       ],
       "status": "6 workers in flight; dual-account split real at request level; recovery budget for a46cab71 slice: 1 of 1 used"
+    },
+    {
+      "entry": "Three-tier evidence discipline adopted; 673d61fe provider verified at request level despite unknown self-report",
+      "facts": [
+        "Evidence tiers now mandatory in all settlements: (1) request parameters (explicit dispatch provider/model), (2) host label (session selection config), (3) actual response (verbatim request/header + request/context payloads from the session log). Only tier 3 proves provider; unknown self-reports stay unverified.",
+        "673d61fe reconciliation: worker receipt self-reported provider=unknown (self-introspection limitation, precedent from phase 1); request-level evidence verified - seq=13 request/header carries config.provider=huoshan-1 and seq=14 request/context carries provider=huoshan-1, model=glm-5.3-flash at 22:10:44Z, re-extracted 22:15:55Z. Provider VERIFIED for this worker; receipt tier remains unknown and is recorded as such.",
+        "Classification: D-line external package reports = read-only package evidence (per scope); B-line profile-probe/AT1 = real local probe reports. Both classified in settlement tables, not conflated with request-level lane evidence.",
+        "Worker completion sweep: 7/10 done (ecadc1fa A-repro 46 tools, 540abb07 C1 23, 4149f8eb B-probe 11, d5f3c838 D1 40, 3e323004/42e4f452/581b149f expansion slices), 2 healthy in-flight (673d61fe 20 tools, 176475b1 27 tools), 1 zombie marked废弃 (a46cab71, registry state pending). Lead trees crystallizing: defects repro captures + a3 polluted list, udeliver records dir."
+      ],
+      "status": "evidence discipline active across four lines; settlements pending lead digestion of 7 completed worker outputs"
     }
   ]
 }
