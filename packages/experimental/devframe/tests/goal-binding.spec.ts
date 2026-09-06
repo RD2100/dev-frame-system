@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -6,22 +6,37 @@ import { GoalId } from '@deepseek-ai/dsh-goal'
 import GoalService from '@deepseek-ai/dsh-goal'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import { MemoryRequiredChecksConfigStore, requiredChecksDigest } from '../src/required-checks.ts'
 import { AcceptanceHash, DevFrameSnapshotId, SourceFingerprint, WorkspaceId } from '../src/shared/types.ts'
 import {
   ControllerSessionId,
   GoalBindingController,
   GoalBindingError,
+  GoalServicePort,
   MemoryGoalBindingStore,
   TaskId,
   createHumanAuthorization,
 } from '../src/controller/goal-binding.ts'
 import type {
+  CompleteGoalRequest,
   GoalBinding,
-  GoalResultBinding,
   GoalBindingStore,
   NativeGoalPort,
   NativeGoalState,
 } from '../src/controller/goal-binding.ts'
+import {
+  CONFIG,
+  createCommittedWorktree,
+  drainWorktreeFixtures,
+  executionFor,
+  reviewEvent,
+  resultReference,
+} from './completion-fixtures.ts'
+import type { WorktreeFixture } from './completion-fixtures.ts'
+
+afterEach(async () => {
+  await drainWorktreeFixtures()
+})
 
 interface TraceGoal extends NativeGoalState {
   activation: 'armed' | 'disarmed'
@@ -47,7 +62,7 @@ function nativeAgent(session: Session): Agent {
   } as Agent
 }
 
-/** Mount the native Goal service behind the controller's narrow port. */
+/** Mount the native Goal service behind the controller's production port. */
 async function realGoalPort(id: string): Promise<{
   readonly ctx: Context
   readonly agent: Agent
@@ -63,12 +78,7 @@ async function realGoalPort(id: string): Promise<{
   return {
     ctx,
     agent,
-    port: {
-      create: request => ctx.goals.create(agent, request),
-      disarm: () => ctx.goals.disarm(agent),
-      get: () => ctx.goals.get(agent),
-      resume: ref => ctx.goals.resume(agent, ref),
-    },
+    port: new GoalServicePort({ goals: ctx.goals, agent }),
   }
 }
 
@@ -109,6 +119,19 @@ function fakeGoals(trace: string[]): NativeGoalPort & { current: TraceGoal | und
       }
       return port.current
     },
+    complete(ref) {
+      trace.push(`goal:complete:${ref.id}:${ref.revision}`)
+      if (port.current === undefined || port.current.id !== ref.id) {
+        throw new Error('complete target mismatch')
+      }
+      port.current = {
+        ...port.current,
+        revision: port.current.revision + 1,
+        phase: 'complete',
+        activation: 'disarmed',
+      }
+      return port.current
+    },
   }
   return port
 }
@@ -123,19 +146,6 @@ function request(overrides: Partial<Parameters<GoalBindingController['start']>[0
     budget: { maxAttempts: 3 },
     authorization: createHumanAuthorization('confirm-a'),
     ...overrides,
-  }
-}
-
-function resultReference(binding: GoalBinding): GoalResultBinding {
-  return {
-    controllerSessionId: binding.controllerSessionId,
-    goalId: binding.goalId,
-    goalRevision: binding.goalRevision,
-    taskIds: binding.taskIds,
-    acceptanceHash: binding.acceptanceHash,
-    workspaceId: binding.workspaceId,
-    sourceFingerprint: binding.sourceFingerprint,
-    snapshotId: binding.snapshotId,
   }
 }
 
@@ -378,3 +388,367 @@ describe('GoalBindingError', () => {
     expect(error.code).toBe('GOAL_BINDING_ADMISSION_CLOSED')
   })
 })
+
+describe('GoalServicePort', () => {
+  it('projects the native service views onto the narrow port state', async () => {
+    const { ctx, port } = await realGoalPort('controller-port-projection')
+    try {
+      expect(port.get()).toBeUndefined()
+      expect(port.disarm()).toBeUndefined()
+      const created = port.create({ objective: 'port projection probe' })
+      expect(created).toMatchObject({ revision: 1, phase: 'active' })
+      expect(port.get()).toMatchObject({ id: created.id, phase: 'active' })
+      expect(port.disarm()).toMatchObject({ id: created.id })
+      expect(port.resume({ id: created.id, revision: 1 })).toMatchObject({ revision: 2, phase: 'active' })
+      expect(port.complete({ id: created.id, revision: 2 })).toMatchObject({ revision: 3, phase: 'complete' })
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+})
+
+describe('GoalBindingController completion admission', { timeout: 30_000 }, () => {
+  // Every case evaluates the three admission predicates against a real git
+  // worktree; the per-test budget stays above the runner default to absorb
+  // lane contention on that cost.
+
+  it('completes the native Goal only after the three predicates admit', async () => {
+    const fixture = await createCommittedWorktree()
+    const trace: string[] = []
+    const goals = fakeGoals(trace)
+    const store = new MemoryGoalBindingStore()
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-complete'),
+      controllerSessionId: ControllerSessionId('controller-complete'),
+      goals,
+      store,
+    })
+    const binding = await controller.start(request({ sourceFingerprint: fixture.fingerprint }))
+
+    const verdict = await controller.complete(binding, await completionRequest(fixture, binding))
+
+    expect(trace).toEqual([
+      'goal:get',
+      'goal:create:implement task',
+      'goal:disarm',
+      'goal:resume:goal-1:1',
+      'goal:get',
+      'goal:complete:goal-1:2',
+    ])
+    expect(verdict).toEqual({
+      kind: 'admitted',
+      fingerprint: fixture.fingerprint,
+      requiredChecksDigest: requiredChecksDigest(CONFIG),
+    })
+    expect(goals.current).toMatchObject({ id: 'goal-1', revision: 3, phase: 'complete', activation: 'disarmed' })
+    expect(controller.admissionState).toBe('closed')
+    await expect(store.read(WorkspaceId('workspace-complete'))).resolves.toMatchObject({ goalRevision: 3 })
+  })
+
+  it('completes through the real native GoalService via GoalServicePort', async () => {
+    const fixture = await createCommittedWorktree()
+    const { ctx, agent, port } = await realGoalPort('controller-native-complete')
+    try {
+      const store = new MemoryGoalBindingStore()
+      const controller = new GoalBindingController({
+        workspaceId: WorkspaceId('workspace-native-complete'),
+        controllerSessionId: agent.id,
+        goals: port,
+        store,
+      })
+      const binding = await controller.start(request({ sourceFingerprint: fixture.fingerprint }))
+
+      const verdict = await controller.complete(binding, await completionRequest(fixture, binding))
+
+      expect(verdict).toEqual({
+        kind: 'admitted',
+        fingerprint: fixture.fingerprint,
+        requiredChecksDigest: requiredChecksDigest(CONFIG),
+      })
+      expect(ctx.goals.get(agent)).toMatchObject({ id: binding.goalId, revision: 3, phase: 'complete' })
+      await expect(store.read(WorkspaceId('workspace-native-complete'))).resolves.toMatchObject({ goalRevision: 3 })
+      expect(controller.admissionState).toBe('closed')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('rejects at the source-fingerprint stage and leaves the native Goal untouched', async () => {
+    const fixture = await createCommittedWorktree()
+    const trace: string[] = []
+    const goals = fakeGoals(trace)
+    const store = new MemoryGoalBindingStore()
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-complete-fp'),
+      controllerSessionId: ControllerSessionId('controller-complete-fp'),
+      goals,
+      store,
+    })
+    // The start records the `source-a` claim, which no real worktree matches;
+    // the admission recompute therefore diverges from the durable binding.
+    const binding = await controller.start(request())
+
+    const verdict = await controller.complete(binding, await completionRequest(fixture, binding))
+
+    expect(verdict.kind).toBe('rejected')
+    if (verdict.kind !== 'rejected' || verdict.stage !== 'source-fingerprint') {
+      throw new Error('expected a fingerprint rejection')
+    }
+    expect(verdict.mismatch.recordedFingerprint).toBe(binding.sourceFingerprint)
+    expect(verdict.mismatch.computed.fingerprint).toBe(fixture.fingerprint)
+    expect(trace.filter(entry => entry.startsWith('goal:complete'))).toEqual([])
+    expect(goals.current).toMatchObject({ id: 'goal-1', revision: 2, phase: 'active' })
+    expect(controller.admissionState).toBe('closed')
+    expect(() => controller.assertAdmitted(binding))
+      .toThrow(expect.objectContaining({ code: 'GOAL_BINDING_ADMISSION_CLOSED' }))
+    await expect(store.read(WorkspaceId('workspace-complete-fp'))).resolves.toMatchObject({ goalRevision: 2 })
+  })
+
+  it('rejects at the required-checks stage and leaves the native Goal untouched', async () => {
+    const fixture = await createCommittedWorktree()
+    const trace: string[] = []
+    const goals = fakeGoals(trace)
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-complete-checks'),
+      controllerSessionId: ControllerSessionId('controller-complete-checks'),
+      goals,
+      store: new MemoryGoalBindingStore(),
+    })
+    const weakenedLint = CONFIG.checks[0]
+    if (weakenedLint === undefined) throw new Error('fixture configuration is malformed')
+    const binding = await controller.start(request({ sourceFingerprint: fixture.fingerprint }))
+
+    const verdict = await controller.complete(binding, await completionRequest(fixture, binding, {
+      checks: [
+        executionFor(weakenedLint, 'passed', { arguments: ['run', 'lint', '--fix'] }),
+        executionFor(CONFIG.checks[1]!),
+      ],
+    }))
+
+    expect(verdict.kind).toBe('rejected')
+    if (verdict.kind !== 'rejected' || verdict.stage !== 'required-checks') {
+      throw new Error('expected a required-checks rejection')
+    }
+    expect(verdict.verdict.violations).toEqual([{
+      reason: 'REQUIRED_CHECKS_COMMAND_MISMATCH',
+      checkId: weakenedLint.checkId,
+      configured: { executable: weakenedLint.executable, arguments: weakenedLint.arguments, cwd: weakenedLint.cwd },
+      executed: [{ executable: weakenedLint.executable, arguments: ['run', 'lint', '--fix'], cwd: weakenedLint.cwd }],
+    }])
+    expect(goals.current).toMatchObject({ id: 'goal-1', revision: 2, phase: 'active' })
+    expect(controller.admissionState).toBe('closed')
+  })
+
+  it('rejects at the review stage and leaves the native Goal untouched', async () => {
+    const fixture = await createCommittedWorktree()
+    const trace: string[] = []
+    const goals = fakeGoals(trace)
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-complete-review'),
+      controllerSessionId: ControllerSessionId('controller-complete-review'),
+      goals,
+      store: new MemoryGoalBindingStore(),
+    })
+    const binding = await controller.start(request({ sourceFingerprint: fixture.fingerprint }))
+    const review = reviewEvent('changes_required', {
+      binding: resultReference(binding),
+      snapshotId: binding.snapshotId,
+    })
+
+    const verdict = await controller.complete(binding, await completionRequest(fixture, binding, { review }))
+
+    expect(verdict.kind).toBe('rejected')
+    if (verdict.kind !== 'rejected' || verdict.stage !== 'review') {
+      throw new Error('expected a review rejection')
+    }
+    expect(verdict.reviewId).toBe(review.reviewId)
+    expect(verdict.decision).toBe('changes_required')
+    expect(verdict.findings).toEqual(review.findings)
+    expect(goals.current).toMatchObject({ id: 'goal-1', revision: 2, phase: 'active' })
+    expect(controller.admissionState).toBe('closed')
+  })
+
+  it('propagates a failed store resolution fail-loud before any native mutation', async () => {
+    const fixture = await createCommittedWorktree()
+    const trace: string[] = []
+    const goals = fakeGoals(trace)
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-complete-store'),
+      controllerSessionId: ControllerSessionId('controller-complete-store'),
+      goals,
+      store: new MemoryGoalBindingStore(),
+    })
+    const binding = await controller.start(request({ sourceFingerprint: fixture.fingerprint }))
+
+    await expect(controller.complete(binding, await completionRequest(fixture, binding, {
+      requiredChecksStore: new MemoryRequiredChecksConfigStore(),
+    }))).rejects.toMatchObject({
+      name: 'RequiredChecksError',
+      code: 'REQUIRED_CHECKS_CONFIG_NOT_FOUND',
+    })
+    expect(trace.filter(entry => entry.startsWith('goal:complete'))).toEqual([])
+    expect(goals.current).toMatchObject({ id: 'goal-1', revision: 2, phase: 'active' })
+    expect(controller.admissionState).toBe('closed')
+  })
+
+  it('keeps admission open when the identity is unknown', async () => {
+    const fixture = await createCommittedWorktree()
+    const goals = fakeGoals([])
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-complete-unknown'),
+      controllerSessionId: ControllerSessionId('controller-complete-unknown'),
+      goals,
+      store: new MemoryGoalBindingStore(),
+    })
+    const binding = await controller.start(request({ sourceFingerprint: fixture.fingerprint }))
+
+    await expect(controller.complete(
+      { ...binding, goalId: GoalId('goal-missing') },
+      await completionRequest(fixture, binding),
+    )).rejects.toMatchObject({ code: 'GOAL_BINDING_NOT_FOUND' })
+    expect(controller.admissionState).toBe('open')
+  })
+
+  it('rejects a native Goal that vanished before the completion', async () => {
+    const fixture = await createCommittedWorktree()
+    const goals = fakeGoals([])
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-complete-vanished'),
+      controllerSessionId: ControllerSessionId('controller-complete-vanished'),
+      goals,
+      store: new MemoryGoalBindingStore(),
+    })
+    const binding = await controller.start(request({ sourceFingerprint: fixture.fingerprint }))
+    goals.current = undefined
+
+    await expect(controller.complete(binding, await completionRequest(fixture, binding)))
+      .rejects.toMatchObject({ code: 'GOAL_BINDING_IDENTITY_MISMATCH' })
+    expect(controller.admissionState).toBe('closed')
+  })
+
+  it('rejects a native Goal that now belongs to another identity', async () => {
+    const fixture = await createCommittedWorktree()
+    const goals = fakeGoals([])
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-complete-foreign'),
+      controllerSessionId: ControllerSessionId('controller-complete-foreign'),
+      goals,
+      store: new MemoryGoalBindingStore(),
+    })
+    const binding = await controller.start(request({ sourceFingerprint: fixture.fingerprint }))
+    goals.current = { ...goals.current!, id: GoalId('goal-foreign') }
+
+    await expect(controller.complete(binding, await completionRequest(fixture, binding)))
+      .rejects.toMatchObject({ code: 'GOAL_BINDING_IDENTITY_MISMATCH' })
+  })
+
+  it('rejects a native Goal that fell behind the bound revision', async () => {
+    const fixture = await createCommittedWorktree()
+    const goals = fakeGoals([])
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-complete-behind'),
+      controllerSessionId: ControllerSessionId('controller-complete-behind'),
+      goals,
+      store: new MemoryGoalBindingStore(),
+    })
+    const binding = await controller.start(request({ sourceFingerprint: fixture.fingerprint }))
+    goals.current = { ...goals.current!, revision: 1 }
+
+    await expect(controller.complete(binding, await completionRequest(fixture, binding)))
+      .rejects.toMatchObject({ code: 'GOAL_BINDING_IDENTITY_MISMATCH' })
+  })
+
+  it('rejects a Goal the native lifecycle already completed', async () => {
+    const fixture = await createCommittedWorktree()
+    const goals = fakeGoals([])
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-complete-done'),
+      controllerSessionId: ControllerSessionId('controller-complete-done'),
+      goals,
+      store: new MemoryGoalBindingStore(),
+    })
+    const binding = await controller.start(request({ sourceFingerprint: fixture.fingerprint }))
+    goals.current = { ...goals.current!, phase: 'complete' }
+
+    await expect(controller.complete(binding, await completionRequest(fixture, binding)))
+      .rejects.toThrow('is already complete')
+  })
+
+  it('rejects review evidence attributed to another Goal before evaluating', async () => {
+    const fixture = await createCommittedWorktree()
+    const trace: string[] = []
+    const goals = fakeGoals(trace)
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-complete-attribution'),
+      controllerSessionId: ControllerSessionId('controller-complete-attribution'),
+      goals,
+      store: new MemoryGoalBindingStore(),
+    })
+    const binding = await controller.start(request({ sourceFingerprint: fixture.fingerprint }))
+    // A real worktree evaluation would only ever return a verdict, so each
+    // GoalBindingError below proves the attribution mismatch is enforced
+    // before the predicates run.
+    const completion = await completionRequest(fixture, binding)
+    const foreignGoal = reviewEvent('pass', { binding: { ...completion.review.binding, goalId: GoalId('goal-admission') } })
+    const foreignSession = reviewEvent('pass', {
+      binding: { ...completion.review.binding, controllerSessionId: ControllerSessionId('controller-foreign') },
+    })
+    const foreignWorkspace = reviewEvent('pass', {
+      binding: { ...completion.review.binding, workspaceId: WorkspaceId('workspace-foreign') },
+    })
+
+    await expect(controller.complete(binding, { ...completion, review: foreignGoal })).rejects.toThrow(
+      'completion review evidence is attributed to Goal "goal-admission"',
+    )
+    await expect(controller.complete(binding, { ...completion, review: foreignSession })).rejects.toThrow(
+      'is recorded under controller Session "controller-foreign"',
+    )
+    await expect(controller.complete(binding, { ...completion, review: foreignWorkspace })).rejects.toThrow(
+      'is recorded for workspace "workspace-foreign"',
+    )
+    expect(trace.filter(entry => entry.startsWith('goal:complete'))).toEqual([])
+    expect(goals.current).toMatchObject({ id: 'goal-1', revision: 2, phase: 'active' })
+  })
+
+  it('rejects a native completion that returned another identity without persisting it', async () => {
+    const fixture = await createCommittedWorktree()
+    const goals = fakeGoals([])
+    const store = new MemoryGoalBindingStore()
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-complete-returned'),
+      controllerSessionId: ControllerSessionId('controller-complete-returned'),
+      goals,
+      store,
+    })
+    const binding = await controller.start(request({ sourceFingerprint: fixture.fingerprint }))
+    const foreignState: TraceGoal = {
+      id: GoalId('goal-foreign'),
+      revision: 3,
+      phase: 'complete',
+      activation: 'disarmed',
+    }
+    goals.complete = () => foreignState
+
+    await expect(controller.complete(binding, await completionRequest(fixture, binding)))
+      .rejects.toMatchObject({ code: 'GOAL_BINDING_IDENTITY_MISMATCH' })
+    await expect(store.read(WorkspaceId('workspace-complete-returned'))).resolves.toMatchObject({ goalRevision: 2 })
+    expect(controller.admissionState).toBe('closed')
+  })
+})
+
+/** Build one completion request over a fresh store registration, with overrides. */
+async function completionRequest(
+  fixture: WorktreeFixture,
+  binding: GoalBinding,
+  overrides: Partial<CompleteGoalRequest> = {},
+): Promise<CompleteGoalRequest> {
+  const store = new MemoryRequiredChecksConfigStore()
+  return {
+    worktreePath: fixture.root,
+    checks: CONFIG.checks.map(check => executionFor(check)),
+    requiredChecksDigest: await store.save(CONFIG),
+    requiredChecksStore: store,
+    review: reviewEvent('pass', { binding: resultReference(binding), snapshotId: binding.snapshotId }),
+    ...overrides,
+  }
+}

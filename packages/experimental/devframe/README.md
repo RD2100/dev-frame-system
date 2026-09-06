@@ -88,11 +88,16 @@ const request = { prompt: [], parent: leadAgent, ...overrides }
 
 The shared types keep the project binding, configuration confirmation, lifecycle state, and persistence seam in one package. They do not add a Run database or copy native task, transcript, or Goal state.
 
+### Completion admission gates the native Goal lifecycle
+
+`GoalBindingController.complete` is the production call point for completion: it resolves an exact binding, closes admission for the attempt, and runs the fixed evidence-chain evaluation — the fingerprint match first against the binding's own recorded fingerprint, the required checks second against the store-registered configuration, and the authorized review last. A rejection is returned as data with the native Goal untouched, and continuing work requires a human-authorized resume. An admission completes the native Goal through the `NativeGoalPort` seam — `GoalServicePort` delegates every verb to the live `ctx.goals` service on its bound Agent — and persists the binding at the revision the service returned. Structural failures, including unusable fingerprints, unregistered digests, foreign identities, and review evidence attributed to another Goal, throw fail-loud and are never converted into rejections.
+
 ### Source map
 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Library entry for stop and shared contracts |
+| [`src/controller/goal-binding.ts`](src/controller/goal-binding.ts) | Goal binding controller, completion admission conjunction, and the production native Goal service port |
 | [`src/hierarchy/index.ts`](src/hierarchy/index.ts) | Per-tier spawn overrides for the controller → lead → worker tree |
 | [`src/permissions/events.ts`](src/permissions/events.ts) | Persisted role and policy identity event contract |
 | [`src/reliability/stop.ts`](src/reliability/stop.ts) | Admission cutoff, owned cancellation, bounded drain, and writer release |
@@ -140,6 +145,7 @@ None. Host-only calls leave the model request prefix unchanged.
 <a id="known-limitations-and-deferred-work"></a>
 
 - **Caller-owned admission and persistence** — the library does not discover project roots, create Goals, or append its own session events.
+- **Completion verdicts are not journaled** — the controller returns the admission verdict to its caller; recording the verdict or a completion receipt, and the host command surface composing `GoalServicePort`, remain deferred host-composition work.
 - **Process handles must be verified** — a missing or uncertain handle is retained as `needs_attention`; the helper never kills by executable name or reused PID.
 - **Single-process coordination** — the contracts do not provide cross-process locking, distributed delivery, or hostile-code isolation.
 

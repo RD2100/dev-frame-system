@@ -73,6 +73,7 @@ describe('DevFrame QA composition', () => {
       disarm: () => ctx.goals.disarm(lead),
       get: () => ctx.goals.get(lead),
       resume: ref => ctx.goals.resume(lead, ref),
+      complete: ref => ctx.goals.complete(lead, ref),
     }
     const controller = new GoalBindingController({
       workspaceId: WorkspaceId('workspace-qa-composition'),
