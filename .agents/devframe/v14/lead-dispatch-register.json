@@ -635,6 +635,23 @@
       "controllerActions": [
         "Merged codex/v14-evjournal-w1 into main as 5c4137bfd3 after independent review on same-SHA evidence; cross-plugin catalog check post-merge; records merge for ledger completeness; user dirty files 376 preserved."
       ]
+    },
+    {
+      "entry": "Speed-up round: candidates deduped, compos + accept waves dispatched, C dependency pinned",
+      "laneAuthorization": [
+        "USER: controller seat manually switched to huoshan-1/glm-5.3 (monitoring-confirmed, retained); Workers stay glm-5.3-flash with explicit provider per wave, distributed by real rate limits, no fixed cap, no quota-driven task invention.",
+        "In-flight confirmed and untouched: BatteryFix worker 461bb82c (parentSession=dbadce52, depth 2, lane evidence extracted) and GoalStore worker 50d730cd-f1eb-452c-8cc5-7f8e8cd6c488 (parentSession=173895e1, depth 2, 28+ steps at verification time, provider per lead dispatch on glm-5.3-flash)."
+      ],
+      "candidateDedup": [
+        "A (composition closure + start/resume): file scope = packages/experimental/command-goal-binding/** + own records; agent-evidence consumed zero-diff, devframe zero-diff (GoalStore owns devframe/src/index.ts + new file) - parallelizable, dispatched.",
+        "B (independent integration acceptance): file scope = own records + harness domain only, isolated DSH_HOME/profile/temp vault, zero repo package writes - parallelizable, dispatched.",
+        "C (SDK subagent-continuable inheritance functional regression): BLOCKED on BatteryFix chain's per-scenario classification (which names the exact source/test file owners for GAP-4). Next trigger: BatteryFix lead settlement report. Not dispatched this round by the user's own confirm-first rule."
+      ],
+      "dispatch": [
+        { "taskId": "v14-compos", "lead": "dd23ebdd-ea8a-4be4-af7e-b19609ebcdfd", "leadWorktree": "D:/dsh-devframe-v14-compos-lead (codex/v14-compos-lead @ c79f85fb81)", "workerWorktree": "D:/dsh-devframe-v14-compos-w1 (lead-created)", "workerLane": "huoshan-1/glm-5.3-flash (load spread: batteryfix+goalstore occupy huoshan-2)", "scope": "production composition closure (construct AgentEvidenceJournal+CheckRunner, wire ctx.sessions.flush + live-role authority per s4-toolface-plan rule 4) + /devframe-start + /devframe-resume host commands following the /goal-complete surface precedent; GoalBindingStore wired via existing injection point (durable integration deferred to GoalStore wave - interface fixed, only final persistence integration blocked)", "controllerPreAuthorizedDecisions": "command naming /devframe-start + /devframe-resume (minimal reversible, recorded); composition construction at existing composition.ts assembly point", "acceptanceTarget": "accept-wave re-run: real host produces evidence after /devframe-start, /goal-complete reads it, /devframe-resume rebuilds projection after restart, Shadow/Memory zero regression" },
+        { "taskId": "v14-accept", "lead": "9fa566f7-3e1f-43ae-931b-22323e150344", "leadWorktree": "D:/dsh-devframe-v14-accept-lead (codex/v14-accept-lead @ c79f85fb81)", "workerWorktree": "D:/dsh-devframe-v14-accept-w1 (lead-created)", "workerLane": "huoshan-2/glm-5.3-flash (harness authoring only; execution by lead)", "scope": "isolated-environment composition acceptance: real task run (key presence probed honestly - absent key = precise blocker, no fake pass), permissions, cwd, results, restart, Shadow cross-project, Memory cold restore; current-state failures (unclosed composition) recorded as findings for compos-wave re-verification", "isolation": "temp DSH_HOME + isolated profile + temp vault; real C:/Users/25313/.dsh never written; harness files only in own records domain" }
+      ],
+      "status": "both leads dispatched"
     }
   ]
 }
