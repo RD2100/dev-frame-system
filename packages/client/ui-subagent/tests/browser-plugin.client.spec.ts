@@ -1,4 +1,4 @@
-/** ui-subagent browser half: catalog actions and read-only composer routing. */
+/** ui-subagent browser half: catalog actions, read-only composer routing, and the @subagent mention source. */
 import { Context } from '@deepseek-ai/cordis'
 import { stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
 import { describe, expect, it } from 'vitest'
@@ -6,6 +6,7 @@ import type {
   SessionListState, SessionSnapshot, SessionSummary,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
+import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -65,17 +66,43 @@ async function provideSlotFaces(ctx: Context): Promise<void> {
   } as never, () => null)
 }
 
+/** Capture registerSource calls the way the pipeline root registry does. */
+function inputTriggersFake() {
+  const registered: InputTriggerSource[] = []
+  const disposed: InputTriggerSource[] = []
+  return {
+    registered,
+    disposed,
+    service: {
+      registerSource(src: InputTriggerSource) {
+        registered.push(src)
+        return () => {
+          disposed.push(src)
+        }
+      },
+    },
+  }
+}
+
 /** Boot the plugin over fake sessions and slot faces. */
 async function fullBench(sessions: SessionSummary[]) {
   const ctx = new Context()
   const face = sessionsWith(sessions)
+  const triggers = inputTriggersFake()
   ctx.provide('sessions', face)
-  ctx.provide('remote', { $on: () => () => {} } as never)
+  ctx.provide('remote', {
+    $on: () => () => {},
+    subagents: {
+      providers: () => Promise.resolve({ ok: true as const, value: ['codex', 'claude-code'] }),
+    },
+  } as never)
+  ctx.provide('remote.subagents', {} as never)
+  ctx.provide('inputTriggers', triggers.service as never)
   ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   await provideSlotFaces(ctx)
   await ctx.plugin({ inject: localeInject, apply: applyLocale }).await()
-  await ctx.plugin({ inject: [...inject], apply }).await()
-  return { face, ctx }
+  const pluginFiber = await ctx.plugin({ inject: [...inject], apply }).await()
+  return { face, ctx, triggers, pluginFiber }
 }
 
 const FAMILY: SessionSummary[] = [
@@ -90,7 +117,21 @@ const FAMILY: SessionSummary[] = [
 
 describe('apply', () => {
   it('declares the services it binds', () => {
-    expect(inject).toEqual(['sessions', 'slots', 'locale'])
+    expect(inject).toEqual(['sessions', 'slots', 'locale', 'inputTriggers', 'remote', 'remote.subagents'])
+  })
+
+  it('registers the @subagent mention source over the provider directory and disposes it with the fiber', async () => {
+    const { triggers, pluginFiber } = await fullBench(FAMILY)
+    expect(triggers.registered).toHaveLength(1)
+    const source = triggers.registered[0]
+    expect(source.trigger).toBe('@')
+    expect(source.name).toBe('subagent')
+    await expect(source.candidates(
+      { sessionId: sid('parent') },
+      { query: '', signal: new AbortController().signal, position: 'inline', drilled: false },
+    )).resolves.toEqual([{ name: 'codex' }, { name: 'claude-code' }])
+    await pluginFiber.dispose()
+    expect(triggers.disposed).toEqual([source])
   })
 
   it('registers catalog actions and selects read-only subagent composers from session facts', async () => {
