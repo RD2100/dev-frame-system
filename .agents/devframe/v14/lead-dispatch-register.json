@@ -931,6 +931,17 @@
         "Worker slots remain closed across all lines; a46cab71 remains marked failed; no investigation workers."
       ],
       "status": "D closed; B reviving for closure commit; A personal-fix in progress; C2-C4 gap-fill flowing"
+    },
+    {
+      "entry": "A line merged (64625d8268): A1/A2 fix + A3 no-source-js gate live; controller takeover commits after 4th lead failure; C lead succession (fresh C2 implementation session)",
+      "facts": [
+        "A-lead 629bed0c failed a 4th time mid-commit ('Commit 1 = A1/A2:' unfinished). Controller takeover per standing authorization: committed the lead's complete, user-verified work on its branch preserving provenance in commit messages (e0c6a0f582 = A1/A2 normalize.ts stack-frame tokenization + spec + full repro evidence incl. a3-producer-mechanism.md the lead had already written; be7e0de5f3 = A3 verify-no-source-js gate wired into gatesForMode + ciSharedStaticGates + 6/6 invalid-case spec).",
+        "Both A commits review-merged into main (64625d8268). Clean-tree verification: both scenarios green (user-isolated re-run + lead run, same content reuse). Main-tree runs: collection still shadowed by the user's 85 src/*.js files (0 tests) - blocked by user files, clean trees remain the sanctioned verification path per the A4 reversible-launch design.",
+        "A3 gate now LIVE on main and fails loud BY DESIGN: names the 85 user files with 'remove them and fix the producer; never gitignore them'. User adjudication of the 85 files is the open blocker for main-tree gate green + main-tree snapshot runs. Controller must not delete/gitignore them.",
+        "C-lead da5d10f3 failed a 4th time (empty closing, tree clean, no C2 work lost). Succession: fresh C2 implementation lead c6ed119d dispatched with the full contract (host roster RPC from actual ctx.subagents registry, independent client @ source, model-visible pick events, three-layer tests, profile mount, stale-metadata fix) and small-increment commit discipline; prior lead identity + failure history retained in this register.",
+        "Main integration state: verify-cordis-config 133 files + build 220 artifacts green post B/C merges; snapshot two-scenario verification pending user file cleanup (clean-tree green stands)."
+      ],
+      "status": "A closed (pending user 85-file adjudication for main-tree re-runs); B real chain in progress; C2 implementation started by successor; D standby"
     }
   ]
 }
