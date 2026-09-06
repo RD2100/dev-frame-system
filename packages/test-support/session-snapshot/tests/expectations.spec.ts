@@ -7,6 +7,7 @@ import {
   childSessionFixtureFileName,
   declaredExpectationVariantFiles,
   expectationFileName,
+  expectationWriteName,
   platformExpectationVariant,
   resolveChildExpectationPath,
   resolveChildSessionFixturePath,
@@ -31,6 +32,18 @@ const VARIANT_PIN = parseSnapshotManifest([
   '      - tool-schemas',
   '      - ui',
   '    posix:',
+  '      - system-prompt',
+  '',
+].join('\n'))
+const SYSTEM_PROMPT_VARIANT_PIN = parseSnapshotManifest([
+  'version: 1',
+  'profile: web',
+  'header:',
+  '  class: web-minimal',
+  '  pin: true',
+  'expectations:',
+  '  variants:',
+  '    win32:',
   '      - system-prompt',
   '',
 ].join('\n'))
@@ -240,6 +253,21 @@ describe('platform expectation variants', () => {
     await writeFile(join(root, 'system-prompt.expected.md'), 'base\n')
     expect(() => resolveExpectationPath({ dir: root, kind: 'system-prompt', manifest: VARIANT_PIN, platform: 'linux' }))
       .toThrow('system-prompt.posix.expected.md')
+  })
+
+  it('names the expectation write target without requiring the file to exist', () => {
+    expect(expectationWriteName(VARIANT_PIN, 'tool-schemas', 'win32')).toBe('tool-schemas.win32.expected.json')
+    expect(expectationWriteName(VARIANT_PIN, 'system-prompt', 'win32')).toBe('system-prompt.expected.md')
+    expect(expectationWriteName(VARIANT_PIN, 'system-prompt', 'linux')).toBe('system-prompt.posix.expected.md')
+    expect(expectationWriteName(VARIANT_PIN, 'ui', 'linux')).toBe('ui.expected.md')
+    expect(expectationWriteName(PLAIN_PIN, 'tool-schemas', 'win32')).toBe('tool-schemas.expected.json')
+  })
+
+  it('fails loud when a declared win32 system-prompt variant is missing on the read path', async () => {
+    const root = await scenarioDir()
+    await writeFile(join(root, 'system-prompt.expected.md'), 'base\n')
+    expect(() => resolveExpectationPath({ dir: root, kind: 'system-prompt', manifest: SYSTEM_PROMPT_VARIANT_PIN, platform: 'win32' }))
+      .toThrow(`session-snapshot: ${root}: declared platform expectation variant file is missing: system-prompt.win32.expected.md`)
   })
 
   it('names the workspace expectation directory without requiring it to exist', () => {
