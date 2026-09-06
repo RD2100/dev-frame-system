@@ -96,7 +96,9 @@ const request = { prompt: [], parent: leadAgent, ...overrides }
 | [`src/hierarchy/index.ts`](src/hierarchy/index.ts) | 总控 → 组长 → 执行树各档的 spawn 覆盖值 |
 | [`src/permissions/events.ts`](src/permissions/events.ts) | 持久化角色和策略身份事件契约 |
 | [`src/reliability/stop.ts`](src/reliability/stop.ts) | 接收截止、已拥有取消、有界排空和写入权释放 |
+| [`src/required-checks.ts`](src/required-checks.ts) | 必需检查配置 schema、规范 digest、完成判定与 digest → 配置登记存储 |
 | [`src/shared/types.ts`](src/shared/types.ts) | 带 brand 的工作身份和绑定持久化接口 |
+| [`src/source-fingerprint.ts`](src/source-fingerprint.ts) | 只读 worktree 指纹引擎与显式 verify 比对面 |
 | [`tests/hierarchy-roles.spec.ts`](tests/hierarchy-roles.spec.ts) | 各档 spawn 覆盖值策略覆盖 |
 | [`tests/reliability/stop.spec.ts`](tests/reliability/stop.spec.ts) | 单元测试和真实已拥有进程停止覆盖 |
 | [`../../experimental/agent-team/tests/devframe-composition.spec.ts`](../agent-team/tests/devframe-composition.spec.ts) | Team、Goal、dispatcher 和 JSONL 的真实组合基线 |

@@ -96,7 +96,9 @@ The shared types keep the project binding, configuration confirmation, lifecycle
 | [`src/hierarchy/index.ts`](src/hierarchy/index.ts) | Per-tier spawn overrides for the controller → lead → worker tree |
 | [`src/permissions/events.ts`](src/permissions/events.ts) | Persisted role and policy identity event contract |
 | [`src/reliability/stop.ts`](src/reliability/stop.ts) | Admission cutoff, owned cancellation, bounded drain, and writer release |
+| [`src/required-checks.ts`](src/required-checks.ts) | Required-checks configuration schema, canonical digest, completion verdicts, and the digest → configuration registration store |
 | [`src/shared/types.ts`](src/shared/types.ts) | Branded work identities and binding persistence interfaces |
+| [`src/source-fingerprint.ts`](src/source-fingerprint.ts) | Read-only worktree fingerprint engine and its explicit verify comparison |
 | [`tests/hierarchy-roles.spec.ts`](tests/hierarchy-roles.spec.ts) | Per-tier spawn-override policy coverage |
 | [`tests/reliability/stop.spec.ts`](tests/reliability/stop.spec.ts) | Unit and real owned-process stop coverage |
 | [`../../experimental/agent-team/tests/devframe-composition.spec.ts`](../agent-team/tests/devframe-composition.spec.ts) | Real Team, Goal, dispatcher, and JSONL composition baseline |

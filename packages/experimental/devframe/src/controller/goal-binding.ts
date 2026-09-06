@@ -4,7 +4,9 @@
  * This module owns the small controller-side seam between a human start
  * command, the native Goal service, and durable project binding records. It
  * deliberately does not execute model or tool work; callers must pass the
- * returned identity to their execution admission hook.
+ * returned identity to their execution admission hook. It also hosts the
+ * completion admission conjunction ({@link evaluateCompletionAdmission}) that
+ * reuses the source fingerprint verify face the binding domain recorded.
  * @module @deepseek-ai/dsh-experimental-devframe/controller/goal-binding
  */
 
@@ -12,6 +14,20 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { GoalId as nativeGoalId } from '@deepseek-ai/dsh-goal'
 import type { GoalId as NativeGoalId } from '@deepseek-ai/dsh-goal/types'
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type {
+  DevFrameCheckResult,
+  DevFrameReviewEventData,
+  DevFrameReviewFinding,
+  DevFrameReviewId,
+} from '../events.ts'
+import { evaluateRequiredChecks } from '../required-checks.ts'
+import type {
+  RequiredChecksConfigStore,
+  RequiredChecksDigest,
+  RequiredChecksUnsatisfied,
+} from '../required-checks.ts'
+import { verifySourceFingerprint } from '../source-fingerprint.ts'
+import type { SourceFingerprintMismatch } from '../source-fingerprint.ts'
 import {
   AcceptanceHash as makeAcceptanceHash,
   ConfigurationConfirmationId as makeConfirmationId,
@@ -579,6 +595,133 @@ export class GoalBindingController {
       }
       ids.add(binding.goalId)
     }
+  }
+}
+
+/**
+ * Input for one completion admission evaluation: the three already-landed
+ * predicates conjuncted by {@link evaluateCompletionAdmission}, in the fixed
+ * evidence-chain order fingerprint → required checks → review.
+ */
+export interface CompletionAdmissionRequest {
+  /**
+   * Absolute path to any directory inside the git worktree the fingerprint is
+   * recomputed against. The recompute is an explicit admission call (three
+   * git subprocesses) and never runs on the binding hot path.
+   */
+  readonly worktreePath: string
+  /** The recorded source fingerprint (e.g. `GoalResultBinding.sourceFingerprint`). */
+  readonly sourceFingerprint: SourceFingerprint
+  /** Real executed check results, e.g. `checks` from the decoded verification evidence. */
+  readonly checks: readonly DevFrameCheckResult[]
+  /** Canonical digest of the approved configuration, registered in the store at approval time. */
+  readonly requiredChecksDigest: RequiredChecksDigest
+  /** Configuration store resolving `requiredChecksDigest` to the stored approved checklist. */
+  readonly requiredChecksStore: RequiredChecksConfigStore
+  /**
+   * The durable, gate-authorized review evidence: the journal write gate
+   * already enforced reviewer authorization before this record entered the
+   * log, so admission consumes only its pass decision.
+   */
+  readonly review: DevFrameReviewEventData
+}
+
+/** Pass arm of the completion admission conjunction: all three predicates hold. */
+export interface CompletionAdmissionAdmitted {
+  /** Discriminant tag of the {@link CompletionAdmissionVerdict} union. */
+  readonly kind: 'admitted'
+  /** The verified fingerprint: the recorded claim equals the fresh computation. */
+  readonly fingerprint: SourceFingerprint
+  /** Canonical identity of the stored configuration the evidence covered. */
+  readonly requiredChecksDigest: RequiredChecksDigest
+}
+
+/** Rejection at the first stage: the worktree no longer matches the recorded fingerprint. */
+export interface CompletionFingerprintRejection {
+  /** Discriminant tag of the {@link CompletionAdmissionVerdict} union. */
+  readonly kind: 'rejected'
+  /** Evaluation stage that rejected the completion. */
+  readonly stage: 'source-fingerprint'
+  /** Dual-value evidence: the recorded claim vs the fresh computation. */
+  readonly mismatch: SourceFingerprintMismatch
+}
+
+/** Rejection at the second stage: the evidence does not fully cover the stored approved checklist. */
+export interface CompletionChecksRejection {
+  /** Discriminant tag of the {@link CompletionAdmissionVerdict} union. */
+  readonly kind: 'rejected'
+  /** Evaluation stage that rejected the completion. */
+  readonly stage: 'required-checks'
+  /** The unsatisfied verdict; each violation's `reason` is the machine-routable code. */
+  readonly verdict: RequiredChecksUnsatisfied
+}
+
+/** Rejection at the final stage: the authorized review did not pass. */
+export interface CompletionReviewRejection {
+  /** Discriminant tag of the {@link CompletionAdmissionVerdict} union. */
+  readonly kind: 'rejected'
+  /** Evaluation stage that rejected the completion. */
+  readonly stage: 'review'
+  /** Identity of the review that did not pass. */
+  readonly reviewId: DevFrameReviewId
+  /** The review's non-pass decision. */
+  readonly decision: 'changes_required'
+  /** Bounded findings explaining the non-pass decision. */
+  readonly findings: readonly DevFrameReviewFinding[]
+}
+
+/** Discriminated union returned by {@link evaluateCompletionAdmission}. */
+export type CompletionAdmissionVerdict =
+  | CompletionAdmissionAdmitted
+  | CompletionFingerprintRejection
+  | CompletionChecksRejection
+  | CompletionReviewRejection
+
+/**
+ * Completion admission for the AT1-05 completion domain: the conjunction of
+ * three already-landed predicates, evaluated in the fixed evidence-chain
+ * order — fingerprint match first (it anchors which tree the evidence is
+ * about and is the cheapest invalidation), required checks second (they
+ * anchor what really ran on that tree, against the configuration resolved
+ * from the store), and the authorized review decision last (it anchors who
+ * judged). Rejections are data carrying each stage's own evidence shape
+ * (recorded claim vs trustworthy side); this face adds no new predicate.
+ *
+ * Structural errors fail loud and are never converted into rejections:
+ * `SourceFingerprintError` codes from the fingerprint recompute and
+ * `RequiredChecksError` codes from the store resolution
+ * (`REQUIRED_CHECKS_CONFIG_NOT_FOUND`, `REQUIRED_CHECKS_INVALID_CONFIG`)
+ * propagate to the caller unchanged.
+ * @param request - worktree, recorded fingerprint, executed checks, registered
+ *   configuration reference, and the durable review evidence.
+ * @returns a {@link CompletionAdmissionAdmitted} verdict, or the rejection of
+ *   the first failing stage.
+ */
+export async function evaluateCompletionAdmission(
+  request: CompletionAdmissionRequest,
+): Promise<CompletionAdmissionVerdict> {
+  const verify = await verifySourceFingerprint(request.worktreePath, request.sourceFingerprint)
+  if (verify.kind === 'mismatch') {
+    return { kind: 'rejected', stage: 'source-fingerprint', mismatch: verify }
+  }
+  const config = await request.requiredChecksStore.load(request.requiredChecksDigest)
+  const verdict = evaluateRequiredChecks(config, request.checks)
+  if (verdict.kind === 'unsatisfied') {
+    return { kind: 'rejected', stage: 'required-checks', verdict }
+  }
+  if (request.review.decision !== 'pass') {
+    return {
+      kind: 'rejected',
+      stage: 'review',
+      reviewId: request.review.reviewId,
+      decision: request.review.decision,
+      findings: [...request.review.findings],
+    }
+  }
+  return {
+    kind: 'admitted',
+    fingerprint: verify.fingerprint,
+    requiredChecksDigest: request.requiredChecksDigest,
   }
 }
 

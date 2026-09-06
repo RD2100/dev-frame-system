@@ -12,10 +12,12 @@
  * evaluation is a pure, explicit face: it mutates nothing and never runs on
  * the binding hot path. Rejections are data — a discriminated verdict with
  * one violation per unsatisfied check — not throws; the error class covers
- * the parse boundary. The durable wiring (configuration storage, schema-level
- * coverage enforcement on `devframe/verification`, and the completion
- * admission that conjuncts this verdict with the review gate and the source
- * fingerprint verify) is registered as future work
+ * the parse and storage boundaries. The durable wiring consumes these faces:
+ * the configuration store registers an approved configuration under its
+ * digest ({@link RequiredChecksConfigStore}), the `devframe/verification`
+ * event schema rejects payloads that do not exactly execute their
+ * self-declared coverage, and the controller's completion admission conjuncts
+ * this verdict with the source fingerprint verify and the review decision
  * (.agents/devframe/p22/required-checks-design.md).
  * @module @deepseek-ai/dsh-experimental-devframe/required-checks
  */
@@ -97,14 +99,16 @@ export type RequiredChecksErrorCode =
   | 'REQUIRED_CHECKS_COMMAND_MISMATCH'
   /** A check executed exactly as configured but its real status was not `passed`. */
   | 'REQUIRED_CHECKS_NOT_PASSED'
+  /** A digest was resolved against the configuration store without a registration. */
+  | 'REQUIRED_CHECKS_CONFIG_NOT_FOUND'
 
 /**
- * Structured failure from required-checks parsing, aligned with the
- * `GoalBindingError`/`SourceFingerprintError` message+code shape. Policy
- * rejections (`REQUIRED_CHECKS_MISSING`, `REQUIRED_CHECKS_COMMAND_MISMATCH`,
- * `REQUIRED_CHECKS_NOT_PASSED`) travel as verdict violations, never as
- * throws; the future completion admission routes them through this same
- * code union.
+ * Structured failure from required-checks parsing and configuration storage,
+ * aligned with the `GoalBindingError`/`SourceFingerprintError` message+code
+ * shape. Policy rejections (`REQUIRED_CHECKS_MISSING`,
+ * `REQUIRED_CHECKS_COMMAND_MISMATCH`, `REQUIRED_CHECKS_NOT_PASSED`) travel as
+ * verdict violations, never as throws; the completion admission routes them
+ * through this same code union.
  */
 export class RequiredChecksError extends Error {
   /** Stable machine-routable classification of this failure. */
@@ -142,6 +146,78 @@ export function decodeRequiredChecksConfig(value: unknown): DevFrameRequiredChec
     )
   }
   return parsed.data
+}
+
+/**
+ * Durable registration seam resolving one approved configuration's canonical
+ * digest back to its parsed configuration — the "digest → config" storage the
+ * completion admission reads the stored checklist from. Implementations may
+ * use JSONL, SQLite, or memory; whatever the backend, `load` is the untrusted
+ * durable read and must go back through {@link decodeRequiredChecksConfig},
+ * failing loud (`REQUIRED_CHECKS_INVALID_CONFIG` on undecodable bytes,
+ * `REQUIRED_CHECKS_CONFIG_NOT_FOUND` on an unregistered digest) instead of
+ * inventing a fallback configuration.
+ */
+export interface RequiredChecksConfigStore {
+  /**
+   * Register one approved configuration under its canonical digest.
+   * @param config - validated configuration from the typed approval boundary.
+   * @returns the digest the configuration is registered under; registering
+   *   the same configuration again is the same registration.
+   */
+  save(config: DevFrameRequiredChecksConfig): Promise<RequiredChecksDigest>
+  /**
+   * Resolve one digest to its registered configuration.
+   * @param digest - canonical identity recorded when the configuration was approved.
+   * @returns the validated registered configuration.
+   * @throws {@link RequiredChecksError} with `REQUIRED_CHECKS_CONFIG_NOT_FOUND`
+   *   when no configuration is registered under the digest, or
+   *   `REQUIRED_CHECKS_INVALID_CONFIG` when the registered bytes fail their schema.
+   */
+  load(digest: RequiredChecksDigest): Promise<DevFrameRequiredChecksConfig>
+}
+
+/**
+ * In-memory {@link RequiredChecksConfigStore} for focused tests and disposable
+ * integrations. Registrations are held as their durable JSON payload and every
+ * load re-decodes them through {@link decodeRequiredChecksConfig}, so the
+ * store exercises the same read boundary a persistent backend would.
+ */
+export class MemoryRequiredChecksConfigStore implements RequiredChecksConfigStore {
+  private readonly registrations = new Map<string, string>()
+
+  /**
+   * Register one approved configuration under its canonical digest.
+   * @param config - validated configuration from the typed approval boundary.
+   * @returns the digest the configuration is registered under.
+   */
+  async save(config: DevFrameRequiredChecksConfig): Promise<RequiredChecksDigest> {
+    const digest = requiredChecksDigest(config)
+    // The registration is content-addressed: a repeated digest is by
+    // construction the same approved set, so the first registration stands.
+    if (!this.registrations.has(digest)) {
+      this.registrations.set(digest, JSON.stringify(config))
+    }
+    return digest
+  }
+
+  /**
+   * Resolve one digest to its registered configuration.
+   * @param digest - canonical identity recorded at approval time.
+   * @returns the validated registered configuration.
+   * @throws {@link RequiredChecksError} with `REQUIRED_CHECKS_CONFIG_NOT_FOUND`
+   *   when the digest has no registration.
+   */
+  async load(digest: RequiredChecksDigest): Promise<DevFrameRequiredChecksConfig> {
+    const payload = this.registrations.get(digest)
+    if (payload === undefined) {
+      throw new RequiredChecksError(
+        `no required-checks configuration is registered under "${digest}"`,
+        'REQUIRED_CHECKS_CONFIG_NOT_FOUND',
+      )
+    }
+    return decodeRequiredChecksConfig(JSON.parse(payload))
+  }
 }
 
 /** Pass arm of a required-checks verdict: every required check ran exactly as approved and passed. */
@@ -228,8 +304,33 @@ export function requiredChecksDigest(config: DevFrameRequiredChecksConfig): Requ
   return RequiredChecksDigest(`${DIGEST_PREFIX}-${digest}`)
 }
 
-/** Exact command equality: no normalization, mirroring the branded-string equality of `verifySourceFingerprint`. */
-function sameCommand(left: RequiredCheckCommand, right: RequiredCheckCommand): boolean {
+/**
+ * The check-configuration component this package contributes to the host's
+ * acceptance composition: the canonical {@link requiredChecksDigest} of the
+ * approved configuration. Per the acceptance-composition ruling, the objective
+ * component and the final objective+checks composition into an
+ * `AcceptanceHash` are host-owned — this value is only the input this package
+ * contributes, and it is never claimed to equal a binding's acceptance hash
+ * (the independent `RequiredChecksDigest` brand keeps that confusion a type
+ * error).
+ * @param config - validated required-checks configuration.
+ * @returns the branded digest feeding the host's acceptance composition.
+ */
+export function acceptanceCheckComponent(config: DevFrameRequiredChecksConfig): RequiredChecksDigest {
+  return requiredChecksDigest(config)
+}
+
+/**
+ * Exact command equality for the completion policy: same executable, same
+ * working directory, same argument vector in order — no normalization, so a
+ * swapped script or trimmed flag cannot pass under a required name. Shared by
+ * the comparison face and the durable verification schema's coverage rule so
+ * both layers reject exactly the same deviations.
+ * @param left - one command side.
+ * @param right - the other command side.
+ * @returns whether the two commands are exactly equal.
+ */
+export function sameRequiredCheckCommand(left: RequiredCheckCommand, right: RequiredCheckCommand): boolean {
   return left.executable === right.executable
     && left.cwd === right.cwd
     && left.arguments.length === right.arguments.length
@@ -265,7 +366,7 @@ export function evaluateRequiredChecks(
       violations.push({ reason: 'REQUIRED_CHECKS_MISSING', checkId: required.checkId })
       continue
     }
-    const matching = candidates.find(result => sameCommand(result, required))
+    const matching = candidates.find(result => sameRequiredCheckCommand(result, required))
     if (matching === undefined) {
       violations.push({
         reason: 'REQUIRED_CHECKS_COMMAND_MISMATCH',

@@ -166,6 +166,13 @@ function cloneVerification(verification: DevFrameVerificationEventData): DevFram
     ...verification,
     binding: cloneResultBinding(verification.binding),
     checks: verification.checks.map(check => ({ ...check, arguments: [...check.arguments] })),
+    requiredChecks: {
+      config: {
+        ...verification.requiredChecks.config,
+        checks: verification.requiredChecks.config.checks.map(check => ({ ...check, arguments: [...check.arguments] })),
+      },
+      digest: verification.requiredChecks.digest,
+    },
   }
 }
 

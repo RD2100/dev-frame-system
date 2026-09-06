@@ -1,8 +1,11 @@
 /**
  * AT1-05 证据拒绝矩阵 + AT1-06 证据引用解析 — 收口自
- * `.agents/devframe/p22/anchor-matrix.md` AT1-05/AT1-06 行（P05 src 波后：六个
+ * `.agents/devframe/p22/anchor-matrix.md` AT1-05/AT1-06 行（P05 接线波后：六个
  * 拒绝变体中四个已有具名用例——伪造成功、失败/跳过检查、错审查者、错快照；
- * "审查后改未跟踪文件"与"削弱必需检查"仍为 GAP）与 `docs/testAndAcceptance.md`
+ * "削弱必需检查"已由 P05 接线波收口为 durable schema 级拒绝（见逐变体对照，
+ * 本文件 verificationPayload 已携带自声明覆盖面）；"审查后改未跟踪文件"的重算
+ * 实现面已落盘（fprecompute 波 verifySourceFingerprint + P05 接线波完成
+ * admission 合取），本文件仍未落具名用例，见其行）与 `docs/testAndAcceptance.md`
  * Part 1 两行断言面。诚实映射：只落有真实实现锚点的用例，其余登记 GAP/语义
  * 差异，不虚构拒绝路径。
  *
@@ -30,12 +33,22 @@
  *   IDENTITY_MISMATCH，既有族扩展、只多拒）；durable schema 交叉校验 + 投影重放
  *   双层 fail-closed | 本文件 "rejects a result bound to a different source
  *   snapshot"（snapshotId 探针已入）；bindingsByGoal 双键过滤已由 at2c-04 锚定 |
- * | 审查后改未跟踪文件 | GAP：无 worktree/HEAD/未跟踪文件检查面；
- *   sourceFingerprint 是绑定时调用方自报值，从不重算（README：台账不检查
- *   仓库，changed paths 按上报记录） | GAP，归 P05 src 波（需真实指纹重算） |
- * | 削弱必需检查 | GAP：全树无 required-checks 模型；approved 检查配置仅以
- *   不透明 acceptanceHash 存在，无配置存储与完成策略比对（anchor-matrix 已
- *   登记 "required-checks 削弱面无实现锚点"） | GAP，归产品波 + P05 src 波 |
+ * | 审查后改未跟踪文件 | 实现面已落盘（本文件仍无具名用例）：指纹重算引擎
+ *   verifySourceFingerprint（fprecompute 波）+ 完成 admission
+ *   evaluateCompletionAdmission 指纹先行合取（P05 接线波）；指纹覆盖 tracked
+ *   (index) 态，untracked 为已裁定边界 | 实现登记：devframe
+ *   source-fingerprint.ts + controller/goal-binding.ts；本文件无用例 |
+ * | 削弱必需检查 | 已收口（P05 接线波，设计见
+ *   .agents/devframe/p22/required-checks-design.md GAP 节）：durable schema 级
+ *   ——verification 载荷自声明 requiredChecks 覆盖面（approved config + canonical
+ *   digest），verificationEventSchema 校验 digest 自洽且每条声明 check 被逐字
+ *   执行（同 checkId + 精确命令），缺项/换命令的削弱载荷解码即拒；比对面
+ *   evaluateRequiredChecks verdict 独立双层拒绝；完成 admission
+ *   evaluateCompletionAdmission 按 指纹→检查→审查 序消费 stored config
+ *   （digest → config 经 RequiredChecksConfigStore 登记） | schema 级落点：
+ *   devframe events.ts verificationEventSchema（本文件 verificationPayload 已
+ *   携带声明）；比对面：devframe required-checks.ts；admission：devframe
+ *   controller/goal-binding.ts |
  * | AT1-06 重复完成请求无害 | 语义差异：project-controller complete 二次 =
  *   PROJECT_CONTROLLER_ILLEGAL_TRANSITION、integrate 二次 = MARKER_INVALID
  *   （拒绝而非无害）；dsh-goal complete 二次 = GOAL_STALE_REVISION /
@@ -61,6 +74,7 @@ import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import { TaskId as EvidenceTaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import { AcceptanceHash, SourceFingerprint, WorkspaceId } from '@deepseek-ai/dsh-experimental-devframe/shared'
 import { decodeDevFramePayload, DevFrameReviewId, DevFrameSnapshotId, DevFrameVerificationId } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
+import { requiredChecksDigest } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
 import { DevFrameSessionJournal } from '@deepseek-ai/dsh-experimental-devframe/src/session-journal.ts'
 import {
   ControllerSessionId,
@@ -112,12 +126,26 @@ function checkResult(status: 'passed' | 'failed' | 'skipped', id: string) {
 
 /** One devframe verification payload over the shared work tuple. */
 function verificationPayload(status: 'passed' | 'failed', checks: readonly ReturnType<typeof checkResult>[]) {
+  // The payload self-declares the approved checklist it covers (P05 接线波
+  // schema 覆盖规则): the declared config is derived from the recorded checks
+  // so the honest cases decode and the aggregate-status rejections below keep
+  // testing their own rule.
+  const declaredConfig = {
+    version: 1 as const,
+    checks: checks.map(check => ({
+      checkId: check.checkId,
+      executable: check.executable,
+      arguments: [...check.arguments],
+      cwd: check.cwd,
+    })),
+  }
   return {
     version: 1,
     verificationId: DevFrameVerificationId('verification-at105'),
     binding: RESULT_BINDING,
     snapshotId: DevFrameSnapshotId('snapshot-at105'),
     status,
+    requiredChecks: { config: declaredConfig, digest: requiredChecksDigest(declaredConfig) },
     checks: [...checks],
   }
 }

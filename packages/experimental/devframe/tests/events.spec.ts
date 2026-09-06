@@ -23,6 +23,8 @@ import {
 } from '../src/events.ts'
 import { DevFrameSessionJournal } from '../src/session-journal.ts'
 import type { DevFrameReviewGate } from '../src/session-journal.ts'
+import { requiredChecksDigest } from '../src/required-checks.ts'
+import type { DevFrameRequiredChecksConfig } from '../src/required-checks.ts'
 import type {
   DevFrameLifecycleEventData,
   DevFrameReviewEventData,
@@ -151,12 +153,22 @@ function fullEventSet(): {
     outcome: 'succeeded',
     tokenUsage: { kind: 'measured', input: 10, output: 5, total: 15 },
   }
+  const verificationCoverage: DevFrameRequiredChecksConfig = {
+    version: 1,
+    checks: [{
+      checkId: 'typecheck',
+      executable: 'pnpm',
+      arguments: ['run', 'typecheck'],
+      cwd: 'C:/workspace',
+    }],
+  }
   const verification: DevFrameVerificationEventData = {
     version: 1,
     verificationId: DevFrameVerificationId('verification-one'),
     binding: reference,
     snapshotId: DevFrameSnapshotId('snapshot-one'),
     status: 'passed',
+    requiredChecks: { config: verificationCoverage, digest: requiredChecksDigest(verificationCoverage) },
     checks: [{
       checkId: 'typecheck',
       executable: 'pnpm',
@@ -248,6 +260,15 @@ describe('DevFrame durable event vocabulary', () => {
       ...fullEventSet().verification,
       snapshotId: undefined,
     } as never)).toThrow(/payload is invalid/)
+    // A weakened verification no longer decodes: the declared required check
+    // is not exactly executed by the recorded checks.
+    expect(() => decodeDevFramePayload('devframe/verification', {
+      ...fullEventSet().verification,
+      checks: [{
+        ...fullEventSet().verification.checks[0],
+        arguments: ['run', 'typecheck', '--fast'],
+      }],
+    })).toThrow(/payload is invalid/)
     expect(() => decodeDevFramePayload('devframe/lifecycle', {
       ...fullEventSet().quiesced,
       state: 'stopped',
