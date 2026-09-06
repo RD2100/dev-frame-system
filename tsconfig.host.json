@@ -306,6 +306,7 @@
     { "path": "./packages/experimental/agent-hierarchy" },
     { "path": "./packages/experimental/agent-worktree" },
     { "path": "./packages/experimental/devframe" },
+    { "path": "./packages/experimental/command-goal-binding" },
     { "path": "./packages/experimental/agent-team-profile" },
     { "path": "./packages/experimental/tool-agent-team" },
     { "path": "./packages/experimental/agent-team-web-profile" },

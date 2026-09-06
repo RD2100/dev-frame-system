@@ -18,11 +18,13 @@ const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.
 describe('DevFrame public entry points', () => {
   it('resolves every runtime subpath from the package root and manifest', () => {
     expect(devframe.GoalBindingController).toBe(controller.GoalBindingController)
+    expect(devframe.GoalServicePort).toBe(controller.GoalServicePort)
     expect(devframe.devframeSpawnOverrides).toBe(hierarchy.devframeSpawnOverrides)
     expect(devframe.RolePolicy).toBe(permissions.RolePolicy)
     expect(devframe.stopProject).toBe(reliability.stopProject)
     expect(devframe.WorkspaceId).toBe(shared.WorkspaceId)
     expect(typeof controller.GoalBindingController).toBe('function')
+    expect(typeof controller.GoalServicePort).toBe('function')
     expect(typeof permissions.installRolePolicy).toBe('function')
     expect(typeof reliability.stopProject).toBe('function')
     expect(typeof shared.WorkspaceId).toBe('function')

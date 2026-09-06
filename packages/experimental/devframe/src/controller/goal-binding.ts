@@ -6,13 +6,18 @@
  * deliberately does not execute model or tool work; callers must pass the
  * returned identity to their execution admission hook. It also hosts the
  * completion admission conjunction ({@link evaluateCompletionAdmission}) that
- * reuses the source fingerprint verify face the binding domain recorded.
+ * reuses the source fingerprint verify face the binding domain recorded, and
+ * the controller completion operation ({@link GoalBindingController.complete})
+ * — the production call point that gates the native Goal lifecycle's complete
+ * mutation behind that conjunction through the {@link NativeGoalPort} seam.
  * @module @deepseek-ai/dsh-experimental-devframe/controller/goal-binding
  */
 
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { GoalId as nativeGoalId } from '@deepseek-ai/dsh-goal'
 import type { GoalId as NativeGoalId } from '@deepseek-ai/dsh-goal/types'
+import type { GoalService, GoalView } from '@deepseek-ai/dsh-goal'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type {
   DevFrameCheckResult,
@@ -191,6 +196,58 @@ export interface NativeGoalPort {
   get(): NativeGoalState | undefined
   /** Resume one exact native Goal revision and arm continuation. */
   resume(ref: { readonly id: NativeGoalId; readonly revision: number }): NativeGoalState
+  /** Mark the current native Goal complete at one exact revision and disarm it. */
+  complete(ref: { readonly id: NativeGoalId; readonly revision: number }): NativeGoalState
+}
+
+/**
+ * Production {@link NativeGoalPort} over the live native Goal service: every
+ * verb delegates to the resolved native service on the exact live Agent this
+ * port binds, and native rejections (`GOAL_AGENT_NOT_LIVE`,
+ * `GOAL_STALE_REVISION`, `GOAL_INVALID_TRANSITION`) propagate unchanged. This
+ * is the adapter a host composition wires behind a
+ * {@link GoalBindingController}; there is no second, softer path into the
+ * native Goal lifecycle.
+ */
+export class GoalServicePort implements NativeGoalPort {
+  /**
+   * @param options - the resolved native Goal service and the one live Agent
+   *   every verb acts on.
+   */
+  constructor(private readonly options: {
+    readonly goals: GoalService
+    readonly agent: Agent
+  }) {}
+
+  create(request: { readonly objective: string; readonly maxGoalRounds?: number }): NativeGoalState {
+    return toNativeGoalState(this.options.goals.create(this.options.agent, request))
+  }
+
+  disarm(): NativeGoalState | undefined {
+    return mapNativeGoalState(this.options.goals.disarm(this.options.agent))
+  }
+
+  get(): NativeGoalState | undefined {
+    return mapNativeGoalState(this.options.goals.get(this.options.agent))
+  }
+
+  resume(ref: { readonly id: NativeGoalId; readonly revision: number }): NativeGoalState {
+    return toNativeGoalState(this.options.goals.resume(this.options.agent, ref))
+  }
+
+  complete(ref: { readonly id: NativeGoalId; readonly revision: number }): NativeGoalState {
+    return toNativeGoalState(this.options.goals.complete(this.options.agent, ref))
+  }
+}
+
+/** Project a native Goal view onto the controller's narrow state triple. */
+function toNativeGoalState(view: GoalView): NativeGoalState {
+  return { id: view.id, revision: view.revision, phase: view.phase }
+}
+
+/** Project an optional native Goal view onto the controller's narrow state. */
+function mapNativeGoalState(view: GoalView | undefined): NativeGoalState | undefined {
+  return view === undefined ? undefined : toNativeGoalState(view)
 }
 
 /** Human-issued capability required for start and resume. */
@@ -232,6 +289,34 @@ export interface StartGoalRequest {
   readonly budget: GoalBudgetInput
   readonly authorization: HumanAuthorization
   readonly maxGoalRounds?: number
+}
+
+/**
+ * Evidence-side input for one controller completion attempt: everything
+ * {@link evaluateCompletionAdmission} consumes except the recorded source
+ * fingerprint, which {@link GoalBindingController.complete} takes from the
+ * durable binding instead of trusting the caller.
+ */
+export interface CompleteGoalRequest {
+  /**
+   * Absolute path to any directory inside the git worktree the fingerprint is
+   * recomputed against; the recompute is an explicit admission call (three
+   * git subprocesses) and never runs on the binding hot path.
+   */
+  readonly worktreePath: string
+  /** Real executed check results, e.g. `checks` from the decoded verification evidence. */
+  readonly checks: readonly DevFrameCheckResult[]
+  /** Canonical digest of the approved configuration, registered in the store at approval time. */
+  readonly requiredChecksDigest: RequiredChecksDigest
+  /** Configuration store resolving `requiredChecksDigest` to the stored approved checklist. */
+  readonly requiredChecksStore: RequiredChecksConfigStore
+  /**
+   * The durable, gate-authorized review evidence attributed to this Goal:
+   * the journal write gate already enforced reviewer authorization before
+   * this record entered the log, so admission consumes only its pass
+   * decision, and the controller rejects evidence naming another Goal.
+   */
+  readonly review: DevFrameReviewEventData
 }
 
 /** Stable error classifications emitted by this controller seam. */
@@ -453,6 +538,114 @@ export class GoalBindingController {
       this.activeIdentity = identityOf(admitted)
       this.admission = 'open'
       return copyBinding(admitted)
+    })
+  }
+
+  /**
+   * Attempt one admission-evaluated completion of an exact bound Goal: the
+   * production call point where the {@link evaluateCompletionAdmission}
+   * conjunction gates the native Goal lifecycle's complete mutation.
+   *
+   * The attempt resolves the binding by exact identity, closes admission for
+   * its whole duration (the evaluation runs real git subprocesses and must
+   * not race admitted model steps; a rejected attempt leaves the safe state,
+   * so continuing work requires a human-authorized {@link resume}), and
+   * validates that the native Goal is still this binding's Goal, not behind
+   * the bound revision, and not already complete, and that the review
+   * evidence is attributed to this Goal. The three predicates then evaluate
+   * in their fixed evidence-chain order against the durable binding's own
+   * recorded fingerprint. A rejection is data: the native Goal stays
+   * untouched. An admission completes the native Goal at its current
+   * revision, persists the binding at the revision the native service
+   * returned, and leaves admission closed.
+   *
+   * Structural failures are never converted into rejections; every throw
+   * propagates to the caller unchanged.
+   * @param identity - controller Session and Goal identity to complete.
+   * @param request - worktree path, executed checks, registered
+   *   required-checks configuration reference, and the review evidence
+   *   attributed to this Goal.
+   * @returns the {@link CompletionAdmissionAdmitted} verdict after the native
+   *   Goal completed, or the first failing stage's rejection verdict with the
+   *   native Goal untouched.
+   * @throws {@link GoalBindingError} when the identity is unknown or foreign,
+   *   the native Goal diverged from the binding (missing, foreign, behind the
+   *   bound revision, or already complete), the review evidence names another
+   *   Goal, persistence fails, or the native completion returned an
+   *   unexpected identity or revision.
+   * @throws {@link SourceFingerprintError} when the worktree fingerprint
+   *   recompute is unusable; `RequiredChecksError` when the digest has no
+   *   registered configuration or its stored bytes fail their schema.
+   */
+  complete(identity: GoalBindingIdentity, request: CompleteGoalRequest): Promise<CompletionAdmissionVerdict> {
+    return this.enqueue(async () => {
+      await this.ensureReady()
+      const binding = this.findBinding(identity)
+      this.closeAdmission()
+
+      const current = this.options.goals.get()
+      if (current === undefined || current.id !== binding.goalId) {
+        throw new GoalBindingError(
+          `native Goal does not match "${identity.goalId}"`,
+          'GOAL_BINDING_IDENTITY_MISMATCH',
+        )
+      }
+      assertNativeRevision(current.revision)
+      if (current.revision < binding.goalRevision) {
+        throw new GoalBindingError(
+          `native Goal "${identity.goalId}" revision ${current.revision} precedes bound revision ${binding.goalRevision}`,
+          'GOAL_BINDING_IDENTITY_MISMATCH',
+        )
+      }
+      if (current.phase === 'complete') {
+        throw new GoalBindingError(
+          `Goal "${identity.goalId}" is already complete`,
+          'GOAL_BINDING_IDENTITY_MISMATCH',
+        )
+      }
+      const reviewBinding = request.review.binding
+      if (reviewBinding.goalId !== binding.goalId) {
+        throw new GoalBindingError(
+          `completion review evidence is attributed to Goal "${reviewBinding.goalId}", not "${binding.goalId}"`,
+          'GOAL_BINDING_IDENTITY_MISMATCH',
+        )
+      }
+      if (reviewBinding.controllerSessionId !== binding.controllerSessionId) {
+        throw new GoalBindingError(
+          `completion review evidence is recorded under controller Session`
+            + ` "${reviewBinding.controllerSessionId}", not "${binding.controllerSessionId}"`,
+          'GOAL_BINDING_IDENTITY_MISMATCH',
+        )
+      }
+      if (reviewBinding.workspaceId !== binding.workspaceId) {
+        throw new GoalBindingError(
+          `completion review evidence is recorded for workspace`
+            + ` "${reviewBinding.workspaceId}", not "${binding.workspaceId}"`,
+          'GOAL_BINDING_IDENTITY_MISMATCH',
+        )
+      }
+
+      const verdict = await evaluateCompletionAdmission({
+        worktreePath: request.worktreePath,
+        sourceFingerprint: binding.sourceFingerprint,
+        checks: request.checks,
+        requiredChecksDigest: request.requiredChecksDigest,
+        requiredChecksStore: request.requiredChecksStore,
+        review: request.review,
+      })
+      if (verdict.kind === 'rejected') return verdict
+
+      const completed = this.options.goals.complete({ id: current.id, revision: current.revision })
+      assertNativeRevision(completed.revision)
+      if (completed.id !== binding.goalId) {
+        throw new GoalBindingError(
+          `native complete returned Goal "${completed.id}" for "${binding.goalId}"`,
+          'GOAL_BINDING_IDENTITY_MISMATCH',
+        )
+      }
+      assertRevisionAdvance(current.revision, completed.revision)
+      await this.saveBinding({ ...binding, goalRevision: completed.revision })
+      return verdict
     })
   }
 

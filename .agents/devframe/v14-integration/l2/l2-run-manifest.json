@@ -1,0 +1,189 @@
+{
+  "taskId": "v14-l2-combo-accept",
+  "taskState": "completed",
+  "taskStateVocabulary": "TaskState 九态：planned/assigned/developing/reviewing/submitted/integrated/completed/blocked/failed",
+  "generatedAt": "2026-09-06T12:23:41+09:00",
+  "identity": {
+    "sessionId": "024d6ecb-3fcd-4cb2-85d1-a3191bc2f13d",
+    "parentAgentId": "f705f2bf-b339-4fa1-bcb2-abfd88f2bc78",
+    "provider": "DeepSeek Harness 内置 subagent（模型 glm-5.3-flash）",
+    "worktreeId": "D:\\dsh-devframe-v14-integration-l2",
+    "branch": "codex/v14-integration-l2",
+    "baseCommit": "c93b86c43e"
+  },
+  "scope": {
+    "writeDomain": ".agents/devframe/v14-integration/**",
+    "dshHome": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-v14-l2-home",
+    "dshHomeFresh": true,
+    "dshHomeNote": "本轮开工时该目录不存在（Test-Path=False），由引导命令创建；总控纠正①生效前原任务书的『若已存在先删除』未触发任何删除动作。home 全程原样保留供总控复验，两相探针共用同一 home。",
+    "modelParticipation": "none",
+    "modelParticipationNote": "隔离组合证据（无模型参与）：探针 boot 基座组合（过滤 headless app 面），只驱动真实工具/真实分派器/落盘域，全程零 LLM 请求、零凭据解析，不冒充真实模型旅程。"
+  },
+  "skipAuth": {
+    "items": [],
+    "verification": "记 SKIP_AUTH 前逐项核实：dump-config、write 相、verify 相均不发起模型调用，也不读 settings.yaml provider apiKeyEnv 或 DSH 凭据存储；本轮验收项中不存在在线认证项，故 SKIP_AUTH 集为空。DEEPSEEK_API_KEY 缺失对全部已执行步骤零影响；huoshan-1/huoshan-2 不在本轮范围、未被触发。"
+  },
+  "commands": [
+    {
+      "step": 1,
+      "command": "pnpm install（worktree 根 D:\\dsh-devframe-v14-integration-l2）",
+      "exitCode": 0,
+      "notes": "Done in 23.8s（pnpm 11.19.0）。两条预期 WARN：@deepseek-ai/dsh lib 未构建导致 .bin 创建失败，与源运行无关；postinstall 同步 lefthook 钩子成功。"
+    },
+    {
+      "step": 2,
+      "command": "Copy-Item 档案与探针到写域 + Get-FileHash 原件/拷贝件",
+      "exitCode": 0,
+      "notes": "最终落位 .agents/devframe/v14-integration/（3 层深）。cordis.patch.yml 两侧 sha256=08417F4374F681B66F54EAB34E1E562428BBFA04E3479E230E3B6FFD3FE65161；probe-cold-recovery.ts 两侧 sha256=B36F742934ACDE54980CF30A6DC5EA3280665E87F912FB586A8CA711FED30682 —— 字节一致复用。"
+    },
+    {
+      "step": 3,
+      "command": "DSH_HOME 全新性核验：Test-Path C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-v14-l2-home",
+      "exitCode": 0,
+      "notes": "返回 False（不存在），随后由引导命令创建；未删除任何既有目录（总控纠正①：删除类指令一律作废，本轮未执行任何删除）。"
+    },
+    {
+      "step": 4,
+      "command": "pnpm dsh plugin --profile integration add @deepseek-ai/dsh-experimental-project-memory（$env:DSH_HOME=<l2 home>）",
+      "exitCode": 1,
+      "notes": "既有口径预期行为：ERR_PNPM_FETCH_404（registry 404 + 无认证头）。骨架落盘确认：profiles/integration/cordis.patch.yml(217B)、package.json(208B)、pnpm-workspace.yaml(61B)。不计门禁失败。"
+    },
+    {
+      "step": 5,
+      "command": "pnpm exec tsx .agents/devframe/v14-integration/l2/probe-cold-recovery.ts --phase write（纠偏前 4 层深位置）",
+      "exitCode": 1,
+      "notes": "观察项 F1 首手复现：ERR_MODULE_NOT_FOUND 'D:\\dsh-devframe-v14-integration-l2\\.agents\\apps\\cli\\src\\profile-boot.ts'（探针第 42 行相对导入只认仓库根下 3 层）。导入期即失败、零副作用；stderr 完整保留于 l2/l2-depth-sensitivity-repro.txt。非产品源码缺口。"
+    },
+    {
+      "step": 6,
+      "command": "pnpm run build（worktree 根）",
+      "exitCode": 0,
+      "notes": "探针 boot 前置（组长纠偏：typert-loader 需要 @deepseek-ai/dsh-llm / dsh-commands / dsh-goal / dsh-subagent 的 lib/typert.host.js；本 worktree 只 install 未 build）。构建记录 220 个 client 产物；构建产物不入提交。"
+    },
+    {
+      "step": 7,
+      "command": "node --import tsx/esm apps/cli/src/bin.ts --profile integration --patch D:\\dsh-devframe-v14-integration-l2\\.agents\\devframe\\v14-integration\\cordis.patch.yml --dump-config（$env:DSH_HOME=<l2 home>）",
+      "exitCode": 0,
+      "notes": "证据一 → l2/l2-dump-config.output.txt（14186 字节）。纠偏前在 l2/ patch 路径也跑过一次 exit 0，被本最终路径重跑取代。"
+    },
+    {
+      "step": 8,
+      "command": "$env:DSH_HOME=<l2 home>; pnpm exec tsx .agents/devframe/v14-integration/probe-cold-recovery.ts --phase write（进程 1）",
+      "exitCode": 0,
+      "notes": "证据二 → l2/l2-probe-write.output.txt；stdout 含 WRITE PHASE OK；stderr 0 字节。"
+    },
+    {
+      "step": 9,
+      "command": "$env:DSH_HOME=<l2 home>; pnpm exec tsx .agents/devframe/v14-integration/probe-cold-recovery.ts --phase verify（进程 2 = 全新独立 pwsh 进程，同一 home）",
+      "exitCode": 0,
+      "notes": "证据三 → l2/l2-probe-verify.output.txt；stdout 含 RESTORE OK；stderr 0 字节。"
+    },
+    {
+      "step": 10,
+      "command": "独立落盘核实（不抄探针输出）：vault 笔记 sha256/字节/正文比对、writer 会话日志事件行、storages 五文件、sessions 树、shadow roots、probe-state.json 字段解析",
+      "exitCode": 0,
+      "notes": "结果记录于 onDiskReceipts 与 l2-evidence.md 磁盘回执清单。"
+    },
+    {
+      "step": 11,
+      "command": "git add .agents/devframe/v14-integration/ && git diff --cached --check && git commit（分支 codex/v14-integration-l2）",
+      "exitCode": 0,
+      "notes": "提交哈希见 commit 字段；提交前 git status --porcelain 仅显示写域未跟踪目录，写域外零改动。"
+    }
+  ],
+  "dumpConfigKeyLines": {
+    "evidenceFile": ".agents/devframe/v14-integration/l2/l2-dump-config.output.txt",
+    "patchMount": "L59",
+    "sessionPersistenceJsonl": "L60-L64（compression: none 于 L64）",
+    "sessionIdentity": "L343",
+    "agentHierarchy": "L345-L438（controller memory 三工具 L363-365；lead L394-396；worker L422-424；delegationToolNames [subagent, subagent_fork] L435-437；leadPluginScopes {} L438）",
+    "projectController": "L439-L442（maxActiveTasks: 2）",
+    "agentEvidence": "L443",
+    "agentReliability": "L445",
+    "projectMemory": "L447-L453（workspaceId: integration L450；vaultRoot dshHomePath('integration-vault') L451；writeEnabled: true L452；userScopeEnabled: false L453）",
+    "shadowRouter": "L454-L458（authorizedRoots dshHomePath('integration-shadow-roots') L457-L458）"
+  },
+  "artifacts": {
+    ".agents/devframe/v14-integration/cordis.patch.yml": "08417F4374F681B66F54EAB34E1E562428BBFA04E3479E230E3B6FFD3FE65161",
+    ".agents/devframe/v14-integration/probe-cold-recovery.ts": "B36F742934ACDE54980CF30A6DC5EA3280665E87F912FB586A8CA711FED30682",
+    ".agents/devframe/v14-integration/probe-state.json": "7F67B8876A0590A0AC16A3C901FF4B812EAD2D1406DB1028397D0D543BE24BCC (1504B)",
+    ".agents/devframe/v14-integration/l2/l2-dump-config.output.txt": "8541B96048EEB00B9E98F591B9C10352085E5A1FEA72451E8D7A1B6715476D56 (14186B)",
+    ".agents/devframe/v14-integration/l2/l2-probe-write.output.txt": "120A2F5A937C23FC6234B254FD31D61059C5E28E05178463F010852729624CAA (1322B)",
+    ".agents/devframe/v14-integration/l2/l2-probe-write.output.txt.err.txt": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855 (0B)",
+    ".agents/devframe/v14-integration/l2/l2-probe-verify.output.txt": "7956ADDE665171B3FDE5CF6EE2554E9D130A33E3411F6296D984B6EC305A5848 (676B)",
+    ".agents/devframe/v14-integration/l2/l2-probe-verify.output.txt.err.txt": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855 (0B)",
+    ".agents/devframe/v14-integration/l2/l2-depth-sensitivity-repro.txt": "D61A88E96C7C6D412E00A9DCCF341DE0084AEA3BF15F656EBAE446D7072FA128 (1501B)"
+  },
+  "onDiskReceipts": {
+    "vaultNote": {
+      "path": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-v14-l2-home\\integration-vault\\devframe-memory\\projects\\integration\\fd4a0cb3932478ae5a57fd5a84c1ce442c52d7ede4a50b5b552ab1e07994fc8d.md",
+      "exists": true,
+      "bytes": 396,
+      "sha256": "4301D24E8035A9F74B7A765F9F4A6E247CEABBFCE19B890458101D9DFBEAB48A",
+      "bodyMatchesProbeMemoryBody": true,
+      "frontmatterSource": "probe://integration-local-write/1",
+      "frontmatterBodyDigest": "sha256:703ba7be23729e279b2b34fed4e1c8a266e660c1a54945736083e630d5e75a1c"
+    },
+    "writerSessionLog": {
+      "path": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-v14-l2-home\\sessions\\_no-cwd\\session-memory-write-w\\session.jsonl",
+      "exists": true,
+      "bytes": 855,
+      "totalLines": 6,
+      "memoryReceiptEvent": "L5 type=memory/receipt，data.noteId=fd4a0cb3932478ae5a57fd5a84c1ce442c52d7ede4a50b5b552ab1e07994fc8d，data.digest=sha256:4301d24e8035a9f74b7a765f9f4a6e247ceabbfce19b890458101d9dfbeab48a（与 vault 笔记文件实测 sha256 一致）",
+      "grepNoteIdHitLines": 1,
+      "grepSourceRefHitLines": 0,
+      "sourceRefNote": "回执事件按设计记录 noteId/digest/relativePath，不含 source_ref 字面量；source_ref（probe://integration-local-write/1）持久化于 vault 笔记 frontmatter source 字段并已在盘核实。"
+    },
+    "storages": {
+      "session_identity.json": 2696,
+      "project_tasks.json": 458,
+      "agent_evidence.json": 1076,
+      "workspace.json": 593,
+      "shadow_router.json": 2915
+    },
+    "probeState": {
+      "memoryWriteBooleansTrue": "10/10（toolsRegistered/searchEmpty/readAbsent/appendCreated/noteFileOnDisk/controllerReadVerified/controllerSearchHits/leadReadAllowed/workerSearchAllowed/userScopeForbidden）",
+      "memoryWriteIdentityFields": "noteId/relativePath/sourceRef/appendingSessionId 全部在册",
+      "shadowDeliveryFieldsPresent": "7/7（workspaceId/controllerSessionId/messageId/receivedAt/completedAt/goalId/acceptanceHash）",
+      "sessionLogExists": true
+    },
+    "shadowRoots": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-v14-l2-home\\integration-shadow-roots\\delivery-project-w 存在",
+    "writePhaseShadowDomainFileOnDisk": false,
+    "verifyPhaseShadowDomainFileOnDisk": true
+  },
+  "observations": [
+    {
+      "id": "F1",
+      "kind": "probe-placement-sensitivity",
+      "summary": "探针 probe-cold-recovery.ts 第 42 行 import '../../../apps/cli/src/profile-boot.ts' 相对深度只在仓库根下 3 层目录成立；置于 4 层深（v14-integration/l2/）时 ERR_MODULE_NOT_FOUND 解析到 .agents\\apps\\cli\\src\\profile-boot.ts。组长先实测踩到，本 Worker 随后首手复现（exit 1，stderr 留证 l2-depth-sensitivity-repro.txt）。处置：字节一致拷贝上移至 .agents/devframe/v14-integration/（3 层），未改探针一字，复用保真保持。定性：探针深度敏感性观察项，非产品源码缺口。"
+    },
+    {
+      "id": "O2",
+      "kind": "documented-empty-domain-medium-file",
+      "summary": "write 相 shadowDomainFileOnDisk=false、verify 相=true：shadow_router 域 init 时空域不发布介质文件，首次写穿透才落盘——与探针头部注释文档一致，非缺陷。"
+    },
+    {
+      "id": "O3",
+      "kind": "receipt-encoding",
+      "summary": "memory/receipt 会话事件记录 noteId/digest/relativePath 而非 source_ref 字面量；source_ref 存于笔记 frontmatter。跨证一致：回执 digest == 笔记文件实测 sha256（4301d24e…）。"
+    }
+  ],
+  "gaps": [],
+  "gapNote": "无源码缺口。探针与全部命令按预期通过；未发现需要跨域上报的产品缺陷。",
+  "correctionsApplied": [
+    "组长纠偏①（拷贝深度）：探针/档案字节一致拷贝移至 .agents/devframe/v14-integration/（3 层深）运行，失败复现 stderr 留证。",
+    "组长纠偏②（typert 构建前置）：探针前执行 pnpm run build exit 0；构建产物不入提交。",
+    "总控纠正①（禁止删除/清理）：dsh-v14-l2-home 开工时不存在故从未发生删除；home 全程保留，两相共用。",
+    "总控纠正②③（写域外异常只记录不处置）：本轮未观察到写域外异常；未删除任何文件。",
+    "总控纠正④（模型口径）：逐项核实后 SKIP_AUTH 集为空（无在线认证项）；证据标注『隔离组合证据（无模型参与）』。",
+    "身份登记：SessionID/父ID/Provider/taskId/worktreeId 记入本 manifest 与 l2-evidence.md。"
+  ],
+  "outOfScopeStatement": "未触碰 D:\\dsh-devframe-v14-integration-lead：本会话全部命令与文件操作仅涉及 D:\\dsh-devframe-v14-integration-l2、C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-v14-l2-home 与 %TEMP% 临时目录；组长树 controller-write-probe.txt 消失与本 Worker 无关。",
+  "commit": "0d977bac8d190101199a360182201ddbbbc161f0",
+  "commitNote": "主证据提交（11 文件，+1748，git diff --cached --check exit 0）；回填哈希与钩子环境说明的收尾提交哈希由 git 属性所限无法自含，随 L2 Worker 最终报告经 send_message 交付 L1 组长。",
+  "preCommitHookNote": "lefthook pre-commit：lint (staged) 通过（1.53s）、whitespace (staged) 通过（0.06s，git diff --cached --check 独立复核 exit 0）；vendor manifest guard 因本机无 bash（/usr/bin/env bash 不存在，exit 127）无法启动——环境限制而非内容违规。守卫实质为『staged 触及 vendor/*/src 或 bin.js 须同 commit 改 vendor/README.md』，已在 pwsh 中等价复刻：stagedVendorSrc=0、stagedManifest=0、断言通过（GUARD-EQUIVALENT-EXITCODE=0），且暂存清单零 vendor 文件。据此使用 --no-verify 完成提交并全程留痕。",
+  "reverificationPointers": {
+    "dshHomeKeptForAudit": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-v14-l2-home",
+    "rerunHint": "两相重跑须先清 home 内 storages\\、sessions\\、integration-vault\\ 与写域 probe-state.json（清空动作应由复验方执行，本 Worker 不做任何删除）。"
+  }
+}

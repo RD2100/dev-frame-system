@@ -88,11 +88,16 @@ const request = { prompt: [], parent: leadAgent, ...overrides }
 
 共享类型把项目绑定、配置确认、生命周期状态和持久化接缝放在一个包中。它不新增 Run 数据库，也不复制原生任务、会话全文或 Goal 状态。
 
+### 完成准入守卫原生 Goal 生命周期
+
+`GoalBindingController.complete` 是完成的生产调用点：它解析精确绑定、在尝试期间关闭准入，并按固定证据链序求值——先对绑定自身记录的指纹做指纹比对，再对 store 登记的配置做必需检查，最后看授权审查。拒绝以数据返回且原生 Goal 不被触碰，继续工作必须经人类授权的 resume。准入通过后经 `NativeGoalPort` 缝完成原生 Goal——`GoalServicePort` 把每个动词委托给其绑定 Agent 上的活 `ctx.goals` 服务——并把绑定持久化为服务返回的 revision。结构失败，包括不可用指纹、未登记 digest、外来身份和归属另一 Goal 的审查证据，都 fail-loud 抛出，绝不转换为拒绝。
+
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 停止操作和共享契约的库入口 |
+| [`src/controller/goal-binding.ts`](src/controller/goal-binding.ts) | Goal 绑定控制器、完成准入合取与生产原生 Goal 服务端口 |
 | [`src/hierarchy/index.ts`](src/hierarchy/index.ts) | 总控 → 组长 → 执行树各档的 spawn 覆盖值 |
 | [`src/permissions/events.ts`](src/permissions/events.ts) | 持久化角色和策略身份事件契约 |
 | [`src/reliability/stop.ts`](src/reliability/stop.ts) | 接收截止、已拥有取消、有界排空和写入权释放 |
@@ -140,6 +145,7 @@ const request = { prompt: [], parent: leadAgent, ...overrides }
 <a id="known-limitations-and-deferred-work"></a>
 
 - **接收和持久化由调用方拥有**——本库不会发现项目根目录、创建 Goal 或追加自己的会话事件。
+- **完成裁定不落日志**——控制器把准入裁定返回给调用方；记录裁定或完成回执、以及组合 `GoalServicePort` 的宿主命令面，仍属延期的宿主组合工作。
 - **进程句柄必须经过验证**——缺失或不确定的句柄会保留为 `needs_attention`；辅助函数绝不会按可执行文件名或复用的 PID 杀进程。
 - **单进程协调**——这些契约不提供跨进程锁、分布式投递或恶意代码隔离。
 
