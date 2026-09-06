@@ -6,3 +6,7 @@ recording: live
 header:
   class: acp-default
 permission: workspace-write
+sessionVariants:
+  win32: true
+stdoutVariants:
+  win32: true
