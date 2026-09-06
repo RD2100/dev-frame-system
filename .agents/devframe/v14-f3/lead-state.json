@@ -12,12 +12,17 @@
     "branch": "codex/v14-f3-lead",
     "fileDomain": ".agents/devframe/v14-f3/**"
   },
-  "state": "planned",
+  "state": "assigned",
   "stateHistory": [
     {
       "state": "planned",
       "at": "2026-09-06T12:36:08+09:00",
       "note": "lead tree verified at base c93b86c43e (merge-base --is-ancestor exit 0); AGENTS.md / architecture.md / defensive-patterns.md / testing.md read; first-round orientation scan done; controller dispatch-correction received"
+    },
+    {
+      "state": "assigned",
+      "at": "2026-09-06T12:43:10+09:00",
+      "note": "lane probe verified via coordinator-extracted persisted JSON; worker worktree D:/dsh-devframe-v14-f3-w1 created (exit 0); L2 worker dispatch on huoshan-2 lane via workflow agent() next"
     }
   ],
   "leadBriefing": {
@@ -38,7 +43,18 @@
       "resultVerbatim": "workflow \"f3-lane-probe\" completed (1 agent). Return value: { \"probeReply\": \"LANE-OK\" }",
       "schemaOverride": "supported",
       "at": "2026-09-06T12:36:08+09:00",
-      "persistedSessionEvidence": "pending extraction"
+      "persistedSessionEvidence": {
+        "source": "D:/dsh-devframe-v14/.agents/devframe/v14/huoshan2-probe-observed.json (read by lead, registered verbatim; extracted by external coordinator from persisted session JSON)",
+        "probeSession": "d4ab27e2-64a1-444e-8a15-670902a21649",
+        "parentSession": "77e4a9a2-db3f-4eb2-916c-dce8cfd615f9",
+        "requestTime": "2026-09-06T03:36:08.914Z (epoch ms 1788665768914)",
+        "responseTime": "2026-09-06T03:36:12.611Z (epoch ms 1788665772611)",
+        "provider": "huoshan-2",
+        "model": "glm-5.3-flash",
+        "replyText": "LANE-OK",
+        "turnEnd": "completed",
+        "qualification": "Connectivity probe only, not substantive F3 worker delivery (coordinator's own qualification, registered as-is)"
+      }
     }
   },
   "worker": {
@@ -47,8 +63,9 @@
     "branch": "codex/v14-f3-w1-semverify",
     "fileDomain": ".agents/devframe/v14-f3/worker/**",
     "agentCreationForbidden": true,
-    "state": "planned",
-    "sessionId": "pending",
+    "state": "assigned",
+    "sessionId": "pending (assigned at workflow launch; extracted from persisted session JSON on return)",
+    "providerRequested": "huoshan-2/glm-5.3-flash via workflow agent() override",
     "providerObserved": "pending persisted JSON"
   },
   "boundaries": [
@@ -57,6 +74,15 @@
     "main tree D:/dsh-devframe and other v14 trees read-only; no entering other worktrees",
     "no push / PR / release / user-file deletion"
   ],
-  "gates": [],
-  "updatedAt": "2026-09-06T12:36:08+09:00"
+  "gates": [
+    {
+      "gate": "pre-commit lefthook (lead worktree commits)",
+      "status": "partially-skipped-environmental",
+      "detail": "whitespace (staged) PASS; vendor manifest guard FAILED environmentally: /usr/bin/env: 'bash': No such file or directory, exit status 127 (portable git lacks bash). Per task discipline: skipped gate + reason recorded; equivalent alternative verification executed: ConvertFrom-Json valid, exactly one trailing newline, git diff --cached --check exit 0; commit performed with --no-verify carrying this record."
+    }
+  ],
+  "tools": {
+    "decodeSession": ".agents/devframe/v14-f3/tools/decode-session.mjs - session.jsonl.zstd is an append stream of zstd frames; node:zlib sync decompress returns only the first frame (verified: 9 magic offsets in probe session file; second frame at offset 201 decodes to sandbox/mode + approval/policy events); streaming createZstdDecompress also stopped after frame one, so multi-frame reads must decode per-frame at magic offsets"
+  },
+  "updatedAt": "2026-09-06T12:43:10+09:00"
 }
