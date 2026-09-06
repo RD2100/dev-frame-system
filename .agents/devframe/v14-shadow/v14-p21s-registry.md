@@ -73,6 +73,27 @@ historical worktrees, any push/PR/publish, deletion of user files.
 - Constraint: worker must NOT create agents; worker commits locally only.
 - Nine-state: assigned.
 
+## Hook-skip ledger and substitute verification (per 主控 directive ②)
+
+Environment fact: this host's git is a portable distribution
+(`C:\Users\25313\.cache\codex-runtimes\codex-primary-runtime\dependencies\native\git`) with no
+bundled or PATH-installed `bash`; lefthook's pre-commit `vendor manifest guard` exits 127
+(`/usr/bin/env: 'bash': No such file or directory`) and cannot run here. Every affected commit is
+recorded below with its skip reason and the substitute verification actually executed. Commits with
+hook skips are NEVER reported as "gates passed".
+
+| Commit | Skipped gate | Reason | Substitute verification executed | Real result |
+| --- | --- | --- | --- | --- |
+| `97a9078112` | vendor manifest guard (pre-commit) | bash absent on host, hook exit 127 | in-hook `whitespace (staged)` passed before the failure; post-commit `git diff --check 97a9078112^..284c485a3c` exit 0; changed-file set is `v14-p21s-registry.md` only (no `vendor/` files, the guard's only subject); byte-level check: file ends with exactly one LF (final bytes `46 10`, no trailing blank line) | PASS (substitute) |
+| `284c485a3c` | vendor manifest guard (pre-commit) | same bash absence | same `git diff --check` run covers it (exit 0); same single changed file, byte-level single-LF check passed | PASS (substitute) |
+
+Pairing check for these commits: `.agents/devframe/**` lead records are outside the
+translation-pairing manifest scope (`scripts/translation-pairing.manifest.json` covers docs/ and
+notes/AGENTS sources); no `.zh.md` pair is required — N/A, not a skip.
+
+This ledger is updated on every future hook skip; each new entry carries its own substitute
+verification with real results.
+
 ## Four-plane proof plan (source / enabled / composition run / production-ready)
 
 1. Source: package vitest suite + `tsc -b packages/experimental/shadow-router` (worker + L1 re-run).
