@@ -847,9 +847,23 @@ function normalizeWebSessionVolatiles(log: string): string {
   }).join('\n')
 }
 
-function stableSessionFixture(session: Session, existing: string, workspaceCwd: string): string {
+/**
+ * Stabilize a harvested session log into the committed fixture form: volatile
+ * values tokenized and message ids aligned with the existing fixture.
+ *
+ * The cwd is tokenized in both spellings because `rawSessionLog` serializes
+ * through JSON.stringify, so a win32 path reaches the text JSON-escaped
+ * (`C:\\...`), which a raw-path split never matches; on POSIX the two spellings
+ * coincide and the escaped-form split is a no-op.
+ * @param session - the harvested session.
+ * @param existing - the committed fixture the message ids stabilize against.
+ * @param workspaceCwd - the harvested run's workspace cwd.
+ * @returns the stabilized fixture text.
+ */
+export function stableSessionFixture(session: Session, existing: string, workspaceCwd: string): string {
   const fresh = scrubSessionSnapshot(normalizeWebSessionVolatiles(rawSessionLog(session)))
     .split(session.id).join('{{sessionId}}')
+    .split(jsonEscape(workspaceCwd)).join('{{cwd}}')
     .split(workspaceCwd).join('{{cwd}}')
   const stable = redactSessionSnapshotIds(stabilizeFixtureMessageIds([fresh], [existing]))[0]
   if (stable === undefined) throw new Error('session harvest produced no stabilized fixture')
