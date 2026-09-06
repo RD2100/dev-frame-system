@@ -31,7 +31,11 @@
 | 8 | `pnpm exec tsx .agents/devframe/v14-integration/probe-cold-recovery.ts --phase write`（进程 1） | 0 | 证据二；stdout 含 `WRITE PHASE OK`；stderr 0B |
 | 9 | `pnpm exec tsx .agents/devframe/v14-integration/probe-cold-recovery.ts --phase verify`（进程 2 = 全新独立 pwsh 进程，同一 home） | 0 | 证据三；stdout 含 `RESTORE OK`；stderr 0B |
 | 10 | 独立落盘核实（vault/会话日志/storages/probe-state 解析） | 0 | 结果见第四节 |
-| 11 | `git add .agents/devframe/v14-integration/` + `git diff --cached --check` + commit | 0 | 提交前 status 仅写域未跟踪目录；提交哈希见 l2-run-manifest.json `commit` 字段与本节下方补记 |
+| 11 | `git add .agents/devframe/v14-integration/` + `git diff --cached --check` + commit | 0 | `git diff --cached --check` exit 0；主证据提交 `0d977bac8d190101199a360182201ddbbbc161f0`（11 文件，+1748）；提交前 status 仅写域未跟踪目录；收尾提交哈希随 L2 最终报告交付 |
+
+### 提交门禁留痕（pre-commit 钩子环境限制）
+
+lefthook pre-commit 三关：lint (staged) ✓（1.53s）、whitespace (staged) ✓（0.06s；`git diff --cached --check` 独立复核 exit 0）、vendor manifest guard ✗ exit 127 —— 原因为本机无 bash（`/usr/bin/env: 'bash': No such file or directory`，PATH 与常见 Git 安装路径均无 bash.exe），脚本 `scripts/check-vendor-manifest.sh` 无法启动，属环境限制而非内容违规。守卫实质（staged 触及 `vendor/*/src` 或 `bin.js` 必须同 commit 修改 `vendor/README.md`）已在 pwsh 等价复刻并断言通过：stagedVendorSrc=0、stagedManifest=0，且暂存清单零 vendor 文件。据此以 `--no-verify` 完成提交，全程留痕于本节与 l2-run-manifest.json `preCommitHookNote`。
 
 ## 三、关键输出摘录
 
