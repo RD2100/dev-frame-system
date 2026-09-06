@@ -619,6 +619,22 @@
         "mergeAuthority": "controller only, after lead settlement review and cross-plugin checks on same-SHA evidence",
         "status": "dispatched"
       }
+    },
+    {
+      "entry": "v14-evjournal settled and integrated: first corrected-topology lead-dispatched wave (producer production source)",
+      "settlement": [
+        "Nine-state: submitted (lead) -> integrated (controller merge 5c4137bfd3); lead chain complete with no blockers.",
+        "Corrected topology executed end to end: controller -> plugin lead e3d51d97 (codex/v14-evjournal-lead @ 24b7db9189, design commit c71438cdbe) -> worker bf2d2345-6c55-4d30-801c-578059c35702 dispatched BY THE LEAD via workflow agent into lead-created codex/v14-evjournal-w1 (base c71438cdbe, single commit 8f5dc63753).",
+        "Worker lane evidence from persisted logs (parentSession=e3d51d97, depth 2): request/header seq13 provider=huoshan-2 model=glm-5.3-flash @ 12:08:59.109Z; turn/end @ 12:40:19.450Z (~31.3min real turn, 88 step/ends, 103 tool-call/result hops).",
+        "Deliverable: agent-evidence src/check-runner.ts (real-subprocess execution, exact-command equivalence, four-state outcomes, verbatim capture, no retry) + src/journal.ts (construction wires EvidenceReviewGate; recordVerification/recordReview through the only schema-validated DevFrameSessionJournal append path) + 4 exports + 17 focused tests; devframe package, command-goal-binding, shadow-router, project-memory, vendor, snapshots, v14/next all zero-diff; no new deps, no Context merge, no new error codes.",
+        "Gates (lead rerun + controller same-SHA verification): install frozen-lockfile 0; focused vitest 6 files/34 tests green (controller rerun exit 0); build after tsbuildinfo invalidation 0; gen-cordis-catalog 115/0 written; diff --check 0; 9/9 single trailing newline; test:docs 15/15; post-merge verify-cordis-catalog up-to-date exit 0; user dirty files 376 unchanged.",
+        "Controller rulings: design matrix item 16 (duplicate-findings-id rejection) accepted without a named case - dual-anchored by the pass-plus-blocking case and devframe events suite, recorded as debt; two worker deviations (ExecFileOptions stdio type assertion, unused-import trim) verified non-semantic and accepted. Agent Note triplet controller-authored commit 5af692547b (worker domain excluded notes).",
+        "GAPs inherited to S4 toolface slice: composition wiring (who constructs the producer, ctx.sessions.flush timing, live-role authority), bounded output capture, timeoutMs injection beyond the 600s default, ledger mirroring of journal evidence.",
+        "Candidate 2 (durable GoalBindingStore) unblocked: EvJournal landed with devframe package zero-diff, so the anticipated shared-surface conflict did not materialize; goalstore wave dispatchable with clean file partition."
+      ],
+      "controllerActions": [
+        "Merged codex/v14-evjournal-w1 into main as 5c4137bfd3 after independent review on same-SHA evidence; cross-plugin catalog check post-merge; records merge for ledger completeness; user dirty files 376 preserved."
+      ]
     }
   ]
 }
