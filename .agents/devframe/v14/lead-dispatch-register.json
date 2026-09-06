@@ -870,6 +870,17 @@
         "Leads keep their own current lane; no shared-config changes for switching. Sequencing rule reinforced: finish the in-hand analysis first, then dispatch independent workers - do not stall at the reading-files stage. Every settlement receipt must register per-worker dispatch parameters, actual request provider/model, and results."
       ],
       "status": "lane split active; four lines continuing analysis phase"
+    },
+    {
+      "entry": "Six workers live across dual accounts (request-level verified); one hung worker diagnosed and recovered once; first two worker outputs accepted (C1 agent-tree verification, D1 OpenCode Go BLOCKED)",
+      "facts": [
+        "Worker lane verification at request level (PROVIDER-HIT request/header): A-line 2 workers + C-line 1 worker on huoshan-1/glm-5.3-flash; B-line 2 workers + D-line 1 worker on huoshan-2/glm-5.3-flash. Spawn counts: A=2 B=2 C=1 D=1 after controller escalation directives (verbatim pre-approved slices) broke the leads' read-only analysis stall.",
+        "A-line worker a46cab71 diagnosed hung: turn started, request/header sent 22:06:53Z, zero response events, log frozen 3m41s - provider-level hang on huoshan-1, not a dispatch-queue stall. Interrupted once by controller per the uncertain-call rule; A-lead instructed to re-dispatch the same verbatim slice once, switch that slice to huoshan-2 with recorded reason on second failure. A-line worker ecadc1fa verified healthy (turn=1).",
+        "C-line worker 540abb07 completed C1 agent-tree verification (agent tree collapse/arrows/SessionID copy) - receipt accepted; C-lead directed to process four-state flips and dispatch C2 mention-parsing slice next.",
+        "D-line first worker completed D1 OpenCode Go package report: BLOCKED = OPENCODE_API_KEY missing, evidence complete - blocks only D1; D-lead directed to continue D2 (Ollama Cloud, check custom base-URL support for authorized huoshan-compatible endpoint) through D6 plus tgz/SHA256 verification.",
+        "B-line 2 workers continuing (shipped-profile read-only assembly probe + B5 matrix shard); production profile still untouched."
+      ],
+      "status": "6 workers in flight; dual-account split real at request level; recovery budget for a46cab71 slice: 1 of 1 used"
     }
   ]
 }
