@@ -1,3 +1,580 @@
+{
+  "kind": "v14-lead-dispatch-register",
+  "controller": {
+    "agent": "V1.4 project controller",
+    "dshSessionId": "session-c1668d60-b936-45fd-84bc-77f121241cfe",
+    "worktree": "D:/dsh-devframe-v14",
+    "branch": "codex/dsh-controller-v1.4",
+    "runtimeCwdNote": "SessionHeader cwd remains D:/dsh-devframe; all writes and shell commands use explicit v14/lead-tree paths; no session history rewrite.",
+    "filePolicy": "danger-full-access; approval=never; no sandbox escalation requests."
+  },
+  "baseline": {
+    "mainHead": "c93b86c43e0a7fa9c5720ea70575241b0c990a22",
+    "bextBuildFix": "5aabbbf6cf merged into main (verified in p/battery log lineage); not to be redone",
+    "packageBaseline": {
+      "command": "pnpm exec vitest run packages/experimental/shadow-router/tests packages/experimental/project-memory/tests",
+      "exitCode": 0,
+      "files": 23,
+      "passed": 92,
+      "skipped": 1,
+      "meaning": "package-level only; composed-runtime acceptance owned by L-Integration"
+    },
+    "source": "coordinator-verification.json (observedAt 2026-09-06T02:46:19.555Z)"
+  },
+  "leads": [
+    {
+      "agent": "L-Shadow",
+      "level": "L1",
+      "sessionId": "72aaa1fb-ce2f-4752-97c9-2d7572d2bd7f",
+      "parentSessionId": "session-c1668d60-b936-45fd-84bc-77f121241cfe",
+      "pluginId": "p-shadow",
+      "taskId": "v14-shadow-prod",
+      "worktree": "D:/dsh-devframe-v14-shadow-lead",
+      "worktreeId": "codex/v14-shadow-lead",
+      "baseCommit": "c93b86c43e0a7fa9c5720ea70575241b0c990a22",
+      "task": "P21-S markShadow real host invocation integration (current definition in packages/experimental/shadow-router, test-only invocation so far). Lead creates exactly one L2 Worker in a brand-new dedicated worktree; Worker is forbidden to create agents. Lead reviews, commits, reports to controller; only controller merges main.",
+      "fileDomain": [
+        "packages/experimental/shadow-router/**",
+        "host/config wiring required for the integration (coordinator-authorized within project; controller adjudicates concrete file conflicts and registers the final path list under coordination.shadowHostWiringAdjudication)",
+        "D:/dsh-devframe-v14-shadow-lead/.agents/devframe/v14-shadow/** (lead's own records)"
+      ],
+      "sharedWiringRule": "shared generated/catalog wiring (e.g. gen-cordis-catalog artifacts) is escalated to controller for serialization before touching shared artifacts",
+      "exclusions": [
+        "battery snapshot domains (snapshot suite/corpus wiring, snapshots/sdk, snapshots/session, snapshots/acp)",
+        "project-memory source",
+        "L-Integration files",
+        "all historical worktrees D:/dsh-devframe-p-*"
+      ],
+      "provider": {
+        "default": "huoshan-1/glm-5.3-flash",
+        "confirmed": "huoshan-1/glm-5.3-flash (persisted descriptor.requestConfig, dispatch-evidence.json observedAt 2026-09-06T03:06:28.437Z)",
+        "note": "attribution recorded from persisted session data only, never assumed; huoshan-2 authorized; switch only on verified real rate-limit/failure with logged evidence"
+      },
+      "status": "integrated",
+      "integration": {
+        "mergeCommit": "d7534edf3e (codex/v14-shadow-lead @ b0d0e80a38 merged into main)",
+        "controllerGates": "domain scan: 12 files 0 outside registered domain (shadow-router + v14-shadow records + integration/cordis.patch.yml + agent notes), vendor overlap 0, diff --check exit 0; focused vitest rerun at merge tip after pnpm install: 14 files / 32 passed / 1 posix skip, exit 0; full build with invalidated tsbuildinfo (8 removed): exit 0, 220 artifacts, zero TS6059/TS6307; build-record public-values delta 3->2 diagnosed as environment-inherited key count (DSH_CLIENT_COMMIT_HASH, DSH_CLIENT_VERSION), not a source regression",
+        "fourState": "source PROVEN / enabled PROVEN / composed PROVEN (composition-level tests incl. real dispatcher + cold-restart row recovery) / production NOT CLAIMED (real authorizedRoots + real model e2e pending; blocks deployment surface only)",
+        "deviationsAccepted": "bare z.string() (vendored schemastery lacks .optional(), repo idiom confirmed by lead); two .i18n.yaml sidecars beyond registered paths blessed (mechanical translation-pairing output); scoped coverage diagnostics stand in for CI gate (CI ownership)",
+        "hookLedger": "7 no-verify commits (worker 3 + lead 4): vendor guard exit 127 (no bash) + lint(staged) 4 findings proven pre-existing via base control group (base 236:34/442/918/1017 vs HEAD 246:34/471/947/1046, pure shift); diff --check base..branch exit 0; byte-level single trailing newline 0 violations; whitespace(staged) passed in-hook; test:docs 15/15; pairing 2 pairs consistent"
+      },
+      "worker": {
+        "sessionId": "0b883d36-5612-40ae-8954-f6da2ef17bbe",
+        "parentSessionId": "72aaa1fb-ce2f-4752-97c9-2d7572d2bd7f",
+        "delegationDepth": 2,
+        "taskId": "P21-S-markshadow-host-wiring",
+        "worktree": "D:/dsh-devframe-v14-shadow-w1",
+        "branch": "p/v14-shadow-w1 @ c93b86c43e",
+        "registeredBy": "lead receipt (native continuable subagent); lane fact = huoshan-1 in flight, kept per controller routing instruction (no re-dispatch, no termination)",
+        "status": "in flight on huoshan-1; one first-round empty failure occurred, lead resumed it from task start per the established breaking-stall protocol - no re-dispatch, no termination",
+        "laneSchemaFacts": "lead's subagent tool schema has NO provider/model override params (declared honestly); workflow agent(prompt,{provider,model}) supports the override (real path for huoshan-2 lanes); delegate_worker supports codex/claude-code/cursor/antigravity adapters only",
+        "leadRegistry": ".agents/devframe/v14-shadow/v14-p21s-registry.md committed on lead branch (97a9078112, 284c485a3c)"
+      },
+      "gateNote": "portable git lacks bash -> pre-commit hook skipped via --no-verify on lead commits 97a9078112, 284c485a3c, then 9f75229887. Substitute verification (lead-reported real results, accepted by controller): git diff --check 97a9078112^..284c485a3c exit 0; sole content change = .agents/devframe/v14-shadow/v14-p21s-registry.md (no vendor files, so the failing vendor-manifest-guard hook makes no content claim); file ends with exactly one newline (last bytes 46 10); md/i18n pairing N/A (.agents/devframe/** is outside the translation-pairing manifest scope); whitespace(staged) hook step passed before the vendor-guard failure. Hook-skip ledger section added to the registry (commit 9f75229887, itself no-verify; post-commit git diff --check HEAD~1..HEAD exit 0 + single-newline byte check passed); in-flight worker under the same ledger obligation (every hook skip: SHA + skipped gate + reason + real substitute result). Accounting stance: three lead commits booked as 'hooks skipped + substitute verification PASS', never claimed as gate-passing."
+    },
+    {
+      "agent": "L-Integration",
+      "level": "L1",
+      "sessionId": "f705f2bf-b339-4fa1-bcb2-abfd88f2bc78",
+      "parentSessionId": "session-c1668d60-b936-45fd-84bc-77f121241cfe",
+      "pluginId": "p-integration",
+      "taskId": "v14-int-combined",
+      "worktree": "D:/dsh-devframe-v14-integration-lead",
+      "worktreeId": "codex/v14-integration-lead",
+      "baseCommit": "c93b86c43e0a7fa9c5720ea70575241b0c990a22",
+      "task": "Installed-plugin combination acceptance; Shadow/Memory write -> separate-process cold recovery -> verify journey in a brand-new dedicated DSH_HOME + temporary Vault. Config dump does not substitute real runs. Lead creates exactly one L2 Worker (brand-new worktree); Worker forbidden to create agents.",
+      "fileDomain": [
+        "D:/dsh-devframe-v14-integration-lead/.agents/devframe/v14-integration/** (sole write domain)"
+      ],
+      "exclusions": [
+        "production source code",
+        "historical probe-state (incl. D:/dsh-devframe-p-integration dirty probe-state.json)",
+        "old worktrees",
+        "main tree",
+        "any existing config or shared DSH_HOME"
+      ],
+      "reuse": "merged .agents/devframe/integration and p22 configs/probes; Memory writeEnabled + three-role tool allow tables already merged (use, never reimplement)",
+      "skipPolicy": "missing real key or production Vault root -> that specific online operation recorded SKIP_AUTH/blocked, never counted as pass; isolated local integration continues regardless",
+      "findingsPolicy": "source gaps reported to controller with exact path + minimal repro; no cross-domain fixes",
+      "provider": {
+        "default": "huoshan-1/glm-5.3-flash",
+        "confirmed": "huoshan-1/glm-5.3-flash (persisted descriptor.requestConfig, dispatch-evidence.json observedAt 2026-09-06T03:06:28.437Z)",
+        "note": "real per-call provider recorded from session data; huoshan-2 authorized"
+      },
+      "status": "integrated",
+      "integration": {
+        "reviewed": "branch diff domain-scan: 11 files each, 0 outside .agents/devframe/v14-integration/, vendor overlap 0, diff --check exit 0 (both branches); shared root files cordis.patch.yml + probe-cold-recovery.ts byte-identical (same blob); probe-state.json add/add conflict resolved: root keeps lead run ledger, l2 run ledger preserved byte-exact at l2/probe-state.json (blob 3e65e529 hash-verified after copy)",
+        "mergeCommits": [
+          "6a5ca13547 (integration-lead)",
+          "7993430263 (integration-l2)"
+        ],
+        "deliverableCommits": [
+          "e2c0542a2d",
+          "1354282cc6",
+          "0d977bac8d",
+          "2ae4ebd7f5"
+        ],
+        "result": "six-plugin combo acceptance ALL GREEN: config enablement (dump-config exit 0 / 458 lines), real tool receipts, disk persistence, dual-phase cross-process cold recovery (write phase + independent-process verify phase, RESTORE OK); two independent runs (lead %TEMP%/dsh-v14-lead-home, L2 %TEMP%/dsh-v14-l2-home, independent workspaceIds and note sha), zero LLM requests = isolated composition evidence, SKIP_AUTH set empty after item-by-item credential-path verification",
+        "gateDisclosure": "lefthook vendor guard exit 127 (no bash on host) -> commits used LEFTHOOK=0/--no-verify with ledger trail; lint/whitespace stages passed in-hook; guard logic equivalent executed outside hook (staged vendor src = 0 -> PASS); real gate ownership stays with CI/pre-push",
+        "findings": [
+          "F1 probe-cold-recovery.ts L42 depth-hardcoded relative import - P22 candidate debt (already ruled), repro stderr preserved on both sides",
+          "F2 documented build prerequisite (not a defect): boot needs four packages' lib/typert.host.js (packages/typert/loader/src/index.ts:349,432); fresh worktree install-only activation fails loud; dump-config exit 0 without build artifacts proves dump != activation",
+          "F3 host environment: same no-bash hook situation as shadow chain, recorded in both evidence sets"
+        ]
+      },
+      "worker": {
+        "sessionId": "024d6ecb-3fcd-4cb2-85d1-a3191bc2f13d",
+        "parentSessionId": "f705f2bf-b339-4fa1-bcb2-abfd88f2bc78",
+        "delegationDepth": 2,
+        "worktree": "D:/dsh-devframe-v14-integration-l2",
+        "registeredBy": "external coordinator from persisted session events",
+        "status": "completed (nine-state, lead re-verified all pass); evidence merged to main via 7993430263; two mid-run interruptions recovered same-session by lead via send_message, no new agents spawned, no lead-worktree intrusion (written declaration + lead corroboration)",
+        "controllerCorrectionSent": "evidence-retention correction delivered to lead f705f2bf: unique-UUID dirs per run, no deletion of any existing dir (history or current round), no blind revert of out-of-domain anomalies, no extra workers, no stopping current worker; SKIP_AUTH only after real credential-path verification (huoshan-1/2 configured), model-free rounds recorded explicitly as isolated composition evidence."
+      }
+    },
+    {
+      "agent": "L-F3-Prod",
+      "level": "L1",
+      "sessionId": "77e4a9a2-db3f-4eb2-916c-dce8cfd615f9",
+      "parentSessionId": "session-c1668d60-b936-45fd-84bc-77f121241cfe",
+      "pluginId": "p-f3-prod",
+      "taskId": "v14-f3-proposal",
+      "worktree": "D:/dsh-devframe-v14-f3-lead",
+      "worktreeId": "codex/v14-f3-lead",
+      "baseCommit": "c93b86c43e0a7fa9c5720ea70575241b0c990a22",
+      "task": "F3 product-side minimal fix proposal review (persistent pwsh vs base-native pwsh double registration): read-only source verification of registration/replacement semantics with file:line evidence, minimal-fix file-domain proposal (>=2 candidates with tradeoffs), one discriminating verification design (pre-fix red / post-fix green, must distinguish candidates). PROPOSAL only - no implementation, no production source edits, no battery snapshot edits, no full-repo audit.",
+      "fileDomain": [
+        "D:/dsh-devframe-v14-f3-lead/.agents/devframe/v14-f3/** (sole write domain)"
+      ],
+      "exclusions": [
+        "production source",
+        "snapshots/**",
+        "battery domains",
+        "all other worktrees",
+        "main tree"
+      ],
+      "lane": "Worker executes via workflow agent(prompt, {provider:'huoshan-2', model:'glm-5.3-flash'}) after real schema verification; if unsupported, exact error/limitation recorded, no fake lane; overlap evidence = persisted request/success timestamps vs huoshan-1 in-flight windows (Shadow L2 0b883d36 / Integration chain); backoff only on real capacity errors",
+      "worker": {
+        "sessionId": "c376aa04-d710-4e0d-9971-ffb6a9731067",
+        "parentSessionId": "77e4a9a2-db3f-4eb2-916c-dce8cfd615f9",
+        "delegationDepth": 2,
+        "taskId": "v14-f3-w1-semverify",
+        "worktree": "D:/dsh-devframe-v14-f3-w1",
+        "branch": "codex/v14-f3-w1-semverify @ c93b86c43e",
+        "origin": "workflow agent(prompt,{provider:'huoshan-2',model:'glm-5.3-flash'}) - lead dispatch tool/call seq 50081 recorded in dual-provider-runtime-evidence.json",
+        "laneEvidence": "request/header seq 13 @ 03:44:08.502Z config.provider=huoshan-2/glm-5.3-flash; first successful response seq 1130 @ 03:44:27.182Z provider=huoshan-2 with responseId; 29 tool calls at observation, childCreationCalls=0 (topology clean); session log decoded frame-by-frame via repo scanZstdFrames by both controller and coordinator",
+        "dualProviderOverlap": "huoshan-2 step2 window 03:44:27.804Z->03:44:34.796Z overlaps Battery Worker 57d0355f huoshan-1 turn5 step47 window 03:44:17.630Z->03:44:45.387Z = 6992ms real model-step overlap; d4ab27e2 excluded as connectivity probe only; prior huoshan-1 429 attribution unchanged"
+      },
+      "status": "integrated",
+      "integration": {
+        "mergeCommit": "5c7e57d146 (codex/v14-f3-lead @ 3e05a4de72 merged into main)",
+        "controllerGates": "6 files all under .agents/devframe/v14-f3/ (lead-review, lead-state, decode tool, three worker deliverables), 0 outside domain, 0 vendor overlap, 0 production/snapshot files touched, diff --check 0; no vitest/build gates applicable (proposal-only, no source changes)",
+        "deliverable": "semantics verified with 24-row file:line evidence (registration=NamedEntries.insert same-name throw contract; collision=win32 headless base row + scenario composition disabling only tool-bash; POSIX green because base row platform-disabled); minimal fix A (disabled tool-pwsh rows in persistent-pwsh-tool-turn snapshot pair, sync both files) + B (corpus shell-family invariant test) adopted as a pair; C (idempotent registration) rejected; discriminating verification V1 static guard + V2 win32 replay designed",
+        "routing": "A+B implementation routed to battery chain (snapshots/corpus owner) via battery-approval-request.json addendum revision 3, relayed by external coordinator; F3 remains proposal-only, no implementation"
+      }
+    }
+  ],
+  "retainedInFlight": {
+    "taskId": "battery",
+    "lead": "0c852cbc-0f17-4a59-a43e-7a141f034efe",
+    "worker": "61e4739d-93e6-4531-aa23-2edb4bc7a781",
+    "previousWorker": "57d0355f-86ff-4f21-9edc-37d33d17e580 (same retained chain; no duplicate dispatch)",
+    "parentOfLead": "session-fef69179-fbaa-49a8-932d-c69b5af24ff6 (V1.3)",
+    "worktree": "D:/dsh-devframe-p-battery",
+    "branch": "p/battery",
+    "headAtAudit": "6f7d3e6051 (clean; stage-2/3 settlement amendment committed)",
+    "provider": "huoshan-1/glm-5.3-flash (persisted request/header and session-log evidence)",
+    "domain": [
+      "snapshot suite and corpus wiring",
+      "snapshots/sdk",
+      "snapshots/session",
+      "snapshots/acp"
+    ],
+    "state": "completed/settled; controller merge commit 89f63d7d58 and main merge commit 5e53609506; user dirty files unchanged",
+    "stagePlan": "stage 1 = per-scenario failure-signature classification of the 89-red snapshot battery (expected-drift -> record/ui variants; functional regression -> fail-loud); stage 2 = implementation, gated on V1.4 approval",
+    "settlement": {
+      "workerTurnEnd": "2026-09-06T07:02:18.390Z",
+      "commits": [
+        "260219ffcc",
+        "6f7d3e6051"
+      ],
+      "controllerMergeCommit": "89f63d7d58",
+      "domainScan": "177 files changed from c93b86c43e; 177 allowed, 0 outside, 0 vendor",
+      "controllerGates": "session-snapshot focused vitest 330 passed / 1 skipped; Shadow+Memory focused vitest 92 passed / 1 skipped; pnpm run typecheck exit 0; gen-cordis-catalog 115 computed / 0 written; staged diff-check exit 0",
+      "recordedFullSnapshot": "pnpm run test:snapshot win32 lib: 6 failed / 104 passed / 10 skipped; known GAP-1 ACP image-compaction, GAP-2 headless hook plus web minimal-preset, GAP-4 SDK subagent-continuable inheritance",
+      "hookLedger": "controller commit used --no-verify because host has no bash; substitute diff-check, domain, vendor, focused tests, typecheck, and catalog checks passed"
+    },
+    "channel": "cross-parent relay completed; no duplicate dispatch, no interruption, no termination"
+  },
+  "topology": {
+    "creationEdges": "controller -> lead -> worker only, max two creation edges; workers never create agents",
+    "sameFileSingleWriter": true,
+    "sharedWiring": "events/manifest/profile/generated/catalog wiring serialized by controller with a named owner",
+    "mainTreeMerge": "controller only",
+    "statusEnum": [
+      "planned",
+      "assigned",
+      "developing",
+      "reviewing",
+      "submitted",
+      "integrated",
+      "completed",
+      "blocked",
+      "failed"
+    ],
+    "idleForbidden": true
+  },
+  "prohibitions": "no push / no PR / no publish / no user-file deletion. User uncommitted changes preserved untouched: AGENTS.md, docs/working/devframe-qa-*, old handoff deletions, docs/env*, untracked notes, ~hundreds of inline build artifacts. Historical worktrees never entered or modified.",
+  "coordination": {
+    "shadowHostWiringAdjudication": "Coordinator ruling: host/config wiring required for Shadow integration is authorized within this project; controller checks concrete file conflicts against battery (snapshots/**) and L-Integration (.agents/devframe/v14-integration/**) domains and registers the final path list in register updates; rollback-able technical judgment is not treated as external-permission blocking.",
+    "next": [
+      "collect lead-reported worker registrations into this register",
+      "verify lead deliverables on settlement (personal re-run of focused gates)",
+      "merge to main only after verification (controller-exclusive)"
+    ]
+  },
+  "roundLog": [
+    {
+      "round": 1,
+      "facts": [
+        "dispatch-blocker.json (02:56:33Z, sandbox ref-lock denial on historical-path attempt) resolved by permission-resolution.json (danger-full-access + approval=never, user-confirmed 2026-09-06).",
+        "Both leads created under this controller session (delegationDepth 1, origin subagent, header cwd D:/dsh-devframe noted - all lead instructions mandate explicit absolute paths).",
+        "Provider confirmed from persisted session data: both leads huoshan-1/glm-5.3-flash (dispatch-evidence.json).",
+        "Activity at snapshot 2026-09-06T03:06:28.437Z: L-Shadow 14 successful responses / 23 tool calls; L-Integration 0/0 (created ~62s after L-Shadow).",
+        "Worktree re-check (goal round 1): both lead trees clean at base c93b86c43e, no commits, no lead-state files yet - leads in their mandated docs/verification phase.",
+        "battery chain unchanged: p/battery clean at c93b86c43e; approval relay file awaiting external-coordinator delivery."
+      ],
+      "controllerActions": [
+        "lead-dispatch-register.json written (IDs/domains/worktrees/topology)",
+        "battery-approval-request.json written (stage-2 conditional approval for relay)",
+        "persistent goal goal-49f30535 armed (revision 1)",
+        "own probe files removed; coordinator records (dispatch-blocker/dispatch-evidence/permission-resolution/takeover-audit/coordinator-verification) read but untouched"
+      ]
+    },
+    {
+      "entry": "battery-stage2-ruling + integration evidence-retention correction + huoshan-2 routing",
+      "facts": [
+        "battery-stage1-observed.json (persisted session events): stage 1 real classification complete - 88 red = headless 67 + sdk 16 + acp 5; drift 69 vs mechanism-unreachable 19 (F1 sdk hydration seam x16, F2 x1, F3 pwsh double-registration x1, F4 x1); key finding: shared normalize.ts/tokenizeSessionFixtureCwd lack the win32 dual-form that 1624f7a5a6 only landed in web scaffold.",
+        "Old lead 0c852cbc already approved worker stage 2 (mechanism generalization first, F1/F2/F4 in-domain fixes, F3 = honest GAP) and reported to the paused V1.3 session; it has not received the takeover update.",
+        "Integration L2 real identity confirmed from persisted events: 024d6ecb-3fcd-4cb2-85d1-a3191bc2f13d, parent f705f2bf, depth 2, worktree D:/dsh-devframe-v14-integration-l2; its brief contained fixed-TEMP deletion / rerun-wipe wording conflicting with evidence retention."
+      ],
+      "controllerActions": [
+        "battery-approval-request.json rewritten to revision 2: concrete ruling - domain expansion to packages/test-support/session-snapshot/** APPROVED (zero-overlap conflict check vs L-Shadow/L-Integration/main), stage-2 plan CONCUR (mechanism-first ordering, F1/F2/F4 fixes, F3 GAP concurrence - no fix, no skip, honest red), precondition = per-case classification persisted into battery worktree record before stage-2 commits; sole-merger and scope-change-to-V1.4 rules restated.",
+        "send_message delivered to f705f2bf: evidence-retention correction for worker 024d6ecb (unique UUID dirs, no deletions, no blind reverts, no extra workers, honest SKIP_AUTH/isolated-evidence labeling).",
+        "send_message delivered to 72aaa1fb: huoshan-2 routing for its next independent low-conflict worker (create-time explicit provider if L2 not yet created; keep existing L2 otherwise; overlap-timestamp evidence; no blind retries)."
+      ]
+    },
+    {
+      "entry": "integration evidence-retention confirmation (lead f705f2bf)",
+      "facts": [
+        "Lead confirmed all five corrections in effect and relayed to L2 worker 024d6ecb (no stop, no re-dispatch).",
+        "Directory convention from now on: %TEMP%/dsh-v14-l1-<guid-lowercase>, brand-new unique per run; existing %TEMP%/dsh-v14-lead-home preserved verbatim as re-verification evidence (created fresh, zero deletions throughout).",
+        "Out-of-domain anomalies: record path+reason+timestamp and escalate; never revert, never delete.",
+        "Model policy: item-by-item credential-path verification; the probes themselves make no model calls, evidence will be labeled 隔离组合证据（无模型参与）.",
+        "Mid-term facts already verified by lead: lead-tree install+build in progress; dump-config exit 0 / 458 lines with writeEnabled:true + three-role memory tools + authorizedRoots + compression:none (lines 363-365/394-396/422-424/447-458); probe portability finding at probe-cold-recovery.ts L42 (depth-hardcoded relative import) worked around by byte-identical copy at same depth, zero source changes - P22 debt candidate."
+      ],
+      "controllerActions": [
+        "probe-file disappearance closed: controller-write-probe.txt was the controller's own write-capability probe, removed by controller cleanup; explanation delivered to lead f705f2bf.",
+        "register updated: shadow worker routing note recorded; integration worker record complete."
+      ]
+    },
+    {
+      "entry": "relay completion + shadow L2 registration + F3 lane creation",
+      "facts": [
+        "Relay COMPLETE: coordination-delivery-evidence.json shows V1.3 turn24 (seq 165865, isError=false) delivered the full battery revision-2 ruling to lead 0c852cbc; V1.3 goal kept paused, no new tasks or main-tree actions from V1.3.",
+        "Shadow L2 real identity: 0b883d36-5612-40ae-8954-f6da2ef17bbe (parent 72aaa1fb, depth 2, taskId P21-S-markshadow-host-wiring, worktree D:/dsh-devframe-v14-shadow-w1, branch p/v14-shadow-w1 @ c93b86c43e) - already created, kept per routing instruction.",
+        "Schema capability facts declared by shadow lead: subagent tool has no provider/model params; workflow agent(prompt,{provider,model}) is the real huoshan-2 path; delegate_worker = external adapters only.",
+        "Gate disclosure: shadow lead used --no-verify on two registry docs commits (portable git lacks bash); substitute verification required and recorded, never counted as gate-passing.",
+        "Battery revision-2 precondition stands: per-case classification must be persisted into the battery worktree record before stage-2 commits."
+      ],
+      "controllerActions": [
+        "F3 product lead (L1 p-f3-prod) dispatched: SessionID 77e4a9a2-db3f-4eb2-916c-dce8cfd615f9, worktree D:/dsh-devframe-v14-f3-lead (branch codex/v14-f3-lead created and verified from base c93b86c43e); its unique L2 will run on the huoshan-2 lane via workflow agent() provider override after real schema verification; F3 proposal read-only, evidence domain .agents/devframe/v14-f3/**.",
+        "Shadow lead instructed: huoshan-2 lane reassigned to the F3 chain (no task-surface report needed from shadow lead); substitute gate verification ordered for the two --no-verify commits.",
+        "Register updated: F3 lead entry, shadow L2 real identity + gateNote, this roundLog entry."
+      ]
+    },
+    {
+      "entry": "shadow gate substitute-verification receipt (accepted)",
+      "facts": [
+        "Shadow lead reported real substitute-verification results for the --no-verify commits: git diff --check 97a9078112^..284c485a3c exit 0; sole change = v14-p21s-registry.md; single-newline byte verification passed (46 10); pairing N/A (outside translation-pairing manifest scope); whitespace(staged) hook step had passed before vendor-guard failure.",
+        "Hook-skip ledger established in the registry (9f75229887) and the same obligation pushed to the in-flight worker; stance = 'hooks skipped + substitute verification PASS', never 'gates passed'.",
+        "Shadow L2 0b883d36: one first-round empty failure, resumed from task start by the lead, in flight on huoshan-1 - no controller intervention required."
+      ],
+      "controllerActions": [
+        "Register gateNote and worker status updated; accounting stance accepted; no message sent (receipt complete, no further instruction needed)."
+      ]
+    },
+    {
+      "entry": "integration chain merged to main (first V1.4 integration)",
+      "facts": [
+        "Both integration branches reviewed before merge: 11 files each, all under .agents/devframe/v14-integration/, vendor overlap 0, diff --check exit 0; shared root patch/probe files byte-identical blobs.",
+        "Merges: 6a5ca13547 (lead evidence, 11 files +2606) then 7993430263 (l2 evidence, 11 files +1754 + l2/probe-state.json); probe-state.json add/add resolved evidence-preserving (root = lead run ledger, l2 ledger byte-exact at l2/probe-state.json, hash 3e65e529 verified).",
+        "Main HEAD = 7993430263; user dirty-file count unchanged at 376; no push/PR.",
+        "Gate disclosure recorded: host has no bash -> lefthook vendor guard exit 127 on all local commits (controller merges included, --no-verify used with substitute checks: domain scan, vendor overlap, diff --check); real gate ownership = CI/pre-push."
+      ],
+      "controllerActions": [
+        "Integration lead + L2 statuses set to integrated with merge SHAs and findings; merge-completion notice sent to lead f705f2bf.",
+        "F3 lead corrected in parallel (single send_message): dispatch its unique L2 immediately via verified workflow agent() huoshan-2 override, hand its mechanism findings over as the worker's starting brief, stop doing the worker's remaining work itself."
+      ]
+    },
+    {
+      "entry": "integration chain closed",
+      "facts": [
+        "Lead f705f2bf delivered final settlement: all four acceptance dimensions PASS, terminal check of merged evidence confirmed no erratum needed (its evidence references remain valid under merged paths).",
+        "Runtime states at closure: L-Shadow 72aaa1fb idle (between turns, its L2 0b883d36 in flight on huoshan-1), L-Integration f705f2bf ready (finished, resumable if evidence erratum ever needed), F3 lead 77e4a9a2 running (processing the dispatch-timing correction: workflow schema verification + unique L2 on the huoshan-2 lane)."
+      ],
+      "controllerActions": [
+        "No intervention: Integration chain closed with no further work; Shadow and F3 chains continue per their own leads."
+      ]
+    },
+    {
+      "entry": "huoshan-2 connectivity proven; F3 substantive worker dispatch ordered",
+      "facts": [
+        "Coordinator-extracted probe record at .agents/devframe/v14/huoshan2-probe-observed.json: probeSession d4ab27e2, request 03:36:08.914Z / response 03:36:12.611Z, provider huoshan-2, result LANE-OK - connectivity lane proven by real request/response.",
+        "F3 lead had been spending effort locating zstd/Python tooling and re-verifying the probe; connectivity probe is not the substantive worker.",
+        "Technical note for log reading: Node zstdDecompressSync decompresses only the first frame; full session logs require the repo's scanZstdFrames frame-by-frame decompression (coordinator evidence produced this way)."
+      ],
+      "controllerActions": [
+        "Single send_message to F3 lead 77e4a9a2: read the probe record as given, stop re-verifying, immediately create the unique substantive worker (D:/dsh-devframe-v14-f3-w1, branch codex/v14-f3-w1-*) via the verified workflow agent(provider/model) huoshan-2 route carrying the original F3 read-only task and the lead's first-round mechanism findings as the starting brief; worker success-timestamp evidence collected by controller while it runs; original session retained, no push/PR/deletion."
+      ]
+    },
+    {
+      "entry": "dual-provider parallel substantiated; F3 worker registered",
+      "facts": [
+        "dual-provider-runtime-evidence.json (coordinator, scanZstdFrames-decoded) cross-checked against controller's own extraction of session c376aa04: identical provider/timestamp facts.",
+        "F3 worker lane is real: request/header provider=huoshan-2 at 03:44:08.502Z, first success 03:44:27.182Z, 29 tool calls, zero child-creation calls; worker bound to D:/dsh-devframe-v14-f3-w1 on codex/v14-f3-w1-semverify.",
+        "Overlap window 6992ms between F3 worker (huoshan-2) and Battery worker 57d0355f (huoshan-1 turn5 step47) - both providers substantively exercised in parallel.",
+        "Shadow L2 0b883d36 finished its turn at 03:44:06.691Z (reason completed) with three commits on p/v14-shadow-w1 (eb44be73f6 feat markShadow config wiring, 5e86ef6cb3 docs, 8ac1a6e6d2 evidence, +amend); its in-log discipline: pre-commit lint(staged) failures proven PRE-EXISTING via base stash test, --no-verify with verbatim recording, base..HEAD diff --check exit 0, 10 files zero trailing-newline violations, tree clean."
+      ],
+      "controllerActions": [
+        "Register updated with F3 worker identity, lane evidence, overlap record; probe d4ab27e2 excluded from substantive delivery; huoshan-1 429 attribution unchanged.",
+        "v14 controller records committed on codex/dsh-controller-v1.4 (register, battery approval, coordination evidence, session-log extractor) with substitute gate checks.",
+        "Shadow lead woken via send_message to review its L2 delivery and report for merge (lead does not merge main)."
+      ]
+    },
+    {
+      "entry": "P21-S shadow chain merged to main (second V1.4 integration, first source deliverable)",
+      "facts": [
+        "Shadow L1 reviewed its L2 delivery APPROVED and integrated the lead branch (0c0cdaf1e8, tip b0d0e80a38) before controller merge.",
+        "Deliverable: ShadowRouterConfig.shadowSessionId fail-closed declarative production call point (service-performed real markShadow via init scan or agent/created listener), host wiring row shadowSessionId: session-shadow in .agents/devframe/integration/cordis.patch.yml (shadow-router row block only), 6-scenario host-designation.spec.ts with real composition/ctx.agents.create/dispatcher, bilingual README + Agent Note.",
+        "Controller personally re-ran gates at merge tip: vitest 14/14 files 32 pass + 1 posix skip; full build with 8 tsbuildinfo invalidated: exit 0 / 220 artifacts / zero TS6059-TS6307.",
+        "Public-values count 3->2 investigated and closed: recorder counts environment keys inherited from the building shell (now DSH_CLIENT_COMMIT_HASH + DSH_CLIENT_VERSION), environment-dependent diagnostic, not source regression."
+      ],
+      "controllerActions": [
+        "Merged codex/v14-shadow-lead into main as d7534edf3e (--no-ff, --no-verify recorded: host has no bash); user dirty files untouched (376).",
+        "Shadow chain status -> integrated; worker 0b883d36 settled idle with zero child agents.",
+        "v14 controller ledger committed on codex/dsh-controller-v1.4."
+      ]
+    },
+    {
+      "entry": "topology artifact preserved; current collection state",
+      "facts": [
+        "three-level-runtime-evidence.json (coordinator, observedAt 03:19:04Z) preserved in ledger commit 4338b1b337: real session-record topology depth0 controller -> depth1 leads -> depth2 workers with permission inheritance and huoshan-1 attribution at that time; complementary to later huoshan-2 lane evidence.",
+        "Collection state: Shadow chain MERGED (d7534edf3e, integrated, lead notified); Integration chain MERGED+CLOSED (6a5ca13547 + 7993430263); F3 worker c376aa04 running on huoshan-2 (read-only verification + three deliverables on codex/v14-f3-w1-semverify); Battery worker 57d0355f on huoshan-1 executing stage 2 (step 47+ observed 03:44)."
+      ],
+      "controllerActions": [
+        "Ledger commit 4338b1b337 includes register, battery approval, coordination/probe/dual-provider/topology evidence, and the session-log extractor tool (read-session-log.mjs, diff --check 0)."
+      ]
+    },
+    {
+      "entry": "P21-S shadow chain formally closed",
+      "facts": [
+        "Lead confirmed closure after merge notice; registry terminal state = completed (d160752150, self-verified per hook-skip ledger discipline).",
+        "Terminal record merged into main by controller: 3c485975b1 (records-only delta, 1 file +7/-2, diff --check 0, user dirty files unchanged at 376).",
+        "Final chain state: markShadow production call point live in packages/experimental/shadow-router via d7534edf3e; four-state source/enabled/composed PROVEN, production NOT CLAIMED; worker 0b883d36 idle with zero child agents; no pending items - optional integration-profile real dump smoke awaits separate controller dispatch if ever needed."
+      ],
+      "controllerActions": [
+        "Shadow chain marked completed in register; no further messages to the finished lead."
+      ]
+    },
+    {
+      "entry": "F3 worker delivered; lead reviewing",
+      "facts": [
+        "Worker c376aa04 turn completed at 03:57:33.092Z after ~13.4 min of real multi-request huoshan-2 activity (2825 zstd frames / 3526 events); turn/end reason completed.",
+        "Deliverable commit a573d7609f on codex/v14-f3-w1-semverify: exactly 3 files under .agents/devframe/v14-f3/worker/ (semantics.md, fix-proposal.md, verification-design.md); controller pre-scan: 0 outside domain, 0 vendor overlap, 0 production source touched, diff --check 0.",
+        "Worker recorded the bash-missing pre-commit gate skip honestly; lead moved to review and integration on its lead branch."
+      ],
+      "controllerActions": [
+        "Worker status -> submitted (nine-state); awaiting lead review report before controller merge review of codex/v14-f3-lead."
+      ]
+    },
+    {
+      "entry": "F3 proposal chain merged; A+B routed to battery",
+      "facts": [
+        "F3 lead settlement accepted: semantics 24-row evidence, lead 12/12 re-verification, A+B adopted pair (3 files, zero product runtime changes), C rejected (fail-loud violation + would not turn green), discriminating V1+V2 verification design.",
+        "Merged as 5c7e57d146: 6 files all under .agents/devframe/v14-f3/, 0 outside domain, 0 vendor, 0 production/snapshot touches, diff --check 0; no vitest/build gates applicable (proposal-only).",
+        "Routing decision recorded: A (persistent-pwsh-tool-turn disabled tool-pwsh rows, both snapshot files in one commit) + B (corpus shell-family invariant test in scripts/session-snapshot-corpus.corpus.ts) -> battery chain via battery-approval-request.json addendum revision 3; F3 GAP closes only after A lands and V1/V2 verify.",
+        "Lane evidence complete: probe d4ab27e2 (LANE-OK) + substantive worker c376aa04 (huoshan-2 request 03:44:08.502Z, turn/end 03:57:33.092Z, ~13.4 min real activity) + 6992ms overlap with battery worker huoshan-1 - dual-provider parallel substantiated end to end."
+      ],
+      "controllerActions": [
+        "battery-approval-request.json addendum revision 3 written for coordinator relay; F3 lead entry -> integrated; merge notice sent to lead 77e4a9a2; ledger commit on codex/dsh-controller-v1.4."
+      ]
+    },
+    {
+      "entry": "F3 terminal addendum merged; chain closed",
+      "facts": [
+        "Terminal record 3b34aece05 merged as 2aaec82d24 (true delta vs merge base 3e05a4de72: lead-state.json only, +44/-2; sentinel files verified present post-merge: shadow host-designation.spec.ts, integration l2-evidence.md, shadow registry, F3 lead-state.json; an initial 32-file diff alarm was a scan-base mistake, not a content loss).",
+        "429 attribution clarification registered by lead: turn1 429 belongs to the huoshan-1 route (persisted), NOT huoshan-2; no blind retries anywhere; huoshan-2 route three-for-three (probe 1 / substantive worker / probe 2).",
+        "Fresh lane data point probe-2: session 3b457ab4-68ee-4b7e-8a87-1764f94b3fbf, 14 frames/36 events decoded; request/header @ 04:04:11.810Z provider=huoshan-2/glm-5.3-flash, finish @ 04:04:15.162Z with wire responseId=021788667454424e5604ce51ad3a2545ae54a532380ddce8ac13e, turn/end completed @ 04:04:15.163Z (window ~3.35s, no first-party huoshan-1 writes in window); dual-provider overlap record remains the 6992ms worker window.",
+        "Instruction checklist all verified in-record: schema verification, unique L2 worker, independent worktree, F3-only write domain, worker no-derivation, production/snapshots untouched."
+      ],
+      "controllerActions": [
+        "F3 chain marked closed (integrated, terminal records merged); no further messages to the finished lead; battery semantic clarifications remain available on request."
+      ]
+    },
+    {
+      "entry": "Battery original-chain closure monitoring resumed (scope + pending list, no polling)",
+      "monitoringBaseline": {
+        "anchoredAt": "controller one-time read-only anchor (not polling)",
+        "branchTip": "p/battery @ de355a4f1a (test(acp): land the escalation-rejected win32 session and stdout variants)",
+        "commitsOverBase": "10 (c93b86c43e..p/battery)",
+        "recentSequence": "24cd5ebbae ACP suite via variant-aware fixture seam -> 7c5c50f75b platform-agnostic acp-diagnostic mock + attachment-path override -> f219800a32 win32 recording + pin variants (default header class) -> 56ccff073a platform stdout-variant projections declared -> 1203cc0b40 escalation-approved win32 session + stdout variants -> de355a4f1a escalation-rejected win32 session + stdout variants",
+        "worktreeAlive": "D:/dsh-devframe-p-battery exists; worker 57d0355f still in turn-5 real execution (coordinator external verification: ACP image-compaction in progress)",
+        "discipline": "never rebuild/replace/re-dispatch the worker; never merge its branch before true turn/end; no high-frequency text polling - coordinator notifies via file-change event on real turn/end; stage receipts handled as real events when they arrive"
+      },
+      "pendingDeliverablesChecklist": [
+        "1. Full commit enumeration c93b86c43e..p/battery with per-commit gate receipts (no-bash hook skips + substitute verification results).",
+        "2. Test exit codes: focused snapshot suite incl. battery red-count delta and the per-case classification persisted per stage-2 approval precondition.",
+        "3. Domain boundary scan: registered battery domain only (snapshots/** incl. sdk/acp, packages/test-support/session-snapshot/**, corpus wiring) + approved expansion; 0 files outside, vendor 0, production source untouched outside approved seams.",
+        "4. stdoutVariants contract extension verification: projection declaration (56ccff073a) vs actual fixture-seam usage; SESSION_FORMAT_VERSION unchanged unless a structural format change is claimed.",
+        "5. F3 A+B addendum rev-3 implementation check if battery picked it up: A rows in persistent-pwsh-tool-turn cordis.snapshot.yml+cordis.yml (same commit, both files), B shell-family invariant in scripts/session-snapshot-corpus.corpus.ts, V1/V2 discriminating verification results.",
+        "6. [RECEIVED, receipt battery-addendum3-delivery.json observedAt 04:19:50.176Z] Relay receipt for battery-approval-request.json addendum rev 3 via old V1.3 parent chain - two real tool/result hops: V1.3 send_message -> 0c852cbc delivered @ 04:17:38.741Z (seq 168245), 0c852cbc send_message -> 57d0355f delivered @ 04:18:11.422Z (seq 120438); relay text explicitly forbids creating/replacing/terminating the worker; lead sequencing suggestion recorded (implement B first -> corpus gate red proves V1 discriminating power -> A pair commit -> corpus gate green -> V2 replay green) and settlement file requirement .agents/devframe/battery/stage2-3-settlement.md (commit SHAs / real test exit codes / exact file domain, V1.4 read-only collection); stdoutVariants surface (56ccff073a) frozen pending controller review echo - see checklist item 4.",
+        "7. Standing evidence preserved: Shadow/Memory composition acceptance gate, dual-provider overlap (6992ms worker window) + probe sessions."
+      ],
+      "controllerMergePlan": [
+        "After true worker turn/end: verify commits, test exit codes, domain boundaries, stdoutVariants extension; run controller gates (domain scan, diff --check, focused vitest, full build with invalidated tsbuildinfo for new test files); then sole main merge --no-ff --no-verify with documented message.",
+        "F3 review already merged - do not re-review; only its A+B implementation status is in scope via the battery checklist."
+      ]
+    },
+    {
+      "entry": "USER DIRECTIVE: provider-skew correction + dual-provider parallel routing fixed; real dispatch v14-p05assemble",
+      "userDirective": [
+        "Retained battery chain 0c852cbc->57d0355f stays on huoshan-1: never interrupt, re-dispatch, or replace.",
+        "The next independent low-conflict substantive task MUST be explicitly routed to huoshan-2/glm-5.3-flash via the verified real workflow agent(prompt,{provider:'huoshan-2',model:'glm-5.3-flash'}) schema - never UI labels or model names alone.",
+        "Record real request/header, first successful response, turn/end time, SessionID, parent-child hierarchy, worktree, file domain; compute real overlap with huoshan-1 in-flight windows.",
+        "If a unique L2 already exists and cannot change provider, keep it; use huoshan-2 for the next independent task. No rebuild, no terminate, no blind retry; backoff recorded only on real capacity errors.",
+        "Dual-provider parallel is the fixed ongoing efficiency routing; this correction is recorded in the v14 ledger/dispatch register."
+      ],
+      "taskSelection": [
+        "Candidate 1 (snapshot 88-red classification + suite.ts wiring + corpus vocabulary) = battery chain's active domain - conflict, excluded.",
+        "Candidates 2/3/4/6 blocked (Linux CI gate / no DEEPSEEK_API_KEY / product ruling pending / real data root missing).",
+        "Candidate 5 selected: P05 admission production assembly (P23/S4 first slice) - wire the merged evaluateCompletionAdmission three-predicate face (fingerprint -> required-checks -> review) into the native Goal lifecycle production call site; devframe domain, zero overlap with battery, no dependency, development scope authorized."
+      ],
+      "dispatch": {
+        "taskId": "v14-p05assemble",
+        "task": "P05 admission production assembly: design-first minimal production wiring of evaluateCompletionAdmission into the native Goal lifecycle with full test matrix and real gate receipts",
+        "worktree": "D:/dsh-devframe-v14-p05asm (controller-created, branch codex/v14-p05asm @ 2aaec82d24, clean)",
+        "topology": "1-edge direct controller dispatch via workflow agent() - within the <=2 creation-edge cap; worker forbidden to create any agent; deviation from the 2-edge lead pattern justified by the single bounded task and the user's immediate-dispatch order; worktree pre-created by controller",
+        "lane": "workflow agent(prompt, {provider:'huoshan-2', model:'glm-5.3-flash'})",
+        "writeDomains": "source edits only in the P05/goal-lifecycle seam files pre-declared in worker design.md; evidence/design in D:/dsh-devframe-v14-p05asm/.agents/devframe/v14-p05asm/worker/**; forbidden: snapshots/**, packages/test-support/session-snapshot/**, scripts/session-snapshot-corpus*, vendor/**, main tree writes",
+        "evidencePlan": "controller extracts the worker session log frame-by-frame (request/header provider, first success, turn/end) via read-session-log.mjs and computes real overlap with battery worker huoshan-1 in-flight window",
+        "workerIdentity": {
+          "sessionId": "fcfc01fd-783f-462c-9107-ef4888f7f475",
+          "parentSession": "session-c1668d60-b936-45fd-84bc-77f121241cfe (controller direct)",
+          "delegationDepth": 1,
+          "origin": "workflow agent(prompt,{provider:'huoshan-2',model:'glm-5.3-flash'}) - session header origin=subagent recorded by harness",
+          "requestHeader": "seq 13 @ 05:24:24.207Z config.provider=huoshan-2/glm-5.3-flash (real wire lane, multiple request/header events across the run all huoshan-2)",
+          "firstSuccessfulResponse": "seq 696 @ 05:24:37.102Z",
+          "turnEnd": "06:09:59.495Z (session window ~45m35s)",
+          "dualProviderOverlap": "huoshan-2 window [05:24:24.207Z, 06:09:59.495Z] fully contained in battery-chain huoshan-1 worker 61e4739d in-flight window [05:11:15.913Z, 06:10:27.067Z open] (request/header seq 14 @ 05:11:15.913Z provider=huoshan-1) = ~45.6min real parallel; battery original worker 57d0355f chain untouched on huoshan-1",
+          "deliverable": "commits 069587b2ae (design) + 5ee23870c5 (impl+tests, 10 files +810/-178) + 84c10cef19 (Agent Note + receipts); evaluateCompletionAdmission wired into native Goal lifecycle via GoalBindingController.complete -> NativeGoalPort.complete -> GoalService.complete; three-predicate order unchanged; SessionEventMap/SESSION_FORMAT_VERSION untouched"
+        },
+        "controllerGates": "domain scan 15 files 0 forbidden zone, diff --check 0; focused vitest rerun: devframe 118/118 + agent-evidence/agent-team 88/88 = 206 green (worker reported 208/23 files - include-set variance, both counts zero-failure, recorded honestly); full build after removing 283 tsbuildinfo: exit 0 / 220 artifacts / 3 public values; gen-cordis-catalog rerun: 115 artifacts 0 written exit 0",
+        "rulingsAccepted": "1) complete() requires no HumanAuthorization - the three-predicate evidence chain is the completion authorization (completion=disarm direction; host command face may add human confirmation in P23/S4); 2) rejected completion keeps admission closed (fail-closed; recovery via human resume); 3) port verb required not optional (construction failure over call failure, p05harden precedent)",
+        "gapRouting": "P23/S4 remainder recorded by worker: host command face / cordis profile composition of GoalServicePort, verdict receipt logging, deep evidence attribution (revision/snapshot/taskIds tuple), required-checks store still memory-only, required-checks-wiring proposal Risk#1 cross-link fix belongs to its owner chain",
+        "status": "integrated",
+        "mergeCommit": "f5c680cacd (codex/v14-p05asm merged into main; user dirty files 376 untouched)"
+      }
+    },
+    {
+      "entry": "Next wave dispatched: v14-hostcmd (P23/S4 host command surface) - strict three-layer topology",
+      "coordinatorVerifiedBaseline": [
+        "main HEAD f5c680cacd; user dirty files 376 untouched; P05 admission production assembly merged.",
+        "Battery original chain retained untouched: current worker 61e4739d-93e6-4531-aa23-2edb4bc7a781, parent 0c852cbc, p/battery, huoshan-1; session log 13,535 events / 11,293 frames, last event ~06:23:44Z, no session/end yet; p/battery HEAD 36178c4b19 (test(session): land child session and child sidecar variants for the two multi-session scenarios) - changes within approved snapshots/sdk + session-snapshot/corpus domains; stage-2 pre-commit work in progress.",
+        "Controller one-time anchor confirms p/battery tip 36178c4b19."
+      ],
+      "dispatch": {
+        "taskId": "v14-hostcmd",
+        "task": "P23/S4 host command surface: wire the landed GoalServicePort/GoalBindingController.complete to the host/plugin command entry, carry verdict/receipt attribution, preserve evaluateCompletionAdmission three-predicate order and fail-closed semantics; architecture verification FIRST (if no safe wiring point: register specific blocked reason + next action, no speculative changes), then design + exact file-domain verification, then minimal revertible slice + targeted tests",
+        "topology": "strict three layers: controller -> L1 lead (new, continuable subagent, huoshan-1 by schema limitation honestly declared) -> L2 worker via workflow agent(prompt,{provider:'huoshan-2',model:'glm-5.3-flash'}) from the lead (subagent schema has no provider param - the lead dispatches the workflow, F3 precedent)",
+        "leadWorktree": "D:/dsh-devframe-v14-hostcmd-lead (controller-created, branch codex/v14-hostcmd-lead @ f5c680cacd)",
+        "workerWorktree": "to be created by the lead: D:/dsh-devframe-v14-hostcmd-w1 branch codex/v14-hostcmd-w1 from its lead branch",
+        "workerWriteDomain": "host command seam files pre-declared in worker design.md + evidence in .agents/devframe/v14-hostcmd/worker/**; forbidden: snapshots/**, packages/test-support/session-snapshot/**, scripts/session-snapshot-corpus*, vendor/**, main-tree writes, battery interaction",
+        "evidencePlan": "request/header, first success, turn/end, SessionID, hierarchy, worktree, domain, real overlap with huoshan-1 - extracted from session logs on lead report",
+        "mergeAuthority": "controller only",
+        "workerIdentity": {
+          "sessionId": "659a560f-47ec-45f7-9063-cc2c86c6604a (controller extracted from persisted session log, closing the lead's honestly-declared SessionID-unavailable gap - the workflow child session is never exposed to the lead lane)",
+          "parentSession": "ec6ba5a1-bb48-453d-94ed-5bc28fb63ecc (hostcmd lead)",
+          "delegationDepth": 2,
+          "origin": "workflow agent(prompt,{provider:'huoshan-2',model:'glm-5.3-flash'}) dispatched by the lead; harness records origin=subagent",
+          "requestHeader": "seq 13 @ 06:44:42.947Z config.provider=huoshan-2/glm-5.3-flash (multiple request/header events across the run all huoshan-2: 06:44/07:06/07:20/07:34)",
+          "firstSuccessfulResponse": "seq 340 @ 06:44:50.016Z",
+          "turnEnd": "07:51:18.060Z (session window ~66.6min)",
+          "dualProviderOverlap": "battery huoshan-1 worker 61e4739d in flight until its turn/end 07:02:18.390Z -> verified parallel window [06:44:42.947Z, 07:02:18.390Z] ~17m35s; battery chain otherwise untouched",
+          "deliverable": "worker 5 commits 05d805bbe7/d3910615c3/a2c59769c0/d334229875/0b229f4b8b + lead design f9ae329095 (ancestor of worker branch)",
+          "disclosure": "worker rewrote local unpushed history mid-wave (comment date fix); final tree re-verified green; no push so no lease concern - recorded"
+        },
+        "controllerGates": "domain scan 18 files 0 forbidden zone (new private package @deepseek-ai/dsh-experimental-command-goal-binding + designs + Agent Note triplet + tsconfig.host.json 1 line + lockfile install consequence), diff --check 0; focused vitest rerun 11 files 138/138 exit 0; full build after removing 284 tsbuildinfo: exit 0 / 220 artifacts; gen-cordis-catalog 115 computed 0 written; verify-package-invariants 39 hand-owned companions conform",
+        "mergeCommit": "d000c84ca5 (controller merged codex/v14-hostcmd-w1 into main, +1917/-0; user dirty files 376 untouched)",
+        "gapLedger": "start/resume production lane unwired; devframe evidence producers exist only in tests; GoalBindingStore + RequiredChecksConfigStore memory-only; model completion path bypasses seam; journal binding log deferred with start lane; review evidence intentionally unfiltered (controller structural validation enforces attribution - worker ruling accepted, README registers the cost)"
+      }
+    },
+    {
+      "entry": "Battery stage-2/3 settlement merged to main",
+      "facts": [
+        "Retained Battery worker 61e4739d-93e6-4531-aa23-2edb4bc7a781 completed on huoshan-1 at 2026-09-06T07:02:18.390Z; branch p/battery tip 6f7d3e6051; no duplicate dispatch, interruption, or termination.",
+        "Controller merged the 177-file approved snapshot/session-snapshot/corpus domain as 89f63d7d58 after focused package vitest 330 passed / 1 skipped, Shadow+Memory 92 passed / 1 skipped, typecheck exit 0, catalog 115 computed / 0 written, diff-check 0, and vendor overlap 0.",
+        "Worker-recorded full win32 snapshot result is 6 failed / 104 passed / 10 skipped; failures remain explicit GAP-1 ACP image-compaction, GAP-2 headless hook plus web minimal-preset, and GAP-4 SDK subagent-continuable inheritance.",
+        "Controller merged codex/dsh-controller-v1.4 into main as 5e53609506; main retained exactly 376 pre-existing user dirty paths and no dirty path overlapped the controller diff."
+      ],
+      "controllerActions": [
+        "Battery settlement and known nonzero GAPs recorded in the dispatch register; hostcmd huoshan-2 chain remains active and untouched."
+      ]
+    },
+    {
+      "entry": "v14-hostcmd chain closed; user-authority merges verified post-hoc",
+      "facts": [
+        "Controller merge d000c84ca5 landed on top of the user's battery-settlement integration: main contains 89f63d7d58 (battery 177-file snapshot domain), 5e53609506 (codex/dsh-controller-v1.4 into main), f470a56f6e (settlement closeout), and d000c84ca5 (hostcmd) - all key SHAs verified in main; dirty count 376 unchanged.",
+        "The battery-settlement and controller-branch merges (89f63d7d58 / 5e53609506 / c046f558e1 on the controller branch) were performed by the user (imccyu) under supreme authority, not by this controller session; verified post-hoc: battery worker 61e4739d turn/end 07:02:18.390Z matches controller's own session-log extraction, p/battery tip 6f7d3e6051 confirmed.",
+        "Battery remaining-failure ledger: GAP-1 ACP image-compaction, GAP-2 headless hook + web minimal-preset, GAP-4 SDK subagent-continuable inheritance (6 failed / 104 passed / 10 skipped on win32); the F3-routed persistent-pwsh double-registration scenario is NOT among remaining failures - F3 GAP closure consistent with battery's F3 A+B implementation and V1/V2 verification routing.",
+        "v14-hostcmd chain closed: lead ec6ba5a1 settled (DELIVERED), worker 659a560f integrated via d000c84ca5."
+      ],
+      "controllerActions": [
+        "Register updated with hostcmd integration evidence; ledger commit on codex/dsh-controller-v1.4; records-only merge to main for ledger completeness."
+      ]
+    },
+    {
+      "entry": "V1.4 next wave: evidence producer and journal binding dispatch blocked",
+      "facts": [
+        "Controller merged the L1 records-only branch codex/v14-next-lead into main as f6fe2fcb88; the merge added only .agents/devframe/v14/next/l1-dispatch.json and l1-workflow-blocked.md.",
+        "L1 task/session 01a075d8-db4e-7fd1-a6bb-42527bf56cd9 ran in D:/dsh-devframe-v14-next-lead on codex/v14-next-lead from baseline 269cda5630; identity correction commit 09de4fcacc follows the initial records commit 0cec533bb2e.",
+        "The sole L2 Worker task/session 01a075dc-9dfc-79d1-b3a5-99e62c03f430 ran in D:/dsh-devframe-v14-next-w1 on codex/v14-next-w1 from the same baseline; its parent is the L1 session and its declared write domain is .agents/devframe/v14/next/worker/**.",
+        "The Worker could not call a DSH workflow/agent entry with provider=huoshan-2 and model=glm-5.3-flash; provider is recorded honestly as blocked/unknown, with no historical attribution reused and no second Worker created.",
+        "Real local probe in the Worker tree: node v24.19.0 and pnpm 11.19.0; pnpm dsh --help exited 1 after automatic installation attempted to open D:/dsh-devframe-v14-next-w1/_tmp_21256_aca2a1a549fcf9b1f9253e1165a9a4f0 and returned EPERM. Credentials/runtime variables were absent.",
+        "L1 focused verification passed: Shadow/Memory source and composition tests 21/21 exit 0; evidence/journal focused tests 21/21 exit 0; L1 and Worker domain diff-checks are clean. No production source, snapshots, vendor files, or user dirty paths changed.",
+        "Shadow and Memory remain explicit dependencies: Shadow requires source + enabled + composed evidence; Memory requires write + cold-restore/composed evidence. The evidence/journal slice was not reimplemented in production.",
+        "The Worker has no submitted commit or Worker-domain evidence because it remains blocked/waitingOnApproval; the next action stays with this same unique Worker once a DSH-capable, permission-free runtime is available."
+      ],
+      "controllerActions": [
+        "Corrected the L1/Worker parent-child identity in the lead record, audited the branch against 269cda5630, and merged records only; main user dirty count remains 376.",
+        "Do not claim a new huoshan-2 success for this wave; retain the earlier hostcmd Worker 659a560f huoshan-2 evidence as the last verified huoshan-2 lane."
+      ]
+    }
 ,
+    {
+      "entry": "Bounded recovery advance executed: lane probe + durable required-checks store slice",
+      "facts": [
+        "v14-next blocker respected: the evidence/journal producer slice stays reserved by the blocked chain (unique worker 01a075dc, records merged by user authority as f6fe2fcb88/6dd8c85bfc); controller did not duplicate it.",
+        "Controller-seat one-shot probe 96c6f108 returned LANE-PROBE-OK on huoshan-2/glm-5.3-flash - the persisted v14-next blocker was worker-seat-specific (EPERM on temp auto-install + absent credentials), not a global lane outage; probe excluded as connectivity-only, not substantive.",
+        "Selected the unowned lowest-conflict GAP: durable RequiredChecksConfigStore (file-backed) - devframe domain, no product-decision dependency, zero overlap with reserved slices; start/resume and journal binding stayed deferred per standing rulings.",
+        "Worker session 91606fcf (depth 1, controller direct, workflow agent provider huoshan-2/glm-5.3-flash): request/header seq 13 @ 11:04:53.351Z, first success seq 955 @ 11:05:12.330Z, turn/end 11:34:16.205Z (~29.4min real work). No concurrent huoshan-1 window existed (all huoshan-1 chains settled) - standing dual-provider overlap record unchanged (45.6min P05asm + 17m35s hostcmd), recorded honestly rather than faked.",
+        "Deliverable: FileRequiredChecksConfigStore (worker commits 09d07ad254 design + e8ec5d15d2 impl + controller note commit 9ba31a3b5e) - ledger envelope {version, registrations[{digest, config}]}, per-read digest-drift detection, new stable REQUIRED_CHECKS_STORE_CORRUPT code, tmp+rename publish, idempotent same-digest save, corrupt-ledger repair refusal; sameRequiredCheckCommand/acceptanceCheckComponent/evaluateRequiredChecks/digest zero-diff; injectable export only, no production wiring (owner-wave decision).",
+        "Controller gates: domain scan 7 files 0 forbidden, diff --check 0, focused vitest 145/145, full build after invalidating 284 tsbuildinfo exit 0 / 220 artifacts, gen-cordis-catalog 0 written, test:docs 15/15 - controller gate caught the worker's stale devframe README pairing (worker gate table lacked test:docs) and re-recorded the sidecar; Agent Note triplet controller-authored (worker domain excluded notes, R7).",
+        "Ruling requests R1-R8 recorded: fsync, multi-writer locks, mkdir, non-ENOENT IO wrapping, prune, concurrency tests deferred with rationale; worker honest disclosures include build first-run exit 1 (noUncheckedIndexedAccess in test) fixed before clean rebuild, and Windows IO oracle notes (EISDIR/ENOENT path mapping)."
+      ],
+      "controllerActions": [
+        "Merged codex/v14-evprod into main as 8028c394ac (safe scope: devframe domain + notes only; user dirty files 376 untouched); ledger commit + records merge for completeness; round closed per single-bounded-advance instruction."
+      ]
+    }
   ]
 }
