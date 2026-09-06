@@ -1,0 +1,55 @@
+{
+  "journey": "three-level-task",
+  "steps": [
+    {
+      "step": "派单",
+      "actor": "总控→组长",
+      "required_evidence": [
+        "任务书文件路径（含 worktree/分支/基线 SHA/文件域/禁触清单/验收标准）",
+        "git rev-parse HEAD 退出码 0 且输出等于基线 fc34223e28",
+        "锚点 git grep 命令原文+退出码+命中计数"
+      ],
+      "persistence_fields": ["sessionId", "worktree", "branch", "commitSha", "gateCounts"]
+    },
+    {
+      "step": "Worker 执行",
+      "actor": "Worker（无子 Agent）",
+      "required_evidence": [
+        "git grep -l \"三级任务\" 实测命中与退出码",
+        "git grep -li \"three-level\" 实测命中与退出码",
+        "pwsh -File run-offline-acceptance.ps1 退出码 0",
+        "证据文档 offline-acceptance-evidence.md"
+      ],
+      "persistence_fields": ["sessionId", "worktree", "branch", "commitSha", "gateCounts"]
+    },
+    {
+      "step": "组长验收",
+      "actor": "组长",
+      "required_evidence": [
+        "复跑关键命令（锚点 grep、runner）的命令原文+退出码",
+        "git show --stat 核对变更文件清单与提交 SHA",
+        "验收记录文件路径"
+      ],
+      "persistence_fields": ["sessionId", "worktree", "branch", "commitSha", "gateCounts"]
+    },
+    {
+      "step": "总控合并",
+      "actor": "总控",
+      "required_evidence": [
+        "合并前基线核对（git merge-base / git log）命令原文+退出码",
+        "门禁计数核对",
+        "合并提交 SHA"
+      ],
+      "persistence_fields": ["sessionId", "worktree", "branch", "commitSha", "gateCounts"]
+    },
+    {
+      "step": "账本登记",
+      "actor": "总控",
+      "required_evidence": [
+        "registry 条目文件路径",
+        "条目字段齐全性自查（日期/链路/SessionID/worktree/分支/提交 SHA/门禁计数/缺口）"
+      ],
+      "persistence_fields": ["sessionId", "worktree", "branch", "commitSha", "gateCounts"]
+    }
+  ]
+}
