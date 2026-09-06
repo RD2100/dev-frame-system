@@ -6,9 +6,11 @@ description: Project controller v1.2 handoff final (2026-09-06, third edition): 
 
 English | [中文](dsh-controller-v1.2-handoff-2026-09-06.zh.md)
 
-## Handoff status: in-flight chain settled and personally verified; the merge decision moves to V1.3
+## Handoff status: in-flight chain settled and personally verified; the merge decision moves to V1.3 (**V1.3 closeout recorded below**)
 
 The AT4 journey deliverable has settled (commit `ad9329723f`) and was personally verified by the outgoing controller (agent-reliability **17/17**+tsc 0+clean tree), **left unmerged by the gate** — V1.3's first action is to verify and merge `p/at4process`. The outgoing controller **stops new dispatches and main-tree merges** from the final-edition commit onward. V1.3 is created externally and, once in control, must never rebuild, interrupt, or re-dispatch AT4-related sessions. This document is the successor controller's **current-state entry point**; the historical ledger (`.agents/devframe/pluginized-round-registry.md`) is consulted on demand.
+
+**V1.3 closeout record (2026-09-06)**: V1.3 took control after verifying that main HEAD, the registry's last entry, and this document agree, personally re-verified (p-at4 tree 17/17+tsc 0+clean tree), and merged `p/at4process` → main `fc34223e28` (--no-ff, the two specs are additions only); main-tree re-verification 17/17+build exit 0 (220 artifacts). AT4 was never rebuilt, interrupted, or re-dispatched.
 
 ## Voided conclusions (latest user directives govern)
 
@@ -38,10 +40,10 @@ Design record: `.agents/devframe/p22/fprecompute-design.md` (fingerprint composi
 | Worker SessionID | `dc51bc32-92b6-4b51-9bc3-fedabedaad1f` (one-shot subagent, settled) |
 | Parent lead chain | Worker → L-Foundation `55979618-6bd7-4bc7-badc-8a3b13079158` → outgoing controller `session-724834c2-9ff4-49e5-9b0a-4ce5f68d2c2d` |
 | Worktree / branch / cwd | `D:\dsh-devframe-p-at4` (created by the lead per the three-layer topology), branch `p/at4process`, base `526e773b23`; session creation cwd=`D:\dsh-devframe`, task workspace=p-at4 |
-| Provider / model | Not recorded in the session JSON (first turn) — **V1.3 re-checks at settlement archival**, never assumes |
+| Provider / model | **Re-checked by V1.3: huoshan-2 / glm-5.3-flash** (session JSONL 3972 frames/4432 lines, descriptor+request/header double evidence) |
 | Artifacts (verified) | Commit `ad9329723f`: `tests/at4-02-command-marker-reconciliation-journey.spec.ts`+`tests/at4-03-process-tree-stop-journey.spec.ts` (519 lines, additions only, src untouched); agent-reliability **17/17**+tsc 0+clean tree; stable across 4 consecutive runs |
 | Verified content | AT4-02 three cases (a real marker settles forever, no re-execution / absent marker retries exactly once / in-flight ambiguous never re-sent); AT4-03 (real process-tree termination on both platforms+output-quiesce negative assertion+writer released only after tree death, doubly evidenced); AT4-06 = GAP fail-loud (no deadline-closed-admission seam, belongs to P06, recorded in the spec-header table) |
-| Merge decision | **The outgoing controller did not merge, per the gate**; V1.3's first action is to verify and merge `p/at4process` (clean worktree, no follow-up dependency) |
+| Merge decision | **Verified and merged by V1.3**: main-tree merge commit `fc34223e28`; main-tree re-verification 17/17+build 220 artifacts |
 | Settlement receiving | Received and verified by the outgoing controller (registry `4a3f6f9af6`); continue the lead session via `send_message`, **never rebuilding, interrupting, or re-dispatching** |
 
 ## Shadow / Memory four states and concrete production gaps
@@ -63,7 +65,7 @@ Cold-recovery rerun (measured): create a new empty temp directory as `DSH_HOME` 
 | Real three-level task offline scaffolding | L-Verify | three-level task briefs+acceptance scaffolding (parts not needing DEEPSEEK_API_KEY) | none; a missing key blocks only the real-run segment | scaffolding offline segments green | separate profile/e2e file domains from L-Integration's task, or serialize |
 | P05 residual (required-checks model; wrong-reviewer ① and snapshotId⇄fingerprint ④ are closed) | L-Foundation | devframe config schema+evidence comparison face | fprecompute closed (this Option-B face); product config face design first | package vitest+tsc+build+jsdoc | different package from AT4, zero conflict; events/schemas wiring lands serially last |
 
-Successor first actions: verify main HEAD / registry last entry / this document agree → **verify and merge `p/at4process` (`ad9329723f`, verified 17/17)** → confirm AT4 closure with L-Foundation via `send_message` (no rebuild) → dispatch the Windows B-family parameterization design and Shadow/Memory local integration in parallel (different leads, zero file conflict) → schedule P05 required-checks design following the Option-A layering path in fprecompute-design.md; the AT4-06 deadline-admission seam joins the P06 wave.
+Successor first actions: verify main HEAD / registry last entry / this document agree → **verify and merge `p/at4process` (`ad9329723f`, verified 17/17)** → confirm AT4 closure with L-Foundation via `send_message` (no rebuild) → dispatch the Windows B-family parameterization design and Shadow/Memory local integration in parallel (different leads, zero file conflict) → schedule P05 required-checks design following the Option-A layering path in fprecompute-design.md; the AT4-06 deadline-admission seam joins the P06 wave. (Execution record: V1.3 completed the checkpoint verification and the merge; `send_message` to the old lead sessions proved unreachable across the handover — "belongs to another parent session" — and was recorded as fact; the first batch of four lines went out through V1.3-created lead chains, see the registry's last entry.)
 
 ## Handoff gate (executed through step 2)
 
@@ -71,7 +73,7 @@ Successor first actions: verify main HEAD / registry last entry / this document 
 2. ✅ AT4's current state persisted (this section+registry `c4ad144d81`)+this document committed.
 3. ✅ The outgoing controller **stops new dispatches and main-tree merges** from this document's commit onward (through the registry's last entry) and pauses the automatic goal at handover.
 4. ⏳ V1.3 is created by **external coordination**: an independent top-level Session+independent worktree; the outgoing controller never creates it as a child agent and never edits parent-child records.
-5. ⏳ V1.3 takes control after checking: main HEAD, the registry's last entry, and this document agree; it never rebuilds or re-dispatches AT4.
+5. ✅ V1.3 completed the takeover check (main HEAD, the registry's last entry, and this document agree) and holds sole control; AT4 was never rebuilt or re-dispatched.
 
 ## Preserved rules (mandatory for V1.3)
 
@@ -79,4 +81,4 @@ Three-layer topology (controller→lead→worker; a worker never creates agents)
 
 ## Dev Note
 
-This document is the 2026-09-06 final snapshot, expiring scratch under docs/working; V1.3 updates the in-flight section after closing AT4 and starts its own versioned record. Provider fields not yet recorded must be re-checked against persisted JSON before use.
+This document is the 2026-09-06 final snapshot, expiring scratch under docs/working; V1.3 has updated the in-flight section (AT4 closed out), and the new versioned record = the registry's V1.3 entries plus a follow-on V1.3 state document. The provider field has been re-checked against persisted JSON.
