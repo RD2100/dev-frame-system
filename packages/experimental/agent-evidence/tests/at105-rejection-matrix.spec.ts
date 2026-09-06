@@ -171,6 +171,13 @@ function fakeGoalPort(): NativeGoalPort & { current: NativeGoalState | undefined
       port.current = { ...port.current, revision: port.current.revision + 1 }
       return port.current
     },
+    complete(ref) {
+      if (port.current === undefined || port.current.id !== ref.id) {
+        throw new Error('complete target mismatch')
+      }
+      port.current = { ...port.current, revision: port.current.revision + 1, phase: 'complete' }
+      return port.current
+    },
   }
   return port
 }
