@@ -512,6 +512,77 @@ describe('normalizeSessionLog', () => {
       expect(out).not.toContain('{{filePolicy}}')
     })
   })
+
+  describe('code-run failure stack tokenization', () => {
+    // The recorded faces from the both-mode-turn and ptc-turn scenarios: the
+    // recording ran the built CJS worker from its tree root, while a source-mode
+    // replay runs the ESM worker from src/. Only the environment-owned stack
+    // region differs; the exception kind and message are the tested semantics.
+    const builtWorkerStack = [
+      'Error: code run failed (exception): TypeError: tools.bash is not a function',
+      '    at eval (eval at runWorkerMain (D:\\battery-tree\\packages\\code-runtime\\code-runtime-worker-thread\\lib\\worker.cjs:887:31), <anonymous>:4:28)',
+      '    at runWorkerMain (D:\\battery-tree\\packages\\code-runtime\\code-runtime-worker-thread\\lib\\worker.cjs:887:172)',
+      '    at Object.<anonymous> (D:\\battery-tree\\packages\\code-runtime\\code-runtime-worker-thread\\lib\\worker.cjs:905:1)',
+      '    at Module._compile (node:internal/modules/cjs/loader:1872:14)',
+      '    at MessagePort.<anonymous> (node:internal/main/worker_thread:223:26)',
+    ].join('\n')
+    const sourceWorkerStack = [
+      'Error: code run failed (exception): TypeError: tools.bash is not a function',
+      '    at eval (eval at runWorkerMain (file:///D:/local-tree/packages/code-runtime/code-runtime-worker-thread/src/bootstrap.ts:406:16), <anonymous>:4:28)',
+      '    at runWorkerMain (file:///D:/local-tree/packages/code-runtime/code-runtime-worker-thread/src/bootstrap.ts:412:25)',
+      '    at file:///D:/local-tree/packages/code-runtime/code-runtime-worker-thread/src/worker.ts:14:6',
+      '    at ModuleJob.run (node:internal/modules/esm/module_job:439:25)',
+    ].join('\n')
+    const failureRow = (text: string) => JSON.stringify({
+      type: 'tool/result', seq: 8, time: 4,
+      data: {
+        turn: 1, step: 1,
+        message: {
+          source: { kind: 'tool', callId: 'c1' },
+          content: [{ type: 'tool-result', toolCallId: 'c1', content: [{ type: 'text', text }] }],
+          role: 'user',
+        },
+        error: { name: 'CodeRunFailedError', code: 'CODE_RUN_FAILED' },
+      },
+    })
+    const normalizedTextOf = (raw: string) => {
+      const out = normalizeSessionLog(`${header({})}\n${raw}\n`, ctx)
+      const record = JSON.parse(out.split('\n')[1] as string) as {
+        data: { message: { content: { content: { text: string }[] }[] } }
+      }
+      return (record.data.message.content[0]?.content[0]?.text)
+    }
+
+    it('tokenizes the recording-host stack after the exception message', () => {
+      const text = normalizedTextOf(failureRow(builtWorkerStack))
+      expect(text).toBe(
+        'Error: code run failed (exception): TypeError: tools.bash is not a function\n{{workerErrorStack}}',
+      )
+    })
+
+    it('collapses built-worker and source-worker stacks to one normalized face', () => {
+      expect(normalizedTextOf(failureRow(sourceWorkerStack)))
+        .toBe(normalizedTextOf(failureRow(builtWorkerStack)))
+    })
+
+    it('preserves captured output that follows the stack', () => {
+      const text = normalizedTextOf(failureRow(`${builtWorkerStack}\nCaptured output:\ncaptured before failure`))
+      expect(text).toBe(
+        'Error: code run failed (exception): TypeError: tools.bash is not a function\n'
+        + '{{workerErrorStack}}\nCaptured output:\ncaptured before failure',
+      )
+    })
+
+    it('leaves other errors and their stacks verbatim', () => {
+      const other = 'Error: bash exited 2\n    at someFrame (/bin/bash:1:1)'
+      expect(normalizedTextOf(failureRow(other))).toBe(other)
+    })
+
+    it('leaves an exception line without stack frames verbatim', () => {
+      const bare = 'Error: code run failed (timeout): outer output exceeded 8 bytes'
+      expect(normalizedTextOf(failureRow(bare))).toBe(bare)
+    })
+  })
 })
 
 describe('normalizeSessionSnapshot', () => {
