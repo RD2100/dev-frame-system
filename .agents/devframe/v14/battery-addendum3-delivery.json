@@ -1,0 +1,104 @@
+{
+  "observedAt": "2026-09-06T04:19:50.176Z",
+  "addendumRevision": 3,
+  "deliveries": [
+    {
+      "sessionId": "session-fef69179-fbaa-49a8-932d-c69b5af24ff6",
+      "call": {
+        "type": "tool/call",
+        "seq": 168244,
+        "time": 1788668258729,
+        "data": {
+          "turn": 27,
+          "step": 2,
+          "callId": "call_d1c1c16ccff64fc2925638ed",
+          "name": "send_message",
+          "arguments": "{\"agent_id\":\"0c852cbc-0f17-4a59-a43e-7a141f034efe\",\"message\":\"【V1.4 裁定中转·addendum revision 3（F3 A+B 实施转接）——经外部协调员一次保留链中转】源：D:/dsh-devframe-v14/.agents/devframe/v14/battery-approval-request.json addendum（rev 2 正文全部继续有效）。签发=V1.4 controller（session session-c1668d60-b936-45fd-84bc-77f121241cfe，worktree D:/dsh-devframe-v14，branch codex/dsh-controller-v1.4）。要求：你将本裁定完整转达原 Worker 57d0355f-86ff-4f21-9edc-37d33d17e580——不创建/不替换/不终止任何 Worker。\\n\\nobservedBy：V1.4 已把 F3 提案审查并入主树（5c7e57d146）后作出本裁定。\\nrouting（F3 GAP 处置采纳）：提案 A+B 路由给 battery 链（snapshots/corpus 所有者）；C（core/tools 幂等/替换注册）REJECTED——违反 Misconfiguration-fails-loud（duplicate-throw 是 spec 钉死契约，tools.spec.ts:1984-1996）、与 row-order-no-load-semantics 冲突（base/cordis.patch.yml:12-13）、且无论如何不会让场景转绿（verifyHeaders schema pin 仍红，headless.snapshot.ts:496-544）。\\nscopeAddition（battery 阶段2/3 范围追加，依据 .agents/devframe/v14-f3/worker/fix-proposal.md 已并主树）：(A) snapshots/session/persistent-pwsh-tool-turn/cordis.snapshot.yml 与 cordis.yml 各补一行 disabled tool-pwsh（镜像 pwsh-tool-turn 形态）——两文件必须同一提交内成对改动以防 record/replay 分叉；(B) scripts/session-snapshot-corpus.corpus.ts（已被 vitest.snapshot.config.ts:48 挂载）增 shell-family 不变量检查：任何触及 shell 行的 composition 在 {posix,win32} 上每个 shell 工具名族恰有一个 active 行，disabled 表达式经 evaluate 注入原语求值（base.spec.ts:79-80），断言范围限于触及 shell 行的 composition。\\nverification（依据 .agents/devframe/v14-f3/worker/verification-design.md 已并主树，V1+V2 配对）：V1 corpus 级静态守卫=修前红/补 A 后绿/上 C 仍红；V2 win32 重放（test:snapshot -t persistent-pwsh-tool-turn）=修前红（boot load 失败，stderr 含 tool \\\"pwsh\\\" is already registered）/补 A 后绿/上 C 仍红但红点移至 header pin 不匹配。V2 在 POSIX 无判别力（平台条件性撞车对录制宿主不可见）——V1+V2 配对缺一不可。\\nconditions：①battery 在其注册域（snapshots/**+corpus 接线）内 p/battery 实施 A+B；F3 链未实施（仅提案边界，0 生产/快照文件触碰——V1.4 域扫描已核）；②persistent-pwsh-tool-turn win32 红是 battery 自有证据（F3 未复跑）；③F3 在 battery 结算账本中保持 GAP 记录直至 A 落地且 V1/V2 验证——届时 GAP 以 F3 提案引用闭案；④同文件单写者与 no-bash hook-skip 账本纪律不变。\\n阶段②/③结算落 battery 专属文件，附提交 SHA/真实测试退出码/精确文件域；stdoutVariants 契约扩展须 V1.4 审阅后才可并 main。main 合并/后续范围裁定独归 V1.4；不重复派发、不终止保留链、保留原父子链。\"}"
+        }
+      },
+      "result": {
+        "type": "tool/result",
+        "seq": 168245,
+        "time": 1788668258741,
+        "data": {
+          "turn": 27,
+          "step": 2,
+          "message": {
+            "source": {
+              "kind": "tool",
+              "callId": "call_d1c1c16ccff64fc2925638ed"
+            },
+            "content": [
+              {
+                "type": "tool-result",
+                "toolCallId": "call_d1c1c16ccff64fc2925638ed",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "message delivered to agent 0c852cbc-0f17-4a59-a43e-7a141f034efe"
+                  }
+                ],
+                "isError": false
+              }
+            ],
+            "role": "user",
+            "id": "c285b6a3-17c4-46e4-b032-1deba2356bad"
+          }
+        },
+        "sourceEventSeqs": [
+          168244
+        ],
+        "surfaceOp": "append"
+      }
+    },
+    {
+      "sessionId": "0c852cbc-0f17-4a59-a43e-7a141f034efe",
+      "call": {
+        "type": "tool/call",
+        "seq": 120437,
+        "time": 1788668291416,
+        "data": {
+          "turn": 23,
+          "step": 1,
+          "callId": "call_f566f7b1b6634fc5bb23b68d",
+          "name": "send_message",
+          "arguments": "{\"agent_id\":\"57d0355f-86ff-4f21-9edc-37d33d17e580\",\"message\":\"【V1.4 裁定转达·addendum revision 3（F3 GAP → A+B 实施转接）】组长按要求完整转达，正文全部继续有效，不创建/不替换/不终止任何 Worker。\\n\\n**routing（F3 处置采纳）**：提案 A+B 路由给你（snapshots/corpus 所有者）；提案 C（core/tools 幂等/替换注册）REJECTED——违反 Misconfiguration-fails-loud（duplicate-throw 是 spec 钉死契约 tools.spec.ts:1984-1996）、与 row-order-no-load-semantics 冲突（base/cordis.patch.yml:12-13）、且无论如何不使场景转绿（verifyHeaders schema pin 仍红 headless.snapshot.ts:496-544）。\\n\\n**scopeAddition（你的阶段 2/3 范围追加）**：\\n- **(A)** `snapshots/session/persistent-pwsh-tool-turn/cordis.snapshot.yml` 与 `cordis.yml` 各补一行 disabled tool-pwsh（镜像 pwsh-tool-turn 形态）——**两文件必须同一提交内成对改动**防 record/replay 分叉。\\n- **(B)** `scripts/session-snapshot-corpus.corpus.ts`（已被 vitest.snapshot.config.ts:48 挂载）增 shell-family 不变量检查：任何触及 shell 行的 composition 在 {posix,win32} 上每个 shell 工具名族恰有一个 active 行；disabled 表达式经 evaluate 注入原语求值（base.spec.ts:79-80 先例）；断言范围限于触及 shell 行的 composition。\\n\\n**verification（V1+V2 配对，缺一不可）**：依据 `.agents/devframe/v14-f3/worker/verification-design.md` 与 fix-proposal.md（均已并主树，先读）。V1 corpus 静态守卫=修前红/补 A 后绿/上 C 仍红；V2 win32 重放 `test:snapshot -t persistent-pwsh-tool-turn`=修前红（boot 失败 stderr 含 `tool \\\"pwsh\\\" is already registered`——你阶段①分类已有此证据）/补 A 后绿/上 C 仍红但红点移至 header pin 不匹配。实操顺序建议：先实现 B → 此刻树无 A → corpus 门红（守卫判别力实证）→ 补 A（成对提交）→ corpus 门绿 → V2 重放绿。\\\"上 C 仍红\\\"按两文档的验证设计推演记录（C 不实施）。V2 在 POSIX 无判别力（平台条件性撞车对录制宿主不可见）——配对缺一不可。\\n\\n**conditions**：①battery 在注册域（snapshots/**+corpus 接线）内实施；②GAP 纪律：F3 在结算账本保持 GAP 记录**直至 A 落地且 V1/V2 验证**——届时 GAP 以 F3 提案引用闭案；③stdoutVariants（56ccff073a）契约扩展**须 V1.4 审阅后才可并 main**（组长已上报，你无需动作，冻结该面后续演进直至审阅回音）；④同文件单写者、no-bash hook-skip 账本纪律不变。\\n\\n**结算落盘要求**：阶段②/③结算报告落 battery 专属文件（建议 `.agents/devframe/battery/stage2-3-settlement.md`），附提交 SHA/真实测试退出码/精确文件域——V1.4 只读收回。\\n\\n队列整合建议：A+V2 可立即做（两行+单用例重放，快）；B 并入阶段④ corpus 门工作（一次提交）。你当前 image-compaction 脚本续写继续，之后按此插入。继续。\"}"
+        }
+      },
+      "result": {
+        "type": "tool/result",
+        "seq": 120438,
+        "time": 1788668291422,
+        "data": {
+          "turn": 23,
+          "step": 1,
+          "message": {
+            "source": {
+              "kind": "tool",
+              "callId": "call_f566f7b1b6634fc5bb23b68d"
+            },
+            "content": [
+              {
+                "type": "tool-result",
+                "toolCallId": "call_f566f7b1b6634fc5bb23b68d",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "message delivered to agent 57d0355f-86ff-4f21-9edc-37d33d17e580"
+                  }
+                ],
+                "isError": false
+              }
+            ],
+            "role": "user",
+            "id": "7fbc4a57-04f0-445f-bb93-cf3d2dc49577"
+          }
+        },
+        "sourceEventSeqs": [
+          120437
+        ],
+        "surfaceOp": "append"
+      }
+    }
+  ]
+}
