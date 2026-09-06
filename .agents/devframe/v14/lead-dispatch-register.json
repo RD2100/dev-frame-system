@@ -748,6 +748,25 @@
         "Held for next steps: accept2 (step 2) and b2acp (step 3) resume after compos2 shows healthy; dispatch freeze continues until two chains are healthy."
       ],
       "status": "recovery in progress (1 of 4 chains resumed)"
+    },
+    {
+      "entry": "GAP-4 closed (candidate C complete): v14-gap4 integrated; compos2 recovery progressing; accept2 confirmed alive self-continuing",
+      "gap4Integration": [
+        "Merged 92825045d0: llm-replay binding contract fix (dual-wording regex, job text deliberately unbound, +2 regression cases) + refreshed subagent-continuable fixtures (controller-executed keyless recipe, scope audit exactly four stale faces in the scenario dir, zero sibling mutation).",
+        "Verification chain: focused 105/105 triple-run (worker/lead/controller); replay green exit 0; full suite 4->3 red (103 passed) with remaining reds unchanged attributions - GAP-4 CLOSED, suite red ledger now: image-compaction (fixture-lane B-2), both-mode-turn/ptc-turn (recording-tree-root embedding).",
+        "Root cause on file: product wording change 1ed2c783d4 vs replay binding regex contract lag; BatteryFix GAP-4 attribution honestly corrected (inheritance mechanism healthy). Agent Note ruling: no new note - the 2026-09-05-subagent-sessionid-explicit note already flagged the contract gap; this slice is its mechanical completion.",
+        "Honest disclosures: worker lost contact after G5 before committing - lead proxy-commit cc7915dfca with attribution, model self-confirmation unrecoverable; worker G3 log missing, lead re-verified independently.",
+        "POSIX legacy noted for the CI platform-matrix owner: three sister scenarios base fixtures pin the legacy wording (win32 host unaffected, green maintained); same keyless recipe applies if POSIX ever replays them - deferred, not this wave."
+      ],
+      "compos2Recovery": [
+        "Lead audited the 10 dirty files as a coherent partial implementation (composition assembly + dual journal construction, host-evidence module, dual-command syntax face, config four-field extension, index exports; tests covering design section 8 all eight items; dependency importers mechanical).",
+        "Honest WIP baseline committed 691e4c4ed6 (message declares interrupted worker 4140f6c0 unfinished partial, committed by successor lead to continue - not a finished deliverable); continuation worker dispatching from that baseline on huoshan-2/glm-5.3-flash; one controlled deviation registered (real-composition.spec.ts BOOT_START_CONFIG assembly adaptation for the new required config fields - assertion behavior unchanged)."
+      ],
+      "accept2Alive": [
+        "Correction to the recovery ledger: accept2 lead 7eda453a is alive and self-continuing (never needed step-2 resume). Mid-sync received: mock adapter interface confirmed (LlmAdapter.stream - predecessor 'run' wording corrected), w1 reused, worker delivered 11 harness files but died before committing (receipt=null, disclosed), lead applied 2 mechanical fixes and proxy-committed d6e3f9d534 with receipts, now personally executing S1-S7 real scenarios.",
+        "Recovery ledger state: compos2 = recovering (continuation worker in flight); accept2 = alive (executing); gap4 = settled and integrated; b2acp = still failed, held (step 3) - the only chain awaiting recovery."
+      ],
+      "status": "goal candidate list A/B/C all delivered or executing; suite red ledger 3 with two pre-attributed + one fixture-lane open (b2acp in flight)"
     }
   ]
 }
