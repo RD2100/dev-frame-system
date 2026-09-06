@@ -4,6 +4,10 @@
 export type AgentReliabilityErrorCode =
   /** A dispatch pre-step ran while admission was closed or before any identity was opened. */
   | 'AGENT_RELIABILITY_ADMISSION_CLOSED'
+  /** A dispatch pre-step ran after the admitted generation's cutoff instant; the window is dead. */
+  | 'AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED'
+  /** openAdmission received a cutoff that is not a finite epoch millisecond instant. */
+  | 'AGENT_RELIABILITY_ADMISSION_DEADLINE_INVALID'
   /** A dispatch pre-step ran for a work identity other than the admitted one. */
   | 'AGENT_RELIABILITY_IDENTITY_MISMATCH'
 

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-experimental-agent-reliability` mounts `ctx.agentReliability`, the Cordis service that carries the defensive-pattern practices agent work needs at its seams: the DevFrame process-tree stop exposed as one serialized call that closes admission first, cancels only known descendants, and flushes before releasing the writer; a dispatch pre-step (`assertAdmitted`) that rejects every operation whose work binding does not match the currently admitted identity; uncertain-call reconciliation that probes external state first and retries the original call at most once, only after the probe proved the effect absent; and a flush barrier that closes admission and retains write ownership when a flush fails. Admission is process-local state that starts closed.
+`dsh-experimental-agent-reliability` mounts `ctx.agentReliability`, the Cordis service that carries the defensive-pattern practices agent work needs at its seams: the DevFrame process-tree stop exposed as one serialized call that closes admission first, cancels only known descendants, and flushes before releasing the writer; a dispatch pre-step (`assertAdmitted`) that rejects every operation whose work binding does not match the currently admitted identity and, when the generation is bounded by an epoch deadline, every dispatch from the deadline instant (inclusive) onward; uncertain-call reconciliation that probes external state first and retries the original call at most once, only after the probe proved the effect absent; and a flush barrier that closes admission and retains write ownership when a flush fails. Admission is process-local state that starts closed.
 
 ## Table of Contents
 
@@ -38,6 +38,15 @@ Open admission for exactly one work binding identity when a dispatch generation 
 ctx.agentReliability.openAdmission({ controllerSessionId, goalId })
 // inside the dispatch path, before any work:
 ctx.agentReliability.assertAdmitted(identity)
+```
+
+### Bound admission with a cutoff
+
+Open admission with an epoch-millisecond deadline to bound the dispatch generation: the pre-step reads the wall clock (`Date.now()`) at every dispatch, and from the `deadline` instant (inclusive) it rejects with `AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED`. Recovery is an explicit reopen with a fresh generation; a non-finite deadline fails loud at open without touching the current generation.
+
+```ts
+ctx.agentReliability.openAdmission({ controllerSessionId, goalId }, { deadline: Date.now() + 60_000 })
+// from `deadline` (inclusive) the pre-step rejects with AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED
 ```
 
 ### Reconcile an uncertain call
@@ -77,6 +86,7 @@ This section explains the design decisions behind the feature and points at the 
 - **Fail-closed admission.** Admission starts closed in a fresh process and opens only for one explicit identity; the pre-step rejects closed admission and mismatched identities with separate stable codes, so dispatch wiring can distinguish "never admitted" from "wrong generation".
 - **The probe owns the retry decision.** `reconcileUncertainCall` has no blind-retry path by construction: the retry is invoked at most once, and only after the probe returned `absent`. `confirmed` settles from the probe alone; `still_uncertain` returns unresolved without resending — the caller decides what an unresolved call means.
 - **The flush barrier retains the writer.** A failed flush closes admission immediately and reports `writerRetained: true`; releasing write ownership is the host's move, and the barrier makes doing it on an unflushed log impossible through this seam.
+- **The deadline seam is enforced at the pre-step, not in stored state.** `openAdmission` accepts a cutoff and fails loud on a non-finite deadline without touching the current generation; from the deadline instant (inclusive) the pre-step rejects with `AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED` before the identity check — a passed deadline is a statement about the window, not the identity. `admissionState` keeps reporting the stored `'closed' | 'open'` decision; the deadline lives only in the dispatch gate, and recovery is an explicit reopen with a fresh generation.
 
 ### Source map
 
@@ -118,6 +128,7 @@ These limits define when the service is a poor fit or needs special operational 
 - **Admission is process-local and fail-closed** — a restart loses the admitted identity and every pre-step rejects until the host reopens admission explicitly.
 - **The reconciler trusts its probe** — `absent` and `confirmed` answers are only as sound as the external-state check the caller supplies; the service cannot verify the probe inspects the right resource.
 - **The stop delegates to the DevFrame contract unchanged** — unresolved identities, retained writer ownership, and restart reconciliation follow the DevFrame stop semantics; the service adds no durable stop state of its own.
+- **The deadline does not cancel in-flight work** — work that already passed the pre-step keeps running after the cutoff instant; the bounded-cancellation half of AT4-06 awaits semantics adjudication.
 
 <a id="dev-note"></a>
 ### Dev Note
