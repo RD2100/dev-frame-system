@@ -7,3 +7,5 @@ header:
   class: default
 workspace:
   final: true
+sessionVariants:
+  win32: true
