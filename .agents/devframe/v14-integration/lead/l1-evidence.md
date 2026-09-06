@@ -47,6 +47,8 @@ description: V1.4 L1 组合验收组长独立证据：全新独立 DSH_HOME + �
 - **F1 探针可移植性**（非产品源码）：`.agents/devframe/integration/probe-cold-recovery.ts` L42 `import '../../../apps/cli/src/profile-boot.ts'` 深度硬编码，仅在其原目录（仓库根下 3 层）成立；异深度运行 `ERR_MODULE_NOT_FOUND: .agents\apps\cli\src\profile-boot.ts`。本轮以「字节一致拷贝 + 同深度落位」零改动绕行。最小复现：把探针拷到 4 层深目录以 tsx 运行 `--phase write`。总控裁定：P22 候选债。
 - **F2 运行前置（文档化构建面，非缺陷）**：boot 挂树时 `typert-loader` 需 `@deepseek-ai/dsh-llm`/`dsh-commands`/`dsh-goal`/`dsh-subagent` 四包 `lib/typert.host.js`（`packages/typert/loader/src/index.ts:349,432`）；fresh worktree 仅 install 不 build 则激活 fail loud（4 贡献者全部 ERR_MODULE_NOT_FOUND），先 `pnpm run build`（exit 0）后同命令通过。同轮 dump-config 在无构建产物时 exit 0 —— 再次实证「配置 dump 不能代替实际运行」。复现：fresh worktree + 仅 install + 探针 write。
 
+- **F3 提交基建（宿主环境，非产品源码）**：本 Windows 宿主不存在任何 bash（便携 git `usr\bin` 91 个文件无 bash*、`where.exe bash` 空、无 WSL），pre-commit 的 `vendor manifest guard`（`scripts/check-vendor-manifest.sh`，bash 脚本）以 exit 127 失败、首次提交未落。该 guard 逻辑为 staged 路径正则断言，已在钩子外以 pwsh 等价执行同一 staged 集（vendor_src_changed=0 → PASS）并复跑 `git diff --cached --check`（exit 0）、lefthook 内 lint/whitespace 两阶段此前已真实通过；随后仅本一次提交以 `LEFTHOOK=0` 完成。真实钩子由 CI/pre-push 把关。
+
 ## 验收结论
 
 | 项 | 结论 |

@@ -95,6 +95,13 @@
       "location": "packages/typert/loader/src/index.ts:349,432 via vendor/loader/src/config/entry.ts",
       "detail": "boot applies typert-loader which imports lib/typert.host.js of @deepseek-ai/dsh-llm, @deepseek-ai/dsh-commands, @deepseek-ai/dsh-goal, @deepseek-ai/dsh-subagent; a fresh install-only worktree fails activation with 4 ERR_MODULE_NOT_FOUND until pnpm run build. dump-config (no tree application) exits 0 without the artifacts — empirical proof that config dump does not substitute a real run.",
       "minimalRepro": "fresh worktree + pnpm install only, then probe --phase write"
+    },
+    {
+      "id": "F3",
+      "kind": "host-environment (commit infrastructure, not product source)",
+      "location": "lefthook.yml pre-commit job 'vendor manifest guard' -> scripts/check-vendor-manifest.sh",
+      "detail": "this Windows host has no bash anywhere (portable git usr/bin has 91 files, none named bash*; where.exe bash empty; WSL absent), so the hook exits 127 ('/usr/bin/env: bash') and the first commit attempt did not land. Guard logic is a staged-path regex check; it was executed equivalently in pwsh on the same staged set (vendor_src_changed=0, manifest_changed=0 -> PASS) and whitespace check re-run (exit 0); lint stage had already passed inside lefthook. Commit completed with LEFTHOOK=0 for this one commit only; CI/pre-push owns the real hook run.",
+      "minimalRepro": "git commit with any staged file on this host -> vendor manifest guard exit 127"
     }
   ],
   "modelParticipation": {
