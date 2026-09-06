@@ -1,14 +1,22 @@
 /**
- * Deployment configuration for the `/goal-complete` host command composition.
+ * Deployment configuration for the DevFrame host command composition
+ * (`/goal-complete`, `/devframe-start`, `/devframe-resume`).
  *
- * The workspace identity is required and validated loudly: a composition
- * without one cannot attribute completion evidence, so activation fails at
- * `apply` time instead of degrading the command into an unattributed path.
+ * The workspace identity and the approved work parameters are required and
+ * validated loudly: a composition without them cannot bind or admit work, so
+ * activation fails at `apply` time instead of degrading the commands into
+ * unattributed paths. `checks` is the human-approved required-checks
+ * checklist; `taskIds`, `maxAttempts`, and `maxGoalRounds` are the approved
+ * work parameters every start binding freezes in.
  * @module @deepseek-ai/dsh-experimental-command-goal-binding/config
  */
 
 import Schema from '@deepseek-ai/schemastery'
 import { isAbsolute } from 'node:path'
+import { decodeRequiredChecksConfig } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
+import type { DevFrameRequiredChecksConfig } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
+import { TaskId } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
+import type { TaskId as BrandedTaskId } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
 import { WorkspaceId } from '@deepseek-ai/dsh-experimental-devframe/shared'
 
 /** Deployment configuration accepted by the `command-goal-binding` plugin. */
@@ -19,36 +27,107 @@ export interface CommandGoalBindingConfig {
    */
   readonly workspaceId: string
   /**
-   * Absolute worktree root used when a `/goal-complete` line names no path.
-   * Optional; when absent, the command line must carry the worktree path.
+   * Absolute worktree root used when a `/goal-complete` line names no path,
+   * and the only worktree `/devframe-start` binds (objective and path cannot
+   * be split unambiguously on one command line). Optional.
    */
   readonly workspaceRoot?: string
+  /**
+   * The human-approved required-checks checklist `/devframe-start` registers
+   * into the required-checks store and executes for real. Required.
+   */
+  readonly checks: DevFrameRequiredChecksConfig
+  /**
+   * Non-empty unique native task ids every start binding carries. Required.
+   */
+  readonly taskIds: readonly string[]
+  /**
+   * Maximum charged attempts frozen into every start binding. Required.
+   */
+  readonly maxAttempts: number
+  /**
+   * Optional continuation round cap frozen into every start binding.
+   */
+  readonly maxGoalRounds?: number
 }
 
 /** Validated configuration held by the composition for its whole lifetime. */
 export interface ResolvedCommandGoalBindingConfig {
   /** Branded workspace identity attributed to every completion. */
   readonly workspaceId: WorkspaceId
-  /** Absolute worktree fallback, present only when configured. */
+  /** Absolute worktree root, present only when configured. */
   readonly workspaceRoot?: string
+  /** The approved required-checks checklist, schema-validated at activation. */
+  readonly checks: DevFrameRequiredChecksConfig
+  /** Branded, non-empty, unique task ids frozen into every start binding. */
+  readonly taskIds: readonly BrandedTaskId[]
+  /** Positive maximum charged attempts frozen into every start binding. */
+  readonly maxAttempts: number
+  /** Optional positive continuation round cap. */
+  readonly maxGoalRounds?: number
 }
 
-/** Schema for {@link CommandGoalBindingConfig}; `workspaceId` is required. */
+/** Schema for the approved-checks nested configuration. */
+const ChecksConfig = Schema.object({
+  version: Schema.const(1).required(),
+  checks: Schema.array(Schema.object({
+    checkId: Schema.string().required(),
+    executable: Schema.string().required(),
+    arguments: Schema.array(Schema.string()),
+    cwd: Schema.string().required(),
+  })).min(1).required(),
+})
+
+/** Schema for {@link CommandGoalBindingConfig}; every start parameter is required. */
 export const Config: Schema<CommandGoalBindingConfig> = Schema.object({
   workspaceId: Schema.string().required(),
   workspaceRoot: Schema.string(),
+  checks: ChecksConfig.required(),
+  taskIds: Schema.array(Schema.string()).min(1).required(),
+  maxAttempts: Schema.number().required(),
+  maxGoalRounds: Schema.number(),
 }) as Schema<CommandGoalBindingConfig>
 
+/** Validate the task-id list shape and uniqueness, returning branded ids. */
+function resolveTaskIds(rawTaskIds: readonly string[]): BrandedTaskId[] {
+  if (!Array.isArray(rawTaskIds) || rawTaskIds.length === 0) {
+    throw new TypeError('command-goal-binding config taskIds must be a non-empty array')
+  }
+  const taskIds: BrandedTaskId[] = []
+  for (const rawTaskId of rawTaskIds) {
+    if (typeof rawTaskId !== 'string' || rawTaskId.trim().length === 0 || rawTaskId !== rawTaskId.trim()) {
+      throw new TypeError('command-goal-binding config taskIds entries must be non-empty trimmed strings')
+    }
+    taskIds.push(TaskId(rawTaskId))
+  }
+  if (new Set(taskIds).size !== taskIds.length) {
+    throw new TypeError('command-goal-binding config taskIds must be unique')
+  }
+  return taskIds
+}
+
+/** Validate the approved checks beyond the schema: every cwd must be absolute. */
+function resolveChecks(rawChecks: DevFrameRequiredChecksConfig): DevFrameRequiredChecksConfig {
+  const checks = decodeRequiredChecksConfig(rawChecks)
+  for (const check of checks.checks) {
+    if (!isAbsolute(check.cwd)) {
+      throw new TypeError(`command-goal-binding config checks entry "${check.checkId}" must carry an absolute cwd`)
+    }
+  }
+  return checks
+}
+
 /**
- * Validate the deployment configuration and brand its workspace identity.
- * Misconfiguration fails loud at activation — this composition cannot
- * attribute completion evidence without a workspace, and a relative
- * workspace root can never satisfy the fingerprint engine's absolute-path
- * contract, so both conditions reject the plugin instead of degrading the
- * command at dispatch time.
+ * Validate the deployment configuration and brand its identities.
+ * Misconfiguration fails loud at activation — this composition cannot bind
+ * or admit work without a workspace, an approved checklist, and approved
+ * work parameters, and a relative workspace root or check cwd can never
+ * satisfy the fingerprint engine's absolute-path contract, so every such
+ * condition rejects the plugin instead of degrading a command at dispatch
+ * time.
  * @param config - configuration resolved by the plugin loader (the Schema
- *   marks `workspaceId` required; this re-check keeps direct constructions
- *   equally loud).
+ *   marks the required fields; this re-check keeps direct constructions
+ *   equally loud and adds the deep shape rules).
  * @returns the validated, branded configuration.
  */
 export function resolveCommandGoalBindingConfig(
@@ -58,6 +137,7 @@ export function resolveCommandGoalBindingConfig(
   if (typeof rawWorkspaceId !== 'string' || rawWorkspaceId.trim().length === 0) {
     throw new TypeError('command-goal-binding config requires a non-empty workspaceId')
   }
+  const workspaceId = WorkspaceId(rawWorkspaceId.trim())
   const rawWorkspaceRoot = config.workspaceRoot
   if (rawWorkspaceRoot !== undefined) {
     if (typeof rawWorkspaceRoot !== 'string' || rawWorkspaceRoot.trim().length === 0) {
@@ -67,9 +147,31 @@ export function resolveCommandGoalBindingConfig(
       throw new TypeError('command-goal-binding config workspaceRoot must be an absolute path')
     }
     return {
-      workspaceId: WorkspaceId(rawWorkspaceId.trim()),
+      workspaceId,
       workspaceRoot: rawWorkspaceRoot.trim(),
+      checks: resolveChecks(config.checks),
+      taskIds: resolveTaskIds(config.taskIds),
+      maxAttempts: validatedPositiveInteger(config.maxAttempts, 'maxAttempts'),
+      ...config.maxGoalRounds === undefined
+        ? {}
+        : { maxGoalRounds: validatedPositiveInteger(config.maxGoalRounds, 'maxGoalRounds') },
     }
   }
-  return { workspaceId: WorkspaceId(rawWorkspaceId.trim()) }
+  return {
+    workspaceId,
+    checks: resolveChecks(config.checks),
+    taskIds: resolveTaskIds(config.taskIds),
+    maxAttempts: validatedPositiveInteger(config.maxAttempts, 'maxAttempts'),
+    ...config.maxGoalRounds === undefined
+      ? {}
+      : { maxGoalRounds: validatedPositiveInteger(config.maxGoalRounds, 'maxGoalRounds') },
+  }
+}
+
+/** Validate one required positive safe integer loudly. */
+function validatedPositiveInteger(value: number, field: 'maxAttempts' | 'maxGoalRounds'): number {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new TypeError(`command-goal-binding config ${field} must be a positive safe integer`)
+  }
+  return value
 }

@@ -21,6 +21,7 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@deepseek-ai/dsh-experimental-agent-evidence": "workspace:^",
     "@deepseek-ai/dsh-experimental-devframe": "workspace:^"
   },
   "peerDependencies": {
@@ -36,6 +37,7 @@
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-commands": "workspace:^",
+    "@deepseek-ai/dsh-experimental-agent-evidence": "workspace:^",
     "@deepseek-ai/dsh-experimental-devframe": "workspace:^",
     "@deepseek-ai/dsh-goal": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",

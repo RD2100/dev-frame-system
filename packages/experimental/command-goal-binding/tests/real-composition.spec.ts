@@ -50,6 +50,25 @@ const roots: string[] = []
 const contexts: Context[] = []
 let bootNumber = 0
 
+/**
+ * The approved start parameters every boot config now must carry (the config
+ * requires them at activation). They feed only the /devframe-start lane,
+ * which this spec does not exercise, so /goal-complete behavior is unchanged.
+ */
+const BOOT_START_CONFIG = {
+  checks: {
+    version: 1 as const,
+    checks: [{
+      checkId: 'boot-probe',
+      executable: 'node',
+      arguments: ['-e', 'process.exit(0)'],
+      cwd: 'C:/ws-command-binding',
+    }],
+  },
+  taskIds: [TaskId('task-v14-hostcmd')],
+  maxAttempts: 3,
+}
+
 afterEach(async () => {
   for (const ctx of contexts.splice(0).reverse()) await ctx.fiber.dispose()
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
@@ -99,7 +118,7 @@ async function boot(config: CommandGoalBindingConfig): Promise<TestComposition> 
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(GoalService)
-  await ctx.plugin(commandGoalBinding, config)
+  await ctx.plugin(commandGoalBinding, { ...BOOT_START_CONFIG, ...config })
   const session = ctx.sessions.create(SessionId(`controller-v14-hostcmd-${bootNumber}`))
   const agent = stubAgent(session)
   ctx.agents.register(agent)
@@ -218,9 +237,11 @@ function reviewRecord(
  * Append the evidence producer records the projection fold requires before
  * completion evidence exists: role policy, the controller binding, the
  * verification, and the review, plus the host-side registration backing the
- * declared digest. The production producers are deferred, so the test is the
- * producer (events.spec append precedent). Returns the reviewer session the
- * appended policy authorizes.
+ * declared digest. The production producers are no longer deferred — the
+ * /devframe-start lane lands role policy, goal binding, and verification —
+ * so these manual appends remain as test assembly for the /goal-complete
+ * error-face coverage (events.spec append precedent). Returns the reviewer
+ * session the appended policy authorizes.
  */
 async function appendEvidence(test: TestComposition, binding: GoalBinding): Promise<{ readonly reviewerSessionId: SessionId }> {
   const reviewerSessionId = SessionId(`reviewer-v14-hostcmd-${bootNumber}`)
@@ -530,7 +551,8 @@ describe('/goal-complete host command composition', { timeout: 30_000 }, () => {
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(GoalService)
-    await expect(ctx.plugin(commandGoalBinding, { workspaceId: '' })).rejects.toThrow(/workspaceId/)
+    await expect(ctx.plugin(commandGoalBinding, { ...BOOT_START_CONFIG, workspaceId: '' }))
+      .rejects.toThrow(/workspaceId/)
   })
 })
 
@@ -543,7 +565,7 @@ describe('/goal-complete registration lifetime', () => {
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(GoalService)
-    const plugin = await ctx.plugin(commandGoalBinding, { workspaceId: WORKSPACE_ID })
+    const plugin = await ctx.plugin(commandGoalBinding, { ...BOOT_START_CONFIG, workspaceId: WORKSPACE_ID })
     expect('default' in commandGoalBinding).toBe(false)
     const session = ctx.sessions.create(SessionId(`controller-lifetime-${++bootNumber}`))
     const agent = stubAgent(session)
