@@ -11,6 +11,7 @@ import type {
 const EXPECTATION_FILES: Record<SnapshotExpectationKind, { stem: string; extension: string }> = {
   'system-prompt': { stem: 'system-prompt', extension: 'md' },
   'tool-schemas': { stem: 'tool-schemas', extension: 'json' },
+  ui: { stem: 'ui', extension: 'md' },
 }
 
 /**
@@ -37,14 +38,19 @@ export function expectationFileName(kind: SnapshotExpectationKind, variant?: Sna
 
 /**
  * Every variant file name the manifest declares, for inventory guards that must
- * admit exactly the committed platform-variant files.
+ * admit exactly the committed platform-variant files: declared expected-sidecar
+ * variants plus the declared platform-variant canonical session recording (the
+ * recording is an expected file in its persisted-replay comparison role).
  * @param manifest - the parsed scenario manifest (its declarations are already validated).
  * @returns deduplicated, sorted variant file names; empty without declarations.
  */
-export function declaredExpectationVariantFiles(manifest: Pick<SnapshotManifest, 'expectations'>): string[] {
+export function declaredExpectationVariantFiles(manifest: Pick<SnapshotManifest, 'expectations' | 'sessionVariants'>): string[] {
   const declared = manifest.expectations?.variants ?? {}
   const entries = Object.entries(declared) as Array<[SnapshotExpectationPlatform, SnapshotExpectationKind[]]>
   const names = entries.flatMap(([variant, kinds]) => kinds.map(kind => expectationFileName(kind, variant)))
+  for (const variant of Object.keys(manifest.sessionVariants ?? {})) {
+    names.push(`session.${variant}.jsonl`)
+  }
   return [...new Set(names)].sort()
 }
 
@@ -81,4 +87,39 @@ export function resolveExpectationPath(options: ResolveExpectationPathOptions): 
     return variantPath
   }
   return join(dir, expectationFileName(kind))
+}
+
+/** Inputs for {@link resolveSessionFixturePath}. */
+export interface ResolveSessionFixturePathOptions {
+  /** Absolute scenario directory that owns the committed session fixtures. */
+  dir: string
+  /** The scenario's parsed manifest carrying optional session-variant declarations. */
+  manifest: Pick<SnapshotManifest, 'sessionVariants'>
+  /** The reading host's `process.platform`; injected so any variant is pinnable on any host. */
+  platform: NodeJS.Platform
+}
+
+/**
+ * Resolve the canonical session fixture the current host platform must use for
+ * both replay roles: a declared variant for the host's platform family selects
+ * `session.<variant>.jsonl`, every other case falls back to `session.jsonl`
+ * (whose absence the caller's own read reports). Unlike the pinned sidecars,
+ * the recording's script side is usable without a header pin, so this
+ * resolution does not require one.
+ * @param options - scenario directory, manifest, and injected host platform.
+ * @returns the absolute path of the session fixture to read.
+ * @throws when the host platform has a declared session variant but the variant file is missing.
+ */
+export function resolveSessionFixturePath(options: ResolveSessionFixturePathOptions): string {
+  const { dir, manifest, platform } = options
+  const variant = platformExpectationVariant(platform)
+  if (manifest.sessionVariants?.[variant] === true) {
+    const fileName = `session.${variant}.jsonl`
+    const variantPath = join(dir, fileName)
+    if (!existsSync(variantPath)) {
+      throw new Error(`session-snapshot: ${dir}: declared platform session fixture variant file is missing: ${fileName}`)
+    }
+    return variantPath
+  }
+  return join(dir, 'session.jsonl')
 }

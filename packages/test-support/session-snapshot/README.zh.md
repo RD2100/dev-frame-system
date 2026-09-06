@@ -80,7 +80,9 @@ defineAcpSnapshotSuite({
 
 每个 pin 默认拥有其生成的 `system-prompt.expected.md` 或 `tool-schemas.expected.json` 伴随文件；当完整的对应序列相同时，`systemPromptSource` 与 `toolSchemasSource` 指定另一个 pin 作为来源，因此每个不同版本只提交一次。该 pin 的 `session.jsonl` 存储 `"system":"{{system}}","tools":"{{tools}}"`，同时保留配置、原因与任何模型可见前缀。自身作用域组合出不同请求的子会话按 fixture 索引以 `pinsChildToolSchemas` 与 `pinsChildSystemPrompts` 单独声明。运行中改变请求 header 的场景声明 `expectedHeaderChanges`。
 
-当某个 pin 的伴随文件内容因宿主平台而合理分化时，场景在 manifest 中声明分化而不是削弱 pin：`expectations.variants` 把每个平台族（`win32`，或代表其余宿主的 `posix`）映射到在基础伴随文件旁携带 `<stem>.<平台族>.expected.<ext>` 变体文件的伴随类别（`system-prompt`、`tool-schemas`），场景通道在声明了当前宿主的变体时比较变体文件，否则比较基础文件——web 通道今天即按此消费。声明了变体但文件缺失时，fixture 清单守卫在所有宿主上失败，匹配宿主上的比较立即失败。
+当某个 pin 的伴随文件内容因宿主平台而合理分化时，场景在 manifest 中声明分化而不是削弱 pin：`expectations.variants` 把每个平台族（`win32`，或代表其余宿主的 `posix`）映射到在基础伴随文件旁携带 `<stem>.<平台族>.expected.<ext>` 变体文件的伴随类别（`system-prompt`、`tool-schemas`、`ui`），场景通道在声明了当前宿主的变体时比较变体文件，否则比较基础文件——web 通道今天即按此消费。声明了变体但文件缺失时，fixture 清单守卫在所有宿主上失败，匹配宿主上的比较立即失败。
+
+当 session 拥有者的 canonical 录制因宿主平台而合理分化时，以同样方式声明 `sessionVariants`：每个声明的平台族会在基础 `session.jsonl` 旁选择一个 `session.<平台族>.jsonl`，同时服务录制的两个回放角色——回放脚本与持久化会话比对目标——未声明平台族的宿主继续读取基础文件。该声明独立于 header pin（脚本侧无需 pin 即可使用），且 session 借用者禁止声明。
 
 ### 平台与组合变体
 

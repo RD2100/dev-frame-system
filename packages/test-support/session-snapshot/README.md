@@ -80,7 +80,9 @@ Each recorded-session directory carries a closed `snapshot.yml` manifest plus it
 
 A pin owns its generated `system-prompt.expected.md` or `tool-schemas.expected.json` sidecar by default; `systemPromptSource` and `toolSchemasSource` name another pin when the complete corresponding sequence is identical, so each distinct version is committed once. The pin's `session.jsonl` stores `"system":"{{system}}","tools":"{{tools}}"` while retaining config, reason, and any model-visible prefix. A child session whose own scope composes a different request declares it per fixture index with `pinsChildToolSchemas` and `pinsChildSystemPrompts`. A scenario that changes the request header mid-run declares `expectedHeaderChanges`.
 
-A pinned scenario whose sidecar content legitimately diverges per host platform declares the divergence instead of weakening the pin: `expectations.variants` maps each platform family (`win32`, or `posix` for every other host) to the sidecar kinds (`system-prompt`, `tool-schemas`) that carry a `<stem>.<family>.expected.<ext>` file beside the base sidecar, and a scenario lane compares against the current host's variant when declared and the base file otherwise — the web lane consumes this today. Declaring a variant whose file is missing fails the fixture-inventory guard on every host and fails the comparison immediately on the matching host.
+A pinned scenario whose sidecar content legitimately diverges per host platform declares the divergence instead of weakening the pin: `expectations.variants` maps each platform family (`win32`, or `posix` for every other host) to the sidecar kinds (`system-prompt`, `tool-schemas`, `ui`) that carry a `<stem>.<family>.expected.<ext>` file beside the base sidecar, and a scenario lane compares against the current host's variant when declared and the base file otherwise — the web lane consumes this today. Declaring a variant whose file is missing fails the fixture-inventory guard on every host and fails the comparison immediately on the matching host.
+
+A session owner whose canonical recording legitimately diverges per host platform declares `sessionVariants` the same way: each declared platform family selects a `session.<family>.jsonl` beside the base `session.jsonl` for both of the recording's replay roles — script and persisted-session comparison target — while undeclared hosts keep reading the base file. The declaration is independent of header pinning (the script side is usable without a pin) and forbidden on a session borrower.
 
 ### Platform and composition variants
 
@@ -113,7 +115,7 @@ The shared core owns manifests, workspace setup/comparison, typed identity mappi
 | [`src/launcher.ts`](src/launcher.ts) | Subprocess/client launcher and shutdown ownership |
 | [`src/harness.ts`](src/harness.ts) | Scripted scenario driver and session-log harvest |
 | [`src/manifest.ts`](src/manifest.ts) | Closed `snapshot.yml` schema, collection, and ownership rules |
-| [`src/expectations.ts`](src/expectations.ts) | Platform-variant expected-file resolution for pinned scenarios |
+| [`src/expectations.ts`](src/expectations.ts) | Platform-variant expected-file and session-fixture resolution |
 | [`src/identity.ts`](src/identity.ts) | Typed first-seen identity tokenization across parent and child logs |
 | [`src/normalize.ts`](src/normalize.ts) | Pure normalizers and scrubbing helpers |
 | [`src/workspace.ts`](src/workspace.ts) | Scenario workspace setup and complete expected-state comparison |

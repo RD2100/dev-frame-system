@@ -3,6 +3,8 @@ scenario: minimal-preset
 profile: web
 composition: web-minimal
 recording: authored
+sessionVariants:
+  win32: true
 header:
   class: web-minimal
   pin: true
@@ -10,3 +12,4 @@ expectations:
   variants:
     win32:
       - tool-schemas
+      - ui

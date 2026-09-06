@@ -6,6 +6,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { expect, it } from 'vitest'
 import {
   captureExpectedWorkspaceSnapshot,
+  declaredExpectationVariantFiles,
   EMPTY_WORKSPACE_MARKER,
   parseSnapshotManifest,
   redactSessionSnapshotIds,
@@ -161,12 +162,23 @@ it('keeps every recorded session owned, pinned, redacted, and header-scrubbed', 
     }
 
     if (manifest.session !== undefined) continue
-    const names = sessionFixtureNames(await readdir(dir))
+    // Declared platform-variant files are manifest-owned inventory: the
+    // session-fixture namer sees only base and child fixtures, while every
+    // declared variant JSONL satisfies the same redaction and scrub invariants
+    // as the base recording.
+    const variantFiles = declaredExpectationVariantFiles(manifest)
+    const names = sessionFixtureNames((await readdir(dir)).filter(name => !variantFiles.includes(name)))
     const fixtures = await Promise.all(names.map(name => readFile(join(dir, name), 'utf8')))
     expect(redactSessionSnapshotIds(fixtures), `${key}: typed identity fixed point`).toEqual(fixtures)
     for (const [index, fixture] of fixtures.entries()) {
       expect(scrubSystemPrompts(fixture), `${key}/${names[index]}: system prompt must be a sidecar`).toBe(fixture)
       expect(scrubToolSchemas(fixture), `${key}/${names[index]}: tool schemas must be a sidecar`).toBe(fixture)
+    }
+    for (const file of variantFiles.filter(name => name.endsWith('.jsonl'))) {
+      const fixture = await readFile(join(dir, file), 'utf8')
+      expect(redactSessionSnapshotIds([fixture]), `${key}/${file}: typed identity fixed point`).toEqual([fixture])
+      expect(scrubSystemPrompts(fixture), `${key}/${file}: system prompt must be a sidecar`).toBe(fixture)
+      expect(scrubToolSchemas(fixture), `${key}/${file}: tool schemas must be a sidecar`).toBe(fixture)
     }
     for (const index of manifest.header.childSystemPrompts ?? []) {
       expect(names[index], `${key}: child prompt index ${index}`).toBeDefined()
