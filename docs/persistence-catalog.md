@@ -404,7 +404,7 @@ Source: [`packages/compaction/compaction/src/types.ts:34`](../packages/compactio
 'devframe/goal-binding': GoalBinding
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:251`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:266`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframelifecycle--log-only"></a>
 
@@ -415,7 +415,7 @@ Source: [`packages/experimental/devframe/src/events.ts:251`](../packages/experim
 'devframe/lifecycle': DevFrameLifecycleEventData
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:259`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:274`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframereview--log-only"></a>
 
@@ -426,7 +426,7 @@ Source: [`packages/experimental/devframe/src/events.ts:259`](../packages/experim
 'devframe/review': DevFrameReviewEventData
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:257`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:272`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframerole-policy--log-only"></a>
 
@@ -437,7 +437,7 @@ Source: [`packages/experimental/devframe/src/events.ts:257`](../packages/experim
 'devframe/role-policy': DevFrameRolePolicyEventData
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:249`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:264`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframeusage--log-only"></a>
 
@@ -448,7 +448,7 @@ Source: [`packages/experimental/devframe/src/events.ts:249`](../packages/experim
 'devframe/usage': DevFrameUsageEventData
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:253`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:268`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframeverification--log-only"></a>
 
@@ -459,7 +459,7 @@ Source: [`packages/experimental/devframe/src/events.ts:253`](../packages/experim
 'devframe/verification': DevFrameVerificationEventData
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:255`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:270`](../packages/experimental/devframe/src/events.ts)
 
 ### `feedback/*`
 
