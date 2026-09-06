@@ -37,12 +37,14 @@ import Group from '@deepseek-ai/cordis-plugin-group'
 import {
   captureExpectedWorkspaceSnapshot,
   captureWorkspaceSnapshot,
+  declaredExpectationVariantFiles,
   formatSystemPromptSnapshot,
   formatToolSchemasSnapshot,
   normalizedSystemPrompts,
   normalizedToolSchemas,
   parseSnapshotManifest,
   redactSessionSnapshotIds,
+  resolveExpectationPath,
   normalizeSessionSnapshots,
   scrubRequestHeaders,
   scrubSessionSnapshot,
@@ -898,8 +900,8 @@ async function assertReplaySession(
     .split(webUrl).join('{{webUrl}}')
   const prompts = normalizedSystemPrompts(actual, actualContext).map(normalizePrompt)
   const schemas = normalizedToolSchemas(actual, actualContext)
-  const promptPath = join(fixtureDir, 'system-prompt.expected.md')
-  const schemaPath = join(fixtureDir, 'tool-schemas.expected.json')
+  const promptPath = resolveExpectationPath({ dir: fixtureDir, kind: 'system-prompt', manifest, platform: process.platform })
+  const schemaPath = resolveExpectationPath({ dir: fixtureDir, kind: 'tool-schemas', manifest, platform: process.platform })
   const promptSnapshot = formatSystemPromptSnapshot(prompts[0] as string, prompts.slice(1))
   const schemaSnapshot = formatToolSchemasSnapshot(schemas[0] as unknown[], schemas.slice(1))
   if (mode === 'refresh') {
@@ -1264,18 +1266,26 @@ export async function compareOrRefreshGolden(goldenPath: string, actual: string,
 /**
  * Fixture-inventory guard: the scenario directory holds exactly the expected
  * files and every committed JSONL is a header-scrubbed, typed-redaction fixed point.
+ * Platform-variant expected files declared by the manifest are manifest-owned
+ * inventory: each must exist on every host, and none may appear in `expected`.
  * @param dir - the scenario snapshot directory.
- * @param expected - the exact expected file inventory.
+ * @param expected - the exact expected file inventory, excluding `snapshot.yml` and declared platform-variant files.
  */
 export async function assertFixtureInventory(dir: string, expected: string[]): Promise<void> {
   const entries = (await readdir(dir)).sort()
   const ownsManifest = entries.includes('snapshot.yml')
-  const artifacts = entries.filter(name => name !== 'snapshot.yml')
+  const manifestPath = join(dir, 'snapshot.yml')
+  const manifest = ownsManifest
+    ? parseSnapshotManifest(await readFile(manifestPath, 'utf8'), manifestPath)
+    : undefined
+  const variantFiles = manifest === undefined ? [] : declaredExpectationVariantFiles(manifest)
+  const artifacts = entries.filter(name => name !== 'snapshot.yml' && !variantFiles.includes(name))
   expect(artifacts).toEqual([...expected].sort())
-  if (ownsManifest) {
-    const manifestPath = join(dir, 'snapshot.yml')
-    const manifest = parseSnapshotManifest(await readFile(manifestPath, 'utf8'), manifestPath)
+  if (manifest !== undefined) {
     expect(manifest.profile).toBe('web')
+    for (const file of variantFiles) {
+      expect(existsSync(join(dir, file)), `${dir}: declared platform expectation variant ${file}`).toBe(true)
+    }
     if (manifest.session === undefined) {
       expect(
         artifacts.includes('session.jsonl'),

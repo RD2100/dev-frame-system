@@ -80,6 +80,8 @@ Each recorded-session directory carries a closed `snapshot.yml` manifest plus it
 
 A pin owns its generated `system-prompt.expected.md` or `tool-schemas.expected.json` sidecar by default; `systemPromptSource` and `toolSchemasSource` name another pin when the complete corresponding sequence is identical, so each distinct version is committed once. The pin's `session.jsonl` stores `"system":"{{system}}","tools":"{{tools}}"` while retaining config, reason, and any model-visible prefix. A child session whose own scope composes a different request declares it per fixture index with `pinsChildToolSchemas` and `pinsChildSystemPrompts`. A scenario that changes the request header mid-run declares `expectedHeaderChanges`.
 
+A pinned scenario whose sidecar content legitimately diverges per host platform declares the divergence instead of weakening the pin: `expectations.variants` maps each platform family (`win32`, or `posix` for every other host) to the sidecar kinds (`system-prompt`, `tool-schemas`) that carry a `<stem>.<family>.expected.<ext>` file beside the base sidecar, and a scenario lane compares against the current host's variant when declared and the base file otherwise — the web lane consumes this today. Declaring a variant whose file is missing fails the fixture-inventory guard on every host and fails the comparison immediately on the matching host.
+
 ### Platform and composition variants
 
 A scenario requiring a non-Windows host declares `posixOnly`, which skips its run test on Windows while the fixture guards keep covering its committed files everywhere; a scenario whose composition needs a usable `pwsh` declares `pwshOnly`. `workspaceParent` moves the generated child cwd outside the platform temp directory when temporary-directory grants are themselves under test; a scenario's committed `workspace/` is copied into that child first, then `prepareWorkspace` runs against the generated cwd before the agent starts. Default generated workspaces are stored in session fixtures as `{{cwd}}`, so platform temp roots and random basenames do not affect recordings.
@@ -111,6 +113,7 @@ The shared core owns manifests, workspace setup/comparison, typed identity mappi
 | [`src/launcher.ts`](src/launcher.ts) | Subprocess/client launcher and shutdown ownership |
 | [`src/harness.ts`](src/harness.ts) | Scripted scenario driver and session-log harvest |
 | [`src/manifest.ts`](src/manifest.ts) | Closed `snapshot.yml` schema, collection, and ownership rules |
+| [`src/expectations.ts`](src/expectations.ts) | Platform-variant expected-file resolution for pinned scenarios |
 | [`src/identity.ts`](src/identity.ts) | Typed first-seen identity tokenization across parent and child logs |
 | [`src/normalize.ts`](src/normalize.ts) | Pure normalizers and scrubbing helpers |
 | [`src/workspace.ts`](src/workspace.ts) | Scenario workspace setup and complete expected-state comparison |

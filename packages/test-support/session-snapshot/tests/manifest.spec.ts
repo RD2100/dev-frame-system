@@ -114,6 +114,29 @@ describe('snapshot manifest', () => {
     })
   })
 
+  it('parses platform expectation variants on a pinned header', () => {
+    expect(parseSnapshotManifest([
+      'version: 1',
+      'profile: web',
+      'header:',
+      '  class: web-minimal',
+      '  pin: true',
+      'expectations:',
+      '  variants:',
+      '    win32:',
+      '      - tool-schemas',
+      '    posix:',
+      '      - system-prompt',
+      '      - tool-schemas',
+      '',
+    ].join('\n'))).toEqual({
+      version: 1,
+      profile: 'web',
+      header: { class: 'web-minimal', pin: true },
+      expectations: { variants: { win32: ['tool-schemas'], posix: ['system-prompt', 'tool-schemas'] } },
+    })
+  })
+
   it.each([
     ['', 'manifest must be a mapping'],
     ['version: 2\nprofile: acp\n', 'manifest.version must equal 1'],
@@ -127,6 +150,14 @@ describe('snapshot manifest', () => {
     ['version: 1\nprofile: acp\nheader:\n  class: base\n  changes: -1\n', 'manifest.header.changes must be a non-negative integer'],
     ['version: 1\nprofile: acp\nheader:\n  class: base\n  systemPromptSource: ../bad\n', 'manifest.header.systemPromptSource must be a lower-kebab-case name or corpus-relative path'],
     ['version: 1\nprofile: acp\nreplay:\n  override: false\n', 'manifest.replay.override must equal true'],
+    ['version: 1\nprofile: acp\nheader:\n  class: base\nexpectations:\n  variants:\n    win32: [tool-schemas]\n', 'manifest.expectations must be declared on a pinned header'],
+    ['version: 1\nprofile: acp\nheader:\n  class: base\n  pin: true\nexpectations:\n  platform: win32\n', 'manifest.expectations has unknown field(s): platform'],
+    ['version: 1\nprofile: acp\nheader:\n  class: base\n  pin: true\nexpectations: {}\n', 'manifest.expectations.variants must be a mapping'],
+    ['version: 1\nprofile: acp\nheader:\n  class: base\n  pin: true\nexpectations:\n  variants:\n    windows: [tool-schemas]\n', 'manifest.expectations.variants has unknown field(s): windows'],
+    ['version: 1\nprofile: acp\nheader:\n  class: base\n  pin: true\nexpectations:\n  variants: {}\n', 'manifest.expectations.variants must declare at least one platform'],
+    ['version: 1\nprofile: acp\nheader:\n  class: base\n  pin: true\nexpectations:\n  variants:\n    win32: []\n', 'manifest.expectations.variants.win32 must be a non-empty array of expectation kinds'],
+    ['version: 1\nprofile: acp\nheader:\n  class: base\n  pin: true\nexpectations:\n  variants:\n    win32: [ui]\n', 'manifest.expectations.variants.win32 must list system-prompt or tool-schemas kinds'],
+    ['version: 1\nprofile: acp\nheader:\n  class: base\n  pin: true\nexpectations:\n  variants:\n    win32: [tool-schemas, tool-schemas]\n', 'manifest.expectations.variants.win32 must not repeat expectation kinds'],
     ['version: 1\nprofile: acp\nplatform: windows\n', 'manifest.platform must be posix or pwsh'],
     ['version: 1\nprofile: acp\npermission: root\n', 'manifest.permission must be read-only, workspace-write, or danger-full-access'],
     ['version: 1\nprofile: acp\nenvironment:\n  lower: value\n', 'manifest.environment must map uppercase environment names to strings'],

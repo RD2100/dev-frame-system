@@ -53,7 +53,17 @@ export {
   type NormalizeOptions,
 } from './normalize.ts'
 export {
+  declaredExpectationVariantFiles,
+  expectationFileName,
+  platformExpectationVariant,
+  resolveExpectationPath,
+  type ResolveExpectationPathOptions,
+} from './expectations.ts'
+export {
   parseSnapshotManifest,
+  type SnapshotExpectationKind,
+  type SnapshotExpectationsManifest,
+  type SnapshotExpectationPlatform,
   type SnapshotHeaderManifest,
   type SnapshotInputAttachment,
   type SnapshotInputManifest,
