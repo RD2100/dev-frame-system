@@ -38,10 +38,18 @@ The agent reliability service: stop productization, admission cutoff, reconcilia
 ```ts cordis-catalog
 /**
  * Open dispatch admission for exactly one work binding identity. Opening
- * replaces a previously admitted identity — a new dispatch generation.
+ * replaces the whole generation — the identity AND the cutoff: passing no
+ * `cutoff` clears a previous generation's deadline. A generation whose
+ * deadline is already past opens fine; its first pre-step call rejects.
  * @param identity - The work binding every pre-step will require.
+ * @param cutoff - Optional deadline bound for this generation, a wall-clock
+ * epoch millisecond instant the pre-step reads via `Date.now()`.
+ * @throws {@link AgentReliabilityError} with code
+ * `AGENT_RELIABILITY_ADMISSION_DEADLINE_INVALID` when `cutoff.deadline`
+ * is defined but not a finite epoch millisecond instant; nothing is
+ * mutated in that case.
  */
-openAdmission(identity: GoalBindingIdentity): void
+openAdmission(identity: GoalBindingIdentity, cutoff?: AdmissionCutoff): void
 
 /** Close dispatch admission; the identity is kept so stop flows can report it. */
 closeAdmission(): void
@@ -53,7 +61,11 @@ closeAdmission(): void
  * @param identity - Work binding carried by the proposed operation.
  * @throws {@link AgentReliabilityError} with code
  * `AGENT_RELIABILITY_ADMISSION_CLOSED` when admission is closed,
+ * `AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED` when the current
+ * generation's cutoff instant has passed, or
  * `AGENT_RELIABILITY_IDENTITY_MISMATCH` when another identity is admitted.
+ * The checks run in that order: a passed deadline is a statement about the
+ * window, not the identity, so it precedes the identity check.
  */
 assertAdmitted(identity: GoalBindingIdentity): void
 
