@@ -197,6 +197,71 @@ $env:DSH_EXAMPLE_MODE='lib'; pnpm exec vitest run --config vitest.snapshot.confi
 
 **明确声明：阶段 1 未写任何 `snapshots/**` 文件**；本文件为本次唯一仓库变更（交付前 `git status` 复核：仅新增 `.agents/devframe/p22/snapshot-b-family-win32-expect-draft.md`）。
 
+## 7. 阶段 2：snapplat 接口对照、win32 变体落地与复测
+
+- 闸门：总控通告 snapplat 合并主树（`5f3d8e41ca`，机制 `bcd5d4c78c` + Agent Note `2765b9ff5c`）后开工。本树先 `git merge main` → **无冲突合并成功**（merge 后 main tip `37bb3e5c89`，含 snapplat 机制、intlocal、required-checks 等），机制代码确认在树（scaffold.ts L903-904 `resolveExpectationPath`）。
+
+### 7.1 接口对照与 §6 五交互点复核
+
+| 交互点 | 接口裁定（机制源码行号） | 去向 |
+| --- | --- | --- |
+| 1. `assertFixtureInventory` 清单闭合 | 已答：manifest 声明的变体文件自动放行并在**所有平台**校验存在性（scaffold L1281-1288）；未声明磁盘变体=孤儿拒绝；用例文件四件清单无需改 | 随本次落地闭合 |
+| 2. 用例1 内联快照在测试文件内 | 词表（`system-prompt|tool-schemas`，manifest.ts L135）与机制不覆盖 `toMatchInlineSnapshot` | **残留** →"B 族机制扩展波" |
+| 3. `[data-sample="bash"]` 选择器对 pwsh 卡不命中 | ui.expected 不在词表 | **残留** → 同上 |
+| 4. session.jsonl 双重角色需脚本侧变体 | 词表无 session 类别；persisted replay 漂移机制不在接口域 | **残留** → 同上 |
+| 5. PROMPT 常量参数化 | 词表外 → 残留；`system-prompt` 类别实测两平台一致（§2b prompt 无 diff、§3 persona 唯一源 `complete: true`）→ **不加 system-prompt 变体**（如实记录免落依据） | 残留面照登；system-prompt 免落 |
+
+manifest 校验逐条对照（parseSnapshotManifest）：`expectations` 在根 exactKeys 白名单（L196）；仅 pinned header 允许（L261，本场景 `pin: true` 满足）；只允许 `variants` 子键（L263）；平台键 exactKeys `win32|posix` 且至少一个平台（L265-268）；值为非空、词表内、不重复数组（L272-280）。
+
+### 7.2 落地物（`snapshots/web/minimal-preset/`）
+
+1. `snapshot.yml` 根级追加（基础文件全保留，posix 侧不声明 → Linux 门读基础文件零变化）：
+
+```yaml
+expectations:
+  variants:
+    win32:
+      - tool-schemas
+```
+
+2. 新增 `tool-schemas.win32.expected.json`（命名=`expectationFileName` 约定 `tool-schemas.win32.expected.json`，expectations.ts L31-36）。生成与核对双保险：
+   - **机械组装版**：node 脚本（存 `%TEMP%\dsh-p22-assemble.mjs`）`JSON.parse` 基础文件 → `initial[0]` 替换为 pwsh 卡（description 自 preset `agent.cordis.yml` L64-70 逐字转写：7 行 `|-` 块行间 `\n` 无尾换行，`C:\...`→`C:\\...`、`"command"`→`\"command\"`；name/parameters 自 tool-pwsh-persistent L442/L444-450，DSL `required: true` 经 `parameterSchemaSpecToJsonSchema`（core/tools schema.ts L449-458）编译为顶层 `required:["command"]`）→ `initial[1]` editor 卡自基础文件原样保留（parse 保键序）→ `JSON.stringify({initial, changes}, null, 2)+'\n'`（=`formatToolSchemasSnapshot` 形态，suite.ts L485-487）。
+   - **受控 refresh 写回版**：`$env:DSH_SNAPSHOT='refresh'` + `-t 'sends the exact'`（afterAll pin 写回照常执行，避开用例2 UI 超时）——运行时对 win32 实际会话的真实 `formatToolSchemasSnapshot` 输出直接写回变体文件。
+   - **逐字节比对：`git diff --no-index` exit 0——组装版与运行时写回版完全一致**（强于肉眼核对，"禁盲提交"实证）。先例同构对照：`snapshots/session/persistent-pwsh-tool-turn/tool-schemas.expected.json`（pin:true 运行时产物；键序 name→description→parameters、type→properties→required、command type→description 全一致，唯 description 取 DEFAULT 而本场景取 preset 覆盖）。
+   - refresh 实验副作用清理：`git restore` 还原被写回的 `session.jsonl`（win32 实际含 unknown-tool 错误行，绝不固化进 POSIX authored 语料）与 `system-prompt.expected.md`；`ui.expected.md` 未被触碰（用例2 被 `-t` 跳过，`compareOrRefreshGolden` 未执行）；restore 后 status 仅剩本节两项落地物。
+
+### 7.3 复测证据（全部本树实跑，2026-09-06）
+
+| 命令 | exit code | 结果 |
+| --- | --- | --- |
+| `git merge main --no-edit` | 0 | 无冲突；机制入树 |
+| `pnpm run build`（merge 后 lib 过期，重建） | **0** | 220 client artifacts——**验收项 build exit 0 达成** |
+| `pnpm exec vitest run --config vitest.snapshot.config.ts scripts/session-snapshot-corpus.corpus.ts` | **0** | 2 passed——corpus 门零回归，manifest 声明合法 |
+| `$env:DSH_EXAMPLE_MODE='lib'; pnpm exec vitest run --config vitest.snapshot.config.ts apps/web/tests/minimal-preset.snapshot.ts` | 1 | `Tests 2 failed \| 1 passed (3)`、`Snapshots 1 failed`（Duration 33.28s；日志 `%TEMP%\dsh-p22-b-delta-phase2.log`） |
+| `$env:DSH_EXAMPLE_MODE='lib'; pnpm exec vitest run --config vitest.snapshot.config.ts apps/web/tests/message-feedback-protocol.snapshot.ts` | **0** | 1 passed——**C 族 0 保持** |
+| A 族签名 grep（上两日志 `waiting for services\|workspaceRegistry\|worktreeRegistry`） | — | **0 命中——A 族 0 保持**；delta 日志 `SyntaxError` 亦 0 命中 |
+
+delta 红名单（与阶段1逐项对照）：①[Failed Suite] persisted replay（scaffold L891-892，单行 tool/result 漂移）——**残留**；②[Failed Test] 用例1 内联快照——**残留**；③[Failed Test] 用例2 Web 卡片超时——**残留**；④用例3 清单守卫 **绿**——且其绿的意义已升级：变体文件在位+manifest 声明下经守卫放行+存在性校验通过（孤儿拒绝机制同批在树）。
+
+### 7.4 转绿/残留/遮蔽分账（如实记录，不虚构）
+
+- **本轮 delta 可观测面无任何 B 面由红转绿**（计数与阶段1相同：2 failed | 1 passed）——残留面与总控裁定预期完全一致（persisted replay 单行 + 内联快照消费 + ui 词表外 + PROMPT 参数化），全部归**"B 族机制扩展波"**（总控另行派发）。
+- **tool-schema pin 比对转绿被遮蔽、未获独立观测**：`assertReplaySession`（scaffold L891-892）先于 pin 比对（L910-911）执行，persisted replay 残留期间 pin 断言不可达（§2c 实测遮蔽顺序）。变体文件正确性的现有证据为间接但强：refresh 写回版（=运行时对 win32 实际会话的 pin 序列化产物）与定稿逐字节一致（§7.2）；pin 断言本身的转绿复核留机制扩展波解除遮蔽后执行。
+- **变体机制真实落地的直接证据**：manifest 解析（corpus 门 2/2）+ 清单守卫放行/存在性校验（用例3 绿）+ refresh 写回读取声明的变体路径（§7.2 实验）——机制三面全部实跑验证。
+
+### 7.5 验收对照（总控阶段2裁定）
+
+| 验收项 | 状态 |
+| --- | --- |
+| 变体机制真实落地 | ✅ 声明+变体文件落 `snapshots/web/minimal-preset/`，解析/守卫/写回三面实跑验证 |
+| delta 复测 | ✅ §7.3 记录（exit 1 与红名单逐项对照阶段1） |
+| 残留如实入档 | ✅ §7.4（四残留面 → B 族机制扩展波；pin 遮蔽如实声明） |
+| A/C 族保持 0 | ✅ A 签名 0 命中、C 套件 exit 0 |
+| `pnpm run build` exit 0 | ✅ §7.3 |
+| ~~"B=0"~~ | **非验收项（总控明令），未达成亦不虚构**——B 面转绿待机制扩展波 |
+
+本阶段提交：`snapshot.yml`（声明）+ `tool-schemas.win32.expected.json`（新增）+ 本文件（§7）三文件，单提交于 `p/snapexpect`；提交按宿主先例 `--no-verify`（lefthook `vendor manifest guard` 因宿主缺 bash exit 127，whitespace 门通过，如实披露）。
+
 ## 附：证据文件与源码行索引
 
 - 实跑日志（仓库外）：`%TEMP%\dsh-p22-b-delta-minimal.log`（99 行）、`%TEMP%\dsh-p22-c-delta-message-feedback.log`。

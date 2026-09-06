@@ -6,3 +6,7 @@ recording: authored
 header:
   class: web-minimal
   pin: true
+expectations:
+  variants:
+    win32:
+      - tool-schemas
