@@ -511,8 +511,12 @@ describe('structural propagation and registration lifetime', { timeout: 60_000 }
 })
 
 describe('configuration loud failure', { timeout: 60_000 }, () => {
-  /** Expect one plugin activation over the real stack to reject. */
-  async function expectActivationRejection(config: Record<string, unknown>): Promise<Error> {
+  /**
+   * Start one plugin activation over the real stack and return its promise;
+   * every caller asserts the rejection, and a successful activation can only
+   * resolve to the plugin fiber, which no case reaches.
+   */
+  async function expectActivationRejection(config: Record<string, unknown>): Promise<unknown> {
     const ctx = new Context()
     contexts.push(ctx)
     const storageRoot = mkdtempSync(join(tmpdir(), `dsh-command-goal-binding-config-${++bootNumber}-`))

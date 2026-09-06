@@ -1,5 +1,5 @@
 ---
-description: "The human /goal-complete slash command for hosts completing a goal through the verified completion admission, with stable rejections and durable completion receipts."
+description: "The human /devframe-start, /devframe-resume, and /goal-complete slash commands: start a bound goal with real verification evidence, resume it after a stop or restart, and complete it only through the verified completion admission."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-experimental-command-goal-binding` gives the human a `/goal-complete` command that completes the current goal only through the verified completion admission: the source fingerprint must re-derive from the worktree, the registered required checks must have passed, and the authorized review must have passed. The command dispatches through the real command registry, reads the devframe projection this package registers, and records a durable completion receipt on success. Every expected refusal comes back as a stable, direct command error that names the failed stage without exposing goal identities, so adapters can render it as command output. This is an experimental wave package: it composes the admission seam for host command surfaces and ships no host surfaces of its own beyond the command.
+`dsh-experimental-command-goal-binding` gives the human the start, resume, and completion verbs of the DevFrame goal-binding flow. `/devframe-start <objective>` binds a new goal to the configured worktree and produces real verification evidence: the host computes the worktree's source fingerprint, registers the approved required-checks checklist, starts the goal through the controller, and lands the role-policy, goal-binding, and verification records on the controller session log by executing every declared check as a real subprocess. `/devframe-resume` restores the current bound goal after a stop or restart, rebuilding the binding from the session log projection or the binding store. `/goal-complete` completes the current goal only through the verified completion admission: the source fingerprint must re-derive from the worktree, the registered required checks must have passed, and the authorized review must have passed. Every expected refusal comes back as a stable, direct command error that names the failed stage without exposing goal identities, so adapters can render it as command output. This is an experimental wave package: it composes the admission seam for host command surfaces and ships no host surfaces of its own beyond the commands.
 
 ## Table of Contents
 
@@ -25,46 +25,64 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the plugin in compositions whose agents carry bounded goals, and give operators one human verb that completes a goal only when the admitted evidence chain holds.
+Mount the plugin in compositions whose agents carry bounded goals, and give operators the human verbs that start a goal with real evidence, resume it across a restart, and complete it only when the admitted evidence chain holds.
 
 ### When to choose it
 
-Choose it when a deployment wants completion to mean "the verified admission admitted it" — the source tree is exactly the bound snapshot, every required check ran and passed, and an authorized review passed — and wants that gate on a human command rather than on model discretion. Hosts that complete goals through model-facing goal tools alone do not need it. The package is experimental and registers a private composition service, so treat its surface as wave-scoped rather than public.
+Choose it when a deployment wants goal work to be host-audited end to end: the objective and required checks are approved through the deployment config, start executes them for real and records the honest results, and completion means "the verified admission admitted it" — the source tree is exactly the bound snapshot, every required check ran and passed, and an authorized review passed. Hosts that start and complete goals through model-facing goal tools alone do not need it. The package is experimental and registers a private composition service, so treat its surface as wave-scoped rather than public.
 
 ### Command reference
 
 | Input | Result |
 |---|---|
+| `/devframe-start <objective>` | Starts a new bound goal against the configured worktree: lands the role-policy, goal-binding, and verification records on the controller session log, and reports the real executed check count and verification status |
+| `/devframe-resume` | Restores and resumes the current bound goal after a stop or restart, rebuilding the binding from the session log projection or the binding store |
 | `/goal-complete` | Completes the current goal at the configured worktree through the completion admission and records one completion receipt |
 | `/goal-complete <worktreePath>` | Completes the current goal against the given worktree, overriding the configured root |
 
 ### Stable rejections
 
-Expected refusals are direct command errors with fixed text: no current goal, no completion binding for the goal, no attributed verification evidence, a goal that is already complete, a latched projection replay failure, and a missing worktree path when neither the command line nor the config names one. A rejected admission names its stage — `source-fingerprint`, `required-checks`, or `review` — without exposing the goal id or revision. Structural errors (`GoalBindingError`, `SourceFingerprintError`, `RequiredChecksError`) are not caught: they fail dispatch so adapters report a command failure.
+Expected refusals are direct command errors with fixed text. Start refusals: a missing objective, a missing `workspaceRoot` in the config (the start line cannot name a worktree alongside the objective), and a goal that is already current and not complete. Resume refusals: unexpected input after the command name, no current goal, a goal that is already complete, and no binding record in either the session log projection or the binding store. Completion refusals: no current goal, no completion binding for the goal, no attributed verification evidence, a goal that is already complete, a latched projection replay failure, and a missing worktree path when neither the command line nor the config names one. A rejected admission names its stage — `source-fingerprint`, `required-checks`, or `review` — without exposing the goal id or revision. Structural errors (`GoalBindingError`, `SourceFingerprintError`, `RequiredChecksError`, `DevFramePersistenceError`) are not caught: they fail dispatch so adapters report a command failure.
 
 ### Minimal configuration
 
-The command injects the command registry, the goal service, and the session projection registry; a custom app mounts their owners plus this plugin:
+The plugin injects the command registry, the goal service, the session store, and the session projection registry; a custom app mounts their owners plus this plugin. The start lane reads the approved work parameters from the config:
 
 ```yaml
 - id: commands
   name: '@deepseek-ai/dsh-commands'
 - id: goal
   name: '@deepseek-ai/dsh-goal'
+- id: session
+  name: '@deepseek-ai/dsh-session'
 - id: session-projection
   name: '@deepseek-ai/dsh-session-projection'
 - id: command-goal-binding
   name: '@deepseek-ai/dsh-experimental-command-goal-binding'
   config:
     workspaceId: ws-team-alpha
+    workspaceRoot: D:/worktrees/team-alpha
+    taskIds: [task-alpha]
+    maxAttempts: 3
+    checks:
+      version: 1
+      checks:
+        - checkId: unit-tests
+          executable: pnpm
+          arguments: [exec, vitest, run, packages/a]
+          cwd: D:/worktrees/team-alpha
 ```
 
 | Field | Default | Meaning |
 |---|---|---|
 | `workspaceId` | required | Workspace identity attributed to this composition's bindings and evidence |
-| `workspaceRoot` | none | Worktree used when the command line omits a path |
+| `workspaceRoot` | none | Worktree `/devframe-start` binds, and the fallback `/goal-complete` uses when the command line omits a path |
+| `checks` | required | The human-approved required-checks checklist `/devframe-start` registers and executes for real; every `cwd` must be absolute |
+| `taskIds` | required | Non-empty unique native task ids every start binding carries |
+| `maxAttempts` | required | Maximum charged attempts frozen into every start binding |
+| `maxGoalRounds` | none | Optional continuation round cap frozen into every start binding |
 
-An empty `workspaceId` or a relative `workspaceRoot` fails plugin activation loudly.
+An empty `workspaceId`, a relative `workspaceRoot`, a relative check `cwd`, an empty or duplicated `taskIds`, or a non-positive `maxAttempts`/`maxGoalRounds` fails plugin activation loudly.
 
 -----
 
@@ -74,12 +92,15 @@ An empty `workspaceId` or a relative `workspaceRoot` fails plugin activation lou
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-This section explains how the command resolves evidence and dispatches the admission; the observable contract is covered in [Use this package](#use-this-package).
+This section explains how the commands resolve evidence and dispatch the admission; the observable contract is covered in [Use this package](#use-this-package).
 
 ### Design
 
-- **Reads the projection this package owns.** Activation registers the devframe projection unit, and the handler reads its state for the invoking session: the latest verification evidence attributed to the current goal, plus the latest review record. Review evidence is not pre-filtered by goal — its attribution is enforced structurally by the admission, which fails closed on a foreign review.
-- **Fail closed before dispatch.** The handler refuses on a missing binding, missing evidence, or a latched projection replay failure before it reaches the admission, and resolves the worktree path explicitly so a missing root is a data error rather than a structural failure.
+- **Reads the projection this package owns.** Activation registers the devframe projection unit, and the handlers read its state for the invoking session: the latest verification evidence attributed to the current goal, plus the latest review record. Review evidence is not pre-filtered by goal — its attribution is enforced structurally by the admission, which fails closed on a foreign review.
+- **The host collects every start fact.** `/devframe-start` computes the worktree's real source fingerprint, derives the snapshot id from it, hashes the approved objective and checklist into the acceptance digest, and mints the human authorization inside the command adapter; model input never writes evidence, and the honest four-state check results are recorded as-is.
+- **One role authority, derived from the log.** The reviewer directory resolves a Session's role from the role-policy snapshot folded into its devframe projection — not from a host-memory side ledger — so the review gate's authority is the session log's own record, and an unassigned role is fail-closed.
+- **Two journals share one durability callback.** The composition owns a DevFrame Session journal for the role-policy and goal-binding records and constructs the `AgentEvidenceJournal` (default real-subprocess check execution) for verification records; both flush through `ctx.sessions.flush`, and a failed flush latches the failing journal's writer.
+- **Fail closed before dispatch.** The handlers refuse on missing goals, missing bindings, missing evidence, or a latched projection replay failure before they reach the admission, and resolve the worktree path explicitly so a missing root is a data error rather than a structural failure.
 - **Receipts only after admission.** An admitted completion advances the native goal through the admission's compare-and-set and records one `completion-admission` evidence entry through the goal service; rejections leave the goal phase, binding, and admission state untouched.
 
 ### Source map
@@ -87,8 +108,9 @@ This section explains how the command resolves evidence and dispatches the admis
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: name, injection list, config schema, apply |
-| [`src/composition.ts`](src/composition.ts) | Composition service: binding start lane, admission reads, completion handler |
-| [`src/command.ts`](src/command.ts) | Command grammar, rejection rendering, receipt evidence |
+| [`src/composition.ts`](src/composition.ts) | Composition service: start/resume lanes, binding start lane, admission reads, completion handler |
+| [`src/command.ts`](src/command.ts) | Command grammar, data-error texts, rejection rendering, receipt evidence |
+| [`src/host-evidence.ts`](src/host-evidence.ts) | Flush closure, projection-derived reviewer directory, role-policy/goal-binding landing helpers, acceptance digest |
 | [`src/config.ts`](src/config.ts) | Config schema and validation |
 | — | No runtime invariant companion is published; admission semantics are owned and tested by the devframe package, and command behavior is covered by package tests. |
 
@@ -99,10 +121,10 @@ This section explains how the command resolves evidence and dispatches the admis
 <a id="further-exploration"></a>
 ## Further Exploration
 
-The command is a thin host surface over the admission seam; read these pages for the contracts it composes.
+The commands are thin host surfaces over the admission seam; read these pages for the contracts they compose.
 
-- [DevFrame host-work session seam](../devframe/README.md) — the projection, fingerprints, required checks, and reviews this command reads and dispatches.
-- [Commands service](../../interaction/commands/README.md) — the registry boundary the command registers into and dispatches through.
+- [DevFrame host-work session seam](../devframe/README.md) — the projection, fingerprints, required checks, and reviews these commands read and dispatch.
+- [Commands service](../../interaction/commands/README.md) — the registry boundary the commands register into and dispatch through.
 - [Goal service](../../goal/goal/README.md) — the native goal lifecycle the admission completes and receipts attach to.
 - [Host command surface Agent Note](../../../.agents/notes/implemented/architecture/2026-09-06-command-goal-binding-host-command-surface.md) — the composition and attribution decisions.
 
@@ -111,32 +133,33 @@ The command is a thin host surface over the admission seam; read these pages for
 <a id="model-experience"></a>
 ## Model Experience
 
-### Human `/goal-complete` control
+### Human start, resume, and completion control
 
 #### What the model sees
 
-The slash input, the admission dispatch, and the direct success/error output never enter model requests. An admitted completion records one `goal/change` receipt carrying the `completion-admission` evidence entry, and the projection this package registers exposes the completed binding and review state to host surfaces; a later continuation prompt observes the completed goal only through those owned channels.
+The slash inputs, the host's evidence collection, and the direct success/error outputs never enter model requests. `/devframe-start` and `/devframe-resume` append `devframe/role-policy`, `devframe/goal-binding`, and `devframe/verification` records to the controller session log — a host-side durable record that never enters a model request. An admitted completion records one `goal/change` receipt carrying the `completion-admission` evidence entry, and the projection this package registers exposes the binding, evidence, and review state to host surfaces; a later continuation prompt observes goal phases only through those owned channels.
 
 #### Token effect
 
-Dispatching the command, receiving its result, and recording the receipt add no model tokens. Later goal-round prompts see the completed phase only through the ordinary request history an enabled driver assembles.
+Dispatching a command, collecting evidence, and recording receipts add no model tokens. Later goal-round prompts see goal phases only through the ordinary request history an enabled driver assembles.
 
 #### KV Cache effect
 
-Command discovery, admission verdicts, and receipt persistence do not affect the cache. Later continuation prompts follow the driver's ordinary request history.
+Command discovery, evidence collection, admission verdicts, and receipt persistence do not affect the cache. Later continuation prompts follow the driver's ordinary request history.
 
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
 
+These limits define when the commands are a poor fit or need special operational care. They are current package constraints, not a task backlog.
 
-These limits define when the command is a poor fit or needs special care. They are current package constraints, not a task backlog.
-
-- **Memory stores only** — bindings and the required-checks registration live in process memory; after a restart the checklist registration is gone and the command fails closed with a structural error instead of completing.
-- **Start and resume lanes are test-visible only** — this wave ships the completion command; host surfaces for starting, disarming, and resuming bindings remain deferred.
-- **Evidence producers are deferred** — a completion needs prior `devframe/verification` and `devframe/review` records; hosts that do not produce them always receive the stable no-evidence error.
-- **Review attribution is structural** — the command takes the latest review record without a goal pre-filter; a foreign latest review surfaces as a structural `GoalBindingError`, which is the fail-closed direction.
-- **Model completion paths bypass this seam** — model-facing goal tools that complete a goal directly do not run this admission; the command gates only the human completion verb.
+- **Review production is not in this wave** — `/devframe-start` lands verification evidence only and fabricates no review decision; after it, `/goal-complete` honestly reports the missing review record (the stable no-review error) instead of completing.
+- **Start has a partial-failure window** — if a journal landing fails after the native goal and the store binding exist, `/devframe-start` throws fail-closed without rolling them back; `/devframe-resume` is the recovery path (a binding present in the store without a log record is re-landed on the log).
+- **The two journals latch independently** — the composition journal (role-policy and goal-binding records) and the `AgentEvidenceJournal`'s internal journal (verification records) are separate instances with separate per-Session failure latches, so one can latch while the other has not; each still blocks its own later writes and fails closed.
+- **The binding and required-checks stores remain in-memory reference implementations** — after a restart the stores are empty; `/devframe-resume` rebuilds the binding from the session log projection, and the approved checklist registration returns with the next `/devframe-start`. Durable store integration stays with the GoalStore wave's existing injection points.
+- **The role policy assigns the controller role only** — no reviewer is authorized, so any review submission is rejected fail-closed until a review production wave lands a reviewer assignment.
+- **Review attribution is structural** — `/goal-complete` takes the latest review record without a goal pre-filter; a foreign latest review surfaces as a structural `GoalBindingError`, which is the fail-closed direction.
+- **Model completion paths bypass this seam** — model-facing goal tools that complete a goal directly do not run this admission; the commands gate only the human verbs.
 
 <a id="dev-note"></a>
 ### Dev Note
@@ -144,6 +167,6 @@ These limits define when the command is a poor fit or needs special care. They a
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-This package is the v14 host-command-surface experimental wave. Open, undecided: host surfaces for the start and resume lane, production evidence producers, and durable stores; the memory stores are composition defaults, not a persistence promise.
+This package is the v14 host-command-surface experimental wave, extended by the composition-closure wave with the `/devframe-start` and `/devframe-resume` lanes. Open, undecided: the review production path (reviewer assignment and review records), durable stores, and a single-journal injection into the evidence producer; the memory stores are composition defaults, not a persistence promise.
 
 </details>

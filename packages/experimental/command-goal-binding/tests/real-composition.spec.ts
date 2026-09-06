@@ -30,8 +30,6 @@ import { createCommittedWorktree, drainWorktreeFixtures, executionFor } from '..
 import * as commandGoalBinding from '../src/index.ts'
 import { GoalBindingComposition } from '../src/composition.ts'
 import { renderCompletionSuccess } from '../src/command.ts'
-import type { CommandGoalBindingConfig } from '../src/config.ts'
-
 const execFileAsync = promisify(execFile)
 
 const WORKSPACE_ID = WorkspaceId('ws-v14-hostcmd')
@@ -105,9 +103,14 @@ function stubAgent(session: Session): Agent {
 /**
  * Boot one REAL composition: native session store, JSONL persistence, the
  * real command registry, the native goal service, the projection registry,
- * and the function plugin under test — then attach one live agent.
+ * and the function plugin under test — then attach one live agent. A case
+ * overrides only the workspace identity and root; BOOT_START_CONFIG fills
+ * the start-lane parameters the activation now requires.
  */
-async function boot(config: CommandGoalBindingConfig): Promise<TestComposition> {
+async function boot(config: {
+  readonly workspaceId: WorkspaceId
+  readonly workspaceRoot?: string
+}): Promise<TestComposition> {
   const ctx = new Context()
   contexts.push(ctx)
   const storageRoot = mkdtempSync(join(tmpdir(), `dsh-command-goal-binding-${++bootNumber}-`))
@@ -118,7 +121,11 @@ async function boot(config: CommandGoalBindingConfig): Promise<TestComposition> 
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(GoalService)
-  await ctx.plugin(commandGoalBinding, { ...BOOT_START_CONFIG, ...config })
+  await ctx.plugin(commandGoalBinding, {
+    ...BOOT_START_CONFIG,
+    workspaceId: config.workspaceId,
+    ...(config.workspaceRoot === undefined ? {} : { workspaceRoot: config.workspaceRoot }),
+  })
   const session = ctx.sessions.create(SessionId(`controller-v14-hostcmd-${bootNumber}`))
   const agent = stubAgent(session)
   ctx.agents.register(agent)
