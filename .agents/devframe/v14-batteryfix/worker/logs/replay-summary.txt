@@ -1,0 +1,6 @@
+hook-cc-posttool-block run1 exit=1
+hook-cc-posttool-block run2 exit=1
+hook-cc-stop-continue run1 exit=1
+hook-cc-stop-continue run2 exit=1
+hook-codex-stop-continue run1 exit=1
+hook-codex-stop-continue run2 exit=1

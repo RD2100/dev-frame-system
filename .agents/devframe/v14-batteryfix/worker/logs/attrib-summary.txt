@@ -1,0 +1,4 @@
+HEAD both-mode-turn exit=1
+HEAD ptc-turn exit=1
+BASE both-mode-turn exit=1
+BASE ptc-turn exit=1

@@ -1,0 +1,2 @@
+$ tsx scripts/gen-cordis-catalog.ts
+gen-cordis-catalog: 115 artifact(s) computed, 0 written, 0 pair record(s) refreshed.
