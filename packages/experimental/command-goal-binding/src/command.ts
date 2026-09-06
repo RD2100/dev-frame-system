@@ -10,7 +10,6 @@ import type {
   CompletionAdmissionAdmitted,
   CompletionAdmissionVerdict,
 } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
-
 /** The slash-command name this plugin registers (without the leading slash). */
 export const COMMAND_NAME = 'goal-complete'
 
@@ -142,5 +141,134 @@ export function goalCompleteDescriptor(): GoalCompleteCommandShape {
     name: COMMAND_NAME,
     description: GOAL_COMPLETE_DESCRIPTION,
     input: { hint: COMMAND_HINT },
+  }
+}
+
+/** The slash-command name of the start verb (without the leading slash). */
+export const DEVFRAME_START_COMMAND_NAME = 'devframe-start'
+
+/** Input hint advertised to capable command composers for the start verb. */
+export const DEVFRAME_START_HINT = '[<objective>]'
+
+/** Human-readable discovery summary for the start command descriptor. */
+export const DEVFRAME_START_DESCRIPTION
+  = 'start a new bound goal and produce real verification evidence'
+
+/** The slash-command name of the resume verb (without the leading slash). */
+export const DEVFRAME_RESUME_COMMAND_NAME = 'devframe-resume'
+
+/** Human-readable discovery summary for the resume command descriptor. */
+export const DEVFRAME_RESUME_DESCRIPTION
+  = 'resume the current bound goal after a stop or restart'
+
+/** Stable data error: the start line names no objective. */
+export const START_OBJECTIVE_REQUIRED_TEXT
+  = '/devframe-start needs an objective: pass "/devframe-start <objective>".'
+
+/** Stable data error: the config names no worktree for the start lane. */
+export const START_WORKTREE_REQUIRED_TEXT
+  = '/devframe-start needs a worktree path: configure workspaceRoot on the plugin; the command line cannot name one alongside the objective.'
+
+/** Stable data error: a goal is already current and not complete. */
+export const START_GOAL_RUNNING_TEXT
+  = 'A goal is already current and not complete. Resume or complete it before using /devframe-start.'
+
+/** Stable data error: the resume line carries unexpected input. */
+export const RESUME_INPUT_UNEXPECTED_TEXT
+  = '/devframe-resume takes no input. Invoke it as "/devframe-resume" with nothing after the command name.'
+
+/** Stable data error: no goal is current for the resume lane. */
+export const RESUME_NO_CURRENT_GOAL_TEXT
+  = 'No goal is currently set. Start one with /devframe-start before using /devframe-resume.'
+
+/** Stable data error: neither the log projection nor the store holds a binding. */
+export const RESUME_NO_BINDING_RECORD_TEXT
+  = 'The current goal has no goal-binding record in this session log or binding store, so it cannot be resumed through /devframe-resume.'
+
+/**
+ * Parse the raw text following `/devframe-start`. The whole trimmed remainder
+ * is one objective (objectives may contain spaces); an empty remainder is a
+ * data error at the handler, not a hidden default.
+ * @param rawInput - verbatim command text following the command name.
+ * @returns the trimmed objective, empty when the line is bare.
+ */
+export function parseDevframeStartInput(rawInput: string): string {
+  return rawInput.trim()
+}
+
+/**
+ * Parse the raw text following `/devframe-resume`. The whole trimmed
+ * remainder must be empty; any residue is a data error at the handler.
+ * @param rawInput - verbatim command text following the command name.
+ * @returns the trimmed residue, empty for the bare form.
+ */
+export function parseDevframeResumeInput(rawInput: string): string {
+  return rawInput.trim()
+}
+
+/**
+ * Render the start success adjudication. The text reports the real executed
+ * check count and the honest verification status and stays stage-shaped; it
+ * never exposes the goal id, snapshot id, verification id, fingerprint, or
+ * confirmation id.
+ * @param checkCount - number of required checks the host really executed.
+ * @param status - aggregate verification status of those real executions.
+ * @returns the stable success text without opaque ids.
+ */
+export function renderStartSuccess(checkCount: number, status: 'passed' | 'failed'): string {
+  return `Bound goal started. The role policy, goal binding, and verification evidence were recorded in this session log; required checks executed for real: ${checkCount}, verification status: ${status}.`
+}
+
+/**
+ * Render the resume success adjudication. The text stays stage-shaped and
+ * never exposes the goal id, revision, or confirmation id.
+ * @returns the stable success text without opaque ids.
+ */
+export function renderResumeSuccess(): string {
+  return 'Bound goal resumed. The updated goal binding was recorded in this session log and goal continuation is armed.'
+}
+
+/** The frozen descriptor part of the start command definition. */
+export interface DevframeStartCommandShape {
+  /** Command name without the leading slash. */
+  readonly name: typeof DEVFRAME_START_COMMAND_NAME
+  /** Human-readable discovery summary. */
+  readonly description: typeof DEVFRAME_START_DESCRIPTION
+  /** Free-form input hint; the command takes no images. */
+  readonly input: { readonly hint: typeof DEVFRAME_START_HINT }
+}
+
+/**
+ * Assemble the immutable descriptor part of the start command definition.
+ * @returns the name/description/input triple for `ctx.commands.register`.
+ */
+export function devframeStartDescriptor(): DevframeStartCommandShape {
+  return {
+    name: DEVFRAME_START_COMMAND_NAME,
+    description: DEVFRAME_START_DESCRIPTION,
+    input: { hint: DEVFRAME_START_HINT },
+  }
+}
+
+/**
+ * The frozen descriptor part of the resume command definition. The resume
+ * verb advertises no input: the command registry rejects an empty hint, so
+ * "no hint" is the absent `input` descriptor rather than an empty string.
+ */
+export interface DevframeResumeCommandShape {
+  /** Command name without the leading slash. */
+  readonly name: typeof DEVFRAME_RESUME_COMMAND_NAME
+  /** Human-readable discovery summary. */
+  readonly description: typeof DEVFRAME_RESUME_DESCRIPTION
+}
+
+/**
+ * Assemble the immutable descriptor part of the resume command definition.
+ * @returns the name/description pair for `ctx.commands.register`.
+ */
+export function devframeResumeDescriptor(): DevframeResumeCommandShape {
+  return {
+    name: DEVFRAME_RESUME_COMMAND_NAME,
+    description: DEVFRAME_RESUME_DESCRIPTION,
   }
 }

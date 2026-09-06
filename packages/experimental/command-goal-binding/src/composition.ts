@@ -1,11 +1,11 @@
 /**
- * The `/goal-complete` composition service: one per-composition owner that
- * lazily builds the {@link GoalBindingController} per controller Session over
- * the live native Goal service, selects completion evidence from the
- * controller Session's devframe projection, and lands the admitted verdict as
- * a durable completion receipt. The command handler is its only production
- * entry; `startBinding` is the composition's test-visible start lane and is
- * deliberately not a command verb.
+ * The DevFrame host command composition service: one per-composition owner
+ * that lazily builds the {@link GoalBindingController} per controller Session
+ * over the live native Goal service, selects completion evidence from the
+ * controller Session's devframe projection, lands the admitted verdict as a
+ * durable completion receipt, and owns the `/devframe-start` and
+ * `/devframe-resume` lanes. Every command handler is a production entry;
+ * `startBinding` stays the composition's test-visible start lane.
  * @module @deepseek-ai/dsh-experimental-command-goal-binding/composition
  */
 
@@ -14,6 +14,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { CommandResult } from '@deepseek-ai/dsh-commands'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type { GoalId } from '@deepseek-ai/dsh-goal/types'
+import { AgentEvidenceJournal } from '@deepseek-ai/dsh-experimental-agent-evidence'
 import { ControllerSessionId, GoalBindingController, GoalServicePort, MemoryGoalBindingStore, createHumanAuthorization } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
 import type {
   CompleteGoalRequest,
@@ -23,11 +24,14 @@ import type {
   GoalBudgetInput,
   TaskId,
 } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
+import { computeSourceFingerprint } from '@deepseek-ai/dsh-experimental-devframe/src/source-fingerprint.ts'
 import type { AcceptanceHash, DevFrameSnapshotId, SourceFingerprint } from '@deepseek-ai/dsh-experimental-devframe/shared'
+import { DevFrameSnapshotId as makeSnapshotId } from '@deepseek-ai/dsh-experimental-devframe/shared'
 import { MemoryRequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
 import type { RequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
 import { devFrameProjectionDefinition } from '@deepseek-ai/dsh-experimental-devframe/src/projection.ts'
 import type { DevFrameProjectionState } from '@deepseek-ai/dsh-experimental-devframe/src/projection.ts'
+import { DevFrameSessionJournal } from '@deepseek-ai/dsh-experimental-devframe/src/session-journal.ts'
 import type { DevFrameReviewEventData, DevFrameVerificationEventData } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
 import {
   GOAL_ALREADY_COMPLETE_TEXT,
@@ -36,13 +40,35 @@ import {
   NO_REVIEW_TEXT,
   NO_VERIFICATION_TEXT,
   PROJECTION_FAILURE_TEXT,
+  RESUME_INPUT_UNEXPECTED_TEXT,
+  RESUME_NO_BINDING_RECORD_TEXT,
+  RESUME_NO_CURRENT_GOAL_TEXT,
+  START_GOAL_RUNNING_TEXT,
+  START_OBJECTIVE_REQUIRED_TEXT,
+  START_WORKTREE_REQUIRED_TEXT,
   WORKTREE_REQUIRED_TEXT,
   completionAdmissionEvidence,
+  devframeResumeDescriptor,
+  devframeStartDescriptor,
   goalCompleteDescriptor,
+  parseDevframeResumeInput,
+  parseDevframeStartInput,
   parseGoalCompleteInput,
   renderCompletionRejection,
   renderCompletionSuccess,
+  renderResumeSuccess,
+  renderStartSuccess,
 } from './command.ts'
+import {
+  ProjectionEvidenceReviewerDirectory,
+  acceptanceHashOf,
+  compositionDevFrameJournal,
+  devFrameStateOf,
+  landGoalBinding,
+  landRolePolicyIfAbsent,
+  resultTupleOf,
+  sessionFlush,
+} from './host-evidence.ts'
 import type { ResolvedCommandGoalBindingConfig } from './config.ts'
 
 /** Replaceable storage boundaries of one composition. */
@@ -77,24 +103,35 @@ export interface StartGoalBindingRequest {
  * Process-local composition owner registering as the `commandGoalBinding`
  * service (deliberately without a Context merge declaration: this is a
  * private experimental seam, so in-process readers use `ctx.reflect.get`).
- * It registers the devframe projection unit and the `/goal-complete` command,
- * and owns the controller registry plus both replaceable reference stores.
+ * It registers the devframe projection unit and the `/goal-complete`,
+ * `/devframe-start`, and `/devframe-resume` commands, and owns the controller
+ * registry, both replaceable reference stores, and the evidence wiring: the
+ * composition-owned DevFrame Session journal for role-policy and
+ * goal-binding records, plus the `AgentEvidenceJournal` whose default
+ * execution face runs required checks as real subprocesses.
  */
 export class GoalBindingComposition extends Service {
   /** Durable binding store backing every controller of this composition. */
   readonly bindingStore: GoalBindingStore
   /** Approved-checks configuration store resolving evidence digests. */
   readonly requiredChecksStore: RequiredChecksConfigStore
+  /** Composition-owned journal landing role-policy and goal-binding records. */
+  readonly journal: DevFrameSessionJournal
+  /** Evidence producer executing required checks through the real subprocess face. */
+  readonly evidenceJournal: AgentEvidenceJournal
 
   private readonly controllers = new Map<string, GoalBindingController>()
 
   /**
    * Construct the composition inside the owning plugin fiber: registering the
-   * projection unit and the command here ties both registrations to that
+   * projection unit and the commands here ties all registrations to that
    * fiber's lifetime (the Goal service registers its own projection the same
-   * way).
-   * @param ctx - the plugin fiber's context carrying `commands`, `goals`, and
-   *   `sessionProjections`.
+   * way). The evidence journals share one native flush closure and one
+   * projection-derived role directory; constructing the evidence journal
+   * without a reviewer directory is impossible by construction, so an
+   * unwired review gate cannot be instantiated.
+   * @param ctx - the plugin fiber's context carrying `commands`, `goals`,
+   *   `sessions`, and `sessionProjections`.
    * @param config - validated workspace configuration.
    * @param stores - optional store overrides; memory reference
    *   implementations otherwise.
@@ -107,6 +144,10 @@ export class GoalBindingComposition extends Service {
     super(ctx, 'commandGoalBinding')
     this.bindingStore = stores.bindings ?? new MemoryGoalBindingStore()
     this.requiredChecksStore = stores.requiredChecks ?? new MemoryRequiredChecksConfigStore()
+    const flush = sessionFlush(ctx)
+    const reviewerDirectory = new ProjectionEvidenceReviewerDirectory(ctx)
+    this.journal = compositionDevFrameJournal(flush, reviewerDirectory)
+    this.evidenceJournal = new AgentEvidenceJournal({ flush, reviewerDirectory })
     ctx.sessionProjections.register(devFrameProjectionDefinition)
     ctx.effect(() => ctx.commands.register({
       ...goalCompleteDescriptor(),
@@ -115,6 +156,20 @@ export class GoalBindingComposition extends Service {
         worktreePath: parseGoalCompleteInput(invocation.rawInput),
       }),
     }), 'command-goal-binding.register')
+    ctx.effect(() => ctx.commands.register({
+      ...devframeStartDescriptor(),
+      handler: invocation => this.startBoundGoal({
+        agent: invocation.agent,
+        rawInput: invocation.rawInput,
+      }),
+    }), 'command-goal-binding.register-start')
+    ctx.effect(() => ctx.commands.register({
+      ...devframeResumeDescriptor(),
+      handler: invocation => this.resumeBoundGoal({
+        agent: invocation.agent,
+        rawInput: invocation.rawInput,
+      }),
+    }), 'command-goal-binding.register-resume')
   }
 
   /**
@@ -138,6 +193,120 @@ export class GoalBindingComposition extends Service {
       ...(request.maxGoalRounds === undefined ? {} : { maxGoalRounds: request.maxGoalRounds }),
       authorization: createHumanAuthorization(request.confirmationId),
     })
+  }
+
+  /**
+   * Execute one `/devframe-start` invocation: parse the objective, compute
+   * the real source fingerprint of the configured worktree, start the bound
+   * goal through the controller, and land the fold-required evidence chain —
+   * role-policy (only when the projection holds none), goal-binding, and a
+   * real verification — on the controller Session log. The host collects
+   * every recorded fact; model input never writes evidence.
+   *
+   * Expected data refusals return stable error results; the structural
+   * failures (`SourceFingerprintError`, `GoalBindingError`,
+   * `DevFramePersistenceError`, `RequiredChecksError`) propagate unchanged so
+   * the command registry settles them as dispatch failures. A journal landing
+   * failure after the native goal exists is the registered partial-failure
+   * window: it throws fail-closed, and the resume lane provides the repair
+   * surface.
+   * @param invocation - the receiving agent plus the verbatim command text.
+   * @returns a success result carrying the honest check count and
+   *   verification status, or a stable error result.
+   */
+  async startBoundGoal(invocation: {
+    readonly agent: Agent
+    readonly rawInput: string
+  }): Promise<CommandResult> {
+    const objective = parseDevframeStartInput(invocation.rawInput)
+    if (objective.length === 0) return { kind: 'error', text: START_OBJECTIVE_REQUIRED_TEXT }
+    const worktreePath = this.config.workspaceRoot
+    if (worktreePath === undefined) return { kind: 'error', text: START_WORKTREE_REQUIRED_TEXT }
+    const current = this.ctx.goals.get(invocation.agent)
+    if (current !== undefined && current.phase !== 'complete') {
+      return { kind: 'error', text: START_GOAL_RUNNING_TEXT }
+    }
+    const computed = await computeSourceFingerprint({ worktreePath })
+    const snapshotId = makeSnapshotId(`snapshot-v1-${computed.headCommit}-${computed.trackedStateHash}`)
+    const requiredChecksDigest = await this.requiredChecksStore.save(this.config.checks)
+    const binding = await this.startBinding(invocation.agent, {
+      objective,
+      taskIds: this.config.taskIds,
+      acceptanceHash: acceptanceHashOf(objective, this.config.checks),
+      sourceFingerprint: computed.fingerprint,
+      snapshotId,
+      budget: { maxAttempts: this.config.maxAttempts },
+      confirmationId: `devframe-start:${invocation.agent.id}:${Date.now()}`,
+      ...(this.config.maxGoalRounds === undefined ? {} : { maxGoalRounds: this.config.maxGoalRounds }),
+    })
+    const session = invocation.agent.session
+    await landRolePolicyIfAbsent(this.ctx, this.journal, session, this.config.workspaceId)
+    await landGoalBinding(this.journal, session, binding)
+    const verification = await this.evidenceJournal.recordVerification({
+      session,
+      binding: resultTupleOf(binding),
+      requiredChecksDigest,
+      requiredChecksStore: this.requiredChecksStore,
+    })
+    return {
+      kind: 'success',
+      text: renderStartSuccess(verification.checks.length, verification.status),
+    }
+  }
+
+  /**
+   * Execute one `/devframe-resume` invocation: align the binding between the
+   * log projection and the binding store, rebuild what a restart or a start
+   * partial failure lost, resume the exact current goal through the
+   * controller, and land the revision-advanced binding back on the log so it
+   * stays the durable authority across the next restart.
+   *
+   * After a restart the in-memory store is empty while the restored log
+   * rebuilds the projection: the projected binding is restored into the
+   * store, and a controller cached with the empty store is evicted so the
+   * rebuilt controller loads the restored binding. After a start partial
+   * failure the store holds the binding while the projection lacks it: the
+   * role-policy (when absent) and the stored binding are landed on the log.
+   * @param invocation - the receiving agent plus the verbatim command text.
+   * @returns a success result, or a stable error result for the expected
+   *   data refusals (unexpected input, no current goal, already complete, no
+   *   binding record). Structural failures propagate unchanged.
+   */
+  async resumeBoundGoal(invocation: {
+    readonly agent: Agent
+    readonly rawInput: string
+  }): Promise<CommandResult> {
+    if (parseDevframeResumeInput(invocation.rawInput).length > 0) {
+      return { kind: 'error', text: RESUME_INPUT_UNEXPECTED_TEXT }
+    }
+    const current = this.ctx.goals.get(invocation.agent)
+    if (current === undefined) return { kind: 'error', text: RESUME_NO_CURRENT_GOAL_TEXT }
+    if (current.phase === 'complete') return { kind: 'error', text: GOAL_ALREADY_COMPLETE_TEXT }
+    const controllerSessionId = ControllerSessionId(invocation.agent.id)
+    const projected = devFrameStateOf(this.ctx, invocation.agent.session)
+      .bindings.find(binding => binding.goalId === current.id)
+    const stored = (await this.bindingStore.load(controllerSessionId))
+      .find(binding => binding.goalId === current.id)
+    let restoredStore = false
+    if (stored === undefined && projected !== undefined) {
+      await this.bindingStore.save(projected)
+      restoredStore = true
+    } else if (stored !== undefined && projected === undefined) {
+      const session = invocation.agent.session
+      await landRolePolicyIfAbsent(this.ctx, this.journal, session, this.config.workspaceId)
+      await landGoalBinding(this.journal, session, stored)
+    } else if (stored === undefined && projected === undefined) {
+      return { kind: 'error', text: RESUME_NO_BINDING_RECORD_TEXT }
+    }
+    if (restoredStore && this.controllers.has(invocation.agent.id)) {
+      this.controllers.delete(invocation.agent.id)
+    }
+    const resumed = await this.controllerFor(invocation.agent).resume(
+      { controllerSessionId, goalId: current.id },
+      createHumanAuthorization(`devframe-resume:${invocation.agent.id}:${Date.now()}`),
+    )
+    await landGoalBinding(this.journal, invocation.agent.session, resumed)
+    return { kind: 'success', text: renderResumeSuccess() }
   }
 
   /**
@@ -181,9 +350,7 @@ export class GoalBindingComposition extends Service {
     if (!bindings.some(binding => binding.goalId === current.id)) {
       return { kind: 'error', text: NO_BINDING_TEXT }
     }
-    const state = this.ctx.sessionProjections.stateOf(invocation.agent.session, 'devframe')
-    /* v8 ignore next 1 -- this service registers the devframe unit in its constructor, so the key cannot be absent while its own command runs */
-    if (state === undefined) throw new TypeError('devframe projection state is unavailable for the controller session')
+    const state = devFrameStateOf(this.ctx, invocation.agent.session)
     if (state.failure !== null) return { kind: 'error', text: PROJECTION_FAILURE_TEXT }
     const verification = latestAttributedVerification(state, current.id)
     if (verification === undefined) return { kind: 'error', text: NO_VERIFICATION_TEXT }

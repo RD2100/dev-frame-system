@@ -4857,6 +4857,9 @@ importers:
 
   packages/experimental/command-goal-binding:
     dependencies:
+      '@deepseek-ai/dsh-experimental-agent-evidence':
+        specifier: workspace:^
+        version: link:../agent-evidence
       '@deepseek-ai/dsh-experimental-devframe':
         specifier: workspace:^
         version: link:../devframe

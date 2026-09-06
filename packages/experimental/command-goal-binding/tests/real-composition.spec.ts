@@ -30,8 +30,6 @@ import { createCommittedWorktree, drainWorktreeFixtures, executionFor } from '..
 import * as commandGoalBinding from '../src/index.ts'
 import { GoalBindingComposition } from '../src/composition.ts'
 import { renderCompletionSuccess } from '../src/command.ts'
-import type { CommandGoalBindingConfig } from '../src/config.ts'
-
 const execFileAsync = promisify(execFile)
 
 const WORKSPACE_ID = WorkspaceId('ws-v14-hostcmd')
@@ -49,6 +47,25 @@ const APPROVED_CONFIG: DevFrameRequiredChecksConfig = {
 const roots: string[] = []
 const contexts: Context[] = []
 let bootNumber = 0
+
+/**
+ * The approved start parameters every boot config now must carry (the config
+ * requires them at activation). They feed only the /devframe-start lane,
+ * which this spec does not exercise, so /goal-complete behavior is unchanged.
+ */
+const BOOT_START_CONFIG = {
+  checks: {
+    version: 1 as const,
+    checks: [{
+      checkId: 'boot-probe',
+      executable: 'node',
+      arguments: ['-e', 'process.exit(0)'],
+      cwd: 'C:/ws-command-binding',
+    }],
+  },
+  taskIds: [TaskId('task-v14-hostcmd')],
+  maxAttempts: 3,
+}
 
 afterEach(async () => {
   for (const ctx of contexts.splice(0).reverse()) await ctx.fiber.dispose()
@@ -86,9 +103,14 @@ function stubAgent(session: Session): Agent {
 /**
  * Boot one REAL composition: native session store, JSONL persistence, the
  * real command registry, the native goal service, the projection registry,
- * and the function plugin under test — then attach one live agent.
+ * and the function plugin under test — then attach one live agent. A case
+ * overrides only the workspace identity and root; BOOT_START_CONFIG fills
+ * the start-lane parameters the activation now requires.
  */
-async function boot(config: CommandGoalBindingConfig): Promise<TestComposition> {
+async function boot(config: {
+  readonly workspaceId: WorkspaceId
+  readonly workspaceRoot?: string
+}): Promise<TestComposition> {
   const ctx = new Context()
   contexts.push(ctx)
   const storageRoot = mkdtempSync(join(tmpdir(), `dsh-command-goal-binding-${++bootNumber}-`))
@@ -99,7 +121,11 @@ async function boot(config: CommandGoalBindingConfig): Promise<TestComposition> 
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(GoalService)
-  await ctx.plugin(commandGoalBinding, config)
+  await ctx.plugin(commandGoalBinding, {
+    ...BOOT_START_CONFIG,
+    workspaceId: config.workspaceId,
+    ...(config.workspaceRoot === undefined ? {} : { workspaceRoot: config.workspaceRoot }),
+  })
   const session = ctx.sessions.create(SessionId(`controller-v14-hostcmd-${bootNumber}`))
   const agent = stubAgent(session)
   ctx.agents.register(agent)
@@ -218,9 +244,11 @@ function reviewRecord(
  * Append the evidence producer records the projection fold requires before
  * completion evidence exists: role policy, the controller binding, the
  * verification, and the review, plus the host-side registration backing the
- * declared digest. The production producers are deferred, so the test is the
- * producer (events.spec append precedent). Returns the reviewer session the
- * appended policy authorizes.
+ * declared digest. The production producers are no longer deferred — the
+ * /devframe-start lane lands role policy, goal binding, and verification —
+ * so these manual appends remain as test assembly for the /goal-complete
+ * error-face coverage (events.spec append precedent). Returns the reviewer
+ * session the appended policy authorizes.
  */
 async function appendEvidence(test: TestComposition, binding: GoalBinding): Promise<{ readonly reviewerSessionId: SessionId }> {
   const reviewerSessionId = SessionId(`reviewer-v14-hostcmd-${bootNumber}`)
@@ -530,7 +558,8 @@ describe('/goal-complete host command composition', { timeout: 30_000 }, () => {
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(GoalService)
-    await expect(ctx.plugin(commandGoalBinding, { workspaceId: '' })).rejects.toThrow(/workspaceId/)
+    await expect(ctx.plugin(commandGoalBinding, { ...BOOT_START_CONFIG, workspaceId: '' }))
+      .rejects.toThrow(/workspaceId/)
   })
 })
 
@@ -543,7 +572,7 @@ describe('/goal-complete registration lifetime', () => {
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(GoalService)
-    const plugin = await ctx.plugin(commandGoalBinding, { workspaceId: WORKSPACE_ID })
+    const plugin = await ctx.plugin(commandGoalBinding, { ...BOOT_START_CONFIG, workspaceId: WORKSPACE_ID })
     expect('default' in commandGoalBinding).toBe(false)
     const session = ctx.sessions.create(SessionId(`controller-lifetime-${++bootNumber}`))
     const agent = stubAgent(session)
