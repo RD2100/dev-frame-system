@@ -4,17 +4,17 @@
   "baseline": "269cda5630255748738a17ae5b1d3b785e78dee5",
   "l1": {
     "role": "L1",
-    "sessionId": "01a07494-bd7d-7bc1-b629-a24b6655895e",
+    "sessionId": "01a075d8-db4e-7fd1-a6bb-42527bf56cd9",
     "parentId": "01a07494-bd7d-7bc1-b629-a24b6655895e",
     "worktree": "D:/dsh-devframe-v14-next-lead",
     "branch": "codex/v14-next-lead",
     "provider": "codex-app-parent-session",
-    "status": "reviewing"
+    "status": "completed"
   },
   "l2": {
     "role": "L2",
     "sessionId": "01a075dc-9dfc-79d1-b3a5-99e62c03f430",
-    "parentId": "01a07494-bd7d-7bc1-b629-a24b6655895e",
+    "parentId": "01a075d8-db4e-7fd1-a6bb-42527bf56cd9",
     "worktree": "D:/dsh-devframe-v14-next-w1",
     "branch": "codex/v14-next-w1",
     "provider": "blocked/unknown",
