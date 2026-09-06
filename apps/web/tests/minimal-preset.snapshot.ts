@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -5,6 +6,12 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { AgentHandle } from '@deepseek-ai/dsh-agent'
+import {
+  parseSnapshotManifest,
+  platformExpectationVariant,
+  resolveExpectationPath,
+  resolveSessionFixturePath,
+} from '@deepseek-ai/dsh-session-snapshot'
 import { ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-agent-presets'
@@ -21,10 +28,44 @@ import {
 import { newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/minimal-preset', import.meta.url))
-const FIXTURE = join(SNAPSHOT_DIR, 'session.jsonl')
-const UI_EXPECTED = join(SNAPSHOT_DIR, 'ui.expected.md')
+const MANIFEST_PATH = join(SNAPSHOT_DIR, 'snapshot.yml')
+const MANIFEST = parseSnapshotManifest(readFileSync(MANIFEST_PATH, 'utf8'), MANIFEST_PATH)
+// Every platform-dependent read resolves through the session-snapshot
+// vocabulary instead of scattered process.platform conditionals: the
+// persisted-replay fixture (both its replay-script and comparison roles), the
+// pinned sidecars (scaffold-side), and this file's UI golden.
+const FIXTURE = resolveSessionFixturePath({ dir: SNAPSHOT_DIR, manifest: MANIFEST, platform: process.platform })
+const UI_EXPECTED = resolveExpectationPath({ dir: SNAPSHOT_DIR, kind: 'ui', manifest: MANIFEST, platform: process.platform })
 const MODE = webSnapshotMode()
+// Authored-corpus constant, byte-identical on every platform (the system-prompt
+// two-platform exemption precedent): the recorded model output is scripted, so
+// the wording drives no platform-conditional behavior — the scripted tool call
+// is what varies, inside the session fixture variant.
 const PROMPT = "Use the bash tool to run exactly: printf 'MINIMAL_BASH_CARD_OK\\n'. Then reply exactly MINIMAL_PRESET_REQUEST_OK and stop."
+
+/**
+ * The minimal preset's persistent shell per the platform seam — the preset
+ * gates `bash` on POSIX and `pwsh` on win32 (agent.cordis.yml), so the direct
+ * tool calls, the Web card selector, and the replayed-command probe all hang
+ * off this one seam. Expectation texts normalize to the shared canonical form
+ * in `text()`; the exact per-platform tool name stays pinned by the
+ * tool-schemas variant file and the tools assertion in the first test.
+ */
+const SHELL = platformExpectationVariant(process.platform) === 'win32'
+  ? {
+      name: 'pwsh',
+      cardRow: '[data-tool="pwsh"] [data-disclosure-row]',
+      setState: (stateDir: string): string => `Set-Location -LiteralPath ${JSON.stringify(stateDir)}; $env:DSH_MINIMAL_STATE = 'PERSISTED'`,
+      readState: 'Write-Output "${env:DSH_MINIMAL_STATE}:$PWD"',
+      commandProbe: /"command": "Write-Output 'MINIMAL_BASH_CARD_OK/,
+    }
+  : {
+      name: 'bash',
+      cardRow: '[data-sample="bash"]',
+      setState: (stateDir: string): string => `cd ${JSON.stringify(stateDir)} && export DSH_MINIMAL_STATE=PERSISTED`,
+      readState: 'printf \'%s:%s\n\' "$DSH_MINIMAL_STATE" "$PWD"',
+      commandProbe: /"command": "printf 'MINIMAL_BASH_CARD_OK/,
+    }
 
 describe('minimal agent preset', () => {
   let scaffold: WebScaffold
@@ -86,15 +127,15 @@ describe('minimal agent preset', () => {
     await scaffold.ctx.tools.execute({
       signal,
       callId: ToolCallId('minimal-bash-state-setup'),
-      name: 'bash',
-      arguments: { command: `cd ${JSON.stringify(stateDir)} && export DSH_MINIMAL_STATE=PERSISTED` },
+      name: SHELL.name,
+      arguments: { command: SHELL.setState(stateDir) },
       agent: agentHandle.agent,
     })
-    const bash = await scaffold.ctx.tools.execute({
+    const shell = await scaffold.ctx.tools.execute({
       signal,
       callId: ToolCallId('minimal-bash-state-read'),
-      name: 'bash',
-      arguments: { command: 'printf \'%s:%s\n\' "$DSH_MINIMAL_STATE" "$PWD"' },
+      name: SHELL.name,
+      arguments: { command: SHELL.readState },
       agent: agentHandle.agent,
     })
     const seedPath = join(scaffold.workspaceCwd, 'preset-smoke.txt')
@@ -107,38 +148,38 @@ describe('minimal agent preset', () => {
       agent: agentHandle.agent,
     })
 
-    const text = (result: typeof bash): string => result.content
+    const text = (result: typeof shell): string => result.content
       .filter(block => block.type === 'text')
       .map(block => block.text)
       .join('')
       .replaceAll(scaffold.workspaceCwd, '{{cwd}}')
+      // Canonical POSIX separator spelling: path separators in tool output are
+      // platform rendering, not behavior, so the shared inline snapshot reads
+      // the same on every host.
+      .replaceAll('\\', '/')
       .trimEnd()
 
     expect({
       prompt: requestHeader.system,
-      tools: requestHeader.tools?.map(tool => tool.name),
       goalCommand: scaffold.ctx.commands.find(agentHandle.agent, 'goal') !== undefined,
-      bash: text(bash),
+      shell: text(shell),
       editor: text(editor),
     }).toMatchInlineSnapshot(`
       {
-        "bash": "PERSISTED:{{cwd}}/persistent-state",
         "editor": "Here's the content of {{cwd}}/preset-smoke.txt with line numbers (which has a total of 2 lines):
            1  MINIMAL_EDITOR_OK
            2",
         "goalCommand": false,
         "prompt": "You are a helpful software engineer assistant.",
-        "tools": [
-          "bash",
-          "str_replace_editor",
-        ],
+        "shell": "PERSISTED:{{cwd}}/persistent-state",
       }
     `)
+    expect(requestHeader.tools?.map(tool => tool.name)).toEqual([SHELL.name, 'str_replace_editor'])
     expect(requestHeader.tools?.toSorted((left, right) => left.name.localeCompare(right.name)))
       .toEqual(scaffold.ctx.tools.schemas(agentHandle.agent).toSorted((left, right) => left.name.localeCompare(right.name)))
   })
 
-  it.skipIf(MODE === 'record')('expands the completed persistent Bash call in the Web conversation', async () => {
+  it.skipIf(MODE === 'record')('expands the completed persistent shell call in the Web conversation', async () => {
     onTestFailed(() => { if (page !== undefined) void saveFailureShot(page, 'web-minimal-persistent-bash-card') })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
@@ -160,7 +201,7 @@ describe('minimal agent preset', () => {
     await process.click()
     await expect.poll(() => process.getAttribute('aria-expanded')).toBe('true')
 
-    const row = page.locator('[data-sample="bash"]').first()
+    const row = page.locator(SHELL.cardRow).first()
     await row.waitFor({ timeout: 15_000 })
     await expect.poll(() => row.getAttribute('aria-expanded')).toBe('false')
     await row.click()
@@ -170,7 +211,7 @@ describe('minimal agent preset', () => {
     await call.getByText('IN', { exact: true }).waitFor()
     await call.getByText('OUT', { exact: true }).waitFor()
     await call.getByText('MINIMAL_BASH_CARD_OK', { exact: true }).waitFor()
-    await call.getByText(/"command": "printf 'MINIMAL_BASH_CARD_OK/).waitFor()
+    await call.getByText(SHELL.commandProbe).waitFor()
 
     const snapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(UI_EXPECTED, snapshot, MODE)

@@ -45,6 +45,7 @@ import {
   parseSnapshotManifest,
   redactSessionSnapshotIds,
   resolveExpectationPath,
+  resolveSessionFixturePath,
   normalizeSessionSnapshots,
   scrubRequestHeaders,
   scrubSessionSnapshot,
@@ -130,11 +131,13 @@ export async function assertFinalWorkspaceSnapshot(scenarioDir: string, workspac
 }
 
 async function ownsReplayFixture(replayFixture: string | undefined): Promise<boolean> {
-  if (replayFixture === undefined || basename(replayFixture) !== 'session.jsonl') return false
-  const manifestPath = join(dirname(replayFixture), 'snapshot.yml')
+  if (replayFixture === undefined) return false
+  const dir = dirname(replayFixture)
+  const manifestPath = join(dir, 'snapshot.yml')
   if (!existsSync(manifestPath)) return false
   const manifest = parseSnapshotManifest(await readFile(manifestPath, 'utf8'), manifestPath)
-  return manifest.session === undefined
+  if (manifest.session !== undefined) return false
+  return basename(resolveSessionFixturePath({ dir, manifest, platform: process.platform })) === basename(replayFixture)
 }
 
 /** The shipped composition under test: the dsh-base and dsh-web-app bundle patches over the empty profile root. */
@@ -879,36 +882,42 @@ async function assertReplaySession(
     expected = stableSessionFixture(session, expected, sessionCwd)
     await writeFile(fixturePath, expected)
   }
+  const actualContext: NormalizeContext = { sessionIds: [String(session.id)], cwd: sessionCwd }
+
+  // The pinned sidecar comparisons precede the full-log persisted-replay
+  // comparison: a replay drift must not shadow them, since the full log
+  // carries the pinned header content only tokenized. Refresh writes stay
+  // paired with their own comparisons, so the swap is replay-neutral.
+  const fixtureDir = dirname(fixturePath)
+  const manifestPath = join(fixtureDir, 'snapshot.yml')
+  const manifest = parseSnapshotManifest(await readFile(manifestPath, 'utf8'), manifestPath)
+  if (manifest.header?.pin === true) {
+    const normalizePrompt = (value: string): string => value
+      .split(REPO_ROOT).join('{{sourceRoot}}')
+      .split(webUrl).join('{{webUrl}}')
+    const prompts = normalizedSystemPrompts(actual, actualContext).map(normalizePrompt)
+    const schemas = normalizedToolSchemas(actual, actualContext)
+    const promptPath = resolveExpectationPath({ dir: fixtureDir, kind: 'system-prompt', manifest, platform: process.platform })
+    const schemaPath = resolveExpectationPath({ dir: fixtureDir, kind: 'tool-schemas', manifest, platform: process.platform })
+    const promptSnapshot = formatSystemPromptSnapshot(prompts[0] as string, prompts.slice(1))
+    const schemaSnapshot = formatToolSchemasSnapshot(schemas[0] as unknown[], schemas.slice(1))
+    if (mode === 'refresh') {
+      await Promise.all([writeFile(promptPath, promptSnapshot), writeFile(schemaPath, schemaSnapshot)])
+    }
+    expect(promptSnapshot, `${fixturePath}: system-prompt pin`).toBe(await readFile(promptPath, 'utf8'))
+    expect(schemaSnapshot, `${fixturePath}: tool-schema pin`).toBe(await readFile(schemaPath, 'utf8'))
+  }
+
   const expectedHeader = JSON.parse(expected.split('\n').find(line => line.trim() !== '') ?? '{}') as {
     id?: unknown
     cwd?: unknown
   }
-  const actualContext: NormalizeContext = { sessionIds: [String(session.id)], cwd: sessionCwd }
   const expectedContext: NormalizeContext = {
     sessionIds: typeof expectedHeader.id === 'string' ? [expectedHeader.id] : [],
     cwd: typeof expectedHeader.cwd === 'string' ? expectedHeader.cwd : '\0no-cwd\0',
   }
   expect(normalizeSessionSnapshots([normalizeWebSessionVolatiles(actual)], actualContext)[0], `${fixturePath}: persisted replay`)
     .toBe(normalizeSessionSnapshots([normalizeWebSessionVolatiles(expected)], expectedContext)[0])
-
-  const fixtureDir = dirname(fixturePath)
-  const manifestPath = join(fixtureDir, 'snapshot.yml')
-  const manifest = parseSnapshotManifest(await readFile(manifestPath, 'utf8'), manifestPath)
-  if (manifest.header?.pin !== true) return
-  const normalizePrompt = (value: string): string => value
-    .split(REPO_ROOT).join('{{sourceRoot}}')
-    .split(webUrl).join('{{webUrl}}')
-  const prompts = normalizedSystemPrompts(actual, actualContext).map(normalizePrompt)
-  const schemas = normalizedToolSchemas(actual, actualContext)
-  const promptPath = resolveExpectationPath({ dir: fixtureDir, kind: 'system-prompt', manifest, platform: process.platform })
-  const schemaPath = resolveExpectationPath({ dir: fixtureDir, kind: 'tool-schemas', manifest, platform: process.platform })
-  const promptSnapshot = formatSystemPromptSnapshot(prompts[0] as string, prompts.slice(1))
-  const schemaSnapshot = formatToolSchemasSnapshot(schemas[0] as unknown[], schemas.slice(1))
-  if (mode === 'refresh') {
-    await Promise.all([writeFile(promptPath, promptSnapshot), writeFile(schemaPath, schemaSnapshot)])
-  }
-  expect(promptSnapshot, `${fixturePath}: system-prompt pin`).toBe(await readFile(promptPath, 'utf8'))
-  expect(schemaSnapshot, `${fixturePath}: tool-schema pin`).toBe(await readFile(schemaPath, 'utf8'))
 }
 
 /**
@@ -1138,8 +1147,9 @@ const ARIA_AGE =
 
 function normalizeAria(snapshot: string, workspaceCwd: string, age: boolean): string {
   // The session heading renders the workspace's basename, not the full
-  // path, so both spellings must collapse to the token.
-  const base = workspaceCwd.split('/').pop()!
+  // path, so both spellings must collapse to the token. The split admits
+  // both separators so a win32 workspace tokenizes like a POSIX one.
+  const base = workspaceCwd.split(/[\\/]/).pop()!
   return (age ? snapshot.replace(ARIA_AGE, '{{age}}') : snapshot)
     .split(workspaceCwd).join('{{cwd}}')
     .split(base).join('{{workspace}}')
@@ -1295,7 +1305,7 @@ export async function assertFixtureInventory(dir: string, expected: string[]): P
       expect(existsSync(resolve(dir, manifest.session.source)), `${dir}: session source`).toBe(true)
     }
   }
-  for (const entry of artifacts.filter(name => name.endsWith('.jsonl'))) {
+  for (const entry of [...artifacts, ...variantFiles].filter(name => name.endsWith('.jsonl'))) {
     const content = await readFile(join(dir, entry), 'utf8')
     expect(scrubRequestHeaders(content), `${dir}/${entry} carries request-header bulk`).toBe(content)
     expect(redactSessionSnapshotIds([content]), `${dir}/${entry} carries unredacted identities`).toEqual([content])
