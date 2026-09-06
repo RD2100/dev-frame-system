@@ -7,3 +7,9 @@ header:
   class: product-subagent-both
   pin: true
   systemPromptSource: product-subagent-codex
+sessionVariants:
+  win32: true
+expectations:
+  variants:
+    win32:
+      - tool-schemas
