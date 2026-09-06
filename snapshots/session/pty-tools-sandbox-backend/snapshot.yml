@@ -6,3 +6,10 @@ recording: authored
 header:
   class: pty-sandbox-backend
   pin: true
+sessionVariants:
+  win32: true
+expectations:
+  variants:
+    win32:
+      - system-prompt
+      - tool-schemas

@@ -7,3 +7,5 @@ header:
   class: image
 replay:
   override: true
+sessionVariants:
+  win32: true

@@ -8,3 +8,13 @@ header:
   pin: true
   childSystemPrompts: [1]
   childToolSchemas: [1]
+sessionVariants:
+  win32: true
+childSessionVariants:
+  win32: [1]
+expectations:
+  variants:
+    win32: [system-prompt, tool-schemas]
+childExpectations:
+  variants:
+    win32: [system-prompt, tool-schemas]

@@ -18,6 +18,10 @@ import { describe, expect, it } from 'vitest'
 import {
   captureExpectedWorkspaceSnapshot,
   captureWorkspaceSnapshot,
+  childExpectationFileName,
+  childSessionFixtureFileName,
+  declaredExpectationVariantFiles,
+  expectationFileName,
   normalizeSessionLog,
   normalizeSessionSnapshots,
   normalizeStdout,
@@ -26,12 +30,18 @@ import {
   normalizedToolSchemas,
   parseSnapshotManifest,
   parseToolSchemasSnapshot,
+  platformExpectationVariant,
   redactSessionSnapshotIds,
   refreshFixtureReplacements,
+  resolveChildExpectationPath,
+  resolveChildSessionFixturePath,
+  resolveExpectationPath,
+  resolveSessionFixturePath,
   restorePinnedToolSchemas,
   scrubRequestHeaders,
   scrubSessionSnapshot,
   scrubSystemPrompts,
+  sessionFixtureFileName,
   sessionFixtureNames,
   stabilizeFixtureMessageIds,
   stabilizeRefreshLog,
@@ -55,6 +65,11 @@ import {
 const corpusRoot = fileURLToPath(new URL('../', import.meta.url))
 
 const MINIMAL_SYSTEM_PROMPT = 'You are the environment-selected minimal software engineer.'
+// The native win32 worktree tools append their guidance section to the
+// assembled system prompt; the POSIX composition never registers them. The
+// text mirrors the product's private GUIDANCE constant in
+// packages/workflow/tool-worktree/src/index.ts.
+const WORKTREE_GUIDANCE = `The worktree_* tools manage second checkouts (git worktrees) of the calling session's own workspace: they authorize against the session's working directory and cannot touch another workspace's registrations. Get ids with worktree_list before worktree_status or worktree_remove; create with worktree_create for clean builds, experiments, or parallel tasks. A worktree whose directory was deleted outside the product is recovered with worktree_prune (pruneDangling: true), and outside-created checkouts become manageable after worktree_prune (adoptUnregistered: true).`
 const MINIMAL_BASH_DESCRIPTION = `Run commands in a bash shell
 * When invoking this tool, the contents of the "command" parameter does NOT need to be XML-escaped.
 * You don't have access to the internet via this tool.
@@ -114,8 +129,24 @@ const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
   },
   'persistent-tools': {
     environment: { DSH_SYSTEM_PROMPT: MINIMAL_SYSTEM_PROMPT },
-    expectedTools: { bash: ['command'], str_replace_editor: ['command', 'path'] },
-    expectedSystem: MINIMAL_SYSTEM_PROMPT,
+    // The scenario-owned composition registers the same persistent bash tool
+    // on every platform (win32 bash calls fail with deterministic spawn
+    // errors); the win32 runtime additionally registers the native worktree
+    // tools, which the POSIX composition never sees.
+    expectedTools: process.platform === 'win32'
+      ? {
+        bash: ['command'],
+        str_replace_editor: ['command', 'path'],
+        worktree_create: ['path'],
+        worktree_list: [],
+        worktree_prune: [],
+        worktree_remove: ['id'],
+        worktree_status: ['id'],
+      }
+      : { bash: ['command'], str_replace_editor: ['command', 'path'] },
+    expectedSystem: process.platform === 'win32'
+      ? `${MINIMAL_SYSTEM_PROMPT}\n\n${WORKTREE_GUIDANCE}`
+      : MINIMAL_SYSTEM_PROMPT,
     expectedToolDescriptions: { bash: MINIMAL_BASH_DESCRIPTION },
     runtimeContext: {
       includes: ['Current DSH file policy: danger-full-access', 'Approval prompts are disabled in this session'],
@@ -299,16 +330,68 @@ function contextOfContents(contents: readonly string[]): NormalizeContext {
 }
 
 async function fixtureFiles(scenario: CorpusScenario): Promise<string[]> {
-  const names = sessionFixtureNames(await readdir(scenario.dir))
-  return names.map(name => join(scenario.dir, name))
+  const variants = new Set(declaredExpectationVariantFiles(scenario.manifest))
+  const names = sessionFixtureNames((await readdir(scenario.dir)).filter(name => !variants.has(name)))
+  return [
+    resolveSessionFixturePath({ dir: scenario.dir, manifest: scenario.manifest, platform: process.platform }),
+    ...names.slice(1).map((_, position) => resolveChildSessionFixturePath({
+      dir: scenario.dir,
+      manifest: scenario.manifest,
+      index: position + 1,
+      platform: process.platform,
+    })),
+  ]
+}
+
+/**
+ * Replace every `{{cwd}}` token in one session fixture with the run's real
+ * cwd, honoring the JSON encoding depth of each occurrence. The token sits
+ * directly in a JSON string for header fields and result texts, but one
+ * encoding deeper inside model-issued tool-call arguments (a JSON payload
+ * carried as a string value): a raw win32 path inserted at the wrong depth
+ * would survive the outer parse with single backslashes and fail the runtime's
+ * arguments parse (`\t` becomes a tab, `\s` is invalid).
+ */
+function hydrateCwdToken(value: unknown, cwd: string): unknown {
+  if (typeof value === 'string') {
+    if (!value.includes('{{cwd}}')) return value
+    if (value.trimStart().startsWith('{') || value.trimStart().startsWith('[')) {
+      try {
+        return JSON.stringify(hydrateCwdToken(JSON.parse(value) as unknown, cwd))
+      } catch {
+        // Not a JSON payload after all: the token sits in plain text and the
+        // direct replacement below is the correct depth.
+      }
+    }
+    return value.split('{{cwd}}').join(cwd)
+  }
+  if (Array.isArray(value)) return value.map(item => hydrateCwdToken(item, cwd))
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, hydrateCwdToken(item, cwd)]))
+  }
+  return value
+}
+
+/** Hydrate one complete fixture text line-by-line so each line's JSON depth stays exact. */
+function hydrateCwdFixtureText(text: string, cwd: string): string {
+  if (!text.includes('{{cwd}}')) return text
+  const lines = text.split('\n')
+  for (const [index, line] of lines.entries()) {
+    if (!line.includes('{{cwd}}')) continue
+    lines[index] = JSON.stringify(hydrateCwdToken(JSON.parse(line) as unknown, cwd))
+  }
+  return lines.join('\n')
 }
 
 async function hydrateReplayFixtures(scenario: CorpusScenario, cwd: string): Promise<string[]> {
   const root = join(cwd, '.replay-fixtures')
   await mkdir(root, { recursive: true })
-  return Promise.all((await fixtureFiles(scenario)).map(async (source) => {
-    const destination = join(root, basename(source))
-    await writeFile(destination, (await readFile(source, 'utf8')).replaceAll('{{cwd}}', cwd))
+  return Promise.all((await fixtureFiles(scenario)).map(async (source, index) => {
+    // Hydrated names stay canonical regardless of which committed variant the
+    // source resolved to, so the runtime-facing fixture contract is constant.
+    const destination = join(root, index === 0 ? 'session.jsonl' : `session.${index}.jsonl`)
+    const sourceText = await readFile(source, 'utf8')
+    await writeFile(destination, hydrateCwdFixtureText(sourceText, cwd))
     return destination
   }))
 }
@@ -625,6 +708,39 @@ function orderLogs(logs: PersistedLog[], expectedCount: number, separateDshSdkCh
   return [...parents, ...children]
 }
 
+/**
+ * The committed file name of one sidecar write target: the declared platform
+ * variant name on a variant-declaring host platform, the base name otherwise.
+ * Never consults the filesystem, so refresh write-backs can name a variant
+ * target that does not exist yet.
+ */
+function sidecarTarget(
+  scenario: CorpusScenario,
+  kind: 'system-prompt' | 'tool-schemas',
+  index?: number,
+): string {
+  const variant = platformExpectationVariant(process.platform)
+  const declared = index === undefined
+    ? scenario.manifest.expectations?.variants[variant]?.includes(kind) === true
+    : scenario.manifest.childExpectations?.variants[variant]?.includes(kind) === true
+  if (!declared) {
+    return index === undefined ? expectationFileName(kind) : childExpectationFileName(kind, index)
+  }
+  return index === undefined ? expectationFileName(kind, variant) : childExpectationFileName(kind, index, variant)
+}
+
+/** The wire-golden pair the host platform must compare against, plus whether the platform declares a variant. */
+function wireGoldenPaths(scenario: CorpusScenario): { declared: boolean; notifications: string; result: string } {
+  const variant = platformExpectationVariant(process.platform)
+  const declared = scenario.manifest.wireVariants?.[variant] === true
+  const suffix = declared ? `.${variant}` : ''
+  return {
+    declared,
+    notifications: join(scenario.dir, `notifications${suffix}.expected.jsonl`),
+    result: join(scenario.dir, `result${suffix}.expected.json`),
+  }
+}
+
 async function writeHeaderSidecars(
   scenario: CorpusScenario,
   ordered: readonly PersistedLog[],
@@ -637,13 +753,13 @@ async function writeHeaderSidecars(
     const schemas = normalizedToolSchemas(primary.content, ctx)
     if (scenario.manifest.header.systemPromptSource === undefined) {
       await writeFile(
-        join(scenario.dir, 'system-prompt.expected.md'),
+        join(scenario.dir, sidecarTarget(scenario, 'system-prompt')),
         formatSystemPromptSnapshot(prompts[0] as string, prompts.slice(1)),
       )
     }
     if (scenario.manifest.header.toolSchemasSource === undefined) {
       await writeFile(
-        join(scenario.dir, 'tool-schemas.expected.json'),
+        join(scenario.dir, sidecarTarget(scenario, 'tool-schemas')),
         formatToolSchemasSnapshot(schemas[0] as unknown[], schemas.slice(1)),
       )
     }
@@ -652,7 +768,7 @@ async function writeHeaderSidecars(
     const child = ordered[index]
     if (child === undefined) throw new Error(`${scenario.name}: no child ${index} prompt to snapshot`)
     const prompts = normalizedSystemPrompts(child.content, ctx)
-    await writeFile(join(scenario.dir, `system-prompt.${index}.expected.md`), formatSystemPromptSnapshot(
+    await writeFile(join(scenario.dir, sidecarTarget(scenario, 'system-prompt', index)), formatSystemPromptSnapshot(
       prompts[0] as string,
       prompts.slice(1),
     ))
@@ -661,7 +777,7 @@ async function writeHeaderSidecars(
     const child = ordered[index]
     if (child === undefined) throw new Error(`${scenario.name}: no child ${index} schemas to snapshot`)
     const schemas = normalizedToolSchemas(child.content, ctx)
-    await writeFile(join(scenario.dir, `tool-schemas.${index}.expected.json`), formatToolSchemasSnapshot(
+    await writeFile(join(scenario.dir, sidecarTarget(scenario, 'tool-schemas', index)), formatToolSchemasSnapshot(
       schemas[0] as unknown[],
       schemas.slice(1),
     ))
@@ -675,7 +791,10 @@ async function verifyHeaders(
   dshSdkChildConfig?: Readonly<Record<string, unknown>>,
 ): Promise<void> {
   const pin = headerPin(scenario)
-  const pinFixture = await readFile(join(pin.dir, 'session.jsonl'), 'utf8')
+  const pinFixture = await readFile(
+    resolveSessionFixturePath({ dir: pin.dir, manifest: pin.manifest, platform: process.platform }),
+    'utf8',
+  )
   const firstLine = pinFixture.split('\n').find(line => line.trim() !== '') ?? '{}'
   const pinHeader = JSON.parse(firstLine) as JsonObject
   const pinned = normalizedHeaders(pinFixture, {
@@ -684,8 +803,14 @@ async function verifyHeaders(
   })
   const promptOwner = sourceScenario(pin, pin.manifest.header.systemPromptSource)
   const schemaOwner = sourceScenario(pin, pin.manifest.header.toolSchemasSource)
-  const prompt = await readFile(join(promptOwner.dir, 'system-prompt.expected.md'), 'utf8')
-  const schemas = parseToolSchemasSnapshot(await readFile(join(schemaOwner.dir, 'tool-schemas.expected.json'), 'utf8'))
+  const prompt = await readFile(
+    resolveExpectationPath({ dir: promptOwner.dir, kind: 'system-prompt', manifest: promptOwner.manifest, platform: process.platform }),
+    'utf8',
+  )
+  const schemas = parseToolSchemasSnapshot(await readFile(
+    resolveExpectationPath({ dir: schemaOwner.dir, kind: 'tool-schemas', manifest: schemaOwner.manifest, platform: process.platform }),
+    'utf8',
+  ))
   const schemaSets = [schemas.initial, ...schemas.changes]
   const reconstructed = pinned.map((header, index) => restorePinnedToolSchemas(
     header,
@@ -695,10 +820,16 @@ async function verifyHeaders(
   const childPrompts = new Map<number, string>()
   const childSchemas = new Map<number, unknown[][]>()
   for (const index of scenario.manifest.header.childSystemPrompts ?? []) {
-    childPrompts.set(index, await readFile(join(scenario.dir, `system-prompt.${index}.expected.md`), 'utf8'))
+    childPrompts.set(index, await readFile(
+      resolveChildExpectationPath({ dir: scenario.dir, kind: 'system-prompt', index, manifest: scenario.manifest, platform: process.platform }),
+      'utf8',
+    ))
   }
   for (const index of scenario.manifest.header.childToolSchemas ?? []) {
-    const child = parseToolSchemasSnapshot(await readFile(join(scenario.dir, `tool-schemas.${index}.expected.json`), 'utf8'))
+    const child = parseToolSchemasSnapshot(await readFile(
+      resolveChildExpectationPath({ dir: scenario.dir, kind: 'tool-schemas', index, manifest: scenario.manifest, platform: process.platform }),
+      'utf8',
+    ))
     childSchemas.set(index, [child.initial, ...child.changes])
   }
 
@@ -726,9 +857,11 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
     const scenarioTest = recording && scenario.manifest.recording === 'authored' ? it.skip : it
     scenarioTest(`${mode}s ${scenario.name} through dsh --profile sdk`, async () => {
       const scenarioDir = scenario.dir
-      const notificationsExpectedPath = join(scenarioDir, 'notifications.expected.jsonl')
-      const resultExpectedPath = join(scenarioDir, 'result.expected.json')
-      const hasWireGoldens = existsSync(notificationsExpectedPath) || existsSync(resultExpectedPath)
+      const wire = wireGoldenPaths(scenario)
+      if (wire.declared && (!existsSync(wire.notifications) || !existsSync(wire.result))) {
+        throw new Error(`${scenario.name}: declared platform wire variant files are missing: ${basename(wire.notifications)}, ${basename(wire.result)}`)
+      }
+      const hasWireGoldens = existsSync(wire.notifications) || existsSync(wire.result)
       const assertions = SDK_ASSERTIONS[scenario.name] ?? {}
 
       const files = await fixtureFiles(scenario)
@@ -769,8 +902,9 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
 
       if (recording || refreshing) {
         const outputFiles = [
-          join(scenarioDir, 'session.jsonl'),
-          ...Array.from({ length: expectedContents.length - 1 }, (_, index) => join(scenarioDir, `session.${index + 1}.jsonl`)),
+          join(scenarioDir, sessionFixtureFileName(scenario.manifest, process.platform)),
+          ...Array.from({ length: expectedContents.length - 1 }, (_, index) =>
+            join(scenarioDir, childSessionFixtureFileName(scenario.manifest, index + 1, process.platform))),
         ]
         await Promise.all(expectedContents.map((stable, index) => writeFile(outputFiles[index] as string, stable)))
         if (recording) {
@@ -807,11 +941,17 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         const normalizedNotifications = normalizeNotifications(notifications, actualContext)
         const normalizedResult = normalizeResult(finalResult, actualContext)
         if (recording || refreshing) {
-          await writeFile(notificationsExpectedPath, normalizedNotifications)
-          await writeFile(resultExpectedPath, normalizedResult)
+          await writeFile(wire.notifications, normalizedNotifications)
+          await writeFile(wire.result, normalizedResult)
         }
-        expect(normalizedNotifications).toBe(await readFile(notificationsExpectedPath, 'utf8'))
-        expect(normalizedResult).toBe(await readFile(resultExpectedPath, 'utf8'))
+        // The committed projection predates or postdates the file-policy
+        // tokenization (a host-environment attribute, not tested semantics),
+        // so read it through the same final-stage normalizer: a literal
+        // policy row aligns with the tokenized received side, an already
+        // tokenized row is the identity.
+        expect(normalizedNotifications)
+          .toBe(normalizeStdout(await readFile(wire.notifications, 'utf8'), actualContext))
+        expect(normalizedResult).toBe(await readFile(wire.result, 'utf8'))
       }
 
       // Wire-shape invariants that must hold in every mode.

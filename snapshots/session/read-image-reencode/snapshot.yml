@@ -5,3 +5,5 @@ composition: image
 recording: authored
 header:
   class: image
+sessionVariants:
+  win32: true

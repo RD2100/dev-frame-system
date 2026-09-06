@@ -154,6 +154,56 @@ describe('snapshot manifest', () => {
     })
   })
 
+  it('parses child session and child sidecar variants on an owning scenario', () => {
+    expect(parseSnapshotManifest([
+      'version: 1',
+      'profile: headless',
+      'header:',
+      '  class: default',
+      '  childToolSchemas: [1, 2]',
+      'childSessionVariants:',
+      '  win32: [1, 2]',
+      'childExpectations:',
+      '  variants:',
+      '    win32: [tool-schemas]',
+      '',
+    ].join('\n'))).toEqual({
+      version: 1,
+      profile: 'headless',
+      header: { class: 'default', childToolSchemas: [1, 2] },
+      childSessionVariants: { win32: [1, 2] },
+      childExpectations: { variants: { win32: ['tool-schemas'] } },
+    })
+  })
+
+  it('parses stdout projection variants on any scenario', () => {
+    expect(parseSnapshotManifest([
+      'version: 1',
+      'profile: acp',
+      'stdoutVariants:',
+      '  win32: true',
+      '',
+    ].join('\n'))).toEqual({
+      version: 1,
+      profile: 'acp',
+      stdoutVariants: { win32: true },
+    })
+  })
+
+  it('parses SDK wire golden variants on any scenario', () => {
+    expect(parseSnapshotManifest([
+      'version: 1',
+      'profile: sdk',
+      'wireVariants:',
+      '  win32: true',
+      '',
+    ].join('\n'))).toEqual({
+      version: 1,
+      profile: 'sdk',
+      wireVariants: { win32: true },
+    })
+  })
+
   it.each([
     ['', 'manifest must be a mapping'],
     ['version: 2\nprofile: acp\n', 'manifest.version must equal 1'],
@@ -179,6 +229,21 @@ describe('snapshot manifest', () => {
     ['version: 1\nprofile: acp\nsessionVariants: {}\n', 'manifest.sessionVariants must declare at least one platform'],
     ['version: 1\nprofile: acp\nsessionVariants:\n  windows: true\n', 'manifest.sessionVariants has unknown field(s): windows'],
     ['version: 1\nprofile: acp\nsessionVariants:\n  win32: false\n', 'manifest.sessionVariants.win32 must equal true when present'],
+    ['version: 1\nprofile: acp\nchildSessionVariants:\n  win32: true\nsession:\n  source: ../x/session.jsonl\n', 'manifest.childSessionVariants cannot be declared by a session borrower'],
+    ['version: 1\nprofile: acp\nchildSessionVariants: {}\n', 'manifest.childSessionVariants must declare at least one platform'],
+    ['version: 1\nprofile: acp\nchildSessionVariants:\n  windows: [1]\n', 'manifest.childSessionVariants has unknown field(s): windows'],
+    ['version: 1\nprofile: acp\nchildSessionVariants:\n  win32: [0]\n', 'manifest.childSessionVariants.win32 must be an array of unique positive integers'],
+    ['version: 1\nprofile: acp\nchildSessionVariants:\n  win32: [1, 1]\n', 'manifest.childSessionVariants.win32 must be an array of unique positive integers'],
+    ['version: 1\nprofile: acp\nchildExpectations:\n  variants: {}\n', 'manifest.childExpectations.variants must declare at least one platform'],
+    ['version: 1\nprofile: acp\nchildExpectations:\n  variants:\n    win32: [ui]\n', 'manifest.childExpectations.variants.win32 must list system-prompt or tool-schemas kinds'],
+    ['version: 1\nprofile: acp\nchildExpectations:\n  variants:\n    win32: [tool-schemas]\n', 'manifest.childExpectations.variants.win32 declares tool-schemas without a child tool-schemas sidecar index'],
+    ['version: 1\nprofile: acp\nheader:\n  class: base\nchildExpectations:\n  variants:\n    win32: [system-prompt]\n', 'manifest.childExpectations.variants.win32 declares system-prompt without a child system-prompt sidecar index'],
+    ['version: 1\nprofile: acp\nstdoutVariants: {}\n', 'manifest.stdoutVariants must declare at least one platform'],
+    ['version: 1\nprofile: acp\nstdoutVariants:\n  windows: true\n', 'manifest.stdoutVariants has unknown field(s): windows'],
+    ['version: 1\nprofile: acp\nstdoutVariants:\n  win32: false\n', 'manifest.stdoutVariants.win32 must equal true when present'],
+    ['version: 1\nprofile: sdk\nwireVariants: {}\n', 'manifest.wireVariants must declare at least one platform'],
+    ['version: 1\nprofile: sdk\nwireVariants:\n  windows: true\n', 'manifest.wireVariants has unknown field(s): windows'],
+    ['version: 1\nprofile: sdk\nwireVariants:\n  win32: false\n', 'manifest.wireVariants.win32 must equal true when present'],
     ['version: 1\nprofile: acp\nplatform: windows\n', 'manifest.platform must be posix or pwsh'],
     ['version: 1\nprofile: acp\npermission: root\n', 'manifest.permission must be read-only, workspace-write, or danger-full-access'],
     ['version: 1\nprofile: acp\nenvironment:\n  lower: value\n', 'manifest.environment must map uppercase environment names to strings'],

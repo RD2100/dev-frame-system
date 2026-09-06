@@ -1,0 +1,329 @@
+{
+  "observedAt": "2026-09-06T03:19:04.802Z",
+  "qualification": "Live DSH Session records. Assigned worktrees differ from immutable header cwd and are recorded separately. Provider overlap huoshan-1/2 not yet established.",
+  "sessions": [
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "session-c1668d60-b936-45fd-84bc-77f121241cfe",
+        "createdAt": 1788662522967,
+        "cwd": "D:\\dsh-devframe",
+        "delegationDepth": 0,
+        "agentPreset": "standard"
+      },
+      "lastRequest": [
+        {
+          "time": 1788664135936,
+          "config": {
+            "provider": "huoshan-1",
+            "model": "glm-5.3-flash"
+          }
+        }
+      ],
+      "lastSuccess": [
+        {
+          "time": 1788664661996,
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        }
+      ],
+      "toolCalls": 32,
+      "permission": [
+        {
+          "type": "permission/preset",
+          "seq": 32086,
+          "time": 1788663518797,
+          "data": {
+            "preset": "danger-full-access"
+          }
+        },
+        {
+          "type": "sandbox/mode",
+          "seq": 32087,
+          "time": 1788663518798,
+          "data": {
+            "mode": "danger-full-access"
+          }
+        },
+        {
+          "type": "approval/policy",
+          "seq": 32088,
+          "time": 1788663518800,
+          "data": {
+            "policy": "never"
+          }
+        }
+      ],
+      "descendants": 2
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "72aaa1fb-ce2f-4752-97c9-2d7572d2bd7f",
+        "createdAt": 1788663875942,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "session-c1668d60-b936-45fd-84bc-77f121241cfe",
+        "origin": "subagent",
+        "delegationDepth": 1,
+        "agentPreset": "standard"
+      },
+      "descriptor": {
+        "version": 3,
+        "mode": "continuable",
+        "provider": "spawn",
+        "label": "L-Shadow V14 接入组长",
+        "agentProvider": "huoshan-1",
+        "agentModel": "glm-5.3-flash"
+      },
+      "lastRequest": [
+        {
+          "time": 1788663876018,
+          "config": {
+            "provider": "huoshan-1",
+            "model": "glm-5.3-flash"
+          }
+        }
+      ],
+      "lastSuccess": [
+        {
+          "time": 1788664715165,
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        }
+      ],
+      "toolCalls": 60,
+      "permission": [
+        {
+          "type": "sandbox/mode",
+          "seq": 2,
+          "time": 1788663875943,
+          "data": {
+            "mode": "danger-full-access",
+            "source": "delegation"
+          }
+        },
+        {
+          "type": "approval/policy",
+          "seq": 3,
+          "time": 1788663875943,
+          "data": {
+            "policy": "never",
+            "source": "delegation"
+          }
+        },
+        {
+          "type": "permission/preset",
+          "seq": 4,
+          "time": 1788663875945,
+          "data": {
+            "preset": "danger-full-access"
+          }
+        }
+      ],
+      "descendants": 1
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "f705f2bf-b339-4fa1-bcb2-abfd88f2bc78",
+        "createdAt": 1788663937167,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "session-c1668d60-b936-45fd-84bc-77f121241cfe",
+        "origin": "subagent",
+        "delegationDepth": 1,
+        "agentPreset": "standard"
+      },
+      "descriptor": {
+        "version": 3,
+        "mode": "continuable",
+        "provider": "spawn",
+        "label": "L-Integration V14 组合验收",
+        "agentProvider": "huoshan-1",
+        "agentModel": "glm-5.3-flash"
+      },
+      "lastRequest": [
+        {
+          "time": 1788663937249,
+          "config": {
+            "provider": "huoshan-1",
+            "model": "glm-5.3-flash"
+          }
+        }
+      ],
+      "lastSuccess": [
+        {
+          "time": 1788664693405,
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        }
+      ],
+      "toolCalls": 59,
+      "permission": [
+        {
+          "type": "sandbox/mode",
+          "seq": 2,
+          "time": 1788663937168,
+          "data": {
+            "mode": "danger-full-access",
+            "source": "delegation"
+          }
+        },
+        {
+          "type": "approval/policy",
+          "seq": 3,
+          "time": 1788663937168,
+          "data": {
+            "policy": "never",
+            "source": "delegation"
+          }
+        },
+        {
+          "type": "permission/preset",
+          "seq": 4,
+          "time": 1788663937170,
+          "data": {
+            "preset": "danger-full-access"
+          }
+        }
+      ],
+      "descendants": 1
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "024d6ecb-3fcd-4cb2-85d1-a3191bc2f13d",
+        "createdAt": 1788664317405,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "f705f2bf-b339-4fa1-bcb2-abfd88f2bc78",
+        "origin": "subagent",
+        "delegationDepth": 2,
+        "agentPreset": "standard"
+      },
+      "descriptor": {
+        "version": 3,
+        "mode": "continuable",
+        "provider": "spawn",
+        "label": "L2 组合验收：真实运行+证据",
+        "agentProvider": "huoshan-1",
+        "agentModel": "glm-5.3-flash"
+      },
+      "lastRequest": [
+        {
+          "time": 1788664317472,
+          "config": {
+            "provider": "huoshan-1",
+            "model": "glm-5.3-flash"
+          }
+        }
+      ],
+      "lastSuccess": [
+        {
+          "time": 1788664694605,
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        }
+      ],
+      "toolCalls": 15,
+      "permission": [
+        {
+          "type": "sandbox/mode",
+          "seq": 2,
+          "time": 1788664317406,
+          "data": {
+            "mode": "danger-full-access",
+            "source": "delegation"
+          }
+        },
+        {
+          "type": "approval/policy",
+          "seq": 3,
+          "time": 1788664317406,
+          "data": {
+            "policy": "never",
+            "source": "delegation"
+          }
+        },
+        {
+          "type": "permission/preset",
+          "seq": 4,
+          "time": 1788664317408,
+          "data": {
+            "preset": "danger-full-access"
+          }
+        }
+      ],
+      "descendants": 0
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "0b883d36-5612-40ae-8954-f6da2ef17bbe",
+        "createdAt": 1788664626919,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "72aaa1fb-ce2f-4752-97c9-2d7572d2bd7f",
+        "origin": "subagent",
+        "delegationDepth": 2,
+        "agentPreset": "standard"
+      },
+      "descriptor": {
+        "version": 3,
+        "mode": "continuable",
+        "provider": "spawn",
+        "label": "P21-S markShadow host wiring",
+        "agentProvider": "huoshan-1",
+        "agentModel": "glm-5.3-flash"
+      },
+      "lastRequest": [
+        {
+          "time": 1788664684351,
+          "config": {
+            "provider": "huoshan-1",
+            "model": "glm-5.3-flash"
+          }
+        }
+      ],
+      "lastSuccess": [
+        {
+          "time": 1788664733702,
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        }
+      ],
+      "toolCalls": 14,
+      "permission": [
+        {
+          "type": "sandbox/mode",
+          "seq": 2,
+          "time": 1788664626920,
+          "data": {
+            "mode": "danger-full-access",
+            "source": "delegation"
+          }
+        },
+        {
+          "type": "approval/policy",
+          "seq": 3,
+          "time": 1788664626920,
+          "data": {
+            "policy": "never",
+            "source": "delegation"
+          }
+        },
+        {
+          "type": "permission/preset",
+          "seq": 4,
+          "time": 1788664626921,
+          "data": {
+            "preset": "danger-full-access"
+          }
+        }
+      ],
+      "descendants": 0
+    }
+  ]
+}

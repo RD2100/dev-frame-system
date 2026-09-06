@@ -62,6 +62,50 @@ export interface SnapshotExpectationsManifest {
  */
 export type SnapshotSessionVariantsManifest = Partial<Record<SnapshotExpectationPlatform, true>>
 
+/**
+ * Platform-keyed declarations that specific child session fixtures carry
+ * variant files (`session.<n>.<platform>.jsonl`) for a platform family. Each
+ * listed 1-based child index names a committed variant file that replaces the
+ * base child fixture of the same index on its platform; undeclared child
+ * indexes keep their base fixtures on every platform. Only a session owner may
+ * declare child variants.
+ */
+export type SnapshotChildSessionVariantsManifest = Partial<Record<SnapshotExpectationPlatform, number[]>>
+
+/** Child-indexed sidecar kinds a platform variant can replace. */
+export type SnapshotChildExpectationKind = 'system-prompt' | 'tool-schemas'
+
+/**
+ * Platform-keyed expected-file variant declarations for a scenario's own
+ * child-indexed sidecars: a declared platform/kind pair commits one variant
+ * file per child sidecar index the scenario declares for that kind
+ * (`tool-schemas.<n>.<platform>.expected.json`). The base child sidecar of
+ * every undeclared platform/kind pair stays authoritative on all platforms.
+ */
+export interface SnapshotChildExpectationsManifest {
+  /** Child sidecar kinds that carry a variant file for each declared platform family. */
+  variants: Partial<Record<SnapshotExpectationPlatform, SnapshotChildExpectationKind[]>>
+}
+
+/**
+ * Platform-keyed declarations that the scenario's canonical stdout projection
+ * carries a variant file (`stdout.<platform>.expected.jsonl`) for a platform
+ * family. The variant replaces the base stdout expectation on its platform:
+ * a platform-specific recording may differ in content, not only in cwd path
+ * spelling, so the platform reads exactly one stdout expectation.
+ */
+export type SnapshotStdoutVariantsManifest = Partial<Record<SnapshotExpectationPlatform, true>>
+
+/**
+ * Platform-keyed declarations that the scenario's SDK wire goldens
+ * (`notifications.expected.jsonl` and `result.expected.json`) carry variant
+ * files (`notifications.<platform>.expected.jsonl`,
+ * `result.<platform>.expected.json`) for a platform family. A
+ * platform-specific recording may diverge in the SDK-visible event stream and
+ * run result, so the platform reads exactly one golden pair.
+ */
+export type SnapshotWireVariantsManifest = Partial<Record<SnapshotExpectationPlatform, true>>
+
 /** Deployment permission preset selected before the scenario starts. */
 export type SnapshotPermission = 'read-only' | 'workspace-write' | 'danger-full-access'
 
@@ -126,6 +170,31 @@ export interface SnapshotManifest {
    * committed. Only a session owner may declare variants.
    */
   sessionVariants?: SnapshotSessionVariantsManifest
+  /**
+   * Platform-variant child session recordings (`session.<n>.<platform>.jsonl`),
+   * read by the host platform instead of the base child fixture of the same
+   * index; every declared variant file must be committed. Only a session owner
+   * may declare child variants.
+   */
+  childSessionVariants?: SnapshotChildSessionVariantsManifest
+  /**
+   * Platform-variant child-indexed sidecars, read by the host platform instead
+   * of the base child sidecar of the same index; every declared variant file
+   * must be committed.
+   */
+  childExpectations?: SnapshotChildExpectationsManifest
+  /**
+   * Platform-variant canonical stdout projections, replacing the base
+   * `stdout.expected.jsonl` on their platform; every declared variant file
+   * must be committed.
+   */
+  stdoutVariants?: SnapshotStdoutVariantsManifest
+  /**
+   * Platform-variant SDK wire goldens, replacing the base
+   * `notifications.expected.jsonl` / `result.expected.json` pair on their
+   * platform; every declared variant file must be committed.
+   */
+  wireVariants?: SnapshotWireVariantsManifest
   /** Exceptional replay metadata absent for ordinary successful recordings. */
   replay?: SnapshotReplayManifest
   /** Optional host requirement; portable scenarios omit it. */
@@ -148,6 +217,7 @@ const PLATFORMS = new Set<SnapshotPlatform>(['posix', 'pwsh'])
 const PERMISSIONS = new Set<SnapshotPermission>(['read-only', 'workspace-write', 'danger-full-access'])
 const EXPECTATION_PLATFORMS = ['win32', 'posix'] as const
 const EXPECTATION_KINDS = new Set<SnapshotExpectationKind>(['system-prompt', 'tool-schemas', 'ui'])
+const CHILD_EXPECTATION_KINDS = new Set<SnapshotChildExpectationKind>(['system-prompt', 'tool-schemas'])
 const NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 function record(value: unknown, label: string): Record<string, unknown> {
@@ -210,6 +280,10 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       'header',
       'expectations',
       'sessionVariants',
+      'childSessionVariants',
+      'childExpectations',
+      'stdoutVariants',
+      'wireVariants',
       'replay',
       'platform',
       'permission',
@@ -317,6 +391,93 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
         parsed[variant as SnapshotExpectationPlatform] = true
       }
       sessionVariants = parsed
+    }
+
+    let childSessionVariants: SnapshotChildSessionVariantsManifest | undefined
+    if (root.childSessionVariants !== undefined) {
+      if (root.session !== undefined) {
+        throw new Error('manifest.childSessionVariants cannot be declared by a session borrower')
+      }
+      const value = record(root.childSessionVariants, 'manifest.childSessionVariants')
+      exactKeys(value, EXPECTATION_PLATFORMS, 'manifest.childSessionVariants')
+      if (Object.keys(value).length === 0) {
+        throw new Error('manifest.childSessionVariants must declare at least one platform')
+      }
+      const parsed: SnapshotChildSessionVariantsManifest = {}
+      for (const [variant, indexes] of Object.entries(value)) {
+        parsed[variant as SnapshotExpectationPlatform] = positiveIndexes(
+          indexes,
+          `manifest.childSessionVariants.${variant}`,
+        )
+      }
+      childSessionVariants = parsed
+    }
+
+    let childExpectations: SnapshotChildExpectationsManifest | undefined
+    if (root.childExpectations !== undefined) {
+      const value = record(root.childExpectations, 'manifest.childExpectations')
+      exactKeys(value, ['variants'], 'manifest.childExpectations')
+      const variants = record(value.variants, 'manifest.childExpectations.variants')
+      exactKeys(variants, EXPECTATION_PLATFORMS, 'manifest.childExpectations.variants')
+      if (Object.keys(variants).length === 0) {
+        throw new Error('manifest.childExpectations.variants must declare at least one platform')
+      }
+      const childIndexesFor = (kind: SnapshotChildExpectationKind): number[] | undefined =>
+        kind === 'system-prompt' ? header?.childSystemPrompts : header?.childToolSchemas
+      const parsed: Partial<Record<SnapshotExpectationPlatform, SnapshotChildExpectationKind[]>> = {}
+      for (const [variant, kinds] of Object.entries(variants)) {
+        const label = `manifest.childExpectations.variants.${variant}`
+        if (!Array.isArray(kinds) || kinds.length === 0) {
+          throw new Error(`${label} must be a non-empty array of child expectation kinds`)
+        }
+        if (kinds.some(kind => typeof kind !== 'string' || !CHILD_EXPECTATION_KINDS.has(kind as SnapshotChildExpectationKind))) {
+          throw new Error(`${label} must list system-prompt or tool-schemas kinds`)
+        }
+        if (new Set(kinds).size !== kinds.length) {
+          throw new Error(`${label} must not repeat child expectation kinds`)
+        }
+        for (const kind of kinds as SnapshotChildExpectationKind[]) {
+          if ((childIndexesFor(kind) ?? []).length === 0) {
+            throw new Error(`${label} declares ${kind} without a child ${kind} sidecar index`)
+          }
+        }
+        parsed[variant as SnapshotExpectationPlatform] = [...kinds as SnapshotChildExpectationKind[]]
+      }
+      childExpectations = { variants: parsed }
+    }
+
+    let stdoutVariants: SnapshotStdoutVariantsManifest | undefined
+    if (root.stdoutVariants !== undefined) {
+      const value = record(root.stdoutVariants, 'manifest.stdoutVariants')
+      exactKeys(value, EXPECTATION_PLATFORMS, 'manifest.stdoutVariants')
+      if (Object.keys(value).length === 0) {
+        throw new Error('manifest.stdoutVariants must declare at least one platform')
+      }
+      const parsed: SnapshotStdoutVariantsManifest = {}
+      for (const [variant, declared] of Object.entries(value)) {
+        if (declared !== true) {
+          throw new Error(`manifest.stdoutVariants.${variant} must equal true when present`)
+        }
+        parsed[variant as SnapshotExpectationPlatform] = true
+      }
+      stdoutVariants = parsed
+    }
+
+    let wireVariants: SnapshotWireVariantsManifest | undefined
+    if (root.wireVariants !== undefined) {
+      const value = record(root.wireVariants, 'manifest.wireVariants')
+      exactKeys(value, EXPECTATION_PLATFORMS, 'manifest.wireVariants')
+      if (Object.keys(value).length === 0) {
+        throw new Error('manifest.wireVariants must declare at least one platform')
+      }
+      const parsed: SnapshotWireVariantsManifest = {}
+      for (const [variant, declared] of Object.entries(value)) {
+        if (declared !== true) {
+          throw new Error(`manifest.wireVariants.${variant} must equal true when present`)
+        }
+        parsed[variant as SnapshotExpectationPlatform] = true
+      }
+      wireVariants = parsed
     }
 
     let replay: SnapshotReplayManifest | undefined
@@ -431,6 +592,10 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       ...(header === undefined ? {} : { header }),
       ...(expectations === undefined ? {} : { expectations }),
       ...(sessionVariants === undefined ? {} : { sessionVariants }),
+      ...(childSessionVariants === undefined ? {} : { childSessionVariants }),
+      ...(childExpectations === undefined ? {} : { childExpectations }),
+      ...(stdoutVariants === undefined ? {} : { stdoutVariants }),
+      ...(wireVariants === undefined ? {} : { wireVariants }),
       ...(replay === undefined ? {} : { replay }),
       ...(platform === undefined ? {} : { platform }),
       ...(permission === undefined ? {} : { permission }),

@@ -10,3 +10,10 @@ header:
   toolSchemasSource: session/text-turn
   childSystemPrompts: [1]
   childToolSchemas: [1]
+sessionVariants:
+  win32: true
+childSessionVariants:
+  win32: [1]
+childExpectations:
+  variants:
+    win32: [system-prompt, tool-schemas]

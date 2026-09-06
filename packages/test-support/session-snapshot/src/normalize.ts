@@ -20,6 +20,7 @@ const SESSION_ID = '{{sessionId}}'
 const MESSAGE_ID = '{{messageId}}'
 const USED_TOKENS = '{{usedTokens}}'
 const CWD = '{{cwd}}'
+const FILE_POLICY = '{{filePolicy}}'
 const SYSTEM = '{{system}}'
 const TOOLS = '{{tools}}'
 const EVENT_TIME = '{{eventTime}}'
@@ -50,6 +51,8 @@ const FILE_URI_PATH_PREFIX_RE = /(?:^|[^a-z0-9+.-])file:\/\/\/?$/i
 
 /** A UUID v4 string, the shape `randomUUID()` produces for session ids. */
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
+/** The file-policy value inside the runtime-context projection's policy sentence. */
+const FILE_POLICY_RE = /Current DSH file policy: [a-z-]+/g
 const LOCAL_SPILL_PATH_RE = new RegExp(
   String.raw`\{\{cwd\}\}[\\/]\.spill[\\/]session-[0-9a-f]{12}[\\/][0-9a-f]{12}-([A-Za-z0-9._~-]+?)`
   + String.raw`(?=\. Use read with offset/limit|[\s)]|$)`,
@@ -108,6 +111,18 @@ export interface NormalizeOptions {
   identityMode?: 'legacy' | 'preserve'
 }
 
+/**
+ * Render a value as a JSON string-literal body, so substituting it into a JSON
+ * fixture line keeps the line parseable when the value contains JSON specials
+ * — backslash paths on Windows would otherwise form invalid escapes. Identity
+ * for typical POSIX paths, so authored fixtures realize byte-identically.
+ * @param value - the raw value to inject between JSON string quotes.
+ * @returns the escaped string-literal body.
+ */
+export function jsonEscape(value: string): string {
+  return JSON.stringify(value).slice(1, -1)
+}
+
 /** Return every known spelling of the generated cwd, most specific first. */
 function cwdSpellings(ctx: NormalizeContext): string[] {
   const spellings = [...new Set([ctx.cwd, ...ctx.cwdAliases ?? []])]
@@ -115,7 +130,12 @@ function cwdSpellings(ctx: NormalizeContext): string[] {
   const macAliases = spellings
     .filter(spelling => spelling.startsWith('/') && !spelling.startsWith('/private/'))
     .map(spelling => `/private${spelling}`)
-  return [...new Set([...spellings, ...macAliases])]
+  const raw = [...new Set([...spellings, ...macAliases])]
+  // Plugin texts serialize embedded content through JSON.stringify, so a win32
+  // cwd also appears JSON-escaped (`C:\\...`); cover that spelling of every raw
+  // form too. Identity for paths without JSON specials, so POSIX is unchanged.
+  const escaped = raw.filter(spelling => jsonEscape(spelling) !== spelling).map(spelling => jsonEscape(spelling))
+  return [...new Set([...raw, ...escaped])]
     .sort((left, right) => right.length - left.length)
 }
 
@@ -169,6 +189,10 @@ function scrubString(
   identityMode: 'legacy' | 'preserve',
 ): string {
   let out = replaceCwd(value, ctx, CWD)
+  // The runtime-context projection embeds the recording host's file policy
+  // verbatim. The policy is a host environment attribute, not tested
+  // semantics, so tokenize the value the same way volatile paths are.
+  out = out.replace(FILE_POLICY_RE, `Current DSH file policy: ${FILE_POLICY}`)
   // Filesystem APIs can report one directory with several spellings. Replace
   // every known spelling longest-first so a shorter alias cannot corrupt a
   // longer one before it is tokenized. macOS additionally symlinks
@@ -280,7 +304,11 @@ export function tokenizeSessionFixtureCwd(rawLog: string): string {
   if (basename === undefined || basename.length === 0) {
     throw new Error('acp-snapshot: cannot tokenize a cwd without a basename')
   }
-  const ctx: NormalizeContext = { sessionIds: [], cwd }
+  // Tools may render the win32 native cwd with forward separators (file-URI
+  // style) even though the session header records the native form; cover that
+  // spelling at write time so the committed fixture carries the token instead
+  // of a run-specific absolute path. Identity on POSIX.
+  const ctx: NormalizeContext = { sessionIds: [], cwd, cwdAliases: [cwd.replaceAll('\\', '/')] }
   return lines.map((line) => {
     if (line.trim().length === 0) return line
     return JSON.stringify(tokenizeFixtureValue(JSON.parse(line), ctx, basename))

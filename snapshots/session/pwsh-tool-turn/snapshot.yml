@@ -7,3 +7,10 @@ header:
   class: pwsh
   pin: true
 platform: pwsh
+sessionVariants:
+  win32: true
+expectations:
+  variants:
+    win32:
+      - system-prompt
+      - tool-schemas

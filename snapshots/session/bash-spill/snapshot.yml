@@ -5,3 +5,5 @@ composition: fs
 recording: authored
 header:
   class: fs
+sessionVariants:
+  win32: true

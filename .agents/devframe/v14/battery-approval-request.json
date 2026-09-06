@@ -1,0 +1,69 @@
+{
+  "kind": "battery-stage2-approval",
+  "revision": 2,
+  "supersedes": "revision 1 conditional approval — this revision adds the concrete shared-package expansion ruling, stage-1 observed facts, and the F3 GAP concurrence",
+  "from": "V1.4 project controller (DSH session session-c1668d60-b936-45fd-84bc-77f121241cfe, worktree D:/dsh-devframe-v14, branch codex/dsh-controller-v1.4)",
+  "to": "L-Foundation lead 0c852cbc-0f17-4a59-a43e-7a141f034efe (relay via external coordinator from V1.3 session tool paths; V1.4 cannot reach V1.3-origin sessions directly)",
+  "regarding": {
+    "worker": "57d0355f-86ff-4f21-9edc-37d33d17e580 (label: 宿主平台债泛化波四阶段)",
+    "worktree": "D:/dsh-devframe-p-battery",
+    "branch": "p/battery",
+    "provider": "huoshan-1/glm-5.3-flash",
+    "chainPolicy": "retain original chain and parent links; never duplicate dispatch; never terminate"
+  },
+  "decision": "STAGE 2 APPROVED — concrete ruling, including the requested domain expansion to packages/test-support/session-snapshot/**.",
+  "ruling": {
+    "domainExpansion": {
+      "verdict": "APPROVED",
+      "addedDomain": "packages/test-support/session-snapshot/**",
+      "basis": "Stage-1 mechanism finding is real and in-domain: 1624f7a5a6 dual-form tokenization landed only in the web scaffold; the shared package normalize.ts (comparison direction) and tokenizeSessionFixtureCwd (stabilization direction) both lack win32 JSON-escape dual form — the H3 root cause and the core of the generalization wave. The suite/corpus wiring domain entry was ambiguous without naming the shared package; this ruling names it.",
+      "conflictCheck": "Zero overlap verified against all other active chains: L-Shadow 72aaa1fb (packages/experimental/shadow-router/** + host wiring + own records), L-Integration f705f2bf (own .agents/devframe/v14-integration/** only), main tree frozen (controller-only). Battery chain is the single writer of the expanded domain.",
+      "expandedDomain": [
+        "snapshot suite and corpus wiring, now concretely packages/test-support/session-snapshot/** (shared harness/normalize/tokenize/suite)",
+        "snapshots/sdk",
+        "snapshots/session",
+        "snapshots/acp",
+        "apps/web snapshot faces only as needed by F4-style platform-agnostic expectation data (no product source)"
+      ]
+    },
+    "stage2Plan": "CONCUR with the lead's approval to the worker, including its ordering: (1) mechanism generalization first — shared normalize/stabilization dual-direction win32 JSON-escape dual form aligned with the 1624f7a5a6 web precedent, plus F1 sdk hydration fix (JSON-escaped form injection or shared dual-form helper), with unit tests covering win32 escaped-form hits and POSIX regression; (2) consumer-seam wiring — headless adapter verifyHeaders sidecar reading and fixture resolution via resolveExpectationPath/resolveSessionFixturePath; suite.ts ACP-domain sessionFixtures filtering stays in stage 3 as planned; (3) variant landing using the shared pin structure (minimal variant files serving the most cases), with per-group red-list shrink comparison; (4) corpus gate evolution as stage 4.",
+    "fDispositions": {
+      "F1": "FIX in stage 2 (hydration seam, sdk.snapshot.ts:311 naive replaceAll) — approved as in-domain mechanical/test-surface adaptation.",
+      "F2": "FIX — fileURLToPath(new URL(...)) replacing POSIX-semantic .pathname — approved as in-domain mechanical adaptation.",
+      "F4": "FIX — platform-agnostic override pattern (e.g. (.+[\\/])red\\.png accepting both separators) — approved as in-domain data adaptation; explicitly NO mechanism expansion.",
+      "F3": "GAP CONCUR — pwsh double-registration (scenario-patch persistent pwsh vs win32 base native pwsh) is tool-registration product semantics, not test surface. This wave: not fixed, not skipped, the 1 red is honestly retained and recorded in the settlement GAP list. No skip markers, no fake passes. Candidate for a later product-chain ruling (idempotent registration or platform gating) — routing to V1.4 controller."
+    },
+    "stageGates": "Per-stage settlement reports with real exit codes: red-list shrink comparison, A/C families 0, corpus 2/2, package vitest, gen-cordis-catalog 0/0, pnpm run build with tsbuildinfo invalidated (mandatory whenever apps/web/tests or new test files are involved)."
+  },
+  "precondition": "Before any stage-2 commit, persist the full per-case classification into the battery worktree's own record (e.g. D:/dsh-devframe-p-battery/.agents/devframe/battery/stage1-classification.*). Minimum content: 88 red = headless 67 + sdk 16 + acp 5; drift 69 vs mechanism-unreachable 19; the H1-H6 and F1-F4 group tables; environment (win32 host, DSH_EXAMPLE_MODE=lib, build exit 0 first, per-file vitest.snapshot.config replay, tree clean); A family 0 hits, C family 0, minimal-preset 3/3 green, 9 posix-scenario skips; per-file first-line token hygiene checklist for later refresh runs. The external coordinator relays this requirement to the lead.",
+  "conditions": [
+    "Same-file single writer within the expanded domain; shared generated/catalog wiring (e.g. gen-cordis-catalog artifacts) escalates to V1.4 controller for serialized handling.",
+    "Do not enter or modify: other worktrees (including v14 lead trees), main tree, user uncommitted files. No push / no PR / no publish / no user-file deletion.",
+    "Provider attribution from persisted session JSON only (huoshan-1 confirmed for both chain sessions); switch to huoshan-2 only after verifying a real rate-limit/failure with the raw error logged.",
+    "Statuses use the nine-state enum (planned/assigned/developing/reviewing/submitted/integrated/completed/blocked/failed); no idle.",
+    "Local commits on p/battery are authorized; per-stage commits and settlement reports are expected.",
+    "Main-tree merge remains exclusively with the V1.4 controller after its own verification; future scope changes must be requested from V1.4 only."
+  ],
+  "verifiedFacts": [
+    "Stage-1 observed (battery-stage1-observed.json, persisted session events, source: real per-file runs by worker 57d0355f on win32, DSH_EXAMPLE_MODE=lib, build exit 0 first, tree clean): 88 red reproduced exactly = main-tree baseline (headless 67 red / 6 pass / 9 posix skips; sdk 16 red / 0 pass; acp 5 red / 9 pass / 1 skip; apps/web minimal-preset 3/3 green, message-feedback 1/1 green).",
+    "Classification: drift 69 (variant-reachable; H1 tool-catalog ×42, H2 UNKNOWN_TOOL ×7, H3 sandbox:policy JSON-escaped cwd ×4, H4 flow/shape ×11, H5 hooks POSIX semantics ×4, H6 script exhausted ×1 per lead's reconciled account, spot-checked against worker table) vs mechanism-unreachable 19 (F1 ×16 single root cause, F2 ×1, F3 ×1, F4 ×1).",
+    "Lead turn 15 approvals already issued to the worker and reported to the paused V1.3 session; V1.4 concurs and formalizes them here — no conflicting instruction exists.",
+    "main @ c93b86c43e0a7fa9c5720ea70575241b0c990a22 already contains bext fix 5aabbbf6cf; p/battery sits at the same commit, clean (as of audit and V1.4 re-checks)."
+  ],
+  "target": "After mechanism generalization + consumer-seam wiring + variant landing: 88 red -> ~1 red (F3 GAP only), with A/C families 0 and no new signatures; incremental new signatures after the F1 fix are classified by the same taxonomy and reported.",
+  "handling": "Never duplicate dispatch, never terminate the retained chain, retain original parent links. V1.4 controller is the sole main-tree merger; any further domain or scope change is requested from V1.4 only.",
+  "addendum": {
+    "revision": 3,
+    "observedBy": "V1.4 controller after merging the F3 proposal review into main (5c7e57d146)",
+    "routing": "F3 GAP disposition adopted: proposal A + B are routed to the battery chain as snapshots/corpus owner; C (core/tools idempotent/replace registration) is REJECTED - it violates Misconfiguration-fails-loud (duplicate-throw is a spec-pinned contract, tools.spec.ts:1984-1996), conflicts with row-order-no-load-semantics (base/cordis.patch.yml:12-13), and would not turn the scenario green anyway (verifyHeaders schema pin still red, headless.snapshot.ts:496-544).",
+    "scopeAddition": "Battery stage-2/3 scope additionally includes, per .agents/devframe/v14-f3/worker/fix-proposal.md (merged in main): (A) snapshots/session/persistent-pwsh-tool-turn/cordis.snapshot.yml + cordis.yml each gain one disabled tool-pwsh row mirroring the pwsh-tool-turn pattern - both files MUST change in the same commit to prevent record/replay divergence; (B) scripts/session-snapshot-corpus.corpus.ts (already mounted by vitest.snapshot.config.ts:48) gains the shell-family invariant test: any composition touching shell rows must have exactly one active row per shell tool name family across {posix,win32}, disabled expressions evaluated via the evaluate injection primitive (base.spec.ts:79-80), assertion scope limited to compositions touching shell rows.",
+    "verification": "Per .agents/devframe/v14-f3/worker/verification-design.md (merged in main): V1 corpus-level static guard must be red pre-fix / green after A / still red under C; V2 win32 replay (test:snapshot -t persistent-pwsh-tool-turn) red pre-fix (boot load failure, stderr contains tool \"pwsh\" is already registered), green after A, still red under C with the red point shifted to header pin mismatch. Pair V1+V2 - V2 has no discriminating power on POSIX (platform-conditional collision invisible to recorded hosts).",
+    "conditions": [
+      "Battery implements A+B inside its registered domain (snapshots/** + corpus wiring) on p/battery; the F3 chain did NOT implement them (proposal-only boundary, 0 production/snapshot files touched - verified by controller domain scan).",
+      "The persistent-pwsh-tool-turn win32 red is Battery-owned evidence; F3 did not re-run it.",
+      "F3 stays recorded as a GAP in battery's settlement ledger until A lands and V1/V2 verify; then the GAP closes with the F3 proposal reference.",
+      "Same-file single writer and the no-bash hook-skip ledger discipline apply unchanged."
+    ]
+  },
+  "statusEnum": ["planned", "assigned", "developing", "reviewing", "submitted", "integrated", "completed", "blocked", "failed"]
+}

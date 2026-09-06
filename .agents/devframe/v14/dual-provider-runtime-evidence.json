@@ -1,0 +1,96 @@
+{
+  "observedAt": "2026-09-06T03:46:04.562Z",
+  "source": "Persisted DSH Session events, decoded using scanZstdFrames and zstdDecompressSync per complete frame",
+  "substantiveWorker": {
+    "header": {
+      "type": "session",
+      "version": 0,
+      "id": "c376aa04-d710-4e0d-9971-ffb6a9731067",
+      "createdAt": 1788666248454,
+      "cwd": "D:\\dsh-devframe",
+      "parentSession": "77e4a9a2-db3f-4eb2-916c-dce8cfd615f9",
+      "origin": "subagent",
+      "delegationDepth": 2,
+      "agentPreset": "standard"
+    },
+    "assignedWorktree": "D:/dsh-devframe-v14-f3-w1",
+    "runtimeCwdLimitation": "Immutable header cwd remains main; explicit assigned worktree in dispatch and shell arguments. No header rewrite.",
+    "requestHeader": {
+      "provider": "huoshan-2",
+      "model": "glm-5.3-flash"
+    },
+    "requestTime": 1788666248502,
+    "firstSuccessfulResponse": [
+      {
+        "seq": 1130,
+        "time": 1788666267182,
+        "provider": "huoshan-2",
+        "model": "glm-5.3-flash"
+      }
+    ],
+    "toolsAtObservation": 29,
+    "childCreationCalls": 0
+  },
+  "dispatch": {
+    "type": "tool/call",
+    "seq": 50081,
+    "time": 1788666248119,
+    "data": {
+      "turn": 2,
+      "step": 15,
+      "callId": "call_d619d8d89c5e43c3bc861292",
+      "name": "workflow",
+      "arguments": "{\"meta\":{\"description\":\"F3 L2 worker: read-only semantics verification + three proposal drafts, committed on codex/v14-f3-w1-semverify, via huoshan-2 lane\",\"name\":\"f3-l2-worker\",\"whenToUse\":\"Single substantive L2 worker for GAP F3 proposal wave; huoshan-2 model lane per controller dispatch\"},\"script\":\"const report = await agent(`你是 V1.4 F3 任务的 L2 核实与起草 Worker（taskId=v14-f3-w1-semverify，父任务 v14-f3-proposal，父会话 77e4a9a2-db3f-4eb2-916c-dce8cfd615f9）。你的模型执行车道：workflow agent(prompt,{provider:'huoshan-2',model:'glm-5.3-flash'})。\\n\\n【硬性边界】\\n1. 工作树：D:/dsh-devframe-v14-f3-w1（分支 codex/v14-f3-w1-semverify，基点 c93b86c43e0a7fa9c5720ea70575241b0c990a22）。所有文件操作与 git 命令都在该目录。\\n2. 你严禁创建任何 Agent/subagent/workflow/goal——只能用你自己的工具（read/grep/glob/pwsh/edit/write）。\\n3. 只读：生产源码（packages/**、apps/**、scripts/**）、snapshots/**、主树 D:/dsh-devframe、其他一切 worktree。零修改、不进入。\\n4. 你唯一的写入域：D:/dsh-devframe-v14-f3-w1/.agents/devframe/v14-f3/worker/**。除此之外零写入；需要脚本时用 node -e 内联，不写临时文件。\\n5. 禁 push/PR；禁 pnpm install/build/全量测试。\\n6. 本仓库便携 git 缺 bash：pre-commit hook（lefthook）的 vendor manifest guard 会因 \\\"/usr/bin/env: bash: No such file or directory\\\" exit 127 失败——已知环境问题。提交用 --no-verify，并在完成报告记录该跳过门禁+原因；提交前自行执行等效验证：git diff --cached --check 必须 exit 0、每个新文件恰好一个尾随换行。\\n\\n【先读（你的树内）】AGENTS.md、docs/architecture.md、docs/defensive-patterns.md、docs/testing.md 中与本任务相关部分。\\n\\n【GAP F3】win32 快照场景 persistent pwsh 与基座原生 pwsh 双注册撞车。\\n\\n【组长首轮已核事实（起点简报——必须逐条复核并钉死 file:line 与上下文，不得照抄）】\\n- packages/core/tools/tests/tools.spec.ts:1984-1987 \\\"rejects duplicate names and unregisters on fiber dispose (HMR safety)\\\"：同名二次 ctx.tools.register 抛 already registered；错误文案在 packages/core/tools/src/index.ts:720-721。\\n- packages/bundle/base/cordis.patch.yml:256-257 挂载 id tool-pwsh -> @deepseek-ai/dsh-tool-pwsh；base README.md:76 记载两套 shell 栈按平台门控（tool-bash/bash-sandbox 在 win32 disabled，twins pwsh-sandbox/tool-pwsh 仅 win32 挂载），并记载 fs 双注册加载失败的先例。\\n- 快照场景 snapshots/session/persistent-pwsh-tool-turn：snapshot.yml 声明 profile headless、composition persistent-pwsh、platform pwsh；cordis.snapshot.yml:93-95 与 cordis.yml:85-87 插入 @deepseek-ai/dsh-tool-pwsh-persistent；两个 composition 都 disable 了 tool-bash（cordis.snapshot.yml:89-91 / cordis.yml:81-83）但没有 disable tool-pwsh。\\n- 两个插件注册的模型工具名都是 pwsh：packages/shell/tool-pwsh/src/index.ts:250-251 与 packages/shell/tool-pwsh-persistent/src/index.ts:441-442。\\n\\n【核实任务（全部 file:line 证据，读不准的写\\\"未核实\\\"）】\\n(a) 基座原生 pwsh 工具注册/替换语义与幂等性现状：ctx.tools.register() 完整语义（重名行为、disposer、scope 规则、注册发生在插件激活=加载期），packages/core/tools/src/index.ts 的 register 实现与相关 spec；确认是否存在任何替换/幂等路径。\\n(b) 快照场景补丁 persistent pwsh 的注册路径：headless profile 如何叠加 dsh-base（packages/bundle/headless），dsh-session-snapshot（packages/test-support/session-snapshot）如何把 snapshot.yml 的 profile 与场景 composition（cordis.snapshot.yml / 录制期 cordis.yml）分层应用（insert 行为语义）、persistent pwsh 在哪注册、录制与回放的差异。\\n(c) 撞车机制链：把 (a)(b) 串成因果链——win32 宿主上 headless→dsh-base 挂载原生 tool-pwsh（注册 pwsh），场景 composition 插入 tool-pwsh-persistent（注册 pwsh），第二次 register 抛 tool \\\"pwsh\\\" is already registered → 加载失败 → 场景红；并解释为何 POSIX 录制当时是绿的（tool-pwsh 行在 POSIX disabled、tool-bash 被 composition disable）。给出最小复现路径描述（win32 宿主 pnpm run test:snapshot -t persistent-pwsh-tool-turn 的预期失败点），不必真跑出红（Battery 链已持有红证据）。\\n(d) 对照面（为何这些不撞车，逐一核）：packages/bundle/sdk-minimal（cordis.patch.yml:146、package.json:63；无 dsh-base——architecture.md）与 packages/preset/agent-presets/presets/minimal/agent.cordis.yml:59。\\n\\n【三份产出（UTF-8 Markdown，各恰好一个尾随换行，写到 .agents/devframe/v14-f3/worker/）】\\n1. semantics.md 语义核实报告：注册/替换/冲突机制 + 全部 file:line 证据表 + 机制链 + 最小复现路径描述。\\n2. fix-proposal.md 最小修复文件域提案：至少 2 个候选方案并列权衡，必须至少覆盖：(A) 场景 composition 补全（补 disable tool-pwsh 行——注明触碰 snapshots/**、属测试资产非产品代码、其修复所有权归属）；(B) 产品侧方案（按代码事实选择并论证，如 base bundle 平台门控行的成对性保障、工具插件注册守卫等）；(C) core/tools 引入替换/幂等注册模式——对照 Misconfiguration fails loud、现有 spec 断言与 fs 双注册先例，评估是否违背库纪律。每方案给：精确文件清单 + 每文件最小改动形状（函数/行为级描述，不写实现代码）、影响面/风险、与 AGENTS.md 约定的契合、以及它不解决什么。\\n3. verification-design.md 区分性验证设计：一个\\\"修复前红/修复后绿\\\"的验证；说明判别力——哪些候选方案会让它绿、哪些仍红、为何它不是对所有方案都通过；给出归属 tier（按 docs/testing.md，如 core/tools 单测 + win32 门控快照回放）与放置位置。只设计不实施。\\n\\n【完成协议】\\n在 D:/dsh-devframe-v14-f3-w1 内：git add .agents/devframe/v14-f3/worker && git commit --no-verify -m \\\"v14-f3-w1: semantics verification + fix proposal + discriminating verification design\\\"（提交前等效验证：git diff --cached --check exit 0、每文件单尾换行）。\\n最终回复（纯文本，不超过 40 行）必须包含：提交 SHA、三个文件路径、关键结论摘要（每条带 file:line）、你运行过的关键命令与真实退出码、被跳过门禁+原因。`, { provider: 'huoshan-2', model: 'glm-5.3-flash', label: 'v14-f3-w1-semverify' });\\nreturn { report };\"}"
+    }
+  },
+  "overlap": {
+    "meaning": "Overlapping model-step start to successful response windows; both responses attributable to actual configured providers. This is substantive worker work, not the preceding connectivity probe.",
+    "huoshan2": {
+      "startEvent": {
+        "type": "step/start",
+        "seq": 1137,
+        "time": 1788666267804,
+        "data": {
+          "turn": 1,
+          "step": 2
+        }
+      },
+      "response": {
+        "seq": 1492,
+        "time": 1788666274796,
+        "turn": 1,
+        "step": 2,
+        "source": {
+          "provider": "huoshan-2",
+          "model": "glm-5.3-flash"
+        }
+      }
+    },
+    "huoshan1": {
+      "startEvent": {
+        "type": "step/start",
+        "seq": 122092,
+        "time": 1788666257630,
+        "data": {
+          "turn": 5,
+          "step": 47
+        }
+      },
+      "response": {
+        "seq": 123377,
+        "time": 1788666285387,
+        "turn": 5,
+        "step": 47,
+        "source": {
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        }
+      }
+    },
+    "start": "2026-09-06T03:44:27.804Z",
+    "end": "2026-09-06T03:44:34.796Z",
+    "milliseconds": 6992
+  },
+  "excludedProbeSession": "d4ab27e2-64a1-444e-8a15-670902a21649",
+  "rateLimitEvidence": "provider-rate-limit-evidence.json: prior F3 lead huoshan-1 429 remains attributed to huoshan-1"
+}

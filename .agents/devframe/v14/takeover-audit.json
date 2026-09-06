@@ -1,0 +1,1727 @@
+{
+  "observedAt": "2026-09-06T02:44:35.097Z",
+  "controller": {
+    "codexTask": "01a07494-bd7d-7bc1-b629-a24b6655895e",
+    "worktree": "D:/dsh-devframe-v14",
+    "branch": "codex/dsh-controller-v1.4",
+    "dshSessionId": null
+  },
+  "mainHead": "c93b86c43e0a7fa9c5720ea70575241b0c990a22",
+  "handoffCommits": [
+    "43e8a6e95e",
+    "8459146e32"
+  ],
+  "sessions": [
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "06af9d00-64a6-4e12-b947-2ff69d21ef85",
+        "createdAt": 1788654633274,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "session-fef69179-fbaa-49a8-932d-c69b5af24ff6",
+        "origin": "subagent",
+        "delegationDepth": 1,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\06af9d00-64a6-4e12-b947-2ff69d21ef85\\session.jsonl.zstd",
+      "lastWrite": "2026-09-06T01:30:08.160Z",
+      "frames": 5441,
+      "model": {
+        "lastUsed": {
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        },
+        "pending": null
+      },
+      "label": "L-Verify 组长链派单",
+      "turnBoundary": {
+        "openTurnStartSeq": null,
+        "lastStepStartSeq": 69271,
+        "lastStepBoundary": {
+          "kind": "end",
+          "seq": 69743
+        },
+        "lastTurn": 2
+      },
+      "lastTurnEnd": {
+        "type": "turn/end",
+        "seq": 69744,
+        "time": 1788658208156,
+        "data": {
+          "turn": 2,
+          "reason": {
+            "kind": "completed"
+          }
+        }
+      },
+      "goal": null
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "08098a45-8c1c-4ce2-8d62-b68333c7a144",
+        "createdAt": 1788655056106,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "06af9d00-64a6-4e12-b947-2ff69d21ef85",
+        "origin": "subagent",
+        "delegationDepth": 2,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\08098a45-8c1c-4ce2-8d62-b68333c7a144\\session.jsonl.zstd",
+      "lastWrite": "2026-09-06T00:48:50.086Z",
+      "frames": 2417,
+      "model": {
+        "lastUsed": {
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        },
+        "pending": null
+      },
+      "label": "Task A: B-family win32 expect draft",
+      "turnBoundary": {
+        "openTurnStartSeq": null,
+        "lastStepStartSeq": 30229,
+        "lastStepBoundary": {
+          "kind": "end",
+          "seq": 31513
+        },
+        "lastTurn": 1
+      },
+      "lastTurnEnd": {
+        "type": "turn/end",
+        "seq": 31514,
+        "time": 1788655730063,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "completed"
+          }
+        }
+      },
+      "goal": null
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "0c852cbc-0f17-4a59-a43e-7a141f034efe",
+        "createdAt": 1788654633271,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "session-fef69179-fbaa-49a8-932d-c69b5af24ff6",
+        "origin": "subagent",
+        "delegationDepth": 1,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\0c852cbc-0f17-4a59-a43e-7a141f034efe\\session.jsonl.zstd",
+      "lastWrite": "2026-09-06T02:41:59.431Z",
+      "frames": 7584,
+      "model": {
+        "lastUsed": {
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        },
+        "pending": null
+      },
+      "label": "L-Foundation 组长链派单",
+      "turnBoundary": {
+        "openTurnStartSeq": null,
+        "lastStepStartSeq": 97215,
+        "lastStepBoundary": {
+          "kind": "end",
+          "seq": 97487
+        },
+        "lastTurn": 14
+      },
+      "lastTurnEnd": {
+        "type": "turn/end",
+        "seq": 97488,
+        "time": 1788662519426,
+        "data": {
+          "turn": 14,
+          "reason": {
+            "kind": "completed"
+          }
+        }
+      },
+      "goal": null
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "237155fa-5a16-41ec-8a28-9c479173ba2e",
+        "createdAt": 1788658055931,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "0c852cbc-0f17-4a59-a43e-7a141f034efe",
+        "origin": "subagent",
+        "delegationDepth": 2,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\237155fa-5a16-41ec-8a28-9c479173ba2e\\session.jsonl.zstd",
+      "lastWrite": "2026-09-06T01:34:17.791Z",
+      "frames": 1365,
+      "model": {
+        "lastUsed": {
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        },
+        "pending": null
+      },
+      "label": "gen-cordis-catalog 分类补行",
+      "turnBoundary": {
+        "openTurnStartSeq": null,
+        "lastStepStartSeq": 15744,
+        "lastStepBoundary": {
+          "kind": "end",
+          "seq": 17289
+        },
+        "lastTurn": 1
+      },
+      "lastTurnEnd": {
+        "type": "turn/end",
+        "seq": 17290,
+        "time": 1788658457778,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "completed"
+          }
+        }
+      },
+      "goal": null
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "31fb7e24-3012-4ee9-91ec-668fdfeb61f5",
+        "createdAt": 1788655515922,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "session-fef69179-fbaa-49a8-932d-c69b5af24ff6",
+        "origin": "subagent",
+        "delegationDepth": 1,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\31fb7e24-3012-4ee9-91ec-668fdfeb61f5\\session.jsonl.zstd",
+      "lastWrite": "2026-09-06T01:11:29.138Z",
+      "frames": 3471,
+      "model": {
+        "lastUsed": {
+          "provider": "huoshan-2",
+          "model": "glm-5.3-flash"
+        },
+        "pending": null
+      },
+      "turnBoundary": {
+        "openTurnStartSeq": null,
+        "lastStepStartSeq": 42559,
+        "lastStepBoundary": {
+          "kind": "end",
+          "seq": 44098
+        },
+        "lastTurn": 1
+      },
+      "lastTurnEnd": {
+        "type": "turn/end",
+        "seq": 44099,
+        "time": 1788657089119,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "completed"
+          }
+        }
+      },
+      "goal": null
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "32549894-fdb7-480e-88cb-2f51659642fa",
+        "createdAt": 1788655377974,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "fdfed999-dbda-4fbf-bfc9-8980c397f454",
+        "origin": "subagent",
+        "delegationDepth": 2,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\32549894-fdb7-480e-88cb-2f51659642fa\\session.jsonl.zstd",
+      "lastWrite": "2026-09-06T00:46:48.757Z",
+      "frames": 971,
+      "model": {
+        "lastUsed": {
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        },
+        "pending": null
+      },
+      "label": "Apply intlocal config+probe edits",
+      "turnBoundary": {
+        "openTurnStartSeq": null,
+        "lastStepStartSeq": 13949,
+        "lastStepBoundary": {
+          "kind": "end",
+          "seq": 14980
+        },
+        "lastTurn": 1
+      },
+      "lastTurnEnd": {
+        "type": "turn/end",
+        "seq": 14981,
+        "time": 1788655608732,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "completed"
+          }
+        }
+      },
+      "goal": null
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "57d0355f-86ff-4f21-9edc-37d33d17e580",
+        "createdAt": 1788662492461,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "0c852cbc-0f17-4a59-a43e-7a141f034efe",
+        "origin": "subagent",
+        "delegationDepth": 2,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\57d0355f-86ff-4f21-9edc-37d33d17e580\\session.jsonl.zstd",
+      "lastWrite": "2026-09-06T02:42:55.302Z",
+      "frames": 285,
+      "model": {
+        "lastUsed": {
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        },
+        "pending": null
+      },
+      "label": "宿主平台债泛化波四阶段",
+      "turnBoundary": {
+        "openTurnStartSeq": 6,
+        "lastStepStartSeq": 2881,
+        "lastStepBoundary": {
+          "kind": "start",
+          "seq": 2881
+        },
+        "lastTurn": 1
+      },
+      "goal": null
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "5fc2499d-5f2a-4675-8035-60e2fd88bd70",
+        "createdAt": 1788654997690,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "0c852cbc-0f17-4a59-a43e-7a141f034efe",
+        "origin": "subagent",
+        "delegationDepth": 2,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\5fc2499d-5f2a-4675-8035-60e2fd88bd70\\session.jsonl.zstd",
+      "lastWrite": "2026-09-06T00:56:22.525Z",
+      "frames": 3646,
+      "model": {
+        "lastUsed": {
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        },
+        "pending": null
+      },
+      "label": "Task B P05 required-checks 设计",
+      "turnBoundary": {
+        "openTurnStartSeq": null,
+        "lastStepStartSeq": 47918,
+        "lastStepBoundary": {
+          "kind": "end",
+          "seq": 48465
+        },
+        "lastTurn": 1
+      },
+      "lastTurnEnd": {
+        "type": "turn/end",
+        "seq": 48466,
+        "time": 1788656182522,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "completed"
+          }
+        }
+      },
+      "goal": null
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "60c8e211-fb49-4797-b0bd-b1c385a12940",
+        "createdAt": 1788656046962,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "31fb7e24-3012-4ee9-91ec-668fdfeb61f5",
+        "origin": "subagent",
+        "delegationDepth": 2,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\60c8e211-fb49-4797-b0bd-b1c385a12940\\session.jsonl.zstd",
+      "lastWrite": "2026-09-06T01:02:58.276Z",
+      "frames": 2056,
+      "model": {
+        "lastUsed": {
+          "provider": "huoshan-2",
+          "model": "glm-5.3-flash"
+        },
+        "pending": null
+      },
+      "label": "AT4-06 截止关闭缝实现 Worker",
+      "turnBoundary": {
+        "openTurnStartSeq": null,
+        "lastStepStartSeq": 30492,
+        "lastStepBoundary": {
+          "kind": "end",
+          "seq": 32077
+        },
+        "lastTurn": 1
+      },
+      "lastTurnEnd": {
+        "type": "turn/end",
+        "seq": 32078,
+        "time": 1788656578254,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "completed"
+          }
+        }
+      },
+      "goal": null
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "6cde90f2-bd39-40fb-8663-0addcf542fd1",
+        "createdAt": 1788655056107,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "06af9d00-64a6-4e12-b947-2ff69d21ef85",
+        "origin": "subagent",
+        "delegationDepth": 2,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\6cde90f2-bd39-40fb-8663-0addcf542fd1\\session.jsonl.zstd",
+      "lastWrite": "2026-09-06T00:47:35.332Z",
+      "frames": 2473,
+      "model": {
+        "lastUsed": {
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        },
+        "pending": null
+      },
+      "label": "Task B: three-level offline scaffold",
+      "turnBoundary": {
+        "openTurnStartSeq": null,
+        "lastStepStartSeq": 7,
+        "lastStepBoundary": {
+          "kind": "end",
+          "seq": 32471
+        },
+        "lastTurn": 1
+      },
+      "lastTurnEnd": {
+        "type": "turn/end",
+        "seq": 32472,
+        "time": 1788655655298,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "max-tokens"
+          }
+        }
+      },
+      "goal": null
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "89d82b24-7295-48b7-b947-7871bffed95e",
+        "createdAt": 1788657861849,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "0c852cbc-0f17-4a59-a43e-7a141f034efe",
+        "origin": "subagent",
+        "delegationDepth": 2,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\89d82b24-7295-48b7-b947-7871bffed95e\\session.jsonl.zstd",
+      "lastWrite": "2026-09-06T01:55:52.913Z",
+      "frames": 5754,
+      "model": {
+        "lastUsed": {
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        },
+        "pending": null
+      },
+      "label": "P05 串行接线波 GAP 收口",
+      "turnBoundary": {
+        "openTurnStartSeq": null,
+        "lastStepStartSeq": 75805,
+        "lastStepBoundary": {
+          "kind": "end",
+          "seq": 76581
+        },
+        "lastTurn": 1
+      },
+      "lastTurnEnd": {
+        "type": "turn/end",
+        "seq": 76582,
+        "time": 1788659752905,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "completed"
+          }
+        }
+      },
+      "goal": null
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "a3c4dd4d-5ca3-4bed-9b0f-c349cafcf203",
+        "createdAt": 1788655776067,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "06af9d00-64a6-4e12-b947-2ff69d21ef85",
+        "origin": "subagent",
+        "delegationDepth": 2,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\a3c4dd4d-5ca3-4bed-9b0f-c349cafcf203\\session.jsonl.zstd",
+      "lastWrite": "2026-09-06T00:59:12.899Z",
+      "frames": 2367,
+      "model": {
+        "lastUsed": {
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        },
+        "pending": null
+      },
+      "label": "Task B retry: lean scaffold build",
+      "turnBoundary": {
+        "openTurnStartSeq": null,
+        "lastStepStartSeq": 7,
+        "lastStepBoundary": {
+          "kind": "end",
+          "seq": 32479
+        },
+        "lastTurn": 1
+      },
+      "lastTurnEnd": {
+        "type": "turn/end",
+        "seq": 32480,
+        "time": 1788656352876,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "max-tokens"
+          }
+        }
+      },
+      "goal": null
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "aac253cd-8166-43dd-a128-770c2a16d152",
+        "createdAt": 1788654997688,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "0c852cbc-0f17-4a59-a43e-7a141f034efe",
+        "origin": "subagent",
+        "delegationDepth": 2,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\aac253cd-8166-43dd-a128-770c2a16d152\\session.jsonl.zstd",
+      "lastWrite": "2026-09-06T00:57:20.638Z",
+      "frames": 3698,
+      "model": {
+        "lastUsed": {
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        },
+        "pending": null
+      },
+      "label": "Task A 快照平台期望配置字段",
+      "turnBoundary": {
+        "openTurnStartSeq": null,
+        "lastStepStartSeq": 48951,
+        "lastStepBoundary": {
+          "kind": "end",
+          "seq": 49859
+        },
+        "lastTurn": 1
+      },
+      "lastTurnEnd": {
+        "type": "turn/end",
+        "seq": 49860,
+        "time": 1788656240635,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "completed"
+          }
+        }
+      },
+      "goal": null
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "c063cf6f-f0cc-452c-a326-68c711ad85da",
+        "createdAt": 1788656411713,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "06af9d00-64a6-4e12-b947-2ff69d21ef85",
+        "origin": "subagent",
+        "delegationDepth": 2,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\c063cf6f-f0cc-452c-a326-68c711ad85da\\session.jsonl.zstd",
+      "lastWrite": "2026-09-06T01:09:18.962Z",
+      "frames": 2168,
+      "model": {
+        "lastUsed": {
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        },
+        "pending": null
+      },
+      "label": "Task B attempt 3: minimal budget",
+      "turnBoundary": {
+        "openTurnStartSeq": null,
+        "lastStepStartSeq": 29421,
+        "lastStepBoundary": {
+          "kind": "end",
+          "seq": 30049
+        },
+        "lastTurn": 1
+      },
+      "lastTurnEnd": {
+        "type": "turn/end",
+        "seq": 30050,
+        "time": 1788656958942,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "completed"
+          }
+        }
+      },
+      "goal": null
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "dabf6b6f-793f-4ed5-979a-9a747f3c23c0",
+        "createdAt": 1788658602741,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "0c852cbc-0f17-4a59-a43e-7a141f034efe",
+        "origin": "subagent",
+        "delegationDepth": 2,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\dabf6b6f-793f-4ed5-979a-9a747f3c23c0\\session.jsonl.zstd",
+      "lastWrite": "2026-09-06T02:28:53.619Z",
+      "frames": 9246,
+      "model": {
+        "lastUsed": {
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        },
+        "pending": null
+      },
+      "label": "B 族机制扩展波四残留面",
+      "turnBoundary": {
+        "openTurnStartSeq": null,
+        "lastStepStartSeq": 115406,
+        "lastStepBoundary": {
+          "kind": "end",
+          "seq": 115980
+        },
+        "lastTurn": 3
+      },
+      "lastTurnEnd": {
+        "type": "turn/end",
+        "seq": 115981,
+        "time": 1788661733616,
+        "data": {
+          "turn": 3,
+          "reason": {
+            "kind": "completed"
+          }
+        }
+      },
+      "goal": null
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "fdfed999-dbda-4fbf-bfc9-8980c397f454",
+        "createdAt": 1788654633273,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "session-fef69179-fbaa-49a8-932d-c69b5af24ff6",
+        "origin": "subagent",
+        "delegationDepth": 1,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\fdfed999-dbda-4fbf-bfc9-8980c397f454\\session.jsonl.zstd",
+      "lastWrite": "2026-09-06T00:56:29.324Z",
+      "frames": 4881,
+      "model": {
+        "lastUsed": {
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        },
+        "pending": null
+      },
+      "label": "L-Integration 组长链派单",
+      "turnBoundary": {
+        "openTurnStartSeq": null,
+        "lastStepStartSeq": 61942,
+        "lastStepBoundary": {
+          "kind": "end",
+          "seq": 62702
+        },
+        "lastTurn": 1
+      },
+      "lastTurnEnd": {
+        "type": "turn/end",
+        "seq": 62703,
+        "time": 1788656189320,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "completed"
+          }
+        }
+      },
+      "goal": null
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "session-fef69179-fbaa-49a8-932d-c69b5af24ff6",
+        "createdAt": 1788617434990,
+        "cwd": "D:\\dsh-devframe",
+        "delegationDepth": 0,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\session-fef69179-fbaa-49a8-932d-c69b5af24ff6\\session.jsonl.zstd",
+      "lastWrite": "2026-09-06T02:42:36.708Z",
+      "frames": 12554,
+      "model": {
+        "lastUsed": {
+          "provider": "huoshan-1",
+          "model": "glm-5.3-flash"
+        },
+        "pending": null
+      },
+      "turnBoundary": {
+        "openTurnStartSeq": null,
+        "lastStepStartSeq": 161312,
+        "lastStepBoundary": {
+          "kind": "end",
+          "seq": 161842
+        },
+        "lastTurn": 22
+      },
+      "lastTurnEnd": {
+        "type": "turn/end",
+        "seq": 161843,
+        "time": 1788662556704,
+        "data": {
+          "turn": 22,
+          "reason": {
+            "kind": "completed"
+          }
+        }
+      },
+      "goal": {
+        "goal": {
+          "id": "goal-66a268b5-62d5-4764-9e78-04d00bf65fe7",
+          "revision": 2,
+          "objective": "V1.3 项目总控持续推进：首批四线（p/snapplat、p/p05checks、p/intlocal、p/snapexpect、p/3level）交付结算、亲验并合规合并主树，四态如实登记；期间按真实依赖中转 snapplat 接口至 snapexpect 阶段2、扩缩并发、fail-loud 缺口裁决；本波收口后按依赖排后续波（P06 AT4-06 截止闭准入缝、P05 events/schemas 接线串行波）。遵守：三层拓扑、只有总控合并主树、不 push/PR/发布/删用户文件、无 idle 空转、一切 SessionID/Worktree/结果持久化入账本。",
+          "phase": "paused",
+          "maxGoalRounds": 256
+        },
+        "roundsStarted": 10,
+        "createdAt": 1788654748981,
+        "updatedAt": 1788662464532
+      }
+    }
+  ],
+  "worktrees": [
+    {
+      "path": "D:/dsh-devframe",
+      "head": "c93b86c43e0a7fa9c5720ea70575241b0c990a22",
+      "branch": "refs/heads/main",
+      "status": [
+        "M AGENTS.md",
+        " M docs/working/devframe-qa-2026-09-04.i18n.yaml",
+        " M docs/working/devframe-qa-2026-09-04.md",
+        " M docs/working/devframe-qa-2026-09-04.zh.md",
+        " D docs/working/handoff-2026-09-03.i18n.yaml",
+        " D docs/working/handoff-2026-09-03.md",
+        " D docs/working/handoff-2026-09-03.zh.md",
+        "?? .agents/notes/proposed/architecture/2026-09-05-pluginized-agent-topology-and-dispatch.i18n.yaml",
+        "?? .agents/notes/proposed/architecture/2026-09-05-pluginized-agent-topology-and-dispatch.md",
+        "?? .agents/notes/proposed/architecture/2026-09-05-pluginized-agent-topology-and-dispatch.zh.md",
+        "?? docs/env.i18n.yaml",
+        "?? docs/env.md",
+        "?? docs/env.zh.md",
+        "?? docs/working/dsh-pluginized-development-handoff-2026-09-05.i18n.yaml",
+        "?? docs/working/dsh-pluginized-development-handoff-2026-09-05.md",
+        "?? docs/working/dsh-pluginized-development-handoff-2026-09-05.zh.md",
+        "?? packages/attachment/attachment/src/admission.d.ts",
+        "?? packages/attachment/attachment/src/admission.d.ts.map",
+        "?? packages/attachment/attachment/src/admission.js",
+        "?? packages/attachment/attachment/src/admission.js.map",
+        "?? packages/attachment/attachment/src/brand.d.ts",
+        "?? packages/attachment/attachment/src/brand.d.ts.map",
+        "?? packages/attachment/attachment/src/brand.js",
+        "?? packages/attachment/attachment/src/brand.js.map",
+        "?? packages/attachment/attachment/src/error.d.ts",
+        "?? packages/attachment/attachment/src/error.d.ts.map",
+        "?? packages/attachment/attachment/src/error.js",
+        "?? packages/attachment/attachment/src/error.js.map",
+        "?? packages/attachment/attachment/src/index.d.ts",
+        "?? packages/attachment/attachment/src/index.d.ts.map",
+        "?? packages/attachment/attachment/src/index.js",
+        "?? packages/attachment/attachment/src/index.js.map",
+        "?? packages/attachment/attachment/src/request-projection.d.ts",
+        "?? packages/attachment/attachment/src/request-projection.d.ts.map",
+        "?? packages/attachment/attachment/src/request-projection.js",
+        "?? packages/attachment/attachment/src/request-projection.js.map",
+        "?? packages/attachment/attachment/src/types.d.ts",
+        "?? packages/attachment/attachment/src/types.d.ts.map",
+        "?? packages/attachment/attachment/src/types.js",
+        "?? packages/attachment/attachment/src/types.js.map",
+        "?? packages/boot/app-boot/src/index.d.ts",
+        "?? packages/boot/app-boot/src/index.d.ts.map",
+        "?? packages/boot/app-boot/src/index.js",
+        "?? packages/boot/app-boot/src/index.js.map",
+        "?? packages/boot/app-boot/src/profile.d.ts",
+        "?? packages/boot/app-boot/src/profile.d.ts.map",
+        "?? packages/boot/app-boot/src/profile.js",
+        "?? packages/boot/app-boot/src/profile.js.map",
+        "?? packages/boot/cmdline/src/index.d.ts",
+        "?? packages/boot/cmdline/src/index.d.ts.map",
+        "?? packages/boot/cmdline/src/index.js",
+        "?? packages/boot/cmdline/src/index.js.map",
+        "?? packages/compaction/compaction/src/brand.d.ts",
+        "?? packages/compaction/compaction/src/brand.d.ts.map",
+        "?? packages/compaction/compaction/src/brand.js",
+        "?? packages/compaction/compaction/src/brand.js.map",
+        "?? packages/compaction/compaction/src/checkpoint.d.ts",
+        "?? packages/compaction/compaction/src/checkpoint.d.ts.map",
+        "?? packages/compaction/compaction/src/checkpoint.js",
+        "?? packages/compaction/compaction/src/checkpoint.js.map",
+        "?? packages/compaction/compaction/src/index.d.ts",
+        "?? packages/compaction/compaction/src/index.d.ts.map",
+        "?? packages/compaction/compaction/src/index.js",
+        "?? packages/compaction/compaction/src/index.js.map",
+        "?? packages/compaction/compaction/src/tool-pairing.d.ts",
+        "?? packages/compaction/compaction/src/tool-pairing.d.ts.map",
+        "?? packages/compaction/compaction/src/tool-pairing.js",
+        "?? packages/compaction/compaction/src/tool-pairing.js.map",
+        "?? packages/compaction/compaction/src/types.d.ts",
+        "?? packages/compaction/compaction/src/types.d.ts.map",
+        "?? packages/compaction/compaction/src/types.js",
+        "?? packages/compaction/compaction/src/types.js.map",
+        "?? packages/core/agent/src/consumed-work.d.ts",
+        "?? packages/core/agent/src/consumed-work.d.ts.map",
+        "?? packages/core/agent/src/consumed-work.js",
+        "?? packages/core/agent/src/consumed-work.js.map",
+        "?? packages/core/agent/src/dispatch.d.ts",
+        "?? packages/core/agent/src/dispatch.d.ts.map",
+        "?? packages/core/agent/src/dispatch.js",
+        "?? packages/core/agent/src/dispatch.js.map",
+        "?? packages/core/agent/src/inbox.d.ts",
+        "?? packages/core/agent/src/inbox.d.ts.map",
+        "?? packages/core/agent/src/inbox.js",
+        "?? packages/core/agent/src/inbox.js.map",
+        "?? packages/core/agent/src/index.d.ts",
+        "?? packages/core/agent/src/index.d.ts.map",
+        "?? packages/core/agent/src/index.js",
+        "?? packages/core/agent/src/index.js.map",
+        "?? packages/core/agent/src/model-selection.d.ts",
+        "?? packages/core/agent/src/model-selection.d.ts.map",
+        "?? packages/core/agent/src/model-selection.js",
+        "?? packages/core/agent/src/model-selection.js.map",
+        "?? packages/core/agent/src/projection.d.ts",
+        "?? packages/core/agent/src/projection.d.ts.map",
+        "?? packages/core/agent/src/projection.js",
+        "?? packages/core/agent/src/projection.js.map",
+        "?? packages/core/agent/src/runtime-types.d.ts",
+        "?? packages/core/agent/src/runtime-types.d.ts.map",
+        "?? packages/core/agent/src/runtime-types.js",
+        "?? packages/core/agent/src/runtime-types.js.map",
+        "?? packages/core/agent/src/types.d.ts",
+        "?? packages/core/agent/src/types.d.ts.map",
+        "?? packages/core/agent/src/types.js",
+        "?? packages/core/agent/src/types.js.map",
+        "?? packages/core/scope/src/index.d.ts",
+        "?? packages/core/scope/src/index.d.ts.map",
+        "?? packages/core/scope/src/index.js",
+        "?? packages/core/scope/src/index.js.map",
+        "?? packages/core/scope/src/store.d.ts",
+        "?? packages/core/scope/src/store.d.ts.map",
+        "?? packages/core/scope/src/store.js",
+        "?? packages/core/scope/src/store.js.map",
+        "?? packages/core/session/src/chunk-rows.d.ts",
+        "?? packages/core/session/src/chunk-rows.d.ts.map",
+        "?? packages/core/session/src/chunk-rows.js",
+        "?? packages/core/session/src/chunk-rows.js.map",
+        "?? packages/core/session/src/index.d.ts",
+        "?? packages/core/session/src/index.d.ts.map",
+        "?? packages/core/session/src/index.js",
+        "?? packages/core/session/src/index.js.map",
+        "?? packages/core/session/src/known-event-types.d.ts",
+        "?? packages/core/session/src/known-event-types.d.ts.map",
+        "?? packages/core/session/src/known-event-types.js",
+        "?? packages/core/session/src/known-event-types.js.map",
+        "?? packages/core/session/src/preparation.d.ts",
+        "?? packages/core/session/src/preparation.d.ts.map",
+        "?? packages/core/session/src/preparation.js",
+        "?? packages/core/session/src/preparation.js.map",
+        "?? packages/core/session/src/repair.d.ts",
+        "?? packages/core/session/src/repair.d.ts.map",
+        "?? packages/core/session/src/repair.js",
+        "?? packages/core/session/src/repair.js.map",
+        "?? packages/core/session/src/request-header.d.ts",
+        "?? packages/core/session/src/request-header.d.ts.map",
+        "?? packages/core/session/src/request-header.js",
+        "?? packages/core/session/src/request-header.js.map",
+        "?? packages/core/session/src/seq-ranges.d.ts",
+        "?? packages/core/session/src/seq-ranges.d.ts.map",
+        "?? packages/core/session/src/seq-ranges.js",
+        "?? packages/core/session/src/seq-ranges.js.map",
+        "?? packages/core/session/src/surface.d.ts",
+        "?? packages/core/session/src/surface.d.ts.map",
+        "?? packages/core/session/src/surface.js",
+        "?? packages/core/session/src/surface.js.map",
+        "?? packages/core/session/src/types.d.ts",
+        "?? packages/core/session/src/types.d.ts.map",
+        "?? packages/core/session/src/types.js",
+        "?? packages/core/session/src/types.js.map",
+        "?? packages/core/system-prompt/src/index.d.ts",
+        "?? packages/core/system-prompt/src/index.d.ts.map",
+        "?? packages/core/system-prompt/src/index.js",
+        "?? packages/core/system-prompt/src/index.js.map",
+        "?? packages/interaction/commands/src/brand.d.ts",
+        "?? packages/interaction/commands/src/brand.d.ts.map",
+        "?? packages/interaction/commands/src/brand.js",
+        "?? packages/interaction/commands/src/brand.js.map",
+        "?? packages/llm/deepseek-llm-api-extensions/src/index.d.ts",
+        "?? packages/llm/deepseek-llm-api-extensions/src/index.d.ts.map",
+        "?? packages/llm/deepseek-llm-api-extensions/src/index.js",
+        "?? packages/llm/deepseek-llm-api-extensions/src/index.js.map",
+        "?? packages/llm/deepseek-llm-api-extensions/src/types.d.ts",
+        "?? packages/llm/deepseek-llm-api-extensions/src/types.d.ts.map",
+        "?? packages/llm/deepseek-llm-api-extensions/src/types.js",
+        "?? packages/llm/deepseek-llm-api-extensions/src/types.js.map",
+        "?? packages/llm/llm/src/adapter-failure.d.ts",
+        "?? packages/llm/llm/src/adapter-failure.d.ts.map",
+        "?? packages/llm/llm/src/adapter-failure.js",
+        "?? packages/llm/llm/src/adapter-failure.js.map",
+        "?? packages/llm/llm/src/api-key.d.ts",
+        "?? packages/llm/llm/src/api-key.d.ts.map",
+        "?? packages/llm/llm/src/api-key.js",
+        "?? packages/llm/llm/src/api-key.js.map",
+        "?? packages/llm/llm/src/assembler.d.ts",
+        "?? packages/llm/llm/src/assembler.d.ts.map",
+        "?? packages/llm/llm/src/assembler.js",
+        "?? packages/llm/llm/src/assembler.js.map",
+        "?? packages/llm/llm/src/attribution.d.ts",
+        "?? packages/llm/llm/src/attribution.d.ts.map",
+        "?? packages/llm/llm/src/attribution.js",
+        "?? packages/llm/llm/src/attribution.js.map",
+        "?? packages/llm/llm/src/brand.d.ts",
+        "?? packages/llm/llm/src/brand.d.ts.map",
+        "?? packages/llm/llm/src/brand.js",
+        "?? packages/llm/llm/src/brand.js.map",
+        "?? packages/llm/llm/src/call-config.d.ts",
+        "?? packages/llm/llm/src/call-config.d.ts.map",
+        "?? packages/llm/llm/src/call-config.js",
+        "?? packages/llm/llm/src/call-config.js.map",
+        "?? packages/llm/llm/src/content.d.ts",
+        "?? packages/llm/llm/src/content.d.ts.map",
+        "?? packages/llm/llm/src/content.js",
+        "?? packages/llm/llm/src/content.js.map",
+        "?? packages/llm/llm/src/error.d.ts",
+        "?? packages/llm/llm/src/error.d.ts.map",
+        "?? packages/llm/llm/src/error.js",
+        "?? packages/llm/llm/src/error.js.map",
+        "?? packages/llm/llm/src/index.d.ts",
+        "?? packages/llm/llm/src/index.d.ts.map",
+        "?? packages/llm/llm/src/index.js",
+        "?? packages/llm/llm/src/index.js.map",
+        "?? packages/llm/llm/src/message.d.ts",
+        "?? packages/llm/llm/src/message.d.ts.map",
+        "?? packages/llm/llm/src/message.js",
+        "?? packages/llm/llm/src/message.js.map",
+        "?? packages/llm/llm/src/retry-policy.d.ts",
+        "?? packages/llm/llm/src/retry-policy.d.ts.map",
+        "?? packages/llm/llm/src/retry-policy.js",
+        "?? packages/llm/llm/src/retry-policy.js.map",
+        "?? packages/llm/llm/src/types.d.ts",
+        "?? packages/llm/llm/src/types.d.ts.map",
+        "?? packages/llm/llm/src/types.js",
+        "?? packages/llm/llm/src/types.js.map",
+        "?? packages/session/session-persistence-jsonl/src/format.d.ts",
+        "?? packages/session/session-persistence-jsonl/src/format.d.ts.map",
+        "?? packages/session/session-persistence-jsonl/src/format.js",
+        "?? packages/session/session-persistence-jsonl/src/format.js.map",
+        "?? packages/session/session-persistence-jsonl/src/index.d.ts",
+        "?? packages/session/session-persistence-jsonl/src/index.d.ts.map",
+        "?? packages/session/session-persistence-jsonl/src/index.js",
+        "?? packages/session/session-persistence-jsonl/src/index.js.map",
+        "?? packages/session/session-persistence-jsonl/src/win32.d.ts",
+        "?? packages/session/session-persistence-jsonl/src/win32.d.ts.map",
+        "?? packages/session/session-persistence-jsonl/src/win32.js",
+        "?? packages/session/session-persistence-jsonl/src/win32.js.map",
+        "?? packages/session/session-persistence-jsonl/src/zstd-private-decoder.d.ts",
+        "?? packages/session/session-persistence-jsonl/src/zstd-private-decoder.d.ts.map",
+        "?? packages/session/session-persistence-jsonl/src/zstd-private-decoder.js",
+        "?? packages/session/session-persistence-jsonl/src/zstd-private-decoder.js.map",
+        "?? packages/session/session-persistence-jsonl/src/zstd-public-decoder.d.ts",
+        "?? packages/session/session-persistence-jsonl/src/zstd-public-decoder.d.ts.map",
+        "?? packages/session/session-persistence-jsonl/src/zstd-public-decoder.js",
+        "?? packages/session/session-persistence-jsonl/src/zstd-public-decoder.js.map",
+        "?? packages/session/session-persistence-jsonl/src/zstd.d.ts",
+        "?? packages/session/session-persistence-jsonl/src/zstd.d.ts.map",
+        "?? packages/session/session-persistence-jsonl/src/zstd.js",
+        "?? packages/session/session-persistence-jsonl/src/zstd.js.map",
+        "?? packages/session/session-persistence/src/coordinator.d.ts",
+        "?? packages/session/session-persistence/src/coordinator.d.ts.map",
+        "?? packages/session/session-persistence/src/coordinator.js",
+        "?? packages/session/session-persistence/src/coordinator.js.map",
+        "?? packages/session/session-persistence/src/errors.d.ts",
+        "?? packages/session/session-persistence/src/errors.d.ts.map",
+        "?? packages/session/session-persistence/src/errors.js",
+        "?? packages/session/session-persistence/src/errors.js.map",
+        "?? packages/session/session-persistence/src/index.d.ts",
+        "?? packages/session/session-persistence/src/index.d.ts.map",
+        "?? packages/session/session-persistence/src/index.js",
+        "?? packages/session/session-persistence/src/index.js.map",
+        "?? packages/session/session-persistence/src/preparations.d.ts",
+        "?? packages/session/session-persistence/src/preparations.d.ts.map",
+        "?? packages/session/session-persistence/src/preparations.js",
+        "?? packages/session/session-persistence/src/preparations.js.map",
+        "?? packages/session/session-persistence/src/revision.d.ts",
+        "?? packages/session/session-persistence/src/revision.d.ts.map",
+        "?? packages/session/session-persistence/src/revision.js",
+        "?? packages/session/session-persistence/src/revision.js.map",
+        "?? packages/session/session-persistence/src/write-behind.d.ts",
+        "?? packages/session/session-persistence/src/write-behind.d.ts.map",
+        "?? packages/session/session-persistence/src/write-behind.js",
+        "?? packages/session/session-persistence/src/write-behind.js.map",
+        "?? packages/session/session-projection/src/index.d.ts",
+        "?? packages/session/session-projection/src/index.d.ts.map",
+        "?? packages/session/session-projection/src/index.js",
+        "?? packages/session/session-projection/src/index.js.map",
+        "?? packages/session/session-projection/src/types.d.ts",
+        "?? packages/session/session-projection/src/types.d.ts.map",
+        "?? packages/session/session-projection/src/types.js",
+        "?? packages/session/session-projection/src/types.js.map",
+        "?? packages/test-support/llm-replay/src/index.d.ts",
+        "?? packages/test-support/llm-replay/src/index.d.ts.map",
+        "?? packages/test-support/llm-replay/src/index.js",
+        "?? packages/test-support/llm-replay/src/index.js.map",
+        "?? packages/test-support/loader-smoke/src/agent-turn.d.ts",
+        "?? packages/test-support/loader-smoke/src/agent-turn.d.ts.map",
+        "?? packages/test-support/loader-smoke/src/agent-turn.js",
+        "?? packages/test-support/loader-smoke/src/agent-turn.js.map",
+        "?? packages/test-support/loader-smoke/src/index.d.ts",
+        "?? packages/test-support/loader-smoke/src/index.d.ts.map",
+        "?? packages/test-support/loader-smoke/src/index.js",
+        "?? packages/test-support/loader-smoke/src/index.js.map",
+        "?? packages/test-support/session-snapshot/src/expectations.d.ts",
+        "?? packages/test-support/session-snapshot/src/expectations.d.ts.map",
+        "?? packages/test-support/session-snapshot/src/expectations.js",
+        "?? packages/test-support/session-snapshot/src/expectations.js.map",
+        "?? packages/test-support/session-snapshot/src/harness.d.ts",
+        "?? packages/test-support/session-snapshot/src/harness.d.ts.map",
+        "?? packages/test-support/session-snapshot/src/harness.js",
+        "?? packages/test-support/session-snapshot/src/harness.js.map",
+        "?? packages/test-support/session-snapshot/src/identity.d.ts",
+        "?? packages/test-support/session-snapshot/src/identity.d.ts.map",
+        "?? packages/test-support/session-snapshot/src/identity.js",
+        "?? packages/test-support/session-snapshot/src/identity.js.map",
+        "?? packages/test-support/session-snapshot/src/index.d.ts",
+        "?? packages/test-support/session-snapshot/src/index.d.ts.map",
+        "?? packages/test-support/session-snapshot/src/index.js",
+        "?? packages/test-support/session-snapshot/src/index.js.map",
+        "?? packages/test-support/session-snapshot/src/launcher.d.ts",
+        "?? packages/test-support/session-snapshot/src/launcher.d.ts.map",
+        "?? packages/test-support/session-snapshot/src/launcher.js",
+        "?? packages/test-support/session-snapshot/src/launcher.js.map",
+        "?? packages/test-support/session-snapshot/src/manifest.d.ts",
+        "?? packages/test-support/session-snapshot/src/manifest.d.ts.map",
+        "?? packages/test-support/session-snapshot/src/manifest.js",
+        "?? packages/test-support/session-snapshot/src/manifest.js.map",
+        "?? packages/test-support/session-snapshot/src/normalize.d.ts",
+        "?? packages/test-support/session-snapshot/src/normalize.d.ts.map",
+        "?? packages/test-support/session-snapshot/src/normalize.js",
+        "?? packages/test-support/session-snapshot/src/normalize.js.map",
+        "?? packages/test-support/session-snapshot/src/suite.d.ts",
+        "?? packages/test-support/session-snapshot/src/suite.d.ts.map",
+        "?? packages/test-support/session-snapshot/src/suite.js",
+        "?? packages/test-support/session-snapshot/src/suite.js.map",
+        "?? packages/test-support/session-snapshot/src/workspace.d.ts",
+        "?? packages/test-support/session-snapshot/src/workspace.d.ts.map",
+        "?? packages/test-support/session-snapshot/src/workspace.js",
+        "?? packages/test-support/session-snapshot/src/workspace.js.map",
+        "?? packages/typert/protocol/src/index.d.ts",
+        "?? packages/typert/protocol/src/index.d.ts.map",
+        "?? packages/typert/protocol/src/index.js",
+        "?? packages/typert/protocol/src/index.js.map",
+        "?? packages/typert/protocol/src/remote-error.d.ts",
+        "?? packages/typert/protocol/src/remote-error.d.ts.map",
+        "?? packages/typert/protocol/src/remote-error.js",
+        "?? packages/typert/protocol/src/remote-error.js.map",
+        "?? packages/typert/protocol/src/types.d.ts",
+        "?? packages/typert/protocol/src/types.d.ts.map",
+        "?? packages/typert/protocol/src/types.js",
+        "?? packages/typert/protocol/src/types.js.map",
+        "?? packages/util/atomic-write/src/index.d.ts",
+        "?? packages/util/atomic-write/src/index.d.ts.map",
+        "?? packages/util/atomic-write/src/index.js",
+        "?? packages/util/atomic-write/src/index.js.map",
+        "?? packages/util/brand/src/index.d.ts",
+        "?? packages/util/brand/src/index.d.ts.map",
+        "?? packages/util/brand/src/index.js",
+        "?? packages/util/brand/src/index.js.map",
+        "?? packages/util/crypto/src/index.d.ts",
+        "?? packages/util/crypto/src/index.d.ts.map",
+        "?? packages/util/crypto/src/index.js",
+        "?? packages/util/crypto/src/index.js.map",
+        "?? packages/util/home-paths/src/index.d.ts",
+        "?? packages/util/home-paths/src/index.d.ts.map",
+        "?? packages/util/home-paths/src/index.js",
+        "?? packages/util/home-paths/src/index.js.map",
+        "?? packages/util/launch-environment/src/index.d.ts",
+        "?? packages/util/launch-environment/src/index.d.ts.map",
+        "?? packages/util/launch-environment/src/index.js",
+        "?? packages/util/launch-environment/src/index.js.map",
+        "?? packages/util/timeout/src/index.d.ts",
+        "?? packages/util/timeout/src/index.d.ts.map",
+        "?? packages/util/timeout/src/index.js",
+        "?? packages/util/timeout/src/index.js.map",
+        "?? packages/util/values/src/index.d.ts",
+        "?? packages/util/values/src/index.d.ts.map",
+        "?? packages/util/values/src/index.js",
+        "?? packages/util/values/src/index.js.map",
+        "?? vendor/group/src/index.d.ts",
+        "?? vendor/group/src/index.d.ts.map",
+        "?? vendor/group/src/index.js",
+        "?? vendor/group/src/index.js.map",
+        "?? vendor/hmr/src/error.d.ts",
+        "?? vendor/hmr/src/error.d.ts.map",
+        "?? vendor/hmr/src/error.js",
+        "?? vendor/hmr/src/error.js.map",
+        "?? vendor/hmr/src/index.d.ts",
+        "?? vendor/hmr/src/index.d.ts.map",
+        "?? vendor/hmr/src/index.js",
+        "?? vendor/hmr/src/index.js.map",
+        "?? vendor/include/src/index.d.ts",
+        "?? vendor/include/src/index.d.ts.map",
+        "?? vendor/include/src/index.js",
+        "?? vendor/include/src/index.js.map",
+        "?? vendor/timer/src/index.d.ts",
+        "?? vendor/timer/src/index.d.ts.map",
+        "?? vendor/timer/src/index.js",
+        "?? vendor/timer/src/index.js.map"
+      ]
+    },
+    {
+      "path": "C:/Users/25313/.codex/worktrees/35ca/dsh-devframe",
+      "head": "7d259dc8392fd6e8e6f83718a09d58597cd06fac",
+      "status": [
+        "T .agents/notes/implemented/CLAUDE.md",
+        " T .claude/skills",
+        " T CLAUDE.md",
+        " T apps/cli/tests/profiles/acp/cordis.yml",
+        " T packages/CLAUDE.md",
+        " M packages/experimental/agent-team/src/roster.ts",
+        " M packages/experimental/agent-team/src/types.ts",
+        " T snapshots/acp/escalation-approved/system-prompt.expected.md",
+        " T snapshots/acp/escalation-approved/tool-schemas.expected.json",
+        " T snapshots/acp/image-compaction/system-prompt.expected.md",
+        " T snapshots/session/agent-instructions/workspace/AGENTS.md",
+        " T snapshots/session/agent-instructions/workspace/nested/AGENTS.md",
+        " M tsconfig.base.json",
+        " M tsconfig.host.json",
+        " T vendor/CLAUDE.md",
+        "?? .agents/notes/proposed/feature/2026-09-02-devframe-dsh-native-development.i18n.yaml",
+        "?? .agents/notes/proposed/feature/2026-09-02-devframe-dsh-native-development.md",
+        "?? .agents/notes/proposed/feature/2026-09-02-devframe-dsh-native-development.zh.md",
+        "?? continue.md",
+        "?? docs/detailDesign-part1.i18n.yaml",
+        "?? docs/detailDesign-part1.md",
+        "?? docs/detailDesign-part1.zh.md",
+        "?? docs/detailDesign-part2.i18n.yaml",
+        "?? docs/detailDesign-part2.md",
+        "?? docs/detailDesign-part2.zh.md",
+        "?? docs/detailDesign-part3.i18n.yaml",
+        "?? docs/detailDesign-part3.md",
+        "?? docs/detailDesign-part3.zh.md",
+        "?? docs/detailDesign-part4.i18n.yaml",
+        "?? docs/detailDesign-part4.md",
+        "?? docs/detailDesign-part4.zh.md",
+        "?? docs/generalDesign.i18n.yaml",
+        "?? docs/generalDesign.md",
+        "?? docs/generalDesign.zh.md",
+        "?? docs/testAndAcceptance.i18n.yaml",
+        "?? docs/testAndAcceptance.md",
+        "?? docs/testAndAcceptance.zh.md",
+        "?? docs/timeline.i18n.yaml",
+        "?? docs/timeline.md",
+        "?? docs/timeline.zh.md",
+        "?? docs/working/",
+        "?? packages/experimental/agent-team/tests/child-options.spec.ts",
+        "?? packages/experimental/agent-team/tests/cold-role-recovery.spec.ts",
+        "?? packages/experimental/agent-team/tests/devframe-composition.spec.ts",
+        "?? packages/experimental/devframe/",
+        "?? packages/experimental/tool-agent-team/tests/role-denial.spec.ts"
+      ]
+    },
+    {
+      "path": "C:/Users/25313/.codex/worktrees/4a95/dsh-devframe",
+      "head": "5e1afbe47b191e0137402d2f8bb728e949ca084c",
+      "status": [
+        "T .agents/notes/implemented/CLAUDE.md",
+        " T .claude/skills",
+        " T CLAUDE.md",
+        " T apps/cli/tests/profiles/acp/cordis.yml",
+        " T packages/CLAUDE.md",
+        " M packages/experimental/agent-team/src/roster.ts",
+        " M packages/experimental/agent-team/src/types.ts",
+        " M pnpm-lock.yaml",
+        " T snapshots/acp/escalation-approved/system-prompt.expected.md",
+        " T snapshots/acp/escalation-approved/tool-schemas.expected.json",
+        " T snapshots/acp/image-compaction/system-prompt.expected.md",
+        " T snapshots/session/agent-instructions/workspace/AGENTS.md",
+        " T snapshots/session/agent-instructions/workspace/nested/AGENTS.md",
+        " M tsconfig.base.json",
+        " M tsconfig.host.json",
+        " T vendor/CLAUDE.md",
+        "?? .agents/notes/proposed/feature/2026-09-02-devframe-dsh-native-development.i18n.yaml",
+        "?? .agents/notes/proposed/feature/2026-09-02-devframe-dsh-native-development.md",
+        "?? .agents/notes/proposed/feature/2026-09-02-devframe-dsh-native-development.zh.md",
+        "?? continue.md",
+        "?? docs/detailDesign-part1.i18n.yaml",
+        "?? docs/detailDesign-part1.md",
+        "?? docs/detailDesign-part1.zh.md",
+        "?? docs/detailDesign-part2.i18n.yaml",
+        "?? docs/detailDesign-part2.md",
+        "?? docs/detailDesign-part2.zh.md",
+        "?? docs/detailDesign-part3.i18n.yaml",
+        "?? docs/detailDesign-part3.md",
+        "?? docs/detailDesign-part3.zh.md",
+        "?? docs/detailDesign-part4.i18n.yaml",
+        "?? docs/detailDesign-part4.md",
+        "?? docs/detailDesign-part4.zh.md",
+        "?? docs/generalDesign.i18n.yaml",
+        "?? docs/generalDesign.md",
+        "?? docs/generalDesign.zh.md",
+        "?? docs/testAndAcceptance.i18n.yaml",
+        "?? docs/testAndAcceptance.md",
+        "?? docs/testAndAcceptance.zh.md",
+        "?? docs/timeline.i18n.yaml",
+        "?? docs/timeline.md",
+        "?? docs/timeline.zh.md",
+        "?? docs/working/",
+        "?? packages/experimental/agent-team/tests/child-options.spec.ts",
+        "?? packages/experimental/agent-team/tests/cold-role-recovery.spec.ts",
+        "?? packages/experimental/agent-team/tests/devframe-composition.spec.ts",
+        "?? packages/experimental/devframe/README.i18n.yaml",
+        "?? packages/experimental/devframe/README.md",
+        "?? packages/experimental/devframe/README.zh.md",
+        "?? packages/experimental/devframe/src/controller/",
+        "?? packages/experimental/devframe/src/index.ts",
+        "?? packages/experimental/devframe/src/permissions/",
+        "?? packages/experimental/devframe/src/reliability/",
+        "?? packages/experimental/devframe/src/shared/",
+        "?? packages/experimental/devframe/tests/entry-exports.spec.ts",
+        "?? packages/experimental/devframe/tests/goal-binding.spec.ts",
+        "?? packages/experimental/devframe/tests/permissions.spec.ts",
+        "?? packages/experimental/devframe/tests/reliability/",
+        "?? packages/experimental/devframe/tsconfig.json",
+        "?? packages/experimental/tool-agent-team/tests/role-denial.spec.ts"
+      ]
+    },
+    {
+      "path": "C:/Users/25313/.codex/worktrees/4e4f/dsh-devframe",
+      "head": "c1ce43e0f6d13dfc3bfc7d4f2a1713aef8cadd69",
+      "branch": "refs/heads/codex/devframe-integration-20260904",
+      "status": [
+        "T .agents/notes/implemented/CLAUDE.md",
+        " T .claude/skills",
+        " T CLAUDE.md",
+        " T apps/cli/tests/profiles/acp/cordis.yml",
+        " T packages/CLAUDE.md",
+        " T snapshots/acp/escalation-approved/system-prompt.expected.md",
+        " T snapshots/acp/escalation-approved/tool-schemas.expected.json",
+        " T snapshots/acp/image-compaction/system-prompt.expected.md",
+        " T snapshots/session/agent-instructions/workspace/AGENTS.md",
+        " T snapshots/session/agent-instructions/workspace/nested/AGENTS.md",
+        " T vendor/CLAUDE.md"
+      ]
+    },
+    {
+      "path": "C:/Users/25313/.codex/worktrees/629a/dsh-devframe",
+      "head": "c7a882e8b3723ad3ea38ebcd0fcd34cb8f2bb2ea",
+      "status": [
+        "T .agents/notes/implemented/CLAUDE.md",
+        " T .claude/skills",
+        " T CLAUDE.md",
+        " T apps/cli/tests/profiles/acp/cordis.yml",
+        " T packages/CLAUDE.md",
+        " T snapshots/acp/escalation-approved/system-prompt.expected.md",
+        " T snapshots/acp/escalation-approved/tool-schemas.expected.json",
+        " T snapshots/acp/image-compaction/system-prompt.expected.md",
+        " T snapshots/session/agent-instructions/workspace/AGENTS.md",
+        " T snapshots/session/agent-instructions/workspace/nested/AGENTS.md",
+        " T vendor/CLAUDE.md"
+      ]
+    },
+    {
+      "path": "C:/Users/25313/.codex/worktrees/9af0/dsh-devframe",
+      "head": "ebc7d0f1b60db9bc752119b479f93d60b5b5c0e6",
+      "status": [
+        "T .agents/notes/implemented/CLAUDE.md",
+        " T .claude/skills",
+        " T CLAUDE.md",
+        " T apps/cli/tests/profiles/acp/cordis.yml",
+        " T packages/CLAUDE.md",
+        " M packages/experimental/agent-team/src/roster.ts",
+        " M packages/experimental/agent-team/src/types.ts",
+        " M pnpm-lock.yaml",
+        " T snapshots/acp/escalation-approved/system-prompt.expected.md",
+        " T snapshots/acp/escalation-approved/tool-schemas.expected.json",
+        " T snapshots/acp/image-compaction/system-prompt.expected.md",
+        " T snapshots/session/agent-instructions/workspace/AGENTS.md",
+        " T snapshots/session/agent-instructions/workspace/nested/AGENTS.md",
+        " M tsconfig.base.json",
+        " M tsconfig.host.json",
+        " T vendor/CLAUDE.md",
+        "?? .agents/notes/proposed/feature/2026-09-02-devframe-dsh-native-development.i18n.yaml",
+        "?? .agents/notes/proposed/feature/2026-09-02-devframe-dsh-native-development.md",
+        "?? .agents/notes/proposed/feature/2026-09-02-devframe-dsh-native-development.zh.md",
+        "?? continue.md",
+        "?? docs/detailDesign-part1.i18n.yaml",
+        "?? docs/detailDesign-part1.md",
+        "?? docs/detailDesign-part1.zh.md",
+        "?? docs/detailDesign-part2.i18n.yaml",
+        "?? docs/detailDesign-part2.md",
+        "?? docs/detailDesign-part2.zh.md",
+        "?? docs/detailDesign-part3.i18n.yaml",
+        "?? docs/detailDesign-part3.md",
+        "?? docs/detailDesign-part3.zh.md",
+        "?? docs/detailDesign-part4.i18n.yaml",
+        "?? docs/detailDesign-part4.md",
+        "?? docs/detailDesign-part4.zh.md",
+        "?? docs/generalDesign.i18n.yaml",
+        "?? docs/generalDesign.md",
+        "?? docs/generalDesign.zh.md",
+        "?? docs/testAndAcceptance.i18n.yaml",
+        "?? docs/testAndAcceptance.md",
+        "?? docs/testAndAcceptance.zh.md",
+        "?? docs/timeline.i18n.yaml",
+        "?? docs/timeline.md",
+        "?? docs/timeline.zh.md",
+        "?? packages/experimental/agent-team/tests/child-options.spec.ts",
+        "?? packages/experimental/agent-team/tests/cold-role-recovery.spec.ts",
+        "?? packages/experimental/agent-team/tests/devframe-composition.spec.ts",
+        "?? packages/experimental/devframe/",
+        "?? packages/experimental/tool-agent-team/tests/role-denial.spec.ts"
+      ]
+    },
+    {
+      "path": "D:/dsh-devframe-f01",
+      "head": "2be4a074c29a87dc76c10e26272dbb101e4ceef7",
+      "branch": "refs/heads/feature/f01-role-policy",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-f02",
+      "head": "2be4a074c29a87dc76c10e26272dbb101e4ceef7",
+      "branch": "refs/heads/feature/f02-project-tools",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-f03",
+      "head": "2be4a074c29a87dc76c10e26272dbb101e4ceef7",
+      "branch": "refs/heads/feature/f03-project-commands",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-f04",
+      "head": "2be4a074c29a87dc76c10e26272dbb101e4ceef7",
+      "branch": "refs/heads/feature/f04-reliability",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-f05",
+      "head": "2be4a074c29a87dc76c10e26272dbb101e4ceef7",
+      "branch": "refs/heads/feature/f05-profile-assembly",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-f06",
+      "head": "2be4a074c29a87dc76c10e26272dbb101e4ceef7",
+      "branch": "refs/heads/feature/f06-worktree-tool",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-f07",
+      "head": "2be4a074c29a87dc76c10e26272dbb101e4ceef7",
+      "branch": "refs/heads/feature/f07-integration-qa",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-g1",
+      "head": "b9edbb392419a4855b47abc81e55e7284b90d6bd",
+      "branch": "refs/heads/group1-branch",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-g2",
+      "head": "3f23dd26ac32ff86f71e33da5f97aafd7ffb5682",
+      "branch": "refs/heads/group2-branch",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-g3",
+      "head": "04e28977d5d8dfb00c891165cc1e4d1b6a7d7829",
+      "branch": "refs/heads/group3-branch",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-g4",
+      "head": "bb45d0ee29dde5c59bff03b13119f9f345508c40",
+      "branch": "refs/heads/group4-branch",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-g5",
+      "head": "81288dc286948f2272e8841e8c1fb80cb894fc81",
+      "branch": "refs/heads/group5-branch",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-3level",
+      "head": "26f19f9606e33007a687ea81217d8513bada5a3f",
+      "branch": "refs/heads/p/3level",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-accept",
+      "head": "20d641a9c5a93139a7568ad4d6fb63807435e0b9",
+      "branch": "refs/heads/p/accept",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-anchors",
+      "head": "eeb942df561e32d2a57e030182c321b81c76be13",
+      "branch": "refs/heads/p/anchors",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-at2c",
+      "head": "7a567b74ec15495c29038eec22a7cbf10a778633",
+      "branch": "refs/heads/p/at2c",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-at4",
+      "head": "ad9329723fb6d134cdc0a33bf0bfc14584703a8a",
+      "branch": "refs/heads/p/at4process",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-at406",
+      "head": "278f25c5b297d84ed4139155b48e9c4a5c279a69",
+      "branch": "refs/heads/p/at406",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-atx",
+      "head": "920cd3db6fc367ad58830d3e8abcd7cf0c55d525",
+      "branch": "refs/heads/p/atx",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-battery",
+      "head": "c93b86c43e0a7fa9c5720ea70575241b0c990a22",
+      "branch": "refs/heads/p/battery",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-bext",
+      "head": "4603ec5c0257647b9f35045b6993883816e3ce0b",
+      "branch": "refs/heads/p/bext",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-buildfix",
+      "head": "110ec66fa1c1bd2fe4a69b9d114d5634a9486da1",
+      "branch": "refs/heads/p/buildfix",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-builtbin",
+      "head": "9d427aeb5c08186dd8eda3de31be1f81ba9b95b4",
+      "branch": "refs/heads/p/postrestart",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-catfix",
+      "head": "9ff234a4cd272e3d0e0dc7bb3be239e16a8bb34b",
+      "branch": "refs/heads/p/catfix",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-debt",
+      "head": "53ed44b4f8255378e773cc1432cc6536fdb92ee4",
+      "branch": "refs/heads/p/debt",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-devexp",
+      "head": "c94be1dc242f09ae1e508264c6353a24d2d70ec8",
+      "branch": "refs/heads/p/devframe-exports",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-docfix",
+      "head": "7689ce3bb55e991f6f07f04adb1cf4e8cb9222e9",
+      "branch": "refs/heads/p/docfix-2",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-foundation",
+      "head": "09b155c4a383a63432f0470b53aab6cadd77f612",
+      "branch": "refs/heads/p/fprecompute",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-hier2",
+      "head": "4d5f9e1e8a25bb75465167feb3f666192950a6cb",
+      "branch": "refs/heads/p/hier3-merge",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-hierarchy",
+      "head": "3f4cd0bb2677c316e0e65b9faff80ba58d414111",
+      "branch": "refs/heads/p/hierarchy-fix",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-integration",
+      "head": "bd066d22b50c3161b874b3e51f6e17ba1f55fe6f",
+      "branch": "refs/heads/p/integration-4",
+      "status": [
+        "M .agents/devframe/integration/probe-state.json"
+      ]
+    },
+    {
+      "path": "D:/dsh-devframe-p-intlocal",
+      "head": "895c6c9780305dd695371a8905eef303cb617382",
+      "branch": "refs/heads/p/intlocal",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-memory",
+      "head": "cfb483461df9f52fa16094aadc6ab12a0d906701",
+      "branch": "refs/heads/p/memory-fix",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-memrx",
+      "head": "edadd77ba57872c976cc36dd6d81c8bb39c1243e",
+      "branch": "refs/heads/p/memrx",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-p05checks",
+      "head": "ca30df667ba7d4bb0f1599b484a38be09b626561",
+      "branch": "refs/heads/p/p05checks",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-p05wire",
+      "head": "08903082a8591a0302146ec2a5d0a14475d5e07b",
+      "branch": "refs/heads/p/p05wire",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-product",
+      "head": "3eb80495fa6b08242d0e512d55aa5c16a1a868b5",
+      "branch": "refs/heads/p/product",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-s6",
+      "head": "25df9823c89029276b041ebac54123e6530c8d3c",
+      "branch": "refs/heads/p/s6",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-sched",
+      "head": "e4ac0814325bf21ecfdfee8f84da26d9fa9e49e9",
+      "branch": "refs/heads/p/sched",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-sfix",
+      "head": "1bca752bcad2ae1565123f5c09f5707da96bc85e",
+      "branch": "refs/heads/p/sfix",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-shadow",
+      "head": "879484b767d576cf3f3c73da35df3460d1243548",
+      "branch": "refs/heads/p/shadow",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-shadowflow",
+      "head": "35661e1b508af26860acd1481ab6778e8cac0fd9",
+      "branch": "refs/heads/p/shadowflow",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-shadowguard",
+      "head": "4e70cbd17e59dc769859fc4817d2b9ae3c5d289c",
+      "branch": "refs/heads/p/shadowguard",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-snapexpect",
+      "head": "47acedd166644476b56b97ea73202a281ab8cd8c",
+      "branch": "refs/heads/p/snapexpect",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-snapplat",
+      "head": "2765b9ff5c12d9e9e9f28ede9afafd5ce9051d0b",
+      "branch": "refs/heads/p/snapplat",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-verify",
+      "head": "03c2b6d4f92c55d900828e22d3361b0ca7dcc6da",
+      "branch": "refs/heads/p/verify",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-webfix",
+      "head": "8f9b81154784c9281bd016f67720a6fd35596ccc",
+      "branch": "refs/heads/p/webfix",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-p-worktree",
+      "head": "853122a620e5bd37dc2f315598beab80e95590f3",
+      "branch": "refs/heads/p/worktree",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-r3-foundation",
+      "head": "1ed2c783d4bc4cc7475983c966fd360281999bc8",
+      "branch": "refs/heads/r3/foundation",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-r3-g1",
+      "head": "3784ead820734216763347f9be6158d76ada6418",
+      "branch": "refs/heads/r3/g1-session-identity",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-r3-g2",
+      "head": "9c473dd98c4a87b1244963a6c8425685c0804f0f",
+      "branch": "refs/heads/r3/g2-hierarchy",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-r3-g2-e1",
+      "head": "c10127a5f5e85214871b6a274117aa699d2417cb",
+      "branch": "refs/heads/r3/g2-e1",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-r3-g3",
+      "head": "081abb678eff7108e8547a8a5a5e861f7950d6ad",
+      "branch": "refs/heads/r3/g3-agent-tree-ui",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-r3-g4",
+      "head": "b8a5f4a565eb25e4d9ab1ce9b2ae75bd229d5801",
+      "branch": "refs/heads/r3/g4-worktree",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-r3-g5",
+      "head": "948e1049cafe3c0eca262b10d27b712fac82b20a",
+      "branch": "refs/heads/r3/g5-quality",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-v13",
+      "head": "8459146e324a98ff85ad211e41cc71f94f203a48",
+      "branch": "refs/heads/codex/dsh-controller-v1.3",
+      "status": []
+    },
+    {
+      "path": "D:/dsh-devframe-v14",
+      "head": "c93b86c43e0a7fa9c5720ea70575241b0c990a22",
+      "branch": "refs/heads/codex/dsh-controller-v1.4",
+      "status": []
+    }
+  ],
+  "protected": "All pre-existing tracked modifications, deletions, untracked files and worktrees are retained.",
+  "activeOwnership": [
+    {
+      "taskId": "battery",
+      "lead": "0c852cbc-0f17-4a59-a43e-7a141f034efe",
+      "worker": "57d0355f-86ff-4f21-9edc-37d33d17e580",
+      "worktree": "D:/dsh-devframe-p-battery",
+      "state": "developing",
+      "domain": [
+        "snapshot suite and corpus wiring",
+        "snapshots/sdk",
+        "snapshots/session",
+        "snapshots/acp"
+      ],
+      "instruction": "Retain original parent links; never duplicate dispatch."
+    }
+  ]
+}
