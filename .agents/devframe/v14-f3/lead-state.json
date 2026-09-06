@@ -12,7 +12,7 @@
     "branch": "codex/v14-f3-lead",
     "fileDomain": ".agents/devframe/v14-f3/**"
   },
-  "state": "assigned",
+  "state": "submitted",
   "stateHistory": [
     {
       "state": "planned",
@@ -22,39 +22,56 @@
     {
       "state": "assigned",
       "at": "2026-09-06T12:43:10+09:00",
-      "note": "lane probe verified via coordinator-extracted persisted JSON; worker worktree D:/dsh-devframe-v14-f3-w1 created (exit 0); L2 worker dispatch on huoshan-2 lane via workflow agent() next"
+      "note": "lane probe verified via coordinator-extracted persisted JSON; worker worktree D:/dsh-devframe-v14-f3-w1 created (exit 0); L2 worker dispatch on huoshan-2 lane via workflow agent()"
+    },
+    {
+      "state": "reviewing",
+      "at": "2026-09-06T12:57:40+09:00",
+      "note": "worker returned commit a573d7609f with three drafts; cherry-picked into lead branch as b6895beeec (exit 0); lead independently re-verified 12 load-bearing citations"
+    },
+    {
+      "state": "submitted",
+      "at": "2026-09-06T13:00:38+09:00",
+      "note": "review accepted 12/12 spot-checks (1 line-range nit hedged by worker); lead-review.md written; settlement reported to controller"
     }
   ],
   "leadBriefing": {
-    "note": "Lead first-round read-only findings, handed to L2 worker as starting facts; worker must re-verify and pin exact lines/context",
+    "note": "Lead first-round read-only findings, handed to L2 worker as starting facts; worker re-verified all of them and pinned exact lines (see worker/semantics.md evidence table)",
     "findings": [
-      "core/tools duplicate registration throws: packages/core/tools/tests/tools.spec.ts:1984-1987 'rejects duplicate names and unregisters on fiber dispose (HMR safety)' asserts ctx.tools.register(echoTool) twice toThrow 'already registered'; error message at packages/core/tools/src/index.ts:720-721",
-      "base bundle mounts native pwsh tool win32-only: packages/bundle/base/cordis.patch.yml:256-257 row id tool-pwsh -> @deepseek-ai/dsh-tool-pwsh; base README.md:76 documents platform gating (tool-bash/bash-sandbox disabled on win32, twins pwsh-sandbox/tool-pwsh mount on win32 only) and the fs double-registration load-failure precedent",
-      "snapshot scenario snapshots/session/persistent-pwsh-tool-turn: snapshot.yml declares profile headless, composition persistent-pwsh, platform pwsh; cordis.snapshot.yml:93-95 and cordis.yml:85-87 insert @deepseek-ai/dsh-tool-pwsh-persistent; both compositions disable tool-bash (cordis.snapshot.yml:89-91, cordis.yml:81-83) but do NOT disable tool-pwsh",
-      "both plugins register a model-facing tool named 'pwsh': packages/shell/tool-pwsh/src/index.ts:250-251 (ctx.tools.register(defineTool({ name: 'pwsh', ...))); packages/shell/tool-pwsh-persistent/src/index.ts:441-442 (ctx.tools.register(defineTool({ name: 'pwsh', ...)))",
-      "contrast surfaces that should not collide (worker to verify): packages/bundle/sdk-minimal (cordis.patch.yml:146, package.json:63; no dsh-base per architecture.md) and packages/preset/agent-presets/presets/minimal/agent.cordis.yml:59"
+      "core/tools duplicate registration throws: packages/core/tools/tests/tools.spec.ts:1984-1987; error message at packages/core/tools/src/index.ts:720-721",
+      "base bundle mounts native pwsh tool win32-only: packages/bundle/base/cordis.patch.yml:256-257; base README.md:76",
+      "snapshot scenario snapshots/session/persistent-pwsh-tool-turn disables tool-bash but not tool-pwsh (cordis.snapshot.yml:89-91 / cordis.yml:81-83; inserts persistent at 93-95 / 85-87)",
+      "both plugins register model-facing tool name 'pwsh': packages/shell/tool-pwsh/src/index.ts:250-251; packages/shell/tool-pwsh-persistent/src/index.ts:441-442",
+      "contrast surfaces: sdk-minimal (no dsh-base) and minimal preset (per-agent scoped shadow) do not collide"
     ]
   },
   "lane": {
     "requested": { "provider": "huoshan-2", "model": "glm-5.3-flash" },
     "probe": {
       "workflow": "f3-lane-probe",
-      "script": "agent('...LANE-OK probe...', { provider: 'huoshan-2', model: 'glm-5.3-flash', label: 'f3-lane-probe' })",
       "resultVerbatim": "workflow \"f3-lane-probe\" completed (1 agent). Return value: { \"probeReply\": \"LANE-OK\" }",
       "schemaOverride": "supported",
       "at": "2026-09-06T12:36:08+09:00",
       "persistedSessionEvidence": {
-        "source": "D:/dsh-devframe-v14/.agents/devframe/v14/huoshan2-probe-observed.json (read by lead, registered verbatim; extracted by external coordinator from persisted session JSON)",
+        "source": "D:/dsh-devframe-v14/.agents/devframe/v14/huoshan2-probe-observed.json (extracted by external coordinator; registered verbatim by lead)",
         "probeSession": "d4ab27e2-64a1-444e-8a15-670902a21649",
-        "parentSession": "77e4a9a2-db3f-4eb2-916c-dce8cfd615f9",
         "requestTime": "2026-09-06T03:36:08.914Z (epoch ms 1788665768914)",
         "responseTime": "2026-09-06T03:36:12.611Z (epoch ms 1788665772611)",
         "provider": "huoshan-2",
         "model": "glm-5.3-flash",
         "replyText": "LANE-OK",
         "turnEnd": "completed",
-        "qualification": "Connectivity probe only, not substantive F3 worker delivery (coordinator's own qualification, registered as-is)"
+        "qualification": "Connectivity probe only, not substantive F3 worker delivery"
       }
+    },
+    "workerEvidence": {
+      "workerSession": "c376aa04-d710-4e0d-9971-ffb6a9731067",
+      "source": "C:/Users/25313/.dsh/sessions/--D-dsh-devframe--/c376aa04-d710-4e0d-9971-ffb6a9731067/session.jsonl.zstd decoded by lead (2825 zstd frames, 3526 events)",
+      "header": "parentSession=77e4a9a2-db3f-4eb2-916c-dce8cfd615f9, origin=subagent, delegationDepth=2, createdAt epoch ms 1788666248454",
+      "firstRequest": "request/header seq13, time epoch ms 1788666248502 = 2026-09-06T12:44:08.502+09:00, config.provider=huoshan-2, config.model=glm-5.3-flash (provider/model taken from persisted JSON, not assumed)",
+      "turnEnd": "turn/end seq34111, time epoch ms 1788667053092 = 2026-09-06T12:57:33.092+09:00, reason completed",
+      "window": "huoshan-2 substantive worker in flight 2026-09-06T12:44:08.502+09:00 .. 12:57:33.092+09:00 (about 13.4 minutes, many model requests)",
+      "huoshan1OverlapObservation": "huoshan-1 Shadow L2 session 0b883d36-5612-40ae-8954-f6da2ef17bbe actively writing through the lead-up: session.jsonl.zstd grew 1227615 -> 1470659 bytes, last write observed 12:44:06+09:00, i.e. in flight up to 2 seconds before the huoshan-2 worker window opened; full-window overlap adjudication (including Integration chain) delegated to controller per dispatch instruction 3"
     }
   },
   "worker": {
@@ -63,10 +80,23 @@
     "branch": "codex/v14-f3-w1-semverify",
     "fileDomain": ".agents/devframe/v14-f3/worker/**",
     "agentCreationForbidden": true,
-    "state": "assigned",
-    "sessionId": "pending (assigned at workflow launch; extracted from persisted session JSON on return)",
+    "state": "submitted",
+    "sessionId": "c376aa04-d710-4e0d-9971-ffb6a9731067",
     "providerRequested": "huoshan-2/glm-5.3-flash via workflow agent() override",
-    "providerObserved": "pending persisted JSON"
+    "providerObserved": "huoshan-2/glm-5.3-flash (persisted request/header seq13, verified by lead from session JSON)",
+    "commitSha": "a573d7609f90d16d4cb8988522ae9fdc57cc6c3c",
+    "deliverables": [
+      ".agents/devframe/v14-f3/worker/semantics.md",
+      ".agents/devframe/v14-f3/worker/fix-proposal.md",
+      ".agents/devframe/v14-f3/worker/verification-design.md"
+    ],
+    "reportedExitCodes": "git rev-parse/branch/log/status exit 0; git add exit 0; git diff --cached --check exit 0; per-file trailing-byte check all exactly-one; git commit --no-verify exit 0"
+  },
+  "review": {
+    "verdict": "accepted",
+    "artifact": ".agents/devframe/v14-f3/lead-review.md",
+    "spotChecks": "12/12 lead-verified citations confirmed; 1 line-range reference (pwsh-tool-turn contrast rows: actual 79-85, worker said 83-91 with hedge) not a factual error",
+    "integration": "cherry-pick a573d7609f -> b6895beeec on codex/v14-f3-lead (exit 0)"
   },
   "boundaries": [
     "lead zero writes outside .agents/devframe/v14-f3/** in D:/dsh-devframe-v14-f3-lead",
@@ -78,11 +108,17 @@
     {
       "gate": "pre-commit lefthook (lead worktree commits)",
       "status": "partially-skipped-environmental",
-      "detail": "whitespace (staged) PASS; vendor manifest guard FAILED environmentally: /usr/bin/env: 'bash': No such file or directory, exit status 127 (portable git lacks bash). Per task discipline: skipped gate + reason recorded; equivalent alternative verification executed: ConvertFrom-Json valid, exactly one trailing newline, git diff --cached --check exit 0; commit performed with --no-verify carrying this record."
+      "detail": "whitespace (staged) PASS; vendor manifest guard FAILED environmentally: /usr/bin/env: 'bash': No such file or directory, exit status 127 (portable git lacks bash). Equivalent verification executed: ConvertFrom-Json valid, exactly one trailing newline, git diff --cached --check exit 0; commits with --no-verify carrying this record."
+    },
+    {
+      "gate": "pre-commit lefthook (worker worktree commit)",
+      "status": "skipped-environmental",
+      "detail": "Worker used --no-verify for the same environmental reason (portable git lacks bash, hook exit 127); worker-reported equivalent verification: git diff --cached --check exit 0, per-file trailing-byte check all exactly-one, git commit exit 0."
     }
   ],
   "tools": {
-    "decodeSession": ".agents/devframe/v14-f3/tools/decode-session.mjs - session.jsonl.zstd is an append stream of zstd frames; node:zlib sync decompress returns only the first frame (verified: 9 magic offsets in probe session file; second frame at offset 201 decodes to sandbox/mode + approval/policy events); streaming createZstdDecompress also stopped after frame one, so multi-frame reads must decode per-frame at magic offsets"
+    "decodeSession": ".agents/devframe/v14-f3/tools/decode-session.mjs - session.jsonl.zstd is an append stream of zstd frames; node:zlib sync decompress returns only the first frame; multi-frame reads decode per-frame at 0x28B52FFD magic offsets (verified: probe file 9 magic offsets, worker file 2825 frames all decoded)",
+    "globNote": "glob tool returned a false negative for the exact path scripts/session-snapshot-corpus.corpus.ts; existence confirmed via pwsh Test-Path (file present, 9427 bytes)"
   },
-  "updatedAt": "2026-09-06T12:43:10+09:00"
+  "updatedAt": "2026-09-06T13:00:38+09:00"
 }
