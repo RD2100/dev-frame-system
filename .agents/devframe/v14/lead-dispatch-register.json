@@ -911,6 +911,16 @@
         "A-lead directive: stop waiting on a46cab71 (no delivery after recovery budget; final废弃) and personally fix A1/A2/A3 using the 673d61fe reproduction report plus the four in-tree evidence files; land the repro report branch commit first for controller review-merge."
       ],
       "status": "blocker closure in progress on both lines; worker slots remain closed (no backfill)"
+    },
+    {
+      "entry": "Workflow-run wrapper hang diagnosed on A/C leads; A recovered once via interrupt; C self-recovered and delivered C1 settlement (accepted); first four-state flip applied to worklist",
+      "facts": [
+        "Harness-level hang class identified: lead turns stuck on a workflow tool call whose agents had already completed (A: tool/call 44 vs result 43, run-start 1 no run-end; C: 50 vs 49, run-start 3 no run-end 2). Workers DONE but run wrapper never returned the result to the lead turn.",
+        "A lead (629bed0c): turn hung since 22:06:52 - interrupted once (recovery budget for this hang: 1 of 1 used) and restarted with self-extraction instructions for the completed worker 673d61fe report (session log path + extractor command provided), then land repro report + branch commit, then personally implement A1/A2 fix + A3 prevention gate.",
+        "C lead (da5d10f3): self-recovered; delivered C1 settlement with three-tier evidence and provider verified via controller-extracted seq13/14 (huoshan-1/glm-5.3-flash @ 22:10:44Z). C1 ACCEPTED: four states = source exists (triple consistency: WorkspaceBrowser.tsx:352-354 collapse, Rows.tsx:678-690+756-776 arrows next-layer-only, Rows.tsx:43/60-86/89-101 SessionID copy via actions menu pinned by README.md:40 contract), runtime = 61 component tests green exit 0, technical acceptance passed. Zero missing items - the three shorter copy paths are optional enhancements beyond the documented contract, no fix slice (controller concurs). C2/C3 slices dispatched huoshan-1 x2; C4 queued.",
+        "Worklist C1 row flipped (change-only). C lead dispatched 5 workflow agents total across the line (4 returned, 1 wrapper outstanding at diagnosis time)."
+      ],
+      "status": "A restart in progress; C2/C3/C4 pipeline flowing; B blocker closure and D consolidation continuing"
     }
   ]
 }
