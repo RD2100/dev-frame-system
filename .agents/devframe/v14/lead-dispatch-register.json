@@ -901,6 +901,16 @@
         "Huoshan quota scope narrowed: DSH mainline real compositions + provable compatibility probes only."
       ],
       "status": "D-line consolidation document to be revised per this scope; other lines unaffected"
+    },
+    {
+      "entry": "B1/B2/B3 real blocker confirmed and closure directed: shipped web composition missing four plugin mounts; A-lead ordered to personally fix A1/A2/A3",
+      "facts": [
+        "B5 AT2 receipt: 8 items = 7 covered + 1 partial (AT2-05 dual-storage backend), all acceptance states still not_run.",
+        "Confirmed blocker: shipped web composition mounts none of session-identity / shadow-router / command-goal-binding / project-memory; apps/cli resolution dependencies missing all four packages; command-goal-binding additionally missing tsconfig paths; agentBindings not mounted. This blocks the B1 real chain, B2 Shadow path, B3 Memory path.",
+        "B-lead directive (serial closure, one-shot design, no more AT investigation workers): (1) manifest four-package dependencies + shipped overlay mounts + required config + command-goal-binding tsconfig paths + agentBindings mount (sole-writer serialized); (2) verify-cordis-config + build exit 0 first; (3) isolated DSH_HOME + huoshan explicit routing real chain launch->controller->lead->worker->output->review->merge->stop/restart->resume with per-station command+exit-code+request-level log seq evidence; (4) then re-run Shadow/Memory real paths and full AT2.",
+        "A-lead directive: stop waiting on a46cab71 (no delivery after recovery budget; final废弃) and personally fix A1/A2/A3 using the 673d61fe reproduction report plus the four in-tree evidence files; land the repro report branch commit first for controller review-merge."
+      ],
+      "status": "blocker closure in progress on both lines; worker slots remain closed (no backfill)"
     }
   ]
 }
