@@ -800,6 +800,29 @@
         "Goal item Shadow/Memory acceptance: DELIVERED via S6+S7 (mechanism B in-process composition); shipped-profile gap honestly registered."
       ],
       "status": "accept chain settled+integrated; remaining live: compos2 (continuation worker), b2acp (worker dispatch); suite red ledger: image-compaction (b2acp in flight) + both-mode/ptc (pre-attributed)"
+    },
+    {
+      "entry": "v14-compos settled and integrated (7c21ed0fc2 + e34654a1fc); post-compos closure re-verification executed: s4 7/7, s5 3/3, compos production-chain spec 30/30 on merged main",
+      "composIntegration": [
+        "Merged 7c21ed0fc2 (composition closure + /devframe-start and /devframe-resume host command surface; delivery chain with honest attribution: inherited findings 8ae99ffc29 -> design cafaf58c83 -> interrupted-worker WIP 691e4c4ed6 -> continuation worker a399608605 with model self-confirmed in notes -> settlement 193714b05c with independent gate re-runs) and e34654a1fc (lead settlement records).",
+        "Domain audit: 16 files all in authorized domain (12 command-goal-binding + records + pnpm-lock importers-only 3-line agent-evidence workspace link); forbidden zones zero-touch; deviations R1-R4 mechanical and line-verified; post-merge catalog 115 up-to-date exit 0."
+      ],
+      "closureReverification": [
+        "Production chain proven on merged main: the compos repo spec (start-resume + real-composition, covering /devframe-start -> real evidence -> /goal-complete honest NO_REVIEW -> /devframe-resume restart) rerun by the controller: 30/30 exit 0.",
+        "Accept-harness reruns: s4 exit 0 (7/7) and s5 exit 0 (3/3, write+resume phases) against the merged tree - the accept wave's repeatable-script recipe works end to end.",
+        "s4 adaptation recorded honestly: the composition config now requires checks/taskIds/maxAttempts at mount (v14-compos extension), so the harness mount gained them mirroring the adjudicated R1 shape; the s4-5 pin stays NO_VERIFICATION_TEXT - the startBinding lane is binding-only by design, so the pin is behaviorally unchanged post-compos and only the stale in-flight annotation was wrong. A first adaptation attempt that flipped the pin to NO_REVIEW was corrected after the observed result proved the lane distinction (fail-loud evidence preserved in the out-dir verdicts)."
+      ],
+      "structuralDiscovery": [
+        "The accept harness lib/ directory (worker's four helper files) was gitignored by the root build-output rule (lib/, line 4) - the reason the lead proxy-commit d6e3f9d534 staged only the seven scripts while its message referenced the lib files (message over-claim, structurally caused).",
+        "Resolution: helpers/ rename with all 23 script imports updated (byte-identical restore hash-verified from the preserved w1 worktree; node --check green on all seven scripts) - the harness is now self-contained on main without fighting the build-output ignore or pnpm clean.",
+        "Controller branch was behind main (wave merges go direct): synced codex/dsh-controller-v1.4 with main before committing the s4 adaptation; the single-writer merge discipline preserved."
+      ],
+      "goalLedger": [
+        "Candidate chains: A compos SETTLED+INTEGRATED+re-verified; B accept SETTLED+INTEGRATED (S2-S7 PASS, S1 keyless-BLOCKED honest); C gap4 SETTLED+INTEGRATED (GAP-4 closed, 4->3 red); B-2 b2acp LIVE (worker dispatch).",
+        "Suite red ledger: 3 red (image-compaction fixture-lane = b2acp target; both-mode-turn/ptc-turn recording-tree-root pre-existing).",
+        "Shadow/Memory + real composition acceptance: DELIVERED (S6/S7 PASS; compos chain 30/30 on merged main)."
+      ],
+      "status": "three of four chains settled and integrated; b2acp worker in flight"
     }
   ]
 }
