@@ -10,7 +10,7 @@ description: DevFrame 单项目试点的总控编排计划、功能登记表与 
 
 DSH-Project-Controller 是本轮开发的唯一总控会话：它统一规划、创建、派发、监督和集成所有 Agent。其宿主生成的会话 ID 为 `session-9f2fb633-25a9-4464-8c9b-c257b0c1ab4f`，读取自 `DSH_SESSION_ID`。只有总控创建 Agent、把功能分支合并进 `main`、更新本登记表；功能负责人及其子 Agent 只向总控汇报，跨功能接口问题一律经总控转发。
 
-用户于 2026-09-05 记录的决策：交付按[验收交付表](testAndAcceptance.zh.md#delivery)的"受控单项目试点"行执行，拆分为下文 F01–F07；每个功能拥有独立 git worktree，七个全部预先创建，负责人按最多两路并发的梯次调度激活（模型提供方的账户级请求频率限制不允许七路并发 turn；证据见变更日志）。[Shadow 路由](detailDesign-part2.zh.md)与 [Obsidian 记忆](detailDesign-part3.zh.md)保持为延后的候选扩展。本轮不推送、不部署、不使用任何凭据。
+用户于 2026-09-05 记录的决策：交付按[验收交付表](testAndAcceptance.zh.md#delivery)的"受控单项目试点"行执行，拆分为下文 F01–F07；每个功能拥有独立 git worktree，七个全部预先创建，负责人按双 Provider 动态并行调度激活——并发受文件域独立、依赖真实、各 Provider 近期 API 健康约束，不设固定路数上限（单 Provider 时代的限流证据仍见变更日志）。[Shadow 路由](detailDesign-part2.zh.md)与 [Obsidian 记忆](detailDesign-part3.zh.md)保持为延后的候选扩展。本轮不推送、不部署、不使用任何凭据。
 
 ## 现状评估
 
@@ -97,7 +97,7 @@ Agent 停顿时，总控读取其最后输出与 worktree，判定为已提交�
 
 ## 开发与合并顺序
 
-开发：七个 worktree 与负责人全部预先就位，但负责人激活改为串行——同一时间只有一名活跃负责人，按有界增量推进，每个增量以一次提交和一份简短中期报告收轮——因为模型提供方的账户级限流在七路并发与两路并发下都终止过 turn（429 证据见变更日志）。`packages/experimental/devframe` 内的共享文件——`src/index.ts`、`src/shared/types.ts`、`package.json`、`README.md` 与 tsconfig 聚合——只接受属主的增量编辑；合并时的冲突由总控解决。
+开发：七个 worktree 与负责人全部预先就位；负责人激活为双 Provider 动态并行——文件域独立、依赖真实、所属 Provider 车道健康时负责人并发运行，并发度按各 Provider 近期成功率与账户额度动态调整，不设固定路数上限。有界增量仍以一次提交和一份简短中期报告收轮。历史上单 Provider 的账户级限流曾在七路并发与两路并发下终止过 turn（429 证据见变更日志）；现行缓解是显式双 Provider 车道分配——唯一总控与其 Worker 分置两 Provider，逐次派发记录 provider 与 model——而非串行。`packages/experimental/devframe` 内的共享文件——`src/index.ts`、`src/shared/types.ts`、`package.json`、`README.md` 与 tsconfig 聚合——只接受属主的增量编辑；合并时的冲突由总控解决。
 
 合并：总控按 F01 → F02 → F04 → F03 → F05 → F06 的顺序合入 `main`，随后以 F07 收口。每次合并先跑下表该功能的针对性命令，凡改动 docs、README 或 `.agents/` 内容即加跑 `pnpm run test:docs`。最终收口跑 typecheck、build、组合冒烟、针对性矩阵并记录集成报告。只有总控合并；负责人永不触碰 `main`。
 
@@ -134,3 +134,4 @@ Windows 主机，仅有 `pnpm`、`pwsh`、Node 24.19 与 git 2.53；无 npm、�
 - 2026-09-05：F04–F07 在产生任何编辑前异常停止（已核实各 worktree 停在基线）；总控已送达恢复消息令各自续作；F01–F03 持续运行；f01–f06 依赖安装完成，f07 收尾中。
 - 2026-09-05：七个负责人全部异常停止且各 worktree 零编辑，无工作丢失。会话日志证据显示 `429 AccountRateLimitExceeded` 且重试耗尽——七路并发 turn 触发提供方账户级限流。总控把执行修正为最多两路并发的梯次激活（先 F01 与 F06）；七个 worktree 的依赖安装全部完成。同时禁用 shell 递归遍历 `node_modules`（pnpm junction 环）；负责人改用限定范围的 glob 模式或 `git ls-files`。
 - 2026-09-05：两路并发同样死于 429 限流（F06 于第 2 轮第 47 步；F01 于第 14 步设计中被切断；均无提交，零丢失）。执行再次修正为单一活跃负责人的有界增量模式——每个增量提交并以中期报告收轮；活跃槽位由 F01 持有。主工作区出现来自本编排之外并行 Agent 的未提交变更（`AGENTS.md` 修改、新交接文档、`src/` 下编译产物）；此处仅记录，一律不动——本编排只暂存自己的文件。
+- 2026-09-06：唯一总控收拢——V1.4（session-c1668d60）为唯一项目总控与唯一 `main` 合并者；V1.0–V1.3 各总控已归档。经用户授权，调度规则由单负责人串行纠正为双 Provider 动态并行（文件域独立、依赖真实、各 Provider 近期 API 健康；不设固定路数上限）；上文 429 各条作为单 Provider 时代的历史保留。`huoshan-1` 实报 `AccountQuotaExceeded`（五小时额度耗尽）；总控席位已切至 `huoshan-2`/glm-5.3、Worker 保持 glm-5.3-flash，车道按真实额度状态再分配。
