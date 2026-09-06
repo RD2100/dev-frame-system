@@ -58,12 +58,12 @@
 | # | 场景 | 态 | 裁定 |
 | --- | --- | --- | --- |
 | GAP-1 | acp image-compaction | 1 红 | 不动不修（脚本模型消息固定，refresh 不能合成平台适配行为；fail-loud 报备在案） |
-| GAP-2 | headless hook 三场景（hook-cc-posttool-block / hook-cc-stop-continue / hook-codex-stop-continue） | 3 红 | 不动不修（同上） |
+| GAP-2 | headless hook 三场景（hook-cc-posttool-block / hook-cc-stop-continue / hook-codex-stop-continue） | 3 红 + web 波及 1 | 不动不修（同上）。**波及面披露**：web minimal-preset 重放 hook-cc-posttool-block 语料，win32 宿主无 `sh`（hook handler 失败 → decision pass）且基座只注册 pwsh（`unknown tool "bash"`）→ 该测试红。**基线实证**：在接手点 f083ce3044 上该测试同样 1 failed/2 passed——非收尾窗回归，属 GAP-2 同根平台分歧在第二车道的显影 |
 | GAP-3 | F3 注册域（persistent-pwsh-tool-turn） | **已闭案** | 方案 A `599e66ca5a`（composition 补 tool-pwsh disable，双文件成对）+ 方案 B `578a73347a`（V1 守卫红→绿实证）+ V2 win32 宿主证据（A 提交说明：boot 复现 duplicate-registration stderr→修复后绿）；方案 C（core/tools 替换注册）四条论据否决维持 |
 | GAP-4 | sdk subagent-continuable | 1 红 | 改判 fail-loud（本波新增）：authored durability-failure 流（subagent + 3×send_message），120s test timeout 确定性×3（基线+重放×2），卡在运行本身（比较之前），变体机制结构性不适用——路由产品链：win32 子代理 durability/恢复机制重放阻塞 |
 
 ## 八、gate 面状态（收尾后）
 
-- `pnpm run test:snapshot`（win32 宿主，lib 口径）：headless 3 GAP 红 / acp 1 GAP 红 / sdk 1 GAP 红 / web message-feedback-protocol 绿，其余全绿。
+- `pnpm run test:snapshot`（win32 宿主，lib 口径）全车道：**6 failed / 104 passed / 10 skipped** = headless 3 GAP 红 + acp 1 GAP 红 + sdk 1 GAP 红 + web minimal-preset 1（GAP-2 波及，见 §七）；web message-feedback-protocol 与 corpus 门同车道绿；其余全绿。
 - corpus 门 3/3（含 V1 shell-family 不变量）；包 vitest 330/1skip；typecheck 0。
 - 冻结面与 base 语料：零触碰；`git status` 净。
