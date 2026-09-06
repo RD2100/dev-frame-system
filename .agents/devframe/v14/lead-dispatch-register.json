@@ -454,6 +454,25 @@
         "status": "integrated",
         "mergeCommit": "f5c680cacd (codex/v14-p05asm merged into main; user dirty files 376 untouched)"
       }
+    },
+    {
+      "entry": "Next wave dispatched: v14-hostcmd (P23/S4 host command surface) - strict three-layer topology",
+      "coordinatorVerifiedBaseline": [
+        "main HEAD f5c680cacd; user dirty files 376 untouched; P05 admission production assembly merged.",
+        "Battery original chain retained untouched: current worker 61e4739d-93e6-4531-aa23-2edb4bc7a781, parent 0c852cbc, p/battery, huoshan-1; session log 13,535 events / 11,293 frames, last event ~06:23:44Z, no session/end yet; p/battery HEAD 36178c4b19 (test(session): land child session and child sidecar variants for the two multi-session scenarios) - changes within approved snapshots/sdk + session-snapshot/corpus domains; stage-2 pre-commit work in progress.",
+        "Controller one-time anchor confirms p/battery tip 36178c4b19."
+      ],
+      "dispatch": {
+        "taskId": "v14-hostcmd",
+        "task": "P23/S4 host command surface: wire the landed GoalServicePort/GoalBindingController.complete to the host/plugin command entry, carry verdict/receipt attribution, preserve evaluateCompletionAdmission three-predicate order and fail-closed semantics; architecture verification FIRST (if no safe wiring point: register specific blocked reason + next action, no speculative changes), then design + exact file-domain verification, then minimal revertible slice + targeted tests",
+        "topology": "strict three layers: controller -> L1 lead (new, continuable subagent, huoshan-1 by schema limitation honestly declared) -> L2 worker via workflow agent(prompt,{provider:'huoshan-2',model:'glm-5.3-flash'}) from the lead (subagent schema has no provider param - the lead dispatches the workflow, F3 precedent)",
+        "leadWorktree": "D:/dsh-devframe-v14-hostcmd-lead (controller-created, branch codex/v14-hostcmd-lead @ f5c680cacd)",
+        "workerWorktree": "to be created by the lead: D:/dsh-devframe-v14-hostcmd-w1 branch codex/v14-hostcmd-w1 from its lead branch",
+        "workerWriteDomain": "host command seam files pre-declared in worker design.md + evidence in .agents/devframe/v14-hostcmd/worker/**; forbidden: snapshots/**, packages/test-support/session-snapshot/**, scripts/session-snapshot-corpus*, vendor/**, main-tree writes, battery interaction",
+        "evidencePlan": "request/header, first success, turn/end, SessionID, hierarchy, worktree, domain, real overlap with huoshan-1 - extracted from session logs on lead report",
+        "mergeAuthority": "controller only",
+        "status": "dispatched"
+      }
     }
   ]
 }
