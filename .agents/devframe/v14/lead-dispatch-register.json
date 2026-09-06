@@ -674,6 +674,26 @@
         "No other old-controller descendant worktrees or in-flight turns detected in the scan; historical worktrees D:/dsh-devframe-p-* remain never-entered."
       ],
       "status": "consolidation recorded; four leads being resumed from persisted state (single deliberate attempt each, no blind retries)"
+    },
+    {
+      "entry": "Succession executed: four old leads sealed on huoshan-1, two replacement leads running, GoalStore + BatteryFix integrated, 7-red attribution closed",
+      "modelUnification": [
+        "USER DIRECTIVE: all lanes unified to huoshan-2/glm-5.3-flash. FACT-CORRECTION on record: the claim that Codex switched the four old leads via session/selectModel was FALSE - all four attempts were rejected by the host (session/agent-busy, owned by subagent routing); no lead was switched and the earlier resume messages never executed. Not recorded as completion evidence anywhere.",
+        "Interface verification (user-side, confirmed): send_message accepts only agent_id/message - no provider/model parameter exists; old continuable subagents pin their spawn-time provider lane. No supported interface can switch an existing child session's model. Bounded succession is therefore the operative mechanism; a provider/model-switch interface remains a possible future plugin task and does not block the mainline.",
+        "Old leads dd23ebdd (compos), 9fa566f7 (accept), 173895e1 (goalstore), dbadce52 (batteryfix): stopped on huoshan-1 AccountQuotaExceeded, sealed, never to be re-woken; their sessions/worktrees/artifacts preserved as-is (compos old tree keeps one uncommitted predecessor file, untouched)."
+      ],
+      "succession": [
+        { "taskId": "v14-compos", "newLead": "85ad815d-6712-4665-b61d-8921d327789f", "worktree": "D:/dsh-devframe-v14-compos2-lead (codex/v14-compos2-lead branched from the predecessor tip 8ae99ffc29)", "inherits": "predecessor interface-verification findings committed at 8ae99ffc29; task continues design -> w1 -> worker (workflow explicit huoshan-2/glm-5.3-flash); no re-verification of settled findings; no parent-child claim - pure succession registered here" },
+        { "taskId": "v14-accept", "newLead": "7eda453a-12f2-4c24-8b7e-ecfcb85aea13", "worktree": "D:/dsh-devframe-v14-accept2-lead (codex/v14-accept2-lead branched from the predecessor tip 4fce69f194)", "inherits": "predecessor scenario design S1-S7 committed at 4fce69f194; continues mock-adapter interface confirmation -> w1 -> worker (huoshan-2/glm-5.3-flash, harness only) -> lead-executed isolated real runs; receipt received: design reading started" }
+      ],
+      "integrations": [
+        { "wave": "v14-goalstore", "merge": "cd676781c3", "evidence": "controller lead-layer review after both lead resumes failed on the exhausted provider (same-SHA: vitest 11 files/182 green incl. restart matrix M1-M11, docs 15/15, domain 9 files forbidden 0, check 0); FileGoalBindingStore durable store, GOAL_BINDING_PERSISTENCE family reuse, zero new codes; Agent Note e0a89ccd96" },
+        { "wave": "v14-batteryfix", "merge": "345ca1443c", "evidence": "final controller suite 4 failed | 102 passed | 10 skipped with every red attributed; GAP-2 closed (three hook scenarios green after controller-adjudicated B-1 fix 683c678935 + web minimal-preset green), GAP-1 core closed (thresholdRatio 0.923, exhausted signature eliminated per worker bisection), GAP-4 stays red as confirmed functional regression (candidate C for an independent product lead); B-2 adjudicated fixture-lane (refresh cascade mutates sibling base fixtures - reverted, zero base-touch) and registered as acp harvest pipeline finding; both-mode-turn/ptc-turn = pre-existing recording-tree-root path embedding (red at base too); Agent Note 832aaf2099; battery write domain released after merge" }
+      ],
+      "attributionConclusion": [
+        "The earlier 7-red controller run was NOT a new regression: it equals the worker's disclosed G4 list exactly (3 x B-1 hook workspace comparison - now fixed and verified green x3; 1 x B-2 pin sidecar - fixture-lane residual; 2 x recording-tree-root embedding - pre-existing, red at base commit 614a2d2085 per worker attribution logs; 1 x GAP-4 functional regression). Cross-plugin catalog check post-merge: 115 up to date, exit 0; user dirty files 376 preserved."
+      ],
+      "status": "succession live (2 replacement leads running), battery write domain released, pending: compos/accept settlements + battery B-2 handoff to a successor"
     }
   ]
 }
