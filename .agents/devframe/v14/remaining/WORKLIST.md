@@ -19,7 +19,8 @@
 | B1 | 真实 dsh profile 全链：启动→总控→组长→Worker（真实 huoshan 调用）→产出→审查→合并→停止重启恢复 | 已有（compos 7c21ed0fc2：/devframe-start+/devframe-resume；GoalStore cd676781c3 复用） | shipped=`apps/cli/config/examples/cordis/cordis.yml`，v14 包挂载待补 | 机制 B 进程内已证 30/30；shipped-profile 待补 | 待 B1 全链 | compos 结算+闭合复验记录 | 无（凭据已授权） | shipped profile 设计→真实链逐站运行 |
 | B2 | Shadow 跨项目投递/隔离进真实用户路径 | 已有（shadow-router；S6 机制 B PASS） | shipped 待挂/待证 | 机制 B 限范围 | 待 shipped 证据 | S6 判定书（隔离域路径+SHADOW_REQUEST_CONFLICT） | B1 | 随 B1 链跑真实跨项目站 |
 | B3 | Memory 写/读/冷恢复进真实用户路径 | 已有（project-memory；S7 机制 B PASS） | shipped 待挂/待证 | 机制 B 限范围 | 待 shipped 证据 | S7 判定书（Vault 恰 2 真实 .md） | B1 | 随 B1 链跑真实 Memory 站 |
-| B4 | S1 真实凭据重测（隔离 profile，不误判账号） | 已有（harness s1 脚本 d0c2c455c2） | 隔离 profile | 先前 keyless BLOCKED（仅证该隔离无凭据） | 待真凭据重测 | s1 key-probes.json 4/4 钉住 | B1 前置可独立 | 配置 huoshan 凭据隔离重跑，凭据不输出不提交 |
+| B4 | S1 真实凭据重测（隔离 profile） | 已有（harness s1 脚本 d0c2c455c2） | 隔离 profile | 先前 keyless BLOCKED——**勘误：该隔离测试缺的是 deepseek-official 凭据，非 huoshan 失败；huoshan 账号可用** | 待 huoshan 显式路由重测 | s1 key-probes.json 4/4 钉住 | B1 前置可独立 | huoshan 显式路由重跑（凭据不输出不提交） |
+| B5 | AT 验收矩阵 36 条逐项对账（AT1×11/AT2×8/AT3×9/AT4×8） | 待对账 | 部分待证 | 矩阵文件仍声明 not_run 且含多项旧缺口 | 待逐条对账（不得把 S2-S7 通过提升为全范围验收） | `.agents/devframe/p22/anchor-matrix.md`（36 条 not_run+旧缺口）+ `docs/testAndAcceptance.zh.md`（每项精确证据要求） | B1 真实链产物可复用链接 | B 组长逐条对最新测试/真实组合产物：已被后续交付覆盖的复用并链接；未覆盖的按依赖派小切片；**AT1-11 真实任务效用在内**；huoshan 显式路由可推进真实任务 |
 
 ## C 产品与外围线（负责人：L-Product）
 
@@ -54,3 +55,4 @@
 ## 变更日志（只记变更）
 
 - W-1（本文件建立）：基线如上。main@381f3dbc10，旧六链+两追加波已并，脏 376 保护。
+- W-2：用户补充核验发现合入——新增 B5（AT 矩阵 36 条对账，anchor-matrix.md not_run+旧缺口 vs docs/testAndAcceptance.zh.md 精确证据要求）；B4 勘误（S1 原失败=deepseek-official 缺凭据，非 huoshan 失败；huoshan 显式路由可推进真实任务）。
