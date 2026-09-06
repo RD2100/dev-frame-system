@@ -177,6 +177,18 @@ importers:
       '@deepseek-ai/dsh-cordis-client-runner':
         specifier: workspace:^
         version: link:../../packages/extensions/cordis-client-runner
+      '@deepseek-ai/dsh-experimental-command-goal-binding':
+        specifier: workspace:^
+        version: link:../../packages/experimental/command-goal-binding
+      '@deepseek-ai/dsh-experimental-project-memory':
+        specifier: workspace:^
+        version: link:../../packages/experimental/project-memory
+      '@deepseek-ai/dsh-experimental-session-identity':
+        specifier: workspace:^
+        version: link:../../packages/experimental/session-identity
+      '@deepseek-ai/dsh-experimental-shadow-router':
+        specifier: workspace:^
+        version: link:../../packages/experimental/shadow-router
       '@deepseek-ai/dsh-fs-local':
         specifier: workspace:^
         version: link:../../packages/fs/fs-local

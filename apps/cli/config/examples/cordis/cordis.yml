@@ -12,8 +12,42 @@
     host: 127.0.0.1
     port: 3081
 
+# DevFrame user-path plugins (V1.4): safe machine-neutral defaults. A
+# deployment narrows them through a later --patch overlay (authorizedRoots,
+# vaultRoot, shadowSessionId, workspace identity), not by editing this file.
+# shadow-router: fail-closed until configured — no authorized roots, no
+# declared Shadow session, so no project_* tools install anywhere.
+# project-memory: unconfigured Vault keeps the tools read-only
+# (MEMORY_UNAVAILABLE) until a real vaultRoot is supplied.
+# command-goal-binding: binds the launch directory as the goal worktree;
+# /devframe-start executes the required checks below as real subprocesses.
 - insert:
     - id: cordis-host-runner
       name: '@deepseek-ai/dsh-cordis-host-runner'
     - id: tool-cordis
       name: '@deepseek-ai/dsh-tool-cordis'
+    - id: session-identity
+      name: '@deepseek-ai/dsh-experimental-session-identity'
+    - id: shadow-router
+      name: '@deepseek-ai/dsh-experimental-shadow-router'
+    - id: project-memory
+      name: '@deepseek-ai/dsh-experimental-project-memory'
+      config:
+        workspaceId: default
+        writeEnabled: false
+        userScopeEnabled: false
+    - id: command-goal-binding
+      name: '@deepseek-ai/dsh-experimental-command-goal-binding'
+      config:
+        workspaceId: default
+        workspaceRoot: !!js process.cwd()
+        maxAttempts: 3
+        maxGoalRounds: 8
+        taskIds: ['devframe-goal']
+        checks:
+          version: 1
+          checks:
+            - checkId: git-diff-check
+              executable: git
+              arguments: ['diff', '--check']
+              cwd: !!js process.cwd()
