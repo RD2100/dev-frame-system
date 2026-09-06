@@ -459,7 +459,12 @@ function materializeSessionTokens(entry: ReplayEntry, liveSessionIds: readonly (
   return replace(entry) as ReplayEntry
 }
 
-/** Learn a background child id from the stable tool-result text before that child reaches its first model call. */
+/**
+ * Learn the live child session id from the subagent tool's start renders (packages/subagent/tool-subagent)
+ * before that child reaches its first model call: both "started continuable subagent; SessionID <id>" and
+ * the legacy "started subagent <id>" bind; the job wording "started background subagent job <jobId>"
+ * deliberately does not bind, a job id is not a session id.
+ */
 function inferStartedSubagents(
   messages: GenerateOptions['messages'],
   liveSessionIds: (string | undefined)[],
@@ -467,7 +472,7 @@ function inferStartedSubagents(
   const leaves: string[] = []
   collectStrings(messages, leaves)
   for (const leaf of leaves) {
-    for (const match of leaf.matchAll(/started subagent ([^\s"'<>]+)/g)) {
+    for (const match of leaf.matchAll(/started (?:continuable )?subagent(?:; SessionID)? ([^\s"'<>]+)/g)) {
       const id = match[1]
       /* v8 ignore next -- the fixed regular expression always has capture group 1. */
       if (id === undefined || liveSessionIds.includes(id)) continue
