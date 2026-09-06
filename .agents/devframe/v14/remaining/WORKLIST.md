@@ -46,6 +46,7 @@
 
 ## 车道与并发纪律（各组长执行）
 
+- **三层证据纪律（W-3 起）**：每个任务/Worker 在结算表分列三层证据——**请求参数**（派发时显式 provider/model）、**宿主标签**（会话选择配置）、**实际响应**（会话日志 request/header+request/context 的逐字载荷）；只有"实际响应"层可判 provider 实证，自报 unknown/缺日志一律记"未证实"，不得提升。D 线只读包证据与 B 线真实本机探针在结算表分类标注。
 - Worker 一律 workflow 显式 `{provider, model:'glm-5.3-flash'}`；每任务记录实际请求 provider/model 及结果，标签≠成功证明。
 - 每账号起步 2 条实质 Worker；独立任务充分且响应稳定再增；组长汇报错峰，避免全员同时查账。
 - 共享契约/manifest/profile（尤其 shipped cordis.yml）唯一写入者=B 线组长串行收口；其余线只读引用。
