@@ -891,6 +891,16 @@
         "Worker completion sweep: 7/10 done (ecadc1fa A-repro 46 tools, 540abb07 C1 23, 4149f8eb B-probe 11, d5f3c838 D1 40, 3e323004/42e4f452/581b149f expansion slices), 2 healthy in-flight (673d61fe 20 tools, 176475b1 27 tools), 1 zombie marked废弃 (a46cab71, registry state pending). Lead trees crystallizing: defects repro captures + a3 polluted list, udeliver records dir."
       ],
       "status": "evidence discipline active across four lines; settlements pending lead digestion of 7 completed worker outputs"
+    },
+    {
+      "entry": "External-plugin verification scope correction delivered to D lead: huoshan endpoint != provider success; transport-compat probes only where docs allow baseURL override, separately labeled",
+      "facts": [
+        "Huoshan endpoints must never be recorded as real success evidence for Ollama Cloud / Grok / CommandCode or any external provider - a compatibility probe does not substitute for the service's own endpoint, credentials, model catalog, and billing/usage verification; missing any of the four keeps that service's production-acceptance state unfulfilled.",
+        "Custom-endpoint transport-compatibility probes are permitted ONLY where the plugin documentation explicitly allows OpenAI-compatible baseURL override, must be labeled as a separate transport-compat section, and never merged into the provider's own verification verdict.",
+        "Items missing OPENCODE_API_KEY / Ollama Cloud / xAI / CommandCode credentials stay BLOCKED/SKIP_AUTH; no forced calls to burn quota, no production-profile modifications.",
+        "Huoshan quota scope narrowed: DSH mainline real compositions + provable compatibility probes only."
+      ],
+      "status": "D-line consolidation document to be revised per this scope; other lines unaffected"
     }
   ]
 }
