@@ -1,0 +1,15 @@
+    826|       for (const [index, actual] of actualSnapshots.entries()) {
+    827|         expect(actual, `${scenario.name}: session ${index}`).toBe(expe…
+       |                                                              ^
+    828|       }
+    829|       await verifyHeaders(scenario, actualLogs, actualContext)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  3 failed | 1 passed (4)
+      Tests  7 failed | 99 passed | 10 skipped (116)
+   Start at  22:43:11
+   Duration  160.49s (transform 2.18s, setup 745ms, import 3.55s, tests 278.77s, environment 0ms)
+
+[ELIFECYCLE] Command failed with exit code 1.
