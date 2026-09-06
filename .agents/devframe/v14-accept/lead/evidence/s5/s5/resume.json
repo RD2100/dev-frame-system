@@ -1,0 +1,40 @@
+{
+  "exitcode": 0,
+  "resumed": {
+    "sessionId": "accept-s5-resume",
+    "cwd": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s5-root-ca493342\\worktree",
+    "eventCount": 4,
+    "lastSeq": 3,
+    "goalPhase": "active",
+    "objective": "Accept the v14 resume composition across two processes"
+  },
+  "writeFacts": {
+    "sessionId": "accept-s5-resume",
+    "cwd": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s5-root-ca493342\\worktree",
+    "eventCount": 3,
+    "lastSeq": 2,
+    "persistedEventCount": 3,
+    "liveEventCount": 3,
+    "objective": "Accept the v14 resume composition across two processes",
+    "goalPhase": "active"
+  },
+  "pauseDispatch": {
+    "commandId": "cmd-35ac6b81-1",
+    "kind": "success",
+    "text": "Goal paused\nStatus: paused\nObjective: Accept the v14 resume composition across two processes\nRounds: 0/256\nActivation: disarmed\n\nCommands: /goal edit <objective>, /goal resume, /goal clear"
+  },
+  "newEvents": [
+    {
+      "seq": 4,
+      "type": "command/run"
+    },
+    {
+      "seq": 5,
+      "type": "goal/change"
+    },
+    {
+      "seq": 6,
+      "type": "command/done"
+    }
+  ]
+}

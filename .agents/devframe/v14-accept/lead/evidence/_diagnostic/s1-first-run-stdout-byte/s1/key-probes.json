@@ -1,0 +1,24 @@
+{
+  "task": "reply with the single word ok",
+  "launchedTree": "D:/dsh-devframe-v14-accept-w1",
+  "run": {
+    "exitCode": 1,
+    "timedOut": false,
+    "durationMs": 4729,
+    "cwd": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s1-DJyXu7\\cwd",
+    "dshHome": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s1-DJyXu7\\dsh-home",
+    "isolationEnv": {
+      "DSH_HOME": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s1-DJyXu7\\dsh-home",
+      "DSH_AGENTS_HOME": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s1-DJyXu7\\cwd\\.agents",
+      "DSH_TELEMETRY_DISABLED": "1",
+      "TSX_TSCONFIG_PATH": "D:\\dsh-devframe-v14-accept-w1\\tsconfig.json"
+    }
+  },
+  "probes": {
+    "rootEnvExists": false,
+    "rootEnvHasKey": false,
+    "processEnvHasKey": false,
+    "credentialsFileExists": false,
+    "keysFound": 0
+  }
+}

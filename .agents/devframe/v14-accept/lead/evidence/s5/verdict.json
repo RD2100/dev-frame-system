@@ -1,0 +1,67 @@
+{
+  "task": "v14-accept",
+  "scenario": "s5-resume",
+  "verdict": "PASS",
+  "generatedAt": "2026-09-06T15:03:03.685Z",
+  "checks": [
+    {
+      "id": "s5-resume-identity",
+      "expectation": "resumed session id and cwd equal the write facts and the restored log contains the persisted write prefix row-by-row",
+      "pass": true,
+      "observed": {
+        "sessionId": "accept-s5-resume",
+        "expectedSessionId": "accept-s5-resume",
+        "headerCwd": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s5-root-ca493342\\worktree",
+        "writeCwd": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s5-root-ca493342\\worktree",
+        "eventCount": 4,
+        "writePersistedEventCount": 3,
+        "writeEventCount": 3,
+        "restoredBeyondWritePrefix": [
+          {
+            "seq": 3,
+            "type": "session/end-seed"
+          }
+        ],
+        "lastSeq": 3,
+        "writeLastSeq": 2
+      },
+      "evidence": "s5/resume.json"
+    },
+    {
+      "id": "s5-resume-goal-projection",
+      "expectation": "the goal projection restores as active with the write-time objective",
+      "pass": true,
+      "observed": {
+        "goalPhase": "active",
+        "objective": "Accept the v14 resume composition across two processes",
+        "writeObjective": "Accept the v14 resume composition across two processes"
+      },
+      "evidence": "s5/resume.json"
+    },
+    {
+      "id": "s5-resume-pause-and-seq",
+      "expectation": "/goal pause succeeds after cold load and every new event continues the restored log seq monotonically",
+      "pass": true,
+      "observed": {
+        "pause": {
+          "commandId": "cmd-35ac6b81-1",
+          "kind": "success",
+          "text": "Goal paused\nStatus: paused\nObjective: Accept the v14 resume composition across two processes\nRounds: 0/256\nActivation: disarmed\n\nCommands: /goal edit <objective>, /goal resume, /goal clear"
+        },
+        "restoredLastSeq": 3,
+        "newSeqs": [
+          4,
+          5,
+          6
+        ],
+        "seqMonotonic": true
+      },
+      "evidence": "s5/resume.json"
+    }
+  ],
+  "notes": [
+    "ctx.agents.resume 传入与 write 相同的 agentOptions（provider/model 路由一致）—— 已登记偏差（design 文本仅列 resumeSessionId）",
+    "lead 偏差登记：冷加载 boot 自补 1 条 session/end-seed（packages/core/session/src/index.ts，resume seed 路径）——身份判据=持久化前缀逐行包含+越前事件如实记录；seq 判据以恢复日志末端为基准",
+    "生产 /devframe-resume 宿主入口未落地（findings §4 现状失败），本场景钉住的是 JSONL 冷加载面本身"
+  ]
+}

@@ -1,0 +1,111 @@
+{
+  "task": "v14-accept",
+  "scenario": "s2-permission-modes",
+  "verdict": "PASS",
+  "generatedAt": "2026-09-06T14:58:43.493Z",
+  "checks": [
+    {
+      "id": "s2-unset-preset",
+      "expectation": "permission/preset appears exactly once with value \"workspace-write\"",
+      "pass": true,
+      "observed": [
+        {
+          "preset": "workspace-write"
+        }
+      ],
+      "evidence": "s2/unset/events.json"
+    },
+    {
+      "id": "s2-unset-sandbox-mode",
+      "expectation": "sandbox/mode appears exactly once with value \"workspace-write\"",
+      "pass": true,
+      "observed": [
+        {
+          "mode": "workspace-write"
+        }
+      ],
+      "evidence": "s2/unset/events.json"
+    },
+    {
+      "id": "s2-unset-approval-policy",
+      "expectation": "approval/policy appears exactly once with value \"ask\"",
+      "pass": true,
+      "observed": [
+        {
+          "policy": "ask"
+        }
+      ],
+      "evidence": "s2/unset/events.json"
+    },
+    {
+      "id": "s2-read-only-preset",
+      "expectation": "permission/preset appears exactly once with value \"read-only\"",
+      "pass": true,
+      "observed": [
+        {
+          "preset": "read-only"
+        }
+      ],
+      "evidence": "s2/read-only/events.json"
+    },
+    {
+      "id": "s2-read-only-sandbox-mode",
+      "expectation": "sandbox/mode appears exactly once with value \"read-only\"",
+      "pass": true,
+      "observed": [
+        {
+          "mode": "read-only"
+        }
+      ],
+      "evidence": "s2/read-only/events.json"
+    },
+    {
+      "id": "s2-read-only-approval-policy",
+      "expectation": "approval/policy appears exactly once with value \"ask\"",
+      "pass": true,
+      "observed": [
+        {
+          "policy": "ask"
+        }
+      ],
+      "evidence": "s2/read-only/events.json"
+    },
+    {
+      "id": "s2-danger-full-access-preset",
+      "expectation": "permission/preset appears exactly once with value \"danger-full-access\"",
+      "pass": true,
+      "observed": [
+        {
+          "preset": "danger-full-access"
+        }
+      ],
+      "evidence": "s2/danger-full-access/events.json"
+    },
+    {
+      "id": "s2-danger-full-access-sandbox-mode",
+      "expectation": "sandbox/mode appears exactly once with value \"danger-full-access\"",
+      "pass": true,
+      "observed": [
+        {
+          "mode": "danger-full-access"
+        }
+      ],
+      "evidence": "s2/danger-full-access/events.json"
+    },
+    {
+      "id": "s2-danger-full-access-approval-policy",
+      "expectation": "approval/policy appears exactly once with value \"never\"",
+      "pass": true,
+      "observed": [
+        {
+          "policy": "never"
+        }
+      ],
+      "evidence": "s2/danger-full-access/events.json"
+    }
+  ],
+  "notes": [
+    "每次子运行各隔离 DSH_HOME + 独立 cwd，同一任务串；三事件由 session/created 钩子钉入，env → 事件值的真实因果即\"真实生效\"（findings §4）",
+    "每次子运行的 stdout.txt / exitcode.txt 为附加证据（design 产物行之外）"
+  ]
+}

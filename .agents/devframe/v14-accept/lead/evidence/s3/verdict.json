@@ -1,0 +1,37 @@
+{
+  "task": "v14-accept",
+  "scenario": "s3-cwd",
+  "verdict": "PASS",
+  "generatedAt": "2026-09-06T14:58:53.689Z",
+  "checks": [
+    {
+      "id": "s3-header-cwd-equals-spawn-cwd",
+      "expectation": "session header cwd equals the spawn cwd after realpath + case normalization",
+      "pass": true,
+      "observed": {
+        "spawnCwd": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s3-ZPeNEb\\cwd-accept-d73cd83a-7ad6-402b-9031-aeef5e1d8dd9",
+        "spawnCwdNormalized": "c:\\users\\25313\\appdata\\local\\temp\\dsh-accept-s3-zpeneb\\cwd-accept-d73cd83a-7ad6-402b-9031-aeef5e1d8dd9",
+        "headerCwd": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s3-ZPeNEb\\cwd-accept-d73cd83a-7ad6-402b-9031-aeef5e1d8dd9",
+        "headerCwdNormalized": "c:\\users\\25313\\appdata\\local\\temp\\dsh-accept-s3-zpeneb\\cwd-accept-d73cd83a-7ad6-402b-9031-aeef5e1d8dd9"
+      },
+      "evidence": "s3/header.json"
+    },
+    {
+      "id": "s3-session-dir-maps-to-cwd",
+      "expectation": "exactly one session directory under $DSH_HOME/sessions/ corresponds to the run cwd",
+      "pass": true,
+      "observed": {
+        "sessionLogCount": 1,
+        "sessionDirs": [
+          "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s3-ZPeNEb\\dsh-home\\sessions\\--C-Users-25313-AppData-Local-Temp-dsh-accept-s3-ZPeNEb-cwd-accept-d73cd83a-7ad6-402b-9031-aeef5e1d8dd9--\\session-bd127b8d-dcbc-4211-970e-3299511656b2"
+        ]
+      },
+      "evidence": "s3/session-path.txt"
+    }
+  ],
+  "notes": [
+    "headless runner 以 meta.cwd = process.cwd() 建 session（findings §4），header.cwd 即 JSONL 首记录的 cwd 字段",
+    "本次运行同样以 keyless 结束（exit 非 0），S3 判据只针对 header cwd 的解析与记录，不以退出码为判据（design §2 S3）",
+    "stdout.txt / stderr.txt / exitcode.txt 为附加证据（design 产物行之外）"
+  ]
+}

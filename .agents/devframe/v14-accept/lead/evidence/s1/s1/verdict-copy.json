@@ -1,0 +1,60 @@
+{
+  "task": "v14-accept",
+  "scenario": "s1-headless-run",
+  "verdict": "BLOCKED",
+  "generatedAt": "2026-09-06T14:58:20.618Z",
+  "checks": [
+    {
+      "id": "s1-exit-code-1",
+      "expectation": "exit code = 1 (real turn ends in the MISSING_CREDENTIAL error)",
+      "pass": true,
+      "observed": {
+        "exitCode": 1,
+        "timedOut": false
+      },
+      "evidence": "s1/exitcode.txt"
+    },
+    {
+      "id": "s1-stderr-missing-credential",
+      "expectation": "stderr contains \"dsh: MISSING_CREDENTIAL: llm-deepseek: no API key for provider route \"deepseek-official\"\"",
+      "pass": true,
+      "observed": {
+        "stderrTail": "dsh: MISSING_CREDENTIAL: llm-deepseek: no API key for provider route \"deepseek-official\"; store DEEPSEEK_API_KEY through the credentials service (the web Models page writes it), or export DEEPSEEK_API_KEY in the launching environment\n"
+      },
+      "evidence": "s1/stderr.txt"
+    },
+    {
+      "id": "s1-stdout-empty",
+      "expectation": "stdout carries no task output (empty, or at most the runner's single trailing newline)",
+      "pass": true,
+      "observed": {
+        "stdoutLength": 1,
+        "stdoutRepr": "\"\\n\""
+      },
+      "evidence": "s1/stdout.txt"
+    },
+    {
+      "id": "s1-one-session-dir",
+      "expectation": "exactly one session directory under $DSH_HOME/sessions/",
+      "pass": true,
+      "observed": {
+        "sessionDirCount": 1
+      },
+      "evidence": "s1/session-listing.txt"
+    }
+  ],
+  "blocked": {
+    "reason": "DEEPSEEK_API_KEY 缺失（根 .env、进程环境变量、$DSH_HOME/.credentials.yaml 三处均无 key，findings §2）：真实 API 任务路径不可运行；上述真实输出即精确阻塞证据，keyless 替代面由 S2–S7 覆盖",
+    "probes": {
+      "rootEnvExists": false,
+      "rootEnvHasKey": false,
+      "processEnvHasKey": false,
+      "credentialsFileExists": false,
+      "keysFound": 0
+    }
+  },
+  "notes": [
+    "钉住检查全部按文档形态复现时判定仍为 BLOCKED（真实 API 路径），而非 FAIL —— design §2 S1 判定语义",
+    "key 探测只记录存在性，绝不记录 key 值"
+  ]
+}

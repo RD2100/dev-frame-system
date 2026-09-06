@@ -1,0 +1,3 @@
+C:\Users\25313\AppData\Local\Temp\dsh-accept-s3-ZPeNEb\dsh-home\sessions\--C-Users-25313-AppData-Local-Temp-dsh-accept-s3-ZPeNEb-cwd-accept-d73cd83a-7ad6-402b-9031-aeef5e1d8dd9--\session-bd127b8d-dcbc-4211-970e-3299511656b2
+C:\Users\25313\AppData\Local\Temp\dsh-accept-s3-ZPeNEb\dsh-home\sessions\--C-Users-25313-AppData-Local-Temp-dsh-accept-s3-ZPeNEb-cwd-accept-d73cd83a-7ad6-402b-9031-aeef5e1d8dd9--\session-bd127b8d-dcbc-4211-970e-3299511656b2\session.jsonl.zstd
+cwd: C:\Users\25313\AppData\Local\Temp\dsh-accept-s3-ZPeNEb\cwd-accept-d73cd83a-7ad6-402b-9031-aeef5e1d8dd9

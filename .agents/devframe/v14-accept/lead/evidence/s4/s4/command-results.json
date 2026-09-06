@@ -1,0 +1,158 @@
+{
+  "dispatches": [
+    {
+      "lane": "command",
+      "line": "/goal-complete",
+      "commandId": "cmd-a22af78d-1",
+      "kind": "error",
+      "text": "No goal is currently set. Create one with /goal before using /goal-complete.",
+      "goalPhaseBefore": null,
+      "goalPhaseAfter": null
+    },
+    {
+      "lane": "command",
+      "line": "/goal Accept the v14 goal-complete composition end to end",
+      "commandId": "cmd-a22af78d-2",
+      "kind": "success",
+      "text": "Goal created\nStatus: active\nObjective: Accept the v14 goal-complete composition end to end\nRounds: 0/256\nActivation: armed\n\nCommands: /goal edit <objective>, /goal pause, /goal clear",
+      "goalPhaseBefore": null,
+      "goalPhaseAfter": "active"
+    },
+    {
+      "lane": "command",
+      "line": "/goal pause",
+      "commandId": "cmd-a22af78d-3",
+      "kind": "success",
+      "text": "Goal paused\nStatus: paused\nObjective: Accept the v14 goal-complete composition end to end\nRounds: 0/256\nActivation: disarmed\n\nCommands: /goal edit <objective>, /goal resume, /goal clear",
+      "goalPhaseBefore": "active",
+      "goalPhaseAfter": "paused"
+    },
+    {
+      "lane": "command",
+      "line": "/goal resume",
+      "commandId": "cmd-a22af78d-4",
+      "kind": "success",
+      "text": "Goal resumed\nStatus: active\nObjective: Accept the v14 goal-complete composition end to end\nRounds: 0/256\nActivation: armed\n\nCommands: /goal edit <objective>, /goal pause, /goal clear",
+      "goalPhaseBefore": "paused",
+      "goalPhaseAfter": "active"
+    },
+    {
+      "lane": "command",
+      "line": "/goal-complete",
+      "commandId": "cmd-a22af78d-5",
+      "kind": "error",
+      "text": "The current goal has no completion binding in this composition. Start it through the goal-binding flow before /goal-complete.",
+      "goalPhaseBefore": "active",
+      "goalPhaseAfter": "active"
+    },
+    {
+      "lane": "command",
+      "line": "/goal clear",
+      "commandId": "cmd-a22af78d-6",
+      "kind": "success",
+      "text": "Goal cleared.",
+      "goalPhaseBefore": "active",
+      "goalPhaseAfter": null
+    },
+    {
+      "lane": "startBinding",
+      "line": "composition.startBinding(agent, {...})",
+      "goalId": "goal-3f1d9b71-c7d1-4c1b-b919-7a48ec3c49ea",
+      "goalRevision": 2,
+      "lifecycle": "admission_open",
+      "workspaceId": "ws-v14-accept"
+    },
+    {
+      "lane": "command",
+      "line": "/goal-complete",
+      "commandId": "cmd-a22af78d-7",
+      "kind": "error",
+      "text": "The current goal has no attributed verification evidence in this session log. Run verification before /goal-complete.",
+      "goalPhaseBefore": "active",
+      "goalPhaseAfter": "active"
+    },
+    {
+      "lane": "command",
+      "line": "/goal clear",
+      "commandId": "cmd-a22af78d-8",
+      "kind": "success",
+      "text": "Goal cleared.",
+      "goalPhaseBefore": "active",
+      "goalPhaseAfter": null
+    }
+  ],
+  "pairing": [
+    {
+      "commandId": "cmd-a22af78d-1",
+      "line": "/goal-complete",
+      "runCount": 1,
+      "doneCount": 1,
+      "doneKinds": [
+        "error"
+      ]
+    },
+    {
+      "commandId": "cmd-a22af78d-2",
+      "line": "/goal Accept the v14 goal-complete composition end to end",
+      "runCount": 1,
+      "doneCount": 1,
+      "doneKinds": [
+        "success"
+      ]
+    },
+    {
+      "commandId": "cmd-a22af78d-3",
+      "line": "/goal pause",
+      "runCount": 1,
+      "doneCount": 1,
+      "doneKinds": [
+        "success"
+      ]
+    },
+    {
+      "commandId": "cmd-a22af78d-4",
+      "line": "/goal resume",
+      "runCount": 1,
+      "doneCount": 1,
+      "doneKinds": [
+        "success"
+      ]
+    },
+    {
+      "commandId": "cmd-a22af78d-5",
+      "line": "/goal-complete",
+      "runCount": 1,
+      "doneCount": 1,
+      "doneKinds": [
+        "error"
+      ]
+    },
+    {
+      "commandId": "cmd-a22af78d-6",
+      "line": "/goal clear",
+      "runCount": 1,
+      "doneCount": 1,
+      "doneKinds": [
+        "success"
+      ]
+    },
+    {
+      "commandId": "cmd-a22af78d-7",
+      "line": "/goal-complete",
+      "runCount": 1,
+      "doneCount": 1,
+      "doneKinds": [
+        "error"
+      ]
+    },
+    {
+      "commandId": "cmd-a22af78d-8",
+      "line": "/goal clear",
+      "runCount": 1,
+      "doneCount": 1,
+      "doneKinds": [
+        "success"
+      ]
+    }
+  ]
+}
