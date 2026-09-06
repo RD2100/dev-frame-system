@@ -1,0 +1,33 @@
+{
+  "observedAt": "2026-09-06T02:56:33.867Z",
+  "taskId": "v14-first-lead-dispatch",
+  "agent": "V1.4 project controller",
+  "sessionId": "session-c1668d60-b936-45fd-84bc-77f121241cfe",
+  "worktree": "D:/dsh-devframe-v14",
+  "state": "blocked",
+  "reason": "DSH workspace-write sandbox denied git ref lock creation. No new plugin lead Session was created.",
+  "evidence": "fatal: cannot lock ref refs/heads/codex/p-shadow-v14: Unable to create D:/dsh-devframe/.git/refs/heads/codex/p-shadow-v14.lock: Permission denied",
+  "plannedLeads": [
+    {
+      "pluginId": "P21-S",
+      "taskId": "v14-shadow-integration",
+      "worktree": "D:/dsh-devframe-v14-shadow-lead",
+      "branch": "codex/v14-shadow-lead",
+      "state": "planned"
+    },
+    {
+      "pluginId": "P22",
+      "taskId": "v14-composition-acceptance",
+      "worktree": "D:/dsh-devframe-v14-integration-lead",
+      "branch": "codex/v14-integration-lead",
+      "state": "planned"
+    }
+  ],
+  "recovery": "Obtain explicit approval for wider DSH execution access, then resume this same Session. Verify actual state before the corrected worktree commands. Do not repeat worktree creation against historical paths.",
+  "retainedActiveWorker": "57d0355f-86ff-4f21-9edc-37d33d17e580",
+  "v13Goal": "paused",
+  "mainHead": "c93b86c43e0a7fa9c5720ea70575241b0c990a22",
+  "mainStatusCount": 376,
+  "controllerTurn": "stopped after settled failed tool result; no outstanding controller tool call",
+  "testEvidence": "coordinator-verification.json"
+}

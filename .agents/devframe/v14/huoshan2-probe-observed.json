@@ -1,0 +1,57 @@
+{
+  "observedAt": "2026-09-06T03:37:36.695Z",
+  "qualification": "Connectivity probe only, not substantive F3 worker delivery. No dedicated worktree in probe prompt.",
+  "sessions": [
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "d4ab27e2-64a1-444e-8a15-670902a21649",
+        "createdAt": 1788665768809,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "77e4a9a2-db3f-4eb2-916c-dce8cfd615f9",
+        "origin": "subagent",
+        "delegationDepth": 2,
+        "agentPreset": "standard"
+      },
+      "descriptor": {
+        "version": 3,
+        "mode": "one-shot",
+        "provider": "spawn"
+      },
+      "requests": [
+        {
+          "time": 1788665768914,
+          "config": {
+            "provider": "huoshan-2",
+            "model": "glm-5.3-flash"
+          }
+        }
+      ],
+      "responses": [
+        {
+          "time": 1788665772611,
+          "provider": "huoshan-2",
+          "model": "glm-5.3-flash",
+          "text": [
+            {
+              "type": "text",
+              "text": "LANE-OK"
+            }
+          ]
+        }
+      ],
+      "end": {
+        "type": "turn/end",
+        "seq": 105,
+        "time": 1788665772611,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "completed"
+          }
+        }
+      }
+    }
+  ]
+}

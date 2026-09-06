@@ -1,0 +1,33 @@
+{
+  "observedAt": "2026-09-06T02:58:54.447Z",
+  "sessionId": "session-c1668d60-b936-45fd-84bc-77f121241cfe",
+  "events": [
+    {
+      "type": "permission/preset",
+      "seq": 32086,
+      "time": 1788663518797,
+      "data": {
+        "preset": "danger-full-access"
+      }
+    },
+    {
+      "type": "sandbox/mode",
+      "seq": 32087,
+      "time": 1788663518798,
+      "data": {
+        "mode": "danger-full-access"
+      }
+    },
+    {
+      "type": "approval/policy",
+      "seq": 32088,
+      "time": 1788663518800,
+      "data": {
+        "policy": "never"
+      }
+    }
+  ],
+  "resolves": "dispatch-blocker.json",
+  "state": "completed",
+  "authorization": "User explicitly confirmed danger-full-access for successor controller on 2026-09-06."
+}

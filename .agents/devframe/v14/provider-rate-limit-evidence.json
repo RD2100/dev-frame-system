@@ -1,0 +1,21 @@
+{
+  "observedAt": "2026-09-06T03:34:16.919Z",
+  "sessionId": "77e4a9a2-db3f-4eb2-916c-dce8cfd615f9",
+  "provider": "huoshan-1",
+  "event": {
+    "type": "turn/end",
+    "seq": 20212,
+    "time": 1788665440946,
+    "data": {
+      "turn": 1,
+      "reason": {
+        "kind": "error",
+        "error": {
+          "message": "429: {\"code\":\"AccountRateLimitExceeded\",\"message\":\"Requests are too frequent. Please reduce your request frequency, wait a short moment, and retry your request. Request id: 021788665443423234941bcf51f16e2fd5d0b33793bdac0f0731a\",\"param\":\"\",\"type\":\"TooManyRequests\"}",
+          "code": "RATE_LIMIT"
+        }
+      }
+    }
+  },
+  "action": "Original F3 Session preserved. Controller send_message resumed the ended turn before external route action. Child-session UI exposes no model-selector control; no route change was executed. Active resumed turn is not interrupted. Intended huoshan-2 route remains the upcoming workflow Worker, subject to real schema and response verification."
+}

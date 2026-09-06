@@ -1,0 +1,32 @@
+{
+  "observedAt": "2026-09-06T02:46:19.555Z",
+  "taskId": "v14-takeover",
+  "agent": "V1.4 external coordinator",
+  "codexTask": "01a07494-bd7d-7bc1-b629-a24b6655895e",
+  "dshControllerSessionId": "session-c1668d60-b936-45fd-84bc-77f121241cfe",
+  "actualSessionHeaderCwd": "D:/dsh-devframe",
+  "assignedWorktree": "D:/dsh-devframe-v14",
+  "worktreeId": "codex/dsh-controller-v1.4",
+  "bindingLimitation": "Web session created under existing registered workspace; all task writes must explicitly target assigned worktree. No historical header was rewritten.",
+  "mainHead": "c93b86c43e0a7fa9c5720ea70575241b0c990a22",
+  "check": {
+    "command": "pnpm exec vitest run packages/experimental/shadow-router/tests packages/experimental/project-memory/tests",
+    "cwd": "D:/dsh-devframe",
+    "exitCode": 0,
+    "filesPassed": 23,
+    "testsPassed": 92,
+    "testsSkipped": 1,
+    "meaning": "Package baseline only; not production or composed-runtime acceptance."
+  },
+  "handoff": {
+    "v13Goal": "paused",
+    "commits": [
+      "43e8a6e95e",
+      "8459146e32"
+    ],
+    "retainedWorker": "57d0355f-86ff-4f21-9edc-37d33d17e580",
+    "retainedLead": "0c852cbc-0f17-4a59-a43e-7a141f034efe"
+  },
+  "state": "completed",
+  "next": "DSH V1.4 owns new lead dispatch and reviewed main integration."
+}

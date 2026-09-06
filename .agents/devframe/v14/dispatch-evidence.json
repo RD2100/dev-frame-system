@@ -1,0 +1,68 @@
+{
+  "observedAt": "2026-09-06T03:06:28.437Z",
+  "controllerSessionId": "session-c1668d60-b936-45fd-84bc-77f121241cfe",
+  "leads": [
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "72aaa1fb-ce2f-4752-97c9-2d7572d2bd7f",
+        "createdAt": 1788663875942,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "session-c1668d60-b936-45fd-84bc-77f121241cfe",
+        "origin": "subagent",
+        "delegationDepth": 1,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\72aaa1fb-ce2f-4752-97c9-2d7572d2bd7f\\session.jsonl.zstd",
+      "descriptor": {
+        "version": 3,
+        "mode": "continuable",
+        "provider": "spawn",
+        "label": "L-Shadow V14 接入组长",
+        "agentProvider": "huoshan-1",
+        "agentModel": "glm-5.3-flash"
+      },
+      "permission": {
+        "preset": "danger-full-access"
+      },
+      "requestConfig": {
+        "provider": "huoshan-1",
+        "model": "glm-5.3-flash"
+      },
+      "successfulResponses": 14,
+      "toolCalls": 23
+    },
+    {
+      "header": {
+        "type": "session",
+        "version": 0,
+        "id": "f705f2bf-b339-4fa1-bcb2-abfd88f2bc78",
+        "createdAt": 1788663937167,
+        "cwd": "D:\\dsh-devframe",
+        "parentSession": "session-c1668d60-b936-45fd-84bc-77f121241cfe",
+        "origin": "subagent",
+        "delegationDepth": 1,
+        "agentPreset": "standard"
+      },
+      "logPath": "C:\\Users\\25313\\.dsh\\sessions\\--D-dsh-devframe--\\f705f2bf-b339-4fa1-bcb2-abfd88f2bc78\\session.jsonl.zstd",
+      "descriptor": {
+        "version": 3,
+        "mode": "continuable",
+        "provider": "spawn",
+        "label": "L-Integration V14 组合验收",
+        "agentProvider": "huoshan-1",
+        "agentModel": "glm-5.3-flash"
+      },
+      "permission": {
+        "preset": "danger-full-access"
+      },
+      "requestConfig": {
+        "provider": "huoshan-1",
+        "model": "glm-5.3-flash"
+      },
+      "successfulResponses": 0,
+      "toolCalls": 0
+    }
+  ]
+}
