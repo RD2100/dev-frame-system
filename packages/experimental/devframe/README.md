@@ -98,6 +98,7 @@ The shared types keep the project binding, configuration confirmation, lifecycle
 |---|---|
 | [`src/index.ts`](src/index.ts) | Library entry for stop and shared contracts |
 | [`src/controller/goal-binding.ts`](src/controller/goal-binding.ts) | Goal binding controller, completion admission conjunction, and the production native Goal service port |
+| [`src/goal-binding-file-store.ts`](src/goal-binding-file-store.ts) | File-backed goal binding store: the durable controller-session binding and workspace current JSON ledger |
 | [`src/hierarchy/index.ts`](src/hierarchy/index.ts) | Per-tier spawn overrides for the controller → lead → worker tree |
 | [`src/permissions/events.ts`](src/permissions/events.ts) | Persisted role and policy identity event contract |
 | [`src/reliability/stop.ts`](src/reliability/stop.ts) | Admission cutoff, owned cancellation, bounded drain, and writer release |

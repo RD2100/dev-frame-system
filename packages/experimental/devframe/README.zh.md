@@ -98,6 +98,7 @@ const request = { prompt: [], parent: leadAgent, ...overrides }
 |---|---|
 | [`src/index.ts`](src/index.ts) | 停止操作和共享契约的库入口 |
 | [`src/controller/goal-binding.ts`](src/controller/goal-binding.ts) | Goal 绑定控制器、完成准入合取与生产原生 Goal 服务端口 |
+| [`src/goal-binding-file-store.ts`](src/goal-binding-file-store.ts) | 文件后备 Goal 绑定存储：控制器会话绑定与工作区当前绑定的 durable JSON 账本 |
 | [`src/hierarchy/index.ts`](src/hierarchy/index.ts) | 总控 → 组长 → 执行树各档的 spawn 覆盖值 |
 | [`src/permissions/events.ts`](src/permissions/events.ts) | 持久化角色和策略身份事件契约 |
 | [`src/reliability/stop.ts`](src/reliability/stop.ts) | 接收截止、已拥有取消、有界排空和写入权释放 |
