@@ -481,7 +481,21 @@
         "workerWriteDomain": "host command seam files pre-declared in worker design.md + evidence in .agents/devframe/v14-hostcmd/worker/**; forbidden: snapshots/**, packages/test-support/session-snapshot/**, scripts/session-snapshot-corpus*, vendor/**, main-tree writes, battery interaction",
         "evidencePlan": "request/header, first success, turn/end, SessionID, hierarchy, worktree, domain, real overlap with huoshan-1 - extracted from session logs on lead report",
         "mergeAuthority": "controller only",
-        "status": "dispatched"
+        "workerIdentity": {
+          "sessionId": "659a560f-47ec-45f7-9063-cc2c86c6604a (controller extracted from persisted session log, closing the lead's honestly-declared SessionID-unavailable gap - the workflow child session is never exposed to the lead lane)",
+          "parentSession": "ec6ba5a1-bb48-453d-94ed-5bc28fb63ecc (hostcmd lead)",
+          "delegationDepth": 2,
+          "origin": "workflow agent(prompt,{provider:'huoshan-2',model:'glm-5.3-flash'}) dispatched by the lead; harness records origin=subagent",
+          "requestHeader": "seq 13 @ 06:44:42.947Z config.provider=huoshan-2/glm-5.3-flash (multiple request/header events across the run all huoshan-2: 06:44/07:06/07:20/07:34)",
+          "firstSuccessfulResponse": "seq 340 @ 06:44:50.016Z",
+          "turnEnd": "07:51:18.060Z (session window ~66.6min)",
+          "dualProviderOverlap": "battery huoshan-1 worker 61e4739d in flight until its turn/end 07:02:18.390Z -> verified parallel window [06:44:42.947Z, 07:02:18.390Z] ~17m35s; battery chain otherwise untouched",
+          "deliverable": "worker 5 commits 05d805bbe7/d3910615c3/a2c59769c0/d334229875/0b229f4b8b + lead design f9ae329095 (ancestor of worker branch)",
+          "disclosure": "worker rewrote local unpushed history mid-wave (comment date fix); final tree re-verified green; no push so no lease concern - recorded"
+        },
+        "controllerGates": "domain scan 18 files 0 forbidden zone (new private package @deepseek-ai/dsh-experimental-command-goal-binding + designs + Agent Note triplet + tsconfig.host.json 1 line + lockfile install consequence), diff --check 0; focused vitest rerun 11 files 138/138 exit 0; full build after removing 284 tsbuildinfo: exit 0 / 220 artifacts; gen-cordis-catalog 115 computed 0 written; verify-package-invariants 39 hand-owned companions conform",
+        "mergeCommit": "d000c84ca5 (controller merged codex/v14-hostcmd-w1 into main, +1917/-0; user dirty files 376 untouched)",
+        "gapLedger": "start/resume production lane unwired; devframe evidence producers exist only in tests; GoalBindingStore + RequiredChecksConfigStore memory-only; model completion path bypasses seam; journal binding log deferred with start lane; review evidence intentionally unfiltered (controller structural validation enforces attribution - worker ruling accepted, README registers the cost)"
       }
     },
     {
@@ -494,6 +508,18 @@
       ],
       "controllerActions": [
         "Battery settlement and known nonzero GAPs recorded in the dispatch register; hostcmd huoshan-2 chain remains active and untouched."
+      ]
+    },
+    {
+      "entry": "v14-hostcmd chain closed; user-authority merges verified post-hoc",
+      "facts": [
+        "Controller merge d000c84ca5 landed on top of the user's battery-settlement integration: main contains 89f63d7d58 (battery 177-file snapshot domain), 5e53609506 (codex/dsh-controller-v1.4 into main), f470a56f6e (settlement closeout), and d000c84ca5 (hostcmd) - all key SHAs verified in main; dirty count 376 unchanged.",
+        "The battery-settlement and controller-branch merges (89f63d7d58 / 5e53609506 / c046f558e1 on the controller branch) were performed by the user (imccyu) under supreme authority, not by this controller session; verified post-hoc: battery worker 61e4739d turn/end 07:02:18.390Z matches controller's own session-log extraction, p/battery tip 6f7d3e6051 confirmed.",
+        "Battery remaining-failure ledger: GAP-1 ACP image-compaction, GAP-2 headless hook + web minimal-preset, GAP-4 SDK subagent-continuable inheritance (6 failed / 104 passed / 10 skipped on win32); the F3-routed persistent-pwsh double-registration scenario is NOT among remaining failures - F3 GAP closure consistent with battery's F3 A+B implementation and V1/V2 verification routing.",
+        "v14-hostcmd chain closed: lead ec6ba5a1 settled (DELIVERED), worker 659a560f integrated via d000c84ca5."
+      ],
+      "controllerActions": [
+        "Register updated with hostcmd integration evidence; ledger commit on codex/dsh-controller-v1.4; records-only merge to main for ledger completeness."
       ]
     }
   ]
