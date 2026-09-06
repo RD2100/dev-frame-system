@@ -521,6 +521,21 @@
       "controllerActions": [
         "Register updated with hostcmd integration evidence; ledger commit on codex/dsh-controller-v1.4; records-only merge to main for ledger completeness."
       ]
+    },
+    {
+      "entry": "Bounded recovery advance executed: lane probe + durable required-checks store slice",
+      "facts": [
+        "v14-next blocker respected: the evidence/journal producer slice stays reserved by the blocked chain (unique worker 01a075dc, records merged by user authority as f6fe2fcb88/6dd8c85bfc); controller did not duplicate it.",
+        "Controller-seat one-shot probe 96c6f108 returned LANE-PROBE-OK on huoshan-2/glm-5.3-flash - the persisted v14-next blocker was worker-seat-specific (EPERM on temp auto-install + absent credentials), not a global lane outage; probe excluded as connectivity-only, not substantive.",
+        "Selected the unowned lowest-conflict GAP: durable RequiredChecksConfigStore (file-backed) - devframe domain, no product-decision dependency, zero overlap with reserved slices; start/resume and journal binding stayed deferred per standing rulings.",
+        "Worker session 91606fcf (depth 1, controller direct, workflow agent provider huoshan-2/glm-5.3-flash): request/header seq 13 @ 11:04:53.351Z, first success seq 955 @ 11:05:12.330Z, turn/end 11:34:16.205Z (~29.4min real work). No concurrent huoshan-1 window existed (all huoshan-1 chains settled) - standing dual-provider overlap record unchanged (45.6min P05asm + 17m35s hostcmd), recorded honestly rather than faked.",
+        "Deliverable: FileRequiredChecksConfigStore (worker commits 09d07ad254 design + e8ec5d15d2 impl + controller note commit 9ba31a3b5e) - ledger envelope {version, registrations[{digest, config}]}, per-read digest-drift detection, new stable REQUIRED_CHECKS_STORE_CORRUPT code, tmp+rename publish, idempotent same-digest save, corrupt-ledger repair refusal; sameRequiredCheckCommand/acceptanceCheckComponent/evaluateRequiredChecks/digest zero-diff; injectable export only, no production wiring (owner-wave decision).",
+        "Controller gates: domain scan 7 files 0 forbidden, diff --check 0, focused vitest 145/145, full build after invalidating 284 tsbuildinfo exit 0 / 220 artifacts, gen-cordis-catalog 0 written, test:docs 15/15 - controller gate caught the worker's stale devframe README pairing (worker gate table lacked test:docs) and re-recorded the sidecar; Agent Note triplet controller-authored (worker domain excluded notes, R7).",
+        "Ruling requests R1-R8 recorded: fsync, multi-writer locks, mkdir, non-ENOENT IO wrapping, prune, concurrency tests deferred with rationale; worker honest disclosures include build first-run exit 1 (noUncheckedIndexedAccess in test) fixed before clean rebuild, and Windows IO oracle notes (EISDIR/ENOENT path mapping)."
+      ],
+      "controllerActions": [
+        "Merged codex/v14-evprod into main as 8028c394ac (safe scope: devframe domain + notes only; user dirty files 376 untouched); ledger commit + records merge for completeness; round closed per single-bounded-advance instruction."
+      ]
     }
   ]
 }
