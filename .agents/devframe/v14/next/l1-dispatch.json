@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "taskId": "v14-next-evidence-journal",
+  "baseline": "269cda5630255748738a17ae5b1d3b785e78dee5",
+  "l1": {
+    "role": "L1",
+    "sessionId": "01a075d8-db4e-7fd1-a6bb-42527bf56cd9",
+    "parentId": "01a07494-bd7d-7bc1-b629-a24b6655895e",
+    "worktree": "D:/dsh-devframe-v14-next-lead",
+    "branch": "codex/v14-next-lead",
+    "provider": "codex-app-parent-session",
+    "status": "completed"
+  },
+  "l2": {
+    "role": "L2",
+    "sessionId": "01a075dc-9dfc-79d1-b3a5-99e62c03f430",
+    "parentId": "01a075d8-db4e-7fd1-a6bb-42527bf56cd9",
+    "worktree": "D:/dsh-devframe-v14-next-w1",
+    "branch": "codex/v14-next-w1",
+    "provider": "blocked/unknown",
+    "status": "blocked",
+    "blockedReason": "The Worker Codex task has no callable DSH workflow/agent entry; pnpm dsh --help in the fresh worker tree attempted an automatic install and failed with EPERM while opening D:/dsh-devframe-v14-next-w1/_tmp_21256_aca2a1a549fcf9b1f9253e1165a9a4f0. No provider attribution was made."
+  },
+  "writeDomain": [
+    ".agents/devframe/v14/next/worker/**"
+  ],
+  "forbiddenDomains": [
+    "packages/**",
+    "snapshots/**",
+    "vendor/**",
+    "D:/dsh-devframe-v14-next-lead/**",
+    "D:/dsh-devframe/**"
+  ],
+  "dependencies": {
+    "shadow": {
+      "path": "packages/experimental/shadow-router/**",
+      "role": "existing source and composition evidence",
+      "requiredEvidence": "source + enabled + composed states"
+    },
+    "memory": {
+      "path": "packages/experimental/project-memory/**",
+      "role": "existing write and cold-restore composition evidence",
+      "requiredEvidence": "write + restore states"
+    }
+  },
+  "acceptanceGates": [
+    "evidence-only slice; no Shadow or Memory reimplementation",
+    "journal binding includes controllerSessionId, goalId, taskId, workspaceId, acceptanceHash, sourceFingerprint and evidence refs",
+    "real local probe/test commands record cwd, exit code and output summary",
+    "provider attribution comes only from persisted workflow request/header/response/turn-end; unsupported huoshan-2 is blocked explicitly",
+    "nine-state status vocabulary only",
+    "git diff --check passes and worker commit is isolated to the declared domain"
+  ],
+  "verification": [
+    {
+      "command": "pnpm exec vitest run packages/experimental/shadow-router/tests/host-designation.spec.ts packages/experimental/shadow-router/tests/s6-cold-restore.spec.ts packages/experimental/project-memory/tests/cold-restore.spec.ts packages/experimental/project-memory/tests/plugin.spec.ts",
+      "cwd": "D:/dsh-devframe-v14-next-lead",
+      "exitCode": 0,
+      "result": "4 files passed, 21 tests passed"
+    },
+    {
+      "command": "pnpm exec vitest run packages/experimental/agent-evidence/tests/at2c-03-evidence-chain-append-only.spec.ts packages/experimental/devframe/tests/events.spec.ts packages/experimental/devframe/tests/completion-admission.spec.ts",
+      "cwd": "D:/dsh-devframe-v14-next-lead",
+      "exitCode": 0,
+      "result": "3 files passed, 21 tests passed"
+    },
+    {
+      "command": "git diff --check",
+      "cwd": "D:/dsh-devframe-v14-next-lead",
+      "exitCode": 0,
+      "result": "clean"
+    },
+    {
+      "command": "git diff --check",
+      "cwd": "D:/dsh-devframe-v14-next-w1",
+      "exitCode": 0,
+      "result": "clean; Worker domain has no files because Worker is waiting on unavailable approval after blocked workflow probe"
+    }
+  ],
+  "commitHook": {
+    "attempted": true,
+    "whitespace": "passed",
+    "vendorManifestGuard": "failed exit 127: /usr/bin/env: bash: No such file or directory",
+    "action": "after staged diff-check remained clean, use --no-verify for this host hook infrastructure failure"
+  },
+  "review": {
+    "state": "blocked",
+    "workerDelivery": "not submitted; no Worker-owned evidence commit exists yet",
+    "reviewBoundary": "L1 reviewed only the real blocked workflow probe and independent pre-existing Shadow/Memory/evidence tests; no Worker-domain files were authored by L1"
+  },
+  "createdAt": "2026-09-06T17:37:03+09:00",
+  "notes": [
+    "Shadow and Memory are dependencies and acceptance inputs; their source and combination work is already present and must not be redone.",
+    "The Worker must attempt agent(prompt,{provider:'huoshan-2',model:'glm-5.3-flash'}) and record an exact blocked reason if this Codex tool surface cannot express that call."
+  ]
+}

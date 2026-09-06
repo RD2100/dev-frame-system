@@ -104,8 +104,16 @@
       "status": "integrated",
       "integration": {
         "reviewed": "branch diff domain-scan: 11 files each, 0 outside .agents/devframe/v14-integration/, vendor overlap 0, diff --check exit 0 (both branches); shared root files cordis.patch.yml + probe-cold-recovery.ts byte-identical (same blob); probe-state.json add/add conflict resolved: root keeps lead run ledger, l2 run ledger preserved byte-exact at l2/probe-state.json (blob 3e65e529 hash-verified after copy)",
-        "mergeCommits": ["6a5ca13547 (integration-lead)", "7993430263 (integration-l2)"],
-        "deliverableCommits": ["e2c0542a2d", "1354282cc6", "0d977bac8d", "2ae4ebd7f5"],
+        "mergeCommits": [
+          "6a5ca13547 (integration-lead)",
+          "7993430263 (integration-l2)"
+        ],
+        "deliverableCommits": [
+          "e2c0542a2d",
+          "1354282cc6",
+          "0d977bac8d",
+          "2ae4ebd7f5"
+        ],
         "result": "six-plugin combo acceptance ALL GREEN: config enablement (dump-config exit 0 / 458 lines), real tool receipts, disk persistence, dual-phase cross-process cold recovery (write phase + independent-process verify phase, RESTORE OK); two independent runs (lead %TEMP%/dsh-v14-lead-home, L2 %TEMP%/dsh-v14-l2-home, independent workspaceIds and note sha), zero LLM requests = isolated composition evidence, SKIP_AUTH set empty after item-by-item credential-path verification",
         "gateDisclosure": "lefthook vendor guard exit 127 (no bash on host) -> commits used LEFTHOOK=0/--no-verify with ledger trail; lint/whitespace stages passed in-hook; guard logic equivalent executed outside hook (staged vendor src = 0 -> PASS); real gate ownership stays with CI/pre-push",
         "findings": [
@@ -186,7 +194,10 @@
     "stagePlan": "stage 1 = per-scenario failure-signature classification of the 89-red snapshot battery (expected-drift -> record/ui variants; functional regression -> fail-loud); stage 2 = implementation, gated on V1.4 approval",
     "settlement": {
       "workerTurnEnd": "2026-09-06T07:02:18.390Z",
-      "commits": ["260219ffcc", "6f7d3e6051"],
+      "commits": [
+        "260219ffcc",
+        "6f7d3e6051"
+      ],
       "controllerMergeCommit": "89f63d7d58",
       "domainScan": "177 files changed from c93b86c43e; 177 allowed, 0 outside, 0 vendor",
       "controllerGates": "session-snapshot focused vitest 330 passed / 1 skipped; Shadow+Memory focused vitest 92 passed / 1 skipped; pnpm run typecheck exit 0; gen-cordis-catalog 115 computed / 0 written; staged diff-check exit 0",
@@ -200,7 +211,17 @@
     "sameFileSingleWriter": true,
     "sharedWiring": "events/manifest/profile/generated/catalog wiring serialized by controller with a named owner",
     "mainTreeMerge": "controller only",
-    "statusEnum": ["planned", "assigned", "developing", "reviewing", "submitted", "integrated", "completed", "blocked", "failed"],
+    "statusEnum": [
+      "planned",
+      "assigned",
+      "developing",
+      "reviewing",
+      "submitted",
+      "integrated",
+      "completed",
+      "blocked",
+      "failed"
+    ],
     "idleForbidden": true
   },
   "prohibitions": "no push / no PR / no publish / no user-file deletion. User uncommitted changes preserved untouched: AGENTS.md, docs/working/devframe-qa-*, old handoff deletions, docs/env*, untracked notes, ~hundreds of inline build artifacts. Historical worktrees never entered or modified.",
@@ -522,6 +543,24 @@
         "Register updated with hostcmd integration evidence; ledger commit on codex/dsh-controller-v1.4; records-only merge to main for ledger completeness."
       ]
     },
+    {
+      "entry": "V1.4 next wave: evidence producer and journal binding dispatch blocked",
+      "facts": [
+        "Controller merged the L1 records-only branch codex/v14-next-lead into main as f6fe2fcb88; the merge added only .agents/devframe/v14/next/l1-dispatch.json and l1-workflow-blocked.md.",
+        "L1 task/session 01a075d8-db4e-7fd1-a6bb-42527bf56cd9 ran in D:/dsh-devframe-v14-next-lead on codex/v14-next-lead from baseline 269cda5630; identity correction commit 09de4fcacc follows the initial records commit 0cec533bb2e.",
+        "The sole L2 Worker task/session 01a075dc-9dfc-79d1-b3a5-99e62c03f430 ran in D:/dsh-devframe-v14-next-w1 on codex/v14-next-w1 from the same baseline; its parent is the L1 session and its declared write domain is .agents/devframe/v14/next/worker/**.",
+        "The Worker could not call a DSH workflow/agent entry with provider=huoshan-2 and model=glm-5.3-flash; provider is recorded honestly as blocked/unknown, with no historical attribution reused and no second Worker created.",
+        "Real local probe in the Worker tree: node v24.19.0 and pnpm 11.19.0; pnpm dsh --help exited 1 after automatic installation attempted to open D:/dsh-devframe-v14-next-w1/_tmp_21256_aca2a1a549fcf9b1f9253e1165a9a4f0 and returned EPERM. Credentials/runtime variables were absent.",
+        "L1 focused verification passed: Shadow/Memory source and composition tests 21/21 exit 0; evidence/journal focused tests 21/21 exit 0; L1 and Worker domain diff-checks are clean. No production source, snapshots, vendor files, or user dirty paths changed.",
+        "Shadow and Memory remain explicit dependencies: Shadow requires source + enabled + composed evidence; Memory requires write + cold-restore/composed evidence. The evidence/journal slice was not reimplemented in production.",
+        "The Worker has no submitted commit or Worker-domain evidence because it remains blocked/waitingOnApproval; the next action stays with this same unique Worker once a DSH-capable, permission-free runtime is available."
+      ],
+      "controllerActions": [
+        "Corrected the L1/Worker parent-child identity in the lead record, audited the branch against 269cda5630, and merged records only; main user dirty count remains 376.",
+        "Do not claim a new huoshan-2 success for this wave; retain the earlier hostcmd Worker 659a560f huoshan-2 evidence as the last verified huoshan-2 lane."
+      ]
+    }
+,
     {
       "entry": "Bounded recovery advance executed: lane probe + durable required-checks store slice",
       "facts": [
