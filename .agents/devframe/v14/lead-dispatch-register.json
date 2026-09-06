@@ -575,6 +575,30 @@
       "controllerActions": [
         "Merged codex/v14-evprod into main as 8028c394ac (safe scope: devframe domain + notes only; user dirty files 376 untouched); ledger commit + records merge for completeness; round closed per single-bounded-advance instruction."
       ]
+    },
+    {
+      "entry": "TOPOLOGY CORRECTION recorded; domain ownership verified; evjournal wave dispatched via plugin lead",
+      "topologyDeviation": [
+        "USER CORRECTION: controller direct-dispatch of workers (v14-p05assemble session fcfc01fd and v14-evprod-checksstore session 91606fcf, both depth-1 workflow agents) violated the user rule controller -> plugin lead -> worker. Recorded honestly as deviations; no parent-child relationship is fabricated and no renaming disguises them.",
+        "Both delivered sessions remain valid history with real evidence; henceforth workers are dispatched ONLY through real plugin leads holding independent worktrees (lead tree and worker tree created separately)."
+      ],
+      "domainOwnershipVerification": [
+        "The external v14-next merge f6fe2fcb88 added exactly two record files (.agents/devframe/v14/next/l1-dispatch.json, l1-workflow-blocked.md); productionSourceOwned=0 - no packages/apps/scripts/snapshots files.",
+        "Therefore the evidence/journal functional domain is NOT locked: only .agents/devframe/v14/next/** is reserved (blocked external worker 01a075dc evidence path). The new wave writes production sources and its own evidence domain, never that path.",
+        "Shadow/Memory sources and composition acceptance remain mandatory program deliverables and stay zero-diff in this wave."
+      ],
+      "dispatch": {
+        "taskId": "v14-evjournal",
+        "task": "P23/S4 evidence/journal producer slice: production emitters for devframe/verification (and devframe/review where the same design covers it) evidence records, wired to a real caller discovered in production code; if no honest production caller exists, report blocked with specifics - no speculative wiring",
+        "topology": "strict corrected topology: controller -> plugin lead (continuable subagent, independent lead worktree codex/v14-evjournal-lead) -> worker dispatched BY THE LEAD via workflow agent(prompt,{provider huoshan-2, model glm-5.3-flash}) into lead-created worker worktree codex/v14-evjournal-w1",
+        "leadWorktree": "D:/dsh-devframe-v14-evjournal-lead (controller-created @ 24b7db9189, clean)",
+        "workerWorktree": "D:/dsh-devframe-v14-evjournal-w1 (lead-created from its branch)",
+        "workerWriteDomain": "pre-declared files in devframe/agent-evidence packages + .agents/devframe/v14-evjournal/worker/**; forbidden: .agents/devframe/v14/next/**, snapshots/**, packages/test-support/session-snapshot/**, scripts/session-snapshot-corpus*, vendor/**, command-goal-binding + shadow-router + project-memory zero-diff, main-tree writes",
+        "gateTableAddition": "worker gate table MUST include test:docs (the evprod round proved the controller catches its omission - do not repeat)",
+        "evidencePlan": "controller extracts worker session evidence (parentSession=lead session, depth 2) from persisted logs; no concurrent huoshan-1 window expected - recorded honestly",
+        "mergeAuthority": "controller only, after review of lead settlement",
+        "status": "dispatched"
+      }
     }
   ]
 }
