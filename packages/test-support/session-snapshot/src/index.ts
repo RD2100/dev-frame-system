@@ -59,6 +59,7 @@ export {
   platformExpectationVariant,
   resolveExpectationPath,
   resolveSessionFixturePath,
+  sessionFixtureFileName,
   type ResolveExpectationPathOptions,
   type ResolveSessionFixturePathOptions,
 } from './expectations.ts'

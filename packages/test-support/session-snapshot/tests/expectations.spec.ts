@@ -8,6 +8,7 @@ import {
   platformExpectationVariant,
   resolveExpectationPath,
   resolveSessionFixturePath,
+  sessionFixtureFileName,
 } from '../src/expectations.ts'
 import { parseSnapshotManifest } from '../src/manifest.ts'
 
@@ -86,6 +87,12 @@ describe('platform expectation variants', () => {
     await writeFile(join(root, 'session.win32.jsonl'), 'win32\n')
     expect(resolveSessionFixturePath({ dir: root, manifest: SESSION_VARIANT_OWNER, platform: 'win32' }))
       .toBe(join(root, 'session.win32.jsonl'))
+  })
+
+  it('names the session fixture target without requiring the file to exist', () => {
+    expect(sessionFixtureFileName(PLAIN_PIN, 'win32')).toBe('session.jsonl')
+    expect(sessionFixtureFileName(SESSION_VARIANT_OWNER, 'win32')).toBe('session.win32.jsonl')
+    expect(sessionFixtureFileName(SESSION_VARIANT_OWNER, 'linux')).toBe('session.jsonl')
   })
 
   it('fails loud when a declared session fixture variant file is missing', async () => {

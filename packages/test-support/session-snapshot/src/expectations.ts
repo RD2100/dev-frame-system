@@ -89,6 +89,23 @@ export function resolveExpectationPath(options: ResolveExpectationPathOptions): 
   return join(dir, expectationFileName(kind))
 }
 
+/**
+ * Build the committed file name of the canonical session fixture, preferring
+ * the declared platform-variant name for the host's platform family. Unlike
+ * {@link resolveSessionFixturePath} this never consults the filesystem, so
+ * refresh write-backs can name a variant target that does not exist yet.
+ * @param manifest - the parsed scenario manifest carrying optional session-variant declarations.
+ * @param platform - the writing host's `process.platform`, injected so any variant stays pinnable on any host.
+ * @returns the file name (not a path) inside the scenario directory.
+ */
+export function sessionFixtureFileName(
+  manifest: Pick<SnapshotManifest, 'sessionVariants'>,
+  platform: NodeJS.Platform,
+): string {
+  const variant = platformExpectationVariant(platform)
+  return manifest.sessionVariants?.[variant] === true ? `session.${variant}.jsonl` : 'session.jsonl'
+}
+
 /** Inputs for {@link resolveSessionFixturePath}. */
 export interface ResolveSessionFixturePathOptions {
   /** Absolute scenario directory that owns the committed session fixtures. */
@@ -112,14 +129,11 @@ export interface ResolveSessionFixturePathOptions {
  */
 export function resolveSessionFixturePath(options: ResolveSessionFixturePathOptions): string {
   const { dir, manifest, platform } = options
-  const variant = platformExpectationVariant(platform)
-  if (manifest.sessionVariants?.[variant] === true) {
-    const fileName = `session.${variant}.jsonl`
-    const variantPath = join(dir, fileName)
-    if (!existsSync(variantPath)) {
-      throw new Error(`session-snapshot: ${dir}: declared platform session fixture variant file is missing: ${fileName}`)
-    }
-    return variantPath
+  const fileName = sessionFixtureFileName(manifest, platform)
+  if (fileName === 'session.jsonl') return join(dir, fileName)
+  const variantPath = join(dir, fileName)
+  if (!existsSync(variantPath)) {
+    throw new Error(`session-snapshot: ${dir}: declared platform session fixture variant file is missing: ${fileName}`)
   }
-  return join(dir, 'session.jsonl')
+  return variantPath
 }
