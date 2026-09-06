@@ -828,10 +828,19 @@ export function refreshFixtureReplacements(logs: HarvestedLog[], fixtures: strin
           const alias = from.replaceAll('\\', '/')
           if (alias !== from) replacements.push({ from: alias, to })
           // Body text lives inside JSON string values, where the win32 native
-          // cwd also appears JSON-escaped; map that spelling to the token so
-          // no run-specific absolute path survives the write-back.
-          const escaped = jsonEscape(from)
-          if (escaped !== from) replacements.push({ from: escaped, to })
+          // cwd also appears JSON-escaped — and JSON-in-JSON tool output
+          // doubles that escaping. Map the first two escape depths so no
+          // run-specific absolute path survives the write-back; the depth is
+          // bounded because escaping a trailing backslash would otherwise
+          // diverge. POSIX spellings are their own escape, so this adds
+          // nothing there.
+          let previous = from
+          for (let depth = 0; depth < 2; depth++) {
+            const escaped = jsonEscape(previous)
+            if (escaped === previous) break
+            replacements.push({ from: escaped, to })
+            previous = escaped
+          }
         }
       }
     }
