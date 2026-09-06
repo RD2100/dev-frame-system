@@ -154,6 +154,20 @@ describe('snapshot manifest', () => {
     })
   })
 
+  it('parses stdout projection variants on any scenario', () => {
+    expect(parseSnapshotManifest([
+      'version: 1',
+      'profile: acp',
+      'stdoutVariants:',
+      '  win32: true',
+      '',
+    ].join('\n'))).toEqual({
+      version: 1,
+      profile: 'acp',
+      stdoutVariants: { win32: true },
+    })
+  })
+
   it.each([
     ['', 'manifest must be a mapping'],
     ['version: 2\nprofile: acp\n', 'manifest.version must equal 1'],
@@ -179,6 +193,9 @@ describe('snapshot manifest', () => {
     ['version: 1\nprofile: acp\nsessionVariants: {}\n', 'manifest.sessionVariants must declare at least one platform'],
     ['version: 1\nprofile: acp\nsessionVariants:\n  windows: true\n', 'manifest.sessionVariants has unknown field(s): windows'],
     ['version: 1\nprofile: acp\nsessionVariants:\n  win32: false\n', 'manifest.sessionVariants.win32 must equal true when present'],
+    ['version: 1\nprofile: acp\nstdoutVariants: {}\n', 'manifest.stdoutVariants must declare at least one platform'],
+    ['version: 1\nprofile: acp\nstdoutVariants:\n  windows: true\n', 'manifest.stdoutVariants has unknown field(s): windows'],
+    ['version: 1\nprofile: acp\nstdoutVariants:\n  win32: false\n', 'manifest.stdoutVariants.win32 must equal true when present'],
     ['version: 1\nprofile: acp\nplatform: windows\n', 'manifest.platform must be posix or pwsh'],
     ['version: 1\nprofile: acp\npermission: root\n', 'manifest.permission must be read-only, workspace-write, or danger-full-access'],
     ['version: 1\nprofile: acp\nenvironment:\n  lower: value\n', 'manifest.environment must map uppercase environment names to strings'],

@@ -23,7 +23,7 @@ import { basename, join } from 'node:path'
 import { isSurfaceEligibleType } from '@deepseek-ai/dsh-session/surface'
 import { describe, expect, it } from 'vitest'
 import { type AgentUnderTest, type HarvestedLog, type InputScript, runScenario } from './harness.ts'
-import { type SnapshotManifest, parseSnapshotManifest } from './manifest.ts'
+import { type SnapshotManifest, type SnapshotStdoutVariantsManifest, parseSnapshotManifest } from './manifest.ts'
 import {
   declaredExpectationVariantFiles,
   resolveExpectationPath,
@@ -182,6 +182,13 @@ export interface Scenario {
    */
   pinsNativeWindowsStdout?: boolean
   /**
+   * Platform-keyed stdout-variant declarations: on a declared platform the
+   * `stdout.<platform>.expected.jsonl` projection replaces the shared canonical
+   * expectation entirely, because a platform-specific recording may differ in
+   * content, not only in cwd path spelling.
+   */
+  stdoutVariants?: SnapshotStdoutVariantsManifest
+  /**
    * Whether the scenario requires a non-Windows host, such as for POSIX process
    * semantics or generated paths Windows cannot represent. The scenario's run
    * test is skipped on Windows; its fixtures stay guarded on every platform.
@@ -227,17 +234,27 @@ interface StdoutExpectedVariant {
 }
 
 /**
- * Select the shared stdout expected output plus any platform-native assertion declared by a scenario.
+ * Select the stdout expected output for a platform run.
+ *
+ * A declared stdout variant replaces the shared canonical expectation on its
+ * platform (the platform-specific recording may differ in content, not only in
+ * cwd path spelling). Without a declaration, Windows may additionally compare
+ * the native-separator sidecar declared by {@link Scenario.pinsNativeWindowsStdout}.
  *
  * @param scenario The scenario whose stdout contract is being selected.
  * @param platform The running Node platform, injectable for unit coverage.
- * @returns The ordered expected-output variants: shared canonical first, then optional Windows native.
+ * @returns The ordered expected-output variants to compare and refresh.
  */
 export function stdoutExpectedVariants(
   scenario: Scenario,
   platform: NodeJS.Platform = process.platform,
 ): StdoutExpectedVariant[] {
   const canonical: StdoutExpectedVariant = { file: 'stdout.expected.jsonl', cwdPathMode: 'canonical' }
+  if (scenario.stdoutVariants?.win32 === true) {
+    return platform === 'win32'
+      ? [{ file: 'stdout.win32.expected.jsonl', cwdPathMode: 'native' }]
+      : [canonical]
+  }
   if (platform !== 'win32' || scenario.pinsNativeWindowsStdout !== true) return [canonical]
   return [canonical, { file: WINDOWS_STDOUT_SNAPSHOT, cwdPathMode: 'native' }]
 }
@@ -1593,6 +1610,10 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
         ).toBe(pinsNativeWindowsStdout === true)
         expect(existsSync(join(dir, 'session.jsonl')), `${name}/session.jsonl`).toBe(true)
         for (const file of declaredExpectationVariantFiles(manifest)) {
+          expect(existsSync(join(dir, file)), `${name}/${file} declared platform variant must exist`).toBe(true)
+        }
+        for (const variant of Object.keys(manifest.stdoutVariants ?? {})) {
+          const file = `stdout.${variant}.expected.jsonl`
           expect(existsSync(join(dir, file)), `${name}/${file} declared platform variant must exist`).toBe(true)
         }
         expect(existsSync(join(dir, 'replay.override.json')), `${name}/replay.override.json presence must match \`overridden\``)

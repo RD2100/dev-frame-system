@@ -62,6 +62,15 @@ export interface SnapshotExpectationsManifest {
  */
 export type SnapshotSessionVariantsManifest = Partial<Record<SnapshotExpectationPlatform, true>>
 
+/**
+ * Platform-keyed declarations that the scenario's canonical stdout projection
+ * carries a variant file (`stdout.<platform>.expected.jsonl`) for a platform
+ * family. The variant replaces the base stdout expectation on its platform:
+ * a platform-specific recording may differ in content, not only in cwd path
+ * spelling, so the platform reads exactly one stdout expectation.
+ */
+export type SnapshotStdoutVariantsManifest = Partial<Record<SnapshotExpectationPlatform, true>>
+
 /** Deployment permission preset selected before the scenario starts. */
 export type SnapshotPermission = 'read-only' | 'workspace-write' | 'danger-full-access'
 
@@ -126,6 +135,12 @@ export interface SnapshotManifest {
    * committed. Only a session owner may declare variants.
    */
   sessionVariants?: SnapshotSessionVariantsManifest
+  /**
+   * Platform-variant canonical stdout projections, replacing the base
+   * `stdout.expected.jsonl` on their platform; every declared variant file
+   * must be committed.
+   */
+  stdoutVariants?: SnapshotStdoutVariantsManifest
   /** Exceptional replay metadata absent for ordinary successful recordings. */
   replay?: SnapshotReplayManifest
   /** Optional host requirement; portable scenarios omit it. */
@@ -210,6 +225,7 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       'header',
       'expectations',
       'sessionVariants',
+      'stdoutVariants',
       'replay',
       'platform',
       'permission',
@@ -317,6 +333,23 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
         parsed[variant as SnapshotExpectationPlatform] = true
       }
       sessionVariants = parsed
+    }
+
+    let stdoutVariants: SnapshotStdoutVariantsManifest | undefined
+    if (root.stdoutVariants !== undefined) {
+      const value = record(root.stdoutVariants, 'manifest.stdoutVariants')
+      exactKeys(value, EXPECTATION_PLATFORMS, 'manifest.stdoutVariants')
+      if (Object.keys(value).length === 0) {
+        throw new Error('manifest.stdoutVariants must declare at least one platform')
+      }
+      const parsed: SnapshotStdoutVariantsManifest = {}
+      for (const [variant, declared] of Object.entries(value)) {
+        if (declared !== true) {
+          throw new Error(`manifest.stdoutVariants.${variant} must equal true when present`)
+        }
+        parsed[variant as SnapshotExpectationPlatform] = true
+      }
+      stdoutVariants = parsed
     }
 
     let replay: SnapshotReplayManifest | undefined
@@ -431,6 +464,7 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       ...(header === undefined ? {} : { header }),
       ...(expectations === undefined ? {} : { expectations }),
       ...(sessionVariants === undefined ? {} : { sessionVariants }),
+      ...(stdoutVariants === undefined ? {} : { stdoutVariants }),
       ...(replay === undefined ? {} : { replay }),
       ...(platform === undefined ? {} : { platform }),
       ...(permission === undefined ? {} : { permission }),

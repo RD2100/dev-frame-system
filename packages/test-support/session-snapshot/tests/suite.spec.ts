@@ -478,6 +478,16 @@ describe('stdoutExpectedVariants', () => {
       { file: 'stdout.expected.jsonl', cwdPathMode: 'canonical' },
     ])
   })
+
+  it('replaces the shared golden with a declared stdout variant on its platform', () => {
+    const declared: Scenario = { ...scenario, stdoutVariants: { win32: true } }
+    expect(stdoutExpectedVariants(declared, 'win32')).toEqual([
+      { file: 'stdout.win32.expected.jsonl', cwdPathMode: 'native' },
+    ])
+    expect(stdoutExpectedVariants(declared, 'linux')).toEqual([
+      { file: 'stdout.expected.jsonl', cwdPathMode: 'canonical' },
+    ])
+  })
 })
 
 describe('scenarioSkipped', () => {
