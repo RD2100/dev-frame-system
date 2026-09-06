@@ -1,0 +1,62 @@
+{
+  "taskId": "v14-f3-proposal",
+  "pluginId": "p-f3-prod",
+  "role": "L1 product lead (F3)",
+  "gap": "F3: win32 snapshot scenario persistent pwsh and base native pwsh double-registration collision",
+  "deliverable": "PROPOSAL only: semantics verification report + minimal fix file-domain proposal (>=2 candidates) + discriminating verification design",
+  "base": "c93b86c43e0a7fa9c5720ea70575241b0c990a22",
+  "lead": {
+    "parentSessionId": "session-c1668d60-b936-45fd-84bc-77f121241cfe",
+    "sessionId": "77e4a9a2-db3f-4eb2-916c-dce8cfd615f9",
+    "worktreeId": "D:/dsh-devframe-v14-f3-lead",
+    "branch": "codex/v14-f3-lead",
+    "fileDomain": ".agents/devframe/v14-f3/**"
+  },
+  "state": "planned",
+  "stateHistory": [
+    {
+      "state": "planned",
+      "at": "2026-09-06T12:36:08+09:00",
+      "note": "lead tree verified at base c93b86c43e (merge-base --is-ancestor exit 0); AGENTS.md / architecture.md / defensive-patterns.md / testing.md read; first-round orientation scan done; controller dispatch-correction received"
+    }
+  ],
+  "leadBriefing": {
+    "note": "Lead first-round read-only findings, handed to L2 worker as starting facts; worker must re-verify and pin exact lines/context",
+    "findings": [
+      "core/tools duplicate registration throws: packages/core/tools/tests/tools.spec.ts:1984-1987 'rejects duplicate names and unregisters on fiber dispose (HMR safety)' asserts ctx.tools.register(echoTool) twice toThrow 'already registered'; error message at packages/core/tools/src/index.ts:720-721",
+      "base bundle mounts native pwsh tool win32-only: packages/bundle/base/cordis.patch.yml:256-257 row id tool-pwsh -> @deepseek-ai/dsh-tool-pwsh; base README.md:76 documents platform gating (tool-bash/bash-sandbox disabled on win32, twins pwsh-sandbox/tool-pwsh mount on win32 only) and the fs double-registration load-failure precedent",
+      "snapshot scenario snapshots/session/persistent-pwsh-tool-turn: snapshot.yml declares profile headless, composition persistent-pwsh, platform pwsh; cordis.snapshot.yml:93-95 and cordis.yml:85-87 insert @deepseek-ai/dsh-tool-pwsh-persistent; both compositions disable tool-bash (cordis.snapshot.yml:89-91, cordis.yml:81-83) but do NOT disable tool-pwsh",
+      "both plugins register a model-facing tool named 'pwsh': packages/shell/tool-pwsh/src/index.ts:250-251 (ctx.tools.register(defineTool({ name: 'pwsh', ...))); packages/shell/tool-pwsh-persistent/src/index.ts:441-442 (ctx.tools.register(defineTool({ name: 'pwsh', ...)))",
+      "contrast surfaces that should not collide (worker to verify): packages/bundle/sdk-minimal (cordis.patch.yml:146, package.json:63; no dsh-base per architecture.md) and packages/preset/agent-presets/presets/minimal/agent.cordis.yml:59"
+    ]
+  },
+  "lane": {
+    "requested": { "provider": "huoshan-2", "model": "glm-5.3-flash" },
+    "probe": {
+      "workflow": "f3-lane-probe",
+      "script": "agent('...LANE-OK probe...', { provider: 'huoshan-2', model: 'glm-5.3-flash', label: 'f3-lane-probe' })",
+      "resultVerbatim": "workflow \"f3-lane-probe\" completed (1 agent). Return value: { \"probeReply\": \"LANE-OK\" }",
+      "schemaOverride": "supported",
+      "at": "2026-09-06T12:36:08+09:00",
+      "persistedSessionEvidence": "pending extraction"
+    }
+  },
+  "worker": {
+    "taskId": "v14-f3-w1-semverify",
+    "worktreeId": "D:/dsh-devframe-v14-f3-w1",
+    "branch": "codex/v14-f3-w1-semverify",
+    "fileDomain": ".agents/devframe/v14-f3/worker/**",
+    "agentCreationForbidden": true,
+    "state": "planned",
+    "sessionId": "pending",
+    "providerObserved": "pending persisted JSON"
+  },
+  "boundaries": [
+    "lead zero writes outside .agents/devframe/v14-f3/** in D:/dsh-devframe-v14-f3-lead",
+    "snapshots/** read-only; production source read-only; no full-repo audit",
+    "main tree D:/dsh-devframe and other v14 trees read-only; no entering other worktrees",
+    "no push / PR / release / user-file deletion"
+  ],
+  "gates": [],
+  "updatedAt": "2026-09-06T12:36:08+09:00"
+}
