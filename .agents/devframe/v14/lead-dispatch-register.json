@@ -575,6 +575,66 @@
       "controllerActions": [
         "Merged codex/v14-evprod into main as 8028c394ac (safe scope: devframe domain + notes only; user dirty files 376 untouched); ledger commit + records merge for completeness; round closed per single-bounded-advance instruction."
       ]
+    },
+    {
+      "entry": "TOPOLOGY CORRECTION recorded; domain ownership verified; evjournal wave dispatched via plugin lead",
+      "topologyDeviation": [
+        "USER CORRECTION: controller direct-dispatch of workers (v14-p05assemble session fcfc01fd and v14-evprod-checksstore session 91606fcf, both depth-1 workflow agents) violated the user rule controller -> plugin lead -> worker. Recorded honestly as deviations; no parent-child relationship is fabricated and no renaming disguises them.",
+        "Both delivered sessions remain valid history with real evidence; henceforth workers are dispatched ONLY through real plugin leads holding independent worktrees (lead tree and worker tree created separately)."
+      ],
+      "domainOwnershipVerification": [
+        "The external v14-next merge f6fe2fcb88 added exactly two record files (.agents/devframe/v14/next/l1-dispatch.json, l1-workflow-blocked.md); productionSourceOwned=0 - no packages/apps/scripts/snapshots files.",
+        "Therefore the evidence/journal functional domain is NOT locked: only .agents/devframe/v14/next/** is reserved (blocked external worker 01a075dc evidence path). The new wave writes production sources and its own evidence domain, never that path.",
+        "Shadow/Memory sources and composition acceptance remain mandatory program deliverables and stay zero-diff in this wave."
+      ],
+      "dispatch": {
+        "taskId": "v14-evjournal",
+        "task": "P23/S4 evidence/journal producer slice: production emitters for devframe/verification (and devframe/review where the same design covers it) evidence records, wired to a real caller discovered in production code; if no honest production caller exists, report blocked with specifics - no speculative wiring",
+        "topology": "strict corrected topology: controller -> plugin lead (continuable subagent, independent lead worktree codex/v14-evjournal-lead) -> worker dispatched BY THE LEAD via workflow agent(prompt,{provider huoshan-2, model glm-5.3-flash}) into lead-created worker worktree codex/v14-evjournal-w1",
+        "leadWorktree": "D:/dsh-devframe-v14-evjournal-lead (controller-created @ 24b7db9189, clean)",
+        "workerWorktree": "D:/dsh-devframe-v14-evjournal-w1 (lead-created from its branch)",
+        "workerWriteDomain": "pre-declared files in devframe/agent-evidence packages + .agents/devframe/v14-evjournal/worker/**; forbidden: .agents/devframe/v14/next/**, snapshots/**, packages/test-support/session-snapshot/**, scripts/session-snapshot-corpus*, vendor/**, command-goal-binding + shadow-router + project-memory zero-diff, main-tree writes",
+        "gateTableAddition": "worker gate table MUST include test:docs (the evprod round proved the controller catches its omission - do not repeat)",
+        "evidencePlan": "controller extracts worker session evidence (parentSession=lead session, depth 2) from persisted logs; no concurrent huoshan-1 window expected - recorded honestly",
+        "mergeAuthority": "controller only, after review of lead settlement",
+        "status": "dispatched"
+      }
+    },
+    {
+      "entry": "Parallel fill-in wave: v14-batteryfix (Battery GAP-1/2/4 root-cause repair) via plugin lead",
+      "ownershipVerification": [
+        "Snapshot domain free: p/battery settled at 6f7d3e6051 (merged via 89f63d7d58); no active chain owns snapshots/**, packages/test-support/session-snapshot/**, or corpus wiring; v14-next reservation is .agents/devframe/v14/next/** records only (productionSourceOwned=0).",
+        "Domain disjoint from in-flight EvJournal (devframe/agent-evidence): zero file overlap, no coordination dependency.",
+        "Candidate 2 (durable GoalBindingStore) deferred to the next wave: it shares devframe exports/README with EvJournal - partition after EvJournal declares its exact files, per the no-whole-package-lockout rule."
+      ],
+      "dispatch": {
+        "taskId": "v14-batteryfix",
+        "task": "Battery GAP-1 (ACP image-compaction) / GAP-2 (headless hook + web minimal-preset) / GAP-4 (SDK subagent-continuable inheritance): targeted reproduction FIRST with real exit codes and stderr signatures read from the in-main settlement (.agents/devframe/battery/stage2-3-settlement.md, read-only) and fresh replay runs, per-scenario root-cause classification (expectation drift vs functional regression), then minimal fix - win32 variant authoring ONLY for drift-class per the established sessionVariants mechanism; functional regressions fail loud and are reported as product findings, never masked by re-recording (no blind re-record)",
+        "topology": "corrected strict topology: controller -> plugin lead (continuable subagent, independent worktree codex/v14-batteryfix-lead) -> worker dispatched BY THE LEAD via workflow agent(prompt, provider huoshan-2, model glm-5.3-flash) into lead-created worker worktree codex/v14-batteryfix-w1",
+        "leadWorktree": "D:/dsh-devframe-v14-batteryfix-lead (controller-created @ 24b7db9189, clean)",
+        "workerWriteDomain": "lead-declared snapshots/session-snapshot/corpus files + .agents/devframe/v14-batteryfix/worker/**; forbidden: .agents/devframe/v14/next/**, vendor/**, devframe/agent-evidence/command-goal-binding/shadow-router/project-memory zero-diff, main-tree writes, EvJournal interaction",
+        "gateTable": "focused vitest + targeted test:snapshot replays (before/after per scenario) + invalidated-tsbuildinfo build + gen-cordis-catalog if types change + diff --check + single trailing newline + test:docs (mandatory)",
+        "ledgerDiscipline": "per-task independent records; shared ledger single-writer by controller with ConvertFrom-Json validation before every commit (corruption recurrence prevention)",
+        "evidencePlan": "controller extracts worker session evidence (parentSession=lead session, depth 2) from persisted logs; dual-provider lanes explicit per wave",
+        "mergeAuthority": "controller only, after lead settlement review and cross-plugin checks on same-SHA evidence",
+        "status": "dispatched"
+      }
+    },
+    {
+      "entry": "v14-evjournal settled and integrated: first corrected-topology lead-dispatched wave (producer production source)",
+      "settlement": [
+        "Nine-state: submitted (lead) -> integrated (controller merge 5c4137bfd3); lead chain complete with no blockers.",
+        "Corrected topology executed end to end: controller -> plugin lead e3d51d97 (codex/v14-evjournal-lead @ 24b7db9189, design commit c71438cdbe) -> worker bf2d2345-6c55-4d30-801c-578059c35702 dispatched BY THE LEAD via workflow agent into lead-created codex/v14-evjournal-w1 (base c71438cdbe, single commit 8f5dc63753).",
+        "Worker lane evidence from persisted logs (parentSession=e3d51d97, depth 2): request/header seq13 provider=huoshan-2 model=glm-5.3-flash @ 12:08:59.109Z; turn/end @ 12:40:19.450Z (~31.3min real turn, 88 step/ends, 103 tool-call/result hops).",
+        "Deliverable: agent-evidence src/check-runner.ts (real-subprocess execution, exact-command equivalence, four-state outcomes, verbatim capture, no retry) + src/journal.ts (construction wires EvidenceReviewGate; recordVerification/recordReview through the only schema-validated DevFrameSessionJournal append path) + 4 exports + 17 focused tests; devframe package, command-goal-binding, shadow-router, project-memory, vendor, snapshots, v14/next all zero-diff; no new deps, no Context merge, no new error codes.",
+        "Gates (lead rerun + controller same-SHA verification): install frozen-lockfile 0; focused vitest 6 files/34 tests green (controller rerun exit 0); build after tsbuildinfo invalidation 0; gen-cordis-catalog 115/0 written; diff --check 0; 9/9 single trailing newline; test:docs 15/15; post-merge verify-cordis-catalog up-to-date exit 0; user dirty files 376 unchanged.",
+        "Controller rulings: design matrix item 16 (duplicate-findings-id rejection) accepted without a named case - dual-anchored by the pass-plus-blocking case and devframe events suite, recorded as debt; two worker deviations (ExecFileOptions stdio type assertion, unused-import trim) verified non-semantic and accepted. Agent Note triplet controller-authored commit 5af692547b (worker domain excluded notes).",
+        "GAPs inherited to S4 toolface slice: composition wiring (who constructs the producer, ctx.sessions.flush timing, live-role authority), bounded output capture, timeoutMs injection beyond the 600s default, ledger mirroring of journal evidence.",
+        "Candidate 2 (durable GoalBindingStore) unblocked: EvJournal landed with devframe package zero-diff, so the anticipated shared-surface conflict did not materialize; goalstore wave dispatchable with clean file partition."
+      ],
+      "controllerActions": [
+        "Merged codex/v14-evjournal-w1 into main as 5c4137bfd3 after independent review on same-SHA evidence; cross-plugin catalog check post-merge; records merge for ledger completeness; user dirty files 376 preserved."
+      ]
     }
   ]
 }
