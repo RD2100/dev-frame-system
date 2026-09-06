@@ -9,3 +9,8 @@ header:
   systemPromptSource: session/text-turn
   toolSchemasSource: session/text-turn
 permission: workspace-write
+expectations:
+  variants:
+    win32:
+      - system-prompt
+      - tool-schemas
