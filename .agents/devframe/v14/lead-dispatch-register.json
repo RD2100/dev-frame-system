@@ -157,7 +157,13 @@
         "laneEvidence": "request/header seq 13 @ 03:44:08.502Z config.provider=huoshan-2/glm-5.3-flash; first successful response seq 1130 @ 03:44:27.182Z provider=huoshan-2 with responseId; 29 tool calls at observation, childCreationCalls=0 (topology clean); session log decoded frame-by-frame via repo scanZstdFrames by both controller and coordinator",
         "dualProviderOverlap": "huoshan-2 step2 window 03:44:27.804Z->03:44:34.796Z overlaps Battery Worker 57d0355f huoshan-1 turn5 step47 window 03:44:17.630Z->03:44:45.387Z = 6992ms real model-step overlap; d4ab27e2 excluded as connectivity probe only; prior huoshan-1 429 attribution unchanged"
       },
-      "status": "developing"
+      "status": "integrated",
+      "integration": {
+        "mergeCommit": "5c7e57d146 (codex/v14-f3-lead @ 3e05a4de72 merged into main)",
+        "controllerGates": "6 files all under .agents/devframe/v14-f3/ (lead-review, lead-state, decode tool, three worker deliverables), 0 outside domain, 0 vendor overlap, 0 production/snapshot files touched, diff --check 0; no vitest/build gates applicable (proposal-only, no source changes)",
+        "deliverable": "semantics verified with 24-row file:line evidence (registration=NamedEntries.insert same-name throw contract; collision=win32 headless base row + scenario composition disabling only tool-bash; POSIX green because base row platform-disabled); minimal fix A (disabled tool-pwsh rows in persistent-pwsh-tool-turn snapshot pair, sync both files) + B (corpus shell-family invariant test) adopted as a pair; C (idempotent registration) rejected; discriminating verification V1 static guard + V2 win32 replay designed",
+        "routing": "A+B implementation routed to battery chain (snapshots/corpus owner) via battery-approval-request.json addendum revision 3, relayed by external coordinator; F3 remains proposal-only, no implementation"
+      }
     }
   ],
   "retainedInFlight": {
@@ -327,6 +333,50 @@
         "Merged codex/v14-shadow-lead into main as d7534edf3e (--no-ff, --no-verify recorded: host has no bash); user dirty files untouched (376).",
         "Shadow chain status -> integrated; worker 0b883d36 settled idle with zero child agents.",
         "v14 controller ledger committed on codex/dsh-controller-v1.4."
+      ]
+    },
+    {
+      "entry": "topology artifact preserved; current collection state",
+      "facts": [
+        "three-level-runtime-evidence.json (coordinator, observedAt 03:19:04Z) preserved in ledger commit 4338b1b337: real session-record topology depth0 controller -> depth1 leads -> depth2 workers with permission inheritance and huoshan-1 attribution at that time; complementary to later huoshan-2 lane evidence.",
+        "Collection state: Shadow chain MERGED (d7534edf3e, integrated, lead notified); Integration chain MERGED+CLOSED (6a5ca13547 + 7993430263); F3 worker c376aa04 running on huoshan-2 (read-only verification + three deliverables on codex/v14-f3-w1-semverify); Battery worker 57d0355f on huoshan-1 executing stage 2 (step 47+ observed 03:44)."
+      ],
+      "controllerActions": [
+        "Ledger commit 4338b1b337 includes register, battery approval, coordination/probe/dual-provider/topology evidence, and the session-log extractor tool (read-session-log.mjs, diff --check 0)."
+      ]
+    },
+    {
+      "entry": "P21-S shadow chain formally closed",
+      "facts": [
+        "Lead confirmed closure after merge notice; registry terminal state = completed (d160752150, self-verified per hook-skip ledger discipline).",
+        "Terminal record merged into main by controller: 3c485975b1 (records-only delta, 1 file +7/-2, diff --check 0, user dirty files unchanged at 376).",
+        "Final chain state: markShadow production call point live in packages/experimental/shadow-router via d7534edf3e; four-state source/enabled/composed PROVEN, production NOT CLAIMED; worker 0b883d36 idle with zero child agents; no pending items - optional integration-profile real dump smoke awaits separate controller dispatch if ever needed."
+      ],
+      "controllerActions": [
+        "Shadow chain marked completed in register; no further messages to the finished lead."
+      ]
+    },
+    {
+      "entry": "F3 worker delivered; lead reviewing",
+      "facts": [
+        "Worker c376aa04 turn completed at 03:57:33.092Z after ~13.4 min of real multi-request huoshan-2 activity (2825 zstd frames / 3526 events); turn/end reason completed.",
+        "Deliverable commit a573d7609f on codex/v14-f3-w1-semverify: exactly 3 files under .agents/devframe/v14-f3/worker/ (semantics.md, fix-proposal.md, verification-design.md); controller pre-scan: 0 outside domain, 0 vendor overlap, 0 production source touched, diff --check 0.",
+        "Worker recorded the bash-missing pre-commit gate skip honestly; lead moved to review and integration on its lead branch."
+      ],
+      "controllerActions": [
+        "Worker status -> submitted (nine-state); awaiting lead review report before controller merge review of codex/v14-f3-lead."
+      ]
+    },
+    {
+      "entry": "F3 proposal chain merged; A+B routed to battery",
+      "facts": [
+        "F3 lead settlement accepted: semantics 24-row evidence, lead 12/12 re-verification, A+B adopted pair (3 files, zero product runtime changes), C rejected (fail-loud violation + would not turn green), discriminating V1+V2 verification design.",
+        "Merged as 5c7e57d146: 6 files all under .agents/devframe/v14-f3/, 0 outside domain, 0 vendor, 0 production/snapshot touches, diff --check 0; no vitest/build gates applicable (proposal-only).",
+        "Routing decision recorded: A (persistent-pwsh-tool-turn disabled tool-pwsh rows, both snapshot files in one commit) + B (corpus shell-family invariant test in scripts/session-snapshot-corpus.corpus.ts) -> battery chain via battery-approval-request.json addendum revision 3; F3 GAP closes only after A lands and V1/V2 verify.",
+        "Lane evidence complete: probe d4ab27e2 (LANE-OK) + substantive worker c376aa04 (huoshan-2 request 03:44:08.502Z, turn/end 03:57:33.092Z, ~13.4 min real activity) + 6992ms overlap with battery worker huoshan-1 - dual-provider parallel substantiated end to end."
+      ],
+      "controllerActions": [
+        "battery-approval-request.json addendum revision 3 written for coordinator relay; F3 lead entry -> integrated; merge notice sent to lead 77e4a9a2; ledger commit on codex/dsh-controller-v1.4."
       ]
     }
   ]
