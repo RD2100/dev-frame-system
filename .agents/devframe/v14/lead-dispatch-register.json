@@ -846,6 +846,21 @@
         "Old-controller consolidation, interface-gap reporting, dual-provider dynamic scheduling correction, and the 376-file user-dirty invariant all held across the program."
       ],
       "status": "V1.4 wave program complete; verify worktree removable; both-mode/ptc-turn reds registered for a future lane"
+    },
+    {
+      "entry": "Phase 2 opened: new goal 675bb502 armed (256-round config unchanged), W-1/W-2 unique remaining-work list landed, four line-leads dispatched",
+      "phase2Open": [
+        "User authorization: both huoshan accounts recovered and serving different valid tasks concurrently; final target = complete local feature delivery with user doing functional acceptance only; old goal closed complete; new goal created via the product goal tool (goal-675bb502, existing round config kept).",
+        "W-1 worklist (3e50ea945d) + W-2 update (908f627101): single source .agents/devframe/v14/remaining/WORKLIST.md - four lines with per-item four-state (source/profile/runtime/production-acceptance), evidence, owners, dependencies; change-only updates. User corrections carried into briefs: A4 does not depend on A3 (clean verify worktree already proved isolation); C4/C3 no presumed dependency; D2 dsh-llm-ollama = Ollama Cloud Provider (no local-ollama presumption); B4 correction (S1 blocker was deepseek-official credentials, not huoshan); B5 AT matrix 36-item reconciliation assigned to B line parallel with production integration design."
+      ],
+      "dispatches": [
+        { "line": "A defects", "lead": "629bed0c-c2e5-46bc-a999-ad0a230adeca", "worktree": "D:/dsh-devframe-v14-defects-lead (codex/v14-defects-lead @ 6b31951491)", "scope": "A1 both-mode-turn + A2 ptc-turn real fixes (principled tree-root normalization or audited keyless refresh; no historical-issue claim), A3 src/*.js pollution generation mechanism investigation + prevention gate in clean worktree (user 376 files untouched), A4 reversible independent launch directory procedure" },
+        { "line": "B user-delivery", "lead": "6a8c25cb-8a0f-4ca5-91b7-c6cd06ab1df3", "worktree": "D:/dsh-devframe-v14-udeliver-lead (codex/v14-udeliver-lead @ 6b31951491)", "scope": "B1 shipped-profile real chain (launch -> controller -> lead -> worker real huoshan calls -> output -> review -> merge -> stop/restart recovery), B5 AT matrix 36-item reconciliation in parallel, B4 S1 retest via huoshan explicit routing, B2/B3 Shadow/Memory into the real path; sole writer of the shipped profile" },
+        { "line": "C product", "lead": "da5d10f3-f09c-463d-98f1-902988cdd4cd", "worktree": "D:/dsh-devframe-v14-product-lead (codex/v14-product-lead @ 6b31951491)", "scope": "C1 agent tree collapse/arrows/SessionID copy, C2 @codex @claude @cursor, C3 model switch/sidebar/usage, C4 phone pairing - latest-implementation verification + minimal fixes + automated acceptance; only genuine user actions go to the final list" },
+        { "line": "D llm-verify", "lead": "311590fd-5f2c-45db-bf08-0114a97ca816", "worktree": "D:/dsh-devframe-v14-llmverify-lead (codex/v14-llmverify-lead @ 6b31951491)", "scope": "D1-D6 isolated-profile verification of five external LLM plugins + providers-ui/codex external package source/version/config; production profile read-only; missing external auth blocks only its item; skip != pass" }
+      ],
+      "laneDiscipline": "workers via workflow explicit {provider, model: glm-5.3-flash} split across both recovered accounts, start <=2 substantive workers per account, stagger lead reporting, record actual request provider/model per task; shared contract/manifest/profile single-writer = B lead; same-commit same-environment passing results reused",
+      "status": "four line-leads live; controller on coordination/acceptance/integration"
     }
   ]
 }
