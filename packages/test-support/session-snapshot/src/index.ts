@@ -57,7 +57,9 @@ export {
   expectationFileName,
   platformExpectationVariant,
   resolveExpectationPath,
+  resolveSessionFixturePath,
   type ResolveExpectationPathOptions,
+  type ResolveSessionFixturePathOptions,
 } from './expectations.ts'
 export {
   parseSnapshotManifest,
@@ -74,6 +76,7 @@ export {
   type SnapshotRecording,
   type SnapshotReplayManifest,
   type SnapshotSessionReference,
+  type SnapshotSessionVariantsManifest,
   type SnapshotWorkspaceManifest,
 } from './manifest.ts'
 export {

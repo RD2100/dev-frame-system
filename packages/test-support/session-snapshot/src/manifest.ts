@@ -37,7 +37,7 @@ export interface SnapshotReplayManifest {
 export type SnapshotPlatform = 'posix' | 'pwsh'
 
 /** Pinned expected sidecar that a platform variant can replace. */
-export type SnapshotExpectationKind = 'system-prompt' | 'tool-schemas'
+export type SnapshotExpectationKind = 'system-prompt' | 'tool-schemas' | 'ui'
 
 /**
  * Host platform family that selects a scenario's expected-file variant, derived
@@ -53,6 +53,14 @@ export interface SnapshotExpectationsManifest {
   /** Expected sidecar kinds that carry a variant file for each declared platform family. */
   variants: Partial<Record<SnapshotExpectationPlatform, SnapshotExpectationKind[]>>
 }
+
+/**
+ * Platform-keyed declarations that the scenario's canonical session recording
+ * carries a variant file (`session.<platform>.jsonl`) for a platform family.
+ * The recording is both replay script and persisted-session comparison target,
+ * so one variant file serves both roles.
+ */
+export type SnapshotSessionVariantsManifest = Partial<Record<SnapshotExpectationPlatform, true>>
 
 /** Deployment permission preset selected before the scenario starts. */
 export type SnapshotPermission = 'read-only' | 'workspace-write' | 'danger-full-access'
@@ -111,6 +119,13 @@ export interface SnapshotManifest {
    * committed. Only meaningful on a pinned header.
    */
   expectations?: SnapshotExpectationsManifest
+  /**
+   * Platform-variant canonical session recordings, read by the host platform
+   * instead of the base `session.jsonl` for both replay roles (script and
+   * persisted-session comparison target); every declared variant file must be
+   * committed. Only a session owner may declare variants.
+   */
+  sessionVariants?: SnapshotSessionVariantsManifest
   /** Exceptional replay metadata absent for ordinary successful recordings. */
   replay?: SnapshotReplayManifest
   /** Optional host requirement; portable scenarios omit it. */
@@ -132,7 +147,7 @@ const RECORDINGS = new Set<SnapshotRecording>(['live', 'authored'])
 const PLATFORMS = new Set<SnapshotPlatform>(['posix', 'pwsh'])
 const PERMISSIONS = new Set<SnapshotPermission>(['read-only', 'workspace-write', 'danger-full-access'])
 const EXPECTATION_PLATFORMS = ['win32', 'posix'] as const
-const EXPECTATION_KINDS = new Set<SnapshotExpectationKind>(['system-prompt', 'tool-schemas'])
+const EXPECTATION_KINDS = new Set<SnapshotExpectationKind>(['system-prompt', 'tool-schemas', 'ui'])
 const NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 function record(value: unknown, label: string): Record<string, unknown> {
@@ -194,6 +209,7 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       'recording',
       'header',
       'expectations',
+      'sessionVariants',
       'replay',
       'platform',
       'permission',
@@ -273,7 +289,7 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
           throw new Error(`${label} must be a non-empty array of expectation kinds`)
         }
         if (kinds.some(kind => typeof kind !== 'string' || !EXPECTATION_KINDS.has(kind as SnapshotExpectationKind))) {
-          throw new Error(`${label} must list system-prompt or tool-schemas kinds`)
+          throw new Error(`${label} must list system-prompt, tool-schemas, or ui kinds`)
         }
         if (new Set(kinds).size !== kinds.length) {
           throw new Error(`${label} must not repeat expectation kinds`)
@@ -281,6 +297,26 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
         parsed[variant as SnapshotExpectationPlatform] = [...kinds as SnapshotExpectationKind[]]
       }
       expectations = { variants: parsed }
+    }
+
+    let sessionVariants: SnapshotSessionVariantsManifest | undefined
+    if (root.sessionVariants !== undefined) {
+      if (root.session !== undefined) {
+        throw new Error('manifest.sessionVariants cannot be declared by a session borrower')
+      }
+      const value = record(root.sessionVariants, 'manifest.sessionVariants')
+      exactKeys(value, EXPECTATION_PLATFORMS, 'manifest.sessionVariants')
+      if (Object.keys(value).length === 0) {
+        throw new Error('manifest.sessionVariants must declare at least one platform')
+      }
+      const parsed: SnapshotSessionVariantsManifest = {}
+      for (const [variant, declared] of Object.entries(value)) {
+        if (declared !== true) {
+          throw new Error(`manifest.sessionVariants.${variant} must equal true when present`)
+        }
+        parsed[variant as SnapshotExpectationPlatform] = true
+      }
+      sessionVariants = parsed
     }
 
     let replay: SnapshotReplayManifest | undefined
@@ -394,6 +430,7 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       ...(recording === undefined ? {} : { recording }),
       ...(header === undefined ? {} : { header }),
       ...(expectations === undefined ? {} : { expectations }),
+      ...(sessionVariants === undefined ? {} : { sessionVariants }),
       ...(replay === undefined ? {} : { replay }),
       ...(platform === undefined ? {} : { platform }),
       ...(permission === undefined ? {} : { permission }),
