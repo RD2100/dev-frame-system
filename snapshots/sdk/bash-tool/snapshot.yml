@@ -6,3 +6,10 @@ recording: live
 header:
   class: sdk-default
   pin: true
+sessionVariants:
+  win32: true
+expectations:
+  variants:
+    win32: [system-prompt, tool-schemas]
+wireVariants:
+  win32: true
