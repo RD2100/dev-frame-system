@@ -10,7 +10,7 @@
 | A1 | both-mode-turn 快照绿 | **已修**（normalize.ts 栈帧令牌化：帧=录制宿主属性，异常种类+消息钉住；e0c6a0f582 合入 64625d8268） | n/a | **干净树绿**（用户+组长隔离复验）；主树 collection 被用户 85 src/*.js 遮蔽（0 tests） | 干净树口径通过；主树待用户清理后复跑 | a1a2-repro.md+a1 vitest 输出（.agents/devframe/v14-defects/repro/） | 用户 85 文件裁定 | 主树复跑待用户清理 |
 | A2 | ptc-turn 快照绿 | **已修**（同 A1 同 commit） | n/a | **干净树绿**（用户+组长隔离复验）；主树同被遮蔽 | 同 A1 | 同上 | 同 A1 | 同 A1 |
 | A3 | src/*.js 污染机制查清+防复发 | **已落地**（verify-no-source-js 门禁：local+CI 双挂线、6/6 无效用例 spec；产生机制报告 a3-producer-mechanism.md） | n/a | **主树按设计 fail-loud**（点名 85 用户文件："remove them and fix the producer; never gitignore"） | 门禁防复发生效；85 文件处置待用户 | no-source-js.ts+spec+run-gates 接线+机制报告 | **用户裁定 85 文件** | 用户处置后主树门禁转绿 |
-| A4 | 可逆独立启动目录（污染排除的候选版本启动方式） | 待设计 | 待接 | 未验 | 待 C 线联验 | 依赖 A3 结论 | A3 | 启动目录方案→文档化→与 C 线联验 |
+| A4 | 可逆独立候选启动目录（污染排除的候选版本启动方式） | 实施中（A 组长按总控配方：worktree add→install/build→verify-no-source-js→clean launch→交付记录） | 候选树专用 | 总控已实证同命令 boot（隔离 DSH_HOME port 3081 LISTENING）；A 线复跑取证中 | 待交付记录+回滚命令入册 | 设计=design.md S1 行+A1/A2 干净树口径 | A3 门禁语义 | 交付记录 commit→亲审合入；主工作区只记保护状态（85 文件=用户资产） |
 
 ## B 用户组合交付线（负责人：L-UDeliver）
 
