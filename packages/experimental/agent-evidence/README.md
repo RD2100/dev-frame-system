@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-experimental-agent-evidence` mounts `ctx.agentEvidence`, the Cordis service that records and serves the append-only provenance trail of agent work over the `agent_evidence` storage domain: task/Goal binding receipts (the DevFrame goal-result binding tuple for one task), submission receipts (commit object name, changed paths, and the digest of the source inputs the work started from), and verification snapshots (command, exit code, and artifact paths — a non-zero exit code is recorded as-is). The ledger stores provenance only: acceptance stays with the Goal binding and task states, so no separate acceptance database exists here. Receipts are restored verbatim on start.
+`dsh-experimental-agent-evidence` mounts `ctx.agentEvidence`, the Cordis service that records and serves the append-only provenance trail of agent work over the `agent_evidence` storage domain: task/Goal binding receipts (the DevFrame goal-result binding tuple for one task), submission receipts (commit object name, changed paths, and the digest of the source inputs the work started from), and verification snapshots (command, exit code, and artifact paths — a non-zero exit code is recorded as-is). The ledger stores provenance only: acceptance stays with the Goal binding and task states, so no separate acceptance database exists here. Receipts are restored verbatim on start. The package also exports the honest DevFrame evidence producer (`AgentEvidenceJournal`): it executes the stored approved required checks through a real subprocess face and appends the real results as `devframe/verification` records, and records reviewer decisions as `devframe/review` records — both through the schema-checked DevFrame Session journal.
 
 ## Table of Contents
 
@@ -57,6 +57,34 @@ const bindings = ctx.agentEvidence.bindingsByGoal(controllerSessionId, goalId)
 
 Malformed receipts fail loud with `AGENT_EVIDENCE_INVALID_RECEIPT`; storage refusals surface as `AGENT_EVIDENCE_PERSISTENCE`.
 
+### Record DevFrame verification and review evidence
+
+The journal producer is a plain class the host composes (no plugin mount): construct it with the Session durability callback and the reviewer role authority, then call the two record methods at the moments verification and review complete.
+
+```ts
+import { AgentEvidenceJournal } from '@deepseek-ai/dsh-experimental-agent-evidence'
+
+const journal = new AgentEvidenceJournal({
+  flush: session => ctx.sessions.flush(session), // native durability callback
+  reviewerDirectory,                             // SessionId-keyed reviewer role authority
+  // execution: optional; defaults to the real subprocess face (10-minute kill guard)
+})
+
+// Verification completed: resolve the stored approved checklist by digest,
+// execute every declared check exactly, and record the real results.
+const verification = await journal.recordVerification({
+  session, binding, requiredChecksDigest, requiredChecksStore,
+})
+
+// Review completed: the reviewer Session is cross-authorized before the event
+// is appended.
+const review = await journal.recordReview({
+  session, binding, reviewerSessionId, policyVersion, decision, findings,
+})
+```
+
+The producer records evidence, it does not judge completion. Store failures propagate as the existing `RequiredChecksError` codes (`REQUIRED_CHECKS_CONFIG_NOT_FOUND`, `REQUIRED_CHECKS_INVALID_CONFIG`) before any event is written; gate rejections surface as `AGENT_EVIDENCE_REVIEWER_UNAUTHORIZED` without latching; durability failures surface as `DevFramePersistenceError` and latch the Session's journal. Every record is validated by the durable `devframe/verification`/`devframe/review` schemas before it lands.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -83,6 +111,8 @@ This section explains the design decisions behind the feature and points at the 
 | [`src/types.ts`](src/types.ts) | Receipt record types over the shared work identities |
 | [`src/ids.ts`](src/ids.ts) | `EvidenceReceiptId` and `CommitSha` brand factories |
 | [`src/errors.ts`](src/errors.ts) | `AgentEvidenceError` and its stable code union |
+| [`src/check-runner.ts`](src/check-runner.ts) | The reference subprocess execution face for required checks |
+| [`src/journal.ts`](src/journal.ts) | The DevFrame evidence producer over the Session journal |
 | [`src/index.ts`](src/index.ts) | Package entry and default export |
 
 ### Invariant
@@ -100,7 +130,7 @@ No runtime invariant companion is published: receipts are append-only single-tab
 
 #### What the model sees
 
-Nothing. The package registers no tools, no prompt sections, and no session events — no `TaskGoalBindingReceipt`, `SubmissionReceipt`, or `VerificationSnapshot` value ever reaches a model request — so no request field carries its data.
+Nothing reaches a model request. The package registers no tools and no prompt sections, and it introduces no new event types; the `AgentEvidenceJournal` producer appends DevFrame evidence records — `devframe/verification` and `devframe/review`, existing DevFrame vocabulary — to the owning controller Session log. That log is a host-side durable record: it never enters a model request, so no request field carries the package's data.
 
 #### Token effect
 
@@ -117,6 +147,8 @@ These limits define when the ledger is a poor fit or needs special operational c
 - **Receipts are trusted provenance, not verified truth** — changed paths and artifact paths are recorded as the caller reports them; the ledger does not inspect the repository to confirm them.
 - **The ledger does not validate task or Goal existence** — receipts reference the ids their caller supplies; referential integrity stays with the project controller and the Goal binding.
 - **Trails grow unbounded** — receipts are never rewritten or pruned; long-running deployments accumulate rows in the three tables.
+- **No bounded output capture** — the execution face classifies outcomes by exit code alone and captures no stdout/stderr (`outputRef` is never produced); bounded log capture and artifact persistence are deferred to the toolface slice.
+- **The producer records evidence, it does not judge completion** — the two record methods write honest records; the admission conjunct (fingerprint → checks → review) belongs to the DevFrame controller.
 
 <a id="dev-note"></a>
 ### Dev Note
