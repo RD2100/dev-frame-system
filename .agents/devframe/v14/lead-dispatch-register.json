@@ -785,6 +785,21 @@
         "Next: create the w1 worker tree from b915db85ee, single worker dispatch via workflow explicit huoshan-2/glm-5.3-flash, then review+settle per the original brief."
       ],
       "status": "b2acp live (worker dispatch in flight)"
+    },
+    {
+      "entry": "v14-accept settled and integrated: seven-scenario real-composition acceptance with archived evidence; Shadow/Memory + composition acceptance delivered",
+      "integration": [
+        "d0c2c455c2: acceptance harness (7 mjs scenario scripts, product packages imported directly via tree-root relative imports; worker authored 11 files then dropped pre-commit - receipt=null honestly logged, lead proxy-committed after per-file review); 72cfd92c7c: settlement records (results.md, mock-adapter interface confirmation, 60 evidence files + 4 diagnostic runs).",
+        "Results: S1 BLOCKED (keyless, 4/4 pinned reproduction); S2 9/9 (env -> preset/mode/policy causality via real session events); S3 2/2 (header.cwd == spawn cwd); S4 7/7 (goal-complete NO_VERIFICATION_TEXT production gap pinned); S5 PASS (resume prefix containment + projection equality + seq monotonic); S6 PASS (shadow cross-project isolation + SHADOW_REQUEST_CONFLICT fail-loud + cold line-level recovery bonus); S7 PASS (memory cold persistence, Vault exactly 2 real .md). Zero LLM calls; per-scenario %TEMP% isolation, real ~/.dsh zero-write."
+      ],
+      "controllerReview": [
+        "Domain scans clean both branches (records-only; zero product/vendor changes); spot-checked S2/S6 verdicts - real workspaceIds, isolated temp paths, routing-log evidence; product facts D3/D4 verified against cited sources during lead review; post-merge catalog 115 up-to-date exit 0; dirty 376 preserved."
+      ],
+      "crossChainAlignment": [
+        "The acceptance current-state failure list maps 1:1 onto the compos2 wave targets (evidence journal wiring in composition, /devframe-resume host entry, goal-complete reads evidence); s4/s5 harness scripts are repeatable for the post-compos re-verification the goal requires.",
+        "Goal item Shadow/Memory acceptance: DELIVERED via S6+S7 (mechanism B in-process composition); shipped-profile gap honestly registered."
+      ],
+      "status": "accept chain settled+integrated; remaining live: compos2 (continuation worker), b2acp (worker dispatch); suite red ledger: image-compaction (b2acp in flight) + both-mode/ptc (pre-attributed)"
     }
   ]
 }
