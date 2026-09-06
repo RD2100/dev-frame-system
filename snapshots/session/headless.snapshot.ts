@@ -31,6 +31,7 @@ import {
   resolveChildSessionFixturePath,
   resolveExpectationPath,
   resolveSessionFixturePath,
+  resolveWorkspaceExpectedDir,
   restorePinnedToolSchemas,
   scrubSessionSnapshot,
   scrubSystemPrompts,
@@ -832,7 +833,9 @@ describe('headless recorded-session snapshots', () => {
         throw new Error(`${scenario.name}: workspace was not captured around the profile run`)
       }
       if (scenario.manifest.workspace?.final === true) {
-        const expectedWorkspace = await captureExpectedWorkspaceSnapshot(join(scenario.dir, 'workspace.expected'))
+        const expectedWorkspace = await captureExpectedWorkspaceSnapshot(
+          resolveWorkspaceExpectedDir({ dir: scenario.dir, manifest: scenario.manifest, platform: process.platform }),
+        )
         expect(finalWorkspace, `${scenario.name}: complete final workspace`).toEqual(expectedWorkspace)
       } else {
         expect(finalWorkspace, `${scenario.name}: a changed workspace requires workspace.final`).toEqual(initialWorkspace)

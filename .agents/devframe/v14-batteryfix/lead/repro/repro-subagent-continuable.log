@@ -1,0 +1,30 @@
+$ vitest run --config vitest.snapshot.config.ts "-t" "subagent-continuable"
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+
+ RUN  v4.1.8 D:/dsh-devframe-v14-batteryfix-lead
+
+ ❯ snapshots/sdk/sdk.snapshot.ts (16 tests | 1 failed | 14 skipped) 121958ms
+     × replays subagent-continuable through dsh --profile sdk 120017ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  snapshots/sdk/sdk.snapshot.ts > TypeScript SDK snapshots over the jsonrpc runtime > replays subagent-continuable through dsh --profile sdk
+Error: Test timed out in 120000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ snapshots/sdk/sdk.snapshot.ts:858:5
+    856|   for (const scenario of sdkScenarios) {
+    857|     const scenarioTest = recording && scenario.manifest.recording === …
+    858|     scenarioTest(`${mode}s ${scenario.name} through dsh --profile sdk`…
+       |     ^
+    859|       const scenarioDir = scenario.dir
+    860|       const wire = wireGoldenPaths(scenario)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 5 skipped (6)
+      Tests  1 failed | 1 passed | 118 skipped (120)
+   Start at  21:09:28
+   Duration  125.27s (transform 7.34s, setup 1.73s, import 14.58s, tests 121.96s, environment 1ms)
+
+[ELIFECYCLE] Command failed with exit code 1.

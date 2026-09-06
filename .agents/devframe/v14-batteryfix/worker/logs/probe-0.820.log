@@ -1,0 +1,26 @@
+$ vitest run --config vitest.snapshot.config.ts "-t" "image-compaction"
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+
+ RUN  v4.1.8 D:/dsh-devframe-v14-batteryfix-w1
+
+ ❯ snapshots/acp/acp.snapshot.ts (15 tests | 1 failed | 14 skipped) 2158ms
+     × snapshot: image-compaction matches the expected outputs 2157ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  snapshots/acp/acp.snapshot.ts > snapshot scenarios > snapshot: image-compaction matches the expected outputs
+RequestError: Internal error: turn failed: llm-replay: script exhausted — session requested model call #4 but its script has only 3; re-record the scenario
+ ❯ Connection.handleResponse node_modules/.pnpm/@agentclientprotocol+sdk@1.4.0_zod@4.4.3/node_modules/@agentclientprotocol/sdk/src/jsonrpc.ts:1501:31
+ ❯ Connection.receiveMessage node_modules/.pnpm/@agentclientprotocol+sdk@1.4.0_zod@4.4.3/node_modules/@agentclientprotocol/sdk/src/jsonrpc.ts:1371:11
+ ❯ Connection.receiveWireMessage node_modules/.pnpm/@agentclientprotocol+sdk@1.4.0_zod@4.4.3/node_modules/@agentclientprotocol/sdk/src/jsonrpc.ts:1271:9
+ ❯ Connection.receive node_modules/.pnpm/@agentclientprotocol+sdk@1.4.0_zod@4.4.3/node_modules/@agentclientprotocol/sdk/src/jsonrpc.ts:1230:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 5 skipped (6)
+      Tests  1 failed | 119 skipped (120)
+   Start at  21:57:53
+   Duration  3.41s (transform 3.24s, setup 1.19s, import 5.95s, tests 2.16s, environment 1ms)
+
+[ELIFECYCLE] Command failed with exit code 1.

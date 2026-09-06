@@ -152,6 +152,13 @@ describe('minimal agent preset', () => {
       .filter(block => block.type === 'text')
       .map(block => block.text)
       .join('')
+      // Win32 conpty pads the START nonce's visual line with trailing spaces,
+      // leaving one whitespace-only line above the tool output; the persistent
+      // shell capture already strips a bare leading newline
+      // (tool-pwsh-persistent/src/index.ts), and this padded form is platform
+      // rendering, not behavior — like the path-separator normalization below —
+      // so strip at most one such leading line for the shared inline snapshot.
+      .replace(/^[ \t]*\r?\n/, '')
       .replaceAll(scaffold.workspaceCwd, '{{cwd}}')
       // Canonical POSIX separator spelling: path separators in tool output are
       // platform rendering, not behavior, so the shared inline snapshot reads

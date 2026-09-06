@@ -1,0 +1,47 @@
+$ vitest run --config vitest.snapshot.config.ts "-t" "hook-cc-stop-continue"
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+
+ RUN  v4.1.8 D:/dsh-devframe-v14-batteryfix-w1
+
+ ❯ snapshots/session/headless.snapshot.ts (82 tests | 1 failed | 81 skipped) 2192ms
+     × replays hook-cc-stop-continue through dsh --profile headless 2191ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  snapshots/session/headless.snapshot.ts > headless recorded-session snapshots > replays hook-cc-stop-continue through dsh --profile headless
+AssertionError: hook-cc-stop-continue: complete final workspace: expected [ { path: 'hooks.json', …(2) } ] to deeply equal [ { path: '.stop_fired', …(2) }, …(1) ]
+
+- Expected
++ Received
+
+@@ -1,12 +1,7 @@
+  [
+    {
+-     "content": "",
+-     "kind": "text",
+-     "path": ".stop_fired",
+-   },
+-   {
+      "content": "{
+    \"hooks\": {
+      \"Stop\": [
+        {
+          \"hooks\": [
+
+ ❯ snapshots/session/headless.snapshot.ts:836:78
+    834|       if (scenario.manifest.workspace?.final === true) {
+    835|         const expectedWorkspace = await captureExpectedWorkspaceSnapsh…
+    836|         expect(finalWorkspace, `${scenario.name}: complete final works…
+       |                                                                              ^
+    837|       } else {
+    838|         expect(finalWorkspace, `${scenario.name}: a changed workspace …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 5 skipped (6)
+      Tests  1 failed | 119 skipped (120)
+   Start at  21:55:40
+   Duration  3.93s (transform 3.53s, setup 1.25s, import 6.14s, tests 2.19s, environment 1ms)
+
+[ELIFECYCLE] Command failed with exit code 1.

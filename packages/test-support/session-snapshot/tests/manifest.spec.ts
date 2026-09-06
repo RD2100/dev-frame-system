@@ -204,6 +204,23 @@ describe('snapshot manifest', () => {
     })
   })
 
+  it('parses workspace expectation variants on a final-workspace scenario', () => {
+    expect(parseSnapshotManifest([
+      'version: 1',
+      'profile: headless',
+      'workspace:',
+      '  final: true',
+      'workspaceVariants:',
+      '  win32: true',
+      '',
+    ].join('\n'))).toEqual({
+      version: 1,
+      profile: 'headless',
+      workspace: { final: true },
+      workspaceVariants: { win32: true },
+    })
+  })
+
   it.each([
     ['', 'manifest must be a mapping'],
     ['version: 2\nprofile: acp\n', 'manifest.version must equal 1'],
@@ -244,6 +261,12 @@ describe('snapshot manifest', () => {
     ['version: 1\nprofile: sdk\nwireVariants: {}\n', 'manifest.wireVariants must declare at least one platform'],
     ['version: 1\nprofile: sdk\nwireVariants:\n  windows: true\n', 'manifest.wireVariants has unknown field(s): windows'],
     ['version: 1\nprofile: sdk\nwireVariants:\n  win32: false\n', 'manifest.wireVariants.win32 must equal true when present'],
+    ['version: 1\nprofile: acp\nworkspaceVariants:\n  win32: true\n', 'manifest.workspaceVariants requires manifest.workspace.final'],
+    ['version: 1\nprofile: acp\nworkspace:\n  setup: fixed-mtimes\nworkspaceVariants:\n  win32: true\n', 'manifest.workspaceVariants requires manifest.workspace.final'],
+    ['version: 1\nprofile: acp\nworkspace:\n  final: true\nworkspaceVariants: []\n', 'manifest.workspaceVariants must be a mapping'],
+    ['version: 1\nprofile: acp\nworkspace:\n  final: true\nworkspaceVariants: {}\n', 'manifest.workspaceVariants must declare at least one platform'],
+    ['version: 1\nprofile: acp\nworkspace:\n  final: true\nworkspaceVariants:\n  windows: true\n', 'manifest.workspaceVariants has unknown field(s): windows'],
+    ['version: 1\nprofile: acp\nworkspace:\n  final: true\nworkspaceVariants:\n  win32: false\n', 'manifest.workspaceVariants.win32 must equal true when present'],
     ['version: 1\nprofile: acp\nplatform: windows\n', 'manifest.platform must be posix or pwsh'],
     ['version: 1\nprofile: acp\npermission: root\n', 'manifest.permission must be read-only, workspace-write, or danger-full-access'],
     ['version: 1\nprofile: acp\nenvironment:\n  lower: value\n', 'manifest.environment must map uppercase environment names to strings'],

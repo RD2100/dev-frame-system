@@ -30,6 +30,7 @@ import {
   resolveChildSessionFixturePath,
   resolveExpectationPath,
   resolveSessionFixturePath,
+  resolveWorkspaceExpectedDir,
   sessionFixtureFileName,
 } from './expectations.ts'
 import { redactSessionSnapshotIds } from './identity.ts'
@@ -1598,7 +1599,9 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
         }
 
         if (manifest.workspace?.final === true) {
-          const expectedWorkspace = await captureExpectedWorkspaceSnapshot(join(dir, 'workspace.expected'))
+          const expectedWorkspace = await captureExpectedWorkspaceSnapshot(
+            resolveWorkspaceExpectedDir({ dir, manifest, platform: process.platform }),
+          )
           expect(result.finalWorkspace, `${scenario.name}: complete final workspace`).toEqual(expectedWorkspace)
         } else {
           expect(result.finalWorkspace, `${scenario.name}: a changed workspace requires workspace.final`)

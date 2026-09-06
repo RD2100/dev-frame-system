@@ -1,0 +1,5 @@
+hook-cc-posttool-block exit=1
+hook-cc-stop-continue exit=1
+hook-codex-stop-continue exit=1
+image-compaction exit=1
+minimal exit=1

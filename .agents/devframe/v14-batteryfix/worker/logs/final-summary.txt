@@ -1,0 +1,4 @@
+image-compaction run1 exit=1 kind=BAND-pin-sidecar-drift
+image-compaction run2 exit=1 kind=BAND-pin-sidecar-drift
+minimal run1 exit=0
+minimal run2 exit=0

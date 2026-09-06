@@ -2,3 +2,5 @@ version: 1
 profile: acp
 workspace:
   final: true
+workspaceVariants:
+  win32: true

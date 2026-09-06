@@ -1,0 +1,21 @@
+0.805 exit=1 sig=$ vitest run --config vitest.snapshot.config.ts "-t" "image-compaction"
+0.810 exit=1 sig=$ vitest run --config vitest.snapshot.config.ts "-t" "image-compaction"
+0.815 exit=1 sig=$ vitest run --config vitest.snapshot.config.ts "-t" "image-compaction"
+0.820 exit=1 sig=$ vitest run --config vitest.snapshot.config.ts "-t" "image-compaction"
+0.830 exit=1 sig=RequestError: Internal error: turn failed: llm-replay: script exhausted — session requested model call #4 but its script has only 3; re-record the scenario
+0.840 exit=1 sig=RequestError: Internal error: turn failed: llm-replay: script exhausted — session requested model call #4 but its script has only 3; re-record the scenario
+0.850 exit=1 sig=AssertionError: session 13430dce-549a-4cb3-bf5d-8570d5f9ae23: initial system prompt #1 diverged from image-compaction/system-prompt.expected.md: expected 'You are an AI agent powered by DeepSe…' to de
+0.860 exit=1 sig=AssertionError: session 25adc1bb-d8ec-4cfb-99d9-046b4a6ec182: initial system prompt #1 diverged from image-compaction/system-prompt.expected.md: expected 'You are an AI agent powered by DeepSe…' to de
+0.845 exit=1 kind=LOW-exhausted#4
+0.870 exit=1 kind=BAND-pin-sidecar-drift
+0.880 exit=1 kind=BAND-pin-sidecar-drift
+0.890 exit=1 kind=BAND-pin-sidecar-drift
+0.900 exit=1 kind=BAND-pin-sidecar-drift
+0.915 exit=1 kind=BAND-pin-sidecar-drift
+0.930 exit=1 kind=BAND-pin-sidecar-drift
+0.945 exit=1 kind=BAND-pin-sidecar-drift
+0.960 exit=1 kind=BAND-pin-sidecar-drift
+0.975 exit=1 kind=BAND-pin-sidecar-drift
+0.990 exit=1 kind=BAND-pin-sidecar-drift
+0.995 exit=1 kind=BAND-pin-sidecar-drift
+1.000 exit=1 kind=BAND-pin-sidecar-drift

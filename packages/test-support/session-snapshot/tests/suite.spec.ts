@@ -5,12 +5,16 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
 import {
+  captureExpectedWorkspaceSnapshot,
   defineAcpSnapshotSuite,
   stabilizeFixtureMessageIds,
   tokenizeSessionFixtureCwd,
+  resolveWorkspaceExpectedDir,
+  workspaceExpectedDirName,
   type HarvestedLog,
   type Scenario,
 } from '../src/index.ts'
+import { parseSnapshotManifest } from '../src/manifest.ts'
 import {
   assertChildSystemPromptSnapshot,
   assertUniqueSnapshotContents,
@@ -88,7 +92,10 @@ const REPLAY_SCENARIOS: Scenario[] = [
     pinsChildToolSchemas: [1],
     pinsChildSystemPrompts: [1],
     prepareWorkspace: (cwd) => {
-      writeFileSync(join(cwd, 'seed.txt'), 'prepared at runtime')
+      // The two host families must expect different seed bytes, so the replay
+      // suite above only passes where its workspace comparison reads the
+      // committed variant directory declared by plain-turn/snapshot.yml.
+      writeFileSync(join(cwd, 'seed.txt'), process.platform === 'win32' ? 'prepared at runtime (win32 variant)' : 'prepared at runtime')
     },
   },
   { name: 'no-model', hasModelTurn: false, recorded: false, headerClass: 'main' },
@@ -414,6 +421,24 @@ describe('shared snapshot content', () => {
         { path: 'two/system-prompt.expected.md', content: 'same\n' },
       ])
     }).toThrow(/identical prompt snapshots appear in one\/system-prompt\.expected\.md and two\/system-prompt\.expected\.md/)
+  })
+})
+
+describe('workspace expectation variants', () => {
+  const textContents = (entries: Awaited<ReturnType<typeof captureExpectedWorkspaceSnapshot>>): string[] =>
+    entries.flatMap(entry => entry.kind === 'text' ? [entry.content] : [])
+
+  it('compares plain-turn through the platform-resolved expectation directory', async () => {
+    const dir = join(REPLAY_DIR, 'plain-turn')
+    const manifest = parseSnapshotManifest(readFileSync(join(dir, 'snapshot.yml'), 'utf8'))
+    expect(workspaceExpectedDirName(manifest, 'win32')).toBe('workspace.win32.expected')
+    expect(workspaceExpectedDirName(manifest, 'linux')).toBe('workspace.expected')
+    const win32Entries = await captureExpectedWorkspaceSnapshot(
+      resolveWorkspaceExpectedDir({ dir, manifest, platform: 'win32' }),
+    )
+    const baseEntries = await captureExpectedWorkspaceSnapshot(join(dir, 'workspace.expected'))
+    expect(textContents(win32Entries)).toContain('prepared at runtime (win32 variant)')
+    expect(textContents(baseEntries)).toContain('prepared at runtime')
   })
 })
 

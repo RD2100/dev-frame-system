@@ -1,0 +1,37 @@
+$ vitest run --config vitest.snapshot.config.ts "-t" "hook-codex-stop-continue"
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+
+ RUN  v4.1.8 D:/dsh-devframe-v14-batteryfix-w1
+
+ ❯ snapshots/session/headless.snapshot.ts (82 tests | 1 failed | 81 skipped) 2143ms
+     × replays hook-codex-stop-continue through dsh --profile headless 2141ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  snapshots/session/headless.snapshot.ts > headless recorded-session snapshots > replays hook-codex-stop-continue through dsh --profile headless
+AssertionError: expected 'FIRST\n' to be 'SECOND\n' // Object.is equality
+
+- Expected
++ Received
+
+- SECOND
++ FIRST
+
+
+ ❯ snapshots/session/headless.snapshot.ts:819:29
+    817|       }
+    818|
+    819|       expect(result.stdout).toBe(`${finalTextFromSession(fixtures[0] a…
+       |                             ^
+    820|       expect(result.stderr).toBe(expectedStderr)
+    821|       expect(actualLogs, `${scenario.name}: persisted session count`).…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 5 skipped (6)
+      Tests  1 failed | 119 skipped (120)
+   Start at  21:41:48
+   Duration  3.80s (transform 3.26s, setup 1.17s, import 5.91s, tests 2.14s, environment 1ms)
+
+[ELIFECYCLE] Command failed with exit code 1.

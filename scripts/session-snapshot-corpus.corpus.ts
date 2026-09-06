@@ -14,6 +14,7 @@ import {
   EMPTY_WORKSPACE_MARKER,
   parseSnapshotManifest,
   redactSessionSnapshotIds,
+  resolveWorkspaceExpectedDir,
   scrubSystemPrompts,
   scrubToolSchemas,
   sessionFixtureNames,
@@ -137,7 +138,10 @@ it('keeps every recorded session owned, pinned, redacted, and header-scrubbed', 
     expect(existsSync(join(dir, 'workspace.expected')), `${key}: final workspace presence`)
       .toBe(manifest.workspace?.final === true)
     if (manifest.workspace?.final === true) {
-      const expectedRoot = join(dir, 'workspace.expected')
+      // The host platform's comparison target is the resolved expectation
+      // directory (a declared variant replaces the base on its platform); the
+      // resolver fails loud on a declared-but-missing variant directory.
+      const expectedRoot = resolveWorkspaceExpectedDir({ dir, manifest, platform: process.platform })
       const expectedWorkspace = await captureExpectedWorkspaceSnapshot(expectedRoot)
       expect(existsSync(join(expectedRoot, EMPTY_WORKSPACE_MARKER)), `${key}: empty workspace marker`)
         .toBe(expectedWorkspace.length === 0)
@@ -206,6 +210,11 @@ it('keeps every recorded session owned, pinned, redacted, and header-scrubbed', 
     for (const variant of Object.keys(manifest.wireVariants ?? {})) {
       expect(existsSync(join(dir, `notifications.${variant}.expected.jsonl`)), `${key}: notifications.${variant} golden`).toBe(true)
       expect(existsSync(join(dir, `result.${variant}.expected.json`)), `${key}: result.${variant} golden`).toBe(true)
+    }
+    // Declared workspace expectation variants must be committed beside the base
+    // workspace expectation they replace on their platform.
+    for (const variant of Object.keys(manifest.workspaceVariants ?? {})) {
+      expect(existsSync(join(dir, `workspace.${variant}.expected`)), `${key}: workspace.${variant} expectation directory`).toBe(true)
     }
     for (const index of manifest.header.childSystemPrompts ?? []) {
       expect(names[index], `${key}: child prompt index ${index}`).toBeDefined()
