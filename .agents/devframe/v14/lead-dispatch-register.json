@@ -182,7 +182,7 @@
       "snapshots/session",
       "snapshots/acp"
     ],
-    "state": "completed/settled; controller merge commit 89f63d7d58 on codex/dsh-controller-v1.4; main merge pending controller-only closeout",
+    "state": "completed/settled; controller merge commit 89f63d7d58 and main merge commit 5e53609506; user dirty files unchanged",
     "stagePlan": "stage 1 = per-scenario failure-signature classification of the 89-red snapshot battery (expected-drift -> record/ui variants; functional regression -> fail-loud); stage 2 = implementation, gated on V1.4 approval",
     "settlement": {
       "workerTurnEnd": "2026-09-06T07:02:18.390Z",
@@ -483,6 +483,18 @@
         "mergeAuthority": "controller only",
         "status": "dispatched"
       }
+    },
+    {
+      "entry": "Battery stage-2/3 settlement merged to main",
+      "facts": [
+        "Retained Battery worker 61e4739d-93e6-4531-aa23-2edb4bc7a781 completed on huoshan-1 at 2026-09-06T07:02:18.390Z; branch p/battery tip 6f7d3e6051; no duplicate dispatch, interruption, or termination.",
+        "Controller merged the 177-file approved snapshot/session-snapshot/corpus domain as 89f63d7d58 after focused package vitest 330 passed / 1 skipped, Shadow+Memory 92 passed / 1 skipped, typecheck exit 0, catalog 115 computed / 0 written, diff-check 0, and vendor overlap 0.",
+        "Worker-recorded full win32 snapshot result is 6 failed / 104 passed / 10 skipped; failures remain explicit GAP-1 ACP image-compaction, GAP-2 headless hook plus web minimal-preset, and GAP-4 SDK subagent-continuable inheritance.",
+        "Controller merged codex/dsh-controller-v1.4 into main as 5e53609506; main retained exactly 376 pre-existing user dirty paths and no dirty path overlapped the controller diff."
+      ],
+      "controllerActions": [
+        "Battery settlement and known nonzero GAPs recorded in the dispatch register; hostcmd huoshan-2 chain remains active and untouched."
+      ]
     }
   ]
 }
