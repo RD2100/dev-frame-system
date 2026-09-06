@@ -6,9 +6,9 @@ description: 项目总控 v1.2 交接定稿（2026-09-06，第三版）：当前
 
 [English](dsh-controller-v1.2-handoff-2026-09-06.md) | 中文
 
-## 交接状态：在途链未收口、可交棒但旧链保留接收责任
+## 交接状态：在途链已结算并亲验，合并决策移交 V1.3
 
-AT4 故障注入 Worker 仍在运行（与本文档整理零文件依赖，保留执行）。旧总控在本文提交后**停止新派发与主树合并**；AT4 结算接收责任保留至交棒前一刻。V1.3 由外部创建，接管后不得重建、打断或重复派发 AT4。本文是接任总控的**当前状态入口**；历史账本（`.agents/devframe/pluginized-round-registry.md`）按需查阅。
+AT4 旅程交付已结算（提交 `ad9329723f`）并由旧总控亲验（agent-reliability **17/17**+tsc 0+树净），**按闸门未合并**——V1.3 首动作=亲验后合并 `p/at4process`。旧总控自定稿提交起**停止新派发与主树合并**。V1.3 由外部创建，接管后不得重建、打断或重复派发 AT4 相关会话。本文是接任总控的**当前状态入口**；历史账本（`.agents/devframe/pluginized-round-registry.md`）按需查阅。
 
 ## 已作废结论（以最新用户指令为准）
 
@@ -31,17 +31,18 @@ AT4 故障注入 Worker 仍在运行（与本文档整理零文件依赖，保�
 
 设计记录：`.agents/devframe/p22/fprecompute-design.md`（指纹构成、5 错误码族、untracked 不可见=已裁定边界、案 A=案 B 前移使用留后叠）。
 
-## 在途链（唯一保留）：AT4 故障注入
+## 在途链（已结算亲验，合并决策移交 V1.3）：AT4 故障注入
 
 | 项 | 值 |
 | --- | --- |
-| Worker SessionID | `dc51bc32-92b6-4b51-9bc3-fedabedaad1f`（one-shot subagent） |
+| Worker SessionID | `dc51bc32-92b6-4b51-9bc3-fedabedaad1f`（one-shot subagent，已结算） |
 | 父组长链 | Worker → L-Foundation `55979618-6bd7-4bc7-badc-8a3b13079158` → 旧总控 `session-724834c2-9ff4-49e5-9b0a-4ce5f68d2c2d` |
 | Worktree / 分支 / cwd | `D:\dsh-devframe-p-at4`（组长按三层自建），分支 `p/at4process`，基点 `526e773b23`；会话创建 cwd=`D:\dsh-devframe`，任务工作区=p-at4 |
-| Provider / 模型 | JSON 尚未落记录（首轮未完成）——**结算时按 session_projcache JSON 补核**，禁止假设 |
-| 产物 | 无提交；工作树 dirty=2（只读调查/早期落盘）；任务=AT4-02/03/06 真实进程注入旅程落 `agent-reliability/tests/`（零模型依赖） |
-| 实际调用 | 一次性 subagent 运行中；恢复点=读工作树文件状态续起、不重做已落盘部分 |
-| 结算接收方式 | 旧总控保留接收责任至交棒前一刻（亲验提交/vitest/tsc/build/证据→其合并权在停止前有效）；交棒后由 V1.3 按 `send_message` 续组长会话接收，**不得重建、打断或重复派发** |
+| Provider / 模型 | 会话 JSON 首轮未落记录——**V1.3 结算归档时补核**，禁止假设 |
+| 产物（已亲验） | 提交 `ad9329723f`：`tests/at4-02-command-marker-reconciliation-journey.spec.ts`+`tests/at4-03-process-tree-stop-journey.spec.ts`（519 行仅新增，src 零改动）；agent-reliability **17/17**+tsc 0+树净；4 连跑稳定 |
+| 实测内容 | AT4-02 三用例（真实标记 settled 永不重执行/缺席恰重试一次/in-flight ambiguous 永不重发）；AT4-03（真实进程树终止双平台+输出停摆否定断言+writer 树死后释放双证）；AT4-06=GAP fail-loud（无截止闭准入缝，归 P06，登记于 spec 头状态表） |
+| 合并决策 | **旧总控按闸门未合并**；V1.3 首动作=自行亲验后合并 `p/at4process`（工作树干净、无后续依赖） |
+| 结算接收方式 | 已由旧总控完成接收与亲验（登记表 `4a3f6f9af6`）；后续经 `send_message` 续组长会话，**不得重建、打断或重复派发** |
 
 ## Shadow / Memory 四态与具体生产缺口
 
@@ -58,11 +59,11 @@ AT4 故障注入 Worker 仍在运行（与本文档整理零文件依赖，保�
 | --- | --- | --- | --- | --- | --- |
 | Windows B 族快照（88F 唯一根） | L-Foundation（patch 行）+L-Verify（语料期望/delta） | `base/cordis.patch.yml` L252-254、minimal preset L36-38、snapshot 语料期望 | 平台参数化技术裁定（已授权）：场景级平台期望配置字段 | test:snapshot lib delta（A/C 族保持 0）+dump | patch 行与语料期望分属两组长不同文件域 |
 | Shadow/Memory 本地配置接入 | L-Integration | 本地（非共享）profile 实例+writeEnabled/角色允许表本地实例 | 无（integration 文件域空闲） | dump-config+双相探针（全新临时根）+build | 与其他任务无文件交集 |
-| AT4 进程注入/恢复 | L-Foundation | `agent-reliability/tests/` | **在飞保留中（见上）** | 包 vitest+tsc+build | 等其结算，不重复派发 |
+| AT4 进程注入/恢复 | L-Foundation | `agent-reliability/tests/` | **已结算亲验、未合并（见上）** | 已验 17/17+tsc 0 | V1.3 首动作合并 `ad9329723f`，不重复派发 |
 | 真实三级任务离线脚手架 | L-Verify | 三级任务 brief+验收脚手架（不依赖 DEEPSEEK_API_KEY 的部分） | 无；真实运行段缺 key 仅阻塞该段 | 脚手架离线段全绿 | profile/e2e 文件域与 L-Integration 任务分文件或串行 |
 | P05 残余（required-checks 模型；错审查者①与 snapshotId⇄fingerprint④已闭环） | L-Foundation | devframe 配置 schema+evidence 比对面 | fprecompute 已收口（本案 B 面）；产品配置面设计先行 | 包 vitest+tsc+build+jsdoc | 与 AT4 不同包零冲突；events/schemas 接线最后串行 |
 
-接任者首轮动作：核对主树 HEAD/登记表末条/本文一致 → 向 L-Foundation 会长发送 AT4 续接确认（不重建）→ 并行派 Windows B 族参数化设计与 Shadow/Memory 本地接入（不同组长、零文件冲突）→ 按 fprecompute-design.md 的案 A 叠加路径排 P05 required-checks 设计。
+接任者首轮动作：核对主树 HEAD/登记表末条/本文一致 → **亲验后合并 `p/at4process`（`ad9329723f`，已验 17/17）** → 经 `send_message` 向 L-Foundation 确认 AT4 收口（不重建）→ 并行派 Windows B 族参数化设计与 Shadow/Memory 本地接入（不同组长、零文件冲突）→ 按 fprecompute-design.md 的案 A 叠加路径排 P05 required-checks 设计；AT4-06 截止准入缝随 P06 波派单。
 
 ## 交接闸门（已执行到第 2 步）
 

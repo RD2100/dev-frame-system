@@ -6,9 +6,9 @@ description: Project controller v1.2 handoff final (2026-09-06, third edition): 
 
 English | [中文](dsh-controller-v1.2-handoff-2026-09-06.zh.md)
 
-## Handoff status: in-flight chain not closed; handover may proceed while the old chain keeps its receiving duty
+## Handoff status: in-flight chain settled and personally verified; the merge decision moves to V1.3
 
-The AT4 fault-injection worker is still running (zero file dependency on this document, preserved). After committing this document the outgoing controller **stops new dispatches and main-tree merges**; the duty to receive AT4's settlement stays with the outgoing controller until the handover moment. V1.3 is created externally and, once in control, must never rebuild, interrupt, or re-dispatch AT4. This document is the successor controller's **current-state entry point**; the historical ledger (`.agents/devframe/pluginized-round-registry.md`) is consulted on demand.
+The AT4 journey deliverable has settled (commit `ad9329723f`) and was personally verified by the outgoing controller (agent-reliability **17/17**+tsc 0+clean tree), **left unmerged by the gate** — V1.3's first action is to verify and merge `p/at4process`. The outgoing controller **stops new dispatches and main-tree merges** from the final-edition commit onward. V1.3 is created externally and, once in control, must never rebuild, interrupt, or re-dispatch AT4-related sessions. This document is the successor controller's **current-state entry point**; the historical ledger (`.agents/devframe/pluginized-round-registry.md`) is consulted on demand.
 
 ## Voided conclusions (latest user directives govern)
 
@@ -31,17 +31,18 @@ The old conclusions — concurrency caps (2/5), provider backoff/exclusivity ass
 
 Design record: `.agents/devframe/p22/fprecompute-design.md` (fingerprint composition, the 5-error family, untracked-invisible as the ruled boundary, Option A = a forward use of Option B left for later).
 
-## In-flight chain (the only preserved one): AT4 fault injection
+## In-flight chain (settled and verified; merge decision moves to V1.3): AT4 fault injection
 
 | Item | Value |
 | --- | --- |
-| Worker SessionID | `dc51bc32-92b6-4b51-9bc3-fedabedaad1f` (one-shot subagent) |
+| Worker SessionID | `dc51bc32-92b6-4b51-9bc3-fedabedaad1f` (one-shot subagent, settled) |
 | Parent lead chain | Worker → L-Foundation `55979618-6bd7-4bc7-badc-8a3b13079158` → outgoing controller `session-724834c2-9ff4-49e5-9b0a-4ce5f68d2c2d` |
 | Worktree / branch / cwd | `D:\dsh-devframe-p-at4` (created by the lead per the three-layer topology), branch `p/at4process`, base `526e773b23`; session creation cwd=`D:\dsh-devframe`, task workspace=p-at4 |
-| Provider / model | Not yet recorded in JSON (first turn unfinished) — **re-check the session_projcache JSON at settlement**, never assume |
-| Artifacts | No commits; worktree dirty=2 (read-only investigation / early writes); task = land AT4-02/03/06 real process-injection journeys in `agent-reliability/tests/` (zero model dependency) |
-| Actual call | One-shot subagent running; recovery point = resume from the worktree file state, never redo what is on disk |
-| Settlement receiving | The outgoing controller keeps the receiving duty until the handover moment (personally verify commits/vitest/tsc/build/evidence → merge right remains valid until stopped); after handover V1.3 continues the lead session via `send_message`, **never rebuilding, interrupting, or re-dispatching** |
+| Provider / model | Not recorded in the session JSON (first turn) — **V1.3 re-checks at settlement archival**, never assumes |
+| Artifacts (verified) | Commit `ad9329723f`: `tests/at4-02-command-marker-reconciliation-journey.spec.ts`+`tests/at4-03-process-tree-stop-journey.spec.ts` (519 lines, additions only, src untouched); agent-reliability **17/17**+tsc 0+clean tree; stable across 4 consecutive runs |
+| Verified content | AT4-02 three cases (a real marker settles forever, no re-execution / absent marker retries exactly once / in-flight ambiguous never re-sent); AT4-03 (real process-tree termination on both platforms+output-quiesce negative assertion+writer released only after tree death, doubly evidenced); AT4-06 = GAP fail-loud (no deadline-closed-admission seam, belongs to P06, recorded in the spec-header table) |
+| Merge decision | **The outgoing controller did not merge, per the gate**; V1.3's first action is to verify and merge `p/at4process` (clean worktree, no follow-up dependency) |
+| Settlement receiving | Received and verified by the outgoing controller (registry `4a3f6f9af6`); continue the lead session via `send_message`, **never rebuilding, interrupting, or re-dispatching** |
 
 ## Shadow / Memory four states and concrete production gaps
 
@@ -58,11 +59,11 @@ Cold-recovery rerun (measured): create a new empty temp directory as `DSH_HOME` 
 | --- | --- | --- | --- | --- | --- |
 | Windows B-family snapshot (the only 88F root) | L-Foundation (patch lines)+L-Verify (corpus expectations/delta) | `base/cordis.patch.yml` L252-254, minimal preset L36-38, snapshot corpus expectation face | platform-parameterization technical ruling (authorized): scenario-level platform expectation config fields | test:snapshot lib delta (A/C families stay 0)+dump | patch lines and corpus expectations sit with different leads in different file domains |
 | Shadow/Memory local config integration | L-Integration | local (non-shared) profile instances+writeEnabled/role allowlist local instances | none (the integration file domain is idle) | dump-config+dual-phase probe (fresh temp root)+build | no file overlap with other tasks |
-| AT4 process injection/recovery | L-Foundation | `agent-reliability/tests/` | **in flight, preserved (above)** | package vitest+tsc+build | await its settlement, never re-dispatch |
+| AT4 process injection/recovery | L-Foundation | `agent-reliability/tests/` | **settled and verified, unmerged (above)** | verified 17/17+tsc 0 | V1.3's first action merges `ad9329723f`; never re-dispatch |
 | Real three-level task offline scaffolding | L-Verify | three-level task briefs+acceptance scaffolding (parts not needing DEEPSEEK_API_KEY) | none; a missing key blocks only the real-run segment | scaffolding offline segments green | separate profile/e2e file domains from L-Integration's task, or serialize |
 | P05 residual (required-checks model; wrong-reviewer ① and snapshotId⇄fingerprint ④ are closed) | L-Foundation | devframe config schema+evidence comparison face | fprecompute closed (this Option-B face); product config face design first | package vitest+tsc+build+jsdoc | different package from AT4, zero conflict; events/schemas wiring lands serially last |
 
-Successor first actions: verify main HEAD / registry last entry / this document agree → confirm AT4 continuation with L-Foundation via `send_message` (no rebuild) → dispatch the Windows B-family parameterization design and Shadow/Memory local integration in parallel (different leads, zero file conflict) → schedule P05 required-checks design following the Option-A layering path in fprecompute-design.md.
+Successor first actions: verify main HEAD / registry last entry / this document agree → **verify and merge `p/at4process` (`ad9329723f`, verified 17/17)** → confirm AT4 closure with L-Foundation via `send_message` (no rebuild) → dispatch the Windows B-family parameterization design and Shadow/Memory local integration in parallel (different leads, zero file conflict) → schedule P05 required-checks design following the Option-A layering path in fprecompute-design.md; the AT4-06 deadline-admission seam joins the P06 wave.
 
 ## Handoff gate (executed through step 2)
 

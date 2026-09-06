@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/working/dsh-controller-v1.2-handoff-2026-09-06.md
-dsh-controller-v1.2-handoff-2026-09-06.md: d3cecfebe4f143631ba004344866093166464bd2
-dsh-controller-v1.2-handoff-2026-09-06.zh.md: 51702944f6c53be28ae405a87f800a6c7875e9a4
+dsh-controller-v1.2-handoff-2026-09-06.md: a2e195ec070149dad4dc1031c98ef20027fd7462
+dsh-controller-v1.2-handoff-2026-09-06.zh.md: 5819495569d44f0fc3d925be91453b3e68970569
