@@ -61,6 +61,16 @@ export interface ShadowRouterConfig {
   authorizedRoots?: string[]
   /** Controller profile the host serves for project root sessions. */
   controllerProfile?: string
+  /**
+   * Session id the host composition declares as its Shadow. The router
+   * performs the real {@link ShadowRouter.markShadow} invocation itself at
+   * the earliest resolvable point: immediately when that agent is already
+   * live at activation, otherwise when it is created. An id that never
+   * becomes live installs nothing (fail-closed, same as unconfigured);
+   * marking is idempotent; disposal cleanup stays with the existing
+   * `agent/disposed` effect.
+   */
+  shadowSessionId?: string
   /** Per-workspace limit of pending (queued, not yet received) deliveries. */
   maxPendingDeliveries?: number
   /** Maximum message text length in characters. */
@@ -69,8 +79,8 @@ export interface ShadowRouterConfig {
   statusPageSize?: number
 }
 
-/** The config shape after schemastery applied the defaults. */
-type ResolvedConfig = Required<ShadowRouterConfig>
+/** The config shape after schemastery applied the defaults; `shadowSessionId` keeps its optional face. */
+type ResolvedConfig = Omit<Required<ShadowRouterConfig>, 'shadowSessionId'> & Pick<ShadowRouterConfig, 'shadowSessionId'>
 
 /** The receipt `project_open` returns: one workspace's controller association. */
 export interface ProjectOpenResult {
@@ -240,11 +250,14 @@ function inputHash(kind: ShadowRequestKind, input: Record<string, string | numbe
 
 /** The shadow router: binding store, cross-root delivery, and the Shadow tool whitelist. */
 export class ShadowRouter extends Service {
-  static inject = ['sessions', 'storageDomain', 'workspaceRegistry', 'agentBindings']
+  static inject = ['sessions', 'storageDomain', 'workspaceRegistry', 'agentBindings', 'agents']
 
   static Config: z<ShadowRouterConfig> = z.object({
     authorizedRoots: z.array(z.string()).default([]),
     controllerProfile: z.string().default('devframe'),
+    // Optional face: schemastery omits an absent key and validates a present
+    // string, so the declared id reaches the constructor only when configured.
+    shadowSessionId: z.string(),
     maxPendingDeliveries: z.number().default(16),
     maxMessageChars: z.number().default(20_000),
     statusPageSize: z.number().default(20),
@@ -285,6 +298,10 @@ export class ShadowRouter extends Service {
     if (this.config.controllerProfile.length === 0 || this.config.controllerProfile !== this.config.controllerProfile.trim()) {
       throw new ShadowRouterError('controllerProfile must be a non-empty trimmed string', 'SHADOW_INVALID_CONFIG')
     }
+    if (this.config.shadowSessionId !== undefined
+      && (this.config.shadowSessionId.length === 0 || this.config.shadowSessionId !== this.config.shadowSessionId.trim())) {
+      throw new ShadowRouterError('shadowSessionId must be a non-empty trimmed string when configured', 'SHADOW_INVALID_CONFIG')
+    }
   }
 
   protected async [Service.init](): Promise<void> {
@@ -317,6 +334,18 @@ export class ShadowRouter extends Service {
         dispose()
       }
     }), 'shadow-router.shadowAgentDispose')
+    if (this.config.shadowSessionId !== undefined) {
+      const shadowId = SessionId(this.config.shadowSessionId)
+      // Declarative designation: mark immediately when the declared agent is
+      // already live at activation (created before this mount), otherwise
+      // when its `agent/created` arrives. `markShadow` is idempotent, so
+      // both paths converge; an id that never becomes live installs nothing.
+      const live = this.ctx.agents.get(shadowId)
+      if (live !== undefined) this.markShadow(live)
+      this.ctx.effect(() => this.ctx.on('agent/created', ({ agent }) => {
+        if (agent.id === shadowId) this.markShadow(agent)
+      }), 'shadow-router.shadowDesignation')
+    }
   }
 
   /** Canonicalize every authorized root; a missing or relative entry fails the load. */

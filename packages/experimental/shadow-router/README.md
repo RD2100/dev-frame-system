@@ -48,6 +48,7 @@ Mount the service in a composition that already mounts the storage stack, the se
 |---|---|---|
 | `authorizedRoots` | `[]` | Absolute directories a project root may live under. Empty means nothing can be opened (fail-closed). |
 | `controllerProfile` | `'devframe'` | Profile key pinned on every binding; an existing binding pinned to another profile is rejected. |
+| `shadowSessionId` | not set | Session id the composition declares as its Shadow. The service performs the `markShadow` invocation itself when that agent is live (at activation) or created; absent or never-created installs nothing (fail-closed). |
 | `maxPendingDeliveries` | `16` | Per-project cap on `queued` deliveries; a full queue rejects new input before acceptance. |
 | `maxMessageChars` | `20000` | Upper bound on one delivery's text. |
 | `statusPageSize` | `20` | Maximum projects and deliveries per `project_status` page. |
@@ -66,6 +67,15 @@ const receipt = await ctx.shadowRouter.sendToProject(shadow, {
   workspaceId: open.workspaceId, bindingRevision: open.bindingRevision,
   goalId, acceptanceHash, requestId: 'send-1', mode: 'work', text: '…',
 })
+```
+
+Compositions can also declare the designation in the row's config: with `shadowSessionId` set, the service performs the `markShadow` invocation itself — immediately when that agent is already live at activation, otherwise when it is created — while session creation stays host-owned. An id that never becomes live installs nothing, and an unconfigured mount keeps the fail-closed `SHADOW_CALLER_FORBIDDEN` behavior.
+
+```yaml
+- name: '@deepseek-ai/dsh-experimental-shadow-router'
+  config:
+    authorizedRoots: [dshHomePath('projects')]
+    shadowSessionId: session-shadow
 ```
 
 -----

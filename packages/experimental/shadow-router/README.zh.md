@@ -48,6 +48,7 @@ kind: "package-reference"
 |---|---|---|
 | `authorizedRoots` | `[]` | 项目根允许位于其下的绝对目录。为空表示任何项目都无法打开（fail-closed）。 |
 | `controllerProfile` | `'devframe'` | 每条绑定固定的 profile 键；已绑定到其他 profile 的绑定会被拒绝。 |
+| `shadowSessionId` | 未设置 | 组合声明为 Shadow 的会话 id。该代理已存活（激活时）或被创建时，服务自行执行 `markShadow` 调用；缺省或从未创建则不安装任何工具（fail-closed）。 |
 | `maxPendingDeliveries` | `16` | 每个项目 `queued` 投递的上限；队列已满时，新输入在接受前即被拒绝。 |
 | `maxMessageChars` | `20000` | 单条投递文本的长度上限。 |
 | `statusPageSize` | `20` | `project_status` 每页项目与投递的最大条数。 |
@@ -66,6 +67,15 @@ const receipt = await ctx.shadowRouter.sendToProject(shadow, {
   workspaceId: open.workspaceId, bindingRevision: open.bindingRevision,
   goalId, acceptanceHash, requestId: 'send-1', mode: 'work', text: '…',
 })
+```
+
+组合也可以在行的 config 中声明指定：设置 `shadowSessionId` 后，服务会自行执行 `markShadow` 调用——该代理在激活时已存活则立即标记，否则在其被创建时标记——而会话创建仍由宿主负责。从未成为存活的 id 不会安装任何东西，未配置的挂载保持 fail-closed 的 `SHADOW_CALLER_FORBIDDEN` 行为。
+
+```yaml
+- name: '@deepseek-ai/dsh-experimental-shadow-router'
+  config:
+    authorizedRoots: [dshHomePath('projects')]
+    shadowSessionId: session-shadow
 ```
 
 -----
