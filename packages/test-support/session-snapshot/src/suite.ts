@@ -819,6 +819,14 @@ export function refreshFixtureReplacements(logs: HarvestedLog[], fixtures: strin
       const to = existing?.[field]
       if (typeof from === 'string' && typeof to === 'string' && from.length > 0 && from !== to) {
         replacements.push({ from, to })
+        // Tools may render the win32 native cwd with forward separators
+        // (file-URI style) inside body text; map that spelling of the fresh
+        // cwd to the fixture's stored value too, or the write-back would keep
+        // a run-specific literal the comparison side tokenizes away.
+        if (field === 'cwd') {
+          const alias = from.replaceAll('\\', '/')
+          if (alias !== from) replacements.push({ from: alias, to })
+        }
       }
     }
     // Stabilize snapshot spill paths: match by filename suffix so the raw

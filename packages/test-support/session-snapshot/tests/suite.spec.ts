@@ -851,6 +851,18 @@ describe('refreshFixtureReplacements', () => {
     ])
   })
 
+  it('maps the forward-separator spelling of a fresh win32 cwd to the fixture value too', () => {
+    const log = (content: string): HarvestedLog => ({ id: 'diagnostic', createdAt: 1, content })
+    const nativeCwd = 'C:\\Users\\runner\\AppData\\Local\\Temp\\dsh-log-snap-ab4NWy'
+    const forwardCwd = nativeCwd.replaceAll('\\', '/')
+    const logs = [log(`${JSON.stringify({ type: 'session', id: 's', cwd: nativeCwd })}\n${JSON.stringify({ type: 'tool/result', data: { content: [{ type: 'text', text: `<path>${forwardCwd}/deleted.txt</path>` }] } })}\n`)]
+    const fixtures = ['{"type":"session","id":"s","cwd":"{{cwd}}"}\n']
+    expect(refreshFixtureReplacements(logs, fixtures)).toEqual([
+      { from: nativeCwd, to: '{{cwd}}' },
+      { from: forwardCwd, to: '{{cwd}}' },
+    ])
+  })
+
   it('stabilizes moved snapshot spill paths by filename while skipping unchanged or unmatched names', () => {
     const spill = (session: string, hash: string, name: string): string =>
       `/tmp/dsh-acp-snapshot-spill/session-${session}/${hash}-${name}`
