@@ -52,4 +52,3 @@ AssertionError: session 4f77f685-97b7-498d-a015-34a087e0bf4b: initial system pro
       Tests  1 failed | 14 skipped (15)
    Start at  00:16:31
    Duration  3.14s (transform 542ms, setup 188ms, import 614ms, tests 2.17s, environment 0ms)
-
