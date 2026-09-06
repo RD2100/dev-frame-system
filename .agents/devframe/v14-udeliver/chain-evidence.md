@@ -55,3 +55,10 @@ job_kill(pwsh-213, reason="总控裁定 B1 本轮失败证据收口：停止 boo
 - 证据文件（本树已提交）：boot-evidence.md（四轮集成发现）、b4-evidence.md、b5-reconciliation.md、worker/receipts.md（③层已实证）。
 - 隔离目录（未提交，保留待恢复轮复用）：`D:\dsh-udeliver-iso\{chain,chain2,chain3,chain4}-home`、`out\chain*-driver.jsonl`、`out\probe-*.mjs`、overlay/driver-patch-*.yml。
 - 恢复前置（总控清单所有，B 线不自行开工）：huoshan 流式 args 契约缺陷立项→录播 chunk 解析器对照→修复→最小真实重放（一次请求+单工具调用）→重启 12 站链。
+
+## 总控补遗（监督新增诊断，2026-09-07 收口时点）
+
+- **pkg-4 running ≠ 成功**：`cordis_inspect_self` 显示 host handlers 为空、chain_scout 未暴露——define 后的 package 内容受损（与流式 args 损坏同根因面：cordis_define 的 source 参数经同一损坏通道），运行态标签不能替代 handler 实存；模型在相同诊断上循环，deliverable/hello.md 始终未产生。
+- **双根因面并列登记**（C2b 修复需两者都覆盖）：①流式 args 碎片损坏（seq 1082/2365/2416/4046）；②模型把 `input` 序列化为字符串（seq 4270-4273）——工具 fail-loud 拒绝正确，属模型侧行为；harness 侧修复面=①，②在重放验证中观察。
+- **附带缺陷登记**：boot1 实证 tool-cordis 在 shipped overlay（web 宿主）`1 entry did not activate`（dynamicCordisRunner,cordisInspect pending）——另立清单项，不阻塞 C2b。
+- B1 状态：**未完成/异常退出**；恢复路径唯一（C2b 修复→最小重放→重启链）。
