@@ -16,7 +16,7 @@
 
 | ID | 用户功能/项 | 源码 | profile | 运行 | 生产验收 | 证据 | 真实依赖 | 下一步 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| B1 | 真实 dsh profile 全链：启动→总控→组长→Worker（真实 huoshan 调用）→产出→审查→合并→停止重启恢复 | 已有（compos 7c21ed0fc2：/devframe-start+/devframe-resume；GoalStore cd676781c3 复用） | shipped=`apps/cli/config/examples/cordis/cordis.yml`，v14 包挂载待补 | 机制 B 进程内已证 30/30；shipped-profile 待补 | 待 B1 全链 | compos 结算+闭合复验记录 | 无（凭据已授权） | shipped profile 设计→真实链逐站运行 |
+| B1 | 真实 dsh profile 全链：启动→总控→组长→Worker（真实 huoshan 调用）→产出→审查→合并→停止重启恢复 | **收口已合并 main**（b6971bfb6c：cordis.yml 四包挂载 fail-closed 缺省+apps/cli 依赖+command-goal-binding tsconfig path+设计/回执 10 文件；verify-cordis-config 133 files+build exit 0 双树复现） | **shipped 已挂载**（安全机器中立缺省，部署经 --patch overlay 收窄） | 机制 B 已证；shipped 真实链 12 站待跑 | 待 B1 全链 | B 收口 commit+设计文档 lead/design.md | 无（凭据已授权） | B4 huoshan 显式重测→dump-config 装配探针→真实链逐站 |
 | B2 | Shadow 跨项目投递/隔离进真实用户路径 | 已有（shadow-router；S6 机制 B PASS） | shipped 待挂/待证 | 机制 B 限范围 | 待 shipped 证据 | S6 判定书（隔离域路径+SHADOW_REQUEST_CONFLICT） | B1 | 随 B1 链跑真实跨项目站 |
 | B3 | Memory 写/读/冷恢复进真实用户路径 | 已有（project-memory；S7 机制 B PASS） | shipped 待挂/待证 | 机制 B 限范围 | 待 shipped 证据 | S7 判定书（Vault 恰 2 真实 .md） | B1 | 随 B1 链跑真实 Memory 站 |
 | B4 | S1 真实凭据重测（隔离 profile） | 已有（harness s1 脚本 d0c2c455c2） | 隔离 profile | 先前 keyless BLOCKED——**勘误：该隔离测试缺的是 deepseek-official 凭据，非 huoshan 失败；huoshan 账号可用** | 待 huoshan 显式路由重测 | s1 key-probes.json 4/4 钉住 | B1 前置可独立 | huoshan 显式路由重跑（凭据不输出不提交） |
@@ -27,9 +27,9 @@
 | ID | 用户功能/项 | 源码 | profile | 运行 | 生产验收 | 证据 | 真实依赖 | 下一步 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | Agent 树默认折叠/箭头仅下一层/SessionID 直接复制 | **存在**（三重一致：折叠 WorkspaceBrowser.tsx:352-354；箭头 Rows.tsx:678-690+756-776；SessionID 复制 Rows.tsx:43,60-86,89-101+词条 locales.ts:48-50；契约 README.md:40） | client（挂载证据随 C3 补） | **组件级自动化绿**（vitest 3 files/61 tests exit 0） | **技术验收通过**（无新增真用户动作） | c1-agent-tree.md（C 线树）；Worker 673d61fe，provider 请求级实证 seq13/14 | 无 | 已关闭；三种更短复制路径=可选增强，用户要再立独立项 |
-| C2 | 显式 @codex @claude @cursor 提及 | 待核验 | client | 未验 | 待技术验收 | 无 | 无 | 同上 |
-| C3 | 模型切换/侧栏/用量监测 | 待核验 | client | 未验 | 待技术验收 | 无 | 无 | 同上 |
-| C4 | 手机配对 | 待核验 | client+配对服务 | 未验 | 仅真用户动作列入最终清单 | 无 | C3 | 区分安装/真实运行；用户操作最小化 |
+| C2 | 显式 @codex @claude @cursor 提及 | **缺失（唯一真实缺口）**：@ 触发管线存在且 137/137 绿（detect.ts:48-76、grammar.ts:26-35、roster 唯一入口 service.ts:49）；现存 @ source 仅 reference/cordis；ui-subagent @ source 已于 ad3632f122 退役；@codex/@claude/@cursor 全 packages 零命中 | client | 触发管线运行绿 | 缺失——实现后另立切片验收 | c2-mentions.md（零命中证据+git -S 考古）；修复设计=宿主侧 roster 契约（ctx.subagents provider 目录 RPC）+薄 client @ source | 总控已裁定：C 组长单写者实现（client 半部+宿主半部写域扩展授权） | C 组长派实现切片+回归测试 |
+| C3 | 模型切换/侧栏/用量监测 | **存在一致**（模型切换 index.ts:126-179+service.ts:68-111；侧栏 SidebarRoot.tsx:52-186；用量 turn-tail.ts:164-166→TurnUsagePanel.tsx:99-178+StatsLine.tsx:163-209+ContextMeter.tsx:55-167） | **挂载在案**（:197-198/:218-219/:286-288） | **101/101 exit 0** | **技术验收通过**（无新增用户动作） | c3-model-sidebar.md | 无 | 已关闭 |
+| C4 | 手机配对 | 外部包/本仓库零源码（配对守护=外部运行时/APK，诚实标注不可核面） | **已安装启用**（mobile profile 四 bundle，release v1.1.6；包内 version 字段落后 release tag 已记录） | **装配级在案**（~/.dsh/mobile/ 守护密钥对+devices.json 恰 1 台设备，仅记结构） | **待真用户动作**（3 步清单已出） | c4-mobile-pairing.md | 真用户手机操作 | 用户操作清单已列入最终交付 |
 
 ## D 独立验证线（负责人：L-LlmVerify）
 
