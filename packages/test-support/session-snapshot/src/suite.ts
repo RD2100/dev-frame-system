@@ -19,11 +19,17 @@
 
 import { readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { isSurfaceEligibleType } from '@deepseek-ai/dsh-session/surface'
 import { describe, expect, it } from 'vitest'
 import { type AgentUnderTest, type HarvestedLog, type InputScript, runScenario } from './harness.ts'
-import { parseSnapshotManifest } from './manifest.ts'
+import { type SnapshotManifest, parseSnapshotManifest } from './manifest.ts'
+import {
+  declaredExpectationVariantFiles,
+  resolveExpectationPath,
+  resolveSessionFixturePath,
+  sessionFixtureFileName,
+} from './expectations.ts'
 import { redactSessionSnapshotIds } from './identity.ts'
 import { captureExpectedWorkspaceSnapshot } from './workspace.ts'
 import {
@@ -355,10 +361,17 @@ export function sessionFixtureNames(names: readonly string[]): string[] {
   return ['session.jsonl', ...children.map(child => child.name)]
 }
 
-/** Read one scenario directory's validated session-fixture inventory. */
-async function sessionFixtures(dir: string): Promise<string[]> {
+/**
+ * Read one scenario directory's validated session-fixture inventory with
+ * manifest-declared platform-variant files removed: a variant recording is a
+ * manifest-owned expected file, not a child session, and
+ * {@link sessionFixtureNames} rejects any `session.<platform>.jsonl` shape it
+ * did not filter out first.
+ */
+async function sessionFixtures(dir: string, manifest: SnapshotManifest): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true })
-  return sessionFixtureNames(entries.filter(entry => entry.isFile()).map(entry => entry.name))
+  const variants = new Set(declaredExpectationVariantFiles(manifest))
+  return sessionFixtureNames(entries.filter(entry => entry.isFile()).map(entry => entry.name).filter(name => !variants.has(name)))
 }
 
 /**
@@ -1198,6 +1211,18 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
     promptSourceByClass.set(cls, sourceFor(pinningScenario, 'systemPromptSource', 'system-prompt snapshot'))
     schemaSourceByClass.set(cls, sourceFor(pinningScenario, 'toolSchemasSource', 'tool-schema snapshot'))
   }
+
+  /** Parsed snapshot.yml manifests by scenario name, so foreign-source sidecar and pin reads resolve through the variant-aware seam. */
+  const manifestByName = new Map<string, Promise<SnapshotManifest>>()
+  const manifestOf = (name: string): Promise<SnapshotManifest> => {
+    let parsed = manifestByName.get(name)
+    if (parsed === undefined) {
+      const manifestPath = join(snapshotsDir, name, 'snapshot.yml')
+      parsed = readFile(manifestPath, 'utf8').then(content => parseSnapshotManifest(content, manifestPath))
+      manifestByName.set(name, parsed)
+    }
+    return parsed
+  }
   const promptOwners = new Set([...promptSourceByClass.values()].map(source => source.name))
   const schemaOwners = new Set([...schemaSourceByClass.values()].map(source => source.name))
   const promptClaims = new Map<string, SharedSnapshotClaim>()
@@ -1218,14 +1243,18 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
         // Replay/refresh need the committed inventory up front because those
         // files drive the model scripts. Record mode creates that inventory
         // from the harvested live logs, so it must also work for a brand-new
-        // scenario with no session.jsonl yet.
-        let fixtureFiles = RECORDING ? [] : await sessionFixtures(dir)
+        // scenario with no session.jsonl yet. The primary comparison name is
+        // the platform-resolved recording: a declared variant file replaces
+        // the base name as both replay script and expected output.
+        let fixtureFiles = RECORDING
+          ? []
+          : [basename(resolveSessionFixturePath({ dir, manifest, platform: process.platform })), ...(await sessionFixtures(dir, manifest)).slice(1)]
         const childFixtureFiles = fixtureFiles.slice(1)
         const comparesLog = scenario.comparesLog ?? scenario.hasModelTurn
         const result = await runScenario(input, {
           agent,
           mode: childMode,
-          fixtureFile: join(dir, 'session.jsonl'),
+          fixtureFile: resolveSessionFixturePath({ dir, manifest, platform: process.platform }),
           ...scenario.env !== undefined ? { env: scenario.env } : {},
           ...existsSync(overrideFile) ? { overrideFile } : {},
           // In REPLAY, forward the recorded child fixtures so each subagent session
@@ -1273,7 +1302,7 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
               .toBe(fixtureFiles.length)
           }
           const outputFixtureFiles = [
-            'session.jsonl',
+            sessionFixtureFileName(manifest, process.platform),
             ...Array.from({ length: result.sessionLogs.length - 1 }, (_, i) => `session.${i + 1}.jsonl`),
           ]
           const existingFixtures = await Promise.all(outputFixtureFiles.map(async (file) => {
@@ -1315,7 +1344,12 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
             const promptSnapshot = formatSystemPromptSnapshot(prompts[0] as string, prompts.slice(1))
             /* v8 ignore next -- registration guarantees every scenario class has resolved sources. */
             const promptSource = promptSourceByClass.get(classOf(scenario)) ?? scenario
-            const promptPath = join(snapshotsDir, promptSource.name, SYSTEM_PROMPT_SNAPSHOT)
+            const promptPath = resolveExpectationPath({
+              dir: join(snapshotsDir, promptSource.name),
+              kind: 'system-prompt',
+              manifest: await manifestOf(promptSource.name),
+              platform: process.platform,
+            })
             claimSharedSnapshot(promptClaims, promptPath, scenario.name, promptSnapshot)
             await writeFile(promptPath, promptSnapshot)
 
@@ -1329,7 +1363,12 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
             )
             /* v8 ignore next -- registration guarantees every scenario class has resolved sources. */
             const schemaSource = schemaSourceByClass.get(classOf(scenario)) ?? scenario
-            const schemaPath = join(snapshotsDir, schemaSource.name, TOOL_SCHEMAS_SNAPSHOT)
+            const schemaPath = resolveExpectationPath({
+              dir: join(snapshotsDir, schemaSource.name),
+              kind: 'tool-schemas',
+              manifest: await manifestOf(schemaSource.name),
+              platform: process.platform,
+            })
             claimSharedSnapshot(schemaClaims, schemaPath, scenario.name, toolSchemasSnapshot)
             await writeFile(schemaPath, toolSchemasSnapshot)
           }
@@ -1401,17 +1440,30 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
         /* v8 ignore next -- registration guarantees every scenario class has resolved sources. */
         const schemaSource = schemaSourceByClass.get(classOf(scenario)) ?? pinningScenario
         const pinningDir = join(snapshotsDir, pinningScenario.name)
-        const pinnedFixture = await readFile(join(pinningDir, 'session.jsonl'), 'utf8')
+        const pinnedFixture = await readFile(
+          resolveSessionFixturePath({ dir: pinningDir, manifest: await manifestOf(pinningScenario.name), platform: process.platform }),
+          'utf8',
+        )
         const pinned = pinningHeaderPayloads(pinnedFixture, fixtureContext(pinnedFixture))
         const promptSnapshot = await readFile(
-          join(snapshotsDir, promptSource.name, SYSTEM_PROMPT_SNAPSHOT),
+          resolveExpectationPath({
+            dir: join(snapshotsDir, promptSource.name),
+            kind: 'system-prompt',
+            manifest: await manifestOf(promptSource.name),
+            platform: process.platform,
+          }),
           'utf8',
         )
         const initialPromptSnapshot = initialSystemPromptSnapshot(promptSnapshot)
         expect(pinned.length, `the pinning fixture (${pinningScenario.name}) has an unexpected request/header count`)
           .toBe(1 + (pinningScenario.expectedHeaderChanges ?? 0))
         const toolSchemasSnapshot = await readFile(
-          join(snapshotsDir, schemaSource.name, TOOL_SCHEMAS_SNAPSHOT),
+          resolveExpectationPath({
+            dir: join(snapshotsDir, schemaSource.name),
+            kind: 'tool-schemas',
+            manifest: await manifestOf(schemaSource.name),
+            platform: process.platform,
+          }),
           'utf8',
         )
         const toolSchemas = parseToolSchemasSnapshot(toolSchemasSnapshot)
@@ -1540,13 +1592,16 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
           `${name}/${WINDOWS_STDOUT_SNAPSHOT} presence must match \`pinsNativeWindowsStdout\``,
         ).toBe(pinsNativeWindowsStdout === true)
         expect(existsSync(join(dir, 'session.jsonl')), `${name}/session.jsonl`).toBe(true)
+        for (const file of declaredExpectationVariantFiles(manifest)) {
+          expect(existsSync(join(dir, file)), `${name}/${file} declared platform variant must exist`).toBe(true)
+        }
         expect(existsSync(join(dir, 'replay.override.json')), `${name}/replay.override.json presence must match \`overridden\``)
           .toBe(overridden === true)
         expect(existsSync(join(dir, SYSTEM_PROMPT_SNAPSHOT)), `${name}/${SYSTEM_PROMPT_SNAPSHOT} presence must match snapshot-source ownership`)
           .toBe(promptOwners.has(name))
         expect(existsSync(join(dir, TOOL_SCHEMAS_SNAPSHOT)), `${name}/${TOOL_SCHEMAS_SNAPSHOT} presence must match snapshot-source ownership`)
           .toBe(schemaOwners.has(name))
-        await expect(sessionFixtures(dir), `${name}: session fixture inventory`).resolves.toBeDefined()
+        await expect(sessionFixtures(dir, manifest), `${name}: session fixture inventory`).resolves.toBeDefined()
       }
     })
 
@@ -1573,16 +1628,29 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
         const promptSource = promptSourceByClass.get(classOf(scenario)) ?? scenario
         /* v8 ignore next -- registration guarantees every pin has resolved sources. */
         const schemaSource = schemaSourceByClass.get(classOf(scenario)) ?? scenario
-        const fixture = await readFile(join(snapshotsDir, scenario.name, 'session.jsonl'), 'utf8')
+        const fixture = await readFile(
+          resolveSessionFixturePath({ dir: join(snapshotsDir, scenario.name), manifest: await manifestOf(scenario.name), platform: process.platform }),
+          'utf8',
+        )
         const headers = pinningHeaderPayloads(fixture, fixtureContext(fixture))
         const promptSnapshot = await readFile(
-          join(snapshotsDir, promptSource.name, SYSTEM_PROMPT_SNAPSHOT),
+          resolveExpectationPath({
+            dir: join(snapshotsDir, promptSource.name),
+            kind: 'system-prompt',
+            manifest: await manifestOf(promptSource.name),
+            platform: process.platform,
+          }),
           'utf8',
         )
         expect(headers.length, `${scenario.name}: unexpected request/header count`)
           .toBe(1 + (scenario.expectedHeaderChanges ?? 0))
         const toolSchemasSnapshot = await readFile(
-          join(snapshotsDir, schemaSource.name, TOOL_SCHEMAS_SNAPSHOT),
+          resolveExpectationPath({
+            dir: join(snapshotsDir, schemaSource.name),
+            kind: 'tool-schemas',
+            manifest: await manifestOf(schemaSource.name),
+            platform: process.platform,
+          }),
           'utf8',
         )
         const toolSchemas = parseToolSchemasSnapshot(toolSchemasSnapshot)
@@ -1603,14 +1671,24 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
     })
 
     it('stores each distinct prompt and tool-schema snapshot once', async () => {
-      const prompts = await Promise.all([...promptOwners].map(async (owner): Promise<NamedSnapshotContent> => ({
-        path: `${owner}/${SYSTEM_PROMPT_SNAPSHOT}`,
-        content: await readFile(join(snapshotsDir, owner, SYSTEM_PROMPT_SNAPSHOT), 'utf8'),
-      })))
-      const schemas = await Promise.all([...schemaOwners].map(async (owner): Promise<NamedSnapshotContent> => ({
-        path: `${owner}/${TOOL_SCHEMAS_SNAPSHOT}`,
-        content: await readFile(join(snapshotsDir, owner, TOOL_SCHEMAS_SNAPSHOT), 'utf8'),
-      })))
+      const prompts = await Promise.all([...promptOwners].map(async (owner): Promise<NamedSnapshotContent> => {
+        const path = resolveExpectationPath({
+          dir: join(snapshotsDir, owner),
+          kind: 'system-prompt',
+          manifest: await manifestOf(owner),
+          platform: process.platform,
+        })
+        return { path: `${owner}/${basename(path)}`, content: await readFile(path, 'utf8') }
+      }))
+      const schemas = await Promise.all([...schemaOwners].map(async (owner): Promise<NamedSnapshotContent> => {
+        const path = resolveExpectationPath({
+          dir: join(snapshotsDir, owner),
+          kind: 'tool-schemas',
+          manifest: await manifestOf(owner),
+          platform: process.platform,
+        })
+        return { path: `${owner}/${basename(path)}`, content: await readFile(path, 'utf8') }
+      }))
       assertUniqueSnapshotContents('system-prompt', prompts)
       assertUniqueSnapshotContents('tool-schema', schemas)
     })
@@ -1618,7 +1696,7 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
     it('every declared child sidecar is canonical and names a real child', async () => {
       for (const scenario of scenarios) {
         const dir = join(snapshotsDir, scenario.name)
-        const files = await sessionFixtures(dir)
+        const files = await sessionFixtures(dir, await manifestOf(scenario.name))
         for (const index of scenario.pinsChildToolSchemas ?? []) {
           expect(files[index], `${scenario.name}: child schema pin ${index} must name an existing session.<n>.jsonl fixture`)
             .toBeDefined()
@@ -1637,7 +1715,15 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
           const sidecar = await readFile(join(dir, file), 'utf8')
           /* v8 ignore next -- registration guarantees every scenario class has resolved sources. */
           const promptSource = promptSourceByClass.get(classOf(scenario)) ?? scenario
-          const classPin = await readFile(join(snapshotsDir, promptSource.name, SYSTEM_PROMPT_SNAPSHOT), 'utf8')
+          const classPin = await readFile(
+            resolveExpectationPath({
+              dir: join(snapshotsDir, promptSource.name),
+              kind: 'system-prompt',
+              manifest: await manifestOf(promptSource.name),
+              platform: process.platform,
+            }),
+            'utf8',
+          )
           assertChildSystemPromptSnapshot(sidecar, initialSystemPromptSnapshot(classPin), `${scenario.name}/${file}`)
         }
       }
@@ -1650,7 +1736,11 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
       // storage rules fail loud.
       for (const scenario of scenarios) {
         const dir = join(snapshotsDir, scenario.name)
-        const files = await sessionFixtures(dir)
+        const manifest = await manifestOf(scenario.name)
+        const files = [
+          ...await sessionFixtures(dir, manifest),
+          ...declaredExpectationVariantFiles(manifest).filter(file => file.endsWith('.jsonl')),
+        ]
         for (const file of files) {
           const fixture = await readFile(join(dir, file), 'utf8')
           expect(unknownToolCallIds(fixture), `${scenario.name}/${file} contains UNKNOWN_TOOL`)
