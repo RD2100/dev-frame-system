@@ -57,11 +57,25 @@ const NAME = 'dsh'
 /** A well-formed but never-issued note id: read must answer `memory_missing`. */
 const ABSENT_NOTE_ID = 'a'.repeat(64)
 const MEMORY_TOOL_NAMES = ['memory_search', 'memory_read', 'memory_append'] as const
+/** The stable source reference of the probe's real append; the verify phase retries the same reference. */
+const PROBE_MEMORY_SOURCE_REF = 'probe://integration-local-write/1'
+/** The body of the probe's real append; both phases share the exact bytes. */
+const PROBE_MEMORY_BODY = 'L-Integration local write-enabled instance: the append path must create this note.'
+/** A lowercase substring of the probe body, used as the search query in both phases. */
+const PROBE_MEMORY_QUERY = 'write-enabled instance'
+/** The appending agent's session id; the verify phase resumes it to replay the receipt log. */
+const PROBE_MEMORY_WRITER_SESSION = 'session-memory-write-w'
 /** The probe-owned workspace root the shadow-router row authorizes; must exist at load. */
 const SHADOW_ROOT = dshHomePath('integration-shadow-roots')
 /** Execution signal for the probe's real tool executions; the probe never aborts them. */
 const probeSignal = new AbortController().signal
 let hierarchyProbeCounter = 0
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => {
+    setTimeout(resolve, ms)
+  })
+}
 
 const phaseIndex = process.argv.indexOf('--phase')
 const phase = phaseIndex >= 0 ? process.argv[phaseIndex + 1] : undefined
@@ -114,44 +128,207 @@ const ctx = await boot(NAME, join(profile.dir, 'cordis.yml'), patches, (hostCtx)
 
 const goalId = 'goal-probe-1' as GoalId
 
+/** The write-phase memory facts one phase hands to the next. */
+interface ProbeMemoryState {
+  readonly noteId: string
+  readonly relativePath: string
+  readonly sourceRef: string
+  readonly appendingSessionId: string
+}
+
 /**
- * The project-memory read-only face over the real mounted plugin: the three
- * tools are registered on the global registry, the search/read path touches
- * the probe Vault for real, and the append path is refused by consent.
+ * The project-memory face over the real mounted plugin in the write phase:
+ * the three tools are registered on the global registry, the fresh probe
+ * Vault answers an empty search and a `memory_missing` read, and the real
+ * write path — `memory_append` through the real dispatcher as a
+ * controller-bound agent, admitted by the role allow table and the enabled
+ * local instance — creates the note file under the isolated Vault root with
+ * its receipt in the calling session's log. The lead and worker roles resolve
+ * their allowed memory tools through the same dispatcher, and user scope
+ * stays fail-closed.
  */
-async function probeMemoryFace(): Promise<{
+async function probeMemoryWriteFace(): Promise<ProbeMemoryState & {
   toolsRegistered: boolean
-  searchCoverageComplete: boolean
+  searchEmpty: boolean
   readAbsent: boolean
-  appendDenied: boolean
+  appendCreated: boolean
+  noteFileOnDisk: boolean
+  controllerReadVerified: boolean
+  controllerSearchHits: boolean
+  leadReadAllowed: boolean
+  workerSearchAllowed: boolean
+  userScopeForbidden: boolean
 }> {
   const missing = MEMORY_TOOL_NAMES.filter(toolName => ctx.tools.get(toolName) === undefined)
   if (missing.length > 0) throw new Error(`memory tools not registered: ${missing.join(', ')}`)
   const vaultRoot = dshHomePath('integration-vault')
   mkdirSync(vaultRoot, { recursive: true })
-  const search = await ctx.projectMemory.search({ scope: 'project', query: 'probe' })
+  const search = await ctx.projectMemory.search({ scope: 'project', query: PROBE_MEMORY_QUERY })
   if (search.hits.length !== 0) {
-    throw new Error(`unexpected memory search hits over the probe vault: ${JSON.stringify(search)}`)
+    throw new Error(`unexpected memory search hits over the fresh probe vault: ${JSON.stringify(search)}`)
   }
   const read = await ctx.projectMemory.read({ scope: 'project', noteId: NoteId(ABSENT_NOTE_ID) })
   const readAbsent = read.status === 'memory_missing'
-  let appendDenied = false
+
+  const writer = (await ctx.agents.create({ sessionId: SessionId(PROBE_MEMORY_WRITER_SESSION) })).agent
+  await ctx.agentBindings.bind({ agentId: writer.id, role: 'controller' })
+  const appended = await executeAsAgent(writer, 'memory_append', {
+    scope: 'project',
+    source_ref: PROBE_MEMORY_SOURCE_REF,
+    kind: 'fact',
+    body: PROBE_MEMORY_BODY,
+  })
+  if (appended.isError !== false || fieldValue(appended.value, 'status') !== 'created') {
+    throw new Error(`memory_append through the real dispatcher did not create the note: ${JSON.stringify(appended)}`)
+  }
+  const noteId = textOf(fieldValue(appended.value, 'noteId'), 'append noteId')
+  const relativePath = textOf(fieldValue(appended.value, 'relativePath'), 'append relativePath')
+  if (!existsSync(join(vaultRoot, relativePath))) {
+    throw new Error(`the created note file is not on disk under the vault root: ${join(vaultRoot, relativePath)}`)
+  }
+  const readBack = await executeAsAgent(writer, 'memory_read', { scope: 'project', note_id: noteId })
+  if (readBack.isError !== false || fieldValue(readBack.value, 'status') !== 'found' || fieldValue(readBack.value, 'verified') !== true) {
+    throw new Error(`memory_read did not verify the fresh note in-process: ${JSON.stringify(readBack.value)}`)
+  }
+  const searched = await executeAsAgent(writer, 'memory_search', { scope: 'project', query: PROBE_MEMORY_QUERY })
+  const hitIds = Array.isArray(fieldValue(searched.value, 'hits'))
+    ? (fieldValue(searched.value, 'hits') as unknown[]).map(hit => textOf(fieldValue(hit, 'noteId'), 'hit noteId'))
+    : []
+  if (searched.isError !== false || !hitIds.includes(noteId)) {
+    throw new Error(`memory_search did not surface the fresh note: ${JSON.stringify(searched.value)}`)
+  }
+
+  const lead = (await ctx.agents.create({ sessionId: SessionId('session-memory-lead-w') })).agent
+  await ctx.agentBindings.bind({ agentId: lead.id, role: 'lead' })
+  const leadRead = await executeAsAgent(lead, 'memory_read', { scope: 'project', note_id: noteId })
+  if (leadRead.isError !== false || fieldValue(leadRead.value, 'status') !== 'found') {
+    throw new Error(`the lead role could not read through the real dispatcher: ${JSON.stringify(leadRead.value)}`)
+  }
+  const worker = (await ctx.agents.create({ sessionId: SessionId('session-memory-worker-w') })).agent
+  await ctx.agentBindings.bind({ agentId: worker.id, role: 'worker' })
+  const workerSearch = await executeAsAgent(worker, 'memory_search', { scope: 'project', query: PROBE_MEMORY_QUERY })
+  if (workerSearch.isError !== false) {
+    throw new Error(`the worker role could not search through the real dispatcher: ${JSON.stringify(workerSearch.value)}`)
+  }
+
+  let userScopeForbidden = false
   try {
     await ctx.projectMemory.append({
-      scope: 'project',
-      sourceRef: 'probe://write-deny',
+      scope: 'user',
+      sourceRef: 'probe://user-scope-deny',
       kind: 'fact',
-      body: 'the read-only assembly must refuse this body',
+      body: 'user scope must stay disabled in the local instance',
       assertionStatus: 'observed',
     })
   } catch (error: unknown) {
-    appendDenied = error instanceof ProjectMemoryError && error.code === 'MEMORY_APPEND_DISABLED'
+    userScopeForbidden = error instanceof ProjectMemoryError && error.code === 'MEMORY_SCOPE_FORBIDDEN'
   }
+  if (!userScopeForbidden) throw new Error('the user-scope append did not fail closed')
+  if (!readAbsent) throw new Error('the absent-note read did not answer memory_missing')
+
+  return {
+    noteId,
+    relativePath,
+    sourceRef: PROBE_MEMORY_SOURCE_REF,
+    appendingSessionId: PROBE_MEMORY_WRITER_SESSION,
+    toolsRegistered: true,
+    searchEmpty: true,
+    readAbsent: true,
+    appendCreated: true,
+    noteFileOnDisk: true,
+    controllerReadVerified: true,
+    controllerSearchHits: true,
+    leadReadAllowed: true,
+    workerSearchAllowed: true,
+    userScopeForbidden: true,
+  }
+}
+
+/**
+ * The project-memory face over the cold-restored composition: the note from
+ * the write phase is read back from the Vault, the resumed appending session
+ * replays its log and rehydrates the receipt (the `agent/created` hook is
+ * fire-and-forget, so the rehydration is awaited on the observable outcome
+ * instead of a clock), the re-read verifies the file against the replayed
+ * receipt, a fresh controller agent resolves the tools through the real
+ * dispatcher again, and the same-source retry reports already_exists. User
+ * scope stays fail-closed.
+ */
+async function probeMemoryVerifyFace(recorded: ProbeMemoryState): Promise<{
+  toolsRegistered: boolean
+  coldReadFound: boolean
+  receiptRehydrated: boolean
+  dispatcherReadVerified: boolean
+  searchHitRestored: boolean
+  retryAlreadyExists: boolean
+  readAbsent: boolean
+  userScopeForbidden: boolean
+}> {
+  const missing = MEMORY_TOOL_NAMES.filter(toolName => ctx.tools.get(toolName) === undefined)
+  if (missing.length > 0) throw new Error(`memory tools not registered: ${missing.join(', ')}`)
+  const noteId = NoteId(recorded.noteId)
+  const absent = await ctx.projectMemory.read({ scope: 'project', noteId: NoteId(ABSENT_NOTE_ID) })
+  const readAbsent = absent.status === 'memory_missing'
+
+  await ctx.agents.resume({ resumeSessionId: SessionId(recorded.appendingSessionId) })
+  let cold = await ctx.projectMemory.read({ scope: 'project', noteId })
+  let rehydrateAttempts = 0
+  while (!(cold.status === 'found' && cold.verified === true) && rehydrateAttempts < 100) {
+    await sleep(50)
+    rehydrateAttempts += 1
+    cold = await ctx.projectMemory.read({ scope: 'project', noteId })
+  }
+  if (cold.status !== 'found' || cold.verified !== true) {
+    throw new Error(`the cold read did not re-verify against the replayed receipt: ${JSON.stringify(cold)}`)
+  }
+
+  const reader = (await ctx.agents.create({ sessionId: SessionId('session-memory-verify-v') })).agent
+  await ctx.agentBindings.bind({ agentId: reader.id, role: 'controller' })
+  const readBack = await executeAsAgent(reader, 'memory_read', { scope: 'project', note_id: recorded.noteId })
+  if (readBack.isError !== false || fieldValue(readBack.value, 'status') !== 'found' || fieldValue(readBack.value, 'verified') !== true) {
+    throw new Error(`memory_read through the real dispatcher did not survive the cold boot: ${JSON.stringify(readBack.value)}`)
+  }
+
+  const search = await ctx.projectMemory.search({ scope: 'project', query: PROBE_MEMORY_QUERY })
+  if (search.hits.length !== 1 || search.hits[0]!.noteId !== recorded.noteId) {
+    throw new Error(`the cold search did not surface exactly the written note: ${JSON.stringify(search)}`)
+  }
+
+  const retry = await ctx.projectMemory.append({
+    scope: 'project',
+    sourceRef: recorded.sourceRef,
+    kind: 'fact',
+    body: PROBE_MEMORY_BODY,
+    assertionStatus: 'observed',
+  })
+  if (retry.status !== 'already_exists') {
+    throw new Error(`the same-source cold retry did not report already_exists: ${JSON.stringify(retry)}`)
+  }
+
+  let userScopeForbidden = false
+  try {
+    await ctx.projectMemory.append({
+      scope: 'user',
+      sourceRef: 'probe://user-scope-deny-verify',
+      kind: 'fact',
+      body: 'user scope must stay disabled in the local instance',
+      assertionStatus: 'observed',
+    })
+  } catch (error: unknown) {
+    userScopeForbidden = error instanceof ProjectMemoryError && error.code === 'MEMORY_SCOPE_FORBIDDEN'
+  }
+  if (!userScopeForbidden) throw new Error('the user-scope append did not fail closed after the cold boot')
+  if (!readAbsent) throw new Error('the absent-note read did not answer memory_missing after the cold boot')
+
   return {
     toolsRegistered: true,
-    searchCoverageComplete: search.coverageComplete,
-    readAbsent,
-    appendDenied,
+    coldReadFound: true,
+    receiptRehydrated: true,
+    dispatcherReadVerified: true,
+    searchHitRestored: true,
+    retryAlreadyExists: true,
+    readAbsent: true,
+    userScopeForbidden: true,
   }
 }
 
@@ -486,7 +663,7 @@ try {
     })
     ctx.agentReliability.openAdmission({ controllerSessionId: session.id as never, goalId })
     ctx.agentReliability.assertAdmitted({ controllerSessionId: session.id as never, goalId })
-    const memory = await probeMemoryFace()
+    const memory = await probeMemoryWriteFace()
     const shadow = await probeShadowFace()
     const hierarchy = await probeHierarchyFace('w')
     const shadowComposition = await probeShadowCompositionFace('w')
@@ -497,10 +674,22 @@ try {
       lifecycleState: lifecycle,
       taskState: assigned.state,
       sessionLogExists: existsSync(join(process.env.DSH_HOME ?? '', 'sessions')),
-      memoryToolsRegistered: memory.toolsRegistered,
-      memorySearchCoverageComplete: memory.searchCoverageComplete,
-      memoryReadAbsent: memory.readAbsent,
-      memoryAppendDenied: memory.appendDenied,
+      memoryWrite: {
+        noteId: memory.noteId,
+        relativePath: memory.relativePath,
+        sourceRef: memory.sourceRef,
+        appendingSessionId: memory.appendingSessionId,
+        toolsRegistered: memory.toolsRegistered,
+        searchEmpty: memory.searchEmpty,
+        readAbsent: memory.readAbsent,
+        appendCreated: memory.appendCreated,
+        noteFileOnDisk: memory.noteFileOnDisk,
+        controllerReadVerified: memory.controllerReadVerified,
+        controllerSearchHits: memory.controllerSearchHits,
+        leadReadAllowed: memory.leadReadAllowed,
+        workerSearchAllowed: memory.workerSearchAllowed,
+        userScopeForbidden: memory.userScopeForbidden,
+      },
       shadowToolsScopeIsolated: shadow.toolsScopeIsolated,
       shadowCallerForbidden: shadow.callerForbidden,
       shadowDomainFileOnDisk: shadow.domainFileOnDisk,
@@ -528,6 +717,7 @@ try {
       bindingRole: string
       lifecycleState: string
       taskState: string
+      memoryWrite?: ProbeMemoryState
       shadowDelivery?: ShadowDeliveryState
     }
     const binding = ctx.agentBindings.find(state.sessionId as never)
@@ -542,10 +732,10 @@ try {
     if (evidence.bindings.length !== 1 || evidence.verifications.length !== 1) {
       throw new Error(`evidence did not cold-restore: ${JSON.stringify(evidence)}`)
     }
-    const memory = await probeMemoryFace()
-    if (!memory.toolsRegistered || !memory.readAbsent) {
-      throw new Error(`memory face did not survive the cold boot: ${JSON.stringify(memory)}`)
+    if (state.memoryWrite === undefined) {
+      throw new Error('probe-state.json carries no memoryWrite record from the write phase')
     }
+    const memory = await probeMemoryVerifyFace(state.memoryWrite)
     const shadow = await probeShadowFace()
     if (!shadow.toolsScopeIsolated || !shadow.callerForbidden) {
       throw new Error(`shadow face did not survive the cold boot: ${JSON.stringify(shadow)}`)
@@ -578,10 +768,16 @@ try {
       taskState: tasks[0].state,
       bindings: evidence.bindings.length,
       verifications: evidence.verifications.length,
-      memoryToolsRegistered: memory.toolsRegistered,
-      memorySearchCoverageComplete: memory.searchCoverageComplete,
-      memoryReadAbsent: memory.readAbsent,
-      memoryAppendDenied: memory.appendDenied,
+      memoryWriteRestored: {
+        toolsRegistered: memory.toolsRegistered,
+        coldReadFound: memory.coldReadFound,
+        receiptRehydrated: memory.receiptRehydrated,
+        dispatcherReadVerified: memory.dispatcherReadVerified,
+        searchHitRestored: memory.searchHitRestored,
+        retryAlreadyExists: memory.retryAlreadyExists,
+        readAbsent: memory.readAbsent,
+        userScopeForbidden: memory.userScopeForbidden,
+      },
       shadowToolsScopeIsolated: shadow.toolsScopeIsolated,
       shadowCallerForbidden: shadow.callerForbidden,
       shadowDomainFileOnDisk: shadow.domainFileOnDisk,
