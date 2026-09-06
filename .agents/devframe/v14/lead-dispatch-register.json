@@ -652,6 +652,28 @@
         { "taskId": "v14-accept", "lead": "9fa566f7-3e1f-43ae-931b-22323e150344", "leadWorktree": "D:/dsh-devframe-v14-accept-lead (codex/v14-accept-lead @ c79f85fb81)", "workerWorktree": "D:/dsh-devframe-v14-accept-w1 (lead-created)", "workerLane": "huoshan-2/glm-5.3-flash (harness authoring only; execution by lead)", "scope": "isolated-environment composition acceptance: real task run (key presence probed honestly - absent key = precise blocker, no fake pass), permissions, cwd, results, restart, Shadow cross-project, Memory cold restore; current-state failures (unclosed composition) recorded as findings for compos-wave re-verification", "isolation": "temp DSH_HOME + isolated profile + temp vault; real C:/Users/25313/.dsh never written; harness files only in own records domain" }
       ],
       "status": "both leads dispatched"
+    },
+    {
+      "entry": "Sole-controller consolidation: rule correction landed, old-chain inventory, four leads queued for resume",
+      "consolidation": [
+        "USER AUTHORIZATION: V1.4 (session-c1668d60) is the sole project controller and sole main-tree merger; V1.0/V1.1/V1.2/two V1.3 controllers archived by user-side Codex; archiving does not stop subtasks or revoke goals.",
+        "ca836bf5ea (user-side commit, author imccyu) had amended docs/agent-orchestration-plan.* to single-owner serialization; corrected per authorization as merge 8d6ba71675 - dynamic dual-provider parallelism (independent file domains, real dependencies, recent per-provider API health, no fixed lane cap) in both the intro claim and the Development rule; all 429 history bullets preserved verbatim; consolidation + lane-switch bullet appended to the change log; test:docs 15/15; user dirty files 376 preserved.",
+        "huoshan-1 reported AccountQuotaExceeded (five-hour quota exhausted) which killed all four lead turns mid-flight (not their errors); session switched to huoshan-2/glm-5.3 per user authorization - no silent switch, recorded here.",
+        "Lane fact for new dispatches: huoshan-1 unusable until quota recovery; workers go huoshan-2/glm-5.3-flash; compos wave's original huoshan-1 worker assignment is amended to huoshan-2 as a dynamic adjustment under the corrected rule."
+      ],
+      "chainStateInventory": [
+        "BatteryFix: worker 461bb82c DELIVERED (turn/end 13:27:55.336Z from persisted logs; w1 tree clean @ 651c076204 with receipts commit; design 614a2d2085 pins drift-only fixes, GAP-4 excluded as functional regression); lead dbadce52 was mid 80-file domain review - resume for review completion + settlement.",
+        "GoalStore: worker 50d730cd DELIVERED (turn/end 13:24:34.832Z; w1 tree clean @ 37936b7550 FileGoalBindingStore implementation); lead 173895e1 resume for review + settlement.",
+        "Compos: findings committed 8ae99ffc29; lead dd23ebdd resume for design finalization -> w1 -> worker (lane amended to huoshan-2/glm-5.3-flash).",
+        "Accept: design committed 4fce69f194 (scenarios S1-S7 with S1 keyless blocker pin); lead 9fa566f7 resume for w1 -> worker (huoshan-2) harness authoring -> lead-executed real runs."
+      ],
+      "oldChainHandling": [
+        "F01 (old V1.0 subtask cbb87195, D:/dsh-devframe-f01, branch feature/f01-role-policy, last commits 2be4a074c2/94820fbabc/a010588564, dirty=4): read-only inventory complete. Overlap with mainline: F01 authored the orchestration-plan doc + registry (2be4a074c2) - same docs domain as ca836bf5ea/8d6ba71675; composition-smoke edges may touch composition domain. HANDOFF INSTRUCTION (recorded for relay): keep modifications and commits, no new task derivation, no main-tree merges; valuable outputs to be registered by V1.4 for acceptance.",
+        "INTERFACE GAP reported honestly: send_message/interrupt_agent reach only this controller's own descendants; cbb87195 belongs to archived V1.0 and is not reachable from this seat - the handoff instruction above requires user/patrol relay.",
+        "Old-controller goal auto-continuation: get_goal is session-scoped and cannot read other sessions' goals from this seat - interface gap reported; operative stop evidence: user-side Codex archived the five old controllers and disabled the 8-minute patrol wake; this controller verified no old-controller session wrote within the last 30 minutes (only this controller's two killed leads' logs were touched, at 22:16).",
+        "No other old-controller descendant worktrees or in-flight turns detected in the scan; historical worktrees D:/dsh-devframe-p-* remain never-entered."
+      ],
+      "status": "consolidation recorded; four leads being resumed from persisted state (single deliberate attempt each, no blind retries)"
     }
   ]
 }
