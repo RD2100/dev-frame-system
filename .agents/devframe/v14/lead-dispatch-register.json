@@ -952,6 +952,17 @@
         "Record corrections: A normalize fix already merged (64625d8268, clean-tree both-scenarios green; main-tree runs blocked by user 85 files); C2 implementation assigned to successor lead c6ed119d (contract delivered, work started)."
       ],
       "status": "B1 boot path restored; chain execution resuming; A closed pending user 85-file adjudication; C2 in progress"
+    },
+    {
+      "entry": "Consolidation wave merged: C2 mentions IMPLEMENTED (181/181), B4 S1 PASS flip + B5 36-row reconciliation + boot evidence, A4 candidate launch verified - A line CLOSED",
+      "facts": [
+        "C2 explicit @codex/@claude/@cursor mentions implemented via controller-takeover workflow execution after 5 C-line session failures (identity+history retained): host subagents/providers Remote face over the LIVE registry (out-of-domain list() Remote RATIFIED after verbatim review: read-only, zero behavior change, contract-authorized), independent client @subagent source, literal pick via the existing model-visible user/message path, stale metadata fixed, 181/181 tests green (137 regression + 44 new). Merged d859259b5a.",
+        "Repo build:lib caught two test-file type errors the worker's vitest-only runs missed (TS18048/TS2352) - fixed, verified in the candidate tree, cherry-picked and merged (ceb4befc59). Lesson recorded: vitest transpile does not replace tsc program checks.",
+        "B line: boot evidence closed (a0dbd7e22e: dump 152 ids zero duplicates, real boot probe port LISTENING ~4s with PID provenance to its own node/tsx bin.ts, !!js activation-time interpolation evidence); B4 retest PASS (bb5d514d0f: harness exit 0, 7/7 checks, request-level seq=10 huoshan-1/glm-5.3-flash verbatim + wire response seq=49, credentials zero-recorded) - S1 flips keyless-BLOCKED to real-credentials PASS; worker receipts layer-3 landed (f94dafdb17); B5 consolidated 36-row reconciliation landed (4886aff6bd). All merged.",
+        "A4 delivered and A line CLOSED: reversible candidate worktree D:/dsh-devframe-v14-candidate verified end-to-end at ceb4befc59 (install 0 + build 0 + verify-no-source-js 0 + clean launch port 3081 LISTENING); create/update/rollback commands and main protection status recorded in a4-candidate-launch.md (5d47652a90).",
+        "Open items: B1 12-station real chain in progress (lead active); main-tree verify-no-source-js + snapshot runs await user adjudication of the 85 src/*.js files; D standby."
+      ],
+      "status": "A closed; C closed (C4 user-ops pending real device); B chain running; D standby"
     }
   ]
 }
