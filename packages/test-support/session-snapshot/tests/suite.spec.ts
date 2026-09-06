@@ -861,7 +861,7 @@ describe('refreshFixtureReplacements', () => {
       { from: nativeCwd, to: '{{cwd}}' },
       { from: forwardCwd, to: '{{cwd}}' },
       { from: nativeCwd.replaceAll('\\', '\\\\'), to: '{{cwd}}' },
-      { from: nativeCwd.replaceAll('\\', '\\\\'), to: '{{cwd}}'.replaceAll('\\', '\\\\') },
+      { from: nativeCwd.replaceAll('\\', '\\\\').replaceAll('\\', '\\\\'), to: '{{cwd}}' },
     ])
   })
 
