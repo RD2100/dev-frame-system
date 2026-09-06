@@ -7,9 +7,9 @@
 
 | ID | 用户功能/项 | 源码 | profile | 运行 | 生产验收 | 证据 | 真实依赖 | 下一步 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| A1 | both-mode-turn 快照绿 | 待修 | n/a | 红（5418ms） | 待 A1 绿 | 先存归因：录制树根 `dsh-devframe-p-battery` 路径嵌入期望栈（干净树复验 2 红在案） | 无 | 复现→定位嵌入机制→最小修复→场景绿 |
-| A2 | ptc-turn 快照绿 | 待修 | n/a | 红（4288ms） | 待 A2 绿 | 同 A1 同因 | A1 同机制 | 与 A1 同波处理 |
-| A3 | src/*.js 污染机制查清+防复发 | 调查中 | n/a | 复现证据在案 | 待防复发落地 | 85 文件清单（09-06 11:34 时戳、untracked 未 ignore、overlap=85 用户文件）；vite 扩展序 .js 先于 .ts 遮蔽源码；清缓存揭开；wave 树全绿对照 | 无 | 干净 worktree 复现产生机制→防复发方案（不动用户 376 文件、不 gitignore 掩盖） |
+| A1 | both-mode-turn 快照绿 | **已修**（normalize.ts 栈帧令牌化：帧=录制宿主属性，异常种类+消息钉住；e0c6a0f582 合入 64625d8268） | n/a | **干净树绿**（用户+组长隔离复验）；主树 collection 被用户 85 src/*.js 遮蔽（0 tests） | 干净树口径通过；主树待用户清理后复跑 | a1a2-repro.md+a1 vitest 输出（.agents/devframe/v14-defects/repro/） | 用户 85 文件裁定 | 主树复跑待用户清理 |
+| A2 | ptc-turn 快照绿 | **已修**（同 A1 同 commit） | n/a | **干净树绿**（用户+组长隔离复验）；主树同被遮蔽 | 同 A1 | 同上 | 同 A1 | 同 A1 |
+| A3 | src/*.js 污染机制查清+防复发 | **已落地**（verify-no-source-js 门禁：local+CI 双挂线、6/6 无效用例 spec；产生机制报告 a3-producer-mechanism.md） | n/a | **主树按设计 fail-loud**（点名 85 用户文件："remove them and fix the producer; never gitignore"） | 门禁防复发生效；85 文件处置待用户 | no-source-js.ts+spec+run-gates 接线+机制报告 | **用户裁定 85 文件** | 用户处置后主树门禁转绿 |
 | A4 | 可逆独立启动目录（污染排除的候选版本启动方式） | 待设计 | 待接 | 未验 | 待 C 线联验 | 依赖 A3 结论 | A3 | 启动目录方案→文档化→与 C 线联验 |
 
 ## B 用户组合交付线（负责人：L-UDeliver）
