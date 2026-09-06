@@ -49,6 +49,9 @@
               - job_list
               - job_output
               - list_agents
+              - memory_append
+              - memory_read
+              - memory_search
               - ralph
               - read
               - read_image
@@ -77,6 +80,9 @@
               - job_list
               - job_output
               - list_agents
+              - memory_append
+              - memory_read
+              - memory_search
               - ralph
               - read
               - read_image
@@ -102,6 +108,9 @@
               - job_kill
               - job_list
               - job_output
+              - memory_append
+              - memory_read
+              - memory_search
               - read
               - read_image
               - send_message
@@ -126,16 +135,17 @@
     - id: agent-reliability
       name: '@deepseek-ai/dsh-experimental-agent-reliability'
 
-    # Read-only assembly: a probe-owned Vault root under the isolated home
-    # makes the search/read path real while appends stay disabled
-    # (writeEnabled false; user scope off). workspaceId is the integration
-    # test value, not a product workspace identity.
+    # Write-enabled local instance: the Vault root is a probe-owned directory
+    # under the isolated integration home (never the shared home), so appends
+    # land in an explicitly isolated local path. User scope stays off
+    # (userScopeEnabled false). workspaceId is the integration test value, not
+    # a product workspace identity.
     - id: project-memory
       name: '@deepseek-ai/dsh-experimental-project-memory'
       config:
         workspaceId: integration
         vaultRoot: !!js dshHomePath('integration-vault')
-        writeEnabled: false
+        writeEnabled: true
         userScopeEnabled: false
 
     # Read-only assembly: authorizedRoots is fail-closed (every entry must be
