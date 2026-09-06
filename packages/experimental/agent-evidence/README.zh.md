@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-experimental-agent-evidence` 挂载 `ctx.agentEvidence`，在 `agent_evidence` 存储域上记录并查询代理工作的追加式溯源台账的 Cordis 服务：任务/Goal 绑定回执（单任务视角的 DevFrame goal-result 绑定元组）、提交回执（commit 对象名、改动路径、工作起点源输入摘要）与验证快照（命令、退出码、产物路径——非零退出码原样记录）。台账只存溯源：验收判定留在 Goal 绑定与任务状态里，因此这里不存在另一个验收数据库。回执在启动时原样恢复。
+`dsh-experimental-agent-evidence` 挂载 `ctx.agentEvidence`，在 `agent_evidence` 存储域上记录并查询代理工作的追加式溯源台账的 Cordis 服务：任务/Goal 绑定回执（单任务视角的 DevFrame goal-result 绑定元组）、提交回执（commit 对象名、改动路径、工作起点源输入摘要）与验证快照（命令、退出码、产物路径——非零退出码原样记录）。台账只存溯源：验收判定留在 Goal 绑定与任务状态里，因此这里不存在另一个验收数据库。回执在启动时原样恢复。本包同时导出诚实的 DevFrame 证据生产者（`AgentEvidenceJournal`）：它以真实子进程执行面逐字执行存储的 approved 必需检查并把真实结果追加为 `devframe/verification` 记录，将审查决定记录为 `devframe/review` 记录——两者都经 schema 校验的 DevFrame Session journal。
 
 ## 目录
 
@@ -57,6 +57,34 @@ const bindings = ctx.agentEvidence.bindingsByGoal(controllerSessionId, goalId)
 
 畸形回执以 `AGENT_EVIDENCE_INVALID_RECEIPT` 大声失败；存储拒绝以 `AGENT_EVIDENCE_PERSISTENCE` 呈现。
 
+### 记录 DevFrame 验证与审查证据
+
+journal 生产者是宿主组合的 plain class（非插件挂载）：以 Session 持久化回调与审查者角色权威构造，在验证与审查完成的时刻调用两个 record 方法。
+
+```ts
+import { AgentEvidenceJournal } from '@deepseek-ai/dsh-experimental-agent-evidence'
+
+const journal = new AgentEvidenceJournal({
+  flush: session => ctx.sessions.flush(session), // native durability callback
+  reviewerDirectory,                             // SessionId-keyed reviewer role authority
+  // execution: optional; defaults to the real subprocess face (10-minute kill guard)
+})
+
+// Verification completed: resolve the stored approved checklist by digest,
+// execute every declared check exactly, and record the real results.
+const verification = await journal.recordVerification({
+  session, binding, requiredChecksDigest, requiredChecksStore,
+})
+
+// Review completed: the reviewer Session is cross-authorized before the event
+// is appended.
+const review = await journal.recordReview({
+  session, binding, reviewerSessionId, policyVersion, decision, findings,
+})
+```
+
+生产者记录证据，不判定完成。存储失败在任何事件写入前以既有 `RequiredChecksError` 错误码（`REQUIRED_CHECKS_CONFIG_NOT_FOUND`、`REQUIRED_CHECKS_INVALID_CONFIG`）传播；门拒绝以 `AGENT_EVIDENCE_REVIEWER_UNAUTHORIZED` 呈现且不闩锁；持久化失败以 `DevFramePersistenceError` 呈现并闩锁该 Session 的 journal。每条记录在落账前都经持久化 `devframe/verification`/`devframe/review` schema 校验。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -83,6 +111,8 @@ const bindings = ctx.agentEvidence.bindingsByGoal(controllerSessionId, goalId)
 | [`src/types.ts`](src/types.ts) | 建立在共享工作身份上的回执记录类型 |
 | [`src/ids.ts`](src/ids.ts) | `EvidenceReceiptId` 与 `CommitSha` 品牌工厂 |
 | [`src/errors.ts`](src/errors.ts) | `AgentEvidenceError` 及其稳定错误码联合 |
+| [`src/check-runner.ts`](src/check-runner.ts) | 必需检查的参考子进程执行面 |
+| [`src/journal.ts`](src/journal.ts) | 建立在 Session journal 上的 DevFrame 证据生产者 |
 | [`src/index.ts`](src/index.ts) | 包入口与默认导出 |
 
 ### Invariant
@@ -100,7 +130,7 @@ const bindings = ctx.agentEvidence.bindingsByGoal(controllerSessionId, goalId)
 
 #### What the model sees
 
-没有任何内容。本包不注册工具、提示词段落或会话事件——任何 `TaskGoalBindingReceipt`、`SubmissionReceipt` 或 `VerificationSnapshot` 值都不会到达模型请求——因此没有请求字段携带其数据。
+没有任何内容到达模型请求。本包不注册工具与提示词段落，也不新增事件类型；`AgentEvidenceJournal` 生产者向所属控制器 Session 日志追加 DevFrame 证据记录——`devframe/verification` 与 `devframe/review`，既有 DevFrame 词汇。该日志是宿主侧 durable 记录：从不进入模型请求，因此没有请求字段携带本包数据。
 
 #### Token effect
 
@@ -118,6 +148,8 @@ const bindings = ctx.agentEvidence.bindingsByGoal(controllerSessionId, goalId)
 - **回执是受信溯源，不是已核实事实** —— 改动路径与产物路径按调用方所报记录；台账不检查仓库来确认它们。
 - **台账不校验任务或 Goal 的存在性** —— 回执引用调用方提供的 id；引用完整性由项目控制器与 Goal 绑定负责。
 - **轨迹无界增长** —— 回执从不重写或修剪；长期运行的部署会在三张表中累积行。
+- **无有界输出捕获** —— 执行面仅以退出码判定结果且不捕获 stdout/stderr（从不产生 `outputRef`）；有界日志捕获与产物落盘归 toolface 切片。
+- **生产者记录证据，不判定完成** —— 两个 record 方法只写入诚实记录；准入合取（指纹→检查→审查）归 DevFrame controller。
 
 <a id="dev-note"></a>
 ### 开发备注
