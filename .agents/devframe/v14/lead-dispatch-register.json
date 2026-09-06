@@ -823,6 +823,29 @@
         "Shadow/Memory + real composition acceptance: DELIVERED (S6/S7 PASS; compos chain 30/30 on merged main)."
       ],
       "status": "three of four chains settled and integrated; b2acp worker in flight"
+    },
+    {
+      "entry": "v14-b2acp settled and integrated (7cd2dc923e + 2248fd822d): B-2 CLOSED, final clean-tree verification 2 failed | 104 passed - V1.4 wave program complete",
+      "b2acpIntegration": [
+        "Merged 7cd2dc923e (pipeline seam: expectationWriteName fs-agnostic write-target builder closing the chicken-egg bootstrap; refresh-mode-only exemption for declared-but-missing expectation sidecars; sourceEventSeqs decoded-equivalence branch; image-compaction manifest declares expectations.variants.win32 with a cross-corpus symlink sidecar) and 2248fd822d (lead records).",
+        "Controller verification: domain audit 31 files all in-domain with the manifest M explicitly authorized by the dispatch brief and base fixtures blob-clean; focused vitest 358 passed | 1 skipped same-SHA; focused spec +16 cases over the 342 baseline with zero regression.",
+        "Honest disclosures accepted: worker receipt logs the dispatch declaration without model self-introspection (lane dispatched explicit huoshan-2/glm-5.3-flash); the briefed two-sidecar expectation deviated to one on evidence; worker G6 log receipts fixed by lead fixup 28cced071e and disclosed."
+      ],
+      "structuralFinding": [
+        "Main working copy carries 85 stale compiled .js artifacts inside packages/*/src (mtime 09-06 11:34, untracked, NOT gitignored) - they are part of the user's 376-file dirty set and were verified as such (overlap=85, user files, controller must not delete them).",
+        "These shadow source-plane resolution under vite (extension order .js before .ts) once the vitest cache was cleared - main-only suite runs surfaced spurious manifest unknown-field failures while every clean wave worktree stayed green.",
+        "Resolution for the controller's final acceptance: a dedicated clean verify worktree (D:/dsh-devframe-v14-verify @ 2248fd822d, install + build + full suite) - NOT modifying or deleting any user file. Registered for the user's own adjudication: the 85 files may be removed or gitignored by them; the repo clean script does not currently cover src/*.js residue (gap registered, records the 278-path clean run as safe: dirty count stayed 376 throughout)."
+      ],
+      "finalVerification": [
+        "Clean-tree full snapshot suite: 2 failed | 104 passed | 10 skipped - failures exactly {both-mode-turn, ptc-turn} (pre-existing recording-tree-root embedding, red at base); image-compaction GREEN (B-2 closed); subagent-continuable GREEN (GAP-4 closed); zero new failure names.",
+        "Suite red ledger final: two pre-attributed recording-tree-root reds remain open for their own future wave; every red introduced or inherited during V1.4 is either fixed or attributed."
+      ],
+      "goalLedger": [
+        "All chains settled and integrated: batteryfix 345ca1443c, goalstore cd676781c3, gap4 92825045d0 (candidate C), accept d0c2c455c2 + 72cfd92c7c, compos 7c21ed0fc2 + e34654a1fc, b2acp 7cd2dc923e + 2248fd822d.",
+        "Shadow/Memory + real composition acceptance delivered and re-verified (S6/S7 PASS; compos chain 30/30 on merged main; s4 7/7 + s5 3/3 harness reruns).",
+        "Old-controller consolidation, interface-gap reporting, dual-provider dynamic scheduling correction, and the 376-file user-dirty invariant all held across the program."
+      ],
+      "status": "V1.4 wave program complete; verify worktree removable; both-mode/ptc-turn reds registered for a future lane"
     }
   ]
 }
