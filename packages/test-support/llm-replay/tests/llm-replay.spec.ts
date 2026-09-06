@@ -1285,6 +1285,50 @@ describe('installLlmReplay (per-session keying)', () => {
     ])
   })
 
+  it('learns a continuable child session id from its current started-subagent tool result', async () => {
+    const reference: StreamChunk[] = [
+      { type: 'text-delta', index: 0, text: '{{session:2}}' },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ]
+    const parentFile = writeSession('session.jsonl', { id: '{{session:1}}', createdAt: 1 }, [reference])
+    const childFile = writeSession('session.1.jsonl', { id: '{{session:2}}', createdAt: 2 }, [second])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    installLlmReplay(ctx, { file: parentFile, childFiles: [childFile] })
+    const options: GenerateOptions = {
+      ...live('live-parent'),
+      messages: [createUserMessage({
+        content: [{ type: 'text', text: 'started continuable subagent; SessionID live-child-before-call started continuable subagent; SessionID live-child-before-call' }],
+        source: { kind: 'user' },
+      })],
+    }
+
+    expect(await drain(ctx.llm.stream(options))).toEqual([
+      { type: 'text-delta', index: 0, text: 'live-child-before-call' },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ])
+  })
+
+  it('does not learn a session id from a background subagent job start text', async () => {
+    const reference: StreamChunk[] = [
+      { type: 'text-delta', index: 0, text: '{{session:2}}' },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ]
+    const parentFile = writeSession('session.jsonl', { id: '{{session:1}}', createdAt: 1 }, [reference])
+    const childFile = writeSession('session.1.jsonl', { id: '{{session:2}}', createdAt: 2 }, [second])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    installLlmReplay(ctx, { file: parentFile, childFiles: [childFile] })
+
+    await expect(drain(ctx.llm.stream({
+      ...live('live-parent'),
+      messages: [createUserMessage({
+        content: [{ type: 'text', text: 'started background subagent job subagent-1' }],
+        source: { kind: 'user' },
+      })],
+    }))).rejects.toThrow(/used before.*bound/)
+  })
+
   it('ignores started-subagent text after every recorded session has bound', async () => {
     const parentFile = writeSession('session.jsonl', { id: '{{session:1}}', createdAt: 1 }, [TEXT_CHUNKS])
     const ctx = new Context()

@@ -1,0 +1,116 @@
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+
+ RUN  v4.1.8 D:/dsh-devframe-v14-gap4-w1
+
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > parseSessionLog > skips the header line and parses each event 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > parseSessionLog > ignores blank lines 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > parseSessionLog > expands range-encoded source provenance 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > parseSessionLog > reports malformed range provenance with its source line 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > parseSessionLog > rejects non-object body rows with their source line 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > parseSessionLog > expands a packed chunk row into its events (a fixture recorded with packChunks on) 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > parseSessionLog > synthesizes omitted ordinary and packed snapshot envelopes 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > deriveReplayScript > groups one finished assistant/chunk stream into one replay entry 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > deriveReplayScript > separates retry calls that share one turn and step at their finish chunks 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > deriveReplayScript > produces one entry per distinct (turn, step), in log order 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > deriveReplayScript > separates calls across turns too 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > deriveReplayScript > ignores non-assistant/chunk events 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > deriveReplayScript > returns an empty script for a log with no assistant/chunk events 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > deriveReplayScript > keeps a finish-error chunk in the derived entry (replays naturally) 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > deriveReplayScript > inserts compaction/summary output between the calls surrounding it 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > deriveReplayScript > does not infer an LLM call from compaction/summary without raw output 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > deriveReplayScript > does not infer a local LLM call from external compact output 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > deriveReplayScript > rejects a persisted marked compact LLM call without its complete output 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > deriveReplayScript > derives a compaction/summary stream when usage is unavailable 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > deriveReplayScript > throws on a group that lacks a terminal finish chunk (a thrown stream) 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > deriveReplayScript > names the offending (turn, step) when a group is incomplete 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > deriveReplayScript > rejects an unfinished call before consuming chunks from a new step 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > deriveReplayScript > rejects an unfinished call at a compact summary boundary 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > loadReplayScript > derives from the session JSONL when no override is present 2ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > loadReplayScript > uses the sidecar override when present, ignoring the JSONL 2ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > loadReplayScript > falls back to the JSONL when the override path is set but absent 2ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > loadReplayScript > fails loud when the fixture is missing 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > loadReplayScript > rejects an override document that is neither supported form 2ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > loadReplayScript > patches form: swaps the named call index and keeps derived siblings 2ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > loadReplayScript > patches form: at == derived length appends (the retry-attempt slot) 2ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > loadReplayScript > patches form: an out-of-range index fails loud with the derived length 2ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > loadReplayScript > validates patch and entry shapes at the file boundary 9ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > loadReplayScript > rejects duplicate patch indexes instead of silently taking the last one 2ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > serves derived chunks back, short-circuiting the adapter 8ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > {{fromRequest:...}} substitution > resolves the capture group from the LAST request match in every scripted string field 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > {{fromRequest:...}} substitution > substitutes the whole match when the pattern has no capture group 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > {{fromRequest:...}} substitution > keeps a trailing brace quantifier inside the pattern (terminator is the run tail) 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > {{fromRequest:...}} substitution > fails loud when a placeholder matches nothing in the request 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > {{fromRequest:...}} substitution > fails loud on an invalid placeholder pattern 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > {{fromRequest:...}} substitution > fails loud on an unterminated placeholder 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > {{fromRequest:...}} substitution > returns the exact same entry when no placeholder appears 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > {{fromRequest:...}} substitution > skips non-string request leaves when building the corpus 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > registers a replay-only provider catalog when configured 7ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > rejects an invalid replay-provider retry policy during registration 12ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > serves the Nth call the Nth derived entry (positional) 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > settles official DeepSeek request extensions before replayed chunks 5ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > accepts anonymous official extensions and tolerates an absent optional registry 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > accepts only throw entries that reached the post-2xx point 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > rejects a non-boolean throw acceptance override 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > replays a sidecar throw-entry as an LlmError with its stable code, after its prefix chunks 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > replays a sidecar hang-entry that surfaces abort when the signal fires 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > fails loud when the script is exhausted 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > aborts mid-replay when the signal is already set 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > removes the waterfall listener when the owning fiber is disposed (HMR safety) 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > rejects a malformed sidecar entry kind before installing replay 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > rejects a hang entry when the signal fires DURING the wait (abort listener path) 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > aborts mid-replay of a throw-entry prefix when the signal is set 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > surfaces an already-aborted signal on a hang entry before waiting 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > rejects a paceMs that is not a non-negative integer 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > paces chunk yields when paceMs is set (each chunk waits at least the pace) 87ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > aborting DURING a pace wait cancels the stream promptly 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > assertConsumed passes only after every recorded call replayed 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > paces a throw-entry prefix too (the recorded partial streams at the same cadence) 24ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > assertConsumed names an underrunning identified session by its id 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (through the real LlmRuntime) > assertConsumed reports recorded scripts no live session ever bound 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > parseSessionHeader > reads id, createdAt, and the inherited event count off the v0 header line 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > parseSessionHeader > reads a non-zero v0 seedLength as the inherited event count 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > parseSessionHeader > falls back to id="" / createdAt=0 / inheritedEventCount=0 when the header lacks them 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > parseSessionHeader > falls back on an empty buffer (no header line) 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > parseSessionHeader > rejects invalid v0 seedLength -1 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > parseSessionHeader > rejects invalid v0 seedLength 0.5 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > parseSessionHeader > rejects invalid v0 seedLength 9007199254740992 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > loadSessionScripts > returns one primary script for a single-session scenario 2ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > loadSessionScripts > orders parent + children by createdAt with the primary first on a tie 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > loadSessionScripts > throws when a declared child fixture is missing 2ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > loadSessionScripts > derives a FORK child script from its OWN events only (skips the seeded parent prefix) 2ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > loadSessionScripts > uses the override for the primary and still derives children 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > loadSessionScripts > defaults the primary header to id="" / createdAt=0 when only an override (no JSONL) exists 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > loadSessionScripts > orders two same-createdAt children deterministically after the primary 11ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > loadSessionScripts > keeps the primary first even when a child sorts BEFORE it in input order 2ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (per-session keying) > routes each live session to its own script by FIRST-CALL order 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (per-session keying) > keeps each session's cursor independent (interleaved calls) 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (per-session keying) > materializes typed session tokens after the matching live child binds 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (per-session keying) > rejects a session token before that recorded child binds 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (per-session keying) > learns a background child id from its started-subagent tool result 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (per-session keying) > learns a continuable child session id from its current started-subagent tool result 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (per-session keying) > does not learn a session id from a background subagent job start text 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (per-session keying) > ignores started-subagent text after every recorded session has bound 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (per-session keying) > treats a call with no sessionId as the single anonymous (primary) session 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > installLlmReplay (per-session keying) > fails loud when more distinct live sessions call than were recorded 3ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > apply (the plugin entry) > exposes the namespace plugin shape (name/inject, no default export) 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > apply (the plugin entry) > installs replay and its catalog from explicit config 91ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > apply (the plugin entry) > declares flat image request pricing only for models that configure it 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > apply (the plugin entry) > rejects imageRequestTokens on a model without the image modality during load 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > apply (the plugin entry) > rejects imageRequestTokens configured as zero during load 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > apply (the plugin entry) > rejects imageRequestTokens configured as a float during load 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > apply (the plugin entry) > rejects inputModalities configured as a string during load 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > apply (the plugin entry) > rejects inputModalities configured as an unknown modality during load 1ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > apply (the plugin entry) > falls back to $DSH_SNAPSHOT_FILE / $DSH_SNAPSHOT_OVERRIDE when config is empty 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > apply (the plugin entry) > uses only the file when no override path is configured or in the env 5ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > apply (the plugin entry) > throws when no fixture path is given by config or env 2ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > apply (the plugin entry) > treats an empty-string fixture path as missing 2ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > apply (the plugin entry) > loads child fixtures from config.childFiles (per-session routing) 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > apply (the plugin entry) > falls back to $DSH_SNAPSHOT_CHILD_FILES (path-delimited) when config omits childFiles 4ms
+ ✓ |thread-safe| packages/test-support/llm-replay/tests/llm-replay.spec.ts > apply (the plugin entry) > ignores an empty $DSH_SNAPSHOT_CHILD_FILES (single-session) 4ms
+
+ Test Files  1 passed (1)
+      Tests  105 passed (105)
+   Start at  23:36:36
+   Duration  1.21s (transform 498ms, setup 194ms, import 382ms, tests 468ms, environment 0ms)
