@@ -36,6 +36,7 @@ import {
   type CwdPathMode,
   type NormalizeContext,
   extractSnapshotSpillPaths,
+  jsonEscape,
   normalizeSessionLog,
   normalizeSessionSnapshots,
   normalizeStdout,
@@ -826,6 +827,11 @@ export function refreshFixtureReplacements(logs: HarvestedLog[], fixtures: strin
         if (field === 'cwd') {
           const alias = from.replaceAll('\\', '/')
           if (alias !== from) replacements.push({ from: alias, to })
+          // Body text lives inside JSON string values, where the win32 native
+          // cwd also appears JSON-escaped; map that spelling to the token so
+          // no run-specific absolute path survives the write-back.
+          const escaped = jsonEscape(from)
+          if (escaped !== from) replacements.push({ from: escaped, to })
         }
       }
     }
