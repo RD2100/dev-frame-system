@@ -1,0 +1,160 @@
+{
+  "task": "v14-accept",
+  "scenario": "s6-shadow-routing (cold)",
+  "verdict": "PASS",
+  "generatedAt": "2026-09-06T15:03:20.359Z",
+  "checks": [
+    {
+      "id": "s6-1-open-two-projects",
+      "expectation": "openProject A/B → ready, distinct workspaceId + controllerSessionId, profileKey devframe, canonical path equal to each project dir",
+      "pass": true,
+      "observed": {
+        "openA": {
+          "workspaceId": "918f2f72-c488-40c4-a03d-0febbc112772",
+          "controllerSessionId": "shadow-2f94c948-6d70-4cb2-a54d-ce8b9805f1e4",
+          "bindingRevision": 1,
+          "state": "ready",
+          "canonicalPath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s6-hIDU1Z\\projects\\project-a"
+        },
+        "openB": {
+          "workspaceId": "23ee5c0b-b9e7-471b-9757-5831d1c941d0",
+          "controllerSessionId": "shadow-2e9025ea-b368-4f54-ab00-c05a77ae60e0",
+          "bindingRevision": 1,
+          "state": "ready",
+          "canonicalPath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s6-hIDU1Z\\projects\\project-b"
+        },
+        "bindingsAfterOpen": {
+          "a": {
+            "workspaceId": "918f2f72-c488-40c4-a03d-0febbc112772",
+            "canonicalPath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s6-hIDU1Z\\projects\\project-a",
+            "controllerSessionId": "shadow-2f94c948-6d70-4cb2-a54d-ce8b9805f1e4",
+            "profileKey": "devframe",
+            "bindingRevision": 1,
+            "requestId": "accept-s6-open-a",
+            "state": "ready",
+            "createdAt": "2026-09-06T15:03:13.408Z",
+            "updatedAt": "2026-09-06T15:03:13.416Z"
+          },
+          "b": {
+            "workspaceId": "23ee5c0b-b9e7-471b-9757-5831d1c941d0",
+            "canonicalPath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s6-hIDU1Z\\projects\\project-b",
+            "controllerSessionId": "shadow-2e9025ea-b368-4f54-ab00-c05a77ae60e0",
+            "profileKey": "devframe",
+            "bindingRevision": 1,
+            "requestId": "accept-s6-open-b",
+            "state": "ready",
+            "createdAt": "2026-09-06T15:03:13.427Z",
+            "updatedAt": "2026-09-06T15:03:13.434Z"
+          }
+        }
+      },
+      "evidence": "s6/routing-log.json"
+    },
+    {
+      "id": "s6-2-delivery-received-and-isolated",
+      "expectation": "sendToProject A → received and present in A deliveries only; B deliveries never contain A message",
+      "pass": true,
+      "observed": {
+        "sendA": {
+          "messageId": "msg-accept-s6-send-a",
+          "workspaceId": "918f2f72-c488-40c4-a03d-0febbc112772",
+          "status": "received"
+        },
+        "sendB": {
+          "messageId": "msg-accept-s6-send-b",
+          "workspaceId": "23ee5c0b-b9e7-471b-9757-5831d1c941d0",
+          "status": "received"
+        },
+        "deliveriesABeforeStop": [
+          {
+            "messageId": "msg-accept-s6-send-a",
+            "requestId": "accept-s6-send-a",
+            "sourceSessionId": "accept-s6-shadow",
+            "workspaceId": "918f2f72-c488-40c4-a03d-0febbc112772",
+            "bindingRevision": 2,
+            "goalId": "accept-s6-goal-a",
+            "acceptanceHash": "accept-s6-hash-a",
+            "mode": "work",
+            "text": "S6 acceptance delivery for project A",
+            "state": "received",
+            "createdAt": "2026-09-06T15:03:13.443Z",
+            "updatedAt": "2026-09-06T15:03:13.445Z",
+            "receivedAt": "2026-09-06T15:03:13.445Z"
+          }
+        ],
+        "deliveriesBBeforeStop": [
+          {
+            "messageId": "msg-accept-s6-send-b",
+            "requestId": "accept-s6-send-b",
+            "sourceSessionId": "accept-s6-shadow",
+            "workspaceId": "23ee5c0b-b9e7-471b-9757-5831d1c941d0",
+            "bindingRevision": 2,
+            "goalId": "accept-s6-goal-b",
+            "acceptanceHash": "accept-s6-hash-b",
+            "mode": "work",
+            "text": "S6 acceptance delivery for project B",
+            "state": "received",
+            "createdAt": "2026-09-06T15:03:13.450Z",
+            "updatedAt": "2026-09-06T15:03:13.452Z",
+            "receivedAt": "2026-09-06T15:03:13.452Z"
+          }
+        ]
+      },
+      "evidence": "s6/routing-log.json"
+    },
+    {
+      "id": "s6-3-active-goal-per-project",
+      "expectation": "setActiveGoal A/B each take effect and neither overwrites the other",
+      "pass": true,
+      "observed": {
+        "a": {
+          "activeGoalId": "accept-s6-goal-a"
+        },
+        "b": {
+          "activeGoalId": "accept-s6-goal-b"
+        }
+      },
+      "evidence": "s6/routing-log.json"
+    },
+    {
+      "id": "s6-4-stop-isolation",
+      "expectation": "stopProject A → stopping, confirmProjectStopped A → stopped, while B stays ready with its queue unchanged",
+      "pass": true,
+      "observed": {
+        "stopA": {
+          "workspaceId": "918f2f72-c488-40c4-a03d-0febbc112772",
+          "status": "stopping",
+          "cancelledDeliveries": 0,
+          "bindingRevision": 3
+        },
+        "confirmedA": {
+          "workspaceId": "918f2f72-c488-40c4-a03d-0febbc112772",
+          "state": "stopped"
+        },
+        "bindingAAfterStop": {
+          "state": "stopped",
+          "bindingRevision": 3
+        },
+        "bindingBAfterStop": {
+          "state": "ready"
+        },
+        "deliveriesUnchangedB": true
+      },
+      "evidence": "s6/routing-log.json"
+    },
+    {
+      "id": "s6-5-request-conflict",
+      "expectation": "the same requestId replayed with different input fails loud with SHADOW_REQUEST_CONFLICT",
+      "pass": true,
+      "observed": {
+        "conflictCode": "SHADOW_REQUEST_CONFLICT",
+        "conflictMessage": "requestId \"accept-s6-open-a\" was already used with different input"
+      },
+      "evidence": "s6/routing-log.json"
+    }
+  ],
+  "notes": [
+    "加分检查 6（行级冷恢复）复现：绑定行级恢复 true，投递行级恢复 true —— 如实记录，失败不判 FAIL（design §2 S6）",
+    "warm 阶段 root: C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s6-hIDU1Z"
+  ]
+}

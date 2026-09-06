@@ -1,0 +1,38 @@
+{
+  "exitcode": 0,
+  "verdict": "PASS",
+  "requests": {
+    "project": {
+      "scope": "project",
+      "sourceRef": "session:accept-s7:note:project",
+      "kind": "fact",
+      "body": "Acceptance note recorded in the project namespace for v14 composition validation.",
+      "assertionStatus": "observed"
+    },
+    "user": {
+      "scope": "user",
+      "sourceRef": "session:accept-s7:note:user",
+      "kind": "preference",
+      "body": "Acceptance preference recorded in the user namespace for v14 composition validation.",
+      "assertionStatus": "confirmed",
+      "humanConfirmation": "human:accept-s7"
+    }
+  },
+  "facts": {
+    "sessionId": "accept-s7-memory",
+    "eventCount": 2,
+    "appends": {
+      "project": {
+        "status": "created",
+        "noteId": "8366b65b93a7c08af3eb5b455e925b579e8b388d802960955209df18d1ffd10e",
+        "relativePath": "devframe-memory/projects/ws-accept/8366b65b93a7c08af3eb5b455e925b579e8b388d802960955209df18d1ffd10e.md"
+      },
+      "user": {
+        "status": "created",
+        "noteId": "40b82b3f8aa444d8e027f2a3ce0f6b2f2011eb960511567ef35b7332055c5ca1",
+        "relativePath": "devframe-memory/user/40b82b3f8aa444d8e027f2a3ce0f6b2f2011eb960511567ef35b7332055c5ca1.md"
+      }
+    },
+    "receiptEventCount": 2
+  }
+}

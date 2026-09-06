@@ -1,0 +1,58 @@
+{
+  "task": "v14-accept",
+  "scenario": "s5-resume",
+  "verdict": "FAIL",
+  "generatedAt": "2026-09-06T15:01:18.166Z",
+  "checks": [
+    {
+      "id": "s5-resume-identity",
+      "expectation": "resumed session id, cwd, and event count equal the write process facts",
+      "pass": false,
+      "observed": {
+        "sessionId": "accept-s5-resume",
+        "expectedSessionId": "accept-s5-resume",
+        "headerCwd": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s5-root-57677806\\worktree",
+        "writeCwd": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s5-root-57677806\\worktree",
+        "eventCount": 4,
+        "writeEventCount": 3,
+        "lastSeq": 3,
+        "writeLastSeq": 2
+      },
+      "evidence": "s5/resume.json"
+    },
+    {
+      "id": "s5-resume-goal-projection",
+      "expectation": "the goal projection restores as active with the write-time objective",
+      "pass": true,
+      "observed": {
+        "goalPhase": "active",
+        "objective": "Accept the v14 resume composition across two processes",
+        "writeObjective": "Accept the v14 resume composition across two processes"
+      },
+      "evidence": "s5/resume.json"
+    },
+    {
+      "id": "s5-resume-pause-and-seq",
+      "expectation": "/goal pause succeeds after cold load and every new event continues the log seq monotonically",
+      "pass": false,
+      "observed": {
+        "pause": {
+          "commandId": "cmd-21fd0e7d-1",
+          "kind": "success",
+          "text": "Goal paused\nStatus: paused\nObjective: Accept the v14 resume composition across two processes\nRounds: 0/256\nActivation: disarmed\n\nCommands: /goal edit <objective>, /goal resume, /goal clear"
+        },
+        "newSeqs": [
+          4,
+          5,
+          6
+        ],
+        "seqMonotonic": false
+      },
+      "evidence": "s5/resume.json"
+    }
+  ],
+  "notes": [
+    "ctx.agents.resume 传入与 write 相同的 agentOptions（provider/model 路由一致）—— 已登记偏差（design 文本仅列 resumeSessionId）",
+    "生产 /devframe-resume 宿主入口未落地（findings §4 现状失败），本场景钉住的是 JSONL 冷加载面本身"
+  ]
+}

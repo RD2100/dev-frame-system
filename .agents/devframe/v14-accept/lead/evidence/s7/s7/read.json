@@ -1,0 +1,76 @@
+{
+  "exitcode": 0,
+  "reads": {
+    "project": {
+      "status": "found",
+      "note": {
+        "schema": 1,
+        "noteId": "8366b65b93a7c08af3eb5b455e925b579e8b388d802960955209df18d1ffd10e",
+        "namespace": "projects/ws-accept",
+        "kind": "fact",
+        "createdAt": "2026-09-06T15:04:34.320Z",
+        "source": "session:accept-s7:note:project",
+        "status": "observed",
+        "bodyDigest": "sha256:72be4a62d5b49a69c6d2bb5c1a8da75bd867b60a6d77a847b1bdc1236176a6cd",
+        "body": "Acceptance note recorded in the project namespace for v14 composition validation."
+      },
+      "verified": true
+    },
+    "user": {
+      "status": "found",
+      "note": {
+        "schema": 1,
+        "noteId": "40b82b3f8aa444d8e027f2a3ce0f6b2f2011eb960511567ef35b7332055c5ca1",
+        "namespace": "user",
+        "kind": "preference",
+        "createdAt": "2026-09-06T15:04:34.328Z",
+        "source": "session:accept-s7:note:user",
+        "status": "confirmed",
+        "bodyDigest": "sha256:1a03737c4632bd142685d83bc539d40f6f969254a8f709541bcda606a1ec6cb9",
+        "body": "Acceptance preference recorded in the user namespace for v14 composition validation."
+      },
+      "verified": true
+    }
+  },
+  "searches": {
+    "project": {
+      "hits": [
+        {
+          "noteId": "8366b65b93a7c08af3eb5b455e925b579e8b388d802960955209df18d1ffd10e",
+          "excerpt": "Acceptance note recorded in the project namespace for v14 composition validation.",
+          "createdAt": "2026-09-06T15:04:34.320Z",
+          "kind": "fact",
+          "status": "observed",
+          "freshness": "current",
+          "source": "session:accept-s7:note:project"
+        }
+      ],
+      "truncated": false,
+      "coverageComplete": true
+    },
+    "user": {
+      "hits": [
+        {
+          "noteId": "40b82b3f8aa444d8e027f2a3ce0f6b2f2011eb960511567ef35b7332055c5ca1",
+          "excerpt": "Acceptance preference recorded in the user namespace for v14 composition validation.",
+          "createdAt": "2026-09-06T15:04:34.328Z",
+          "kind": "preference",
+          "status": "confirmed",
+          "freshness": "current",
+          "source": "session:accept-s7:note:user"
+        }
+      ],
+      "truncated": false,
+      "coverageComplete": true
+    }
+  },
+  "retryAppend": {
+    "status": "already_exists",
+    "noteId": "8366b65b93a7c08af3eb5b455e925b579e8b388d802960955209df18d1ffd10e",
+    "relativePath": "devframe-memory/projects/ws-accept/8366b65b93a7c08af3eb5b455e925b579e8b388d802960955209df18d1ffd10e.md"
+  },
+  "mdFiles": [
+    "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s7-root-b742e7e1\\vault\\devframe-memory\\projects\\ws-accept\\8366b65b93a7c08af3eb5b455e925b579e8b388d802960955209df18d1ffd10e.md",
+    "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s7-root-b742e7e1\\vault\\devframe-memory\\user\\40b82b3f8aa444d8e027f2a3ce0f6b2f2011eb960511567ef35b7332055c5ca1.md"
+  ]
+}

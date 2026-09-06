@@ -1,0 +1,135 @@
+{
+  "root": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s6-hIDU1Z",
+  "restored": {
+    "a": {
+      "workspaceId": "918f2f72-c488-40c4-a03d-0febbc112772",
+      "canonicalPath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s6-hIDU1Z\\projects\\project-a",
+      "controllerSessionId": "shadow-2f94c948-6d70-4cb2-a54d-ce8b9805f1e4",
+      "profileKey": "devframe",
+      "bindingRevision": 3,
+      "requestId": "accept-s6-open-a",
+      "state": "stopped",
+      "activeGoalId": "accept-s6-goal-a",
+      "activeAcceptanceHash": "accept-s6-hash-a",
+      "createdAt": "2026-09-06T15:03:13.408Z",
+      "updatedAt": "2026-09-06T15:03:13.460Z"
+    },
+    "b": {
+      "workspaceId": "23ee5c0b-b9e7-471b-9757-5831d1c941d0",
+      "canonicalPath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s6-hIDU1Z\\projects\\project-b",
+      "controllerSessionId": "shadow-2e9025ea-b368-4f54-ab00-c05a77ae60e0",
+      "profileKey": "devframe",
+      "bindingRevision": 2,
+      "requestId": "accept-s6-open-b",
+      "state": "ready",
+      "activeGoalId": "accept-s6-goal-b",
+      "activeAcceptanceHash": "accept-s6-hash-b",
+      "createdAt": "2026-09-06T15:03:13.427Z",
+      "updatedAt": "2026-09-06T15:03:13.440Z"
+    },
+    "deliveries": {
+      "a": [
+        {
+          "messageId": "msg-accept-s6-send-a",
+          "requestId": "accept-s6-send-a",
+          "sourceSessionId": "accept-s6-shadow",
+          "workspaceId": "918f2f72-c488-40c4-a03d-0febbc112772",
+          "bindingRevision": 2,
+          "goalId": "accept-s6-goal-a",
+          "acceptanceHash": "accept-s6-hash-a",
+          "mode": "work",
+          "text": "S6 acceptance delivery for project A",
+          "state": "received",
+          "createdAt": "2026-09-06T15:03:13.443Z",
+          "updatedAt": "2026-09-06T15:03:13.445Z",
+          "receivedAt": "2026-09-06T15:03:13.445Z"
+        }
+      ],
+      "b": [
+        {
+          "messageId": "msg-accept-s6-send-b",
+          "requestId": "accept-s6-send-b",
+          "sourceSessionId": "accept-s6-shadow",
+          "workspaceId": "23ee5c0b-b9e7-471b-9757-5831d1c941d0",
+          "bindingRevision": 2,
+          "goalId": "accept-s6-goal-b",
+          "acceptanceHash": "accept-s6-hash-b",
+          "mode": "work",
+          "text": "S6 acceptance delivery for project B",
+          "state": "received",
+          "createdAt": "2026-09-06T15:03:13.450Z",
+          "updatedAt": "2026-09-06T15:03:13.452Z",
+          "receivedAt": "2026-09-06T15:03:13.452Z"
+        }
+      ]
+    }
+  },
+  "expected": {
+    "root": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s6-hIDU1Z",
+    "projectsRoot": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s6-hIDU1Z\\projects",
+    "bindings": {
+      "a": {
+        "workspaceId": "918f2f72-c488-40c4-a03d-0febbc112772",
+        "canonicalPath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s6-hIDU1Z\\projects\\project-a",
+        "controllerSessionId": "shadow-2f94c948-6d70-4cb2-a54d-ce8b9805f1e4",
+        "profileKey": "devframe",
+        "bindingRevision": 3,
+        "requestId": "accept-s6-open-a",
+        "state": "stopped",
+        "createdAt": "2026-09-06T15:03:13.408Z",
+        "updatedAt": "2026-09-06T15:03:13.460Z",
+        "activeGoalId": "accept-s6-goal-a",
+        "activeAcceptanceHash": "accept-s6-hash-a"
+      },
+      "b": {
+        "workspaceId": "23ee5c0b-b9e7-471b-9757-5831d1c941d0",
+        "canonicalPath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s6-hIDU1Z\\projects\\project-b",
+        "controllerSessionId": "shadow-2e9025ea-b368-4f54-ab00-c05a77ae60e0",
+        "profileKey": "devframe",
+        "bindingRevision": 2,
+        "requestId": "accept-s6-open-b",
+        "state": "ready",
+        "createdAt": "2026-09-06T15:03:13.427Z",
+        "updatedAt": "2026-09-06T15:03:13.440Z",
+        "activeGoalId": "accept-s6-goal-b",
+        "activeAcceptanceHash": "accept-s6-hash-b"
+      }
+    },
+    "deliveries": {
+      "a": [
+        {
+          "messageId": "msg-accept-s6-send-a",
+          "requestId": "accept-s6-send-a",
+          "sourceSessionId": "accept-s6-shadow",
+          "workspaceId": "918f2f72-c488-40c4-a03d-0febbc112772",
+          "bindingRevision": 2,
+          "goalId": "accept-s6-goal-a",
+          "acceptanceHash": "accept-s6-hash-a",
+          "mode": "work",
+          "text": "S6 acceptance delivery for project A",
+          "state": "received",
+          "createdAt": "2026-09-06T15:03:13.443Z",
+          "updatedAt": "2026-09-06T15:03:13.445Z",
+          "receivedAt": "2026-09-06T15:03:13.445Z"
+        }
+      ],
+      "b": [
+        {
+          "messageId": "msg-accept-s6-send-b",
+          "requestId": "accept-s6-send-b",
+          "sourceSessionId": "accept-s6-shadow",
+          "workspaceId": "23ee5c0b-b9e7-471b-9757-5831d1c941d0",
+          "bindingRevision": 2,
+          "goalId": "accept-s6-goal-b",
+          "acceptanceHash": "accept-s6-hash-b",
+          "mode": "work",
+          "text": "S6 acceptance delivery for project B",
+          "state": "received",
+          "createdAt": "2026-09-06T15:03:13.450Z",
+          "updatedAt": "2026-09-06T15:03:13.452Z",
+          "receivedAt": "2026-09-06T15:03:13.452Z"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,284 @@
+{
+  "task": "v14-accept",
+  "scenario": "s4-goal-complete",
+  "verdict": "PASS",
+  "generatedAt": "2026-09-06T14:59:04.692Z",
+  "checks": [
+    {
+      "id": "s4-1-no-current-goal-text",
+      "expectation": "/goal-complete with no goal answers the error text NO_CURRENT_GOAL_TEXT verbatim",
+      "pass": true,
+      "observed": {
+        "kind": "error",
+        "text": "No goal is currently set. Create one with /goal before using /goal-complete.",
+        "expectedText": "No goal is currently set. Create one with /goal before using /goal-complete."
+      },
+      "evidence": "s4/command-results.json"
+    },
+    {
+      "id": "s4-2-goal-create-active",
+      "expectation": "/goal <objective> succeeds and the log holds a goal/change with phase active",
+      "pass": true,
+      "observed": {
+        "kind": "success",
+        "createEvents": [
+          {
+            "kind": "goal/change",
+            "version": 1,
+            "operation": "create",
+            "goal": {
+              "id": "goal-fe3dee49-11cd-44b4-bc48-5744fa08f5ef",
+              "revision": 1,
+              "objective": "Accept the v14 goal-complete composition end to end",
+              "phase": "active",
+              "maxGoalRounds": 256
+            },
+            "roundsStarted": 0,
+            "createdAt": 1788706744646,
+            "updatedAt": 1788706744646
+          }
+        ],
+        "persistedHasActiveCreate": true
+      },
+      "evidence": "s4/log-events.json"
+    },
+    {
+      "id": "s4-3-pause-resume",
+      "expectation": "/goal pause → paused and /goal resume → active, each with its own goal/change",
+      "pass": true,
+      "observed": {
+        "pause": {
+          "kind": "success",
+          "phase": "paused",
+          "events": [
+            {
+              "kind": "goal/change",
+              "version": 1,
+              "operation": "pause",
+              "goal": {
+                "id": "goal-fe3dee49-11cd-44b4-bc48-5744fa08f5ef",
+                "revision": 2,
+                "objective": "Accept the v14 goal-complete composition end to end",
+                "phase": "paused",
+                "maxGoalRounds": 256
+              },
+              "roundsStarted": 0,
+              "createdAt": 1788706744646,
+              "updatedAt": 1788706744648
+            }
+          ]
+        },
+        "resume": {
+          "kind": "success",
+          "phase": "active",
+          "events": [
+            {
+              "kind": "goal/change",
+              "version": 1,
+              "operation": "resume",
+              "goal": {
+                "id": "goal-fe3dee49-11cd-44b4-bc48-5744fa08f5ef",
+                "revision": 3,
+                "objective": "Accept the v14 goal-complete composition end to end",
+                "phase": "active",
+                "maxGoalRounds": 256
+              },
+              "roundsStarted": 0,
+              "createdAt": 1788706744646,
+              "updatedAt": 1788706744650
+            }
+          ]
+        }
+      },
+      "evidence": "s4/command-results.json"
+    },
+    {
+      "id": "s4-4-no-binding-text",
+      "expectation": "/goal-complete with an unbound goal answers the error text NO_BINDING_TEXT verbatim",
+      "pass": true,
+      "observed": {
+        "kind": "error",
+        "text": "The current goal has no completion binding in this composition. Start it through the goal-binding flow before /goal-complete.",
+        "expectedText": "The current goal has no completion binding in this composition. Start it through the goal-binding flow before /goal-complete."
+      },
+      "evidence": "s4/command-results.json"
+    },
+    {
+      "id": "s4-5-no-verification-text-pinned",
+      "expectation": "after startBinding succeeds, /goal-complete answers the error text NO_VERIFICATION_TEXT verbatim (pinned: production composition has no producer wiring; v14-compos in flight)",
+      "pass": true,
+      "observed": {
+        "intermediateClear": {
+          "kind": "success",
+          "text": "Goal cleared."
+        },
+        "startBinding": {
+          "goalId": "goal-3f1d9b71-c7d1-4c1b-b919-7a48ec3c49ea",
+          "goalRevision": 2,
+          "lifecycle": "admission_open"
+        },
+        "kind": "error",
+        "text": "The current goal has no attributed verification evidence in this session log. Run verification before /goal-complete.",
+        "expectedText": "The current goal has no attributed verification evidence in this session log. Run verification before /goal-complete."
+      },
+      "evidence": "s4/command-results.json"
+    },
+    {
+      "id": "s4-6-command-pairing-and-phase-stability",
+      "expectation": "every dispatch logs a paired command/run + command/done (live and persisted), and goal phase is unchanged after each refusal",
+      "pass": true,
+      "observed": {
+        "pairing": [
+          {
+            "commandId": "cmd-a22af78d-1",
+            "line": "/goal-complete",
+            "runCount": 1,
+            "doneCount": 1,
+            "doneKinds": [
+              "error"
+            ]
+          },
+          {
+            "commandId": "cmd-a22af78d-2",
+            "line": "/goal Accept the v14 goal-complete composition end to end",
+            "runCount": 1,
+            "doneCount": 1,
+            "doneKinds": [
+              "success"
+            ]
+          },
+          {
+            "commandId": "cmd-a22af78d-3",
+            "line": "/goal pause",
+            "runCount": 1,
+            "doneCount": 1,
+            "doneKinds": [
+              "success"
+            ]
+          },
+          {
+            "commandId": "cmd-a22af78d-4",
+            "line": "/goal resume",
+            "runCount": 1,
+            "doneCount": 1,
+            "doneKinds": [
+              "success"
+            ]
+          },
+          {
+            "commandId": "cmd-a22af78d-5",
+            "line": "/goal-complete",
+            "runCount": 1,
+            "doneCount": 1,
+            "doneKinds": [
+              "error"
+            ]
+          },
+          {
+            "commandId": "cmd-a22af78d-6",
+            "line": "/goal clear",
+            "runCount": 1,
+            "doneCount": 1,
+            "doneKinds": [
+              "success"
+            ]
+          },
+          {
+            "commandId": "cmd-a22af78d-7",
+            "line": "/goal-complete",
+            "runCount": 1,
+            "doneCount": 1,
+            "doneKinds": [
+              "error"
+            ]
+          },
+          {
+            "commandId": "cmd-a22af78d-8",
+            "line": "/goal clear",
+            "runCount": 1,
+            "doneCount": 1,
+            "doneKinds": [
+              "success"
+            ]
+          }
+        ],
+        "persistedPairing": [
+          {
+            "commandId": "cmd-a22af78d-1",
+            "runCount": 1,
+            "doneCount": 1
+          },
+          {
+            "commandId": "cmd-a22af78d-2",
+            "runCount": 1,
+            "doneCount": 1
+          },
+          {
+            "commandId": "cmd-a22af78d-3",
+            "runCount": 1,
+            "doneCount": 1
+          },
+          {
+            "commandId": "cmd-a22af78d-4",
+            "runCount": 1,
+            "doneCount": 1
+          },
+          {
+            "commandId": "cmd-a22af78d-5",
+            "runCount": 1,
+            "doneCount": 1
+          },
+          {
+            "commandId": "cmd-a22af78d-6",
+            "runCount": 1,
+            "doneCount": 1
+          },
+          {
+            "commandId": "cmd-a22af78d-7",
+            "runCount": 1,
+            "doneCount": 1
+          },
+          {
+            "commandId": "cmd-a22af78d-8",
+            "runCount": 1,
+            "doneCount": 1
+          }
+        ],
+        "refusalPhaseStable": true
+      },
+      "evidence": "s4/log-events.json"
+    },
+    {
+      "id": "s4-7-goal-clear",
+      "expectation": "/goal clear succeeds and the log holds a goal/change clear tombstone",
+      "pass": true,
+      "observed": {
+        "kind": "success",
+        "text": "Goal cleared.",
+        "clearEvents": [
+          {
+            "cleared": {
+              "id": "goal-fe3dee49-11cd-44b4-bc48-5744fa08f5ef",
+              "revision": 4
+            },
+            "clearedAt": 1788706744652
+          },
+          {
+            "cleared": {
+              "id": "goal-3f1d9b71-c7d1-4c1b-b919-7a48ec3c49ea",
+              "revision": 3
+            },
+            "clearedAt": 1788706744656
+          }
+        ]
+      },
+      "evidence": "s4/command-results.json"
+    }
+  ],
+  "notes": [
+    "startBinding 为组合 test-visible start lane（README 标注）；生产宿主 start 面未交付（v14-compos 在飞），如实标注",
+    "稳定拒绝文本逐字导入自产品 src 导出面 packages/experimental/command-goal-binding/src/command.ts，无比对副本",
+    "检查 5 前插入一次 /goal clear（中间步）：start lane 要求当前无未完成 goal（GOAL_BINDING_ALREADY_RUNNING），design §2 S4 检查序未含此步 —— 已登记偏差",
+    "完成链走通（admitted 路径）在本基线不可达，记为现状失败清单条目（非场景 FAIL）—— design §2 S4 判定"
+  ]
+}

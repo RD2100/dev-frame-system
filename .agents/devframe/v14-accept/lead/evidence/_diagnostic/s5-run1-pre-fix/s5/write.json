@@ -1,0 +1,31 @@
+{
+  "exitcode": 0,
+  "verdict": "PASS",
+  "dispatch": {
+    "commandId": "cmd-c53b88a4-1",
+    "kind": "success",
+    "text": "Goal created\nStatus: active\nObjective: Accept the v14 resume composition across two processes\nRounds: 0/256\nActivation: armed\n\nCommands: /goal edit <objective>, /goal pause, /goal clear"
+  },
+  "facts": {
+    "sessionId": "accept-s5-resume",
+    "cwd": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s5-root-346ce7e6\\worktree",
+    "eventCount": 3,
+    "lastSeq": 2,
+    "objective": "Accept the v14 resume composition across two processes",
+    "goalPhase": "active"
+  },
+  "events": [
+    {
+      "seq": 0,
+      "type": "command/run"
+    },
+    {
+      "seq": 1,
+      "type": "goal/change"
+    },
+    {
+      "seq": 2,
+      "type": "command/done"
+    }
+  ]
+}

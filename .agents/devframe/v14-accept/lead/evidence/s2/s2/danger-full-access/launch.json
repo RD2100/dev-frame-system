@@ -1,0 +1,22 @@
+{
+  "env": {
+    "DSH_PERMISSION_MODE": "danger-full-access"
+  },
+  "run": {
+    "exitCode": 1,
+    "timedOut": false,
+    "durationMs": 2639,
+    "cwd": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s2-danger-full-access-zaEqUC\\cwd",
+    "dshHome": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s2-danger-full-access-zaEqUC\\dsh-home",
+    "isolationEnv": {
+      "DSH_HOME": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s2-danger-full-access-zaEqUC\\dsh-home",
+      "DSH_AGENTS_HOME": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s2-danger-full-access-zaEqUC\\cwd\\.agents",
+      "DSH_TELEMETRY_DISABLED": "1",
+      "TSX_TSCONFIG_PATH": "D:\\dsh-devframe-v14-accept-w1\\tsconfig.json",
+      "DSH_PERMISSION_MODE": "danger-full-access"
+    }
+  },
+  "sessionLogs": [
+    "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s2-danger-full-access-zaEqUC\\dsh-home\\sessions\\--C-Users-25313-AppData-Local-Temp-dsh-accept-s2-danger-full-access-zaEqUC-cwd--\\session-78749001-8ec7-46bf-ab04-3c75d75a91b6\\session.jsonl.zstd"
+  ]
+}

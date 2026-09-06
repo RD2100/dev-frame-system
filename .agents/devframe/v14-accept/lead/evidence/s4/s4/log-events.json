@@ -1,0 +1,321 @@
+{
+  "sessionLogs": [
+    "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s4-10SxfR\\session-logs\\_no-cwd\\accept-s4-goal-complete\\session.jsonl.zstd"
+  ],
+  "events": [
+    {
+      "type": "command/run",
+      "seq": 0,
+      "time": 1788706744644,
+      "data": {
+        "commandId": "cmd-a22af78d-1",
+        "name": "goal-complete",
+        "args": "",
+        "source": {
+          "kind": "user"
+        }
+      }
+    },
+    {
+      "type": "command/done",
+      "seq": 1,
+      "time": 1788706744645,
+      "data": {
+        "commandId": "cmd-a22af78d-1",
+        "kind": "error",
+        "text": "No goal is currently set. Create one with /goal before using /goal-complete."
+      }
+    },
+    {
+      "type": "command/run",
+      "seq": 2,
+      "time": 1788706744646,
+      "data": {
+        "commandId": "cmd-a22af78d-2",
+        "name": "goal",
+        "args": " Accept the v14 goal-complete composition end to end",
+        "source": {
+          "kind": "user"
+        }
+      }
+    },
+    {
+      "type": "goal/change",
+      "seq": 3,
+      "time": 1788706744647,
+      "data": {
+        "kind": "goal/change",
+        "version": 1,
+        "operation": "create",
+        "goal": {
+          "id": "goal-fe3dee49-11cd-44b4-bc48-5744fa08f5ef",
+          "revision": 1,
+          "objective": "Accept the v14 goal-complete composition end to end",
+          "phase": "active",
+          "maxGoalRounds": 256
+        },
+        "roundsStarted": 0,
+        "createdAt": 1788706744646,
+        "updatedAt": 1788706744646
+      }
+    },
+    {
+      "type": "command/done",
+      "seq": 4,
+      "time": 1788706744647,
+      "data": {
+        "commandId": "cmd-a22af78d-2",
+        "kind": "success",
+        "text": "Goal created\nStatus: active\nObjective: Accept the v14 goal-complete composition end to end\nRounds: 0/256\nActivation: armed\n\nCommands: /goal edit <objective>, /goal pause, /goal clear"
+      }
+    },
+    {
+      "type": "command/run",
+      "seq": 5,
+      "time": 1788706744648,
+      "data": {
+        "commandId": "cmd-a22af78d-3",
+        "name": "goal",
+        "args": " pause",
+        "source": {
+          "kind": "user"
+        }
+      }
+    },
+    {
+      "type": "goal/change",
+      "seq": 6,
+      "time": 1788706744648,
+      "data": {
+        "kind": "goal/change",
+        "version": 1,
+        "operation": "pause",
+        "goal": {
+          "id": "goal-fe3dee49-11cd-44b4-bc48-5744fa08f5ef",
+          "revision": 2,
+          "objective": "Accept the v14 goal-complete composition end to end",
+          "phase": "paused",
+          "maxGoalRounds": 256
+        },
+        "roundsStarted": 0,
+        "createdAt": 1788706744646,
+        "updatedAt": 1788706744648
+      }
+    },
+    {
+      "type": "command/done",
+      "seq": 7,
+      "time": 1788706744649,
+      "data": {
+        "commandId": "cmd-a22af78d-3",
+        "kind": "success",
+        "text": "Goal paused\nStatus: paused\nObjective: Accept the v14 goal-complete composition end to end\nRounds: 0/256\nActivation: disarmed\n\nCommands: /goal edit <objective>, /goal resume, /goal clear"
+      }
+    },
+    {
+      "type": "command/run",
+      "seq": 8,
+      "time": 1788706744649,
+      "data": {
+        "commandId": "cmd-a22af78d-4",
+        "name": "goal",
+        "args": " resume",
+        "source": {
+          "kind": "user"
+        }
+      }
+    },
+    {
+      "type": "goal/change",
+      "seq": 9,
+      "time": 1788706744650,
+      "data": {
+        "kind": "goal/change",
+        "version": 1,
+        "operation": "resume",
+        "goal": {
+          "id": "goal-fe3dee49-11cd-44b4-bc48-5744fa08f5ef",
+          "revision": 3,
+          "objective": "Accept the v14 goal-complete composition end to end",
+          "phase": "active",
+          "maxGoalRounds": 256
+        },
+        "roundsStarted": 0,
+        "createdAt": 1788706744646,
+        "updatedAt": 1788706744650
+      }
+    },
+    {
+      "type": "command/done",
+      "seq": 10,
+      "time": 1788706744650,
+      "data": {
+        "commandId": "cmd-a22af78d-4",
+        "kind": "success",
+        "text": "Goal resumed\nStatus: active\nObjective: Accept the v14 goal-complete composition end to end\nRounds: 0/256\nActivation: armed\n\nCommands: /goal edit <objective>, /goal pause, /goal clear"
+      }
+    },
+    {
+      "type": "command/run",
+      "seq": 11,
+      "time": 1788706744651,
+      "data": {
+        "commandId": "cmd-a22af78d-5",
+        "name": "goal-complete",
+        "args": "",
+        "source": {
+          "kind": "user"
+        }
+      }
+    },
+    {
+      "type": "command/done",
+      "seq": 12,
+      "time": 1788706744651,
+      "data": {
+        "commandId": "cmd-a22af78d-5",
+        "kind": "error",
+        "text": "The current goal has no completion binding in this composition. Start it through the goal-binding flow before /goal-complete."
+      }
+    },
+    {
+      "type": "command/run",
+      "seq": 13,
+      "time": 1788706744652,
+      "data": {
+        "commandId": "cmd-a22af78d-6",
+        "name": "goal",
+        "args": " clear",
+        "source": {
+          "kind": "user"
+        }
+      }
+    },
+    {
+      "type": "goal/change",
+      "seq": 14,
+      "time": 1788706744652,
+      "data": {
+        "kind": "goal/change",
+        "version": 1,
+        "operation": "clear",
+        "cleared": {
+          "id": "goal-fe3dee49-11cd-44b4-bc48-5744fa08f5ef",
+          "revision": 4
+        },
+        "clearedAt": 1788706744652
+      }
+    },
+    {
+      "type": "command/done",
+      "seq": 15,
+      "time": 1788706744653,
+      "data": {
+        "commandId": "cmd-a22af78d-6",
+        "kind": "success",
+        "text": "Goal cleared."
+      }
+    },
+    {
+      "type": "goal/change",
+      "seq": 16,
+      "time": 1788706744654,
+      "data": {
+        "kind": "goal/change",
+        "version": 1,
+        "operation": "create",
+        "goal": {
+          "id": "goal-3f1d9b71-c7d1-4c1b-b919-7a48ec3c49ea",
+          "revision": 1,
+          "objective": "complete the bound work",
+          "phase": "active",
+          "maxGoalRounds": 256
+        },
+        "roundsStarted": 0,
+        "createdAt": 1788706744654,
+        "updatedAt": 1788706744654
+      }
+    },
+    {
+      "type": "goal/change",
+      "seq": 17,
+      "time": 1788706744654,
+      "data": {
+        "kind": "goal/change",
+        "version": 1,
+        "operation": "resume",
+        "goal": {
+          "id": "goal-3f1d9b71-c7d1-4c1b-b919-7a48ec3c49ea",
+          "revision": 2,
+          "objective": "complete the bound work",
+          "phase": "active",
+          "maxGoalRounds": 256
+        },
+        "roundsStarted": 0,
+        "createdAt": 1788706744654,
+        "updatedAt": 1788706744654
+      }
+    },
+    {
+      "type": "command/run",
+      "seq": 18,
+      "time": 1788706744655,
+      "data": {
+        "commandId": "cmd-a22af78d-7",
+        "name": "goal-complete",
+        "args": "",
+        "source": {
+          "kind": "user"
+        }
+      }
+    },
+    {
+      "type": "command/done",
+      "seq": 19,
+      "time": 1788706744655,
+      "data": {
+        "commandId": "cmd-a22af78d-7",
+        "kind": "error",
+        "text": "The current goal has no attributed verification evidence in this session log. Run verification before /goal-complete."
+      }
+    },
+    {
+      "type": "command/run",
+      "seq": 20,
+      "time": 1788706744656,
+      "data": {
+        "commandId": "cmd-a22af78d-8",
+        "name": "goal",
+        "args": " clear",
+        "source": {
+          "kind": "user"
+        }
+      }
+    },
+    {
+      "type": "goal/change",
+      "seq": 21,
+      "time": 1788706744656,
+      "data": {
+        "kind": "goal/change",
+        "version": 1,
+        "operation": "clear",
+        "cleared": {
+          "id": "goal-3f1d9b71-c7d1-4c1b-b919-7a48ec3c49ea",
+          "revision": 3
+        },
+        "clearedAt": 1788706744656
+      }
+    },
+    {
+      "type": "command/done",
+      "seq": 22,
+      "time": 1788706744656,
+      "data": {
+        "commandId": "cmd-a22af78d-8",
+        "kind": "success",
+        "text": "Goal cleared."
+      }
+    }
+  ]
+}

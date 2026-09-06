@@ -1,0 +1,4 @@
+C:\Users\25313\AppData\Local\Temp\dsh-accept-s1-DJyXu7\dsh-home\sessions
+  [dir] --C-Users-25313-AppData-Local-Temp-dsh-accept-s1-DJyXu7-cwd--
+    [dir] session-a8d2ef3c-256a-4288-8bfb-8b83cfef7d0b
+      [file]session.jsonl.zstd (14831 bytes)

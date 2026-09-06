@@ -1,0 +1,103 @@
+{
+  "task": "v14-accept",
+  "scenario": "s7-memory-cold",
+  "verdict": "FAIL",
+  "generatedAt": "2026-09-06T15:03:29.320Z",
+  "checks": [
+    {
+      "id": "s7-read-found-verified-equal",
+      "expectation": "read by noteId → found + verified:true + note fields equal the write-time request (project and user domain)",
+      "pass": false,
+      "observed": {
+        "project": {
+          "status": "found",
+          "verified": true,
+          "note": {
+            "schema": 1,
+            "noteId": "8366b65b93a7c08af3eb5b455e925b579e8b388d802960955209df18d1ffd10e",
+            "namespace": "projects/ws-accept",
+            "kind": "fact",
+            "createdAt": "2026-09-06T15:03:28.814Z",
+            "source": "session:accept-s7:note:project",
+            "status": "observed",
+            "bodyDigest": "sha256:72be4a62d5b49a69c6d2bb5c1a8da75bd867b60a6d77a847b1bdc1236176a6cd",
+            "body": "Acceptance note recorded in the project namespace for v14 composition validation."
+          }
+        },
+        "user": {
+          "status": "found",
+          "verified": true,
+          "note": {
+            "schema": 1,
+            "noteId": "40b82b3f8aa444d8e027f2a3ce0f6b2f2011eb960511567ef35b7332055c5ca1",
+            "namespace": "user",
+            "kind": "preference",
+            "createdAt": "2026-09-06T15:03:28.825Z",
+            "source": "session:accept-s7:note:user",
+            "status": "confirmed",
+            "bodyDigest": "sha256:1a03737c4632bd142685d83bc539d40f6f969254a8f709541bcda606a1ec6cb9",
+            "body": "Acceptance preference recorded in the user namespace for v14 composition validation."
+          }
+        }
+      },
+      "evidence": "s7/read.json"
+    },
+    {
+      "id": "s7-search-one-hit-per-domain",
+      "expectation": "search hits exactly one note in each domain",
+      "pass": true,
+      "observed": {
+        "projectHits": [
+          {
+            "noteId": "8366b65b93a7c08af3eb5b455e925b579e8b388d802960955209df18d1ffd10e",
+            "excerpt": "Acceptance note recorded in the project namespace for v14 composition validation.",
+            "createdAt": "2026-09-06T15:03:28.814Z",
+            "kind": "fact",
+            "status": "observed",
+            "freshness": "current",
+            "source": "session:accept-s7:note:project"
+          }
+        ],
+        "userHits": [
+          {
+            "noteId": "40b82b3f8aa444d8e027f2a3ce0f6b2f2011eb960511567ef35b7332055c5ca1",
+            "excerpt": "Acceptance preference recorded in the user namespace for v14 composition validation.",
+            "createdAt": "2026-09-06T15:03:28.825Z",
+            "kind": "preference",
+            "status": "confirmed",
+            "freshness": "current",
+            "source": "session:accept-s7:note:user"
+          }
+        ]
+      },
+      "evidence": "s7/read.json"
+    },
+    {
+      "id": "s7-retry-append-already-exists",
+      "expectation": "retrying the same append (same sourceRef) reports already_exists",
+      "pass": true,
+      "observed": {
+        "status": "already_exists",
+        "noteId": "8366b65b93a7c08af3eb5b455e925b579e8b388d802960955209df18d1ffd10e",
+        "relativePath": "devframe-memory/projects/ws-accept/8366b65b93a7c08af3eb5b455e925b579e8b388d802960955209df18d1ffd10e.md"
+      },
+      "evidence": "s7/read.json"
+    },
+    {
+      "id": "s7-vault-two-real-md-files",
+      "expectation": "exactly two real .md files exist inside the Vault (one per domain)",
+      "pass": true,
+      "observed": {
+        "mdFiles": [
+          "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s7-root-5499c9e1\\vault\\devframe-memory\\projects\\ws-accept\\8366b65b93a7c08af3eb5b455e925b579e8b388d802960955209df18d1ffd10e.md",
+          "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-accept-s7-root-5499c9e1\\vault\\devframe-memory\\user\\40b82b3f8aa444d8e027f2a3ce0f6b2f2011eb960511567ef35b7332055c5ca1.md"
+        ]
+      },
+      "evidence": "s7/vault-listing.txt"
+    }
+  ],
+  "notes": [
+    "read 进程经 ctx.agents.resume 冷加载后先 rehydrateMemoryReceipts 再以新 ProjectMemoryService（同 Vault 同 spec）读回",
+    "ctx.agents.resume 传入与 write 相同的 agentOptions（provider/model 路由一致）—— 已登记偏差（design 文本仅列 resumeSessionId）"
+  ]
+}

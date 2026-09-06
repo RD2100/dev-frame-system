@@ -1,0 +1,32 @@
+{
+  "permissionPreset": [
+    {
+      "type": "permission/preset",
+      "seq": 0,
+      "time": 1788706720706,
+      "data": {
+        "preset": "read-only"
+      }
+    }
+  ],
+  "sandboxMode": [
+    {
+      "type": "sandbox/mode",
+      "seq": 1,
+      "time": 1788706720707,
+      "data": {
+        "mode": "read-only"
+      }
+    }
+  ],
+  "approvalPolicy": [
+    {
+      "type": "approval/policy",
+      "seq": 2,
+      "time": 1788706720708,
+      "data": {
+        "policy": "ask"
+      }
+    }
+  ]
+}
