@@ -76,3 +76,12 @@
 - **测试**：事件 grade 断言（optional→complete-with-warning；required→恰一条 fail）；admission 拒绝例（fail 证据→拒绝且 native Goal 未触碰、admission 关闭；故意错 fingerprint 前置仍 task-warning 先拒；complete-with-warning→admitted 且完成）；投影 round-trip 折叠+重复 fail-closed；解码拒绝判级外扩。
 - **真实退出码**：host tsc **exit 0**；受影响 7 文件 **82 tests exit 0**；devframe+project-memory 联合回归 **270 tests exit 0**；gen-persistence-catalog / verify-persistence-catalog / gen-cordis-catalog / verify-cordis-catalog 全 **exit 0**。路由：零模型调用；TaskRecord/project-contracts 零改动。
 - **仍开放边界（如实）**：goal-round-driver 续轮面尚未消费 devframe/task-warning（完成判定拒绝已是任务真实失败终态；续轮驱动的停止/转向属后续片）；生产 journey 对 fail 终态后的人工 resume/修复环消费未接。
+
+## 独立未完成项收口片（总控"恢复独立未完成项（不新增范围）"裁定，c4d05d66f9 + 51890974a8；已并入 main 4b3212719f）
+
+上节两条"仍开放边界"于本片闭合；该行保留为当时状态的历史记录，此后以本节为准。
+
+- **①续轮驱动消费**（c4d05d66f9，devframe 域内）：新插件 `devframe-task-fail-disarm`（src/task-fail-continuation.ts，inject agents/goals）在 session/event 面消费 `devframe/task-warning` grade='fail'，经**原生 goal port**（`ctx.goals.disarm`——goal-round-driver 遵从的同一张脸）解除驾驶 agent 的 armed active goal 自动续权：driver 不再预留新轮、排队续轮在 pre-step 失去 armed 前提、durable phase 保留给人工 resume。**driver 包零改动**——消费缝落在 devframe，driver 继续读本监听器改变的 goal 状态。complete-with-warning 刻意不动（容忍退化不停车）。disarm 收容在 try/catch：拒绝的 goal port 不得中止发布分级记录的 append（证据已 durable，人工 resume 是恢复路径；空 catch 已具名）。六用例：armed-active→disarm、容忍判级不动、非 armed/active 跳过、无 agent 跳过、拒收 port 收容且记录不丢、dispose 后停消费。
+- **②fail 终态→修复环消费**（51890974a8）：`/goal-complete` 旅程对 task-warning 拒绝走新臂 `renderRejectedCompletion`——在 AT1-08 规定的 call point（changes_required 拒绝后回送工作）为 fail 终态**记一次修复环**（`beginRepairRound`）：准入→文本报告"Repair round N was charged (M remaining)"；耗尽→"repair limit (2) is exhausted after 2 charged rounds; continuing requires a human-authorized resume"。其余拒绝阶段渲染零变化（fingerprint 阶段反例断言文本无修复环字样）。controller 面未动：拒绝仍是纯数据，计费发生在回送工作的旅程。测试贯穿真实 composition：三轮 /goal-complete（round 1→2→耗尽）、goal 保持 active、零 receipt。
+- **真实退出码**：host tsc **exit 0**；续轮消费套件 **6/6 exit 0**；real-composition **18/18 exit 0**；三包联合回归（devframe + command-goal-binding + goal-round-driver）**20 files / 308 tests exit 0**；gen/verify-persistence-catalog、verify-cordis-catalog 全 **exit 0**（无新事件类型、无新 service 面——纯监听器不设 ctx.* 缝，无需目录分类）。路由：零模型调用；TaskRecord/project-contracts 零改动；project-controller、profile/manifest/catalog、已删 src 产物路径零触碰。
+- **仍开放（如实）**：修复环的 worker 侧回送（谁把 round 送回同一 worker）属编排域后续片；人工 resume 的原生面（goals.resume）本片未包测试（既有原生服务面，非本域新增）。

@@ -17,7 +17,7 @@ function harvestedSession(cwd: string): Session {
     },
     snapshotEvents: () => [],
     inheritedEventCount: 0,
-  } as unknown as Session
+  }
 }
 
 describe('stableSessionFixture', () => {
