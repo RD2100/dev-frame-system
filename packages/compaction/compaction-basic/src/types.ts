@@ -20,6 +20,8 @@ export interface CompactionPolicyConfig {
   summarizationModel?: string
   /** Provider generation cap for summarization. Defaults to `8192`. */
   maxTokens?: number
+  /** Consecutive automatic token-cap failures before summaries pause across steps and turns. Defaults to `1`. */
+  maxAutomaticSummaryFailures?: number
   /** Extra attempts after the first compaction when pressure remains above threshold. Defaults to `1`. */
   compactionRetries?: number
   /** Maximum retries after canonical context overflow; `0` disables recovery. Defaults to `1`. */
@@ -53,6 +55,7 @@ interface ResolvedPolicyFields {
   readonly summarizationProvider: string
   readonly summarizationModel: string
   readonly maxTokens: number
+  readonly maxAutomaticSummaryFailures: number
   readonly compactionRetries: number
   readonly maxOverflowRetries: number
 }

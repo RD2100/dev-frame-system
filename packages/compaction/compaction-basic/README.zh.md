@@ -69,6 +69,7 @@ kind: "package-reference"
 | `summarizationProvider` | `''` | 与 `summarizationModel` 一起设置；空对使用最新已路由请求目标，再回退到 `AgentOptions` 对。 |
 | `summarizationModel` | `''` | 与 `summarizationProvider` 一起设置；空对使用最新已路由请求目标，再回退到 `AgentOptions` 对。 |
 | `maxTokens` | `8192` | 摘要请求的输出上限；可包含推理 token。 |
+| `maxAutomaticSummaryFailures` | `1` | 同一会话和摘要策略的连续自动摘要 token 上限失败次数，必须为正整数。 |
 | `compactionRetries` | `1` | 压力仍高于阈值时，在首次压缩后进行的额外尝试次数。 |
 | `maxOverflowRetries` | `1` | 已确认上下文窗口溢出后的最大重试次数；`0` 只禁用恢复。 |
 | `modelPolicies` | `[]` | 针对个别模型路由的精确 `{ provider, model, ...partialPolicy }` 覆盖。 |
@@ -81,6 +82,8 @@ kind: "package-reference"
 最旧的平衡范围会被替换为一条摘要消息，近期尾部保持逐字不变；对话从摘要继续。操作会报告压缩了多少历史项以及估算释放的 token 数。如果没有任何内容可以安全压缩——例如整个对话就是一个不可分单元——则不会有任何改变，也不会向会话日志写入任何内容。如果没有模型可以撰写摘要（既未配置目标，也还没有已路由请求），压缩会失败并给出清晰错误，提示你配置摘要提供方与模型，或先路由一次请求。
 
 ### 通过 /compact 按需压缩
+
+摘要连续截断达到 `maxAutomaticSummaryFailures` 后，自动摘要调用跨步骤和轮次暂停。警告标明会话、摘要路由和已用完的预算。无模型修剪仍可执行；溢出时若没有持久化缩减，保留原始请求错误。手动检查点成功提交，或摘要提供方、模型、输出上限、失败次数上限变化后，自动摘要恢复。失败或无内容可压缩的手动尝试不重置预算。预算仅保存在当前后端和会话内；重建后端会创建新的预算。部分摘要永远不会成为检查点。
 
 挂载 `dsh-command-compact` 后，在聊天 UI 中输入 `/compact` 即可立即压缩，即使未达到压力阈值。命令会报告压缩了多少历史项以及估算节省的 token 数。当 agent 正在轮次中或压缩已在运行时，`/compact` 会报告压缩暂不可用；运行期间你发送的提示词会被接受，并在压缩结束后才开始。
 

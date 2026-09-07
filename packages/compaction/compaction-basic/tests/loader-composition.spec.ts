@@ -56,6 +56,36 @@ async function loadYaml(lines: readonly string[]): Promise<Context> {
 }
 
 describe('real Loader composition', () => {
+  it.each([0, -1, 1.5])('rejects an invalid automatic summary failure budget %s', async (value) => {
+    await expect(loadYaml([
+      '- name: "@deepseek-ai/dsh-llm"',
+      '- name: "@deepseek-ai/dsh-session"',
+      '- name: "@deepseek-ai/dsh-session-projection"',
+      '- name: "@deepseek-ai/dsh-token-meter"',
+      '- name: "@deepseek-ai/dsh-compaction-basic"',
+      '  config:',
+      `    maxAutomaticSummaryFailures: ${value}`,
+    ])).rejects.toThrow()
+  })
+
+  it('loads an automatic summary budget with an exact-target override', async () => {
+    const ctx = await loadYaml([
+      '- name: "@deepseek-ai/dsh-llm"',
+      '- name: "@deepseek-ai/dsh-session"',
+      '- name: "@deepseek-ai/dsh-session-projection"',
+      '- name: "@deepseek-ai/dsh-token-meter"',
+      '- name: "@deepseek-ai/dsh-compaction-basic"',
+      '  config:',
+      '    maxAutomaticSummaryFailures: 2',
+      '    modelPolicies:',
+      '      - provider: mock',
+      '        model: mock',
+      '        maxAutomaticSummaryFailures: 3',
+    ])
+    expect((ctx.compaction as BasicCompactionEngine).config.maxAutomaticSummaryFailures).toBe(2)
+    expect((ctx.compaction as BasicCompactionEngine).config.modelPolicies[0]?.maxAutomaticSummaryFailures).toBe(3)
+  })
+
   it('loads the shipped token-meter, pruning, and compaction-basic YAML order', async () => {
     const loaded = await loadYaml([
       "- name: '@deepseek-ai/dsh-llm'",

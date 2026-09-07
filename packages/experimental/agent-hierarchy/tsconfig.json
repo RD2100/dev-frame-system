@@ -12,6 +12,7 @@
     { "path": "../session-identity" },
     { "path": "../../core/agent" },
     { "path": "../../core/session" },
+    { "path": "../../session/session-persistence" },
     { "path": "../../core/tools" },
     { "path": "../../subagent/subagent" }
   ]
