@@ -188,3 +188,21 @@ and is not reproduced here beyond the deferred-items section.
   `resolveCaller`, `requireNonEmpty`) — catalog regen (gen-cordis-catalog +
   api-catalog) owed by the single-write pass. No new session event types;
   the persistence-catalog gate is unaffected.
+
+## ⑧ Loader entry fix (commit `a5bbfa7490`, P1 close-out blocker)
+
+- The package root default-exported the service alongside the consumer
+  namespace; the Loader unwraps `exports.default` first, so a shipped
+  composition mounted the bare service, `apply` never ran, and the
+  `agent_dispatch` tool never registered. The default export is removed:
+  the function-plugin namespace is the only unwrapped entry; the named
+  `AgentDispatch` export stays for direct service consumers.
+- New `tests/loader-composition.spec.ts` boots a real cordis.yml through the
+  real Loader (full stack, hierarchy role policy naming `agent_dispatch`,
+  jsonl persistence) and proves the face the direct-service suites could
+  not: tool registered on the namespace face, executable on controller and
+  lead faces (lead→worker through the configured approved set), unknown on
+  the worker face. Red-proofed: restoring the default export fails the
+  tool-registration assertion.
+- Evidence: `tsc -b tsconfig.host.json` exit 0; vitest all three dispatch
+  specs exit 0 (12 passed); `git diff --cached --check` exit 0.

@@ -46,6 +46,8 @@
     "@deepseek-ai/dsh-compaction-basic": "workspace:^",
     "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:^",
     "@deepseek-ai/dsh-cordis-client-runner": "workspace:^",
+    "@deepseek-ai/dsh-experimental-agent-dispatch": "workspace:^",
+    "@deepseek-ai/dsh-experimental-agent-hierarchy": "workspace:^",
     "@deepseek-ai/dsh-experimental-command-goal-binding": "workspace:^",
     "@deepseek-ai/dsh-experimental-project-memory": "workspace:^",
     "@deepseek-ai/dsh-experimental-session-identity": "workspace:^",

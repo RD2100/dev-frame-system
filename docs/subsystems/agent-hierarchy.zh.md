@@ -36,14 +36,32 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.agentDispatch` — `AgentDispatch`
 
-The host daily-dispatch entry. Hard-injects the real creation engine (`ctx.agentHierarchy`), the role authority (`ctx.agentBindings`), and the worktree registry whose rows make the worktree proof real, and fails at activation when any is absent. Denials raised here are AgentDispatchErrors; the engine's own policy denials propagate unchanged.
+The host daily-dispatch entry. Hard-injects the real creation engine (`ctx.agentHierarchy`), the role authority (`ctx.agentBindings`), and the worktree registry whose rows make the worktree proof real, and fails at activation when any is absent. Denials raised here are AgentDispatchErrors; the engine's own denials — including the reserved-child recovery refusal for an identity whose session is no longer live — propagate unchanged.
 
 ```ts cordis-catalog
+/**
+ * Find the durable identity an earlier dispatch returned for one parent
+ * task, if any. The matching rule is the engine's own dedupe key
+ * (`parentSessionId` + `taskId`). A retry reuses the identity only by
+ * passing `record.agentId` back as `options.sessionId`; reuse never
+ * re-delivers a prompt, and a child whose session is no longer live keeps
+ * its engine-owned recovery lane instead of a replacement child.
+ * @param parent - The dispatching parent the child was created for.
+ * @param taskId - The task the child was created for.
+ * @returns The durable identity and its live state, or `undefined` when
+ *   no dispatched child exists for the pair.
+ */
+findDispatchedChild(parent: Agent, taskId: TaskId): DispatchedIdentity | undefined
+
 /**
  * Validate one dispatch request at the entry and, when it holds, create the
  * child through the real hierarchy engine. The authoritative registry rows
  * prove registration before any live observation runs; a git failure whose
- * refusal carries the registry's classified kind rethrows unchanged.
+ * refusal carries the registry's classified kind rethrows unchanged. A
+ * parent task that already has a child refuses with
+ * `DISPATCH_IDENTITY_EXISTS` until the caller passes the returned agent id
+ * back as `sessionId` — the engine's own dedupe then answers with the same
+ * child.
  * @param parent - The exact live dispatching agent.
  * @param request - The child creation request; `worktree` is required at
  *   this entry because the dispatched child owns one registered worktree.
@@ -53,6 +71,26 @@ The host daily-dispatch entry. Hard-injects the real creation engine (`ctx.agent
  * @returns The published child and its durable binding record.
  */
 async createChildAgent( parent: Agent, request: CreateChildAgentRequest, options: DispatchAgentOptions, ): Promise<CreatedChildAgent>
+
+/**
+ * Recover one reserved child through the engine's fixed recovery lane after
+ * the same entry proof the creation path runs. The caller must pass the
+ * reserved identity back as `sessionId`; recovery reuses the same host
+ * assembly as creation — the preset composition join and the registered
+ * worktree's single-writer binding are re-established by the composed
+ * setup on the recovered session — and never delivers a prompt (the type
+ * omits one). The engine decides between resuming the existing session
+ * and, only on a typed missing-log result, republishing under the same
+ * identity. Corruption, cancellation, and foreign-identity failures
+ * propagate unchanged — no replacement child.
+ * @param parent - The exact live dispatching agent recorded by the reservation.
+ * @param request - The original creation request, unchanged.
+ * @param options - The reserved identity, the owner workspace anchoring the
+ *   registry proof, and the factory setup, route, and cancellation to
+ *   reinstall with the recovered session.
+ * @returns The recovered child and its unchanged durable binding record.
+ */
+async recoverChildAgent( parent: Agent, request: CreateChildAgentRequest, options: RecoverDispatchAgentOptions, ): Promise<CreatedChildAgent>
 ```
 
 Types: [Agent](core.zh.md)

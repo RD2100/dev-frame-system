@@ -801,6 +801,26 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'devframeLeadRoleLanding',
+    summary: 'The host seam the landing wave provides.',
+    description: 'The host seam the landing wave provides.',
+    methods: [
+      {
+        signature: 'land(agentId: SessionId): Promise<LandingOutcome>',
+        description: 'Land the role-policy snapshot assigning one agent\'s lead binding.',
+        parameters: [{ name: 'agentId', description: 'The published agent identity whose binding names a lead and its controller parent.' }],
+        returns: 'What the landing did with the fact.',
+        throws: ['When the binding is missing or not a controller-parented lead, the parent Session is gone, the DevFrame controller dispatched before its role policy landed, the recorded policy version scheme cannot be advanced, or the durable append failed.'],
+      },
+      {
+        signature: 'failureOf(controllerSessionId: SessionId): unknown',
+        description: 'The latched failure of the last landing for one controller Session, if any; a latched failure is rethrown by the next landing for that Session.',
+        parameters: [{ name: 'controllerSessionId', description: 'The controller Session whose landing failed.' }],
+        returns: 'The latched error, or undefined.',
+      },
+    ],
+  },
+  {
     key: 'devframeTaskGrading',
     summary: 'Host seam declaring the per-session grading context before memory runs.',
     description: 'Host seam declaring the per-session grading context before memory runs.',
@@ -4390,6 +4410,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'KvUnitDescriptor',
     declaration: 'export interface KvUnitDescriptor {\n    readonly name: string;\n    readonly version: number;\n    readonly tables: readonly string[];\n    readonly hasGlobal: boolean;\n    readonly layout?: \'single\' | \'per-record\';\n}',
+  },
+  {
+    name: 'LandingOutcome',
+    declaration: 'export type LandingOutcome = \'landed\' | \'assigned\' | \'skipped\';',
   },
   {
     name: 'LlmAdapter',

@@ -24,4 +24,11 @@ export {
   type DevFrameTaskGrading,
   type DevFrameTaskGradingDeclaration,
 } from './task-warning-listener.ts'
+import * as leadRoleLandingModule from './lead-role-landing.ts'
+/** The plugin namespace (name + inject + apply) as cordis plugin mounting expects it. */
+export const leadRoleLanding = leadRoleLandingModule
+export {
+  type DevFrameLeadRoleLanding,
+  type LandingOutcome,
+} from './lead-role-landing.ts'
 export type * from './permissions/events.ts'

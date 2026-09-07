@@ -186,6 +186,38 @@ interface GoalChanged {
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxdevframeleadrolelanding--devframeleadrolelanding"></a>
+
+### `ctx.devframeLeadRoleLanding` — `DevFrameLeadRoleLanding`
+
+The host seam the landing wave provides.
+
+```ts cordis-catalog
+/**
+ * Land the role-policy snapshot assigning one agent's lead binding.
+ * @param agentId - The published agent identity whose binding names a lead
+ *   and its controller parent.
+ * @returns What the landing did with the fact.
+ * @throws When the binding is missing or not a controller-parented lead,
+ *   the parent Session is gone, the DevFrame controller dispatched before
+ *   its role policy landed, the recorded policy version scheme cannot be
+ *   advanced, or the durable append failed.
+ */
+land(agentId: SessionId): Promise<LandingOutcome>
+
+/**
+ * The latched failure of the last landing for one controller Session, if
+ * any; a latched failure is rethrown by the next landing for that Session.
+ * @param controllerSessionId - The controller Session whose landing failed.
+ * @returns The latched error, or undefined.
+ */
+failureOf(controllerSessionId: SessionId): unknown
+```
+
+Types: [SessionId](core.zh.md)
+
+Source: [`packages/experimental/devframe/src/lead-role-landing.ts`](../../packages/experimental/devframe/src/lead-role-landing.ts)
+
 <a id="ctxdevframetaskgrading--devframetaskgrading"></a>
 
 ### `ctx.devframeTaskGrading` — `DevFrameTaskGrading`
