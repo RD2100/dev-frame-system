@@ -1,0 +1,135 @@
+{
+  "header": [
+    {
+      "seq": 12,
+      "provider": "huoshan-1",
+      "model": "glm-5.3-flash"
+    }
+  ],
+  "context": [
+    {
+      "seq": 13,
+      "provider": "huoshan-1",
+      "model": "glm-5.3-flash"
+    }
+  ],
+  "chunkRows": {
+    "step1Index1": [
+      {
+        "seq0": 115,
+        "turn": 1,
+        "step": 1,
+        "index": 1,
+        "id": "call_38345d397bf942c1bcf6369c",
+        "name": "cordis_inspect_query",
+        "args": [
+          "{\"",
+          "input",
+          "\":\"",
+          "{\\\"",
+          "service",
+          "\\\":",
+          " \\\"",
+          "workflow",
+          "Engine",
+          "\\\"}",
+          "\"",
+          ",\"",
+          "method",
+          "\":\"",
+          "list",
+          "Service",
+          "\"",
+          ",\""
+        ]
+      },
+      {
+        "seq0": 133,
+        "turn": 1,
+        "step": 1,
+        "index": 1,
+        "id": "call_38345d397bf942c1bcf6369c",
+        "name": "cordis_inspect_query",
+        "args": [
+          "platform",
+          "\":\"",
+          "host",
+          "\"",
+          ",\"",
+          "provider",
+          "\":\"",
+          "Service",
+          "\"",
+          "}"
+        ]
+      }
+    ]
+  },
+  "calls": [
+    {
+      "seq": 168,
+      "turn": 1,
+      "step": 1,
+      "callId": "call_38345d397bf942c1bcf6369c",
+      "name": "cordis_inspect_query",
+      "arguments": "{\"input\":\"{\\\"service\\\": \\\"workflowEngine\\\"}\",\"method\":\"listService\",\"platform\":\"host\",\"provider\":\"Service\"}"
+    },
+    {
+      "seq": 170,
+      "turn": 1,
+      "step": 1,
+      "callId": "call_96c49375392c48ee8a62ecbf",
+      "name": "cordis_inspect_query",
+      "arguments": "{\"method\":\"listBuiltins\",\"platform\":\"host\",\"provider\":\"Builtin\"}"
+    },
+    {
+      "seq": 338,
+      "turn": 1,
+      "step": 2,
+      "callId": "call_d19e537484ef428087a32bfa",
+      "name": "cordis_inspect_query",
+      "arguments": "{\"input\":\"{\\\"service\\\": \\\"workflowEngine\\\"}\",\"method\":\"listService\",\"platform\":\"host\",\"provider\":\"Service\"}"
+    },
+    {
+      "seq": 471,
+      "turn": 1,
+      "step": 3,
+      "callId": "call_d2858c19fce64043853c52e2",
+      "name": "cordis_inspect_query",
+      "arguments": "{\"input\":\"{\\\"service\\\": \\\"workflowEngine\\\"}\",\"method\":\"listService\",\"platform\":\"host\",\"provider\":\"Service\"}"
+    }
+  ],
+  "rejections": [
+    {
+      "seq": 169,
+      "callId": "call_38345d397bf942c1bcf6369c",
+      "isError": true,
+      "text": "Error: Host Cordis inspect Service.listService rejected input: \"input\" must be an object"
+    },
+    {
+      "seq": 339,
+      "callId": "call_d19e537484ef428087a32bfa",
+      "isError": true,
+      "text": "Error: Host Cordis inspect Service.listService rejected input: \"input\" must be an object"
+    },
+    {
+      "seq": 472,
+      "callId": "call_d2858c19fce64043853c52e2",
+      "isError": true,
+      "text": "Error: Host Cordis inspect Service.listService rejected input: \"input\" must be an object"
+    }
+  ],
+  "okResults": [
+    {
+      "seq": 171,
+      "callId": "call_96c49375392c48ee8a62ecbf",
+      "excerpt": "{\n  \"platform\": \"host\",\n  \"provider\": \"Builtin\",\n  \"method\": \"listBuiltins\",\n  \"data\": {\n    \"builtins\": [\n      {\n        \"name\": \"ctx\",\n        \"description\": \"Restricted Cordis Context. Prefer ctx."
+    }
+  ],
+  "turnEnds": [
+    {
+      "seq": 819,
+      "turn": 1
+    }
+  ]
+}

@@ -1,0 +1,1700 @@
+{
+  "summary": {
+    "frames": 3572,
+    "tornStart": null,
+    "recordCount": 3888,
+    "steps": {
+      "turn1-step1": {
+        "deltaCount": 24,
+        "indexes": [
+          1,
+          2,
+          3
+        ],
+        "ids": [
+          "call_5d73950573374f4386848578",
+          "call_c7046a37d3e54c82a76c44a0",
+          "call_4c0c547ae09946289e8ffdc0"
+        ]
+      },
+      "turn1-step2": {
+        "deltaCount": 55,
+        "indexes": [
+          1,
+          2,
+          3
+        ],
+        "ids": [
+          "call_5ffc55378e9c48b698e87414",
+          "call_66f4702be29f4dcdb3dba636",
+          "call_98480ff041f94b02a4cdef1c"
+        ]
+      },
+      "turn1-step3": {
+        "deltaCount": 72,
+        "indexes": [
+          2,
+          3,
+          4
+        ],
+        "ids": [
+          "call_26d94bf7c11a4d80938dbbe4",
+          "call_500547a7266c450dbec576f2",
+          "call_939d19c2f5f64dab8bf6722d"
+        ]
+      },
+      "turn1-step4": {
+        "deltaCount": 61,
+        "indexes": [
+          2,
+          3,
+          4
+        ],
+        "ids": [
+          "call_ab27adfeea9240ea8ae88e29",
+          "call_9af36d8fbe94469babb0963b",
+          "call_178e2ff39c194ce682a5f9b4"
+        ]
+      },
+      "turn1-step5": {
+        "deltaCount": 2243,
+        "indexes": [
+          2
+        ],
+        "ids": [
+          "call_22b4cacb268245c8b0ba6b19"
+        ]
+      },
+      "turn1-step6": {
+        "deltaCount": 22,
+        "indexes": [
+          2
+        ],
+        "ids": [
+          "call_2b68cc3e829d4b0f83440477"
+        ]
+      },
+      "turn1-step7": {
+        "deltaCount": 2227,
+        "indexes": [
+          2
+        ],
+        "ids": [
+          "call_0cf3a2231cd344d3a8092bea"
+        ]
+      },
+      "turn1-step8": {
+        "deltaCount": 19,
+        "indexes": [
+          0
+        ],
+        "ids": [
+          "call_eaf1e22f72cd4723af0fea3e"
+        ]
+      },
+      "turn1-step9": {
+        "deltaCount": 2302,
+        "indexes": [
+          2
+        ],
+        "ids": [
+          "call_022cfbb196c64fd3ae62ff5d"
+        ]
+      },
+      "turn1-step10": {
+        "deltaCount": 19,
+        "indexes": [
+          0
+        ],
+        "ids": [
+          "call_68fbd49b4a4742418fb55c15"
+        ]
+      },
+      "turn1-step11": {
+        "deltaCount": 16,
+        "indexes": [
+          2
+        ],
+        "ids": [
+          "call_d50820f49e924abc8b6db4c6"
+        ]
+      },
+      "turn1-step12": {
+        "deltaCount": 16,
+        "indexes": [
+          2
+        ],
+        "ids": [
+          "call_67828b73f7ec409d8e32b383"
+        ]
+      },
+      "turn1-step13": {
+        "deltaCount": 4338,
+        "indexes": [
+          2
+        ],
+        "ids": [
+          "call_6804bf8c2a5748c38b4852f5"
+        ]
+      },
+      "turn1-step14": {
+        "deltaCount": 21,
+        "indexes": [
+          0
+        ],
+        "ids": [
+          "call_f1b6700074fa41f2934c4869"
+        ]
+      },
+      "turn1-step15": {
+        "deltaCount": 17,
+        "indexes": [
+          1
+        ],
+        "ids": [
+          "call_a4f4b7f5ea1046c0b35137d1"
+        ]
+      },
+      "turn1-step16": {
+        "deltaCount": 17,
+        "indexes": [
+          2
+        ],
+        "ids": [
+          "call_7b944cab1acf4fa295971b90"
+        ]
+      },
+      "turn1-step17": {
+        "deltaCount": 17,
+        "indexes": [
+          2
+        ],
+        "ids": [
+          "call_96332d4e922a4c448e8c1035"
+        ]
+      },
+      "turn1-step18": {
+        "deltaCount": 491,
+        "indexes": [
+          2,
+          3
+        ],
+        "ids": [
+          "call_5c5e99ba9fc94a42be03b006",
+          "call_dd955a64859f4ad8b5e1e0c3"
+        ]
+      },
+      "turn1-step19": {
+        "deltaCount": 17,
+        "indexes": [
+          2
+        ],
+        "ids": [
+          "call_f776182ab0b94564a41878e9"
+        ]
+      },
+      "turn2-step1": {
+        "deltaCount": 34,
+        "indexes": [
+          2,
+          3
+        ],
+        "ids": [
+          "call_1aeb3dfb9c2f4f6b99202bfe",
+          "call_4bf9666214aa454b92fe485e"
+        ]
+      }
+    },
+    "rejections": [
+      {
+        "seq": 2450,
+        "callId": "call_500547a7266c450dbec576f2",
+        "excerpt": "Error: Host Cordis inspect Service.listService rejected input: \"input\" must be an object"
+      },
+      {
+        "seq": 2452,
+        "callId": "call_939d19c2f5f64dab8bf6722d",
+        "excerpt": "Error: Host Cordis inspect Service.listService rejected input: \"input\" must be an object"
+      },
+      {
+        "seq": 4114,
+        "callId": "call_ab27adfeea9240ea8ae88e29",
+        "excerpt": "Error: Host Cordis inspect Service.listService rejected input: \"input\" must be an object"
+      }
+    ]
+  },
+  "rejections": [
+    {
+      "seq": 2450,
+      "callId": "call_500547a7266c450dbec576f2",
+      "excerpt": "Error: Host Cordis inspect Service.listService rejected input: \"input\" must be an object"
+    },
+    {
+      "seq": 2452,
+      "callId": "call_939d19c2f5f64dab8bf6722d",
+      "excerpt": "Error: Host Cordis inspect Service.listService rejected input: \"input\" must be an object"
+    },
+    {
+      "seq": 4114,
+      "callId": "call_ab27adfeea9240ea8ae88e29",
+      "excerpt": "Error: Host Cordis inspect Service.listService rejected input: \"input\" must be an object"
+    }
+  ],
+  "stream": {
+    "turn1-step2": [
+      {
+        "seq": 1059,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": "{\""
+      },
+      {
+        "seq": 1060,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": "limit"
+      },
+      {
+        "seq": 1061,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": "\":"
+      },
+      {
+        "seq": 1062,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": "10"
+      },
+      {
+        "seq": 1063,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": ""
+      },
+      {
+        "seq": 1064,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 1065,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": "query"
+      },
+      {
+        "seq": 1066,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 1067,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": "workflow"
+      },
+      {
+        "seq": 1068,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": " worker"
+      },
+      {
+        "seq": 1069,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": " hu"
+      },
+      {
+        "seq": 1070,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": "osh"
+      },
+      {
+        "seq": 1071,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": "an"
+      },
+      {
+        "seq": 1072,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": " glm"
+      },
+      {
+        "seq": 1073,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 1074,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 1075,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": "scope"
+      },
+      {
+        "seq": 1076,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 1077,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": "project"
+      },
+      {
+        "seq": 1078,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 1079,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "argumentsDelta": "}"
+      },
+      {
+        "seq": 1081,
+        "index": 2,
+        "id": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "{\""
+      },
+      {
+        "seq": 1082,
+        "index": 2,
+        "id": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "method"
+      },
+      {
+        "seq": 1083,
+        "index": 2,
+        "id": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 1084,
+        "index": 2,
+        "id": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "list"
+      },
+      {
+        "seq": 1085,
+        "index": 2,
+        "id": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "Service"
+      },
+      {
+        "seq": 1086,
+        "index": 2,
+        "id": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 1087,
+        "index": 2,
+        "id": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 1088,
+        "index": 2,
+        "id": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "platform"
+      },
+      {
+        "seq": 1089,
+        "index": 2,
+        "id": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 1090,
+        "index": 2,
+        "id": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "host"
+      },
+      {
+        "seq": 1091,
+        "index": 2,
+        "id": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 1092,
+        "index": 2,
+        "id": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 1093,
+        "index": 2,
+        "id": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "provider"
+      },
+      {
+        "seq": 1094,
+        "index": 2,
+        "id": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 1095,
+        "index": 2,
+        "id": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "Service"
+      },
+      {
+        "seq": 1096,
+        "index": 2,
+        "id": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 1097,
+        "index": 2,
+        "id": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "}"
+      },
+      {
+        "seq": 1099,
+        "index": 3,
+        "id": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "{\""
+      },
+      {
+        "seq": 1100,
+        "index": 3,
+        "id": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "method"
+      },
+      {
+        "seq": 1101,
+        "index": 3,
+        "id": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 1102,
+        "index": 3,
+        "id": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "list"
+      },
+      {
+        "seq": 1103,
+        "index": 3,
+        "id": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "Built"
+      },
+      {
+        "seq": 1104,
+        "index": 3,
+        "id": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "ins"
+      },
+      {
+        "seq": 1105,
+        "index": 3,
+        "id": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 1106,
+        "index": 3,
+        "id": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 1107,
+        "index": 3,
+        "id": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "platform"
+      },
+      {
+        "seq": 1108,
+        "index": 3,
+        "id": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 1109,
+        "index": 3,
+        "id": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "host"
+      },
+      {
+        "seq": 1110,
+        "index": 3,
+        "id": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 1111,
+        "index": 3,
+        "id": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 1112,
+        "index": 3,
+        "id": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "provider"
+      },
+      {
+        "seq": 1113,
+        "index": 3,
+        "id": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 1114,
+        "index": 3,
+        "id": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "Builtin\""
+      },
+      {
+        "seq": 1115,
+        "index": 3,
+        "id": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "}"
+      }
+    ],
+    "turn1-step3": [
+      {
+        "seq": 2365,
+        "index": 2,
+        "id": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "{\""
+      },
+      {
+        "seq": 2366,
+        "index": 2,
+        "id": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "method"
+      },
+      {
+        "seq": 2367,
+        "index": 2,
+        "id": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 2368,
+        "index": 2,
+        "id": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "list"
+      },
+      {
+        "seq": 2369,
+        "index": 2,
+        "id": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "Tools"
+      },
+      {
+        "seq": 2370,
+        "index": 2,
+        "id": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 2371,
+        "index": 2,
+        "id": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 2372,
+        "index": 2,
+        "id": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "platform"
+      },
+      {
+        "seq": 2373,
+        "index": 2,
+        "id": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 2374,
+        "index": 2,
+        "id": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "host"
+      },
+      {
+        "seq": 2375,
+        "index": 2,
+        "id": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 2376,
+        "index": 2,
+        "id": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 2377,
+        "index": 2,
+        "id": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "provider"
+      },
+      {
+        "seq": 2378,
+        "index": 2,
+        "id": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 2379,
+        "index": 2,
+        "id": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "Tool"
+      },
+      {
+        "seq": 2380,
+        "index": 2,
+        "id": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 2381,
+        "index": 2,
+        "id": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "}"
+      },
+      {
+        "seq": 2383,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "{\""
+      },
+      {
+        "seq": 2384,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "input"
+      },
+      {
+        "seq": 2385,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 2386,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "{\\\""
+      },
+      {
+        "seq": 2387,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "service"
+      },
+      {
+        "seq": 2388,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\\\":"
+      },
+      {
+        "seq": 2389,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": " \\\""
+      },
+      {
+        "seq": 2390,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "workflow"
+      },
+      {
+        "seq": 2391,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "Engine"
+      },
+      {
+        "seq": 2392,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\\\"}"
+      },
+      {
+        "seq": 2393,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 2394,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 2395,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "method"
+      },
+      {
+        "seq": 2396,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 2397,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "list"
+      },
+      {
+        "seq": 2398,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "Service"
+      },
+      {
+        "seq": 2399,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 2400,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 2401,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "platform"
+      },
+      {
+        "seq": 2402,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 2403,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "host"
+      },
+      {
+        "seq": 2404,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 2405,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 2406,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "provider"
+      },
+      {
+        "seq": 2407,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 2408,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "Service"
+      },
+      {
+        "seq": 2409,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 2410,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "}"
+      },
+      {
+        "seq": 2412,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "{\""
+      },
+      {
+        "seq": 2413,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "input"
+      },
+      {
+        "seq": 2414,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 2415,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "{\\\""
+      },
+      {
+        "seq": 2416,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "service"
+      },
+      {
+        "seq": 2417,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\\\":"
+      },
+      {
+        "seq": 2418,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": " \\\""
+      },
+      {
+        "seq": 2419,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "sub"
+      },
+      {
+        "seq": 2420,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "agents"
+      },
+      {
+        "seq": 2421,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\\\"}"
+      },
+      {
+        "seq": 2422,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 2423,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 2424,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "method"
+      },
+      {
+        "seq": 2425,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 2426,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "list"
+      },
+      {
+        "seq": 2427,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "Service"
+      },
+      {
+        "seq": 2428,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 2429,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 2430,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "platform"
+      },
+      {
+        "seq": 2431,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 2432,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "host"
+      },
+      {
+        "seq": 2433,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 2434,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 2435,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "provider"
+      },
+      {
+        "seq": 2436,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 2437,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "Service\""
+      },
+      {
+        "seq": 2438,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "}"
+      }
+    ],
+    "turn1-step4": [
+      {
+        "seq": 4042,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "{\""
+      },
+      {
+        "seq": 4043,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "input"
+      },
+      {
+        "seq": 4044,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 4045,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "{\\\""
+      },
+      {
+        "seq": 4046,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "service"
+      },
+      {
+        "seq": 4047,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\\\":"
+      },
+      {
+        "seq": 4048,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": " \\\""
+      },
+      {
+        "seq": 4049,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "workflow"
+      },
+      {
+        "seq": 4050,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "Engine"
+      },
+      {
+        "seq": 4051,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\\\"}"
+      },
+      {
+        "seq": 4052,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 4053,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 4054,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "method"
+      },
+      {
+        "seq": 4055,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 4056,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "list"
+      },
+      {
+        "seq": 4057,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "Service"
+      },
+      {
+        "seq": 4058,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 4059,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 4060,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "platform"
+      },
+      {
+        "seq": 4061,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 4062,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "host"
+      },
+      {
+        "seq": 4063,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 4064,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 4065,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "provider"
+      },
+      {
+        "seq": 4066,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 4067,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "Service"
+      },
+      {
+        "seq": 4068,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 4069,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "argumentsDelta": "}"
+      },
+      {
+        "seq": 4071,
+        "index": 3,
+        "id": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "argumentsDelta": "{\""
+      },
+      {
+        "seq": 4072,
+        "index": 3,
+        "id": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "argumentsDelta": "limit"
+      },
+      {
+        "seq": 4073,
+        "index": 3,
+        "id": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "argumentsDelta": "\":"
+      },
+      {
+        "seq": 4074,
+        "index": 3,
+        "id": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "argumentsDelta": "10"
+      },
+      {
+        "seq": 4075,
+        "index": 3,
+        "id": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "argumentsDelta": ""
+      },
+      {
+        "seq": 4076,
+        "index": 3,
+        "id": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 4077,
+        "index": 3,
+        "id": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "argumentsDelta": "query"
+      },
+      {
+        "seq": 4078,
+        "index": 3,
+        "id": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 4079,
+        "index": 3,
+        "id": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "argumentsDelta": "deliver"
+      },
+      {
+        "seq": 4080,
+        "index": 3,
+        "id": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "argumentsDelta": "able"
+      },
+      {
+        "seq": 4081,
+        "index": 3,
+        "id": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 4082,
+        "index": 3,
+        "id": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 4083,
+        "index": 3,
+        "id": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "argumentsDelta": "scope"
+      },
+      {
+        "seq": 4084,
+        "index": 3,
+        "id": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 4085,
+        "index": 3,
+        "id": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "argumentsDelta": "project"
+      },
+      {
+        "seq": 4086,
+        "index": 3,
+        "id": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 4087,
+        "index": 3,
+        "id": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "argumentsDelta": "}"
+      },
+      {
+        "seq": 4089,
+        "index": 4,
+        "id": "call_178e2ff39c194ce682a5f9b4",
+        "name": "memory_search",
+        "argumentsDelta": "{\""
+      },
+      {
+        "seq": 4090,
+        "index": 4,
+        "id": "call_178e2ff39c194ce682a5f9b4",
+        "name": "memory_search",
+        "argumentsDelta": "limit"
+      },
+      {
+        "seq": 4091,
+        "index": 4,
+        "id": "call_178e2ff39c194ce682a5f9b4",
+        "name": "memory_search",
+        "argumentsDelta": "\":"
+      },
+      {
+        "seq": 4092,
+        "index": 4,
+        "id": "call_178e2ff39c194ce682a5f9b4",
+        "name": "memory_search",
+        "argumentsDelta": "10"
+      },
+      {
+        "seq": 4093,
+        "index": 4,
+        "id": "call_178e2ff39c194ce682a5f9b4",
+        "name": "memory_search",
+        "argumentsDelta": ""
+      },
+      {
+        "seq": 4094,
+        "index": 4,
+        "id": "call_178e2ff39c194ce682a5f9b4",
+        "name": "memory_search",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 4095,
+        "index": 4,
+        "id": "call_178e2ff39c194ce682a5f9b4",
+        "name": "memory_search",
+        "argumentsDelta": "query"
+      },
+      {
+        "seq": 4096,
+        "index": 4,
+        "id": "call_178e2ff39c194ce682a5f9b4",
+        "name": "memory_search",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 4097,
+        "index": 4,
+        "id": "call_178e2ff39c194ce682a5f9b4",
+        "name": "memory_search",
+        "argumentsDelta": "worker"
+      },
+      {
+        "seq": 4098,
+        "index": 4,
+        "id": "call_178e2ff39c194ce682a5f9b4",
+        "name": "memory_search",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 4099,
+        "index": 4,
+        "id": "call_178e2ff39c194ce682a5f9b4",
+        "name": "memory_search",
+        "argumentsDelta": ",\""
+      },
+      {
+        "seq": 4100,
+        "index": 4,
+        "id": "call_178e2ff39c194ce682a5f9b4",
+        "name": "memory_search",
+        "argumentsDelta": "scope"
+      },
+      {
+        "seq": 4101,
+        "index": 4,
+        "id": "call_178e2ff39c194ce682a5f9b4",
+        "name": "memory_search",
+        "argumentsDelta": "\":\""
+      },
+      {
+        "seq": 4102,
+        "index": 4,
+        "id": "call_178e2ff39c194ce682a5f9b4",
+        "name": "memory_search",
+        "argumentsDelta": "project"
+      },
+      {
+        "seq": 4103,
+        "index": 4,
+        "id": "call_178e2ff39c194ce682a5f9b4",
+        "name": "memory_search",
+        "argumentsDelta": "\""
+      },
+      {
+        "seq": 4104,
+        "index": 4,
+        "id": "call_178e2ff39c194ce682a5f9b4",
+        "name": "memory_search",
+        "argumentsDelta": "}"
+      }
+    ]
+  },
+  "dispatched": {
+    "turn1-step2": [
+      {
+        "seq": 1123,
+        "callId": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "arguments": "{\"limit\":10,\"query\":\"workflow worker huoshan glm\",\"scope\":\"project\"}"
+      },
+      {
+        "seq": 1125,
+        "callId": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "arguments": "{\"method\":\"listService\",\"platform\":\"host\",\"provider\":\"Service\"}"
+      },
+      {
+        "seq": 1127,
+        "callId": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "arguments": "{\"method\":\"listBuiltins\",\"platform\":\"host\",\"provider\":\"Builtin\"}"
+      }
+    ],
+    "turn1-step3": [
+      {
+        "seq": 2447,
+        "callId": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "arguments": "{\"method\":\"listTools\",\"platform\":\"host\",\"provider\":\"Tool\"}"
+      },
+      {
+        "seq": 2449,
+        "callId": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "arguments": "{\"input\":\"{\\\"service\\\": \\\"workflowEngine\\\"}\",\"method\":\"listService\",\"platform\":\"host\",\"provider\":\"Service\"}"
+      },
+      {
+        "seq": 2451,
+        "callId": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "arguments": "{\"input\":\"{\\\"service\\\": \\\"subagents\\\"}\",\"method\":\"listService\",\"platform\":\"host\",\"provider\":\"Service\"}"
+      }
+    ],
+    "turn1-step4": [
+      {
+        "seq": 4113,
+        "callId": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "arguments": "{\"input\":\"{\\\"service\\\": \\\"workflowEngine\\\"}\",\"method\":\"listService\",\"platform\":\"host\",\"provider\":\"Service\"}"
+      },
+      {
+        "seq": 4115,
+        "callId": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "arguments": "{\"limit\":10,\"query\":\"deliverable\",\"scope\":\"project\"}"
+      },
+      {
+        "seq": 4116,
+        "callId": "call_178e2ff39c194ce682a5f9b4",
+        "name": "memory_search",
+        "arguments": "{\"limit\":10,\"query\":\"worker\",\"scope\":\"project\"}"
+      }
+    ]
+  },
+  "blockEnds": {
+    "turn1-step2": [
+      {
+        "seq": 1117,
+        "index": 1,
+        "id": "call_5ffc55378e9c48b698e87414",
+        "name": "memory_search",
+        "arguments": "{\"limit\":10,\"query\":\"workflow worker huoshan glm\",\"scope\":\"project\"}"
+      },
+      {
+        "seq": 1118,
+        "index": 2,
+        "id": "call_66f4702be29f4dcdb3dba636",
+        "name": "cordis_inspect_query",
+        "arguments": "{\"method\":\"listService\",\"platform\":\"host\",\"provider\":\"Service\"}"
+      },
+      {
+        "seq": 1119,
+        "index": 3,
+        "id": "call_98480ff041f94b02a4cdef1c",
+        "name": "cordis_inspect_query",
+        "arguments": "{\"method\":\"listBuiltins\",\"platform\":\"host\",\"provider\":\"Builtin\"}"
+      }
+    ],
+    "turn1-step3": [
+      {
+        "seq": 2441,
+        "index": 2,
+        "id": "call_26d94bf7c11a4d80938dbbe4",
+        "name": "cordis_inspect_query",
+        "arguments": "{\"method\":\"listTools\",\"platform\":\"host\",\"provider\":\"Tool\"}"
+      },
+      {
+        "seq": 2442,
+        "index": 3,
+        "id": "call_500547a7266c450dbec576f2",
+        "name": "cordis_inspect_query",
+        "arguments": "{\"input\":\"{\\\"service\\\": \\\"workflowEngine\\\"}\",\"method\":\"listService\",\"platform\":\"host\",\"provider\":\"Service\"}"
+      },
+      {
+        "seq": 2443,
+        "index": 4,
+        "id": "call_939d19c2f5f64dab8bf6722d",
+        "name": "cordis_inspect_query",
+        "arguments": "{\"input\":\"{\\\"service\\\": \\\"subagents\\\"}\",\"method\":\"listService\",\"platform\":\"host\",\"provider\":\"Service\"}"
+      }
+    ],
+    "turn1-step4": [
+      {
+        "seq": 4107,
+        "index": 2,
+        "id": "call_ab27adfeea9240ea8ae88e29",
+        "name": "cordis_inspect_query",
+        "arguments": "{\"input\":\"{\\\"service\\\": \\\"workflowEngine\\\"}\",\"method\":\"listService\",\"platform\":\"host\",\"provider\":\"Service\"}"
+      },
+      {
+        "seq": 4108,
+        "index": 3,
+        "id": "call_9af36d8fbe94469babb0963b",
+        "name": "memory_search",
+        "arguments": "{\"limit\":10,\"query\":\"deliverable\",\"scope\":\"project\"}"
+      },
+      {
+        "seq": 4109,
+        "index": 4,
+        "id": "call_178e2ff39c194ce682a5f9b4",
+        "name": "memory_search",
+        "arguments": "{\"limit\":10,\"query\":\"worker\",\"scope\":\"project\"}"
+      }
+    ]
+  }
+}

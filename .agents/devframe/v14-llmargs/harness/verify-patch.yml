@@ -1,0 +1,20 @@
+# v14-llmargs C2b ③ real-call probe patch (isolated, NOT committed): inserts the
+# verify-replay driver and pins an isolated webserver port for the one boot.
+#
+# Layering: boot MUST pass the opt-in cordis-tools overlay FIRST so the probe
+# session sees cordis_inspect_query at all (the first verify boot, session
+# 33d6d352, lacked it and the model correctly declined — no tool to call):
+#   node --import tsx/esm apps/cli/src/bin.ts web ^
+#     --patch D:\dsh-devframe-v14-llmargs-lead\apps\cli\config\examples\cordis\cordis.yml ^
+#     --patch <this file>
+# Later --patch layers win id-targeted config replacement, so port 3492 and the
+# evidencePath below override the examples overlay's port 3081.
+- insert:
+    - id: v14-llmargs-verify-replay
+      name: 'file:///D:/dsh-devframe-v14-llmargs-lead/.agents/devframe/v14-llmargs/harness/verify-replay.ts'
+      config:
+        evidencePath: D:\dsh-udeliver-iso\out\verify-driver.jsonl
+- id: webserver
+  config:
+    host: 127.0.0.1
+    port: 3492
