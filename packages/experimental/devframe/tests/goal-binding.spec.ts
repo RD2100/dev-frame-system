@@ -386,6 +386,48 @@ describe('GoalBindingController', () => {
       await ctx.fiber.dispose()
     }
   })
+
+  it('adopts changed approved checks into a new binding generation on resume', async () => {
+    const { ctx, agent, port } = await realGoalPort('controller-native-adopt')
+    try {
+      const store = new MemoryGoalBindingStore()
+      const controller = new GoalBindingController({
+        workspaceId: WorkspaceId('workspace-native-adopt'),
+        controllerSessionId: agent.id,
+        goals: port,
+        store,
+      })
+
+      const binding = await controller.start(request())
+      controller.closeAdmission()
+      const current = ctx.goals.get(agent)
+      if (current === undefined) throw new Error('expected native Goal after start')
+      ctx.goals.pause(agent, { id: current.id, revision: current.revision })
+
+      // The host composition recomputes the acceptance of (objective,
+      // current checks) and mints a fresh confirmation; the resumed binding
+      // carries both as the adopted generation's acceptance face.
+      const adoptedHash = AcceptanceHash(`${binding.acceptanceHash}-adopted`)
+      const resumed = await controller.resume(binding, createHumanAuthorization('resume-adopt'), {
+        acceptanceHash: adoptedHash,
+        confirmation: {
+          id: ConfigurationConfirmationId('confirmation-adopted'),
+          acceptanceHash: adoptedHash,
+        },
+      })
+      expect(resumed.goalRevision).toBe(binding.goalRevision + 2)
+      expect(resumed.lifecycle).toBe('admission_open')
+      expect(resumed.acceptanceHash).toBe(adoptedHash)
+      expect(resumed.confirmation).toMatchObject({ id: 'confirmation-adopted', acceptanceHash: adoptedHash })
+      await expect(store.read(WorkspaceId('workspace-native-adopt'))).resolves.toMatchObject({
+        goalRevision: binding.goalRevision + 2,
+        acceptanceHash: adoptedHash,
+      })
+      expect(controller.admissionState).toBe('open')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
 })
 
 describe('GoalBindingError', () => {

@@ -32,9 +32,25 @@ export const NO_BINDING_TEXT
 export const NO_VERIFICATION_TEXT
   = 'The current goal has no attributed verification evidence in this session log. Run verification before /goal-complete.'
 
-/** Stable data error: the session log holds no review record at all. */
+/** Stable data error: no review record is attributed to the goal. */
 export const NO_REVIEW_TEXT
   = 'This session log holds no review record. Obtain an authorized review before /goal-complete.'
+
+/**
+ * Stable data error: the newest attributed verification predates the
+ * accepted checks change (AT1-10) — it belongs to a superseded binding
+ * generation, so it cannot satisfy the current acceptance.
+ */
+export const VERIFICATION_SUPERSEDED_TEXT
+  = 'The newest verification for this goal predates the accepted checks change and belongs to a superseded generation. Re-verify under the current approved checks before /goal-complete.'
+
+/**
+ * Stable data error: the newest review predates the accepted checks change
+ * (AT1-10) — it approved a superseded acceptance, so it cannot gate the
+ * current generation's completion.
+ */
+export const REVIEW_SUPERSEDED_TEXT
+  = 'The newest review for this goal predates the accepted checks change and approved a superseded acceptance. Obtain a new authorized review before /goal-complete.'
 
 /** Stable data error: the current goal already completed. */
 export const GOAL_ALREADY_COMPLETE_TEXT
@@ -228,6 +244,18 @@ export function renderStartSuccess(checkCount: number, status: 'passed' | 'faile
  */
 export function renderResumeSuccess(): string {
   return 'Bound goal resumed. The updated goal binding was recorded in this session log and goal continuation is armed.'
+}
+
+/**
+ * Render the resume-with-adoption success adjudication (AT1-10): the
+ * approved checks changed since the goal started, so the resume opened a new
+ * binding generation under the recomputed acceptance, re-verified the real
+ * approved checks for it, and the superseded generation's evidence and
+ * review no longer count. The text stays stage-shaped without opaque ids.
+ * @returns the stable adoption success text without opaque ids.
+ */
+export function renderResumeAdoptedSuccess(): string {
+  return 'Bound goal resumed under the changed approved checks. A new binding generation was recorded, the current checks were re-verified for it, and the superseded generation\'s evidence no longer counts.'
 }
 
 /** The frozen descriptor part of the start command definition. */

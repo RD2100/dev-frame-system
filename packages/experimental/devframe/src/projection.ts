@@ -43,6 +43,14 @@ export interface DevFrameProjectionState {
   rolePolicy: DevFrameRolePolicyEventData | null
   /** Historical Goal bindings keyed by Goal identity. */
   bindings: GoalBinding[]
+  /**
+   * Superseded binding generations replaced by a strictly higher revision:
+   * evidence records may legitimately attribute to an earlier generation
+   * (late-arriving log order or a checks-change adoption), so attribution
+   * validates against this history instead of latching the replay; the
+   * completion face refuses superseded generations by name.
+   */
+  superseded: GoalBinding[]
   /** Reservation and settlement records keyed by operation identity. */
   usage: DevFrameUsageEventData[]
   /** Explicit task outputs in delivery order. */
@@ -77,6 +85,7 @@ const devFrameStateSchema = z.object({
   workspaceId: z.union([trimmedString, z.null()]),
   rolePolicy: z.unknown().nullable(),
   bindings: z.array(z.unknown()),
+  superseded: z.array(z.unknown()).default([]),
   usage: z.array(z.unknown()),
   deliveries: z.array(z.unknown()),
   verifications: z.array(z.unknown()),
@@ -94,6 +103,7 @@ const devFrameStateSchema = z.object({
         ? null
         : decodeDevFramePayload('devframe/role-policy', value.rolePolicy),
       bindings: value.bindings.map(binding => decodeDevFramePayload('devframe/goal-binding', binding)),
+      superseded: value.superseded.map(binding => decodeDevFramePayload('devframe/goal-binding', binding)),
       usage: value.usage.map(usage => decodeDevFramePayload('devframe/usage', usage)),
       deliveries: value.deliveries.map(delivery => decodeDevFramePayload('devframe/task-delivery', delivery)),
       verifications: value.verifications.map(verification => decodeDevFramePayload('devframe/verification', verification)),
@@ -121,6 +131,7 @@ function initialState(header: SessionHeader): DevFrameProjectionState {
     workspaceId: null,
     rolePolicy: null,
     bindings: [],
+    superseded: [],
     usage: [],
     deliveries: [],
     verifications: [],
@@ -242,18 +253,29 @@ function sameAssignments(
     candidate.role === assignment.role && candidate.sessionId === assignment.sessionId))
 }
 
-/** Compare the immutable fields of a Goal binding. */
+/**
+ * Compare the always-immutable structural fields of a Goal binding: the
+ * workspace, controller, Goal identity, task set, source snapshot, and
+ * attempt limit never change while the Goal lives. The acceptance fields
+ * (hash and confirmation) are generation-variable — see
+ * {@link applyGoalBinding}.
+ */
 function sameBindingIdentity(left: GoalBinding, right: GoalBinding): boolean {
   return left.workspaceId === right.workspaceId
     && left.controllerSessionId === right.controllerSessionId
     && left.goalId === right.goalId
     && left.taskIds.length === right.taskIds.length
     && left.taskIds.every((taskId, index) => taskId === right.taskIds[index])
-    && left.acceptanceHash === right.acceptanceHash
     && left.sourceFingerprint === right.sourceFingerprint
+    && left.snapshotId === right.snapshotId
+    && left.budget.maxAttempts === right.budget.maxAttempts
+}
+
+/** Compare the generation-variable acceptance fields of a Goal binding. */
+function sameAcceptance(left: GoalBinding, right: GoalBinding): boolean {
+  return left.acceptanceHash === right.acceptanceHash
     && left.confirmation.id === right.confirmation.id
     && left.confirmation.acceptanceHash === right.confirmation.acceptanceHash
-    && left.budget.maxAttempts === right.budget.maxAttempts
 }
 
 /** Compare a result tuple with a persisted Goal binding, allowing later CAS revisions. */
@@ -297,10 +319,14 @@ function assertResultBinding(state: DevFrameProjectionState, binding: GoalResult
   assertProjectIdentity(state, binding.controllerSessionId, binding.workspaceId)
   const current = bindingFor(state, binding.goalId)
   if (current === undefined) throw new Error(`DevFrame result references unknown Goal "${binding.goalId}"`)
-  if (!sameResultTuple(current, binding)) {
-    throw new Error(`DevFrame result tuple for Goal "${binding.goalId}" does not match its binding`)
-  }
-  return current
+  if (sameResultTuple(current, binding)) return current
+  // A record attributed to a superseded generation (e.g. late-arriving
+  // evidence or a checks-change adoption's older log order) folds with its
+  // own attribution instead of latching the replay — the completion face
+  // refuses superseded generations by name.
+  const superseded = state.superseded.find(candidate => candidate.goalId === binding.goalId && sameResultTuple(candidate, binding))
+  if (superseded !== undefined) return superseded
+  throw new Error(`DevFrame result tuple for Goal "${binding.goalId}" does not match its binding`)
 }
 
 /** Return the lifecycle states permitted after one prior state. */
@@ -380,7 +406,19 @@ function applyRolePolicy(state: DevFrameProjectionState, policy: DevFrameRolePol
   state.rolePolicy = cloneRolePolicy(policy)
 }
 
-/** Apply a complete Goal binding and retain only monotonic lifecycle/budget changes. */
+/**
+ * Apply a complete Goal binding and retain only monotonic lifecycle/budget
+ * changes. The structural identity is immutable. The acceptance fields
+ * (acceptance hash and human confirmation) may change only across a
+ * generation advance — a strictly higher native revision carrying a
+ * different approved-checks acceptance, the resume lane's authorized
+ * adoption of changed checks (AT1-10: changing checks invalidates the
+ * evidence of the superseded generation without resetting usage). The same
+ * revision with changed acceptance fields stays an in-place mutation and is
+ * refused. An exact repeat of the current binding state is an idempotent
+ * re-observation — the reliability stop flow may re-record `stop_requested`
+ * after the command lane — and replays converge instead of latching.
+ */
 function applyGoalBinding(state: DevFrameProjectionState, binding: GoalBinding): void {
   assertProjectIdentity(state, binding.controllerSessionId, binding.workspaceId)
   if (binding.confirmation.acceptanceHash !== binding.acceptanceHash) {
@@ -396,7 +434,14 @@ function applyGoalBinding(state: DevFrameProjectionState, binding: GoalBinding):
     }
     return
   }
+  if (binding.goalRevision > prior.goalRevision) {
+    state.superseded.push(cloneBinding(prior))
+  }
   if (!sameBindingIdentity(prior, binding)) {
+    throw new Error(`DevFrame Goal "${binding.goalId}" changed its immutable binding`)
+  }
+  const generationAdvanced = binding.goalRevision > prior.goalRevision
+  if (!generationAdvanced && !sameAcceptance(prior, binding)) {
     throw new Error(`DevFrame Goal "${binding.goalId}" changed its immutable binding`)
   }
   if (binding.goalRevision < prior.goalRevision) {
@@ -407,7 +452,7 @@ function applyGoalBinding(state: DevFrameProjectionState, binding: GoalBinding):
   }
   if (binding.goalRevision === prior.goalRevision && binding.lifecycle === prior.lifecycle
     && binding.budget.consumedAttempts === prior.budget.consumedAttempts) {
-    throw new Error(`DevFrame Goal "${binding.goalId}" binding was recorded twice`)
+    return
   }
   if (binding.lifecycle !== prior.lifecycle) assertLifecycleTransition(prior.lifecycle, binding.lifecycle)
   state.bindings[index] = cloneBinding(binding)

@@ -46,6 +46,7 @@ import {
 } from '../shared/types.ts'
 import type {
   AcceptanceHash,
+  ConfigurationConfirmation,
   DevFrameSnapshotId,
   ProjectBindingPersistence,
   ProjectBindingRecord,
@@ -119,11 +120,34 @@ export interface GoalResultBinding extends GoalBindingIdentity {
   readonly snapshotId: DevFrameSnapshotId
 }
 
+/**
+ * Host-authorized adoption of changed approved checks across one binding
+ * generation: the host composition recomputes the acceptance hash of the
+ * same objective under the current approved checks and mints a fresh human
+ * confirmation; the resumed binding carries both instead of the stored
+ * acceptance. The projection admits the change only across a strict
+ * revision advance, so the superseded generation's evidence stops
+ * satisfying completion while usage keeps bridging by Goal identity.
+ */
+export interface GenerationAdoption {
+  /** The recomputed acceptance hash of (objective, current approved checks). */
+  readonly acceptanceHash: AcceptanceHash
+  /** Fresh human confirmation minted for the adopted generation. */
+  readonly confirmation: ConfigurationConfirmation
+}
+
 /** Durable storage needed by the controller. Implementations may use JSONL, SQLite, or memory. */
 export interface GoalBindingStore extends ProjectBindingPersistence {
   /** Load every binding for one controller Session, including completed Goals. */
   load(controllerSessionId: ControllerSessionId): Promise<readonly GoalBinding[]>
-  /** Persist one immutable binding; identical retries must be idempotent. */
+  /**
+   * Persist one binding; identical retries must be idempotent. Besides an
+   * equal-or-advanced identical tuple, a legal generation advance
+   * ({@link isGenerationAdvance}: strictly higher revision, unchanged
+   * structural identity, consumption not moved backwards) may carry changed
+   * acceptance fields — the resume lane's authorized adoption of changed
+   * approved checks (AT1-10).
+   */
   save(binding: GoalBinding): Promise<void>
 }
 
@@ -160,9 +184,10 @@ export class MemoryGoalBindingStore implements GoalBindingStore {
   }
 
   /**
-   * Save one binding, accepting an identical retry and rejecting identity reuse
-   * with changed task, acceptance, or budget data.
-   * @param binding - immutable Goal binding to retain.
+   * Save one binding, accepting an identical retry, a legal generation
+   * advance ({@link isGenerationAdvance}), and rejecting identity reuse
+   * with changed task, acceptance, or budget data outside those rules.
+   * @param binding - Goal binding to retain.
    */
   save(binding: GoalBinding): Promise<void> {
     return new Promise((resolve) => {
@@ -170,8 +195,9 @@ export class MemoryGoalBindingStore implements GoalBindingStore {
       const index = records.findIndex(record => record.goalId === binding.goalId)
       if (index !== -1) {
         const current = records[index]
-        if (current !== undefined && sameBinding(current, binding)
-          && binding.goalRevision >= current.goalRevision) {
+        if (current !== undefined
+          && ((sameBinding(current, binding) && binding.goalRevision >= current.goalRevision)
+            || isGenerationAdvance(current, binding))) {
           records[index] = copyBinding(binding)
           this.values.set(binding.controllerSessionId, records)
           resolve()
@@ -559,9 +585,21 @@ export class GoalBindingController {
    * whichever Goal happens to be current.
    * @param identity - controller Session and Goal identity to resume.
    * @param authorization - host-issued human authorization for this resume.
-   * @returns the historical binding retained for the resumed Goal.
+   * @param adopt - optional host-authorized adoption of changed approved
+   *   checks: the resumed binding opens a new generation that carries the
+   *   recomputed acceptance hash and a fresh human confirmation instead of
+   *   the stored ones. The projection accepts acceptance changes only
+   *   across this strict revision advance, the superseded generation's
+   *   evidence stops satisfying completion, and usage bridges by Goal
+   *   identity; the fold enforces the confirmation/hash match.
+   * @returns the binding retained for the resumed Goal — the historical
+   *   acceptance, or the adopted generation when `adopt` was given.
    */
-  resume(identity: GoalBindingIdentity, authorization: HumanAuthorization): Promise<GoalBinding> {
+  resume(
+    identity: GoalBindingIdentity,
+    authorization: HumanAuthorization,
+    adopt?: GenerationAdoption,
+  ): Promise<GoalBinding> {
     return this.enqueue(async () => {
       await this.ensureReady()
       assertHumanAuthorization(authorization)
@@ -602,8 +640,12 @@ export class GoalBindingController {
         ...binding,
         goalRevision: resumed.revision,
         lifecycle: 'admission_open' as const,
+        ...(adopt === undefined ? {} : {
+          acceptanceHash: adopt.acceptanceHash,
+          confirmation: adopt.confirmation,
+        }),
       }
-      await this.saveBinding(admitted)
+      await this.saveBinding(admitted, adopt !== undefined)
       this.activeIdentity = identityOf(admitted)
       this.admission = 'open'
       return copyBinding(admitted)
@@ -971,10 +1013,21 @@ export class GoalBindingController {
     return run
   }
 
-  /** Persist and cache one binding only after native disarm has completed. */
-  private async saveBinding(binding: GoalBinding): Promise<void> {
+  /**
+   * Persist and cache one binding only after native disarm has completed.
+   * With `adoptGeneration` the acceptance fields may change across the
+   * strict revision advance (the resume lane's authorized checks adoption,
+   * mirroring the projection's generation rule); every other difference
+   * from the cached binding stays a conflict, and consumption may never
+   * move backwards.
+   */
+  private async saveBinding(binding: GoalBinding, adoptGeneration = false): Promise<void> {
     const current = this.bindings.find(candidate => candidate.goalId === binding.goalId)
-    if (current !== undefined && (!sameBinding(current, binding) || binding.goalRevision < current.goalRevision)) {
+    const generationAdvance = adoptGeneration
+      && current !== undefined
+      && isGenerationAdvance(current, binding)
+    if (current !== undefined && !generationAdvance
+      && (!sameBinding(current, binding) || binding.goalRevision < current.goalRevision)) {
       throw new GoalBindingError(
         `Goal "${binding.goalId}" already has a different binding`,
         'GOAL_BINDING_CONFLICT',
@@ -1340,6 +1393,28 @@ function sameBinding(left: GoalBinding, right: GoalBinding): boolean {
     && left.budget.consumedAttempts === right.budget.consumedAttempts
     && left.taskIds.length === right.taskIds.length
     && left.taskIds.every((id, index) => id === right.taskIds[index])
+}
+
+/**
+ * Whether one binding update is a legal generation advance over the stored
+ * one: the structural identity is unchanged, the native revision strictly
+ * advances, and consumption never moves backwards. A generation advance may
+ * carry changed acceptance fields (hash and confirmation) — the resume
+ * lane's authorized adoption of changed approved checks (AT1-10: changing
+ * checks invalidates the superseded generation's evidence without resetting
+ * usage). Any other difference stays an identity-reuse conflict.
+ */
+export function isGenerationAdvance(current: GoalBinding, binding: GoalBinding): boolean {
+  return binding.goalRevision > current.goalRevision
+    && current.workspaceId === binding.workspaceId
+    && current.controllerSessionId === binding.controllerSessionId
+    && current.goalId === binding.goalId
+    && current.sourceFingerprint === binding.sourceFingerprint
+    && current.snapshotId === binding.snapshotId
+    && current.budget.maxAttempts === binding.budget.maxAttempts
+    && current.budget.consumedAttempts <= binding.budget.consumedAttempts
+    && current.taskIds.length === binding.taskIds.length
+    && current.taskIds.every((id, index) => id === binding.taskIds[index])
 }
 
 /** Compare the shared persisted projection restored for the current workspace. */

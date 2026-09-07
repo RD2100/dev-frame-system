@@ -11,7 +11,7 @@ import GoalService from '@deepseek-ai/dsh-goal'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import { DevFrameOperationId, DevFrameReviewId } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
+import { DevFrameOperationId, DevFrameReviewId, DevFrameVerificationId } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
 import type {
   DevFrameReviewEventData,
   DevFrameRolePolicyEventData,
@@ -26,7 +26,10 @@ import * as commandGoalBinding from '../src/index.ts'
 import type { GoalBindingComposition } from '../src/composition.ts'
 import {
   GOAL_ALREADY_COMPLETE_TEXT,
+  REVIEW_SUPERSEDED_TEXT,
+  VERIFICATION_SUPERSEDED_TEXT,
   renderCompletionSuccess,
+  renderResumeAdoptedSuccess,
   renderResumeSuccess,
   renderStartSuccess,
 } from '../src/command.ts'
@@ -211,10 +214,14 @@ function reviewerPolicyRecord(
 }
 
 /** One passing review record attributed to the landed binding. */
-function reviewRecord(binding: GoalBinding, reviewerSessionId: SessionId): DevFrameReviewEventData {
+function reviewRecord(
+  binding: GoalBinding,
+  reviewerSessionId: SessionId,
+  reviewId: string,
+): DevFrameReviewEventData {
   return {
     version: 1,
-    reviewId: DevFrameReviewId('review-v14-checks-change'),
+    reviewId: DevFrameReviewId(reviewId),
     binding: resultTupleOf(binding),
     snapshotId: binding.snapshotId,
     reviewerSessionId,
@@ -239,8 +246,8 @@ function foldProbe(
   return devFrameStateOf(test.ctx, probe).failure
 }
 
-describe('checks change composition (same Goal, new acceptance hash belongs to the next Goal)', { timeout: 120_000 }, () => {
-  it('keeps the frozen acceptance, keeps usage counting across the change, and completes on the original evidence', async () => {
+describe('checks change composition (AT1-10: the change invalidates evidence, keeps usage)', { timeout: 120_000 }, () => {
+  it('adopts the changed checks into a new generation on resume, refuses superseded evidence, and keeps usage counting', async () => {
     const fixture = await createCommittedWorktree()
     const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-command-goal-binding-checks-'))
     roots.push(storageRoot)
@@ -282,84 +289,136 @@ describe('checks change composition (same Goal, new acceptance hash belongs to t
     })
     const resumed = await execute(second, '/devframe-resume')
     if (resumed.result.kind !== 'success') throw new Error('expected a success result')
-    expect(resumed.result.text).toBe(renderResumeSuccess())
+    expect(resumed.result.text).toBe(renderResumeAdoptedSuccess())
 
-    // The acceptance is frozen: the resumed binding keeps the v1 hash, and
-    // the v2 hash — the new acceptance the changed checks mint — is not
-    // retrofitted onto the running Goal.
+    // The resume adopted the changed checks into a new generation: the
+    // binding advances one revision under the recomputed (objective, v2)
+    // acceptance behind a fresh resume-minted confirmation, and the lane
+    // re-verified the real approved v2 checks for the new generation.
     const resumedBinding = goalBindingEvents(second).at(-1)
     if (resumedBinding === undefined) throw new Error('resumed binding is missing')
     expect(resumedBinding.goalId).toBe(goal.id)
     expect(resumedBinding.goalRevision).toBe(goal.revision + 1)
     expect(resumedBinding.lifecycle).toBe('admission_open')
-    expect(resumedBinding.acceptanceHash).toBe(bindingA.acceptanceHash)
-    expect(resumedBinding.acceptanceHash).toBe(acceptanceHashOf(objective, startChecksV1(fixture.root)))
-    expect(resumedBinding.acceptanceHash).not.toBe(acceptanceHashOf(objective, startChecksV2(fixture.root)))
-    expect(resumedBinding.confirmation.acceptanceHash).toBe(bindingA.confirmation.acceptanceHash)
+    expect(resumedBinding.acceptanceHash).toBe(acceptanceHashOf(objective, startChecksV2(fixture.root)))
+    expect(resumedBinding.acceptanceHash).not.toBe(bindingA.acceptanceHash)
+    expect(resumedBinding.confirmation.acceptanceHash).toBe(resumedBinding.acceptanceHash)
+    const adoptedVerification = devFrameStateOf(second.ctx, second.session).verifications.at(-1)
+    if (adoptedVerification === undefined) throw new Error('adopted generation verification is missing')
+    expect(adoptedVerification.binding.goalRevision).toBe(resumedBinding.goalRevision)
+    expect(adoptedVerification.binding.acceptanceHash).toBe(resumedBinding.acceptanceHash)
+    expect(adoptedVerification.status).toBe('passed')
 
-    // The pre-change verification stays the Goal's attributed evidence and
-    // the fold stays clean (the existing evidence criteria, unchanged).
-    const stateAfterResume = devFrameStateOf(second.ctx, second.session)
-    expect(stateAfterResume.failure).toBeNull()
-    expect(stateAfterResume.verifications).toHaveLength(1)
-    expect(stateAfterResume.verifications[0]?.binding.goalId).toBe(goal.id)
-    expect(stateAfterResume.verifications[0]?.binding.acceptanceHash).toBe(bindingA.acceptanceHash)
-
-    // Usage is not reset across the checks change: the next charge must be
-    // the continuing 2 — a from-zero 1 refuses and would latch the fold.
-    second.session.append('devframe/usage', usageRecord(bindingA, 'operation-v14-checks-a-2', { attempt: 2, consumedAttempts: 2 }))
+    // Usage is not reset across the generation change: the bridging is by
+    // Goal identity, so the next charge continues at 2 against the new
+    // generation's tuple — a from-zero 1 refuses and would latch the fold.
+    second.session.append('devframe/usage', usageRecord(resumedBinding, 'operation-v14-checks-a-2', { attempt: 2, consumedAttempts: 2 }))
     const stateAfterCharge = devFrameStateOf(second.ctx, second.session)
     expect(stateAfterCharge.failure).toBeNull()
     expect(stateAfterCharge.usage.map(record => record.consumedAttempts)).toEqual([1, 2])
 
-    // The accounting criteria hold on the fold itself: the reset charge is
-    // refused, and a binding record carrying the new acceptance hash is
-    // refused as an immutable-binding change.
+    // The accounting criteria hold on the fold itself: the continuing charge
+    // advances cleanly while a from-zero 1 refuses (the consumed base comes
+    // from the generation's binding and prior usage, not from zero).
     const resetRefused = foldProbe(second, 'probe-reset-refused', controllerSessionId => [
-      { type: 'devframe/goal-binding', data: { ...bindingA, controllerSessionId } },
-      { type: 'devframe/usage', data: usageRecord({ ...bindingA, controllerSessionId }, 'operation-probe-1', { attempt: 1, consumedAttempts: 1 }) },
-      {
-        type: 'devframe/goal-binding',
-        data: { ...bindingA, controllerSessionId, goalRevision: bindingA.goalRevision + 1, lifecycle: 'admission_open' },
-      },
-      { type: 'devframe/usage', data: usageRecord({ ...bindingA, controllerSessionId }, 'operation-probe-2', { attempt: 1, consumedAttempts: 1 }) },
+      { type: 'devframe/goal-binding', data: { ...resumedBinding, controllerSessionId } },
+      { type: 'devframe/usage', data: usageRecord({ ...resumedBinding, controllerSessionId }, 'operation-probe-1', { attempt: 1, consumedAttempts: 1 }) },
+      { type: 'devframe/usage', data: usageRecord({ ...resumedBinding, controllerSessionId }, 'operation-probe-2', { attempt: 1, consumedAttempts: 1 }) },
     ])
     expect(resetRefused).toContain('did not advance consumed attempts by one')
 
     const hashRefused = foldProbe(second, 'probe-hash-refused', controllerSessionId => [
-      { type: 'devframe/goal-binding', data: { ...bindingA, controllerSessionId } },
+      { type: 'devframe/goal-binding', data: { ...resumedBinding, controllerSessionId } },
       {
         type: 'devframe/goal-binding',
         data: {
-          ...bindingA,
+          ...resumedBinding,
           controllerSessionId,
-          acceptanceHash: acceptanceHashOf(objective, startChecksV2(fixture.root)),
+          acceptanceHash: acceptanceHashOf(objective, startChecksV1(fixture.root)),
           confirmation: {
-            ...bindingA.confirmation,
-            acceptanceHash: acceptanceHashOf(objective, startChecksV2(fixture.root)),
+            ...resumedBinding.confirmation,
+            acceptanceHash: acceptanceHashOf(objective, startChecksV1(fixture.root)),
           },
         },
       },
     ])
     expect(hashRefused).toContain('changed its immutable binding')
 
-    // Completion runs on the frozen acceptance with the pre-change evidence:
-    // the admission resolves the evidence's own declared digest from the
-    // shared approved-checks ledger and admits — the checks change neither
-    // invalidates the Goal's own evidence nor resets its accounting.
+    // The reviewer's pass from the superseded generation cannot gate the
+    // adopted generation: /goal-complete names the stale review.
     const reviewerSessionId = SessionId('reviewer-v14-checks-change')
     second.session.append('devframe/role-policy', reviewerPolicyRecord(second.session.id, reviewerSessionId))
-    second.session.append('devframe/review', reviewRecord(bindingA, reviewerSessionId))
+    second.session.append('devframe/review', reviewRecord(bindingA, reviewerSessionId, 'review-v14-checks-stale'))
+    const staleReview = await execute(second, '/goal-complete')
+    expect(staleReview.result.kind).toBe('error')
+    if (staleReview.result.kind === 'error') expect(staleReview.result.text).toBe(REVIEW_SUPERSEDED_TEXT)
+    expect(devFrameStateOf(second.ctx, second.session).failure).toBeNull()
+
+    // A late-arriving verification from the superseded generation cannot
+    // satisfy the adopted acceptance either: /goal-complete names the stale
+    // verification instead of completing on it.
+    const staleVerification = devFrameStateOf(second.ctx, second.session).verifications.find(
+      record => record.binding.acceptanceHash === bindingA.acceptanceHash,
+    )
+    if (staleVerification === undefined) throw new Error('superseded-generation verification is missing')
+    second.session.append('devframe/verification', {
+      ...staleVerification,
+      verificationId: DevFrameVerificationId('verification-v14-checks-stale'),
+    })
+    const staleVerificationResult = await execute(second, '/goal-complete')
+    expect(staleVerificationResult.result.kind).toBe('error')
+    if (staleVerificationResult.result.kind === 'error') expect(staleVerificationResult.result.text).toBe(VERIFICATION_SUPERSEDED_TEXT)
+    expect(devFrameStateOf(second.ctx, second.session).failure).toBeNull()
+
+    // A fresh current-generation verification (the shape the evidence
+    // journal lands) restores the newest-attributed position and completion
+    // proceeds on the adopted generation: a current-generation authorized
+    // review admits, the native goal completes, and the accounting stays
+    // continuous — usage is [1, 2] across the change.
+    second.session.append('devframe/verification', {
+      ...adoptedVerification,
+      verificationId: DevFrameVerificationId('verification-v14-checks-current'),
+    })
+    second.session.append('devframe/review', reviewRecord(resumedBinding, reviewerSessionId, 'review-v14-checks-current'))
     const completed = await execute(second, '/goal-complete')
-    if (completed.result.kind !== 'success') throw new Error('expected a success result')
+    if (completed.result.kind !== 'success') {
+      throw new Error(`expected a success result: ${completed.result.text} | projection failure: ${devFrameStateOf(second.ctx, second.session).failure}`)
+    }
     expect(completed.result.text).toBe(renderCompletionSuccess())
     expect(second.ctx.goals.get(second.agent)?.phase).toBe('complete')
     expect(second.composition.admissionOf(second.agent)).toBe('closed')
 
-    // The completion preserves the same accounting: usage stays [1, 2].
     const stateAfterComplete = devFrameStateOf(second.ctx, second.session)
     expect(stateAfterComplete.usage.map(record => record.consumedAttempts)).toEqual([1, 2])
     expect(stateAfterComplete.failure).toBeNull()
+  })
+
+  it('keeps the plain resume text when the approved checks did not change', async () => {
+    const fixture = await createCommittedWorktree()
+    const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-command-goal-binding-checks-same-'))
+    roots.push(storageRoot)
+    const sessionId = SessionId('controller-v14-checks-same')
+    const first = await boot({
+      checks: startChecksV1(fixture.root),
+      workspaceRoot: fixture.root,
+      storageRoot,
+      sessionId,
+    })
+    expect((await execute(first, '/devframe-start fix the login bug')).result.kind).toBe('success')
+    await first.ctx.sessions.flush(first.session)
+    contexts.splice(contexts.indexOf(first.ctx), 1)
+    await first.ctx.fiber.dispose()
+
+    const second = await boot({
+      checks: startChecksV1(fixture.root),
+      workspaceRoot: fixture.root,
+      storageRoot,
+      sessionId,
+      restore: true,
+    })
+    const resumed = await execute(second, '/devframe-resume')
+    if (resumed.result.kind !== 'success') throw new Error('expected a success result')
+    expect(resumed.result.text).toBe(renderResumeSuccess())
   })
 
   it('refuses to complete a goal that is already complete after the checks change', async () => {
