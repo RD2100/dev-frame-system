@@ -28,7 +28,7 @@ import type { Domain, KvTable } from '@deepseek-ai/dsh-storage-domain'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ProjectLifecycleState } from '@deepseek-ai/dsh-experimental-devframe/shared'
 import { evaluateCompletionAdmission } from '@deepseek-ai/dsh-experimental-devframe/controller'
-import type { RequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
+import type { RequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-worktree-registry'
 import type {} from '@deepseek-ai/dsh-workspace'
@@ -573,7 +573,7 @@ export class ProjectController extends Service {
     }
     const worker = current.assigneeSessionId === undefined ? undefined : this.ctx.agentBindings.find(current.assigneeSessionId)
     const lead = worker?.parentSessionId === undefined ? undefined : this.ctx.agentBindings.find(worker.parentSessionId)
-    if (expected === undefined || worker === undefined || lead === undefined) {
+    if (worker === undefined || lead === undefined) {
       throw new Error('Integration requires the current Goal binding and registered task hierarchy')
     }
     const evidence = selectIntegrationEvidence({ state, expected, controller: binding, task: current, worker, lead })

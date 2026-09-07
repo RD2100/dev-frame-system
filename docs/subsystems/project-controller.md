@@ -113,17 +113,27 @@ async submit(taskId: TaskId): Promise<TaskRecord>
  * is single-use and process-local.
  * @param callerSessionId - Session requesting the merge.
  * @param taskId - Task to merge.
+ * @param request - Exact Git inputs and the host-owned approved-checks store.
  * @returns the marker to hand to {@link ProjectController.integrate}.
  */
-async requestMainTreeMerge(callerSessionId: SessionId, taskId: TaskId): Promise<MainTreeMergeMarker>
+async requestMainTreeMerge( callerSessionId: SessionId, taskId: TaskId, request: MainTreeMergeRequest, ): Promise<MainTreeMergeMarker>
 
 /**
- * Consume one merge marker and move the task to `integrated`.
+ * Execute the admitted fast-forward once, then record integration only after observing the exact clean target.
  * @param taskId - Task to move; the marker must name it.
  * @param marker - The marker minted by {@link ProjectController.requestMainTreeMerge}.
  * @returns the updated record.
  */
 async integrate(taskId: TaskId, marker: MainTreeMergeMarker): Promise<TaskRecord>
+
+/**
+ * Reconcile a durable intent after interruption without issuing another Git merge.
+ * @param callerSessionId - The same controller that admitted the original operation.
+ * @param taskId - Task whose retained intent is being reconciled.
+ * @param options - Explicit deployment process limits for read-only Git observations.
+ * @returns The actual Git observation; only `applied` advances the task board.
+ */
+async reconcileMainTreeIntegration( callerSessionId: SessionId, taskId: TaskId, options: IntegrationGitOptions, ): Promise<IntegrationGitObservation>
 
 /**
  * Complete an integrated task.
@@ -203,7 +213,7 @@ byState(state: TaskState): readonly TaskRecord[]
 list(): readonly TaskRecord[]
 ```
 
-Types: [SessionId](core.md)
+Types: [IntegrationGitObservation](../../packages/experimental/project-controller/README.md) · [IntegrationGitOptions](../../packages/experimental/project-controller/README.md) · [MainTreeMergeRequest](../../packages/experimental/project-controller/README.md) · [SessionId](core.md)
 
 Source: [`packages/experimental/project-controller/src/controller.ts`](../../packages/experimental/project-controller/src/controller.ts)
 <!-- END GENERATED cordis-surface -->
