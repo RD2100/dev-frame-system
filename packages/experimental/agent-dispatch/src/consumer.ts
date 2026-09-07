@@ -143,6 +143,7 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
               tasks: { type: 'array', required: true, items: { type: 'object', additionalProperties: false, properties: {
                 taskId: { type: 'string', required: true }, worktreeId: { type: 'string', required: true }, digest: { type: 'string', required: true }, coldLockHolder: { type: 'string' },
               } } },
+              leadWorktreeId: { type: 'string' },
             } },
             render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
           },

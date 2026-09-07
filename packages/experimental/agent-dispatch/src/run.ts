@@ -28,6 +28,7 @@ import { readFile } from 'node:fs/promises'
 import { TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { WorktreeLockHolder } from '@deepseek-ai/dsh-worktree-registry'
+import type { WorktreeId as WorktreeIdBrand } from '@deepseek-ai/dsh-worktree-registry'
 import {
   FileRequiredChecksConfigStore,
   RequiredChecksDigest,
@@ -111,6 +112,10 @@ export interface CandidateScenarioTask {
 export interface CandidateScenario {
   /** The repository the pre-built worktrees hang off. */
   readonly anchorPath: string
+  /** The controller's own integration-target worktree, bound at bootstrap. */
+  readonly targetWorktreePath?: string
+  /** The lead's worktree, adopted but left free for the lead's dispatch. */
+  readonly leadWorktreePath?: string
   readonly tasks: readonly CandidateScenarioTask[]
 }
 
@@ -122,6 +127,8 @@ export interface CandidateHostReceipt {
   readonly controllerSessionId: string
   /** Per task: the worktree row id and the verified digest. */
   readonly tasks: { taskId: string; worktreeId: string; digest: string; coldLockHolder?: string }[]
+  /** The lead tree's row id, for the controller's lead dispatch. */
+  readonly leadWorktreeId?: string
   /** The board lifecycle state after the start. */
   readonly lifecycle: string
 }
@@ -255,7 +262,33 @@ export class AgentProjectRun extends Service {
     const known = this.ctx.workspaceRegistry.list().find(row => row.path === scenario.anchorPath)
       ?? await this.ctx.workspaceRegistry.create(scenario.anchorPath)
     await this.ctx.worktreeRegistry.reconcile(known.id, { adoptUnregistered: true })
-    const holder = WorktreeLockHolder(controllerSessionId)
+    // The controller binds exactly one tree: the integration target. The
+    // lead and worker trees stay free — their own holders take them through
+    // their own dispatch, and a foreign holder would block that dispatch.
+    let controllerWorktree: { worktreeId: WorktreeIdBrand; worktreePath: string } | undefined
+    let leadWorktreeId: string | undefined
+    if (scenario.targetWorktreePath !== undefined) {
+      const holder = WorktreeLockHolder(controllerSessionId)
+      const targetRow = this.ctx.worktreeRegistry.list(known.id).find(entry => entry.path === scenario.targetWorktreePath)
+      if (targetRow === undefined) {
+        throw new ProjectRunError(
+          `target worktree '${scenario.targetWorktreePath}' is not registered under the adopted workspace`,
+          'PROJECT_RUN_SCENARIO_MISMATCH',
+        )
+      }
+      await this.ctx.worktreeRegistry.bind(targetRow.id, holder)
+      controllerWorktree = { worktreeId: targetRow.id, worktreePath: targetRow.path }
+    }
+    if (scenario.leadWorktreePath !== undefined) {
+      const leadRow = this.ctx.worktreeRegistry.list(known.id).find(entry => entry.path === scenario.leadWorktreePath)
+      if (leadRow === undefined) {
+        throw new ProjectRunError(
+          `lead worktree '${scenario.leadWorktreePath}' is not registered under the adopted workspace`,
+          'PROJECT_RUN_SCENARIO_MISMATCH',
+        )
+      }
+      leadWorktreeId = String(leadRow.id)
+    }
     const tasks: CandidateHostReceipt['tasks'] = []
     for (const task of scenario.tasks) {
       // The digest must resolve to exactly the host-approved checks.
@@ -274,27 +307,19 @@ export class AgentProjectRun extends Service {
           'PROJECT_RUN_SCENARIO_MISMATCH',
         )
       }
-      // One worktree has one writer. After a cold restart the persisted lock
-      // still names the previous controller; the lock row is the durable
-      // identity evidence, so the receipt carries it instead of stealing it.
-      // Stealing needs the holder-resume face and is out of this service's
-      // authority.
-      let coldLockHolder: string | undefined
-      await this.ctx.worktreeRegistry.bind(row.id, holder).catch((error: unknown) => {
-        if ((error as { code?: string }).code !== 'already-locked') throw error
-        coldLockHolder = String(row.lockedBy)
-      })
-      tasks.push({ taskId: task.taskId, worktreeId: String(row.id), digest: String(digest), ...(coldLockHolder !== undefined ? { coldLockHolder } : {}) })
+      tasks.push({ taskId: task.taskId, worktreeId: String(row.id), digest: String(digest) })
     }
     await this.ctx.agentBindings.bind({
       agentId: controllerSessionId,
       role: 'controller',
+      ...(controllerWorktree !== undefined ? { worktree: controllerWorktree } : {}),
     })
     const admission = this.startProject()
     return {
       workspaceId: String(known.id),
       controllerSessionId: String(controllerSessionId),
       tasks,
+      ...(leadWorktreeId !== undefined ? { leadWorktreeId } : {}),
       lifecycle: String(admission),
     }
   }

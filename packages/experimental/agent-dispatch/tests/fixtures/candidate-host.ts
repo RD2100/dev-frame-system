@@ -34,6 +34,10 @@ export interface PreparedScenario {
   /** The repository the worktrees hang off. */
   readonly anchorPath: string
   readonly tasks: readonly PreparedTask[]
+  /** The controller's own integration-target worktree (realpath canon). */
+  readonly targetWorktreePath: string
+  /** The lead's worktree, left unbound for the lead's own dispatch. */
+  readonly leadWorktreePath: string
 }
 
 /** One git invocation, failing loud with stderr; env stripped of secrets and GIT_ overrides. */
@@ -56,12 +60,12 @@ export async function scenarioGit(cwd: string, ...args: string[]): Promise<strin
  * worktree realpath).
  * @param worktreePath - The normalized Worker worktree path.
  */
-export function approvedChecksFor(worktreePath: string): DevFrameRequiredChecksConfig {
+export function approvedChecksFor(worktreePath: string, artifactName: string): DevFrameRequiredChecksConfig {
   return {
     version: 1,
     checks: [
       { checkId: 'git-diff-check', executable: 'git', arguments: ['diff', '--check'], cwd: worktreePath },
-      { checkId: 'artifact-probe', executable: 'node', arguments: ['-e', 'require("node:fs").accessSync("artifact.txt")'], cwd: worktreePath },
+      { checkId: 'artifact-probe', executable: 'node', arguments: ['-e', `require("node:fs").accessSync(${JSON.stringify(artifactName)})`], cwd: worktreePath },
     ],
   }
 }
@@ -84,17 +88,25 @@ export async function prepareCandidateScenario(root: string, ledgerPath: string)
   await scenarioGit(anchorPath, 'commit', '--allow-empty', '-m', 'candidate base')
 
   const store = new FileRequiredChecksConfigStore({ path: ledgerPath })
+  // Four independent trees: the controller's integration target, the lead's
+  // own tree, and one worker tree per task. Only the target is bound at
+  // bootstrap; the lead and worker trees stay free for their own holders.
+  const targetWorktreePath = join(root, 'wt-target')
+  await scenarioGit(anchorPath, 'worktree', 'add', targetWorktreePath, '-b', 'feature/target')
+  const leadWorktreePath = join(root, 'wt-lead')
+  await scenarioGit(anchorPath, 'worktree', 'add', leadWorktreePath, '-b', 'feature/lead')
   const tasks: PreparedTask[] = []
   for (const taskId of ['task-a', 'task-b'] as const) {
     const worktreePath = join(root, `wt-${taskId}`)
     await scenarioGit(anchorPath, 'worktree', 'add', worktreePath, '-b', `feature/${taskId}`)
     // git created the directory, so the realpath canon now applies.
     const canonical = await realpath(worktreePath)
-    // Sequential saves: the shared ledger file admits one writer at a time.
-    const digest = await store.save(approvedChecksFor(canonical))
+    // Each worker produces its own artifact file; the approved probe checks
+    // that exact name.
+    const digest = await store.save(approvedChecksFor(canonical, `artifact-${taskId}.txt`))
     tasks.push({ taskId, worktreePath: canonical, digest })
   }
-  return { anchorPath, tasks }
+  return { anchorPath, tasks, targetWorktreePath: await realpath(targetWorktreePath), leadWorktreePath: await realpath(leadWorktreePath) }
 }
 
 /**
@@ -109,7 +121,7 @@ export async function writeDigestPatch(home: string, prepared: PreparedScenario)
     `    '${task.taskId}': '${String(task.digest)}'`,
   ].join('\n'))
   const checkRows = prepared.tasks.map(task => {
-    const checks = approvedChecksFor(task.worktreePath).checks
+    const checks = approvedChecksFor(task.worktreePath, `artifact-${task.taskId}.txt`).checks
     return `        '${task.taskId}': ${JSON.stringify(checks)}`
   })
   const patch = [
@@ -137,7 +149,7 @@ export async function writeDigestPatch(home: string, prepared: PreparedScenario)
 /** The bootstrap's approveTaskChecks cross-check: recompute and compare. */
 export function expectedDigests(prepared: PreparedScenario): Record<string, string> {
   return Object.fromEntries(prepared.tasks.map(task => [
-    task.taskId, String(requiredChecksDigest(approvedChecksFor(task.worktreePath))),
+    task.taskId, String(requiredChecksDigest(approvedChecksFor(task.worktreePath, `artifact-${task.taskId}.txt`))),
   ]))
 }
 
@@ -151,11 +163,13 @@ export function expectedDigests(prepared: PreparedScenario): Record<string, stri
 export async function writeScenarioFile(home: string, prepared: PreparedScenario): Promise<string> {
   const scenario = {
     anchorPath: prepared.anchorPath,
+    targetWorktreePath: prepared.targetWorktreePath,
+    leadWorktreePath: prepared.leadWorktreePath,
     tasks: prepared.tasks.map(task => ({
       taskId: task.taskId,
       worktreePath: task.worktreePath,
       digest: String(task.digest),
-      checks: approvedChecksFor(task.worktreePath),
+      checks: approvedChecksFor(task.worktreePath, `artifact-${task.taskId}.txt`),
     })),
   }
   const scenarioPath = join(home, 'candidate-scenario.json')

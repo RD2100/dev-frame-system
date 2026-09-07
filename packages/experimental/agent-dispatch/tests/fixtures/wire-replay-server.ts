@@ -22,7 +22,13 @@ export interface WireReplayTurn {
   readonly toolCalls?: readonly {
     readonly id?: string
     readonly name: string
-    readonly arguments: unknown
+    /**
+     * Exact JSON arguments, or a callback evaluated against the captured
+     * request body when the turn is served — earlier tool receipts (host
+     * bootstrap worktree ids, dispatch briefings) flow back into later
+     * scripts without hardcoding per-run identifiers.
+     */
+    readonly arguments: unknown | ((body: string) => unknown)
   }[]
 }
 
@@ -49,13 +55,16 @@ export interface WireReplayServer {
   close(): Promise<void>
 }
 
-function sseChunks(turn: WireReplayTurn): readonly unknown[] {
+function sseChunks(turn: WireReplayTurn, body: string): readonly unknown[] {
   const chunks: unknown[] = []
   if (turn.text !== undefined && turn.text.length > 0) {
     chunks.push({ choices: [{ index: 0, delta: { role: 'assistant', content: turn.text }, finish_reason: null }] })
   }
   for (const [index, call] of (turn.toolCalls ?? []).entries()) {
-    const args = JSON.stringify(call.arguments)
+    const resolved = typeof call.arguments === 'function'
+      ? (call.arguments as (requestBody: string) => unknown)(body)
+      : call.arguments
+    const args = JSON.stringify(resolved)
     chunks.push({
       choices: [{
         index: 0,
@@ -95,7 +104,10 @@ export async function startWireReplayServer(sessions: readonly WireReplaySession
       const parsed = JSON.parse(body) as unknown
       let matched: WireReplaySession | undefined
       for (const session of sessions) {
-        if (body.includes(session.needle)) { matched = session; break }
+        // Only real agent-loop requests carry a tools array; the web app's
+        // session-title generation embeds the user text too and must not
+        // consume a scripted turn.
+        if (body.includes(session.needle) && body.includes('"tools"')) { matched = session; break }
       }
       const index = requests.length + 1
       requests.push({ index, needle: matched?.needle ?? null, body: parsed })
@@ -114,7 +126,7 @@ export async function startWireReplayServer(sessions: readonly WireReplaySession
       }
       response.writeHead(200, { 'content-type': 'text/event-stream' })
       response.end([
-        ...sseChunks(turn).map(chunk => `data: ${JSON.stringify(chunk)}`),
+        ...sseChunks(turn, body).map(chunk => `data: ${JSON.stringify(chunk)}`),
         'data: [DONE]',
         '',
       ].join('\n\n'))
