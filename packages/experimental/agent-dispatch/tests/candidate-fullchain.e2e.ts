@@ -621,11 +621,13 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       try {
         // The persistence row's root varies by configuration; the physical
         // shape does not: session.jsonl(.zstd) under an encoded session-id
-        // directory segment. The zstd log is a sequence of independent
-        // frames; a streaming decompressor yields every complete frame and
-        // stops at the torn active tail, which is exactly the diagnostic
-        // slice needed before the finally deletes the temporary home.
-        const { createZstdDecompress } = await import('node:zlib')
+        // directory segment. The repository zstd reader scans every
+        // structurally complete frame (a streaming one-shot decode can stop
+        // after the first frame and hide the whole turn history), recovers
+        // the torn active tail separately, and the raw log plus plaintext
+        // are archived before the finally deletes the temporary home.
+        const { scanZstdFrames, createZstdFrameDecoder, decompressZstdPrefix } =
+          await import('../../../session/session-persistence-jsonl/src/zstd.ts')
         const entries = await readdir(dshHome, { recursive: true, withFileTypes: true })
         const logs = entries.filter(entry => entry.isFile()
           && (entry.name === 'session.jsonl' || entry.name === 'session.jsonl.zstd')
@@ -634,16 +636,26 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         let lineNo = 0
         for (const log of logs) {
           const buffer = await readFile(log)
+          await writeFile('.agents/devframe/v14/remaining/root-session-log.raw.zstd', buffer, { flag: 'w' })
           let plaintext = buffer.toString('utf8')
           if (log.endsWith('.zstd')) {
-            const decompressor = createZstdDecompress()
+            const { frames, tornStart } = scanZstdFrames(buffer)
+            const decoder = createZstdFrameDecoder()
             const parts: Buffer[] = []
-            plaintext = await new Promise<string>(resolve => {
-              decompressor.on('data', (chunk: Buffer) => parts.push(chunk))
-              decompressor.on('error', () => resolve(Buffer.concat(parts).toString('utf8')))
-              decompressor.on('end', () => resolve(Buffer.concat(parts).toString('utf8')))
-              decompressor.end(buffer)
-            })
+            try {
+              for (const frame of decoder.decode(buffer, frames)) parts.push(Buffer.from(frame))
+            } finally {
+              decoder.close()
+            }
+            if (tornStart !== undefined) {
+              try {
+                parts.push(await decompressZstdPrefix(buffer.subarray(tornStart)))
+              } catch {
+                // A structurally incomplete final frame may yield no
+                // plaintext; the complete prior frames remain readable.
+              }
+            }
+            plaintext = Buffer.concat(parts).toString('utf8')
           }
           await writeFile('.agents/devframe/v14/remaining/root-session-dump.jsonl', plaintext, { flag: 'w' })
           for (const line of plaintext.split('\n')) {
