@@ -11,6 +11,7 @@ The agent-hierarchy subsystem is the policy service of the pluginized agent hier
 - The guard covers model-facing tool executions automatically; denials name the bound role, `missing role`, the plugin scope, or the depth budget, and the tool body never runs.
 - `roleOf` — resolves an agent's bound role from the live binding registry.
 - `evaluateCreation` — every non-tool creation entry (host services, SDK bridges) must call it with the creator's binding record and a P00 `CreationIntent` before the child exists.
+- `createChildAgent` — validates and creates a child through factory setup, persisting its identity before publication. `CreateChildAgentRequest` carries the required task, plugin scope, and registered worktree; `CreateChildAgentOptions` carries host setup, routing options, cancellation, and an optional allocated SessionID. `CreatedChildAgent` returns the live Agent and durable binding, without sending a prompt. The service owns the Agent lifecycle.
 - Configuration validates once at construction: per-role `roleToolPolicies` (each role keeps the global tools its `inheritedTools` list names) and per-lead `leadPluginScopes`.
 
 ## Contracts
