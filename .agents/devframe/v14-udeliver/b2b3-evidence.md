@@ -13,3 +13,12 @@
 | controller 收养+绑定 | `b2b3-error` | ❌ RemoteError：session "shadow-fe079f37" belongs to "D:\dsh-udeliver-second", not "D:\dsh-udeliver-chain2"（sessionController.create 的 cwd 归属校验；driver 传参缺陷，非产品缺陷）；appExit(1) 优雅退出验证生效（进程自净） |
 
 **处置**：driver 修复（controller 收养改传 canonicalPath），同构零副本，重启 Boot A。失败步已按纪律记录为证据。
+
+## Boot A round 2（pwsh-216，全新 home-b2b3b/vault-b2b3b）
+
+| 步骤 | 结果 |
+| --- | --- |
+| b2-open | ✅ 真实成功（第二个工作区：workspaceId=5e32a516-6cc8-4433-a7ea-39fe7ce39393、controllerSessionId=shadow-4d5f0f49、bindingRevision=1、state=ready） |
+| controller 收养 | ❌ RemoteError 逐字：`failed to create session "shadow-4d5f0f49-1427-49d9-8ecb-28edc1a8f334": Error: cannot prepare session "..." while it is live`——**路由 provisioning 已建活跃 agent**（controllerLive），收养路径多余；appExit(1) 自净退出 |
+
+**处置**：driver 改为优先 `agents.get(controllerSessionId)` 取活跃 agent（b5dafec048）。
