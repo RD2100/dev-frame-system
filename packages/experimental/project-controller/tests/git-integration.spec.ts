@@ -95,6 +95,18 @@ describe('controller Git integration', () => {
     expect(await reconcileIntegrationGit(request, options)).toEqual({ kind: 'unchanged', head: request.targetHead })
   })
 
+  it('refuses a gate that closes during preflight and leaves the target unchanged', async () => {
+    const request = await fixture()
+    const gate = new AbortController()
+    // Deterministically scheduled closure: the microtask fires inside the
+    // async preflight, so the refusal must come from the spawn-adjacent
+    // recheck and the mutating merge must never run.
+    queueMicrotask(() => gate.abort(new Error('admission closed during preflight')))
+    await expect(executeIntegrationGit(request, options, gate.signal)).rejects.toThrow('admission closed during preflight')
+    expect(await git(request.targetPath, 'rev-parse', 'HEAD')).toBe(request.targetHead)
+    expect(await reconcileIntegrationGit(request, options)).toEqual({ kind: 'unchanged', head: request.targetHead })
+  })
+
   it('rejects using the controller checkout as its own independent source', async () => {
     const request = await fixture()
     await expect(inspectIntegrationGit({ ...request, sourcePath: request.targetPath }, options)).rejects.toThrow('independent')
@@ -260,13 +272,27 @@ describe('controller Git integration', () => {
     expect(await reconcileIntegrationGit(request, options)).toEqual({ kind: 'ambiguous', head: await git(root, 'rev-parse', 'HEAD'), clean: true })
   })
 
-  it('refuses local custom merge drivers while the fast-forward path keeps its reviewed face', async () => {
+  it('refuses a driver effective through an include while the fast-forward path keeps its reviewed face', async () => {
     const request = await fixture()
-    await git(request.targetPath, 'config', 'merge.custom.driver', 'echo merged %A %O %B')
+    // `--local` alone does not expand includes; the merge environment sees
+    // the driver through it, so the reachable-config check must refuse it.
+    // The include file lives inside .git so it never dirties the worktree.
+    const includePath = join(request.targetPath, '.git', 'included-config')
+    await writeFile(includePath, '[merge "probe"]\n\tdriver = echo merged %A %O %B\n')
+    await git(request.targetPath, 'config', 'include.path', includePath)
     await expect(inspectIntegrationGit({ ...request, mode: 'merge' }, options))
       .rejects.toThrow('no custom merge drivers or external filters')
     // The fast-forward path keeps its reviewed face and still integrates.
     expect((await executeIntegrationGit(request, options)).observation.kind).toBe('applied')
+  })
+
+  it('refuses a filter effective through worktree config', async () => {
+    const request = await fixture()
+    await git(request.targetPath, 'config', 'extensions.worktreeConfig', 'true')
+    await git(request.targetPath, 'config', '--worktree', 'filter.probe.smudge', 'echo smudged')
+    await expect(inspectIntegrationGit({ ...request, mode: 'merge' }, options))
+      .rejects.toThrow('no custom merge drivers or external filters')
+    expect(await git(request.targetPath, 'rev-parse', 'HEAD')).toBe(request.targetHead)
   })
 
   it('merges through built-in mechanisms only when the reviewed tree names unreachable drivers or filters', async () => {
