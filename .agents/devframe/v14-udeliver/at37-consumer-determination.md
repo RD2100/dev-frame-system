@@ -52,3 +52,10 @@
 - **tsc 程序声明**：所跑程序为 **`tsc -b tsconfig.host.json`**（host 面，include 含 `packages/*/*/tests/**/*.ts` 即本 spec，references 含 devframe src），修复后 **exit 0**；该程序曾抓出 vitest 转译放行的 6 处 spec 类型错误，全部修复——vitest 转译≠tsc 程序，教训第三度坐实。
 - **真实退出码**：监听器套件 **6/6 exit 0 零未处理错误**；联合回归 **23 files / 264 tests passed exit 0**；host tsc **exit 0**。路由：零模型调用；TaskRecord/project-contracts 零改动；未全仓 build。
 - **边界如实标注**：required 纯函数返回 `grade='fail'` 仅为分级判定，**不替代实际任务失败验收**——真实任务失败路径（agent-loop 终态、goal 判定）尚未接线，本片不含；其余未完成的生产接线同此边界，暂不列缺陷。
+
+## 原生 hook 真实补验（更正"宿主缺 bash"误判）
+
+- **更正**：此前两笔提交（06dc601897/69381b5750）commit message 所写 "Hook skip: no bash on host" 为**误判**——宿主 bash 可用（GNU bash 5.2.37，临时副本 bash.exe + git usr/bin 前置 PATH）。今后不再把可用 shell 误判成宿主缺能力。
+- **补验方法**：临时分支自 f46fe9f595 `cherry-pick --no-commit` 重放两提交的真实内容（暂存区=全部 6 文件，非空暂存），PATH 前置后真实 `git commit` 触发 lefthook pre-commit（临时提交 d862c99bf4，验后删支）。
+- **逐项结果**（首轮 lint 抓出 spec L107 超 140 列——wrap 修复后重放）：✓ lint (staged)（oxlint --config .oxlintrc.staged.json，1.75s）✓ third-party notices（THIRD_PARTY_NOTICES.md 再生成）✓ whitespace（git diff --cached --check）✓ vendor manifest guard；(skip) translation pairing / archived agent notes（无匹配暂存文件，属 glob 无命中非跳过执行）；**HOOK-COMMIT-EXIT=0**。
+- **既有证据维持**：264 tests / host tsc exit 0 不重跑（门禁未改动语义面）。

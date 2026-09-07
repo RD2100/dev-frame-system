@@ -104,7 +104,11 @@ function dispatchMemoryAppend(ctx: Context, session: Session, callId: string, so
   })
 }
 
-/** Drain the listener's deferred appends: one macrotask lets the store's deferred session/event dispatch and the listener's own microtask both finish deterministically. */
+/**
+ * Drain the listener's deferred appends: one macrotask lets the store's
+ * deferred session/event dispatch and the listener's own drain both finish
+ * deterministically.
+ */
 async function drain(): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, 0))
 }
