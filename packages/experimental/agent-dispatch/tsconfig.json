@@ -1,0 +1,21 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../../vendor/cosmokit" },
+    { "path": "../../../vendor/cordis" },
+    { "path": "../agent-hierarchy" },
+    { "path": "../project-contracts" },
+    { "path": "../session-identity" },
+    { "path": "../../core/agent" },
+    { "path": "../../core/session" },
+    { "path": "../../llm/llm" },
+    { "path": "../../preset/agent-presets" },
+    { "path": "../../workspace/workspace" },
+    { "path": "../../workflow/worktree-registry" }
+  ]
+}
