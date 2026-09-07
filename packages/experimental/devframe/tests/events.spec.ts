@@ -463,13 +463,27 @@ describe('DevFrame durable event vocabulary', () => {
     expect(state.lifecycle?.state).toBe('quiescence_confirmed')
   })
 
-  it('keeps a corrupted duplicate or identity change fail-closed during replay', () => {
+  it('converges an exact binding repeat and keeps an identity change fail-closed during replay', () => {
+    // An exact repeat is an idempotent re-observation: the reliability stop
+    // flow may re-record `stop_requested` after the command lane, and the
+    // replay must converge instead of latching (AT4-06/AT1-10 seam).
     const duplicate = session()
     duplicate.append('devframe/role-policy', rolePolicy())
     duplicate.append('devframe/goal-binding', binding())
     duplicate.append('devframe/goal-binding', binding())
-    expect(foldDevFrameState(duplicate.snapshotEvents(), duplicate.header).failure)
-      .toMatch(/recorded twice/)
+    const duplicateState = foldDevFrameState(duplicate.snapshotEvents(), duplicate.header)
+    expect(duplicateState.failure).toBeNull()
+    expect(duplicateState.bindings).toHaveLength(1)
+
+    const repeatedStop = session()
+    repeatedStop.append('devframe/role-policy', rolePolicy())
+    repeatedStop.append('devframe/goal-binding', binding())
+    repeatedStop.append('devframe/goal-binding', binding({ lifecycle: 'stop_requested' }))
+    repeatedStop.append('devframe/goal-binding', binding({ lifecycle: 'stop_requested' }))
+    const stopState = foldDevFrameState(repeatedStop.snapshotEvents(), repeatedStop.header)
+    expect(stopState.failure).toBeNull()
+    expect(stopState.bindings).toHaveLength(1)
+    expect(stopState.bindings[0]?.lifecycle).toBe('stop_requested')
 
     const changed = session()
     changed.append('devframe/role-policy', rolePolicy())
