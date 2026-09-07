@@ -984,6 +984,17 @@
         "Current in-flight leads unaffected: L-llmargs-verify (C2b three-proof), L-accept (AT1-08/AT4-05/AT4-08), L-cverify (browser real actions), B-lead standby after B2/B3 acceptance."
       ],
       "status": "Governance record only; parallel lead work continues"
+    },
+    {
+      "entry": "B1 agent-hierarchy daily dispatch entry ruling: new packages/experimental/agent-dispatch host-consumption adapter owned by L-llmargs-verify; external Codex keeps engine semantics",
+      "facts": [
+        "Ruling (2026-09-07, user-requested cross-end): the daily dispatch entry point is a NEW independent adapter module packages/experimental/agent-dispatch (host consumption face) - NOT project-controller (generic task board never absorbs agent lifecycle), NOT devframe (B's warning-fix domain, no double-write), not shadow-router/llm.",
+        "Sole implementation owner: L-llmargs-verify (session a64ddc57-0187-4a55-b2e9-9173ce430720). Domain: the capability-seam Service Definition projecting external createChildAgent(parent, request, {sessionId?, setup, agentOptions?, signal?}) -> {agent, record}; entry validation (registered worktree check, parent role/plugin-domain check enforcing controller->lead->worker, setup order = preset.mount + registered worktree.bind before followup); stub-driven entry tests, zero model calls. The adapter does NOT implement the engine.",
+        "External Codex (B1) continues: agent-hierarchy/session-identity semantics + creation-failure tests in its independent tree (createChildAgent engine; real 3-level isolated-profile evidence verified at D:/dsh-udeliver-iso/codex-hierarchy-513c25fa9e21468da4ee6bb0df42399f/evidence.jsonl). Docking face = the signature above; the adapter stub matches it verbatim. B1 stays open; nothing merged to main from the external tree yet.",
+        "Single writers: adapter package manifest/tsconfig = L-llmargs-verify; shipped profile mounting row (cordis patch overlay) = controller alone at integration closure. Hierarchy discipline preserved (controller creates leads; leads create workers).",
+        "Evidence base: B1_WORKER_OK with model-artifact-verified + recovery-complete records; default subagent wiring not yet connected; B1 not closable."
+      ],
+      "status": "Dispatched to L-llmargs-verify; results to be relayed to external Codex by the user"
     }
   ]
 }
