@@ -663,10 +663,12 @@ registerProvider(provider: SubagentProvider): () => void
 getProvider(name: string): SubagentProvider | undefined
 
 /**
- * List registered provider names in insertion order.
+ * List registered provider names in insertion order. The `subagents/providers`
+ * Remote face serves this exact read as the mentionable-provider directory:
+ * client `@` mention sources render the live registry, never a static roster.
  * @returns the registered names.
  */
-list(): string[]
+@Remote('providers') list(): string[]
 
 /**
  * Establish a published child on the named provider. Capability and semantic

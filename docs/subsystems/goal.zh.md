@@ -186,6 +186,31 @@ interface GoalChanged {
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxdevframetaskgrading--devframetaskgrading"></a>
+
+### `ctx.devframeTaskGrading` — `DevFrameTaskGrading`
+
+Host seam declaring the per-session grading context before memory runs.
+
+```ts cordis-catalog
+/**
+ * Declare the grading context for one session's current task.
+ * @param sessionId - The session executing the task.
+ * @param grading - The task id and the memory requirement.
+ */
+declare(sessionId: SessionId, grading: DevFrameTaskGradingDeclaration): void
+
+/**
+ * Drop the declaration when the session ends.
+ * @param sessionId - The session whose declaration is dropped.
+ */
+clear(sessionId: SessionId): void
+```
+
+Types: [SessionId](core.zh.md)
+
+Source: [`packages/experimental/devframe/src/task-warning-listener.ts`](../../packages/experimental/devframe/src/task-warning-listener.ts)
+
 <a id="ctxgoals--goalservice"></a>
 
 ### `ctx.goals` — `GoalService`
