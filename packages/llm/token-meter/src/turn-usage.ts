@@ -101,7 +101,11 @@ function normalizeUsage(usage: TokenUsage, route?: TurnTokenUsageRoute): Normali
     }
     exactTotal = totalTokens
   } else {
-    if (cacheReadTokens === undefined || cacheWriteTokens === undefined) return undefined
+    // Without a reported total the exact sum still needs the whole prompt:
+    // both cache buckets, or none at all — a provider that reports no cache
+    // bucket accounted the entire prompt in inputTokens. One bucket alone
+    // leaves the prompt partly unknown and fails closed.
+    if ((cacheReadTokens === undefined) !== (cacheWriteTokens === undefined)) return undefined
     const derivedTotal = safeSum([knownPrompt, outputTokens])
     if (derivedTotal === undefined) return undefined
     exactTotal = derivedTotal
@@ -166,7 +170,8 @@ function sameAttempt(
  *
  * No attempt is inferred from a usage sample. Any missing lifecycle boundary,
  * incomplete attempt usage, unsafe count, or contradictory exact total makes
- * the whole disclosure unavailable.
+ * the whole disclosure unavailable. A sample without a reported total derives
+ * its exact sum from the whole prompt — both cache buckets, or none.
  * @param events - Turn-local durable events from `turn/start` through `turn/end`.
  * @returns exact aggregate usage, or undefined when it cannot be proven.
  */

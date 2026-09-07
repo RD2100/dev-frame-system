@@ -81,6 +81,28 @@ describe('deriveTurnTokenUsage', () => {
     }))))).toBeUndefined()
   })
 
+  it('derives the total from input and output when no cache bucket is reported', () => {
+    expect(deriveTurnTokenUsage(completeAttempt(message(3, usage({
+      totalTokens: undefined,
+      cacheReadTokens: undefined,
+      cacheWriteTokens: undefined,
+    }))))).toEqual({
+      uncachedInputTokens: 100,
+      outputTokens: 20,
+      totalTokens: 120,
+      routes: [{ provider: 'deepseek', model: 'deepseek-chat' }],
+    })
+
+    expect(deriveTurnTokenUsage(completeAttempt(
+      event(3, 'assistant/chunk', {
+        turn: 1,
+        step: 1,
+        chunk: { type: 'usage', usage: usage({ totalTokens: undefined, cacheReadTokens: undefined, cacheWriteTokens: undefined }) },
+      }),
+      message(4),
+    ))).toMatchObject({ uncachedInputTokens: 100, outputTokens: 20, totalTokens: 120 })
+  })
+
   it('lets final message usage replace the latest streaming sample', () => {
     const result = deriveTurnTokenUsage(completeAttempt(
       event(3, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'usage', usage: usage() } }),
