@@ -58,6 +58,69 @@ interface HttpResult {
   readonly body: string
 }
 
+type JournalEvent = { type?: string; time?: number; data?: Record<string, unknown> }
+
+/** The repository zstd reader: every structurally complete frame decodes. */
+const { scanZstdFrames, createZstdFrameDecoder } = await import('../../../session/session-persistence-jsonl/src/zstd.ts')
+
+/** Decode one session log: multi-frame zstd, full plaintext. */
+async function decodeSessionLog(path: string): Promise<string> {
+  const buffer = await readFile(path)
+  const decoder = createZstdFrameDecoder()
+  try {
+    let plaintext = ''
+    for (const frame of decoder.decode(buffer, scanZstdFrames(buffer).frames)) {
+      plaintext += Buffer.from(frame).toString('utf8')
+    }
+    return plaintext
+  } finally {
+    decoder.close()
+  }
+}
+
+/** Parse a session log event by event; torn tail lines are skipped. */
+function parseLogEvents(text: string): JournalEvent[] {
+  return text.split('\n').flatMap(line => {
+    try {
+      return [JSON.parse(line) as JournalEvent]
+    } catch {
+      return []
+    }
+  })
+}
+
+/** Every session log under the isolated home, by path. */
+function sessionLogPaths(dshHome: string): string[] {
+  return readdirSync(join(dshHome, 'sessions'), { withFileTypes: true, recursive: true })
+    .filter(entry => entry.isFile() && entry.name === 'session.jsonl.zstd')
+    .map(entry => join((entry as unknown as { parentPath: string }).parentPath, entry.name))
+}
+
+/** Decode every session log under the isolated home. */
+async function decodeSessionLogs(dshHome: string): Promise<{ path: string; text: string }[]> {
+  const decoded: { path: string; text: string }[] = []
+  for (const path of sessionLogPaths(dshHome)) decoded.push({ path, text: await decodeSessionLog(path) })
+  return decoded
+}
+
+/**
+ * The goal-binding capability evidence the coordinator's ruling requires:
+ * the controller session log lands the binding record folded at
+ * `admission_open` — runtime proof the composition bound the goal, not a
+ * static deployment row.
+ * @param events - The parsed controller session events.
+ * @param what - The test leg the evidence belongs to, for the message.
+ */
+function assertGoalBindingAdmissionOpen(events: JournalEvent[], what: string): void {
+  const bindings = events.filter(event => event.type === 'devframe/goal-binding')
+  expect(bindings.length, `goal-binding records for ${what}`).toBeGreaterThanOrEqual(1)
+  for (const binding of bindings) {
+    const data = binding.data as { lifecycle?: string; goalId?: string }
+    expect(data.goalId, `goal id in ${what}`).toBeTruthy()
+    expect(data.lifecycle, `goal-binding lifecycle in ${what}`).toBe('admission_open')
+  }
+}
+
 function redact(output: string): string {
   return output.replace(/([?&]token=)[^\s)]+/gu, '$1<redacted>')
 }
@@ -215,6 +278,15 @@ async function expectCandidateRowsActive(running: RunningWeb): Promise<void> {
     if (entry === undefined) {
       throw new Error(`candidate row ${moduleName} is not in the loader inventory; mounted=${JSON.stringify([...mounted.keys()])}`)
     }
+    // Row enabled-ness is deployment configuration, not capability: the
+    // candidate explicitly disables the default launch-directory goal row
+    // (the bootstrap mounts its own composition), and the runtime
+    // capability evidence is the goal-binding record the bootstrap lands,
+    // asserted in the bootstrap and chain legs.
+    if (moduleName === '@deepseek-ai/dsh-experimental-command-goal-binding') {
+      expect(entry.enabled, `${moduleName} deployment-disabled in the candidate`).toBe(false)
+      continue
+    }
     expect(entry.enabled, moduleName).toBe(true)
     expect(entry.fiberPhase, moduleName).toBe('active')
   }
@@ -279,6 +351,12 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
   it('drives a session turn over the wire-level replay lane through the real RPC face', { timeout: 420_000 }, async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-candidate-fullchain-drive-'))
     const dshHome = join(root, '.dsh')
+    await mkdir(dshHome, { recursive: true })
+    // The candidate deployment's contract: the host prepares the scenario
+    // before boot — the controller turn reads it from the isolated home,
+    // and a missing file errors the turn before any model request.
+    const prepared = await prepareCandidateScenario(root, join(dshHome, 'checks-ledger.json'))
+    await writeScenarioFile(dshHome, prepared)
     const replay = await startWireReplayServer([
       {
         needle: 'candidate-driving-probe',
@@ -296,7 +374,11 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       const url = new URL(running.launchUrl)
       const cookie = await exchangeLaunchCookie(running.launchUrl)
 
-      const created = await postRpc(Number(url.port), url.host, cookie, 'session/create', { args: { request: {} } })
+      // The request-budget consumer admits only the configured root, its
+      // lead, or that lead's scoped worker: the probe session must be the
+      // fixed candidate root the deployment selected, or the precharge
+      // refuses every send attempt and the turn never reaches the model.
+      const created = await postRpc(Number(url.port), url.host, cookie, 'session/create', { args: { request: { sessionId: 'candidate-root-c14' } } })
       expect(created.status, `session/create status; body=${redact(created.body)}`).toBe(200)
       const createdValue = (JSON.parse(created.body) as { result?: { value?: { sessionId?: string } } }).result?.value
       if (createdValue?.sessionId === undefined) {
@@ -324,6 +406,18 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       expect(JSON.stringify(captured.body)).toContain(prompt)
       expect(running.child.exitCode).toBeNull()
     } catch (error) {
+      // Archive the probe session's own log before the finally deletes the
+      // home: turn errors live there, not in the RPC acceptance. Best
+      // effort only — the original error still propagates.
+      try {
+        for (const log of sessionLogPaths(dshHome)) {
+          const segment = log.split(/[\\/]/).at(-2) ?? 'unknown-session'
+          await writeFile(`.agents/devframe/v14/remaining/drive-${segment}.dump.jsonl`, await decodeSessionLog(log), { flag: 'w' })
+        }
+      } catch {
+        // The archive is diagnostic convenience; the failure evidence below
+        // is the primary report.
+      }
       const evidence = running?.output()
       throw new Error(`${error instanceof Error ? error.message : String(error)}${evidence === undefined ? '' : `\n${redact(evidence)}`}`, { cause: error })
     } finally {
@@ -354,6 +448,14 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         { text: 'HOST_BOOTSTRAP_OK' },
       ],
     }]
+    // The restart leg confirms the persisted identity: the current goal
+    // resumes, so the leg drives a plain turn — re-invoking the bootstrap
+    // would refuse with "a goal is already current", which is the fold's
+    // correct behavior, not a recovery path.
+    const resumeScript = [{
+      needle: 'host-resume-probe',
+      turns: [{ text: 'HOST_RESUME_OK' }],
+    }]
 
     /** Extract the host receipt the wire carried in the tool result. */
     function receiptFrom(text: string): { workspaceId: string; worktreeIds: string[]; controllerSessionId?: string } {
@@ -367,8 +469,8 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       return { workspaceId, worktreeIds, ...(controllerSessionId !== undefined ? { controllerSessionId } : {}) }
     }
 
-    /** Drive one host-bootstrap turn; resume the recorded session on restart. */
-    async function driveHostTurn(replay: Awaited<ReturnType<typeof startWireReplayServer>>, resumeSessionId?: string): Promise<{ sessionId: string; receipt: { workspaceId: string; worktreeIds: string[]; controllerSessionId?: string } }> {
+    /** Drive one turn; `requireReceipt` waits for the host receipt too. */
+    async function driveHostTurn(replay: Awaited<ReturnType<typeof startWireReplayServer>>, prompt: string, requireReceipt: boolean, resumeSessionId?: string): Promise<{ sessionId: string; receipt?: { workspaceId: string; worktreeIds: string[]; controllerSessionId?: string } }> {
       const running = await startCandidateWeb(root, dshHome, {
         DEEPSEEK_API_KEY: 'wire-replay-key',
         DEEPSEEK_BASE_URL: replay.baseURL,
@@ -378,7 +480,9 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         const cookie = await exchangeLaunchCookie(running.launchUrl)
         let sessionId = resumeSessionId
         if (sessionId === undefined) {
-          const created = await postRpc(Number(url.port), url.host, cookie, 'session/create', { args: { request: {} } })
+          // The request-budget consumer admits only the configured root, so
+          // the bootstrap session must be the fixed candidate root.
+          const created = await postRpc(Number(url.port), url.host, cookie, 'session/create', { args: { request: { sessionId: 'candidate-root-c14' } } })
           sessionId = (unwrapRpc('session/create', created.body) as { sessionId: string }).sessionId
         } else {
           // The restart leg first verifies the persisted session registry
@@ -387,21 +491,39 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
           const listValue = JSON.stringify(unwrapRpc('session/list', listed.body))
           expect(listValue, `session/list after restart must carry ${sessionId}`).toContain(sessionId)
         }
-        const prompt = 'host-bootstrap-probe: start the host.'
         const prompted = await postRpc(Number(url.port), url.host, cookie, 'session/prompt', { args: {
           request: { requestId: randomUUID(), sessionId, mode: 'queue', content: [{ type: 'text', text: prompt }] },
         } })
         expect(prompted.status, `session/prompt status; body=${redact(prompted.body)}`).toBe(200)
         unwrapRpc('session/prompt', prompted.body)
+        // The resumed session with a current goal replays devframe-start on
+        // its next input and the fold refuses it — durable proof the goal
+        // persisted across the restart; the restart leg waits for exactly
+        // that refusal instead of a model request.
+        if (resumeSessionId !== undefined) {
+          const controllerLogPath = sessionLogPaths(dshHome).find(path => path.includes(sessionId))
+          for (let tick = 0; tick < 300; tick++) {
+            if (controllerLogPath !== undefined) {
+              const log = await decodeSessionLog(controllerLogPath)
+              if (log.includes('A goal is already current and not complete')) return { sessionId }
+            }
+            await new Promise(resolve => setTimeout(resolve, 100))
+          }
+          throw new Error('the resumed session never replayed devframe-start; the current goal did not persist across the restart')
+        }
         // The web session also fires a title-generation request through the
-        // same lane; scan every captured body for the receipt instead of
-        // assuming request positions.
+        // same lane; scan every captured body for the turn's own request
+        // instead of assuming request positions.
         for (let tick = 0; tick < 600; tick++) {
-          const hit = replay.requests.map(request => JSON.stringify(request.body)).find(text => text.includes('admission_open'))
-          if (hit !== undefined) return { sessionId, receipt: receiptFrom(hit) }
+          const bodies = replay.requests.map(request => JSON.stringify(request.body))
+          // The receipt lands only after the turn executes project_host_start,
+          // so the bootstrap leg keeps polling past its own prompt request.
+          const receiptHit = bodies.find(text => text.includes('admission_open'))
+          if (receiptHit !== undefined) return { sessionId, receipt: receiptFrom(receiptHit) }
+          if (!requireReceipt && bodies.some(text => text.includes(prompt))) return { sessionId }
           await new Promise(resolve => setTimeout(resolve, 100))
         }
-        throw new Error(`wire replay lane saw ${replay.requests.length} requests in 60s, none carrying the host receipt; tool messages: ${
+        throw new Error(`wire replay lane saw ${replay.requests.length} requests in 60s, none carrying "${prompt}"; tool messages: ${
           redact(replay.requests.map(request => JSON.stringify(request.body)).filter(text => text.includes('"role":"tool"')).map(text => {
             const at = text.indexOf('"role":"tool"')
             return text.slice(at, at + 400)
@@ -416,27 +538,44 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
     let firstReceipt: { workspaceId: string; worktreeIds: string[] }
     let controllerSessionId: string
     try {
-      const driven = await driveHostTurn(first)
+      const driven = await driveHostTurn(first, 'host-bootstrap-probe: start the host.', true)
       controllerSessionId = driven.sessionId
-      firstReceipt = driven.receipt
+      firstReceipt = driven.receipt!
       expect(firstReceipt.worktreeIds.length, `receipt ${JSON.stringify(firstReceipt)}`).toBe(2)
+      // The ruled capability evidence: the bootstrap bound the goal and the
+      // controller log folded the record at admission_open.
+      const controllerLog = sessionLogPaths(dshHome).find(path => path.includes(controllerSessionId))
+      expect(controllerLog, 'controller session log after the first bootstrap').toBeDefined()
+      assertGoalBindingAdmissionOpen(parseLogEvents(await decodeSessionLog(controllerLog!)), 'the first bootstrap')
     } catch (error) {
       throw new Error(`${error instanceof Error ? error.message : String(error)}`, { cause: error })
     } finally {
       await first.close()
     }
 
-    // Restart on the SAME home: the SAME controller session id drives the
-    // resumed turn (the registry's lock holder), so the persisted identity is
-    // asserted positively: the model request happens again and the receipt's
-    // workspace, worktree, and controller ids all match the first boot.
-    const second = await startWireReplayServer(hostScript)
+    // Restart on the SAME home: the SAME controller session id turns again,
+    // proving the persisted identity without starting a second goal — the
+    // current goal resumes, so the leg drives a plain confirmation turn and
+    // asserts the same goal-binding record still folded at admission_open.
+    const second = await startWireReplayServer(resumeScript)
     try {
-      const driven = await driveHostTurn(second, controllerSessionId)
-      expect(driven.receipt.controllerSessionId ?? driven.sessionId).toBe(controllerSessionId)
-      expect(driven.receipt.workspaceId).toBe(firstReceipt.workspaceId)
-      expect([...driven.receipt.worktreeIds].sort()).toEqual([...firstReceipt.worktreeIds].sort())
+      const driven = await driveHostTurn(second, 'host-resume-probe: confirm the persisted host identity.', false, controllerSessionId)
+      expect(driven.sessionId).toBe(controllerSessionId)
+      const resumedLog = sessionLogPaths(dshHome).find(path => path.includes(controllerSessionId))
+      expect(resumedLog, 'controller session log after the restart leg').toBeDefined()
+      assertGoalBindingAdmissionOpen(parseLogEvents(await decodeSessionLog(resumedLog!)), 'the restart leg')
     } catch (error) {
+      // Archive the controller log before the finally deletes the home: the
+      // resumed turn's own error lives there. Best effort only.
+      try {
+        for (const log of sessionLogPaths(dshHome)) {
+          const segment = log.split(/[\\/]/).at(-2) ?? 'unknown-session'
+          await writeFile(`.agents/devframe/v14/remaining/host-${segment}.dump.jsonl`, await decodeSessionLog(log), { flag: 'w' })
+        }
+      } catch {
+        // The archive is diagnostic convenience; the original error still
+        // propagates.
+      }
       throw new Error(`${error instanceof Error ? error.message : String(error)}`, { cause: error })
     } finally {
       await second.close()
@@ -621,32 +760,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       // event by event. The root log answers the start-turn evidence and the
       // timeline; the worker logs answer the durable delivery and
       // verification evidence.
-      const { scanZstdFrames, createZstdFrameDecoder } = await import('../../../session/session-persistence-jsonl/src/zstd.ts')
-      const decodeSessionLog = async (path: string): Promise<string> => {
-        const buffer = await readFile(path)
-        const decoder = createZstdFrameDecoder()
-        try {
-          let plaintext = ''
-          for (const frame of decoder.decode(buffer, scanZstdFrames(buffer).frames)) {
-            plaintext += Buffer.from(frame).toString('utf8')
-          }
-          return plaintext
-        } finally {
-          decoder.close()
-        }
-      }
-      type JournalEvent = { type?: string; time?: number; data?: Record<string, unknown> }
-      const parseLogEvents = (text: string): JournalEvent[] => text.split('\n').flatMap(line => {
-        try {
-          return [JSON.parse(line) as JournalEvent]
-        } catch {
-          return []
-        }
-      })
-      const sessionLogPaths = (): string[] => readdirSync(join(dshHome, 'sessions'), { withFileTypes: true, recursive: true })
-        .filter(entry => entry.isFile() && entry.name === 'session.jsonl.zstd')
-        .map(entry => join((entry as unknown as { parentPath: string }).parentPath, entry.name))
-      const rootLogPath = (): string | undefined => sessionLogPaths()
+      const rootLogPath = (): string | undefined => sessionLogPaths(dshHome)
         .find(path => path.includes('candidate-root-c14'))
       const readRootStartCalls = async (): Promise<{ time: number; task: string }[]> => {
         const rootLog = rootLogPath()
@@ -705,6 +819,10 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
           expect(startAt.time).toBeGreaterThan(workerAt)
         }
       }
+      // The ruled capability evidence on the controller's own log: the
+      // bootstrap bound the goal and the record folded at admission_open.
+      assertGoalBindingAdmissionOpen(
+        parseLogEvents(await decodeSessionLog(rootLogPath()!)), 'the candidate chain controller log')
 
       // Success = the real tool results on the wire, read back from the
       // captured request objects by the exact tool-call identity (no
@@ -748,8 +866,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       }[]
       const byTask = parsedPatch[0]?.config?.requiredChecksByTask ?? {}
       const expected = expectedDigests(prepared)
-      const decodedLogs: { path: string; text: string }[] = []
-      for (const path of sessionLogPaths()) decodedLogs.push({ path, text: await decodeSessionLog(path) })
+      const decodedLogs = await decodeSessionLogs(dshHome)
       const workerLogEvents = (taskId: string, needle: string): JournalEvent[] => {
         const sessionId = workerSessionIdByTask.get(taskId)
         expect(sessionId, `worker session id for ${taskId}`).toBeTruthy()
