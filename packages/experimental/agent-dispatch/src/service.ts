@@ -6,24 +6,33 @@
  * match the registry's authoritative rows (`status` for the live directory
  * and branch, `list` for the path and binding), and the
  * controller→lead→worker chain with its plugin scopes holds over the
- * engine's approved-set contract — and then delegates to the real engine.
- * The engine owns the child's lifecycle; the published
- * {@link CreatedChildAgent} carries no disposer.
+ * engine's approved-set contract. When the request holds, the entry runs the
+ * host assembly inside the engine's factory setup window — the child joins
+ * its parent's preset composition (the subagent seam's `composeFrom`
+ * convention, a no-op on a rosterless deployment), then takes the registered
+ * worktree's single-writer binding, and only then does the engine persist
+ * the prepared binding and publish — and delivers the requested prompt
+ * strictly after the engine resolves. The engine owns the child's lifecycle;
+ * the published {@link CreatedChildAgent} carries no disposer.
  *
  * @module @deepseek-ai/dsh-experimental-agent-dispatch/service
  */
 
 import { Service, type Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type {
   CreateChildAgentOptions,
   CreateChildAgentRequest,
   CreatedChildAgent,
 } from '@deepseek-ai/dsh-experimental-agent-hierarchy'
 import type {} from '@deepseek-ai/dsh-experimental-session-identity'
+// Type-only: resolve the opportunistic `ctx.get('agentPresets')` join to the
+// preset roster when composed; a rosterless deployment keeps the no-op.
+import type {} from '@deepseek-ai/dsh-agent-presets'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import type { WorktreeId } from '@deepseek-ai/dsh-worktree-registry'
-import { WorktreeGitOperationError } from '@deepseek-ai/dsh-worktree-registry'
+import { WorktreeGitOperationError, WorktreeLockHolder } from '@deepseek-ai/dsh-worktree-registry'
 import type { Worktree, WorktreeStatus } from '@deepseek-ai/dsh-worktree-registry'
 import { AgentDispatchError } from './errors.ts'
 import { evaluateDispatchEntry } from './entry.ts'
@@ -42,6 +51,11 @@ declare module '@deepseek-ai/cordis' {
 export interface DispatchAgentOptions extends CreateChildAgentOptions {
   /** Workspace the requested worktree is registered under. */
   readonly workspaceId: WorkspaceId
+  /**
+   * Initial task briefing delivered through `Agent.followup()` once creation
+   * resolves. Never queued before publication.
+   */
+  readonly prompt?: string | undefined
 }
 
 /**
@@ -61,14 +75,15 @@ export class AgentDispatch extends Service {
 
   /**
    * Validate one dispatch request at the entry and, when it holds, create the
-   * child through the real hierarchy engine. A git-broken registered worktree
-   * rethrows the registry's classified git failure instead of being reported
-   * as unregistered.
+   * child through the real hierarchy engine. The authoritative registry rows
+   * prove registration before any live observation runs; a git failure whose
+   * refusal carries the registry's classified kind rethrows unchanged.
    * @param parent - The exact live dispatching agent.
    * @param request - The child creation request; `worktree` is required at
    *   this entry because the dispatched child owns one registered worktree.
    * @param options - Factory setup, route, cancellation, preallocated
-   *   identity, and the owner workspace anchoring the registry proof.
+   *   identity, the owner workspace anchoring the registry proof, and the
+   *   optional initial prompt delivered after publication.
    * @returns The published child and its durable binding record.
    */
   async createChildAgent(
@@ -90,6 +105,7 @@ export class AgentDispatch extends Service {
         'DISPATCH_WORKTREE_UNREGISTERED',
       )
     }
+    const row = this.registeredRow(workspaceId, worktree.worktreeId)
     const status = await this.observedStatus(worktree.worktreeId)
     if (!status.directoryExists) {
       throw new AgentDispatchError(
@@ -103,7 +119,6 @@ export class AgentDispatch extends Service {
         'DISPATCH_WORKTREE_MISMATCH',
       )
     }
-    const row = this.registeredRow(workspaceId, worktree.worktreeId)
     if (row.path !== worktree.worktreePath) {
       throw new AgentDispatchError(
         `agent-dispatch: worktree "${worktree.worktreeId}" is registered at "${row.path}", not the requested "${worktree.worktreePath}"`,
@@ -135,18 +150,60 @@ export class AgentDispatch extends Service {
         'DISPATCH_HIERARCHY_DENIED',
       )
     }
-    return await this.ctx.agentHierarchy.createChildAgent(parent, request, {
-      ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
-      ...(options.agentOptions === undefined ? {} : { agentOptions: options.agentOptions }),
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-      ...(options.setup === undefined ? {} : { setup: options.setup }),
-    })
+    return await this.dispatch(parent, request, options, worktree)
   }
 
   /**
-   * Read one registry status observation, classifying an unknown id as an
-   * unregistered dispatch. A git-broken registered worktree rethrows the
-   * registry's classified failure unchanged.
+   * Run the real engine with the host assembly installed. Inside the factory
+   * setup window the child joins its parent's preset composition, then takes
+   * the registered worktree's single-writer binding, and the caller's own
+   * setup runs last; the engine persists the prepared binding and publishes
+   * afterwards. The initial prompt is delivered only once creation has
+   * resolved, so a refused or failed dispatch never queues one.
+   */
+  private async dispatch(
+    parent: Agent,
+    request: CreateChildAgentRequest,
+    options: DispatchAgentOptions,
+    worktree: NonNullable<CreateChildAgentRequest['worktree']>,
+  ): Promise<CreatedChildAgent> {
+    const hostSetup = options.setup
+    const engineOptions: CreateChildAgentOptions = {
+      ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+      ...(options.agentOptions === undefined ? {} : { agentOptions: options.agentOptions }),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      setup: async (childCtx) => {
+        const child = childCtx.agent
+        if (child === undefined) throw new Error('agent-dispatch: factory setup has no Agent')
+        childCtx.get('agentPresets')?.composeFrom(childCtx, parent.ctx)
+        const holder = WorktreeLockHolder(child.session.id)
+        await this.ctx.worktreeRegistry.bind(worktree.worktreeId, holder)
+        try {
+          return await hostSetup?.(childCtx)
+        } catch (error) {
+          await this.ctx.worktreeRegistry.unbind(worktree.worktreeId, holder).catch(() => {
+            // The setup failure is the reportable outcome; a refused release
+            // leaves the holder-mismatch diagnosis to the registry's own error.
+          })
+          throw error
+        }
+      },
+    }
+    const created = await this.ctx.agentHierarchy.createChildAgent(parent, request, engineOptions)
+    if (options.prompt !== undefined) {
+      created.agent.followup(createUserMessage({
+        content: [{ type: 'text', text: options.prompt }],
+        source: { kind: 'plugin', plugin: 'agent-dispatch' },
+      }))
+    }
+    return created
+  }
+
+  /**
+   * Read one registry status observation for an already-proven registration.
+   * The registry's classified git failures rethrow unchanged; any other
+   * failed observation on a registered worktree is a live mismatch, not an
+   * unregistered dispatch.
    */
   private async observedStatus(worktreeId: WorktreeId): Promise<WorktreeStatus> {
     try {
@@ -154,8 +211,8 @@ export class AgentDispatch extends Service {
     } catch (error) {
       if (error instanceof WorktreeGitOperationError) throw error
       throw new AgentDispatchError(
-        `agent-dispatch: worktree "${worktreeId}" is not a registered worktree`,
-        'DISPATCH_WORKTREE_UNREGISTERED',
+        `agent-dispatch: the live status observation of registered worktree "${worktreeId}" failed`,
+        'DISPATCH_WORKTREE_MISMATCH',
         { cause: error },
       )
     }
