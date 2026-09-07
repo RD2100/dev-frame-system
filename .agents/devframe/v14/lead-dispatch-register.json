@@ -974,6 +974,16 @@
         "C2b code review remains valid and closed (953/953, real-replay PASS, merged bf198278cc/67e2087f1a)."
       ],
       "status": "Governance record only; B2/B3 in progress via B-lead; A/C closed; B1 blocked; D standby"
+    },
+    {
+      "entry": "External force registered: Codex (gpt-6-astra/low leaf) authorized by user for B1 no-real-Worker blocker diagnosis in its own worktree; controller remains sole merger",
+      "facts": [
+        "User authorized Codex as an independent external development force. First batch scope: locate the B1 no-real-Worker blocker and prepare minimal repro + fix scope, ONLY in an independent Codex worktree.",
+        "Boundaries: Codex does not touch shared product source, does not repeat the C2b assembler verification, does not start duplicate model chains, does not operate existing profiles/processes. External Codex thread IDs are NOT DSH SessionIDs and must never be recorded as such in this register or session logs.",
+        "Integration path: the user delivers specific file scope and commits from the Codex thread to the controller for review; the controller remains the sole DSH controller and sole main-tree merger. No double-write: Codex worktree is disjoint from all lead trees (llmargs/atgap/product/udeliver).",
+        "Current in-flight leads unaffected: L-llmargs-verify (C2b three-proof), L-accept (AT1-08/AT4-05/AT4-08), L-cverify (browser real actions), B-lead standby after B2/B3 acceptance."
+      ],
+      "status": "Governance record only; parallel lead work continues"
     }
   ]
 }
