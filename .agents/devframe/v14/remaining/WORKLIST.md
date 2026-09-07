@@ -23,6 +23,7 @@
 | B3 | Memory 写/读/冷恢复进真实用户路径 | **已交付**（同 commit，已合并） | shipped overlay | **运行+验收通过**（三要件+磁盘实证） | b2b3-evidence.md | AT3-07 任务联动半边：**监听器片闭合**（a861715995：devframe/task-warning 分级事件+宿主装配监听器+三竞态/形状缺陷修复+6/6+264 回归+tsc host exit 0；判据=显式宿主上下文 declare，mode 面零接触；grade=fail≠实际任务失败验收边界已留档） | B 组长（已闭合） | 闭合 |
 | B4 | S1 真实凭据重测（隔离 profile） | **PASS**（bb5d514d0f：harness exit 0、7/7 checks） | 隔离 profile | **keyless BLOCKED→真实凭据 PASS 翻转**（请求级 seq=10 huoshan-1/glm-5.3-flash 逐字+wire 响应 seq=49"ok"；凭据零记录） | **通过** | b4 证据+三层证据分列 | 无 | 已关闭 |
 | B5 | AT 验收矩阵 36 条逐项对账（AT1×11/AT2×8/AT3×9/AT4×8） | **36 行对账收官**（4886aff6bd：b5-reconciliation.md 69 行） | 部分经 B1 挂载改善 | 矩阵 not_run→已覆盖项链接最新证据（AT2=7 覆盖+1 部分 AT2-05 双存储后端） | 逐条对账完成；未覆盖项按依赖待派 | b5-reconciliation.md | B1 链产物复用 | 未覆盖项小切片随 12 站链产出评估 |
+| B6 | **background workflow 顶层 run_in_background 候选激活** | **源码已合**（53eb537303 系；快照同步 e87786ff1c） | n/a | **运行未启用**——总控 request/header 实证（ts 1788810059109）workflow 工具 description 仍前台句、parameters 仅 script/meta/args 无顶层 flag（subagent/pwsh 有该字段不替代 workflow 验收） | 未验收 | WORKLIST 本行+总控证据绑定 | 一次候选启动（与后半链验收共享，禁重复全仓 build，不重启承载 A2/B 的 3080） | **候选 refresh 四步证据**：①新 schema 加载②顶层 run_in_background:true 取 jobId③parent 于 child 终态前继续④job 结果/清理核销 |
 
 ## C 产品与外围线（负责人：L-Product）
 
