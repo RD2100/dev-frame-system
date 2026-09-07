@@ -130,3 +130,8 @@
 - 再翻面 4 行：**AT4-05** 缺口→覆盖（76080fe40b durable request budget：Config 化+先持久化后回执+重启不重置+写失败闩锁，18 具名用例）；**AT4-04** 部分→覆盖（真实 WorktreeLockError 锁面 4 用例——**归属更正：落地 commit e07c38260a，非 24bbe04a7d**）；**AT4-07** 部分→覆盖（2859e1842c 真实 EEXIST/ENOTDIR 注入+脱敏+writer 保持）；**AT4-08** 缺口→覆盖（34b562ba03 三场景具名，dsh-session 属主）。
 - 真实未闭合面（可派单序）：AT2-02/AT2-08 一行级用例；AT4-01 两分支 pre-step 注入（agent-reliability，纯测试组装）；fixture 录制批次（snapshots 属主）。被 required-checks 收敛线阻塞：AT1-09(e)+AT1-10 跨 boot 完成面（命令面出厂挂载 index.ts:84 仍不传 stores→Memory 默认——收敛后一次到位）。待裁定：AT4-06。
 - **cordis-catalog 门更新**：run.ts:171 标注已修（ef8a137dcae）但门现失败于同型新面 **run.ts:191** 缺显式返回标注（A2 属主面滚动新增，组长实测 exit 1 于 2c965e5a61）——继续登记待修。
+
+### 跨 boot 完成面闭合（消费 B1 审定提交 b0aafa900a，2026-09-08，bf4984f833）
+
+- 收敛线解除：main 0d739d2df2 并入 B1 审定提交（durable required-checks 面：requiredChecksPath 必填绝对路径+FileRequiredChecksConfigStore 插件注入+单写者；冷重启 19 项+ACP 双进程录制+独立审查 PASS）。本树消费后 AT1-09 旅程末尾由"REQUIRED_CHECKS_CONFIG_NOT_FOUND 最小可达阶段断言"推进为**真实 completed**（此前登记的结构墙闭合）：B 在非 start boot 带自身授权审查真实完成（成功文本/身份保持/phase complete/revision+2/admission closed）；同一绝对 checks ledger 跨三 boot 字节不变（A 起始注册→B 幂等重注册→完成仅 load）；AT1-10 完成侧保持=receipt 注明 B 完成身份+completion-admission 证据、B 预算跨 boot 保持 [1,2] 不重置、A 迟到结果保持 A 元组、durable 日志载 receipt（下一 boot 可恢复）。harness 适配由 b0aafa900a 自带（boot() 从共享 storageRoot 派生 requiredChecksPath）。20/20 exit 0 ×3（Worker×2+Lead 验收×1）；实现 Worker 显式 huoshan-2 路由+Lead 独立 diff 审查。
+- 登记事实：binding lifecycle 词汇表无 `completed` 值（完成经原生 goal/change receipt 可观察，devframe binding 停在最后 admission_open）——词汇面事实非缺陷，未改。第 4 boot 未加（durable receipt 断言已覆盖恢复内容，范围决策）。AT1-10 的 stop/abandon 专用命令面与启动中断注入仍未闭合（独立后续切片）。
