@@ -52,3 +52,21 @@
               executable: git
               arguments: ['diff', '--check']
               cwd: !!js process.cwd()
+    # Three-role tool faces over the hierarchy policy. Controller and lead keep
+    # the shipped global surface plus the dispatch tool; the worker face starts
+    # empty (fail closed) and is expanded in the same deployment commit that
+    # preallocates leadPluginScopes entries. Delegation tool names match the
+    # actually registered tool names of the base bundle subagent rows.
+    - id: agent-hierarchy
+      name: '@deepseek-ai/dsh-experimental-agent-hierarchy'
+      config:
+        roleToolPolicies:
+          controller:
+            inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'read_image', 'str_replace_editor', 'glob', 'grep', 'web_fetch', 'web_search', 'skill', 'todo_write', 'job_kill', 'job_list', 'job_output', 'subagent', 'subagent_fork', 'interrupt_agent', 'send_message', 'list_agents', 'workflow', 'worktree_create', 'worktree_list', 'worktree_prune', 'worktree_remove', 'worktree_status', 'create_goal', 'get_goal', 'update_goal', 'ralph', 'ralph-loop', 'cordis_define', 'cordis_inspect_list', 'cordis_inspect_query', 'cordis_inspect_self', 'cordis_run', 'cordis_stop', 'cordis_undefine', 'agent_dispatch']"
+          lead:
+            inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'read_image', 'str_replace_editor', 'glob', 'grep', 'web_fetch', 'web_search', 'skill', 'todo_write', 'job_kill', 'job_list', 'job_output', 'subagent', 'subagent_fork', 'interrupt_agent', 'send_message', 'list_agents', 'workflow', 'worktree_create', 'worktree_list', 'worktree_prune', 'worktree_remove', 'worktree_status', 'create_goal', 'get_goal', 'update_goal', 'ralph', 'ralph-loop', 'cordis_define', 'cordis_inspect_list', 'cordis_inspect_query', 'cordis_inspect_self', 'cordis_run', 'cordis_stop', 'cordis_undefine', 'agent_dispatch']"
+          worker:
+            inheritedTools: []
+        leadPluginScopes: {}
+    - id: agent-dispatch
+      name: '@deepseek-ai/dsh-experimental-agent-dispatch'

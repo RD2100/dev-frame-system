@@ -177,6 +177,12 @@ importers:
       '@deepseek-ai/dsh-cordis-client-runner':
         specifier: workspace:^
         version: link:../../packages/extensions/cordis-client-runner
+      '@deepseek-ai/dsh-experimental-agent-dispatch':
+        specifier: workspace:^
+        version: link:../../packages/experimental/agent-dispatch
+      '@deepseek-ai/dsh-experimental-agent-hierarchy':
+        specifier: workspace:^
+        version: link:../../packages/experimental/agent-hierarchy
       '@deepseek-ai/dsh-experimental-command-goal-binding':
         specifier: workspace:^
         version: link:../../packages/experimental/command-goal-binding
