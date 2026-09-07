@@ -34,6 +34,7 @@ import type {
   BasicCompactionConfig,
   ModelCompactPolicyConfig,
   ResolvedConfig,
+  ResolvedTargetPolicy,
 } from './types.ts'
 
 export type {
@@ -89,6 +90,7 @@ const modelPolicy: z<ModelCompactPolicyConfig> = z.object({
   summarizationProvider: summarizationProviderSchema,
   summarizationModel: summarizationModelSchema,
   maxTokens: maxTokensSchema,
+  maxAutomaticSummaryFailures: maxTokensSchema,
   compactionRetries: compactionRetriesSchema,
   maxOverflowRetries: maxOverflowRetriesSchema,
 })
@@ -111,6 +113,7 @@ export class BasicCompactionEngine extends CompactionEngine {
     summarizationProvider: summarizationProviderSchema,
     summarizationModel: summarizationModelSchema,
     maxTokens: maxTokensSchema,
+    maxAutomaticSummaryFailures: maxTokensSchema,
     compactionRetries: compactionRetriesSchema,
     maxOverflowRetries: maxOverflowRetriesSchema,
     modelPolicies: z.array(modelPolicy),
@@ -123,6 +126,7 @@ export class BasicCompactionEngine extends CompactionEngine {
   private readonly warnedPressureConfigTargets = new Set<string>()
   private readonly overflowRetries = new WeakMap<Agent, number>()
   private readonly overflowAgents = new WeakMap<Session, Agent>()
+  private readonly summaryFailures = new WeakMap<Session, { strategy: string; count: number }>()
 
   constructor(ctx: Context, config: BasicCompactionConfig = {}) {
     super(ctx)
@@ -288,7 +292,7 @@ export class BasicCompactionEngine extends CompactionEngine {
       }
       const range = selectCompactableRange(agent.session, measurement, 0)
       if (range === null) return null
-      return this.compactRegion(range.start, range.end, agent, signal)
+      return this.compactAutomatically(range.start, range.end, agent, policy, signal)
     }
 
     const context = (await this.ctx.llm.resolveModelInfo(target.provider, target.model, signal)).context
@@ -321,7 +325,8 @@ export class BasicCompactionEngine extends CompactionEngine {
         /* v8 ignore next -- paired with the defensive post-success branch above. */
         break
       }
-      result = await this.compactRegion(range.start, range.end, agent, signal)
+      result = await this.compactAutomatically(range.start, range.end, agent, policy, signal)
+      if (result === null) return null
       measurement = meter.measure(agent.session)
       if (measurement.totalTokens < spec.thresholdTokens) return result
     }
@@ -330,6 +335,44 @@ export class BasicCompactionEngine extends CompactionEngine {
       `compaction still above threshold after ${spec.compactionRetries + 1} compaction attempts `
       + `(${measurement.totalTokens} estimated tokens >= threshold ${spec.thresholdTokens})`,
     )
+  }
+
+  /** Apply the per-session truncation budget after any model-free pruning has committed. */
+  private async compactAutomatically(
+    start: SessionSeq,
+    end: SessionSeq,
+    agent: Agent,
+    policy: ResolvedTargetPolicy,
+    signal: AbortSignal,
+  ): Promise<CompactionResult | null> {
+    signal.throwIfAborted()
+    const provider = policy.summarizationProvider || policy.target.provider
+    const model = policy.summarizationModel || policy.target.model
+    // Pressure measurements, turn numbers, and retained-tail growth do not recover a truncated summarizer.
+    const strategy = JSON.stringify([provider, model, policy.maxTokens, policy.maxAutomaticSummaryFailures])
+    let failures = this.summaryFailures.get(agent.session)
+    if (failures?.strategy !== strategy) {
+      failures = { strategy, count: 0 }
+      this.summaryFailures.set(agent.session, failures)
+    }
+    if (failures.count >= policy.maxAutomaticSummaryFailures) return null
+    try {
+      const result = await this.compactRegion(start, end, agent, signal)
+      this.summaryFailures.delete(agent.session)
+      return result
+    } catch (error: unknown) {
+      if (!signal.aborted && error instanceof Error && 'code' in error && error.code === 'MAX_TOKENS') {
+        failures.count += 1
+        if (failures.count >= policy.maxAutomaticSummaryFailures) {
+          this.ctx.logger.warn(
+            `automatic compaction paused for session ${agent.session.id}: ${provider}/${model} `
+            + `reached ${failures.count}/${policy.maxAutomaticSummaryFailures} token-cap failures; `
+            + 'complete manual compaction or change the summary model or output budget to resume',
+          )
+        }
+      }
+      throw error
+    }
   }
 
   /**
@@ -383,7 +426,7 @@ export class BasicCompactionEngine extends CompactionEngine {
             0,
           )
           if (range === null) return null
-          return await compactSurfaceRegion(
+          const result = await compactSurfaceRegion(
             this.regionDependencies(),
             agent.session,
             range.start,
@@ -399,6 +442,8 @@ export class BasicCompactionEngine extends CompactionEngine {
             },
             operationSignal,
           )
+          this.summaryFailures.delete(agent.session)
+          return result
         } catch (error: unknown) {
           if (agentSignal.aborted && operationSignal.reason === agentSignal.reason) {
             throw new ManualCompactionError(

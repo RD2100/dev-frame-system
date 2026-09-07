@@ -69,6 +69,7 @@ All settings are optional. The defaults start condensing at 80% of the routed mo
 | `summarizationProvider` | `''` | Set together with `summarizationModel`; an empty pair uses the latest routed request target, then the `AgentOptions` pair. |
 | `summarizationModel` | `''` | Set together with `summarizationProvider`; an empty pair uses the latest routed request target, then the `AgentOptions` pair. |
 | `maxTokens` | `8192` | Output cap for the summarization request; may include reasoning tokens. |
+| `maxAutomaticSummaryFailures` | `1` | Positive limit on consecutive automatic token-cap failures for one session and summary strategy. |
 | `compactionRetries` | `1` | Extra condensation attempts after the first when pressure remains above threshold. |
 | `maxOverflowRetries` | `1` | Maximum retries after a confirmed context-window overflow; `0` disables recovery only. |
 | `modelPolicies` | `[]` | Exact `{ provider, model, ...partialPolicy }` overrides for individual model routes. |
@@ -81,6 +82,8 @@ Misconfiguration fails fast: an unknown setting, a duplicate per-model override,
 The oldest balanced span is replaced by one summary message and the recent tail stays verbatim; the conversation continues from the summary. The operation reports how many history items were condensed and the estimated tokens freed. If nothing can be condensed safely — for example the whole conversation is one indivisible unit — nothing changes and nothing is written to the session log. If no model is available to write the summary (no configured target and no routed request yet), condensation fails with a clear error telling you to configure the summarization provider and model or route one request.
 
 ### On-demand condensation with /compact
+
+After `maxAutomaticSummaryFailures` truncated summaries, automatic summary calls pause across steps and turns. A warning identifies the session, summary route, and exhausted budget. Model-free pruning remains available; an overflow without durable reduction preserves the original request error. A successfully committed manual checkpoint or a changed summary provider, model, output cap, or failure limit restores automatic summaries. Failed or empty manual attempts do not reset the budget. The budget is local to the live backend and session; rebuilding the backend starts a fresh budget. Partial summaries never become checkpoints.
 
 With `dsh-command-compact` mounted, type `/compact` in a chat UI to condense immediately, even below the pressure threshold. The command reports how many history items were condensed and the estimated tokens saved. While the agent is mid-turn or condensation is already running, `/compact` reports that condensation is unavailable; prompts you send while it runs are accepted and start after it finishes.
 

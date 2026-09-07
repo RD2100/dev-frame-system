@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { BasicCompactionConfig } from '@deepseek-ai/dsh-compaction-basic'
 import { Context } from '@deepseek-ai/cordis'
 import { toolPairingBalancedAfter, toolPairingBalancedBefore } from '@deepseek-ai/dsh-compaction'
 import { createUserMessage, CONTEXT_WINDOW_EXCEEDED_CODE, LlmError, resolveRetryPolicy , createMessage } from '@deepseek-ai/dsh-llm'
@@ -217,6 +218,145 @@ function overflowHistorySeed(): readonly SessionEvent[] {
   }
   return session.snapshotEvents()
 }
+
+/** Real stream finishes distinguish truncation, cancellation, and successful recovery. */
+class BudgetAdapter extends StepwiseToolAdapter {
+  summaries = 0
+  summaryMode: 'max-tokens' | 'stop' | 'aborted' = 'max-tokens'
+  overflow = false
+
+  override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    if (options.purpose === 'compaction') {
+      this.summaries += 1
+      yield { type: 'block-start', index: 0, blockType: 'text' }
+      yield { type: 'block-end', index: 0, block: { type: 'text', text: 'CHECKPOINT' } }
+      yield this.summaryMode === 'aborted'
+        ? { type: 'finish', reason: { kind: 'aborted', failure: { message: 'cancelled summary', code: 'ABORTED' } } }
+        : { type: 'finish', reason: { kind: this.summaryMode } }
+      return
+    }
+    if (this.overflow) {
+      throw new LlmError('original overflow', CONTEXT_WINDOW_EXCEEDED_CODE)
+    }
+    yield * super.stream(options)
+  }
+}
+
+async function budgetHarness(config: BasicCompactionConfig = {}) {
+  const ctx = new Context()
+  const adapter = new BudgetAdapter(5)
+  await mountAgentLoopTestDependencies(ctx)
+  await mountInvariants(ctx)
+  await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentLoop, { agents: [] })
+  await ctx.plugin(TokenMeter)
+  ctx.llm.registerAdapter(['mock'], adapter)
+  ctx.tools.register(defineContentToolFixture({
+    name: 'work', description: 'does work', parameters: { i: { type: 'number' } },
+    async execute() { return [{ type: 'text', text: 'work result' }] },
+  }))
+  await ctx.plugin(BasicCompactionEngine, {
+    thresholdRatio: 0.5, retainTokens: 0, compactionRetries: 0, ...config,
+  })
+  const { agent } = await ctx.agentLoop.createAgent(ctx, {
+    sessionId: SessionId('summary-budget'), seed: overflowHistorySeed(),
+    agentOptions: { provider: 'mock', model: 'mock' },
+  })
+  const run = async () => {
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'continue' }], source: { kind: 'user' } }))
+    await agent.whenIdle()
+  }
+  return { ctx, adapter, agent, run }
+}
+
+describe('automatic summary truncation budget', () => {
+  it.each([false, true])('keys recovery to the actual summary route (explicit target: %s)', async (explicit) => {
+    const { ctx, adapter, run } = await budgetHarness(explicit
+      ? { summarizationProvider: 'mock', summarizationModel: 'mock' } : {})
+    try {
+      await run()
+      expect(adapter.summaries).toBe(1)
+      ctx.on('agent/request', async (_payload, next) => ({ ...await next(), model: 'changed-conversation-model' }))
+      await run()
+      await run()
+      expect(adapter.summaries).toBe(explicit ? 1 : 2)
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('does not share an exhausted budget with another live session', async () => {
+    const { ctx, adapter, run } = await budgetHarness()
+    try {
+      await run()
+      const { agent } = await ctx.agentLoop.createAgent(ctx, {
+        sessionId: SessionId('another-summary-budget'), seed: overflowHistorySeed(),
+        agentOptions: { provider: 'mock', model: 'mock' },
+      })
+      agent.followup(createUserMessage({ content: [{ type: 'text', text: 'continue' }], source: { kind: 'user' } }))
+      await agent.whenIdle()
+      agent.followup(createUserMessage({ content: [{ type: 'text', text: 'continue again' }], source: { kind: 'user' } }))
+      await agent.whenIdle()
+      expect(adapter.summaries).toBe(2)
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it.each([1, 2])('limits consecutive failures to %i across tool steps and turns', async (budget) => {
+    const { ctx, adapter, agent, run } = await budgetHarness({ maxAutomaticSummaryFailures: budget })
+    try {
+      await run()
+      await run()
+      expect(adapter.summaries).toBe(budget)
+      const events = agent.session.snapshotEvents()
+      expect(events.filter(event => event.type === 'compaction/end')).toHaveLength(budget)
+      expect(events.some(event => event.type === 'compaction/summary')).toBe(false)
+      expect(events.at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('requires successful manual compaction to restore automatic summaries', async () => {
+    const { ctx, adapter, agent, run } = await budgetHarness()
+    try {
+      await run()
+      expect(adapter.summaries).toBe(1)
+      await expect(ctx.compaction.compactNow(agent, new AbortController().signal)).rejects.toThrow()
+      await run()
+      expect(adapter.summaries).toBe(2)
+      adapter.summaryMode = 'stop'
+      await expect(ctx.compaction.compactNow(agent, new AbortController().signal)).resolves.not.toBeNull()
+      adapter.summaryMode = 'max-tokens'
+      agent.followup(createUserMessage({ content: [{ type: 'text', text: 'long followup '.repeat(300) }], source: { kind: 'user' } }))
+      await agent.whenIdle()
+      await run()
+      expect(adapter.summaries).toBe(4)
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('preserves the original overflow after automatic summaries pause', async () => {
+    const { ctx, adapter, agent, run } = await budgetHarness()
+    try {
+      await run()
+      adapter.overflow = true
+      await run()
+      expect(adapter.summaries).toBe(1)
+      expect(agent.session.snapshotEvents().at(-1)).toMatchObject({
+        type: 'turn/end', data: { reason: { kind: 'error', error: { code: CONTEXT_WINDOW_EXCEEDED_CODE } } },
+      })
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('does not charge aborted summary finishes against the truncation budget', async () => {
+    const { ctx, adapter, run } = await budgetHarness()
+    try {
+      adapter.summaryMode = 'aborted'
+      await run()
+      const aborted = adapter.summaries
+      expect(aborted).toBeGreaterThan(1)
+      adapter.summaryMode = 'max-tokens'
+      await run()
+      await run()
+      expect(adapter.summaries).toBe(aborted + 1)
+    } finally { await ctx.fiber.dispose() }
+  })
+})
 
 describe('CBR-001: a real-loop checkpoint is a valid boundary on both sides', () => {
   it('uses the model actually routed by agent/request for post-step pressure', async () => {
