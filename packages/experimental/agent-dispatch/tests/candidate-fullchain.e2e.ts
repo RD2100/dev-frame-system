@@ -86,7 +86,7 @@ async function startCandidateWeb(root: string, dshHome: string, extraEnv: NodeJS
   // packages only when the profile carries the production node_modules
   // layout. Mirror it with a junction to the repository's installed
   // workspace so loader-generated imports behave like the shipped app.
-  const profileDir = join(dshHome, 'profiles', 'web')
+  const profileDir = join(dshHome, '.dsh', 'profiles', 'web')
   await mkdir(profileDir, { recursive: true })
   await symlink(join(REPO_ROOT, 'node_modules'), join(profileDir, 'node_modules'), 'junction').catch((error: NodeJS.ErrnoException) => {
     if (error.code !== 'EEXIST') throw error
@@ -686,13 +686,17 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
 
       // The acceptance timeline reuses the one source of truth: exactly two
       // starts — task-a and task-b — and both stamped after both worker
-      // bindings were durably created.
+      // bindings were durably created. The bindings also name each worker's
+      // session id, which locates its log by identity — the controller log
+      // carries the briefing text too (its own dispatch arguments), so a
+      // needle search alone cannot tell the logs apart.
       const identityTable = JSON.parse(await readFile(join(dshHome, 'storages', 'session_identity.json'), 'utf8')) as {
-        tables: { bindings: Record<string, { role: string; taskId?: string; createdAt: string }> }
+        tables: { bindings: Record<string, { role: string; sessionId: string; taskId?: string; createdAt: string }> }
       }
-      const workerCreatedAt = Object.values(identityTable.tables.bindings)
-        .filter(record => record.role === 'worker')
-        .map(record => Date.parse(record.createdAt))
+      const workerBindings = Object.values(identityTable.tables.bindings)
+        .filter(record => record.role === 'worker' && record.taskId !== undefined)
+      const workerSessionIdByTask = new Map(workerBindings.map(record => [record.taskId!, record.sessionId]))
+      const workerCreatedAt = workerBindings.map(record => Date.parse(record.createdAt))
       expect(workerCreatedAt).toHaveLength(2)
       const startCalls = await readRootStartCalls()
       expect(startCalls.map(call => call.task).sort()).toEqual(['task-a', 'task-b'])
@@ -746,9 +750,12 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       const expected = expectedDigests(prepared)
       const decodedLogs: { path: string; text: string }[] = []
       for (const path of sessionLogPaths()) decodedLogs.push({ path, text: await decodeSessionLog(path) })
-      const workerLogEvents = (needle: string): JournalEvent[] => {
-        const hit = decodedLogs.find(log => log.text.includes(needle))
-        expect(hit, `worker session log for "${needle}"`).toBeDefined()
+      const workerLogEvents = (taskId: string, needle: string): JournalEvent[] => {
+        const sessionId = workerSessionIdByTask.get(taskId)
+        expect(sessionId, `worker session id for ${taskId}`).toBeTruthy()
+        const hit = decodedLogs.find(log => log.path.includes(sessionId!))
+        expect(hit, `worker session log for ${taskId} (${sessionId})`).toBeDefined()
+        expect(hit!.text.includes(needle), `briefing present in the identity-selected log for ${taskId}`).toBe(true)
         return parseLogEvents(hit!.text)
       }
       for (const task of prepared.tasks) {
@@ -764,7 +771,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         expect(deliverResult).not.toBe(shellResult)
         expect(await ledgerStore.load(task.digest)).toEqual(approvedChecksFor(task.worktreePath, `artifact-${task.taskId}.txt`))
         expect(byTask[task.taskId]).toBe(expected[task.taskId])
-        const events = workerLogEvents(`worker-${task.taskId}-briefing-c14`)
+        const events = workerLogEvents(task.taskId, `worker-${task.taskId}-briefing-c14`)
         const deliveries = events.filter(event =>
           event.type === 'devframe/task-delivery' && String((event.data as { taskId?: unknown }).taskId) === task.taskId)
         expect(deliveries.length, `durable delivery event for ${task.taskId}`).toBeGreaterThanOrEqual(1)
