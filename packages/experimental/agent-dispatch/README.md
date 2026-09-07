@@ -33,13 +33,19 @@ propagate as their own typed errors.
 `CreateChildAgentOptions` fields passed through key-explicit, plus the required
 `workspaceId` used for authoritative-row validation and the optional `prompt`.
 
+No runtime invariant companion is published: every guarantee the adapter makes
+(worktree registration, path/branch match, lock exclusivity, scope approval) is
+derived from the same authoritative registry rows and engine evaluation it
+calls, and the rejections are observable at the `AgentDispatchError` surface
+those calls return, so no independent observation exists that could diverge.
+
 ## Known Limitations and Deferred Work
 
-- The composition tests run with rosterless degradation: preset
-  `composeFrom` is an optional-chain no-op without a joined roster, so real
-  roster preset join, model-driven dispatch rounds, and shipped-profile
-  mounting are not yet verified — the external combined-verification lane owns
-  that evidence.
+- Evidence state: the real-Loader composition suite proves tool registration
+  and the controller/lead/worker visibility faces; the real model round
+  proved the service face and one real dispatch round (worker artifact).
+  The shipped opt-in overlay is wired — its candidate-profile verification
+  (explicit `--patch`, isolated home) is the remaining acceptance step.
 - Recovery of an interrupted creation reuses the engine's
   `recoverChildAgent` semantics (typed `SessionPersistenceNotFoundError`
   restores the original id; corruption and cancellation do not fall back); the
