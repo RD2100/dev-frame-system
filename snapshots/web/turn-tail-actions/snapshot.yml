@@ -3,5 +3,7 @@ scenario: turn-tail-actions
 profile: web
 composition: web-default
 recording: live
+sessionVariants:
+  win32: true
 header:
   class: web-default

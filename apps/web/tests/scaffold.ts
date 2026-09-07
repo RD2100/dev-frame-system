@@ -348,6 +348,15 @@ export interface LaunchOptions {
    * 127.0.0.1; a non-resolving authority fails before Host trust is exercised.
    */
   remoteAuthority?: string
+  /**
+   * Replace the shipped deepseek-official replay/model provider set — a
+   * platform-variant scenario whose canonical recording rides another route.
+   * Replay installs the replay adapter for these ids and keyless runs need no
+   * external credential; record mode treats the set's credential arrangement
+   * as the scenario's own responsibility, so the shipped DEEPSEEK_API_KEY
+   * gate applies only to the default set.
+   */
+  replayProviders?: typeof REPLAY_PROVIDERS
   /** Reuse an existing harness home so a second Host can verify user settings across origins. */
   harnessHome?: string
 }
@@ -373,8 +382,10 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
   const browserHost = options.remoteAuthority ?? '127.0.0.1'
   if (mode === 'record') {
     // Both owning vitest configs (web unconditionally, snapshot in record
-    // mode) load the repo-root .env before this file runs.
-    if (process.env.DEEPSEEK_API_KEY === undefined || process.env.DEEPSEEK_API_KEY.length === 0) {
+    // mode) load the repo-root .env before this file runs. A scenario that
+    // overrides the provider set owns its own credential arrangement.
+    if (options.replayProviders === undefined
+      && (process.env.DEEPSEEK_API_KEY === undefined || process.env.DEEPSEEK_API_KEY.length === 0)) {
       throw new Error('web e2e record mode needs DEEPSEEK_API_KEY (env or repo-root .env)')
     }
   }
@@ -686,10 +697,15 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       }
     }
     if (mode !== 'record' && options.replayFixture !== undefined) {
+      const replaySet = options.replayProviders ?? REPLAY_PROVIDERS
+      const replayContextWindow = options.replayContextWindow
       replayHandle = installLlmReplay(ctx, {
         file: options.replayFixture,
-        providers: replayProviders(options.replayContextWindow).map(provider => ({
+        providers: replaySet.map(provider => ({
           ...provider,
+          ...replayContextWindow === undefined ? {} : {
+            models: provider.models.map(model => ({ ...model, contextWindow: replayContextWindow })),
+          },
           ...(options.replayRetryPolicy === undefined ? {} : { retryPolicy: options.replayRetryPolicy }),
         })),
         ...(options.replayOverride === undefined ? {} : { overrideFile: options.replayOverride }),
@@ -702,9 +718,10 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       // composer refuses to type into. Register the same routes
       // a fixture would, with streaming that still fails loud: the scenario
       // issues no model calls, and one that slipped in must not pass quietly.
+      const routeOnlyProviders = options.replayProviders ?? replayProviders(options.replayContextWindow)
       ctx.effect(() => ctx.llm.registerAdapter(
-        replayProviders(options.replayContextWindow).map(provider => provider.id),
-        new RouteOnlyAdapter(replayProviders(options.replayContextWindow)),
+        routeOnlyProviders.map(provider => provider.id),
+        new RouteOnlyAdapter(routeOnlyProviders),
       ), 'web e2e scaffold: route-only adapter')
     }
     baseUrl = `http://${browserHost}:${String(port)}`
@@ -863,6 +880,11 @@ function normalizeWebSessionVolatiles(log: string): string {
 export function stableSessionFixture(session: Session, existing: string, workspaceCwd: string): string {
   const fresh = scrubSessionSnapshot(normalizeWebSessionVolatiles(rawSessionLog(session)))
     .split(session.id).join('{{sessionId}}')
+    // Plugin texts embed the cwd JSON.stringify-escaped (the normalize.ts
+    // cwdSpellings precedent), and the JSONL line escapes it again, so a win32
+    // cwd reaches the committed text twice-escaped; on POSIX all spellings
+    // coincide with the raw form and the extra splits are no-ops.
+    .split(jsonEscape(jsonEscape(workspaceCwd))).join('{{cwd}}')
     .split(jsonEscape(workspaceCwd)).join('{{cwd}}')
     .split(workspaceCwd).join('{{cwd}}')
   const stable = redactSessionSnapshotIds(stabilizeFixtureMessageIds([fresh], [existing]))[0]
@@ -946,7 +968,13 @@ export async function recordFixture(scaffold: WebScaffold, sessionId: SessionId,
   const agent = scaffold.ctx.agents.get(sessionId)
   if (agent === undefined) throw new Error(`record harvest: no live agent for ${sessionId}`)
   const existing = existsSync(fixturePath) ? await readFile(fixturePath, 'utf8') : ''
-  await writeFile(fixturePath, stableSessionFixture(agent.session, existing, scaffold.workspaceCwd))
+  // Tokenize against the session's own cwd — the lane's adopted workspace
+  // (`connectFreshWorkspace` stages `<root>/workspace`), not the scaffold's
+  // outer temp root. This mirrors the refresh write-back, which already
+  // stabilizes against `session.header.cwd`.
+  const sessionCwd = agent.session.header.cwd
+  if (sessionCwd === undefined) throw new Error(`record harvest: session ${sessionId} carries no cwd`)
+  await writeFile(fixturePath, stableSessionFixture(agent.session, existing, sessionCwd))
 }
 
 /**
