@@ -86,3 +86,13 @@
 - 验证（全部真实退出码）：tsc -b tsconfig.host.json exit 0（两轮）；keyless refresh exit 0（7 passed，写 5 个 win32 golden）；**keyless replay exit 0（7 passed | 1 skipped，含 canonical persisted-session 比较=证明 pwsh 调用回放成功；parked/stop/completed/usage/focus 全过）**；POSIX 基线六文件 git diff 零输出；新文件尾单 `\n` 核验；`git diff --cached --check` 每笔 exit 0（--no-verify，宿主无 bash）。
 - 提交：`d3f0c89a72`（scaffold 缝+harvest 修复）、`05747d4a40`（夹具变体+e2e+goldens）。
 - 边界披露：零 src 改动、零重建（沿用 C3 dist 同基线）。**附带发现（独立登记项，未并入本片）**：minimal-preset 两条 ui golden（base 0033fd4c04 前 9effa0c6b3 / win32 0033fd4c04）早于 C3 token-meter 修复（4746a3544b），修复后该夹具无 total 无 cache 样本可派生 → usage pill 出现 → golden 陈旧，本机 win32 面实跑复现（1 failed：received 多 `Usage 28 tok` 行）；POSIX 面同机制预计同样陈旧，属 4746a3544b 落地后未刷新该语料所致，与本片 scaffold 改动无关（本片改动对 replay 路径零影响）。
+
+## 7. minimal-preset usage-pill golden 陈旧 refresh 片（总控续派，2026-09-07）
+
+- 前置：`git merge main`（a72af0b484，fast-forward，main 已含 §6 片；带入内容不涉 apps/web/tests 与 token-meter）。
+- 根因：C3 修复 4746a3544b 使「无 total 无 cache」样本可派生精确总量 → minimal-preset 夹具（两 attempts 各 {in:10,out:4}，无 total 无 cache）派生 total=14/attempt → 聚合 uncached 20 / output 8 / total 28 → pill `Usage 28 tok` 合法出现（formatTokens(28)='28'，<1000 纯数字；与状态行既有 `Input 20 tok · Output 8 tok` 一致）。两条 golden（base 9effa0c6b3、win32 0033fd4c04）先于该修复落盘 → 陈旧。
+- 执行：keyless refresh（win32 面，exit 0，3 passed，12:28）由 sanction 写回器重录 `ui.win32.expected.md`（真实回放 actual 侧）；POSIX 面 `ui.expected.md` 由本机补齐同位插入（pill 三行 `- button "Usage 28 tok":`/`- img`/`- text: Usage 28 tok`，插于 Branch 行与 Ran for 行之间）——先例：workspace 变体波次自真实回放 actual 侧手作期望目录；pill 行为平台无关（token-meter 派生与 aria 归一化均平台无关），并以 pair-delta 不变量证明：补齐后两面 diff 恰为 refresh 前原状（仅 3+3 卡行 pwsh/bash），即插入逐字节等同 POSIX refresh 写回结果。
+- 披露（验收限制）：win32 面已由本机 replay 复跑验证（exit 0，3 passed，12:31）；POSIX 面的 replay 验证归 CI/POSIX 宿主（win32 宿主渲染 pwsh 卡，无法产生 bash 面真身）。
+- 夹具不动：refresh 写回曾重锚 `session.win32.jsonl` header createdAt（比较时归零、语义良性），按总控「夹具不变」约束回退该行，本片仅两条 golden。
+- 回归：合并后 turn-tail-actions keyless replay exit 0（7 passed | 1 skipped，12:32）。零 src 改动、零构建、零录制。
+- 提交：golden refresh + 本节证据，两笔小步。
