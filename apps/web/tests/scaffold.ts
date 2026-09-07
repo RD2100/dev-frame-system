@@ -249,6 +249,16 @@ export interface LaunchOptions {
    */
   extraInstallAnchors?: string[]
   /**
+   * Absolute package directories the overlay inserts as rows but no carrier
+   * layer depends on. Each becomes a synthetic module layer (the loader-smoke
+   * overlay mechanism) so the package itself — not only its dependency
+   * closure — is linked into the scaffold profile's module fallback; a
+   * package named as an {@link extraInstallAnchors} layer is deliberately
+   * never self-linked, so an inserted row naming an anchor package fails to
+   * import. Their peer closures supply the injected services.
+   */
+  extraOverlayPackageDirs?: string[]
+  /**
    * Replay fixture (session.jsonl) served by the inserted dsh-llm-replay row
    * in replay/refresh modes; ignored in record mode (the real adapter
    * answers). Omit for scenarios issuing no model calls — a stray stream then
@@ -607,6 +617,20 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
         patches: [],
       }
     }))
+    const overlayPackageLayers: Profile['layers'] = await Promise.all((options.extraOverlayPackageDirs ?? []).map(async (packageDir, index) => {
+      const manifest = JSON.parse(await readFile(join(packageDir, 'package.json'), 'utf8')) as { name?: unknown }
+      if (typeof manifest.name !== 'string' || manifest.name === '') {
+        throw new Error(`web scaffold extra overlay package has no package name: ${packageDir}`)
+      }
+      // The synthetic name keeps the real package out of the layer self-delete
+      // in the module-fallback healer, so its own row imports resolve.
+      return {
+        packageName: `overlay:${index}:${manifest.name}`,
+        packageDir,
+        patchPath: join(packageDir, 'cordis.patch.yml'),
+        patches: [],
+      }
+    }))
     // Mirror the production launcher: the shared installation closure keeps
     // its carrier-specific fallback, while private bundle dependencies stay
     // isolated to this synthetic scaffold profile.
@@ -616,7 +640,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       profile: {
         name: 'scaffold',
         dir: profileDir,
-        layers: extraLayers,
+        layers: [...extraLayers, ...overlayPackageLayers],
         patchPath: join(profileDir, 'cordis.patch.yml'),
         patches: [],
         patchReload: 'startup',

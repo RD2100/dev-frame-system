@@ -97,6 +97,7 @@
     "apps/web/tests/c1-agent-tree-actions.e2e.ts",
     "apps/web/tests/c2-subagent-mentions.e2e.ts",
     "apps/web/tests/c3-sidebar-session-model-usage.e2e.ts",
+    "apps/web/tests/dispatch-gate.e2e.ts",
     "apps/web/stress-tests/reasoning-chunks.stress.ts",
     "apps/cli/tests/**/*.ts",
     "packages/*/*/tests/**/*.ts",
