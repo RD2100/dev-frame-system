@@ -504,12 +504,12 @@ function applyGoalBinding(state: DevFrameProjectionState, binding: GoalBinding):
 
 /** Record the start revision of one goal's current acceptance region. */
 function setAcceptanceRegion(state: DevFrameProjectionState, goalId: GoalId, startRevision: number): void {
-  const existing = state.acceptanceRegions.find(region => region.goalId === goalId)
-  if (existing === undefined) {
+  const index = state.acceptanceRegions.findIndex(region => region.goalId === goalId)
+  if (index < 0) {
     state.acceptanceRegions.push({ goalId, startRevision })
     return
   }
-  existing.startRevision = startRevision
+  state.acceptanceRegions[index] = { goalId, startRevision }
 }
 
 /**
