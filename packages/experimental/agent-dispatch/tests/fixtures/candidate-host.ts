@@ -1,0 +1,142 @@
+/**
+ * Candidate host-side scenario preparation, per the digest wiring ruling: the
+ * harness pre-builds real isolated git worktrees, normalizes their paths,
+ * saves each task's approved checks sequentially into the ONE
+ * FileRequiredChecksConfigStore the delivery, integration, and bootstrap
+ * faces share, and emits the final-layer patch yml that pins the per-task
+ * digests. The candidate CLI boots with this patch as the last sibling, so
+ * the deployment's requiredChecksByTask matches what the store actually
+ * holds before the first model request.
+ * @module tests/fixtures/candidate-host
+ */
+
+import { execFile } from 'node:child_process'
+import { mkdir, realpath, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { promisify } from 'node:util'
+import { TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
+import {
+  FileRequiredChecksConfigStore,
+  requiredChecksDigest,
+} from '@deepseek-ai/dsh-experimental-devframe'
+import type { DevFrameRequiredChecksConfig, RequiredChecksDigest } from '@deepseek-ai/dsh-experimental-devframe'
+
+const exec = promisify(execFile)
+
+/** One prepared Worker worktree and its task's approved digest. */
+export interface PreparedTask {
+  readonly taskId: string
+  readonly worktreePath: string
+  readonly digest: RequiredChecksDigest
+}
+
+export interface PreparedScenario {
+  /** The repository the worktrees hang off. */
+  readonly anchorPath: string
+  readonly tasks: readonly PreparedTask[]
+}
+
+/** One git invocation, failing loud with stderr; env stripped of secrets and GIT_ overrides. */
+export async function scenarioGit(cwd: string, ...args: string[]): Promise<string> {
+  const result = await exec('git', args, {
+    cwd,
+    windowsHide: true,
+    timeout: 15_000,
+    maxBuffer: 1024 * 1024,
+    env: Object.fromEntries(Object.entries(process.env).filter(([name]) =>
+      !/KEY|SECRET|TOKEN|PASSWORD/i.test(name) && !/^GIT_/i.test(name))),
+  })
+  return result.stdout.trim()
+}
+
+/**
+ * The machine-neutral approved checklist one Worker must pass: a whitespace
+ * check and the artifact-existence probe, both executing in the Worker's own
+ * worktree (the delivery consumer verifies each cwd against the assigned
+ * worktree realpath).
+ * @param worktreePath - The normalized Worker worktree path.
+ */
+export function approvedChecksFor(worktreePath: string): DevFrameRequiredChecksConfig {
+  return {
+    version: 1,
+    checks: [
+      { checkId: 'git-diff-check', executable: 'git', arguments: ['diff', '--check'], cwd: worktreePath },
+      { checkId: 'artifact-probe', executable: 'node', arguments: ['-e', 'require("node:fs").accessSync("artifact.txt")'], cwd: worktreePath },
+    ],
+  }
+}
+
+/**
+ * Prepare the candidate scenario: anchor repo, two Worker worktrees with one
+ * initial commit each, and the sequential approved-digest registration.
+ * Saves run strictly in sequence — parallel saves to the shared ledger file
+ * are forbidden by the wiring ruling.
+ * @param root - The isolated scenario root.
+ * @param ledgerPath - The single checks ledger every face shares.
+ */
+export async function prepareCandidateScenario(root: string, ledgerPath: string): Promise<PreparedScenario> {
+  const anchorPath = join(root, 'anchor')
+  await mkdir(anchorPath, { recursive: true })
+  await scenarioGit(root, 'init', '-b', 'main', anchorPath)
+  await scenarioGit(anchorPath, 'config', 'user.name', 'Candidate Fullchain')
+  await scenarioGit(anchorPath, 'config', 'user.email', 'candidate-fullchain@test.invalid')
+  await scenarioGit(anchorPath, 'config', 'commit.gpgsign', 'false')
+  await scenarioGit(anchorPath, 'commit', '--allow-empty', '-m', 'candidate base')
+
+  const store = new FileRequiredChecksConfigStore({ path: ledgerPath })
+  const tasks: PreparedTask[] = []
+  for (const taskId of ['task-a', 'task-b'] as const) {
+    const worktreePath = await realpath(join(root, `wt-${taskId}`))
+    await scenarioGit(anchorPath, 'worktree', 'add', worktreePath, '-b', `feature/${taskId}`)
+    // Sequential saves: the shared ledger file admits one writer at a time.
+    const digest = await store.save(approvedChecksFor(worktreePath))
+    tasks.push({ taskId, worktreePath, digest })
+  }
+  return { anchorPath, tasks }
+}
+
+/**
+ * Emit the final-layer patch yml pinning the prepared digests and the
+ * per-task check worktree paths. The harness passes this file as the last
+ * `--patch`, after the shipped overlays and the loop-closure fixture.
+ * @param home - The isolated home the patch file is written into.
+ * @param prepared - The prepared tasks with their digests.
+ */
+export async function writeDigestPatch(home: string, prepared: PreparedScenario): Promise<string> {
+  const rows = prepared.tasks.map(task => [
+    `    '${task.taskId}': '${String(task.digest)}'`,
+  ].join('\n'))
+  const checkRows = prepared.tasks.map(task => {
+    const checks = approvedChecksFor(task.worktreePath).checks
+    return `        '${task.taskId}': ${JSON.stringify(checks)}`
+  })
+  const patch = [
+    '# Final-layer digest patch, generated per run by the candidate harness.',
+    '# The digests match the shared ledger contents prepared before boot.',
+    '- id: project-delivery-tools',
+    '  config:',
+    '    requiredChecksPath: !!js "process.env.DSH_CANDIDATE_HOME + \'/checks-ledger.json\'"',
+    '    requiredChecksByTask:',
+    ...rows,
+    '    gitExecutable: git',
+    '    gitTimeoutMs: 15000',
+    '    gitMaxOutputBytes: 1048576',
+    '    checkTimeoutMs: 15000',
+    '    checkMaxOutputBytes: 1048576',
+    // The approved checksets the delivery consumer loads by digest.
+    `# checksets: ${checkRows.join(' ')}`,
+    '',
+  ].join('\n')
+  const patchPath = join(home, 'candidate-digests.patch.yml')
+  await writeFile(patchPath, patch, 'utf8')
+  return patchPath
+}
+
+/** The bootstrap's approveTaskChecks cross-check: recompute and compare. */
+export function expectedDigests(prepared: PreparedScenario): Record<string, string> {
+  return Object.fromEntries(prepared.tasks.map(task => [
+    task.taskId, String(requiredChecksDigest(approvedChecksFor(task.worktreePath))),
+  ]))
+}
+
+export { TaskId }

@@ -50,6 +50,10 @@
       config:
         maxActiveTasks: 2
         requestBudget: 4
+    # Lead reviewer assignments land on the controller's role policy from the
+    # real dispatch facts (the landing journal rejects review events).
+    - id: lead-role-landing
+      name: '@deepseek-ai/dsh-experimental-devframe/lead-role-landing'
     # Root-only planning and Worker admission (project_task plan/start).
     - id: project-task-tool
       name: '@deepseek-ai/dsh-experimental-project-controller/task-consumer'
