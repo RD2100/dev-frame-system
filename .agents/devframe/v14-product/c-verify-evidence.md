@@ -75,3 +75,14 @@
 - C3：修复后 PASS（exit 0；修复前 FAIL 证据见 §3a）。根因=token-meter normalizeUsage 对「无 totalTokens」样本的过严派生规则（要求 cache 两桶齐全）；修复后无 cache 桶样本以 input+output 派生精确总量，单桶样本维持 fail closed。
 - 附带发现（非 C 线义务，仅记录）：本分支 `turn-tail-actions` lane 存在无关 golden 漂移（`bash` 工具 unknown vs recorded fixture）——总控已裁定为独立登记项，不并入本片。
 - 构建所有者披露：本片验证构建（两次全量 `pnpm run build`，均 exit 0）由本实例执行；后续同类迭代的增量构建备选链（tsc -b ui-chat → tsdown client face → 单跑 C3）为总控转达的未实证备选，本片未采用、不宣称已加速。
+
+## 6. turn-tail-actions Windows 夹具选择缺陷修复片（接续实例，2026-09-07 下午）
+
+- 接手：干净上下文接替前任（其未提交在制改动保留并收敛）；树/分支不变，基线 93359615a5。
+- 定性（核定）：standard 组合按平台缝供应 pwsh（win32 禁 bash），而该 lane 硬编码 `session.jsonl` + bash prompt → win32 回放报 `ToolNotFoundError: unknown tool "bash"`，属夹具选择缺陷，非普通 golden drift。
+- 修复面：`apps/web/tests/scaffold.ts`（① LaunchOptions.replayProviders：场景自有 replay provider 集 + record 门豁免语义；② recordFixture 改按 session 自身 cwd token 化（对齐 refresh 写回；lane 采纳的工作区是 `<root>/workspace`）；③ stableSessionFixture 增拆 win32 插件文本中两次 JSON 转义的 cwd 拼写，POSIX 恒等）；`apps/web/tests/turn-tail-actions.e2e.ts`（manifest+resolveSessionFixturePath+platformExpectationVariant 全量解析、五 golden 变体命名、TOOL_CARD_NAME/usage 常量按平台、inventory 闭集+5、record 模式传 provider 集使门豁免真实触发）；`snapshots/web/turn-tail-actions/snapshot.yml`（声明 `sessionVariants.win32`，recording 保持 live）。
+- **真实录制（有限一次，总控批准）**：DSH_SNAPSHOT=record 单测一次通过（exit 0，13.87s，vitest 12:09）。真实路由=huoshan-1/deepseek-v4-flash-ga-260731（ark.cn-beijing.volces.com，openai-completions；fixture 内 responseId 为 volces 真实响应 id）；隔离 HOME（scaffold 临时 .dsh-home）；凭据仅经进程环境（不回显、不入库）。真实样本：真实 pwsh 执行 `Write-Output alpha` → 工具结果 `alpha\r\n`；模型自述 call description「Output the word alpha」；request/context contextWindow=262144；usage 样本 attempt1 {in:8661,out:70,total:8731,无 cache 桶}、attempt2 {in:554,out:3,total:8749,cacheRead:8192}。测试常量按实录钉：pill `Usage 17.5K tok`、路由行 `huoshan-1/deepseek-v4-flash-ga-260731`、9,215/73/17,480 tok、无 cache 行（attempt1 无 cache 桶 → 聚合无 cache）；POSIX 15.8K 数字未改写移植；未以 refresh 接受 ToolNotFoundError。
+- 中途发现并修复（录制后、未二次录制）：首次 refresh 暴露 harvest token 化缺口（session cwd 是 `<root>/workspace` 而非 scaffold 外层根；插件文本含两次转义拼写）→ 修 scaffold.ts ②③ 后由 refresh 写回自行完成 token 化，无手工拼接残留（残留检查 0）。
+- 验证（全部真实退出码）：tsc -b tsconfig.host.json exit 0（两轮）；keyless refresh exit 0（7 passed，写 5 个 win32 golden）；**keyless replay exit 0（7 passed | 1 skipped，含 canonical persisted-session 比较=证明 pwsh 调用回放成功；parked/stop/completed/usage/focus 全过）**；POSIX 基线六文件 git diff 零输出；新文件尾单 `\n` 核验；`git diff --cached --check` 每笔 exit 0（--no-verify，宿主无 bash）。
+- 提交：`d3f0c89a72`（scaffold 缝+harvest 修复）、`05747d4a40`（夹具变体+e2e+goldens）。
+- 边界披露：零 src 改动、零重建（沿用 C3 dist 同基线）。**附带发现（独立登记项，未并入本片）**：minimal-preset 两条 ui golden（base 0033fd4c04 前 9effa0c6b3 / win32 0033fd4c04）早于 C3 token-meter 修复（4746a3544b），修复后该夹具无 total 无 cache 样本可派生 → usage pill 出现 → golden 陈旧，本机 win32 面实跑复现（1 failed：received 多 `Usage 28 tok` 行）；POSIX 面同机制预计同样陈旧，属 4746a3544b 落地后未刷新该语料所致，与本片 scaffold 改动无关（本片改动对 replay 路径零影响）。
