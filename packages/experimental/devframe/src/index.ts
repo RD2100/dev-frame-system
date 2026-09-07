@@ -17,9 +17,10 @@ export {
   type DevFrameTaskWarningCode,
   type DevFrameTaskWarningEventData,
 } from './events.ts'
+import * as taskWarningListenerModule from './task-warning-listener.ts'
+/** The plugin namespace (name + inject + apply) as cordis plugin mounting expects it. */
+export const taskWarningListener = taskWarningListenerModule
 export {
-  apply as taskWarningListener,
-  name as taskWarningListenerName,
   type DevFrameTaskGrading,
   type DevFrameTaskGradingDeclaration,
 } from './task-warning-listener.ts'
