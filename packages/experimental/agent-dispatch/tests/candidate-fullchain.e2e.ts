@@ -10,6 +10,7 @@
 
 import type { ChildProcess } from 'node:child_process'
 import { spawn } from 'node:child_process'
+import { existsSync, readdirSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
@@ -583,10 +584,30 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       await promptSession('controller-chain-c14: start the host, then plan and dispatch the lead.')
       await waitFor('controller host receipt', () => bodies().some(text => text.includes('admission_open')), 90_000)
       // Precise routing only: the lead's own requests, never the controller's
-      // input text. Two lead requests = the lead's turn advanced past both
-      // registration dispatches, so the workers are durably registered.
+      // input text. Two lead requests alone do not prove registration: the
+      // second request arrives before the dispatch tool results return, so
+      // the children may still be publishing. The durable proof is on disk —
+      // each published child session owns a log under the sessions root, and
+      // project_task start itself refuses without exactly one registered
+      // worker per task — so the wait requires the two worker logs to exist.
+      const sessionLogs = (): number => {
+        // dshHome already IS the .dsh directory: the sessions root sits
+        // directly beneath it.
+        const sessionsRoot = join(dshHome, 'sessions')
+        if (!existsSync(sessionsRoot)) return 0
+        let count = 0
+        const visit = (dir: string): void => {
+          for (const entry of readdirSync(dir, { withFileTypes: true })) {
+            if (entry.isDirectory()) visit(join(dir, entry.name))
+            else if (entry.name === 'session.jsonl' || entry.name === 'session.jsonl.zstd') count += 1
+          }
+        }
+        visit(sessionsRoot)
+        return count
+      }
       await waitFor('lead registered its workers', () =>
-        replay.requests.filter(request => request.needle === 'lead-briefing-c14').length >= 2, 120_000)
+        replay.requests.filter(request => request.needle === 'lead-briefing-c14').length >= 2
+        && sessionLogs() >= 4, 120_000)
       // The workers are registered; only now does the controller start the
       // tasks, and only their briefings give the workers a first model call.
       await promptSession('controller-chain-c14: the workers are registered, start both tasks now.')
@@ -640,13 +661,19 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
           await import('../../../session/session-persistence-jsonl/src/zstd.ts')
         const entries = await readdir(dshHome, { recursive: true, withFileTypes: true })
         const logs = entries.filter(entry => entry.isFile()
-          && (entry.name === 'session.jsonl' || entry.name === 'session.jsonl.zstd')
-          && entry.parentPath.includes('candidate-root-c14'))
+          && (entry.name === 'session.jsonl' || entry.name === 'session.jsonl.zstd'))
           .map(entry => join(entry.parentPath, entry.name))
         let lineNo = 0
         for (const log of logs) {
+          // One archive per session: the root's forensics keep their names;
+          // every other log (lead, workers) lands beside them under its own
+          // session segment so a silent child failure is readable.
+          const sessionSegment = log.split(/[\\/]/).at(-2) ?? 'unknown-session'
+          const dumpName = sessionSegment.includes('candidate-root-c14')
+            ? 'root-session-dump.jsonl'
+            : `${sessionSegment}.dump.jsonl`
           const buffer = await readFile(log)
-          await writeFile('.agents/devframe/v14/remaining/root-session-log.raw.zstd', buffer, { flag: 'w' })
+          await writeFile(`.agents/devframe/v14/remaining/${sessionSegment}.raw.zstd`, buffer, { flag: 'w' })
           let plaintext = buffer.toString('utf8')
           if (log.endsWith('.zstd')) {
             const { frames, tornStart } = scanZstdFrames(buffer)
@@ -667,7 +694,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
             }
             plaintext = Buffer.concat(parts).toString('utf8')
           }
-          await writeFile('.agents/devframe/v14/remaining/root-session-dump.jsonl', plaintext, { flag: 'w' })
+          await writeFile(`.agents/devframe/v14/remaining/${dumpName}`, plaintext, { flag: 'w' })
           for (const line of plaintext.split('\n')) {
             lineNo += 1
             if (line.includes('"error"') || line.includes('"kind":"error"')
