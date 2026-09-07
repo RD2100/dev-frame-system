@@ -8,9 +8,15 @@ Source: [`packages/workflow/worktree-registry/src/registry.ts`](../../packages/w
 
 ## The service
 
-`WorktreeRegistry` declares seven operations. `create` resolves the owning workspace through `ctx.workspaceRegistry`, runs `git worktree add` from the workspace directory, and records the observed facts — the canonical path after `fs.realpath` and the branch read back from the new worktree — after refusing a path the workspace or another registered worktree already occupies and an explicit branch another worktree of the same workspace already holds. `bind`/`unbind` maintain one single-writer binding per worktree: the holder value is opaque, re-binding by the current holder is idempotent, and every other bind, an unbind by a non-holder, or an unbind of an unbound worktree refuses with a `WorktreeLockError`. `list` answers from durable rows in stable `(createdAt, id)` order and never shells out to git. `status` is the observation surface: a missing directory reports `directoryExists: false` without calling git, while a present directory reports its live branch and cleanliness. `remove` refuses while the worktree is bound — `force` never overrides the binding — then runs `git worktree remove` and deletes the registration only after git succeeded, so a failed removal never hides a real worktree. `reconcile` diffs the rows against `git worktree list` and reports the difference — dangling registrations and unregistered worktrees — dropping stale rows or adopting outside-created worktrees only when the corresponding action is opted in; it never deletes directories or files, and `pruneRows` drops a stale row together with its binding, because a binding guards a live checkout, not a vanished directory.
+`WorktreeRegistry` declares eight operations. `create` resolves the owning workspace through `ctx.workspaceRegistry`, runs `git worktree add` from the workspace directory, and records the observed facts — the canonical path after `fs.realpath` and the branch read back from the new worktree — after refusing a path the workspace or another registered worktree already occupies and an explicit branch another worktree of the same workspace already holds. `bind`/`unbind` maintain one single-writer binding per worktree: the holder value is opaque, re-binding by the current holder is idempotent, and every other bind, an unbind by a non-holder, or an unbind of an unbound worktree refuses with a `WorktreeLockError`. `list` answers from durable rows in stable `(createdAt, id)` order and never shells out to git. `status` is the observation surface: a missing directory reports `directoryExists: false` without calling git, while a present directory reports its live branch and cleanliness. `remove` refuses while the worktree is bound — `force` never overrides the binding — then runs `git worktree remove` and deletes the registration only after git succeeded, so a failed removal never hides a real worktree. `reconcile` diffs the rows against `git worktree list` and reports the difference — dangling registrations and unregistered worktrees — dropping stale rows or adopting outside-created worktrees only when the corresponding action is opted in; it never deletes directories or files, and `pruneRows` drops a stale row together with its binding, because a binding guards a live checkout, not a vanished directory.
 
 Registrations persist in the `worktree_registry` storage domain (version 2; one `worktrees` table keyed by a branded `WorktreeId`, carrying the optional `lockedBy`/`lockedAt` binding fields written and read together); they survive restarts and reappear on the next composition. Directory operations run with the owning workspace path as cwd — a worktree cannot remove itself as its own cwd on Windows. The model reaches these operations only through the `worktree_*` tools of [`tool-worktree`](../../packages/workflow/tool-worktree) and the per-agent seam of [`agent-worktree`](agent-worktree.md), whose tool descriptions carry the retry semantics for the four classified git refusal dialects (occupied path, branch conflict, dirty tree, oversized path).
+
+## Commit request and result
+
+`WorktreeCommitId` is a branded full Git object ID. `WorktreeCommitRequest` identifies the registered checkout with `id`, the authorized writer with `holder`, and the optimistic precondition with `expectedHead`; `paths` lists literal relative files and `message` supplies the commit message. `WorktreeCommitResult` returns the new `head` and whole-checkout `clean` state.
+
+The host-only `commit` operation requires consumer authorization and writer quiescence. It preserves unrelated changes, refuses existing staging, and requires the registered branch and expected HEAD. Cancellation or failure may leave staging or a commit; inspect before retrying. The [package contract](../../packages/workflow/worktree-registry/README.md) owns hooks, filters, and path restrictions.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -85,6 +91,18 @@ abstract list(workspaceId: WorkspaceId): readonly Worktree[]
  *   directory no longer exists.
  */
 abstract status(id: WorktreeId): Promise<WorktreeStatus>
+
+/**
+ * Commit selected paths through the host provider while retaining the writer lock.
+ * The consumer must authorize the calling writer and stop its other mutations first.
+ * Existing staged changes, a changed branch, and a stale HEAD reject before staging.
+ * A rejection after staging may leave an index or commit; inspect before retrying.
+ * No rollback, reset, history rewrite, or sandbox permission change is performed.
+ * @param request - Trusted writer, registered target, expected HEAD and literal paths.
+ * @param signal - Cancellation of queued or executing Git operations.
+ * @returns The verified new commit and the remaining worktree cleanliness.
+ */
+abstract commit(request: WorktreeCommitRequest, signal?: AbortSignal): Promise<WorktreeCommitResult>
 
 /**
  * Remove one worktree through git and delete its registration. A bound

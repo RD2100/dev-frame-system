@@ -113,6 +113,10 @@ const OUT = 'docs/tool-catalog.md'
  * harvested, never executed; every operation rejects loud if it ever ran.
  */
 class CatalogWorktreeRegistry extends WorktreeRegistry {
+  override commit(): Promise<never> {
+    return Promise.reject(new Error('gen-tool-catalog: worktree tools are harvested, not executed'))
+  }
+
   override create(_request: WorktreeCreateRequest): Promise<Worktree> {
     return Promise.reject(new Error('gen-tool-catalog: worktree tools are harvested, not executed'))
   }

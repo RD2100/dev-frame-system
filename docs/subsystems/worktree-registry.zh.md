@@ -8,9 +8,15 @@ Source: [`packages/workflow/worktree-registry/src/registry.ts`](../../packages/w
 
 ## 服务
 
-`WorktreeRegistry` 声明七个操作。`create` 经 `ctx.workspaceRegistry` 解析归属 workspace，从 workspace 目录运行 `git worktree add`，并记录观测事实——`fs.realpath` 之后的规范路径与从新 worktree 读回的分支——在此之前先拒绝 workspace 或其他已登记 worktree 已占用的路径，以及同一 workspace 的其他 worktree 已持有的显式分支。`bind`/`unbind` 维护每个 worktree 至多一个的单一写入者绑定：holder 值不透明，当前 holder 重复绑定是幂等成功，其余任何绑定、非 holder 的解绑、对未绑定 worktree 的解绑都以 `WorktreeLockError` 拒绝。`list` 以稳定 `(createdAt, id)` 顺序从持久化行作答，绝不 shell out 到 git。`status` 是观测面：目录缺失时报告 `directoryExists: false` 且不调用 git，目录存在时报告实时分支与干净度。`remove` 在 worktree 处于绑定状态时拒绝——`force` 绝不覆盖绑定——然后运行 `git worktree remove`，git 成功之后才删除登记，所以失败的删除绝不会掩盖真实存在的 worktree。`reconcile` 把登记行与 `git worktree list` 作差并报告差异——悬空登记与未注册的 worktree——只有显式选择对应动作时才丢弃过时行或采纳外部创建的 worktree；它绝不删除目录或文件，且 `pruneRows` 丢弃过时行时连同其绑定一起丢弃，因为绑定守护的是活着的 checkout，不是消失的目录。
+`WorktreeRegistry` 声明八个操作。`create` 经 `ctx.workspaceRegistry` 解析归属 workspace，从 workspace 目录运行 `git worktree add`，并记录观测事实——`fs.realpath` 之后的规范路径与从新 worktree 读回的分支——在此之前先拒绝 workspace 或其他已登记 worktree 已占用的路径，以及同一 workspace 的其他 worktree 已持有的显式分支。`bind`/`unbind` 维护每个 worktree 至多一个的单一写入者绑定：holder 值不透明，当前 holder 重复绑定是幂等成功，其余任何绑定、非 holder 的解绑、对未绑定 worktree 的解绑都以 `WorktreeLockError` 拒绝。`list` 以稳定 `(createdAt, id)` 顺序从持久化行作答，绝不 shell out 到 git。`status` 是观测面：目录缺失时报告 `directoryExists: false` 且不调用 git，目录存在时报告实时分支与干净度。`remove` 在 worktree 处于绑定状态时拒绝——`force` 绝不覆盖绑定——然后运行 `git worktree remove`，git 成功之后才删除登记，所以失败的删除绝不会掩盖真实存在的 worktree。`reconcile` 把登记行与 `git worktree list` 作差并报告差异——悬空登记与未注册的 worktree——只有显式选择对应动作时才丢弃过时行或采纳外部创建的 worktree；它绝不删除目录或文件，且 `pruneRows` 丢弃过时行时连同其绑定一起丢弃，因为绑定守护的是活着的 checkout，不是消失的目录。
 
 登记持久化在 `worktree_registry` 存储域（version 2；一张以 branded `WorktreeId` 为 key 的 `worktrees` 表，携带成对写入读取的可选 `lockedBy`/`lockedAt` 绑定字段）；重启后保留并在下次组合时重新可用。目录操作以归属 workspace 路径为 cwd——Windows 上 worktree 不能以自己为 cwd 删除自己。模型只能经 [`tool-worktree`](../../packages/workflow/tool-worktree) 的 `worktree_*` 工具与 [`agent-worktree`](agent-worktree.zh.md) 的每 Agent seam 触达这些操作，工具描述自带四类已分类 git 拒绝方言（路径被占用、分支冲突、脏树、路径超长）的重试语义。
+
+## 提交请求与结果
+
+`WorktreeCommitId` 是带品牌的完整 Git 对象 ID。`WorktreeCommitRequest` 通过 `id` 标识已登记的检出，通过 `holder` 标识获授权的写入者，通过 `expectedHead` 指定乐观并发前置条件；`paths` 列出字面相对文件路径，`message` 提供提交消息。`WorktreeCommitResult` 返回新的 `head` 和整个检出的 `clean` 状态。
+
+仅限宿主调用的 `commit` 操作要求消费者授权并使其他写入者停止写入。它保留无关改动、拒绝已有暂存，并要求登记分支和预期 HEAD 匹配。取消或失败可能留下暂存改动或提交；重试前应检查。[包契约](../../packages/workflow/worktree-registry/README.zh.md)负责 hooks、filters 和路径限制。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -85,6 +91,18 @@ abstract list(workspaceId: WorkspaceId): readonly Worktree[]
  *   directory no longer exists.
  */
 abstract status(id: WorktreeId): Promise<WorktreeStatus>
+
+/**
+ * Commit selected paths through the host provider while retaining the writer lock.
+ * The consumer must authorize the calling writer and stop its other mutations first.
+ * Existing staged changes, a changed branch, and a stale HEAD reject before staging.
+ * A rejection after staging may leave an index or commit; inspect before retrying.
+ * No rollback, reset, history rewrite, or sandbox permission change is performed.
+ * @param request - Trusted writer, registered target, expected HEAD and literal paths.
+ * @param signal - Cancellation of queued or executing Git operations.
+ * @returns The verified new commit and the remaining worktree cleanliness.
+ */
+abstract commit(request: WorktreeCommitRequest, signal?: AbortSignal): Promise<WorktreeCommitResult>
 
 /**
  * Remove one worktree through git and delete its registration. A bound

@@ -23,6 +23,31 @@ export type WorktreeId = Branded<'WorktreeId'>
  */
 export type WorktreeLockHolder = Branded<'WorktreeLockHolder'>
 
+/** Full Git object identity used for an optimistic commit precondition. */
+export type WorktreeCommitId = Branded<'WorktreeCommitId'>
+
+/** A host-authorized commit in a registered, exclusively held worktree. */
+export interface WorktreeCommitRequest {
+  /** Registered target; paths and branch come from its durable row. */
+  readonly id: WorktreeId
+  /** Trusted consumer-derived writer identity, never a model-selected identity. */
+  readonly holder: WorktreeLockHolder
+  /** Exact HEAD observed when the consumer authorized the operation. */
+  readonly expectedHead: WorktreeCommitId
+  /** Literal relative files without symlinks or junctions; unrelated changes remain untouched. */
+  readonly paths: readonly string[]
+  /** Commit message passed as one argument. */
+  readonly message: string
+}
+
+/** Observed commit identity and remaining worktree changes after a successful commit. */
+export interface WorktreeCommitResult {
+  /** Newly created commit, whose sole parent is the authorized HEAD. */
+  readonly head: WorktreeCommitId
+  /** Whether the entire worktree is clean, including untracked files. */
+  readonly clean: boolean
+}
+
 /**
  * One `create` request. The service resolves `workspaceId` through
  * `ctx.workspaceRegistry` and runs git from the owner workspace directory;
