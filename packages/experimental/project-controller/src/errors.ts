@@ -6,6 +6,8 @@ export type ProjectControllerErrorCode =
   | 'PROJECT_CONTROLLER_ILLEGAL_TRANSITION'
   /** The dispatch budget is exhausted; no further task may enter `developing` until one leaves it. */
   | 'PROJECT_CONTROLLER_CONCURRENCY_EXCEEDED'
+  /** The cumulative request budget is spent; no further model request may be charged until the budget is raised. */
+  | 'PROJECT_CONTROLLER_REQUEST_BUDGET_EXHAUSTED'
   /** The task id does not exist on the board. */
   | 'PROJECT_CONTROLLER_TASK_UNKNOWN'
   /** The task id already exists on the board. */

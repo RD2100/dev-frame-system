@@ -31,6 +31,8 @@ import type {
   RequiredChecksDigest,
   RequiredChecksUnsatisfied,
 } from '../required-checks.ts'
+import { evaluateRepairRoundAdmission, resolveRepairLimit } from '../repair-limit.ts'
+import type { RepairRoundAdmission } from '../repair-limit.ts'
 import { verifySourceFingerprint } from '../source-fingerprint.ts'
 import type { SourceFingerprintMismatch } from '../source-fingerprint.ts'
 import {
@@ -356,6 +358,13 @@ export interface GoalBindingControllerOptions {
   readonly controllerSessionId: ControllerSessionId
   readonly goals: NativeGoalPort
   readonly store: GoalBindingStore
+  /**
+   * Deployment-varying repair-round limit for the review-repair cycle
+   * (AT1-08): the maximum correction/retest/review rounds admitted after the
+   * initial review. Validated with {@link resolveRepairLimit} at
+   * construction; unset resolves to the acceptance-defined default of 2.
+   */
+  readonly repairLimit?: number
 }
 
 /**
@@ -375,11 +384,20 @@ export class GoalBindingController {
   private loadFailure: unknown
   private bindings: GoalBinding[] = []
   private tail: Promise<void> = Promise.resolve()
+  /** Validated repair-round limit resolved from the construction config. */
+  private readonly repairLimit: number
+  /** Repair rounds charged per Goal in this process; the initial review consumes none. */
+  private readonly repairRounds = new Map<NativeGoalId, number>()
 
   /**
    * @param options - controller Session identity, native Goal adapter, and store.
+   * @throws {@link RepairLimitError} when `repairLimit` is set and not a
+   *   positive safe integer — misconfiguration fails loud at construction.
    */
   constructor(private readonly options: GoalBindingControllerOptions) {
+    this.repairLimit = resolveRepairLimit(
+      options.repairLimit === undefined ? {} : { repairLimit: options.repairLimit },
+    )
     this.ready = Promise.resolve()
       .then(async () => await Promise.all([
         options.store.load(options.controllerSessionId),
@@ -652,6 +670,60 @@ export class GoalBindingController {
   /** Close model-step admission while retaining the current identity for resume. */
   closeAdmission(): void {
     this.admission = 'closed'
+  }
+
+  /**
+   * Admit one correction/retest/review round for an exact bound Goal
+   * (AT1-08): the call point after a `changes_required` completion rejection
+   * sends work back to the same worker. The initial review consumes no round;
+   * each admitted round is charged when it starts. Exhaustion returns the
+   * rejection as data — remaining issues then require human input through the
+   * human-authorized {@link GoalBindingController.resume} face, with no
+   * replacement-member or new-run bypass through this seam. Round accounting
+   * is per Goal in this controller instance; the durable side of the cycle is
+   * the evidence chain itself — each round's re-review must be fresh,
+   * gate-authorized evidence naming this Goal with a new snapshot
+   * (`docs/detailDesign-part1.md`), which {@link GoalBindingController.complete}
+   * already consumes by exact identity.
+   * @param identity - controller Session and Goal identity returning to repair.
+   * @returns the admitted verdict with the charged round number, or the
+   *   `repair-limit-exhausted` rejection as data.
+   * @throws {@link GoalBindingError} when the identity is unknown, foreign, or
+   *   belongs to another workspace.
+   */
+  beginRepairRound(identity: GoalBindingIdentity): Promise<RepairRoundAdmission> {
+    return this.enqueue(async () => {
+      await this.ensureReady()
+      const binding = this.findBinding(identity)
+      const verdict = evaluateRepairRoundAdmission({
+        repairLimit: this.repairLimit,
+        consumedRepairRounds: this.repairRounds.get(binding.goalId) ?? 0,
+      })
+      if (verdict.kind === 'admitted') this.repairRounds.set(binding.goalId, verdict.repairRound)
+      return verdict
+    })
+  }
+
+  /**
+   * Read the repair-round accounting for an exact bound Goal.
+   * @param identity - controller Session and Goal identity to inspect.
+   * @returns the validated limit, the rounds already charged, and the rounds
+   *   still available (clamped at zero once exhausted).
+   * @throws {@link GoalBindingError} when the identity is unknown, foreign, or
+   *   belongs to another workspace.
+   */
+  repairRoundState(identity: GoalBindingIdentity): {
+    readonly repairLimit: number
+    readonly consumedRepairRounds: number
+    readonly remainingRepairRounds: number
+  } {
+    const binding = this.findBinding(identity)
+    const consumedRepairRounds = this.repairRounds.get(binding.goalId) ?? 0
+    return {
+      repairLimit: this.repairLimit,
+      consumedRepairRounds,
+      remainingRepairRounds: Math.max(0, this.repairLimit - consumedRepairRounds),
+    }
   }
 
   /**
