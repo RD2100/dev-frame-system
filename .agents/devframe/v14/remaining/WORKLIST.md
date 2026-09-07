@@ -16,7 +16,7 @@
 
 | ID | 用户功能/项 | 源码 | profile | 运行 | 生产验收 | 证据 | 真实依赖 | 下一步 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| B1 | 真实 dsh profile 全链：启动→总控→组长→Worker（真实 huoshan 调用）→产出→审查→合并→停止重启恢复 | **部分站实证后阻塞**（boot/goal-bind/task-deliver 绿；12 站阻塞于工具调用面） | **shipped 已挂载**（acb2a2956b boot 修复在 main） | chain1-4：driver JSONL+chain3 会话证据在案；**判定=huoshan-1 流式 tool-call args 碎片损坏**（`\\\"` 双重转义+标识符碎裂→"input must be object"×N→无第二次模型请求自愈）；录播快照同路径正常 | **阻塞**（恢复路径已立：新切片 HuoshanStreamArgs） | boot-evidence.md+chain-evidence.md（组长落盘中） | B4 已证 huoshan 非流式路径正常（seq=10/49） | HuoshanStreamArgs 修复→最小真实重放→重启 12 站 |
+| B1 | 真实 dsh profile 全链 | **blocked/not_run**（总控最终尝试 chain5 收口：5 步+1 请求+goal 绑定绿，但无 Worker 派发/提交/deliverable；进程全停+证据入册 d6caf6f992） | **shipped 已挂载**（boot/profile/route/缓存/UI 状态≠验收） | S1-S3b/S8-进程级绿证据保留（chain-evidence.md）；S4-S12 未达 | **blocked**——恢复须新证据驱动的新裁定，不再重试 | chain-evidence.md（四轮+边界+chain5 全记录） | C2b 已修（模型面正常） | 无活动；B 组长转 B2/B3 |
 | C2b | **HuoshanStreamArgs**——provider 流式 tool-call 参数 delta 累积契约 | **已修+已验证**（02251fac16 合 64dae5eb2a：assembler index 复用冲突丢弃+indexConflicts 诊断面+id 覆写消除+逐字透传契约测试） | n/a | 单测 953/953+tsc 0+build 220 artifacts；**最小真实重放 PASS**（session-f37c4bea：request/header seq=12 huoshan-1/glm-5.3-flash+工具真实返回 4 providers+turn/end seq=166；旧缺陷签名消失） | **通过**（双层根因中流式面已修；input-as-string 属模型侧，重放未见复发） | chain3 fixture+replay 证据 bf198278cc | 无 | **B1 恢复解锁**：重启 12 站链 |
 | B2 | Shadow 跨项目投递/隔离进真实用户路径 | 已有（shadow-router；S6 机制 B PASS） | shipped 待挂/待证 | 机制 B 限范围 | 待 shipped 证据 | S6 判定书（隔离域路径+SHADOW_REQUEST_CONFLICT） | B1 | 随 B1 链跑真实跨项目站 |
 | B3 | Memory 写/读/冷恢复进真实用户路径 | 已有（project-memory；S7 机制 B PASS） | shipped 待挂/待证 | 机制 B 限范围 | 待 shipped 证据 | S7 判定书（Vault 恰 2 真实 .md） | B1 | 随 B1 链跑真实 Memory 站 |
