@@ -404,7 +404,7 @@ Source: [`packages/compaction/compaction/src/types.ts:34`](../packages/compactio
 'devframe/goal-binding': GoalBinding
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:304`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:311`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframelifecycle--log-only"></a>
 
@@ -415,7 +415,7 @@ Source: [`packages/experimental/devframe/src/events.ts:304`](../packages/experim
 'devframe/lifecycle': DevFrameLifecycleEventData
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:312`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:319`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframereview--log-only"></a>
 
@@ -426,7 +426,7 @@ Source: [`packages/experimental/devframe/src/events.ts:312`](../packages/experim
 'devframe/review': DevFrameReviewEventData
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:310`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:317`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframerole-policy--log-only"></a>
 
@@ -437,7 +437,7 @@ Source: [`packages/experimental/devframe/src/events.ts:310`](../packages/experim
 'devframe/role-policy': DevFrameRolePolicyEventData
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:302`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:309`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframetask-warning--log-only"></a>
 
@@ -448,7 +448,7 @@ Source: [`packages/experimental/devframe/src/events.ts:302`](../packages/experim
 'devframe/task-warning': DevFrameTaskWarningEventData
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:314`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:321`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframeusage--log-only"></a>
 
@@ -459,7 +459,7 @@ Source: [`packages/experimental/devframe/src/events.ts:314`](../packages/experim
 'devframe/usage': DevFrameUsageEventData
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:306`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:313`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframeverification--log-only"></a>
 
@@ -470,7 +470,7 @@ Source: [`packages/experimental/devframe/src/events.ts:306`](../packages/experim
 'devframe/verification': DevFrameVerificationEventData
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:308`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:315`](../packages/experimental/devframe/src/events.ts)
 
 ### `feedback/*`
 

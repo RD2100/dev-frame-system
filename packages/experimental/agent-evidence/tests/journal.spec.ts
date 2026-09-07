@@ -374,6 +374,46 @@ describe('AgentEvidenceJournal recordReview', () => {
     expect(current.snapshotEvents()).toEqual([])
   })
 
+  it('admits a review from a Session the directory records as a hierarchy-authorized lead', async () => {
+    const LEAD = SessionId('session-lead')
+    const consulted: SessionId[] = []
+    const journal = new AgentEvidenceJournal({
+      flush: async () => true,
+      reviewerDirectory: {
+        roleOf(sessionId) {
+          consulted.push(sessionId)
+          return sessionId === LEAD ? 'lead' : undefined
+        },
+      },
+      execution: executionWith(['passed']),
+    })
+    const current = session()
+
+    const data = await journal.recordReview({
+      session: current, binding: BINDING, reviewerSessionId: LEAD,
+      policyVersion: POLICY_VERSION, decision: 'pass', findings: [],
+    })
+    expect(data.reviewerSessionId).toBe(LEAD)
+    expect(current.snapshotEvents().filter(event => event.type === 'devframe/review')).toHaveLength(1)
+    expect(consulted).toEqual([LEAD])
+  })
+
+  it('rejects a review from a worker-role Session with AGENT_EVIDENCE_REVIEWER_UNAUTHORIZED', async () => {
+    const WORKER = SessionId('session-worker')
+    const journal = new AgentEvidenceJournal({
+      flush: async () => true,
+      reviewerDirectory: { roleOf: sessionId => sessionId === WORKER ? 'worker' : undefined },
+      execution: executionWith(['passed']),
+    })
+    const current = session()
+
+    await expect(journal.recordReview({
+      session: current, binding: BINDING, reviewerSessionId: WORKER,
+      policyVersion: POLICY_VERSION, decision: 'pass', findings: [],
+    })).rejects.toMatchObject({ name: 'AgentEvidenceError', code: 'AGENT_EVIDENCE_REVIEWER_UNAUTHORIZED' })
+    expect(current.snapshotEvents()).toEqual([])
+  })
+
   it('rejects a review from an unbound Session identity with AGENT_EVIDENCE_REVIEWER_UNAUTHORIZED', async () => {
     const { directory } = reviewerDirectory()
     const journal = new AgentEvidenceJournal({ flush: async () => true, reviewerDirectory: directory, execution: executionWith(['passed']) })

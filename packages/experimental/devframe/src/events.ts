@@ -66,8 +66,15 @@ export function DevFrameOperationId(value: string): DevFrameOperationId {
   return brandString<DevFrameOperationId>(value)
 }
 
-/** Roles recognized by the DevFrame host policy. */
-export type DevFrameRole = 'controller' | 'worker' | 'reviewer'
+/**
+ * Roles recognized by the DevFrame host policy. `lead` is the
+ * hierarchy-authorized tier-1 lead: the host records the assignment only for
+ * Sessions the deployed hierarchy bindings back, and a lead is
+ * reviewer-eligible for its own subtree — the hierarchy truth (real lead,
+ * same plugin, parent, reviewed-Worker independence) stays with the host's
+ * durable agent bindings, and a review consumer re-verifies it.
+ */
+export type DevFrameRole = 'controller' | 'lead' | 'worker' | 'reviewer'
 
 /** One role assignment restored into the exact live Agent identity. */
 export interface DevFrameRoleAssignment {
@@ -342,7 +349,7 @@ const lifecycleStateSchema = z.enum([
   'needs_attention',
 ])
 
-const roleSchema = z.enum(['controller', 'worker', 'reviewer'])
+const roleSchema = z.enum(['controller', 'lead', 'worker', 'reviewer'])
 const roleToolPolicySchema = z.object({
   inheritedTools: uniqueStrings,
   denyScopedTools: uniqueStrings,
@@ -368,7 +375,9 @@ const rolePolicyEventSchema = z.object({
   const roles = new Set<string>()
   const sessions = new Set<string>()
   for (const assignment of value.assignments) {
-    if (roles.has(assignment.role)) {
+    // The three legacy roles are singletons per snapshot; leads are many —
+    // one per subtree of the three-tier tree.
+    if (assignment.role !== 'lead' && roles.has(assignment.role)) {
       context.addIssue({ code: 'custom', path: ['assignments'], message: `role "${assignment.role}" is assigned twice` })
     }
     if (sessions.has(assignment.sessionId)) {
