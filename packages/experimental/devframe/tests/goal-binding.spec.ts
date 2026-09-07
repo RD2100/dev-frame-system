@@ -7,7 +7,7 @@ import GoalService from '@deepseek-ai/dsh-goal'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MemoryRequiredChecksConfigStore, requiredChecksDigest } from '../src/required-checks.ts'
-import { AcceptanceHash, DevFrameSnapshotId, SourceFingerprint, WorkspaceId } from '../src/shared/types.ts'
+import { AcceptanceHash, ConfigurationConfirmationId, DevFrameSnapshotId, SourceFingerprint, WorkspaceId } from '../src/shared/types.ts'
 import {
   ControllerSessionId,
   GoalBindingController,
@@ -131,6 +131,14 @@ function fakeGoals(trace: string[]): NativeGoalPort & { current: TraceGoal | und
         activation: 'disarmed',
       }
       return port.current
+    },
+    clear(ref) {
+      trace.push(`goal:clear:${ref.id}:${ref.revision}`)
+      if (port.current === undefined || port.current.id !== ref.id) {
+        throw new Error('clear target mismatch')
+      }
+      port.current = undefined
+      return { id: ref.id, revision: ref.revision + 1 }
     },
   }
   return port
@@ -817,3 +825,211 @@ async function completionRequest(
     ...overrides,
   }
 }
+
+describe('GoalBindingController stop and abandon (AT1-10)', () => {
+  it('records a human-authorized stop request with disarmed native continuation', async () => {
+    const trace: string[] = []
+    const goals = fakeGoals(trace)
+    const store = new MemoryGoalBindingStore()
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-stop'),
+      controllerSessionId: ControllerSessionId('controller-stop'),
+      goals,
+      store,
+    })
+    const binding = await controller.start(request())
+
+    const stopped = await controller.stop(
+      { controllerSessionId: binding.controllerSessionId, goalId: binding.goalId },
+      createHumanAuthorization('stop-confirm'),
+    )
+
+    expect(stopped.lifecycle).toBe('stop_requested')
+    expect(stopped.goalRevision).toBe(binding.goalRevision)
+    expect(goals.current).toMatchObject({ activation: 'disarmed', phase: 'active' })
+    expect(controller.admissionState).toBe('closed')
+    expect(() => controller.assertAdmitted(binding)).toThrow(
+      expect.objectContaining({ code: 'GOAL_BINDING_ADMISSION_CLOSED' }),
+    )
+    expect(trace).toEqual([
+      'goal:get',
+      'goal:create:implement task',
+      'goal:disarm',
+      'goal:resume:goal-1:1',
+      'goal:get',
+      'goal:disarm',
+    ])
+    await expect(store.read(WorkspaceId('workspace-stop'))).resolves.toMatchObject({
+      goalId: 'goal-1',
+      lifecycle: 'stop_requested',
+    })
+  })
+
+  it('refuses forged authorization, repeat stops, and complete goals without stopping', async () => {
+    const trace: string[] = []
+    const goals = fakeGoals(trace)
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-stop-refusals'),
+      controllerSessionId: ControllerSessionId('controller-stop-refusals'),
+      goals,
+      store: new MemoryGoalBindingStore(),
+    })
+    const binding = await controller.start(request())
+    expect(trace).toHaveLength(4)
+
+    const forged = { kind: 'human', confirmationId: 'model-text' }
+    await expect(controller.stop(
+      { controllerSessionId: binding.controllerSessionId, goalId: binding.goalId },
+      forged as never,
+    )).rejects.toMatchObject({ code: 'GOAL_BINDING_AUTHORIZATION_REQUIRED' })
+    expect(trace).toHaveLength(4)
+
+    await controller.stop(
+      { controllerSessionId: binding.controllerSessionId, goalId: binding.goalId },
+      createHumanAuthorization('stop-confirm'),
+    )
+    expect(trace).toHaveLength(6)
+
+    await expect(controller.stop(
+      { controllerSessionId: binding.controllerSessionId, goalId: binding.goalId },
+      createHumanAuthorization('stop-confirm-2'),
+    )).rejects.toMatchObject({ code: 'GOAL_BINDING_INVALID_REQUEST' })
+    expect(trace).toHaveLength(7)
+
+    goals.current = { ...goals.current!, phase: 'complete' }
+    await expect(controller.stop(
+      { controllerSessionId: binding.controllerSessionId, goalId: binding.goalId },
+      createHumanAuthorization('stop-confirm-3'),
+    )).rejects.toMatchObject({ code: 'GOAL_BINDING_IDENTITY_MISMATCH' })
+    expect(trace).toHaveLength(8)
+  })
+
+  it('clears the native Goal when abandoning an unfinished Goal and retains the stop-mark', async () => {
+    const trace: string[] = []
+    const goals = fakeGoals(trace)
+    const store = new MemoryGoalBindingStore()
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-abandon-running'),
+      controllerSessionId: ControllerSessionId('controller-abandon-running'),
+      goals,
+      store,
+    })
+    const binding = await controller.start(request())
+
+    const retained = await controller.abandon(
+      { controllerSessionId: binding.controllerSessionId, goalId: binding.goalId },
+      createHumanAuthorization('abandon-confirm'),
+    )
+
+    expect(retained.lifecycle).toBe('stop_requested')
+    expect(goals.current).toBeUndefined()
+    expect(controller.admissionState).toBe('closed')
+    expect(trace).toEqual([
+      'goal:get',
+      'goal:create:implement task',
+      'goal:disarm',
+      'goal:resume:goal-1:1',
+      'goal:get',
+      'goal:disarm',
+      'goal:clear:goal-1:2',
+    ])
+    await expect(store.read(WorkspaceId('workspace-abandon-running'))).resolves.toMatchObject({
+      goalId: 'goal-1',
+      lifecycle: 'stop_requested',
+    })
+  })
+
+  it('abandons an already stopped Goal without another binding record', async () => {
+    const trace: string[] = []
+    const goals = fakeGoals(trace)
+    const store = new MemoryGoalBindingStore()
+    await store.save({
+      version: 1,
+      workspaceId: WorkspaceId('workspace-abandon-stopped'),
+      controllerSessionId: ControllerSessionId('controller-abandon-stopped'),
+      goalId: GoalId('goal-1'),
+      goalRevision: 2,
+      taskIds: [TaskId('task-1')],
+      acceptanceHash: AcceptanceHash('acceptance-a'),
+      sourceFingerprint: SourceFingerprint('source-a'),
+      snapshotId: DevFrameSnapshotId('snapshot-a'),
+      confirmation: {
+        id: ConfigurationConfirmationId('confirm-a'),
+        acceptanceHash: AcceptanceHash('acceptance-a'),
+      },
+      lifecycle: 'stopped',
+      budget: { maxAttempts: 3, consumedAttempts: 0 },
+    })
+    goals.current = {
+      id: GoalId('goal-1'),
+      revision: 2,
+      phase: 'paused',
+      activation: 'disarmed',
+    }
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-abandon-stopped'),
+      controllerSessionId: ControllerSessionId('controller-abandon-stopped'),
+      goals,
+      store,
+    })
+
+    const retained = await controller.abandon(
+      { controllerSessionId: ControllerSessionId('controller-abandon-stopped'), goalId: GoalId('goal-1') },
+      createHumanAuthorization('abandon-confirm'),
+    )
+
+    expect(retained.lifecycle).toBe('stopped')
+    expect(goals.current).toBeUndefined()
+    expect(trace).toEqual(['goal:get', 'goal:disarm', 'goal:clear:goal-1:2'])
+    const loaded = await store.load(ControllerSessionId('controller-abandon-stopped'))
+    expect(loaded[0]).toMatchObject({ goalId: 'goal-1', lifecycle: 'stopped' })
+  })
+
+  it('refuses abandon mid-stop and when the native port cannot clear', async () => {
+    const trace: string[] = []
+    const goals = fakeGoals(trace)
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-abandon-midstop'),
+      controllerSessionId: ControllerSessionId('controller-abandon-midstop'),
+      goals,
+      store: new MemoryGoalBindingStore(),
+    })
+    const binding = await controller.start(request())
+    await controller.stop(
+      { controllerSessionId: binding.controllerSessionId, goalId: binding.goalId },
+      createHumanAuthorization('stop-confirm'),
+    )
+
+    await expect(controller.abandon(
+      { controllerSessionId: binding.controllerSessionId, goalId: binding.goalId },
+      createHumanAuthorization('abandon-confirm'),
+    )).rejects.toMatchObject({ code: 'GOAL_BINDING_INVALID_REQUEST' })
+    expect(goals.current).not.toBeUndefined()
+    expect(trace.some(entry => entry.startsWith('goal:clear'))).toBe(false)
+
+    const base = fakeGoals([])
+    const withoutClear: NativeGoalPort = {
+      create: request => base.create(request),
+      disarm: () => base.disarm(),
+      get: () => base.get(),
+      resume: ref => base.resume(ref),
+      complete: ref => base.complete(ref),
+    }
+    const clearless = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-abandon-noport'),
+      controllerSessionId: ControllerSessionId('controller-abandon-noport'),
+      goals: withoutClear,
+      store: new MemoryGoalBindingStore(),
+    })
+    const started = await clearless.start(request({}))
+
+    await expect(clearless.abandon(
+      { controllerSessionId: started.controllerSessionId, goalId: started.goalId },
+      createHumanAuthorization('abandon-confirm'),
+    )).rejects.toMatchObject({ code: 'GOAL_BINDING_INVALID_REQUEST' })
+    expect(clearless.admissionState).toBe('closed')
+    expect(() => clearless.assertAdmitted(started)).toThrow(
+      expect.objectContaining({ code: 'GOAL_BINDING_ADMISSION_CLOSED' }),
+    )
+  })
+})

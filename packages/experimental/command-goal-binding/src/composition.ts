@@ -3,9 +3,10 @@
  * that lazily builds the {@link GoalBindingController} per controller Session
  * over the live native Goal service, selects completion evidence from the
  * controller Session's devframe projection, lands the admitted verdict as a
- * durable completion receipt, and owns the `/devframe-start` and
- * `/devframe-resume` lanes. Every command handler is a production entry;
- * `startBinding` stays the composition's test-visible start lane.
+ * durable completion receipt, and owns the `/devframe-start`,
+ * `/devframe-resume`, `/devframe-stop`, and `/devframe-abandon` lanes. Every
+ * command handler is a production entry; `startBinding` stays the
+ * composition's test-visible start lane.
  * @module @deepseek-ai/dsh-experimental-command-goal-binding/composition
  */
 
@@ -37,6 +38,10 @@ import { DevFrameSessionJournal } from '@deepseek-ai/dsh-experimental-devframe'
 import type { DevFrameReviewEventData, DevFrameVerificationEventData } from '@deepseek-ai/dsh-experimental-devframe'
 import { taskWarningListener as taskWarningListenerPlugin, taskFailDisarm as taskFailDisarmPlugin } from '@deepseek-ai/dsh-experimental-devframe'
 import {
+  ABANDON_INPUT_UNEXPECTED_TEXT,
+  ABANDON_NO_BINDING_RECORD_TEXT,
+  ABANDON_NO_CURRENT_GOAL_TEXT,
+  ABANDON_UNRESOLVED_STATE_TEXT,
   GOAL_ALREADY_COMPLETE_TEXT,
   NO_BINDING_TEXT,
   NO_CURRENT_GOAL_TEXT,
@@ -46,21 +51,32 @@ import {
   RESUME_INPUT_UNEXPECTED_TEXT,
   RESUME_NO_BINDING_RECORD_TEXT,
   RESUME_NO_CURRENT_GOAL_TEXT,
+  RESUME_STOP_PENDING_TEXT,
   START_GOAL_RUNNING_TEXT,
   START_OBJECTIVE_REQUIRED_TEXT,
   START_WORKTREE_REQUIRED_TEXT,
+  STOP_ALREADY_PENDING_TEXT,
+  STOP_INPUT_UNEXPECTED_TEXT,
+  STOP_NO_BINDING_RECORD_TEXT,
+  STOP_NO_CURRENT_GOAL_TEXT,
   WORKTREE_REQUIRED_TEXT,
   completionAdmissionEvidence,
+  devframeAbandonDescriptor,
   devframeResumeDescriptor,
   devframeStartDescriptor,
+  devframeStopDescriptor,
   goalCompleteDescriptor,
+  parseDevframeAbandonInput,
   parseDevframeResumeInput,
   parseDevframeStartInput,
+  parseDevframeStopInput,
   parseGoalCompleteInput,
+  renderAbandonSuccess,
   renderCompletionRejection,
   renderCompletionSuccess,
   renderResumeSuccess,
   renderStartSuccess,
+  renderStopSuccess,
 } from './command.ts'
 import {
   ProjectionEvidenceReviewerDirectory,
@@ -107,7 +123,8 @@ export interface StartGoalBindingRequest {
  * service (deliberately without a Context merge declaration: this is a
  * private experimental seam, so in-process readers use `ctx.reflect.get`).
  * It registers the devframe projection unit and the `/goal-complete`,
- * `/devframe-start`, and `/devframe-resume` commands, and owns the controller
+ * `/devframe-start`, `/devframe-resume`, `/devframe-stop`, and
+ * `/devframe-abandon` commands, and owns the controller
  * registry, both replaceable reference stores, and the evidence wiring: the
  * composition-owned DevFrame Session journal for role-policy and
  * goal-binding records, plus the `AgentEvidenceJournal` whose default
@@ -180,6 +197,20 @@ export class GoalBindingComposition extends Service {
         rawInput: invocation.rawInput,
       }),
     }), 'command-goal-binding.register-resume')
+    ctx.effect(() => ctx.commands.register({
+      ...devframeStopDescriptor(),
+      handler: invocation => this.stopBoundGoal({
+        agent: invocation.agent,
+        rawInput: invocation.rawInput,
+      }),
+    }), 'command-goal-binding.register-stop')
+    ctx.effect(() => ctx.commands.register({
+      ...devframeAbandonDescriptor(),
+      handler: invocation => this.abandonBoundGoal({
+        agent: invocation.agent,
+        rawInput: invocation.rawInput,
+      }),
+    }), 'command-goal-binding.register-abandon')
   }
 
   /**
@@ -280,7 +311,7 @@ export class GoalBindingComposition extends Service {
    * @param invocation - the receiving agent plus the verbatim command text.
    * @returns a success result, or a stable error result for the expected
    *   data refusals (unexpected input, no current goal, already complete, no
-   *   binding record). Structural failures propagate unchanged.
+   *   binding record, pending stop). Structural failures propagate unchanged.
    */
   async resumeBoundGoal(invocation: {
     readonly agent: Agent
@@ -297,6 +328,14 @@ export class GoalBindingComposition extends Service {
       .bindings.find(binding => binding.goalId === current.id)
     const stored = (await this.bindingStore.load(controllerSessionId))
       .find(binding => binding.goalId === current.id)
+    // A pending stop (`stop_requested`/`quiescence_confirmed`) is the
+    // uncertain state the lifecycle fold refuses to leave for
+    // `admission_open`: resuming here would latch a replay failure, so the
+    // lane refuses as data while the stop flow is unresolved.
+    const currentLifecycle = projected?.lifecycle ?? stored?.lifecycle
+    if (currentLifecycle === 'stop_requested' || currentLifecycle === 'quiescence_confirmed') {
+      return { kind: 'error', text: RESUME_STOP_PENDING_TEXT }
+    }
     let restoredStore = false
     if (stored === undefined && projected !== undefined) {
       await this.bindingStore.save(projected)
@@ -317,6 +356,117 @@ export class GoalBindingComposition extends Service {
     )
     await landGoalBinding(this.journal, invocation.agent.session, resumed)
     return { kind: 'success', text: renderResumeSuccess() }
+  }
+
+  /**
+   * Execute one `/devframe-stop` invocation: record a human-authorized stop
+   * request for the agent's current unfinished bound goal. The lane resolves
+   * the binding between the log projection and the binding store, refuses
+   * the expected data refusals as stable errors (unexpected input, no
+   * current goal, already complete, no binding record, stop already
+   * pending), and delegates the structural work to the controller's
+   * {@link GoalBindingController.stop}: admission closes, the native Goal is
+   * disarmed, and the binding persists at `stop_requested`, which the lane
+   * lands on the session log as the durable authority. The terminal
+   * `stopped` state stays reachable through the existing lifecycle
+   * vocabulary; the stop flow owns quiescence confirmation and writer
+   * release. Structural failures propagate unchanged.
+   * @param invocation - the receiving agent plus the verbatim command text.
+   * @returns a success result after the stop-requested binding lands, or a
+   *   stable error result.
+   */
+  async stopBoundGoal(invocation: {
+    readonly agent: Agent
+    readonly rawInput: string
+  }): Promise<CommandResult> {
+    if (parseDevframeStopInput(invocation.rawInput).length > 0) {
+      return { kind: 'error', text: STOP_INPUT_UNEXPECTED_TEXT }
+    }
+    const current = this.ctx.goals.get(invocation.agent)
+    if (current === undefined) return { kind: 'error', text: STOP_NO_CURRENT_GOAL_TEXT }
+    if (current.phase === 'complete') return { kind: 'error', text: GOAL_ALREADY_COMPLETE_TEXT }
+    const controllerSessionId = ControllerSessionId(invocation.agent.id)
+    const projected = devFrameStateOf(this.ctx, invocation.agent.session)
+      .bindings.find(binding => binding.goalId === current.id)
+    const stored = (await this.bindingStore.load(controllerSessionId))
+      .find(binding => binding.goalId === current.id)
+    if (projected === undefined && stored === undefined) {
+      return { kind: 'error', text: STOP_NO_BINDING_RECORD_TEXT }
+    }
+    const currentLifecycle = projected?.lifecycle ?? stored?.lifecycle
+    if (currentLifecycle === 'stop_requested' || currentLifecycle === 'quiescence_confirmed') {
+      return { kind: 'error', text: STOP_ALREADY_PENDING_TEXT }
+    }
+    const stopped = await this.controllerFor(invocation.agent).stop(
+      { controllerSessionId, goalId: current.id },
+      createHumanAuthorization(`devframe-stop:${invocation.agent.id}:${Date.now()}`),
+    )
+    await landGoalBinding(this.journal, invocation.agent.session, stopped)
+    return { kind: 'success', text: renderStopSuccess() }
+  }
+
+  /**
+   * Execute one `/devframe-abandon` invocation: record a human-authorized
+   * abandon of the agent's current stopped or unfinished bound goal. The
+   * controller's {@link GoalBindingController.abandon} closes admission,
+   * disarms the native Goal, persists the stop-requested stop-mark for a
+   * previously unfinished Goal, and clears the native Goal behind its
+   * durable tombstone — the existing vocabulary's expression of "no longer
+   * resumable" — while the binding history is retained and no completion is
+   * claimed. A fresh stop-mark lands on the session log; an already stopped
+   * binding adds no record (a repeat would fold as recorded twice).
+   * Structural failures propagate unchanged.
+   * @param invocation - the receiving agent plus the verbatim command text.
+   * @returns a success result after the abandon, or a stable error result.
+   */
+  async abandonBoundGoal(invocation: {
+    readonly agent: Agent
+    readonly rawInput: string
+  }): Promise<CommandResult> {
+    if (parseDevframeAbandonInput(invocation.rawInput).length > 0) {
+      return { kind: 'error', text: ABANDON_INPUT_UNEXPECTED_TEXT }
+    }
+    const current = this.ctx.goals.get(invocation.agent)
+    if (current === undefined) return { kind: 'error', text: ABANDON_NO_CURRENT_GOAL_TEXT }
+    if (current.phase === 'complete') return { kind: 'error', text: GOAL_ALREADY_COMPLETE_TEXT }
+    const controllerSessionId = ControllerSessionId(invocation.agent.id)
+    const projected = devFrameStateOf(this.ctx, invocation.agent.session)
+      .bindings.find(binding => binding.goalId === current.id)
+    const stored = (await this.bindingStore.load(controllerSessionId))
+      .find(binding => binding.goalId === current.id)
+    if (projected === undefined && stored === undefined) {
+      return { kind: 'error', text: ABANDON_NO_BINDING_RECORD_TEXT }
+    }
+    const currentLifecycle = projected?.lifecycle ?? stored?.lifecycle
+    if (currentLifecycle !== 'admission_open' && currentLifecycle !== 'stopped') {
+      return { kind: 'error', text: ABANDON_UNRESOLVED_STATE_TEXT }
+    }
+    // The log is the binding authority: when the stop flow advanced the
+    // projected lifecycle past the store's (stop_requested → … → stopped),
+    // reconcile the store and evict the stale cached controller so abandon
+    // validates against the terminal binding.
+    if (projected !== undefined && stored !== undefined && projected.lifecycle !== stored.lifecycle) {
+      await this.bindingStore.save(projected)
+      await this.bindingStore.write({
+        workspaceId: projected.workspaceId,
+        controllerSessionId: projected.controllerSessionId,
+        goalId: projected.goalId,
+        goalRevision: projected.goalRevision,
+        acceptanceHash: projected.acceptanceHash,
+        sourceFingerprint: projected.sourceFingerprint,
+        confirmation: { ...projected.confirmation },
+        lifecycle: projected.lifecycle,
+      })
+      this.controllers.delete(invocation.agent.id)
+    }
+    const retained = await this.controllerFor(invocation.agent).abandon(
+      { controllerSessionId, goalId: current.id },
+      createHumanAuthorization(`devframe-abandon:${invocation.agent.id}:${Date.now()}`),
+    )
+    if (retained.lifecycle === 'stop_requested') {
+      await landGoalBinding(this.journal, invocation.agent.session, retained)
+    }
+    return { kind: 'success', text: renderAbandonSuccess() }
   }
 
   /**
