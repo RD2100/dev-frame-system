@@ -630,11 +630,15 @@ Requires: `commands` · `goals` · `sessions` · `sessionProjections`
 ```ts config-catalog
 /** Deployment configuration accepted by the `command-goal-binding` plugin. */
 export interface CommandGoalBindingConfig {
+  /** Shared Goal repair-round limit; omitted resolves to the DevFrame default. */
+  readonly repairLimit?: number
   /**
    * Host-owned workspace identity every completion binding and evidence
    * record of this composition carries. Required.
    */
   readonly workspaceId: string
+  /** Absolute ledger path for approved checklists; its parent must already exist. */
+  readonly requiredChecksPath: string
   /**
    * Absolute worktree root used when a `/goal-complete` line names no path,
    * and the only worktree `/devframe-start` binds (objective and path cannot
@@ -663,7 +667,7 @@ export interface CommandGoalBindingConfig {
 
 Depends on: [`DevFrameRequiredChecksConfig`](../packages/experimental/devframe/src/index.ts)
 
-Source: [`packages/experimental/command-goal-binding/src/config.ts:23`](../packages/experimental/command-goal-binding/src/config.ts)
+Source: [`packages/experimental/command-goal-binding/src/config.ts:24`](../packages/experimental/command-goal-binding/src/config.ts)
 
 <a id="deepseek-aidsh-experimental-inspector"></a>
 
@@ -792,6 +796,8 @@ Requires: `tools` · `agents` · `sessions` · `sessionProjections` · `projectC
 ```ts config-catalog
 /** Explicit deployment settings; tools cannot choose identities, commands, or approval digests. */
 export interface Config {
+  /** Shared Goal repair-round limit; omitted uses the DevFrame default. */
+  repairLimit?: number
   /** Existing approved-checks ledger. */
   requiredChecksPath: string
   /** Approved checkset digest keyed by task id. */
@@ -809,7 +815,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/experimental/project-controller/src/delivery-consumer.ts:30`](../packages/experimental/project-controller/src/delivery-consumer.ts)
+Source: [`packages/experimental/project-controller/src/delivery-consumer.ts:31`](../packages/experimental/project-controller/src/delivery-consumer.ts)
 
 <a id="deepseek-aidsh-experimental-shadow-router"></a>
 

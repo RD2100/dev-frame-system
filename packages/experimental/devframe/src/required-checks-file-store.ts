@@ -16,9 +16,8 @@
  * file + rename, so a reader sees the old or the new complete ledger and
  * never a torn one; there are no locks, so the store assumes a single writer
  * and concurrent writers are last-writer-wins. This is an injectable
- * alternative to {@link MemoryRequiredChecksConfigStore}, not a production
- * composition: wiring it into a profile or host Config belongs to the owning
- * wave.
+ * alternative to {@link MemoryRequiredChecksConfigStore}. Host command,
+ * delivery, and integration plugins select the ledger through their Config.
  * @module @deepseek-ai/dsh-experimental-devframe/required-checks-file-store
  */
 
@@ -155,8 +154,8 @@ export interface FileRequiredChecksConfigStoreOptions {
  * via a same-directory temp file + rename, so a concurrent reader sees the
  * old or the new complete ledger; there are no locks, so the store assumes a
  * single writer and concurrent writers are last-writer-wins. An injectable
- * alternative to {@link MemoryRequiredChecksConfigStore}; production
- * composition wiring belongs to the owning wave.
+ * alternative to {@link MemoryRequiredChecksConfigStore}; the deployment must
+ * own the ledger path and serialize registration writes.
  */
 export class FileRequiredChecksConfigStore implements RequiredChecksConfigStore {
   private readonly ledgerPath: string

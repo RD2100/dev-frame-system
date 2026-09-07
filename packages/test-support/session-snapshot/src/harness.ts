@@ -72,6 +72,7 @@ const WAIT_POLL_INTERVAL_MS = 10
  */
 export type InputStep =
   | { op: 'initialize' }
+  | { op: 'restartAndResume' }
   | { op: 'newSession' }
   | { op: 'newSessionExpectError'; additionalDirectories?: string[] }
   | { op: 'prompt'; text: string }
@@ -96,6 +97,8 @@ export type InputStep =
 /** A scenario's `input.json`: an ordered list of input steps. */
 export interface InputScript {
   steps: InputStep[]
+  /** Session workspace relative to the isolated run root; reused after process restart. */
+  sessionCwd?: string
   /**
    * Ordered answers for the agent's `session/request_permission` round-trips,
    * consumed FIFO — the Nth request gets the Nth answer. Each answer selects
@@ -280,7 +283,7 @@ export async function runScenario(input: InputScript, opts: RunOptions): Promise
     // callback answers `cancelled` (a well-defined path for the agent),
     // captures the error here, and the step loop fails the run on it.
     let scriptError: Error | undefined
-    launched = launchAcpTestAgent({
+    const launch = (): LaunchedAcpTestAgent => launchAcpTestAgent({
       agent: opts.agent,
       cwd,
       ...opts.configPath !== undefined ? { configPath: opts.configPath } : {},
@@ -302,15 +305,31 @@ export async function runScenario(input: InputScript, opts: RunOptions): Promise
         return Promise.resolve({ outcome: { outcome: 'selected', optionId: option.optionId } })
       },
     })
-    const active = launched
+    launched = launch()
+    let active = launched
     await active.spawned
-    const { client } = active
+    const sessionCwd = input.sessionCwd === undefined ? cwd : join(cwd, input.sessionCwd)
+    const priorStdout: string[] = []
+    const priorStderr: string[] = []
 
     for (const step of input.steps) {
+      if (step.op === 'restartAndResume') {
+        if (sessionId === undefined) throw new Error('snapshot-harness: restart requires a created session')
+        await active.client.closeSession({ sessionId })
+        await active.close()
+        priorStdout.push(active.rawStdout())
+        priorStderr.push(active.stderr())
+        launched = launch()
+        active = launched
+        await active.spawned
+        await active.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
+        await active.client.resumeSession({ sessionId, cwd: sessionCwd, mcpServers: [] })
+        continue
+      }
       await runStep(
-        client,
+        active.client,
         step,
-        cwd,
+        sessionCwd,
         match => active.waitForUpdate(match),
         () => sessionId,
         (id) => { sessionId = id },
@@ -338,8 +357,8 @@ export async function runScenario(input: InputScript, opts: RunOptions): Promise
       ignoredRootEntries: ['.agents', '.dsh', '.dsh-profile-patches', '.dsh-snapshot-stream-ready'],
     })
     return {
-      rawStdout: launched.rawStdout(),
-      stderr: launched.stderr(),
+      rawStdout: [...priorStdout, active.rawStdout()].join(''),
+      stderr: [...priorStderr, active.stderr()].join(''),
       cwd,
       cwdAliases,
       initialWorkspace,
@@ -392,7 +411,7 @@ export async function runScenario(input: InputScript, opts: RunOptions): Promise
 /** Drive one input step over the client connection. */
 async function runStep(
   client: AcpTestClient,
-  step: InputStep,
+  step: Exclude<InputStep, { op: 'restartAndResume' }>,
   cwd: string,
   waitForUpdate: (match: (u: SessionNotification['update']) => boolean) => Promise<SessionNotification['update']>,
   getSessionId: () => string | undefined,

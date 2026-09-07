@@ -466,6 +466,18 @@ describe('normalizeSessionLog', () => {
     expect(out).toContain('"operation":"resume"')
   })
 
+  it('normalizes receipt clocks and check durations while retaining their outcomes', () => {
+    const events = [
+      { type: 'goal/change', data: { operation: 'receipt', recordedAt: 42, evidence: [{ at: 41, summary: 'approved' }] } },
+      { type: 'devframe/verification', data: { checks: [{ durationMs: 19, exitCode: 0, status: 'passed' }] } },
+      { type: 'tool/result', data: { recordedAt: 42, at: 41, durationMs: 19 } },
+    ]
+    const out = normalizeSessionLog(`${header({})}\n${events.map(event => JSON.stringify(event)).join('\n')}\n`, ctx)
+    expect(out).toContain('"recordedAt":0,"evidence":[{"at":0,"summary":"approved"}]')
+    expect(out).toContain('"durationMs":0,"exitCode":0,"status":"passed"')
+    expect(out).toContain('"recordedAt":42,"at":41,"durationMs":19')
+  })
+
   it('handles complete envelopes when optional normalized fields are absent', () => {
     const bareHeader = JSON.stringify({ type: 'session', id: 's' })
     const bareHook = JSON.stringify({ type: 'hook/result', seq: 2, time: 5, data: { decision: 'allow' } })
@@ -769,20 +781,20 @@ describe('tokenizeSessionFixtureCwd', () => {
   })
 
   it('collapses a residual macOS realpath prefix around an existing cwd token', () => {    const raw = [
-      JSON.stringify({ type: 'session', id: 's', createdAt: 1, cwd: '{{cwd}}' }),
-      JSON.stringify({
-        type: 'tool/result',
-        seq: 1,
-        time: 2,
-        data: { content: [{ type: 'text', text: 'wrote /private{{cwd}}/proof.txt' }] },
-      }),
-      '',
-    ].join('\n')
+    JSON.stringify({ type: 'session', id: 's', createdAt: 1, cwd: '{{cwd}}' }),
+    JSON.stringify({
+      type: 'tool/result',
+      seq: 1,
+      time: 2,
+      data: { content: [{ type: 'text', text: 'wrote /private{{cwd}}/proof.txt' }] },
+    }),
+    '',
+  ].join('\n')
 
-    const out = tokenizeSessionFixtureCwd(raw)
-    expect(out).toContain('wrote {{cwd}}/proof.txt')
-    expect(out).not.toContain('/private{{cwd}}')
-    expect(tokenizeSessionFixtureCwd(out)).toBe(out)
+  const out = tokenizeSessionFixtureCwd(raw)
+  expect(out).toContain('wrote {{cwd}}/proof.txt')
+  expect(out).not.toContain('/private{{cwd}}')
+  expect(tokenizeSessionFixtureCwd(out)).toBe(out)
   })
 
   it('rejects a log without a session cwd', () => {
@@ -851,7 +863,7 @@ describe('win32 JSON-escaped cwd spelling', () => {
     const record = JSON.parse(out.split('\n').find(line => line.includes('user/message')) as string) as {
       data: { content: { text: string }[] }
     }
-    expect((record.data.content[0] as { text: string }).text).toBe(`at {{cwd}}/x and "{{cwd}}" ends`)
+    expect((record.data.content[0] as { text: string }).text).toBe('at {{cwd}}/x and "{{cwd}}" ends')
     expect(out).toContain('"cwd":"{{cwd}}"')
     expect(out).not.toContain(posixCwd)
   })

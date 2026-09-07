@@ -48,7 +48,7 @@ Fail-graded task warnings also report repair admission. Repeating the same warni
 
 ### Minimal configuration
 
-The plugin injects the command registry, the goal service, the session store, and the session projection registry; a custom app mounts their owners plus this plugin. The start lane reads the approved work parameters from the config:
+The plugin injects the command registry, the goal service, the session store, and the session projection registry; a custom app mounts their owners plus this plugin. The start lane reads the approved work parameters from the config. Create the ledger’s parent directory (`D:/dsh-state` in this example) before the first start; keep the ledger outside the source worktree and reuse its path after deployment restarts:
 
 ```yaml
 - id: commands
@@ -64,6 +64,7 @@ The plugin injects the command registry, the goal service, the session store, an
   config:
     workspaceId: ws-team-alpha
     workspaceRoot: D:/worktrees/team-alpha
+    requiredChecksPath: D:/dsh-state/required-checks.json
     taskIds: [task-alpha]
     maxAttempts: 3
     checks:
@@ -79,13 +80,18 @@ The plugin injects the command registry, the goal service, the session store, an
 |---|---|---|
 | `workspaceId` | required | Workspace identity attributed to this composition's bindings and evidence |
 | `workspaceRoot` | none | Worktree `/devframe-start` binds, and the fallback `/goal-complete` uses when the command line omits a path |
+| `requiredChecksPath` | required | Non-empty absolute path without surrounding whitespace of the persistent approved-checks ledger; its parent directory must exist |
 | `checks` | required | The human-approved required-checks checklist `/devframe-start` registers and executes for real; every `cwd` must be absolute |
 | `taskIds` | required | Non-empty unique native task ids every start binding carries |
 | `maxAttempts` | required | Maximum charged attempts frozen into every start binding |
 | `maxGoalRounds` | none | Optional continuation round cap frozen into every start binding |
 | `repairLimit` | `2` | Positive integer shared Goal correction limit; must match the project delivery consumer |
 
-An empty `workspaceId`, a relative `workspaceRoot`, a relative check `cwd`, an empty or duplicated `taskIds`, or a non-positive `maxAttempts`/`maxGoalRounds` fails plugin activation loudly. `repairLimit` must be a positive safe integer.
+An empty `workspaceId`, a relative `workspaceRoot`, an absent, empty, or relative `requiredChecksPath`, a relative check `cwd`, an empty or duplicated `taskIds`, or a non-positive `maxAttempts`/`maxGoalRounds` fails plugin activation loudly. `repairLimit` must be a positive safe integer.
+
+The mounted plugin persists approved check configurations under their canonical digests. The first start can create an absent ledger file, but its parent directory must already exist. Completion after restart resolves the historical digest from that same ledger; a missing ledger, missing digest, or corrupt registration fails instead of substituting the current deployment’s checklist. Retain older registrations while their evidence remains in use.
+
+Delivery and integration consumers can read this same ledger. The deployment must designate one writer and serialize saves: whole-file replacement does not provide concurrent-writer merging or cross-process locking. Keeping the ledger outside the fingerprinted worktree prevents registration writes from changing the source evidence.
 
 -----
 
@@ -159,7 +165,7 @@ These limits define when the commands are a poor fit or need special operational
 - **Review production is not in this wave** — `/devframe-start` lands verification evidence only and fabricates no review decision; after it, `/goal-complete` honestly reports the missing review record (the stable no-review error) instead of completing.
 - **Start has a partial-failure window** — if a journal landing fails after the native goal and the store binding exist, `/devframe-start` throws fail-closed without rolling them back; `/devframe-resume` is the recovery path (a binding present in the store without a log record is re-landed on the log).
 - **One live writer per Session** — shared journal queues coordinate one live Session inside one process; they do not provide cross-process compare-and-set or protect multiple independently restored writers.
-- **The binding and required-checks stores remain in-memory reference implementations** — after a restart the stores are empty; `/devframe-resume` rebuilds the binding from the session log projection, and the approved checklist registration returns with the next `/devframe-start`. Durable store integration stays with the GoalStore wave's existing injection points.
+- **Binding restoration uses the Session log** — the composition’s default binding store remains in memory; `/devframe-resume` rebuilds it from the projection. The mounted plugin uses the file-backed required-checks store at `requiredChecksPath`; programmatic compositions retain their explicit store injection points.
 - **The role policy assigns the controller role only** — no reviewer is authorized, so any review submission is rejected fail-closed until a review production wave lands a reviewer assignment.
 - **Review attribution is structural** — `/goal-complete` takes the latest review record without a goal pre-filter; a foreign latest review surfaces as a structural `GoalBindingError`, which is the fail-closed direction.
 - **Model completion paths bypass this seam** — model-facing goal tools that complete a goal directly do not run this admission; the commands gate only the human verbs.
@@ -170,6 +176,6 @@ These limits define when the commands are a poor fit or need special operational
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-The memory stores are composition defaults, not a persistence promise. Review production and durable store selection remain host-composition responsibilities.
+Review production and binding-store selection remain host-composition responsibilities.
 
 </details>

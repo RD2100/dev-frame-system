@@ -471,8 +471,7 @@ function normalizedHeaderEvents(rawLog: string, ctx: NormalizeContext): Normaliz
 /**
  * Header revisions that own sidecar content. `series` reuses the current revision, while
  * `resume` owns sidecars because its full snapshot may drift across the process boundary.
- * Pinning fixtures therefore cover one loop instance; a mid-log `resume` fails their
- * pin-count invariant.
+ * Scripted process restarts declare additional resume revisions through `input.json`.
  */
 function pinningHeaderPayloads(rawLog: string, ctx: NormalizeContext): unknown[] {
   return normalizedHeaderEvents(rawLog, ctx)
@@ -1382,8 +1381,8 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
             ...result.sessionId !== undefined ? [result.sessionId] : [],
             ...result.sessionLogs.map(l => l.id),
           ],
-          cwd: result.cwd,
-          cwdAliases: result.cwdAliases,
+          cwd: input.sessionCwd === undefined ? result.cwd : join(result.cwd, input.sessionCwd),
+          cwdAliases: result.cwdAliases.map(cwd => input.sessionCwd === undefined ? cwd : join(cwd, input.sessionCwd)),
         }
 
         const childSchemaPins = new Set(scenario.pinsChildToolSchemas ?? [])
@@ -1555,8 +1554,10 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
           'utf8',
         )
         const initialPromptSnapshot = initialSystemPromptSnapshot(promptSnapshot)
+        const pinInput = JSON.parse(await readFile(join(snapshotsDir, pinningScenario.name, 'input.json'), 'utf8')) as InputScript
+        const expectedResumes = pinInput.steps.filter(step => step.op === 'restartAndResume').length
         expect(pinned.length, `the pinning fixture (${pinningScenario.name}) has an unexpected request/header count`)
-          .toBe(1 + (pinningScenario.expectedHeaderChanges ?? 0))
+          .toBe(1 + (pinningScenario.expectedHeaderChanges ?? 0) + expectedResumes)
         const toolSchemasSnapshot = await readFile(
           resolveExpectationPath({
             dir: join(snapshotsDir, schemaSource.name),
@@ -1595,6 +1596,8 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
           expect(headerChangeCount(log.content), `session ${log.id}: changed request/header count`)
             .toBe(expectedChanges)
           const headerEvents = normalizedHeaderEvents(scrubSystemPrompts(log.content), ctx)
+          expect(headerEvents.filter(event => event.reason === 'resume').length, `session ${log.id}: resumed request/header count`)
+            .toBe(logIndex === 0 ? input.steps.filter(step => step.op === 'restartAndResume').length : 0)
           const headers = headerEvents.map(event => event.header)
           const prompts = normalizedSystemPrompts(log.content, ctx)
           const schemaSets = normalizedToolSchemas(log.content, ctx)
@@ -1608,14 +1611,14 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
           }
           let revision = 0
           for (const [k, header] of headers.entries()) {
-            if (headerEvents[k]?.reason === 'change') revision++
-            const classPin = expectedChanges > 0 ? pinnedHeaders[revision] : pinnedHeaders[0]
+            if (headerEvents[k]?.reason === 'change' || headerEvents[k]?.reason === 'resume') revision++
+            const classPin = expectedChanges > 0 || expectedResumes > 0 ? pinnedHeaders[revision] : pinnedHeaders[0]
             const expected = childSchemas === undefined
               ? classPin
               : { ...classPin as Record<string, unknown>, tools: childSchemas[revision] }
             expect(header, `session ${log.id}: request/header #${k + 1} diverged from the pinned (${pinningScenario.name}) header`)
               .toEqual(expected)
-            if (expectedChanges === 0) {
+            if (expectedChanges === 0 && expectedResumes === 0) {
               // A pinned child owns its whole prompt: its scope-local sections
               // are exactly what the class pin cannot describe.
               const childPrompt = childPinnedPrompts.get(logIndex)
@@ -1751,7 +1754,9 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
           'utf8',
         )
         expect(headers.length, `${scenario.name}: unexpected request/header count`)
-          .toBe(1 + (scenario.expectedHeaderChanges ?? 0))
+          .toBe(1 + (scenario.expectedHeaderChanges ?? 0) + (JSON.parse(
+            await readFile(join(snapshotsDir, scenario.name, 'input.json'), 'utf8'),
+          ) as InputScript).steps.filter(step => step.op === 'restartAndResume').length)
         const toolSchemasSnapshot = await readFile(
           resolveExpectationPath({
             dir: join(snapshotsDir, schemaSource.name),

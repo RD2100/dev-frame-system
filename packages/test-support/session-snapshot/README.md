@@ -108,6 +108,8 @@ This section explains the design of the kit; the observable behavior is fully co
 
 The shared core owns manifests, workspace setup/comparison, typed identity mapping, normalizers, and fixture invariants. The ACP adapter adds four composable layers: launcher, scenario harness, normalizers, and suite factory. `launchAcpTestAgent` boots a source profile under tsx or a built `lib` profile under plain Node, connects the SDK client over a raw-byte stdout tee, collects session updates and stderr, fails closed on unhandled permission requests, and owns shutdown. `runScenario` drives ACP JSON-RPC stdio and harvests every persisted raw JSONL session log. The pure normalizers replace cwd paths and typed identities with stable tokens, zero times, expand physical provenance ranges, and scrub request-header bulk. `defineAcpSnapshotSuite` registers comparisons, fixture write-back, and the live uniformity guard.
 
+An ACP input script can use `restartAndResume` after creating a session. The harness closes that session, awaits process shutdown, launches the same profile with the same durable home, and resumes the original session through ACP. It retains stdout from both processes and pins each resumed request header independently. Optional `sessionCwd` selects a workspace relative to the isolated run root and remains unchanged across restarts.
+
 ### Source map
 
 | File | Role |

@@ -29,6 +29,8 @@ export interface CommandGoalBindingConfig {
    * record of this composition carries. Required.
    */
   readonly workspaceId: string
+  /** Absolute ledger path for approved checklists; its parent must already exist. */
+  readonly requiredChecksPath: string
   /**
    * Absolute worktree root used when a `/goal-complete` line names no path,
    * and the only worktree `/devframe-start` binds (objective and path cannot
@@ -60,6 +62,8 @@ export interface ResolvedCommandGoalBindingConfig {
   readonly repairLimit: number
   /** Branded workspace identity attributed to every completion. */
   readonly workspaceId: WorkspaceId
+  /** Validated absolute approved-checks ledger path. */
+  readonly requiredChecksPath: string
   /** Absolute worktree root, present only when configured. */
   readonly workspaceRoot?: string
   /** The approved required-checks checklist, schema-validated at activation. */
@@ -87,6 +91,7 @@ const ChecksConfig = Schema.object({
 export const Config: Schema<CommandGoalBindingConfig> = Schema.object({
   repairLimit: Schema.number(),
   workspaceId: Schema.string().required(),
+  requiredChecksPath: Schema.string().required(),
   workspaceRoot: Schema.string(),
   checks: ChecksConfig.required(),
   taskIds: Schema.array(Schema.string()).min(1).required(),
@@ -144,6 +149,11 @@ export function resolveCommandGoalBindingConfig(
     throw new TypeError('command-goal-binding config requires a non-empty workspaceId')
   }
   const workspaceId = WorkspaceId(rawWorkspaceId.trim())
+  const requiredChecksPath = config.requiredChecksPath
+  if (typeof requiredChecksPath !== 'string' || requiredChecksPath.length === 0
+    || requiredChecksPath !== requiredChecksPath.trim() || !isAbsolute(requiredChecksPath)) {
+    throw new TypeError('command-goal-binding config requiredChecksPath must be a non-empty trimmed absolute path')
+  }
   const rawWorkspaceRoot = config.workspaceRoot
   if (rawWorkspaceRoot !== undefined) {
     if (typeof rawWorkspaceRoot !== 'string' || rawWorkspaceRoot.trim().length === 0) {
@@ -155,6 +165,7 @@ export function resolveCommandGoalBindingConfig(
     return {
       repairLimit: resolveRepairLimit(config),
       workspaceId,
+      requiredChecksPath,
       workspaceRoot: rawWorkspaceRoot.trim(),
       checks: resolveChecks(config.checks),
       taskIds: resolveTaskIds(config.taskIds),
@@ -167,6 +178,7 @@ export function resolveCommandGoalBindingConfig(
   return {
     repairLimit: resolveRepairLimit(config),
     workspaceId,
+    requiredChecksPath,
     checks: resolveChecks(config.checks),
     taskIds: resolveTaskIds(config.taskIds),
     maxAttempts: validatedPositiveInteger(config.maxAttempts, 'maxAttempts'),

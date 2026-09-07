@@ -123,6 +123,7 @@ async function boot(config: {
   await ctx.plugin(GoalService)
   await ctx.plugin(commandGoalBinding, {
     ...BOOT_START_CONFIG,
+    requiredChecksPath: join(storageRoot, 'required-checks.json'),
     workspaceId: config.workspaceId,
     ...(config.workspaceRoot === undefined ? {} : { workspaceRoot: config.workspaceRoot }),
   })
@@ -603,7 +604,7 @@ describe('/goal-complete host command composition', { timeout: 30_000 }, () => {
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(GoalService)
-    await expect(ctx.plugin(commandGoalBinding, { ...BOOT_START_CONFIG, workspaceId: '' }))
+    await expect(ctx.plugin(commandGoalBinding, { ...BOOT_START_CONFIG, requiredChecksPath: join(storageRoot, 'required-checks.json'), workspaceId: '' }))
       .rejects.toThrow(/workspaceId/)
   })
 })
@@ -617,7 +618,7 @@ describe('/goal-complete registration lifetime', () => {
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(GoalService)
-    const plugin = await ctx.plugin(commandGoalBinding, { ...BOOT_START_CONFIG, workspaceId: WORKSPACE_ID })
+    const plugin = await ctx.plugin(commandGoalBinding, { ...BOOT_START_CONFIG, requiredChecksPath: join(tmpdir(), 'unused-required-checks.json'), workspaceId: WORKSPACE_ID })
     expect('default' in commandGoalBinding).toBe(false)
     const session = ctx.sessions.create(SessionId(`controller-lifetime-${++bootNumber}`))
     const agent = stubAgent(session)

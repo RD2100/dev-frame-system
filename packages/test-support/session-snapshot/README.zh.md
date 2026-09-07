@@ -108,6 +108,8 @@ defineAcpSnapshotSuite({
 
 共享核心拥有 manifest、workspace 设置／比较、类型化身份映射、规范化器与 fixture 不变式。ACP 适配器增加四个可组合层：启动器、场景 harness、规范化器与套件工厂。`launchAcpTestAgent` 在 tsx 下启动源码 profile，或在普通 Node 下启动已构建 `lib` profile，通过原始字节 stdout tee 连接 SDK 客户端，收集会话更新与 stderr，默认拒绝未处理的权限请求，并负责关闭。`runScenario` 驱动 ACP JSON-RPC stdio，并收集每个持久化原始 JSONL 会话日志。纯规范化器把 cwd 路径与类型化身份变为稳定 token，将时间归零、展开物理来源区间，并擦除请求 header bulk。`defineAcpSnapshotSuite` 注册比较、fixture 回写与实时一致性保护。
 
+ACP 输入脚本可在创建会话后使用 `restartAndResume`。harness 关闭该会话、等待进程退出，使用同一持久化 home 启动同一 profile，再通过 ACP 恢复原会话。它保留两个进程的 stdout，并分别固定每份恢复请求头。可选 `sessionCwd` 选择相对于隔离运行根目录的工作区，且在重启前后保持不变。
+
 ### 源码地图
 
 | 文件 | 职责 |

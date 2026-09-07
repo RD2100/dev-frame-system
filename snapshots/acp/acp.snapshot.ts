@@ -3,6 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { prepareProjectIntegration } from '../sdk/project-integration-setup.ts'
 import {
   defineAcpSnapshotSuite,
   parseSnapshotManifest,
@@ -27,7 +28,13 @@ const controllerCases: readonly {
   readonly name: string
   readonly hasModelTurn: boolean
   readonly configPath?: string
+  readonly prepareWorkspace?: (cwd: string) => Promise<void>
 }[] = [
+  {
+    name: 'goal-complete-restart', hasModelTurn: true,
+    configPath: join(corpusDir, 'goal-complete-restart', 'cordis.yml'),
+    prepareWorkspace: prepareProjectIntegration,
+  },
   { name: 'handshake', hasModelTurn: false },
   { name: 'reject-extra-dirs', hasModelTurn: false },
   { name: 'cancel', hasModelTurn: true },

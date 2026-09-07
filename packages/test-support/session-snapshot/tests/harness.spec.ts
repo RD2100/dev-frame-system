@@ -1227,6 +1227,7 @@ describe('runScenario', () => {
   })
 
   it.each([
+    [{ op: 'restartAndResume' }, /restart requires a created session/],
     [{ op: 'prompt', text: 'x' }, /prompt before newSession/],
     [{ op: 'promptContent', content: [{ type: 'text', text: 'x' }] }, /promptContent before newSession/],
     [{ op: 'promptAndWaitForAgentMessage', text: 'x', waitForText: 'later' }, /promptAndWaitForAgentMessage before newSession/],

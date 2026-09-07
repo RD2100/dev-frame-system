@@ -11,6 +11,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { FileRequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe'
 import { GoalBindingComposition } from './composition.ts'
 import { resolveCommandGoalBindingConfig } from './config.ts'
 import type { CommandGoalBindingConfig } from './config.ts'
@@ -63,7 +64,7 @@ export {
 /** Loader plugin name. */
 export const name = 'command-goal-binding'
 
-/** Services this plugin requires at activation: the command registry, the native goal service, the projection registry, and the session store. */
+/** Required native command, Goal, projection, and Session services. */
 export const inject = ['commands', 'goals', 'sessions', 'sessionProjections']
 
 /**
@@ -72,7 +73,7 @@ export const inject = ['commands', 'goals', 'sessions', 'sessionProjections']
  * projection unit and the effect-wrapped `/goal-complete`, `/devframe-start`,
  * and `/devframe-resume` commands on the calling fiber.
  * @param ctx - the plugin fiber's context.
- * @param config - deployment configuration; `workspaceId`, `checks`,
+ * @param config - deployment configuration; `workspaceId`, `requiredChecksPath`, `checks`,
  *   `taskIds`, and `maxAttempts` are required.
  * @returns the composition service constructed for this fiber, also
  *   available in-process as the `commandGoalBinding` service.
@@ -81,5 +82,8 @@ export function apply(
   ctx: Context,
   config: CommandGoalBindingConfig,
 ): GoalBindingComposition {
-  return new GoalBindingComposition(ctx, resolveCommandGoalBindingConfig(config))
+  const resolved = resolveCommandGoalBindingConfig(config)
+  return new GoalBindingComposition(ctx, resolved, {
+    requiredChecks: new FileRequiredChecksConfigStore({ path: resolved.requiredChecksPath }),
+  })
 }

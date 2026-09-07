@@ -47,6 +47,21 @@ export function redactSessionSnapshotIds(logs: readonly string[]): string[] {
   const parsed = logs.map(parseLog)
   const tokenByValue = new Map<string, string>()
   const nextByKind = new Map<IdentityKind, number>()
+  const workspaceDerivedHashes = new Set<string>()
+  for (const log of parsed) {
+    for (const record of log.records) {
+      if (record.type !== 'devframe/verification' || !isRecord(record.data)) continue
+      const checks = record.data.requiredChecks
+      if (!isRecord(checks) || !isRecord(checks.config) || !Array.isArray(checks.config.checks)) continue
+      const usesWorkspacePath = checks.config.checks.some(check => isRecord(check)
+        && typeof check.cwd === 'string' && /^(?:\{\{cwd\}\}|[A-Za-z]:[\\/]|\/)/.test(check.cwd))
+      if (!usesWorkspacePath) continue
+      if (typeof checks.digest === 'string') workspaceDerivedHashes.add(checks.digest)
+      if (isRecord(record.data.binding) && typeof record.data.binding.acceptanceHash === 'string') {
+        workspaceDerivedHashes.add(record.data.binding.acceptanceHash)
+      }
+    }
+  }
 
   const claim = (value: unknown, kind: IdentityKind, always = false): void => {
     if (typeof value !== 'string' || value.length === 0 || tokenByValue.has(value)) return
@@ -83,8 +98,14 @@ export function redactSessionSnapshotIds(logs: readonly string[]): string[] {
 
     const identifiedMessage = messageId(value)
     if (identifiedMessage !== undefined) claim(identifiedMessage, 'message')
+    if (recordType === 'devframe/goal-binding' && isRecord(value.confirmation)
+      && typeof value.confirmation.id === 'string' && value.confirmation.id.startsWith('devframe-start:')) {
+      claim(value.confirmation.id, 'id', true)
+    }
     for (const [childKey, item] of Object.entries(value)) {
-      if (recordType === 'approval/asked' || recordType === 'approval/decided') {
+      if ((childKey === 'acceptanceHash' || childKey === 'digest') && typeof item === 'string' && workspaceDerivedHashes.has(item)) {
+        claim(item, 'id', true)
+      } else if (recordType === 'approval/asked' || recordType === 'approval/decided') {
         if (childKey === 'id') claim(item, 'approval')
       } else if (childKey === 'commandId') {
         claim(item, 'command', true)
