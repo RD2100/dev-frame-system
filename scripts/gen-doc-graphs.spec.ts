@@ -9,7 +9,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { collectPackageSources, EventRelationCollector } from './gen-doc-graphs.ts'
+import { assertServiceRolesComplete, collectPackageSources, EventRelationCollector, SERVICE_ROLES } from './gen-doc-graphs.ts'
 import { TypeScriptProject } from './ts-project.ts'
 
 const FIXTURE: Record<string, string> = {
@@ -80,6 +80,25 @@ function dispatchersOf(pkgs: readonly string[], event: string): string[] {
   const relations = new EventRelationCollector(project, subset).collect()
   return [...(relations.get(event)?.dispatchers.keys() ?? [])]
 }
+
+describe('service role completeness', () => {
+  const services = SERVICE_ROLES.map(({ key }) => ({ key, type: key, abstract: false, doc: '', methods: [], source: '' }))
+
+  it('accepts the complete classified service set', () => {
+    expect(() => { assertServiceRolesComplete(services) }).not.toThrow()
+  })
+
+  it('rejects a discovered service without an ownership classification', () => {
+    expect(() => { assertServiceRolesComplete([...services, {
+      key: 'unclassified', type: 'Unclassified', abstract: false, doc: '', methods: [], source: '',
+    }]) }).toThrow('missing service role classification: unclassified')
+  })
+
+  it('rejects an experimental classification whose service has disappeared', () => {
+    expect(() => { assertServiceRolesComplete(services.filter(({ key }) => key !== 'projectController')) })
+      .toThrow('stale service role classification: projectController')
+  })
+})
 
 describe('event relation call-site indexing', () => {
   it('recovers a proven-local helper through the single-file fast path', () => {

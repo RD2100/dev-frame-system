@@ -7,6 +7,25 @@ A service can be a core spine service, a swappable capability seam, or a bundle/
 
 ```mermaid
 flowchart LR
+  pkg_experimental_session_identity["experimental-session-identity"]
+  svc_agentBindings["ctx.agentBindings<br/>Durable agent bindings"]
+  pkg_experimental_agent_dispatch["experimental-agent-dispatch"]
+  pkg_experimental_agent_hierarchy["experimental-agent-hierarchy"]
+  pkg_experimental_devframe["experimental-devframe"]
+  pkg_experimental_project_controller["experimental-project-controller"]
+  pkg_experimental_shadow_router["experimental-shadow-router"]
+  svc_agentDispatch["ctx.agentDispatch<br/>Hierarchy-authorized dispatch"]
+  pkg_experimental_agent_evidence["experimental-agent-evidence"]
+  svc_agentEvidence["ctx.agentEvidence<br/>Agent evidence ledger"]
+  svc_agentHierarchy["ctx.agentHierarchy<br/>Agent creation and role policy"]
+  pkg_experimental_agent_reliability["experimental-agent-reliability"]
+  svc_agentReliability["ctx.agentReliability<br/>Admission and recovery coordination"]
+  svc_devframeLeadRoleLanding["ctx.devframeLeadRoleLanding<br/>Lead assignment journal landing"]
+  svc_devframeTaskGrading["ctx.devframeTaskGrading<br/>Task memory failure grading"]
+  svc_projectController["ctx.projectController<br/>Project task and integration authority"]
+  pkg_experimental_project_memory["experimental-project-memory"]
+  svc_projectMemory["ctx.projectMemory<br/>Bounded project memory"]
+  svc_shadowRouter["ctx.shadowRouter<br/>Project controller routing"]
   pkg_attachment["attachment"]
   svc_attachments["ctx.attachments<br/>Durable binary attachment storage"]
   pkg_attachment_local["attachment-local"]
@@ -254,8 +273,18 @@ flowchart LR
   pkg_credentials_local --> svc_credentials
   pkg_deepseek_llm_api_extensions --> svc_deepseekLlmApiExtensions
   pkg_e2b --> svc_e2b
+  pkg_experimental_agent_dispatch --> svc_agentDispatch
+  pkg_experimental_agent_evidence --> svc_agentEvidence
+  pkg_experimental_agent_hierarchy --> svc_agentHierarchy
+  pkg_experimental_agent_reliability --> svc_agentReliability
   pkg_experimental_agent_team --> svc_agentTeams
   pkg_experimental_code_runtime_python --> svc_codeRuntime
+  pkg_experimental_devframe --> svc_devframeLeadRoleLanding
+  pkg_experimental_devframe --> svc_devframeTaskGrading
+  pkg_experimental_project_controller --> svc_projectController
+  pkg_experimental_project_memory --> svc_projectMemory
+  pkg_experimental_session_identity --> svc_agentBindings
+  pkg_experimental_shadow_router --> svc_shadowRouter
   pkg_file_reference --> svc_fileReferences
   pkg_file_reference_local --> svc_fileReferences
   pkg_fs --> svc_fs
@@ -341,8 +370,15 @@ flowchart LR
   pkg_workflow_worker_thread --> svc_workflowEngine
   pkg_workspace --> svc_workspaceRegistry
   pkg_worktree_registry --> svc_worktreeRegistry
+  svc_agentBindings --> pkg_experimental_agent_dispatch
+  svc_agentBindings --> pkg_experimental_agent_hierarchy
+  svc_agentBindings --> pkg_experimental_devframe
+  svc_agentBindings --> pkg_experimental_project_controller
+  svc_agentBindings --> pkg_experimental_shadow_router
   svc_agentDefaultModel --> pkg_api_session_controller
   svc_agentDefaultModel --> pkg_headless
+  svc_agentDispatch --> pkg_experimental_agent_dispatch
+  svc_agentHierarchy --> pkg_experimental_agent_dispatch
   svc_agentLoop --> pkg_base
   svc_agentLoop --> pkg_sdk_minimal
   svc_agentTeams --> pkg_experimental_client_ui_agent_team
@@ -383,6 +419,8 @@ flowchart LR
   svc_llm --> pkg_agent_loop
   svc_llm --> pkg_compaction_basic
   svc_lsp --> pkg_tool_lsp
+  svc_projectController --> pkg_experimental_project_controller
+  svc_projectMemory --> pkg_experimental_project_memory
   svc_sandbox --> pkg_bash_sandbox
   svc_sandbox --> pkg_terminal_bash
   svc_sandboxPolicy --> pkg_bash_sandbox
@@ -415,6 +453,7 @@ flowchart LR
   svc_settings --> pkg_api_settings_controller
   svc_settings --> pkg_llm_deepseek
   svc_settings --> pkg_llm_pi_ai
+  svc_shadowRouter --> pkg_experimental_shadow_router
   svc_shell --> pkg_hooks_claude_code
   svc_shell --> pkg_hooks_codex
   svc_shell --> pkg_tool_bash
@@ -474,6 +513,16 @@ flowchart LR
 
 | ctx key | Role | Owner | Implementations | Direct consumers | Companion plugins | Note |
 | --- | --- | --- | --- | --- | --- | --- |
+| `ctx.agentBindings` | `core` | [`experimental-session-identity`](../packages/experimental/session-identity) | - | [`experimental-agent-dispatch`](../packages/experimental/agent-dispatch), [`experimental-agent-hierarchy`](../packages/experimental/agent-hierarchy), [`experimental-devframe`](../packages/experimental/devframe), [`experimental-project-controller`](../packages/experimental/project-controller), [`experimental-shadow-router`](../packages/experimental/shadow-router) | - | Owns durable role, lineage, and worktree bindings and creates native Sessions with that identity. |
+| `ctx.agentDispatch` | `core` | [`experimental-agent-dispatch`](../packages/experimental/agent-dispatch) | - | [`experimental-agent-dispatch`](../packages/experimental/agent-dispatch) | - | Validates registered worktrees and holds their writer locks while the hierarchy engine creates children; the package also exposes the dispatch tool. |
+| `ctx.agentEvidence` | `core` | [`experimental-agent-evidence`](../packages/experimental/agent-evidence) | - | - | - | Stores binding receipts, submissions, and verification provenance; acceptance remains with Goal bindings and task state. |
+| `ctx.agentHierarchy` | `core` | [`experimental-agent-hierarchy`](../packages/experimental/agent-hierarchy) | - | [`experimental-agent-dispatch`](../packages/experimental/agent-dispatch) | - | Enforces controller, lead, and worker creation authority, approved plugin scopes, and delegation depth. |
+| `ctx.agentReliability` | `core` | [`experimental-agent-reliability`](../packages/experimental/agent-reliability) | - | - | - | Closes admission before stopping owned work, reconciles uncertain calls, and retains writer ownership until persistence flush succeeds. |
+| `ctx.devframeLeadRoleLanding` | `core` | [`experimental-devframe`](../packages/experimental/devframe) | - | - | - | Consumes published lead creation facts and journals the controller role-policy assignment from durable bindings. |
+| `ctx.devframeTaskGrading` | `core` | [`experimental-devframe`](../packages/experimental/devframe) | - | - | - | Records host-declared task memory requirements and grades memory failures into task-warning events. |
+| `ctx.projectController` | `core` | [`experimental-project-controller`](../packages/experimental/project-controller) | - | [`experimental-project-controller`](../packages/experimental/project-controller) | - | Owns task transitions and evidence-bound Git integration; its consumer supplies the controller-authorized integration tool. |
+| `ctx.projectMemory` | `core` | [`experimental-project-memory`](../packages/experimental/project-memory) | - | [`experimental-project-memory`](../packages/experimental/project-memory) | - | Serves bounded memory tools over the configured Vault subtree; memory content never grants execution authority. |
+| `ctx.shadowRouter` | `core` | [`experimental-shadow-router`](../packages/experimental/shadow-router) | - | [`experimental-shadow-router`](../packages/experimental/shadow-router) | - | Owns per-workspace controller roots, durable cross-root delivery, and project controls exposed to the designated Shadow agent. |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | [`api-session-controller`](../packages/api/session-controller), [`tool-fs`](../packages/fs/tool-fs), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-deepseek`](../packages/llm/llm-deepseek) | - | The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content. |
 | `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | Adapters register provider implementations; the loop and compaction call the provider-neutral stream service. |
 | `ctx.deepseekLlmApiExtensions` | `seam` | [`deepseek-llm-api-extensions`](../packages/llm/deepseek-llm-api-extensions) | [`session-log-deepseek`](../packages/session/session-log-deepseek), [`plugin-package-inventory-deepseek`](../packages/llm/plugin-package-inventory-deepseek) | [`llm-deepseek`](../packages/llm/llm-deepseek) | - | Plugins prepare independent top-level fields; the official adapter merges them and commits their delivery state after HTTP acceptance. |
