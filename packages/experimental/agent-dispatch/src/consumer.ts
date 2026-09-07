@@ -20,7 +20,7 @@ import type { WorktreeId } from '@deepseek-ai/dsh-worktree-registry'
 import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import { apply as requestBudgetApply } from '@deepseek-ai/dsh-experimental-project-controller/request-budget-consumer'
 import { GoalBindingComposition, resolveCommandGoalBindingConfig } from '@deepseek-ai/dsh-experimental-command-goal-binding'
-import type { CommandGoalBindingConfig } from '@deepseek-ai/dsh-experimental-command-goal-binding'
+import type { CommandGoalBindingConfig, GoalBindingCompositionStores } from '@deepseek-ai/dsh-experimental-command-goal-binding'
 import { AgentDispatch } from './service.ts'
 import { AgentProjectRun } from './run.ts'
 import { requireNonEmpty, resolveCaller } from './authorization.ts'
@@ -70,14 +70,14 @@ function callCard(title: string, rawInput?: string): ToolCallView {
  * @param config - The runtime-resolved workspace configuration.
  * @returns The mounted composition.
  */
-function mountGoalComposition(ctx: Context, config: CommandGoalBindingConfig): Promise<GoalBindingComposition> {
+function mountGoalComposition(ctx: Context, config: CommandGoalBindingConfig, stores: GoalBindingCompositionStores): Promise<GoalBindingComposition> {
   return new Promise((resolve, reject) => {
     ctx.plugin({
       id: 'candidate-goal-binding',
       inject: ['commands', 'goals', 'sessions', 'sessionProjections'] as const,
       apply: (goalCtx: Context) => {
         try {
-          resolve(new GoalBindingComposition(goalCtx, resolveCommandGoalBindingConfig(config)))
+          resolve(new GoalBindingComposition(goalCtx, resolveCommandGoalBindingConfig(config), stores))
         } catch (error) {
           reject(error instanceof Error ? error : new Error(String(error)))
         }
@@ -225,6 +225,11 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
             }] },
             taskIds: receipt.tasks.map(task => task.taskId),
             maxAttempts: 4,
+          }, {
+            // The composition reads the one file-backed ledger the
+            // bootstrap writes — never its own memory default, never a
+            // second path.
+            requiredChecks: run.sharedChecksStore(),
           })
           const result = await composition.startBoundGoal({ agent, rawInput: 'Run the candidate fullchain: both workers deliver their own artifacts through the lead.' })
           if (result.kind !== 'success') {

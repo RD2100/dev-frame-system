@@ -193,6 +193,16 @@ export class AgentProjectRun extends Service {
   }
 
   /**
+   * The one required-checks store this service owns — the same file-backed
+   * ledger the bootstrap's approvals write and every other consumer in the
+   * process must read, so the ledger has a single writer and a single path.
+   * @returns The lazily built file store over the configured absolute path.
+   */
+  sharedChecksStore(): RequiredChecksConfigStore {
+    return this.requireStore()
+  }
+
+  /**
    * Register one human-approved required-checks configuration for one task
    * under its canonical digest in the deployment's registration ledger — the
    * digest the delivery tools' `requiredChecksByTask` wiring carries for the

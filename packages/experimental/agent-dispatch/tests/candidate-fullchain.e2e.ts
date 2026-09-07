@@ -10,7 +10,7 @@
 
 import type { ChildProcess } from 'node:child_process'
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
@@ -611,24 +611,55 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         expect(content.trim()).toBe(`${taskId} artifact body`)
       }
     } catch (error) {
-      // Surface the root session's own durable log: turn/end errors live
-      // there, not in the RPC acceptance.
+      // Read the root session's own durable log: turn/end and step/end
+      // errors live there, not in the RPC acceptance. The log is a
+      // multi-frame zstd JSONL under sessions/<cwd>/<id>/session.jsonl.zstd;
+      // complete frames decode, a torn active tail is recovered separately,
+      // and the full plaintext is archived before the finally deletes the
+      // temporary home.
       let logEvidence = ''
       try {
-        const storageDir = join(dshHome, 'storages')
-        const entries = await readdir(storageDir, { recursive: true, withFileTypes: true })
-        const logs = entries.filter(entry => entry.isFile() && entry.name.endsWith('.json') || entry.name.endsWith('.jsonl'))
+        // The persistence row's root varies by configuration; the physical
+        // shape does not: session.jsonl(.zstd) under an encoded session-id
+        // directory segment. The zstd log is a sequence of independent
+        // frames; a streaming decompressor yields every complete frame and
+        // stops at the torn active tail, which is exactly the diagnostic
+        // slice needed before the finally deletes the temporary home.
+        const { createZstdDecompress } = await import('node:zlib')
+        const entries = await readdir(dshHome, { recursive: true, withFileTypes: true })
+        const logs = entries.filter(entry => entry.isFile()
+          && (entry.name === 'session.jsonl' || entry.name === 'session.jsonl.zstd')
+          && entry.parentPath.includes('candidate-root-c14'))
           .map(entry => join(entry.parentPath, entry.name))
-          .filter(path => path.includes('candidate-root-c14') || path.includes('session'))
-          .slice(0, 8)
+        let lineNo = 0
         for (const log of logs) {
-          logEvidence += `\n[log ${log}] ${(await readFile(log, 'utf8')).slice(-800)}`
+          const buffer = await readFile(log)
+          let plaintext = buffer.toString('utf8')
+          if (log.endsWith('.zstd')) {
+            const decompressor = createZstdDecompress()
+            const parts: Buffer[] = []
+            plaintext = await new Promise<string>(resolve => {
+              decompressor.on('data', (chunk: Buffer) => parts.push(chunk))
+              decompressor.on('error', () => resolve(Buffer.concat(parts).toString('utf8')))
+              decompressor.on('end', () => resolve(Buffer.concat(parts).toString('utf8')))
+              decompressor.end(buffer)
+            })
+          }
+          await writeFile('.agents/devframe/v14/remaining/root-session-dump.jsonl', plaintext, { flag: 'w' })
+          for (const line of plaintext.split('\n')) {
+            lineNo += 1
+            if (line.includes('"error"') || line.includes('"kind":"error"')
+              || line.includes('"type":"turn/end"') || line.includes('"type":"step/end"')) {
+              logEvidence += `\n[line ${lineNo}] ${line.slice(0, 500)}`
+            }
+          }
         }
-      } catch {
-        // The home may already be gone; the RPC evidence above still stands.
+        logEvidence = `${logEvidence} [archived root-session-dump.jsonl from ${logs.length} log(s), ${lineNo} lines]`
+      } catch (dumpError) {
+        logEvidence = `\n[root session dump failed: ${dumpError instanceof Error ? dumpError.message : String(dumpError)}]`
       }
       const evidence = running?.output()
-      throw new Error(`${error instanceof Error ? error.message : String(error)}${logEvidence}${evidence === undefined ? '' : `\n${redact(evidence)}`}`, { cause: error })
+      throw new Error(`${error instanceof Error ? error.message : String(error)}${redact(logEvidence)}${evidence === undefined ? '' : `\n${redact(evidence)}`}`, { cause: error })
     } finally {
       await replay.close()
       if (running !== undefined) await stopCandidateWeb(running)
