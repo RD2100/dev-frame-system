@@ -10,6 +10,8 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import type {
   Worktree,
+  WorktreeCommitRequest,
+  WorktreeCommitResult,
   WorktreeCreateRequest,
   WorktreeId,
   WorktreeLockHolder,
@@ -105,6 +107,18 @@ export abstract class WorktreeRegistry extends Service {
    *   directory no longer exists.
    */
   abstract status(id: WorktreeId): Promise<WorktreeStatus>
+
+  /**
+   * Commit selected paths through the host provider while retaining the writer lock.
+   * The consumer must authorize the calling writer and stop its other mutations first.
+   * Existing staged changes, a changed branch, and a stale HEAD reject before staging.
+   * A rejection after staging may leave an index or commit; inspect before retrying.
+   * No rollback, reset, history rewrite, or sandbox permission change is performed.
+   * @param request - Trusted writer, registered target, expected HEAD and literal paths.
+   * @param signal - Cancellation of queued or executing Git operations.
+   * @returns The verified new commit and the remaining worktree cleanliness.
+   */
+  abstract commit(request: WorktreeCommitRequest, signal?: AbortSignal): Promise<WorktreeCommitResult>
 
   /**
    * Remove one worktree through git and delete its registration. A bound

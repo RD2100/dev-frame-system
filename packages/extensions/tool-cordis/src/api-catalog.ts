@@ -2974,6 +2974,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the observation; optional fields are absent when the recorded directory no longer exists.',
       },
       {
+        signature: 'abstract commit(request: WorktreeCommitRequest, signal?: AbortSignal): Promise<WorktreeCommitResult>',
+        description: 'Commit selected paths through the host provider while retaining the writer lock. The consumer must authorize the calling writer and stop its other mutations first. Existing staged changes, a changed branch, and a stale HEAD reject before staging. A rejection after staging may leave an index or commit; inspect before retrying. No rollback, reset, history rewrite, or sandbox permission change is performed.',
+        parameters: [{ name: 'request', description: 'Trusted writer, registered target, expected HEAD and literal paths.' }, { name: 'signal', description: 'Cancellation of queued or executing Git operations.' }],
+        returns: 'The verified new commit and the remaining worktree cleanliness.',
+      },
+      {
         signature: 'abstract remove(id: WorktreeId, options?: WorktreeRemoveOptions): Promise<void>',
         description: 'Remove one worktree through git and delete its registration. A bound worktree refuses with `WorktreeLockError` (`already-locked`) until its holder unbinds — `force` never overrides the lock. The row is deleted only after the removal succeeded.',
         parameters: [{ name: 'id', description: 'Registered worktree id; unknown ids reject.' }, { name: 'options', description: 'Pass `force` to allow removing dirty worktrees.' }],
@@ -6326,6 +6332,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'Worktree',
     declaration: 'export interface Worktree {\n    readonly id: WorktreeId;\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly branch: string;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n    readonly lockedBy?: WorktreeLockHolder;\n    readonly lockedAt?: string;\n}',
+  },
+  {
+    name: 'WorktreeCommitId',
+    declaration: 'export type WorktreeCommitId = Branded<\'WorktreeCommitId\'>;',
+  },
+  {
+    name: 'WorktreeCommitRequest',
+    declaration: 'export interface WorktreeCommitRequest {\n    readonly id: WorktreeId;\n    readonly holder: WorktreeLockHolder;\n    readonly expectedHead: WorktreeCommitId;\n    readonly paths: readonly string[];\n    readonly message: string;\n}',
+  },
+  {
+    name: 'WorktreeCommitResult',
+    declaration: 'export interface WorktreeCommitResult {\n    readonly head: WorktreeCommitId;\n    readonly clean: boolean;\n}',
   },
   {
     name: 'WorktreeCreateRequest',

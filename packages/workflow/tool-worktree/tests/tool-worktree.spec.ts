@@ -32,6 +32,9 @@ import * as toolWorktree from '../src/index.ts'
  * the real registry's git mechanics are covered by the registry package.
  */
 class FakeWorktreeRegistry extends WorktreeRegistry {
+  async commit(): Promise<never> {
+    throw new Error('tool-worktree does not expose host-authorized commits')
+  }
   requests: WorktreeCreateRequest[] = []
   removed: { id: WorktreeId; force: boolean }[] = []
   reconciles: WorktreeReconcileOptions[] = []

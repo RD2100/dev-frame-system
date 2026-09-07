@@ -22,6 +22,9 @@ export { parseWorktreeList, sameGitPath } from './porcelain.ts'
 export type { GitWorktreeEntry } from './porcelain.ts'
 export type {
   Worktree,
+  WorktreeCommitId,
+  WorktreeCommitRequest,
+  WorktreeCommitResult,
   WorktreeCreateRequest,
   WorktreeDanglingReason,
   WorktreeDanglingRegistration,
