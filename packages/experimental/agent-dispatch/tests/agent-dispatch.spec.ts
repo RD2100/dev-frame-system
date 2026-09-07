@@ -112,6 +112,8 @@ async function harness(
       },
     }))
     await ctx.plugin(AgentHierarchy, { ...rolesConfig, leadPluginScopes: leadPluginScopes ?? {} })
+    // The plugin's formal bootstrap is opt-in; these dispatch-face suites
+    // run without it, so no project controller is mounted.
     await ctx.plugin(AgentDispatch)
     let workspaceId: WorkspaceId
     if (options.seed !== false) {

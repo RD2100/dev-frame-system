@@ -115,6 +115,8 @@ async function setup(leadPluginScopes: AgentHierarchyConfigInput['leadPluginScop
       },
     }))
     await ctx.plugin(AgentHierarchy, { ...rolesConfig, leadPluginScopes })
+    // The plugin's formal bootstrap is opt-in; the plugin-face suites run
+    // dispatch-only, so no project controller is mounted.
     await ctx.plugin(consumer)
 
     const repo = join(root, 'repo')
