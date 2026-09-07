@@ -19,8 +19,9 @@ import { createRequire } from 'node:module'
 import { request as httpRequest } from 'node:http'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { load as yamlLoad } from 'js-yaml'
 import { startWireReplayServer } from './fixtures/wire-replay-server.ts'
-import { expectedDigests, prepareCandidateScenario, writeScenarioFile } from './fixtures/candidate-host.ts'
+import { approvedChecksFor, expectedDigests, FileRequiredChecksConfigStore, prepareCandidateScenario, writeDigestPatch, writeScenarioFile } from './fixtures/candidate-host.ts'
 
 const REPO_ROOT = fileURLToPath(new URL('../../../..', import.meta.url))
 const DSH_SOURCE_BIN = join(REPO_ROOT, 'apps/cli/src/bin.ts')
@@ -78,25 +79,28 @@ function cleanEnvironment(root: string, dshHome: string, extra: NodeJS.ProcessEn
   }
 }
 
-/** Start the real source CLI with all three patches and await readiness. */
-async function startCandidateWeb(root: string, dshHome: string, extraEnv: NodeJS.ProcessEnv = {}): Promise<RunningWeb> {
+/** Start the real source CLI with all patches and await readiness. */
+async function startCandidateWeb(root: string, dshHome: string, extraEnv: NodeJS.ProcessEnv = {}, digestPatchPath?: string): Promise<RunningWeb> {
   // A source-run CLI writes loader entry wrappers into the profile directory
   // under the temporary home; imports from that directory resolve workspace
   // packages only when the profile carries the production node_modules
   // layout. Mirror it with a junction to the repository's installed
   // workspace so loader-generated imports behave like the shipped app.
-  const profileDir = join(dshHome, '.dsh', 'profiles', 'web')
+  const profileDir = join(dshHome, 'profiles', 'web')
   await mkdir(profileDir, { recursive: true })
   await symlink(join(REPO_ROOT, 'node_modules'), join(profileDir, 'node_modules'), 'junction').catch((error: NodeJS.ErrnoException) => {
     if (error.code !== 'EEXIST') throw error
   })
+  const patches = [EXAMPLE_OVERLAY, DEVFRAME_PATCH, CANDIDATE_OVERLAY]
+  // The generated digest patch is the last sibling: the deployment's
+  // requiredChecksByTask must pin what the shared ledger actually holds,
+  // and the file lives in the home so a restarted CLI re-reads it.
+  if (digestPatchPath !== undefined) patches.push(digestPatchPath)
   const child = spawn(process.execPath, [
     '--import', TSX_LOADER,
     DSH_SOURCE_BIN,
     '--profile', 'web',
-    '--patch', EXAMPLE_OVERLAY,
-    '--patch', DEVFRAME_PATCH,
-    '--patch', CANDIDATE_OVERLAY,
+    ...patches.flatMap(patch => ['--patch', patch]),
     '--no-open',
   ], {
     cwd: REPO_ROOT,
@@ -446,6 +450,9 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
     await mkdir(dshHome, { recursive: true })
     const prepared = await prepareCandidateScenario(root, join(dshHome, 'checks-ledger.json'))
     await writeScenarioFile(dshHome, prepared)
+    // The final-layer patch pins the per-task digests; the CLI reads it on
+    // every boot, so a restarted candidate re-derives the same approvals.
+    const digestPatch = await writeDigestPatch(dshHome, prepared)
 
     /** Pull the prepared worktree ids back out of any wire body. */
     function worktreeIdsFrom(text: string): Record<string, string> {
@@ -541,8 +548,8 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       needle: 'worker-task-a-briefing-c14',
       turns: [
         { toolCalls: [
-          { name: shell, arguments: { command: commitFor('task-a'), description: 'commit the task artifact' } },
-          { name: 'project_deliver', arguments: { taskId: 'task-a' } },
+          { id: 'shell-task-a', name: shell, arguments: { command: commitFor('task-a'), description: 'commit the task artifact' } },
+          { id: 'deliver-task-a', name: 'project_deliver', arguments: { taskId: 'task-a' } },
         ] },
         { text: 'WORKER_A_DONE_C14' },
       ],
@@ -551,8 +558,8 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       needle: 'worker-task-b-briefing-c14',
       turns: [
         { toolCalls: [
-          { name: shell, arguments: { command: commitFor('task-b'), description: 'commit the task artifact' } },
-          { name: 'project_deliver', arguments: { taskId: 'task-b' } },
+          { id: 'shell-task-b', name: shell, arguments: { command: commitFor('task-b'), description: 'commit the task artifact' } },
+          { id: 'deliver-task-b', name: 'project_deliver', arguments: { taskId: 'task-b' } },
         ] },
         { text: 'WORKER_B_DONE_C14' },
       ],
@@ -563,7 +570,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       running = await startCandidateWeb(root, dshHome, {
         DEEPSEEK_API_KEY: 'wire-replay-key',
         DEEPSEEK_BASE_URL: replay.baseURL,
-      })
+      }, digestPatch)
       const url = new URL(running.launchUrl)
       const cookie = await exchangeLaunchCookie(running.launchUrl)
       // The host selects the root identity up front: the same fixed id feeds
@@ -685,26 +692,44 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         }
       }
 
-      // Success = the real tool results on the wire: the deliver receipts
-      // must be non-error results, and the worker trees must hold their own
-      // committed artifact files with the expected content.
-      const toolResultsOf = (needle: string): string[] => {
+      // Success = the real tool results on the wire, keyed by the exact
+      // tool-call identity: the scripted ids tie each result to its call, so
+      // git shell output (which also names the task) can never masquerade as
+      // the project_deliver receipt, and a failed delivery cannot hide
+      // behind a successful shell call.
+      const toolResultByCallId = (needle: string, callId: string): string | undefined => {
         const flat = replay.requests.filter(request => request.needle === needle)
           .map(request => JSON.stringify(request.body).replaceAll('\\"', '"'))
-        const results: string[] = []
         for (const text of flat) {
-          for (const match of text.matchAll(/"role":"tool","tool_call_id":"[^"]*","content":"((?:[^"\\]|\\.)*)"/gu)) {
-            results.push(match[1]!)
-          }
+          const match = new RegExp(`"tool_call_id":"${callId}","content":"((?:[^"\\\\]|\\\\.)*)"`, 'u').exec(text)
+          if (match !== null) return JSON.parse(`"${match[1]}"`) as string
         }
-        return results
+        return undefined
       }
-      for (const [needle, taskId] of [['worker-task-a-briefing-c14', 'task-a'], ['worker-task-b-briefing-c14', 'task-b']] as const) {
-        const deliverResult = toolResultsOf(needle).find(text => text.includes(taskId) && !text.startsWith('Error:'))
-        expect(deliverResult, `real deliver receipt for ${taskId}`).toBeDefined()
-        const artifact = join(prepared.tasks.find(task => task.taskId === taskId)!.worktreePath, `artifact-${taskId}.txt`)
+      // The persisted checks state: the shared ledger resolves each task's
+      // digest to exactly the approved checklist, and the generated patch
+      // pins the same digests as real parsed YAML.
+      const ledgerStore = new FileRequiredChecksConfigStore({ path: join(dshHome, 'checks-ledger.json') })
+      const patchText = await readFile(digestPatch, 'utf8')
+      const parsedPatch = yamlLoad(patchText.replace(/!!js "[^"]*"/u, '"<ledger-path-expression>"')) as {
+        config?: { requiredChecksByTask?: Record<string, string> }
+      }[]
+      const byTask = parsedPatch[0]?.config?.requiredChecksByTask ?? {}
+      const expected = expectedDigests(prepared)
+      for (const task of prepared.tasks) {
+        const shellResult = toolResultByCallId(`worker-${task.taskId}-briefing-c14`, `shell-${task.taskId}`)
+        expect(shellResult, `shell commit receipt for ${task.taskId}`).toBeDefined()
+        expect(shellResult!.startsWith('Error:'), `shell commit must succeed for ${task.taskId}`).toBe(false)
+        const deliverResult = toolResultByCallId(`worker-${task.taskId}-briefing-c14`, `deliver-${task.taskId}`)
+        expect(deliverResult, `real deliver receipt for ${task.taskId}`).toBeDefined()
+        expect(deliverResult!.startsWith('Error:'), `delivery must succeed for ${task.taskId}: ${deliverResult}`).toBe(false)
+        expect(deliverResult).toContain(task.taskId)
+        expect(deliverResult).not.toBe(shellResult)
+        expect(await ledgerStore.load(task.digest)).toEqual(approvedChecksFor(task.worktreePath, `artifact-${task.taskId}.txt`))
+        expect(byTask[task.taskId]).toBe(expected[task.taskId])
+        const artifact = join(task.worktreePath, `artifact-${task.taskId}.txt`)
         const content = await readFile(artifact, 'utf8')
-        expect(content.trim()).toBe(`${taskId} artifact body`)
+        expect(content.trim()).toBe(`${task.taskId} artifact body`)
       }
     } catch (error) {
       // Read the root session's own durable log: turn/end and step/end
