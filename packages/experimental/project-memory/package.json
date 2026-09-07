@@ -28,7 +28,8 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:^",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@deepseek-ai/dsh-llm": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-agent": "workspace:^",
