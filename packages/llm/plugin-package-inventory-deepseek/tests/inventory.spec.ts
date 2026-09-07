@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { registerHooks } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -130,16 +131,21 @@ describe('DeepSeek plugin package inventory', () => {
     await packagePlugin(root, 'node_modules/@scope/scoped-package', { name: '@scope/scoped-package', version: '2.0.0' })
     await packagePlugin(root, 'absolute-package', { name: 'absolute-package', version: '3.0.0' })
     const absolute = join(root, 'absolute-package/plugin.mjs')
-    const internal = ctx.loader.internal
+    const internal = ctx.loader.internal as unknown as {
+      import(specifier: string, ...args: unknown[]): Promise<unknown>
+      resolveSync(parentURL: string, request: { specifier: string }): { url: string }
+    }
     ctx.loader.internal = {
       version: 'v2',
       import: async (specifier: string, ...args: unknown[]) => {
         if (specifier === 'https://plugins.example/test.mjs') return { default: () => {} }
         // Node ESM on Windows requires a file URL; retain the raw Loader name for package attribution.
         const portableSpecifier = specifier === absolute ? pathToFileURL(specifier).href : specifier
-        return await (internal as never as { import(specifier: string, ...args: unknown[]): Promise<unknown> })
-          .import(portableSpecifier, ...args)
+        return await internal.import(portableSpecifier, ...args)
       },
+      // The inventory reads bare-row identities through the same Node module
+      // loader the import above delegates to, so its resolution face follows.
+      resolveSync: (parentURL: string, request: { specifier: string }) => internal.resolveSync(parentURL, request),
     } as unknown as NonNullable<typeof ctx.loader.internal>
 
     await ctx.loader.create({ name: 'plain-package/plugin.mjs' })
@@ -159,14 +165,62 @@ describe('DeepSeek plugin package inventory', () => {
   })
 
   it('fails when a Loader-resolved bare entry has no package manifest', async () => {
-    const { ctx } = await harness()
+    const { ctx, root } = await harness()
     ctx.loader.internal = {
       version: 'v2',
       import: async () => ({ default: () => {} }),
+      // A resolved file URL whose owning directory tree declares no package.
+      resolveSync: () => ({ url: pathToFileURL(join(root, 'absent-manifest', 'missing-package', 'entry.mjs')).href, format: 'module' }),
     } as unknown as NonNullable<typeof ctx.loader.internal>
     await ctx.loader.create({ name: 'missing-package' })
     await expect(ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL }))
       .rejects.toThrow(/cannot resolve active package/)
+  })
+
+  it('fails when the Loader resolves a bare row outside the filesystem', async () => {
+    const { ctx } = await harness()
+    ctx.loader.internal = {
+      version: 'v2',
+      import: async () => ({ default: () => {} }),
+      resolveSync: () => ({ url: 'data:text/javascript,export default () => {}', format: 'module' }),
+    } as unknown as NonNullable<typeof ctx.loader.internal>
+    await ctx.loader.create({ name: 'off-filesystem-package' })
+    await expect(ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL }))
+      .rejects.toThrow(/cannot resolve active package/)
+  })
+
+  it('fails loud for a bare row instead of walking node_modules when the Loader exposes no resolution face', async () => {
+    const { ctx, root } = await harness()
+    await packagePlugin(root, 'node_modules/faceless-package', { name: 'faceless-package', version: '6.0.0' })
+    await ctx.loader.create({ name: 'faceless-package/plugin.mjs' })
+    ctx.loader.internal = undefined
+    await expect(ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL }))
+      .rejects.toThrow(/cannot resolve active package/)
+  })
+
+  it('resolves a bare row through the Loader module chain when no node_modules link exists', async () => {
+    const { ctx, root } = await harness()
+    // The package lives outside any node_modules: only the module chain's
+    // resolve hook — the slot tsconfig paths resolution occupies under tsx —
+    // can name its file, which is how the Loader already imported the row.
+    const chainDir = join(root, 'chain-only', 'chain-paths-pkg')
+    await mkdir(chainDir, { recursive: true })
+    await writeFile(join(chainDir, 'package.json'), `${JSON.stringify({ type: 'module', name: 'chain-paths-pkg', version: '5.0.0' })}\n`)
+    await writeFile(join(chainDir, 'plugin.mjs'), 'export default () => {}\n')
+    const pluginUrl = pathToFileURL(join(chainDir, 'plugin.mjs')).href
+    const hooks = registerHooks({
+      resolve(specifier, context, nextResolve) {
+        if (specifier === 'chain-paths-pkg/plugin.mjs') return { url: pluginUrl, shortCircuit: true }
+        return nextResolve(specifier, context)
+      },
+    })
+    try {
+      await ctx.loader.create({ name: 'chain-paths-pkg/plugin.mjs' })
+      const prepared = await ctx.deepseekLlmApiExtensions.prepare({ body: { messages: [] }, signal: SIGNAL })
+      expect(prepared.fields.dsh_plugin_packages?.packages).toEqual([{ name: 'chain-paths-pkg', version: '5.0.0' }])
+    } finally {
+      hooks.deregister()
+    }
   })
 
   it('supports a direct embedding whose context has no base URL', async () => {
