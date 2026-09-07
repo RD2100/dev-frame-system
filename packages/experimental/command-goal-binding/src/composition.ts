@@ -530,8 +530,10 @@ export class GoalBindingComposition extends Service {
    * retains the writer and reports `needs_attention`; the goal stays in the
    * stop flow for a rerun. A log left at `quiescence_confirmed` (a release
    * that failed, or a crash between the confirmation and the release)
-   * converges through {@link finishConfirmedStop}: the repeat stop is not
-   * refused.
+   * converges through {@link finishConfirmedStop}; a log left at
+   * `stop_requested` (a crash during the drain) re-enters the drain through
+   * {@link resumeStopRequestedStop} — the repeat stop is not refused in
+   * either state.
    * @param agent - the receiving agent whose writer the chain drains.
    * @param current - the goal read before the chain serialized.
    * @returns a success result after the confirmed stop, or a stable error.
@@ -550,7 +552,12 @@ export class GoalBindingComposition extends Service {
       return { kind: 'error', text: STOP_ALREADY_STOPPED_TEXT }
     }
     if (currentLifecycle === 'stop_requested') {
-      return { kind: 'error', text: STOP_ALREADY_PENDING_TEXT }
+      // A crash while the chain waited in its drain leaves the log here —
+      // a normal failure window for a stop the human explicitly asked for.
+      // Re-enter the drain instead of refusing the repeat.
+      const requested = projected ?? stored
+      if (requested !== undefined) return this.resumeStopRequestedStop(agent, requested)
+      return { kind: 'error', text: STOP_NO_BINDING_RECORD_TEXT }
     }
     if (currentLifecycle === 'quiescence_confirmed') {
       // The drain already confirmed; only the release and the terminal
@@ -565,7 +572,46 @@ export class GoalBindingComposition extends Service {
       createHumanAuthorization(`devframe-stop:${agent.id}:${Date.now()}`),
     )
     await landGoalBinding(this.journal, agent.session, stopped)
+    return this.stopChainDrain(agent, controller, stopped)
+  }
 
+  /**
+   * Re-enter a stop flow whose request already landed: a crash while the
+   * chain waited in its drain leaves the log at `stop_requested` — a normal
+   * failure window for a stop the human explicitly asked for, and the cold
+   * restart must be able to finish it. The recovery mirrors the fresh chain:
+   * rebuild the admission fence and re-run the drain over the host's
+   * verified inventory and live registry identities, then finish honestly.
+   * A missing live identity or an unverifiable inventory surfaces as
+   * `needs_attention` with the writer held — never a silent bypass, and no
+   * goal work is restarted.
+   * @param agent - the receiving agent whose writer the chain drains.
+   * @param base - the persisted stop_requested binding carrying the flow's identity.
+   * @returns a success result after the confirmed stop, or a stable error.
+   */
+  private async resumeStopRequestedStop(agent: Agent, base: GoalBinding): Promise<CommandResult> {
+    const controller = this.controllerFor(agent)
+    return this.stopChainDrain(agent, controller, base)
+  }
+
+  /**
+   * Run the drain-and-finish body of the stop chain from one stop-flow
+   * base: the primitive re-observes the flow (an idempotent `stop_requested`
+   * repeat), drains the tree's jobs and processes, flushes every
+   * participating session, and releases the writer only on confirmed
+   * quiescence. The confirmed-quiescence record is the durable pre-release
+   * prerequisite; the stopped terminal record, store entry, and checkpoint
+   * land only AFTER the writer release actually succeeded — a release
+   * failure never lands `stopped`, and both terminal landings are bounded
+   * by the stop grace so a never-settling persistence face cannot hang the
+   * command. Every unconfirmed resource retains the writer and reports
+   * `needs_attention`; the goal stays in the stop flow for a rerun.
+   * @param agent - the receiving agent whose writer the chain drains.
+   * @param controller - the admission fence controller for the invoking agent.
+   * @param base - the stop-flow binding whose identity the observations carry.
+   * @returns a success result after the confirmed stop, or a stable error.
+   */
+  private async stopChainDrain(agent: Agent, controller: GoalBindingController, base: GoalBinding): Promise<CommandResult> {
     // The chain's observation callbacks are synchronous, while each landed
     // record owns a trailing flush promise: the chain's own flush drains
     // those first, so an unlandable observation fails the chain's flush and
@@ -606,7 +652,7 @@ export class GoalBindingComposition extends Service {
       },
       record: (observation) => {
         recordLandings.push(landGoalBinding(this.journal, agent.session, {
-          ...stopped,
+          ...base,
           lifecycle: observation.status,
         }))
       },
@@ -637,14 +683,14 @@ export class GoalBindingComposition extends Service {
     // the command past the chain's own bound.
     if (result.status === 'stopped') {
       try {
-        await this.landTerminalBookkeeping(agent, { ...stopped, lifecycle: 'stopped' })
+        await this.landTerminalBookkeeping(agent, { ...base, lifecycle: 'stopped' })
       } catch {
         return { kind: 'error', text: renderStopChainBookkeepingUnsettledText(true) }
       }
       return { kind: 'success', text: renderStopChainStoppedText() }
     }
     try {
-      await this.landTerminalBookkeeping(agent, { ...stopped, lifecycle: 'needs_attention' })
+      await this.landTerminalBookkeeping(agent, { ...base, lifecycle: 'needs_attention' })
     } catch {
       return { kind: 'error', text: renderStopChainBookkeepingUnsettledText(false) }
     }

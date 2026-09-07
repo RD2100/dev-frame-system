@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -24,7 +24,6 @@ import { WorkspaceId } from '@deepseek-ai/dsh-experimental-devframe/shared'
 import { ControllerSessionId, MemoryGoalBindingStore } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
 import type { GoalBinding, GoalBindingStore } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
 import { createCommittedWorktree, drainWorktreeFixtures } from '../../devframe/tests/completion-fixtures.ts'
-import * as commandGoalBinding from '../src/index.ts'
 import { GoalBindingComposition } from '../src/composition.ts'
 import { resolveCommandGoalBindingConfig } from '../src/config.ts'
 import {
@@ -48,7 +47,7 @@ const handles: SubprocessHandle[] = []
 
 afterEach(async () => {
   for (const handle of handles.splice(0).reverse()) {
-    try { handle.terminate('spec teardown') } catch { /* already exited */ }
+    try { handle.terminate() } catch { /* already exited */ }
   }
   for (const ctx of contexts.splice(0).reverse()) await ctx.fiber.dispose()
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
@@ -217,10 +216,11 @@ async function expectProcessGone(pid: number): Promise<void> {
 /**
  * One real heartbeat child that beats every 40 ms until it is killed. The
  * child self-publishes its pid (the handle does not expose one) as the
- * heartbeat file's first line.
+ * heartbeat file's first line. The file lives outside the fingerprinted
+ * worktree so its constant appends cannot race the source fingerprint.
  */
-function spawnHeartbeatChild(root: string): { handle: SubprocessHandle; heartbeatPath: string } {
-  const heartbeatPath = join(root, `heartbeat-${Math.random().toString(36).slice(2)}.log`)
+function spawnHeartbeatChild(fileBase: string): { handle: SubprocessHandle; heartbeatPath: string } {
+  const heartbeatPath = `${fileBase}-heartbeat-${Math.random().toString(36).slice(2)}.log`
   const script = [
     'const fs = require("node:fs");',
     `const path = ${JSON.stringify(heartbeatPath)};`,
@@ -230,7 +230,7 @@ function spawnHeartbeatChild(root: string): { handle: SubprocessHandle; heartbea
   ].join('')
   const handle = spawnSubprocess({
     argv: [process.execPath, '-e', script],
-    cwd: root,
+    cwd: dirname(fileBase),
     graceMs: 2000,
     stdio: { stdin: 'ignore', stdout: { maxBytes: 1000 }, stderr: { maxBytes: 1000 } },
   })
@@ -291,7 +291,7 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
     // The verified tree is captured after the boot hands back the root
     // agent; the face evaluates when the chain runs.
     const treeAgents: Agent[] = []
-    const { handle, heartbeatPath } = spawnHeartbeatChild(fixture.root)
+    const { handle, heartbeatPath } = spawnHeartbeatChild(join(storageRoot, 'state'))
     const first = await boot({
       checks: startChecks(fixture.root),
       workspaceRoot: fixture.root,
@@ -372,7 +372,7 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
     first.ctx.agents.register(unrelatedAgent)
     // A real child-owned job and a real child-owned process: both must drain.
     const childJob = startSlowCancelJob(first, childAgent, 150)
-    const { handle: childHandle, heartbeatPath } = spawnHeartbeatChild(fixture.root)
+    const { handle: childHandle, heartbeatPath } = spawnHeartbeatChild(join(storageRoot, 'state'))
     // A real unrelated job the tree-scoped stop must leave alone.
     const unrelatedJob = startSlowCancelJob(first, unrelatedAgent, 150)
     const started = await execute(first, '/devframe-start fix the billing bug')
@@ -848,5 +848,113 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
     const rerun = await execute(first, '/devframe-stop')
     expect(rerun.result.kind).toBe('error')
     if (rerun.result.kind === 'error') expect(rerun.result.text).toBe(STOP_ALREADY_STOPPED_TEXT)
+  })
+
+  it('finishes a stop flow left at stop_requested across a cold restart', async () => {
+    const fixture = await createCommittedWorktree()
+    const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-stop-chain-stop-requested-'))
+    roots.push(storageRoot)
+    const sessionId = SessionId('controller-v14-stop-chain-stop-requested')
+    const treeAgents: Agent[] = []
+    const first = await boot({
+      checks: startChecks(fixture.root),
+      workspaceRoot: fixture.root,
+      storageRoot,
+      sessionId,
+      mountJobs: true,
+      stopAdapters: {
+        tree: () => treeAgents,
+        releaseWriter: () => {},
+      },
+    })
+    treeAgents.push(first.agent)
+    expect((await execute(first, '/devframe-start fix the billing bug')).result.kind).toBe('success')
+    // Simulate the crash exactly: the stop request landed durably, then the
+    // process died while the chain waited in its drain. No release, no
+    // quiescence record, no drain evidence.
+    const started = goalBindingEvents(first)[0]
+    if (started === undefined) throw new Error('started binding is missing')
+    first.session.append('devframe/goal-binding', { ...started, lifecycle: 'stop_requested' })
+    await first.ctx.sessions.flush(first.session)
+    contexts.splice(contexts.indexOf(first.ctx), 1)
+    await first.ctx.fiber.dispose()
+
+    // Cold restart: the host re-registers the agent, replays the log to
+    // stop_requested, and the operator repeats the stop. The recovery
+    // re-enters the drain over the verified inventory and finishes.
+    const secondTreeAgents: Agent[] = []
+    let writerReleased = false
+    const second = await boot({
+      checks: startChecks(fixture.root),
+      workspaceRoot: fixture.root,
+      storageRoot,
+      sessionId,
+      restore: true,
+      mountJobs: true,
+      stopAdapters: {
+        tree: () => secondTreeAgents,
+        releaseWriter: () => { writerReleased = true },
+      },
+    })
+    secondTreeAgents.push(second.agent)
+    expect(lifecycleSequence(second).at(-1)).toBe('stop_requested')
+
+    const stopped = await execute(second, '/devframe-stop')
+    if (stopped.result.kind !== 'success') {
+      throw new Error(`expected a success result: ${stopped.result.text} | projection failure: ${devFrameStateOf(second.ctx, second.session).failure}`)
+    }
+    expect(stopped.result.text).toBe(renderStopChainStoppedText())
+    expect(writerReleased).toBe(true)
+    // The recovery's own re-observation folds as an idempotent repeat.
+    expect(lifecycleSequence(second)).toEqual([
+      'admission_open',
+      'stop_requested',
+      'stop_requested',
+      'quiescence_confirmed',
+      'stopped',
+    ])
+    const stored = await second.composition.bindingStore.load(ControllerSessionId(second.agent.id))
+    expect(stored.at(-1)?.lifecycle).toBe('stopped')
+  })
+
+  it('refuses a stop_requested recovery when a tree member lost its live identity', async () => {
+    const fixture = await createCommittedWorktree()
+    const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-stop-chain-stale-tree-'))
+    roots.push(storageRoot)
+    const sessionId = SessionId('controller-v14-stop-chain-stale-tree')
+    const childSessionId = SessionId('worker-v14-stop-chain-stale-tree')
+    let writerReleased = false
+    const first = await boot({
+      checks: startChecks(fixture.root),
+      workspaceRoot: fixture.root,
+      storageRoot,
+      sessionId,
+      mountJobs: true,
+      stopAdapters: {
+        // The stale host inventory still lists the pre-crash descendant, but
+        // that agent was never re-registered after the restart: the owner
+        // identity fact is missing and the recovery must fail closed.
+        tree: () => [first.agent, phantomChild],
+        releaseWriter: () => { writerReleased = true },
+      },
+    })
+    // A descendant-shaped agent that is NOT registered on the live registry.
+    const phantomChild = stubAgent(first.ctx.sessions.create(childSessionId))
+    expect((await execute(first, '/devframe-start fix the billing bug')).result.kind).toBe('success')
+    const started = goalBindingEvents(first)[0]
+    if (started === undefined) throw new Error('started binding is missing')
+    first.session.append('devframe/goal-binding', { ...started, lifecycle: 'stop_requested' })
+
+    const stopped = await execute(first, '/devframe-stop')
+    expect(stopped.result.kind).toBe('error')
+    if (stopped.result.kind === 'error') {
+      expect(stopped.result.text.startsWith('The stop chain could not confirm quiescence (')).toBe(true)
+      expect(stopped.result.text).toContain(`agent:${childSessionId}`)
+      expect(stopped.result.text).toContain('identity_unknown')
+      expect(stopped.result.text).toContain('The writer remains held')
+    }
+    expect(writerReleased).toBe(false)
+    expect(lifecycleSequence(first).at(-1)).toBe('needs_attention')
+    expect(first.ctx.goals.get(first.agent)?.phase).not.toBe('complete')
   })
 })
