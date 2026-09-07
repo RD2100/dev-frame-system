@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/agent-hierarchy.md
-agent-hierarchy.md: c6d70a74e077fe417cce28177d155a62e52a71a5
-agent-hierarchy.zh.md: 7d1e099266fbe58ad8499408568dcbd41391473a
+agent-hierarchy.md: 8298a03de370514d245c031b10ff248af808e9d0
+agent-hierarchy.zh.md: fb65167d84020f91b06b6ffc2dc49f96b1f21d40

@@ -30,6 +30,33 @@ The registry it reads is documented at [session identity bindings](session-ident
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxagentdispatch--agentdispatch"></a>
+
+### `ctx.agentDispatch` — `AgentDispatch`
+
+The host daily-dispatch entry. Hard-injects the real creation engine (`ctx.agentHierarchy`), the role authority (`ctx.agentBindings`), and the worktree registry whose rows make the worktree proof real, and fails at activation when any is absent. Denials raised here are AgentDispatchErrors; the engine's own policy denials propagate unchanged.
+
+```ts cordis-catalog
+/**
+ * Validate one dispatch request at the entry and, when it holds, create the
+ * child through the real hierarchy engine. The authoritative registry rows
+ * prove registration before any live observation runs; a git failure whose
+ * refusal carries the registry's classified kind rethrows unchanged.
+ * @param parent - The exact live dispatching agent.
+ * @param request - The child creation request; `worktree` is required at
+ *   this entry because the dispatched child owns one registered worktree.
+ * @param options - Factory setup, route, cancellation, preallocated
+ *   identity, the owner workspace anchoring the registry proof, and the
+ *   optional initial prompt delivered after publication.
+ * @returns The published child and its durable binding record.
+ */
+async createChildAgent( parent: Agent, request: CreateChildAgentRequest, options: DispatchAgentOptions, ): Promise<CreatedChildAgent>
+```
+
+Types: [Agent](core.md)
+
+Source: [`packages/experimental/agent-dispatch/src/service.ts`](../../packages/experimental/agent-dispatch/src/service.ts)
+
 <a id="ctxagenthierarchy--agenthierarchy"></a>
 
 ### `ctx.agentHierarchy` — `AgentHierarchy`
