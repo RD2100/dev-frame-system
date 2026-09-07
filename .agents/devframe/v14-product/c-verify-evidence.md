@@ -32,7 +32,15 @@
 - 结果：**exit 0，Test Files 1 passed，Tests 1 passed**（9.05s，日志 `$env:TEMP\c2-run1.log`）。
 - 断言结果：裸 `@` 打开 Trigger suggestions listbox、`Subagents` 组渲染且 codex/claude-code/cursor 三名候选各恰 1 个 option ✅；`@cl` 收窄后 codex 归零、点选 claude-code ✅；pick 落字面文本 `@claude-code `（textContent 精确相等、`[data-composer-chip]` 计数 0）✅；cursor/codex 两名同样逐个 pick 字面 ✅；console tripwire 干净 ✅。
 
-## 3. C3：侧栏/SessionID/模型切换/turn 用量 — FAIL（可复现，冻结待总控裁定）
+## 3. C3：侧栏/SessionID/模型切换/turn 用量 — 修复后 PASS（原 FAIL 证据保留于 3a）
+
+- 总控裁定（fix 片开立）后完成：`git merge main`（fast-forward 至 29c9c8e5e6，含本文件前 4 笔 commit）→ 根因定位 → 最小修复 → C3 e2e **exit 0**（13.67s，`$env:TEMP\c3-run3.log`），C1+C2 回归 **exit 0**（2 passed），ui-chat+token-meter 全量单测 **425 passed**（32 files，含 turn-usage-panel.client.spec 绿面无回归）。构建 `pnpm run build` exit 0（本片构建所有者=本实例）。
+- 根因（file:line）：`deriveTurnTokenUsage` 的 `normalizeUsage`（`packages/llm/token-meter/src/turn-usage.ts`）在 usage 样本无 `totalTokens` 时要求 cache 两桶齐全才能派生精确总量，缺任一桶即整体 unavailable；C3 的 replay override 样本恰为 `{inputTokens:700, outputTokens:500}`（无 total、无 cache 桶——提供方未报 cache 即全 prompt 计入 inputTokens），于是整条 disclosure 判 unavailable → `TurnTailNodeView.tsx:54` 不挂 panel。日志面（agent.ts:368/:424）与 replay 面（override 数组短路、usage chunk 原样入流）此前已排除。
+- 修复（src 解冻仅限本用量面）：normalizeUsage 无 total 分支改为「两桶齐全 → knownPrompt+output；两桶全无 → input+output（全 prompt 无 cache 分量）；单桶 → 维持 fail closed」；JSDoc 补一句派生规则。`deriveTurnTokenUsage` 消费者唯一（ui-chat turn-tail.ts:165），ui-chat src 零改动。
+- 测试对齐：token-meter `turn-usage.spec.ts` 新增「无桶派生 input+output」正例（message 携带 + chunk 流式两形态）与既有混合桶负例（fail closed）共存；ui-chat `conversation-node-definitions.client.spec.ts` 新增 live 形状用例（raw assistant/chunk×5 含 usage chunk + assistant/message，无 total/cache → tokenUsage={700,500,total:1200,routes}）。
+- C3 e2e 断言结果（修复后全过）：usage pill `Usage 1.2K tok` 挂载（aria-expanded=false→true）、Turn usage 对话框（路由行 `deepseek-official/deepseek-v4-flash`、`700 tok`、`500 tok`、`1,200 tok`）、durable SessionID、Rename RTT、模型切换落 settings.yaml、Archive RTT、侧栏折叠/展开、console tripwire 干净。
+
+### 3a. 修复前 FAIL 证据（2026-09-07 上午，保留供追溯）
 
 - 文件：`apps/web/tests/c3-sidebar-session-model-usage.e2e.ts`（按前任交付原样提交，未改）
 - 命令：`pnpm exec vitest run --config vitest.web.config.ts apps/web/tests/c3-sidebar-session-model-usage.e2e.ts`
@@ -64,5 +72,6 @@
 
 - C1：PASS（经总控授权的最小测试面修正后；exit 0）。
 - C2：PASS（首跑即过；exit 0）。
-- C3：FAIL（可复现 2×；exit 1；usage pill 未渲染；实现 src 冻结未动，修复裁定权在总控）。
-- 附带发现（非 C 线义务，仅记录）：本分支 `turn-tail-actions` lane 存在无关 golden 漂移（`bash` 工具 unknown vs recorded fixture）。
+- C3：修复后 PASS（exit 0；修复前 FAIL 证据见 §3a）。根因=token-meter normalizeUsage 对「无 totalTokens」样本的过严派生规则（要求 cache 两桶齐全）；修复后无 cache 桶样本以 input+output 派生精确总量，单桶样本维持 fail closed。
+- 附带发现（非 C 线义务，仅记录）：本分支 `turn-tail-actions` lane 存在无关 golden 漂移（`bash` 工具 unknown vs recorded fixture）——总控已裁定为独立登记项，不并入本片。
+- 构建所有者披露：本片验证构建（两次全量 `pnpm run build`，均 exit 0）由本实例执行；后续同类迭代的增量构建备选链（tsc -b ui-chat → tsdown client face → 单跑 C3）为总控转达的未实证备选，本片未采用、不宣称已加速。
