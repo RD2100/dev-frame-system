@@ -36,12 +36,12 @@
 
 | ID | 用户功能/项 | 源码 | profile | 运行 | 生产验收 | 证据 | 真实依赖 | 下一步 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| D1 | dsh-llm-opencode-go 隔离核验 | 待核验 | 隔离 profile | 未验 | skip≠pass | 无 | 外部认证（缺则只阻塞本项） | 实际外部包源码/版本/配置核对+隔离运行 |
-| D2 | dsh-llm-ollama 同上 | 待核验 | 隔离 | 未验 | 同上 | 无 | 本机 ollama 可用性 | 同上 |
-| D3 | dsh-llm-grok 同上 | 待核验 | 隔离 | 未验 | 同上 | 无 | 外部认证 | 同上 |
-| D4 | dsh-llm-commandcode 同上 | 待核验 | 隔离 | 未验 | 同上 | 无 | 外部认证 | 同上 |
-| D5 | dsh-ponytail 同上 | 待核验 | 隔离 | 未验 | 同上 | 无 | 待查 | 同上 |
-| D6 | dsh-llm-providers-ui+codex 插件外部包源码/版本/配置核对 | 待核验 | n/a | 未验 | 待核对报告 | 无 | 无 | 外部包同名目录≠本仓库源码不存在——按实际包管理清单核对 |
+| D1 | dsh-llm-opencode-go 隔离核验 | **复验闭合**（0.1.20 digest 同旧台账三重互证；旧 ark compat probe seq=12/13 有效不重跑） | 隔离 profile | dump-config exit=0 | **BLOCKED(缺 OPENCODE_API_KEY) 延续**——凭据到位即解 | d-verification.md（c04de6016f） | 外部认证 | 闭合 |
+| D2 | dsh-llm-ollama 同上 | **复验闭合**（0.6.17；/v1 归一化无逃生口亲读一致） | 隔离 | 亲读一致 | **BLOCKED(缺 OLLAMA_API_KEY) 延续** | d-verification.md | 外部认证 | 闭合 |
+| D3 | dsh-llm-grok 同上 | **复验闭合并推进**（判定对象 0.3.10→0.3.11：digest MATCH、增量 8 文件全在搜索面、认证面同构） | 隔离 profile d3-grok-0311 | dump-config exit=0 | **BLOCKED(xAI 订阅 OAuth 会话) 延续**（grok-oauth.json 不存在） | d-verification.md | 外部 OAuth | 闭合 |
+| D4 | dsh-llm-commandcode 同上 | **复验闭合**（0.1.19；端点硬编码+凭据名 lib/index.js:230 亲读一致） | 隔离 | 亲读一致 | **BLOCKED(缺 COMMANDCODE_API_KEY) 延续** | d-verification.md | 外部认证 | 闭合 |
+| D5 | dsh-ponytail 同上 | **复验闭合**（0.2.5 latest 未变） | 隔离 | 旧静态+装配证据有效 | **SKIP(Web 真机 headless) 维持** | d-verification.md | 真机环境 | 闭合 |
+| D6 | dsh-llm-providers-ui+codex 插件外部包源码/版本/配置核对 | **复验闭合**（事实纠正：workspace:52=minimumReleaseAgeExclude 豁免非 pin；真实声明 ^0.84.2+lock 0.84.2；上游 latest 0.85.1 不在范围内） | n/a | Worker 只读评估（零 install/build） | **维持 0.84.2**（强升必致宿主+四外部插件双实例树；升级触发=外部插件声明 ^0.85 或仅 0.85.x 携必需目录条目） | d6-piai-delta.md+d-verification.md | 无 | 闭合 |
 
 备注：Astra=可选 Provider 兼容分支，不锁开发模型，不建任务不耗主线（用户接受现有 glm 路线）。
 
