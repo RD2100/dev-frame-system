@@ -1,0 +1,32 @@
+{
+  "sessionCwd": ".dsh/integration/target",
+  "steps": [
+    {
+      "op": "initialize"
+    },
+    {
+      "op": "newSession"
+    },
+    {
+      "op": "prompt",
+      "text": "Prepare the approved restart check."
+    },
+    {
+      "op": "waitForTurnEnd"
+    },
+    {
+      "op": "restartAndResume"
+    },
+    {
+      "op": "prompt",
+      "text": "Complete the approved goal after restart."
+    },
+    {
+      "op": "waitForGoalPhase",
+      "phase": "complete"
+    },
+    {
+      "op": "waitForTurnEnd"
+    }
+  ]
+}

@@ -27,4 +27,4 @@ The private experimental package `packages/experimental/command-goal-binding` mo
 - The human completion verb is product-reachable end to end: command dispatch, projection read, controller admission, native compare-and-set complete, durable receipt.
 - Receipt journaling through `GoalService.recordReceipt` now belongs to this slice; verdict journaling beyond the receipt and the model-facing tool surface remain with the still-active proposed note.
 - Evidence producers remain deferred: the composition's tests append role-policy, goal-binding, verification, and review records directly, and a host without producers receives the stable no-evidence error.
-- Binding and required-checks stores are process-local memory defaults; durable stores are future work.
+- The default binding store is process-local memory, restored through Session projection on resume. The mounted plugin persists required checks through its configured ledger; [persistent command check registration](../bug-fix/2026-09-07-persist-command-required-checks.md) owns that deployment contract.

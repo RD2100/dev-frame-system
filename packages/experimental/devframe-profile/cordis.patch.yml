@@ -31,6 +31,7 @@
       config:
         workspaceId: default
         workspaceRoot: !!js process.cwd()
+        requiredChecksPath: !!js dshHomePath('required-checks.json')
         maxAttempts: 3
         maxGoalRounds: 8
         taskIds: ['devframe-goal']

@@ -1,0 +1,19 @@
+# Authored model responses; the driver harvests both sides of a real ACP process restart.
+version: 1
+scenario: goal-complete-restart
+profile: acp
+composition: acp-goal-complete-restart
+recording: authored
+header:
+  class: acp-goal-complete-restart
+  pin: true
+  changes: 0
+sessionVariants:
+  win32: true
+expectations:
+  variants:
+    win32: [system-prompt, tool-schemas]
+replay:
+  override: true
+workspace:
+  final: true

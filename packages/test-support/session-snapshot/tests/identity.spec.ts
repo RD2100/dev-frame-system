@@ -10,6 +10,33 @@ const otherId = '66666666-6666-4666-8666-666666666666'
 const proseUuid = '77777777-7777-4777-8777-777777777777'
 
 describe('session snapshot identity redaction', () => {
+  it('preserves confirmation identity across a resumed binding and repeated redaction', () => {
+    const source = ['devframe/goal-binding', 'devframe/goal-binding', 'unrelated'].map(type => JSON.stringify({
+      type, data: { confirmation: { id: type === 'unrelated' ? 'keep-this-id' : 'devframe-start:{{session:1}}:123' } },
+    })).join('\n') + '\n'
+    const redacted = redactSessionSnapshotIds([source])
+    expect(redacted[0]?.match(/\{\{id:1\}\}/g)).toHaveLength(2)
+    expect(redacted[0]).toContain('keep-this-id')
+    expect(redactSessionSnapshotIds(redacted)).toEqual(redacted)
+  })
+
+  it('preserves path-dependent check digest relationships and distinct acceptance hashes', () => {
+    const source = [
+      { type: 'devframe/goal-binding', data: { acceptanceHash: 'first-hash' } },
+      { type: 'devframe/goal-binding', data: { acceptanceHash: 'second-hash' } },
+      { type: 'devframe/verification', data: { binding: { acceptanceHash: 'first-hash' }, requiredChecks: { config: { checks: [{ cwd: '{{cwd}}' }] }, digest: 'check-digest' } } },
+      { type: 'goal/change', data: { operation: 'receipt', evidence: [{ summary: 'Satisfied check-digest' }] } },
+      { type: 'unrelated', data: { acceptanceHash: 'retain-this-hash', digest: 'retain-this-digest' } },
+    ].map(event => JSON.stringify(event)).join('\n') + '\n'
+    const redacted = redactSessionSnapshotIds([source])
+    expect(redacted[0]?.match(/\{\{id:1\}\}/g)).toHaveLength(2)
+    expect(redacted[0]).toContain('"acceptanceHash":"second-hash"')
+    expect(redacted[0]).toContain('Satisfied {{id:2}}')
+    expect(redacted[0]).toContain('retain-this-hash')
+    expect(redacted[0]).toContain('retain-this-digest')
+    expect(redactSessionSnapshotIds(redacted)).toEqual(redacted)
+  })
+
   it('preserves typed relationships across parent and child logs', () => {
     const parent = [
       JSON.stringify({ type: 'session', id: parentId, createdAt: 1, cwd: '/tmp/work' }),

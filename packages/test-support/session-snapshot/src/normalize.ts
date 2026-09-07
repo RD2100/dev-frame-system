@@ -407,6 +407,22 @@ export function normalizeSessionLog(
       const data = record.data as Record<string, unknown>
       if ('createdAt' in data) data.createdAt = 0
       if ('updatedAt' in data) data.updatedAt = 0
+      if (data.operation === 'receipt') {
+        if ('recordedAt' in data) data.recordedAt = 0
+        if (Array.isArray(data.evidence)) {
+          for (const evidence of data.evidence) {
+            if (evidence !== null && typeof evidence === 'object' && 'at' in evidence) evidence.at = 0
+          }
+        }
+      }
+    }
+    if (record.type === 'devframe/verification' && record.data !== null && typeof record.data === 'object') {
+      const data = record.data as Record<string, unknown>
+      if (Array.isArray(data.checks)) {
+        for (const check of data.checks) {
+          if (check !== null && typeof check === 'object' && 'durationMs' in check) check.durationMs = 0
+        }
+      }
     }
     if (Object.hasOwn(record, 'sourceEventSeqs')) {
       record.sourceEventSeqs = decodeSeqRanges(record.sourceEventSeqs)

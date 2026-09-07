@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-06-required-checks-file-store.md
-2026-09-06-required-checks-file-store.md: 733ed73e676662425c26d8acce25bdb67bc35b8f
-2026-09-06-required-checks-file-store.zh.md: bf0d9ac418fe4550db1d7720204cac8be63e6c1e
+2026-09-06-required-checks-file-store.md: 62bc4ec3f91dde49fe8c3c59843b0bab7ed05dd3
+2026-09-06-required-checks-file-store.zh.md: afafbbeff5572c5a34699040fd1dff32dd68ba27

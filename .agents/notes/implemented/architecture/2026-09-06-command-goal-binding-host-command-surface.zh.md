@@ -27,4 +27,4 @@ Status: implemented
 - 人类完成动词端到端可达产品路径：命令分发、projection 读取、控制器准入、原生 compare-and-set 完成、持久回执。
 - 经由 `GoalService.recordReceipt` 的回执记账现在归属本 slice；回执之外的裁决记账与面向模型的工具面仍由仍然活跃的提案保留。
 - 证据生产者仍然延期：组合的测试直接追加 role-policy、goal-binding、verification 与 review 记录，没有生产者的宿主会收到稳定的无证据错误。
-- 绑定与必需检查存储是进程本地的内存默认值；持久存储是后续工作。
+- 默认绑定存储是进程本地内存，恢复时通过 Session projection 重建。挂载的插件通过配置的账本持久化必需检查；[命令检查登记持久化](../bug-fix/2026-09-07-persist-command-required-checks.zh.md)拥有该部署契约。

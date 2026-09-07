@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-`FileRequiredChecksConfigStore` 在 `Config` 提供的 JSON 账本路径上实现既有接口：信封为 `{ version: 1, registrations: [{ digest, config }] }`，每次读取都会重新解码已登记载荷，并把声称的 digest 与 `requiredChecksDigest(decoded)` 比对。字节不可解析、信封不合、digest 漂移三者一律以新的稳定码 `REQUIRED_CHECKS_STORE_CORRUPT` fail-loud；`save` 面对损坏账本同样拒绝——绝不原地修复。发布经同目录临时文件加 rename；重复保存已知 digest 是幂等空操作；`sameRequiredCheckCommand`、`acceptanceCheckComponent`、`evaluateRequiredChecks` 与 digest 算法零改动。该存储仅作为可注入替代实现交付；在 profile 或组合中选用它属属主波的决策。
+`FileRequiredChecksConfigStore` 在 `Config` 提供的 JSON 账本路径上实现既有接口：信封为 `{ version: 1, registrations: [{ digest, config }] }`，每次读取都会重新解码已登记载荷，并把声称的 digest 与 `requiredChecksDigest(decoded)` 比对。字节不可解析、信封不合、digest 漂移三者一律以新的稳定码 `REQUIRED_CHECKS_STORE_CORRUPT` fail-loud；`save` 面对损坏账本同样拒绝——绝不原地修复。发布经同目录临时文件加 rename；重复保存已知 digest 是幂等空操作；`sameRequiredCheckCommand`、`acceptanceCheckComponent`、`evaluateRequiredChecks` 与 digest 算法零改动。该存储仍可独立注入；挂载的命令插件通过必填路径配置选用它，见[命令检查登记持久化](../bug-fix/2026-09-07-persist-command-required-checks.zh.md)。
 
 ## 落选替代
 

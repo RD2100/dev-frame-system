@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -134,6 +134,7 @@ async function boot(options: BootOptions): Promise<TestComposition> {
   await ctx.plugin(GoalService)
   await ctx.plugin(commandGoalBinding, {
     workspaceId: WORKSPACE_ID,
+    requiredChecksPath: join(ownedRoot, 'required-checks.json'),
     checks: options.checks,
     taskIds: [TaskId('task-v14-compos')],
     maxAttempts: 3,
@@ -361,6 +362,48 @@ describe('/devframe-start composition', { timeout: 60_000 }, () => {
 })
 
 describe('/devframe-resume composition', { timeout: 60_000 }, () => {
+  it.each(['retained', 'changed-config', 'missing', 'corrupt'] as const)(
+    'completes from the approved checks ledger after cold restart: %s', async (state) => {
+      const fixture = await createCommittedWorktree()
+      const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-approved-checks-restart-'))
+      roots.push(storageRoot)
+      const sessionId = SessionId('controller-checks-restart')
+      const first = await boot({ checks: startChecks(fixture.root), workspaceRoot: fixture.root, storageRoot, sessionId })
+      expect((await execute(first, '/devframe-start repair the project')).result.kind).toBe('success')
+      const binding = goalBindingEvents(first)[0]
+      if (binding === undefined) throw new Error('missing started binding')
+      const reviewer = SessionId('reviewer-checks-restart')
+      first.session.append('devframe/role-policy', reviewerPolicyRecord(sessionId, reviewer))
+      first.session.append('devframe/review', reviewRecord(binding, reviewer))
+      await first.ctx.sessions.flush(first.session)
+      contexts.splice(contexts.indexOf(first.ctx), 1)
+      await first.ctx.fiber.dispose()
+      const ledgerPath = join(storageRoot, 'required-checks.json')
+      const approvedLedger = readFileSync(ledgerPath, 'utf8')
+      if (state === 'missing') rmSync(ledgerPath, { force: true })
+      if (state === 'corrupt') writeFileSync(ledgerPath, '{broken ledger')
+      const second = await boot({
+        checks: startChecks(fixture.root, state === 'changed-config' ? 'fail' : 'pass'),
+        workspaceRoot: fixture.root, storageRoot, sessionId, restore: true,
+      })
+      expect((await execute(second, '/devframe-resume')).result.kind).toBe('success')
+      if (state === 'missing' || state === 'corrupt') {
+        await expect(execute(second, '/goal-complete')).rejects.toMatchObject({
+          code: state === 'missing' ? 'REQUIRED_CHECKS_CONFIG_NOT_FOUND' : 'REQUIRED_CHECKS_STORE_CORRUPT',
+        })
+        expect(second.ctx.goals.get(second.agent)?.phase).toBe('active')
+      } else {
+        const completion = await execute(second, '/goal-complete')
+        expect(completion.result.kind).toBe('success')
+        expect(second.ctx.goals.get(second.agent)?.phase).toBe('complete')
+        expect(readFileSync(ledgerPath, 'utf8')).toBe(approvedLedger)
+        await second.ctx.sessions.flush(second.session)
+        const durable = await second.ctx.sessionPersistence.load(sessionId)
+        expect(durable.events.some(event => event.type === 'goal/change' && event.data.operation === 'receipt')).toBe(true)
+      }
+    },
+  )
+
   it('resumes the bound goal after a restart against the same persistence root', async () => {
     const fixture = await createCommittedWorktree()
     const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-command-goal-binding-restart-'))
@@ -493,6 +536,7 @@ describe('structural propagation and registration lifetime', { timeout: 60_000 }
     await ctx.plugin(GoalService)
     const plugin = await ctx.plugin(commandGoalBinding, {
       workspaceId: WORKSPACE_ID,
+      requiredChecksPath: join(tmpdir(), 'unused-required-checks.json'),
       checks: startChecks(tmpdir()),
       taskIds: [TaskId('task-v14-compos')],
       maxAttempts: 3,
@@ -527,10 +571,18 @@ describe('configuration loud failure', { timeout: 60_000 }, () => {
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(GoalService)
-    return ctx.plugin(commandGoalBinding, config as never)
+    return ctx.plugin(commandGoalBinding, { requiredChecksPath: join(storageRoot, 'required-checks.json'), ...config } as never)
   }
 
   const validChecks = startChecks(tmpdir())
+
+  it.each([undefined, '', '  ', 'relative-ledger.json', ` ${join(tmpdir(), 'ledger.json')} `])(
+    'rejects requiredChecksPath %j in the resolver and plugin activation', async (requiredChecksPath) => {
+      const config = { workspaceId: WORKSPACE_ID, requiredChecksPath, checks: validChecks, taskIds: ['t'], maxAttempts: 3 }
+      expect(() => commandGoalBinding.resolveCommandGoalBindingConfig(config as never)).toThrow(/requiredChecksPath/)
+      await expect(expectActivationRejection(config)).rejects.toThrow(/requiredChecksPath/)
+    },
+  )
 
   it('rejects missing checks, taskIds, and maxAttempts at activation', async () => {
     await expect(expectActivationRejection({ workspaceId: WORKSPACE_ID, taskIds: ['t'], maxAttempts: 3 }))

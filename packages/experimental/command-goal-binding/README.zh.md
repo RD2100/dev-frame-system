@@ -48,7 +48,7 @@ kind: "package-reference"
 
 ### 最小配置
 
-本插件注入命令注册表、goal 服务、会话存储与会话 projection 注册表；自定义应用挂载它们的所有者与此插件。启动通道从 config 读取已批准的工作参数：
+插件注入命令注册表、Goal 服务、会话存储和会话投影注册表；自定义应用挂载这些组件及本插件。启动流程从配置读取已批准的工作参数。首次启动前先创建账本父目录（本例为 `D:/dsh-state`）；账本放在源码工作树之外，并在部署重启后复用同一路径：
 
 ```yaml
 - id: commands
@@ -64,6 +64,7 @@ kind: "package-reference"
   config:
     workspaceId: ws-team-alpha
     workspaceRoot: D:/worktrees/team-alpha
+    requiredChecksPath: D:/dsh-state/required-checks.json
     taskIds: [task-alpha]
     maxAttempts: 3
     checks:
@@ -79,13 +80,18 @@ kind: "package-reference"
 |---|---|---|
 | `workspaceId` | 必填 | 归属于本组合绑定与证据的 workspace 身份 |
 | `workspaceRoot` | 无 | `/devframe-start` 绑定的 worktree，也是 `/goal-complete` 在命令行省略路径时的回退 |
+| `requiredChecksPath` | 必填 | 持久化已批准检查账本的非空绝对路径，不得有首尾空白；父目录必须已存在 |
 | `checks` | 必填 | `/devframe-start` 注册并真实执行的人工批准必需检查清单；每项 `cwd` 必须是绝对路径 |
 | `taskIds` | 必填 | 每个启动绑定携带的非空、不重复的原生任务 id |
 | `maxAttempts` | 必填 | 冻结进每个启动绑定的最大计费尝试次数 |
 | `maxGoalRounds` | 无 | 固定在每个 start 绑定中的可选续跑轮次上限 |
 | `repairLimit` | `2` | Goal 共用的正整数修复上限；必须与项目交付消费方一致 |
 
-空 `workspaceId`、相对 `workspaceRoot`、相对检查 `cwd`、空或重复的 `taskIds`、非正数的 `maxAttempts`/`maxGoalRounds` 都会使插件激活明确失败。`repairLimit` 必须为正安全整数。
+空 `workspaceId`、相对 `workspaceRoot`、缺失、空或相对 `requiredChecksPath`、相对检查 `cwd`、空或重复的 `taskIds`、非正数的 `maxAttempts`/`maxGoalRounds` 都会使插件激活明确失败。`repairLimit` 必须为正安全整数。
+
+挂载的插件按规范摘要持久化已批准的检查配置。首次启动可以创建尚不存在的账本文件，但父目录必须已经存在。重启后完成操作从同一账本解析历史摘要；账本缺失、摘要缺失或登记损坏都会失败，不会拿当前部署的检查清单替代。在对应证据仍被使用时保留旧登记。
+
+交付和集成消费方可以读取同一账本。部署必须指定单一写者并串行保存：整文件替换不提供并发写者合并或跨进程锁。将账本放在参与指纹计算的工作树之外，能避免登记写入改变源码证据。
 
 -----
 
@@ -159,7 +165,7 @@ kind: "package-reference"
 - **审查生产路径不在本 wave**——`/devframe-start` 只落 verification 证据、不伪造任何审查决定；它之后 `/goal-complete` 如实报告缺失审查记录（稳定的无审查错误），而不是完成。
 - **启动存在部分失败窗口**——若原生 goal 与存储绑定建立后 journal 落账失败，`/devframe-start` 以 fail-closed 抛出且不回滚它们；`/devframe-resume` 是恢复路径（存储里有而日志里没有的绑定会被重新落账）。
 - **每个会话只有一个活跃写者**——共享日志队列协调同一进程内的一个活跃会话；它不提供跨进程比较交换，也不保护多个独立恢复的写者。
-- **绑定与必需检查存储仍是内存参考实现**——重启后存储为空；`/devframe-resume` 从会话日志 projection 重建绑定，已批准清单注册随下一次 `/devframe-start` 回来。持久存储集成归 GoalStore wave 的既有注入点。
+- **绑定从会话日志恢复**——组合默认的绑定存储仍在内存中；`/devframe-resume` 从投影重建它。挂载的插件使用 `requiredChecksPath` 指向的文件后备必需检查存储；程序化组合保留显式存储注入点。
 - **role policy 只指派 controller 角色**——没有任何审查者被授权，在审查生产 wave 落地审查者指派之前，任何审查提交都会被 fail-closed 拒绝。
 - **审查归属是结构性的**——`/goal-complete` 直接取最新审查记录而不按 goal 预过滤；外来的最新审查会以结构性 `GoalBindingError` 呈现，这正是 fail-closed 方向。
 - **模型完成路径绕过本 seam**——直接完成 goal 的面向模型 goal 工具不会运行本准入；这些命令只约束人类动词。
@@ -170,6 +176,6 @@ kind: "package-reference"
 <details>
 <summary>维护者的工作上下文——点击展开</summary>
 
-内存存储是组合默认值，不代表持久化承诺。审查生成和持久化存储选型仍由宿主组合负责。
+审查生成和绑定存储选型仍由宿主组合负责。
 
 </details>
