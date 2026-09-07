@@ -12,11 +12,13 @@ import type { ChildProcess } from 'node:child_process'
 import { spawn } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
 import { request as httpRequest } from 'node:http'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { startWireReplayServer } from './fixtures/wire-replay-server.ts'
 
 const REPO_ROOT = fileURLToPath(new URL('../../../..', import.meta.url))
 const DSH_SOURCE_BIN = join(REPO_ROOT, 'apps/cli/src/bin.ts')
@@ -56,7 +58,7 @@ function redact(output: string): string {
   return output.replace(/([?&]token=)[^\s)]+/gu, '$1<redacted>')
 }
 
-function cleanEnvironment(root: string, dshHome: string): NodeJS.ProcessEnv {
+function cleanEnvironment(root: string, dshHome: string, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) =>
     !/(?:KEY|SECRET|TOKEN|PASSWORD)/iu.test(name)))
   return {
@@ -69,11 +71,12 @@ function cleanEnvironment(root: string, dshHome: string): NodeJS.ProcessEnv {
     SSH_CONNECTION: '',
     SSH_TTY: '',
     TSX_TSCONFIG_PATH: join(REPO_ROOT, 'tsconfig.json'),
+    ...extra,
   }
 }
 
 /** Start the real source CLI with all three patches and await readiness. */
-async function startCandidateWeb(root: string, dshHome: string): Promise<RunningWeb> {
+async function startCandidateWeb(root: string, dshHome: string, extraEnv: NodeJS.ProcessEnv = {}): Promise<RunningWeb> {
   const child = spawn(process.execPath, [
     '--import', TSX_LOADER,
     DSH_SOURCE_BIN,
@@ -84,7 +87,7 @@ async function startCandidateWeb(root: string, dshHome: string): Promise<Running
     '--no-open',
   ], {
     cwd: REPO_ROOT,
-    env: cleanEnvironment(root, dshHome),
+    env: cleanEnvironment(root, dshHome, extraEnv),
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   const pid = child.pid ?? -1
@@ -146,12 +149,12 @@ async function exchangeLaunchCookie(launchUrl: string): Promise<string> {
 }
 
 /** POST one real Remote envelope to the candidate deployment. */
-function postRpc(port: number, host: string, cookie: string, method: string): Promise<HttpResult> {
+function postRpc(port: number, host: string, cookie: string, method: string, payload: unknown = { args: {} }): Promise<HttpResult> {
   const body = JSON.stringify({
     type: 'client-request',
     rpcId: 'candidate-fullchain',
     method,
-    payload: { args: {} },
+    payload,
   })
   return new Promise((resolve, reject) => {
     const req = httpRequest({
@@ -241,6 +244,66 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
     } finally {
       if (second !== undefined) await stopCandidateWeb(second)
       if (first !== undefined) await stopCandidateWeb(first)
+      await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 25 })
+    }
+  })
+
+  // Stage 2a (in progress): the RPC envelope for session/create|prompt needs
+  // the web scaffold's remoteRpc helper semantics (payload/args wrapping and
+  // response unwrapping) read from apps/web/tests before this drives green.
+  it.skip('drives a session turn over the wire-level replay lane through the real RPC face', { timeout: 420_000 }, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-candidate-fullchain-drive-'))
+    const dshHome = join(root, '.dsh')
+    const replay = await startWireReplayServer([
+      {
+        needle: 'candidate-driving-probe',
+        turns: [{ text: 'CANDIDATE_DRIVING_OK' }],
+      },
+    ])
+    let running: RunningWeb | undefined
+    try {
+      // The provider route points at the local replay server: the model lane
+      // is scripted at the wire boundary, every other layer is the real CLI.
+      running = await startCandidateWeb(root, dshHome, {
+        DEEPSEEK_API_KEY: 'wire-replay-key',
+        DEEPSEEK_BASE_URL: replay.baseURL,
+      })
+      const url = new URL(running.launchUrl)
+      const cookie = await exchangeLaunchCookie(running.launchUrl)
+
+      const created = await postRpc(url.port, url.host, cookie, 'session/create', { request: {} })
+      expect(created.status, `session/create status; body=${redact(created.body)}`).toBe(200)
+      const createdValue = (JSON.parse(created.body) as { result?: { value?: { sessionId?: string } } }).result?.value
+      if (createdValue?.sessionId === undefined) {
+        throw new Error(`session/create returned no sessionId; body=${redact(created.body)}`)
+      }
+      const sessionId = createdValue.sessionId
+
+      const prompt = 'candidate-driving-probe: reply with the marker and stop.'
+      const prompted = await postRpc(url.port, url.host, cookie, 'session/prompt', {
+        request: { requestId: randomUUID(), sessionId, mode: 'queue', content: [{ type: 'text', text: prompt }] },
+      })
+      expect(prompted.status, `session/prompt status; body=${redact(prompted.body)}`).toBe(200)
+
+      // The turn is proven by the wire lane: the real CLI session sends the
+      // prompt to the replay server, which answers the scripted marker.
+      const captured = await Promise.race([
+        (async () => {
+          for (let tick = 0; tick < 200; tick++) {
+            if (replay.requests.length > 0) return replay.requests[0]!
+            await new Promise(resolve => setTimeout(resolve, 100))
+          }
+          throw new Error('wire replay lane received no request in 20s')
+        })(),
+      ])
+      expect(JSON.stringify(captured.body)).toContain(prompt)
+      expect(running.child.exitCode).toBeNull()
+    } catch (error) {
+      const evidence = running?.output()
+      throw new Error(`${error instanceof Error ? error.message : String(error)}${evidence === undefined ? '' : `\n${redact(evidence)}`}`, { cause: error })
+    } finally {
+      await replay.close()
+      if (running !== undefined) await stopCandidateWeb(running)
       await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 25 })
     }
   })
