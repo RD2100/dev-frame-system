@@ -2,7 +2,8 @@
 
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { realpath, unlink, writeFile } from 'node:fs/promises'
+import { unlinkSync, writeFileSync } from 'node:fs'
+import { realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -68,10 +69,13 @@ async function git(options: IntegrationGitOptions, cwd: string, args: readonly s
  * mechanism then fails loudly instead of executing ambient code. Only the
  * host-owned target checkout's local config remains. Git requires the
  * redirected files to exist and be readable, so the caller disposes them.
+ * Preparation is synchronous on purpose: no await may sit between the final
+ * admission guard and the spawn, or a gate closing in that gap could still
+ * admit the merge.
  */
-async function isolatedMergeEnv(): Promise<{ readonly env: Record<string, string | undefined>; readonly dispose: () => Promise<void> }> {
+function isolatedMergeEnv(): { readonly env: Record<string, string | undefined>; dispose: () => void } {
   const emptyConfig = join(tmpdir(), `dsh-integration-isolated-config-${randomUUID()}`)
-  await writeFile(emptyConfig, '')
+  writeFileSync(emptyConfig, '')
   return {
     env: {
       ...Object.fromEntries(Object.entries(process.env).filter(([key]) =>
@@ -79,9 +83,9 @@ async function isolatedMergeEnv(): Promise<{ readonly env: Record<string, string
       GIT_CONFIG_GLOBAL: emptyConfig,
       GIT_CONFIG_SYSTEM: emptyConfig,
     },
-    dispose: async () => {
+    dispose: () => {
       try {
-        await unlink(emptyConfig)
+        unlinkSync(emptyConfig)
       } catch {
         // A disposable temp file whose unlink raced a lost process is harmless residue.
       }
@@ -166,25 +170,30 @@ async function observe(options: IntegrationGitOptions, path: string): Promise<{ 
 }
 
 /**
- * Refuse a target checkout whose LOCAL Git config defines process-running
- * merge drivers or external checkout filters. Config-defined
- * `merge.<name>.driver` and `filter.<name>.clean|smudge|process` entries
- * execute arbitrary commands selected by an in-tree `.gitattributes`; the
- * merge path isolates global and system config through the merge
- * environment and refuses the local face outright, so no config-selected
- * process can run. Exit 1 means no entries and is the approved shape; any
- * other failure is real and propagates.
+ * Refuse a target checkout whose reachable Git config defines
+ * process-running merge drivers or external checkout filters. The query
+ * runs in the merge subprocess's own isolated environment — global and
+ * system config stripped, repository config with `include.*` expanded, and
+ * worktree config included exactly as the merge would resolve them — so a
+ * driver or filter effective through any reachable channel cannot hide
+ * from `--local`'s narrow scope. Config-defined `merge.<name>.driver` and
+ * `filter.<name>.clean|smudge|process` entries execute arbitrary commands
+ * selected by an in-tree `.gitattributes`. Exit 1 means no entries and is
+ * the approved shape; any other failure is real and propagates.
  */
-async function refuseLocalProcessConfig(options: IntegrationGitOptions, path: string): Promise<void> {
+async function refuseReachableProcessConfig(options: IntegrationGitOptions, path: string): Promise<void> {
   const pattern = '^merge\\..+\\.driver$|^filter\\..+\\.(clean|smudge|process)$'
+  const isolation = isolatedMergeEnv()
   try {
-    const listing = await git(options, path, ['config', '--local', '--get-regexp', pattern])
+    const listing = await git(options, path, ['config', '--get-regexp', pattern], undefined, isolation.env)
     if (listing.length > 0) {
-      throw new Error('Integration merge mode requires a target repository whose local Git config defines no custom merge drivers or external filters')
+      throw new Error('Integration merge mode requires a target repository whose reachable Git config defines no custom merge drivers or external filters')
     }
   } catch (error) {
     if ((error as { code?: unknown }).code === 1) return
     throw error
+  } finally {
+    isolation.dispose()
   }
 }
 
@@ -218,7 +227,7 @@ export async function inspectIntegrationGit(request: IntegrationGitRequest, opti
   }
   await git(options, target, ['symbolic-ref', '--quiet', 'HEAD'])
   if (request.mode === 'merge') {
-    await refuseLocalProcessConfig(options, request.targetPath)
+    await refuseReachableProcessConfig(options, request.targetPath)
     await assertRelatedHistories(options, request.targetPath, request.targetHead, request.sourceCommit)
     if (await isAncestor(options, request.targetPath, request.sourceCommit, request.targetHead)) {
       throw new Error('Integration merge mode requires an unmerged source; the target already contains it')
@@ -304,7 +313,7 @@ export async function reconcileIntegrationGit(
  * bundle (`merge.ff=false`, `commit.gpgsign=false`, `core.hooksPath=/dev/null`)
  * and `--no-verify` so hooks, signing, and fast-forward overrides cannot
  * change what the command does, with global and system Git config stripped
- * from the merge environment and local custom merge drivers or external
+ * from the merge environment and reachable custom merge drivers or external
  * checkout filters refused at inspection — no config-selected process can
  * influence the merge. The author identity comes from the host-owned target
  * checkout's local config. No reset, abort, retry, commit
@@ -327,19 +336,23 @@ export async function executeIntegrationGit(
   await inspectIntegrationGit(request, options)
   signal?.throwIfAborted()
   beforeMerge?.()
+  // Everything between the guard above and the spawned merge is synchronous:
+  // preparing the isolated environment creates its temp file with sync file
+  // calls, so a gate closing in a microtask cannot slip into the window and
+  // admit a merge that the host never admitted.
+  const isolation = request.mode === 'merge' ? isolatedMergeEnv() : undefined
   const mergeArgs = request.mode === 'merge'
     ? ['-c', 'merge.ff=false', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null',
       'merge', '--no-verify', '--no-edit', '--no-overwrite-ignore', request.sourceCommit]
     : ['merge', '--ff-only', '--no-edit', '--no-overwrite-ignore', request.sourceCommit]
   let commandError: unknown
-  const isolation = request.mode === 'merge' ? await isolatedMergeEnv() : undefined
   try {
     await git(options, request.targetPath, mergeArgs, signal, isolation?.env)
   } catch (error) {
     // The command may have advanced HEAD before transport failure or cancellation; observe before any decision.
     commandError = error
   } finally {
-    await isolation?.dispose()
+    isolation?.dispose()
   }
   const observation = await reconcileIntegrationGit(request, options)
   return commandError === undefined ? { observation } : { observation, commandError }
