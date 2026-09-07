@@ -67,6 +67,15 @@ function workBinding(
 
 The host owns validation and persistence. A changed acceptance or source value is a different binding and must not reuse earlier evidence.
 
+<a id="fingerprint-source-contents"></a>
+### Fingerprint source contents
+
+Source fingerprints cover the repository HEAD, index records, and actual contents of tracked and nonignored untracked files. Repository-relative paths, entry types, executable bits, and tracked deletions contribute. Unstaged edits, additions, deletions, and raw line-ending changes therefore invalidate recorded evidence without requiring `git add`. Symlinks contribute their link-target text, not the target file contents. Timestamps and ignored untracked files do not contribute.
+
+The fingerprint uses `dsh-source-fp-v2-<headCommit>-<stateHash>`. `stateHash` hashes framed index records and actual source entries; `entryCount` counts distinct selected paths, including missing tracked paths. A nested directory selects its containing worktree. Submodules, special file types, non-UTF-8 paths, symlink ancestors, unreadable entries, and observed concurrent changes fail closed. Empty directories are outside the Git-selected inventory.
+
+Computation streams source bytes without changing Git state. `maxOutputBytes` limits each Git output; optional `maxSourceBytes` limits aggregate source-content bytes and has no default total cap. Overflow rejects rather than truncates evidence. A supplied `timeoutMs` bounds each Git child and the whole file-reading phase. Callers must retain writer ownership through the operation using the fingerprint: observation checks do not create an atomic filesystem snapshot.
+
 ### Preserve Goal input and task output
 
 A `devframe/task-delivery` record preserves the original complete Goal input binding and records a task's Worker, registered worktree, exact commit, output fingerprint, and output snapshot separately. `deliveryResultBinding` derives an output evidence binding without rewriting the authorized Goal input.

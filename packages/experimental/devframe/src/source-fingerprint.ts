@@ -1,25 +1,19 @@
 /**
- * Pure computation engine for the GoalBindingController domain's source
- * worktree fingerprint — the evidence basis for the AT1-05 "source changed
- * after review" rejection variant.
- *
- * The engine is read-only: it runs three git subprocesses (`rev-parse
- * --is-inside-work-tree`, `rev-parse --verify --quiet HEAD`, `ls-files -s
- * -z`) against one worktree directory and derives a deterministic, branded
- * {@link SourceFingerprint} from the HEAD commit id plus a sha256 over the
- * canonical `ls-files -s -z` index byte stream. The fingerprint covers
- * tracked (index) state only — untracked files are a registered boundary
- * (.agents/devframe/p22/fprecompute-design.md). Both entries —
- * {@link computeSourceFingerprint} and the {@link verifySourceFingerprint}
- * comparison — are explicit, off-hot-path calls: nothing recomputes or
- * compares automatically on the binding path.
+ * Read-only source evidence over HEAD, index records, and actual tracked and
+ * nonignored untracked files. Raw contents, repository-relative paths, entry
+ * types, and executable bits contribute; timestamps do not. Symlinks contribute
+ * only their link target. Missing tracked paths contribute deletion records.
+ * Ignored untracked paths are outside this source scope. Submodules, special
+ * files, non-UTF-8 paths, and observed concurrent changes fail closed. Callers
+ * retain writer ownership through the operation that consumes the fingerprint.
  * @module @deepseek-ai/dsh-experimental-devframe/source-fingerprint
  */
 
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { stat } from 'node:fs/promises'
-import { isAbsolute } from 'node:path'
+import { constants, type Stats } from 'node:fs'
+import { lstat, open, readlink, realpath, stat } from 'node:fs/promises'
+import { isAbsolute, join } from 'node:path'
 import { promisify } from 'node:util'
 import { SourceFingerprint as makeSourceFingerprint } from './shared/types.ts'
 import type { SourceFingerprint } from './shared/types.ts'
@@ -33,6 +27,7 @@ export type SourceFingerprintErrorCode =
   | 'SOURCE_FINGERPRINT_NO_COMMIT'
   | 'SOURCE_FINGERPRINT_GIT_UNAVAILABLE'
   | 'SOURCE_FINGERPRINT_GIT_FAILED'
+  | 'SOURCE_FINGERPRINT_SOURCE_FAILED'
 
 /** Structured failure from fingerprint computation; never a silent fallback. */
 export class SourceFingerprintError extends Error {
@@ -66,37 +61,38 @@ export interface SourceFingerprintRequest {
    */
   readonly gitCommand?: string
   /**
-   * Per-call stdout collection cap in bytes; defaults to 64 MiB (roughly two
-   * million index entries). Exceeding it fails loud with
-   * `SOURCE_FINGERPRINT_GIT_FAILED` rather than truncating the fingerprint input.
+   * Per-Git-output collection cap in bytes; defaults to 64 MiB.
+   * Exceeding it fails rather than truncating fingerprint input.
    */
   readonly maxOutputBytes?: number
-  /** Cancel each Git child and wait for its exit before settling. */
+  /** Optional positive aggregate file-content and symlink-target byte cap; omitted means no total byte cap. */
+  readonly maxSourceBytes?: number
+  /** Cancel Git children and file streams, closing owned resources before settling. */
   readonly signal?: AbortSignal
-  /** Positive integer timeout in milliseconds for each Git child; omitted means no deadline. */
+  /** Positive deadline in milliseconds per Git child and for the whole file-reading phase. */
   readonly timeoutMs?: number
 }
 
 /** One computed fingerprint plus the human-readable facts behind it. */
 export interface ComputedSourceFingerprint {
   /**
-   * Branded fingerprint value `dsh-source-fp-v1-<headCommit>-<stateHash>`;
+   * Branded fingerprint value `dsh-source-fp-v2-<headCommit>-<stateHash>`;
    * fits every `ProjectWorkBinding.sourceFingerprint` consumer. Equal worktree
-   * states produce equal values on every platform.
+   * contents, paths, types, index state and executable bits produce equal values.
    */
   readonly fingerprint: SourceFingerprint
   /** Resolved HEAD commit id (hex), as reported by `rev-parse --verify`. */
   readonly headCommit: string
-  /** sha256 over the raw `ls-files -s -z` index byte stream. */
-  readonly trackedStateHash: string
-  /** Number of index records observed (one per staged path, per conflict stage). */
-  readonly trackedEntryCount: number
+  /** sha256 over framed index records and actual source entries. */
+  readonly stateHash: string
+  /** Number of distinct tracked and nonignored untracked paths, including tracked deletions. */
+  readonly entryCount: number
   /**
    * Normalization algorithm generation. Moves together with the
    * {@link FINGERPRINT_PREFIX} value generation: a normalization change is a
    * fingerprint value change by construction.
    */
-  readonly algorithm: 'v1'
+  readonly algorithm: 'v2'
 }
 
 /** Pass arm of a verify verdict: the recorded fingerprint was re-derived from the worktree. */
@@ -129,7 +125,7 @@ export type VerifyVerdict = SourceFingerprintMatch | SourceFingerprintMismatch
 
 const DEFAULT_GIT_COMMAND = 'git'
 const DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024 * 1024
-const FINGERPRINT_PREFIX = 'dsh-source-fp-v1'
+const FINGERPRINT_PREFIX = 'dsh-source-fp-v2'
 const HEAD_HEX_PATTERN = /^[0-9a-f]{40,64}$/
 const NOT_A_REPOSITORY_MESSAGE = /not a git repository/i
 
@@ -185,6 +181,9 @@ export async function computeSourceFingerprint(
   if (request.timeoutMs !== undefined && (!Number.isSafeInteger(request.timeoutMs) || request.timeoutMs < 1)) {
     throw new SourceFingerprintError('timeoutMs must be a positive safe integer', 'SOURCE_FINGERPRINT_INVALID_REQUEST')
   }
+  if (request.maxSourceBytes !== undefined && (!Number.isSafeInteger(request.maxSourceBytes) || request.maxSourceBytes < 1)) {
+    throw new SourceFingerprintError('maxSourceBytes must be a positive safe integer', 'SOURCE_FINGERPRINT_INVALID_REQUEST')
+  }
 
   const directory = await stat(worktreePath).catch(() => undefined)
   if (directory === undefined || !directory.isDirectory()) {
@@ -227,13 +226,24 @@ export async function computeSourceFingerprint(
   if (!listing.ok) {
     throw classifyFailure(gitCommand, listingArgs, listing)
   }
-  const trackedStateHash = createHash('sha256').update(listing.stdout).digest('hex')
+  const topArgs = ['rev-parse', '--show-toplevel'] as const
+  const top = await runGit(gitCommand, worktreePath, topArgs, maxOutputBytes, request)
+  if (!top.ok) throw classifyFailure(gitCommand, topArgs, top)
+  const root = await realpath(top.stdout.toString('utf8').replace(/\r?\n$/, ''))
+  const pathsArgs = ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--full-name', '--', ':/'] as const
+  const paths = await runGit(gitCommand, root, pathsArgs, maxOutputBytes, request)
+  if (!paths.ok) throw classifyFailure(gitCommand, pathsArgs, paths)
+  const state = await hashSourceEntries(root, listing.stdout, paths.stdout, request)
+  for (const [args, expected] of [[headArgs, head.stdout], [listingArgs, listing.stdout], [pathsArgs, paths.stdout]] as const) {
+    const after = await runGit(gitCommand, root, args, maxOutputBytes, request)
+    if (!after.ok) throw classifyFailure(gitCommand, args, after)
+    if (!after.stdout.equals(expected)) throw sourceFailure('Git source inventory changed while computing its fingerprint')
+  }
   return Object.freeze({
-    fingerprint: makeSourceFingerprint(`${FINGERPRINT_PREFIX}-${headCommit}-${trackedStateHash}`),
+    fingerprint: makeSourceFingerprint(`${FINGERPRINT_PREFIX}-${headCommit}-${state.stateHash}`),
     headCommit,
-    trackedStateHash,
-    trackedEntryCount: countIndexEntries(listing.stdout),
-    algorithm: 'v1',
+    ...state,
+    algorithm: 'v2',
   })
 }
 
@@ -263,6 +273,7 @@ export async function computeSourceFingerprint(
  *   - `SOURCE_FINGERPRINT_NO_COMMIT` — the repository has an unborn HEAD (no commits);
  *   - `SOURCE_FINGERPRINT_GIT_UNAVAILABLE` — the git executable is missing (ENOENT) or not executable (EACCES);
  *   - `SOURCE_FINGERPRINT_GIT_FAILED` — any other git failure, including index corruption and output-cap overflow.
+ *   - `SOURCE_FINGERPRINT_SOURCE_FAILED` — unreadable, unsupported, changing, cancelled, or over-budget source input.
  */
 export async function verifySourceFingerprint(
   worktreePath: string,
@@ -397,13 +408,110 @@ function gitFailed(args: readonly string[], run: GitFailure): SourceFingerprintE
   )
 }
 
-/** Count NUL-framed index records in the raw `ls-files -s -z` byte stream. */
-function countIndexEntries(listing: Buffer): number {
-  let count = 0
-  let offset = listing.indexOf(0)
-  while (offset !== -1) {
-    count += 1
-    offset = listing.indexOf(0, offset + 1)
+/** Preserve file-read and inventory failures without disclosing source contents. */
+function sourceFailure(message: string, cause?: unknown): SourceFingerprintError {
+  return new SourceFingerprintError(message, 'SOURCE_FINGERPRINT_SOURCE_FAILED', { cause })
+}
+
+/** Observe a path without following its final symlink; only absence is a deletion. */
+async function observe(path: string): Promise<Stats | undefined> {
+  try { return await lstat(path) } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw error
   }
-  return count
+}
+
+/** Metadata detects replacement or mutation during a read; it is never fingerprint input. */
+function sameObservation(left: Stats | undefined, right: Stats | undefined): boolean {
+  if (left === undefined || right === undefined) return left === right
+  return left.dev === right.dev && left.ino === right.ino && left.mode === right.mode
+    && left.size === right.size && left.mtimeMs === right.mtimeMs && left.ctimeMs === right.ctimeMs
+}
+
+/** Hash one Git-selected source inventory without spawning a process per file. */
+async function hashSourceEntries(
+  root: string, index: Buffer, inventory: Buffer, request: SourceFingerprintRequest,
+): Promise<{ stateHash: string; entryCount: number }> {
+  const deadline = request.timeoutMs === undefined ? undefined : AbortSignal.timeout(request.timeoutMs)
+  const signals = [request.signal, deadline].filter((signal): signal is AbortSignal => signal !== undefined)
+  const signal = AbortSignal.any(signals)
+  try {
+    if (index.toString('utf8').split('\0').some(record => record.startsWith('160000 '))) {
+      throw sourceFailure('Submodules require an explicit source snapshot policy')
+    }
+    const raw = new TextDecoder('utf-8', { fatal: true }).decode(inventory)
+    if (raw.length > 0 && !raw.endsWith('\0')) throw sourceFailure('Git source inventory is not NUL terminated')
+    const paths = [...new Set(raw.length === 0 ? [] : raw.slice(0, -1).split('\0'))].sort()
+    const hash = createHash('sha256')
+    const field = (value: string | Buffer) => {
+      const bytes = typeof value === 'string' ? Buffer.from(value) : value
+      hash.update(String(bytes.length)).update(':').update(bytes)
+    }
+    field(index)
+    let consumed = 0
+    const consume = (bytes: number) => {
+      consumed += bytes
+      if (request.maxSourceBytes !== undefined && consumed > request.maxSourceBytes) {
+        throw sourceFailure('Source contents exceed the configured byte cap')
+      }
+    }
+    const observations = new Map<string, Stats | undefined>()
+    for (const path of paths) {
+      signal.throwIfAborted()
+      const segments = path.split('/')
+      if (isAbsolute(path) || segments.some(segment => segment === '' || segment === '.' || segment === '..')
+        || (process.platform === 'win32' && /[:\\]/.test(path))) throw sourceFailure('Git source inventory contains an unsafe path')
+      let parent = root
+      for (const segment of segments.slice(0, -1)) {
+        parent = join(parent, segment)
+        const directory = await observe(parent)
+        if (directory !== undefined && !directory.isDirectory()) throw sourceFailure('Source path traverses a non-directory entry')
+        if (observations.has(parent) && !sameObservation(observations.get(parent), directory)) throw sourceFailure('Source directory changed')
+        observations.set(parent, directory)
+      }
+      const absolute = join(root, path)
+      const before = await observe(absolute)
+      observations.set(absolute, before)
+      field(path)
+      if (before === undefined) {
+        field('missing')
+      } else if (before.isSymbolicLink()) {
+        field('symlink')
+        const target = await readlink(absolute, { encoding: 'buffer' })
+        consume(target.length)
+        field(target)
+      } else if (before.isFile()) {
+        field('file')
+        field(String(before.mode & 0o111))
+        consume(before.size)
+        const handle = await open(absolute, constants.O_RDONLY | constants.O_NOFOLLOW)
+        try {
+          if (!sameObservation(before, await handle.stat())) throw sourceFailure('Source file changed before reading')
+          signal.throwIfAborted()
+          const contents = createHash('sha256')
+          let read = 0
+          for await (const chunk of handle.createReadStream({ autoClose: false, signal })) {
+            if (!Buffer.isBuffer(chunk)) throw sourceFailure('Source stream returned non-binary data')
+            read += chunk.length
+            if (read > before.size) throw sourceFailure('Source file grew while reading')
+            contents.update(chunk)
+          }
+          if (read !== before.size || !sameObservation(before, await handle.stat())) throw sourceFailure('Source file changed while reading')
+          field(contents.digest())
+        } finally { await handle.close() }
+      } else {
+        throw sourceFailure('Source inventory contains an unsupported file type or submodule')
+      }
+      if (!sameObservation(before, await observe(absolute))) throw sourceFailure('Source entry changed while reading')
+    }
+    for (const [path, before] of observations) {
+      signal.throwIfAborted()
+      if (!sameObservation(before, await observe(path))) throw sourceFailure('Source inventory changed while reading')
+    }
+    signal.throwIfAborted()
+    return { stateHash: hash.digest('hex'), entryCount: paths.length }
+  } catch (error) {
+    if (error instanceof SourceFingerprintError) throw error
+    throw sourceFailure('Source contents could not be fingerprinted', error)
+  }
 }
