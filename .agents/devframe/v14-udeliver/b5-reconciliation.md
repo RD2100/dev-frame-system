@@ -117,3 +117,9 @@
 - **AT1-08**：上表证据已按 V1.2 证据标准更正为 durable consumer 面（main 76080fe40b → 本树 c469e0863c 并入；worker 初核引用的内存 map 行号即其交付前树态，已过时不再引用）。合并把 main 新签名 `beginRepairRound(identity, {kind:'task-warning', taskId})` 与本线旅程消费臂整合（composition.ts:441-453）。
 - **合并集成修复**：main 新增 `devframe/repair-admission` 事件后 `events.spec.ts` "registers every project event" 断言数组补齐该类型（52 文件/492 通过 + 1 平台 skip，exit 0）。
 - **cordis-catalog 门**：main 新 agent-dispatch `src/run.ts:171` 缺显式返回类型标注致门失败（A2 属主面，本线不碰，登记待修）。
+
+### AT1-09 旅程闭合（组长验收，2026-09-08，232e6fe825）
+
+- **AT1-09 部分→覆盖（包级，单一旅程场景驱动）**：huoshan-2 Worker（显式路由 spawn 参数）在 start-resume harness 落一条 A→B 旅程（command-goal-binding/tests/start-resume-composition.spec.ts，+213/−2，既有 10 用例零改动）：A 起始/消费/授权完成 → B 需求变更（新 goalId/新 hash/新 budget，A 提前起 B 拒、旧审查不收 B 归属门拒）→ **预算跨 restart 保留活性证明**（重启若重置消费投影折叠即闩锁，实测 B 第二次消费折叠成功）→ 迟到 A 结果落 A 完整身份元组不计入 B → B 自身证据到 required-checks 阶段。复用既有判据零新增实现。验收复跑：11/33/267 passed + tsc 0，全 exit 0。
+- **源码级墙（待裁定，旅程诚实登记未掩盖）**：`MemoryRequiredChecksConfigStore` 每进程实例（required-checks.ts:188-223）、插件 apply 无 store 注入缝（index.ts:80-84 硬默认）——任何 goal 在非其 start 所在 boot 完成（含生产跨进程重启）必命中 `REQUIRED_CHECKS_CONFIG_NOT_FOUND`；硬互斥"resume 成功⇔之后可完成"。durable required-checks 注入缝裁定后 AT1-09 (e) 与 AT1-10 跨 boot 完成面才可开展。
+- 附带登记：`devframe/usage` 全树无生产写入者（测试装配与既有 review/role-policy fixture 同型）；task-delivery 迟到面因投影 `currentDeliveryGoal` 约束（delivery goalId 须等于最后一条 open binding）不可用于旅程运行时断言。
