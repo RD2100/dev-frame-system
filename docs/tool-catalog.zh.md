@@ -2136,7 +2136,7 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
 
 如果误用钩子（参数错误、未知选项、不受支持的 schema、触发上限），抛出的错误**总会**终止脚本，绝不会退化为单个条目的 `null`。
 
-约束：并发上限和 agent 总数上限均会生效；不提供文件系统、网络、定时器或 Node.js API。具体工作由 agent 完成，脚本只负责编排。该运行在前台执行：整个脚本完成后，调用才会返回。
+约束：并发上限和 agent 总数上限均会生效；不提供文件系统、网络、定时器或 Node.js API。具体工作由 agent 完成，脚本只负责编排。默认调用会等待整个脚本完成。设置 `run_in_background: true` 可返回 job id 并继续其他工作；用 job_output 收集结果，或用 job_kill 取消。后台执行要求可用的 job registry 和 controller。job 由调用 agent 持有，只有清理完成后才进入终态。
 
 ```json
 {
@@ -2202,6 +2202,10 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
       "type": "object",
       "description": "Optional JSON input exposed to the script as the `args` global (wrap a bare list as a field, e.g. {\"files\": [...]}).",
       "additionalProperties": true
+    },
+    "run_in_background": {
+      "type": "boolean",
+      "description": "Return an owned job id immediately instead of waiting for the workflow. Defaults to false. Collect with job_output or cancel with job_kill; the job settles only after the workflow and its children stop."
     }
   },
   "required": [

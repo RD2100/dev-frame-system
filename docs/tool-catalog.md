@@ -2128,7 +2128,7 @@ Script-body hooks:
 
 Misused hooks (bad arguments, unknown options, unsupported schemas, tripped caps) throw errors that ALWAYS kill the script — they never dissolve into a per-item `null`.
 
-Constraints: concurrency and total-agent caps apply; no filesystem, network, timers, or Node.js APIs are provided — the agents do the work, the script only coordinates them. The run executes in the foreground: this call returns when the whole script finishes.
+Constraints: concurrency and total-agent caps apply; no filesystem, network, timers, or Node.js APIs are provided — the agents do the work, the script only coordinates them. By default this call waits for the whole script. Set `run_in_background: true` to return a job id and continue other work; use job_output to collect the result or job_kill to cancel. Background execution requires an available job registry and controller. Jobs remain owned by the calling agent and become terminal only after cleanup.
 
 ```json
 {
@@ -2194,6 +2194,10 @@ Constraints: concurrency and total-agent caps apply; no filesystem, network, tim
       "type": "object",
       "description": "Optional JSON input exposed to the script as the `args` global (wrap a bare list as a field, e.g. {\"files\": [...]}).",
       "additionalProperties": true
+    },
+    "run_in_background": {
+      "type": "boolean",
+      "description": "Return an owned job id immediately instead of waiting for the workflow. Defaults to false. Collect with job_output or cancel with job_kill; the job settles only after the workflow and its children stop."
     }
   },
   "required": [
