@@ -35,6 +35,11 @@
     leadPluginScopes:
       candidate-fullchain-lead: ['candidate-fullchain']
 
+# The default launch-directory goal row is disabled: the candidate mounts its
+# own single composition with the real workspace facts at bootstrap.
+- id: command-goal-binding
+  disabled: true
+
 # The host bootstrap rides the dispatch plugin fiber as an explicit opt-in:
 # the deployment must mount the project controller (the row below), and the
 # approved-checks ledger is the same file the delivery tools read.

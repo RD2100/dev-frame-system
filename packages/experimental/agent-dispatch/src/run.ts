@@ -160,6 +160,19 @@ export class AgentProjectRun extends Service {
   /** The file-backed registration store, built on first use. */
   private store?: RequiredChecksConfigStore
 
+  /** The scenario as last loaded by hostStart, for the bootstrap-phase consumers. */
+  private cachedScenario?: CandidateScenario
+
+  /** The target worktree path from the cached scenario, when hostStart ran. */
+  get candidateTargetWorktreePath(): string | undefined {
+    return this.cachedScenario?.targetWorktreePath
+  }
+
+  /** The task ids from the cached scenario, when hostStart ran. */
+  get candidateTaskIds(): readonly string[] | undefined {
+    return this.cachedScenario?.tasks.map(task => task.taskId)
+  }
+
   /**
    * @param ctx - Mounting context.
    * @param config - Schema-validated config; `checksLedgerPath` is optional.
@@ -250,6 +263,7 @@ export class AgentProjectRun extends Service {
       )
     }
     const scenario = JSON.parse(await readFile(this.config.candidateScenarioPath, 'utf8')) as CandidateScenario
+    this.cachedScenario = scenario
     if (scenario.tasks.length === 0) {
       throw new ProjectRunError(
         `candidate scenario '${this.config.candidateScenarioPath}' lists no tasks`,

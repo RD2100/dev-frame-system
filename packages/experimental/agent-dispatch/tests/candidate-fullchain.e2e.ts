@@ -470,10 +470,12 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
           } },
         ] },
         { text: 'CONTROLLER_PHASE1_DONE_C14' },
-        // Served on the second controller prompt, after the workers are live.
+        // Served on the second controller prompt, after the lead registered
+        // both workers: start carries the worker briefing (startDevelopment
+        // then followup) — the workers' first model request rides this.
         { toolCalls: [
-          { name: 'project_task', arguments: { action: 'start', taskId: 'task-a' } },
-          { name: 'project_task', arguments: { action: 'start', taskId: 'task-b' } },
+          { name: 'project_task', arguments: { action: 'start', taskId: 'task-a', briefing: 'worker-task-a-briefing-c14: create your own artifact file and commit it, then deliver.' } },
+          { name: 'project_task', arguments: { action: 'start', taskId: 'task-b', briefing: 'worker-task-b-briefing-c14: create your own artifact file and commit it, then deliver.' } },
         ] },
         { text: 'CONTROLLER_CHAIN_DONE_C14' },
       ],
@@ -484,11 +486,14 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         { toolCalls: [
           { name: 'agent_dispatch', arguments: (body: string) => {
             const ids = worktreeIdsFrom(body)
-            return { role: 'worker', taskId: 'task-a', worktreeId: ids['task-a'], pluginId: 'candidate-fullchain', prompt: 'worker-task-a-briefing-c14: create your own artifact file and commit it, then deliver.' }
+            // Registration only: no prompt field — the workers receive their
+            // briefings through project_task start after the root confirms
+            // the registry registrations.
+            return { role: 'worker', taskId: 'task-a', worktreeId: ids['task-a'], pluginId: 'candidate-fullchain' }
           } },
           { name: 'agent_dispatch', arguments: (body: string) => {
             const ids = worktreeIdsFrom(body)
-            return { role: 'worker', taskId: 'task-b', worktreeId: ids['task-b'], pluginId: 'candidate-fullchain', prompt: 'worker-task-b-briefing-c14: create your own artifact file and commit it, then deliver.' }
+            return { role: 'worker', taskId: 'task-b', worktreeId: ids['task-b'], pluginId: 'candidate-fullchain' }
           } },
         ] },
         { text: 'LEAD_DISPATCHED_C14' },
@@ -568,15 +573,12 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       await promptSession('controller-chain-c14: start the host, then plan and dispatch the lead.')
       await waitFor('controller host receipt', () => bodies().some(text => text.includes('admission_open')), 90_000)
       // Precise routing only: the lead's own requests, never the controller's
-      // input text.
-      await waitFor('lead dispatched its workers', () =>
+      // input text. Two lead requests = the lead's turn advanced past both
+      // registration dispatches, so the workers are durably registered.
+      await waitFor('lead registered its workers', () =>
         replay.requests.filter(request => request.needle === 'lead-briefing-c14').length >= 2, 120_000)
-      await waitFor('worker a live', () =>
-        replay.requests.some(request => request.needle === 'worker-task-a-briefing-c14'), 120_000)
-      await waitFor('worker b live', () =>
-        replay.requests.some(request => request.needle === 'worker-task-b-briefing-c14'), 120_000)
-      // The workers are registered and running; only now does the controller
-      // start the tasks.
+      // The workers are registered; only now does the controller start the
+      // tasks, and only their briefings give the workers a first model call.
       await promptSession('controller-chain-c14: the workers are registered, start both tasks now.')
       await waitFor('worker a delivery turn', () => {
         const workerRequests = replay.requests.filter(request => request.needle === 'worker-task-a-briefing-c14')
@@ -613,11 +615,14 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       // there, not in the RPC acceptance.
       let logEvidence = ''
       try {
-        const entries = await readdir(dshHome, { recursive: true, withFileTypes: true })
-        const logs = entries.filter(entry => entry.isFile() && entry.name.includes('candidate-root-c14'))
-          .map(entry => join(entry.parentPath, entry.name)).slice(0, 6)
+        const storageDir = join(dshHome, 'storages')
+        const entries = await readdir(storageDir, { recursive: true, withFileTypes: true })
+        const logs = entries.filter(entry => entry.isFile() && entry.name.endsWith('.json') || entry.name.endsWith('.jsonl'))
+          .map(entry => join(entry.parentPath, entry.name))
+          .filter(path => path.includes('candidate-root-c14') || path.includes('session'))
+          .slice(0, 8)
         for (const log of logs) {
-          logEvidence += `\n[log ${log}] ${(await readFile(log, 'utf8')).slice(-1200)}`
+          logEvidence += `\n[log ${log}] ${(await readFile(log, 'utf8')).slice(-800)}`
         }
       } catch {
         // The home may already be gone; the RPC evidence above still stands.
