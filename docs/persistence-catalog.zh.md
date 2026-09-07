@@ -441,6 +441,17 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 来源：[`packages/experimental/devframe/src/events.ts:264`](../packages/experimental/devframe/src/events.ts)
 
+<a id="devframetask-warning--log-only"></a>
+
+#### `devframe/task-warning` — log-only
+
+```ts persistence-catalog
+/** Host-graded degradation of one task's memory surface, carrying the grading the explicit requirement context produced; at most one per task. */
+'devframe/task-warning': DevFrameTaskWarningEventData
+```
+
+来源：[`packages/experimental/devframe/src/events.ts:321`](../packages/experimental/devframe/src/events.ts)
+
 <a id="devframeusage--log-only"></a>
 
 #### `devframe/usage` — log-only
