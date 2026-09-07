@@ -194,7 +194,7 @@ describe('agent dispatch tool schema', () => {
       required?: string[]
     }
     expect(Object.keys(parameters.properties)).toEqual([
-      'role', 'taskId', 'pluginId', 'worktreeId', 'prompt', 'retry', 'childId',
+      'role', 'taskId', 'pluginId', 'worktreeId', 'prompt', 'retry', 'followup', 'childId',
     ])
     expect(parameters.required).toEqual(['role', 'taskId', 'pluginId', 'worktreeId'])
   })
@@ -268,6 +268,56 @@ describe('agent dispatch tool behavior over the real engine', () => {
     expect(inserted).toHaveLength(1)
     expect(textOf(await execute('agent_dispatch', { ...args, retry: true }, controller)))
       .toContain(`Reusing lead child ${retried.childId}`)
+  })
+
+  it('delivers an explicit followup to the existing child and refuses a followup without one', async () => {
+    const { ctx, controller, createWorktree, execute } = await setup({
+      'dispatch-lead': ['plugin-a'],
+    })
+    const tree = await createWorktree('wt-followup', 'feature/followup')
+
+    // A followup on a task with no dispatched child is a model-facing
+    // refusal that names the fix.
+    const blind = await execute('agent_dispatch', {
+      role: 'lead',
+      taskId: 'ghost-task',
+      pluginId: 'plugin-a',
+      worktreeId: tree.id,
+      followup: true,
+      prompt: 'continue the work',
+    }, controller)
+    expect(blind.isError).toBe(true)
+    expect(textOf(blind)).toContain('has no dispatched child to follow up')
+
+    const first = valueOf(await execute('agent_dispatch', {
+      role: 'lead',
+      taskId: 'task-1',
+      pluginId: 'plugin-a',
+      worktreeId: tree.id,
+    }, controller)) as { childId: string }
+
+    // The explicit continuation reaches the existing child's inbox under
+    // its own deterministic-prefix identity, with no second child created.
+    const followed = valueOf(await execute('agent_dispatch', {
+      role: 'lead',
+      taskId: 'task-1',
+      pluginId: 'plugin-a',
+      worktreeId: tree.id,
+      followup: true,
+      prompt: 'lead-review-c14: review the delivered work now.',
+    }, controller)) as { childId: string; reused: boolean; followup: boolean }
+    expect(followed.reused).toBe(true)
+    expect(followed.followup).toBe(true)
+    expect(followed.childId).toBe(first.childId)
+
+    const childAgent = ctx.agents.get(SessionId(first.childId))
+    expect(childAgent).toBeDefined()
+    const followups = childAgent!.session.snapshotEvents()
+      .filter(event => event.type === 'agent/inbox/spliced')
+      .flatMap(event => (event.data as { inserted?: Array<{ id?: string; content?: unknown }> }).inserted ?? [])
+      .filter(message => typeof message.id === 'string' && message.id.startsWith('dispatch-followup:'))
+    expect(followups).toHaveLength(1)
+    expect(JSON.stringify(followups[0])).toContain('lead-review-c14: review the delivered work now.')
   })
 
   it('carries the controller-to-lead-to-worker chain through the model face', async () => {

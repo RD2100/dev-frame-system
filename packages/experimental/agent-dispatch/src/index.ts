@@ -27,4 +27,6 @@ export type {
   ProjectRunErrorCode,
   TaskChecksApproval,
 } from './run.ts'
+export { settlementNotice, watchChildSettlement } from './child-settlement.ts'
+export type { DispatchSettledMessageSource, SettlementFlush } from './child-settlement.ts'
 export { name, inject, Config, apply, TOOL_NAMES } from './consumer.ts'
