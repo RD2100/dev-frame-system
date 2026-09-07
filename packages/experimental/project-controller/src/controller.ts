@@ -27,11 +27,25 @@ import { Service, type Context } from '@deepseek-ai/cordis'
 import type { Domain, KvTable } from '@deepseek-ai/dsh-storage-domain'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ProjectLifecycleState } from '@deepseek-ai/dsh-experimental-devframe/shared'
+import { evaluateCompletionAdmission } from '@deepseek-ai/dsh-experimental-devframe/controller'
+import type { RequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
+import type {} from '@deepseek-ai/dsh-session-projection'
+import type {} from '@deepseek-ai/dsh-worktree-registry'
+import type {} from '@deepseek-ai/dsh-workspace'
 import type { PluginId, TaskId, TaskRecord, TaskState } from '@deepseek-ai/dsh-experimental-project-contracts'
 // Loads the session-identity Context augmentation so `ctx.agentBindings` types the merge-gate lookup.
 import type {} from '@deepseek-ai/dsh-experimental-session-identity'
 import { ProjectControllerError } from './errors.ts'
-import { projectTasksDomainSpec } from './spec.ts'
+import { projectTasksDomainSpec, type MainTreeIntegrationRecord } from './spec.ts'
+import { selectIntegrationEvidence } from './integration-evidence.ts'
+import {
+  executeIntegrationGit,
+  inspectIntegrationGit,
+  reconcileIntegrationGit,
+  type IntegrationGitOptions,
+  type IntegrationGitRequest,
+  type IntegrationGitObservation,
+} from './git-integration.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -80,6 +94,20 @@ export interface MainTreeMergeMarker {
   readonly callerSessionId: SessionId
   /** ISO-8601 minting instant. */
   readonly createdAt: string
+}
+
+/** Host-owned merge preparation; evidence itself is read from the controller Session projection. */
+export interface MainTreeMergeRequest {
+  /** Exact source and target selected by the registered worktree owners. */
+  readonly git: IntegrationGitRequest
+  /** Deployment-resolved process limits. */
+  readonly options: IntegrationGitOptions
+  /** Existing approved-checks store; never supplied by model JSON. */
+  readonly requiredChecksStore: RequiredChecksConfigStore
+  /** Explicitly re-admit an unchanged prepared operation; never enabled by normal dispatch. */
+  readonly retryUnchanged?: boolean
+  /** Host cancellation, retained only for the live attempt. */
+  readonly signal?: AbortSignal
 }
 
 /** Receipt for one model request charged against the project request budget. */
@@ -132,6 +160,7 @@ export class ProjectController extends Service {
   private table?: KvTable<TaskId, TaskRecord>
   private readonly tasks = new Map<TaskId, TaskRecord>()
   private readonly pendingMarkers = new Map<string, MainTreeMergeMarker>()
+  private readonly pendingGit = new Map<string, MainTreeMergeRequest>()
   private lifecycleState: ProjectLifecycleState = 'stopped'
   /** In-process mirror of the durable request-budget usage global. */
   private chargedRequests = 0
@@ -162,7 +191,13 @@ export class ProjectController extends Service {
 
   protected async [Service.init](): Promise<void> {
     const domain = await this.ctx.storageDomain.open(projectTasksDomainSpec)
-    this.ctx.effect(() => () => domain.close(), 'project-controller.domainClose')
+    this.ctx.effect(() => async () => {
+      this.lifecycleState = 'stopped'
+      await this.tail
+      this.pendingMarkers.clear()
+      this.pendingGit.clear()
+      await domain.close()
+    }, 'project-controller.domainClose')
     this.domain = domain
     this.table = domain.table('tasks')
     // Cold restore: the board comes back verbatim; in-flight records need the
@@ -381,9 +416,14 @@ export class ProjectController extends Service {
    * is single-use and process-local.
    * @param callerSessionId - Session requesting the merge.
    * @param taskId - Task to merge.
+   * @param request - Exact Git inputs and the host-owned approved-checks store.
    * @returns the marker to hand to {@link ProjectController.integrate}.
    */
-  async requestMainTreeMerge(callerSessionId: SessionId, taskId: TaskId): Promise<MainTreeMergeMarker> {
+  async requestMainTreeMerge(
+    callerSessionId: SessionId,
+    taskId: TaskId,
+    request: MainTreeMergeRequest,
+  ): Promise<MainTreeMergeMarker> {
     return await this.enqueue(async () => {
       this.requireAdmissionOpen()
       const binding = this.ctx.agentBindings.find(callerSessionId)
@@ -401,19 +441,44 @@ export class ProjectController extends Service {
       }
       const current = this.requireTask(taskId)
       this.requireTransition(current, 'submitted', 'integrated')
+      const table = this.requireDomain().table('integrations')
+      const previous = table.get(taskId)
+      if (previous !== undefined) {
+        if (request.retryUnchanged !== true || previous.state !== 'prepared' || previous.controllerSessionId !== callerSessionId
+          || previous.targetPath !== request.git.targetPath || previous.targetHead !== request.git.targetHead
+          || (await reconcileIntegrationGit(previous, request.options)).kind !== 'unchanged') {
+          throw new Error('Integration already has a durable intent; reconcile before another attempt')
+        }
+      }
+      const { evidence, guard } = await this.admitIntegration(callerSessionId, current, request)
+      await inspectIntegrationGit(request.git, request.options)
+      guard()
+      const now = new Date().toISOString()
+      await table.put(taskId, {
+        taskId, controllerSessionId: callerSessionId,
+        reviewId: evidence.review.reviewId, verificationId: evidence.verification.verificationId,
+        ...request.git, state: 'prepared', createdAt: now, updatedAt: now,
+      })
       const marker: MainTreeMergeMarker = Object.freeze({
         mergeId: randomUUID(),
         taskId,
         callerSessionId,
         createdAt: new Date().toISOString(),
       })
+      for (const [id, pending] of this.pendingMarkers) {
+        if (pending.taskId === taskId) {
+          this.pendingMarkers.delete(id)
+          this.pendingGit.delete(id)
+        }
+      }
       this.pendingMarkers.set(marker.mergeId, marker)
+      this.pendingGit.set(marker.mergeId, { ...request, git: { ...request.git }, options: { ...request.options } })
       return marker
     })
   }
 
   /**
-   * Consume one merge marker and move the task to `integrated`.
+   * Execute the admitted fast-forward once, then record integration only after observing the exact clean target.
    * @param taskId - Task to move; the marker must name it.
    * @param marker - The marker minted by {@link ProjectController.requestMainTreeMerge}.
    * @returns the updated record.
@@ -431,9 +496,140 @@ export class ProjectController extends Service {
       const current = this.requireTask(taskId)
       this.requireTransition(current, 'submitted', 'integrated')
       this.requireAdmissionOpen()
+      const request = this.pendingGit.get(marker.mergeId)
+      const intent = this.requireDomain().table('integrations').get(taskId)
+      if (request === undefined || intent === undefined || intent.controllerSessionId !== marker.callerSessionId) {
+        throw new Error('Integration marker has no matching durable Git intent')
+      }
       this.pendingMarkers.delete(marker.mergeId)
-      return await this.persist(stamped(current, 'integrated'))
+      this.pendingGit.delete(marker.mergeId)
+      const { evidence, guard } = await this.admitIntegration(marker.callerSessionId, current, request)
+      if (evidence.review.reviewId !== intent.reviewId || evidence.verification.verificationId !== intent.verificationId) {
+        throw new Error('Integration evidence superseded the prepared intent; prepare again')
+      }
+      const result = await executeIntegrationGit(intent, request.options, request.signal, guard)
+      if (result.observation.kind !== 'applied' || result.commandError !== undefined) {
+        throw new Error(`Integration requires reconciliation: ${result.observation.kind}`, { cause: result.commandError })
+      }
+      return await this.recordAppliedIntegration(current, intent)
     })
+  }
+
+  /**
+   * Reconcile a durable intent after interruption without issuing another Git merge.
+   * @param callerSessionId - The same controller that admitted the original operation.
+   * @param taskId - Task whose retained intent is being reconciled.
+   * @param options - Explicit deployment process limits for read-only Git observations.
+   * @returns The actual Git observation; only `applied` advances the task board.
+   */
+  async reconcileMainTreeIntegration(
+    callerSessionId: SessionId,
+    taskId: TaskId,
+    options: IntegrationGitOptions,
+  ): Promise<IntegrationGitObservation> {
+    return await this.enqueue(async () => {
+      this.requireAdmissionOpen()
+      const binding = this.ctx.agentBindings.find(callerSessionId)
+      const intent = this.requireDomain().table('integrations').get(taskId)
+      if (binding?.role !== 'controller' || intent?.controllerSessionId !== callerSessionId
+        || binding.worktreePath !== intent.targetPath) {
+        throw new Error('Integration reconciliation requires its original registered controller')
+      }
+      const registries = this.integrationWorktrees()
+      const target = registries.workspaces.list().flatMap(workspace => registries.worktrees.list(workspace.id))
+        .find(row => row.id === binding.worktreeId)
+      if (target?.path !== intent.targetPath || String(target.lockedBy) !== String(callerSessionId)) {
+        throw new Error('Integration reconciliation requires the controller writer lock')
+      }
+      const current = this.requireTask(taskId)
+      if (current.state !== 'submitted' && current.state !== 'integrated') {
+        throw new Error('Integration reconciliation requires a submitted or integrated task')
+      }
+      const observation = await reconcileIntegrationGit(intent, options)
+      if (observation.kind === 'applied' && current.state === 'submitted') await this.recordAppliedIntegration(current, intent)
+      return observation
+    })
+  }
+
+  /** Integration requires registries at its execution entry, independently of any tool consumer. */
+  private integrationWorktrees() {
+    const workspaces = this.ctx.get('workspaceRegistry')
+    const worktrees = this.ctx.get('worktreeRegistry')
+    if (workspaces === undefined || worktrees === undefined) throw new Error('Integration requires workspace and worktree registries')
+    return { workspaces, worktrees }
+  }
+
+  /** Read registry and projection evidence afresh; no marker substitutes for current authority. */
+  private readIntegrationAdmission(callerSessionId: SessionId, current: TaskRecord, request: MainTreeMergeRequest) {
+    const taskId = current.taskId
+    const binding = this.ctx.agentBindings.find(callerSessionId)
+    if (binding?.role !== 'controller') throw new Error('Integration requires its registered controller')
+    const session = this.ctx.get('sessions')?.get(callerSessionId)
+    const state = session === undefined ? undefined : this.ctx.get('sessionProjections')?.stateOf(session, 'devframe')
+    if (state === undefined) throw new Error('Integration requires the live controller evidence projection')
+    const expected = state.bindings.at(-1)
+    if (expected?.lifecycle !== 'admission_open' || !expected.taskIds.some(id => String(id) === String(taskId))) {
+      throw new Error('Integration requires the task in the current Goal with open admission')
+    }
+    const worker = current.assigneeSessionId === undefined ? undefined : this.ctx.agentBindings.find(current.assigneeSessionId)
+    const lead = worker?.parentSessionId === undefined ? undefined : this.ctx.agentBindings.find(worker.parentSessionId)
+    if (expected === undefined || worker === undefined || lead === undefined) {
+      throw new Error('Integration requires the current Goal binding and registered task hierarchy')
+    }
+    const evidence = selectIntegrationEvidence({ state, expected, controller: binding, task: current, worker, lead })
+    if (request.git.sourcePath !== worker.worktreePath || request.git.targetPath !== binding.worktreePath) {
+      throw new Error('Integration paths must match the registered Worker and controller worktrees')
+    }
+    const registries = this.integrationWorktrees()
+    const rows = registries.workspaces.list().flatMap(workspace => registries.worktrees.list(workspace.id))
+    const target = rows.find(row => row.id === binding.worktreeId)
+    const source = rows.find(row => row.id === worker.worktreeId)
+    const reviewer = rows.find(row => row.id === lead.worktreeId)
+    if (target === undefined || source === undefined || reviewer === undefined
+      || target.path !== binding.worktreePath || source.path !== worker.worktreePath || reviewer.path !== lead.worktreePath
+      || target.workspaceId !== source.workspaceId || target.workspaceId !== reviewer.workspaceId
+      || String(target.workspaceId) !== String(expected.workspaceId)
+      || String(target.lockedBy) !== String(callerSessionId) || String(source.lockedBy) !== String(worker.sessionId)) {
+      throw new Error('Integration requires registered worktrees and current controller/Worker writer locks in its workspace')
+    }
+    const taskWarnings = state.taskWarnings.filter(warning => String(warning.taskId) === String(taskId))
+    return {
+      evidence,
+      signature: JSON.stringify({ expected, evidence, taskWarnings, binding, worker, lead, target, source, reviewer }),
+      input: {
+        worktreePath: request.git.sourcePath,
+        sourceFingerprint: expected.sourceFingerprint,
+        checks: evidence.verification.checks,
+        requiredChecksDigest: evidence.verification.requiredChecks.digest,
+        requiredChecksStore: request.requiredChecksStore,
+        review: evidence.review,
+        taskWarnings,
+      },
+    }
+  }
+
+  /** Evaluate source checks and retain a synchronous admission guard for the Git spawn. */
+  private async admitIntegration(callerSessionId: SessionId, current: TaskRecord, request: MainTreeMergeRequest) {
+    const admission = this.readIntegrationAdmission(callerSessionId, current, request)
+    const verdict = await evaluateCompletionAdmission(admission.input)
+    if (verdict.kind !== 'admitted') throw new Error(`Integration admission rejected at ${verdict.stage}`)
+    const guard = () => {
+      request.signal?.throwIfAborted()
+      this.requireAdmissionOpen()
+      if (this.readIntegrationAdmission(callerSessionId, current, request).signature !== admission.signature) {
+        throw new Error('Integration evidence changed during admission; prepare again')
+      }
+    }
+    guard()
+    return { evidence: admission.evidence, guard }
+  }
+
+  /** Persist the observed Git result before updating the task; a failed task write remains reconcilable. */
+  private async recordAppliedIntegration(current: TaskRecord, intent: MainTreeIntegrationRecord): Promise<TaskRecord> {
+    await this.requireDomain().table('integrations').put(current.taskId, {
+      ...intent, state: 'applied', updatedAt: new Date().toISOString(),
+    })
+    return await this.persist(stamped(current, 'integrated'))
   }
 
   /**

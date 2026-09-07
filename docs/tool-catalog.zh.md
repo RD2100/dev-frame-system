@@ -45,6 +45,7 @@
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-worktree` | `worktree_create`、`worktree_list`、`worktree_prune`、`worktree_remove`、`worktree_status` | `ctx.tools`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry`、`ctx.systemPrompt`、`a calling Agent (its session cwd authorizes the workspace)` | `tool/call`、`tool/result` | - | 五个工具把每次调用都授权到由不可变 session cwd 解析出的调用会话工作区；另一工作区持有的 worktree id 与未知 id 的报告完全一致。上方 schema 不依赖具体哪个 provider 支撑注册表。 |
 | `@deepseek-ai/dsh-experimental-agent-worktree` | `worktree_create`、`worktree_remove`、`worktree_status` | `ctx.tools`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry`、`ctx.systemPrompt`、`a calling Agent (its session cwd authorizes the workspace)` | `tool/call`、`tool/result` | - | 三个工具把每个新建 worktree 绑定为调用会话的单一写入目标：其他会话只能观察，只有绑定持有者能移除。实验性私有包：不出现在任何发布 bundle 中，且与 dsh-tool-worktree 同装一个组合会重复注册共享的工具名。 |
+| `@deepseek-ai/dsh-experimental-project-controller/consumer` | `project_integrate` | `ctx.tools`、`ctx.agents`、`ctx.projectController`、`ctx.agentBindings`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry` | `tool/call`、`tool/result`、`project_tasks integrations and tasks`、`Git target worktree` | - | 需显式启用的总控专用消费者。集成需要持久化验证、独立组长评审、当前 Goal 和已注册工作树的写入锁。协调恢复只观察中断的意图，不重复执行 Git。 |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
@@ -2397,6 +2398,38 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
 来源：[`packages/experimental/agent-worktree/src/index.ts`](../packages/experimental/agent-worktree/src/index.ts)
 
 三个工具把每个新建 worktree 绑定为调用会话的单一写入目标：其他会话只能观察，只有绑定持有者能移除。实验性私有包：不出现在任何发布 bundle 中，且与 dsh-tool-worktree 同装一个组合会重复注册共享的工具名。
+
+<a id="deepseek-aidsh-experimental-project-controllerconsumer"></a>
+
+## `@deepseek-ai/dsh-experimental-project-controller/consumer`
+
+### `project_integrate`
+
+在持久化验证和独立组长评审通过后，将已提交任务从其注册的 Worker 工作树集成到你的总控工作树。选择 integrate 发起新尝试，选择 reconcile 观察中断的尝试而不重复 Git，或在目标未变化时选择 retry 显式重新准入之前的尝试。已变化或含糊的目标需要协调恢复；此工具从不重置文件或解决冲突。只有实际的根总控可以调用它。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "taskId": {
+      "type": "string",
+      "description": "The submitted task id on the project task board."
+    },
+    "action": {
+      "type": "string",
+      "description": "integrate, reconcile, or retry. Retry rechecks all current evidence before another attempt."
+    }
+  },
+  "required": [
+    "taskId",
+    "action"
+  ]
+}
+```
+
+来源：[`packages/experimental/project-controller/src/consumer.ts`](../packages/experimental/project-controller/src/consumer.ts)
+
+需显式启用的总控专用消费者。集成需要持久化验证、独立组长评审、当前 Goal 和已注册工作树的写入锁。协调恢复只观察中断的意图，不重复执行 Git。
 
 <a id="deepseek-aidsh-tool-web"></a>
 

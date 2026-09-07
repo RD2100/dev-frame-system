@@ -4,7 +4,7 @@ import { expect, describe, it } from 'vitest'
 import { join } from 'node:path'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
-import { harness } from './helpers.ts'
+import { harness, unavailableMergeRequest } from './helpers.ts'
 import { MainTreeMergeMarker, ProjectControllerError } from '../src/index.ts'
 
 const CWD = (h: { root: string }) => join(h.root, `ws-${Math.random().toString(36).slice(2, 8)}`)
@@ -22,7 +22,7 @@ async function bindSession(
 }
 
 describe('task dispatch', () => {
-  it('runs the full TaskState order through the controller-only merge gate', async () => {
+  it('moves through submission and refuses integration without evidence', async () => {
     const h = await harness()
     try {
       h.ctx.projectController.startProject()
@@ -38,14 +38,9 @@ describe('task dispatch', () => {
       await h.ctx.projectController.submit(TASK('1'))
       expect(h.ctx.projectController.find(TASK('1'))?.assigneeSessionId).toBe(worker)
 
-      const marker = await h.ctx.projectController.requestMainTreeMerge(controller, TASK('1'))
-      expect(marker.taskId).toBe(TASK('1'))
-      expect(marker.callerSessionId).toBe(controller)
-      const integrated = await h.ctx.projectController.integrate(TASK('1'), marker)
-      expect(integrated.state).toBe('integrated')
-
-      const completed = await h.ctx.projectController.complete(TASK('1'))
-      expect(completed.state).toBe('completed')
+      await expect(h.ctx.projectController.requestMainTreeMerge(controller, TASK('1'), unavailableMergeRequest))
+        .rejects.toThrow('evidence projection')
+      expect(h.ctx.projectController.find(TASK('1'))?.state).toBe('submitted')
     } finally {
       await h.dispose()
     }
@@ -151,7 +146,7 @@ describe('blocked and failed tasks', () => {
 })
 
 describe('merge gate', () => {
-  it('mints markers for controller sessions only and consumes them once', async () => {
+  it('rejects unbound and non-controller callers and forged markers', async () => {
     const h = await harness()
     try {
       h.ctx.projectController.startProject()
@@ -163,15 +158,10 @@ describe('merge gate', () => {
       await h.ctx.projectController.beginReview(TASK('1'))
       await h.ctx.projectController.submit(TASK('1'))
 
-      await expect(h.ctx.projectController.requestMainTreeMerge(lead, TASK('1')))
+      await expect(h.ctx.projectController.requestMainTreeMerge(lead, TASK('1'), unavailableMergeRequest))
         .rejects.toMatchObject({ code: 'PROJECT_CONTROLLER_NOT_CONTROLLER' })
-      await expect(h.ctx.projectController.requestMainTreeMerge(SessionId('session-none'), TASK('1')))
+      await expect(h.ctx.projectController.requestMainTreeMerge(SessionId('session-none'), TASK('1'), unavailableMergeRequest))
         .rejects.toMatchObject({ code: 'PROJECT_CONTROLLER_NOT_CONTROLLER' })
-
-      const marker = await h.ctx.projectController.requestMainTreeMerge(controller, TASK('1'))
-      await h.ctx.projectController.integrate(TASK('1'), marker)
-      await expect(h.ctx.projectController.integrate(TASK('1'), marker))
-        .rejects.toMatchObject({ code: 'PROJECT_CONTROLLER_MARKER_INVALID' })
 
       const forged: MainTreeMergeMarker = {
         mergeId: 'forged', taskId: TASK('1'), callerSessionId: controller, createdAt: 'now',
@@ -248,7 +238,7 @@ describe('project lifecycle', () => {
 })
 
 describe('cold restore', () => {
-  it('restores the board verbatim and re-gates integration on fresh markers', async () => {
+  it('restores the board verbatim and refuses a new controller without evidence', async () => {
     const h1 = await harness()
     h1.ctx.projectController.startProject()
     await bindSession(h1, 'controller')
@@ -267,9 +257,8 @@ describe('cold restore', () => {
       expect(h2.ctx.projectController.find(TASK('1'))?.state).toBe('submitted')
       h2.ctx.projectController.startProject()
       const controller2 = await bindSession(h2, 'controller')
-      const marker = await h2.ctx.projectController.requestMainTreeMerge(controller2, TASK('1'))
-      const integrated = await h2.ctx.projectController.integrate(TASK('1'), marker)
-      expect(integrated.state).toBe('integrated')
+      await expect(h2.ctx.projectController.requestMainTreeMerge(controller2, TASK('1'), unavailableMergeRequest))
+        .rejects.toThrow('evidence projection')
     } finally {
       await h2.dispose()
     }

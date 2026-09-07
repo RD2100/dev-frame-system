@@ -1,10 +1,12 @@
 /** Experimental-package publication and dependency constraints. */
 
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   checkExperimentalDependencyIsolation,
   checkExperimentalManifest,
   expectedDshPackageFiles,
+  type PackageManifest,
   type WorkspaceManifest,
 } from './check-workspace-constraints.ts'
 
@@ -77,6 +79,34 @@ describe('experimental workspace constraints', () => {
 })
 
 describe('package payload constraints', () => {
+  it.each([
+    { './consumer': './lib/consumer.js' },
+    { './consumer': { types: './lib/types/consumer.d.ts', default: './lib/consumer.js' } },
+  ])('requires the independent consumer bundle for its runtime export: %j', (exports) => {
+    expect(expectedDshPackageFiles({ exports })).toEqual([
+      'lib/index.js', 'lib/consumer.js', 'lib/types/**/*.d.ts',
+    ])
+  })
+
+  it.each([
+    {},
+    { './consumer': './src/consumer.ts' },
+    { './consumer': { types: './lib/types/consumer.d.ts' } },
+    { './consumer': { default: './lib/index.js' } },
+    { './other': './lib/consumer.js' },
+  ])('excludes the consumer bundle without its exact runtime export: %j', (exports) => {
+    expect(expectedDshPackageFiles({ exports })).toEqual([
+      'lib/index.js', 'lib/types/**/*.d.ts',
+    ])
+  })
+
+  it('matches the project controller payload to its independent consumer export', () => {
+    const manifest = JSON.parse(readFileSync(new URL(
+      '../packages/experimental/project-controller/package.json', import.meta.url,
+    ), 'utf8')) as PackageManifest
+    expect(manifest.files).toEqual(expectedDshPackageFiles(manifest))
+  })
+
   it('includes a declared profile patch without a package-name allowlist', () => {
     expect(expectedDshPackageFiles({
       name: '@deepseek-ai/dsh-private-profile',

@@ -1,0 +1,115 @@
+/** Snapshot-only preconditions; the SDK Agent itself executes project_integrate through its model turn. */
+import { execFile } from 'node:child_process'
+import { join } from 'node:path'
+import { promisify } from 'node:util'
+import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-agent'
+import type {} from '@deepseek-ai/dsh-session-projection'
+import type {} from '@deepseek-ai/dsh-experimental-project-controller'
+import type {} from '@deepseek-ai/dsh-experimental-session-identity'
+import type {} from '@deepseek-ai/dsh-workspace'
+import { WorktreeLockHolder } from '@deepseek-ai/dsh-worktree-registry'
+import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
+import { FileRequiredChecksConfigStore, computeSourceFingerprint } from '@deepseek-ai/dsh-experimental-devframe'
+import { GoalId } from '@deepseek-ai/dsh-goal'
+import { AcceptanceHash, ConfigurationConfirmationId, DevFrameSnapshotId, WorkspaceId } from '@deepseek-ai/dsh-experimental-devframe/shared'
+import { ControllerSessionId, TaskId as GoalTaskId } from '@deepseek-ai/dsh-experimental-devframe/controller'
+import { DevFrameReviewId, DevFrameVerificationId } from '../../../devframe/lib/types/events.js'
+import { devFrameProjectionDefinition } from '../../../devframe/lib/types/projection.js'
+import { DevFrameSessionJournal } from '../../../devframe/lib/types/session-journal.js'
+
+export const name = 'project-integration-snapshot'
+export const inject = ['agents', 'sessions', 'sessionProjections', 'agentBindings', 'projectController', 'workspaceRegistry', 'worktreeRegistry']
+
+/** Install deterministic host-owned evidence before the first model request. */
+export function apply(ctx: Context): void {
+  const initialized = new WeakSet<object>()
+  ctx.effect(() => ctx.sessionProjections.register(devFrameProjectionDefinition))
+  ctx.on('agent/pre-step', async ({ agent }, next) => {
+    if (initialized.has(agent)) return await next()
+    if (String(agent.id) !== 'fixture-root-session') throw new Error('Integration snapshot received an unexpected root Agent')
+    const root = join(process.cwd(), '.dsh', 'integration')
+    const workspace = await ctx.workspaceRegistry.create(join(root, 'repo'))
+    await ctx.worktreeRegistry.reconcile(workspace.id, { adoptUnregistered: true })
+    const rows = ctx.worktreeRegistry.list(workspace.id)
+    const rowFor = (role: string) => {
+      const row = rows.find(candidate => candidate.branch === role)
+      if (row === undefined) throw new Error(`Integration snapshot is missing its ${role} worktree`)
+      return row
+    }
+    const target = rowFor('target')
+    const leadTree = rowFor('lead')
+    const source = rowFor('worker')
+    const pluginId = PluginId('snapshot-plugin')
+    const taskId = TaskId('task-integration')
+    await ctx.agentBindings.bind({ agentId: agent.id, role: 'controller',
+      worktree: { worktreeId: target.id, worktreePath: target.path } })
+    const lead = (await ctx.agentBindings.createBoundSession({
+      cwd: leadTree.path, role: 'lead', parentSessionId: agent.id, pluginId,
+      worktree: { worktreeId: leadTree.id, worktreePath: leadTree.path },
+    })).session
+    const worker = (await ctx.agentBindings.createBoundSession({
+      cwd: source.path, role: 'worker', parentSessionId: lead.id, pluginId, taskId,
+      worktree: { worktreeId: source.id, worktreePath: source.path },
+    })).session
+    for (const [tree, session] of [[target, agent.session], [leadTree, lead], [source, worker]] as const) {
+      await ctx.worktreeRegistry.bind(tree.id, WorktreeLockHolder(String(session.id)))
+    }
+    const journal = new DevFrameSessionJournal(session => ctx.sessions.flush(session), {
+      requireReviewer(sessionId) {
+        const binding = ctx.agentBindings.find(sessionId)
+        if (binding?.role !== 'lead' || binding.parentSessionId !== agent.id || binding.pluginId !== pluginId
+          || binding.sessionId === worker.id || binding.worktreeId === source.id) {
+          throw new Error('Snapshot review requires the independent registered plugin lead')
+        }
+      },
+    })
+    const policy = { inheritedTools: [], denyScopedTools: [] }
+    const binding = {
+      controllerSessionId: ControllerSessionId(String(agent.id)), workspaceId: WorkspaceId(String(workspace.id)),
+      goalId: GoalId('goal-integration'), goalRevision: 1,
+      taskIds: [GoalTaskId(String(taskId))], acceptanceHash: AcceptanceHash('acceptance-integration'),
+      snapshotId: DevFrameSnapshotId('snapshot-integration'),
+      sourceFingerprint: (await computeSourceFingerprint({ worktreePath: source.path })).fingerprint,
+    }
+    await journal.append(agent.session, 'devframe/role-policy', {
+      version: 1, controllerSessionId: agent.id, workspaceId: binding.workspaceId, policyVersion: 'snapshot-policy',
+      config: { controller: policy, worker: policy, reviewer: policy },
+      assignments: [{ role: 'controller', sessionId: agent.id }, { role: 'lead', sessionId: lead.id }],
+    })
+    await journal.append(agent.session, 'devframe/goal-binding', {
+      ...binding, version: 1,
+      confirmation: { id: ConfigurationConfirmationId('confirmation-integration'), acceptanceHash: binding.acceptanceHash },
+      lifecycle: 'admission_open', budget: { maxAttempts: 10, consumedAttempts: 0 },
+    })
+    const check = { checkId: 'diff-check', executable: 'git', arguments: ['diff', '--check'], cwd: '.' }
+    const config = { version: 1 as const, checks: [check] }
+    const store = new FileRequiredChecksConfigStore({ path: join(process.cwd(), '.dsh', 'project-checks.json') })
+    const digest = await store.save(config)
+    const env = Object.fromEntries(Object.entries(process.env)
+      .filter(([key]) => !/KEY|SECRET|TOKEN|PASSWORD/i.test(key) && !/^GIT_/i.test(key)))
+    await promisify(execFile)('git', ['diff', '--check'], {
+      cwd: source.path, env, windowsHide: true, timeout: 15_000, maxBuffer: 1024 * 1024,
+    })
+    await journal.append(agent.session, 'devframe/verification', {
+      version: 1, verificationId: DevFrameVerificationId('verification-integration'), binding, snapshotId: binding.snapshotId,
+      status: 'passed', requiredChecks: { config, digest },
+      // The subprocess outcome is real; the fixture clock reports a fixed duration.
+      checks: [{ ...check, status: 'passed', exitCode: 0, durationMs: 0 }],
+    })
+    await journal.append(agent.session, 'devframe/review', {
+      version: 1, reviewId: DevFrameReviewId('review-integration'), binding, snapshotId: binding.snapshotId,
+      reviewerSessionId: lead.id, policyVersion: 'snapshot-policy', decision: 'pass', findings: [],
+    })
+    ctx.projectController.startProject()
+    await ctx.projectController.createTask({ taskId, pluginId, title: 'Integrate reviewed snapshot source' })
+    await ctx.projectController.assign(taskId, worker.id)
+    await ctx.projectController.startDevelopment(taskId)
+    await ctx.projectController.beginReview(taskId)
+    await ctx.projectController.submit(taskId)
+    await ctx.sessions.flush(lead)
+    await ctx.sessions.flush(worker)
+    initialized.add(agent)
+    return await next()
+  })
+}

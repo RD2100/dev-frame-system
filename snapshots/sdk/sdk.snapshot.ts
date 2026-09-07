@@ -61,6 +61,7 @@ import {
   type RunResult,
   type SdkPromptContentBlock,
 } from '@deepseek-ai/dsh-sdk-client'
+import { prepareProjectIntegration, verifyProjectIntegration } from './project-integration-setup.ts'
 
 const corpusRoot = fileURLToPath(new URL('../', import.meta.url))
 
@@ -104,6 +105,12 @@ function dirOf(url: string): string {
 }
 
 interface SdkAssertions {
+  /** Session worktree below the isolated run root. */
+  sessionCwd?: string
+  /** Inspect external effects after the runtime has closed and flushed storage. */
+  verifyWorkspace?: (cwd: string) => Promise<void>
+  /** Child sessions contain seeded evidence without an Agent model run. */
+  boundSessionsOnly?: boolean
   /** Environment overrides passed to the runtime subprocess. */
   environment?: Readonly<Record<string, string>>
   /** A separate DSH SDK child whose persisted session joins the evidence. */
@@ -124,6 +131,11 @@ interface SdkAssertions {
 }
 
 const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
+  'project-integrate-success': {
+    sessionCwd: '.dsh/integration/target',
+    verifyWorkspace: verifyProjectIntegration,
+    boundSessionsOnly: true,
+  },
   'subagent-dsh-sdk-diagnostic': {
     environment: { DSH_TEST_CHILD_PATCH: dshSdkDiagnosticChildPatch },
   },
@@ -597,6 +609,20 @@ async function runScenario(scenario: CorpusScenario): Promise<{
       await cp(join(workspaceDir, entry), join(cwd, entry), { recursive: true, verbatimSymlinks: true })
     }
   }
+  const workspaceSetup = scenario.manifest.workspace?.setup
+  if (workspaceSetup !== undefined) {
+    const setups: Readonly<Record<string, (root: string) => Promise<void>>> = {
+      'project-integration': prepareProjectIntegration,
+    }
+    const prepare = setups[workspaceSetup]
+    if (prepare === undefined) throw new Error(`${scenario.name}: unknown SDK workspace setup ${workspaceSetup}`)
+    try {
+      await prepare(cwd)
+    } catch (error) {
+      await rm(cwd, { recursive: true, force: true })
+      throw error
+    }
+  }
   const initialWorkspace = await captureWorkspaceSnapshot(cwd, {
     ignoredRootEntries: RUNTIME_WORKSPACE_ENTRIES,
   })
@@ -628,7 +654,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     processCwd: cwd,
     env,
     requestTimeoutMs: 110_000,
-    cwd,
+    cwd: assertions.sessionCwd === undefined ? cwd : join(cwd, assertions.sessionCwd),
     provider: route.provider,
     model: route.model,
   })
@@ -680,6 +706,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
       subscription.close()
     }
     await harness.close()
+    await assertions.verifyWorkspace?.(cwd)
     const logs = (await Promise.all([
       persistedLogs(sessionsRoot),
       ...(childSessionsRoot === undefined ? [] : [persistedLogs(childSessionsRoot)]),
@@ -872,12 +899,38 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         assertions.dshSdkChild !== undefined,
       )
       const actualContext = contextOf(ordered, cwd)
+      // Embedded JSON-quoted paths must be replaced before the shared normalizer
+      // converts Windows separators; all three workspace relationships stay visible.
+      const nestedCwd = (log: string): string => {
+        if (assertions.sessionCwd === undefined) return log
+        const paths = ordered.map(({ header }) => String(header.cwd))
+        const canonicalize = (value: unknown): unknown => {
+          if (typeof value === 'string') {
+            let text = value
+            for (const path of paths) {
+              const replacement = '{{cwd}}' + path.slice(cwd.length).replaceAll('\\', '/')
+              text = text.split(JSON.stringify(path).slice(1, -1)).join(replacement)
+              text = text.split(path).join(replacement)
+            }
+            return text
+          }
+          if (Array.isArray(value)) return value.map(canonicalize)
+          if (value !== null && typeof value === 'object') {
+            return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, canonicalize(item)]))
+          }
+          return value
+        }
+        return log.split('\n').map(line => line.length === 0 ? line : JSON.stringify(canonicalize(JSON.parse(line)))).join('\n')
+      }
+      const fixtureCwd = (log: string) => assertions.sessionCwd === undefined
+        ? tokenizeSessionFixtureCwd(log)
+        : normalizeSessionLog(nestedCwd(log), actualContext, { identityMode: 'preserve' })
 
       let expectedContents = await Promise.all(files.map(file => readFile(file, 'utf8')))
 
       if (recording) {
         expectedContents = redactSessionSnapshotIds(stabilizeFixtureMessageIds(
-          ordered.map(log => scrubSessionSnapshot(tokenizeSessionFixtureCwd(log.content))),
+          ordered.map(log => scrubSessionSnapshot(fixtureCwd(log.content))),
           expectedContents,
         ))
       }
@@ -893,8 +946,8 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         const refreshed = ordered.map((log, index) => {
           const existing = expectedContents[index]
           if (existing === undefined) throw new Error(`no fixture for persisted log ${index}`)
-          return scrubSessionSnapshot(tokenizeSessionFixtureCwd(
-            stabilizeRefreshLog(log.content, existing, replacements, actualContext),
+          return scrubSessionSnapshot(fixtureCwd(
+            stabilizeRefreshLog(nestedCwd(log.content), existing, replacements, actualContext),
           ))
         })
         expectedContents = redactSessionSnapshotIds(stabilizeFixtureMessageIds(refreshed, expectedContents))
@@ -927,10 +980,21 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
 
       // Persisted transcripts match the committed fixtures.
       const expectedContext = contextOfContents(expectedContents)
-      const actualSnapshots = normalizeSessionSnapshots(ordered.map(log => log.content), actualContext)
+      if (assertions.sessionCwd !== undefined) expectedContext.cwd = '{{cwd}}'
+      const actualLogs = ordered.map(log => nestedCwd(log.content))
+      const actualSnapshots = normalizeSessionSnapshots(actualLogs, actualContext)
       const expectedSnapshots = normalizeSessionSnapshots(expectedContents, expectedContext)
       for (const [index, actual] of actualSnapshots.entries()) {
         expect(actual, `${scenario.name}: session ${index}`).toBe(expectedSnapshots[index])
+      }
+      if (scenario.name === 'project-integrate-success') {
+        const headers = actualSnapshots.map(log => JSON.parse(log.slice(0, log.indexOf('\n'))) as { cwd: string })
+        expect(headers.map(header => header.cwd)).toEqual([
+          '{{cwd}}/.dsh/integration/target', '{{cwd}}/.dsh/integration/lead', '{{cwd}}/.dsh/integration/worker',
+        ])
+        expect(normalizeSessionSnapshots(actualSnapshots, { cwd: '{{cwd}}', sessionIds: [] }))
+          .toEqual(actualSnapshots)
+        expect(actualSnapshots.some(log => log.includes(cwd) || log.includes(cwd.replaceAll('\\', '/')))).toBe(false)
       }
       await verifyHeaders(scenario, ordered, actualContext, assertions.dshSdkChild?.agentConfig)
 
@@ -993,7 +1057,7 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
       }
       if (ordered.length > 1 && assertions.dshSdkChild === undefined) {
         expect(observedMethods.has('subagent.started')).toBe(true)
-        expect(observedMethods.has('subagent.finished')).toBe(true)
+        expect(observedMethods.has('subagent.finished')).toBe(assertions.boundSessionsOnly !== true)
       }
     })
   }

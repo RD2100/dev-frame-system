@@ -7,6 +7,10 @@ import type { WorktreeId } from '@deepseek-ai/dsh-worktree-registry'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import type { TaskRecord } from '@deepseek-ai/dsh-experimental-project-contracts'
+import {
+  DevFrameReviewId,
+  DevFrameVerificationId,
+} from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
 
 /** Task identity schema; validation owns the brand factory. */
 const taskId = z.string().min(1).transform(value => TaskId(value))
@@ -62,19 +66,40 @@ export interface RequestBudgetUsage {
   readonly chargedRequests: number
 }
 
+/** Durable Git intent and observation; review decisions remain owned by the existing Session projection. */
+export const mainTreeIntegrationSchema = z.object({
+  taskId,
+  controllerSessionId: sessionId,
+  reviewId: z.string().min(1).transform(DevFrameReviewId),
+  verificationId: z.string().min(1).transform(DevFrameVerificationId),
+  sourcePath: z.string().min(1),
+  targetPath: z.string().min(1),
+  sourceCommit: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
+  targetHead: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
+  state: z.enum(['prepared', 'applied']),
+  createdAt: z.string().min(1),
+  updatedAt: z.string().min(1),
+}).strict()
+
+/** Git operation identity and outcome restored before any post-restart integration decision. */
+export type MainTreeIntegrationRecord = z.infer<typeof mainTreeIntegrationSchema>
+
 /**
  * The project-controller domain spec: one `tasks` table keyed by
  * {@link TaskId} plus the request-budget usage global. Records are written
  * through on every transition and rebuilt from this table on start, so the
  * table is the only durable authority for the board; the global is the only
- * durable authority for charged request usage. Version 2 adds the global
- * slot; a medium stamped with version 1 rejects at open (pre-release stance:
+ * durable authority for charged request usage. Version 3 adds integration
+ * intents and observed Git outcomes; earlier versions reject at open (pre-release stance:
  * no migration across layout changes).
  */
 export const projectTasksDomainSpec = defineDomain({
   name: 'project_tasks',
-  version: 2,
-  tables: { tasks: domainTable<TaskId, TaskRecord>(taskRecordSchema) },
+  version: 3,
+  tables: {
+    tasks: domainTable<TaskId, TaskRecord>(taskRecordSchema),
+    integrations: domainTable<TaskId, MainTreeIntegrationRecord>(mainTreeIntegrationSchema),
+  },
   global: {
     schema: requestBudgetUsageSchema,
     initial: { chargedRequests: 0 },

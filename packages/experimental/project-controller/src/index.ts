@@ -9,7 +9,7 @@
 export { ProjectControllerError } from './errors.ts'
 export type { ProjectControllerErrorCode } from './errors.ts'
 export { ProjectController } from './controller.ts'
-export type { MainTreeMergeMarker, ProjectControllerConfig, RequestChargeReceipt, TaskBlockDetail } from './controller.ts'
+export type { MainTreeMergeMarker, MainTreeMergeRequest, ProjectControllerConfig, RequestChargeReceipt, TaskBlockDetail } from './controller.ts'
 export { projectTasksDomainSpec, taskRecordSchema } from './spec.ts'
 export type { RequestBudgetUsage } from './spec.ts'
 export { ProjectController as default } from './controller.ts'

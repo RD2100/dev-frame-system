@@ -8,10 +8,15 @@
   "references": [
     { "path": "../../../vendor/cordis" },
     { "path": "../../../vendor/schemastery" },
+    { "path": "../../core/agent" },
+    { "path": "../../core/tools" },
     { "path": "../devframe" },
     { "path": "../project-contracts" },
     { "path": "../session-identity" },
+    { "path": "../../session/session-projection" },
     { "path": "../../storage/storage-domain" },
-    { "path": "../../util/brand" }
+    { "path": "../../util/brand" },
+    { "path": "../../workflow/worktree-registry" },
+    { "path": "../../workspace/workspace" }
   ]
 }

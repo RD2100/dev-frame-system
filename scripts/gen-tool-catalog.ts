@@ -69,6 +69,7 @@ import * as ToolRalph from '@deepseek-ai/dsh-tool-ralph'
 import * as ToolWorkflow from '@deepseek-ai/dsh-tool-workflow'
 import * as ToolWorktree from '@deepseek-ai/dsh-tool-worktree'
 import * as AgentWorktreeTools from '@deepseek-ai/dsh-experimental-agent-worktree'
+import * as ProjectIntegrationTool from '../packages/experimental/project-controller/src/consumer.ts'
 import { WorktreeRegistry } from '@deepseek-ai/dsh-worktree-registry'
 import type {
   Worktree, WorktreeCreateRequest, WorktreeId, WorktreeLockHolder, WorktreeReconcileOptions,
@@ -109,35 +110,35 @@ const OUT = 'docs/tool-catalog.md'
  * harvested, never executed; every operation rejects loud if it ever ran.
  */
 class CatalogWorktreeRegistry extends WorktreeRegistry {
-  override async create(_request: WorktreeCreateRequest): Promise<Worktree> {
-    throw new Error('gen-tool-catalog: worktree tools are harvested, not executed')
+  override create(_request: WorktreeCreateRequest): Promise<Worktree> {
+    return Promise.reject(new Error('gen-tool-catalog: worktree tools are harvested, not executed'))
   }
 
   override list(_workspaceId: WorkspaceId): readonly Worktree[] {
     throw new Error('gen-tool-catalog: worktree tools are harvested, not executed')
   }
 
-  override async status(_id: WorktreeId): Promise<WorktreeStatus> {
-    throw new Error('gen-tool-catalog: worktree tools are harvested, not executed')
+  override status(_id: WorktreeId): Promise<WorktreeStatus> {
+    return Promise.reject(new Error('gen-tool-catalog: worktree tools are harvested, not executed'))
   }
 
-  override async bind(_id: WorktreeId, _holder: WorktreeLockHolder): Promise<Worktree> {
-    throw new Error('gen-tool-catalog: worktree tools are harvested, not executed')
+  override bind(_id: WorktreeId, _holder: WorktreeLockHolder): Promise<Worktree> {
+    return Promise.reject(new Error('gen-tool-catalog: worktree tools are harvested, not executed'))
   }
 
-  override async unbind(_id: WorktreeId, _holder: WorktreeLockHolder): Promise<Worktree> {
-    throw new Error('gen-tool-catalog: worktree tools are harvested, not executed')
+  override unbind(_id: WorktreeId, _holder: WorktreeLockHolder): Promise<Worktree> {
+    return Promise.reject(new Error('gen-tool-catalog: worktree tools are harvested, not executed'))
   }
 
-  override async remove(_id: WorktreeId, _options?: WorktreeRemoveOptions): Promise<void> {
-    throw new Error('gen-tool-catalog: worktree tools are harvested, not executed')
+  override remove(_id: WorktreeId, _options?: WorktreeRemoveOptions): Promise<void> {
+    return Promise.reject(new Error('gen-tool-catalog: worktree tools are harvested, not executed'))
   }
 
-  override async reconcile(
+  override reconcile(
     _workspaceId: WorkspaceId,
     _options?: WorktreeReconcileOptions,
   ): Promise<WorktreeReconcileReport> {
-    throw new Error('gen-tool-catalog: worktree tools are harvested, not executed')
+    return Promise.reject(new Error('gen-tool-catalog: worktree tools are harvested, not executed'))
   }
 }
 
@@ -659,6 +660,24 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'The three tools bind every created worktree to the calling session as its single writer: other sessions observe it, only the binding holder removes it. Experimental and private: the package ships in no released bundle, and a composition mounting it alongside dsh-tool-worktree would double-register the shared tool names.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-experimental-project-controller/consumer',
+    dir: 'project-controller',
+    source: 'packages/experimental/project-controller/src/consumer.ts',
+    requires: ['ctx.tools', 'ctx.agents', 'ctx.projectController', 'ctx.agentBindings', 'ctx.workspaceRegistry', 'ctx.worktreeRegistry'],
+    writes: ['tool/call', 'tool/result', 'project_tasks integrations and tasks', 'Git target worktree'],
+    async mount(ctx) {
+      // These services are read only by execute; schema harvest never opens the ledger or runs Git.
+      for (const key of ['agents', 'projectController', 'agentBindings', 'workspaceRegistry', 'worktreeRegistry'] as const) {
+        ctx.provide(key, {} as never)
+      }
+      await ctx.plugin(ProjectIntegrationTool, {
+        requiredChecksPath: resolve(root, 'catalog-unused-required-checks.json'),
+        gitExecutable: 'git', gitTimeoutMs: 1, gitMaxOutputBytes: 1,
+      })
+    },
+    note: 'Opt-in controller-only consumer. Integration requires persisted verification, independent lead review, the current Goal, and registered worktree writer locks. Reconciliation observes an interrupted intent without repeating Git.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-web',
