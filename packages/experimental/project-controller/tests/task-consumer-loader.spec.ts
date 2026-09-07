@@ -47,7 +47,7 @@ const cleanups: (() => Promise<void>)[] = []
 
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
-}, 30_000)
+})
 
 async function load(delivery = false, mutateDuringCheck = false) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-project-integration-loader-'))
@@ -278,7 +278,7 @@ async function deliverySetup(mutateDuringCheck = false) {
 
 describe('project task consumer through the real Loader', () => {
   // Delivery cases run four linked worktrees, real checks, and multiple model/tool turns.
-  describe('delivery lifecycle', { timeout: 30_000 }, () => {
+  describe('delivery lifecycle', () => {
     it('executes overlapping Worker commits, approved checks, lead model review, and controller integration', async () => {
       const f = await deliverySetup()
       await f.start(true)
