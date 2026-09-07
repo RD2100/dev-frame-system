@@ -50,6 +50,10 @@ A lead delegating through a spawn/fork tool must carry a `pluginId` binding that
 
 Tool executions are guarded automatically. Every non-tool creation entry (host services, SDK bridges) must call `ctx.agentHierarchy.evaluateCreation(creatorRecord, intent)` before the child exists; it applies the same policy to a P00 `CreationIntent`.
 
+The evaluator permits a controller to create only a lead. It rejects requests for another controller or a worker; a lead creates workers only within its approved plugin scope. Returning an allowed decision does not create or bind an agent: the caller must enforce the decision before performing creation.
+
+`createChildAgent(parent, request, options)` validates the live parent, role, depth, task, and worktree ownership, then persists the binding during Agent factory setup before publication. The caller supplies a registry-validated worktree and setup that mounts the required preset. Matching parent/task retries return the live child; conflicting requests and occupied worktrees reject. A reserved child that is unavailable requires explicit recovery. The method activates the Agent without sending a prompt. Hosts may allocate its SessionID beforehand to configure the lead's approved plugin scopes.
+
 -----
 
 <a id="understand-the-implementation"></a>

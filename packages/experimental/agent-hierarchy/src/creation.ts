@@ -23,7 +23,7 @@ export interface CreationDecision {
  * Evaluate one creation intent against the creator's role and approved
  * plugin scopes. Workers may create nothing; a lead may only create workers
  * inside a scope the host config approved for its agent id (unlisted leads
- * are approved for nothing — fail closed); a controller may create any role.
+ * are approved for nothing — fail closed); a controller may create only leads.
  * @param config - The resolved host configuration.
  * @param creator - The durable binding of the creating session.
  * @param intent - The recorded creation attempt: parent, requested role, requested scope.
@@ -63,6 +63,8 @@ export function evaluateCreationIntent(
       return { allowed: true }
     }
     case 'controller':
-      return { allowed: true }
+      return intent.requestedRole === 'lead'
+        ? { allowed: true }
+        : { allowed: false, reason: `agent-hierarchy: a controller may only create leads, requested "${intent.requestedRole}"` }
   }
 }

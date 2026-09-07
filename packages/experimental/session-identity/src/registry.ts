@@ -86,7 +86,9 @@ export interface BoundSession {
 }
 
 /** Project the optional worktree binding into record fields. */
-function worktreeFields(worktree: BoundWorktree | undefined): Pick<AgentBindingRecord, 'worktreeId' | 'worktreePath' | 'branch'> {
+function worktreeFields(
+  worktree: BoundWorktree | undefined,
+): Pick<AgentBindingRecord, 'worktreeId' | 'worktreePath' | 'branch'> {
   if (worktree === undefined) return {}
   if (worktree.worktreePath.length === 0 || worktree.worktreePath !== worktree.worktreePath.trim()) {
     throw new SessionIdentityError('worktreePath must be a non-empty trimmed path', 'SESSION_IDENTITY_INVALID_REQUEST')
@@ -94,7 +96,11 @@ function worktreeFields(worktree: BoundWorktree | undefined): Pick<AgentBindingR
   if (worktree.branch !== undefined && (worktree.branch.length === 0 || worktree.branch !== worktree.branch.trim())) {
     throw new SessionIdentityError('branch must be a non-empty trimmed name', 'SESSION_IDENTITY_INVALID_REQUEST')
   }
-  return { worktreeId: worktree.worktreeId, worktreePath: worktree.worktreePath, ...worktree.branch === undefined ? {} : { branch: worktree.branch } }
+  return {
+    worktreeId: worktree.worktreeId,
+    worktreePath: worktree.worktreePath,
+    ...worktree.branch === undefined ? {} : { branch: worktree.branch },
+  }
 }
 
 /**
@@ -204,27 +210,63 @@ export class AgentBindingRegistry extends Service {
       if (this.ctx.sessions.get(request.agentId) === undefined) {
         throw new SessionIdentityError(`agent "${request.agentId}" does not exist in the session store`, 'SESSION_IDENTITY_AGENT_UNKNOWN')
       }
-      const record: AgentBindingRecord = Object.freeze({
-        agentId: request.agentId,
-        sessionId: request.sessionId ?? request.agentId,
-        ...request.parentSessionId === undefined ? {} : { parentSessionId: request.parentSessionId },
-        role: request.role,
-        ...request.pluginId === undefined ? {} : { pluginId: request.pluginId },
-        ...request.taskId === undefined ? {} : { taskId: request.taskId },
-        ...worktreeFields(request.worktree),
-        createdAt: new Date().toISOString(),
-      })
-      const existing = this.records.get(request.agentId)
-      if (existing !== undefined) {
-        if (sameRecord(existing, record)) return existing
-        throw new SessionIdentityError(
-          `agent "${request.agentId}" is already bound with different content`,
-          'SESSION_IDENTITY_ALREADY_BOUND',
-        )
-      }
-      await this.writeRecord(record)
-      return record
+      return await this.bindRecord(request)
     })
+  }
+
+  /**
+   * Persist identity during the Agent factory's unpublished setup window.
+   * The factory retains Session ownership; this method never enters the store.
+   * If later setup fails, the binding remains reserved for explicit recovery.
+   * @param session - Factory-owned unpublished Session from the setup context.
+   * @param request - Role and ownership; identity and parent derive from the Session.
+   * @returns The durable binding, available before Agent publication.
+   */
+  async bindPreparedSession(
+    session: Session,
+    request: Omit<BindAgentRequest, 'agentId' | 'sessionId' | 'parentSessionId'>,
+  ): Promise<AgentBindingRecord> {
+    return await this.enqueue(async () => {
+      if (this.ctx.sessions.get(session.id) !== undefined) {
+        throw new SessionIdentityError('prepared binding requires an unpublished Session', 'SESSION_IDENTITY_INVALID_REQUEST')
+      }
+      if (request.worktree !== undefined && request.worktree.worktreePath !== session.header.cwd) {
+        throw new SessionIdentityError('worktree path must match the prepared Session cwd', 'SESSION_IDENTITY_INVALID_REQUEST')
+      }
+      const parent = this.resolveParent(session.header.parentSession)
+      return await this.bindRecord({
+        ...request,
+        agentId: session.id,
+        ...(parent === undefined ? {} : { parentSessionId: parent.id }),
+      })
+    })
+  }
+
+  /** Persist one binding after the calling entry point has resolved Session ownership. */
+  private async bindRecord(request: BindAgentRequest): Promise<AgentBindingRecord> {
+    if (!isAgentRole(request.role)) {
+      throw new SessionIdentityError(`"${String(request.role)}" is not a hierarchy role`, 'SESSION_IDENTITY_INVALID_REQUEST')
+    }
+    const record: AgentBindingRecord = Object.freeze({
+      agentId: request.agentId,
+      sessionId: request.sessionId ?? request.agentId,
+      ...request.parentSessionId === undefined ? {} : { parentSessionId: request.parentSessionId },
+      role: request.role,
+      ...request.pluginId === undefined ? {} : { pluginId: request.pluginId },
+      ...request.taskId === undefined ? {} : { taskId: request.taskId },
+      ...worktreeFields(request.worktree),
+      createdAt: new Date().toISOString(),
+    })
+    const existing = this.records.get(request.agentId)
+    if (existing !== undefined) {
+      if (sameRecord(existing, record)) return existing
+      throw new SessionIdentityError(
+        `agent "${request.agentId}" is already bound with different content`,
+        'SESSION_IDENTITY_ALREADY_BOUND',
+      )
+    }
+    await this.writeRecord(record)
+    return record
   }
 
   /**

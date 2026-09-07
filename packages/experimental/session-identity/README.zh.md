@@ -40,7 +40,7 @@ kind: "package-reference"
 
 ### 创建带绑定的会话
 
-`createBoundSession` 是宿主自行创建代理的入口。父会话必须存在；子代理深度从父头部推导（`父深度 + 1`），调用方也可显式传入 `delegationDepth`。
+`createBoundSession` 创建独立 Session，而非活跃 Agent。父会话必须存在；子代理深度从父头部推导（`父深度 + 1`），调用方也可显式传入 `delegationDepth`。
 
 ```ts
 const { session, record } = await ctx.agentBindings.createBoundSession({
@@ -55,6 +55,8 @@ const { session, record } = await ctx.agentBindings.createBoundSession({
 ### 绑定、查询与恢复
 
 `bind` 登记由其他入口创建的代理；完全相同的重绑是幂等的，冲突的重绑大声失败。`find`、`byRole`、`list` 从启动时恢复的索引作答，冷进程无须回放会话即可看到全部绑定。
+
+在 Agent 工厂的 setup 中，使用 `bindPreparedSession(agentCtx.agent.session, request)` 在发布前持久化绑定。工厂拥有 Session 的创建和销毁生命周期；再次调用工厂不能接管独立的活跃 Session。身份和父子关系从准备中的 Session 推导。如果后续 setup 或发布失败，绑定会保留供显式恢复，不会静默创建替代 Agent。
 
 -----
 
