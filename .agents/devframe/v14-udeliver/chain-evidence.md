@@ -68,3 +68,10 @@ job_kill(pwsh-213, reason="总控裁定 B1 本轮失败证据收口：停止 boo
 - **边界证据**：`git -C D:/dsh-udeliver-chain rev-parse --git-dir` → `D:/dsh-devframe/.git/worktrees/dsh-udeliver-chain`——旧链目录元数据根=主树 .git；chain 进程执行 `git switch -c codex/v14-b1-w1` 需写 `D:\dsh-devframe\.git\refs`，被拒（环境边界，不做权限绕过）。
 - **已验证方案（一次有限验证）**：新链目录 `D:/dsh-udeliver-chain2` = udeliver-lead 仓库的 worktree（元数据根=`D:/dsh-devframe-v14-udeliver-lead/.git`，该根可写性由本分支日常提交证明）；其内 `git switch -c codex/v14-b1-w1-verify` → **exit 0**，验证分支已清理。
 - **恢复**：12 站链重启以 chain2 为启动目录（branch codex/v14-udeliver-chain2 @ 61a4b9f417）；模型调用面无涉本边界。
+
+## chain5（最终尝试）收口——B1 定格 blocked/not_run（2026-09-07，总控执笔）
+
+- **canonical run**：session-90dfd29a（chain5-home，boot 树含 C2b 修复 @ 88a5bb4f87，元数据可写面=chain2 已预验证 switch -c exit 0）。证据：1616 事件、request/header=1（seq=16 huoshan-1/glm-5.3-flash）、step/start=5、goal-binding+role-policy 在册；**未产生** Worker 派发、codex/v14-b1-w1 提交、deliverable/hello.md（会话日志与 chain2 工作树双重核验）。
+- **收口动作**：boot 进程全停（node chain5 匹配=0，端口 3081/3490/3491 监听=0）；会话日志保留于 chain5-home 供审计；driver JSONL 保留（含碰撞期双 driver-applied 记录及成因注明）。
+- **判定**：B1 12 站链 = **blocked/not_run**（S1-S3b/S8-进程级绿证据保留；S4-S12 未达）。boot/profile/route/缓存/UI 状态不构成验收；模型调用正常（C2b 重放已证），失败面在子链任务执行推进（总控 agent 未在窗口内完成 subagent 派发）。
+- **约束**：不再启动副本/重试；B1 恢复须新证据驱动的新裁定。
