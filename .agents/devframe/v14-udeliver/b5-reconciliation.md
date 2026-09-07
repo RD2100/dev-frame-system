@@ -113,7 +113,7 @@
 
 ### 归属与合并集成更正（组长，2026-09-08 合并 c469e0863c 后）
 
-- **AT1-05 变体 5**：本线切片**永久取消**——V1.2 已接手（B1 隔离树 owner），fingerprint v2 已落 main（80f74545e3：实际内容指纹+完成拒绝），旧"registered boundary"豁免不再承认；本线不重派不落用例，该缺口在 B1 树闭合。
+- **AT1-05 变体 5**：本线切片**永久取消**——V1.2 已接手（B1 隔离树 owner），fingerprint v2 已落 main（80f74545e3：实际内容指纹+完成拒绝），旧"registered boundary"豁免不再承认；本线不重派不落用例。**原验收要求保持有效并由实现满足，非"待裁定"替代**（总控强化指令 2026-09-08）：合并树实测 source-fingerprint.spec 41 passed+1 平台 skip，exit 0——`:205 includes nonignored untracked files`（指纹含未忽略 untracked 内容）、`:235` size/mtime 还原后仍检出 untracked 字节改动、`:249` 忽略输入排除、`:621 rejects when an untracked file appears after the recorded snapshot`（完成时拒绝面）——"HEAD 相同不能掩盖未跟踪文件变化"由实现闭合。
 - **AT1-08**：上表证据已按 V1.2 证据标准更正为 durable consumer 面（main 76080fe40b → 本树 c469e0863c 并入；worker 初核引用的内存 map 行号即其交付前树态，已过时不再引用）。合并把 main 新签名 `beginRepairRound(identity, {kind:'task-warning', taskId})` 与本线旅程消费臂整合（composition.ts:441-453）。
 - **合并集成修复**：main 新增 `devframe/repair-admission` 事件后 `events.spec.ts` "registers every project event" 断言数组补齐该类型（52 文件/492 通过 + 1 平台 skip，exit 0）。
 - **cordis-catalog 门**：main 新 agent-dispatch `src/run.ts:171` 缺显式返回类型标注致门失败（A2 属主面，本线不碰，登记待修）。
