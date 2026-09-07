@@ -1,5 +1,5 @@
 ---
-description: "面向宿主的 /devframe-start、/devframe-resume 与 /goal-complete 斜杠命令说明：以真实验证证据启动绑定的 goal，在停止或重启后恢复它，且只有通过已验证完成准入时才完成它。"
+description: "面向宿主的 /devframe-start、/devframe-resume、/devframe-stop 与 /goal-complete 斜杠命令说明：以真实验证证据启动绑定的 goal，在停止或重启后恢复它，通过可靠性停止链停止项目树，且只有通过已验证完成准入时才完成它。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-experimental-command-goal-binding` 为用户提供 DevFrame goal 绑定流程的启动、恢复与完成动词。`/devframe-start <objective>` 将新 goal 绑定到配置的 worktree 并产出真实验证证据：宿主计算 worktree 的源指纹、注册已批准的必需检查清单、通过控制器启动 goal，并把 role-policy、goal-binding 与 verification 记录落到控制器会话日志，其中每项声明检查都通过真实子进程执行。`/devframe-resume` 在停止或重启后恢复当前绑定的 goal，从会话日志 projection 或绑定存储重建绑定。`/goal-complete` 只有通过已验证的完成准入时才会完成当前 goal：源指纹必须能从 worktree 重新推导、已注册的必需检查必须全部通过、授权审查必须通过。每一类可预期的拒绝都以稳定、直接的命令错误返回，指明失败的阶段但不暴露 goal 身份，适配器可以将其作为命令输出渲染。这是一个实验性 wave 包：它为宿主命令面组装准入 seam，除这些命令本身外不提供任何宿主面。
+`dsh-experimental-command-goal-binding` 为用户提供 DevFrame goal 绑定流程的启动、恢复、停止与完成动词。`/devframe-start <objective>` 将新 goal 绑定到配置的 worktree 并产出真实验证证据：宿主计算 worktree 的源指纹、注册已批准的必需检查清单、通过控制器启动 goal，并把 role-policy、goal-binding 与 verification 记录落到控制器会话日志，其中每项声明检查都通过真实子进程执行。`/devframe-resume` 在停止或重启后恢复当前绑定的 goal，从会话日志 projection 或绑定存储重建绑定。`/devframe-stop` 通过真实可靠性停止链结束当前 goal：关闭准入、排空项目树的作业与已捕获进程、刷新每个参与会话，且只在链确认静止后才释放 writer。`/goal-complete` 只有通过已验证的完成准入时才会完成当前 goal：源指纹必须能从 worktree 重新推导、已注册的必需检查必须全部通过、授权审查必须通过。每一类可预期的拒绝都以稳定、直接的命令错误返回，指明失败的阶段但不暴露 goal 身份，适配器可以将其作为命令输出渲染。这是一个实验性 wave 包：它为宿主命令面组装准入 seam，除这些命令本身外不提供任何宿主面。
 
 ## 目录
 
@@ -37,12 +37,13 @@ kind: "package-reference"
 |---|---|
 | `/devframe-start <objective>` | 针对配置的 worktree 启动新绑定的 goal：把 role-policy、goal-binding 与 verification 记录落到控制器会话日志，并报告真实执行的检查数与验证状态 |
 | `/devframe-resume` | 在停止或重启后恢复并续跑当前绑定的 goal，从会话日志 projection 或绑定存储重建绑定 |
+| `/devframe-stop` | 启用 `stopChain` 时运行停止链：跨项目树关闭准入、排空拥有的作业与已捕获的后代进程、刷新每个参与会话，且只在链确认静止后才释放 writer；被中断的停止流程在重复停止时收敛 |
 | `/goal-complete` | 在配置的 worktree 上通过完成准入完成当前 goal，并记录一条完成回执 |
 | `/goal-complete <worktreePath>` | 针对给定 worktree 完成当前 goal，覆盖配置的根路径 |
 
 ### 稳定拒绝
 
-可预期的拒绝都是带固定文本的直接命令错误。启动拒绝：缺少 objective、config 缺少 `workspaceRoot`（启动行无法在 objective 之外无歧义地给出 worktree）、以及已有未完成的当前 goal。恢复拒绝：命令名后带意外输入、没有当前 goal、goal 已完成、以及会话日志 projection 与绑定存储中都没有绑定记录。完成拒绝：没有当前 goal、该 goal 没有完成绑定、没有归属的验证证据、goal 已完成、projection 重放失败已锁存、以及命令行与配置都未给出 worktree 路径。被拒绝的准入会指明其阶段——`source-fingerprint`、`required-checks` 或 `review`——但不暴露 goal id 或 revision。结构性错误（`GoalBindingError`、`SourceFingerprintError`、`RequiredChecksError`、`DevFramePersistenceError`）不会被捕获：它们使分发失败，适配器会报告命令失败。
+可预期的拒绝都是带固定文本的直接命令错误。启动拒绝：缺少 objective、config 缺少 `workspaceRoot`（启动行无法在 objective 之外无歧义地给出 worktree）、以及已有未完成的当前 goal。恢复拒绝：命令名后带意外输入、没有当前 goal、goal 已完成、以及会话日志 projection 与绑定存储中都没有绑定记录。停止拒绝（启用 `stopChain` 时）：命令名后带意外输入、没有当前 goal、没有绑定记录、停止链已在运行中的第二次调用、以及已经 stopped 的绑定。一次未确认的停止——未解决的作业或进程、缺失的活跃 agent 身份、未接线的释放钩子、不可验证的项目树、或缺失的作业注册表——返回稳定的 needs-attention 错误，逐一列出剩余资源（例如 `job:<id>: timeout` 或 `writer:release: operation_failed`），报告 writer 仍被持有，并在项目树无法验证时附加 inventory 附注；该流程保持可重入，重复停止会重新进入 drain 或 release，而不是被拒绝。完成拒绝：没有当前 goal、该 goal 没有完成绑定、没有归属的验证证据、goal 已完成、projection 重放失败已锁存、以及命令行与配置都未给出 worktree 路径。被拒绝的准入会指明其阶段——`source-fingerprint`、`required-checks` 或 `review`——但不暴露 goal id 或 revision。结构性错误（`GoalBindingError`、`SourceFingerprintError`、`RequiredChecksError`、`DevFramePersistenceError`）不会被捕获：它们使分发失败，适配器会报告命令失败。
 
 评级为 fail 的任务告警也会报告修复准入。同一告警重试会复用持久化回执，重启后仍然如此；项目负评消耗同一 Goal 的额度。`repairLimit` 默认为 2。人类授权的 resume 不会重置这项记账，该 Goal 的所有消费方必须使用一致的上限。参见 [DevFrame 修复契约](../devframe/README.zh.md#bound-correction-rounds)。
 
@@ -86,8 +87,10 @@ kind: "package-reference"
 | `maxAttempts` | 必填 | 冻结进每个启动绑定的最大计费尝试次数 |
 | `maxGoalRounds` | 无 | 固定在每个 start 绑定中的可选续跑轮次上限 |
 | `repairLimit` | `2` | Goal 共用的正整数修复上限；必须与项目交付消费方一致 |
+| `stopChain` | `false` | 在 `/devframe-stop` 后运行真实可靠性停止链；`false` 保持仅词表面 |
+| `stopGraceMs` | `2000` | 链给予 drain、会话刷新与终态记账的正有限宽限期 |
 
-空 `workspaceId`、相对 `workspaceRoot`、缺失、空或相对 `requiredChecksPath`、相对检查 `cwd`、空或重复的 `taskIds`、非正数的 `maxAttempts`/`maxGoalRounds` 都会使插件激活明确失败。`repairLimit` 必须为正安全整数。
+空 `workspaceId`、相对 `workspaceRoot`、缺失、空或相对 `requiredChecksPath`、相对检查 `cwd`、空或重复的 `taskIds`、非正数的 `maxAttempts`/`maxGoalRounds`、或非正有限的 `stopGraceMs` 都会使插件激活明确失败。`repairLimit` 必须为正安全整数。
 
 挂载的插件按规范摘要持久化已批准的检查配置。首次启动可以创建尚不存在的账本文件，但父目录必须已经存在。重启后完成操作从同一账本解析历史摘要；账本缺失、摘要缺失或登记损坏都会失败，不会拿当前部署的检查清单替代。在对应证据仍被使用时保留旧登记。
 
@@ -111,13 +114,16 @@ kind: "package-reference"
 - **日志实例共享会话持久化。** 组合日志和证据日志都通过 `ctx.sessions.flush` 刷新。使用同一活跃会话的所有日志共享追加队列和失败锁；一次结果不确定的刷新会阻止它们之后的写入。
 - **分发前先 fail closed。** 各处理器在到达准入之前，会因缺失 goal、缺失绑定、缺失证据或已锁存的 projection 重放失败而拒绝，并显式解析 worktree 路径，使缺失根路径成为数据错误而非结构性失败。
 - **回执只在准入之后。** 获得准入的完成会通过准入的 compare-and-set 推进原生 goal，并通过 goal 服务记录一条 `completion-admission` 证据条目；拒绝则保持 goal phase、绑定与准入状态不变。
+- **停止链是可选项且由宿主接线。** 项目树面、已捕获的后代进程与 writer 释放是组合服务上的注入点——不是 config：宿主捕获并做 owner 验证项目树（根加上每个真实后代 agent）并拥有释放。链在树 inventory 缺失或为空、作业注册表缺失、释放钩子未接线时一律 fail-closed——缺失绝不等于安静。
+- **writer 只在链确认后释放。** 确认静止的记录是持久的释放前前置；stopped 终态记录、存储条目与检查点只在该次释放真实成功之后落盘，每次落盘都受停止宽限期约束，永不 settle 的持久化面会返回而不是挂起。释放失败折叠为 `needs_attention`，绝不落 `stopped`。
+- **被中断的停止流程在重复停止时收敛。** 日志停在 `stop_requested`（drain 期间崩溃）时，恢复会基于宿主当前 inventory 重新进入 drain；日志停在 `quiescence_confirmed` 时重新进入释放。缺失的活跃身份以 `needs_attention` 呈现且 writer 保持持有——绝不静默绕过，也绝不重启被中断的 goal 工作。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：name、注入列表、config 模式、apply |
-| [`src/composition.ts`](src/composition.ts) | 组合服务：启动/恢复通道、绑定启动通道、准入读取、完成处理器 |
+| [`src/composition.ts`](src/composition.ts) | 组合服务：启动/恢复/停止通道、绑定启动通道、准入读取、完成处理器、停止链 drain 与恢复 |
 | [`src/command.ts`](src/command.ts) | 命令语法、数据错误文本、拒绝渲染、回执证据 |
 | [`src/host-evidence.ts`](src/host-evidence.ts) | flush 闭包、projection 派生审查者目录、role-policy/goal-binding 落账 helper、验收摘要 |
 | [`src/config.ts`](src/config.ts) | config 模式与校验 |
@@ -136,6 +142,7 @@ kind: "package-reference"
 - [命令服务](../../interaction/commands/README.zh.md)——命令注册、分发的注册表边界。
 - [goal 服务](../../goal/goal/README.zh.md)——准入所完成的原生 goal 生命周期与回执所依附的状态。
 - [宿主命令面 Agent Note](../../../.agents/notes/implemented/architecture/2026-09-06-command-goal-binding-host-command-surface.zh.md)——组合与归属决策。
+- [停止链组合 Agent Note](../../../.agents/notes/implemented/architecture/2026-09-08-command-goal-binding-stop-chain-composition.zh.md)——树 fail-closed、确认后释放、有界记账与恢复决策。
 
 -----
 
@@ -169,6 +176,7 @@ kind: "package-reference"
 - **role policy 只指派 controller 角色**——没有任何审查者被授权，在审查生产 wave 落地审查者指派之前，任何审查提交都会被 fail-closed 拒绝。
 - **审查归属是结构性的**——`/goal-complete` 直接取最新审查记录而不按 goal 预过滤；外来的最新审查会以结构性 `GoalBindingError` 呈现，这正是 fail-closed 方向。
 - **模型完成路径绕过本 seam**——直接完成 goal 的面向模型 goal 工具不会运行本准入；这些命令只约束人类动词。
+- **停止链只 drain，绝不重启**——恢复会基于宿主当前 inventory 重跑 drain，并对缺失的活跃身份 fail-closed；它不恢复也不重启被中断的 goal 工作，writer 在某次运行确认树静止前保持持有。
 
 <a id="dev-note"></a>
 ### 开发备注
@@ -176,6 +184,6 @@ kind: "package-reference"
 <details>
 <summary>维护者的工作上下文——点击展开</summary>
 
-审查生成和绑定存储选型仍由宿主组合负责。
+审查生成和绑定存储选型仍由宿主组合负责。停止链的树捕获与 writer 释放同样由宿主负责；两者缺任一时组合都会拒绝释放。
 
 </details>

@@ -13,6 +13,7 @@
 import { Service, type Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { CommandResult } from '@deepseek-ai/dsh-commands'
+import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type { GoalId } from '@deepseek-ai/dsh-goal/types'
 import { AgentEvidenceJournal } from '@deepseek-ai/dsh-experimental-agent-evidence'
@@ -28,7 +29,16 @@ import type {
   GoalResultBinding,
   TaskId,
 } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
-import { acceptanceRegionStartOf, computeSourceFingerprint } from '@deepseek-ai/dsh-experimental-devframe'
+import {
+  acceptanceRegionStartOf,
+  computeSourceFingerprint,
+  stopProject,
+} from '@deepseek-ai/dsh-experimental-devframe'
+import type {
+  StopProcess,
+  StopProjectOptions,
+} from '@deepseek-ai/dsh-experimental-devframe'
+import { setTimeout as delay } from 'node:timers/promises'
 import type {
   AcceptanceHash,
   DevFrameSnapshotId,
@@ -40,7 +50,7 @@ import type { RequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-de
 import { devFrameProjectionDefinition } from '@deepseek-ai/dsh-experimental-devframe'
 import type { DevFrameProjectionState } from '@deepseek-ai/dsh-experimental-devframe'
 import { DevFrameSessionJournal } from '@deepseek-ai/dsh-experimental-devframe'
-import type { DevFrameReviewEventData, DevFrameVerificationEventData } from '@deepseek-ai/dsh-experimental-devframe'
+import type { DevFrameFlush, DevFrameReviewEventData, DevFrameVerificationEventData } from '@deepseek-ai/dsh-experimental-devframe'
 import { taskWarningListener as taskWarningListenerPlugin, taskFailDisarm as taskFailDisarmPlugin } from '@deepseek-ai/dsh-experimental-devframe'
 import {
   ABANDON_INPUT_UNEXPECTED_TEXT,
@@ -62,6 +72,9 @@ import {
   START_OBJECTIVE_REQUIRED_TEXT,
   START_WORKTREE_REQUIRED_TEXT,
   STOP_ALREADY_PENDING_TEXT,
+  STOP_ALREADY_STOPPED_TEXT,
+  STOP_CHAIN_INVENTORY_UNVERIFIED_NOTE,
+  STOP_IN_PROGRESS_TEXT,
   STOP_INPUT_UNEXPECTED_TEXT,
   STOP_NO_BINDING_RECORD_TEXT,
   STOP_NO_CURRENT_GOAL_TEXT,
@@ -84,6 +97,9 @@ import {
   renderResumeAdoptedSuccess,
   renderResumeSuccess,
   renderStartSuccess,
+  renderStopChainBookkeepingUnsettledText,
+  renderStopChainNeedsAttentionText,
+  renderStopChainStoppedText,
   renderStopSuccess,
 } from './command.ts'
 import {
@@ -104,6 +120,23 @@ export interface GoalBindingCompositionStores {
   readonly bindings?: GoalBindingStore
   /** Approved-checks configuration store; defaults to the in-memory reference implementation. */
   readonly requiredChecks?: RequiredChecksConfigStore
+  /**
+   * Host-injected stop-chain adapters (AT4-06). `tree` returns the project's
+   * participating agents — the root plus every real descendant agent, each
+   * host-verified for owner and worktree identity so unrelated projects are
+   * never drained. `processes` returns every captured descendant process.
+   * `releaseWriter` is the synchronous owner-checked writer release; it
+   * must tolerate repeat invocation because the confirmed-stop recovery
+   * path retries it. The chain fails closed: a missing or empty tree
+   * inventory refuses the writer release, and a composition constructed
+   * without `releaseWriter` reports `needs_attention` and retains the
+   * writer — never a silent release.
+   */
+  readonly stop?: {
+    readonly tree?: () => readonly Agent[]
+    readonly processes?: () => readonly StopProcess[]
+    readonly releaseWriter?: () => void
+  }
 }
 
 /** Start-lane request accepted by {@link GoalBindingComposition.startBinding}. */
@@ -149,6 +182,16 @@ export class GoalBindingComposition extends Service {
   readonly evidenceJournal: AgentEvidenceJournal
 
   private readonly controllers = new Map<string, GoalBindingController>()
+  /** One in-flight stop chain per agent; concurrent chains refuse. */
+  private readonly stopChains = new Map<string, Promise<CommandResult>>()
+  /** The native flush closure the journals and the stop chain share. */
+  private readonly sessionFlusher: DevFrameFlush
+  /** Host-captured descendant processes handed to the stop chain. */
+  private readonly stopProcesses: () => readonly StopProcess[]
+  /** Host-verified project tree (root plus descendants); absent fails closed. */
+  private readonly stopTree: (() => readonly Agent[]) | undefined
+  /** Host writer release; absent means the chain retains the writer loudly. */
+  private readonly stopReleaseWriter: (() => void) | undefined
 
   /**
    * Construct the composition inside the owning plugin fiber: registering the
@@ -173,6 +216,10 @@ export class GoalBindingComposition extends Service {
     this.bindingStore = stores.bindings ?? new MemoryGoalBindingStore()
     this.requiredChecksStore = stores.requiredChecks ?? new MemoryRequiredChecksConfigStore()
     const flush = sessionFlush(ctx)
+    this.sessionFlusher = flush
+    this.stopProcesses = stores.stop?.processes ?? (() => [])
+    this.stopTree = stores.stop?.tree
+    this.stopReleaseWriter = stores.stop?.releaseWriter
     const reviewerDirectory = new ProjectionEvidenceReviewerDirectory(ctx)
     this.journal = compositionDevFrameJournal(flush, reviewerDirectory)
     this.evidenceJournal = new AgentEvidenceJournal({ flush, reviewerDirectory })
@@ -415,9 +462,18 @@ export class GoalBindingComposition extends Service {
    * `stopped` state stays reachable through the existing lifecycle
    * vocabulary; the stop flow owns quiescence confirmation and writer
    * release. Structural failures propagate unchanged.
+   *
+   * With `stopChain` enabled (AT4-06), the invocation additionally runs the
+   * real reliability stop chain over the same binding: admission fences,
+   * owned jobs and captured processes drain within the configured grace, the
+   * session state flushes, and the writer releases only after the confirmed
+   * chain. Concurrent chains refuse; a chain that cannot confirm quiescence
+   * reports the unresolved resources, retains the writer, and leaves the
+   * goal in the stop flow. Without the flag the vocabulary face is
+   * byte-identical to the pre-chain lane.
    * @param invocation - the receiving agent plus the verbatim command text.
-   * @returns a success result after the stop-requested binding lands, or a
-   *   stable error result.
+   * @returns a success result after the stop-requested binding lands (or the
+   *   chain confirms the stop), or a stable error result.
    */
   async stopBoundGoal(invocation: {
     readonly agent: Agent
@@ -429,8 +485,62 @@ export class GoalBindingComposition extends Service {
     const current = this.ctx.goals.get(invocation.agent)
     if (current === undefined) return { kind: 'error', text: STOP_NO_CURRENT_GOAL_TEXT }
     if (current.phase === 'complete') return { kind: 'error', text: GOAL_ALREADY_COMPLETE_TEXT }
-    const controllerSessionId = ControllerSessionId(invocation.agent.id)
-    const projected = devFrameStateOf(this.ctx, invocation.agent.session)
+    if (!this.config.stopChain) {
+      const controllerSessionId = ControllerSessionId(invocation.agent.id)
+      const projected = devFrameStateOf(this.ctx, invocation.agent.session)
+        .bindings.find(binding => binding.goalId === current.id)
+      const stored = (await this.bindingStore.load(controllerSessionId))
+        .find(binding => binding.goalId === current.id)
+      if (projected === undefined && stored === undefined) {
+        return { kind: 'error', text: STOP_NO_BINDING_RECORD_TEXT }
+      }
+      const currentLifecycle = projected?.lifecycle ?? stored?.lifecycle
+      if (currentLifecycle === 'stop_requested' || currentLifecycle === 'quiescence_confirmed') {
+        return { kind: 'error', text: STOP_ALREADY_PENDING_TEXT }
+      }
+      const stopped = await this.controllerFor(invocation.agent).stop(
+        { controllerSessionId, goalId: current.id },
+        createHumanAuthorization(`devframe-stop:${invocation.agent.id}:${Date.now()}`),
+      )
+      await landGoalBinding(this.journal, invocation.agent.session, stopped)
+      return { kind: 'success', text: renderStopSuccess() }
+    }
+    // The in-flight guard must run synchronously: between the stored promise
+    // and its first await no other invocation can slip past the check.
+    if (this.stopChains.has(invocation.agent.id)) {
+      return { kind: 'error', text: STOP_IN_PROGRESS_TEXT }
+    }
+    const chain = Promise.resolve()
+      .then(() => this.runStopChain(invocation.agent, current))
+      .finally(() => { this.stopChains.delete(invocation.agent.id) })
+    this.stopChains.set(invocation.agent.id, chain)
+    return chain
+  }
+
+  /**
+   * Run the reliability stop chain for one agent's current goal: the
+   * controller's stop request lands first (the vocabulary face), then the
+   * real chain drains jobs and captured processes and flushes the session
+   * state; the confirmed-quiescence record is the durable pre-release
+   * prerequisite, and the stopped terminal record, store entry, and
+   * checkpoint land only AFTER the writer release actually succeeded — a
+   * release failure never lands `stopped`, and both terminal landings are
+   * bounded by the stop grace so a never-settling persistence face cannot
+   * hang the command. Every unconfirmed resource
+   * retains the writer and reports `needs_attention`; the goal stays in the
+   * stop flow for a rerun. A log left at `quiescence_confirmed` (a release
+   * that failed, or a crash between the confirmation and the release)
+   * converges through {@link finishConfirmedStop}; a log left at
+   * `stop_requested` (a crash during the drain) re-enters the drain through
+   * {@link resumeStopRequestedStop} — the repeat stop is not refused in
+   * either state.
+   * @param agent - the receiving agent whose writer the chain drains.
+   * @param current - the goal read before the chain serialized.
+   * @returns a success result after the confirmed stop, or a stable error.
+   */
+  private async runStopChain(agent: Agent, current: { readonly id: GoalId }): Promise<CommandResult> {
+    const controllerSessionId = ControllerSessionId(agent.id)
+    const projected = devFrameStateOf(this.ctx, agent.session)
       .bindings.find(binding => binding.goalId === current.id)
     const stored = (await this.bindingStore.load(controllerSessionId))
       .find(binding => binding.goalId === current.id)
@@ -438,15 +548,244 @@ export class GoalBindingComposition extends Service {
       return { kind: 'error', text: STOP_NO_BINDING_RECORD_TEXT }
     }
     const currentLifecycle = projected?.lifecycle ?? stored?.lifecycle
-    if (currentLifecycle === 'stop_requested' || currentLifecycle === 'quiescence_confirmed') {
-      return { kind: 'error', text: STOP_ALREADY_PENDING_TEXT }
+    if (currentLifecycle === 'stopped') {
+      return { kind: 'error', text: STOP_ALREADY_STOPPED_TEXT }
     }
-    const stopped = await this.controllerFor(invocation.agent).stop(
+    if (currentLifecycle === 'stop_requested') {
+      // A crash while the chain waited in its drain leaves the log here —
+      // a normal failure window for a stop the human explicitly asked for.
+      // Re-enter the drain instead of refusing the repeat.
+      const requested = projected ?? stored
+      if (requested !== undefined) return this.resumeStopRequestedStop(agent, requested)
+      return { kind: 'error', text: STOP_NO_BINDING_RECORD_TEXT }
+    }
+    if (currentLifecycle === 'quiescence_confirmed') {
+      // The drain already confirmed; only the release and the terminal
+      // bookkeeping remain. Re-enter there instead of refusing the repeat.
+      const confirmed = projected ?? stored
+      if (confirmed !== undefined) return this.finishConfirmedStop(agent, confirmed)
+      return { kind: 'error', text: STOP_NO_BINDING_RECORD_TEXT }
+    }
+    const controller = this.controllerFor(agent)
+    const stopped = await controller.stop(
       { controllerSessionId, goalId: current.id },
-      createHumanAuthorization(`devframe-stop:${invocation.agent.id}:${Date.now()}`),
+      createHumanAuthorization(`devframe-stop:${agent.id}:${Date.now()}`),
     )
-    await landGoalBinding(this.journal, invocation.agent.session, stopped)
-    return { kind: 'success', text: renderStopSuccess() }
+    await landGoalBinding(this.journal, agent.session, stopped)
+    return this.stopChainDrain(agent, controller, stopped)
+  }
+
+  /**
+   * Re-enter a stop flow whose request already landed: a crash while the
+   * chain waited in its drain leaves the log at `stop_requested` — a normal
+   * failure window for a stop the human explicitly asked for, and the cold
+   * restart must be able to finish it. The recovery mirrors the fresh chain:
+   * rebuild the admission fence and re-run the drain over the host's
+   * verified inventory and live registry identities, then finish honestly.
+   * A missing live identity or an unverifiable inventory surfaces as
+   * `needs_attention` with the writer held — never a silent bypass, and no
+   * goal work is restarted.
+   * @param agent - the receiving agent whose writer the chain drains.
+   * @param base - the persisted stop_requested binding carrying the flow's identity.
+   * @returns a success result after the confirmed stop, or a stable error.
+   */
+  private async resumeStopRequestedStop(agent: Agent, base: GoalBinding): Promise<CommandResult> {
+    const controller = this.controllerFor(agent)
+    return this.stopChainDrain(agent, controller, base)
+  }
+
+  /**
+   * Run the drain-and-finish body of the stop chain from one stop-flow
+   * base: the primitive re-observes the flow (an idempotent `stop_requested`
+   * repeat), drains the tree's jobs and processes, flushes every
+   * participating session, and releases the writer only on confirmed
+   * quiescence. The confirmed-quiescence record is the durable pre-release
+   * prerequisite; the stopped terminal record, store entry, and checkpoint
+   * land only AFTER the writer release actually succeeded — a release
+   * failure never lands `stopped`, and both terminal landings are bounded
+   * by the stop grace so a never-settling persistence face cannot hang the
+   * command. Every unconfirmed resource retains the writer and reports
+   * `needs_attention`; the goal stays in the stop flow for a rerun.
+   * @param agent - the receiving agent whose writer the chain drains.
+   * @param controller - the admission fence controller for the invoking agent.
+   * @param base - the stop-flow binding whose identity the observations carry.
+   * @returns a success result after the confirmed stop, or a stable error.
+   */
+  private async stopChainDrain(agent: Agent, controller: GoalBindingController, base: GoalBinding): Promise<CommandResult> {
+    // The chain's observation callbacks are synchronous, while each landed
+    // record owns a trailing flush promise: the chain's own flush drains
+    // those first, so an unlandable observation fails the chain's flush and
+    // retains the writer instead of releasing over a lost record.
+    const recordLandings: Array<Promise<unknown>> = []
+    // Project-tree stop (AT4-06): the host's verified tree face supplies the
+    // root plus every real descendant agent, so the primitive's owner filters
+    // see descendant jobs and processes and the flush covers every
+    // participating session. A missing or empty inventory is fail-closed:
+    // the root still drains, but the writer release is refused instead of
+    // claiming a clean tree stop over an unverifiable inventory.
+    const treeAgents = this.stopTree?.call(undefined) ?? []
+    const inventoryUnverified = this.stopTree === undefined || treeAgents.length === 0
+    const agents = [agent, ...treeAgents.filter(candidate => candidate.id !== agent.id)]
+    const treeSessions = new Map<string, Session>()
+    for (const treeAgent of agents) treeSessions.set(treeAgent.id, treeAgent.session)
+    // A missing jobs registry is a fail-closed misconfiguration, not a
+    // verified zero-jobs state: the throwing adapter turns into a chain
+    // issue, so the primitive refuses the release instead of trusting an
+    // unverifiable empty job inventory (absent ≠ quiet).
+    const jobs = this.ctx.jobs ?? {
+      list: () => { throw new Error('no jobs registry is mounted for this composition') },
+      kill: () => { throw new Error('no jobs registry is mounted for this composition') },
+      wait: async () => { throw new Error('no jobs registry is mounted for this composition') },
+    }
+    const options: StopProjectOptions = {
+      agents,
+      registry: this.ctx.agents,
+      goals: this.ctx.goals,
+      jobs,
+      processes: this.stopProcesses,
+      graceMs: this.config.stopGraceMs,
+      closeAdmission: () => {
+        controller.closeAdmission()
+        // Fence every cached controller of this workspace-scoped
+        // composition: the tree's goal dispatch faces stop admitting.
+        for (const treeController of this.controllers.values()) treeController.closeAdmission()
+      },
+      record: (observation) => {
+        recordLandings.push(landGoalBinding(this.journal, agent.session, {
+          ...base,
+          lifecycle: observation.status,
+        }))
+      },
+      flush: async () => {
+        await Promise.all(recordLandings)
+        // Every participating session's state must be durable before the
+        // release — not just the invoking root session. The confirmed
+        // quiescence record is the chain's durable pre-release
+        // prerequisite; the stopped terminal lands only after the release
+        // actually succeeded.
+        for (const treeSession of treeSessions.values()) await this.sessionFlusher(treeSession)
+      },
+      releaseWriter: () => {
+        if (inventoryUnverified) {
+          throw new Error('the project tree inventory is missing or empty; the writer release is refused')
+        }
+        if (this.stopReleaseWriter === undefined) {
+          throw new Error('the writer release is not wired for this composition')
+        }
+        this.stopReleaseWriter()
+      },
+    }
+    const result = await stopProject(options)
+    this.controllers.delete(agent.id)
+    // The stopped terminal lands only after the release actually succeeded;
+    // needs_attention keeps the flow re-stoppable. Both landings are bounded
+    // by the stop grace: a persistence face that never settles must not hang
+    // the command past the chain's own bound.
+    if (result.status === 'stopped') {
+      try {
+        await this.landTerminalBookkeeping(agent, { ...base, lifecycle: 'stopped' })
+      } catch {
+        return { kind: 'error', text: renderStopChainBookkeepingUnsettledText(true) }
+      }
+      return { kind: 'success', text: renderStopChainStoppedText() }
+    }
+    try {
+      await this.landTerminalBookkeeping(agent, { ...base, lifecycle: 'needs_attention' })
+    } catch {
+      return { kind: 'error', text: renderStopChainBookkeepingUnsettledText(false) }
+    }
+    const text = renderStopChainNeedsAttentionText(result.remaining)
+    return {
+      kind: 'error',
+      text: inventoryUnverified ? `${text} ${STOP_CHAIN_INVENTORY_UNVERIFIED_NOTE}` : text,
+    }
+  }
+
+  /**
+   * Bound one stop-path work promise by the stop grace: a persistence face
+   * that never settles must not hang the composition past the chain's own
+   * bound. The losing work keeps running and converges the durable state
+   * late; the next stop reconciles against whatever landed.
+   * @param work - the bookkeeping or flush work to bound.
+   * @throws when the work does not settle within the configured stop grace.
+   */
+  private async boundedStopWork(work: Promise<void>): Promise<void> {
+    const bound = delay(this.config.stopGraceMs).then(() => {
+      throw new Error('the stop work did not settle within the grace bound')
+    })
+    await Promise.race([work, bound])
+  }
+
+  /**
+   * Land one terminal binding as the stop flow's bookkeeping: the record
+   * append first (the log is the binding authority), then the store entry
+   * and the checkpoint, all bounded by the stop grace.
+   * @param agent - the receiving agent whose session carries the record.
+   * @param finalBinding - the terminal binding to land durably.
+   * @throws when the bookkeeping fails or does not settle within the bound.
+   */
+  private async landTerminalBookkeeping(agent: Agent, finalBinding: GoalBinding): Promise<void> {
+    await this.boundedStopWork((async () => {
+      await landGoalBinding(this.journal, agent.session, finalBinding)
+      await this.bindingStore.save(finalBinding)
+      await this.bindingStore.write({
+        workspaceId: finalBinding.workspaceId,
+        controllerSessionId: finalBinding.controllerSessionId,
+        goalId: finalBinding.goalId,
+        goalRevision: finalBinding.goalRevision,
+        acceptanceHash: finalBinding.acceptanceHash,
+        sourceFingerprint: finalBinding.sourceFingerprint,
+        confirmation: { ...finalBinding.confirmation },
+        lifecycle: finalBinding.lifecycle,
+      })
+    })())
+  }
+
+  /**
+   * Converge a stop flow whose drain already confirmed quiescence but whose
+   * writer state never resolved: a release that threw, or a crash between
+   * the confirmation and the release, leaves the log at
+   * `quiescence_confirmed`. The repeat stop is not refused here: flush the
+   * participating sessions again, retry the release (the host hook
+   * tolerates repeat invocation), and land the stopped terminal. A failed
+   * release folds `needs_attention` so the flow stays retryable — a release
+   * failure never lands `stopped`.
+   * @param agent - the receiving agent whose writer the flow finishes.
+   * @param confirmed - the quiescence-confirmed binding carrying the flow's identity.
+   * @returns a success result after the released stop, or a stable error.
+   */
+  private async finishConfirmedStop(agent: Agent, confirmed: GoalBinding): Promise<CommandResult> {
+    const treeAgents = this.stopTree?.call(undefined) ?? []
+    const inventoryUnverified = this.stopTree === undefined || treeAgents.length === 0
+    try {
+      await this.boundedStopWork((async () => {
+        for (const treeAgent of [agent, ...treeAgents.filter(candidate => candidate.id !== agent.id)]) {
+          await this.sessionFlusher(treeAgent.session)
+        }
+      })())
+    } catch {
+      return { kind: 'error', text: renderStopChainBookkeepingUnsettledText(false) }
+    }
+    if (inventoryUnverified || this.stopReleaseWriter === undefined) {
+      await this.landTerminalBookkeeping(agent, { ...confirmed, lifecycle: 'needs_attention' })
+      const text = renderStopChainNeedsAttentionText([{ resource: 'writer:release', reason: 'operation_failed' }])
+      return {
+        kind: 'error',
+        text: inventoryUnverified ? `${text} ${STOP_CHAIN_INVENTORY_UNVERIFIED_NOTE}` : text,
+      }
+    }
+    try {
+      this.stopReleaseWriter()
+    } catch {
+      await this.landTerminalBookkeeping(agent, { ...confirmed, lifecycle: 'needs_attention' })
+      return {
+        kind: 'error',
+        text: renderStopChainNeedsAttentionText([{ resource: 'writer:release', reason: 'operation_failed' }]),
+      }
+    }
+    await this.landTerminalBookkeeping(agent, { ...confirmed, lifecycle: 'stopped' })
+    this.controllers.delete(agent.id)
+    return { kind: 'success', text: renderStopChainStoppedText() }
   }
 
   /**
