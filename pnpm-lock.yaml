@@ -4600,9 +4600,15 @@ importers:
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
         version: link:../../util/brand
+      '@deepseek-ai/dsh-deepseek-llm-api-extensions':
+        specifier: workspace:^
+        version: link:../../llm/deepseek-llm-api-extensions
       '@deepseek-ai/dsh-experimental-agent-hierarchy':
         specifier: workspace:^
         version: link:../agent-hierarchy
+      '@deepseek-ai/dsh-experimental-command-goal-binding':
+        specifier: workspace:^
+        version: link:../command-goal-binding
       '@deepseek-ai/dsh-experimental-devframe':
         specifier: workspace:^
         version: link:../devframe
@@ -4621,6 +4627,9 @@ importers:
       '@deepseek-ai/dsh-session':
         specifier: workspace:^
         version: link:../../core/session
+      '@deepseek-ai/dsh-session-persistence-jsonl':
+        specifier: workspace:^
+        version: link:../../session/session-persistence-jsonl
       '@deepseek-ai/dsh-session-projection':
         specifier: workspace:^
         version: link:../../session/session-projection
@@ -5163,6 +5172,9 @@ importers:
       '@deepseek-ai/dsh-experimental-session-identity':
         specifier: workspace:^
         version: link:../session-identity
+      '@deepseek-ai/dsh-jobs-local':
+        specifier: workspace:^
+        version: link:../../jobs/jobs-local
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
         version: link:../../llm/llm

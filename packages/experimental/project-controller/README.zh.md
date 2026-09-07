@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 装配与配置
 
-将 `@deepseek-ai/dsh-experimental-project-controller` 与 storage-domain、session-identity 一起挂载一次，提供 `ctx.projectController`。挂载 `/consumer` 提供 `project_integrate`，挂载 `/task-consumer` 提供 `project_task`，挂载 `/delivery-consumer` 提供 `project_deliver` 和 `project_review`；各子路径前都使用完整包名。挂载 `/request-budget-consumer` 执行模型发送准入。这些消费方使用既有服务，并导出没有默认导出的 Loader 函数插件命名空间。
+将 `@deepseek-ai/dsh-experimental-project-controller` 与 storage-domain、session-identity 一起挂载一次，提供 `ctx.projectController`。挂载 `/consumer` 提供 `project_integrate`，挂载 `/task-consumer` 提供 `project_task`，挂载 `/delivery-consumer` 提供 `project_deliver`、`project_review` 和 `project_commit`；各子路径前都使用完整包名。挂载 `/request-budget-consumer` 执行模型发送准入。这些消费方使用既有服务，并导出没有默认导出的 Loader 函数插件命名空间。
 
 集成还需要活动会话、DevFrame 会话投影、workspace 与 worktree 注册表，以及持久化验证和审查证据。工具还需要活动 Agent 注册表与工具运行时。[真实 Loader 测试装配](tests/consumer-loader.spec.ts) 提供这些依赖，并在不发起模型请求的情况下执行这两个入口。
 
@@ -66,11 +66,13 @@ kind: "package-reference"
 
 ### 交付与审查工作
 
-交付消费者使用与集成消费者相同的账本和 Git 配置。它还要求 `requiredChecksByTask`（宿主提供的任务到已批准摘要映射），以及每个检查子进程的正整数限制 `checkTimeoutMs` 和 `checkMaxOutputBytes`。每项已登记检查都必须在已分配 Worker 的实际工作树内运行。为 Worker 允许 `project_deliver`，为其独立插件 lead 允许 `project_review`。
+交付消费者使用与集成消费者相同的账本和 Git 配置。它还要求 `requiredChecksByTask`（宿主提供的任务到已批准摘要映射）、每个检查子进程的正整数限制 `checkTimeoutMs` 和 `checkMaxOutputBytes`，以及可选的 `commitPathsByTask`（登记每个任务可提交的工件路径）。每项已登记检查都必须在已分配 Worker 的实际工作树内运行。为 Worker 允许 `project_deliver` 和 `project_commit`，为其独立插件 lead 允许 `project_review`。
 
 Worker 从清洁且已提交的工作树显式调用 `project_deliver`，提供 `taskId`。宿主推导身份与源信息，在不改变原始 Goal 输入绑定的前提下记录任务交付，并运行现有已批准检查。检查通过且源仍然匹配时，任务才从开发推进到审查。检查失败保留结果但不推进任务；失败或中断的尝试要求显式设置 `retryChecks: true` 才会重跑该已批准检查集。
 
 实际父级组长通过 `taskId`、`decision` 和 `findings` 调用 `project_review`。通过审查要求最新交付的验证通过，并提交该输出。`changes_required` 会记录审查、消耗 Goal 共用修复额度，并在活跃任务上限内将任务退回开发。额度耗尽时保留审查记录，但不准入修复。相同重试复用审查及其持久化修复回执，包括从任务状态写入失败中恢复。冲突的决定要求新交付，被拒绝的源码必须改变后才能再次交付。执行 Agent 空闲不等于完成交付或获得批准。
+
+产出任务工件的 Worker 以 `taskId`、显式相对 `paths` 和可选单行 `message` 调用 `project_commit`。宿主只提交 `commitPathsByTask` 中为该任务登记的路径；未登记范围的任务会拒绝提交。调用方存在非终态后台作业时提交会被拒绝，并在唯一一次 HEAD 观察之后再次复核——活动作业可能仍在写工作树，该证据不是操作系统级锁。观察从 owner 工作区读取已登记分支的引用，绝不经过 Worker 检出，worktree-registry 提交 Service 会在其固定 gitdir 内复核分支与期望 HEAD。Worker shell 永远不运行 `git commit`。提交后仍存在的变更按未核实报告而不是分类；交付仍然要求完全清洁的工作树。路径范围按精确且区分大小写匹配；在 Windows 等大小写不敏感文件系统上，这只可能产生 fail-closed 误拒，不构成绕过。
 
 证据、修复准入和任务写入是独立的持久化操作。使用同一活跃总控会话的日志跨调用和消费方共享追加队列及持久化失败锁。出错后检查保留的证据；日志成功不证明任务已推进。集成仍要求最新的精确任务交付、验证、独立审查和未改变的源码提交。[DevFrame 修复契约](../devframe/README.zh.md#bound-correction-rounds)定义审查与告警共用的记账和冷恢复规则。
 
@@ -139,7 +141,7 @@ controller 串行执行任务变更与集成尝试。任务记录、累计请求
 
 挂载消费者会暴露带 `taskId` 和 `action` 参数的 `project_integrate`。成功结果包含任务 id、任务状态和集成观察；失败通过工具运行时报告拒绝原因。普通工具调用与结果日志承载这些模型可见值。仅挂载服务不会暴露工具。任务消费者单独暴露 `project_task`：规划需要标题与插件范围，启动接受可选 briefing。结果报告 `taskId`、`state` 和 `briefingQueued`；指令入队不代表 Worker 已完成。
 
-交付消费者还提供 `project_deliver`（任务与可选重试标志）和 `project_review`（任务、显式决定与发现项）。两者返回 `taskId`、`state` 和 `outcome`，通过普通工具调用与结果日志展示；模型不能指定身份、源码路径或检查命令。
+交付消费者还提供 `project_deliver`（任务与可选重试标志）、`project_review`（任务、显式决定与发现项）和 `project_commit`（任务、显式相对路径与可选提交说明）。三者返回 `taskId`、`state` 和 `outcome`，通过普通工具调用与结果日志展示；模型不能指定身份、源码路径、检查命令，也不能越过宿主登记的提交范围。
 
 #### Token 影响
 

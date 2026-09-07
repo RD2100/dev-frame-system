@@ -43,7 +43,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-experimental-agent-worktree` | `worktree_create`, `worktree_remove`, `worktree_status` | `ctx.tools`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry`, `ctx.systemPrompt`, `a calling Agent (its session cwd authorizes the workspace)` | `tool/call`, `tool/result` | - | The three tools bind every created worktree to the calling session as its single writer: other sessions observe it, only the binding holder removes it. Experimental and private: the package ships in no released bundle, and a composition mounting it alongside dsh-tool-worktree would double-register the shared tool names. |
 | `@deepseek-ai/dsh-experimental-project-controller/consumer` | `project_integrate` | `ctx.tools`, `ctx.agents`, `ctx.projectController`, `ctx.agentBindings`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry` | `tool/call`, `tool/result`, `project_tasks integrations and tasks`, `Git target worktree` | - | Opt-in controller-only consumer. Integration requires persisted verification, independent lead review, the current Goal, and registered worktree writer locks. Reconciliation observes an interrupted intent without repeating Git. |
 | `@deepseek-ai/dsh-experimental-project-controller/task-consumer` | `project_task` | `ctx.tools`, `ctx.agents`, `ctx.sessions`, `ctx.sessionProjections`, `ctx.projectController`, `ctx.agentBindings`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry` | `tool/call`, `tool/result`, `project_tasks tasks`, `Worker briefing inbox` | - | Opt-in root-controller consumer for planning authorized Goal tasks and starting their registered Workers. Start derives identity and worktree locks from live registries, and queues an optional briefing once after development admission. It does not deliver, review, submit, or complete work. |
-| `@deepseek-ai/dsh-experimental-project-controller/delivery-consumer` | `project_deliver`, `project_review` | `ctx.tools`, `ctx.agents`, `ctx.sessions`, `ctx.sessionProjections`, `ctx.projectController`, `ctx.agentBindings`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry` | `tool/call`, `tool/result`, `DevFrame delivery, verification and review events`, `project_tasks tasks`, `approved check subprocess effects` | - | Opt-in explicit Worker delivery and independent parent-lead review. The host derives source identity and executes preapproved checks. Failed or uncertain checks require explicit retryChecks; identical reviews can repair task-state recording without repeating the review. |
+| `@deepseek-ai/dsh-experimental-project-controller/delivery-consumer` | `project_commit`, `project_deliver`, `project_review` | `ctx.tools`, `ctx.agents`, `ctx.sessions`, `ctx.sessionProjections`, `ctx.projectController`, `ctx.agentBindings`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry` | `tool/call`, `tool/result`, `DevFrame delivery, verification and review events`, `project_tasks tasks`, `approved check subprocess effects`, `Worker worktree commits through the registry commit Service` | - | Opt-in explicit Worker delivery, independent parent-lead review, and Worker artifact commits. The host derives source identity and executes preapproved checks, commits only host-registered per-task paths, refuses while the caller has non-terminal background jobs, and re-verifies branch and expected HEAD inside the registry commit Service. Failed or uncertain checks require explicit retryChecks; identical reviews can repair task-state recording without repeating the review. |
 | `@deepseek-ai/dsh-experimental-agent-dispatch` | `agent_dispatch` | `ctx.tools`, `ctx.systemPrompt`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry`, `ctx.agentHierarchy`, `ctx.agentBindings`, `ctx.agents`, `ctx.sessions`, `a calling Agent (its session cwd authorizes the workspace)` | `tool/call`, `tool/result` | - | The one tool dispatches a hierarchy child for one task onto one registered worktree and holds the worktree single-writer lock for the child's whole life; a task with an existing dispatched child refuses and names it, and retry reuses that child without re-delivering the briefing. Experimental and private: the package ships in no released bundle, and visibility is role-restricted (workers cannot see the tool) through the hierarchy's restrict face. |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
 
@@ -2478,6 +2478,39 @@ Opt-in root-controller consumer for planning authorized Goal tasks and starting 
 
 ## `@deepseek-ai/dsh-experimental-project-controller/delivery-consumer`
 
+### `project_commit`
+
+Commit exactly the changed artifact files of your assigned task in your Worker worktree through the host-controlled commit. Pass the explicit relative paths of the files you produced; the host only commits paths registered for your task, verifies each one in the worktree, and refuses anything else you name, while your unfinished background jobs exist, or with forged identities. Pending changes that stay after the commit are unverified; call project_deliver only once the worktree is fully clean.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "taskId": {
+      "type": "string",
+      "description": "Your assigned task."
+    },
+    "paths": {
+      "type": "array",
+      "description": "The artifact file paths you changed, relative to the worktree root.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "message": {
+      "type": "string",
+      "description": "Optional single-line commit message; the host derives one from the task and goal otherwise."
+    }
+  },
+  "required": [
+    "taskId",
+    "paths"
+  ]
+}
+```
+
+Source: [`packages/experimental/project-controller/src/delivery-consumer.ts`](../packages/experimental/project-controller/src/delivery-consumer.ts)
+
 ### `project_deliver`
 
 Explicitly deliver your assigned task from a clean committed Worker worktree. The host records the actual output and runs the existing approved checks. Repeated successful delivery reuses its evidence; interrupted or failed checks run again only with retryChecks true. This does not approve review or integrate work.
@@ -2533,7 +2566,7 @@ Record your explicit independent lead review of the latest task delivery. Pass s
 
 Source: [`packages/experimental/project-controller/src/delivery-consumer.ts`](../packages/experimental/project-controller/src/delivery-consumer.ts)
 
-Opt-in explicit Worker delivery and independent parent-lead review. The host derives source identity and executes preapproved checks. Failed or uncertain checks require explicit retryChecks; identical reviews can repair task-state recording without repeating the review.
+Opt-in explicit Worker delivery, independent parent-lead review, and Worker artifact commits. The host derives source identity and executes preapproved checks, commits only host-registered per-task paths, refuses while the caller has non-terminal background jobs, and re-verifies branch and expected HEAD inside the registry commit Service. Failed or uncertain checks require explicit retryChecks; identical reviews can repair task-state recording without repeating the review.
 
 <a id="deepseek-aidsh-experimental-agent-dispatch"></a>
 
