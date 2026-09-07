@@ -32,6 +32,7 @@ The experimental group contains prototype capabilities that are not part of any 
 | [`client-ui-agent-team`](client-ui-agent-team/README.md) | Team roster, task board, and teammate navigation for Web | — |
 | [`code-runtime-python`](code-runtime-python/README.md) | CPython subprocess backend for the code-execution seam | `ctx.codeRuntime` |
 | [`devframe`](devframe/README.md) | Shared contracts for the experimental single-project controller | — |
+| [`devframe-profile`](devframe-profile/README.md) | Explicit source-checkout Web profile layer mounting the DevFrame stack | — |
 | [`inspector`](inspector/README.md) | Cross-realm CDP hub for Host debugging, Client Runtime inspection, network capture, and Cordis trees | `ctx.inspector` |
 | [`agent-evidence`](agent-evidence/README.md) | Append-only evidence ledger for agent work: task/Goal binding receipts, submission receipts, and verification snapshots | `ctx.agentEvidence` |
 | [`agent-reliability`](agent-reliability/README.md) | Process-tree stop, admission cutoff, uncertain-call reconciliation, and the flush barrier as one service | `ctx.agentReliability` |
