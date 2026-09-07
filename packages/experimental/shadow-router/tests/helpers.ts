@@ -21,6 +21,7 @@ import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import Storage from '@deepseek-ai/dsh-storage'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import * as StorageJson from '@deepseek-ai/dsh-storage-json'
+import * as StorageSqlite from '@deepseek-ai/dsh-storage-sqlite'
 import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
 import { MockAdapter } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -45,15 +46,28 @@ export interface Harness {
   dispose: () => Promise<void>
 }
 
+/** Storage backends the delivery anchors run over: the suite default and the sqlite medium. */
+export type HarnessBackend = 'json' | 'sqlite'
+export const HARNESS_BACKENDS: readonly HarnessBackend[] = ['json', 'sqlite']
+
+/** Harness mount options: which storage backend serves the shadow-router domain. */
+export interface HarnessOptions {
+  /** Storage backend name; defaults to the suite's json medium. */
+  backend?: HarnessBackend
+}
+
 /**
  * Boot the real composition over a directory.
  * @param root - Existing storage root to reuse (cold-restore specs pass the
  *   previous harness's root); omitted, a fresh temp root is created.
  * @param routerConfig - Router config forwarded without mutation.
+ * @param options - Mount options; every reopen of one root must pass the same
+ *   backend or the cold restore reads a different medium than the crash wrote.
  * @returns the booted harness; the caller owns disposal.
  */
-export async function harness(root?: string, routerConfig: ShadowRouterConfig = {}): Promise<Harness> {
+export async function harness(root?: string, routerConfig: ShadowRouterConfig = {}, options: HarnessOptions = {}): Promise<Harness> {
   const resolved = root ?? await mkdtemp(join(tmpdir(), 'dsh-shadow-router-'))
+  const backend = options.backend ?? 'json'
   const ctx = new Context()
   let shadow: Agent | undefined
   try {
@@ -61,8 +75,9 @@ export async function harness(root?: string, routerConfig: ShadowRouterConfig = 
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentLoop, { agents: [] })
     await ctx.plugin(Storage)
-    await ctx.plugin(StorageJson, { root: resolved })
-    await ctx.plugin(StorageDomain, { backend: 'json' })
+    if (backend === 'sqlite') await ctx.plugin(StorageSqlite, { path: join(resolved, 'shadow-state.db') })
+    else await ctx.plugin(StorageJson, { root: resolved })
+    await ctx.plugin(StorageDomain, { backend })
     await ctx.plugin(JsonlSessionPersistence, { root: join(resolved, 'session-logs') })
     await ctx.plugin(WorkspaceRegistry)
     await ctx.plugin(AgentBindingRegistry)
@@ -104,18 +119,22 @@ export async function harness(root?: string, routerConfig: ShadowRouterConfig = 
  * restore) before a router process cold-restores them. The caller closes the
  * returned domain before disposing.
  * @param root - Existing storage root shared with the router harness.
+ * @param options - Mount options; must match the backend the router harness
+ *   reopens the same root with.
  * @returns the open domain handle and the harness disposal.
  */
-export async function seedHarness(root: string): Promise<{
+export async function seedHarness(root: string, options: HarnessOptions = {}): Promise<{
   domain: StorageDomain.Domain<typeof shadowRouterDomainSpec>
   workspaceDomain: StorageDomain.Domain<typeof workspaceDomainSpec>
   dispose: () => Promise<void>
 }> {
+  const backend = options.backend ?? 'json'
   const ctx = new Context()
   try {
     await ctx.plugin(Storage)
-    await ctx.plugin(StorageJson, { root })
-    await ctx.plugin(StorageDomain, { backend: 'json' })
+    if (backend === 'sqlite') await ctx.plugin(StorageSqlite, { path: join(root, 'shadow-state.db') })
+    else await ctx.plugin(StorageJson, { root })
+    await ctx.plugin(StorageDomain, { backend })
   } catch (error) {
     await ctx.fiber.dispose()
     throw error

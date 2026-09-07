@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { AcceptanceHash, ShadowMessageId, ShadowRequestId } from '../src/index.ts'
-import { harness, seedHarness, seedWorkspaceFact } from './helpers.ts'
+import { HARNESS_BACKENDS, harness, seedHarness, seedWorkspaceFact } from './helpers.ts'
 import type { ShadowBindingRecord, ShadowDeliveryRecord } from '../src/index.ts'
 
 interface ScenarioSeed {
@@ -60,7 +60,7 @@ async function seedDelivery(seed: Awaited<ReturnType<typeof seedHarness>>, scena
 }
 
 describe('shadow-router delivery recovery', () => {
-  it('AT2-05: an intent persisted before target acceptance converges to one received input on retry and on recovery', async () => {
+  it.each(HARNESS_BACKENDS)('AT2-05 [%s]: an intent persisted before target acceptance converges to one received input on retry and on recovery', async (backend) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-at2-05a-'))
     const scenario: ScenarioSeed = {
       workspaceId: 'ws-recovery-1',
@@ -69,7 +69,7 @@ describe('shadow-router delivery recovery', () => {
       goalId: 'goal-r1',
       acceptanceHash: 'hash-run-r1',
     }
-    const seed = await seedHarness(root)
+    const seed = await seedHarness(root, { backend })
     try {
       await seedReadyBinding(seed, scenario)
       await seedDelivery(seed, scenario, { messageId: 'msg-seed-q-1', requestId: 'seed-q-1', state: 'queued' })
@@ -78,7 +78,7 @@ describe('shadow-router delivery recovery', () => {
       await seed.dispose()
     }
 
-    const h = await harness(root, { authorizedRoots: [root] })
+    const h = await harness(root, { authorizedRoots: [root] }, { backend })
     try {
       h.ctx.sessions.create(SessionId('session-ctrl-r1'), { meta: { cwd: scenario.canonicalPath } })
       // Retry the first interrupted delivery with the same stable request id.
@@ -108,7 +108,7 @@ describe('shadow-router delivery recovery', () => {
     }
   })
 
-  it('AT2-05: an accepted delivery whose sender receipt was lost is returned without rewriting the acceptance', async () => {
+  it.each(HARNESS_BACKENDS)('AT2-05 [%s]: an accepted delivery whose sender receipt was lost is returned without rewriting the acceptance', async (backend) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-at2-05b-'))
     const scenario: ScenarioSeed = {
       workspaceId: 'ws-recovery-2',
@@ -118,7 +118,7 @@ describe('shadow-router delivery recovery', () => {
       acceptanceHash: 'hash-run-r2',
     }
     const acceptedAt = '2026-09-05T10:00:00.000Z'
-    const seed = await seedHarness(root)
+    const seed = await seedHarness(root, { backend })
     try {
       await seedReadyBinding(seed, scenario)
       await seedDelivery(seed, scenario, {
@@ -131,7 +131,7 @@ describe('shadow-router delivery recovery', () => {
       await seed.dispose()
     }
 
-    const h = await harness(root, { authorizedRoots: [root] })
+    const h = await harness(root, { authorizedRoots: [root] }, { backend })
     try {
       h.ctx.sessions.create(SessionId('session-ctrl-r2'), { meta: { cwd: scenario.canonicalPath } })
       const receipt = await h.router.sendToProject(h.shadow, {
@@ -153,7 +153,7 @@ describe('shadow-router delivery recovery', () => {
     }
   })
 
-  it('AT2-05: a delivery interrupted before its intent was persisted is a fresh accepted delivery', async () => {
+  it.each(HARNESS_BACKENDS)('AT2-05 [%s]: a delivery interrupted before its intent was persisted is a fresh accepted delivery', async (backend) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-at2-05c-'))
     const scenario: ScenarioSeed = {
       workspaceId: 'ws-recovery-3',
@@ -162,14 +162,14 @@ describe('shadow-router delivery recovery', () => {
       goalId: 'goal-r3',
       acceptanceHash: 'hash-run-r3',
     }
-    const seed = await seedHarness(root)
+    const seed = await seedHarness(root, { backend })
     try {
       await seedReadyBinding(seed, scenario)
     } finally {
       await seed.dispose()
     }
 
-    const h = await harness(root, { authorizedRoots: [root] })
+    const h = await harness(root, { authorizedRoots: [root] }, { backend })
     try {
       h.ctx.sessions.create(SessionId('session-ctrl-r3'), { meta: { cwd: scenario.canonicalPath } })
       const receipt = await h.router.sendToProject(h.shadow, {

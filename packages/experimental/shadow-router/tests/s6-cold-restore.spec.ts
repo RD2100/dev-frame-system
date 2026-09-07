@@ -11,10 +11,10 @@ import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { harness } from './helpers.ts'
+import { HARNESS_BACKENDS, harness } from './helpers.ts'
 
 describe('shadow-router S6 binding row-level cold recovery', () => {
-  it('S6: provisioned bindings and received deliveries restore row-for-row after a cold restart on the same root', async () => {
+  it.each(HARNESS_BACKENDS)('S6 [%s]: provisioned bindings and received deliveries restore row-for-row after a cold restart on the same root', async (backend) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-s6-cold-'))
 
     // Phase 1: provision two real projects so the binding rows traverse the
@@ -22,7 +22,7 @@ describe('shadow-router S6 binding row-level cold recovery', () => {
     // storage, then authorize each open run and deliver one message. The
     // recorded values are what the restart must reproduce.
     const phase1 = await (async () => {
-      const h1 = await harness(root, { authorizedRoots: [root] })
+      const h1 = await harness(root, { authorizedRoots: [root] }, { backend })
       try {
         const dirA = await h1.makeProjectDir('s6-project-a')
         const dirB = await h1.makeProjectDir('s6-project-b')
@@ -84,7 +84,7 @@ describe('shadow-router S6 binding row-level cold recovery', () => {
     const { openA, openB, beforeA, beforeB } = phase1
 
     // Phase 2: a fresh harness boots over the same root.
-    const h2 = await harness(root, { authorizedRoots: [root] })
+    const h2 = await harness(root, { authorizedRoots: [root] }, { backend })
     try {
       // Row-level re-assertion for EACH workspace, field by field.
       const afterA = h2.router.findBinding(beforeA.workspaceId)

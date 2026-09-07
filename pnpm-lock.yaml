@@ -5131,6 +5131,9 @@ importers:
       '@deepseek-ai/dsh-storage-domain':
         specifier: workspace:^
         version: link:../../storage/storage-domain
+      '@deepseek-ai/dsh-storage-sqlite':
+        specifier: workspace:^
+        version: link:../../storage/storage-sqlite
       '@deepseek-ai/dsh-tools':
         specifier: workspace:^
         version: link:../../core/tools
