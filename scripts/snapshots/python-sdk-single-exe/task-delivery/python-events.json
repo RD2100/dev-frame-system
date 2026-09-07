@@ -1,0 +1,57 @@
+{
+  "scope": "authored source-SDK built-CLI delivery transport; no checks or review",
+  "finalResponse": "runtime smoke ok",
+  "events": [
+    {
+      "type": "devframe/goal-binding",
+      "data": {
+        "version": 1,
+        "workspaceId": "transport-workspace",
+        "controllerSessionId": "python-delivery",
+        "goalId": "transport-goal",
+        "goalRevision": 1,
+        "taskIds": [
+          "transport-task"
+        ],
+        "acceptanceHash": "transport-acceptance",
+        "sourceFingerprint": "transport-input-source",
+        "snapshotId": "transport-input-snapshot",
+        "confirmation": {
+          "id": "transport-confirmation",
+          "acceptanceHash": "transport-acceptance"
+        },
+        "lifecycle": "admission_open",
+        "budget": {
+          "maxAttempts": 1,
+          "consumedAttempts": 0
+        }
+      }
+    },
+    {
+      "type": "devframe/task-delivery",
+      "data": {
+        "version": 1,
+        "deliveryId": "transport-delivery",
+        "taskId": "transport-task",
+        "binding": {
+          "controllerSessionId": "python-delivery",
+          "goalId": "transport-goal",
+          "goalRevision": 1,
+          "taskIds": [
+            "transport-task"
+          ],
+          "acceptanceHash": "transport-acceptance",
+          "workspaceId": "transport-workspace",
+          "sourceFingerprint": "transport-input-source",
+          "snapshotId": "transport-input-snapshot"
+        },
+        "workerSessionId": "transport-worker",
+        "worktreeId": "transport-worktree",
+        "worktreePath": "{{cwd}}/worker",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceFingerprint": "transport-output-source",
+        "snapshotId": "transport-output-snapshot"
+      }
+    }
+  ]
+}

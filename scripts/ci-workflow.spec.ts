@@ -803,3 +803,40 @@ function workflowJob(workflow: Record<string, unknown>, job: string): Record<str
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
+
+/** Source transport is mandatory per native target without weakening installed-wheel isolation. */
+function assertDeliveryTransportStep(step: unknown, platform: 'POSIX' | 'Windows'): void {
+  if (!isRecord(step) || !isRecord(step.env) || typeof step.run !== 'string') throw new Error('Missing source transport step')
+  const windows = platform === 'Windows'
+  expect(step.if).toBe(windows ? "runner.os == 'Windows'" : "runner.os != 'Windows'")
+  expect(step['continue-on-error']).toBeUndefined()
+  expect(step.env.PYTHONPATH).toBe('${{ github.workspace }}/python/sdk/src' + (windows ? ';' : ':') + '${{ github.workspace }}/python/sdk-runtime/src')
+  expect(step.run).toContain(windows ? '${{ steps.smoke-venv-windows.outputs.python }}' : '${{ steps.smoke-venv-posix.outputs.python }}')
+  expect(step.run).toContain('--scenario sdk-task-delivery --exe "$PWD/apps/cli/lib/bin.js"')
+  expect(step.run).not.toContain('--installed-wheel')
+  expect(step.run).not.toContain('--update-snapshots')
+  expect(step.run).not.toContain('pip install')
+  if (windows) {
+    expect(step.shell).toBe('pwsh')
+    expect(step.run).toContain('if ($LASTEXITCODE -ne 0) { throw')
+  } else expect(step.run).toContain('set -euo pipefail')
+}
+
+it('runs source delivery transport after building and installing on every native target', () => {
+  const build = workflowJob(loadWorkflow('.github/workflows/build-exe-for-python-sdk.yml'), 'build')
+  if (!Array.isArray(build.steps)) throw new Error('Missing native build steps')
+  const steps = build.steps
+  const buildIndex = steps.findIndex(step => isRecord(step) && step.name === 'Build single-exe')
+  expect(buildIndex).toBeGreaterThanOrEqual(0)
+  for (const platform of ['POSIX', 'Windows'] as const) {
+    const index = steps.findIndex(step => isRecord(step) && step.name === `Run source SDK delivery transport (${platform})`)
+    expect(index).toBeGreaterThan(buildIndex)
+    const installIndex = steps.findIndex(step => isRecord(step) && step.name === `Install local SDK and runtime wheels into a clean venv (${platform})`)
+    expect(installIndex).toBeGreaterThanOrEqual(0)
+    expect(index).toBeGreaterThan(installIndex)
+    assertDeliveryTransportStep(steps[index], platform)
+    for (const patch of [{ if: 'false' }, { 'continue-on-error': true }, { run: '--scenario all --installed-wheel' }, { env: { PYTHONPATH: '' } }]) {
+      expect(() => { assertDeliveryTransportStep({ ...steps[index], ...patch }, platform) }).toThrow()
+    }
+  }
+})
