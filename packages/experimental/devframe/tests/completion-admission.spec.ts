@@ -8,7 +8,7 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { evaluateCompletionAdmission } from '../src/controller/goal-binding.ts'
+import { evaluateCompletionAdmission, TaskId } from '../src/controller/goal-binding.ts'
 import type { CompletionAdmissionRequest } from '../src/controller/goal-binding.ts'
 import { MemoryRequiredChecksConfigStore, requiredChecksDigest } from '../src/required-checks.ts'
 import { SourceFingerprint } from '../src/shared/types.ts'
@@ -93,6 +93,46 @@ describe('evaluateCompletionAdmission', { timeout: 30_000 }, () => {
     expect(verdict.findings).toEqual(review.findings)
   })
 
+  it('rejects at the task-warning stage before any subprocess runs when the log holds a fail grade', async () => {
+    const fixture = await createCommittedWorktree()
+    // The fingerprint is deliberately wrong too: the task's own recorded
+    // outcome evidence outranks the worktree check and is the cheapest
+    // invalidation.
+    const verdict = await evaluateCompletionAdmission(await admissionRequest(fixture, {
+      sourceFingerprint: SourceFingerprint('0000000000000000000000000000000000000000000000000000000000000000'),
+      taskWarnings: [{
+        version: 1,
+        taskId: TaskId('task-a'),
+        warning: 'MEMORY_UNAVAILABLE',
+        tool: 'memory_append',
+        grade: 'fail',
+      }],
+    }))
+    expect(rejectionStage(verdict)).toBe('task-warning')
+    if (verdict.kind !== 'rejected' || verdict.stage !== 'task-warning') {
+      throw new Error('expected a task-warning rejection')
+    }
+    expect(verdict.warning).toBe('MEMORY_UNAVAILABLE')
+    expect(verdict.tool).toBe('memory_append')
+    expect(verdict.grade).toBe('fail')
+  })
+
+  it('lets complete-with-warning records through to the later stages', async () => {
+    const fixture = await createCommittedWorktree()
+    const verdict = await evaluateCompletionAdmission(await admissionRequest(fixture, {
+      taskWarnings: [{
+        version: 1,
+        taskId: TaskId('task-a'),
+        warning: 'MEMORY_UNAVAILABLE',
+        tool: 'memory_append',
+        grade: 'complete-with-warning',
+      }],
+    }))
+    // The optional-memory degradation does not reject: the admission runs the
+    // fingerprint predicate (which passes on the committed fixture) to admitted.
+    expect(verdict.kind).toBe('admitted')
+  })
+
   it('propagates a failed store resolution fail-loud instead of inventing a rejection', async () => {
     const fixture = await createCommittedWorktree()
     await expect(evaluateCompletionAdmission(await admissionRequest(fixture, {
@@ -118,12 +158,13 @@ async function admissionRequest(
     requiredChecksDigest: digest,
     requiredChecksStore: store,
     review: reviewEvent('pass'),
+    taskWarnings: [],
     ...overrides,
   }
 }
 
 /** Narrow a verdict to its rejection arm and assert the stage. */
-function rejectionStage(verdict: Awaited<ReturnType<typeof evaluateCompletionAdmission>>): 'source-fingerprint' | 'required-checks' | 'review' {
+function rejectionStage(verdict: Awaited<ReturnType<typeof evaluateCompletionAdmission>>): 'source-fingerprint' | 'required-checks' | 'review' | 'task-warning' {
   expect(verdict.kind).toBe('rejected')
   if (verdict.kind !== 'rejected') throw new Error('expected a rejection verdict')
   return verdict.stage
