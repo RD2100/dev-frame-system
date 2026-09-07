@@ -36,7 +36,7 @@ describe('stop with real session persistence', () => {
       const result = await stopProject({
         agents: [],
         registry: { get: () => undefined },
-        goals: { disarm: () => undefined, pause: () => undefined },
+        goals: { disarm: () => undefined, pause: vi.fn() },
         jobs: { list: () => [], kill: vi.fn(), wait: vi.fn() },
         processes: () => [],
         graceMs: 30_000,
