@@ -214,6 +214,13 @@ export interface NativeGoalPort {
   resume(ref: { readonly id: NativeGoalId; readonly revision: number }): NativeGoalState
   /** Mark the current native Goal complete at one exact revision and disarm it. */
   complete(ref: { readonly id: NativeGoalId; readonly revision: number }): NativeGoalState
+  /**
+   * Clear the current native Goal at one exact revision behind the native
+   * durable tombstone, retaining its history. Optional because only the
+   * human-authorized abandon consumes it; a port without it fails abandon
+   * loud instead of degrading into a silent non-clear.
+   */
+  clear?(ref: { readonly id: NativeGoalId; readonly revision: number }): { readonly id: NativeGoalId; readonly revision: number }
 }
 
 /**
@@ -253,6 +260,10 @@ export class GoalServicePort implements NativeGoalPort {
 
   complete(ref: { readonly id: NativeGoalId; readonly revision: number }): NativeGoalState {
     return toNativeGoalState(this.options.goals.complete(this.options.agent, ref))
+  }
+
+  clear(ref: { readonly id: NativeGoalId; readonly revision: number }): { readonly id: NativeGoalId; readonly revision: number } {
+    return this.options.goals.clear(this.options.agent, ref)
   }
 }
 
@@ -596,6 +607,132 @@ export class GoalBindingController {
       this.activeIdentity = identityOf(admitted)
       this.admission = 'open'
       return copyBinding(admitted)
+    })
+  }
+
+  /**
+   * Record one human-authorized stop request for an exact unfinished bound
+   * Goal: admission closes for the controller's own steps, the native Goal
+   * loses continuation authority through the same disarm the start lane
+   * performs, and the binding persists at `stop_requested` — the honest
+   * statement that a stop was requested while quiescence (draining jobs,
+   * processes, and the flush) is still unconfirmed. The terminal `stopped`
+   * state stays reachable through the existing lifecycle vocabulary
+   * (`stop_requested` → `quiescence_confirmed` → `stopped`); the stop flow,
+   * not this seam, owns those observations and the writer release.
+   * @param identity - controller Session and Goal identity to stop.
+   * @param authorization - host-issued human authorization for this stop.
+   * @returns the persisted binding at `stop_requested`.
+   * @throws {@link GoalBindingError} when the authorization is not
+   *   host-issued, the identity is unknown or foreign, the native Goal
+   *   diverged from the binding or is already complete, the binding's
+   *   lifecycle cannot legally enter `stop_requested`, or persistence fails.
+   */
+  stop(identity: GoalBindingIdentity, authorization: HumanAuthorization): Promise<GoalBinding> {
+    return this.enqueue(async () => {
+      await this.ensureReady()
+      assertHumanAuthorization(authorization)
+      const binding = this.findBinding(identity)
+      this.closeAdmission()
+
+      const current = this.options.goals.get()
+      if (current === undefined || current.id !== identity.goalId) {
+        throw new GoalBindingError(
+          `native Goal does not match "${identity.goalId}"`,
+          'GOAL_BINDING_IDENTITY_MISMATCH',
+        )
+      }
+      assertNativeRevision(current.revision)
+      if (current.revision < binding.goalRevision) {
+        throw new GoalBindingError(
+          `native Goal "${identity.goalId}" revision ${current.revision} precedes bound revision ${binding.goalRevision}`,
+          'GOAL_BINDING_IDENTITY_MISMATCH',
+        )
+      }
+      if (current.phase === 'complete') {
+        throw new GoalBindingError(
+          `Goal "${identity.goalId}" is already complete`,
+          'GOAL_BINDING_IDENTITY_MISMATCH',
+        )
+      }
+      assertStoppableLifecycle(binding.lifecycle)
+
+      this.options.goals.disarm()
+      const stopped = { ...binding, lifecycle: 'stop_requested' as const }
+      await this.saveBinding(stopped)
+      return copyBinding(stopped)
+    })
+  }
+
+  /**
+   * Record one human-authorized abandon of an exact stopped or unfinished
+   * bound Goal: admission closes, the native Goal loses continuation
+   * authority, and the native Goal is cleared behind its durable tombstone —
+   * the existing vocabulary's expression of "no longer resumable", since a
+   * cleared Goal can never again satisfy the native-state match every resume
+   * performs. The binding history is retained and no completion is claimed.
+   * An unfinished (`admission_open`) binding first persists the same
+   * `stop_requested` stop-mark the stop lane writes, because the abandon
+   * stops the work without quiescence confirmation; a `stopped` binding
+   * needs no new record.
+   * @param identity - controller Session and Goal identity to abandon.
+   * @param authorization - host-issued human authorization for this abandon.
+   * @returns the retained binding: at `stop_requested` for a previously
+   *   unfinished Goal, unchanged (`stopped`) for an already stopped one.
+   * @throws {@link GoalBindingError} when the authorization is not
+   *   host-issued, the identity is unknown or foreign, the native Goal
+   *   diverged from the binding or is already complete, the binding's
+   *   lifecycle is neither `admission_open` nor `stopped`, the injected
+   *   native port cannot clear, or persistence fails.
+   */
+  abandon(identity: GoalBindingIdentity, authorization: HumanAuthorization): Promise<GoalBinding> {
+    return this.enqueue(async () => {
+      await this.ensureReady()
+      assertHumanAuthorization(authorization)
+      const binding = this.findBinding(identity)
+      this.closeAdmission()
+
+      const current = this.options.goals.get()
+      if (current === undefined || current.id !== identity.goalId) {
+        throw new GoalBindingError(
+          `native Goal does not match "${identity.goalId}"`,
+          'GOAL_BINDING_IDENTITY_MISMATCH',
+        )
+      }
+      assertNativeRevision(current.revision)
+      if (current.revision < binding.goalRevision) {
+        throw new GoalBindingError(
+          `native Goal "${identity.goalId}" revision ${current.revision} precedes bound revision ${binding.goalRevision}`,
+          'GOAL_BINDING_IDENTITY_MISMATCH',
+        )
+      }
+      if (current.phase === 'complete') {
+        throw new GoalBindingError(
+          `Goal "${identity.goalId}" is already complete and cannot be abandoned; completion already claimed it`,
+          'GOAL_BINDING_IDENTITY_MISMATCH',
+        )
+      }
+      if (binding.lifecycle !== 'admission_open' && binding.lifecycle !== 'stopped') {
+        throw new GoalBindingError(
+          `Goal "${identity.goalId}" lifecycle "${binding.lifecycle}" is neither admission_open nor stopped; resolve the pending stop flow before abandoning`,
+          'GOAL_BINDING_INVALID_REQUEST',
+        )
+      }
+      if (this.options.goals.clear === undefined) {
+        throw new GoalBindingError(
+          'native Goal port cannot clear Goals; abandon requires the production GoalServicePort',
+          'GOAL_BINDING_INVALID_REQUEST',
+        )
+      }
+
+      this.options.goals.disarm()
+      const retained = binding.lifecycle === 'admission_open'
+        ? { ...binding, lifecycle: 'stop_requested' as const }
+        : binding
+      if (binding.lifecycle === 'admission_open') await this.saveBinding(retained)
+
+      this.options.goals.clear({ id: current.id, revision: current.revision })
+      return copyBinding(retained)
     })
   }
 
@@ -1136,6 +1273,21 @@ function assertRevisionAdvance(previous: number, next: number): void {
     throw new GoalBindingError(
       `native Goal resume must advance revision from ${previous} to ${previous + 1}; received ${next}`,
       'GOAL_BINDING_IDENTITY_MISMATCH',
+    )
+  }
+}
+
+/**
+ * Restrict the stop request to lifecycles from which `stop_requested` is a
+ * legal fold transition (the projection's lifecycle graph: ambiguous,
+ * admission_open, and needs_attention may enter stop_requested; a pending or
+ * reached stop must not issue a second request).
+ */
+function assertStoppableLifecycle(lifecycle: GoalBinding['lifecycle']): void {
+  if (lifecycle !== 'admission_open' && lifecycle !== 'ambiguous' && lifecycle !== 'needs_attention') {
+    throw new GoalBindingError(
+      `Goal lifecycle "${lifecycle}" cannot enter stop_requested; a stop is already pending or reached`,
+      'GOAL_BINDING_INVALID_REQUEST',
     )
   }
 }

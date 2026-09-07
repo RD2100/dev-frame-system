@@ -4,10 +4,16 @@ import type { CompletionChecksRejection, CompletionFingerprintRejection, Complet
 import {
   COMMAND_NAME,
   completionAdmissionEvidence,
+  devframeAbandonDescriptor,
+  devframeStopDescriptor,
   goalCompleteDescriptor,
+  parseDevframeAbandonInput,
+  parseDevframeStopInput,
   parseGoalCompleteInput,
+  renderAbandonSuccess,
   renderCompletionRejection,
   renderCompletionSuccess,
+  renderStopSuccess,
 } from '../src/command.ts'
 import type { RequiredChecksDigest } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
 
@@ -99,5 +105,39 @@ describe('/goal-complete verdict rendering', () => {
     expect(evidence.summary).toContain('recorded equals fresh')
     expect(evidence.summary).toContain('goal-1')
     expect(evidence.at).toBeGreaterThan(0)
+  })
+})
+
+describe('/devframe-stop and /devframe-abandon grammar', () => {
+  it('exposes the strict no-input descriptors', () => {
+    expect(devframeStopDescriptor()).toEqual({
+      name: 'devframe-stop',
+      description: 'request a human-authorized stop of the current bound goal',
+    })
+    expect(devframeAbandonDescriptor()).toEqual({
+      name: 'devframe-abandon',
+      description: 'abandon the stopped or unfinished bound goal and clear its native Goal without claiming completion',
+    })
+  })
+
+  it('treats the bare line as the only stop and abandon form', () => {
+    expect(parseDevframeStopInput('')).toBe('')
+    expect(parseDevframeStopInput('   ')).toBe('')
+    expect(parseDevframeStopInput(' now')).toBe('now')
+    expect(parseDevframeAbandonInput('')).toBe('')
+    expect(parseDevframeAbandonInput('  ')).toBe('')
+    expect(parseDevframeAbandonInput('all of it')).toBe('all of it')
+  })
+
+  it('renders the stop and abandon success texts without goal identities', () => {
+    const stopText = renderStopSuccess()
+    expect(stopText).toContain('stop requested')
+    expect(stopText).not.toMatch(/goal-\d/i)
+    expect(stopText).not.toContain('devframe-stop:')
+    const abandonText = renderAbandonSuccess()
+    expect(abandonText).toContain('cleared')
+    expect(abandonText).toContain('no completion was claimed')
+    expect(abandonText).not.toMatch(/goal-\d/i)
+    expect(abandonText).not.toContain('devframe-abandon:')
   })
 })
