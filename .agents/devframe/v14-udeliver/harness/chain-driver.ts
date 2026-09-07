@@ -129,7 +129,8 @@ async function b2b3(ctx: Context, config: DriverConfig): Promise<void> {
     const workspaceId = opened.workspaceId as string
     const controllerSessionId = opened.controllerSessionId as string
 
-    const controller = await ensureAgent(ctx, config.evidencePath, controllerSessionId, opened.canonicalPath as string, undefined)
+    const live = ctx.agents.get(SessionId(controllerSessionId))
+    const controller = live ?? await ensureAgent(ctx, config.evidencePath, controllerSessionId, opened.canonicalPath as string, undefined)
     const line = `/devframe-start B2 第二项目根验证目标：确认 shadow 投递旅程与 goal 绑定（boot ${config.bootLabel}）`
     const execution = await ctx.commands.execute(controller as Agent, line, [], new AbortController().signal)
     if (execution === undefined) throw new Error('/devframe-start is not registered in this composition')
