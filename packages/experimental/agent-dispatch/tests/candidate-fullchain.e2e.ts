@@ -10,7 +10,7 @@
 
 import type { ChildProcess } from 'node:child_process'
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
@@ -79,6 +79,16 @@ function cleanEnvironment(root: string, dshHome: string, extra: NodeJS.ProcessEn
 
 /** Start the real source CLI with all three patches and await readiness. */
 async function startCandidateWeb(root: string, dshHome: string, extraEnv: NodeJS.ProcessEnv = {}): Promise<RunningWeb> {
+  // A source-run CLI writes loader entry wrappers into the profile directory
+  // under the temporary home; imports from that directory resolve workspace
+  // packages only when the profile carries the production node_modules
+  // layout. Mirror it with a junction to the repository's installed
+  // workspace so loader-generated imports behave like the shipped app.
+  const profileDir = join(dshHome, '.dsh', 'profiles', 'web')
+  await mkdir(profileDir, { recursive: true })
+  await symlink(join(REPO_ROOT, 'node_modules'), join(profileDir, 'node_modules'), 'junction').catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'EEXIST') throw error
+  })
   const child = spawn(process.execPath, [
     '--import', TSX_LOADER,
     DSH_SOURCE_BIN,
@@ -667,6 +677,15 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
           }
         }
         logEvidence = `${logEvidence} [archived root-session-dump.jsonl from ${logs.length} log(s), ${lineNo} lines]`
+        // The candidate's own agent/error diagnostics: the original error
+        // cause chain per run tag, bound to this run's root id.
+        const diags = entries.filter(entry => entry.isFile() && entry.name.startsWith('agent-error-diag-'))
+          .map(entry => join(entry.parentPath, entry.name))
+        for (const diag of diags) {
+          const content = await readFile(diag, 'utf8')
+          await writeFile('.agents/devframe/v14/remaining/agent-error-diag-archive.jsonl', content, { flag: 'w' })
+          logEvidence += `\n[agent-error-diag ${diag}] ${content.slice(0, 1600)}`
+        }
       } catch (dumpError) {
         logEvidence = `\n[root session dump failed: ${dumpError instanceof Error ? dumpError.message : String(dumpError)}]`
       }
