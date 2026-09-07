@@ -14,6 +14,8 @@
     { "path": "../../goal/goal" },
     { "path": "../../jobs/jobs" },
     { "path": "../../subprocess/subprocess" },
-    { "path": "../../util/timeout" }
+    { "path": "../../util/timeout" },
+    { "path": "../project-contracts" },
+    { "path": "../session-identity" }
   ]
 }
