@@ -80,7 +80,7 @@ async function decodeSessionLog(path: string): Promise<string> {
 
 /** Parse a session log event by event; torn tail lines are skipped. */
 function parseLogEvents(text: string): JournalEvent[] {
-  return text.split('\n').flatMap(line => {
+  return text.split('\n').flatMap((line) => {
     try {
       return [JSON.parse(line) as JournalEvent]
     } catch {
@@ -146,7 +146,12 @@ function cleanEnvironment(root: string, dshHome: string, extra: NodeJS.ProcessEn
 }
 
 /** Start the real source CLI with all patches and await readiness. */
-async function startCandidateWeb(root: string, dshHome: string, extraEnv: NodeJS.ProcessEnv = {}, digestPatchPath?: string): Promise<RunningWeb> {
+async function startCandidateWeb(
+  root: string,
+  dshHome: string,
+  extraEnv: NodeJS.ProcessEnv = {},
+  digestPatchPath?: string,
+): Promise<RunningWeb> {
   // A source-run CLI writes loader entry wrappers into the profile directory
   // under the temporary home; imports from that directory resolve workspace
   // packages only when the profile carries the production node_modules
@@ -261,6 +266,15 @@ function postRpc(port: number, host: string, cookie: string, method: string, pay
     req.once('error', reject)
     req.end(body)
   })
+}
+
+/** Queue one session prompt through the real RPC face and require acceptance. */
+async function promptViaRpc(port: number, host: string, cookie: string, sessionId: string, text: string): Promise<void> {
+  const prompted = await postRpc(port, host, cookie, 'session/prompt', { args: {
+    request: { requestId: randomUUID(), sessionId, mode: 'queue', content: [{ type: 'text', text }] },
+  } })
+  expect(prompted.status, `session/prompt status; body=${redact(prompted.body)}`).toBe(200)
+  unwrapRpc('session/prompt', prompted.body)
 }
 
 /** Assert every candidate row is mounted, enabled, and active. */
@@ -488,7 +502,12 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
     }
 
     /** Drive one turn; `requireReceipt` waits for the host receipt too. */
-    async function driveHostTurn(replay: Awaited<ReturnType<typeof startWireReplayServer>>, prompt: string, requireReceipt: boolean, resumeSessionId?: string): Promise<{ sessionId: string; receipt?: { workspaceId: string; worktreeIds: string[]; controllerSessionId?: string } }> {
+    async function driveHostTurn(
+      replay: Awaited<ReturnType<typeof startWireReplayServer>>,
+      prompt: string,
+      requireReceipt: boolean,
+      resumeSessionId?: string,
+    ): Promise<{ sessionId: string; receipt?: { workspaceId: string; worktreeIds: string[]; controllerSessionId?: string } }> {
       const running = await startCandidateWeb(root, dshHome, {
         DEEPSEEK_API_KEY: 'wire-replay-key',
         DEEPSEEK_BASE_URL: replay.baseURL,
@@ -530,7 +549,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
           await new Promise(resolve => setTimeout(resolve, 100))
         }
         throw new Error(`wire replay lane saw ${replay.requests.length} requests in 60s, none carrying "${prompt}"; tool messages: ${
-          redact(replay.requests.map(request => JSON.stringify(request.body)).filter(text => text.includes('"role":"tool"')).map(text => {
+          redact(replay.requests.map(request => JSON.stringify(request.body)).filter(text => text.includes('"role":"tool"')).map((text) => {
             const at = text.indexOf('"role":"tool"')
             return text.slice(at, at + 400)
           }).join(' | ') || 'none')
@@ -544,16 +563,26 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
     let firstReceipt: { workspaceId: string; worktreeIds: string[] }
     let controllerSessionId: string
     let chargedBeforeResume = 0
+    let beforeGoalId = ''
+    let beforeRevision = 0
+    let beforeBindingCount = 0
     try {
       const driven = await driveHostTurn(first, 'host-bootstrap-probe: start the host.', true)
       controllerSessionId = driven.sessionId
       firstReceipt = driven.receipt!
       expect(firstReceipt.worktreeIds.length, `receipt ${JSON.stringify(firstReceipt)}`).toBe(2)
-      // The ruled capability evidence: the bootstrap bound the goal and the
-      // controller log folded the record at admission_open.
+      // The ruled capability evidence, captured before the restart: the
+      // bootstrap bound one goal at one revision, folded at admission_open.
       const controllerLog = sessionLogPaths(dshHome).find(path => path.includes(controllerSessionId))
       expect(controllerLog, 'controller session log after the first bootstrap').toBeDefined()
-      assertGoalBindingAdmissionOpen(parseLogEvents(await decodeSessionLog(controllerLog!)), 'the first bootstrap')
+      const beforeBindings = parseLogEvents(await decodeSessionLog(controllerLog!))
+        .filter(event => event.type === 'devframe/goal-binding')
+      expect(beforeBindings.length, 'one binding record after the first bootstrap').toBe(1)
+      beforeGoalId = String((beforeBindings[0]!.data as { goalId?: unknown }).goalId)
+      beforeRevision = Number((beforeBindings[0]!.data as { goalRevision?: unknown }).goalRevision)
+      beforeBindingCount = beforeBindings.length
+      expect(beforeGoalId, 'the bound goal id').toBeTruthy()
+      expect(Number.isFinite(beforeRevision), 'the first binding carries a revision').toBe(true)
       chargedBeforeResume = await chargedRequestsOf()
       expect(chargedBeforeResume, 'the first bootstrap charged the budget').toBeGreaterThanOrEqual(1)
     } catch (error) {
@@ -573,7 +602,21 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       expect(driven.sessionId).toBe(controllerSessionId)
       const resumedLog = sessionLogPaths(dshHome).find(path => path.includes(controllerSessionId))
       expect(resumedLog, 'controller session log after the restart leg').toBeDefined()
-      assertGoalBindingAdmissionOpen(parseLogEvents(await decodeSessionLog(resumedLog!)), 'the restart leg')
+      // Binding face: the resumed turn belongs to the SAME goal — every
+      // record names the identical goal id, the resume landed a new binding
+      // record on top of the pre-restart one, and that record advanced the
+      // revision.
+      const afterEvents = parseLogEvents(await decodeSessionLog(resumedLog!))
+      const afterBindings = afterEvents.filter(event => event.type === 'devframe/goal-binding')
+      for (const binding of afterBindings) {
+        expect(String((binding.data as { goalId?: unknown }).goalId), 'the resume stayed on the same goal').toBe(beforeGoalId)
+      }
+      expect(afterBindings.length, 'the resume landed a new binding record').toBeGreaterThan(beforeBindingCount)
+      const afterRevision = Math.max(...afterBindings.map(binding => Number((binding.data as { goalRevision?: unknown }).goalRevision)))
+      expect(afterRevision, 'the resumed binding advanced the revision').toBeGreaterThan(beforeRevision)
+      assertGoalBindingAdmissionOpen(afterEvents, 'the restart leg')
+      // Project face: the durable charged-usage global accumulated across
+      // the restart (the project-level contract, no goal bucketing).
       const chargedAfterResume = await chargedRequestsOf()
       expect(chargedAfterResume, 'the resumed request charged the same durable budget')
         .toBeGreaterThan(chargedBeforeResume)
@@ -615,12 +658,10 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       const cookie = await exchangeLaunchCookie(running.launchUrl)
       const created = await postRpc(Number(url.port), url.host, cookie, 'session/create', { args: { request: { sessionId: 'candidate-root-c14' } } })
       const sessionId = (unwrapRpc('session/create', created.body) as { sessionId: string }).sessionId
-      const promptRoot = async (text: string): Promise<void> => {
-        const prompted = await postRpc(Number(url.port), url.host, cookie, 'session/prompt', { args: {
-          request: { requestId: randomUUID(), sessionId, mode: 'queue', content: [{ type: 'text', text }] },
-        } })
-        expect(prompted.status, `session/prompt status; body=${redact(prompted.body)}`).toBe(200)
-        unwrapRpc('session/prompt', prompted.body)
+      const promptRoot = (text: string): Promise<void> => {
+        // The recovery legs prompt the same fixed root through the one RPC
+        // face; the wrapper keeps the failure-reporting helper shared.
+        return promptViaRpc(Number(url.port), url.host, cookie, sessionId, text)
       }
       const controllerLogPath = (): string => {
         const log = sessionLogPaths(dshHome).find(path => path.includes(sessionId))
@@ -825,13 +866,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       const sessionId = (unwrapRpc('session/create', created.body) as { sessionId: string }).sessionId
       expect(sessionId).toBe(rootSessionId)
 
-      const promptSession = async (text: string): Promise<void> => {
-        const prompted = await postRpc(Number(url.port), url.host, cookie, 'session/prompt', { args: {
-          request: { requestId: randomUUID(), sessionId, mode: 'queue', content: [{ type: 'text', text }] },
-        } })
-        expect(prompted.status, `session/prompt status; body=${redact(prompted.body)}`).toBe(200)
-        unwrapRpc('session/prompt', prompted.body)
-      }
+      const promptSession = (text: string): Promise<void> => promptViaRpc(Number(url.port), url.host, cookie, sessionId, text)
       /** Wait until a predicate holds; the predicate may be async. */
       const waitFor = async (what: string, predicate: () => boolean | Promise<boolean>, ms: number): Promise<void> => {
         for (let tick = 0; tick < Math.ceil(ms / 100); tick++) {
@@ -840,7 +875,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         }
         const toolEvidence = replay.requests.map(request => ({ needle: request.needle, text: JSON.stringify(request.body).replaceAll('\\"', '"') }))
           .filter(entry => entry.text.includes('"role":"tool"'))
-          .map(entry => {
+          .map((entry) => {
             const results = [...entry.text.matchAll(/"role":"tool","tool_call_id":"([^"]*)","content":"((?:[^"\\]|\\.)*)"/gu)]
               .map(match => `${match[1]}=>${match[2]!.slice(0, 220)}`)
             return `${entry.needle}: ${results.join(' ## ')}`
@@ -945,7 +980,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
             if (wire.role !== 'tool' || wire.tool_call_id !== callId) continue
             if (typeof wire.content === 'string') return wire.content
             if (Array.isArray(wire.content)) {
-              return wire.content.map(part => {
+              return wire.content.map((part) => {
                 const piece = part as { type?: string; text?: string }
                 return typeof piece.text === 'string' ? piece.text : ''
               }).join('')
@@ -995,8 +1030,11 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
           event.type === 'devframe/task-delivery' && String((event.data as { taskId?: unknown }).taskId) === task.taskId)
         expect(deliveries.length, `durable delivery event for ${task.taskId}`).toBeGreaterThanOrEqual(1)
         const delivery = deliveries.at(-1)!.data as {
-          deliveryId: string; worktreePath: string; sourceCommit: string
-          binding: { goalId?: string }; sourceFingerprint?: string
+          deliveryId: string
+          worktreePath: string
+          sourceCommit: string
+          binding: { goalId?: string }
+          sourceFingerprint?: string
         }
         expect(delivery.deliveryId).toBeTruthy()
         expect(delivery.worktreePath).toBe(task.worktreePath)
