@@ -131,7 +131,7 @@ describe('integration evidence selection', () => {
   it('rejects shared worktree ownership', () => {
     const request = fixture()
     expect(() => selectIntegrationEvidence({
-      ...request, lead: { ...request.lead, worktreeId: request.worker.worktreeId },
+      ...request, lead: { ...request.lead, worktreeId: request.worker.worktreeId! },
     })).toThrow('independent registered worktrees')
   })
 

@@ -106,7 +106,7 @@ describe('controller integration admission and recovery', { timeout: 30_000 }, (
     const f = await prepareIntegration()
     try {
       const marker = await f.h.ctx.projectController.requestMainTreeMerge(f.controller.id, f.taskId, f.request)
-      f.controller.append('devframe/task-warning', { version: 1, taskId: f.taskId, warning: 'MEMORY_APPEND_DISABLED', tool: 'memory_append', grade: 'fail' })
+      f.controller.append('devframe/task-warning', { version: 1, taskId: GoalTaskId(String(f.taskId)), warning: 'MEMORY_APPEND_DISABLED', tool: 'memory_append', grade: 'fail' })
       await expect(f.h.ctx.projectController.integrate(f.taskId, marker)).rejects.toThrow('task-warning')
       expect(await f.git(f.request.git.targetPath, 'rev-parse', 'HEAD')).toBe(f.request.git.targetHead)
     } finally { await f.h.dispose() }
@@ -216,7 +216,8 @@ describe('controller integration admission and recovery', { timeout: 30_000 }, (
   })
 
   it('waits for an admitted operation to settle before closing its domain on disposal', async () => {
-    const f = await prepareIntegration()
+    const h = await harness()
+    const f = await prepareIntegration(h)
     let release!: () => void
     const gate = new Promise<void>((resolve) => { release = resolve })
     let entered!: () => void
@@ -236,7 +237,7 @@ describe('controller integration admission and recovery', { timeout: 30_000 }, (
         const rejected = expect(operation).rejects.toMatchObject({ code: 'PROJECT_CONTROLLER_ADMISSION_CLOSED' })
         await atChecks
         let disposed = false
-        disposal = f.h.ctx.projectController.ctx.fiber.dispose().then(() => { disposed = true })
+        disposal = h.disposeController().then(() => { disposed = true })
         await Promise.resolve()
         expect(disposed).toBe(false)
         release()
@@ -256,7 +257,7 @@ describe('controller integration admission and recovery', { timeout: 30_000 }, (
     const f = await prepareIntegration()
     try {
       const state = f.h.ctx.sessionProjections.stateOf(f.controller, 'devframe')
-      const original = state.bindings[0]!
+      const original = state!.bindings[0]!
       if (change === 'stopped') {
         for (const lifecycle of ['stop_requested', 'quiescence_confirmed', 'stopped'] as const) {
           f.controller.append('devframe/goal-binding', { ...original, lifecycle })
@@ -266,7 +267,7 @@ describe('controller integration admission and recovery', { timeout: 30_000 }, (
           ...original, goalId: GoalId('replacement-goal'), taskIds: [GoalTaskId('different-task')],
         })
       }
-      expect(f.h.ctx.sessionProjections.stateOf(f.controller, 'devframe').failure).toBeNull()
+      expect(f.h.ctx.sessionProjections.stateOf(f.controller, 'devframe')!.failure).toBeNull()
       await expect(f.h.ctx.projectController.requestMainTreeMerge(f.controller.id, f.taskId, f.request))
         .rejects.toThrow('current Goal')
       expect(await f.git(f.request.git.targetPath, 'rev-parse', 'HEAD')).toBe(f.request.git.targetHead)
@@ -277,7 +278,7 @@ describe('controller integration admission and recovery', { timeout: 30_000 }, (
     const f = await prepareIntegration()
     try {
       const marker = await f.h.ctx.projectController.requestMainTreeMerge(f.controller.id, f.taskId, f.request)
-      const original = f.h.ctx.sessionProjections.stateOf(f.controller, 'devframe').bindings[0]!
+      const original = f.h.ctx.sessionProjections.stateOf(f.controller, 'devframe')!.bindings[0]!
       f.controller.append('devframe/goal-binding', {
         ...original, goalId: GoalId('replacement-goal'), taskIds: [GoalTaskId('different-task')],
       })

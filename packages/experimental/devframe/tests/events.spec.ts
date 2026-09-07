@@ -716,8 +716,8 @@ describe('task delivery evidence replay', () => {
   it.each(['duplicate', 'foreign-task', 'foreign-goal', 'closed', 'lifecycle-closed', 'changed-input'] as const)('rejects %s delivery authority', (variant) => {
     const { current, delivery, goal } = prepared()
     if (variant === 'duplicate') current.append('devframe/task-delivery', delivery)
-    if (variant === 'lifecycle-closed') current.append('devframe/lifecycle', { version: 1, binding: resultBinding(goal), state: 'admission_closed', remaining: [] })
-    if (variant === 'closed') current.append('devframe/goal-binding', { ...goal, lifecycle: 'admission_closed' })
+    if (variant === 'lifecycle-closed') current.append('devframe/lifecycle', { version: 1, binding: resultBinding(goal), state: 'stop_requested', remaining: [] })
+    if (variant === 'closed') current.append('devframe/goal-binding', { ...goal, lifecycle: 'stop_requested' })
     current.append('devframe/task-delivery', { ...delivery,
       ...(variant === 'foreign-task' ? { taskId: TaskId('outside') } : {}),
       binding: { ...delivery.binding,
