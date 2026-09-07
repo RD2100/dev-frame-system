@@ -18,6 +18,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ToolCallId, createToolResultMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionSeq } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -104,7 +105,11 @@ function dispatchMemoryAppend(ctx: Context, session: Session, callId: string, so
   })
 }
 
-/** Drain the listener's deferred appends: one macrotask lets the store's deferred session/event dispatch and the listener's own microtask both finish deterministically. */
+/**
+ * Drain the listener's deferred appends: one macrotask lets the store's
+ * deferred session/event dispatch and the listener's own drain both finish
+ * deterministically.
+ */
 async function drain(): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, 0))
 }
@@ -217,6 +222,42 @@ describe('AT3-07 explicit-context grading', () => {
     await drain()
 
     expect(taskWarnings(session), 'no append after the plugin disposer ran').toHaveLength(0)
+  })
+
+  it('stops a mid-batch drain when the first warning detaches the session', async () => {
+    const { ctx, root } = await boot()
+    const prepared = ctx.sessions.prepare(undefined, { meta: { cwd: root } })
+    const detach = ctx.sessions.enter(prepared)
+    // 1) Both real dispatch outcomes first — no result row is queued yet, so
+    // no drain timer exists and no await can let one fire.
+    const seq1 = appendToolCall(prepared, 1, 'call-f1', 'memory_append')
+    const first = await dispatchMemoryAppend(ctx, prepared, 'call-f1', 'session-f#event-1')
+    expect(first.isError).toBe(true)
+    const seq2 = appendToolCall(prepared, 2, 'call-f2', 'memory_append')
+    const second = await dispatchMemoryAppend(ctx, prepared, 'call-f2', 'session-f#event-2')
+    expect(second.isError).toBe(true)
+    // 2) Register the detach observer before anything is queued.
+    let killerRan = false
+    ctx.on('session/event', (_session: Session, event: SessionEvent) => {
+      if (event.type === 'devframe/task-warning' && String(event.data.taskId) === 'task-f1') {
+        killerRan = true
+        detach()
+      }
+    })
+    // 3) With no awaits in between, queue both results into one batch.
+    ctx.devframeTaskGrading.declare(prepared.id, { taskId: TaskId('task-f1'), memory: 'optional' })
+    appendToolResult(prepared, 1, 'call-f1', seq1, first)
+    ctx.devframeTaskGrading.declare(prepared.id, { taskId: TaskId('task-f2'), memory: 'optional' })
+    appendToolResult(prepared, 2, 'call-f2', seq2, second)
+    // 4) Nothing drained yet; then the first warning's synchronous observer
+    // detaches the session mid-batch through the store's own detach face and
+    // the second write must not land.
+    expect(taskWarnings(prepared), 'nothing drained before the explicit drain').toHaveLength(0)
+    await drain()
+
+    expect(killerRan, 'the detach observer ran for the first warning').toBe(true)
+    const warnings = taskWarnings(prepared)
+    expect(warnings.map(event => String(event.data.taskId)), 'only the first warning lands').toEqual(['task-f1'])
   })
 
   it('grades only memory-save degradations and decodes the durable payload with brands', () => {
