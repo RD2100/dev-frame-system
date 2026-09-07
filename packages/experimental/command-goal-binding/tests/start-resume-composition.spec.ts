@@ -711,6 +711,13 @@ describe('AT1-09 A to B journey composition', { timeout: 120_000 }, () => {
     expect(bindingA.budget).toEqual({ maxAttempts: 3, consumedAttempts: 0 })
     expect(bindingA.acceptanceHash).toBe(acceptanceHashOf(objectiveA, startChecks(fixture.root)))
 
+    // Every journey boot passes this same storageRoot, so boot() derives one
+    // shared absolute requiredChecksPath: A's start registers the approved
+    // checklist into the ledger, B's start re-registers the identical digest
+    // idempotently, and B's later completion resolves it from the same file.
+    const ledgerPath = join(storageRoot, 'required-checks.json')
+    const ledgerAfterAStart = readFileSync(ledgerPath, 'utf8')
+
     // The requirement change cannot start while A is still running: the same
     // binding refuses a second unfinished Goal.
     const refusedB = await execute(first, `/devframe-start ${objectiveB}`)
@@ -765,6 +772,10 @@ describe('AT1-09 A to B journey composition', { timeout: 120_000 }, () => {
     expect(bindingB.acceptanceHash).toBe(acceptanceHashOf(objectiveB, startChecks(fixture.root)))
     expect(bindingB.acceptanceHash).not.toBe(bindingA.acceptanceHash)
     expect(bindingB.budget).toEqual({ maxAttempts: 3, consumedAttempts: 0 })
+
+    // B's start re-registered the same checklist under the shared ledger:
+    // byte-identical, one registration across boots.
+    expect(readFileSync(ledgerPath, 'utf8')).toBe(ledgerAfterAStart)
 
     // B consumes one charged attempt; A's earlier consumption stays on A.
     second.session.append('devframe/usage', usageRecord(bindingB, 'operation-v14-compos-b', { attempt: 1, consumedAttempts: 1 }))
@@ -840,15 +851,45 @@ describe('AT1-09 A to B journey composition', { timeout: 120_000 }, () => {
 
     // With B's own review as the latest one, the completion face passes the
     // task-warning and source-fingerprint stages (a fingerprint rejection
-    // would be a verdict, not this throw) and then reports the unregistered
-    // digest: the required-checks store is per-process, so the post-restart
-    // completion stops at that structural boundary.
+    // would be a verdict, not this throw), resolves the approved-checks
+    // digest from the ledger all journey boots share, and admits B for real
+    // in a boot that never started it (AT1-09(e)).
     third.session.append('devframe/review', journeyReview(bindingB, reviewerSessionId, 'review-v14-compos-b'))
-    await expect(execute(third, '/goal-complete')).rejects.toMatchObject({
-      name: 'RequiredChecksError',
-      code: 'REQUIRED_CHECKS_CONFIG_NOT_FOUND',
-    })
-    expect(third.ctx.goals.get(third.agent)?.phase).toBe('active')
+    const usageBeforeComplete = devFrameStateOf(third.ctx, third.session).usage
+    const completedB = await execute(third, '/goal-complete')
+    if (completedB.result.kind !== 'success') throw new Error('expected a success result')
+    expect(completedB.result.text).toBe(renderCompletionSuccess())
+    const goalCompleted = third.ctx.goals.get(third.agent)
+    expect(goalCompleted?.id).toBe(goalB.id)
+    expect(goalCompleted?.phase).toBe('complete')
+    expect(goalCompleted?.revision).toBe(goalB.revision + 2)
     expect(third.composition.admissionOf(third.agent)).toBe('closed')
+
+    // The admitted completion preserves B's cross-boot surface (AT1-10): the
+    // receipt annotates exactly B's completed identity with the
+    // completion-admission evidence, B's budget stays its own two charges
+    // (the completing boot restored the count and did not reset or re-fold
+    // it), A's settled late result keeps A's tuple, and the shared ledger is
+    // byte-identical after the completion's load-only digest resolution.
+    const receipt = third.session.snapshotEvents().findLast(event =>
+      event.type === 'goal/change' && event.data.operation === 'receipt' && event.data.ref.id === goalB.id)
+    if (receipt === undefined || receipt.type !== 'goal/change') throw new Error('completion receipt for goal B is missing')
+    expect(receipt.data).toMatchObject({
+      ref: { id: goalB.id, revision: goalB.revision + 2 },
+      evidence: [{ kind: 'completion-admission', summary: expect.stringContaining(goalB.id) }],
+    })
+    const usageAfterComplete = devFrameStateOf(third.ctx, third.session).usage
+    expect(usageAfterComplete).toEqual(usageBeforeComplete)
+    expect(usageAfterComplete.filter(record => record.binding.goalId === goalB.id).map(record => record.consumedAttempts))
+      .toEqual([1, 2])
+    expect(usageAfterComplete.filter(record => record.binding.goalId === goalA.id)).toHaveLength(2)
+    expect(devFrameStateOf(third.ctx, third.session).failure).toBeNull()
+    expect(readFileSync(ledgerPath, 'utf8')).toBe(ledgerAfterAStart)
+
+    // The receipt is durable: the flushed log the next boot would restore
+    // from carries the goal/change receipt operation.
+    await third.ctx.sessions.flush(third.session)
+    const durable = await third.ctx.sessionPersistence.load(sessionId)
+    expect(durable.events.some(event => event.type === 'goal/change' && event.data.operation === 'receipt')).toBe(true)
   })
 })
