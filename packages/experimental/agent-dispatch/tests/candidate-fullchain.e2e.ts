@@ -10,7 +10,7 @@
 
 import type { ChildProcess } from 'node:child_process'
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
@@ -205,6 +205,15 @@ async function expectCandidateRowsActive(running: RunningWeb): Promise<void> {
   }
 }
 
+/** Unwrap one RPC response: HTTP 200 is not success until result.ok says so. */
+function unwrapRpc(name: string, body: string): unknown {
+  const parsed = JSON.parse(body) as { result?: { ok?: boolean; value?: unknown; error?: { code?: string; message?: string } } }
+  const result = parsed.result
+  if (result === undefined) throw new Error(`${name} returned no result envelope; body=${redact(body)}`)
+  if (result.ok !== true) throw new Error(`${name} refused: ${JSON.stringify(result.error ?? result)}; body=${redact(body)}`)
+  return result.value
+}
+
 describe('candidate full-chain: real CLI boot, rows, and restart on an isolated home', () => {
   it('boots the candidate stack twice on one home with every row active', { timeout: 420_000 }, async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-candidate-fullchain-'))
@@ -343,15 +352,6 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       return { workspaceId, worktreeIds, ...(controllerSessionId !== undefined ? { controllerSessionId } : {}) }
     }
 
-    /** Unwrap one RPC response: HTTP 200 is not success until result.ok says so. */
-    function unwrapRpc(name: string, body: string): unknown {
-      const parsed = JSON.parse(body) as { result?: { ok?: boolean; value?: unknown; error?: { code?: string; message?: string } } }
-      const result = parsed.result
-      if (result === undefined) throw new Error(`${name} returned no result envelope; body=${redact(body)}`)
-      if (result.ok !== true) throw new Error(`${name} refused: ${JSON.stringify(result.error ?? result)}; body=${redact(body)}`)
-      return result.value
-    }
-
     /** Drive one host-bootstrap turn; resume the recorded session on restart. */
     async function driveHostTurn(replay: Awaited<ReturnType<typeof startWireReplayServer>>, resumeSessionId?: string): Promise<{ sessionId: string; receipt: { workspaceId: string; worktreeIds: string[]; controllerSessionId?: string } }> {
       const running = await startCandidateWeb(root, dshHome, {
@@ -427,5 +427,186 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       await second.close()
     }
     await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 25 })
+  })
+
+  it('drives the candidate chain over the wire lane: plan, lead dispatch, worker delivery with real checks', { timeout: 600_000 }, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-candidate-fullchain-chain-'))
+    const dshHome = join(root, '.dsh')
+    await mkdir(dshHome, { recursive: true })
+    const prepared = await prepareCandidateScenario(root, join(dshHome, 'checks-ledger.json'))
+    await writeScenarioFile(dshHome, prepared)
+
+    /** Pull the prepared worktree ids back out of any wire body. */
+    function worktreeIdsFrom(text: string): Record<string, string> {
+      const flat = text.replaceAll('\\"', '"')
+      const map: Record<string, string> = {}
+      for (const match of flat.matchAll(/"taskId":"(task-[ab])","worktreeId":"([^"]+)"/gu)) {
+        map[match[1]!] = match[2]!
+      }
+      const leadWorktreeId = /"leadWorktreeId":"([^"]+)"/u.exec(flat)?.[1]
+      if (leadWorktreeId !== undefined) map['lead'] = leadWorktreeId
+      return map
+    }
+
+    const shell = process.platform === 'win32' ? 'pwsh' : 'bash'
+    const commitFor = (taskId: string): string => process.platform === 'win32'
+      ? `Set-Content -Path artifact-${taskId}.txt -Value '${taskId} artifact body' -Encoding utf8; git add artifact-${taskId}.txt; git commit -m '${taskId} artifact'`
+      : `printf '${taskId} artifact body' > artifact-${taskId}.txt && git add artifact-${taskId}.txt && git commit -m '${taskId} artifact'`
+
+    const controller = {
+      needle: 'controller-chain-c14',
+      turns: [
+        { toolCalls: [{ name: 'project_host_start', arguments: {} }] },
+        // Served on the receipt-carrying request: plan (with pluginId), then
+        // dispatch the lead onto its own tree. The dispatch publishes and
+        // queues the lead asynchronously — the tasks start only in a later
+        // controller turn, after the workers are registered.
+        { toolCalls: [
+          { name: 'project_task', arguments: { action: 'plan', taskId: 'task-a', pluginId: 'candidate-fullchain', title: 'Candidate task A' } },
+          { name: 'project_task', arguments: { action: 'plan', taskId: 'task-b', pluginId: 'candidate-fullchain', title: 'Candidate task B' } },
+          { name: 'agent_dispatch', arguments: (body: string) => {
+            const ids = worktreeIdsFrom(body)
+            return { role: 'lead', taskId: 'task-a', worktreeId: ids['lead'], pluginId: 'candidate-fullchain', childId: 'candidate-fullchain-lead', prompt: `lead-briefing-c14: you are the independent lead. Dispatch one worker per task. RECEIPT_ECHO:${JSON.stringify({ taskId: 'task-a', worktreeId: ids['task-a'] })} RECEIPT_ECHO:${JSON.stringify({ taskId: 'task-b', worktreeId: ids['task-b'] })}` }
+          } },
+        ] },
+        { text: 'CONTROLLER_PHASE1_DONE_C14' },
+        // Served on the second controller prompt, after the workers are live.
+        { toolCalls: [
+          { name: 'project_task', arguments: { action: 'start', taskId: 'task-a' } },
+          { name: 'project_task', arguments: { action: 'start', taskId: 'task-b' } },
+        ] },
+        { text: 'CONTROLLER_CHAIN_DONE_C14' },
+      ],
+    }
+    const lead = {
+      needle: 'lead-briefing-c14',
+      turns: [
+        { toolCalls: [
+          { name: 'agent_dispatch', arguments: (body: string) => {
+            const ids = worktreeIdsFrom(body)
+            return { role: 'worker', taskId: 'task-a', worktreeId: ids['task-a'], pluginId: 'candidate-fullchain', prompt: 'worker-task-a-briefing-c14: create your own artifact file and commit it, then deliver.' }
+          } },
+          { name: 'agent_dispatch', arguments: (body: string) => {
+            const ids = worktreeIdsFrom(body)
+            return { role: 'worker', taskId: 'task-b', worktreeId: ids['task-b'], pluginId: 'candidate-fullchain', prompt: 'worker-task-b-briefing-c14: create your own artifact file and commit it, then deliver.' }
+          } },
+        ] },
+        { text: 'LEAD_DISPATCHED_C14' },
+      ],
+    }
+    const workerA = {
+      needle: 'worker-task-a-briefing-c14',
+      turns: [
+        { toolCalls: [
+          { name: shell, arguments: { command: commitFor('task-a') } },
+          { name: 'project_deliver', arguments: { taskId: 'task-a' } },
+        ] },
+        { text: 'WORKER_A_DONE_C14' },
+      ],
+    }
+    const workerB = {
+      needle: 'worker-task-b-briefing-c14',
+      turns: [
+        { toolCalls: [
+          { name: shell, arguments: { command: commitFor('task-b') } },
+          { name: 'project_deliver', arguments: { taskId: 'task-b' } },
+        ] },
+        { text: 'WORKER_B_DONE_C14' },
+      ],
+    }
+    const replay = await startWireReplayServer([controller, lead, workerA, workerB])
+    let running: RunningWeb | undefined
+    try {
+      running = await startCandidateWeb(root, dshHome, {
+        DEEPSEEK_API_KEY: 'wire-replay-key',
+        DEEPSEEK_BASE_URL: replay.baseURL,
+      })
+      const url = new URL(running.launchUrl)
+      const cookie = await exchangeLaunchCookie(running.launchUrl)
+      const created = await postRpc(Number(url.port), url.host, cookie, 'session/create', { args: { request: {} } })
+      const sessionId = (unwrapRpc('session/create', created.body) as { sessionId: string }).sessionId
+
+      const promptSession = async (text: string): Promise<void> => {
+        const prompted = await postRpc(Number(url.port), url.host, cookie, 'session/prompt', { args: {
+          request: { requestId: randomUUID(), sessionId, mode: 'queue', content: [{ type: 'text', text }] },
+        } })
+        expect(prompted.status, `session/prompt status; body=${redact(prompted.body)}`).toBe(200)
+        unwrapRpc('session/prompt', prompted.body)
+      }
+      /** Wait until a predicate over all captured bodies holds. */
+      const waitFor = async (what: string, predicate: () => boolean, ms: number): Promise<void> => {
+        for (let tick = 0; tick < Math.ceil(ms / 100); tick++) {
+          if (predicate()) return
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+        const toolEvidence = replay.requests.map(request => ({ needle: request.needle, text: JSON.stringify(request.body).replaceAll('\\"', '"') }))
+          .filter(entry => entry.text.includes('"role":"tool"'))
+          .map(entry => {
+            const results = [...entry.text.matchAll(/"role":"tool","tool_call_id":"([^"]*)","content":"((?:[^"\\]|\\.)*)"/gu)]
+              .map(match => `${match[1]}=>${match[2]!.slice(0, 220)}`)
+            return `${entry.needle}: ${results.join(' ## ')}`
+          })
+          .join(' | ')
+        throw new Error(`timed out after ${String(ms)}ms waiting for ${what}; captured=${replay.requests.length} requests by needle: ${
+          JSON.stringify(replay.requests.reduce<Record<string, number>>((acc, r) => {
+            const key = r.needle ?? 'unrouted'
+            acc[key] = (acc[key] ?? 0) + 1
+            return acc
+          }, {}))
+        }; tool evidence: ${redact(toolEvidence.slice(0, 3500))}\n${redact(running!.output())}`)
+      }
+      const bodies = (): string[] => replay.requests.map(request => JSON.stringify(request.body))
+
+      await promptSession('controller-chain-c14: start the host, then plan and dispatch the lead.')
+      await waitFor('controller host receipt', () => bodies().some(text => text.includes('admission_open')), 90_000)
+      // Precise routing only: the lead's own requests, never the controller's
+      // input text.
+      await waitFor('lead dispatched its workers', () =>
+        replay.requests.filter(request => request.needle === 'lead-briefing-c14').length >= 2, 120_000)
+      await waitFor('worker a live', () =>
+        replay.requests.some(request => request.needle === 'worker-task-a-briefing-c14'), 120_000)
+      await waitFor('worker b live', () =>
+        replay.requests.some(request => request.needle === 'worker-task-b-briefing-c14'), 120_000)
+      // The workers are registered and running; only now does the controller
+      // start the tasks.
+      await promptSession('controller-chain-c14: the workers are registered, start both tasks now.')
+      await waitFor('worker a delivery turn', () => {
+        const workerRequests = replay.requests.filter(request => request.needle === 'worker-task-a-briefing-c14')
+        return workerRequests.length >= 2 && JSON.stringify(workerRequests[1]!.body).includes('task-a')
+      }, 120_000)
+      await waitFor('worker b delivery turn', () => {
+        const workerRequests = replay.requests.filter(request => request.needle === 'worker-task-b-briefing-c14')
+        return workerRequests.length >= 2 && JSON.stringify(workerRequests[1]!.body).includes('task-b')
+      }, 120_000)
+
+      // Success = the real tool results on the wire: the deliver receipts
+      // must be non-error results, and the worker trees must hold their own
+      // committed artifact files with the expected content.
+      const toolResultsOf = (needle: string): string[] => {
+        const flat = replay.requests.filter(request => request.needle === needle)
+          .map(request => JSON.stringify(request.body).replaceAll('\\"', '"'))
+        const results: string[] = []
+        for (const text of flat) {
+          for (const match of text.matchAll(/"role":"tool","tool_call_id":"[^"]*","content":"((?:[^"\\]|\\.)*)"/gu)) {
+            results.push(match[1]!)
+          }
+        }
+        return results
+      }
+      for (const [needle, taskId] of [['worker-task-a-briefing-c14', 'task-a'], ['worker-task-b-briefing-c14', 'task-b']] as const) {
+        const deliverResult = toolResultsOf(needle).find(text => text.includes(taskId) && !text.startsWith('Error:'))
+        expect(deliverResult, `real deliver receipt for ${taskId}`).toBeDefined()
+        const artifact = join(prepared.tasks.find(task => task.taskId === taskId)!.worktreePath, `artifact-${taskId}.txt`)
+        const content = await readFile(artifact, 'utf8')
+        expect(content.trim()).toBe(`${taskId} artifact body`)
+      }
+    } catch (error) {
+      const evidence = running?.output()
+      throw new Error(`${error instanceof Error ? error.message : String(error)}${evidence === undefined ? '' : `\n${redact(evidence)}`}`, { cause: error })
+    } finally {
+      await replay.close()
+      if (running !== undefined) await stopCandidateWeb(running)
+      await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 25 })
+    }
   })
 })
