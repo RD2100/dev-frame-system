@@ -95,7 +95,7 @@ function taskGateKey(parentId: SessionId, taskId: TaskId | undefined): string {
  * live — propagate unchanged.
  */
 export class AgentDispatch extends Service {
-  static inject = ['agentHierarchy', 'agentBindings', 'worktreeRegistry']
+  static inject = ['agentHierarchy', 'agentBindings', 'worktreeRegistry', 'agents']
 
   /** One settled-before-run chain per parent task, serializing its full dispatch span. */
   private taskGates = new Map<string, Promise<unknown>>()
