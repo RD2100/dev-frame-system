@@ -1,7 +1,8 @@
 /**
  * S6 real delivery journey: one project travels the full cross-root delivery
- * path through the package's real machinery — real JSON storage on disk, the
- * real tool dispatcher, and a controller session created by `project_open` —
+ * path through the package's real machinery — real storage on disk (the json
+ * and sqlite backends both run), the real tool dispatcher, and a controller
+ * session created by `project_open` —
  * from the model-facing open through host goal authorization, a dispatched
  * send, the host settlement, and a read-back through the model face.
  * @module tests/s6-delivery-flow
@@ -15,7 +16,7 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { ShadowMessageId } from '../src/index.ts'
-import { dispatch, failureText, harness, resultText } from './helpers.ts'
+import { HARNESS_BACKENDS, dispatch, failureText, harness, resultText } from './helpers.ts'
 
 /** One settled dispatch outcome: the real tool runtime's discriminated result. */
 type DispatchOutcome = Awaited<ReturnType<typeof dispatch>>
@@ -49,9 +50,9 @@ function numberOf(value: JsonValue, label: string): number {
 }
 
 describe('shadow-router S6 real delivery journey', () => {
-  it('S6: open → authorize → send → settle → status runs end to end through the real dispatcher, real storage, and a real controller session', async () => {
+  it.each(HARNESS_BACKENDS)('S6 [%s]: open → authorize → send → settle → status runs end to end through the real dispatcher, real storage, and a real controller session', async (backend) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-s6-flow-'))
-    const h = await harness(root, { authorizedRoots: [root] })
+    const h = await harness(root, { authorizedRoots: [root] }, { backend })
     try {
       const dir = await h.makeProjectDir('s6-flow-project')
 

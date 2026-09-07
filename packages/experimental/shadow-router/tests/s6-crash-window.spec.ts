@@ -18,7 +18,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { AcceptanceHash, ShadowMessageId, ShadowRequestId } from '../src/index.ts'
 import type { ShadowDeliveryRecord } from '../src/index.ts'
-import { dispatch, failureCode, failureText, harness, resultText, seedHarness } from './helpers.ts'
+import { HARNESS_BACKENDS, dispatch, failureCode, failureText, harness, resultText, seedHarness } from './helpers.ts'
 
 /** One settled dispatch outcome: the real tool runtime's discriminated result. */
 type DispatchOutcome = Awaited<ReturnType<typeof dispatch>>
@@ -46,12 +46,12 @@ function textOf(value: JsonValue, label: string): string {
 }
 
 describe('shadow-router S6 crash-window adjudication', () => {
-  it('S6: recovery converges the interrupted queued intent and the real dispatcher adjudicates replay and conflict without duplicating rows', async () => {
+  it.each(HARNESS_BACKENDS)('S6 [%s]: recovery converges the interrupted queued intent and the real dispatcher adjudicates replay and conflict without duplicating rows', async (backend) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-s6-crash-'))
 
     // Generation 1: open through the real dispatcher, authorize the run, and
     // persist one accepted delivery. Then the process dies; the root stays.
-    const h1 = await harness(root, { authorizedRoots: [root] })
+    const h1 = await harness(root, { authorizedRoots: [root] }, { backend })
     const gen1 = await (async () => {
       try {
         const dir = await h1.makeProjectDir('s6-crash-project')
@@ -87,7 +87,7 @@ describe('shadow-router S6 crash-window adjudication', () => {
 
     // Crash-window residue: one queued intent whose acceptance never landed,
     // written through the real domain while no router process holds the root.
-    const seed = await seedHarness(root)
+    const seed = await seedHarness(root, { backend })
     try {
       const now = new Date().toISOString()
       const queued: ShadowDeliveryRecord = {
@@ -110,7 +110,7 @@ describe('shadow-router S6 crash-window adjudication', () => {
     }
 
     // Generation 2: a fresh harness cold-restores the same root.
-    const h2 = await harness(root, { authorizedRoots: [root] })
+    const h2 = await harness(root, { authorizedRoots: [root] }, { backend })
     try {
       // The binding restored row-for-row; the host re-creates the reserved
       // controller session on the SAME id (sessions are process-local).
