@@ -32,6 +32,20 @@ import type {
   ProjectLifecycleState,
   WorkspaceId,
 } from './shared/types.ts'
+import type { GoalId } from '@deepseek-ai/dsh-goal/types'
+
+/**
+ * One goal's start revision of its current acceptance's evidence region
+ * (AT1-10): the fold moves it to the adopted revision whenever a strict
+ * revision advance changes the acceptance hash, and leaves it untouched
+ * across a plain same-hash resume.
+ */
+export interface GoalAcceptanceRegion {
+  /** The goal whose current acceptance region is tracked. */
+  readonly goalId: GoalId
+  /** The lowest evidence revision the current acceptance still admits. */
+  readonly startRevision: number
+}
 
 /** Current host state reconstructed from DevFrame durable events. */
 export interface DevFrameProjectionState {
@@ -51,6 +65,15 @@ export interface DevFrameProjectionState {
    * completion face refuses superseded generations by name.
    */
   superseded: GoalBinding[]
+  /**
+   * Per-goal start revision of the current acceptance's evidence region
+   * (AT1-10). The acceptance hash alone cannot distinguish a swung-back
+   * acceptance: when the approved checks change A→B and back B→A, the
+   * re-adopted hash equals the original, so the completion gate also
+   * requires evidence revisions at or above the region start. Absent
+   * entries (checkpoints written before this field) degrade fail-closed.
+   */
+  acceptanceRegions: GoalAcceptanceRegion[]
   /** Reservation and settlement records keyed by operation identity. */
   usage: DevFrameUsageEventData[]
   /** Explicit task outputs in delivery order. */
@@ -86,6 +109,10 @@ const devFrameStateSchema = z.object({
   rolePolicy: z.unknown().nullable(),
   bindings: z.array(z.unknown()),
   superseded: z.array(z.unknown()).default([]),
+  acceptanceRegions: z.array(z.object({
+    goalId: trimmedString,
+    startRevision: z.number().int().positive(),
+  })).default([]),
   usage: z.array(z.unknown()),
   deliveries: z.array(z.unknown()),
   verifications: z.array(z.unknown()),
@@ -104,6 +131,10 @@ const devFrameStateSchema = z.object({
         : decodeDevFramePayload('devframe/role-policy', value.rolePolicy),
       bindings: value.bindings.map(binding => decodeDevFramePayload('devframe/goal-binding', binding)),
       superseded: value.superseded.map(binding => decodeDevFramePayload('devframe/goal-binding', binding)),
+      acceptanceRegions: value.acceptanceRegions.map(region => ({
+        goalId: brandString<GoalId>(region.goalId),
+        startRevision: region.startRevision,
+      })),
       usage: value.usage.map(usage => decodeDevFramePayload('devframe/usage', usage)),
       deliveries: value.deliveries.map(delivery => decodeDevFramePayload('devframe/task-delivery', delivery)),
       verifications: value.verifications.map(verification => decodeDevFramePayload('devframe/verification', verification)),
@@ -132,6 +163,7 @@ function initialState(header: SessionHeader): DevFrameProjectionState {
     rolePolicy: null,
     bindings: [],
     superseded: [],
+    acceptanceRegions: [],
     usage: [],
     deliveries: [],
     verifications: [],
@@ -418,6 +450,14 @@ function applyRolePolicy(state: DevFrameProjectionState, policy: DevFrameRolePol
  * refused. An exact repeat of the current binding state is an idempotent
  * re-observation — the reliability stop flow may re-record `stop_requested`
  * after the command lane — and replays converge instead of latching.
+ *
+ * Each accepted record also maintains the goal's acceptance region start:
+ * the first record and every hash-changing generation advance move the
+ * region start to the record's revision, while a same-hash revision
+ * advance (a plain resume) keeps the prior start — so evidence carrying
+ * the same hash from before the region start (checks swung back to an
+ * earlier acceptance, A→B→A) stays refuse-able by revision at the
+ * completion gate.
  */
 function applyGoalBinding(state: DevFrameProjectionState, binding: GoalBinding): void {
   assertProjectIdentity(state, binding.controllerSessionId, binding.workspaceId)
@@ -429,6 +469,7 @@ function applyGoalBinding(state: DevFrameProjectionState, binding: GoalBinding):
   if (prior === undefined) {
     assertLifecycleTransition(undefined, binding.lifecycle)
     state.bindings.push(cloneBinding(binding))
+    setAcceptanceRegion(state, binding.goalId, binding.goalRevision)
     if (state.lifecycle !== null && state.lifecycle.binding.goalId !== binding.goalId) {
       state.lifecycle = null
     }
@@ -455,7 +496,32 @@ function applyGoalBinding(state: DevFrameProjectionState, binding: GoalBinding):
     return
   }
   if (binding.lifecycle !== prior.lifecycle) assertLifecycleTransition(prior.lifecycle, binding.lifecycle)
+  if (generationAdvanced && !sameAcceptance(prior, binding)) {
+    setAcceptanceRegion(state, binding.goalId, binding.goalRevision)
+  }
   state.bindings[index] = cloneBinding(binding)
+}
+
+/** Record the start revision of one goal's current acceptance region. */
+function setAcceptanceRegion(state: DevFrameProjectionState, goalId: GoalId, startRevision: number): void {
+  const index = state.acceptanceRegions.findIndex(region => region.goalId === goalId)
+  if (index < 0) {
+    state.acceptanceRegions.push({ goalId, startRevision })
+    return
+  }
+  state.acceptanceRegions[index] = { goalId, startRevision }
+}
+
+/**
+ * Read the start revision of one goal's current acceptance region.
+ * @param state - the folded projection state.
+ * @param goalId - the goal whose region start is read.
+ * @returns the region start, or `undefined` when no region was ever folded
+ *   for the goal — a degraded pre-field checkpoint cache, which the
+ *   completion gate treats fail-closed instead of admitting.
+ */
+export function acceptanceRegionStartOf(state: DevFrameProjectionState, goalId: GoalId): number | undefined {
+  return state.acceptanceRegions.find(region => region.goalId === goalId)?.startRevision
 }
 
 /** Require current Goal authorization without rewriting its source input. */
@@ -696,7 +762,7 @@ export function foldDevFrameState(
 /** Host-only projection definition registered by the DevFrame profile. */
 export const devFrameProjectionDefinition = {
   key: 'devframe',
-  stateVersion: 3,
+  stateVersion: 4,
   stateSchema: devFrameStateSchema,
   init: (header: SessionHeader, _inheritedEventCount: SessionLogOffset) => initialState(header),
   apply: (state: DevFrameProjectionState, event: SessionEvent) => {

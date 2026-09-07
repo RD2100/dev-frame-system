@@ -28,7 +28,7 @@ import type {
   GoalResultBinding,
   TaskId,
 } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
-import { computeSourceFingerprint } from '@deepseek-ai/dsh-experimental-devframe'
+import { acceptanceRegionStartOf, computeSourceFingerprint } from '@deepseek-ai/dsh-experimental-devframe'
 import type {
   AcceptanceHash,
   DevFrameSnapshotId,
@@ -564,9 +564,10 @@ export class GoalBindingComposition extends Service {
     // stays behind the structural attribution checks the controller enforces
     // (a foreign review propagates its GoalBindingError instead).
     const currentBinding = state.bindings.find(binding => binding.goalId === current.id)
+    const regionStart = acceptanceRegionStartOf(state, current.id)
     const verification = latestAttributedVerification(state, current.id)
     if (verification === undefined) return { kind: 'error', text: NO_VERIFICATION_TEXT }
-    if (currentBinding !== undefined && !isCurrentGeneration(verification, currentBinding)) {
+    if (currentBinding === undefined || !isCurrentGeneration(verification, currentBinding, regionStart)) {
       return { kind: 'error', text: VERIFICATION_SUPERSEDED_TEXT }
     }
     // The review is the log's latest gate decision; goal attribution is
@@ -575,7 +576,7 @@ export class GoalBindingComposition extends Service {
     const review = latestReview(state)
     if (review === undefined) return { kind: 'error', text: NO_REVIEW_TEXT }
     if (currentBinding !== undefined && review.binding.goalId === current.id
-      && !isCurrentGeneration(review, currentBinding)) {
+      && !isCurrentGeneration(review, currentBinding, regionStart)) {
       return { kind: 'error', text: REVIEW_SUPERSEDED_TEXT }
     }
     // The graded memory-degradation records attributed to the current goal's
@@ -664,19 +665,27 @@ export class GoalBindingComposition extends Service {
 
 /**
  * Whether one evidence record belongs to the binding's current acceptance
- * generation: the acceptance hash is the generation identity the resume
- * lane's checks-change adoption rewrites (AT1-10), so evidence carrying a
- * different acceptance cannot satisfy completion. A plain resume keeps the
- * acceptance and the evidence stays valid across its revision advance.
+ * generation (AT1-10): the acceptance hash must match AND the record's
+ * revision must sit at or above the hash's region start. The hash alone
+ * cannot distinguish a swung-back acceptance — when the approved checks
+ * change A→B and back B→A, the re-adopted hash equals the original — so
+ * the region start revision (moved by every hash-changing adoption, kept
+ * by a plain same-hash resume) fences evidence produced before the current
+ * acceptance took hold. An absent region (a degraded pre-field checkpoint
+ * cache) refuses fail-closed.
  * @param record - the evidence record whose attribution is tested.
  * @param binding - the goal's current projected binding.
- * @returns `true` when the record carries the current acceptance.
+ * @param regionStart - the current acceptance's region start revision.
+ * @returns `true` when the record may satisfy the current acceptance.
  */
 function isCurrentGeneration(
   record: { readonly binding: GoalResultBinding },
   binding: GoalBinding,
+  regionStart: number | undefined,
 ): boolean {
   return record.binding.acceptanceHash === binding.acceptanceHash
+    && regionStart !== undefined
+    && record.binding.goalRevision >= regionStart
 }
 
 /**
