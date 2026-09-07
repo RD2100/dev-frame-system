@@ -129,7 +129,7 @@ async function b2b3(ctx: Context, config: DriverConfig): Promise<void> {
     const workspaceId = opened.workspaceId as string
     const controllerSessionId = opened.controllerSessionId as string
 
-    const controller = await ensureAgent(ctx, config.evidencePath, controllerSessionId)
+    const controller = await ensureAgent(ctx, config.evidencePath, controllerSessionId, opened.canonicalPath as string, undefined)
     const line = `/devframe-start B2 第二项目根验证目标：确认 shadow 投递旅程与 goal 绑定（boot ${config.bootLabel}）`
     const execution = await ctx.commands.execute(controller as Agent, line, [], new AbortController().signal)
     if (execution === undefined) throw new Error('/devframe-start is not registered in this composition')
@@ -213,13 +213,13 @@ async function b2b3verify(ctx: Context, config: DriverConfig): Promise<void> {
 }
 
 /** Create (or adopt) one session through the real session-controller face. */
-async function ensureAgent(ctx: Context, evidencePath: string, sessionId: string | undefined): Promise<Agent> {
+async function ensureAgent(ctx: Context, evidencePath: string, sessionId: string | undefined, cwd = process.cwd(), preset: string | undefined = 'standard'): Promise<Agent> {
   const controller = ctx.get('sessionController') as SessionController | undefined
   if (controller === undefined) throw new Error('chain-driver: sessionController unavailable')
   const created = await controller.create({
     ...(sessionId === undefined ? {} : { sessionId: SessionId(sessionId) }),
-    cwd: process.cwd(),
-    agentPreset: 'standard',
+    cwd,
+    ...(preset === undefined ? {} : { agentPreset: preset }),
   })
   const agent = ctx.agents.get(created.sessionId)
   if (agent === undefined) throw new Error(`chain-driver: agent ${created.sessionId.toString()} not live after create`)
