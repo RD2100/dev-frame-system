@@ -1,0 +1,305 @@
+{
+  "ledger": "at1-11-efficiency-evidence",
+  "schema": {
+    "fieldShape": {
+      "value": "every field is an object {value, provenance, note?}; provenance enum: git | controller-account-log | worker-report | lead-acceptance-log | unobserved; the value scanner in tools/at11-collect.mjs rejects five token families and strips one sanctioned phrase from notes",
+      "provenance": "controller-account-log"
+    },
+    "subjectPolicy": {
+      "value": "commit subject text is not quoted anywhere in this ledger: subject wording can contain scanner-forbidden substrings; read full subjects via git show <hash>",
+      "provenance": "controller-account-log"
+    }
+  },
+  "meta": {
+    "worktree": {
+      "value": "D:\\dsh-devframe-v14-udeliver-lead",
+      "provenance": "controller-account-log",
+      "note": "named by the task brief; git commands in this worktree confirmed the branch and head below"
+    },
+    "branch": {
+      "value": "codex/v14-udeliver-lead",
+      "provenance": "git"
+    },
+    "headCommit": {
+      "value": "047b4f6fb4 (full: 047b4f6fb4a06e0fb4968a733b06dcf0ad6066bc)",
+      "provenance": "git"
+    },
+    "worktreeCleanAtCollection": {
+      "value": true,
+      "provenance": "git",
+      "note": "git status --porcelain printed no lines at collection time; the two AT1-11 output files were written after the git reads and stay uncommitted (no git write operations performed)"
+    },
+    "timestampFormat": {
+      "value": "git author dates rendered with --date=format:'%Y-%m-%d %H:%M:%S' per the task brief; the offsets shown come from a follow-up %ai read (all eleven commits carry +09:00)",
+      "provenance": "git"
+    },
+    "authorIdentity": {
+      "value": "all eleven commits carry the same local git author/committer identity (imccyu <276526105+imccyu@users.noreply.github.com>); local git metadata does not distinguish which session made each commit",
+      "provenance": "git"
+    },
+    "controllerCheckpointBackground": {
+      "value": "controller checkpoint 22:08:25: sessions f28b6a79 / ebc48424 at 9/3 model replies, route huoshan-2/glm-5.3-flash; earlier subagent pair, terminal, background only (omitted from rows; kept here because it anchors the W1/W2 start bounds)",
+      "provenance": "controller-account-log"
+    },
+    "mainTipObserved": {
+      "value": "203e0a6578 at 2026-09-07 23:39:25 +09:00",
+      "provenance": "git",
+      "note": "main tip at collection time; context only"
+    },
+    "honestyConstraints": {
+      "value": "model-reply counts are cumulative per session; no per-interval measure is derived from them; no fabricated serial contrast; no multiplier claims; missing facts are recorded as unobserved",
+      "provenance": "controller-account-log",
+      "note": "constraints restated from the AT1-11 task brief"
+    }
+  },
+  "commits": [
+    {
+      "hash": { "value": "4a8c35dafc", "provenance": "git" },
+      "fullHash": { "value": "4a8c35dafc4f9fb7dd274232ee853a12bd21c8ff", "provenance": "git" },
+      "committedAt": { "value": "2026-09-07 22:37:16 +09:00", "provenance": "git", "note": "git author date; equals the committer date" },
+      "parents": { "value": ["029bd89195"], "provenance": "git" },
+      "isMerge": { "value": false, "provenance": "git" },
+      "line": { "value": "codex/v14-udeliver-lead (in-HEAD)", "provenance": "git" },
+      "filesChanged": { "value": 6, "provenance": "git", "note": "git show --stat and git diff --stat <hash>^ <hash> printed the same summary" },
+      "insertions": { "value": 153, "provenance": "git" },
+      "deletions": { "value": 103, "provenance": "git" }
+    },
+    {
+      "hash": { "value": "ba36245196", "provenance": "git" },
+      "fullHash": { "value": "ba362451966fc79ef272bd136761d6955b64a011", "provenance": "git" },
+      "committedAt": { "value": "2026-09-07 22:37:32 +09:00", "provenance": "git", "note": "git author date; equals the committer date" },
+      "parents": { "value": ["4a8c35dafc"], "provenance": "git" },
+      "isMerge": { "value": false, "provenance": "git" },
+      "line": { "value": "codex/v14-udeliver-lead (in-HEAD)", "provenance": "git" },
+      "filesChanged": { "value": 10, "provenance": "git", "note": "git show --stat and git diff --stat <hash>^ <hash> printed the same summary" },
+      "insertions": { "value": 264, "provenance": "git" },
+      "deletions": { "value": 8, "provenance": "git" }
+    },
+    {
+      "hash": { "value": "c469e0863c", "provenance": "git" },
+      "fullHash": { "value": "c469e0863ce907c2c5743f2273c1759e82369976", "provenance": "git" },
+      "committedAt": { "value": "2026-09-07 22:38:38 +09:00", "provenance": "git", "note": "git author date; equals the committer date" },
+      "parents": { "value": ["ba36245196", "e45bffcfd0"], "provenance": "git" },
+      "isMerge": { "value": true, "provenance": "git" },
+      "line": { "value": "codex/v14-udeliver-lead (in-HEAD)", "provenance": "git" },
+      "filesChanged": { "value": 62, "provenance": "git", "note": "merge commit: git show --stat and git diff --stat <hash>^ <hash> printed the same summary; the diff is against the first parent (content merged in from main)" },
+      "insertions": { "value": 3205, "provenance": "git" },
+      "deletions": { "value": 289, "provenance": "git" }
+    },
+    {
+      "hash": { "value": "6dac3f305d", "provenance": "git" },
+      "fullHash": { "value": "6dac3f305d63130a2d6079ed1bf66da76685e0f6", "provenance": "git" },
+      "committedAt": { "value": "2026-09-07 22:48:51 +09:00", "provenance": "git", "note": "git author date; equals the committer date" },
+      "parents": { "value": ["c469e0863c"], "provenance": "git" },
+      "isMerge": { "value": false, "provenance": "git" },
+      "line": { "value": "codex/v14-udeliver-lead (in-HEAD)", "provenance": "git" },
+      "filesChanged": { "value": 2, "provenance": "git", "note": "git show --stat and git diff --stat <hash>^ <hash> printed the same summary" },
+      "insertions": { "value": 9, "provenance": "git" },
+      "deletions": { "value": 1, "provenance": "git" }
+    },
+    {
+      "hash": { "value": "6f01fa0d87", "provenance": "git" },
+      "fullHash": { "value": "6f01fa0d87822fbce72ac50dc410ea5c65f2c18e", "provenance": "git" },
+      "committedAt": { "value": "2026-09-07 22:48:57 +09:00", "provenance": "git", "note": "git author date; equals the committer date" },
+      "parents": { "value": ["6dac3f305d", "008e17eb9b"], "provenance": "git" },
+      "isMerge": { "value": true, "provenance": "git" },
+      "line": { "value": "codex/v14-udeliver-lead (in-HEAD)", "provenance": "git" },
+      "filesChanged": { "value": 20, "provenance": "git", "note": "merge commit: git show --stat and git diff --stat <hash>^ <hash> printed the same summary; the diff is against the first parent" },
+      "insertions": { "value": 516, "provenance": "git" },
+      "deletions": { "value": 103, "provenance": "git" }
+    },
+    {
+      "hash": { "value": "232e6fe825", "provenance": "git" },
+      "fullHash": { "value": "232e6fe8257aed3aaec1c84778ddd1c9bfcb4086", "provenance": "git" },
+      "committedAt": { "value": "2026-09-07 23:18:33 +09:00", "provenance": "git", "note": "git author date; equals the committer date" },
+      "parents": { "value": ["6f01fa0d87"], "provenance": "git" },
+      "isMerge": { "value": false, "provenance": "git" },
+      "line": { "value": "codex/v14-udeliver-lead (in-HEAD)", "provenance": "git" },
+      "filesChanged": { "value": 1, "provenance": "git", "note": "git show --stat and git diff --stat <hash>^ <hash> printed the same summary" },
+      "insertions": { "value": 213, "provenance": "git" },
+      "deletions": { "value": 2, "provenance": "git" }
+    },
+    {
+      "hash": { "value": "78fc5b88a7", "provenance": "git" },
+      "fullHash": { "value": "78fc5b88a748b159f3d4bbb49f7ce1d046519fcc", "provenance": "git" },
+      "committedAt": { "value": "2026-09-07 23:19:38 +09:00", "provenance": "git", "note": "git author date; equals the committer date" },
+      "parents": { "value": ["232e6fe825"], "provenance": "git" },
+      "isMerge": { "value": false, "provenance": "git" },
+      "line": { "value": "codex/v14-udeliver-lead (in-HEAD)", "provenance": "git" },
+      "filesChanged": { "value": 1, "provenance": "git", "note": "git show --stat and git diff --stat <hash>^ <hash> printed the same summary; no deletions segment in the summary line" },
+      "insertions": { "value": 6, "provenance": "git" },
+      "deletions": { "value": 0, "provenance": "git" }
+    },
+    {
+      "hash": { "value": "047b4f6fb4", "provenance": "git" },
+      "fullHash": { "value": "047b4f6fb4a06e0fb4968a733b06dcf0ad6066bc", "provenance": "git" },
+      "committedAt": { "value": "2026-09-07 23:22:30 +09:00", "provenance": "git", "note": "git author date; equals the committer date" },
+      "parents": { "value": ["78fc5b88a7"], "provenance": "git" },
+      "isMerge": { "value": false, "provenance": "git" },
+      "line": { "value": "codex/v14-udeliver-lead (in-HEAD, branch tip)", "provenance": "git" },
+      "filesChanged": { "value": 1, "provenance": "git", "note": "git show --stat and git diff --stat <hash>^ <hash> printed the same summary" },
+      "insertions": { "value": 1, "provenance": "git" },
+      "deletions": { "value": 1, "provenance": "git" }
+    },
+    {
+      "hash": { "value": "80f74545e3", "provenance": "git" },
+      "fullHash": { "value": "80f74545e3f7273a42e29d4eedaed9f4e3fcd5d8", "provenance": "git" },
+      "committedAt": { "value": "2026-09-07 22:47:13 +09:00", "provenance": "git", "note": "git author date; equals the committer date" },
+      "parents": { "value": ["e45bffcfd0", "7e9fd2beca"], "provenance": "git" },
+      "isMerge": { "value": true, "provenance": "git" },
+      "line": { "value": "main (merge-base confirmed ancestor)", "provenance": "git" }
+    },
+    {
+      "hash": { "value": "7e9fd2beca", "provenance": "git" },
+      "fullHash": { "value": "7e9fd2beca5da12dd221c1807c595af1c07c970a", "provenance": "git" },
+      "committedAt": { "value": "2026-09-07 22:45:28 +09:00", "provenance": "git", "note": "git author date; equals the committer date" },
+      "parents": { "value": ["c4c46d6e64"], "provenance": "git" },
+      "isMerge": { "value": false, "provenance": "git" },
+      "line": { "value": "main (merge-base confirmed ancestor)", "provenance": "git" }
+    },
+    {
+      "hash": { "value": "76080fe40b", "provenance": "git" },
+      "fullHash": { "value": "76080fe40b42a4515bde96ddd0db9cd289bdc421", "provenance": "git" },
+      "committedAt": { "value": "2026-09-07 22:30:40 +09:00", "provenance": "git", "note": "git author date; equals the committer date" },
+      "parents": { "value": ["029bd89195", "c4c46d6e64"], "provenance": "git" },
+      "isMerge": { "value": true, "provenance": "git" },
+      "line": { "value": "main (merge-base confirmed ancestor)", "provenance": "git" }
+    }
+  ],
+  "rows": [
+    {
+      "rowType": { "value": "worker-task", "provenance": "controller-account-log" },
+      "taskId": { "value": "W1", "provenance": "controller-account-log" },
+      "executorSession": { "value": "a9fcb6c5", "provenance": "controller-account-log", "note": "session id from the controller account log; not observable from local git" },
+      "route": { "value": "huoshan-2/glm-5.3-flash", "provenance": "git", "note": "commit ba36245196 message states the explicit provider/model routing; also stated in the controller account log" },
+      "taskLabel": { "value": "composition (devframe-profile loader-composition acceptance)", "provenance": "controller-account-log" },
+      "outputCommit": { "value": "ba36245196", "provenance": "git", "note": "full hash ba362451966fc79ef272bd136761d6955b64a011" },
+      "outputCommitTime": { "value": "2026-09-07 22:37:32 +09:00 (author date = committer date)", "provenance": "git" },
+      "commitBinding": { "value": "controller brief binds task W1 (composition, session a9fcb6c5) to this landing; the commit message self-describes the composition work; parent structure: parent is 4a8c35dafc (the W2 landing), committed on the branch line before the L1 merge c469e0863c", "provenance": "controller-account-log", "note": "commit message text not quoted in this ledger; read via git show ba36245196" },
+      "filesTouched": { "value": 10, "provenance": "git", "note": "git show --stat summary line; equals the git diff --stat <hash>^ <hash> summary" },
+      "insertions": { "value": 264, "provenance": "git" },
+      "deletions": { "value": 8, "provenance": "git" },
+      "cumulativeModelReplies": { "value": 126, "provenance": "controller-account-log", "note": "cumulative, not RPM; as of the controller termination observation at 22:34; no git corroboration located (the commit message records no reply count)" },
+      "startBound": { "value": "unobserved (worker spawn not logged locally); bounded below by the controller checkpoint at 22:08:25 which precedes the first worker pair", "provenance": "controller-account-log" },
+      "endBound": { "value": "terminated at 22:34 (controller observation)", "provenance": "controller-account-log" },
+      "outputLandingAnchor": { "value": "commit ba36245196 author date 2026-09-07 22:37:32 +09:00 postdates the reported session termination at 22:34; it lands one step after the W2 landing 4a8c35dafc (22:37:16) and before the L1 merge c469e0863c (22:38:38)", "provenance": "git", "note": "ordering facts from git author dates; the reported termination time is from the controller account log" },
+      "verificationRunsWorkerReport": { "value": "新套件 x1; 三包 x1; tsc x1; test:docs x1; translation x1 (as relayed from the worker report)", "provenance": "worker-report", "note": "run counts only; no timing data" },
+      "verificationRunsLeadAcceptance": { "value": "three packages x1 + tsc x1 (lead acceptance re-run, as relayed in the task brief)", "provenance": "lead-acceptance-log" },
+      "verificationRunsGitRecord": { "value": "commit ba36245196 message records: new suite 3/3 exit 0; devframe-profile + shadow-router + project-memory 26 files / 117 passed + 1 platform-skip exit 0; host tsc exit 0; translation pairing re-run exit 0; test:docs 14 of 15 gates pass with 3 package-README model-experience anchors outside the task write scope registered for a follow-up fix", "provenance": "git", "note": "paraphrased from the commit message to fit ledger vocabulary constraints; full wording via git show ba36245196" },
+      "reworkLoops": { "value": "none recorded in the available worker report extract", "provenance": "worker-report" }
+    },
+    {
+      "rowType": { "value": "worker-task", "provenance": "controller-account-log" },
+      "taskId": { "value": "W2", "provenance": "controller-account-log" },
+      "executorSession": { "value": "6fa6f883", "provenance": "controller-account-log", "note": "session id from the controller account log; not observable from local git" },
+      "route": { "value": "huoshan-2/glm-5.3-flash", "provenance": "git", "note": "commit 4a8c35dafc message states the explicit provider/model routing; also stated in the controller account log" },
+      "taskLabel": { "value": "dual-backend (shadow-router recovery and fault suites on both storage backends)", "provenance": "controller-account-log" },
+      "outputCommit": { "value": "4a8c35dafc", "provenance": "git", "note": "full hash 4a8c35dafc4f9fb7dd274232ee853a12bd21c8ff" },
+      "outputCommitTime": { "value": "2026-09-07 22:37:16 +09:00 (author date = committer date)", "provenance": "git" },
+      "commitBinding": { "value": "controller brief binds task W2 (dual-backend, session 6fa6f883) to this landing; the commit message self-describes the dual-backend work and records the reply count; parent structure: parent is 029bd89195 and it is the first of the two worker landings on the branch line", "provenance": "controller-account-log", "note": "commit message text not quoted in this ledger; read via git show 4a8c35dafc" },
+      "filesTouched": { "value": 6, "provenance": "git", "note": "git show --stat summary line; equals the git diff --stat <hash>^ <hash> summary" },
+      "insertions": { "value": 153, "provenance": "git" },
+      "deletions": { "value": 103, "provenance": "git" },
+      "cumulativeModelReplies": { "value": 56, "provenance": "controller-account-log", "note": "cumulative, not RPM; controller observed completion before 22:34" },
+      "replyCountGitCorroboration": { "value": "commit 4a8c35dafc message records '56 model replies recorded account-side'", "provenance": "git" },
+      "startBound": { "value": "unobserved (worker spawn not logged locally); bounded below by the controller checkpoint at 22:08:25 which precedes the first worker pair", "provenance": "controller-account-log" },
+      "endBound": { "value": "completed before 22:34 (controller observation)", "provenance": "controller-account-log" },
+      "outputLandingAnchor": { "value": "commit 4a8c35dafc author date 2026-09-07 22:37:16 +09:00 postdates the reported completion (before 22:34); it is the first of the two worker landings, one step before the W1 landing ba36245196 (22:37:32)", "provenance": "git" },
+      "verificationRunsWorkerReport": { "value": "5 suites x1; all-packages run x1; tsc x1 (as relayed from the worker report)", "provenance": "worker-report", "note": "run counts only; no timing data" },
+      "verificationRunsLeadAcceptance": { "value": "three packages x1 + tsc x1 (lead acceptance re-run, as relayed in the task brief)", "provenance": "lead-acceptance-log" },
+      "verificationRunsGitRecord": { "value": "commit 4a8c35dafc message records: the five touched suites 22/22 exit 0; shadow-router package 14 files / 47 passed + 1 platform-skip exit 0; host tsc exit 0", "provenance": "git", "note": "verbatim from the commit message exit-code segment" },
+      "reworkLoops": { "value": "delivery-limits EBUSY 世代重构: the delivery-limits old-Goal case was restructured to a handle lifetime scoped to the EBUSY 世代 (h1.close moved before the residue seed, following the s6-crash-window precedent) because sqlite is a single-writer file medium and the previous shape hit EBUSY teardown on the first sqlite run; assertions unchanged", "provenance": "worker-report", "note": "git corroboration: commit 4a8c35dafc message describes the same restructure" }
+    },
+    {
+      "rowType": { "value": "worker-task", "provenance": "controller-account-log" },
+      "taskId": { "value": "W3", "provenance": "controller-account-log" },
+      "executorSession": { "value": "51ad6b98", "provenance": "controller-account-log", "note": "session id from the controller account log; not observable from local git" },
+      "route": { "value": "huoshan-2/glm-5.3-flash", "provenance": "git", "note": "commit 232e6fe825 message states the explicit provider/model routing; also stated in the controller account log" },
+      "taskLabel": { "value": "AT1-09 journey (single-scenario A-to-B journey case driven through the real command face)", "provenance": "controller-account-log" },
+      "outputCommit": { "value": "232e6fe825", "provenance": "git", "note": "full hash 232e6fe8257aed3aaec1c84778ddd1c9bfcb4086" },
+      "outputCommitTime": { "value": "2026-09-07 23:18:33 +09:00 (author date = committer date)", "provenance": "git" },
+      "commitBinding": { "value": "controller brief binds task W3 (AT1-09 journey, session 51ad6b98) to this landing; the commit message self-describes the journey work and records the reply count as of 23:06; parent structure: parent is 6f01fa0d87 (the L2 merge)", "provenance": "controller-account-log", "note": "commit message text not quoted in this ledger; read via git show 232e6fe825" },
+      "filesTouched": { "value": 1, "provenance": "git", "note": "git show --stat summary line; equals the git diff --stat <hash>^ <hash> summary" },
+      "insertions": { "value": 213, "provenance": "git" },
+      "deletions": { "value": 2, "provenance": "git" },
+      "cumulativeModelReplies": { "value": 23, "provenance": "controller-account-log", "note": "cumulative, not RPM; as of 23:06 per the controller account log" },
+      "replyCountGitCorroboration": { "value": "commit 232e6fe825 message records '23 model replies recorded account-side as of 23:06'", "provenance": "git" },
+      "startBound": { "value": "unobserved (worker spawn not logged locally); no local fact bounds it", "provenance": "unobserved" },
+      "endBound": { "value": "last session event 23:03:42; session still live at 23:06; workflow returned normally afterward (controller observations)", "provenance": "controller-account-log" },
+      "returnAnchor": { "value": "lead-side observation: the workflow return preceded the acceptance commit 232e6fe825 (git author date 2026-09-07 23:18:33 +09:00)", "provenance": "lead-acceptance-log" },
+      "outputLandingAnchor": { "value": "commit 232e6fe825 author date 2026-09-07 23:18:33 +09:00; it sits directly on the L2 merge 6f01fa0d87 (22:48:57) and precedes the two record commits 78fc5b88a7 (23:19:38) and 047b4f6fb4 (23:22:30)", "provenance": "git" },
+      "verificationRunsWorkerReport": { "value": "本文件 x1; 两包 x2 (as relayed from the worker report)", "provenance": "worker-report", "note": "run counts only; no timing data" },
+      "verificationRunsLeadAcceptance": { "value": "three packages x1 + tsc x1 (lead acceptance re-run, as relayed in the task brief)", "provenance": "lead-acceptance-log" },
+      "verificationRunsGitRecord": { "value": "commit 232e6fe825 message records: this file 11 passed exit 0; command-goal-binding 3 files / 33 passed exit 0; devframe 17 files / 267 passed + 1 platform skip exit 0; agent-evidence package green; host tsc exit 0", "provenance": "git", "note": "verbatim from the commit message exit-code segment" },
+      "reworkLoops": { "value": "none recorded in the available worker report extract; the commit message registers structural walls (the per-process required-checks store, the missing devframe/usage production writer, the task-delivery late-surface projection constraint) as honest registrations rather than rework", "provenance": "worker-report" }
+    },
+    {
+      "rowType": { "value": "lead-integration", "provenance": "controller-account-log" },
+      "taskId": { "value": "L1", "provenance": "controller-account-log" },
+      "executorSession": { "value": "unobserved (lead session id not recorded in local sources)", "provenance": "unobserved" },
+      "route": { "value": "unobserved", "provenance": "unobserved" },
+      "taskLabel": { "value": "lead integration: merge main + assertion repair + verification re-run", "provenance": "controller-account-log" },
+      "outputCommit": { "value": ["c469e0863c", "6dac3f305d"], "provenance": "git" },
+      "outputCommitTime": { "value": { "c469e0863c": "2026-09-07 22:38:38 +09:00", "6dac3f305d": "2026-09-07 22:48:51 +09:00" }, "provenance": "git", "note": "author dates = committer dates" },
+      "commitBinding": { "value": "controller brief binds L1 to the merge c469e0863c plus the assertion-repair record commit 6dac3f305d; git ancestry: c469e0863c merges main at e45bffcfd0, and 76080fe40b (durable request budget + repair admission accounting) is an ancestor of e45bffcfd0 (merge-base confirmed); 6dac3f305d's parent is c469e0863c", "provenance": "controller-account-log", "note": "the ancestry facts are git-verified; the task binding is from the controller brief" },
+      "filesTouched": { "value": { "c469e0863c": 62, "6dac3f305d": 2 }, "provenance": "git", "note": "per commit, not summed; the merge number is the first-parent diff (content merged in from main)" },
+      "insertions": { "value": { "c469e0863c": 3205, "6dac3f305d": 9 }, "provenance": "git" },
+      "deletions": { "value": { "c469e0863c": 289, "6dac3f305d": 1 }, "provenance": "git" },
+      "cumulativeModelReplies": { "value": "unobserved", "provenance": "unobserved", "note": "cumulative, not RPM; lead-session reply count not recorded locally" },
+      "startBound": { "value": "22:38:38 (controller brief)", "provenance": "controller-account-log" },
+      "endBound": { "value": "22:48:57 (controller brief)", "provenance": "controller-account-log" },
+      "boundGitAnchor": { "value": "git commit c469e0863c author date 2026-09-07 22:38:38 +09:00 equals the reported window start; git commit 6f01fa0d87 (the next merge, bound to L2 by the controller brief) author date 2026-09-07 22:48:57 +09:00 equals the reported window end", "provenance": "git" },
+      "verificationRunsWorkerReport": { "value": "unobserved (not applicable: lead task; no worker report)", "provenance": "unobserved" },
+      "verificationRunsLeadAcceptance": { "value": "affected suites re-ran green on the merged tree after the merge and the assertion row (lead record as relayed in the task brief)", "provenance": "lead-acceptance-log", "note": "git corroboration: commit 6dac3f305d message records six-package regression 52 files / 492 passed + 1 platform skip, exit 0" },
+      "verificationRunsGitRecord": { "value": "commit 6dac3f305d message records: six-package regression 52 files / 492 passed + 1 platform skip, exit 0; staged diff --check 0; the affected suites re-ran green on the merged tree", "provenance": "git", "note": "verbatim from the commit message exit-code segment" },
+      "reworkLoops": { "value": "assertion repair during integration: the merge added the devframe/repair-admission event type, so the events.spec native-vocabulary assertion gained a row; the B5 re-verification record was corrected to the durable consumer evidence, superseding the worker's pre-merge in-memory citations", "provenance": "controller-account-log", "note": "git corroboration: commit 6dac3f305d message" }
+    },
+    {
+      "rowType": { "value": "lead-integration", "provenance": "controller-account-log" },
+      "taskId": { "value": "L2", "provenance": "controller-account-log" },
+      "executorSession": { "value": "unobserved (lead session id not recorded in local sources)", "provenance": "unobserved" },
+      "route": { "value": "unobserved", "provenance": "unobserved" },
+      "taskLabel": { "value": "lead integration: merge main + record correction (记录更正)", "provenance": "controller-account-log" },
+      "outputCommit": { "value": ["6f01fa0d87", "78fc5b88a7", "047b4f6fb4"], "provenance": "git" },
+      "outputCommitTime": { "value": { "6f01fa0d87": "2026-09-07 22:48:57 +09:00", "78fc5b88a7": "2026-09-07 23:19:38 +09:00", "047b4f6fb4": "2026-09-07 23:22:30 +09:00" }, "provenance": "git", "note": "author dates = committer dates" },
+      "commitBinding": { "value": "controller brief binds L2 to 'merge 6f01fa0d87 + 记录更正'; git ancestry: 6f01fa0d87 merges main at 008e17eb9b, and 80f74545e3 (source fingerprint engine v2) is an ancestor of 008e17eb9b (merge-base confirmed); after the merge the branch carries two record commits: 78fc5b88a7 (23:19:38, recording the AT1-09 journey closure and the required-checks structural wall) and 047b4f6fb4 (23:22:30, re-binding the AT1-05 closure to the fingerprint v2 evidence instead of the earlier hand-off claim); the brief does not disambiguate which record commit or commits form the 记录更正, so both are listed under this row", "provenance": "controller-account-log", "note": "the ancestry facts are git-verified; the task binding is from the controller brief" },
+      "filesTouched": { "value": { "6f01fa0d87": 20, "78fc5b88a7": 1, "047b4f6fb4": 1 }, "provenance": "git", "note": "per commit, not summed; the merge number is the first-parent diff" },
+      "insertions": { "value": { "6f01fa0d87": 516, "78fc5b88a7": 6, "047b4f6fb4": 1 }, "provenance": "git" },
+      "deletions": { "value": { "6f01fa0d87": 103, "78fc5b88a7": 0, "047b4f6fb4": 1 }, "provenance": "git" },
+      "cumulativeModelReplies": { "value": "unobserved", "provenance": "unobserved", "note": "cumulative, not RPM; lead-session reply count not recorded locally" },
+      "startBound": { "value": "unobserved (no controller wall-clock recorded for L2); bounded below by git commit 6f01fa0d87 (the L2 merge) at 2026-09-07 22:48:57 +09:00", "provenance": "controller-account-log", "note": "the binding of 6f01fa0d87 to L2 is from the controller brief; the timestamp is git" },
+      "endBound": { "value": "unobserved as a wall-clock figure; bounded above by the record commits 78fc5b88a7 at 2026-09-07 23:19:38 +09:00 and 047b4f6fb4 at 2026-09-07 23:22:30 +09:00 (git author dates)", "provenance": "controller-account-log", "note": "the binding of the record commits to L2 is the disambiguation documented in commitBinding" },
+      "verificationRunsWorkerReport": { "value": "unobserved (not applicable: lead task; no worker report)", "provenance": "unobserved" },
+      "verificationRunsLeadAcceptance": { "value": "unobserved (no lead acceptance re-run for L2 recorded in the task brief)", "provenance": "unobserved" },
+      "verificationRunsGitRecord": { "value": "commit 78fc5b88a7 message records: staged diff --check 0; no test surfaces changed by this record commit. Commit 047b4f6fb4 message records: the merged tree runs source-fingerprint.spec green (41 passed + 1 platform skip, exit 0); staged diff --check 0", "provenance": "git", "note": "verbatim from the commit message exit-code segments" },
+      "reworkLoops": { "value": "记录更正 (record correction): the AT1-05 closure record was re-bound to the fingerprint v2 evidence on the merged tree, replacing the earlier hand-off claim (commit 047b4f6fb4); the AT1-09 row moved from partial to covered after the journey landing (commit 78fc5b88a7)", "provenance": "controller-account-log", "note": "git: commit messages 78fc5b88a7 / 047b4f6fb4" }
+    }
+  ],
+  "unobservedGaps": [
+    {
+      "gap": { "value": "worker session spawn times for W1 (a9fcb6c5), W2 (6fa6f883), W3 (51ad6b98)", "provenance": "unobserved" },
+      "why": { "value": "spawn events are not logged locally; W1 and W2 carry only the controller checkpoint at 22:08:25 as a lower bound; W3 has no local lower bound", "provenance": "unobserved" },
+      "neededSource": { "value": "account-side session logs", "provenance": "unobserved" }
+    },
+    {
+      "gap": { "value": "L1 and L2 executor session ids, routes, and cumulative model-reply counts", "provenance": "unobserved" },
+      "why": { "value": "lead sessions are not identified in local records", "provenance": "unobserved" },
+      "neededSource": { "value": "account-side session logs", "provenance": "unobserved" }
+    },
+    {
+      "gap": { "value": "L2 wall-clock start and end", "provenance": "unobserved" },
+      "why": { "value": "the controller brief gives no window for L2; only git commit timestamps bound it", "provenance": "unobserved" },
+      "neededSource": { "value": "controller account log", "provenance": "unobserved" }
+    },
+    {
+      "gap": { "value": "within-session reply distribution (any per-interval view)", "provenance": "unobserved" },
+      "why": { "value": "only cumulative counts exist (126 / 56 / 23); no per-interval data is recorded in any local source", "provenance": "unobserved" },
+      "neededSource": { "value": "account-side session logs", "provenance": "unobserved" }
+    },
+    {
+      "gap": { "value": "offsets for the controller-reported wall-clock times (22:08:25, 22:34, 22:38:38, 22:48:57, 23:03:42, 23:06, 23:18:33)", "provenance": "unobserved" },
+      "why": { "value": "the brief carries no offsets for these times; git author dates carry +09:00 (see the commits table); whether the controller times share that offset is not established locally", "provenance": "unobserved" },
+      "neededSource": { "value": "account-side logs", "provenance": "unobserved" }
+    }
+  ]
+}
