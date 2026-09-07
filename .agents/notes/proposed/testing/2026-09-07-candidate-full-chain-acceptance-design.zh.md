@@ -2,6 +2,8 @@
 
 Status: proposed
 
+[English](2026-09-07-candidate-full-chain-acceptance-design.md) | 中文
+
 ## Problem
 
 候选派发旅程的每条缝都各有套件证明——派发引擎及其 `agent_dispatch` consumer（单元 + 真实 Loader 组合 spec）、持久任务 ack（日志折叠 + 重启证明）、lead 指派落盘波（冷恢复折叠）、审查门（`AGENT_EVIDENCE_REVIEWER_UNAUTHORIZED` 拒绝矩阵）、DevFrame 证据日志、project-controller 任务机（`planned → assigned → developing → reviewing → submitted → integrated`）。没有任何套件证明的是**一次真实候选部署上的完整旅程**：一个 controller 会话派发一个 lead，lead 派发**两个相互独立的 Worker 任务、各占独立 worktree、真实并发**，每个 Worker 经真实 required checks 交付，lead 独立审查，任务 submit，controller 经 controller 专属合并门 integrate，受控重启后每条持久事实重推导成立。V1.2 点名的缺口：没有正式运行消费者，产品无法自主闭环。该消费者已派 A2（agent_dispatch → `assigned`/`developing` → Worker 交付+真实 checks → `reviewing` → 独立 lead `recordReview` → `submit` → 既有 `integrate`，复用 `AgentEvidenceJournal`，禁止预制造 `passed`/`submitted` 记录，不重写 controller/Git gate）。本 note 设计将验收该消费者交付的**测试与证据面**；本身不实现。

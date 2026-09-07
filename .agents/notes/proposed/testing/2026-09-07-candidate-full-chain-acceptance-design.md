@@ -2,6 +2,8 @@
 
 Status: proposed
 
+English | [中文](2026-09-07-candidate-full-chain-acceptance-design.zh.md)
+
 ## Problem
 
 Every seam of the candidate dispatch journey is proven by its own suite — the dispatch engine and its `agent_dispatch` consumer (unit + real-Loader composition specs), the durable task ack (log-fold + restart proofs), the lead-assignment landing wave (cold-restore fold), the reviewer gate (`AGENT_EVIDENCE_REVIEWER_UNAUTHORIZED` matrix), the DevFrame evidence journal, and the project-controller task machine (`planned → assigned → developing → reviewing → submitted → integrated`). What no suite proves is the **journey on one real candidate deployment**: one controller session dispatches one lead, the lead dispatches **two independent Worker tasks onto two separate worktrees running concurrently**, each Worker delivers through real required checks, the lead reviews independently, tasks are submitted, the controller integrates through the controller-only merge gate, and a controlled restart re-derives every durable fact. V1.2 named the gap: without a formal running consumer the product cannot close this loop on its own. That consumer is A2's assignment (agent_dispatch → `assigned`/`developing` → Worker delivery with real checks → `reviewing` → independent lead `recordReview` → `submit` → existing `integrate`, reusing `AgentEvidenceJournal`, never pre-minting `passed`/`submitted` records, not rewriting the controller or Git gate). This note designs the **test and evidence face** that will accept that consumer's delivery; it implements nothing.

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/testing/2026-09-07-candidate-full-chain-acceptance-design.md
-2026-09-07-candidate-full-chain-acceptance-design.md: cb43f06e11be24988299695b8e756230dce83884
-2026-09-07-candidate-full-chain-acceptance-design.zh.md: 8b2c13680dccb79479b2ed6577dd70b1616ca555
+2026-09-07-candidate-full-chain-acceptance-design.md: 3ad444b4a73fcf9e8ec3a8fc43986090d73bfee0
+2026-09-07-candidate-full-chain-acceptance-design.zh.md: 3b4941bb39cd8ebd4a8f427ca669f2745f6c8a7c
