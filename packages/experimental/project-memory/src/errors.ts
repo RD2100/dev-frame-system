@@ -1,5 +1,7 @@
 /** The stable error type for project-memory failures. */
 
+import { HarnessError } from '@deepseek-ai/dsh-llm'
+
 /**
  * Stable, machine-routable failure classifications for the bounded Obsidian
  * memory service, matching the failure table of
@@ -37,20 +39,17 @@ export type ProjectMemoryErrorCode =
 
 /**
  * Structured failure thrown by the project-memory service, so host admission
- * and diagnostics can route on the code alone.
+ * and diagnostics can route on the code alone. Extending {@link HarnessError}
+ * keeps the `{ name, code }` classification on the tool result and its
+ * `tool/result` session event, so host consumers route without parsing text.
  */
-export class ProjectMemoryError extends Error {
-  /** Stable machine-routable failure classification. */
-  readonly code: ProjectMemoryErrorCode
-
+export class ProjectMemoryError extends HarnessError {
   /**
    * @param message - Human-readable rejection reason; carries no note content.
    * @param code - Stable failure classification.
    * @param options - Original filesystem or seam failure, when one exists.
    */
   constructor(message: string, code: ProjectMemoryErrorCode, options?: ErrorOptions) {
-    super(message, options)
-    this.name = 'ProjectMemoryError'
-    this.code = code
+    super(message, code, options)
   }
 }
