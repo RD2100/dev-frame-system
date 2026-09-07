@@ -713,6 +713,16 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
           await writeFile('.agents/devframe/v14/remaining/agent-error-diag-archive.jsonl', content, { flag: 'w' })
           logEvidence += `\n[agent-error-diag ${diag}] ${content.slice(0, 1600)}`
         }
+        // The durable identity and worktree tables: project_task start
+        // refuses on the bindings these files hold, so the archive shows
+        // exactly which rows the authority saw.
+        for (const table of ['session_identity.json', 'worktree_registry.json']) {
+          const tablePath = join(dshHome, 'storages', table)
+          if (!existsSync(tablePath)) continue
+          const content = await readFile(tablePath, 'utf8')
+          await writeFile(`.agents/devframe/v14/remaining/${table}`, content, { flag: 'w' })
+          logEvidence += `\n[${table}] ${content.slice(0, 2400)}`
+        }
       } catch (dumpError) {
         logEvidence = `\n[root session dump failed: ${dumpError instanceof Error ? dumpError.message : String(dumpError)}]`
       }
