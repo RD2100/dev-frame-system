@@ -28,12 +28,12 @@ kind: "package-reference"
 
 ### 使用时机
 
-每次派发需要四个决定，全部在引擎运行前校验：子 agent 的 `role`（controller 派 lead，lead 派 worker）、其拥有的 `taskId`（一任务至多一个被派子 agent）、其工作的 `pluginId` 范围、其将持有的 `worktreeId`。重试中的任务传 `retry: true`——或之前返回的子 agent id——复用既有子 agent 且不重投其简报。被派子 agent 的 worktree 锁终生绑定该子 agent；中断创建经引擎的 `recoverChildAgent` 语义恢复（typed `SessionPersistenceNotFoundError` 按原 id 恢复；损坏与取消不 fallback），适配器只新增持久身份查询——身份复用绝不重投 prompt。
+每次派发需要四个决定，全部在引擎运行前校验：子 agent 的 `role`（controller 派 lead，lead 派 worker）、其拥有的 `taskId`（一任务至多一个被派子 agent）、其工作的 `pluginId` 范围、其将持有的 `worktreeId`。重试中的任务传 `retry: true`——或之前返回的子 agent id——复用既有子 agent 且不重投其简报。被派子 agent 的 worktree 锁终生绑定该子 agent；中断创建经引擎的 `recoverChildAgent` 语义恢复（typed `SessionPersistenceNotFoundError` 按原 id 恢复；损坏与取消不 fallback），适配器只新增持久身份查询——身份复用绝不重投 prompt。已结算的子 agent 经 `followup: true` 配合 prompt 续作：指令作为其下一普通回合投进该子 agent 的 inbox，而全新派发绝不排队 followup。被派子 agent 完成一轮真实回合后，服务以父会话下一普通回合的形式向其投递类型化的 `dispatch-settled` 通知，父会话因此无需轮询即被真实完成唤醒。
 
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-Service 挂载于插件 fiber，接缝随插件存亡（构造上即 HMR 安全）。`AgentDispatchError` 错误码：`DISPATCH_WORKTREE_UNREGISTERED`、`DISPATCH_WORKTREE_MISMATCH`、`DISPATCH_PARENT_UNBOUND`、`DISPATCH_HIERARCHY_DENIED`。引擎拒绝（角色、范围、深度、去重）以其自身类型化错误透传。`DispatchAgentOptions` 是适配器 options 面：四个引擎 `CreateChildAgentOptions` 字段按键显式透传，外加用于权威行校验的必填 `workspaceId` 与可选 `prompt`。per-task 门把身份判断、引擎创建/恢复与首次投递串行进一个原子跨度，因此同任务并发请求恰产生一个子 agent 与一份简报。
+Service 挂载于插件 fiber，接缝随插件存亡（构造上即 HMR 安全）。`AgentDispatchError` 错误码：`DISPATCH_WORKTREE_UNREGISTERED`、`DISPATCH_WORKTREE_MISMATCH`、`DISPATCH_PARENT_UNBOUND`、`DISPATCH_HIERARCHY_DENIED`。引擎拒绝（角色、范围、深度、去重）以其自身类型化错误透传。`DispatchAgentOptions` 是适配器 options 面：四个引擎 `CreateChildAgentOptions` 字段按键显式透传，外加用于权威行校验的必填 `workspaceId`、可选 `prompt`，以及向既有子 agent 投递一轮续作的 `followupPrompt`。per-task 门把身份判断、引擎创建/恢复与首次投递串行进一个原子跨度，因此同任务并发请求恰产生一个子 agent 与一份简报。结算监听同等地挂载在全新、复用与冷恢复的子 agent 上，去重依据父会话的持久账本加一份以确切存活 child 为键的声明集。
 
 不发布运行时 invariant 伴随物：适配器承诺的每一项保证（worktree 注册、path/branch 匹配、锁排他、范围批准）都从它所调用的同一批权威注册表行与引擎求值推导，拒绝在其调用返回的 `AgentDispatchError` 面上可观察，因此不存在可能分叉的独立观察。
 
@@ -86,6 +86,6 @@ The agent dispatch tool is the daily delegation entry over the agent hierarchy. 
 <details>
 <summary>维护者的工作上下文——点开查看</summary>
 
-开放方向：被派子 agent 终态的持久确认；编排域接管后的 worker 侧修复环回送路径；lead 指派消费已在 devframe 包落地。
+开放方向：编排域接管后的 worker 侧修复环回送路径；lead 指派消费已在 devframe 包落地。被派子 agent 的结算确认已落地：结算唤醒与 followup 契约见[结算通知笔记](../../../.agents/notes/implemented/architecture/2026-09-08-dispatch-settlement-wake.zh.md)。
 
 </details>

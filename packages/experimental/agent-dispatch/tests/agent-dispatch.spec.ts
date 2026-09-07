@@ -17,10 +17,11 @@ import { afterEach, expect, it, vi } from 'vitest'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentHierarchy, { type AgentHierarchyConfigInput } from '@deepseek-ai/dsh-experimental-agent-hierarchy'
 import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import AgentBindingRegistry from '@deepseek-ai/dsh-experimental-session-identity'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { SessionId, type Session } from '@deepseek-ai/dsh-session'
 import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import Storage from '@deepseek-ai/dsh-storage'
@@ -29,6 +30,7 @@ import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import SubprocessLocal from '@deepseek-ai/dsh-subprocess-local'
 import WorkspaceRegistry, { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
+import { LlmAdapter, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import {
   GitWorktreeRegistry,
   WorktreeId,
@@ -36,6 +38,30 @@ import {
 } from '@deepseek-ai/dsh-worktree-registry'
 import type { Worktree } from '@deepseek-ai/dsh-worktree-registry'
 import { AgentDispatch, AgentDispatchError, type DispatchAgentOptions } from '../src/index.ts'
+import { watchChildSettlement, type DispatchSettledMessageSource } from '../src/index.ts'
+
+/** A never-exhausting adapter: every model call returns the same short reply. */
+class TextAdapter extends LlmAdapter {
+  async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    if (options.signal?.aborted) throw new Error('aborted')
+    const text = 'ok'
+    yield { type: 'block-start', index: 0, blockType: 'text' }
+    yield { type: 'text-delta', index: 0, text }
+    yield { type: 'block-end', index: 0, block: { type: 'text', text } }
+    yield { type: 'usage', usage: { inputTokens: 1, outputTokens: 1 } }
+    yield { type: 'finish', reason: { kind: 'stop' } }
+  }
+}
+
+/** Poll until the probe returns a truthy value or the budget expires. */
+async function until(probe: () => unknown, budgetMs = 5_000): Promise<void> {
+  const deadline = Date.now() + budgetMs
+  for (;;) {
+    if (probe()) return
+    if (Date.now() > deadline) throw new Error('probe did not settle within its budget')
+    await new Promise(resolve => setTimeout(resolve, 25))
+  }
+}
 
 /** One git invocation, failing loud with its stderr. */
 function git(cwd: string, ...args: string[]): Promise<string> {
@@ -572,3 +598,360 @@ it('delivers a concurrent same-task pair exactly one prompt under the per-task g
   expect(JSON.stringify(inserted[0])).toContain(briefing)
   expect(h.ctx.agentBindings.list().filter(record => record.taskId === 'parallel-task')).toHaveLength(1)
 })
+
+it('delivers a durable settlement notice to the parent when a dispatched child finishes a real turn', async () => {
+  const h = await harness({ 'dispatch-lead': ['plugin-a'] })
+  activeHarnesses.push(h)
+  // The mock route turns the briefing into a real completed child turn, and
+  // the flush participant stands in for the durability backend the notice's
+  // checkpoint rides.
+  h.ctx.llm.registerAdapter(['mock'], new TextAdapter())
+  ctxOnSessionFlush(h.ctx)
+  const controller = (await h.ctx.agents.create({
+    sessionId: SessionId('settle-controller'),
+    meta: { cwd: join(h.root, 'repo') },
+    agentOptions: { provider: 'mock', model: 'mock' },
+  })).agent
+  await h.ctx.agentBindings.bind({ agentId: controller.id, role: 'controller' })
+  const tree = await h.createWorktree('wt-settle', 'feature/settle')
+  await h.dispatch(controller, {
+    cwd: tree.path,
+    role: 'lead',
+    taskId: TaskId('settle-task'),
+    pluginId: PluginId('plugin-a'),
+    worktree: { worktreeId: tree.id, worktreePath: tree.path, branch: tree.branch },
+  }, { sessionId: SessionId('settle-lead'), prompt: 'child briefing: do the work', agentOptions: { provider: 'mock', model: 'mock' } })
+
+  // The child's own log holds the completed turn the notice accounts for.
+  const child = h.ctx.agents.get(SessionId('settle-lead'))
+  expect(child).toBeDefined()
+  await until(() => child!.session.snapshotEvents().some(event =>
+    event.type === 'turn/end'
+    && (event.data as { reason?: { kind?: string } }).reason?.kind === 'completed'))
+
+  // The parent learns about the settlement on its own inbox, under the
+  // dispatch runtime's own typed account — matched by source kind, sender,
+  // and the settled turn's identity, not by text coincidence.
+  const parentNotices = (): DispatchSettledMessageSource[] => [
+    ...controller.session.snapshotEvents()
+      .filter(event => event.type === 'user/message')
+      .map(event => (event.data as { source?: DispatchSettledMessageSource }).source),
+    ...controller.inbox.nextTurn.map(message => message.source),
+  ].filter((source): source is DispatchSettledMessageSource =>
+    source?.kind === 'dispatch-settled' && source.senderSessionId === 'settle-lead')
+  await until(() => parentNotices().length >= 1)
+  await new Promise(resolve => setTimeout(resolve, 300))
+  expect(parentNotices()).toHaveLength(1)
+  expect(parentNotices()[0]!.kind).toBe('dispatch-settled')
+  expect(parentNotices()[0]!.taskId).toBe('settle-task')
+  expect(parentNotices()[0]!.turnIdentity).toMatch(/^\d+:1$/)
+})
+
+it('delivers exactly one notice per settled turn across duplicate watches', async () => {
+  const h = await harness({ 'dispatch-lead': ['plugin-a'] })
+  activeHarnesses.push(h)
+  h.ctx.llm.registerAdapter(['mock'], new TextAdapter())
+  ctxOnSessionFlush(h.ctx)
+  const controller = (await h.ctx.agents.create({
+    sessionId: SessionId('dup-controller'),
+    meta: { cwd: join(h.root, 'repo') },
+    agentOptions: { provider: 'mock', model: 'mock' },
+  })).agent
+  await h.ctx.agentBindings.bind({ agentId: controller.id, role: 'controller' })
+  const tree = await h.createWorktree('wt-dup', 'feature/dup')
+  const child = await h.dispatch(controller, {
+    cwd: tree.path,
+    role: 'lead',
+    taskId: TaskId('dup-task'),
+    pluginId: PluginId('plugin-a'),
+    worktree: { worktreeId: tree.id, worktreePath: tree.path, branch: tree.branch },
+  }, { sessionId: SessionId('dup-lead'), prompt: 'child briefing: do the work', agentOptions: { provider: 'mock', model: 'mock' } })
+  // A re-mounted watch — a duplicate dispatch or a cold recovery remount —
+  // must dedupe on the parent's own durable facts, not on per-watch memory.
+  watchChildSettlement(h.ctx, h.ctx.sessions, controller, child.agent, TaskId('dup-task'))
+
+  const parentNotices = (): DispatchSettledMessageSource[] => [
+    ...controller.session.snapshotEvents()
+      .filter(event => event.type === 'user/message')
+      .map(event => (event.data as { source?: DispatchSettledMessageSource }).source),
+    ...controller.inbox.nextTurn.map(message => message.source),
+  ].filter((source): source is DispatchSettledMessageSource =>
+    source?.kind === 'dispatch-settled' && source.senderSessionId === 'dup-lead')
+  await until(() => parentNotices().length >= 1)
+  await new Promise(resolve => setTimeout(resolve, 400))
+  expect(parentNotices()).toHaveLength(1)
+  expect(parentNotices()[0]!.turnIdentity).toMatch(/^\d+:1$/)
+})
+
+it('wakes the parent again after a cold recovery remounts the settlement watch', async () => {
+  // Phase 1: a real child turn settles and its notice reaches the parent.
+  const h = await harness({ 'dispatch-lead': ['plugin-a'] })
+  activeHarnesses.push(h)
+  h.ctx.llm.registerAdapter(['mock'], new TextAdapter())
+  ctxOnSessionFlush(h.ctx)
+  const controller = (await h.ctx.agents.create({
+    sessionId: SessionId('recover-wake-controller'),
+    meta: { cwd: join(h.root, 'repo') },
+    agentOptions: { provider: 'mock', model: 'mock' },
+  })).agent
+  await h.ctx.agentBindings.bind({ agentId: controller.id, role: 'controller' })
+  const tree = await h.createWorktree('wt-recover-wake', 'feature/recover-wake')
+  const request = {
+    cwd: tree.path,
+    role: 'lead' as const,
+    taskId: TaskId('recover-wake-task'),
+    pluginId: PluginId('plugin-a'),
+    worktree: { worktreeId: tree.id, worktreePath: tree.path, branch: tree.branch },
+  }
+  await h.dispatch(controller, request, {
+    sessionId: SessionId('recover-wake-lead'),
+    prompt: 'child briefing: do the work',
+    agentOptions: { provider: 'mock', model: 'mock' },
+  })
+  const noticesOf = (parent: Agent): DispatchSettledMessageSource[] => [
+    ...parent.session.snapshotEvents()
+      .filter(event => event.type === 'user/message')
+      .map(event => (event.data as { source?: DispatchSettledMessageSource }).source),
+    ...parent.inbox.nextTurn.map(message => message.source),
+  ].filter((source): source is DispatchSettledMessageSource =>
+    source?.kind === 'dispatch-settled' && source.senderSessionId === 'recover-wake-lead')
+  await until(() => noticesOf(controller).length >= 1)
+  await new Promise(resolve => setTimeout(resolve, 300))
+  expect(noticesOf(controller)).toHaveLength(1)
+
+  // Phase 2: cold restart over the same root. The reservation survives, the
+  // child is republished under the reserved identity as a NEW live agent,
+  // and the settlement watch remounts on it.
+  await h.dispose({ keepRoot: true })
+  activeHarnesses.splice(activeHarnesses.indexOf(h), 1)
+  const restarted = await harness({ 'dispatch-lead': ['plugin-a'] }, { root: h.root, seed: false })
+  activeHarnesses.push(restarted)
+  restarted.ctx.llm.registerAdapter(['mock'], new TextAdapter())
+  ctxOnSessionFlush(restarted.ctx)
+  const controller2 = (await restarted.ctx.agents.create({
+    sessionId: SessionId('recover-wake-controller'),
+    meta: { cwd: join(restarted.root, 'repo') },
+    agentOptions: { provider: 'mock', model: 'mock' },
+  })).agent
+  // Drop the restored single-writer lock so the recovery re-takes it.
+  await restarted.ctx.worktreeRegistry.unbind(tree.id, WorktreeLockHolder('recover-wake-lead'))
+  const resume = vi.spyOn(restarted.ctx.agents, 'resume')
+    .mockRejectedValue(new SessionPersistenceNotFoundError(SessionId('recover-wake-lead')))
+  let recoveredAgent: Agent | undefined
+  try {
+    const recovered = await restarted.ctx.agentDispatch.recoverChildAgent(controller2, request, {
+      sessionId: SessionId('recover-wake-lead'),
+      workspaceId: restarted.workspaceId,
+      agentOptions: { provider: 'mock', model: 'mock' },
+    })
+    recoveredAgent = recovered.agent
+  } finally {
+    resume.mockRestore()
+  }
+  expect(recoveredAgent!.id).toBe('recover-wake-lead')
+  // A recovered-but-idle child owes no notice: the fresh controller session
+  // starts empty and recovery replays no stale settlement.
+  await new Promise(resolve => setTimeout(resolve, 300))
+  expect(noticesOf(controller2)).toHaveLength(0)
+
+  // The recovered child's next real turn opens the parent's next turn with
+  // a settlement notice — the wake survives the restart.
+  await restarted.dispatch(controller2, request, {
+    sessionId: SessionId('recover-wake-lead'),
+    followupPrompt: 'recovered: continue the work.',
+  })
+  const child2 = restarted.ctx.agents.get(SessionId('recover-wake-lead'))
+  await until(() => child2!.session.snapshotEvents().some(event =>
+    event.type === 'turn/end'
+    && (event.data as { reason?: { kind?: string } }).reason?.kind === 'completed'))
+  await until(() => noticesOf(controller2).length >= 1)
+  await new Promise(resolve => setTimeout(resolve, 300))
+  expect(noticesOf(controller2)).toHaveLength(1)
+  expect(noticesOf(controller2)[0]!.turnIdentity).toMatch(/^\d+:1$/)
+})
+
+it('keeps settlement claims scoped to the live child, so two isolated contexts with identical ids both wake', async () => {
+  // Two independent contexts reuse the same session ids and, after their
+  // first turns, the same log seqs. A string-keyed cross-host lock would
+  // let one context's claim swallow the other's notice; the claim is
+  // scoped to the exact live child instead, so both parents wake.
+  const harnesses: Harness[] = []
+  for (let index = 0; index < 2; index++) {
+    const h = await harness({ 'dispatch-lead': ['plugin-a'] })
+    activeHarnesses.push(h)
+    harnesses.push(h)
+    h.ctx.llm.registerAdapter(['mock'], new TextAdapter())
+    ctxOnSessionFlush(h.ctx)
+    const controller = (await h.ctx.agents.create({
+      sessionId: SessionId('iso-controller'),
+      meta: { cwd: join(h.root, 'repo') },
+      agentOptions: { provider: 'mock', model: 'mock' },
+    })).agent
+    await h.ctx.agentBindings.bind({ agentId: controller.id, role: 'controller' })
+    const tree = await h.createWorktree('wt-iso', 'feature/iso')
+    await h.dispatch(controller, {
+      cwd: tree.path,
+      role: 'lead',
+      taskId: TaskId('iso-task'),
+      pluginId: PluginId('plugin-a'),
+      worktree: { worktreeId: tree.id, worktreePath: tree.path, branch: tree.branch },
+    }, { sessionId: SessionId('iso-lead'), prompt: 'child briefing: do the work', agentOptions: { provider: 'mock', model: 'mock' } })
+  }
+  expect(harnesses).toHaveLength(2)
+  for (const h of harnesses) {
+    const controller = h.ctx.agents.get(SessionId('iso-controller'))!
+    const notices = (): DispatchSettledMessageSource[] => [
+      ...controller.session.snapshotEvents()
+        .filter(event => event.type === 'user/message')
+        .map(event => (event.data as { source?: DispatchSettledMessageSource }).source),
+      ...controller.inbox.nextTurn.map(message => message.source),
+    ].filter((source): source is DispatchSettledMessageSource =>
+      source?.kind === 'dispatch-settled' && source.senderSessionId === 'iso-lead')
+    await until(() => notices().length >= 1)
+    expect(notices()).toHaveLength(1)
+  }
+})
+
+it('withholds the settlement notice when the turn end never flushes durably', async () => {
+  const h = await harness({ 'dispatch-lead': ['plugin-a'] })
+  activeHarnesses.push(h)
+  // No flush participant: sessions.flush() answers false, so the notice's
+  // durability warrant fails and the parent stays unwoken.
+  h.ctx.llm.registerAdapter(['mock'], new TextAdapter())
+  const controller = (await h.ctx.agents.create({
+    sessionId: SessionId('quiet-controller'),
+    meta: { cwd: join(h.root, 'repo') },
+    agentOptions: { provider: 'mock', model: 'mock' },
+  })).agent
+  await h.ctx.agentBindings.bind({ agentId: controller.id, role: 'controller' })
+  const tree = await h.createWorktree('wt-quiet', 'feature/quiet')
+  await h.dispatch(controller, {
+    cwd: tree.path,
+    role: 'lead',
+    taskId: TaskId('quiet-task'),
+    pluginId: PluginId('plugin-a'),
+    worktree: { worktreeId: tree.id, worktreePath: tree.path, branch: tree.branch },
+  }, { sessionId: SessionId('quiet-lead'), prompt: 'child briefing: do the work', agentOptions: { provider: 'mock', model: 'mock' } })
+
+  const child = h.ctx.agents.get(SessionId('quiet-lead'))
+  await until(() => child!.session.snapshotEvents().some(event =>
+    event.type === 'turn/end'
+    && (event.data as { reason?: { kind?: string } }).reason?.kind === 'completed'))
+  await new Promise(resolve => setTimeout(resolve, 300))
+  expect(controller.session.snapshotEvents().some(event =>
+    event.type === 'user/message'
+    && (event.data as { source?: DispatchSettledMessageSource }).source?.kind === 'dispatch-settled')).toBe(false)
+})
+
+it('delivers an explicit followup to an existing child without re-creating, and a fresh creation ignores one', async () => {
+  const h = await harness({ 'dispatch-lead': ['plugin-a'] })
+  activeHarnesses.push(h)
+  const controller = (await h.ctx.agents.create({
+    sessionId: SessionId('followup-controller'),
+    meta: { cwd: join(h.root, 'repo') },
+  })).agent
+  await h.ctx.agentBindings.bind({ agentId: controller.id, role: 'controller' })
+  const tree = await h.createWorktree('wt-followup', 'feature/followup')
+  const request = {
+    cwd: tree.path,
+    role: 'lead' as const,
+    taskId: TaskId('followup-task'),
+    pluginId: PluginId('plugin-a'),
+    worktree: { worktreeId: tree.id, worktreePath: tree.path, branch: tree.branch },
+  }
+  await h.dispatch(controller, request, { sessionId: SessionId('followup-lead') })
+  expect(h.ctx.agentBindings.list().filter(record => record.taskId === 'followup-task')).toHaveLength(1)
+
+  const followupCount = (): number => h.ctx.agents.get(SessionId('followup-lead'))!
+    .session.snapshotEvents()
+    .filter(event => event.type === 'agent/inbox/spliced')
+    .flatMap(event => (event.data as { inserted?: Array<{ id?: string }> }).inserted ?? [])
+    .filter(message => typeof message.id === 'string' && message.id.startsWith('dispatch-followup:'))
+    .length
+
+  await h.dispatch(controller, request, {
+    sessionId: SessionId('followup-lead'),
+    followupPrompt: 'followup: review the delivered work now.',
+  })
+  expect(followupCount()).toBe(1)
+  expect(h.ctx.agentBindings.list().filter(record => record.taskId === 'followup-task')).toHaveLength(1)
+
+  // A second explicit followup is a second delivery: every followup is a
+  // distinct instruction, not an idempotent re-brief.
+  await h.dispatch(controller, request, {
+    sessionId: SessionId('followup-lead'),
+    followupPrompt: 'followup: also check the ledger.',
+  })
+  expect(followupCount()).toBe(2)
+
+  // A fresh creation never queues a followup: the field applies only to an
+  // existing child.
+  const freshTree = await h.createWorktree('wt-fresh', 'feature/fresh')
+  await h.dispatch(controller, {
+    cwd: freshTree.path,
+    role: 'lead',
+    taskId: TaskId('fresh-task'),
+    pluginId: PluginId('plugin-a'),
+    worktree: { worktreeId: freshTree.id, worktreePath: freshTree.path, branch: freshTree.branch },
+  }, { sessionId: SessionId('fresh-lead'), followupPrompt: 'followup: ignored on a fresh creation' })
+  expect(h.ctx.agents.get(SessionId('fresh-lead'))!.session.snapshotEvents()
+    .filter(event => event.type === 'agent/inbox/spliced')
+    .flatMap(event => (event.data as { inserted?: Array<{ id?: string }> }).inserted ?? [])
+    .filter(message => typeof message.id === 'string' && message.id.startsWith('dispatch-followup:')))
+    .toHaveLength(0)
+})
+
+it('rechecks the live parent after the flush window and never delivers to a disposed parent', async () => {
+  const h = await harness({ 'dispatch-lead': ['plugin-a'] })
+  activeHarnesses.push(h)
+  h.ctx.llm.registerAdapter(['mock'], new TextAdapter())
+  // The flush blocks once the child's real turn has ended — the watch's
+  // delivery window — while earlier checkpoints pass through untouched.
+  let releaseFlush: () => void = () => {}
+  let flushEntered = false
+  const childSessionRef: { session?: Session } = {}
+  h.ctx.on('session/flush', (session: Session) => {
+    if (session !== childSessionRef.session) return
+    const ended = session.snapshotEvents().some(event =>
+      event.type === 'turn/end'
+      && (event.data as { reason?: { kind?: string } }).reason?.kind === 'completed')
+    if (!ended) return
+    flushEntered = true
+    return new Promise<void>((resolve) => { releaseFlush = resolve })
+  })
+  const parentHandle = await h.ctx.agents.create({
+    sessionId: SessionId('window-controller'),
+    meta: { cwd: join(h.root, 'repo') },
+    agentOptions: { provider: 'mock', model: 'mock' },
+  })
+  const controller = parentHandle.agent
+  await h.ctx.agentBindings.bind({ agentId: controller.id, role: 'controller' })
+  const tree = await h.createWorktree('wt-window', 'feature/window')
+  await h.dispatch(controller, {
+    cwd: tree.path,
+    role: 'lead',
+    taskId: TaskId('window-task'),
+    pluginId: PluginId('plugin-a'),
+    worktree: { worktreeId: tree.id, worktreePath: tree.path, branch: tree.branch },
+  }, { sessionId: SessionId('window-lead'), prompt: 'child briefing: do the work', agentOptions: { provider: 'mock', model: 'mock' } })
+
+  const child = h.ctx.agents.get(SessionId('window-lead'))
+  childSessionRef.session = child!.session
+  await until(() => child!.session.snapshotEvents().some(event =>
+    event.type === 'turn/end'
+    && (event.data as { reason?: { kind?: string } }).reason?.kind === 'completed'))
+  await until(() => flushEntered)
+  const followupSpy = vi.spyOn(controller, 'followup')
+
+  // The parent leaves the registry inside the flush window; the watch must
+  // re-check the same live parent after the flush and skip the delivery.
+  await parentHandle.dispose()
+  releaseFlush()
+  await new Promise(resolve => setTimeout(resolve, 200))
+  expect(followupSpy).not.toHaveBeenCalled()
+})
+
+/** Register a no-op session/flush participant so flushes answer durable. */
+function ctxOnSessionFlush(ctx: Context): void {
+  ctx.on('session/flush', () => {})
+}

@@ -31,7 +31,12 @@ import { requireNonEmpty, resolveCaller } from './authorization.ts'
 export const name = 'agent-dispatch'
 
 /** Plugin config. The formal bootstrap is explicit opt-in, so dispatch-only deployments load unchanged. */
-export const Config: z<{ bootstrap?: boolean; checksLedgerPath?: string; candidateScenarioPath?: string; candidateRootSessionId?: string }> = z.object({
+export const Config: z<{
+  bootstrap?: boolean
+  checksLedgerPath?: string
+  candidateScenarioPath?: string
+  candidateRootSessionId?: string
+}> = z.object({
   bootstrap: z.boolean(),
   checksLedgerPath: z.string(),
   candidateScenarioPath: z.string(),
@@ -50,7 +55,7 @@ export const inject = [
   'sessions',
 ] as const
 
-const DISPATCH_DESCRIPTION = 'Dispatch a child agent for one task onto one registered git worktree: the controller dispatches a lead, and a lead dispatches workers inside its approved plugin scopes. Name the task id, the plugin scope, and the worktree id (get worktree ids from worktree_create or the host), and pass a briefing prompt for a fresh dispatch — the briefing is queued only after the child is published. Every result carries ack: what the child\'s own durable log proves about the task (briefed while pending, claimed while executing, terminal with the turn\'s recorded ending — completed means the task finished cleanly, dropped when the briefing was cancelled unrun). If this task already has a dispatched child, the tool refuses and names it: pass retry: true to reuse that child instead, which never re-delivers the briefing and reports the task\'s current ack. The engine owns the child\'s lifecycle and the hierarchy owns every denial; refusals name the cause and the fix.'
+const DISPATCH_DESCRIPTION = 'Dispatch a child agent for one task onto one registered git worktree: the controller dispatches a lead, and a lead dispatches workers inside its approved plugin scopes. Name the task id, the plugin scope, and the worktree id (get worktree ids from worktree_create or the host), and pass a briefing prompt for a fresh dispatch — the briefing is queued only after the child is published. Every result carries ack: what the child\'s own durable log proves about the task (briefed while pending, claimed while executing, terminal with the turn\'s recorded ending — completed means the task finished cleanly, dropped when the briefing was cancelled unrun). If this task already has a dispatched child, the tool refuses and names it: pass retry: true to reuse that child instead, which never re-delivers the briefing and reports the task\'s current ack, or pass followup: true with a new prompt to continue that child with explicit instructions. The engine owns the child\'s lifecycle and the hierarchy owns every denial; refusals name the cause and the fix.'
 
 const GUIDANCE = 'The agent dispatch tool is the daily delegation entry over the agent hierarchy. The controller dispatches a lead per task onto its own registered worktree; the lead dispatches workers inside the plugin scopes approved for it in the deployment\'s leadPluginScopes. Every dispatch binds the worktree\'s single-writer lock to the new child for its whole life. A retried task reuses the existing child (retry: true) — never re-brief a running child.'
 
@@ -101,7 +106,11 @@ function callCard(title: string, rawInput?: string): ToolCallView {
  * @param config - The runtime-resolved workspace configuration.
  * @returns The mounted composition.
  */
-function mountGoalComposition(ctx: Context, config: CommandGoalBindingConfig, stores: GoalBindingCompositionStores): Promise<GoalBindingComposition> {
+function mountGoalComposition(
+  ctx: Context,
+  config: CommandGoalBindingConfig,
+  stores: GoalBindingCompositionStores,
+): Promise<GoalBindingComposition> {
   return new Promise((resolve, reject) => {
     ctx.plugin({
       id: 'candidate-goal-binding',
@@ -128,10 +137,10 @@ interface DispatchAckValue {
 }
 
 /**
- * Render one dispatch or reuse outcome, with the durable-acknowledgment
- * state the child's log proves. Reuse never re-briefs; its text tells the
- * model exactly where the task stands so the next decision (wait, recover,
- * or a new task) is grounded.
+ * Render one dispatch, reuse, or followup outcome, with the
+ * durable-acknowledgment state the child's log proves. Reuse never
+ * re-briefs; its text tells the model exactly where the task stands so
+ * the next decision (wait, recover, or a new task) is grounded.
  */
 function renderDispatchText(value: {
   childId: string
@@ -139,29 +148,34 @@ function renderDispatchText(value: {
   taskId: string
   worktreeId: string
   reused: boolean
+  followup: boolean
   ack: DispatchAckValue
 }): string {
-  const head = value.reused
-    ? `Reusing ${value.role} child ${value.childId} for task '${value.taskId}' on worktree ${value.worktreeId}`
-    : `Dispatched ${value.role} child ${value.childId} for task '${value.taskId}' on worktree ${value.worktreeId}, bound as the worktree's single writer`
+  const head = !value.reused
+    ? `Dispatched ${value.role} child ${value.childId} for task '${value.taskId}' on worktree ${value.worktreeId}, bound as the worktree's single writer`
+    : value.followup
+      ? `Followup delivered to ${value.role} child ${value.childId} for task '${value.taskId}' on worktree ${value.worktreeId}`
+      : `Reusing ${value.role} child ${value.childId} for task '${value.taskId}' on worktree ${value.worktreeId}`
   const durability = value.ack.durable ? '' : value.ack.degraded === true
     ? ' The durability backend failed this check (degraded).'
     : ' No durability backend participated in the check.'
-  const tail = !value.reused
-    ? '.'
-    : value.ack.state === 'terminal' && value.ack.completed === true
-      ? '; the task\'s terminal state is durable (completed).'
-      : value.ack.state === 'terminal'
-        ? `; the claiming turn ended without completing (reason: ${value.ack.reasonKind ?? 'unknown'}, turn ${String(value.ack.turn ?? '?')}); recover the child or dispatch a new task.`
-        : value.ack.state === 'claimed'
-          ? '; the child is executing the briefing, its terminal state is not recorded yet.'
-          : value.ack.state === 'dropped'
-            ? '; the briefing was cancelled unrun, dispatch a new task.'
-            : value.ack.state === 'unbriefed'
-              ? '; no briefing for this task is recorded in the recovered session.'
-              : value.ack.state === 'unavailable'
-                ? '; the child is not live in this process, recover it through the recovery lane.'
-                : '; the earlier briefing stands, none re-queued.'
+  const tail = value.followup
+    ? '; the new instructions are queued on the child\'s inbox.'
+    : !value.reused
+      ? '.'
+      : value.ack.state === 'terminal' && value.ack.completed === true
+        ? '; the task\'s terminal state is durable (completed).'
+        : value.ack.state === 'terminal'
+          ? `; the claiming turn ended without completing (reason: ${value.ack.reasonKind ?? 'unknown'}, turn ${String(value.ack.turn ?? '?')}); recover the child or dispatch a new task.`
+          : value.ack.state === 'claimed'
+            ? '; the child is executing the briefing, its terminal state is not recorded yet.'
+            : value.ack.state === 'dropped'
+              ? '; the briefing was cancelled unrun, dispatch a new task.'
+              : value.ack.state === 'unbriefed'
+                ? '; no briefing for this task is recorded in the recovered session.'
+                : value.ack.state === 'unavailable'
+                  ? '; the child is not live in this process, recover it through the recovery lane.'
+                  : '; the earlier briefing stands, none re-queued.'
   return head + tail + durability
 }
 
@@ -173,7 +187,12 @@ function renderDispatchText(value: {
  * @param ctx - The plugin's context.
  * @param config - The schema-validated plugin config.
  */
-export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedgerPath?: string; candidateScenarioPath?: string; candidateRootSessionId?: string }): void {
+export function apply(ctx: Context, config?: {
+  bootstrap?: boolean
+  checksLedgerPath?: string
+  candidateScenarioPath?: string
+  candidateRootSessionId?: string
+}): void {
   // The candidate host process is the single project scope: when the root
   // session id is pinned, the request budget mounts on this same scope, so
   // every model stream in the process charges this hierarchy's budget and
@@ -337,11 +356,15 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
       },
       prompt: {
         type: 'string',
-        description: 'The task briefing queued to a freshly dispatched child after publication. Never re-sent on a retry.',
+        description: 'The task briefing queued to a freshly dispatched child after publication. Never re-sent on a retry; with followup: true it is the continuation instructions for the existing child instead.',
       },
       retry: {
         type: 'boolean',
         description: 'Pass true to reuse the child this task already has instead of dispatching a new one; no briefing is queued on reuse.',
+      },
+      followup: {
+        type: 'boolean',
+        description: 'Pass true with a prompt to deliver explicit continuation instructions to the child this task already has: the instructions queue as the child\'s next ordinary turn and wake it. Requires an existing dispatched child; a fresh dispatch never queues a followup.',
       },
       childId: {
         type: 'string',
@@ -358,6 +381,7 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
           taskId: { type: 'string', required: true },
           worktreeId: { type: 'string', required: true },
           reused: { type: 'boolean', required: true },
+          followup: { type: 'boolean', required: true },
           ack: {
             type: 'object',
             required: true,
@@ -393,13 +417,19 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
         )
       }
       const taskId = TaskId(requireNonEmpty(args.taskId, 'taskId'))
-      const existing = args.retry === true
+      const existing = args.retry === true || args.followup === true
         ? ctx.agentDispatch.findDispatchedChild(caller.agent, taskId)
         : undefined
       if (args.retry === true && existing === undefined) {
         throw new Error(
           `the agent dispatch tool: task '${taskId}' has no dispatched child to reuse; `
           + 'dispatch fresh without retry',
+        )
+      }
+      if (args.followup === true && existing === undefined) {
+        throw new Error(
+          `the agent dispatch tool: task '${taskId}' has no dispatched child to follow up; `
+          + 'dispatch fresh without followup',
         )
       }
       const child = await ctx.agentDispatch.createChildAgent(caller.agent, {
@@ -419,6 +449,9 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
         ...(existing === undefined && args.prompt !== undefined && requireNonEmpty(args.prompt, 'prompt') !== ''
           ? { prompt: args.prompt }
           : {}),
+        ...(existing !== undefined && args.followup === true && args.prompt !== undefined && requireNonEmpty(args.prompt, 'prompt') !== ''
+          ? { followupPrompt: args.prompt }
+          : {}),
         // The child must assemble the standard persona, whose {{model}}
         // variable resolves from its own agent options: inherit only the
         // approved parent route (the request header owns provider/model and
@@ -436,6 +469,7 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
         taskId,
         worktreeId: String(row.id),
         reused: existing !== undefined,
+        followup: existing !== undefined && args.followup === true,
         ack: {
           state: ack.state,
           durable: ack.durable,

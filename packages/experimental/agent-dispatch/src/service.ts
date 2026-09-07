@@ -41,6 +41,7 @@ import type { Worktree, WorktreeStatus } from '@deepseek-ai/dsh-worktree-registr
 import { AgentDispatchError } from './errors.ts'
 import { evaluateDispatchEntry } from './entry.ts'
 import { foldBriefingAck, type DispatchTaskAck } from './ack.ts'
+import { deliverToAgent, followupMessageId, watchChildSettlement } from './child-settlement.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -61,6 +62,14 @@ export interface DispatchAgentOptions extends CreateChildAgentOptions {
    * resolves. Never queued before publication.
    */
   readonly prompt?: string | undefined
+  /**
+   * Explicit continuation instructions for the child an earlier dispatch
+   * already published for this task. Delivered to that live child's inbox
+   * as its next ordinary turn — queued behind any in-flight turn and
+   * woken — and never re-tasks a fresh creation: on identity reuse without
+   * this field nothing is delivered, exactly as before.
+   */
+  readonly followupPrompt?: string | undefined
 }
 
 /**
@@ -68,7 +77,7 @@ export interface DispatchAgentOptions extends CreateChildAgentOptions {
  * structurally absent — recovery reinstalls the reservation, it never
  * re-tasks the child.
  */
-export type RecoverDispatchAgentOptions = Omit<DispatchAgentOptions, 'prompt' | 'sessionId'> & {
+export type RecoverDispatchAgentOptions = Omit<DispatchAgentOptions, 'prompt' | 'followupPrompt' | 'sessionId'> & {
   /** The reserved identity a previous dispatch returned. */
   readonly sessionId: SessionId
 }
@@ -114,6 +123,9 @@ export class AgentDispatch extends Service {
   /** One settled-before-run chain per parent task, serializing its full dispatch span. */
   private taskGates = new Map<string, Promise<unknown>>()
 
+  /** Settlement watches already mounted, deduped by the exact child agent instance. */
+  private settlementWatches = new WeakSet<Agent>()
+
   constructor(ctx: Context) {
     super(ctx, 'agentDispatch')
   }
@@ -144,6 +156,22 @@ export class AgentDispatch extends Service {
       if (this.taskGates.get(key) === tail) this.taskGates.delete(key)
     })
     return await result
+  }
+
+  /**
+   * Mount the parent settlement watch for one live child exactly once per
+   * child agent instance. Fresh dispatches, identity reuses, and cold
+   * recoveries all run through here: the watch rides the child's actual
+   * in-process lifecycle, so a restarted process re-mounts it when the
+   * child is taken back, and a duplicate dispatch never mounts a second one.
+   * @param parent - The exact live parent the child was dispatched for.
+   * @param child - The exact live dispatched child.
+   * @param taskId - The task the child owns, when the request carried one.
+   */
+  private ensureSettlementWatch(parent: Agent, child: Agent, taskId: TaskId | undefined): void {
+    if (this.settlementWatches.has(child)) return
+    this.settlementWatches.add(child)
+    watchChildSettlement(this.ctx, this.ctx.sessions, parent, child, taskId)
   }
 
   /**
@@ -219,12 +247,16 @@ export class AgentDispatch extends Service {
   ): Promise<CreatedChildAgent> {
     return await this.withTaskGate(taskGateKey(parent.id, request.taskId), async () => {
       const { worktree } = await this.entryProof(parent, request, options.workspaceId, options.sessionId)
-      return await this.ctx.agentHierarchy.recoverChildAgent(parent, request, {
+      const recovered = await this.ctx.agentHierarchy.recoverChildAgent(parent, request, {
         sessionId: options.sessionId,
         setup: this.composedSetup(parent, worktree, options.setup),
         ...(options.agentOptions === undefined ? {} : { agentOptions: options.agentOptions }),
         ...(options.signal === undefined ? {} : { signal: options.signal }),
       })
+      // A cold-recovered child re-mounts its settlement watch on the new
+      // in-process instance, so post-restart turns still wake the parent.
+      this.ensureSettlementWatch(parent, recovered.agent, request.taskId)
+      return recovered
     })
   }
 
@@ -401,6 +433,28 @@ export class AgentDispatch extends Service {
         })
       created.agent.followup(message)
     }
+    // The explicit continuation contract: an existing child receives new
+    // instructions on its inbox without any re-creation. Recovery never
+    // passes this field, so a recovery lane cannot re-task a child.
+    if (existing !== undefined && options.followupPrompt !== undefined) {
+      const message = request.taskId === undefined
+        ? createUserMessage({
+          content: [{ type: 'text', text: options.followupPrompt }],
+          source: { kind: 'plugin', plugin: 'agent-dispatch' },
+        })
+        : freezeMessage({
+          id: followupMessageId(parent.id, request.taskId),
+          role: 'user',
+          content: [{ type: 'text', text: options.followupPrompt }],
+          source: { kind: 'plugin', plugin: 'agent-dispatch' },
+        })
+      deliverToAgent(created.agent, message)
+    }
+    // A dispatched child reports its settlements to its parent: each one is
+    // the external event a goal-bound parent's continuation needs to make
+    // its next decision. Mounted per child instance, on every lane that
+    // hands a live child back.
+    this.ensureSettlementWatch(parent, created.agent, request.taskId)
     return created
   }
 
