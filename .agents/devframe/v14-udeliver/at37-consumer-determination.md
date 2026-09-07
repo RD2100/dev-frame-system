@@ -66,3 +66,13 @@
 - **修复**：`mayAppend` 谓词（未 cancelled/未 disposed + `ctx.sessions.get(id)===session` + inactive context 视为不活）在**每次 append 前**重查；任何提前终止经 `releaseBatch` 释放整批预占键（已落键本已删，整批释放精确无副作用）；循环前检查复用同一谓词。已确认项（入队预占去重、真实 source.callId 链接）不动。
 - **回归编排（总控四步，消除时序根因）**：①先取两次真实 dispatch outcome（无 result 排队即无计时器，await 间隙无从触发）；②注册 detach 观察者；③**无 await 连续** declare A→append A result→declare B→append B result（确保同批）；④drain 前断言 warning=0（证明确未提前 drain），await drain 后恰 ['task-f1']、killerRan=true。此前探针实测定位：初版编排首条排队后 await dispatch（真实 fs I/O 宏任务边界）会让首 timer 提前 drain——探针实证两写分属两批，按四步编排修正后同批成立。
 - **真实退出码**：监听器套件 **7/7 exit 0**；host tsc（tsconfig.host.json，含本 src+spec）**exit 0**。路由：零模型调用；TaskRecord/project-contracts 零改动；不重复 264 全绿（范围限定）。
+
+## grade=fail 消费联动片（总控"边界收口"裁定，571c05b3f9 + 0906e1d00a）
+
+- **边界收口**：上文"监听器修复片"的边界注记（required grade='fail' 仅为纯函数判定、任务失败验收未接线）**已于本片闭合**——该注记保留为当时状态的历史记录，此后以本节为准。
+- **分级持久化**（571c05b3f9）：`devframe/task-warning` 事件数据补 `grade` 字段（封闭二值 `complete-with-warning | 'fail'`，由既有 `gradeMemoryFailure` 纯函数从显式宿主声明产出）；监听器对 **required 判级也落事件**（恰一条，grade='fail'；此前 required 不落、只留原始 tool/result，goal 判定面无可消费证据）。未声明会话仍零事件；去重/存活/计时器机制未动；durable 解码拒绝判级外扩。
+- **判定消费缝**（0906e1d00a）：`evaluateCompletionAdmission` 增 `taskWarnings` 证据面为**合取第一谓词**——grade='fail' 记录 → stage `'task-warning'` 拒绝（携带 warning/tool/grade），先于 fingerprint（纯内存、最廉、任务自身结局证据先于工作树证据）；`complete-with-warning` 与空证据不拒绝（optional 路径不回归）。`CompleteGoalRequest`/`GoalBindingController.complete` 透传；投影折叠 `state.taskWarnings`（同任务双记录 fail-loud）；`/goal-complete` 旅程只传归因于当前 goal 绑定 taskIds 的记录；`renderCompletionRejection` 增渲染臂。判定面即失败终态等价物：拒绝为数据、native Goal 未触碰（phase 不得 complete）、admission 关闭——原生 Goal 服务无 fail 动词，此为既有面内的真实失败路径。
+- **持久化词汇洞补修**：`gen-persistence-catalog` 在监听事件并入 main 后未再生——KNOWN_SESSION_EVENT_TYPES 缺 `devframe/task-warning`，一方持久化后端将拒绝含该事件的日志。本片再生（known-event-types.ts + persistence-catalog.md，gen/verify exit 0）；另随 main 合并再生 agent-hierarchy 面文档（f7969c48db）。
+- **测试**：事件 grade 断言（optional→complete-with-warning；required→恰一条 fail）；admission 拒绝例（fail 证据→拒绝且 native Goal 未触碰、admission 关闭；故意错 fingerprint 前置仍 task-warning 先拒；complete-with-warning→admitted 且完成）；投影 round-trip 折叠+重复 fail-closed；解码拒绝判级外扩。
+- **真实退出码**：host tsc **exit 0**；受影响 7 文件 **82 tests exit 0**；devframe+project-memory 联合回归 **270 tests exit 0**；gen-persistence-catalog / verify-persistence-catalog / gen-cordis-catalog / verify-cordis-catalog 全 **exit 0**。路由：零模型调用；TaskRecord/project-contracts 零改动。
+- **仍开放边界（如实）**：goal-round-driver 续轮面尚未消费 devframe/task-warning（完成判定拒绝已是任务真实失败终态；续轮驱动的停止/转向属后续片）；生产 journey 对 fail 终态后的人工 resume/修复环消费未接。
