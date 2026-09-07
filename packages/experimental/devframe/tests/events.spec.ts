@@ -29,6 +29,7 @@ import type {
   DevFrameLifecycleEventData,
   DevFrameReviewEventData,
   DevFrameRolePolicyEventData,
+  DevFrameTaskWarningEventData,
   DevFrameUsageEventData,
   DevFrameVerificationEventData,
 } from '../src/events.ts'
@@ -133,6 +134,7 @@ function fullEventSet(): {
   readonly usageSettled: DevFrameUsageEventData
   readonly verification: DevFrameVerificationEventData
   readonly review: DevFrameReviewEventData
+  readonly taskWarning: DevFrameTaskWarningEventData
   readonly stopRequested: DevFrameLifecycleEventData
   readonly quiesced: DevFrameLifecycleEventData
 } {
@@ -200,7 +202,14 @@ function fullEventSet(): {
     ...stopRequested,
     state: 'quiescence_confirmed',
   }
-  return { usageReserved, usageSettled, verification, review, stopRequested, quiesced }
+  const taskWarning: DevFrameTaskWarningEventData = {
+    version: 1,
+    taskId: TASK,
+    warning: 'MEMORY_UNAVAILABLE',
+    tool: 'memory_append',
+    grade: 'fail',
+  }
+  return { usageReserved, usageSettled, verification, review, taskWarning, stopRequested, quiesced }
 }
 
 describe('DevFrame durable event vocabulary', () => {
@@ -210,6 +219,7 @@ describe('DevFrame durable event vocabulary', () => {
       'devframe/lifecycle',
       'devframe/review',
       'devframe/role-policy',
+      'devframe/task-warning',
       'devframe/usage',
       'devframe/verification',
     ])
@@ -344,6 +354,7 @@ describe('DevFrame durable event vocabulary', () => {
     current.append('devframe/usage', events.usageSettled)
     current.append('devframe/verification', events.verification)
     current.append('devframe/review', events.review)
+    current.append('devframe/task-warning', events.taskWarning)
     current.append('devframe/lifecycle', events.stopRequested)
     current.append('devframe/lifecycle', events.quiesced)
 
@@ -361,6 +372,7 @@ describe('DevFrame durable event vocabulary', () => {
     expect(state.usage).toHaveLength(2)
     expect(state.verifications).toHaveLength(1)
     expect(state.reviews).toHaveLength(1)
+    expect(state.taskWarnings).toEqual([events.taskWarning])
     expect(state.lifecycle?.state).toBe('quiescence_confirmed')
   })
 
@@ -378,6 +390,15 @@ describe('DevFrame durable event vocabulary', () => {
     changed.append('devframe/goal-binding', binding({ taskIds: [TaskId('task-2')] }))
     expect(foldDevFrameState(changed.snapshotEvents(), changed.header).failure)
       .toMatch(/immutable binding/)
+  })
+
+  it('keeps a duplicated task warning fail-closed during replay', () => {
+    const events = fullEventSet()
+    const duplicate = session()
+    duplicate.append('devframe/task-warning', events.taskWarning)
+    duplicate.append('devframe/task-warning', events.taskWarning)
+    expect(foldDevFrameState(duplicate.snapshotEvents(), duplicate.header).failure)
+      .toMatch(/recorded twice/)
   })
 
   it('rejects cross-record budget and policy mismatches during replay', () => {

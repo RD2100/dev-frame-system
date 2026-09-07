@@ -626,6 +626,69 @@ describe('GoalBindingController completion admission', { timeout: 30_000 }, () =
     expect(controller.admissionState).toBe('closed')
   })
 
+  it('refuses completion as real task failure when the log holds a fail-graded memory record', async () => {
+    const fixture = await createCommittedWorktree()
+    const goals = fakeGoals([])
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-complete-warning'),
+      controllerSessionId: ControllerSessionId('controller-complete-warning'),
+      goals,
+      store: new MemoryGoalBindingStore(),
+    })
+    const binding = await controller.start(request({ sourceFingerprint: fixture.fingerprint }))
+    const before = goals.current
+
+    // The required-memory task's graded record: the acceptance needed the
+    // memory operation and it failed, so the verdict is a rejection with the
+    // record's own evidence and the native Goal stays untouched — the task's
+    // real outcome is failure, never a warned completion.
+    const verdict = await controller.complete(binding, await completionRequest(fixture, binding, {
+      taskWarnings: [{
+        version: 1,
+        taskId: binding.taskIds[0]!,
+        warning: 'MEMORY_UNAVAILABLE',
+        tool: 'memory_append',
+        grade: 'fail',
+      }],
+    }))
+    expect(verdict).toEqual({
+      kind: 'rejected',
+      stage: 'task-warning',
+      warning: 'MEMORY_UNAVAILABLE',
+      tool: 'memory_append',
+      grade: 'fail',
+    })
+    expect(goals.current).toBe(before)
+    expect(goals.current?.phase).not.toBe('complete')
+    expect(controller.admissionState).toBe('closed')
+  })
+
+  it('completes an optional-memory task whose degraded record never graded fail', async () => {
+    const fixture = await createCommittedWorktree()
+    const goals = fakeGoals([])
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId('workspace-complete-optional'),
+      controllerSessionId: ControllerSessionId('controller-complete-optional'),
+      goals,
+      store: new MemoryGoalBindingStore(),
+    })
+    const binding = await controller.start(request({ sourceFingerprint: fixture.fingerprint }))
+
+    // The optional-memory path does not regress: a complete-with-warning
+    // record is not failure evidence, and the admission admits.
+    const verdict = await controller.complete(binding, await completionRequest(fixture, binding, {
+      taskWarnings: [{
+        version: 1,
+        taskId: binding.taskIds[0]!,
+        warning: 'MEMORY_UNAVAILABLE',
+        tool: 'memory_append',
+        grade: 'complete-with-warning',
+      }],
+    }))
+    expect(verdict.kind).toBe('admitted')
+    expect(goals.current?.phase).toBe('complete')
+  })
+
   it('rejects a native Goal that now belongs to another identity', async () => {
     const fixture = await createCommittedWorktree()
     const goals = fakeGoals([])
@@ -749,6 +812,7 @@ async function completionRequest(
     requiredChecksDigest: await store.save(CONFIG),
     requiredChecksStore: store,
     review: reviewEvent('pass', { binding: resultReference(binding), snapshotId: binding.snapshotId }),
+    taskWarnings: [],
     ...overrides,
   }
 }

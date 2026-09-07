@@ -359,12 +359,20 @@ export class GoalBindingComposition extends Service {
     // that check instead of being silently filtered here.
     const review = latestReview(state)
     if (review === undefined) return { kind: 'error', text: NO_REVIEW_TEXT }
+    // The graded memory-degradation records attributed to the current goal's
+    // bound tasks (AT3-07): a fail-graded record is the task's real failure
+    // evidence the admission consumes.
+    const boundTaskIds = new Set(
+      bindings.find(binding => binding.goalId === current.id)?.taskIds.map(taskId => String(taskId)) ?? [],
+    )
+    const taskWarnings = state.taskWarnings.filter(warning => boundTaskIds.has(String(warning.taskId)))
     const request: CompleteGoalRequest = {
       worktreePath,
       checks: verification.checks,
       requiredChecksDigest: verification.requiredChecks.digest,
       requiredChecksStore: this.requiredChecksStore,
       review,
+      taskWarnings,
     }
     const verdict = await controller.complete({ controllerSessionId, goalId: current.id }, request)
     if (verdict.kind !== 'admitted') {
