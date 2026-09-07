@@ -59,3 +59,5 @@
 
 - W-1（本文件建立）：基线如上。main@381f3dbc10，旧六链+两追加波已并，脏 376 保护。
 - W-2：用户补充核验发现合入——新增 B5（AT 矩阵 36 条对账，anchor-matrix.md not_run+旧缺口 vs docs/testAndAcceptance.zh.md 精确证据要求）；B4 勘误（S1 原失败=deepseek-official 缺凭据，非 huoshan 失败；huoshan 显式路由可推进真实任务）。
+- W-3（2026-09-07 晚）：实链缺口立 owner——编排宿主正式运行消费者（dispatch→assigned/developing→Worker 交付+真实 checks→reviewing→recordReview→submit→现有 project_integrate，复用 AgentEvidenceJournal，禁预制造 passed/submitted）派 A2（387b0963）；C2 出测试/证据面设计稿对齐；优先于并发扩张。main@0350415ac8（durable ack f4b32013ed+真实挂载 0350415ac8+devframe-profile 隔离层 aea4e51925）。
+- W-4（2026-09-07 晚）：接口裁定（V1.2）——checks/review 消费者复用其 task-consumer/delivery-consumer（./task-consumer、./delivery-consumer、./consumer，含 devframe/task-delivery 最新 delivery 精确引用），A2 不另造；A2 收窄至 host/bootstrap/profile 接线+真实根工作树/锁+startProject+leadRoleLanding+每任务已批准 digest+角色 allowlist+实际 shipped 工具+真实模型/重启验收。main@53884943fe（C harness 双 patch+全链设计稿+zh locale 小修）。
