@@ -98,9 +98,20 @@ evaluateCreation(creator: AgentBindingRecord, intent: CreationIntent): CreationD
  * @returns The published Agent and its durable binding.
  */
 async createChildAgent( parent: Agent, request: CreateChildAgentRequest, options: CreateChildAgentOptions = {}, ): Promise<CreatedChildAgent>
+
+/**
+ * Recover one reserved child without replacing its identity or replaying a task.
+ * Existing durable history is resumed; only a missing durable log permits
+ * fresh publication under the same reserved identity.
+ * @param parent - Exact live parent recorded by the reservation.
+ * @param request - Original role, plugin, task, cwd and worktree binding.
+ * @param options - Reserved Session identity and explicit host setup and route.
+ * @returns The recovered child and its unchanged durable binding.
+ */
+async recoverChildAgent( parent: Agent, request: CreateChildAgentRequest, options: CreateChildAgentOptions & { sessionId: SessionId }, ): Promise<CreatedChildAgent>
 ```
 
-Types: [Agent](core.zh.md)
+Types: [Agent](core.zh.md) · [SessionId](core.zh.md)
 
 Source: [`packages/experimental/agent-hierarchy/src/service.ts`](../../packages/experimental/agent-hierarchy/src/service.ts)
 <!-- END GENERATED cordis-surface -->
