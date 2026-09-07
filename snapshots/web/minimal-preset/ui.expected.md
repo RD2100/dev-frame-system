@@ -33,6 +33,9 @@
   - img
 - button "Branch into a new conversation":
   - img
+- button "Usage 28 tok":
+  - img
+  - text: Usage 28 tok
 - button "Ran for {{duration}}":
   - img
   - text: Ran for {{duration}}
