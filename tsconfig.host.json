@@ -304,6 +304,7 @@
     { "path": "./packages/experimental/project-memory" },
     { "path": "./packages/experimental/project-controller" },
     { "path": "./packages/experimental/agent-hierarchy" },
+    { "path": "./packages/experimental/agent-dispatch" },
     { "path": "./packages/experimental/agent-worktree" },
     { "path": "./packages/experimental/devframe" },
     { "path": "./packages/experimental/command-goal-binding" },
