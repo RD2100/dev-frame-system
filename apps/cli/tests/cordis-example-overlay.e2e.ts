@@ -1,17 +1,19 @@
-/** Candidate-command harness for the shipped opt-in Cordis example overlay:
- *  the real source CLI booted with an explicit root-level `--patch` of
- *  `apps/cli/config/examples/cordis/cordis.yml` over an isolated harness
- *  home, its readiness line observed on the overlay's own pinned 3081 port,
- *  and a controlled teardown. The 总控 boundary governs what this harness may
- *  claim: the example is an opt-in overlay, not the web default bundle, so a
- *  run here never speaks for the default 3080 deployment, and a scaffold
- *  composeEntries run never substitutes for this candidate-command path.
+/** Candidate-command harness for the shipped opt-in Cordis example overlay
+ *  plus its private DevFrame profile layer: the real source CLI booted with
+ *  two explicit root-level `--patch`es (the example overlay for the pinned
+ *  3081 webserver and tool-cordis, then
+ *  `packages/experimental/devframe-profile/cordis.patch.yml` for the six-row
+ *  hierarchy stack) over an isolated harness home, its readiness line
+ *  observed on the overlay's own pinned 3081 port, and a controlled teardown.
+ *  The 总控 boundary governs what this harness may claim: these are opt-in
+ *  overlays, not the web default bundle, so a run here never speaks for the
+ *  default 3080 deployment, and a scaffold composeEntries run never
+ *  substitutes for this candidate-command path.
  *  The dry-run test verifies the harness mechanism (boot, readiness,
- *  teardown); the full-candidate test additionally asserts the overlay's own
- *  rows mounted active through the real --patch (plugin-inventory RPC),
- *  including the hierarchy and dispatch rows the yml closure wired. Zero
- *  model calls: the isolated home carries no credentials and no session
- *  starts.
+ *  teardown); the full-candidate test additionally asserts every row from
+ *  both patches mounted active through the real --patch (plugin-inventory
+ *  RPC), including the hierarchy and dispatch rows. Zero model calls: the
+ *  isolated home carries no credentials and no session starts.
  */
 
 import type { ChildProcess } from 'node:child_process'
@@ -28,10 +30,11 @@ const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url))
 const DSH_SOURCE_BIN = join(REPO_ROOT, 'apps/cli/src/bin.ts')
 const TSX_LOADER = pathToFileURL(createRequire(join(REPO_ROOT, 'package.json')).resolve('tsx')).href
 const EXAMPLE_OVERLAY = join(REPO_ROOT, 'apps/cli/config/examples/cordis/cordis.yml')
-// The overlay's own webserver row pins this port; the harness passes no
-// --port so the readiness URL proves the overlay actually rode.
+const DEVFRAME_PATCH = join(REPO_ROOT, 'packages/experimental/devframe-profile/cordis.patch.yml')
+// The example overlay's own webserver row pins this port; the harness passes
+// no --port so the readiness URL proves the overlay actually rode.
 const OVERLAY_PORT = 3081
-// The overlay's own inserted rows; the full candidate verification asserts
+// Every row the two patches insert; the full candidate verification asserts
 // each mounted enabled and active through the real --patch.
 const OVERLAY_ROWS = [
   '@deepseek-ai/dsh-tool-cordis',
@@ -73,13 +76,14 @@ function cleanEnvironment(root: string, dshHome: string): NodeJS.ProcessEnv {
   }
 }
 
-/** Start the real source CLI with the example overlay and await readiness. */
+/** Start the real source CLI with both patches and await readiness. */
 async function startCandidateWeb(root: string, dshHome: string): Promise<RunningWeb> {
   const child = spawn(process.execPath, [
     '--import', TSX_LOADER,
     DSH_SOURCE_BIN,
     '--profile', 'web',
     '--patch', EXAMPLE_OVERLAY,
+    '--patch', DEVFRAME_PATCH,
     '--no-open',
   ], {
     cwd: REPO_ROOT,
