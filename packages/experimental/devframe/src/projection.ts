@@ -333,7 +333,11 @@ function assertRoleAssignments(
   const roles = new Set<string>()
   const sessions = new Set<string>()
   for (const assignment of policy.assignments) {
-    if (roles.has(assignment.role)) throw new Error(`DevFrame role "${assignment.role}" is assigned twice`)
+    // Leads are many — one per subtree of the three-tier tree; the legacy
+    // roles stay singletons per snapshot.
+    if (assignment.role !== 'lead' && roles.has(assignment.role)) {
+      throw new Error(`DevFrame role "${assignment.role}" is assigned twice`)
+    }
     if (sessions.has(assignment.sessionId)) throw new Error(`DevFrame Session "${assignment.sessionId}" has multiple roles`)
     roles.add(assignment.role)
     sessions.add(assignment.sessionId)
@@ -433,15 +437,24 @@ function applyVerification(state: DevFrameProjectionState, verification: DevFram
   state.verifications.push(cloneVerification(verification))
 }
 
-/** Apply one independent review record tied to an existing verification snapshot. */
+/**
+ * Apply one independent review record tied to an existing verification
+ * snapshot. The submitter must hold recorded reviewer authority: a dedicated
+ * reviewer or a hierarchy-authorized lead. The fold consumes only the durable
+ * role policy, so cold restore re-derives the same decision; the hierarchy
+ * truth behind a lead assignment (real lead, same plugin, parent, reviewed
+ * Worker independence) stays with the host's durable agent bindings and is
+ * re-verified by the review consumer.
+ */
 function applyReview(state: DevFrameProjectionState, review: DevFrameReviewEventData): void {
   assertResultBinding(state, review.binding)
   if (state.rolePolicy === null || state.rolePolicy.policyVersion !== review.policyVersion) {
     throw new Error(`DevFrame review "${review.reviewId}" uses an unavailable role policy version`)
   }
   if (!state.rolePolicy.assignments.some(assignment =>
-    assignment.role === 'reviewer' && assignment.sessionId === review.reviewerSessionId)) {
-    throw new Error(`DevFrame review "${review.reviewId}" was submitted by Session "${review.reviewerSessionId}" without the reviewer role`)
+    assignment.sessionId === review.reviewerSessionId
+    && (assignment.role === 'reviewer' || assignment.role === 'lead'))) {
+    throw new Error(`DevFrame review "${review.reviewId}" was submitted by Session "${review.reviewerSessionId}" without reviewer authority`)
   }
   if (!state.verifications.some(record => record.snapshotId === review.snapshotId
     && record.binding.goalId === review.binding.goalId)) {

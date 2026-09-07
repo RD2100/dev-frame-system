@@ -250,6 +250,31 @@ describe('DevFrame durable event vocabulary', () => {
         { role: 'controller', sessionId: SessionId('worker-one') },
       ],
     })).toThrow(/payload is invalid/)
+    // Leads are many: two lead assignments decode, the legacy singleton
+    // roles still do not repeat, and one Session cannot hold two roles.
+    expect(decodeDevFramePayload('devframe/role-policy', {
+      ...rolePolicy(),
+      assignments: [
+        { role: 'controller', sessionId: CONTROLLER },
+        { role: 'reviewer', sessionId: REVIEWER },
+        { role: 'lead', sessionId: SessionId('lead-one') },
+        { role: 'lead', sessionId: SessionId('lead-two') },
+      ],
+    }).assignments).toHaveLength(4)
+    expect(() => decodeDevFramePayload('devframe/role-policy', {
+      ...rolePolicy(),
+      assignments: [
+        { role: 'reviewer', sessionId: REVIEWER },
+        { role: 'reviewer', sessionId: SessionId('reviewer-two') },
+      ],
+    })).toThrow(/payload is invalid/)
+    expect(() => decodeDevFramePayload('devframe/role-policy', {
+      ...rolePolicy(),
+      assignments: [
+        { role: 'lead', sessionId: SessionId('lead-one') },
+        { role: 'worker', sessionId: SessionId('lead-one') },
+      ],
+    })).toThrow(/payload is invalid/)
     expect(() => decodeDevFramePayload('devframe/goal-binding', {
       ...binding(),
       budget: { maxAttempts: 1, consumedAttempts: 2 },
@@ -424,7 +449,7 @@ describe('DevFrame durable event vocabulary', () => {
       .toMatch(/unavailable role policy version/)
   })
 
-  it('rejects reviews from sessions without the reviewer role and snapshot swaps during replay', () => {
+  it('rejects reviews from sessions without reviewer authority and snapshot swaps during replay', () => {
     const impostor = session()
     const events = fullEventSet()
     impostor.append('devframe/role-policy', rolePolicy())
@@ -435,7 +460,7 @@ describe('DevFrame durable event vocabulary', () => {
       reviewerSessionId: SessionId('worker-one'),
     })
     expect(foldDevFrameState(impostor.snapshotEvents(), impostor.header).failure)
-      .toMatch(/without the reviewer role/)
+      .toMatch(/without reviewer authority/)
 
     const swapped = session()
     swapped.append('devframe/role-policy', rolePolicy())
@@ -468,6 +493,41 @@ describe('DevFrame durable event vocabulary', () => {
     })
     expect(foldDevFrameState(swappedVerification.snapshotEvents(), swappedVerification.header).failure)
       .toMatch(/does not match its binding/)
+  })
+
+  it('reads a lead-authored review through the live fold and cold restore', () => {
+    const LEAD = SessionId('lead-one')
+    const LEAD_TWO = SessionId('lead-two')
+    const events = fullEventSet()
+    const tree = session()
+    // The host records the real hierarchy's leads as reviewer-eligible
+    // assignments; several leads coexist in one snapshot.
+    tree.append('devframe/role-policy', rolePolicy({
+      assignments: [
+        { role: 'controller', sessionId: CONTROLLER },
+        { role: 'reviewer', sessionId: REVIEWER },
+        { role: 'lead', sessionId: LEAD },
+        { role: 'lead', sessionId: LEAD_TWO },
+      ],
+    }))
+    tree.append('devframe/goal-binding', binding())
+    tree.append('devframe/verification', events.verification)
+    tree.append('devframe/review', { ...events.review, reviewerSessionId: LEAD })
+
+    const state = foldDevFrameState(tree.snapshotEvents(), tree.header)
+    expect(state.failure).toBeNull()
+    expect(state.reviews.map(review => String(review.reviewerSessionId))).toEqual([String(LEAD)])
+
+    // Cold restore re-derives the same acceptance from the log alone.
+    const restored = Session.fromRestore(
+      tree.id,
+      structuredClone(tree.snapshotEvents()),
+      tree.header,
+      SessionLogOffset(0),
+    )
+    const coldState = foldDevFrameState(restored.snapshotEvents(), restored.header)
+    expect(coldState.failure).toBeNull()
+    expect(coldState.reviews).toHaveLength(1)
   })
 
   it('resets the current lifecycle projection for a subsequent Goal', () => {

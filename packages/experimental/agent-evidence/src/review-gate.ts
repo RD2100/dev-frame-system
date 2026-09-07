@@ -2,7 +2,8 @@
  * Reviewer authorization gate for DevFrame review recording. The gate is the
  * AT1-05 wrong-reviewer rejection: it consumes a host-wired SessionId-keyed
  * role directory and refuses any review submission whose Session the deployed
- * role policy has not assigned the reviewer role, with the stable
+ * role policy has not made reviewer-eligible — the reviewer role, or the
+ * hierarchy-authorized lead tier the host recorded — with the stable
  * `AGENT_EVIDENCE_REVIEWER_UNAUTHORIZED` code.
  *
  * The gate structurally satisfies the DevFrame journal's `DevFrameReviewGate`
@@ -15,8 +16,8 @@
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { AgentEvidenceError } from './errors.ts'
 
-/** The role value a Session must hold before it may submit a review. */
-const REVIEWER_ROLE = 'reviewer'
+/** The role values that make a Session reviewer-eligible. */
+const REVIEWER_ELIGIBLE_ROLES: ReadonlySet<string> = new Set(['reviewer', 'lead'])
 
 /**
  * SessionId-keyed role read face the gate authorizes against. Hosts wire it to
@@ -34,10 +35,10 @@ export interface EvidenceReviewerDirectory {
 }
 
 /**
- * Reject reviews submitted by Sessions without the reviewer role. Wired as the
- * required review gate of the DevFrame Session journal, so a review event whose
- * `reviewerSessionId` does not resolve to the reviewer role never reaches the
- * Session log.
+ * Reject reviews submitted by Sessions without recorded reviewer authority.
+ * Wired as the required review gate of the DevFrame Session journal, so a
+ * review event whose `reviewerSessionId` resolves to neither the reviewer
+ * role nor a hierarchy-authorized lead never reaches the Session log.
  */
 export class EvidenceReviewGate {
   private readonly directory: EvidenceReviewerDirectory
@@ -50,16 +51,17 @@ export class EvidenceReviewGate {
   }
 
   /**
-   * Reject a review submission whose Session holds no reviewer role.
+   * Reject a review submission whose Session holds no reviewer-eligible role.
    * @param sessionId - Reviewer Session identity carried by the review payload.
    * @returns Nothing; a rejection throws before the event is appended.
    * @throws {@link AgentEvidenceError} with code
    * `AGENT_EVIDENCE_REVIEWER_UNAUTHORIZED` when the Session lacks the role.
    */
   requireReviewer(sessionId: SessionId): void {
-    if (this.directory.roleOf(sessionId) !== REVIEWER_ROLE) {
+    const role = this.directory.roleOf(sessionId)
+    if (role === undefined || !REVIEWER_ELIGIBLE_ROLES.has(role)) {
       throw new AgentEvidenceError(
-        `review Session "${sessionId}" does not hold the "${REVIEWER_ROLE}" role`,
+        `review Session "${sessionId}" holds no reviewer-eligible role`,
         'AGENT_EVIDENCE_REVIEWER_UNAUTHORIZED',
       )
     }
