@@ -85,3 +85,12 @@
 - **②fail 终态→修复环消费**（51890974a8）：`/goal-complete` 旅程对 task-warning 拒绝走新臂 `renderRejectedCompletion`——在 AT1-08 规定的 call point（changes_required 拒绝后回送工作）为 fail 终态**记一次修复环**（`beginRepairRound`）：准入→文本报告"Repair round N was charged (M remaining)"；耗尽→"repair limit (2) is exhausted after 2 charged rounds; continuing requires a human-authorized resume"。其余拒绝阶段渲染零变化（fingerprint 阶段反例断言文本无修复环字样）。controller 面未动：拒绝仍是纯数据，计费发生在回送工作的旅程。测试贯穿真实 composition：三轮 /goal-complete（round 1→2→耗尽）、goal 保持 active、零 receipt。
 - **真实退出码**：host tsc **exit 0**；续轮消费套件 **6/6 exit 0**；real-composition **18/18 exit 0**；三包联合回归（devframe + command-goal-binding + goal-round-driver）**20 files / 308 tests exit 0**；gen/verify-persistence-catalog、verify-cordis-catalog 全 **exit 0**（无新事件类型、无新 service 面——纯监听器不设 ctx.* 缝，无需目录分类）。路由：零模型调用；TaskRecord/project-contracts 零改动；project-controller、profile/manifest/catalog、已删 src 产物路径零触碰。
 - **仍开放（如实）**：修复环的 worker 侧回送（谁把 round 送回同一 worker）属编排域后续片；人工 resume 的原生面（goals.resume）本片未包测试（既有原生服务面，非本域新增）。
+
+## 实装缺口补验片（总控转达独立同步审查"taskFailDisarm 未真实挂载"，4bd6345064；已并入 main dc118b84f5）
+
+独立审查属实：上节①的 disarm 监听器（以及 graded 监听器本尊——同缺口）仅 barrel 导出+自身单测挂载，**生产宿主零挂载**，合并说明的"fail→driver disarm"不能标生产闭合。本片补验后该面才真闭合。
+
+- **①真实挂载**（4bd6345064）：`GoalBindingComposition` 构造器（command-goal-binding 组合内，devframe 插件族的宿主装配点）经 `ctx.plugin` 在组合 fiber 上挂载两个监听器——graded 监听器（首次真实挂载）+ fail-disarm 监听器——**同进同出**（组合 fiber 生命周期）；无新 Loader 行、零 profile/manifest/config 写。挂载形状=模块命名空间（name/inject/apply）；直连 src 路径导入命名空间对象即 barrel 命名空间再导出所期望的形状（曾因按命名导出导入触发模块加载失败→Loader 报 invalid plugin，组合测试钉住）。
+- **②真实 Loader 组合验证**（A2 loader-composition 模式，devframe/tests/loader-composition.spec.ts）：cordis.yml 全栈（session、llm、jsonl 持久化、投影、system-prompt、tools、agent、agent-loop、commands、原生 goal 服务、project-memory 缺席 Vault、command-goal-binding、goal-round-driver）经真实 Loader 引导、零未挂载行。三断言：真实 memory_append（缺席 Vault）→ 经挂载的 graded 监听器落恰一条 fail 记录 → armed goal 经原生 port 实际 disarmed（phase 保留）；容忍判级 complete-with-warning → goal 保持 armed；已 disarmed 的 goal → 分级证据照常落日志、goal 态不触碰（守卫路径）。
+- **如实标注**：port 拒收收容语义仍在单测层钉住（对活 GoalService 同步派发窗内构造不出真实拒收，守卫路径即组合层的等价面）；零模型调用（无配置 agent、无轮次执行——真实 driver 在栈内但无可驱动面）。
+- **真实退出码**：host tsc **exit 0**；Loader 组合套件 **3/3 exit 0**；三包联合回归 **21 files / 311 tests exit 0**；verify-persistence-catalog、verify-cordis-catalog **exit 0**。路由：零模型调用；TaskRecord/project-contracts 零改动；project-controller、profile/manifest/catalog 零触碰。

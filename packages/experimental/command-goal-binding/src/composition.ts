@@ -35,6 +35,8 @@ import { devFrameProjectionDefinition } from '@deepseek-ai/dsh-experimental-devf
 import type { DevFrameProjectionState } from '@deepseek-ai/dsh-experimental-devframe/src/projection.ts'
 import { DevFrameSessionJournal } from '@deepseek-ai/dsh-experimental-devframe/src/session-journal.ts'
 import type { DevFrameReviewEventData, DevFrameVerificationEventData } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
+import * as taskWarningListenerPlugin from '@deepseek-ai/dsh-experimental-devframe/src/task-warning-listener.ts'
+import * as taskFailDisarmPlugin from '@deepseek-ai/dsh-experimental-devframe/src/task-fail-continuation.ts'
 import {
   GOAL_ALREADY_COMPLETE_TEXT,
   NO_BINDING_TEXT,
@@ -151,6 +153,13 @@ export class GoalBindingComposition extends Service {
     this.journal = compositionDevFrameJournal(flush, reviewerDirectory)
     this.evidenceJournal = new AgentEvidenceJournal({ flush, reviewerDirectory })
     ctx.sessionProjections.register(devFrameProjectionDefinition)
+    // The graded-listener family mounts here, on the composition fiber — same
+    // lifetime in, same lifetime out. The grading listener lands the per-task
+    // memory-degradation records; the fail-disarm listener withdraws automatic
+    // goal continuation from a fail-graded record through the native goal
+    // port the goal-round-driver obeys.
+    void ctx.plugin(taskWarningListenerPlugin)
+    void ctx.plugin(taskFailDisarmPlugin)
     ctx.effect(() => ctx.commands.register({
       ...goalCompleteDescriptor(),
       handler: invocation => this.completeCurrent({
