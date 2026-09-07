@@ -749,9 +749,12 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
     }
 
     const shell = process.platform === 'win32' ? 'pwsh' : 'bash'
-    const commitFor = (taskId: string): string => process.platform === 'win32'
-      ? `Set-Content -Path artifact-${taskId}.txt -Value '${taskId} artifact body' -Encoding utf8; git add artifact-${taskId}.txt; git commit -m '${taskId} artifact'`
-      : `printf '${taskId} artifact body' > artifact-${taskId}.txt && git add artifact-${taskId}.txt && git commit -m '${taskId} artifact'`
+    // The worker shell only writes its artifact; the commit itself rides the
+    // host's project_commit through the registry Service (the Worker shell
+    // never runs `git commit`).
+    const writeFileFor = (taskId: string): string => process.platform === 'win32'
+      ? `Set-Content -Path artifact-${taskId}.txt -Value '${taskId} artifact body' -Encoding utf8`
+      : `printf '${taskId} artifact body' > artifact-${taskId}.txt`
 
     /**
      * The exact registration state project_task start demands: both worker
@@ -830,7 +833,8 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       needle: 'worker-task-a-briefing-c14',
       turns: [
         { toolCalls: [
-          { id: 'shell-task-a', name: shell, arguments: { command: commitFor('task-a'), description: 'commit the task artifact' } },
+          { id: 'shell-task-a', name: shell, arguments: { command: writeFileFor('task-a'), description: 'write the task artifact' } },
+          { id: 'commit-task-a', name: 'project_commit', arguments: { taskId: 'task-a', paths: ['artifact-task-a.txt'], message: 'task-a artifact' } },
           { id: 'deliver-task-a', name: 'project_deliver', arguments: { taskId: 'task-a' } },
         ] },
         { text: 'WORKER_A_DONE_C14' },
@@ -840,7 +844,8 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       needle: 'worker-task-b-briefing-c14',
       turns: [
         { toolCalls: [
-          { id: 'shell-task-b', name: shell, arguments: { command: commitFor('task-b'), description: 'commit the task artifact' } },
+          { id: 'shell-task-b', name: shell, arguments: { command: writeFileFor('task-b'), description: 'write the task artifact' } },
+          { id: 'commit-task-b', name: 'project_commit', arguments: { taskId: 'task-b', paths: ['artifact-task-b.txt'], message: 'task-b artifact' } },
           { id: 'deliver-task-b', name: 'project_deliver', arguments: { taskId: 'task-b' } },
         ] },
         { text: 'WORKER_B_DONE_C14' },
@@ -1014,8 +1019,13 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       }
       for (const task of prepared.tasks) {
         const shellResult = toolResultById(`worker-${task.taskId}-briefing-c14`, `shell-${task.taskId}`)
-        expect(shellResult, `shell commit receipt for ${task.taskId}`).toBeDefined()
-        expect(shellResult!.startsWith('Error:'), `shell commit must succeed for ${task.taskId}: ${shellResult}`).toBe(false)
+        expect(shellResult, `shell write receipt for ${task.taskId}`).toBeDefined()
+        expect(shellResult!.startsWith('Error:'), `shell write must succeed for ${task.taskId}: ${shellResult}`).toBe(false)
+        const commitResult = toolResultById(`worker-${task.taskId}-briefing-c14`, `commit-${task.taskId}`)
+        expect(commitResult, `host commit receipt for ${task.taskId}`).toBeDefined()
+        expect(commitResult!.startsWith('Error:'), `the host commit must succeed for ${task.taskId}: ${commitResult}`).toBe(false)
+        const commitHead = /committed ([0-9a-f]{40}); worktree clean/u.exec(commitResult!)?.[1]
+        expect(commitHead, `commit receipt carries the new clean head for ${task.taskId}: ${commitResult}`).toBeTruthy()
         const deliverResult = toolResultById(`worker-${task.taskId}-briefing-c14`, `deliver-${task.taskId}`)
         expect(deliverResult, `real deliver receipt for ${task.taskId}`).toBeDefined()
         expect(deliverResult!.startsWith('Error:'), `delivery must not error for ${task.taskId}: ${deliverResult}`).toBe(false)
@@ -1038,7 +1048,8 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         }
         expect(delivery.deliveryId).toBeTruthy()
         expect(delivery.worktreePath).toBe(task.worktreePath)
-        expect(delivery.sourceCommit).toBeTruthy()
+        // The delivery's source commit is the host commit's receipt head.
+        expect(delivery.sourceCommit, `delivery commits the receipt head for ${task.taskId}`).toBe(commitHead)
         expect(delivery.binding?.goalId).toBeTruthy()
         const verifications = events.filter(event =>
           event.type === 'devframe/verification'
