@@ -127,7 +127,7 @@ export async function writeDigestPatch(home: string, prepared: PreparedScenario)
   const rows = prepared.tasks.map(task => [
     `      '${task.taskId}': '${String(task.digest)}'`,
   ].join('\n'))
-  const checkRows = prepared.tasks.map(task => {
+  const checkRows = prepared.tasks.map((task) => {
     const checks = approvedChecksFor(task.worktreePath, `artifact-${task.taskId}.txt`).checks
     return `        '${task.taskId}': ${JSON.stringify(checks)}`
   })
@@ -139,6 +139,11 @@ export async function writeDigestPatch(home: string, prepared: PreparedScenario)
     '    requiredChecksPath: !!js "process.env.DSH_CANDIDATE_HOME + \'/checks-ledger.json\'"',
     '    requiredChecksByTask:',
     ...rows,
+    // This final layer replaces the delivery row's whole config, so the
+    // commit path scope rides here too — otherwise the last patch would
+    // wipe the fixture overlay's commitPathsByTask.
+    '    commitPathsByTask:',
+    ...prepared.tasks.map(task => `      '${task.taskId}': ['artifact-${task.taskId}.txt']`),
     '    gitExecutable: git',
     '    gitTimeoutMs: 15000',
     '    gitMaxOutputBytes: 1048576',

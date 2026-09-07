@@ -1009,6 +1009,10 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       const byTask = parsedPatch[0]?.config?.requiredChecksByTask ?? {}
       const expected = expectedDigests(prepared)
       const decodedLogs = await decodeSessionLogs(dshHome)
+      // The merged goal-bound journal folds the delivery and verification
+      // evidence into the CONTROLLER's session log (the goal's owner), so
+      // the durable projection reads from the root log, not the workers'.
+      const rootEvents = parseLogEvents(await decodeSessionLog(rootLogPath()))
       const workerLogEvents = (taskId: string, needle: string): JournalEvent[] => {
         const sessionId = workerSessionIdByTask.get(taskId)
         expect(sessionId, `worker session id for ${taskId}`).toBeTruthy()
@@ -1035,8 +1039,10 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         expect(deliverResult).not.toBe(shellResult)
         expect(await ledgerStore.load(task.digest)).toEqual(approvedChecksFor(task.worktreePath, `artifact-${task.taskId}.txt`))
         expect(byTask[task.taskId]).toBe(expected[task.taskId])
-        const events = workerLogEvents(task.taskId, `worker-${task.taskId}-briefing-c14`)
-        const deliveries = events.filter(event =>
+        // The worker's own log still carries its briefing; the durable
+        // delivery and verification evidence folds in the root log.
+        workerLogEvents(task.taskId, `worker-${task.taskId}-briefing-c14`)
+        const deliveries = rootEvents.filter(event =>
           event.type === 'devframe/task-delivery' && String((event.data as { taskId?: unknown }).taskId) === task.taskId)
         expect(deliveries.length, `durable delivery event for ${task.taskId}`).toBeGreaterThanOrEqual(1)
         const delivery = deliveries.at(-1)!.data as {
@@ -1051,7 +1057,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         // The delivery's source commit is the host commit's receipt head.
         expect(delivery.sourceCommit, `delivery commits the receipt head for ${task.taskId}`).toBe(commitHead)
         expect(delivery.binding?.goalId).toBeTruthy()
-        const verifications = events.filter(event =>
+        const verifications = rootEvents.filter(event =>
           event.type === 'devframe/verification'
           && (event.data as { deliveryId?: unknown }).deliveryId === delivery.deliveryId)
         expect(verifications.length, `durable verification event for ${task.taskId}`).toBeGreaterThanOrEqual(1)
