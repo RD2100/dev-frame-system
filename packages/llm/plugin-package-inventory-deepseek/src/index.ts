@@ -6,7 +6,6 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join, parse } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { FiberState, type Context } from '@deepseek-ai/cordis'
@@ -68,18 +67,32 @@ function identityFromManifest(path: string, allowAnonymous: boolean): DeepSeekPl
   return { name: manifest.name, version: manifest.version }
 }
 
-/** Resolve a bare package without requiring it to export `./package.json`. */
-function barePackageManifest(packageName: string, anchors: readonly string[]): string | undefined {
-  for (const anchor of anchors) {
-    const searchPaths = createRequire(anchor).resolve.paths(packageName)
-    /* v8 ignore next -- active non-builtin package entries always have Node package search paths */
-    if (searchPaths === null) continue
-    for (const searchPath of searchPaths) {
-      const manifest = join(searchPath, packageName, 'package.json')
-      if (existsSync(manifest)) return manifest
-    }
-  }
-  return undefined
+/** The Node internal module loader the Loader drives for entry imports. */
+type InternalModuleLoader = NonNullable<Entry['loader']['internal']>
+
+/** Narrow a resolved module URL to the `file:` scheme a manifest lookup can read. */
+function fileModuleUrl(url: string): string | undefined {
+  return url.startsWith('file:') ? url : undefined
+}
+
+/**
+ * Resolve one specifier through the Loader's own module loader — the surface
+ * `EntryTree.import` drives for bare rows, where tsx registers its tsconfig
+ * `paths` resolution — so a bare entry's identity reads the same resolution
+ * fact its import already established instead of walking `node_modules` again.
+ * @param loader - the Loader that imported (and owns) the entry.
+ * @param specifier - the entry's own module specifier.
+ * @param parentUrl - the base URL the Loader's import resolved the specifier against.
+ * @returns the resolved `file:` URL, or `undefined` when the Loader exposes no
+ * resolution face or resolves the row outside the filesystem.
+ */
+async function loaderResolvedModuleUrl(loader: Entry['loader'], specifier: string, parentUrl: string): Promise<string | undefined> {
+  const internal: InternalModuleLoader | undefined = loader.internal
+  if (internal === undefined) return undefined
+  /* v8 ignore next 3 -- the primary lane runs Node 24 (v2 loader); Node 22 embedders keep the public async resolve */
+  return internal.version === 'v2'
+    ? fileModuleUrl(internal.resolveSync(parentUrl, { specifier }).url)
+    : fileModuleUrl((await internal.resolve(specifier, parentUrl, {})).url)
 }
 
 /** Find the nearest owning manifest for a relative or absolute plugin module. */
@@ -102,17 +115,24 @@ class PackageIdentityResolver {
   constructor(private readonly hostBaseUrl: string) {}
 
   /** Resolve one Loader entry's owning package, or absence for a non-package loose module. */
-  resolve({ entry, bareBaseUrl }: ActiveEntry): DeepSeekPluginPackageIdentity | undefined {
+  async resolve({ entry, bareBaseUrl }: ActiveEntry): Promise<DeepSeekPluginPackageIdentity | undefined> {
     /* v8 ignore next -- Loader entry trees inherit a base URL; the fallback supports direct embedders. */
     const treeBase = entry.parent.tree.ctx.baseUrl ?? this.hostBaseUrl
-    const anchors = [...new Set([bareBaseUrl ?? treeBase, treeBase, this.hostBaseUrl, import.meta.url])]
-    const key = `${anchors.join('\u0000')}\u0000${entry.options.name}`
+    // Bare rows re-resolve against the same parent URL their import used: the
+    // tree base for ordinary trees, the recorded harness base for standing
+    // preset mounts (`PresetTree.import`, mirrored by `bareBaseUrl`).
+    const parentUrl = bareBaseUrl ?? treeBase
+    const key = `${parentUrl}\u0000${treeBase}\u0000${entry.options.name}`
     if (this.cache.has(key)) return this.cache.get(key)
 
     const packageName = barePackageName(entry.options.name)
     let manifest: string | undefined
     if (packageName !== undefined) {
-      manifest = barePackageManifest(packageName, anchors)
+      const moduleUrl = await loaderResolvedModuleUrl(entry.loader, entry.options.name, parentUrl)
+      if (moduleUrl === undefined) {
+        throw new Error(`plugin-package-inventory-deepseek: cannot resolve active package ${JSON.stringify(packageName)}`)
+      }
+      manifest = nearestManifest(fileURLToPath(moduleUrl))
       if (manifest === undefined) {
         throw new Error(`plugin-package-inventory-deepseek: cannot resolve active package ${JSON.stringify(packageName)}`)
       }
@@ -169,7 +189,7 @@ async function collectActivePluginPackages(
   }
   const unique = new Map<string, DeepSeekPluginPackageIdentity>()
   for (const activeEntry of entries) {
-    const identity = resolver.resolve(activeEntry)
+    const identity = await resolver.resolve(activeEntry)
     if (identity === undefined) continue
     unique.set(`${identity.name}\u0000${identity.version}`, identity)
   }
