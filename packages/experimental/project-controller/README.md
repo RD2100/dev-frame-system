@@ -73,7 +73,7 @@ This section explains the design decisions behind the feature and points at the 
 
 | File | Role |
 |---|---|
-| [`src/controller.ts`](src/controller.ts) | The `ctx.projectController` service: lifecycle, task moves, budget, merge gate, restore |
+| [`src/controller.ts`](src/controller.ts) | The `ctx.projectController` service: lifecycle, task moves, budget, request charge (`chargeModelRequest` → `RequestChargeReceipt`), merge gate, restore |
 | [`src/spec.ts`](src/spec.ts) | The `project_tasks` domain spec and the zod record schema bound to the shared contract type |
 | [`src/errors.ts`](src/errors.ts) | `ProjectControllerError` and its stable code union |
 | [`src/index.ts`](src/index.ts) | Package entry and default export |

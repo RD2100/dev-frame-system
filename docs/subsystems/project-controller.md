@@ -158,6 +158,31 @@ async fail(taskId: TaskId, detail: TaskBlockDetail): Promise<TaskRecord>
 async resume(taskId: TaskId, assigneeSessionId?: SessionId): Promise<TaskRecord>
 
 /**
+ * Charge one granted-and-billed model request against the project's
+ * cumulative budget. The request that fills the last budget slot is
+ * admitted; any further charge is rejected until the deployment raises
+ * `requestBudget`. Concurrent charges from racing controller/child sessions
+ * serialize on the controller's write chain, so a full budget admits
+ * exactly one of them, and the charge persists before the receipt returns —
+ * a retry or a process restart never resets usage.
+ * @returns the receipt with the cumulative charged count, the configured
+ *   budget, and the remaining allowance after this charge.
+ * @throws {@link ProjectControllerError} with
+ *   `PROJECT_CONTROLLER_REQUEST_BUDGET_EXHAUSTED` when every budget unit is
+ *   already spent, `PROJECT_CONTROLLER_ADMISSION_CLOSED` when the project
+ *   lifecycle is not admitting dispatch work, or
+ *   `PROJECT_CONTROLLER_PERSISTENCE` when the usage write failed.
+ */
+async chargeModelRequest(): Promise<RequestChargeReceipt>
+
+/**
+ * Read the request-budget accounting without charging.
+ * @returns the configured budget, the cumulative charged count, and the
+ *   remaining allowance (clamped at zero once exhausted).
+ */
+requestBudgetUsage(): { readonly requestBudget: number readonly chargedRequests: number readonly remainingRequests: number }
+
+/**
  * Read one task from the restored board.
  * @param taskId - Task identity selecting the record.
  * @returns the record, or `undefined` when the task does not exist.

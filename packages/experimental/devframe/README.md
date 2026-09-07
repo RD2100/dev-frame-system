@@ -102,6 +102,7 @@ The shared types keep the project binding, configuration confirmation, lifecycle
 | [`src/hierarchy/index.ts`](src/hierarchy/index.ts) | Per-tier spawn overrides for the controller → lead → worker tree |
 | [`src/permissions/events.ts`](src/permissions/events.ts) | Persisted role and policy identity event contract |
 | [`src/reliability/stop.ts`](src/reliability/stop.ts) | Admission cutoff, owned cancellation, bounded drain, and writer release |
+| [`src/task-warning-listener.ts`](src/task-warning-listener.ts) | Host-assembly listener folding memory tool failures into at most one `devframe/task-warning` per task, graded by the explicitly declared per-session context (`DevFrameTaskGradingDeclaration`: the task id plus whether the task's acceptance requires memory) |
 | [`src/required-checks-file-store.ts`](src/required-checks-file-store.ts) | File-backed required-checks registration store: the durable digest → configuration JSON ledger |
 | [`src/required-checks.ts`](src/required-checks.ts) | Required-checks configuration schema, canonical digest, completion verdicts, and the digest → configuration registration store |
 | [`src/shared/types.ts`](src/shared/types.ts) | Branded work identities and binding persistence interfaces |

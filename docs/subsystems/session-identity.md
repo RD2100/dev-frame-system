@@ -54,6 +54,16 @@ async createBoundSession(request: CreateBoundSessionRequest): Promise<BoundSessi
 async bind(request: BindAgentRequest): Promise<AgentBindingRecord>
 
 /**
+ * Persist identity during the Agent factory's unpublished setup window.
+ * The factory retains Session ownership; this method never enters the store.
+ * If later setup fails, the binding remains reserved for explicit recovery.
+ * @param session - Factory-owned unpublished Session from the setup context.
+ * @param request - Role and ownership; identity and parent derive from the Session.
+ * @returns The durable binding, available before Agent publication.
+ */
+async bindPreparedSession( session: Session, request: Omit<BindAgentRequest, 'agentId' | 'sessionId' | 'parentSessionId'>, ): Promise<AgentBindingRecord>
+
+/**
  * Read one agent's binding from the restored index.
  * @param agentId - Live Agent registry identity selecting the record.
  * @returns the binding, or `undefined` when the agent has none.
@@ -74,7 +84,7 @@ byRole(role: AgentRole): readonly AgentBindingRecord[]
 list(): readonly AgentBindingRecord[]
 ```
 
-Types: [SessionId](core.md)
+Types: [Session](session.md) · [SessionId](core.md)
 
 Source: [`packages/experimental/session-identity/src/registry.ts`](../../packages/experimental/session-identity/src/registry.ts)
 <!-- END GENERATED cordis-surface -->

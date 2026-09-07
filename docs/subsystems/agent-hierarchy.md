@@ -54,6 +54,21 @@ roleOf(agent: Agent): AgentRole | undefined
  * @returns The verdict with a denial reason when refused.
  */
 evaluateCreation(creator: AgentBindingRecord, intent: CreationIntent): CreationDecision
+
+/**
+ * Create a child through the Agent factory with its role persisted in setup.
+ * The caller supplies a registered, independently owned worktree. This
+ * operation does not allocate a worktree or send a prompt.
+ * Persistence failures retain the session-identity registry's recovery semantics.
+ * Matching parent/task retries reuse the stored binding; changed requests and
+ * occupied worktrees reject. A persisted child whose Session is unavailable
+ * requires recovery rather than replacement.
+ * @param parent - Exact live delegating Agent with a durable role binding.
+ * @param request - Child role plus required task, explicit plugin scope, and registered worktree.
+ * @param options - Factory composition, model options, and cancellation signal.
+ * @returns The published Agent and its durable binding.
+ */
+async createChildAgent( parent: Agent, request: CreateChildAgentRequest, options: CreateChildAgentOptions = {}, ): Promise<CreatedChildAgent>
 ```
 
 Types: [Agent](core.md)

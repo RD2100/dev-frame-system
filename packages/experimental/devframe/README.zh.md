@@ -102,6 +102,7 @@ const request = { prompt: [], parent: leadAgent, ...overrides }
 | [`src/hierarchy/index.ts`](src/hierarchy/index.ts) | 总控 → 组长 → 执行树各档的 spawn 覆盖值 |
 | [`src/permissions/events.ts`](src/permissions/events.ts) | 持久化角色和策略身份事件契约 |
 | [`src/reliability/stop.ts`](src/reliability/stop.ts) | 接收截止、已拥有取消、有界排空和写入权释放 |
+| [`src/task-warning-listener.ts`](src/task-warning-listener.ts) | 宿主装配监听器：把 memory 工具失败折叠为每任务至多一条 `devframe/task-warning`，按显式声明的每会话上下文分级（`DevFrameTaskGradingDeclaration`：任务 id 加该任务验收是否必需 memory） |
 | [`src/required-checks-file-store.ts`](src/required-checks-file-store.ts) | 文件后备必需检查登记存储：digest → 配置 JSON 账本的 durable 边界 |
 | [`src/required-checks.ts`](src/required-checks.ts) | 必需检查配置 schema、规范 digest、完成判定与 digest → 配置登记存储 |
 | [`src/shared/types.ts`](src/shared/types.ts) | 带 brand 的工作身份和绑定持久化接口 |

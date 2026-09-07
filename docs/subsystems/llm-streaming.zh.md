@@ -392,6 +392,12 @@ declare class BlockAssembler {
   interruptedBlocks(): ContentBlock[];
   /** Usage from the `usage` chunk; undefined until one arrives. */
   get usage(): TokenUsage | undefined;
+  /**
+   * Provider misbehavior diagnosed during assembly: index-reuse fragments that
+   * were dropped to keep the owning call's arguments uncorrupted. Empty for a
+   * well-behaved stream.
+   */
+  get indexConflicts(): readonly string[];
   /** Finish reason from the `finish` chunk; `{kind: 'stop'}` when the stream ended without one. */
   get finish(): FinishReason;
   /**
