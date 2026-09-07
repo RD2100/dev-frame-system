@@ -61,6 +61,10 @@ function startBoundedGeneration(ctx: { agentReliability: AgentReliability }, ide
 }
 ```
 
+To stop in-flight work, pass the host's current-generation `StopProjectOptions` as `stop` in `openAdmission(identity, { deadline, stop })`. At expiry the timer closes service admission before invoking the existing `stopProject`; writer release follows confirmed cleanup and flush. `deadlineStopResult` exposes the result after triggering. Unconfirmed resources retain `needs_attention`.
+
+Explicit closure or reopen disarms an untriggered timer. Reopening during stop throws `AGENT_RELIABILITY_STOP_IN_PROGRESS` so an old release callback cannot affect a new generation. Service disposal clears the timer and awaits an already-triggered bounded stop. The timer does not keep Node alive; a process that exits before the deadline does not run deadline cleanup. The host supplies validated Config deadlines and grace plus real Agent, job, persistence, and writer adapters; omitting `stop` retains pre-step-only enforcement.
+
 ### Reconcile an uncertain call
 
 When a call's outcome is unknown, hand the plan to the reconciler: the probe checks external state first, and the retry runs at most once and only after the probe proved the effect absent.
@@ -117,7 +121,7 @@ This section explains the design decisions behind the feature and points at the 
 - **Fail-closed admission.** Admission starts closed in a fresh process and opens only for one explicit identity; the pre-step rejects closed admission and mismatched identities with separate stable codes, so dispatch wiring can distinguish "never admitted" from "wrong generation".
 - **The probe owns the retry decision.** `reconcileUncertainCall` has no blind-retry path by construction: the retry is invoked at most once, and only after the probe returned `absent`. `confirmed` settles from the probe alone; `still_uncertain` returns unresolved without resending — the caller decides what an unresolved call means.
 - **The flush barrier retains the writer.** A failed flush closes admission immediately and reports `writerRetained: true`; releasing write ownership is the host's move, and the barrier makes doing it on an unflushed log impossible through this seam.
-- **The deadline seam is enforced at the pre-step, not in stored state.** `openAdmission` accepts a cutoff and fails loud on a non-finite deadline without touching the current generation; from the deadline instant (inclusive) the pre-step rejects with `AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED` before the identity check — a passed deadline is a statement about the window, not the identity. `admissionState` keeps reporting the stored `'closed' | 'open'` decision; the deadline lives only in the dispatch gate, and recovery is an explicit reopen with a fresh generation.
+- **The deadline seam is enforced at the pre-step, not in stored state.** `openAdmission` accepts a cutoff and fails loud on a non-finite deadline without touching the current generation; from the deadline instant (inclusive) the pre-step rejects with `AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED` before the identity check — a passed deadline is a statement about the window, not the identity. `admissionState` keeps reporting the stored `'closed' | 'open'` decision; without `stop` only the dispatch gate enforces the cutoff; with `stop` the timer explicitly closes admission. Recovery requires an explicit reopen after stop finishes.
 
 ### Source map
 
@@ -152,15 +156,16 @@ Zero direct tokens on every request.
 
 Independent of live requests: the package never touches a request prefix, so it cannot invalidate provider cache reuse.
 
-<a id="known-limitations-and-deferred-work"></a>
 ## Known Limitations and Deferred Work
+
+<a id="known-limitations-and-deferred-work"></a>
 
 These limits define when the service is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
 
 - **Admission is process-local and fail-closed** — a restart loses the admitted identity and every pre-step rejects until the host reopens admission explicitly.
 - **The reconciler trusts its probe** — `absent` and `confirmed` answers are only as sound as the external-state check the caller supplies; the service cannot verify the probe inspects the right resource.
 - **The stop delegates to the DevFrame contract unchanged** — unresolved identities, retained writer ownership, and restart reconciliation follow the DevFrame stop semantics; the service adds no durable stop state of its own.
-- **The deadline does not cancel in-flight work** — work that already passed the pre-step keeps running after the cutoff instant; the bounded-cancellation half of AT4-06 awaits semantics adjudication.
+- **Automatic stop requires real host adapters** — deployments without `cutoff.stop` only reject subsequent dispatch. Project acceptance must exercise the actual host and durable writer lock.
 
 <a id="dev-note"></a>
 ### Dev Note

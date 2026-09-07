@@ -274,3 +274,136 @@ export function devframeResumeDescriptor(): DevframeResumeCommandShape {
     description: DEVFRAME_RESUME_DESCRIPTION,
   }
 }
+
+/** The slash-command name of the stop verb (without the leading slash). */
+export const DEVFRAME_STOP_COMMAND_NAME = 'devframe-stop'
+
+/** Human-readable discovery summary for the stop command descriptor. */
+export const DEVFRAME_STOP_DESCRIPTION
+  = 'request a human-authorized stop of the current bound goal'
+
+/** The slash-command name of the abandon verb (without the leading slash). */
+export const DEVFRAME_ABANDON_COMMAND_NAME = 'devframe-abandon'
+
+/** Human-readable discovery summary for the abandon command descriptor. */
+export const DEVFRAME_ABANDON_DESCRIPTION
+  = 'abandon the stopped or unfinished bound goal and clear its native Goal without claiming completion'
+
+/** Stable data error: the stop line carries unexpected input. */
+export const STOP_INPUT_UNEXPECTED_TEXT
+  = '/devframe-stop takes no input. Invoke it as "/devframe-stop" with nothing after the command name.'
+
+/** Stable data error: no goal is current for the stop lane. */
+export const STOP_NO_CURRENT_GOAL_TEXT
+  = 'No goal is currently set. Start one with /devframe-start before using /devframe-stop.'
+
+/** Stable data error: neither the log projection nor the store holds a stoppable binding. */
+export const STOP_NO_BINDING_RECORD_TEXT
+  = 'The current goal has no goal-binding record in this session log or binding store, so it cannot be stopped through /devframe-stop.'
+
+/** Stable data error: a stop request is already pending for the current goal. */
+export const STOP_ALREADY_PENDING_TEXT
+  = 'A stop request is already pending for the current goal; /devframe-stop refuses to issue a second request while the stop flow is unresolved.'
+
+/** Stable data error: the abandon line carries unexpected input. */
+export const ABANDON_INPUT_UNEXPECTED_TEXT
+  = '/devframe-abandon takes no input. Invoke it as "/devframe-abandon" with nothing after the command name.'
+
+/** Stable data error: no goal is current for the abandon lane. */
+export const ABANDON_NO_CURRENT_GOAL_TEXT
+  = 'No goal is currently set. Start one with /devframe-start before using /devframe-abandon.'
+
+/** Stable data error: neither the log projection nor the store holds an abandonable binding. */
+export const ABANDON_NO_BINDING_RECORD_TEXT
+  = 'The current goal has no goal-binding record in this session log or binding store, so it cannot be abandoned through /devframe-abandon.'
+
+/** Stable data error: the binding is neither admission-open nor stopped. */
+export const ABANDON_UNRESOLVED_STATE_TEXT
+  = 'The current goal binding is neither admission-open nor stopped; resolve the pending stop flow before /devframe-abandon.'
+
+/** Stable data error: the resume target binding is mid-stop. */
+export const RESUME_STOP_PENDING_TEXT
+  = 'The current goal has a pending stop; the stop flow must land the stopped binding before /devframe-resume can run.'
+
+/**
+ * Parse the raw text following `/devframe-stop`. The whole trimmed remainder
+ * must be empty; any residue is a data error at the handler.
+ * @param rawInput - verbatim command text following the command name.
+ * @returns the trimmed residue, empty for the bare form.
+ */
+export function parseDevframeStopInput(rawInput: string): string {
+  return rawInput.trim()
+}
+
+/**
+ * Parse the raw text following `/devframe-abandon`. The whole trimmed
+ * remainder must be empty; any residue is a data error at the handler.
+ * @param rawInput - verbatim command text following the command name.
+ * @returns the trimmed residue, empty for the bare form.
+ */
+export function parseDevframeAbandonInput(rawInput: string): string {
+  return rawInput.trim()
+}
+
+/**
+ * Render the stop success adjudication. The text stays stage-shaped and
+ * never exposes the goal id, revision, or confirmation id.
+ * @returns the stable success text without opaque ids.
+ */
+export function renderStopSuccess(): string {
+  return 'Bound goal stop requested. The stop-requested binding was recorded in this session log and goal continuation is disarmed; the stop flow owns quiescence confirmation.'
+}
+
+/**
+ * Render the abandon success adjudication. The text stays stage-shaped and
+ * never exposes the goal id, revision, or confirmation id.
+ * @returns the stable success text without opaque ids.
+ */
+export function renderAbandonSuccess(): string {
+  return 'Bound goal abandoned. The native Goal was cleared behind a durable tombstone, the binding history was retained, and no completion was claimed.'
+}
+
+/**
+ * The frozen descriptor part of the stop command definition. Like the resume
+ * verb, the stop verb advertises no input: "no hint" is the absent `input`
+ * descriptor rather than an empty string.
+ */
+export interface DevframeStopCommandShape {
+  /** Command name without the leading slash. */
+  readonly name: typeof DEVFRAME_STOP_COMMAND_NAME
+  /** Human-readable discovery summary. */
+  readonly description: typeof DEVFRAME_STOP_DESCRIPTION
+}
+
+/**
+ * Assemble the immutable descriptor part of the stop command definition.
+ * @returns the name/description pair for `ctx.commands.register`.
+ */
+export function devframeStopDescriptor(): DevframeStopCommandShape {
+  return {
+    name: DEVFRAME_STOP_COMMAND_NAME,
+    description: DEVFRAME_STOP_DESCRIPTION,
+  }
+}
+
+/**
+ * The frozen descriptor part of the abandon command definition. Like the
+ * resume verb, the abandon verb advertises no input.
+ */
+export interface DevframeAbandonCommandShape {
+  /** Command name without the leading slash. */
+  readonly name: typeof DEVFRAME_ABANDON_COMMAND_NAME
+  /** Human-readable discovery summary. */
+  readonly description: typeof DEVFRAME_ABANDON_DESCRIPTION
+}
+
+/**
+ * Assemble the immutable descriptor part of the abandon command definition.
+ * @returns the name/description pair for `ctx.commands.register`.
+ */
+export function devframeAbandonDescriptor(): DevframeAbandonCommandShape {
+  return {
+    name: DEVFRAME_ABANDON_COMMAND_NAME,
+    description: DEVFRAME_ABANDON_DESCRIPTION,
+  }
+}

@@ -135,3 +135,10 @@
 
 - 收敛线解除：main 0d739d2df2 并入 B1 审定提交（durable required-checks 面：requiredChecksPath 必填绝对路径+FileRequiredChecksConfigStore 插件注入+单写者；冷重启 19 项+ACP 双进程录制+独立审查 PASS）。本树消费后 AT1-09 旅程末尾由"REQUIRED_CHECKS_CONFIG_NOT_FOUND 最小可达阶段断言"推进为**真实 completed**（此前登记的结构墙闭合）：B 在非 start boot 带自身授权审查真实完成（成功文本/身份保持/phase complete/revision+2/admission closed）；同一绝对 checks ledger 跨三 boot 字节不变（A 起始注册→B 幂等重注册→完成仅 load）；AT1-10 完成侧保持=receipt 注明 B 完成身份+completion-admission 证据、B 预算跨 boot 保持 [1,2] 不重置、A 迟到结果保持 A 元组、durable 日志载 receipt（下一 boot 可恢复）。harness 适配由 b0aafa900a 自带（boot() 从共享 storageRoot 派生 requiredChecksPath）。20/20 exit 0 ×3（Worker×2+Lead 验收×1）；实现 Worker 显式 huoshan-2 路由+Lead 独立 diff 审查。
 - 登记事实：binding lifecycle 词汇表无 `completed` 值（完成经原生 goal/change receipt 可观察，devframe binding 停在最后 admission_open）——词汇面事实非缺陷，未改。第 4 boot 未加（durable receipt 断言已覆盖恢复内容，范围决策）。AT1-10 的 stop/abandon 专用命令面与启动中断注入仍未闭合（独立后续切片）。
+
+### AT1-10 范围纠偏（V1.2 增量核对触发，2026-09-08，8bfe2d28ad 后）
+
+- **纠偏成立**：AT1-10 原文（docs/testAndAcceptance.zh.md:86）要求旅程"停止→**修改检查、恢复**→查看结果→放弃"且"**修改检查使证据失效**但不重置用量"。8bfe2d28ad 的 checks-change 切片只闭"不重置用量"半边；其 spec（checks-change-composition.spec.ts:295-297 断言恢复保持 v1 冻结 hash、:346-349 断言改检查前旧证据照常 admitted）与"证据失效"要求**方向相反**——现状态=改检查只铸造下一个 Goal 的 hash，运行中 Goal 永不采纳新检查。**AT1-10 checks-change 面保持未完成**，此前报告不得读作该面闭合。
+- **缺口 #1（改检查→证据失效路径）**：须补真实授权路径=人工改检查→恢复→绑定在新代际采纳新 acceptanceHash→旧代际证据在新代际 admission 下被拒→用量跨代际保持→新检查下重新取证→完成。immutable binding 折叠拒改（'changed its immutable binding'）保护证据归属完整性，方案须在现有契约内：新代际绑定记录（沿用 resume revision+1 代际机制）显式承继旧代际并携带用量连续性，同代际 hash 变更仍拒；设计待总控裁定后实施，不降验收标准。
+- **缺口 #2（真实 stop 可靠性接线）**：8bfe2d28ad 的 stop flow quiescence/stopped 记录为词汇级测试手落，非真实可靠性链；接线时注意已登记的重复 stop_requested 折叠缺口（绑定已进 stop_requested 后 flow 首个同名记录 fold 失败——applyLifecycle 拒重复观察）。
+- 主树 background workflow 激活协调期（h2 reviewer 75a7 收尾中）：不再开同步前台 workflow 派发。
