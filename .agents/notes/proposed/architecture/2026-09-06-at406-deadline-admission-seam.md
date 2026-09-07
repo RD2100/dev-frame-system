@@ -4,6 +4,8 @@ Status: proposed
 
 English | [中文](2026-09-06-at406-deadline-admission-seam.zh.md)
 
+The cutoff-only contract remains applicable. [Native deadline stop](../../implemented/architecture/2026-09-08-admission-deadline-native-stop.md) addresses the deferred in-flight cancellation mechanism when a host supplies stop adapters; full project acceptance and the time-source alternative remain outside that mechanism.
+
 ## Problem
 
 AT4 delivery registered GAP AT4-06: a short deadline's expiry must close admission and cancel bounded work, but the agent-reliability src had no deadline implementation seam. The only deadline in the tree was the DevFrame stop's internal grace bound, which is not wired to admission, and the anchor-matrix likewise noted "no cases, assigned to P06". A dispatch generation could therefore run unbounded: the pre-step checked only closed admission and identity, so a window that was supposed to end at an instant kept admitting work forever.

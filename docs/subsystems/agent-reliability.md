@@ -43,11 +43,15 @@ The agent reliability service: stop productization, admission cutoff, reconcilia
  * deadline is already past opens fine; its first pre-step call rejects.
  * @param identity - The work binding every pre-step will require.
  * @param cutoff - Optional deadline bound for this generation, a wall-clock
- * epoch millisecond instant the pre-step reads via `Date.now()`.
+ * epoch millisecond instant the pre-step reads via `Date.now()`. Supplying
+ * `cutoff.stop` also schedules the native stop protocol. Reopen or explicit
+ * closure disarms an untriggered timer; service disposal awaits a triggered stop.
  * @throws {@link AgentReliabilityError} with code
  * `AGENT_RELIABILITY_ADMISSION_DEADLINE_INVALID` when `cutoff.deadline`
  * is defined but not a finite epoch millisecond instant; nothing is
- * mutated in that case.
+ * mutated in that case, or when the stop grace is invalid. Throws
+ * `AGENT_RELIABILITY_STOP_IN_PROGRESS` if the old stop still owns cleanup;
+ * reopening is allowed only after its result settles.
  */
 openAdmission(identity: GoalBindingIdentity, cutoff?: AdmissionCutoff): void
 

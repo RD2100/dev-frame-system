@@ -15,7 +15,8 @@
  *   may bound a generation with an epoch deadline ({@link AdmissionCutoff});
  *   from that instant (inclusive) the pre-step rejects with
  *   `AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED`, and recovery is only an
- *   explicit reopen (a new generation).
+ *   explicit reopen (a new generation). An optional native stop adapter also
+ *   closes admission and drains in-flight work when that deadline fires.
  * - **Uncertain-call reconciliation**: when a call's outcome is unknown, the
  *   probe runs first — an operation is retried only after the external state
  *   check proves its effect absent. There is no blind-retry path.
@@ -29,6 +30,7 @@
  */
 
 import { Service, type Context } from '@deepseek-ai/cordis'
+import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { stopProject as stopProjectProcessTree } from '@deepseek-ai/dsh-experimental-devframe/reliability'
 import type { GoalBindingIdentity } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
 import type { StopProjectOptions, StopResult } from '@deepseek-ai/dsh-experimental-devframe/reliability'
@@ -47,6 +49,8 @@ export type ReliabilityAdmission = 'closed' | 'open'
 export interface AdmissionCutoff {
   /** Epoch milliseconds; the instant the admission window closes (inclusive). */
   readonly deadline: number
+  /** Native stop adapters for this generation; omission enforces only the pre-step cutoff. */
+  readonly stop?: StopProjectOptions
 }
 
 /** External-state answer a reconciliation probe must return. */
@@ -104,9 +108,17 @@ export class AgentReliability extends Service {
   private admission: ReliabilityAdmission = 'closed'
   private admittedWork: GoalBindingIdentity | undefined
   private admittedCutoff: number | undefined
+  private deadlineTimer: ReturnType<typeof setTimeout> | undefined
+  private generation = 0
+  private stopping = false
+  private deadlineResult: Promise<StopResult> | undefined
 
   constructor(ctx: Context) {
     super(ctx, 'agentReliability')
+    ctx.effect(() => async () => {
+      this.closeAdmission()
+      await this.deadlineResult
+    })
   }
 
   /**
@@ -116,11 +128,15 @@ export class AgentReliability extends Service {
    * deadline is already past opens fine; its first pre-step call rejects.
    * @param identity - The work binding every pre-step will require.
    * @param cutoff - Optional deadline bound for this generation, a wall-clock
-   * epoch millisecond instant the pre-step reads via `Date.now()`.
+   * epoch millisecond instant the pre-step reads via `Date.now()`. Supplying
+   * `cutoff.stop` also schedules the native stop protocol. Reopen or explicit
+   * closure disarms an untriggered timer; service disposal awaits a triggered stop.
    * @throws {@link AgentReliabilityError} with code
    * `AGENT_RELIABILITY_ADMISSION_DEADLINE_INVALID` when `cutoff.deadline`
    * is defined but not a finite epoch millisecond instant; nothing is
-   * mutated in that case.
+   * mutated in that case, or when the stop grace is invalid. Throws
+   * `AGENT_RELIABILITY_STOP_IN_PROGRESS` if the old stop still owns cleanup;
+   * reopening is allowed only after its result settles.
    */
   openAdmission(identity: GoalBindingIdentity, cutoff?: AdmissionCutoff): void {
     if (cutoff?.deadline !== undefined && !Number.isFinite(cutoff.deadline)) {
@@ -129,14 +145,56 @@ export class AgentReliability extends Service {
         'AGENT_RELIABILITY_ADMISSION_DEADLINE_INVALID',
       )
     }
+    if (cutoff?.stop !== undefined && (!Number.isFinite(cutoff.stop.graceMs)
+      || cutoff.stop.graceMs <= 0 || cutoff.stop.graceMs > MAX_TIMER_DELAY_MS)) {
+      throw new AgentReliabilityError('stop graceMs must be a positive finite timer delay', 'AGENT_RELIABILITY_ADMISSION_DEADLINE_INVALID')
+    }
+    if (this.stopping) {
+      throw new AgentReliabilityError('deadline stop is still running; admission cannot reopen', 'AGENT_RELIABILITY_STOP_IN_PROGRESS')
+    }
+    this.clearDeadlineTimer()
+    this.deadlineResult = undefined
     this.admittedWork = { controllerSessionId: identity.controllerSessionId, goalId: identity.goalId }
     this.admittedCutoff = cutoff?.deadline
     this.admission = 'open'
+    if (cutoff?.stop !== undefined) this.armDeadline(cutoff.deadline, cutoff.stop)
   }
 
   /** Close dispatch admission; the identity is kept so stop flows can report it. */
   closeAdmission(): void {
     this.admission = 'closed'
+    this.clearDeadlineTimer()
+  }
+
+  /** Result of the current generation's triggered stop; undefined until its deadline fires. */
+  get deadlineStopResult(): Promise<StopResult> | undefined {
+    return this.deadlineResult
+  }
+
+  private clearDeadlineTimer(): void {
+    this.generation += 1
+    clearTimeout(this.deadlineTimer)
+    this.deadlineTimer = undefined
+  }
+
+  private armDeadline(at: number, options: StopProjectOptions): void {
+    const generation = this.generation
+    const tick = (): void => {
+      if (generation !== this.generation) return
+      const remaining = at - Date.now()
+      if (remaining > 0) {
+        this.deadlineTimer = setTimeout(tick, Math.min(remaining, MAX_TIMER_DELAY_MS))
+        this.deadlineTimer.unref()
+        return
+      }
+      this.closeAdmission()
+      this.stopping = true
+      this.deadlineResult = this.stopProject(options).catch((): StopResult => ({
+        status: 'needs_attention', remaining: [{ resource: 'deadline-stop', reason: 'operation_failed' }],
+      })).finally(() => { this.stopping = false })
+    }
+    this.deadlineTimer = setTimeout(tick, Math.max(0, Math.min(at - Date.now(), MAX_TIMER_DELAY_MS)))
+    this.deadlineTimer.unref()
   }
 
   /** The current admission state and, when open, the admitted identity. */
@@ -148,7 +206,8 @@ export class AgentReliability extends Service {
    * The stored cutoff instant of the current generation; `undefined` when the
    * generation has no cutoff. Note: `admissionState` stays the stored
    * generation decision (`'closed' | 'open'` — the union does not change);
-   * the deadline is enforced at the pre-step, the single dispatch gate.
+   * pre-step cutoff enforcement alone does not mutate that state. A scheduled
+   * native stop explicitly closes admission when its timer fires.
    */
   get admissionCutoff(): number | undefined {
     return this.admittedCutoff
@@ -177,7 +236,7 @@ export class AgentReliability extends Service {
     const admitted = this.admittedWork
     if (admitted.controllerSessionId !== identity.controllerSessionId || admitted.goalId !== identity.goalId) {
       throw new AgentReliabilityError(
-        `work binding does not match the admitted identity; dispatch rejected`,
+        'work binding does not match the admitted identity; dispatch rejected',
         'AGENT_RELIABILITY_IDENTITY_MISMATCH',
       )
     }

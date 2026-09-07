@@ -43,6 +43,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SubprocessHandle } from '@deepseek-ai/dsh-subprocess'
 import { spawnSubprocess } from '../../../subprocess/subprocess-local/src/spawn.ts'
 import AgentReliability, { AgentReliabilityError } from '../src/index.ts'
+import type { StopProjectOptions } from '../src/index.ts'
 
 const HEARTBEAT_MS = 40
 const IDENTITY = { controllerSessionId: ControllerSessionId('controller-at4-03'), goalId: GoalId('goal-at4-03') }
@@ -149,7 +150,7 @@ function expectAssertRejected(assert: () => void, failure: { code: string; messa
 }
 
 describe('AT4-03 process tree stop journey', () => {
-  it('stops a real heartbeat tree: tree ends, output stops, callbacks settle, writer released last', async () => {
+  it.each(['manual', 'deadline'] as const)('stops a real heartbeat tree via %s: writer released after exit', async (trigger) => {
     const root = await mkdtemp(join(tmpdir(), 'at4-03-'))
     tempRoots.push(root)
     const heartbeat = join(root, 'heartbeat.log')
@@ -193,7 +194,7 @@ describe('AT4-03 process tree stop journey', () => {
       }, { timeout: 5000 })
       expect(processPresent(published.grandchildPid)).toBe(true)
 
-      const result = await service.stopProject({
+      const options: StopProjectOptions = {
         agents: [agent],
         registry: { get: () => agent },
         goals: {
@@ -218,7 +219,12 @@ describe('AT4-03 process tree stop journey', () => {
           // The release-time snapshot: the tree must already be gone.
           grandchildAbsentAtRelease = !processPresent(published.grandchildPid)
         },
-      })
+      }
+      if (trigger === 'deadline') {
+        service.openAdmission(IDENTITY, { deadline: Date.now() + 10, stop: options })
+        await vi.waitFor(() => { expect(service.deadlineStopResult).toBeDefined() })
+      }
+      const result = await (trigger === 'deadline' ? service.deadlineStopResult : service.stopProject(options))
 
       // Callbacks settle in the productized order...
       expect(result).toEqual({ status: 'stopped', remaining: [] })
@@ -230,7 +236,7 @@ describe('AT4-03 process tree stop journey', () => {
         'releaseWriter',
       ])
       // ...and the stop closed the service's dispatch admission fail-loud.
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY), ADMISSION_CLOSED)
+      expectAssertRejected(() => { service.assertAdmitted(IDENTITY) }, ADMISSION_CLOSED)
 
       // The tree ended, double-evidenced: the child's exit event fired with
       // termination facts (POSIX carries the death on the signal, Windows on
