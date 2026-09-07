@@ -283,7 +283,10 @@ describe('project task consumer through the real Loader', () => {
       const f = await deliverySetup()
       await f.start(true)
       expect(f.adapter.maxActive).toBe(2)
-      expect(f.ctx.projectController.list().map(task => task.state)).toEqual(['reviewing', 'reviewing'])
+      expect(f.ctx.projectController.list().map(task => task.state), JSON.stringify({
+        results: [f.workerA, f.workerB].flatMap(worker => worker.session.snapshotEvents().filter(event => event.type === 'tool/result')),
+        verifications: f.ctx.sessionProjections.stateOf(f.controller.session, 'devframe')?.verifications,
+      })).toEqual(['reviewing', 'reviewing'])
       const state = f.ctx.sessionProjections.stateOf(f.controller.session, 'devframe')!
       expect(state.failure).toBeNull()
       expect(state.deliveries).toHaveLength(2)
@@ -387,7 +390,8 @@ describe('project task consumer through the real Loader', () => {
         await queued.promise
         await f.ctx.worktreeRegistry.unbind(f.trees[3]!.id, WorktreeLockHolder(f.workerB.id))
         release.resolve(undefined)
-        expect((await first).isError).not.toBe(true)
+        const firstResult = await first
+        expect(firstResult.isError, JSON.stringify(firstResult)).not.toBe(true)
         expect((await second).isError).toBe(true)
         const state = f.ctx.sessionProjections.stateOf(f.controller.session, 'devframe')!
         expect(state.deliveries.map(item => String(item.taskId))).toEqual(['task-a'])
@@ -407,9 +411,17 @@ describe('project task consumer through the real Loader', () => {
       const table = f.ctx.storageDomain.get('project_tasks')!.table('tasks')
       const spy = vi.spyOn(table, 'put').mockRejectedValueOnce(new Error('board write interrupted'))
       const args = { taskId: 'task-a', decision: 'changes_required', findings: [{ id: 'fix', severity: 'blocking', message: 'Correct the output' }] }
-      try { expect((await f.tool(f.lead, 'project_review', args)).isError).toBe(true) }
+      let reviewResult: Awaited<ReturnType<typeof f.tool>> | undefined
+      try {
+        reviewResult = await f.tool(f.lead, 'project_review', args)
+        expect(reviewResult.isError, JSON.stringify(reviewResult)).toBe(true)
+      }
       finally { spy.mockRestore() }
-      expect(f.ctx.projectController.find(TaskId('task-a'))?.state).toBe('reviewing')
+      expect(f.ctx.projectController.find(TaskId('task-a'))?.state, JSON.stringify({
+        reviewResult,
+        results: f.workerA.session.snapshotEvents().filter(event => event.type === 'tool/result'),
+        verifications: f.ctx.sessionProjections.stateOf(f.controller.session, 'devframe')?.verifications,
+      })).toBe('reviewing')
       expect((await f.tool(f.lead, 'project_review', args)).isError).not.toBe(true)
       expect(f.ctx.projectController.find(TaskId('task-a'))?.state).toBe('developing')
       const state = f.ctx.sessionProjections.stateOf(f.controller.session, 'devframe')!

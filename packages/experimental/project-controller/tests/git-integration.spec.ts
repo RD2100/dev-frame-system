@@ -44,9 +44,10 @@ async function fixture() {
 
 afterEach(async () => {
   for (const root of roots.splice(0).reverse()) await rm(root, { recursive: true, force: true })
-})
+}, 30_000)
 
-describe('controller Git integration', () => {
+// Linked worktrees and repeated Git preflights share the controller integration suite's process budget.
+describe('controller Git integration', { timeout: 30_000 }, () => {
   it('fast-forwards the exact reviewed commit and recovers its applied observation without another merge', async () => {
     const request = await fixture()
     const result = await executeIntegrationGit(request, options)
