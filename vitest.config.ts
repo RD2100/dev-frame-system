@@ -133,10 +133,12 @@ if (coveragePartitionRaw !== undefined && coveragePartitionRaw !== '' && coverag
 }
 const coveragePartitionMode = coveragePartitionRaw === '1'
 
-// These suites exercise process-global state, process APIs, or timing-sensitive process I/O
-// that worker threads cannot isolate reliably under aggregate gate contention.
-// Keep the narrow exception in forks while the rest of the inventory avoids per-file processes.
+// These suites exercise process-global state, process APIs, or repeated native subprocess setup.
+// Keep their inventory separate so runner timeouts cover setup and teardown under contention.
 const processBoundTests = [
+  'packages/experimental/project-controller/tests/git-integration.spec.ts',
+  'packages/experimental/project-controller/tests/task-consumer-loader.spec.ts',
+  'packages/experimental/agent-dispatch/tests/agent-dispatch.spec.ts',
   'packages/session/session-persistence-jsonl/tests/jsonl.spec.ts',
   'packages/subagent/subagent-acp/tests/subagent-acp.spec.ts',
   'packages/subprocess/subprocess-local/tests/process-exit.spec.ts',
@@ -179,6 +181,9 @@ export default defineConfig({
         plugins: [pathsPlugin(), standardDecoratorPlugin()],
         test: {
           name: 'process-bound',
+          // Native Git and Loader fixtures use the Windows lane's test and teardown budget.
+          testTimeout: 90_000,
+          hookTimeout: 90_000,
           execArgv: vitestExecArgv,
           pool: 'forks',
           setupFiles: ['./scripts/test-invariants.ts'],
