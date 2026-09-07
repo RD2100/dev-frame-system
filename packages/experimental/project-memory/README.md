@@ -34,6 +34,8 @@ pnpm dsh plugin --profile headless add ./packages/experimental/project-memory
 
 The command initializes a custom profile with `@deepseek-ai/dsh-base` first and links the package from the checkout; the manifest's `dsh.bundle.patch` declaration is what makes it join the ordered layer stack instead of staying a plain dependency. Removing it with `dsh plugin --profile <name> remove @deepseek-ai/dsh-experimental-project-memory` removes the dependency and the layer.
 
+To enable the whole DevFrame stack — this memory layer beside session identity, shadow routing, goal binding, and dispatch — with one command over the web profile, mount the [DevFrame profile layer](../devframe-profile/README.md) instead of adding this package alone.
+
 ### Configure a Vault
 
 The shipped patch defaults mount the row with `workspaceId: default`, writes off, and no Vault root, so loading is safe everywhere and every tool call reports `MEMORY_UNAVAILABLE` until the deployment overrides the row's config with `vaultRoot`. The user-selected Vault root must already exist — the service never creates it — and enabling `writeEnabled` without an explicit `vaultRoot` fails the profile at load. A patch entry replaces the target row's whole configuration, so restate every setting you keep; the [base bundle README](../../bundle/base/README.md) owns the override semantics.

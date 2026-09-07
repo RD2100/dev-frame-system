@@ -35,6 +35,8 @@ pnpm dsh --profile web --patch ./packages/experimental/devframe-profile/cordis.p
 
 The profile must already contain the web bundle layers, whose webserver row this layer leaves untouched. A deployment narrows the safe machine-neutral defaults through a later `--patch` overlay (authorizedRoots, vaultRoot, shadowSessionId, workspace identity), not by editing this file.
 
+This layer's patch inserts its six rows; it does not target existing rows. Do not also mount these rows through their own package layers (for example `dsh plugin --profile <name> add @deepseek-ai/dsh-experimental-project-memory`): two inserts of one row id fail the boot with a duplicate-id loader error. Narrow a row's defaults with a later id-targeted `--patch` entry (`- id: project-memory, config: …`) instead — a patch entry replaces the target row's whole configuration, with the last write winning per row; the [base bundle README](../../bundle/base/README.md) owns the override semantics.
+
 ### What you get
 
 The layer inserts the identity, routing, memory, and goal-binding rows with unconfigured, read-only defaults: shadow-router installs no `project_*` tools until authorized roots are declared, and project-memory keeps its tools read-only until a real vaultRoot is supplied. The hierarchy row starts the worker face empty (fail closed) and preallocates no lead plugin scopes; the dispatch row mounts the `agent_dispatch` consumption face.

@@ -34,6 +34,8 @@ pnpm dsh plugin --profile headless add ./packages/experimental/project-memory
 
 该命令以 `@deepseek-ai/dsh-base` 开头初始化一个自定义 profile，并把包从检出中以 link 方式接入；清单中的 `dsh.bundle.patch` 声明使它加入有序层栈，而不是停留在普通依赖上。用 `dsh plugin --profile <name> remove @deepseek-ai/dsh-experimental-project-memory` 移除它时，依赖与该层一并移除。
 
+要通过一条命令在 Web profile 上启用整套 DevFrame 栈——本记忆层与会话身份、影子路由、目标绑定、派发并行——请改为挂载 [DevFrame profile 层](../devframe-profile/README.zh.md)，而不是单独添加本包。
+
 ### 配置 Vault
 
 Shipped patch 默认以 `workspaceId: default`、关闭写入、无 Vault 根挂载该行，因此在任何地方加载都是安全的，且每次工具调用都报告 `MEMORY_UNAVAILABLE`，直到部署用 `vaultRoot` 覆盖该行的配置。用户选定的 Vault 根必须已存在——服务绝不创建它——并且在没有显式 `vaultRoot` 时启用 `writeEnabled` 会让 profile 在加载时失败。patch 条目替换目标行的整个配置，因此要保留的每个设置都必须重述；覆盖语义由[基础 bundle README](../../bundle/base/README.zh.md) 拥有。
