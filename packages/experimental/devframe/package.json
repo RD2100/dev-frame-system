@@ -35,6 +35,10 @@
       "types": "./lib/types/hierarchy/index.d.ts",
       "default": "./lib/types/hierarchy/index.js"
     },
+    "./lead-role-landing": {
+      "types": "./lib/types/lead-role-landing.d.ts",
+      "default": "./lib/types/lead-role-landing.js"
+    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
