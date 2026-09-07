@@ -35,7 +35,10 @@ import { isTaskState, PluginId, TaskId } from '@deepseek-ai/dsh-experimental-pro
 
 const pluginId = PluginId('agent-reliability')
 const taskId = TaskId('task-7')
-if (!isTaskState(rawState)) throw new Error('unknown task state')
+function parseTaskState(rawState: unknown) {
+  if (!isTaskState(rawState)) throw new Error('unknown task state')
+  return rawState
+}
 ```
 
 ### Implement a store seam
@@ -95,6 +98,8 @@ Zero direct tokens on every request.
 Independent of live requests: the package never touches a request prefix, so it cannot invalidate provider cache reuse.
 
 ## Known Limitations and Deferred Work
+
+<a id="known-limitations-and-deferred-work"></a>
 
 These limits define when the contracts are a poor fit or need special operational care. They are current package constraints, not a task backlog.
 

@@ -35,9 +35,16 @@ Mount the service anywhere in the plugin set; it injects nothing and owns only p
 Open admission for exactly one work binding identity when a dispatch generation starts, and make `assertAdmitted` the first step of every dispatch; a mismatched or stale binding is rejected before any model or tool work runs.
 
 ```ts
-ctx.agentReliability.openAdmission({ controllerSessionId, goalId })
-// inside the dispatch path, before any work:
-ctx.agentReliability.assertAdmitted(identity)
+import type { AgentReliability } from '@deepseek-ai/dsh-experimental-agent-reliability'
+import type { GoalBindingIdentity } from '@deepseek-ai/dsh-experimental-devframe/controller'
+
+function startGeneration(ctx: { agentReliability: AgentReliability }, identity: GoalBindingIdentity) {
+  ctx.agentReliability.openAdmission(identity)
+}
+
+function beforeDispatch(ctx: { agentReliability: AgentReliability }, identity: GoalBindingIdentity) {
+  ctx.agentReliability.assertAdmitted(identity)
+}
 ```
 
 ### Bound admission with a cutoff
@@ -45,8 +52,13 @@ ctx.agentReliability.assertAdmitted(identity)
 Open admission with an epoch-millisecond deadline to bound the dispatch generation: the pre-step reads the wall clock (`Date.now()`) at every dispatch, and from the `deadline` instant (inclusive) it rejects with `AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED`. Recovery is an explicit reopen with a fresh generation; a non-finite deadline fails loud at open without touching the current generation.
 
 ```ts
-ctx.agentReliability.openAdmission({ controllerSessionId, goalId }, { deadline: Date.now() + 60_000 })
-// from `deadline` (inclusive) the pre-step rejects with AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED
+import type { AgentReliability } from '@deepseek-ai/dsh-experimental-agent-reliability'
+import type { GoalBindingIdentity } from '@deepseek-ai/dsh-experimental-devframe/controller'
+
+function startBoundedGeneration(ctx: { agentReliability: AgentReliability }, identity: GoalBindingIdentity) {
+  ctx.agentReliability.openAdmission(identity, { deadline: Date.now() + 60_000 })
+  // From the deadline (inclusive), assertAdmitted rejects dispatch.
+}
 ```
 
 ### Reconcile an uncertain call
@@ -54,11 +66,21 @@ ctx.agentReliability.openAdmission({ controllerSessionId, goalId }, { deadline: 
 When a call's outcome is unknown, hand the plan to the reconciler: the probe checks external state first, and the retry runs at most once and only after the probe proved the effect absent.
 
 ```ts
-const outcome = await ctx.agentReliability.reconcileUncertainCall({
-  operation: 'create-worktree',
-  probe: async () => await probeExternalState(operationId),
-  retry: async () => await createWorktree(request),
-})
+import type {
+  AgentReliability, ReconciliationProbe,
+} from '@deepseek-ai/dsh-experimental-agent-reliability'
+
+async function reconcileWorktree<R>(
+  ctx: { agentReliability: AgentReliability },
+  probeExternalState: () => Promise<ReconciliationProbe>,
+  createWorktree: () => Promise<R>,
+) {
+  return await ctx.agentReliability.reconcileUncertainCall({
+    operation: 'create-worktree',
+    probe: probeExternalState,
+    retry: createWorktree,
+  })
+}
 ```
 
 ### Barrier a flush
@@ -66,8 +88,17 @@ const outcome = await ctx.agentReliability.reconcileUncertainCall({
 A failed flush closes admission and retains write ownership; the writer is never released on top of an unflushed log.
 
 ```ts
-const barrier = await ctx.agentReliability.flushBarrier(flushSessions)
-if (!barrier.flushed) reportFlushFailure(barrier.failure)
+import type { AgentReliability } from '@deepseek-ai/dsh-experimental-agent-reliability'
+
+async function flushBeforeRelease(
+  ctx: { agentReliability: AgentReliability },
+  flushSessions: () => Promise<void>,
+  reportFlushFailure: (failure: unknown) => void,
+) {
+  const barrier = await ctx.agentReliability.flushBarrier(flushSessions)
+  if (!barrier.flushed) reportFlushFailure(barrier.failure)
+  return barrier
+}
 ```
 
 -----
@@ -121,6 +152,7 @@ Zero direct tokens on every request.
 
 Independent of live requests: the package never touches a request prefix, so it cannot invalidate provider cache reuse.
 
+<a id="known-limitations-and-deferred-work"></a>
 ## Known Limitations and Deferred Work
 
 These limits define when the service is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
