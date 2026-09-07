@@ -87,11 +87,12 @@ function memoryToolName(session: Session, event: SessionEvent<'tool/result'>): s
  * deferred past the current macrotask so the listener never appends while the
  * store is still publishing the `tool/result` event that triggered it. Dedup
  * reserves the task key at enqueue time — two failures drained together still
- * land one event — and re-checks the log at drain. At drain the session must
- * still be live in the store, so a teardown whose `session/disposed` dispatch
- * has not run yet still cancels the queued write; the disposer cancels the
- * remaining timers and batches outright, so a captured session is never
- * appended after either teardown.
+ * land one event — and re-checks the log at drain. Liveness is re-verified
+ * before EVERY append: a synchronous listener of one warning may detach the
+ * session mid-batch, and a teardown whose `session/disposed` dispatch has not
+ * run yet still removed the session from the store; terminated writes release
+ * their reservations. The disposer cancels the remaining timers and batches
+ * outright, so a captured session is never appended after either teardown.
  * @param ctx - The mounting context.
  * @returns The plugin disposer.
  */
@@ -109,27 +110,35 @@ export function apply(ctx: Context): () => void {
     session.snapshotEvents().some(candidate =>
       candidate.type === 'devframe/task-warning' && String(candidate.data.taskId) === String(taskId))
 
+  /** Release the enqueue reservations of a batch that will not drain fully. */
+  const releaseBatch = (sessionId: string, batch: PendingBatch): void => {
+    for (const write of batch.writes) reserved.delete(warnKey(sessionId, write.taskId))
+  }
+
+  /**
+   * Whether the batch may still append: the plugin must be mounted, the batch
+   * must not be cancelled, and the session must be the live store entry. A
+   * teardown that has not dispatched its disposal notification yet still
+   * removed the session from the store; the live lookup is authoritative. The
+   * mounting context may itself already be inactive when a late timer fires
+   * during teardown — that is not live either.
+   */
+  const mayAppend = (batch: PendingBatch): boolean => {
+    if (batch.cancelled || disposed) return false
+    try {
+      return ctx.sessions.get(batch.session.id) === batch.session
+    } catch {
+      return false // the context is disposed; no service lookup can succeed
+    }
+  }
+
   const drainSession = (sessionId: string): void => {
     timers.delete(sessionId)
     const batch = pending.get(sessionId)
     if (batch === undefined) return
     pending.delete(sessionId)
-    if (batch.cancelled || disposed) {
-      for (const write of batch.writes) reserved.delete(warnKey(sessionId, write.taskId))
-      return
-    }
-    // A teardown that has not dispatched its disposal notification yet still
-    // removed the session from the store; the live lookup is authoritative.
-    // The mounting context may itself already be inactive when a late timer
-    // fires during teardown — that is not live either.
-    let isLive: boolean
-    try {
-      isLive = ctx.sessions.get(batch.session.id) === batch.session
-    } catch {
-      isLive = false // the context is disposed; no service lookup can succeed
-    }
-    if (!isLive) {
-      for (const write of batch.writes) reserved.delete(warnKey(sessionId, write.taskId))
+    if (!mayAppend(batch)) {
+      releaseBatch(sessionId, batch)
       return
     }
     for (const write of batch.writes) {
@@ -139,6 +148,12 @@ export function apply(ctx: Context): () => void {
       if (inLog(batch.session, write.taskId)) {
         reserved.delete(warnKey(sessionId, write.taskId))
         continue
+      }
+      // Re-verify before EVERY append: a synchronous listener of the previous
+      // warning may have detached the session mid-batch.
+      if (!mayAppend(batch)) {
+        releaseBatch(sessionId, batch)
+        return
       }
       batch.session.append('devframe/task-warning', { version: 1, taskId: write.taskId, warning: write.warning, tool: write.tool })
       reserved.delete(warnKey(sessionId, write.taskId))
