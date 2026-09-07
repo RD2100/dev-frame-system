@@ -1159,6 +1159,52 @@ describe('dsh-workflow-worker-thread', { timeout: 120_000 }, () => {
       expect(order.indexOf('run-end')).toBe(order.length - 1)
       await handle.dispose()
     })
+
+    it('dispose() on a completed run takes its real worker thread down: the exit event is observable after dispose resolves', async () => {
+      const { ctx, parent } = await setup()
+      const handle = ctx.workflowEngine.start({ ...scripted('return 42'), parent })
+      const worker = (handle as unknown as { worker: Worker }).worker
+      const exit = new Promise<number | undefined>((resolve) => { worker.once('exit', resolve) })
+      await expect(handle.result).resolves.toMatchObject({ value: 42, stopReason: 'completed' })
+      // dispose() awaits worker.terminate() (the thread never outlives its
+      // run), so the death must already have been observed by the time the
+      // promise settles. The bounded race pins the normal-path exit face —
+      // until now only the death and grace paths touched a real exit.
+      await handle.dispose()
+      const exitCode = await Promise.race([
+        exit,
+        new Promise<never>((_, reject) => setTimeout(
+          () => reject(new Error('worker exit not observed within 5s of dispose()')), 5_000,
+        ).unref()),
+      ])
+      expect(exitCode).toBe(1)
+    })
+
+    it('the grace force-settle takes the real thread down promptly: the worker exit lands on the grace, not eventually', async () => {
+      const GRACE = 100
+      const { ctx, parent } = await setup({ config: { provider: 'stub', disposeGraceMs: GRACE } })
+      const handle = ctx.workflowEngine.start({
+        ...scripted("await new Promise(() => {})\nreturn 'unreachable'"),
+        parent,
+      })
+      const worker = (handle as unknown as { worker: Worker }).worker
+      const exit = new Promise<number | undefined>((resolve) => { worker.once('exit', resolve) })
+      const cancelAt = Date.now()
+      handle.cancel('force termination')
+      await expect(handle.result).resolves.toMatchObject({ stopReason: 'cancelled' })
+      // The grace path fires `void worker.terminate()` without awaiting it;
+      // its observable completion is the real thread's exit. Bound it to the
+      // grace plus teardown headroom: an exit that lands "eventually" would
+      // leave the thread outliving its run.
+      const exitCode = await Promise.race([
+        exit,
+        new Promise<never>((_, reject) => setTimeout(
+          () => reject(new Error(`worker exit not observed within ${GRACE + 2_000}ms of cancel() at t=${cancelAt}`)),
+          GRACE + 2_000,
+        ).unref()),
+      ])
+      expect(exitCode).toBe(1)
+    })
   })
 
   describe('worker death', () => {
