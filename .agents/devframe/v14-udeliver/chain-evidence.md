@@ -62,3 +62,9 @@ job_kill(pwsh-213, reason="总控裁定 B1 本轮失败证据收口：停止 boo
 - **双根因面并列登记**（C2b 修复需两者都覆盖）：①流式 args 碎片损坏（seq 1082/2365/2416/4046）；②模型把 `input` 序列化为字符串（seq 4270-4273）——工具 fail-loud 拒绝正确，属模型侧行为；harness 侧修复面=①，②在重放验证中观察。
 - **附带缺陷登记**：boot1 实证 tool-cordis 在 shipped overlay（web 宿主）`1 entry did not activate`（dynamicCordisRunner,cordisInspect pending）——另立清单项，不阻塞 C2b。
 - B1 状态：**未完成/异常退出**；恢复路径唯一（C2b 修复→最小重放→重启链）。
+
+## 环境边界补充（chain4 元数据写入被拒）+ 已验证恢复（2026-09-07）
+
+- **边界证据**：`git -C D:/dsh-udeliver-chain rev-parse --git-dir` → `D:/dsh-devframe/.git/worktrees/dsh-udeliver-chain`——旧链目录元数据根=主树 .git；chain 进程执行 `git switch -c codex/v14-b1-w1` 需写 `D:\dsh-devframe\.git\refs`，被拒（环境边界，不做权限绕过）。
+- **已验证方案（一次有限验证）**：新链目录 `D:/dsh-udeliver-chain2` = udeliver-lead 仓库的 worktree（元数据根=`D:/dsh-devframe-v14-udeliver-lead/.git`，该根可写性由本分支日常提交证明）；其内 `git switch -c codex/v14-b1-w1-verify` → **exit 0**，验证分支已清理。
+- **恢复**：12 站链重启以 chain2 为启动目录（branch codex/v14-udeliver-chain2 @ 61a4b9f417）；模型调用面无涉本边界。
