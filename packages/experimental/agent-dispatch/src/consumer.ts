@@ -12,11 +12,10 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { appendFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolCallView } from '@deepseek-ai/dsh-tools'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { WorktreeId } from '@deepseek-ai/dsh-worktree-registry'
 import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
@@ -58,13 +57,33 @@ const GUIDANCE = 'The agent dispatch tool is the daily delegation entry over the
 /** The tool names this plugin registers, in registration order. */
 export const TOOL_NAMES = ['agent_dispatch'] as const
 
-/** Redact credential-shaped fragments and bound the length of diagnostic text. */
-function scrub(value: string): string {
-  return value
-    .replace(/([?&]token=)[^\s&)]+/gu, '$1<redacted>')
-    .replace(/(sk-|Bearer\s+)[^\s"']+/gu, '$1<redacted>')
-    .replace(/((?:api[_-]?key|access[_-]?token|password)\s*[=:]\s*)[^\s"',}]+/giu, '$1<redacted>')
-    .slice(0, 400)
+/**
+ * Resolve the approved parent route a dispatched child inherits: the latest
+ * request header owns provider, model, and reasoning effort after
+ * request-time selection; creation options are the fallback before the
+ * first request and retain the configured output-token limit. Only the
+ * route fields pass — the child never receives the parent's whole option
+ * bag — and the standard persona's required {{model}} variable resolves
+ * from them.
+ * @param parent - the delegating parent agent.
+ * @returns the detached route options for the child's creation.
+ */
+function parentRouteForDelegation(parent: Agent): AgentOptions {
+  const requestConfig = parent.session.requestHeader()?.config
+  if (requestConfig === undefined) {
+    return {
+      ...(parent.options.provider !== undefined ? { provider: parent.options.provider } : {}),
+      ...(parent.options.model !== undefined ? { model: parent.options.model } : {}),
+      ...(parent.options.reasoningEffort !== undefined ? { reasoningEffort: parent.options.reasoningEffort } : {}),
+      ...(parent.options.maxTokens !== undefined ? { maxTokens: parent.options.maxTokens } : {}),
+    }
+  }
+  return {
+    provider: requestConfig.provider,
+    model: requestConfig.model,
+    ...(requestConfig.reasoningEffort === undefined ? {} : { reasoningEffort: requestConfig.reasoningEffort }),
+    ...(parent.options.maxTokens !== undefined ? { maxTokens: parent.options.maxTokens } : {}),
+  }
 }
 
 /** The plain pending-state card, titled from the call's arguments. */
@@ -217,7 +236,7 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
       if (config?.candidateRootSessionId !== undefined) {
         const rootId = config.candidateRootSessionId
         let bootstrapped = false
-        ctx.on('agent/pre-step', async (data, next) => {
+        ctx.on('agent/pre-step', async (_data, next) => {
           if (bootstrapped) return next()
           const agent = ctx.agents.currentInitiator()
           if (agent === undefined || String(agent.session.id) !== rootId) return next()
@@ -249,27 +268,6 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
           const result = await composition.startBoundGoal({ agent, rawInput: 'Run the candidate fullchain: both workers deliver their own artifacts through the lead.' })
           if (result.kind !== 'success') {
             throw new Error(`devframe-start refused: ${result.text}`)
-          }
-          // One controlled extension preparation against the real registry —
-          // no network, no stream: a failing extension's raw message is
-          // redacted into the run's diagnostic file and the error rethrown
-          // unchanged, naming the exact failing field for the fixture owner.
-          const signal = (data as { signal?: AbortSignal }).signal
-          if (signal !== undefined) {
-            try {
-              await ctx.inject(['deepseekLlmApiExtensions'], (extCtx) =>
-                extCtx.deepseekLlmApiExtensions.prepare({ body: {}, sessionId: rootId, signal }))
-            } catch (error) {
-              const home = process.env.DSH_CANDIDATE_HOME
-              const message = error instanceof Error ? error.message : String(error)
-              if (home !== undefined) {
-                const line = `${JSON.stringify({ runTag: String(process.pid), rootId, stage: 'controlled-prepare', message: scrub(message) })}\n`
-                void appendFile(join(home, `agent-error-diag-${String(process.pid)}.jsonl`), line).catch(() => {
-                  // Diagnostics must never break the agent loop.
-                })
-              }
-              throw error
-            }
           }
           return next()
         })
@@ -391,6 +389,12 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
         ...(existing === undefined && args.prompt !== undefined && requireNonEmpty(args.prompt, 'prompt') !== ''
           ? { prompt: args.prompt }
           : {}),
+        // The child must assemble the standard persona, whose {{model}}
+        // variable resolves from its own agent options: inherit only the
+        // approved parent route (the request header owns provider/model and
+        // effort after request-time selection) and the configured output
+        // limit - never the parent's whole option bag.
+        agentOptions: parentRouteForDelegation(caller.agent),
       })
       const ack = await ctx.agentDispatch.taskAck(caller.agent, taskId)
       if (ack === undefined) {
