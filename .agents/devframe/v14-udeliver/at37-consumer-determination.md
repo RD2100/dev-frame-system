@@ -43,3 +43,12 @@
 - **微任务延迟**：监听器在 tool/result 发布回调内不直接 append（嵌套发布危害），排队至 microtask 落盘。
 - **测试**（3 例，断言面=会话日志+fold 单测）：A1 optional+真实 MEMORY_UNAVAILABLE（真实工具注册表+缺席 Vault）→恰一条警告、重试仍一条；A2 全程无 memory/receipt（receipt 唯一保存权威）；A3 同构 dispatch+required→零警告+grade=fail、未声明会话零事件；解码再品牌化+词汇外扩拒绝。
 - **真实退出码**：片内 3/3 exit 0；devframe+project-memory 联合回归 **23 files / 261 tests passed exit 0**。路由：零模型调用（unit 层）；隔离 HOME 未涉及（无 boot；若需 boot，home 独立建禁 junction）。TaskRecord/project-contracts **零改动**。
+
+## 监听器修复片（总控三条确定缺陷裁定，06dc601897）
+
+- **①去重竞态**：原去重只查已落日志——drain 前同步落两条失败 tool/result 会产生两条警告。修复：入队时预占任务键（入队查"日志∪预占"，drain 只查日志——预占是监听器自己的，不得否决自己的落盘），补用例「两条失败先入队后统一 drain」恰一条。
+- **②dispose 泄漏竞态**：pending 闭包捕获 session 且微任务晚于延迟派发的 disposed 通知。修复：drain 改宏任务调度 + 落盘前实时查 store 存活性（`ctx.sessions.get(id) === session`；挂载 context 已 inactive 视为不活，晚到计时器不抛）+ session/disposed 处理器与两级 disposer 清计时器/取消批次/清预占。补两用例「真实 store detach 后零 append」「插件 fiber dispose 后零 append」。为此插件声明 `inject: ['sessions']`，桶导出改为命名空间对象（函数改名会丢 inject——cordis 门禁实测）。
+- **③真实消息形状缺陷**：监听器原读 `event.data.message.callId`——真实 ToolResultMessage 无此字段（call id 在 `message.source`），真实失败从未分级。修复：监听器读 `message.source.callId`；测试改用真实 `createToolResultMessage` 构造 fixture（id/role/source 齐），tool/call 行 arguments 为原始 JSON 串，outcome 类型对齐真实 ToolFailure（info 可选），结构化 error info 原样保留。
+- **tsc 程序声明**：所跑程序为 **`tsc -b tsconfig.host.json`**（host 面，include 含 `packages/*/*/tests/**/*.ts` 即本 spec，references 含 devframe src），修复后 **exit 0**；该程序曾抓出 vitest 转译放行的 6 处 spec 类型错误，全部修复——vitest 转译≠tsc 程序，教训第三度坐实。
+- **真实退出码**：监听器套件 **6/6 exit 0 零未处理错误**；联合回归 **23 files / 264 tests passed exit 0**；host tsc **exit 0**。路由：零模型调用；TaskRecord/project-contracts 零改动；未全仓 build。
+- **边界如实标注**：required 纯函数返回 `grade='fail'` 仅为分级判定，**不替代实际任务失败验收**——真实任务失败路径（agent-loop 终态、goal 判定）尚未接线，本片不含；其余未完成的生产接线同此边界，暂不列缺陷。

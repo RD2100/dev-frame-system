@@ -74,6 +74,7 @@
     "@deepseek-ai/dsh-timeout": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/dsh-system-prompt": "workspace:^",
-    "@deepseek-ai/dsh-experimental-project-memory": "workspace:^"
+    "@deepseek-ai/dsh-experimental-project-memory": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^"
   }
 }

@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, createToolResultMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { SessionSeq } from '@deepseek-ai/dsh-session'
@@ -44,9 +44,9 @@ afterEach(async () => {
 /**
  * Boot the real composition: session store, tool runtime, project-memory over
  * an absent Vault root (the unconfigured face — every append reports
- * `MEMORY_UNAVAILABLE`), and the task-warning listener.
+ * `MEMORY_UNAVAILABLE`), and — unless declined — the task-warning listener.
  */
-async function boot(): Promise<{ ctx: Context; session: Session }> {
+async function boot(options: { readonly withListener?: boolean } = {}): Promise<{ ctx: Context; session: Session; root: string }> {
   const root = await mkdtemp(join(tmpdir(), 'dsh-devframe-task-warning-'))
   ROOTS.push(root)
   const ctx = new Context()
@@ -55,9 +55,9 @@ async function boot(): Promise<{ ctx: Context; session: Session }> {
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(projectMemory, { workspaceId: 'ws-warn', vaultRoot: join(root, 'absent-vault'), writeEnabled: true })
-  await ctx.plugin(taskWarningListener)
+  if (options.withListener !== false) await ctx.plugin(taskWarningListener)
   const session = ctx.sessions.create(undefined, { meta: { cwd: root } })
-  return { ctx, session }
+  return { ctx, session, root }
 }
 
 /** The agent face the memory tools dispatch through: the live session only. */
@@ -67,25 +67,28 @@ function agentOn(session: Session): Agent {
 
 /** Append the `tool/call` row exactly as the agent loop appends it. */
 function appendToolCall(session: Session, turn: number, callId: string, name: string): SessionSeq {
-  return session.append('tool/call', { turn, step: 1, callId, name, arguments: {} }).seq
+  return session.append('tool/call', { turn, step: 1, callId: ToolCallId(callId), name, arguments: '{}' }).seq
 }
 
 /**
- * Append the `tool/result` row exactly as the agent loop appends it, carrying
- * the error info of the real dispatch outcome and citing its call row.
+ * Append the `tool/result` row exactly as the agent loop appends it: the
+ * message is built by the real `createToolResultMessage` (id/role/source
+ * included, the call id on `message.source`), and the row carries the error
+ * info of the real dispatch outcome and cites its `tool/call` row.
  */
 function appendToolResult(session: Session, turn: number, callId: string, callSeq: SessionSeq, outcome: {
   readonly isError: boolean
-  readonly error?: { readonly info?: { readonly name?: string; readonly code?: string } }
+  readonly error?: { readonly message?: string; readonly info?: { readonly name: string; readonly code: string } }
 }): void {
+  const message = createToolResultMessage({
+    callId: ToolCallId(callId),
+    content: [{ type: 'text', text: outcome.isError ? `failed: ${outcome.error?.message ?? ''}` : 'ok' }],
+    isError: outcome.isError,
+  })
   session.append('tool/result', {
     turn,
     step: 1,
-    message: {
-      callId,
-      content: [{ type: 'text', text: outcome.isError ? `failed: ${outcome.error?.message ?? ''}` : 'ok' }],
-      isError: outcome.isError,
-    },
+    message,
     ...outcome.error?.info ? { error: outcome.error.info } : {},
   }, { surfaceOp: 'append', sourceEventSeqs: [callSeq] })
 }
@@ -101,10 +104,9 @@ function dispatchMemoryAppend(ctx: Context, session: Session, callId: string, so
   })
 }
 
-/** Drain the listener's deferred appends. */
+/** Drain the listener's deferred appends: one macrotask lets the store's deferred session/event dispatch and the listener's own microtask both finish deterministically. */
 async function drain(): Promise<void> {
-  await Promise.resolve()
-  await Promise.resolve()
+  await new Promise(resolve => setTimeout(resolve, 0))
 }
 
 function taskWarnings(session: Session) {
@@ -143,7 +145,7 @@ describe('AT3-07 explicit-context grading', () => {
   })
 
   it('A3+counter-example: a required-memory task in the SAME dispatch shape warns nothing and fails', async () => {
-    const { ctx, session } = await boot()
+    const { ctx, session, root } = await boot()
     // Identical message dispatch shape as A1 — only the explicit host
     // requirement context differs; the mode face is never consulted.
     ctx.devframeTaskGrading.declare(session.id, { taskId: TaskId('task-b'), memory: 'required' })
@@ -159,13 +161,62 @@ describe('AT3-07 explicit-context grading', () => {
     expect(session.snapshotEvents().some(event => event.type === 'memory/receipt')).toBe(false)
 
     // An undeclared session grades nothing either — the conservative default.
-    const undeclared = ctx.sessions.create(undefined, { meta: { cwd: ROOTS[0] } })
+    const undeclared = ctx.sessions.create(undefined, { meta: { cwd: root } })
     const callSeqC1 = appendToolCall(undeclared, 1, 'call-c1', 'memory_append')
     const other = await dispatchMemoryAppend(ctx, undeclared, 'call-c1', 'session-c#event-1')
     expect(other.isError).toBe(true)
     appendToolResult(undeclared, 1, 'call-c1', callSeqC1, other)
     await drain()
     expect(taskWarnings(undeclared)).toHaveLength(0)
+  })
+
+  it('keeps exactly one warning when two failures enqueue before any drain', async () => {
+    const { ctx, session } = await boot()
+    ctx.devframeTaskGrading.declare(session.id, { taskId: TaskId('task-a'), memory: 'optional' })
+    const firstSeq = appendToolCall(session, 1, 'call-r1', 'memory_append')
+    const first = await dispatchMemoryAppend(ctx, session, 'call-r1', 'session-a#event-1')
+    expect(first.isError).toBe(true)
+    // The second failure enqueues before the first batch drains: the enqueue
+    // reservation, not the log alone, must keep the count at one.
+    const secondSeq = appendToolCall(session, 2, 'call-r2', 'memory_append')
+    const second = await dispatchMemoryAppend(ctx, session, 'call-r2', 'session-a#event-2')
+    expect(second.isError).toBe(true)
+    appendToolResult(session, 1, 'call-r1', firstSeq, first)
+    appendToolResult(session, 2, 'call-r2', secondSeq, second)
+    await drain()
+
+    expect(taskWarnings(session), 'no drain between the two failures').toHaveLength(1)
+  })
+
+  it('cancels a queued append when the session disposes before the drain', async () => {
+    const { ctx, root } = await boot()
+    const prepared = ctx.sessions.prepare(undefined, { meta: { cwd: root } })
+    const detach = ctx.sessions.enter(prepared)
+    ctx.devframeTaskGrading.declare(prepared.id, { taskId: TaskId('task-d'), memory: 'optional' })
+    const seq = appendToolCall(prepared, 1, 'call-d1', 'memory_append')
+    const outcome = await dispatchMemoryAppend(ctx, prepared, 'call-d1', 'session-d#event-1')
+    expect(outcome.isError).toBe(true)
+    appendToolResult(prepared, 1, 'call-d1', seq, outcome)
+    // Queued, not drained — the real store teardown must cancel the write.
+    detach()
+    await drain()
+
+    expect(taskWarnings(prepared), 'no append after the session left the store').toHaveLength(0)
+  })
+
+  it('cancels a queued append when the listener plugin disposes before the drain', async () => {
+    const { ctx, session } = await boot({ withListener: false })
+    const fiber = await ctx.plugin(taskWarningListener)
+    ctx.devframeTaskGrading.declare(session.id, { taskId: TaskId('task-e'), memory: 'optional' })
+    const seq = appendToolCall(session, 1, 'call-e1', 'memory_append')
+    const outcome = await dispatchMemoryAppend(ctx, session, 'call-e1', 'session-e#event-1')
+    expect(outcome.isError).toBe(true)
+    appendToolResult(session, 1, 'call-e1', seq, outcome)
+    // Queued, not drained — the plugin disposer must cancel the captured write.
+    await fiber.dispose()
+    await drain()
+
+    expect(taskWarnings(session), 'no append after the plugin disposer ran').toHaveLength(0)
   })
 
   it('grades only memory-save degradations and decodes the durable payload with brands', () => {

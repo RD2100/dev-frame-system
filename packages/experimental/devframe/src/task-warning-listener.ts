@@ -14,6 +14,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Session, SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { TaskId } from './controller/goal-binding.ts'
 import { memoryWarningCode } from './events.ts'
+import type { DevFrameTaskWarningCode } from './events.ts'
 
 /** The explicit host context one task's memory grading is judged by. */
 export interface DevFrameTaskGradingDeclaration {
@@ -47,18 +48,34 @@ declare module '@deepseek-ai/cordis' {
 
 /** Cordis plugin name. */
 export const name = 'devframe-task-warning-listener'
-/** The listener consumes session events only. */
-export const inject: string[] = []
+/** The listener consumes session events and reads store liveness at drain. */
+export const inject: string[] = ['sessions']
+
+/** One queued append for a task whose warning is not in the log yet. */
+interface PendingWrite {
+  readonly taskId: TaskId
+  readonly warning: DevFrameTaskWarningCode
+  readonly tool: string
+}
+
+/** The deferred appends of one session, cancellable until their drain runs. */
+interface PendingBatch {
+  readonly session: Session
+  readonly writes: PendingWrite[]
+  cancelled: boolean
+}
 
 /**
- * Whether one appended `tool/result` event names a memory tool. The tool name
- * lives on the linked `tool/call` event, cited by the result's call id.
+ * Whether one appended `tool/result` event names a memory tool. The call id
+ * lives on the tool-result message's source (`ToolMessageSource.callId` — the
+ * real message has no top-level callId), and the tool name on the linked
+ * `tool/call` event.
  * @param session - The session whose log holds both events.
  * @param event - The `tool/result` event under classification.
  * @returns The tool name, or `undefined` when the linked call is absent.
  */
 function memoryToolName(session: Session, event: SessionEvent<'tool/result'>): string | undefined {
-  const callId = event.data.message.callId
+  const callId = event.data.message.source.callId
   const call = session.snapshotEvents().find(candidate =>
     candidate.type === 'tool/call' && candidate.data.callId === callId)
   return call?.type === 'tool/call' ? call.data.name : undefined
@@ -66,15 +83,68 @@ function memoryToolName(session: Session, event: SessionEvent<'tool/result'>): s
 
 /**
  * Plugin entry: provide the grading declaration seam and fold memory tool
- * failures into at most one `devframe/task-warning` per task. The append is
- * deferred to a microtask so the listener never appends while the store is
- * still publishing the `tool/result` event that triggered it.
+ * failures into at most one `devframe/task-warning` per task. Appends are
+ * deferred past the current macrotask so the listener never appends while the
+ * store is still publishing the `tool/result` event that triggered it. Dedup
+ * reserves the task key at enqueue time — two failures drained together still
+ * land one event — and re-checks the log at drain. At drain the session must
+ * still be live in the store, so a teardown whose `session/disposed` dispatch
+ * has not run yet still cancels the queued write; the disposer cancels the
+ * remaining timers and batches outright, so a captured session is never
+ * appended after either teardown.
  * @param ctx - The mounting context.
  * @returns The plugin disposer.
  */
 export function apply(ctx: Context): () => void {
   const declared = new Map<string, DevFrameTaskGradingDeclaration>()
-  const pending: Array<() => void> = []
+  const pending = new Map<string, PendingBatch>()
+  const timers = new Map<string, ReturnType<typeof setTimeout>>()
+  const reserved = new Set<string>()
+  let disposed = false
+
+  const warnKey = (sessionId: string, taskId: TaskId): string => `${sessionId}::${String(taskId)}`
+
+  /** Whether the task's warning is already in the session log. */
+  const inLog = (session: Session, taskId: TaskId): boolean =>
+    session.snapshotEvents().some(candidate =>
+      candidate.type === 'devframe/task-warning' && String(candidate.data.taskId) === String(taskId))
+
+  const drainSession = (sessionId: string): void => {
+    timers.delete(sessionId)
+    const batch = pending.get(sessionId)
+    if (batch === undefined) return
+    pending.delete(sessionId)
+    if (batch.cancelled || disposed) {
+      for (const write of batch.writes) reserved.delete(warnKey(sessionId, write.taskId))
+      return
+    }
+    // A teardown that has not dispatched its disposal notification yet still
+    // removed the session from the store; the live lookup is authoritative.
+    // The mounting context may itself already be inactive when a late timer
+    // fires during teardown — that is not live either.
+    let isLive: boolean
+    try {
+      isLive = ctx.sessions.get(batch.session.id) === batch.session
+    } catch {
+      isLive = false // the context is disposed; no service lookup can succeed
+    }
+    if (!isLive) {
+      for (const write of batch.writes) reserved.delete(warnKey(sessionId, write.taskId))
+      return
+    }
+    for (const write of batch.writes) {
+      // The log may have grown between enqueue and drain through another
+      // writer; the enqueue reservation is this listener's own and is not
+      // consulted here — the log alone decides.
+      if (inLog(batch.session, write.taskId)) {
+        reserved.delete(warnKey(sessionId, write.taskId))
+        continue
+      }
+      batch.session.append('devframe/task-warning', { version: 1, taskId: write.taskId, warning: write.warning, tool: write.tool })
+      reserved.delete(warnKey(sessionId, write.taskId))
+    }
+  }
+
   const disposers: Array<() => unknown> = [
     ctx.provide('devframeTaskGrading', {
       declare: (sessionId, grading) => {
@@ -86,26 +156,53 @@ export function apply(ctx: Context): () => void {
     }),
     ctx.on('session/event', (session: Session, event: SessionEvent) => {
       if (event.type !== 'tool/result') return
-      const grading = declared.get(String(session.id))
+      const sessionId = String(session.id)
+      const grading = declared.get(sessionId)
       if (grading === undefined || grading.memory !== 'optional') return
       const warning = memoryWarningCode(event.data.error?.code)
       if (warning === undefined) return
       const tool = memoryToolName(session, event)
       if (tool === undefined || !tool.startsWith('memory_')) return
-      if (session.snapshotEvents().some(candidate =>
-        candidate.type === 'devframe/task-warning' && String(candidate.data.taskId) === String(grading.taskId))) return
-      pending.push(() => {
-        session.append('devframe/task-warning', { version: 1, taskId: grading.taskId, warning, tool })
-      })
-      queueMicrotask(() => {
-        for (const append of pending.splice(0)) append()
-      })
+      // The enqueue guard consults both the log and this listener's own
+      // reservation, so two failures drained together reserve one write.
+      if (inLog(session, grading.taskId) || reserved.has(warnKey(sessionId, grading.taskId))) return
+      reserved.add(warnKey(sessionId, grading.taskId))
+      let batch = pending.get(sessionId)
+      if (batch === undefined) {
+        batch = { session, writes: [], cancelled: false }
+        pending.set(sessionId, batch)
+        // A macrotask drain lets a teardown that starts before it cancel the
+        // write; a microtask would outrun the disposal notification.
+        timers.set(sessionId, setTimeout(() => {
+          drainSession(sessionId)
+        }, 0))
+      }
+      batch.writes.push({ taskId: grading.taskId, warning, tool })
     }),
     ctx.on('session/disposed', (session: Session) => {
-      declared.delete(String(session.id))
+      const sessionId = String(session.id)
+      declared.delete(sessionId)
+      const timer = timers.get(sessionId)
+      if (timer !== undefined) {
+        clearTimeout(timer)
+        timers.delete(sessionId)
+      }
+      const batch = pending.get(sessionId)
+      if (batch !== undefined) batch.cancelled = true
+      pending.delete(sessionId)
+      for (const key of [...reserved]) {
+        if (key.startsWith(`${sessionId}::`)) reserved.delete(key)
+      }
     }),
   ]
   return () => {
+    disposed = true
+    declared.clear()
+    for (const timer of timers.values()) clearTimeout(timer)
+    timers.clear()
+    for (const batch of pending.values()) batch.cancelled = true
+    pending.clear()
+    reserved.clear()
     for (const dispose of disposers.reverse()) void dispose()
   }
 }
