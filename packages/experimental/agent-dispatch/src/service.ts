@@ -20,7 +20,8 @@
 
 import { Service, type Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { freezeMessage, createUserMessage, type MessageId } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {
   CreateChildAgentOptions,
@@ -32,12 +33,14 @@ import type {} from '@deepseek-ai/dsh-experimental-session-identity'
 // Type-only: resolve the opportunistic `ctx.get('agentPresets')` join to the
 // preset roster when composed; a rosterless deployment keeps the no-op.
 import type {} from '@deepseek-ai/dsh-agent-presets'
+import type {} from '@deepseek-ai/dsh-session-persistence'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import type { WorktreeId } from '@deepseek-ai/dsh-worktree-registry'
 import { WorktreeGitOperationError, WorktreeLockHolder } from '@deepseek-ai/dsh-worktree-registry'
 import type { Worktree, WorktreeStatus } from '@deepseek-ai/dsh-worktree-registry'
 import { AgentDispatchError } from './errors.ts'
 import { evaluateDispatchEntry } from './entry.ts'
+import { foldBriefingAck, type DispatchTaskAck } from './ack.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -86,6 +89,17 @@ function taskGateKey(parentId: SessionId, taskId: TaskId | undefined): string {
 }
 
 /**
+ * The deterministic briefing identity for one dispatched task. Both inputs
+ * are durable facts of the binding record, so the identity is re-derivable
+ * after a process restart or a recovery — the anchor that lets the
+ * acknowledgment face find this task's briefing in a reloaded child log
+ * without any parallel ledger.
+ */
+function briefingMessageId(parentId: SessionId, taskId: TaskId): MessageId {
+  return brandString<MessageId>(`dispatch-briefing:${String(parentId)}:${String(taskId)}`)
+}
+
+/**
  * The host daily-dispatch entry. Hard-injects the real creation engine
  * (`ctx.agentHierarchy`), the role authority (`ctx.agentBindings`), and the
  * worktree registry whose rows make the worktree proof real, and fails at
@@ -95,7 +109,7 @@ function taskGateKey(parentId: SessionId, taskId: TaskId | undefined): string {
  * live — propagate unchanged.
  */
 export class AgentDispatch extends Service {
-  static inject = ['agentHierarchy', 'agentBindings', 'worktreeRegistry', 'agents']
+  static inject = ['agentHierarchy', 'agentBindings', 'worktreeRegistry', 'agents', 'sessions']
 
   /** One settled-before-run chain per parent task, serializing its full dispatch span. */
   private taskGates = new Map<string, Promise<unknown>>()
@@ -370,12 +384,79 @@ export class AgentDispatch extends Service {
     // errors — including the reserved-child recovery refusal and a typed
     // session-persistence miss — propagate unchanged; no fallback child.
     if (options.prompt !== undefined && existing === undefined) {
-      created.agent.followup(createUserMessage({
-        content: [{ type: 'text', text: options.prompt }],
-        source: { kind: 'plugin', plugin: 'agent-dispatch' },
-      }))
+      // The briefing carries a deterministic identity derived from the
+      // durable binding facts, so the acknowledgment face can find exactly
+      // this task's briefing in the child's log — including a log reloaded
+      // by a recovery — without a parallel in-memory ledger.
+      const message = request.taskId === undefined
+        ? createUserMessage({
+          content: [{ type: 'text', text: options.prompt }],
+          source: { kind: 'plugin', plugin: 'agent-dispatch' },
+        })
+        : freezeMessage({
+          id: briefingMessageId(parent.id, request.taskId),
+          role: 'user',
+          content: [{ type: 'text', text: options.prompt }],
+          source: { kind: 'plugin', plugin: 'agent-dispatch' },
+        })
+      created.agent.followup(message)
     }
     return created
+  }
+
+  /**
+   * The durable acknowledgment for one dispatched task: what the child's own
+   * log proves about the briefing this entry delivered, backed by the
+   * session store's flush barrier. The derivation is durable by
+   * construction — delivery splice, claiming splice, and the claiming
+   * turn's `turn/end` are all durable session events — and `durable` is
+   * claimed only when a durability listener participates in the barrier. A
+   * barrier refusal or a durability failure never hides the primary
+   * dispatch outcome behind an exception: the ack reports `durable: false`
+   * with `degraded: true`, so a broken backend is visible exactly where the
+   * parent looks, and the child's own turn checkpoints fail loud on their
+   * own boundaries.
+   * @param parent - The exact live dispatching agent the child was created for.
+   * @param taskId - The task the child was created for.
+   * @returns The acknowledgment, or `undefined` when no dispatched child
+   *   exists for the pair.
+   */
+  async taskAck(parent: Agent, taskId: TaskId): Promise<DispatchTaskAck | undefined> {
+    const record = this.ctx.agentBindings.list().find(
+      candidate => candidate.parentSessionId === parent.id && candidate.taskId === taskId,
+    )
+    if (record === undefined) return undefined
+    const briefingId = briefingMessageId(parent.id, taskId)
+    const child = this.ctx.agents.get(record.agentId)
+    if (child === undefined) {
+      // Not live: the log facts are engine-owned recovery territory. The
+      // recovery lane reinstates the identity, and this derivation runs
+      // unchanged over the reloaded log afterwards.
+      return { state: 'unavailable', briefingMessageId: briefingId, durable: false }
+    }
+    // Snapshot first, then flush: the barrier covers every event appended
+    // before it, so facts present in the snapshot are durable once it
+    // settles; facts appended after it are not in the snapshot and are
+    // never claimed.
+    const events = child.session.snapshotEvents()
+    let durable = false
+    let degraded: true | undefined
+    try {
+      durable = await this.ctx.sessions.flush(child.session)
+    } catch {
+      degraded = true
+    }
+    const fold = foldBriefingAck(events, String(briefingId))
+    return {
+      state: fold.state,
+      briefingMessageId: briefingId,
+      durable,
+      ...degraded === undefined ? {} : { degraded },
+      ...(fold.turnEnd === undefined ? {} : {
+        turnEnd: fold.turnEnd,
+        completed: fold.turnEnd.reason.kind === 'completed',
+      }),
+    }
   }
 
   /**

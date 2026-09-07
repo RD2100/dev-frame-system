@@ -249,16 +249,23 @@ describe('agent dispatch tool behavior over the real engine', () => {
     expect(textOf(blind)).toContain('retry by passing that id as sessionId')
 
     // The retry path reuses the returned identity; even a carried prompt is
-    // never re-delivered to the already-running child.
+    // never re-delivered to the already-running child. The ack reports the
+    // honest state the log proves — with no model route the turn may still
+    // be pending (briefed), open (claimed), or already ended in error
+    // (terminal) — and the stub harness has no durability bridge, so the
+    // flush verdict is deterministically `durable: false`.
     const retried = valueOf(await execute('agent_dispatch', { ...args, retry: true, prompt: 're-brief' }, controller)) as {
       childId: string
       reused: boolean
+      ack: { state: string; durable: boolean }
     }
     expect(retried.reused).toBe(true)
     expect(retried.childId).toBe(first.childId)
+    expect(retried.ack.state).toBeDefined()
+    expect(retried.ack.durable).toBe(false)
     expect(inserted).toHaveLength(1)
     expect(textOf(await execute('agent_dispatch', { ...args, retry: true }, controller)))
-      .toContain('the earlier briefing stands')
+      .toContain(`Reusing lead child ${retried.childId}`)
   })
 
   it('carries the controller-to-lead-to-worker chain through the model face', async () => {
