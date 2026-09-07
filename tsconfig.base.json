@@ -246,6 +246,7 @@
       "@deepseek-ai/dsh-experimental-shadow-router": ["./packages/experimental/shadow-router/src"],
       "@deepseek-ai/dsh-experimental-command-goal-binding": ["./packages/experimental/command-goal-binding/src"],
       "@deepseek-ai/dsh-experimental-devframe": ["./packages/experimental/devframe/src"],
+      "@deepseek-ai/dsh-experimental-devframe/controller": ["./packages/experimental/devframe/src/controller/goal-binding.ts"],
       "@deepseek-ai/dsh-experimental-devframe/*": ["./packages/experimental/devframe/src/*"],
       // BEGIN generated package aliases — pnpm run gen-tsconfig-paths
       "@deepseek-ai/dsh-acp": ["./packages/acp/acp/src"],

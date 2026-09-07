@@ -71,6 +71,14 @@ await ctx.worktreeRegistry.unbind(worktree.id, WorktreeLockHolder(sessionId))
 
 The binding is a product-level promise, not a git lock: git commands the registry does not run are unaffected. While bound, `remove` refuses — `force` never overrides it — until the holder unbinds. A stale row dropped through `reconcile` with `pruneRows` takes its binding along, because a binding guards a live checkout, not a vanished directory.
 
+### Committing selected files
+
+Trusted host consumers call `commit({ id, holder, expectedHead, paths, message }, signal?)` to commit explicit files in a bound linked checkout. The consumer authorizes the operation, derives the holder from the calling session's binding, and quiesces other writers before calling. The provider checks the holder, registered branch, Git metadata ownership, and full expected HEAD object ID before staging; existing staged changes are refused. Missing paths must name exact tracked files, so a deleted directory cannot expand the selected scope. Symbolic links and junctions in selected paths are rejected.
+
+The operation grants no shell access to shared Git metadata. It disables Git hooks and rejects tracked or selected files with filter attributes because those programs would execute in the host. The returned `head` identifies the new commit; `clean` reports the whole checkout, including unrelated changes that were preserved. The service does not expose a model-facing commit tool.
+
+Git observations exceeding `maxOutputBytes` reject. Cancellation or failure after staging can leave staged changes or a completed commit. Inspect HEAD and the index before retrying, and raise the configured output limit if a complete observation requires it; the provider does not reset, roll back, or retry the operation.
+
 ### Removing worktrees
 
 Remove a registration when the checkout is no longer needed: the package runs `git worktree remove` first and deletes the durable row only after git succeeded. A checkout with modified or untracked files refuses to go without `force: true`, which passes `--force` to git, and a bound checkout refuses until its holder unbinds. Removal never touches the workspace record or the repository's history.
@@ -99,7 +107,7 @@ git refusals the provider recognizes are classified into four kinds; each error 
 
 Lock refusals are a separate error class: `WorktreeLockError` carries a closed refusal kind (`already-locked`, `not-locked`, `holder-mismatch`) and names the holder facts and the way out. They are product decisions — git never saw the request — so they never flow through the git stderr classifier.
 
-Retry semantics: nothing auto-retries. A refused operation is deterministic — retrying without changing the parameters fails again. A failed attempt never leaves a registration row and never leaves a worktree behind (`remove` deletes its row only after git succeeded), so a corrected retry starts clean. On a `path-length` refusal git may leave empty leading directories on disk; the registry never records them and never deletes them.
+Retry semantics: nothing auto-retries. Creation failures leave no registration or checkout; `remove` deletes its row only after git succeeds. On a `path-length` refusal git may leave empty leading directories on disk; the registry never records or deletes them. A failed commit may have changed the index or HEAD, so inspect its outcome before retrying.
 
 Link-shell contract (symlinks and junctions): the registry never creates symlinks or junctions. Every path it records is canonicalized through `fs.realpath` after the directory exists, so a worktree reached through a junction or symlink spelling is registered under its physical target, and the same directory through two spellings is one registration — creating a worktree through the alias of an existing one fails as already registered instead of doubling. `reconcile` canonicalizes git-reported paths the same way before comparing, so metadata that stored a link spelling still matches its row. Windows path comparisons fold case; git's forward-slash output compares equal to the recorded backslash paths.
 
@@ -118,7 +126,7 @@ This section explains the design decisions behind the feature and points at the 
 - **The uuid is the anchor, the path is a fact.** Worktree paths are rewritten by normalization and by git itself, so rows are keyed by a generated `WorktreeId` and store the canonical path observed after creation.
 - **An independent domain, not a WorkspaceRecord field.** Worktree lifecycle is git mechanics, not workspace session accounting; the rows live in this package's `worktree_registry` domain, and the ownership link is a `workspaceId` field validated at operation time through `ctx.workspaceRegistry`.
 - **Observed facts over assumptions.** The stored branch is read back from the new worktree, the stored path is the post-creation `fs.realpath`, and `status` reports only what git reports now.
-- **The binding is a promise between consumers, not a mechanism.** The registry stores and enforces one holder per worktree but never interprets the marker; enforcement lives at the registry's own `remove`, and the holder's identity belongs to the caller that minted it.
+- **The binding belongs to consumers.** The registry stores one holder per worktree, rejects removal while bound, and requires that holder for commits. The caller owns the holder's identity and authorization.
 - **The registry is the authority for registrations.** `list` answers from durable rows; where git's own metadata disagrees, `reconcile` reports the difference and repairs it only on request.
 - **Reconcile is registry-side by default.** Dropping rows never deletes directories or files, and adopting never rewrites a worktree — the actions only bring the product's records in line with what already exists.
 - **Removal is git-first.** The durable row is deleted only after `git worktree remove` succeeded, so a failed removal never hides a real checkout.
@@ -191,7 +199,7 @@ Independent of live requests: the package never touches a request prefix, so it 
 These limits define when the registry is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
 
 - **A stale binding wedges removal** — a holder that never unbinds keeps its worktree unremovable until the holder returns, another authority unbinds with the holder value, or the row is dropped through reconcile after its directory vanished; the registry has no timeout or third-party break-lock operation.
-- **The binding gates only the registry** — it is a product-level exclusivity promise enforced at this registry's `remove`; git commands run outside the registry ignore it entirely.
+- **The binding gates registry removal and commits** — Git commands run outside the registry ignore it. Commit consumers must quiesce other writers.
 - **Reconcile never deletes trees** — dropping rows and adopting registrations are the only actions; a worktree that should be physically deleted still goes through `remove` (or the user's own hands).
 - **Remove needs its owner** — the owner workspace registration must still exist when a worktree is removed; deleting the workspace wedges its worktree rows' removal until the workspace is re-registered or the row is dropped through reconcile.
 - **Adoption trusts git's list** — an adopted worktree records the branch observed in it; a detached HEAD is recorded as `HEAD`, and the registry does not resolve what the detached HEAD points at.

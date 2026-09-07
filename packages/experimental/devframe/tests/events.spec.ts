@@ -463,13 +463,27 @@ describe('DevFrame durable event vocabulary', () => {
     expect(state.lifecycle?.state).toBe('quiescence_confirmed')
   })
 
-  it('keeps a corrupted duplicate or identity change fail-closed during replay', () => {
+  it('converges an exact binding repeat and keeps an identity change fail-closed during replay', () => {
+    // An exact repeat is an idempotent re-observation: the reliability stop
+    // flow may re-record `stop_requested` after the command lane, and the
+    // replay must converge instead of latching (AT4-06/AT1-10 seam).
     const duplicate = session()
     duplicate.append('devframe/role-policy', rolePolicy())
     duplicate.append('devframe/goal-binding', binding())
     duplicate.append('devframe/goal-binding', binding())
-    expect(foldDevFrameState(duplicate.snapshotEvents(), duplicate.header).failure)
-      .toMatch(/recorded twice/)
+    const duplicateState = foldDevFrameState(duplicate.snapshotEvents(), duplicate.header)
+    expect(duplicateState.failure).toBeNull()
+    expect(duplicateState.bindings).toHaveLength(1)
+
+    const repeatedStop = session()
+    repeatedStop.append('devframe/role-policy', rolePolicy())
+    repeatedStop.append('devframe/goal-binding', binding())
+    repeatedStop.append('devframe/goal-binding', binding({ lifecycle: 'stop_requested' }))
+    repeatedStop.append('devframe/goal-binding', binding({ lifecycle: 'stop_requested' }))
+    const stopState = foldDevFrameState(repeatedStop.snapshotEvents(), repeatedStop.header)
+    expect(stopState.failure).toBeNull()
+    expect(stopState.bindings).toHaveLength(1)
+    expect(stopState.bindings[0]?.lifecycle).toBe('stop_requested')
 
     const changed = session()
     changed.append('devframe/role-policy', rolePolicy())
@@ -477,6 +491,38 @@ describe('DevFrame durable event vocabulary', () => {
     changed.append('devframe/goal-binding', binding({ taskIds: [TaskId('task-2')] }))
     expect(foldDevFrameState(changed.snapshotEvents(), changed.header).failure)
       .toMatch(/immutable binding/)
+  })
+
+  it('moves the acceptance region start on hash-changing adoptions and keeps it across a plain resume', () => {
+    // AT1-10 A→B→A swing: the acceptance hash is a deterministic function of
+    // (objective, checks), so a swung-back adoption reproduces the ORIGINAL
+    // hash — the region start revision is what keeps the earlier generation's
+    // same-hash evidence refuse-able. A plain same-hash resume keeps the
+    // original start, so same-generation evidence stays valid.
+    const ACCEPTANCE_B = AcceptanceHash('acceptance-two')
+    const swing = session()
+    swing.append('devframe/role-policy', rolePolicy())
+    swing.append('devframe/goal-binding', binding())
+    swing.append('devframe/goal-binding', binding({
+      goalRevision: 2,
+      acceptanceHash: ACCEPTANCE_B,
+      confirmation: { id: ConfigurationConfirmationId('confirmation-b'), acceptanceHash: ACCEPTANCE_B },
+    }))
+    swing.append('devframe/goal-binding', binding({
+      goalRevision: 3,
+      confirmation: { id: ConfigurationConfirmationId('confirmation-a3'), acceptanceHash: ACCEPTANCE },
+    }))
+    const swingState = foldDevFrameState(swing.snapshotEvents(), swing.header)
+    expect(swingState.failure).toBeNull()
+    expect(swingState.acceptanceRegions).toEqual([{ goalId: GoalId('goal-1'), startRevision: 3 }])
+
+    const plain = session()
+    plain.append('devframe/role-policy', rolePolicy())
+    plain.append('devframe/goal-binding', binding())
+    plain.append('devframe/goal-binding', binding({ goalRevision: 2, lifecycle: 'admission_open' }))
+    const plainState = foldDevFrameState(plain.snapshotEvents(), plain.header)
+    expect(plainState.failure).toBeNull()
+    expect(plainState.acceptanceRegions).toEqual([{ goalId: GoalId('goal-1'), startRevision: 1 }])
   })
 
   it('keeps a duplicated task warning fail-closed during replay', () => {
@@ -632,9 +678,10 @@ describe('DevFrame host projection', () => {
     const live = ctx.sessionProjections.stateOf(current, 'devframe')
     expect(live?.failure).toBeNull()
     expect(live?.bindings).toHaveLength(1)
+    expect(live?.acceptanceRegions).toEqual([{ goalId: GoalId('goal-1'), startRevision: 1 }])
     const checkpoint = ctx.sessionProjections.checkpoint(current)
     const row = checkpoint.devframe
-    expect(row?.ver).toBe(3)
+    expect(row?.ver).toBe(4)
     expect(ctx.sessionProjections.restore(
       checkpoint,
       current.snapshotEvents(),
@@ -715,7 +762,7 @@ describe('task delivery evidence replay', () => {
     expect(state.bindings[0]).toEqual(goal)
     expect(state.deliveries).toEqual([delivery])
     expect(state.verifications[0]?.binding.sourceFingerprint).toBe(delivery.sourceFingerprint)
-    expect(devFrameProjectionDefinition.stateVersion).toBe(3)
+    expect(devFrameProjectionDefinition.stateVersion).toBe(4)
     const { deliveries: _deliveries, ...oldCheckpoint } = state
     expect(devFrameProjectionDefinition.stateSchema.safeParse(oldCheckpoint).success).toBe(false)
   })

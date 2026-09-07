@@ -32,6 +32,20 @@ import type {
   ProjectLifecycleState,
   WorkspaceId,
 } from './shared/types.ts'
+import type { GoalId } from '@deepseek-ai/dsh-goal/types'
+
+/**
+ * One goal's start revision of its current acceptance's evidence region
+ * (AT1-10): the fold moves it to the adopted revision whenever a strict
+ * revision advance changes the acceptance hash, and leaves it untouched
+ * across a plain same-hash resume.
+ */
+export interface GoalAcceptanceRegion {
+  /** The goal whose current acceptance region is tracked. */
+  readonly goalId: GoalId
+  /** The lowest evidence revision the current acceptance still admits. */
+  readonly startRevision: number
+}
 
 /** Current host state reconstructed from DevFrame durable events. */
 export interface DevFrameProjectionState {
@@ -43,6 +57,23 @@ export interface DevFrameProjectionState {
   rolePolicy: DevFrameRolePolicyEventData | null
   /** Historical Goal bindings keyed by Goal identity. */
   bindings: GoalBinding[]
+  /**
+   * Superseded binding generations replaced by a strictly higher revision:
+   * evidence records may legitimately attribute to an earlier generation
+   * (late-arriving log order or a checks-change adoption), so attribution
+   * validates against this history instead of latching the replay; the
+   * completion face refuses superseded generations by name.
+   */
+  superseded: GoalBinding[]
+  /**
+   * Per-goal start revision of the current acceptance's evidence region
+   * (AT1-10). The acceptance hash alone cannot distinguish a swung-back
+   * acceptance: when the approved checks change A→B and back B→A, the
+   * re-adopted hash equals the original, so the completion gate also
+   * requires evidence revisions at or above the region start. Absent
+   * entries (checkpoints written before this field) degrade fail-closed.
+   */
+  acceptanceRegions: GoalAcceptanceRegion[]
   /** Reservation and settlement records keyed by operation identity. */
   usage: DevFrameUsageEventData[]
   /** Explicit task outputs in delivery order. */
@@ -77,6 +108,11 @@ const devFrameStateSchema = z.object({
   workspaceId: z.union([trimmedString, z.null()]),
   rolePolicy: z.unknown().nullable(),
   bindings: z.array(z.unknown()),
+  superseded: z.array(z.unknown()).default([]),
+  acceptanceRegions: z.array(z.object({
+    goalId: trimmedString,
+    startRevision: z.number().int().positive(),
+  })).default([]),
   usage: z.array(z.unknown()),
   deliveries: z.array(z.unknown()),
   verifications: z.array(z.unknown()),
@@ -94,6 +130,11 @@ const devFrameStateSchema = z.object({
         ? null
         : decodeDevFramePayload('devframe/role-policy', value.rolePolicy),
       bindings: value.bindings.map(binding => decodeDevFramePayload('devframe/goal-binding', binding)),
+      superseded: value.superseded.map(binding => decodeDevFramePayload('devframe/goal-binding', binding)),
+      acceptanceRegions: value.acceptanceRegions.map(region => ({
+        goalId: brandString<GoalId>(region.goalId),
+        startRevision: region.startRevision,
+      })),
       usage: value.usage.map(usage => decodeDevFramePayload('devframe/usage', usage)),
       deliveries: value.deliveries.map(delivery => decodeDevFramePayload('devframe/task-delivery', delivery)),
       verifications: value.verifications.map(verification => decodeDevFramePayload('devframe/verification', verification)),
@@ -121,6 +162,8 @@ function initialState(header: SessionHeader): DevFrameProjectionState {
     workspaceId: null,
     rolePolicy: null,
     bindings: [],
+    superseded: [],
+    acceptanceRegions: [],
     usage: [],
     deliveries: [],
     verifications: [],
@@ -242,18 +285,29 @@ function sameAssignments(
     candidate.role === assignment.role && candidate.sessionId === assignment.sessionId))
 }
 
-/** Compare the immutable fields of a Goal binding. */
+/**
+ * Compare the always-immutable structural fields of a Goal binding: the
+ * workspace, controller, Goal identity, task set, source snapshot, and
+ * attempt limit never change while the Goal lives. The acceptance fields
+ * (hash and confirmation) are generation-variable — see
+ * {@link applyGoalBinding}.
+ */
 function sameBindingIdentity(left: GoalBinding, right: GoalBinding): boolean {
   return left.workspaceId === right.workspaceId
     && left.controllerSessionId === right.controllerSessionId
     && left.goalId === right.goalId
     && left.taskIds.length === right.taskIds.length
     && left.taskIds.every((taskId, index) => taskId === right.taskIds[index])
-    && left.acceptanceHash === right.acceptanceHash
     && left.sourceFingerprint === right.sourceFingerprint
+    && left.snapshotId === right.snapshotId
+    && left.budget.maxAttempts === right.budget.maxAttempts
+}
+
+/** Compare the generation-variable acceptance fields of a Goal binding. */
+function sameAcceptance(left: GoalBinding, right: GoalBinding): boolean {
+  return left.acceptanceHash === right.acceptanceHash
     && left.confirmation.id === right.confirmation.id
     && left.confirmation.acceptanceHash === right.confirmation.acceptanceHash
-    && left.budget.maxAttempts === right.budget.maxAttempts
 }
 
 /** Compare a result tuple with a persisted Goal binding, allowing later CAS revisions. */
@@ -297,10 +351,14 @@ function assertResultBinding(state: DevFrameProjectionState, binding: GoalResult
   assertProjectIdentity(state, binding.controllerSessionId, binding.workspaceId)
   const current = bindingFor(state, binding.goalId)
   if (current === undefined) throw new Error(`DevFrame result references unknown Goal "${binding.goalId}"`)
-  if (!sameResultTuple(current, binding)) {
-    throw new Error(`DevFrame result tuple for Goal "${binding.goalId}" does not match its binding`)
-  }
-  return current
+  if (sameResultTuple(current, binding)) return current
+  // A record attributed to a superseded generation (e.g. late-arriving
+  // evidence or a checks-change adoption's older log order) folds with its
+  // own attribution instead of latching the replay — the completion face
+  // refuses superseded generations by name.
+  const superseded = state.superseded.find(candidate => candidate.goalId === binding.goalId && sameResultTuple(candidate, binding))
+  if (superseded !== undefined) return superseded
+  throw new Error(`DevFrame result tuple for Goal "${binding.goalId}" does not match its binding`)
 }
 
 /** Return the lifecycle states permitted after one prior state. */
@@ -380,7 +438,27 @@ function applyRolePolicy(state: DevFrameProjectionState, policy: DevFrameRolePol
   state.rolePolicy = cloneRolePolicy(policy)
 }
 
-/** Apply a complete Goal binding and retain only monotonic lifecycle/budget changes. */
+/**
+ * Apply a complete Goal binding and retain only monotonic lifecycle/budget
+ * changes. The structural identity is immutable. The acceptance fields
+ * (acceptance hash and human confirmation) may change only across a
+ * generation advance — a strictly higher native revision carrying a
+ * different approved-checks acceptance, the resume lane's authorized
+ * adoption of changed checks (AT1-10: changing checks invalidates the
+ * evidence of the superseded generation without resetting usage). The same
+ * revision with changed acceptance fields stays an in-place mutation and is
+ * refused. An exact repeat of the current binding state is an idempotent
+ * re-observation — the reliability stop flow may re-record `stop_requested`
+ * after the command lane — and replays converge instead of latching.
+ *
+ * Each accepted record also maintains the goal's acceptance region start:
+ * the first record and every hash-changing generation advance move the
+ * region start to the record's revision, while a same-hash revision
+ * advance (a plain resume) keeps the prior start — so evidence carrying
+ * the same hash from before the region start (checks swung back to an
+ * earlier acceptance, A→B→A) stays refuse-able by revision at the
+ * completion gate.
+ */
 function applyGoalBinding(state: DevFrameProjectionState, binding: GoalBinding): void {
   assertProjectIdentity(state, binding.controllerSessionId, binding.workspaceId)
   if (binding.confirmation.acceptanceHash !== binding.acceptanceHash) {
@@ -391,12 +469,20 @@ function applyGoalBinding(state: DevFrameProjectionState, binding: GoalBinding):
   if (prior === undefined) {
     assertLifecycleTransition(undefined, binding.lifecycle)
     state.bindings.push(cloneBinding(binding))
+    setAcceptanceRegion(state, binding.goalId, binding.goalRevision)
     if (state.lifecycle !== null && state.lifecycle.binding.goalId !== binding.goalId) {
       state.lifecycle = null
     }
     return
   }
+  if (binding.goalRevision > prior.goalRevision) {
+    state.superseded.push(cloneBinding(prior))
+  }
   if (!sameBindingIdentity(prior, binding)) {
+    throw new Error(`DevFrame Goal "${binding.goalId}" changed its immutable binding`)
+  }
+  const generationAdvanced = binding.goalRevision > prior.goalRevision
+  if (!generationAdvanced && !sameAcceptance(prior, binding)) {
     throw new Error(`DevFrame Goal "${binding.goalId}" changed its immutable binding`)
   }
   if (binding.goalRevision < prior.goalRevision) {
@@ -407,10 +493,35 @@ function applyGoalBinding(state: DevFrameProjectionState, binding: GoalBinding):
   }
   if (binding.goalRevision === prior.goalRevision && binding.lifecycle === prior.lifecycle
     && binding.budget.consumedAttempts === prior.budget.consumedAttempts) {
-    throw new Error(`DevFrame Goal "${binding.goalId}" binding was recorded twice`)
+    return
   }
   if (binding.lifecycle !== prior.lifecycle) assertLifecycleTransition(prior.lifecycle, binding.lifecycle)
+  if (generationAdvanced && !sameAcceptance(prior, binding)) {
+    setAcceptanceRegion(state, binding.goalId, binding.goalRevision)
+  }
   state.bindings[index] = cloneBinding(binding)
+}
+
+/** Record the start revision of one goal's current acceptance region. */
+function setAcceptanceRegion(state: DevFrameProjectionState, goalId: GoalId, startRevision: number): void {
+  const index = state.acceptanceRegions.findIndex(region => region.goalId === goalId)
+  if (index < 0) {
+    state.acceptanceRegions.push({ goalId, startRevision })
+    return
+  }
+  state.acceptanceRegions[index] = { goalId, startRevision }
+}
+
+/**
+ * Read the start revision of one goal's current acceptance region.
+ * @param state - the folded projection state.
+ * @param goalId - the goal whose region start is read.
+ * @returns the region start, or `undefined` when no region was ever folded
+ *   for the goal — a degraded pre-field checkpoint cache, which the
+ *   completion gate treats fail-closed instead of admitting.
+ */
+export function acceptanceRegionStartOf(state: DevFrameProjectionState, goalId: GoalId): number | undefined {
+  return state.acceptanceRegions.find(region => region.goalId === goalId)?.startRevision
 }
 
 /** Require current Goal authorization without rewriting its source input. */
@@ -651,7 +762,7 @@ export function foldDevFrameState(
 /** Host-only projection definition registered by the DevFrame profile. */
 export const devFrameProjectionDefinition = {
   key: 'devframe',
-  stateVersion: 3,
+  stateVersion: 4,
   stateSchema: devFrameStateSchema,
   init: (header: SessionHeader, _inheritedEventCount: SessionLogOffset) => initialState(header),
   apply: (state: DevFrameProjectionState, event: SessionEvent) => {

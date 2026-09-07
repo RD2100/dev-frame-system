@@ -12,7 +12,7 @@ export * from './required-checks-file-store.ts'
 export * from './goal-binding-file-store.ts'
 export { DevFrameSessionJournal, DevFramePersistenceError } from './session-journal.ts'
 export type { DevFrameAppendOptions, DevFrameFlush, DevFrameReviewGate } from './session-journal.ts'
-export { devFrameProjectionDefinition, type DevFrameProjectionState } from './projection.ts'
+export { acceptanceRegionStartOf, devFrameProjectionDefinition, type DevFrameProjectionState, type GoalAcceptanceRegion } from './projection.ts'
 export {
   DevFrameDeliveryId,
   DevFrameReviewId,

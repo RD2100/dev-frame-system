@@ -28,6 +28,7 @@ import {
   type GoalBinding,
   GoalBindingError,
   type GoalBindingStore,
+  isGenerationAdvance,
   TaskId,
 } from './controller/goal-binding.ts'
 import {
@@ -348,14 +349,17 @@ export class FileGoalBindingStore implements GoalBindingStore {
   }
 
   /**
-   * Save one binding, accepting an identical or equal-or-advanced retry and
-   * rejecting identity reuse with changed task, acceptance, or budget data.
-   * @param binding - immutable Goal binding to retain.
+   * Save one binding, accepting an identical or equal-or-advanced retry, a
+   * legal generation advance ({@link isGenerationAdvance}), and rejecting
+   * identity reuse with changed task, acceptance, or budget data outside
+   * those rules.
+   * @param binding - Goal binding to retain.
    * @throws {@link GoalBindingError} with `GOAL_BINDING_PERSISTENCE` when the
    *   existing ledger is corrupt — save never repairs or overwrites
    *   corruption — and with `GOAL_BINDING_CONFLICT` when the identity already
-   *   carries a different immutable tuple or an earlier revision. Raw fs
-   *   errors (e.g. a missing parent directory) propagate unwrapped.
+   *   carries a different immutable tuple or an earlier revision outside a
+   *   legal generation advance. Raw fs errors (e.g. a missing parent
+   *   directory) propagate unwrapped.
    */
   async save(binding: GoalBinding): Promise<void> {
     const ledger = await readLedger(this.ledgerPath)
@@ -365,8 +369,9 @@ export class FileGoalBindingStore implements GoalBindingStore {
       && record.goalId === binding.goalId)
     if (index !== -1) {
       const current = bindings[index]
-      if (current !== undefined && sameImmutableBinding(current, binding)
-        && binding.goalRevision >= current.goalRevision) {
+      if (current !== undefined
+        && ((sameImmutableBinding(current, binding) && binding.goalRevision >= current.goalRevision)
+          || isGenerationAdvance(current, binding))) {
         bindings[index] = binding
       } else {
         throw new GoalBindingError(

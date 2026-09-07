@@ -71,6 +71,14 @@ await ctx.worktreeRegistry.unbind(worktree.id, WorktreeLockHolder(sessionId))
 
 绑定是产品层的承诺，不是 git 锁：注册表不运行的 git 命令不受影响。绑定期间 `remove` 拒绝——`force` 绝不覆盖它——直到 holder 解绑。经 `reconcile` 加 `pruneRows` 丢弃的过时行连同其绑定一起丢弃，因为绑定守护的是活着的 checkout，不是消失的目录。
 
+### 提交选定文件
+
+受信任的宿主消费者调用 `commit({ id, holder, expectedHead, paths, message }, signal?)`，在已绑定的关联检出中提交明确指定的文件。消费者负责授权操作、从调用会话的绑定派生 holder，并在调用前使其他写入者停止写入。provider 在暂存前检查 holder、登记分支、Git 元数据归属和完整的预期 HEAD 对象 ID；已有暂存改动会被拒绝。缺失路径必须精确指向一个已跟踪文件，因此已删除目录不会扩张选定范围。选定路径中的符号链接和 junction 会被拒绝。
+
+该操作不授予 shell 对共享 Git 元数据的访问权。它禁用 Git hooks，并拒绝带有 filter 属性的已跟踪或选定文件，因为这些程序会在宿主中执行。返回的 `head` 标识新提交；`clean` 报告整个检出的状态，包括被保留的无关改动。该服务不提供面向模型的提交工具。
+
+Git 观测输出超过 `maxOutputBytes` 时会被拒绝。暂存后的取消或失败可能留下暂存改动或已完成的提交。重试前应检查 HEAD 和索引，并在完整观测需要时提高配置的输出上限；provider 不会重置、回滚或重试该操作。
+
 ### 删除 worktree
 
 检出不再需要时删除登记：本包先运行 `git worktree remove`，git 成功之后才删持久化行。有改动或未跟踪文件的检出拒绝删除，除非传 `force: true`（对 git 传 `--force`）；处于绑定状态的检出拒绝删除，直到其 holder 解绑。删除绝不触碰 workspace 记录或仓库历史。
@@ -101,7 +109,7 @@ provider 能识别的 git 拒绝分为四类；每个错误都是 `WorktreeGitOp
 
 锁定拒绝是另一个错误类：`WorktreeLockError` 携带封闭的拒绝类别（`already-locked`、`not-locked`、`holder-mismatch`），并指明 holder 事实与出路。它们是产品决策——git 从未见到请求——所以绝不流入 git stderr 分类器。
 
-重试语义：任何东西都不会自动重试。被拒绝的操作是确定性的——不改变参数的重试会再次失败。失败的尝试绝不留下登记行，也绝不留下 worktree（`remove` 只在 git 成功后才删行），所以修正后的重试从干净状态开始。`path-length` 拒绝时 git 可能在磁盘上留下空的前导目录；注册表既不登记也不删除它们。
+重试语义：任何操作都不会自动重试。创建失败不留下登记或检出；`remove` 只在 git 成功后才删行。`path-length` 拒绝时 git 可能在磁盘上留下空的前导目录；注册表既不登记也不删除它们。提交失败可能已经改变索引或 HEAD，因此重试前应检查结果。
 
 链接壳契约（symlink 与 junction）：注册表从不创建 symlink 或 junction。它记录的每个路径都在目录存在之后经 `fs.realpath` 规范化，所以经由 junction 或 symlink 拼写到达的 worktree 以其物理目标登记，同一目录的两种拼写就是同一登记——经由别名创建已有 worktree 的尝试以已登记失败，而不是重复登记。`reconcile` 以同样方式规范化 git 报告的路径再比较，所以存储了链接拼写的 git 元数据仍能匹配到行。Windows 路径比较折叠大小写；git 的正斜杠输出与登记的反斜杠路径视为相等。
 
@@ -120,7 +128,7 @@ provider 能识别的 git 拒绝分为四类；每个错误都是 `WorktreeGitOp
 - **uuid 是锚点，路径是事实。** worktree 路径会被规范化与 git 本身改写，所以行以生成的 `WorktreeId` 为 key，存储创建之后观测到的规范路径。
 - **独立的域，不挂 WorkspaceRecord 字段。** worktree 生命周期是 git 机制，不是 workspace 的 session 记账；行存在本包的 `worktree_registry` 域，归属关联是一个 `workspaceId` 字段，在操作时经 `ctx.workspaceRegistry` 校验。
 - **观测事实优先于假设。** 存储的分支是从新 worktree 读回的，存储的路径是创建后的 `fs.realpath`，`status` 只报告 git 当下报告的内容。
-- **绑定是消费方之间的承诺，不是机制。** 注册表存储并执行每个 worktree 至多一个 holder，但从不解释标记本身；执行点在注册表自己的 `remove`，holder 的身份属于铸造它的调用方。
+- **绑定属于消费者。** 注册表为每个 worktree 存储一个 holder，在绑定期间拒绝删除，并要求提交者匹配该 holder。调用方负责 holder 的身份与授权。
 - **注册表是登记的权威。** `list` 从持久化行作答；git 自身元数据与之相悖时，`reconcile` 报告差异并仅在被要求时修复。
 - **对账默认只动登记侧。** 删行绝不删目录或文件，采纳绝不改写 worktree——动作只把产品的记录对齐到已存在的事实上。
 - **删除 git 优先。** `git worktree remove` 成功之后才删持久化行，所以失败的删除绝不会掩盖一个真实存在的检出。
@@ -196,7 +204,7 @@ provider 打开 `worktree_registry` 域（version 2）：一张以 `WorktreeId` 
 这些限制定义了注册表何时不适用或需要特殊运维关注。它们是当前包约束，不是任务积压。
 
 - **过时绑定卡住删除**——从不解绑的 holder 使其 worktree 不可删除，直到 holder 回来、其他权威以 holder 值解绑、或其目录消失后该行经 reconcile 丢弃；注册表没有超时或第三方破锁操作。
-- **绑定只约束注册表**——它是产品层的排他承诺，执行点在本注册表的 `remove`；注册表之外运行的 git 命令完全无视它。
+- **绑定约束注册表的删除和提交**——注册表之外运行的 Git 命令不受约束。提交消费者必须使其他写入者停止写入。
 - **对账从不删除树**——删行与采纳登记是仅有的动作；需要物理删除的 worktree 仍走 `remove`（或用户自己动手）。
 - **删除需要归属方**——删除 worktree 时归属 workspace 登记必须仍存在；删除 workspace 会卡住其 worktree 行的删除，直到 workspace 重新登记或该行经 reconcile 删除。
 - **采纳信任 git 的列表**——被采纳的 worktree 记录观测到的分支；detached HEAD 记为 `HEAD`，注册表不解析 detached HEAD 指向什么。

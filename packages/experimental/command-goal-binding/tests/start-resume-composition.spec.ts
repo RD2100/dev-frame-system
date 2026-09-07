@@ -394,7 +394,7 @@ describe('/devframe-resume composition', { timeout: 60_000 }, () => {
           code: state === 'missing' ? 'REQUIRED_CHECKS_CONFIG_NOT_FOUND' : 'REQUIRED_CHECKS_STORE_CORRUPT',
         })
         expect(second.ctx.goals.get(second.agent)?.phase).toBe('active')
-      } else {
+      } else if (state === 'retained') {
         const completion = await execute(second, '/goal-complete')
         expect(completion.result.kind).toBe('success')
         expect(second.ctx.goals.get(second.agent)?.phase).toBe('complete')
@@ -402,6 +402,16 @@ describe('/devframe-resume composition', { timeout: 60_000 }, () => {
         await second.ctx.sessions.flush(second.session)
         const durable = await second.ctx.sessionPersistence.load(sessionId)
         expect(durable.events.some(event => event.type === 'goal/change' && event.data.operation === 'receipt')).toBe(true)
+      } else {
+        // AT1-10: the changed-config deployment adopts the changed checks
+        // into a new generation on resume, which re-verifies the real
+        // changed checks; the superseded generation's review cannot gate
+        // completion, so the goal stays active as a stable data refusal —
+        // and the adopted digest joins the ledger (usage is not reset).
+        const completion = await execute(second, '/goal-complete')
+        expect(completion.result.kind).toBe('error')
+        expect(second.ctx.goals.get(second.agent)?.phase).toBe('active')
+        expect(readFileSync(ledgerPath, 'utf8')).not.toBe(approvedLedger)
       }
     },
   )

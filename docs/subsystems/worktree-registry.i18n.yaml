@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/worktree-registry.md
-worktree-registry.md: 5946e2f1baaf5187bf05beaeded667686a1473c3
-worktree-registry.zh.md: aeff256f099c439f6fbada4d0d18175adac8539b
+worktree-registry.md: e02c8817e6951ad01ef19cf56aa6964b5505b26d
+worktree-registry.zh.md: 69a0c4fc1496c6339c2f724d44a8d36d3c78856d

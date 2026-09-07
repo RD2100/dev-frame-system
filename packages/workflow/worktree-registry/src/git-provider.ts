@@ -15,8 +15,9 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { stat } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { lstat, mkdtemp, readFile, realpath, rmdir, stat } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { isAbsolute, join, relative, resolve, win32 } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Workspace, WorkspaceId } from '@deepseek-ai/dsh-workspace'
@@ -34,6 +35,9 @@ import { WorktreeLockError } from './lock-failures.ts'
 import { parseWorktreeList, sameGitPath } from './porcelain.ts'
 import type {
   Worktree,
+  WorktreeCommitId,
+  WorktreeCommitRequest,
+  WorktreeCommitResult,
   WorktreeCreateRequest,
   WorktreeDanglingRegistration,
   WorktreeId,
@@ -216,6 +220,112 @@ export class GitWorktreeRegistry extends WorktreeRegistry {
     const branch = (await this.runGit(['rev-parse', '--abbrev-ref', 'HEAD'], record.path)).trim()
     const porcelain = await this.runGit(['status', '--porcelain=v1'], record.path)
     return { directoryExists: true, branch, clean: porcelain.length === 0 }
+  }
+
+  async commit(request: WorktreeCommitRequest, signal?: AbortSignal): Promise<WorktreeCommitResult> {
+    return await this.enqueue(async () => {
+      signal?.throwIfAborted()
+      const record = this.requireRecord(request.id)
+      if (record.lockedBy === undefined || record.lockedBy !== request.holder) {
+        throw new WorktreeLockError('cannot commit worktree: the caller does not hold its writer lock',
+          record.lockedBy === undefined ? 'not-locked' : 'holder-mismatch')
+      }
+      if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(request.expectedHead)) {
+        throw new Error('worktree commit requires a full expected HEAD object ID')
+      }
+      if (request.message.trim().length === 0 || request.paths.length === 0) {
+        throw new Error('worktree commit requires a message and at least one literal relative path')
+      }
+      const missingPaths: string[] = []
+      for (const path of request.paths) {
+        const parts = path.replaceAll('\\', '/').split('/')
+        if (isAbsolute(path) || win32.isAbsolute(path) || path.includes('\0')
+          || parts.some(part => part === '' || part === '.' || part === '..' || part.toLowerCase() === '.git')) {
+          throw new Error('worktree commit paths must stay inside the checkout and exclude Git metadata')
+        }
+        for (let count = 1; count <= parts.length; count++) {
+          try {
+            if ((await lstat(join(record.path, ...parts.slice(0, count)))).isSymbolicLink()) {
+              throw new Error('worktree commit paths must not traverse symbolic links or junctions')
+            }
+          } catch (error) {
+            // Deleted tracked files may have missing parents; other failures reject.
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+          }
+        }
+        let directory = false
+        try {
+          directory = (await lstat(join(record.path, path))).isDirectory()
+        } catch (error) {
+          // Missing paths can represent tracked deletions; other filesystem failures reject.
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+          missingPaths.push(path)
+        }
+        if (directory) throw new Error('worktree commit requires explicit files, not directory pathspecs')
+      }
+      const workspace = this.requireWorkspace(record.workspaceId)
+      const invoke = async (args: readonly string[], input?: string) =>
+        await this.runGit(args, workspace.path, signal, true, input)
+      const entries = await invoke(['worktree', 'list', '--porcelain', '-z'])
+      const entry = parseWorktreeList(entries).find(value => sameGitPath(value.path, record.path))
+      if (entry?.branch !== record.branch) throw new Error('worktree commit target or branch changed since registration')
+      const common = await realpath((await invoke(['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim())
+      const pointerPath = join(record.path, '.git')
+      const pointer = (await readFile(pointerPath, 'utf8')).trim()
+      if (!pointer.startsWith('gitdir: ')) throw new Error('worktree commit requires a registered linked checkout')
+      const gitDir = await realpath(resolve(record.path, pointer.slice(8)))
+      const child = relative(join(common, 'worktrees'), gitDir)
+      if (child === '' || child === '..' || isAbsolute(child) || child.includes('/') || child.includes('\\')) {
+        throw new Error('worktree commit Git metadata is outside the registered repository')
+      }
+      const backlink = (await readFile(join(gitDir, 'gitdir'), 'utf8')).trim()
+      const linkedCommon = await realpath(resolve(gitDir, (await readFile(join(gitDir, 'commondir'), 'utf8')).trim()))
+      if (!sameGitPath(backlink, pointerPath) || !sameGitPath(linkedCommon, common)) {
+        throw new Error('worktree commit Git metadata does not belong to the registered checkout')
+      }
+      // Pin the host-owned Git directory so edits to the checkout's .git pointer
+      // cannot redirect a later command. Hooks and configured filters must not
+      // execute checkout-controlled programs in the host execution world.
+      const hooks = await mkdtemp(join(tmpdir(), 'dsh-worktree-commit-hooks-'))
+      try {
+        const prefix = ['--literal-pathspecs', `--git-dir=${gitDir}`, `--work-tree=${record.path}`,
+          '-c', `core.hooksPath=${hooks}`, '-c', 'core.fsmonitor=false', '-c', 'commit.gpgSign=false',
+          '-c', 'gc.auto=0', '-c', 'maintenance.auto=false']
+        const git = async (args: readonly string[], input?: string) => await invoke([...prefix, ...args], input)
+        // Status may refresh any tracked file through its clean filter.
+        const trackedPaths = await git(['ls-files', '--cached', '-z'])
+        const attributes = (await git(['check-attr', '-z', '--stdin', 'filter'],
+          trackedPaths + request.paths.join('\0') + '\0')).split('\0')
+        if (attributes.some((value, index) => index % 3 === 2 && value !== 'unspecified' && value !== 'unset')) {
+          throw new Error('host worktree commit does not execute file filters; tracked and selected paths must have no filter attribute')
+        }
+        if ((await git(['symbolic-ref', '--quiet', 'HEAD'])).trim() !== `refs/heads/${record.branch}`
+          || (await git(['rev-parse', '--verify', 'HEAD'])).trim() !== request.expectedHead) {
+          throw new Error('worktree commit expected HEAD or registered branch no longer matches')
+        }
+        if ((await git(['diff', '--cached', '--name-only', '-z'])).length !== 0) {
+          throw new Error('worktree commit refuses existing staged changes')
+        }
+        for (const path of missingPaths) {
+          const tracked = (await git(['ls-files', '--cached', '-z', '--', path])).split('\0').filter(Boolean)
+          if (tracked.length !== 1 || tracked[0] !== path.replaceAll('\\', '/')) {
+            throw new Error('worktree commit missing paths must name an exact tracked file')
+          }
+        }
+        await git(['add', '--', ...request.paths])
+        await git(['commit', '-m', request.message])
+        const lineage = (await git(['rev-list', '--parents', '-n', '1', 'HEAD'])).trim().split(' ')
+        const head = lineage[0]
+        if (lineage.length !== 2 || lineage[1] !== request.expectedHead
+          || head === undefined || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(head)) {
+          throw new Error('worktree commit outcome is uncertain: inspect HEAD before retrying')
+        }
+        const clean = (await git(['--no-optional-locks', 'status', '--porcelain=v1', '--untracked-files=all'])).length === 0
+        return { head: brandString<WorktreeCommitId>(head), clean }
+      } finally {
+        await rmdir(hooks)
+      }
+    })
   }
 
   async remove(id: WorktreeId, options?: WorktreeRemoveOptions): Promise<void> {
@@ -455,15 +565,22 @@ export class GitWorktreeRegistry extends WorktreeRegistry {
    * Run one git invocation to completion and collect its stdout.
    * @param args - git arguments after the executable.
    * @param cwd - Working directory for the invocation.
+   * @param signal - Optional caller cancellation.
+   * @param isolateGitEnv - Remove ambient Git overrides and credentials for controlled commits.
+   * @param input - Optional complete stdin payload.
    * @returns the collected stdout, with its truncation flag.
    */
-  private async runGitOut(args: readonly string[], cwd: string): Promise<CollectedOutput> {
-    using d = deadline(undefined, this.config.timeoutMs, 'WORKTREE_GIT_TIMEOUT')
+  private async runGitOut(
+    args: readonly string[], cwd: string, signal?: AbortSignal, isolateGitEnv = false, input?: string,
+  ): Promise<CollectedOutput> {
+    using d = deadline(signal, this.config.timeoutMs, 'WORKTREE_GIT_TIMEOUT')
     const handle: SubprocessHandle = this.ctx.subprocess.spawn({
       argv: [this.config.gitPath ?? 'git', ...args],
       cwd,
+      ...(isolateGitEnv ? { env: Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+        !/^GIT_/iu.test(key) && !/KEY|SECRET|TOKEN|PASSWORD/iu.test(key))) } : {}),
       stdio: {
-        stdin: 'ignore',
+        stdin: input === undefined ? 'ignore' : { data: input },
         stdout: { maxBytes: this.config.maxOutputBytes },
         stderr: { maxBytes: this.config.maxOutputBytes },
       },
@@ -482,6 +599,7 @@ export class GitWorktreeRegistry extends WorktreeRegistry {
         `worktree-registry: git ${describeArgs(args)} in '${cwd}' timed out after ${this.config.timeoutMs}ms`,
       )
     }
+    d.signal.throwIfAborted()
     if (outcome.exitCode !== 0) {
       const tail = stderr.text.trim()
       const base = `worktree-registry: git ${describeArgs(args)} in '${cwd}' failed with exit code ${outcome.exitCode}`
@@ -501,10 +619,15 @@ export class GitWorktreeRegistry extends WorktreeRegistry {
    * Run one git invocation to completion.
    * @param args - git arguments after the executable.
    * @param cwd - Working directory for the invocation.
+   * @param signal - Optional caller cancellation.
+   * @param isolateGitEnv - Require complete observations with a scrubbed Git environment.
+   * @param input - Optional complete stdin payload.
    * @returns the collected stdout text.
    */
-  private async runGit(args: readonly string[], cwd: string): Promise<string> {
-    return (await this.runGitOut(args, cwd)).text
+  private async runGit(args: readonly string[], cwd: string, signal?: AbortSignal, isolateGitEnv = false, input?: string): Promise<string> {
+    const output = await this.runGitOut(args, cwd, signal, isolateGitEnv, input)
+    if (isolateGitEnv && output.truncated) throw new Error('worktree commit Git observation was truncated')
+    return output.text
   }
 }
 

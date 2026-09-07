@@ -22,6 +22,7 @@ import { DevFrameDeliveryId, DevFrameSnapshotId, deliveryResultBinding } from '@
 import type { DevFrameCheckResult, DevFrameTaskDeliveryEventData } from '@deepseek-ai/dsh-experimental-devframe'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type {} from './controller.ts'
+import { normalizeCommitPaths, registerProjectCommitTool } from './commit-consumer.ts'
 
 /** Loader namespace name; the existing controller service owns task persistence. */
 export const name = 'project-delivery-tools'
@@ -45,6 +46,8 @@ export interface Config {
   checkTimeoutMs: number
   /** Per-check-process output cap. */
   checkMaxOutputBytes: number
+  /** Host-registered commit paths per task bounding what project_commit may commit. */
+  commitPathsByTask?: Record<string, string[]>
 }
 /** Loader validation for deployment settings. */
 export const Config: z<Config> = z.object({
@@ -52,6 +55,7 @@ export const Config: z<Config> = z.object({
   requiredChecksPath: z.string(), requiredChecksByTask: z.dict(z.string()),
   gitExecutable: z.string().min(1), gitTimeoutMs: z.number().min(1), gitMaxOutputBytes: z.number().min(1),
   checkTimeoutMs: z.number().min(1), checkMaxOutputBytes: z.number().min(1),
+  commitPathsByTask: z.dict(z.array(z.string())),
 })
 const execFileAsync = promisify(execFile)
 const findingsSchema = validation.array(validation.object({
@@ -392,4 +396,29 @@ export function apply(ctx: Context, config: Config): void {
     },
     presentCall: args => ({ card: 'generic', title: `Review task ${args.taskId}` }), presentResult: () => ({ card: 'generic' }),
   }))
+  const commitPaths = new Map<string, readonly string[]>()
+  for (const [taskId, paths] of Object.entries(config.commitPathsByTask ?? {})) {
+    try {
+      commitPaths.set(taskId, normalizeCommitPaths(paths))
+    } catch (error) {
+      throw new Error(`Invalid host commit path scope for task ${taskId}: ${(error as Error).message}`)
+    }
+  }
+  registerProjectCommitTool({
+    tools: ctx.tools,
+    registry: ctx.worktreeRegistry,
+    resolveWorker: (agent, taskId, signal) => resolve(agent, taskId, 'worker', signal),
+    serial,
+    gitEnvironment: env,
+    commitPathsByTask: commitPaths,
+    jobs: () => ctx.get('jobs'),
+    resolveOwnerHead: (sourceId) => {
+      const row = ctx.workspaceRegistry.list()
+        .flatMap(workspace => ctx.worktreeRegistry.list(workspace.id).map(tree => ({ workspace, tree })))
+        .find(entry => String(entry.tree.id) === String(sourceId))
+      if (row === undefined) throw new Error('Project commit requires the registered Worker worktree row')
+      return { ownerPath: row.workspace.path, branch: row.tree.branch }
+    },
+    config: { gitExecutable: config.gitExecutable, gitTimeoutMs: config.gitTimeoutMs, gitMaxOutputBytes: config.gitMaxOutputBytes },
+  })
 }

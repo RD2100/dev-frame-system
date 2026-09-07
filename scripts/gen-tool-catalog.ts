@@ -113,6 +113,10 @@ const OUT = 'docs/tool-catalog.md'
  * harvested, never executed; every operation rejects loud if it ever ran.
  */
 class CatalogWorktreeRegistry extends WorktreeRegistry {
+  override commit(): Promise<never> {
+    return Promise.reject(new Error('gen-tool-catalog: worktree tools are harvested, not executed'))
+  }
+
   override create(_request: WorktreeCreateRequest): Promise<Worktree> {
     return Promise.reject(new Error('gen-tool-catalog: worktree tools are harvested, not executed'))
   }
@@ -257,18 +261,21 @@ export const PROJECT_DELIVERY_TOOL_PACKAGE: ToolPackage = {
   pkg: '@deepseek-ai/dsh-experimental-project-controller/delivery-consumer',
   dir: 'project-controller', source: 'packages/experimental/project-controller/src/delivery-consumer.ts',
   requires: ['ctx.tools', 'ctx.agents', 'ctx.sessions', 'ctx.sessionProjections', 'ctx.projectController', 'ctx.agentBindings', 'ctx.workspaceRegistry', 'ctx.worktreeRegistry'],
-  writes: ['tool/call', 'tool/result', 'DevFrame delivery, verification and review events', 'project_tasks tasks', 'approved check subprocess effects'],
+  writes: ['tool/call', 'tool/result', 'DevFrame delivery, verification and review events', 'project_tasks tasks', 'approved check subprocess effects', 'Worker worktree commits through the registry commit Service'],
   async mount(ctx) {
     // Service methods are execution-only; harvesting neither opens the ledger nor runs checks.
-    for (const key of ['agents', 'sessions', 'projectController', 'agentBindings', 'workspaceRegistry', 'worktreeRegistry'] as const) {
+    for (const key of ['agents', 'sessions', 'projectController', 'agentBindings', 'workspaceRegistry'] as const) {
       ctx.provide(key, {} as never)
     }
+    // The commit registration rejects a provider without the merged commit
+    // Service, so the harvested stand-in carries the seam without Git access.
+    ctx.provide('worktreeRegistry', { commit: () => { throw new Error('catalog schema harvest never commits') } } as never)
     await ctx.plugin(ProjectDeliveryTool, {
       requiredChecksPath: resolve(root, 'catalog-unused-required-checks.json'), requiredChecksByTask: {},
       gitExecutable: 'git', gitTimeoutMs: 1, gitMaxOutputBytes: 1, checkTimeoutMs: 1, checkMaxOutputBytes: 1,
     })
   },
-  note: 'Opt-in explicit Worker delivery and independent parent-lead review. The host derives source identity and executes preapproved checks. Failed or uncertain checks require explicit retryChecks; identical reviews can repair task-state recording without repeating the review.',
+  note: 'Opt-in explicit Worker delivery, independent parent-lead review, and Worker artifact commits. The host derives source identity and executes preapproved checks, commits only host-registered per-task paths, refuses while the caller has non-terminal background jobs, and re-verifies branch and expected HEAD inside the registry commit Service. Failed or uncertain checks require explicit retryChecks; identical reviews can repair task-state recording without repeating the review.',
 }
 
 const TOOL_PACKAGES: ToolPackage[] = [

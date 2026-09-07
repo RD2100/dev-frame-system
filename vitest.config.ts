@@ -138,6 +138,7 @@ const coveragePartitionMode = coveragePartitionRaw === '1'
 const processBoundTests = [
   'packages/experimental/project-controller/tests/git-integration.spec.ts',
   'packages/experimental/project-controller/tests/task-consumer-loader.spec.ts',
+  'packages/experimental/project-controller/tests/commit-consumer.spec.ts',
   'packages/experimental/agent-dispatch/tests/agent-dispatch.spec.ts',
   'packages/session/session-persistence-jsonl/tests/jsonl.spec.ts',
   'packages/subagent/subagent-acp/tests/subagent-acp.spec.ts',

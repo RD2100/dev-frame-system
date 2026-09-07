@@ -25,11 +25,16 @@ import type {
   GoalBindingIdentity,
   GoalBindingStore,
   GoalBudgetInput,
+  GoalResultBinding,
   TaskId,
 } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
-import { computeSourceFingerprint } from '@deepseek-ai/dsh-experimental-devframe'
-import type { AcceptanceHash, DevFrameSnapshotId, SourceFingerprint } from '@deepseek-ai/dsh-experimental-devframe/shared'
-import { DevFrameSnapshotId as makeSnapshotId } from '@deepseek-ai/dsh-experimental-devframe/shared'
+import { acceptanceRegionStartOf, computeSourceFingerprint } from '@deepseek-ai/dsh-experimental-devframe'
+import type {
+  AcceptanceHash,
+  DevFrameSnapshotId,
+  SourceFingerprint,
+} from '@deepseek-ai/dsh-experimental-devframe/shared'
+import { ConfigurationConfirmationId, DevFrameSnapshotId as makeSnapshotId } from '@deepseek-ai/dsh-experimental-devframe/shared'
 import { MemoryRequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe'
 import type { RequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe'
 import { devFrameProjectionDefinition } from '@deepseek-ai/dsh-experimental-devframe'
@@ -52,6 +57,7 @@ import {
   RESUME_NO_BINDING_RECORD_TEXT,
   RESUME_NO_CURRENT_GOAL_TEXT,
   RESUME_STOP_PENDING_TEXT,
+  REVIEW_SUPERSEDED_TEXT,
   START_GOAL_RUNNING_TEXT,
   START_OBJECTIVE_REQUIRED_TEXT,
   START_WORKTREE_REQUIRED_TEXT,
@@ -59,6 +65,7 @@ import {
   STOP_INPUT_UNEXPECTED_TEXT,
   STOP_NO_BINDING_RECORD_TEXT,
   STOP_NO_CURRENT_GOAL_TEXT,
+  VERIFICATION_SUPERSEDED_TEXT,
   WORKTREE_REQUIRED_TEXT,
   completionAdmissionEvidence,
   devframeAbandonDescriptor,
@@ -74,6 +81,7 @@ import {
   renderAbandonSuccess,
   renderCompletionRejection,
   renderCompletionSuccess,
+  renderResumeAdoptedSuccess,
   renderResumeSuccess,
   renderStartSuccess,
   renderStopSuccess,
@@ -308,6 +316,11 @@ export class GoalBindingComposition extends Service {
    * rebuilt controller loads the restored binding. After a start partial
    * failure the store holds the binding while the projection lacks it: the
    * role-policy (when absent) and the stored binding are landed on the log.
+   * When the deployment's approved checks hash differently from the stored
+   * acceptance (AT1-10), the lane adopts the recomputed acceptance into a
+   * new binding generation, re-verifies the real approved checks for it,
+   * and reports the adoption; the superseded generation's evidence and
+   * review stop counting while usage bridges by Goal identity.
    * @param invocation - the receiving agent plus the verbatim command text.
    * @returns a success result, or a stable error result for the expected
    *   data refusals (unexpected input, no current goal, already complete, no
@@ -350,11 +363,42 @@ export class GoalBindingComposition extends Service {
     if (restoredStore && this.controllers.has(invocation.agent.id)) {
       this.controllers.delete(invocation.agent.id)
     }
+    // AT1-10: changing the approved checks invalidates the running goal's
+    // evidence without resetting its usage. The binding freezes the
+    // acceptance of (objective, checks at start); when the deployment's
+    // current approved checks hash differently, the resume opens a new
+    // binding generation that adopts the recomputed acceptance behind a
+    // fresh human confirmation, and this lane re-verifies the real approved
+    // checks for the new generation — the superseded generation's evidence
+    // and review stop counting while usage keeps bridging by Goal identity.
+    const bindingForAdoption = projected ?? stored
+    if (bindingForAdoption === undefined) {
+      return { kind: 'error', text: RESUME_NO_BINDING_RECORD_TEXT }
+    }
+    const expectedHash = acceptanceHashOf(current.objective, this.config.checks)
+    const adoption = expectedHash === bindingForAdoption.acceptanceHash ? undefined : {
+      acceptanceHash: expectedHash,
+      confirmation: {
+        id: ConfigurationConfirmationId(`devframe-resume:${invocation.agent.id}:${Date.now()}`),
+        acceptanceHash: expectedHash,
+      },
+    }
     const resumed = await this.controllerFor(invocation.agent).resume(
       { controllerSessionId, goalId: current.id },
       createHumanAuthorization(`devframe-resume:${invocation.agent.id}:${Date.now()}`),
+      adoption,
     )
     await landGoalBinding(this.journal, invocation.agent.session, resumed)
+    if (adoption !== undefined) {
+      const requiredChecksDigest = await this.requiredChecksStore.save(this.config.checks)
+      await this.evidenceJournal.recordVerification({
+        session: invocation.agent.session,
+        binding: resultTupleOf(resumed),
+        requiredChecksDigest,
+        requiredChecksStore: this.requiredChecksStore,
+      })
+      return { kind: 'success', text: renderResumeAdoptedSuccess() }
+    }
     return { kind: 'success', text: renderResumeSuccess() }
   }
 
@@ -512,13 +556,29 @@ export class GoalBindingComposition extends Service {
     }
     const state = devFrameStateOf(this.ctx, invocation.agent.session)
     if (state.failure !== null) return { kind: 'error', text: PROJECTION_FAILURE_TEXT }
+    // AT1-10: the completion evidence must belong to the goal's current
+    // acceptance generation. After a checks-change adoption the superseded
+    // generation's verification and review stay attributed in the log but
+    // cannot satisfy the adopted acceptance — each refusal names which
+    // record is stale so the human knows what to renew. The generation gate
+    // stays behind the structural attribution checks the controller enforces
+    // (a foreign review propagates its GoalBindingError instead).
+    const currentBinding = state.bindings.find(binding => binding.goalId === current.id)
+    const regionStart = acceptanceRegionStartOf(state, current.id)
     const verification = latestAttributedVerification(state, current.id)
     if (verification === undefined) return { kind: 'error', text: NO_VERIFICATION_TEXT }
+    if (currentBinding === undefined || !isCurrentGeneration(verification, currentBinding, regionStart)) {
+      return { kind: 'error', text: VERIFICATION_SUPERSEDED_TEXT }
+    }
     // The review is the log's latest gate decision; goal attribution is
     // enforced structurally by the controller, so a foreign review reaches
     // that check instead of being silently filtered here.
     const review = latestReview(state)
     if (review === undefined) return { kind: 'error', text: NO_REVIEW_TEXT }
+    if (currentBinding !== undefined && review.binding.goalId === current.id
+      && !isCurrentGeneration(review, currentBinding, regionStart)) {
+      return { kind: 'error', text: REVIEW_SUPERSEDED_TEXT }
+    }
     // The graded memory-degradation records attributed to the current goal's
     // bound tasks (AT3-07): a fail-graded record is the task's real failure
     // evidence the admission consumes.
@@ -601,6 +661,31 @@ export class GoalBindingComposition extends Service {
     }
     return `${text} The repair limit (${repair.repairLimit}) is exhausted after ${repair.consumedRepairRounds} charged rounds; continuing requires a human-authorized resume.`
   }
+}
+
+/**
+ * Whether one evidence record belongs to the binding's current acceptance
+ * generation (AT1-10): the acceptance hash must match AND the record's
+ * revision must sit at or above the hash's region start. The hash alone
+ * cannot distinguish a swung-back acceptance — when the approved checks
+ * change A→B and back B→A, the re-adopted hash equals the original — so
+ * the region start revision (moved by every hash-changing adoption, kept
+ * by a plain same-hash resume) fences evidence produced before the current
+ * acceptance took hold. An absent region (a degraded pre-field checkpoint
+ * cache) refuses fail-closed.
+ * @param record - the evidence record whose attribution is tested.
+ * @param binding - the goal's current projected binding.
+ * @param regionStart - the current acceptance's region start revision.
+ * @returns `true` when the record may satisfy the current acceptance.
+ */
+function isCurrentGeneration(
+  record: { readonly binding: GoalResultBinding },
+  binding: GoalBinding,
+  regionStart: number | undefined,
+): boolean {
+  return record.binding.acceptanceHash === binding.acceptanceHash
+    && regionStart !== undefined
+    && record.binding.goalRevision >= regionStart
 }
 
 /**
