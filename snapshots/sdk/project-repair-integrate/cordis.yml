@@ -1,0 +1,26 @@
+# Test-only SDK composition; the fixture establishes prior reviewed work through real services.
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    includeDefaultRoots: false
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+- insert:
+    - id: integration-session-identity
+      name: '../../../packages/experimental/session-identity/lib/index.js'
+    - id: integration-controller
+      name: '../../../packages/experimental/project-controller/lib/index.js'
+    - id: integration-consumer
+      name: '../../../packages/experimental/project-controller/lib/consumer.js'
+      config:
+        requiredChecksPath: !!js dshHomePath('project-checks.json')
+        gitExecutable: git
+        gitTimeoutMs: 15000
+        gitMaxOutputBytes: 1048576
+    - id: integration-snapshot
+      name: '../../../packages/experimental/project-controller/tests/fixtures/integration-snapshot.ts'
+      config:
+        repairBeforeIntegration: true

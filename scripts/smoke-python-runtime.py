@@ -1224,19 +1224,28 @@ def smoke_sdk_task_delivery(base_url: str, executable: Path, update_snapshots: b
                              if note.method == "session.event" and "event" in note.payload])
         if streamed != durable or callback != durable:
             raise AssertionError("Python events, callbacks, and durable evidence disagree")
-        if [event["type"] for event in durable] != ["devframe/goal-binding", "devframe/task-delivery"]:
+        if [event["type"] for event in durable] != [
+            "devframe/goal-binding", "devframe/task-delivery", "devframe/task-warning", "devframe/repair-admission",
+        ]:
             raise AssertionError(f"Unexpected evidence types: {durable}")
-        goal, delivery = (event["data"] for event in durable)
+        goal, delivery, warning, repair = (event["data"] for event in durable)
         binding = delivery["binding"]
         if any(binding[key] != goal[key] for key in binding):
             raise AssertionError("Delivery changed the authorized Goal input")
         if delivery["sourceFingerprint"] == binding["sourceFingerprint"] or delivery["snapshotId"] == binding["snapshotId"]:
             raise AssertionError("Transport fixture must distinguish input from output")
+        if repair != {
+            "version": 1,
+            "identity": {"controllerSessionId": goal["controllerSessionId"], "goalId": goal["goalId"]},
+            "cause": {"kind": "task-warning", "taskId": warning["taskId"]},
+            "repairRound": 1, "repairLimit": 2,
+        } or warning["grade"] != "fail":
+            raise AssertionError("Repair admission lost its Goal, durable cause, or charged round")
         replacements = [(str(root / "worker"), "{{cwd}}/worker"),
                         (str(root), "{{cwd}}"), (root.as_posix(), "{{cwd}}")]
         files = {
             "python-events.json": json.dumps(normalize_snapshot_value({
-                "scope": "authored source-SDK built-CLI delivery transport; no checks or review",
+                "scope": "source-SDK built-CLI delivery and journal-backed repair transport; no checks or review",
                 "finalResponse": result.final_response, "events": streamed,
             }, replacements), indent=2, ensure_ascii=False) + "\n",
             "durable-events.jsonl": render_jsonl(normalize_snapshot_value(durable, replacements)),

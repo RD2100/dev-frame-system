@@ -29,20 +29,28 @@ Use this package for a project with one integration controller, plugin leads, an
 
 ### Composition and configuration
 
-Mount `@deepseek-ai/dsh-experimental-project-controller` once for `ctx.projectController`, alongside storage-domain and session-identity. Mount `/consumer` for `project_integrate` and `/task-consumer` for `project_task`, using the full package name before each subpath. Mount `/delivery-consumer` for `project_deliver` and `project_review`. All three consumers use the existing service and export Loader function-plugin namespaces without default exports.
+Mount `@deepseek-ai/dsh-experimental-project-controller` once for `ctx.projectController`, alongside storage-domain and session-identity. Mount `/consumer` for `project_integrate`, `/task-consumer` for `project_task`, and `/delivery-consumer` for `project_deliver` and `project_review`, using the full package name before each subpath. Mount `/request-budget-consumer` to enforce model sending admission. These consumers use the existing service and export Loader function-plugin namespaces without default exports.
 
 Integration also requires live sessions, the DevFrame session projection, workspace and worktree registries, and persisted verification and review evidence. The tool additionally requires the live Agent registry and tool runtime. The [real Loader test composition](tests/consumer-loader.spec.ts) supplies these prerequisites and exercises the two entries without making model requests.
 
 | Entry | Field | Default | Meaning |
 |---|---|---|---|
 | Service | `maxActiveTasks` | `2` | Positive integer limit on tasks in `developing`. |
-| Service | `requestBudget` | `1` | Positive integer cumulative model-request charge budget. |
+| Service | `requestBudget` | `1` | Positive integer cumulative model sending-attempt budget. |
+| Request budget consumer | `controllerSessionId` | Required | Host-selected root Session for the exclusively scoped project model traffic. |
+| Delivery consumer | `repairLimit` | `2` | Positive integer shared Goal correction limit; must match the command consumer. |
 | Consumer | `requiredChecksPath` | Required | Absolute path of the existing approved-checks registration ledger. |
 | Consumer | `gitExecutable` | Required | Deployment-selected Git executable. |
 | Consumer | `gitTimeoutMs` | Required | Positive integer timeout in milliseconds per Git subprocess. |
 | Consumer | `gitMaxOutputBytes` | Required | Positive integer output limit in bytes per Git subprocess. |
 
 The consumer reads the configured ledger; it does not approve checks or create a replacement ledger. Missing registrations and corrupt contents fail admission. The host's controller tool policy must allow `project_integrate`; leads and Workers must not receive it.
+
+### Bound model sending attempts
+
+The request budget consumer requires the LLM service, live Agents, durable agent bindings, and the existing project controller in a scope dedicated to one project. Configure its root `controllerSessionId` on the host. Each actual initiating Agent must resolve to that root, its plugin Lead, or that Lead’s scoped Worker; unbound or foreign requests are refused. Use separate plugin scopes for unrelated model traffic.
+
+The consumer reserves budget before delegating `llm/stream` to the adapter. Root, Lead, and Worker requests share the service budget, and each AgentLoop retry consumes another allowance. The last available allowance admits exactly one concurrent request. Cancellation or adapter failure after persistence does not refund a charge: a charge records a sending attempt, not supplier billing or proof that HTTP occurred. An uncertain storage write closes charging until service reload restores durable usage. Internal provider-SDK retries require adapter-specific verification.
 
 ### Plan and start tasks
 
@@ -62,9 +70,9 @@ The delivery consumer uses the same ledger and Git settings as the integration c
 
 A Worker explicitly calls `project_deliver` with `taskId` from a clean, committed worktree. The host derives identities and source data, records a task delivery without changing the original Goal input binding, and runs the existing approved checks. Passing checks advance development to review only while the source still matches. Failed checks retain their results without advancing the task; failed or interrupted attempts require explicit `retryChecks: true` to rerun that approved checkset.
 
-The actual parent lead calls `project_review` with `taskId`, `decision`, and `findings`. A pass requires passing verification for the latest delivery and submits that output; `changes_required` returns the task to development within the active-task limit. Repeating an identical recorded review can repair a failed task-state write without recording another review. A conflicting decision requires a new delivery, and rejected source must change before another delivery. Idle Workers do not constitute delivery or approval.
+The actual parent lead calls `project_review` with `taskId`, `decision`, and `findings`. A pass requires passing verification for the latest delivery and submits that output. `changes_required` records the review, charges the shared Goal repair allowance, and returns the task to development within the active-task limit. Exhaustion retains the review without admitting correction. Identical retries reuse both the review and its durable repair receipt, including recovery from a failed task-state write. A conflicting decision requires a new delivery, and rejected source must change before another delivery. Idle Workers do not constitute delivery or approval.
 
-Evidence and task writes are separate durable operations. The consumer shares one session journal across deliveries, checks, and reviews so its append queue and persistence-failure latch survive individual calls. Inspect retained evidence after an error; successful logging does not prove task advancement. Integration still requires the latest exact task delivery, verification, independent review, and unchanged source commit.
+Evidence, repair admission, and task writes are separate durable operations. Journals using the same live controller Session share the append queue and persistence-failure latch across calls and consumers. Inspect retained evidence after an error; successful logging does not prove task advancement. Integration still requires the latest exact task delivery, verification, independent review, and unchanged source commit. The [DevFrame correction contract](../devframe/README.md#bound-correction-rounds) defines shared review/warning accounting and cold recovery.
 
 ### Task admission and integration
 
@@ -135,7 +143,7 @@ The delivery consumer also exposes `project_deliver` (task and optional retry fl
 
 #### Token effect
 
-The tool definition contributes request tokens when visible to the Agent, and each call adds its arguments and result to conversation history. This package has no measured fixed token cost.
+The tool definition contributes request tokens when visible to the Agent, and each call adds its arguments and result to conversation history. This package has no measured fixed token cost. The request budget consumer adds no messages or tool definitions.
 
 #### KV Cache effect
 
@@ -151,7 +159,7 @@ These constraints matter when choosing the composition and handling interrupted 
 - The version 3 storage domain rejects older layouts. Do not activate it against an existing version 2 domain or reset that domain as an implicit upgrade.
 - Integration supports clean, independent worktrees in one repository and fast-forward updates only. It does not reset files, resolve conflicts, or automatically repeat uncertain commands.
 - Writer locks require participating hosts to honor ownership. They do not fence unrelated filesystem writers or Git commands that bypass the registries.
-- `maxActiveTasks` counts developing tasks, not live model requests. Request charges persist across restarts; account and provider limits remain deployment concerns.
+- `maxActiveTasks` counts developing tasks, not live model requests. Request charges persist across restarts, but serialization belongs to one controller service instance; it is not a cross-process compare-and-set. Account and provider limits remain deployment concerns.
 - Loader and real-Git tests verify local composition. They do not establish a shipped-profile rollout, production activation, or real-model completion quality.
 
 <a id="dev-note"></a>

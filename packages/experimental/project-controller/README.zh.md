@@ -29,14 +29,16 @@ kind: "package-reference"
 
 ### 装配与配置
 
-挂载一次 `@deepseek-ai/dsh-experimental-project-controller` 以提供 `ctx.projectController`，并同时挂载 storage-domain 与 session-identity。在完整包名后分别添加 `/consumer` 以提供 `project_integrate`、添加 `/task-consumer` 以提供 `project_task`。另挂载 `/delivery-consumer` 以提供 `project_deliver` 和 `project_review`。三个消费者都使用现有服务，并导出没有默认导出的 Loader 函数插件命名空间。
+将 `@deepseek-ai/dsh-experimental-project-controller` 与 storage-domain、session-identity 一起挂载一次，提供 `ctx.projectController`。挂载 `/consumer` 提供 `project_integrate`，挂载 `/task-consumer` 提供 `project_task`，挂载 `/delivery-consumer` 提供 `project_deliver` 和 `project_review`；各子路径前都使用完整包名。挂载 `/request-budget-consumer` 执行模型发送准入。这些消费方使用既有服务，并导出没有默认导出的 Loader 函数插件命名空间。
 
 集成还需要活动会话、DevFrame 会话投影、workspace 与 worktree 注册表，以及持久化验证和审查证据。工具还需要活动 Agent 注册表与工具运行时。[真实 Loader 测试装配](tests/consumer-loader.spec.ts) 提供这些依赖，并在不发起模型请求的情况下执行这两个入口。
 
 | 入口 | 字段 | 默认值 | 含义 |
 |---|---|---|---|
 | 服务 | `maxActiveTasks` | `2` | 处于 `developing` 的任务数上限，取正整数。 |
-| 服务 | `requestBudget` | `1` | 累计模型请求计费预算，取正整数。 |
+| 服务 | `requestBudget` | `1` | 模型发送尝试的累计预算，必须为正整数。 |
+| 请求预算消费方 | `controllerSessionId` | 必填 | 宿主选定的根会话，用于独占作用域内的项目模型流量。 |
+| 交付消费方 | `repairLimit` | `2` | Goal 共用的修复上限，必须为正整数并与命令消费方一致。 |
 | 消费者 | `requiredChecksPath` | 必填 | 现有已批准检查配置登记账本的绝对路径。 |
 | 消费者 | `gitExecutable` | 必填 | 部署选择的 Git 可执行文件。 |
 | 消费者 | `gitTimeoutMs` | 必填 | 每个 Git 子进程的超时毫秒数，取正整数。 |
@@ -44,7 +46,13 @@ kind: "package-reference"
 
 消费者读取配置指定的账本，不批准检查，也不创建替代账本。缺少登记项或内容损坏会阻止准入。宿主的 controller 工具策略必须允许 `project_integrate`；lead 与 Worker 不应获得该工具。
 
-### 规划与启动任务
+### 限制模型发送尝试
+
+请求预算消费方需要 LLM 服务、活跃 Agent、持久化 Agent 绑定和既有项目总控，且作用域专用于一个项目。宿主配置根 `controllerSessionId`。每个实际发起请求的 Agent 必须解析为该根总控、其插件组长或该组长作用域内的执行 Agent；未绑定或外来请求会被拒绝。无关模型流量使用独立插件作用域。
+
+消费方在将 `llm/stream` 委托给适配器前预占预算。总控、组长和执行 Agent 的请求共用服务预算，每次 AgentLoop 重试都会再消耗一次额度。并发争用最后一个额度时只允许一个请求。持久化后的取消或适配器失败不退还额度：记账表示发送尝试，不表示供应商计费，也不能证明已发生 HTTP 请求。结果不确定的存储写入会关闭计费准入，直到服务重新加载并恢复持久用量。供应商 SDK 内部重试需要针对适配器另行验证。
+
+### 规划并启动任务
 
 挂载任务消费者仅暴露 `plan` 和 `start` 两个动作。宿主通过 `startProject()` 开放项目准入，准备当前 Goal 绑定，并在 controller 工具策略中允许 `project_task`。调用要求实际活动的根 controller、属于其当前开放 Goal 的任务，以及由 controller 持有写入锁的注册工作树。
 
@@ -62,9 +70,9 @@ kind: "package-reference"
 
 Worker 从清洁且已提交的工作树显式调用 `project_deliver`，提供 `taskId`。宿主推导身份与源信息，在不改变原始 Goal 输入绑定的前提下记录任务交付，并运行现有已批准检查。检查通过且源仍然匹配时，任务才从开发推进到审查。检查失败保留结果但不推进任务；失败或中断的尝试要求显式设置 `retryChecks: true` 才会重跑该已批准检查集。
 
-实际父级 lead 调用 `project_review`，提供 `taskId`、`decision` 和 `findings`。通过要求最新交付具有通过的验证，并提交该输出；`changes_required` 在活动任务上限内将任务退回开发。重复相同的已记录审查可以修复失败的任务状态写入，而不新增审查。冲突决定要求新交付，被拒绝的源必须修改后才能再次交付。Worker 空闲不构成交付或批准。
+实际父级组长通过 `taskId`、`decision` 和 `findings` 调用 `project_review`。通过审查要求最新交付的验证通过，并提交该输出。`changes_required` 会记录审查、消耗 Goal 共用修复额度，并在活跃任务上限内将任务退回开发。额度耗尽时保留审查记录，但不准入修复。相同重试复用审查及其持久化修复回执，包括从任务状态写入失败中恢复。冲突的决定要求新交付，被拒绝的源码必须改变后才能再次交付。执行 Agent 空闲不等于完成交付或获得批准。
 
-证据与任务写入是独立的持久化操作。消费者在交付、检查和审查间共享同一个会话 journal，使追加队列和持久化失败锁存状态跨调用保留。出错后检查已保留的证据；日志成功不代表任务已推进。集成仍要求最新的精确任务交付、验证、独立审查和未变化的源提交。
+证据、修复准入和任务写入是独立的持久化操作。使用同一活跃总控会话的日志跨调用和消费方共享追加队列及持久化失败锁。出错后检查保留的证据；日志成功不证明任务已推进。集成仍要求最新的精确任务交付、验证、独立审查和未改变的源码提交。[DevFrame 修复契约](../devframe/README.zh.md#bound-correction-rounds)定义审查与告警共用的记账和冷恢复规则。
 
 ### 任务准入与集成
 
@@ -135,7 +143,7 @@ controller 串行执行任务变更与集成尝试。任务记录、累计请求
 
 #### Token 影响
 
-当工具对 Agent 可见时，工具定义会占用请求 token；每次调用会将参数与结果加入会话历史。本包没有经过测量的固定 token 成本。
+当工具对 Agent 可见时，工具定义会占用请求 token；每次调用会将参数与结果加入会话历史。本包没有经过测量的固定 token 成本。 请求预算消费方不添加消息或工具定义。
 
 #### KV Cache 影响
 
@@ -151,7 +159,7 @@ controller 串行执行任务变更与集成尝试。任务记录、累计请求
 - 版本 3 存储域拒绝旧布局。不要将其直接激活到现有版本 2 域上，也不要将重置该域当作隐式升级。
 - 集成仅支持同一仓库内清洁且独立的工作树与快进更新。它不重置文件、不解决冲突，也不自动重复结果不明的命令。
 - 写入锁依赖参与宿主遵守所有权。它们无法阻止绕过注册表的其他文件系统写入者或 Git 命令。
-- `maxActiveTasks` 统计开发中任务，而非活动模型请求。请求计费跨重启保留；账号与提供方限制仍由部署负责。
+- `maxActiveTasks` 统计开发中的任务，不统计活跃模型请求。请求用量跨重启保留，但串行化属于单个总控服务实例，不是跨进程比较交换。账号和供应商限制仍由部署负责。
 - Loader 与真实 Git 测试验证本地装配。它们不能证明已完成随产品提供的 profile 部署、生产激活或真实模型完成质量验证。
 
 <a id="dev-note"></a>

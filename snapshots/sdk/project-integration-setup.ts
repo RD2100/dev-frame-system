@@ -58,14 +58,15 @@ export async function prepareProjectIntegration(cwd: string): Promise<void> {
 /**
  * Read Git and reopen durable storage after the SDK process exits; no model self-report is accepted.
  * @param cwd - The same isolated SDK run root used for setup.
+ * @param expectedContent - Required feature content after the reviewed commit is integrated.
  */
-export async function verifyProjectIntegration(cwd: string): Promise<void> {
+export async function verifyProjectIntegration(cwd: string, expectedContent = 'reviewed\n'): Promise<void> {
   const root = join(cwd, '.dsh', 'integration')
   const [targetHead, sourceHead, baseHead, content] = await Promise.all([
     git(join(root, 'target'), 'rev-parse', 'HEAD'), git(join(root, 'worker'), 'rev-parse', 'HEAD'),
     git(join(root, 'repo'), 'rev-parse', 'HEAD'), readFile(join(root, 'target', 'feature.txt'), 'utf8'),
   ])
-  if (targetHead !== sourceHead || targetHead === baseHead || content !== 'reviewed\n') {
+  if (targetHead !== sourceHead || targetHead === baseHead || content !== expectedContent) {
     throw new Error(`Integration snapshot did not apply the reviewed commit: target=${targetHead} source=${sourceHead} base=${baseHead}`)
   }
   const ctx = new Context()

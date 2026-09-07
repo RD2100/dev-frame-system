@@ -1,0 +1,21 @@
+# Authored replay responses; Windows output was harvested through the real SDK profile.
+# POSIX sidecars use the SDK's Bash surface; POSIX execution is not claimed.
+version: 1
+scenario: project-repair-integrate
+profile: sdk
+composition: sdk-project-repair-integrate
+recording: authored
+header:
+  class: sdk-project-repair-integrate
+  pin: true
+  changes: 0
+sessionVariants:
+  win32: true
+expectations:
+  variants:
+    win32: [system-prompt, tool-schemas]
+replay:
+  override: true
+workspace:
+  setup: project-integration
+  final: true

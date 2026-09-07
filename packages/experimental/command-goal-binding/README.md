@@ -44,6 +44,8 @@ Choose it when a deployment wants goal work to be host-audited end to end: the o
 
 Expected refusals are direct command errors with fixed text. Start refusals: a missing objective, a missing `workspaceRoot` in the config (the start line cannot name a worktree alongside the objective), and a goal that is already current and not complete. Resume refusals: unexpected input after the command name, no current goal, a goal that is already complete, and no binding record in either the session log projection or the binding store. Completion refusals: no current goal, no completion binding for the goal, no attributed verification evidence, a goal that is already complete, a latched projection replay failure, and a missing worktree path when neither the command line nor the config names one. A rejected admission names its stage — `source-fingerprint`, `required-checks`, or `review` — without exposing the goal id or revision. Structural errors (`GoalBindingError`, `SourceFingerprintError`, `RequiredChecksError`, `DevFramePersistenceError`) are not caught: they fail dispatch so adapters report a command failure.
 
+Fail-graded task warnings also report repair admission. Repeating the same warning reuses its durable receipt, including after restart; negative project reviews consume the same Goal allowance. The default `repairLimit` is 2. Human-authorized resume does not reset this accounting, and all consumers of the Goal must agree on its limit. See the [DevFrame correction contract](../devframe/README.md#bound-correction-rounds).
+
 ### Minimal configuration
 
 The plugin injects the command registry, the goal service, the session store, and the session projection registry; a custom app mounts their owners plus this plugin. The start lane reads the approved work parameters from the config:
@@ -81,8 +83,9 @@ The plugin injects the command registry, the goal service, the session store, an
 | `taskIds` | required | Non-empty unique native task ids every start binding carries |
 | `maxAttempts` | required | Maximum charged attempts frozen into every start binding |
 | `maxGoalRounds` | none | Optional continuation round cap frozen into every start binding |
+| `repairLimit` | `2` | Positive integer shared Goal correction limit; must match the project delivery consumer |
 
-An empty `workspaceId`, a relative `workspaceRoot`, a relative check `cwd`, an empty or duplicated `taskIds`, or a non-positive `maxAttempts`/`maxGoalRounds` fails plugin activation loudly.
+An empty `workspaceId`, a relative `workspaceRoot`, a relative check `cwd`, an empty or duplicated `taskIds`, or a non-positive `maxAttempts`/`maxGoalRounds` fails plugin activation loudly. `repairLimit` must be a positive safe integer.
 
 -----
 
@@ -99,7 +102,7 @@ This section explains how the commands resolve evidence and dispatch the admissi
 - **Reads the projection this package owns.** Activation registers the devframe projection unit, and the handlers read its state for the invoking session: the latest verification evidence attributed to the current goal, plus the latest review record. Review evidence is not pre-filtered by goal — its attribution is enforced structurally by the admission, which fails closed on a foreign review.
 - **The host collects every start fact.** `/devframe-start` computes the worktree's real source fingerprint, derives the snapshot id from it, hashes the approved objective and checklist into the acceptance digest, and mints the human authorization inside the command adapter; model input never writes evidence, and the honest four-state check results are recorded as-is.
 - **One role authority, derived from the log.** The reviewer directory resolves a Session's role from the role-policy snapshot folded into its devframe projection — not from a host-memory side ledger — so the review gate's authority is the session log's own record, and an unassigned role is fail-closed.
-- **Two journals share one durability callback.** The composition owns a DevFrame Session journal for the role-policy and goal-binding records and constructs the `AgentEvidenceJournal` (default real-subprocess check execution) for verification records; both flush through `ctx.sessions.flush`, and a failed flush latches the failing journal's writer.
+- **Journal instances share Session durability.** The composition and evidence journals flush through `ctx.sessions.flush`. Every journal using the same live Session shares its append queue and failure latch; one uncertain flush blocks later writes from all of them.
 - **Fail closed before dispatch.** The handlers refuse on missing goals, missing bindings, missing evidence, or a latched projection replay failure before they reach the admission, and resolve the worktree path explicitly so a missing root is a data error rather than a structural failure.
 - **Receipts only after admission.** An admitted completion advances the native goal through the admission's compare-and-set and records one `completion-admission` evidence entry through the goal service; rejections leave the goal phase, binding, and admission state untouched.
 
@@ -155,7 +158,7 @@ These limits define when the commands are a poor fit or need special operational
 
 - **Review production is not in this wave** — `/devframe-start` lands verification evidence only and fabricates no review decision; after it, `/goal-complete` honestly reports the missing review record (the stable no-review error) instead of completing.
 - **Start has a partial-failure window** — if a journal landing fails after the native goal and the store binding exist, `/devframe-start` throws fail-closed without rolling them back; `/devframe-resume` is the recovery path (a binding present in the store without a log record is re-landed on the log).
-- **The two journals latch independently** — the composition journal (role-policy and goal-binding records) and the `AgentEvidenceJournal`'s internal journal (verification records) are separate instances with separate per-Session failure latches, so one can latch while the other has not; each still blocks its own later writes and fails closed.
+- **One live writer per Session** — shared journal queues coordinate one live Session inside one process; they do not provide cross-process compare-and-set or protect multiple independently restored writers.
 - **The binding and required-checks stores remain in-memory reference implementations** — after a restart the stores are empty; `/devframe-resume` rebuilds the binding from the session log projection, and the approved checklist registration returns with the next `/devframe-start`. Durable store integration stays with the GoalStore wave's existing injection points.
 - **The role policy assigns the controller role only** — no reviewer is authorized, so any review submission is rejected fail-closed until a review production wave lands a reviewer assignment.
 - **Review attribution is structural** — `/goal-complete` takes the latest review record without a goal pre-filter; a foreign latest review surfaces as a structural `GoalBindingError`, which is the fail-closed direction.
@@ -167,6 +170,6 @@ These limits define when the commands are a poor fit or need special operational
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-This package is the v14 host-command-surface experimental wave, extended by the composition-closure wave with the `/devframe-start` and `/devframe-resume` lanes. Open, undecided: the review production path (reviewer assignment and review records), durable stores, and a single-journal injection into the evidence producer; the memory stores are composition defaults, not a persistence promise.
+The memory stores are composition defaults, not a persistence promise. Review production and durable store selection remain host-composition responsibilities.
 
 </details>

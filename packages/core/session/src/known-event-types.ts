@@ -35,6 +35,7 @@ export const KNOWN_SESSION_EVENT_TYPES: ReadonlySet<string> = new Set([
   'compaction/summary',
   'devframe/goal-binding',
   'devframe/lifecycle',
+  'devframe/repair-admission',
   'devframe/review',
   'devframe/role-policy',
   'devframe/task-delivery',

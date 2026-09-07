@@ -23,6 +23,10 @@
       "types": "./lib/types/delivery-consumer.d.ts",
       "default": "./lib/delivery-consumer.js"
     },
+    "./request-budget-consumer": {
+      "types": "./lib/types/request-budget-consumer.d.ts",
+      "default": "./lib/request-budget-consumer.js"
+    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
@@ -31,6 +35,7 @@
     "lib/consumer.js",
     "lib/task-consumer.js",
     "lib/delivery-consumer.js",
+    "lib/request-budget-consumer.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -68,6 +73,7 @@
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:^",
+    "@deepseek-ai/dsh-llm-retry": "workspace:^",
     "@deepseek-ai/dsh-session-projection": "workspace:^",
     "@deepseek-ai/dsh-storage": "workspace:^",
     "@deepseek-ai/dsh-storage-domain": "workspace:^",

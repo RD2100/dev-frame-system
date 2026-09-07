@@ -1,0 +1,4 @@
+{"type":"session","version":0,"id":"{{session:2}}","createdAt":0,"cwd":"{{cwd}}/.dsh/integration/lead","parentSession":"{{session:1}}","delegationDepth":1}
+{"type":"permission/preset","data":{"preset":"workspace-write"}}
+{"type":"sandbox/mode","data":{"mode":"workspace-write"}}
+{"type":"approval/policy","data":{"policy":"ask"}}

@@ -21,6 +21,8 @@ export {
   type DevFrameTaskDeliveryEventData,
   type DevFrameCheckResult,
   type DevFrameReviewEventData,
+  type DevFrameRepairAdmissionEventData,
+  type DevFrameRepairCause,
   type DevFrameReviewFinding,
   type DevFrameRolePolicyEventData,
   type DevFrameVerificationEventData,

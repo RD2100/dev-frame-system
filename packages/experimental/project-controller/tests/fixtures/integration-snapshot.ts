@@ -1,5 +1,6 @@
 /** Snapshot-only preconditions; the SDK Agent itself executes project_integrate through its model turn. */
 import { execFile } from 'node:child_process'
+import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import type { Context } from '@deepseek-ai/cordis'
@@ -21,8 +22,12 @@ import { DevFrameSessionJournal } from '../../../devframe/lib/types/session-jour
 export const name = 'project-integration-snapshot'
 export const inject = ['agents', 'sessions', 'sessionProjections', 'agentBindings', 'projectController', 'workspaceRegistry', 'worktreeRegistry']
 
-/** Install deterministic host-owned evidence before the first model request. */
-export function apply(ctx: Context): void {
+/**
+ * Install host-owned evidence before the first model request.
+ * @param ctx - SDK composition containing the real registry, journal, and controller services.
+ * @param options - Whether the task must correct a rejected delivery before final review.
+ */
+export function apply(ctx: Context, options: { repairBeforeIntegration?: boolean } = {}): void {
   const initialized = new WeakSet<object>()
   ctx.effect(() => ctx.sessionProjections.register(devFrameProjectionDefinition))
   ctx.on('agent/pre-step', async ({ agent }, next) => {
@@ -91,11 +96,61 @@ export function apply(ctx: Context): void {
     const sourceCommit = (await promisify(execFile)('git', ['rev-parse', 'HEAD'], {
       cwd: source.path, env, windowsHide: true, timeout: 15_000, maxBuffer: 1024 * 1024,
     })).stdout.trim()
-    const delivery = {
+    let delivery = {
       version: 1 as const, deliveryId: DevFrameDeliveryId('delivery-integration'), taskId: GoalTaskId(String(taskId)), binding,
       workerSessionId: worker.id, worktreeId: source.id, worktreePath: source.path, sourceCommit,
       sourceFingerprint: (await computeSourceFingerprint({ worktreePath: source.path })).fingerprint,
       snapshotId: DevFrameSnapshotId('output-snapshot-integration'),
+    }
+    ctx.projectController.startProject()
+    await ctx.projectController.createTask({ taskId, pluginId, title: 'Integrate reviewed snapshot source' })
+    await ctx.projectController.assign(taskId, worker.id)
+    await ctx.projectController.startDevelopment(taskId)
+    if (options.repairBeforeIntegration) {
+      await journal.append(agent.session, 'devframe/task-delivery', delivery)
+      const rejectedOutput = deliveryResultBinding(delivery)
+      await promisify(execFile)('git', ['diff', '--check'], {
+        cwd: source.path, env, windowsHide: true, timeout: 15_000, maxBuffer: 1024 * 1024,
+      })
+      await journal.append(agent.session, 'devframe/verification', {
+        version: 1, verificationId: DevFrameVerificationId('verification-before-repair'), binding: rejectedOutput,
+        snapshotId: rejectedOutput.snapshotId, deliveryId: delivery.deliveryId, status: 'passed',
+        requiredChecks: { config: { version: 1, checks: [check] }, digest },
+        checks: [{ ...check, status: 'passed', exitCode: 0, durationMs: 0 }],
+      })
+      await ctx.projectController.beginReview(taskId)
+      const reviewId = DevFrameReviewId('review-before-repair')
+      await journal.append(agent.session, 'devframe/review', {
+        version: 1, reviewId, binding: rejectedOutput, snapshotId: rejectedOutput.snapshotId,
+        deliveryId: delivery.deliveryId, reviewerSessionId: lead.id, policyVersion: 'snapshot-policy',
+        decision: 'changes_required', findings: [{ id: 'required-content', severity: 'blocking',
+          path: 'feature.txt', message: 'The required feature content is repaired, not reviewed.' }],
+      })
+      const request = { identity: { controllerSessionId: binding.controllerSessionId, goalId: binding.goalId },
+        cause: { kind: 'review' as const, reviewId }, repairLimit: 2 }
+      const admitted = await journal.admitRepair(agent.session, request)
+      const restoredJournal = new DevFrameSessionJournal(session => ctx.sessions.flush(session), {
+        requireReviewer() { throw new Error('Repair admission must reuse the existing durable review') },
+      })
+      const repeated = await restoredJournal.admitRepair(agent.session, request)
+      if (admitted.kind !== 'admitted' || admitted.repairRound !== 1
+        || repeated.kind !== 'admitted' || repeated.repairRound !== 1) {
+        throw new Error('Repair admission must charge the same Goal once across Journal replacement')
+      }
+      await ctx.projectController.returnToDevelopment(taskId)
+      await writeFile(join(source.path, 'feature.txt'), 'repaired\n')
+      const repairEnv = { ...env, GIT_AUTHOR_DATE: '2026-01-01T00:00:00Z', GIT_COMMITTER_DATE: '2026-01-01T00:00:00Z' }
+      for (const args of [['add', 'feature.txt'], ['commit', '-m', 'repair reviewed implementation']]) {
+        await promisify(execFile)('git', args, { cwd: source.path, env: repairEnv,
+          windowsHide: true, timeout: 15_000, maxBuffer: 1024 * 1024 })
+      }
+      delivery = { ...delivery, deliveryId: DevFrameDeliveryId('delivery-after-repair'),
+        sourceCommit: (await promisify(execFile)('git', ['rev-parse', 'HEAD'], {
+          cwd: source.path, env, windowsHide: true, timeout: 15_000, maxBuffer: 1024 * 1024,
+        })).stdout.trim(),
+        sourceFingerprint: (await computeSourceFingerprint({ worktreePath: source.path })).fingerprint,
+        snapshotId: DevFrameSnapshotId('output-snapshot-after-repair'),
+      }
     }
     await journal.append(agent.session, 'devframe/task-delivery', delivery)
     const output = deliveryResultBinding(delivery)
@@ -114,10 +169,6 @@ export function apply(ctx: Context): void {
       deliveryId: delivery.deliveryId,
       reviewerSessionId: lead.id, policyVersion: 'snapshot-policy', decision: 'pass', findings: [],
     })
-    ctx.projectController.startProject()
-    await ctx.projectController.createTask({ taskId, pluginId, title: 'Integrate reviewed snapshot source' })
-    await ctx.projectController.assign(taskId, worker.id)
-    await ctx.projectController.startDevelopment(taskId)
     await ctx.projectController.beginReview(taskId)
     await ctx.projectController.submit(taskId)
     await ctx.sessions.flush(lead)
