@@ -266,8 +266,8 @@ describe('BlockAssembler.interruptedBlocks', () => {
     const assembler = new BlockAssembler()
     assembler.push({ type: 'tool-call-delta', index: 0, id: ToolCallId('a'), name: 'q', argumentsDelta: '{"service"' })
     assembler.push({ type: 'tool-call-delta', index: 1, id: ToolCallId('b'), name: 'q', argumentsDelta: '{"provider"' })
-    assembler.push({ type: 'tool-call-delta', index: 0, argumentsDelta: ':"goals"}' })
-    assembler.push({ type: 'tool-call-delta', index: 1, argumentsDelta: ':"Service"}' })
+    assembler.push({ type: 'tool-call-delta', index: 0, id: ToolCallId(''), argumentsDelta: ':"goals"}' })
+    assembler.push({ type: 'tool-call-delta', index: 1, id: ToolCallId(''), argumentsDelta: ':"Service"}' })
     const [first, second] = assembler.blocks()
     expect(first).toEqual({ type: 'tool-call', id: ToolCallId('a'), name: 'q', arguments: '{"service":"goals"}' })
     expect(second).toEqual({ type: 'tool-call', id: ToolCallId('b'), name: 'q', arguments: '{"provider":"Service"}' })
@@ -290,7 +290,7 @@ describe('BlockAssembler.interruptedBlocks', () => {
     // Recorded from the huoshan-1 chain: fragments may carry literal backslash
     // sequences; the assembler must never inject or strip escapes.
     assembler.push({ type: 'tool-call-delta', index: 0, id: ToolCallId('c'), name: 'define', argumentsDelta: '{"source":"a\\\\"' })
-    assembler.push({ type: 'tool-call-delta', index: 0, argumentsDelta: ',\\"x' })
+    assembler.push({ type: 'tool-call-delta', index: 0, id: ToolCallId(''), argumentsDelta: ',\\"x' })
     const [call] = assembler.blocks()
     expect(call).toEqual({ type: 'tool-call', id: ToolCallId('c'), name: 'define', arguments: '{"source":"a\\\\",\\"x' })
     expect(assembler.indexConflicts).toEqual([])
