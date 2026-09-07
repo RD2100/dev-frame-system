@@ -43,12 +43,21 @@ Mount the service in a composition that already mounts the session store and the
 `createBoundSession` creates a standalone Session, not a live Agent. The parent must exist; the child depth derives from the parent header (`parent depth + 1`) unless the caller passes `delegationDepth` explicitly.
 
 ```ts
+import type { Context } from '@deepseek-ai/cordis'
+import type { Session } from '@deepseek-ai/dsh-session'
+import type { BoundWorktree } from '@deepseek-ai/dsh-experimental-session-identity'
+import { PluginId } from '@deepseek-ai/dsh-experimental-project-contracts'
+
+declare const ctx: Context
+declare const controllerSession: Session
+declare const worktree: BoundWorktree
+
 const { session, record } = await ctx.agentBindings.createBoundSession({
-  cwd: workspacePath,
+  cwd: worktree.worktreePath,
   role: 'lead',
   parentSessionId: controllerSession.id,
   pluginId: PluginId('agent-reliability'),
-  worktree: { worktreeId, worktreePath, branch },
+  worktree,
 })
 ```
 
