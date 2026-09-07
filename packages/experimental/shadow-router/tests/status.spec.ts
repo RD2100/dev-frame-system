@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { harness, seedHarness } from './helpers.ts'
+import { HARNESS_BACKENDS, harness, seedHarness } from './helpers.ts'
 import type { ShadowBindingRecord } from '../src/index.ts'
 
 describe('shadow-router status', () => {
@@ -93,7 +93,7 @@ describe('shadow-router status', () => {
     }
   })
 
-  it('AT2-08: a parked provisioning mismatch surfaces as blocked with its failure reason', async () => {
+  it.each(HARNESS_BACKENDS)('AT2-08 [%s]: a parked provisioning mismatch surfaces as blocked with its failure reason', async (backend) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-at2-08b-'))
     const project = join(root, 'project-a')
     await mkdir(project)
@@ -101,7 +101,7 @@ describe('shadow-router status', () => {
     const other = join(root, 'other-project')
     await mkdir(other)
     const canonicalOther = await realpath(other)
-    const seed = await seedHarness(root)
+    const seed = await seedHarness(root, { backend })
     try {
       const now = new Date().toISOString()
       const binding: ShadowBindingRecord = {
@@ -120,7 +120,7 @@ describe('shadow-router status', () => {
       await seed.dispose()
     }
 
-    const h = await harness(root, { authorizedRoots: [root] })
+    const h = await harness(root, { authorizedRoots: [root] }, { backend })
     try {
       h.ctx.sessions.create(SessionId('session-blocked-1'), { meta: { cwd: canonical } })
       const parked = await h.router.reconcileProject(WorkspaceId('ws-blocked-1'))

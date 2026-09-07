@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { harness, seedHarness, seedWorkspaceFact } from './helpers.ts'
+import { HARNESS_BACKENDS, harness, seedHarness, seedWorkspaceFact } from './helpers.ts'
 import type { ShadowBindingRecord } from '../src/index.ts'
 
 /** A schema-valid crash-residue binding row. */
@@ -46,14 +46,14 @@ describe('shadow-router provisioning', () => {
     }
   })
 
-  it('AT2-03: a reservation interrupted before readiness converges on the same reserved session id', async () => {
+  it.each(HARNESS_BACKENDS)('AT2-03 [%s]: a reservation interrupted before readiness converges on the same reserved session id', async (backend) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-at2-03b-'))
     const dir = join(root, 'project-a')
     await mkdir(dir)
     const canonical = await realpath(dir)
     // Crash residue: the workspace fact and the in-creation association are
     // durable; the controller session is not.
-    const seed = await seedHarness(root)
+    const seed = await seedHarness(root, { backend })
     try {
       await seedWorkspaceFact(seed.workspaceDomain, 'ws-seed-1', canonical)
       await seed.domain.table('bindings').put(WorkspaceId('ws-seed-1'), seedRow({
@@ -66,7 +66,7 @@ describe('shadow-router provisioning', () => {
       await seed.dispose()
     }
 
-    const h = await harness(root, { authorizedRoots: [root] })
+    const h = await harness(root, { authorizedRoots: [root] }, { backend })
     try {
       const reopened = await h.router.openProject(h.shadow, { path: dir, requestId: 'at2-03-open-recover' })
       // No duplicate writer: the SAME reserved id becomes the controller.
@@ -82,7 +82,7 @@ describe('shadow-router provisioning', () => {
     }
   })
 
-  it('AT2-03: recovery completes a half-provisioned root whose session matches, and parks a cwd mismatch', async () => {
+  it.each(HARNESS_BACKENDS)('AT2-03 [%s]: recovery completes a half-provisioned root whose session matches, and parks a cwd mismatch', async (backend) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-at2-03c-'))
     try {
       const project = join(root, 'project-a')
@@ -94,7 +94,7 @@ describe('shadow-router provisioning', () => {
       // Row 1: the reserved session came to exist with the matching cwd — the
       // bind (role persistence) is what crashed; recovery completes it.
       // Row 2: a reserved session whose cwd stopped matching the row.
-      const seed = await seedHarness(root)
+      const seed = await seedHarness(root, { backend })
       try {
         await seed.domain.table('bindings').put(WorkspaceId('ws-seed-2'), seedRow({
           workspaceId: 'ws-seed-2',
@@ -112,7 +112,7 @@ describe('shadow-router provisioning', () => {
         await seed.dispose()
       }
 
-      const h = await harness(root, { authorizedRoots: [root] })
+      const h = await harness(root, { authorizedRoots: [root] }, { backend })
       try {
         // Row 2's reserved session exists but points somewhere else; the host
         // recovery converges both rows around their reserved ids.
@@ -133,7 +133,7 @@ describe('shadow-router provisioning', () => {
     }
   })
 
-  it('AT2-03: a provisioning failure rolls back to a failed row, and the next open re-provisions with a new reservation', async () => {
+  it.each(HARNESS_BACKENDS)('AT2-03 [%s]: a provisioning failure rolls back to a failed row, and the next open re-provisions with a new reservation', async (backend) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-at2-03d-'))
     try {
       const dir = join(root, 'project-a')
@@ -142,7 +142,7 @@ describe('shadow-router provisioning', () => {
       // The session store rejects a non-absolute cwd, which deterministically
       // exercises the creation-failure rollback around the reserved id. A
       // second row holds a usable root and a failed state to retry.
-      const seed = await seedHarness(root)
+      const seed = await seedHarness(root, { backend })
       try {
         await seedWorkspaceFact(seed.workspaceDomain, 'ws-seed-5', canonical)
         await seed.domain.table('bindings').put(WorkspaceId('ws-bad-path'), seedRow({
@@ -162,7 +162,7 @@ describe('shadow-router provisioning', () => {
         await seed.dispose()
       }
 
-      const h = await harness(root, { authorizedRoots: [root] })
+      const h = await harness(root, { authorizedRoots: [root] }, { backend })
       try {
         await expect(h.router.reconcileProject(WorkspaceId('ws-bad-path')))
           .rejects.toMatchObject({ code: 'SHADOW_INVALID_REQUEST' })
@@ -186,16 +186,16 @@ describe('shadow-router provisioning', () => {
     }
   })
 
-  it('AT2-03: request results replay across a cold restart and conflict on different input', async () => {
+  it.each(HARNESS_BACKENDS)('AT2-03 [%s]: request results replay across a cold restart and conflict on different input', async (backend) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-at2-03e-'))
-    const h1 = await harness(root, { authorizedRoots: [root] })
+    const h1 = await harness(root, { authorizedRoots: [root] }, { backend })
     const dirA = await h1.makeProjectDir('project-a')
     const dirB = await h1.makeProjectDir('project-b')
     const first = await h1.router.openProject(h1.shadow, { path: dirA, requestId: 'at2-03-replay' })
     // Cold restart: the context stops, the root stays on disk.
     await h1.close()
 
-    const h2 = await harness(root, { authorizedRoots: [root] })
+    const h2 = await harness(root, { authorizedRoots: [root] }, { backend })
     try {
       const replayed = await h2.router.openProject(h2.shadow, { path: dirA, requestId: 'at2-03-replay' })
       expect(replayed).toEqual(first)
