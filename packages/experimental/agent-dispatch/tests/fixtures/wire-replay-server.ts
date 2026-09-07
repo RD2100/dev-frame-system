@@ -18,6 +18,13 @@ import type { AddressInfo } from 'node:net'
 export interface WireReplayTurn {
   /** Assistant text emitted before any tool call. */
   readonly text?: string
+  /**
+   * Readiness gate evaluated against the captured request body before this
+   * turn is served. A false gate holds the cursor in place and answers a
+   * bounded standby response instead, so a scripted phase is never consumed
+   * before its real precondition (durable registration receipts) holds.
+   */
+  readonly gate?: (body: string) => boolean
   /** Tool calls the model emits; each carries exact JSON arguments. */
   readonly toolCalls?: readonly {
     readonly id?: string
@@ -96,6 +103,7 @@ function sseChunks(turn: WireReplayTurn, body: string): readonly unknown[] {
 export async function startWireReplayServer(sessions: readonly WireReplaySession[]): Promise<WireReplayServer> {
   const cursors = new Map<string, number>()
   const requests: WireReplayRequest[] = []
+  const timers = new Set<NodeJS.Timeout>()
   const server = createServer((request: IncomingMessage, response: ServerResponse) => {
     let body = ''
     request.setEncoding('utf8')
@@ -117,13 +125,79 @@ export async function startWireReplayServer(sessions: readonly WireReplaySession
         return
       }
       const cursor = cursors.get(matched.needle) ?? 0
-      cursors.set(matched.needle, cursor + 1)
       const turn = matched.turns[cursor]
       if (turn === undefined) {
         response.writeHead(500, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ error: { message: `wire replay: script exhausted for "${matched.needle}"`, code: 'WIRE_REPLAY_EXHAUSTED' } }))
         return
       }
+      // A gated turn whose precondition has not produced its durable receipt
+      // yet holds the response open — the request stays in flight and costs
+      // no extra continuation round — and the moment the gate reports ready,
+      // the scripted turn streams on the same connection and the cursor
+      // advances exactly once, so no phase can repeat. A gate that throws
+      // fails the response loudly, the hold has a hard deadline, and
+      // close() cancels the poll so nothing hangs on shutdown.
+      if (turn.gate !== undefined) {
+        let ready = false
+        let gateFailed: Error | undefined
+        try {
+          ready = turn.gate(body)
+        } catch (error) {
+          gateFailed = error instanceof Error ? error : new Error(String(error))
+        }
+        if (gateFailed !== undefined) {
+          response.writeHead(500, { 'content-type': 'application/json' })
+          response.end(JSON.stringify({ error: { message: `wire replay: gate evaluation failed: ${gateFailed.message}`, code: 'WIRE_REPLAY_GATE_FAILED' } }))
+          return
+        }
+        if (!ready) {
+          const startedAt = Date.now()
+          const serve = (): void => {
+            clearInterval(poll)
+            timers.delete(poll)
+            if (response.destroyed) return
+            // Serving from the poll advances the cursor exactly like the
+            // immediate path: the phase is consumed once, by the one
+            // in-flight request that waited for it.
+            cursors.set(matched.needle, cursor + 1)
+            response.writeHead(200, { 'content-type': 'text/event-stream' })
+            response.end([
+              ...sseChunks(turn, body).map(chunk => `data: ${JSON.stringify(chunk)}`),
+              'data: [DONE]',
+              '',
+            ].join('\n\n'))
+          }
+          const fail = (message: string): void => {
+            clearInterval(poll)
+            timers.delete(poll)
+            if (response.destroyed) return
+            response.writeHead(500, { 'content-type': 'application/json' })
+            response.end(JSON.stringify({ error: { message, code: 'WIRE_REPLAY_GATE_FAILED' } }))
+          }
+          const poll = setInterval(() => {
+            let ok = false
+            try {
+              ok = turn.gate!(body)
+            } catch (error) {
+              fail(`gate evaluation failed: ${error instanceof Error ? error.message : String(error)}`)
+              return
+            }
+            if (ok) {
+              serve()
+              return
+            }
+            if (Date.now() - startedAt > 120_000) fail('gate deadline exceeded after 120000ms')
+          }, 200)
+          timers.add(poll)
+          response.on('close', () => {
+            clearInterval(poll)
+            timers.delete(poll)
+          })
+          return
+        }
+      }
+      cursors.set(matched.needle, cursor + 1)
       response.writeHead(200, { 'content-type': 'text/event-stream' })
       response.end([
         ...sseChunks(turn, body).map(chunk => `data: ${JSON.stringify(chunk)}`),
@@ -143,6 +217,8 @@ export async function startWireReplayServer(sessions: readonly WireReplaySession
     requests,
     close: () => {
       closing ??= new Promise<void>((resolve) => {
+        for (const timer of timers) clearTimeout(timer)
+        timers.clear()
         server.close(() => { resolve() })
         server.closeAllConnections()
       })

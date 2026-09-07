@@ -91,6 +91,11 @@ export async function prepareCandidateScenario(root: string, ledgerPath: string)
   // Four independent trees: the controller's integration target, the lead's
   // own tree, and one worker tree per task. Only the target is bound at
   // bootstrap; the lead and worker trees stay free for their own holders.
+  // Linked git worktrees are the registry's product contract (`git worktree
+  // list` reconciliation); the worker commit denial this exposes — the
+  // shared gitdir sits outside the worker's sandboxed workspace — is a
+  // product isolation question reported to the coordinator, not something
+  // the fixture may paper over with standalone repos.
   const targetWorktreePath = join(root, 'wt-target')
   await scenarioGit(anchorPath, 'worktree', 'add', targetWorktreePath, '-b', 'feature/target')
   const leadWorktreePath = join(root, 'wt-lead')
@@ -117,10 +122,12 @@ export async function prepareCandidateScenario(root: string, ledgerPath: string)
  * @param prepared - The prepared tasks with their digests.
  */
 export async function writeDigestPatch(home: string, prepared: PreparedScenario): Promise<string> {
+  // requiredChecksByTask sits at four spaces inside the plugin config, so
+  // each task row needs six — one level deeper than the mapping key itself.
   const rows = prepared.tasks.map(task => [
-    `    '${task.taskId}': '${String(task.digest)}'`,
+    `      '${task.taskId}': '${String(task.digest)}'`,
   ].join('\n'))
-  const checkRows = prepared.tasks.map(task => {
+  const checkRows = prepared.tasks.map((task) => {
     const checks = approvedChecksFor(task.worktreePath, `artifact-${task.taskId}.txt`).checks
     return `        '${task.taskId}': ${JSON.stringify(checks)}`
   })
@@ -132,6 +139,11 @@ export async function writeDigestPatch(home: string, prepared: PreparedScenario)
     '    requiredChecksPath: !!js "process.env.DSH_CANDIDATE_HOME + \'/checks-ledger.json\'"',
     '    requiredChecksByTask:',
     ...rows,
+    // This final layer replaces the delivery row's whole config, so the
+    // commit path scope rides here too — otherwise the last patch would
+    // wipe the fixture overlay's commitPathsByTask.
+    '    commitPathsByTask:',
+    ...prepared.tasks.map(task => `      '${task.taskId}': ['artifact-${task.taskId}.txt']`),
     '    gitExecutable: git',
     '    gitTimeoutMs: 15000',
     '    gitMaxOutputBytes: 1048576',
@@ -177,4 +189,4 @@ export async function writeScenarioFile(home: string, prepared: PreparedScenario
   return scenarioPath
 }
 
-export { TaskId }
+export { TaskId, FileRequiredChecksConfigStore }

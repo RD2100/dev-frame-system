@@ -31,7 +31,7 @@
       lead:
         inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'read_image', 'glob', 'grep', 'todo_write', 'agent_dispatch', 'project_review']"
       worker:
-        inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'glob', 'grep', 'project_deliver']"
+        inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'glob', 'grep', 'project_deliver', 'project_commit']"
     leadPluginScopes:
       candidate-fullchain-lead: ['candidate-fullchain']
 
@@ -79,6 +79,13 @@
       config:
         requiredChecksPath: !!js "process.env.DSH_CANDIDATE_HOME + '/checks-ledger.json'"
         requiredChecksByTask: {}
+        # The host-registered artifact scope per task: project_commit commits
+        # only these paths for the task, through the registry Service.
+        commitPathsByTask:
+          task-a:
+            - artifact-task-a.txt
+          task-b:
+            - artifact-task-b.txt
         gitExecutable: git
         gitTimeoutMs: 15000
         gitMaxOutputBytes: 1048576

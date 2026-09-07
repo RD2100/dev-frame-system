@@ -21,7 +21,7 @@ import type { WorktreeId } from '@deepseek-ai/dsh-worktree-registry'
 import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import { apply as requestBudgetApply } from '@deepseek-ai/dsh-experimental-project-controller/request-budget-consumer'
 import type {} from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
-import { GoalBindingComposition, resolveCommandGoalBindingConfig } from '@deepseek-ai/dsh-experimental-command-goal-binding'
+import { GoalBindingComposition, resolveCommandGoalBindingConfig, START_GOAL_RUNNING_TEXT } from '@deepseek-ai/dsh-experimental-command-goal-binding'
 import type { CommandGoalBindingConfig, GoalBindingCompositionStores } from '@deepseek-ai/dsh-experimental-command-goal-binding'
 import { AgentDispatch } from './service.ts'
 import { AgentProjectRun } from './run.ts'
@@ -236,38 +236,68 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
       if (config?.candidateRootSessionId !== undefined) {
         const rootId = config.candidateRootSessionId
         let bootstrapped = false
+        // The mounted composition survives a failed start/resume: the fiber
+        // carries the one process-shared composition, and mounting it again
+        // would register its commands and listeners a second time.
+        let composition: GoalBindingComposition | undefined
+        let bootstrap: Promise<void> | undefined
         ctx.on('agent/pre-step', async (_data, next) => {
           if (bootstrapped) return next()
           const agent = ctx.agents.currentInitiator()
           if (agent === undefined || String(agent.session.id) !== rootId) return next()
-          bootstrapped = true
-          const receipt = await run.hostStart(agent.id)
-          const targetPath = run.candidateTargetWorktreePath
-          if (targetPath === undefined) {
-            throw new Error('candidate bootstrap requires a target worktree in the scenario')
+          if (bootstrap === undefined) {
+            bootstrap = (async () => {
+              const receipt = await run.hostStart(agent.id)
+              const targetPath = run.candidateTargetWorktreePath
+              if (targetPath === undefined) {
+                throw new Error('candidate bootstrap requires a target worktree in the scenario')
+              }
+              composition ??= await mountGoalComposition(ctx, {
+                workspaceId: receipt.workspaceId,
+                workspaceRoot: targetPath,
+                // The one ledger: the same absolute file the bootstrap's
+                // approvals write, required explicitly by the formal config.
+                requiredChecksPath: run.requiredChecksLedgerPath,
+                // The start gate checks the clean target tree; the workers' own
+                // artifact probes and the final acceptance list stay separate.
+                checks: { version: 1, checks: [{
+                  checkId: 'git-diff-check', executable: 'git', arguments: ['diff', '--quiet', 'HEAD'], cwd: targetPath,
+                }] },
+                taskIds: receipt.tasks.map(task => task.taskId),
+                maxAttempts: 4,
+              }, {
+                // The composition reads the one file-backed ledger the
+                // bootstrap writes — never its own memory default, never a
+                // second path.
+                requiredChecks: run.sharedChecksStore(),
+              })
+              const result = await composition.startBoundGoal({ agent, rawInput: 'Run the candidate fullchain: both workers deliver their own artifacts through the lead.' })
+              if (result.kind !== 'success') {
+                // A restart re-enters this pre-step while the goal is still
+                // current, so the fold refuses a second start. The public
+                // resume lane is the honest recovery: it aligns the binding
+                // store with the log projection, refuses a pending stop,
+                // resumes the same goal, and lands the revision-advanced
+                // binding. Any other start refusal — and any resume refusal —
+                // fails the bootstrap loudly; nothing is swallowed.
+                if (result.text !== START_GOAL_RUNNING_TEXT) {
+                  throw new Error(`devframe-start refused: ${result.text}`)
+                }
+                const resumed = await composition.resumeBoundGoal({ agent, rawInput: '' })
+                if (resumed.kind !== 'success') {
+                  throw new Error(`devframe-resume refused: ${resumed.text}`)
+                }
+              }
+              // The marker flips only after the whole face succeeded, so a
+              // failed bootstrap is retried by the next pre-step instead of
+              // being bypassed.
+              bootstrapped = true
+            })()
           }
-          const composition = await mountGoalComposition(ctx, {
-            workspaceId: receipt.workspaceId,
-            workspaceRoot: targetPath,
-            // The one ledger: the same absolute file the bootstrap's
-            // approvals write, required explicitly by the formal config.
-            requiredChecksPath: run.requiredChecksLedgerPath,
-            // The start gate checks the clean target tree; the workers' own
-            // artifact probes and the final acceptance list stay separate.
-            checks: { version: 1, checks: [{
-              checkId: 'git-diff-check', executable: 'git', arguments: ['diff', '--quiet', 'HEAD'], cwd: targetPath,
-            }] },
-            taskIds: receipt.tasks.map(task => task.taskId),
-            maxAttempts: 4,
-          }, {
-            // The composition reads the one file-backed ledger the
-            // bootstrap writes — never its own memory default, never a
-            // second path.
-            requiredChecks: run.sharedChecksStore(),
-          })
-          const result = await composition.startBoundGoal({ agent, rawInput: 'Run the candidate fullchain: both workers deliver their own artifacts through the lead.' })
-          if (result.kind !== 'success') {
-            throw new Error(`devframe-start refused: ${result.text}`)
+          try {
+            await bootstrap
+          } finally {
+            bootstrap = undefined
           }
           return next()
         })
