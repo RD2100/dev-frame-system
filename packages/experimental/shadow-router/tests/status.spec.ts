@@ -7,7 +7,8 @@ import { join } from 'node:path'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { HARNESS_BACKENDS, harness, seedHarness } from './helpers.ts'
-import type { ShadowBindingRecord } from '../src/index.ts'
+import { AcceptanceHash, ShadowMessageId, ShadowRequestId } from '../src/index.ts'
+import type { ShadowBindingRecord, ShadowDeliveryRecord } from '../src/index.ts'
 
 describe('shadow-router status', () => {
   it('AT2-08: status pages projects, bounds deliveries, and never mutates state', async () => {
@@ -88,6 +89,61 @@ describe('shadow-router status', () => {
       expect(after).toBe(before)
       expect(second.observedAt >= first.observedAt).toBe(true)
       expect(third.observedAt >= second.observedAt).toBe(true)
+    } finally {
+      await h.dispose()
+    }
+  })
+
+  it('AT2-08: a queued delivery intent reads back as queued in the status readout', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-at2-08c-'))
+    const project = join(root, 'project-a')
+    await mkdir(project)
+    const canonical = await realpath(project)
+    // Crash residue: a ready binding plus one queued intent that never got its
+    // target-acceptance write, seeded through the real domain.
+    const seed = await seedHarness(root)
+    try {
+      const now = new Date().toISOString()
+      await seed.domain.table('bindings').put(WorkspaceId('ws-queued-1'), {
+        workspaceId: WorkspaceId('ws-queued-1'),
+        canonicalPath: canonical,
+        controllerSessionId: SessionId('session-ctrl-q1'),
+        profileKey: 'devframe',
+        bindingRevision: 2,
+        requestId: 'seed-open-1',
+        state: 'ready',
+        activeGoalId: 'goal-1',
+        activeAcceptanceHash: AcceptanceHash('hash-run-1'),
+        createdAt: now,
+        updatedAt: now,
+      })
+      const residue: ShadowDeliveryRecord = {
+        messageId: ShadowMessageId('msg-seed-queued-1'),
+        requestId: ShadowRequestId('seed-queued-1'),
+        sourceSessionId: SessionId('session-shadow'),
+        workspaceId: WorkspaceId('ws-queued-1'),
+        bindingRevision: 2,
+        goalId: 'goal-1',
+        acceptanceHash: AcceptanceHash('hash-run-1'),
+        mode: 'work',
+        text: 'queued residue',
+        state: 'queued',
+        createdAt: now,
+        updatedAt: now,
+      }
+      await seed.domain.table('deliveries').put(residue.messageId, residue)
+    } finally {
+      await seed.dispose()
+    }
+
+    const h = await harness(root, { authorizedRoots: [root] })
+    try {
+      const status = await h.router.projectStatus(h.shadow, { workspaceId: 'ws-queued-1' })
+      const entry = status.projects[0]!
+      // The queued intent is visible with its own count, distinct from received
+      // and completed: live sends converge to received, so only this durable
+      // residue can prove the queued state reads back.
+      expect(entry.deliveries.filter(delivery => delivery.state === 'queued')).toHaveLength(1)
     } finally {
       await h.dispose()
     }

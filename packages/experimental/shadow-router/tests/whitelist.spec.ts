@@ -1,7 +1,7 @@
 /** AT2-02: the whitelist rejection face — forbidden callers, tools, and inputs fail before target mutation. */
 
 import { describe, expect, it } from 'vitest'
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { dispatch, failureCode, failureText, harness } from './helpers.ts'
@@ -23,6 +23,14 @@ describe('shadow-router whitelist', () => {
       // The four tools are installed only in the Shadow scope, so a worker
       // cannot even resolve the name — let alone reach the service guard.
       expect(failureText(dispatched)).toContain('unknown tool "project_status"')
+
+      // An open whose root sits outside every authorized root is named and
+      // rejected before any workspace or binding row exists.
+      const outside = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-at2-02-outside-'))
+      await expect(h.router.openProject(h.shadow, { path: outside, requestId: 'at2-02-outside-root' }))
+        .rejects.toMatchObject({ code: 'SHADOW_ROOT_UNAUTHORIZED' })
+      await rm(outside, { recursive: true, force: true })
+      expect(h.router.listBindings()).toEqual([])
 
       // The Shadow model face is exactly the four project tools: host shell and
       // raw-session tool names are not reachable from the Shadow scope.

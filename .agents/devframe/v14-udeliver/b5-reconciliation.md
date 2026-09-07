@@ -123,3 +123,10 @@
 - **AT1-09 部分→覆盖（包级，单一旅程场景驱动）**：huoshan-2 Worker（显式路由 spawn 参数）在 start-resume harness 落一条 A→B 旅程（command-goal-binding/tests/start-resume-composition.spec.ts，+213/−2，既有 10 用例零改动）：A 起始/消费/授权完成 → B 需求变更（新 goalId/新 hash/新 budget，A 提前起 B 拒、旧审查不收 B 归属门拒）→ **预算跨 restart 保留活性证明**（重启若重置消费投影折叠即闩锁，实测 B 第二次消费折叠成功）→ 迟到 A 结果落 A 完整身份元组不计入 B → B 自身证据到 required-checks 阶段。复用既有判据零新增实现。验收复跑：11/33/267 passed + tsc 0，全 exit 0。
 - **源码级墙（待裁定，旅程诚实登记未掩盖）**：`MemoryRequiredChecksConfigStore` 每进程实例（required-checks.ts:188-223）、插件 apply 无 store 注入缝（index.ts:80-84 硬默认）——任何 goal 在非其 start 所在 boot 完成（含生产跨进程重启）必命中 `REQUIRED_CHECKS_CONFIG_NOT_FOUND`；硬互斥"resume 成功⇔之后可完成"。durable required-checks 注入缝裁定后 AT1-09 (e) 与 AT1-10 跨 boot 完成面才可开展。
 - 附带登记：`devframe/usage` 全树无生产写入者（测试装配与既有 review/role-policy fixture 同型）；task-delivery 迟到面因投影 `currentDeliveryGoal` 约束（delivery goalId 须等于最后一条 open binding）不可用于旅程运行时断言。
+
+### 未覆盖面刷新（huoshan-2 Worker，2026-09-08，基准 2c965e5a61）
+
+详表见 [b5-uncovered-refresh.md](b5-uncovered-refresh.md)（同 Worker 交付，逐行证据）。刷新后分布：**覆盖 31 / 部分 4（AT1-03/10、AT4-01/06）/ 缺口→推进中 1（AT1-11）；全部 AT* 验收态仍 not_run 不变。**要点：
+- 再翻面 4 行：**AT4-05** 缺口→覆盖（76080fe40b durable request budget：Config 化+先持久化后回执+重启不重置+写失败闩锁，18 具名用例）；**AT4-04** 部分→覆盖（真实 WorktreeLockError 锁面 4 用例——**归属更正：落地 commit e07c38260a，非 24bbe04a7d**）；**AT4-07** 部分→覆盖（2859e1842c 真实 EEXIST/ENOTDIR 注入+脱敏+writer 保持）；**AT4-08** 缺口→覆盖（34b562ba03 三场景具名，dsh-session 属主）。
+- 真实未闭合面（可派单序）：AT2-02/AT2-08 一行级用例；AT4-01 两分支 pre-step 注入（agent-reliability，纯测试组装）；fixture 录制批次（snapshots 属主）。被 required-checks 收敛线阻塞：AT1-09(e)+AT1-10 跨 boot 完成面（命令面出厂挂载 index.ts:84 仍不传 stores→Memory 默认——收敛后一次到位）。待裁定：AT4-06。
+- **cordis-catalog 门更新**：run.ts:171 标注已修（ef8a137dcae）但门现失败于同型新面 **run.ts:191** 缺显式返回标注（A2 属主面滚动新增，组长实测 exit 1 于 2c965e5a61）——继续登记待修。
