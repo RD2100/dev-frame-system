@@ -50,13 +50,14 @@ An output schema makes a schema-valid committed capture mandatory for successful
 
 `ObjectJsonSchema` is the object-rooted consumer view of the unified enforceable raw JSON Schema subset in `dsh-tools`; unsupported keywords fail loudly because that wire data becomes the capture tool's parameters verbatim. The [unified JSON-value schema Agent Note](../architecture/2026-07-20-unified-json-value-schema-dsl.md) owns the vocabulary and validation semantics, while the [agent-scope runtime-design Agent Note](../architecture/2026-07-12-agent-scope-runtime-design.md#structured-output-commits-only-authoritative-outcomes) owns the assembly, commit, guard, and terminal-stop algorithms.
 
+Background execution is explicitly selected with `run_in_background` and reuses [jobs](../../../../packages/jobs/jobs/README.md) ownership, admission, collection, and cancellation. The calling Agent owns the job rather than the calling step: work survives step completion, while Agent disposal cancels and awaits cleanup. Each background run holds its own Session recorder, which survives tool reload and is released after run cleanup. Jobs and runs do not resume across processes.
+
 ## Testing
 
 Worker-side logic runs through an in-process `MessageChannel` so V8 coverage measures it. Unit tests cover script helpers, fatal and nullable failures, JSON boundaries, caps, cancellation, child ownership, and structured output through real loops. A built-bin smoke runs the separately bundled `lib/worker.cjs` under plain Node, a with-key e2e drives real child agents, and model-facing workflow behavior is snapshot-covered through its owning example.
 
 ## Deferred (documented non-goals)
 
-- **Background collection** (start tool → run id → completion notice → collect), designed alongside shell/subagent background unification.
 - **Journaling + resume** (`resumeFromRunId`, cached agent() prefixes) — implementing it reintroduces CC's determinism bans as a script-contract tightening (scripts may read the clock).
 - **Saved/bundled workflows** (a `.deepseek/workflows/` registry, slash-command API) and **script persistence to a run directory** (the tool-call event already records the script durably).
 - **Nested `workflow()`**, **token `budget`**, and the `effort`/`isolation`/`agentType` agent options (each rejects loud with a message naming it deferred).
@@ -68,7 +69,7 @@ Worker-side logic runs through an in-process `MessageChannel` so V8 coverage mea
 
 - **Hostile-value containment in the host** (trap-free proxy rejection, accessor-never-invoked descriptor walks, realm-side pre-rendering of thrown values, realm-built promises/arrays/error clones with structural fatal recognition): rejected because every defense targets an author the trust premise accepts, while the thread's serialization boundary already makes cross-realm values total by construction.
 - **In-process `node:vm` execution**: mechanically simplest — no RPC, no thread — but `start()` blocks the caller for the script's initial synchronous slice, a synchronous spin past the first await cannot be killed in-process (the vm `timeout` covers only that first slice), and `dispose()` could only abandon an unsettling script on the host loop. The worker-thread engine keeps the same vm-context script API while unblocking the host and making termination real.
-- **Background execution as the default** (CC's shape): deferred; foreground-synchronous matches `dsh-tool-subagent`'s cut, and background semantics should be designed ONCE across shell/subagent/workflow rather than per-tool.
+- **Background execution as the default**: callers must explicitly choose deferred result collection. Optional background runs reuse the shared jobs contract; foreground calls retain direct results and step cancellation.
 - **Workflow-layer JSON parsing for `agent({schema})`**: duplicating a seam concern at one consumer while the seam's capability flag stayed dishonestly `false`.
 - **Meta embedded in the script as `export const meta = {...}`** (CC's exact format): keeps scripts self-contained and CC scripts drop-in, but obtaining meta requires evaluating model-written text on the host. Even an empty timed vm context cannot bound script-controlled getters when the host reads the resulting object. A JSON parameter removes the scanner, evaluation, and host-spin hole; the cost is that a CC script's meta header must move into the parameter (the body stays drop-in).
 - **`ValueSchemaSpec` as the `outputSchema` wire type**: the author form now has equivalent vocabulary, but a workflow supplies realm-foreign raw JSON Schema data; pretending that runtime data is a trusted author declaration would skip the raw-schema assertion boundary.

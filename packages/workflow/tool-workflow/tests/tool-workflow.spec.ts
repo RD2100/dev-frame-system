@@ -5,6 +5,9 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionResult, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
+import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
+import { JobId } from '@deepseek-ai/dsh-jobs'
 import { WorkflowRunId, WorkflowEngine } from '@deepseek-ai/dsh-workflow'
 import type {
   WorkflowAgentEndInfo, WorkflowAgentInfo, WorkflowResult, WorkflowRun,
@@ -25,6 +28,7 @@ class StubEngine extends WorkflowEngine {
   cancels: string[] = []
   disposed = 0
   disposeBarrier: Promise<void> | undefined
+  onDispose: (() => void) | undefined
   settle!: (result: WorkflowResult) => void
   readonly settlements = new Map<WorkflowRunIdType, (result: WorkflowResult) => void>()
   startError: Error | undefined
@@ -49,6 +53,7 @@ class StubEngine extends WorkflowEngine {
       dispose: async () => {
         this.disposed += 1
         await this.disposeBarrier
+        this.onDispose?.()
         this.settlements.delete(id)
       },
     }
@@ -80,15 +85,27 @@ async function setup(config?: { toolName?: string; maxResultChars?: number }) {
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(StubEngine)
-  await ctx.plugin(toolWorkflow, config ?? {})
+  const toolFiber = ctx.plugin(toolWorkflow, config ?? {})
+  await toolFiber
   const engine = ctx.workflowEngine as StubEngine
   const session = Session.create(SessionId('caller'))
   const parent = { id: session.id, options: {}, session } as unknown as Agent
-  return { ctx, engine, parent, session }
+  return { ctx, engine, parent, session, toolFiber }
 }
 
 const SCRIPT = 'return 1'
 const META = { name: 'audit', description: 'd' }
+
+async function backgroundSetup(controller = true) {
+  const fixture = await setup()
+  await fixture.ctx.plugin(AgentRegistry)
+  await fixture.ctx.plugin(LocalJobRegistry)
+  const ownerFiber = fixture.ctx.plugin(() => {})
+  const parent = { ...fixture.parent, ctx: ownerFiber.ctx } as Agent
+  fixture.ctx.agents.register(parent)
+  if (controller) fixture.ctx.jobs.attachController('test-workflow')
+  return { ...fixture, parent, ownerFiber }
+}
 
 function execute(ctx: Context, args: unknown, extra?: {
   agent?: Agent
@@ -107,6 +124,143 @@ function execute(ctx: Context, args: unknown, extra?: {
 }
 
 describe('dsh-tool-workflow', () => {
+  it('does not retain a job when background engine startup fails', async () => {
+    const { ctx, engine, parent } = await backgroundSetup()
+    try {
+      engine.startError = new Error('script does not parse')
+      const result = await execute(ctx, { script: 'return (((', meta: META, run_in_background: true }, { agent: parent })
+      expect(result.isError).toBe(true)
+      expect(JSON.stringify(result.content)).toContain('script does not parse')
+      expect(ctx.jobs.list(parent)).toEqual([])
+      expect(engine.disposed).toBe(0)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each(['script', 'disposal'] as const)('reports background %s failure without a completed job', async (failure) => {
+    const { ctx, engine, parent, session } = await backgroundSetup()
+    try {
+      if (failure === 'disposal') engine.onDispose = () => { throw new Error('cleanup failed') }
+      await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })
+      engine.settle(failure === 'script'
+        ? { value: null, stopReason: 'error', error: 'script failed', agentsStarted: 0 }
+        : { value: 1, stopReason: 'completed', agentsStarted: 0 })
+      const terminal = await ctx.jobs.wait(JobId('workflow-1'), 5000, parent)
+      expect(terminal.status).toBe('failed')
+      expect(terminal.detail).toContain(failure === 'script' ? 'script failed' : 'cleanup failed')
+      expect(engine.disposed).toBe(1)
+      expect(session.snapshotEvents().some(event => event.type === 'tool-workflow/run-end')).toBe(failure === 'script')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('keeps background member records paired when the tool is unloaded', async () => {
+    const { ctx, engine, parent, session, toolFiber } = await backgroundSetup()
+    try {
+      await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })
+      const runId = WorkflowRunId('run-1')
+      engine.agentStart(runId, { seq: 1, childId: SessionId('background-child'), label: 'audit' })
+      await toolFiber.dispose()
+      expect(ctx.tools.get('workflow')).toBeUndefined()
+      expect(ctx.jobs.list(parent)[0]?.status).toBe('running')
+      engine.agentEnd(runId, { seq: 1, childId: SessionId('background-child'), label: 'audit', outcome: 'completed' })
+      engine.settle({ value: 1, stopReason: 'completed', agentsStarted: 1 })
+      expect((await ctx.jobs.wait(JobId('workflow-1'), 5000, parent)).status).toBe('completed')
+      expect(session.snapshotEvents().map(event => event.type)).toEqual([
+        'tool-workflow/run-start', 'tool-workflow/agent-start', 'tool-workflow/agent-end', 'tool-workflow/run-end',
+      ])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('returns an owned job before completion and keeps it alive after the caller step ends', async () => {
+    const { ctx, engine, parent, session } = await backgroundSetup()
+    try {
+      const step = new AbortController()
+      const result = await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent, signal: step.signal })
+      expect(result.isError).toBe(false)
+      if (result.isError) throw new Error('expected background start')
+      expect(result.value).toEqual({ jobId: 'workflow-1' })
+      expect(engine.disposed).toBe(0)
+      expect(ctx.jobs.list(parent)[0]?.status).toBe('running')
+      step.abort()
+      expect(engine.requests[0]!.signal!.aborted).toBe(false)
+      engine.agentStart(WorkflowRunId('run-1'), { seq: 1, childId: SessionId('background-child'), label: 'audit' })
+      engine.settle({ value: { answer: 42 }, stopReason: 'completed', agentsStarted: 1 })
+      expect((await ctx.jobs.wait(JobId('workflow-1'), 5000, parent)).status).toBe('completed')
+      expect(ctx.jobs.read(JobId('workflow-1'), parent).text).toContain('"answer": 42')
+      expect(engine.disposed).toBe(1)
+      expect(session.snapshotEvents().map(event => event.type)).toEqual([
+        'tool-workflow/run-start', 'tool-workflow/agent-start', 'tool-workflow/run-end',
+      ])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('keeps a cancelled job stopping until workflow disposal reaches quiescence', async () => {
+    const { ctx, engine, parent, session } = await backgroundSetup()
+    const disposal = Promise.withResolvers<undefined>()
+    engine.disposeBarrier = disposal.promise
+    try {
+      await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })
+      ctx.jobs.kill(JobId('workflow-1'), parent, 'stop audit')
+      await vi.waitFor(() => { expect(engine.disposed).toBe(1) })
+      expect(ctx.jobs.list(parent)[0]?.status).toBe('stopping')
+      expect(session.snapshotEvents().map(event => event.type)).toEqual(['tool-workflow/run-start'])
+      disposal.resolve(undefined)
+      expect((await ctx.jobs.wait(JobId('workflow-1'), 5000, parent)).status).toBe('killed')
+      expect(session.snapshotEvents().at(-1)?.type).toBe('tool-workflow/run-end')
+    } finally {
+      disposal.resolve(undefined)
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('cancels and awaits background workflows when their owner is disposed', async () => {
+    const { ctx, engine, parent, session, ownerFiber } = await backgroundSetup()
+    try {
+      await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })
+      const runId = WorkflowRunId('run-1')
+      engine.agentStart(runId, { seq: 1, childId: SessionId('owned-child'), label: 'owned' })
+      engine.onDispose = () => { engine.agentEnd(runId, { seq: 1, childId: SessionId('owned-child'), label: 'owned', outcome: 'cancelled' }) }
+      await ownerFiber.dispose()
+      expect(engine.requests[0]!.signal!.aborted).toBe(true)
+      expect(engine.disposed).toBe(1)
+      expect(ctx.jobs.list(parent)).toEqual([])
+      expect(session.snapshotEvents().map(event => event.type)).toEqual([
+        'tool-workflow/run-start', 'tool-workflow/agent-start', 'tool-workflow/agent-end', 'tool-workflow/run-end',
+      ])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('refuses background work without a registry before starting the engine', async () => {
+    const { ctx, engine, parent } = await setup()
+    try {
+      const result = await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })
+      expect(result.isError).toBe(true)
+      expect(engine.requests).toEqual([])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('refuses background work without an owner-accessible job controller', async () => {
+    const { ctx, engine, parent } = await backgroundSetup(false)
+    try {
+      expect((await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })).isError).toBe(true)
+      expect(engine.requests).toEqual([])
+      expect(ctx.jobs.list(parent)).toEqual([])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('starts a run with the script/args/parent/signal and renders the completed value', async () => {
     const { ctx, engine, parent } = await setup()
     const controller = new AbortController()

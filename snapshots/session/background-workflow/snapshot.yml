@@ -1,0 +1,17 @@
+version: 1
+scenario: background-workflow
+profile: headless
+composition: background-workflow
+recording: authored
+header:
+  class: background-workflow
+  pin: true
+replay:
+  override: true
+sessionVariants:
+  win32: true
+expectations:
+  variants:
+    win32:
+      - system-prompt
+      - tool-schemas
