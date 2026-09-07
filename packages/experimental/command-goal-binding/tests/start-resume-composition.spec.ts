@@ -107,7 +107,7 @@ function stubAgent(session: Session): Agent {
     cancel() {},
     runMaintenance: task => task(new AbortController().signal),
     whenIdle() { return Promise.resolve() },
-  } as Agent
+  }
 }
 
 /**
@@ -175,7 +175,7 @@ function devframeEvent(
 ): { readonly type: string; readonly data: unknown } & Record<string, unknown> {
   const event = test.session.snapshotEvents().find(candidate => candidate.type === type)
   if (event === undefined) throw new Error(`${type} event is missing`)
-  return event as { readonly type: string; readonly data: unknown } & Record<string, unknown>
+  return event
 }
 
 /** Every logged goal-binding event payload, in log order. */
@@ -273,8 +273,8 @@ describe('/devframe-start composition', { timeout: 60_000 }, () => {
     })
 
     const text = execution.result.text
-    expect(text).not.toContain('snapshot-v1-')
-    expect(text).not.toContain('dsh-source-fp-v1-')
+    expect(text).not.toContain('snapshot-v2-')
+    expect(text).not.toContain('dsh-source-fp-v2-')
     expect(text).not.toContain('devframe-start:')
     if (goal === undefined) throw new Error('goal is missing')
     expect(text).not.toContain(goal.id)

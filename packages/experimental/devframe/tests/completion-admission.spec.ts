@@ -8,6 +8,9 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest'
+import { writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { computeSourceFingerprint } from '../src/source-fingerprint.ts'
 import { evaluateCompletionAdmission, TaskId } from '../src/controller/goal-binding.ts'
 import type { CompletionAdmissionRequest } from '../src/controller/goal-binding.ts'
 import { MemoryRequiredChecksConfigStore, requiredChecksDigest } from '../src/required-checks.ts'
@@ -55,6 +58,26 @@ describe('evaluateCompletionAdmission', { timeout: 30_000 }, () => {
     expect(verdict.mismatch.recordedFingerprint).toBe(recordedClaim)
     expect(verdict.mismatch.computed.fingerprint).toBe(fixture.fingerprint)
   })
+
+  it.each(['tracked', 'existing-untracked', 'new-untracked'] as const)(
+    'rejects %s content changed after a passing review without a new commit',
+    async (variant) => {
+      const fixture = await createCommittedWorktree()
+      const path = join(fixture.root, variant === 'tracked' ? 'src.ts' : 'untracked.ts')
+      if (variant === 'existing-untracked') await writeFile(path, 'export const reviewed = true\n')
+      const reviewed = await computeSourceFingerprint({ worktreePath: fixture.root })
+      const request = await admissionRequest(fixture, { sourceFingerprint: reviewed.fingerprint })
+      expect((await evaluateCompletionAdmission(request)).kind).toBe('admitted')
+
+      await writeFile(path, 'export const reviewed = false\n')
+      const verdict = await evaluateCompletionAdmission(request)
+      expect(rejectionStage(verdict)).toBe('source-fingerprint')
+      if (verdict.kind !== 'rejected' || verdict.stage !== 'source-fingerprint') {
+        throw new Error('expected changed source to invalidate the passing review')
+      }
+      expect(verdict.mismatch.computed.headCommit).toBe(reviewed.headCommit)
+    },
+  )
 
   it('rejects at the required-checks stage before consulting the review', async () => {
     const fixture = await createCommittedWorktree()
