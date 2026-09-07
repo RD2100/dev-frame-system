@@ -633,13 +633,18 @@ describe('DevFrame host projection', () => {
     expect(live?.bindings).toHaveLength(1)
     const checkpoint = ctx.sessionProjections.checkpoint(current)
     const row = checkpoint.devframe
-    expect(row?.ver).toBe(2)
+    expect(row?.ver).toBe(3)
     expect(ctx.sessionProjections.restore(
       checkpoint,
       current.snapshotEvents(),
       SessionLogOffset(0),
       current.header,
       SessionLogOffset(0),
+    ).checkpoint.devframe?.val).toEqual(row?.val)
+    // An older projection checkpoint is discarded; the durable log rebuilds its new fields.
+    expect(ctx.sessionProjections.restore(
+      { devframe: { ...row!, ver: 2 } },
+      current.snapshotEvents(), SessionLogOffset(0), current.header, SessionLogOffset(0),
     ).checkpoint.devframe?.val).toEqual(row?.val)
     await ctx.fiber.dispose()
   })
@@ -709,7 +714,7 @@ describe('task delivery evidence replay', () => {
     expect(state.bindings[0]).toEqual(goal)
     expect(state.deliveries).toEqual([delivery])
     expect(state.verifications[0]?.binding.sourceFingerprint).toBe(delivery.sourceFingerprint)
-    expect(devFrameProjectionDefinition.stateVersion).toBe(2)
+    expect(devFrameProjectionDefinition.stateVersion).toBe(3)
     const { deliveries: _deliveries, ...oldCheckpoint } = state
     expect(devFrameProjectionDefinition.stateSchema.safeParse(oldCheckpoint).success).toBe(false)
   })

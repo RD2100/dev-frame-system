@@ -18,9 +18,12 @@ import type { DevFrameRequiredChecksConfig } from '@deepseek-ai/dsh-experimental
 import { TaskId } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
 import type { TaskId as BrandedTaskId } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
 import { WorkspaceId } from '@deepseek-ai/dsh-experimental-devframe/shared'
+import { resolveRepairLimit } from '@deepseek-ai/dsh-experimental-devframe'
 
 /** Deployment configuration accepted by the `command-goal-binding` plugin. */
 export interface CommandGoalBindingConfig {
+  /** Shared Goal repair-round limit; omitted resolves to the DevFrame default. */
+  readonly repairLimit?: number
   /**
    * Host-owned workspace identity every completion binding and evidence
    * record of this composition carries. Required.
@@ -53,6 +56,8 @@ export interface CommandGoalBindingConfig {
 
 /** Validated configuration held by the composition for its whole lifetime. */
 export interface ResolvedCommandGoalBindingConfig {
+  /** Validated repair-round limit shared by review and warning consumers. */
+  readonly repairLimit: number
   /** Branded workspace identity attributed to every completion. */
   readonly workspaceId: WorkspaceId
   /** Absolute worktree root, present only when configured. */
@@ -80,6 +85,7 @@ const ChecksConfig = Schema.object({
 
 /** Schema for {@link CommandGoalBindingConfig}; every start parameter is required. */
 export const Config: Schema<CommandGoalBindingConfig> = Schema.object({
+  repairLimit: Schema.number(),
   workspaceId: Schema.string().required(),
   workspaceRoot: Schema.string(),
   checks: ChecksConfig.required(),
@@ -147,6 +153,7 @@ export function resolveCommandGoalBindingConfig(
       throw new TypeError('command-goal-binding config workspaceRoot must be an absolute path')
     }
     return {
+      repairLimit: resolveRepairLimit(config),
       workspaceId,
       workspaceRoot: rawWorkspaceRoot.trim(),
       checks: resolveChecks(config.checks),
@@ -158,6 +165,7 @@ export function resolveCommandGoalBindingConfig(
     }
   }
   return {
+    repairLimit: resolveRepairLimit(config),
     workspaceId,
     checks: resolveChecks(config.checks),
     taskIds: resolveTaskIds(config.taskIds),

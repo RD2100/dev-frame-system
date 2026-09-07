@@ -427,6 +427,10 @@ describe('project task consumer through the real Loader', () => {
       const state = f.ctx.sessionProjections.stateOf(f.controller.session, 'devframe')!
       expect(state.reviews).toHaveLength(1)
       expect(state.reviews[0]?.decision).toBe('changes_required')
+      expect(state.repairAdmissions).toHaveLength(1)
+      expect(state.repairAdmissions[0]).toMatchObject({ repairRound: 1, cause: { kind: 'review', reviewId: state.reviews[0]?.reviewId } })
+      expect((await f.tool(f.lead, 'project_review', args)).isError).not.toBe(true)
+      expect(f.ctx.sessionProjections.stateOf(f.controller.session, 'devframe')?.repairAdmissions).toHaveLength(1)
       expect((await f.tool(f.workerA, 'project_deliver', { taskId: 'task-a' })).isError).toBe(true)
       expect(state.deliveries).toHaveLength(2)
     })

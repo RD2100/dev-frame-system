@@ -9,7 +9,15 @@ import type {
 import {
   decodeDevFramePayload,
   type DevFrameEventType,
+  type DevFrameRepairCause,
 } from './events.ts'
+import type { GoalBindingIdentity, RepairRoundState } from './controller/goal-binding.ts'
+import { assertRepairAdmission, foldDevFrameState, sameRepairCause } from './projection.ts'
+import { evaluateRepairRoundAdmission, resolveRepairLimit, type RepairRoundAdmission } from './repair-limit.ts'
+
+// Every journal using one live Session shares its write order and uncertain-flush latch.
+const tails = new WeakMap<Session, Promise<void>>()
+const failures = new WeakMap<Session, DevFramePersistenceError>()
 
 type AppendDevFrameEvent = <T extends DevFrameEventType>(
   type: T,
@@ -72,8 +80,6 @@ export class DevFramePersistenceError extends Error {
  * cannot be built without wiring the deployed reviewer role authority.
  */
 export class DevFrameSessionJournal {
-  private readonly tails = new WeakMap<Session, Promise<void>>()
-  private readonly failures = new WeakMap<Session, DevFramePersistenceError>()
 
   /**
    * @param flush - Native `ctx.sessions.flush`-compatible durability callback.
@@ -102,51 +108,77 @@ export class DevFrameSessionJournal {
     data: SessionEventMap[T],
     options: DevFrameAppendOptions = {},
   ): Promise<SessionEvent<T>> {
-    const previous = this.tails.get(session) ?? Promise.resolve()
-    let event: SessionEvent<T> | undefined
-    const run = previous.then(async () => {
-      const priorFailure = this.failures.get(session)
-      if (priorFailure !== undefined) {
-        throw new DevFramePersistenceError(
-          `DevFrame Session "${session.id}" is blocked after a persistence failure`,
-          'blocked',
-          { cause: priorFailure },
-        )
-      }
+    return this.enqueue(session, async () => {
       options.beforeAppend?.()
       if (options.prepare !== undefined) await options.prepare()
       options.beforeAppend?.()
-      const decoded = decodeDevFramePayload(type, data)
-      if (type === 'devframe/review') {
-        // The discriminant check proves the decoded payload is a review event.
-        const review = decoded as SessionEventMap['devframe/review']
-        this.reviewGate.requireReviewer(review.reviewerSessionId)
+      return await this.appendOwned(session, type, data)
+    })
+  }
+
+  /**
+   * Persist one correction admission, reusing the receipt for the same cause.
+   * @param session - Live controller Session and sole durable log owner.
+   * @param request - Exact Goal, existing failure evidence, and configured limit.
+   * @param options - Authority and source checks executed in the shared append queue.
+   * @returns An admitted round after flush, or exhaustion without an append.
+   */
+  admitRepair(session: Session, request: {
+    readonly identity: GoalBindingIdentity
+    readonly cause: DevFrameRepairCause
+    readonly repairLimit: number
+  }, options: DevFrameAppendOptions = {}): Promise<RepairRoundAdmission> {
+    return this.enqueue(session, async () => {
+      options.beforeAppend?.()
+      if (options.prepare !== undefined) await options.prepare()
+      options.beforeAppend?.()
+      const repairLimit = resolveRepairLimit({ repairLimit: request.repairLimit })
+      const state = foldDevFrameState(session.snapshotEvents(), session.header)
+      if (state.failure !== null) throw new Error(`DevFrame projection is unavailable: ${state.failure}`)
+      const current = state.bindings.at(-1)
+      if (session.id !== request.identity.controllerSessionId || current?.goalId !== request.identity.goalId) {
+        throw new Error('Repair admission requires the current controller Goal')
       }
-      // DevFrameEventType is a closed non-surface subset, but Session.append's
-      // generic conditional cannot prove that fact through this class method.
-      const append = session.append.bind(session) as unknown as AppendDevFrameEvent
-      event = append(type, decoded)
-      try {
-        const durable = await this.flush(session)
-        if (durable === false) {
-          throw new DevFramePersistenceError(
-            `DevFrame Session "${session.id}" has no active persistence backend`,
-            'unavailable',
-          )
-        }
-      } catch (error: unknown) {
-        const failure = error instanceof DevFramePersistenceError
-          ? error
-          : new DevFramePersistenceError(
-            `DevFrame Session "${session.id}" could not be persisted`,
-            'failed',
-            { cause: error },
-          )
-        this.failures.set(session, failure)
-        throw failure
+      const admissions = state.repairAdmissions.filter(record => record.identity.goalId === request.identity.goalId)
+      if (admissions.some(record => record.repairLimit !== repairLimit)) throw new Error('Repair limit changed for this Goal')
+      const existing = admissions.find(record => sameRepairCause(record.cause, request.cause))
+      if (existing !== undefined) return {
+        kind: 'admitted', repairRound: existing.repairRound, remainingRepairRounds: repairLimit - existing.repairRound,
       }
-    }, () => {
-      const priorFailure = this.failures.get(session)
+      const verdict = evaluateRepairRoundAdmission({ repairLimit, consumedRepairRounds: admissions.length })
+      if (verdict.kind === 'rejected') return verdict
+      await this.appendOwned(session, 'devframe/repair-admission', {
+        version: 1, identity: request.identity, cause: request.cause, repairRound: verdict.repairRound, repairLimit,
+      })
+      return verdict
+    })
+  }
+
+  /**
+   * Read durable correction consumption without opening another accounting owner.
+   * @param session - Live controller Session whose log owns the admissions.
+   * @param identity - Exact Goal to inspect.
+   * @param repairLimit - Configured correction limit, unchanged within the Goal.
+   * @returns Consumption reconstructed from the Session log.
+   */
+  repairRoundState(session: Session, identity: GoalBindingIdentity, repairLimit: number): RepairRoundState {
+    resolveRepairLimit({ repairLimit })
+    if (failures.has(session)) throw new DevFramePersistenceError('Repair accounting is blocked after a persistence failure', 'blocked')
+    const state = foldDevFrameState(session.snapshotEvents(), session.header)
+    if (state.failure !== null) throw new Error(`DevFrame projection is unavailable: ${state.failure}`)
+    if (identity.controllerSessionId !== session.id || !state.bindings.some(binding => binding.goalId === identity.goalId)) {
+      throw new Error('Repair accounting requires a bound controller Goal')
+    }
+    const admissions = state.repairAdmissions.filter(record => record.identity.goalId === identity.goalId)
+    if (admissions.some(record => record.repairLimit !== repairLimit)) throw new Error('Repair limit changed for this Goal')
+    return { repairLimit, consumedRepairRounds: admissions.length, remainingRepairRounds: Math.max(0, repairLimit - admissions.length) }
+  }
+
+  /** Run an operation after earlier writers settle, preserving failures across journal instances. */
+  private enqueue<T>(session: Session, operation: () => Promise<T>): Promise<T> {
+    const previous = tails.get(session) ?? Promise.resolve()
+    const run = previous.then(async () => {
+      const priorFailure = failures.get(session)
       if (priorFailure !== undefined) {
         throw new DevFramePersistenceError(
           `DevFrame Session "${session.id}" is blocked after a persistence failure`,
@@ -154,18 +186,37 @@ export class DevFrameSessionJournal {
           { cause: priorFailure },
         )
       }
-      throw new DevFramePersistenceError(
-        `DevFrame Session "${session.id}" has an unresolved earlier journal operation`,
-        'blocked',
+      return await operation()
+    })
+    tails.set(session, run.then(() => undefined, () => undefined))
+    return run
+  }
+
+  /** Append while owning the Session queue; callers must not enqueue this operation again. */
+  private async appendOwned<T extends DevFrameEventType>(session: Session, type: T, data: SessionEventMap[T]): Promise<SessionEvent<T>> {
+    const decoded = decodeDevFramePayload(type, data)
+    if (type === 'devframe/review') {
+      // The discriminant selects the decoded review payload.
+      this.reviewGate.requireReviewer((decoded as SessionEventMap['devframe/review']).reviewerSessionId)
+    }
+    if (type === 'devframe/repair-admission') {
+      assertRepairAdmission(foldDevFrameState(session.snapshotEvents(), session.header), decoded as SessionEventMap['devframe/repair-admission'])
+    }
+    // Session.append's conditional type cannot prove this closed non-surface subset.
+    const append = session.append.bind(session) as unknown as AppendDevFrameEvent
+    const event = append(type, decoded)
+    try {
+      if (await this.flush(session) === false) throw new DevFramePersistenceError(
+        `DevFrame Session "${session.id}" has no active persistence backend`, 'unavailable',
       )
-    })
-    this.tails.set(session, run.then(() => undefined, () => undefined))
-    return run.then(() => {
-      if (event === undefined) {
-        throw new Error(`DevFrame journal completed without an event for Session "${session.id}"`)
-      }
-      return event
-    })
+    } catch (error: unknown) {
+      const failure = error instanceof DevFramePersistenceError ? error : new DevFramePersistenceError(
+        `DevFrame Session "${session.id}" could not be persisted`, 'failed', { cause: error },
+      )
+      failures.set(session, failure)
+      throw failure
+    }
+    return event
   }
 
   /**
@@ -174,6 +225,6 @@ export class DevFrameSessionJournal {
    * @returns Whether a persistence failure has been latched for the Session.
    */
   isBlocked(session: Session): boolean {
-    return this.failures.has(session)
+    return failures.has(session)
   }
 }

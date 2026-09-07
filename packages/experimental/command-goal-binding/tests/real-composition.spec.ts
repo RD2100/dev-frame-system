@@ -97,7 +97,7 @@ function stubAgent(session: Session): Agent {
     cancel() {},
     runMaintenance: task => task(new AbortController().signal),
     whenIdle() { return Promise.resolve() },
-  } as Agent
+  }
 }
 
 /**
@@ -400,7 +400,7 @@ describe('/goal-complete host command composition', { timeout: 30_000 }, () => {
     expect(test.composition.admissionOf(test.agent)).toBe('closed')
   })
 
-  it('charges the bounded repair cycle when a fail-graded warning rejects completion', async () => {
+  it('charges a fail-graded warning once across repeated completion attempts', async () => {
     const fixture = await createCommittedWorktree()
     const test = await boot({ workspaceId: WORKSPACE_ID, workspaceRoot: fixture.root })
     const binding = await startBinding(test, fixture.fingerprint)
@@ -422,8 +422,9 @@ describe('/goal-complete host command composition', { timeout: 30_000 }, () => {
     }
     expect(first.result.text).toContain('task-warning')
     expect(first.result.text).toContain('Repair round 1 was charged (1 remaining)')
-    expect(second.result.text).toContain('Repair round 2 was charged (0 remaining)')
-    expect(third.result.text).toContain('repair limit (2) is exhausted after 2 charged rounds')
+    expect(second.result.text).toContain('Repair round 1 was charged (1 remaining)')
+    expect(third.result.text).toContain('Repair round 1 was charged (1 remaining)')
+    expect(test.session.snapshotEvents().filter(event => event.type === 'devframe/repair-admission')).toHaveLength(1)
     expect(third.result.text).toContain('human-authorized resume')
     expect(test.ctx.goals.get(test.agent)?.phase).toBe('active')
     expect(hasReceipt(test)).toBe(false)
@@ -540,10 +541,11 @@ describe('/goal-complete host command composition', { timeout: 30_000 }, () => {
       reviewId: DevFrameReviewId('review-foreign'),
     }))
 
-    await expect(execute(test, '/goal-complete')).rejects.toMatchObject({
+    const completion = execute(test, '/goal-complete')
+    await expect(completion).rejects.toMatchObject({
       name: 'GoalBindingError',
-      message: expect.stringContaining('completion review evidence is attributed to Goal'),
     })
+    await expect(completion).rejects.toThrow('completion review evidence is attributed to Goal')
     expect(test.ctx.goals.get(test.agent)?.phase).toBe('active')
     expect(hasReceipt(test)).toBe(false)
     expect(test.composition.admissionOf(test.agent)).toBe('closed')

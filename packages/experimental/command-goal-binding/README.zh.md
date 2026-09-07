@@ -44,6 +44,8 @@ kind: "package-reference"
 
 可预期的拒绝都是带固定文本的直接命令错误。启动拒绝：缺少 objective、config 缺少 `workspaceRoot`（启动行无法在 objective 之外无歧义地给出 worktree）、以及已有未完成的当前 goal。恢复拒绝：命令名后带意外输入、没有当前 goal、goal 已完成、以及会话日志 projection 与绑定存储中都没有绑定记录。完成拒绝：没有当前 goal、该 goal 没有完成绑定、没有归属的验证证据、goal 已完成、projection 重放失败已锁存、以及命令行与配置都未给出 worktree 路径。被拒绝的准入会指明其阶段——`source-fingerprint`、`required-checks` 或 `review`——但不暴露 goal id 或 revision。结构性错误（`GoalBindingError`、`SourceFingerprintError`、`RequiredChecksError`、`DevFramePersistenceError`）不会被捕获：它们使分发失败，适配器会报告命令失败。
 
+评级为 fail 的任务告警也会报告修复准入。同一告警重试会复用持久化回执，重启后仍然如此；项目负评消耗同一 Goal 的额度。`repairLimit` 默认为 2。人类授权的 resume 不会重置这项记账，该 Goal 的所有消费方必须使用一致的上限。参见 [DevFrame 修复契约](../devframe/README.zh.md#bound-correction-rounds)。
+
 ### 最小配置
 
 本插件注入命令注册表、goal 服务、会话存储与会话 projection 注册表；自定义应用挂载它们的所有者与此插件。启动通道从 config 读取已批准的工作参数：
@@ -80,9 +82,10 @@ kind: "package-reference"
 | `checks` | 必填 | `/devframe-start` 注册并真实执行的人工批准必需检查清单；每项 `cwd` 必须是绝对路径 |
 | `taskIds` | 必填 | 每个启动绑定携带的非空、不重复的原生任务 id |
 | `maxAttempts` | 必填 | 冻结进每个启动绑定的最大计费尝试次数 |
-| `maxGoalRounds` | 无 | 冻结进每个启动绑定的可选续行轮数上限 |
+| `maxGoalRounds` | 无 | 固定在每个 start 绑定中的可选续跑轮次上限 |
+| `repairLimit` | `2` | Goal 共用的正整数修复上限；必须与项目交付消费方一致 |
 
-空 `workspaceId`、相对 `workspaceRoot`、相对检查 `cwd`、空或重复的 `taskIds`、非正的 `maxAttempts`/`maxGoalRounds` 会让插件激活大声失败。
+空 `workspaceId`、相对 `workspaceRoot`、相对检查 `cwd`、空或重复的 `taskIds`、非正数的 `maxAttempts`/`maxGoalRounds` 都会使插件激活明确失败。`repairLimit` 必须为正安全整数。
 
 -----
 
@@ -99,7 +102,7 @@ kind: "package-reference"
 - **读取本包拥有的 projection。** 激活时注册 devframe projection 单元，各处理器为调用会话读取其状态：归属到当前 goal 的最新验证证据，加上最新审查记录。审查证据不按 goal 预过滤——其归属由准入结构性强制，遇到外来审查时以 fail-closed 方式失败。
 - **每个启动事实都由宿主采集。** `/devframe-start` 计算 worktree 的真实源指纹、从指纹派生快照 id、把批准的 objective 与检查清单哈希为验收摘要，并在命令适配器内铸造人类授权；模型输入永不写证据，四态检查结果如实落账。
 - **角色权威由日志派生。** 审查者目录从会话 devframe projection 折叠出的 role-policy 快照解析某个会话的角色——不依赖宿主内存另册——因此审查门的权威就是会话日志自身的记录，未指派的角色一律 fail-closed。
-- **两个 journal 共享同一持久化回调。** 组合自有一个 DevFrame Session journal 负责 role-policy 与 goal-binding 记录，并构造 `AgentEvidenceJournal`（默认真实子进程检查执行）负责 verification 记录；两者都经 `ctx.sessions.flush` 落盘，flush 失败会锁存失败一方 journal 的写入。
+- **日志实例共享会话持久化。** 组合日志和证据日志都通过 `ctx.sessions.flush` 刷新。使用同一活跃会话的所有日志共享追加队列和失败锁；一次结果不确定的刷新会阻止它们之后的写入。
 - **分发前先 fail closed。** 各处理器在到达准入之前，会因缺失 goal、缺失绑定、缺失证据或已锁存的 projection 重放失败而拒绝，并显式解析 worktree 路径，使缺失根路径成为数据错误而非结构性失败。
 - **回执只在准入之后。** 获得准入的完成会通过准入的 compare-and-set 推进原生 goal，并通过 goal 服务记录一条 `completion-admission` 证据条目；拒绝则保持 goal phase、绑定与准入状态不变。
 
@@ -155,7 +158,7 @@ kind: "package-reference"
 
 - **审查生产路径不在本 wave**——`/devframe-start` 只落 verification 证据、不伪造任何审查决定；它之后 `/goal-complete` 如实报告缺失审查记录（稳定的无审查错误），而不是完成。
 - **启动存在部分失败窗口**——若原生 goal 与存储绑定建立后 journal 落账失败，`/devframe-start` 以 fail-closed 抛出且不回滚它们；`/devframe-resume` 是恢复路径（存储里有而日志里没有的绑定会被重新落账）。
-- **两个 journal 各自独立锁存**——组合 journal（role-policy 与 goal-binding 记录）与 `AgentEvidenceJournal` 内部 journal（verification 记录）是两个实例、各自持有 per-Session 失败锁存，因此可能出现一个已锁存而另一个未锁存的窗口；每一方仍会阻塞自身的后续写入并保持 fail-closed。
+- **每个会话只有一个活跃写者**——共享日志队列协调同一进程内的一个活跃会话；它不提供跨进程比较交换，也不保护多个独立恢复的写者。
 - **绑定与必需检查存储仍是内存参考实现**——重启后存储为空；`/devframe-resume` 从会话日志 projection 重建绑定，已批准清单注册随下一次 `/devframe-start` 回来。持久存储集成归 GoalStore wave 的既有注入点。
 - **role policy 只指派 controller 角色**——没有任何审查者被授权，在审查生产 wave 落地审查者指派之前，任何审查提交都会被 fail-closed 拒绝。
 - **审查归属是结构性的**——`/goal-complete` 直接取最新审查记录而不按 goal 预过滤；外来的最新审查会以结构性 `GoalBindingError` 呈现，这正是 fail-closed 方向。
@@ -167,6 +170,6 @@ kind: "package-reference"
 <details>
 <summary>维护者的工作上下文——点击展开</summary>
 
-本包是 v14 宿主命令面实验 wave，并由组合闭合 wave 扩展出 `/devframe-start` 与 `/devframe-resume` 通道。开放且未决：审查生产路径（审查者指派与审查记录）、持久存储、以及向证据生产者的单 journal 注入；内存存储是组合默认值，不是持久化承诺。
+内存存储是组合默认值，不代表持久化承诺。审查生成和持久化存储选型仍由宿主组合负责。
 
 </details>

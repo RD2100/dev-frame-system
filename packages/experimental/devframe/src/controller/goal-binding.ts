@@ -24,6 +24,7 @@ import type {
   DevFrameReviewEventData,
   DevFrameReviewFinding,
   DevFrameReviewId,
+  DevFrameRepairCause,
   DevFrameTaskWarningEventData,
 } from '../events.ts'
 import { evaluateRequiredChecks } from '../required-checks.ts'
@@ -32,8 +33,9 @@ import type {
   RequiredChecksDigest,
   RequiredChecksUnsatisfied,
 } from '../required-checks.ts'
-import { evaluateRepairRoundAdmission, resolveRepairLimit } from '../repair-limit.ts'
+import { resolveRepairLimit } from '../repair-limit.ts'
 import type { RepairRoundAdmission } from '../repair-limit.ts'
+import type { DevFrameAppendOptions } from '../session-journal.ts'
 import { verifySourceFingerprint } from '../source-fingerprint.ts'
 import type { SourceFingerprintMismatch } from '../source-fingerprint.ts'
 import {
@@ -135,19 +137,26 @@ export class MemoryGoalBindingStore implements GoalBindingStore {
    * @param controllerSessionId - controller identity selecting the records.
    * @returns immutable binding snapshots detached from the store.
    */
-  async load(controllerSessionId: ControllerSessionId): Promise<readonly GoalBinding[]> {
-    return this.values.get(controllerSessionId)?.map(copyBinding) ?? []
+  load(controllerSessionId: ControllerSessionId): Promise<readonly GoalBinding[]> {
+    return new Promise((resolve) => {
+      resolve(this.values.get(controllerSessionId)?.map(copyBinding) ?? [])
+    })
   }
 
   /** Read the current shared project binding for one workspace. */
-  async read(workspaceId: WorkspaceId): Promise<ProjectBindingRecord | undefined> {
-    const record = this.current.get(workspaceId)
-    return record === undefined ? undefined : copyProjectBindingRecord(record)
+  read(workspaceId: WorkspaceId): Promise<ProjectBindingRecord | undefined> {
+    return new Promise((resolve) => {
+      const record = this.current.get(workspaceId)
+      resolve(record === undefined ? undefined : copyProjectBindingRecord(record))
+    })
   }
 
   /** Write the current shared project binding for one workspace. */
-  async write(record: ProjectBindingRecord): Promise<void> {
-    this.current.set(record.workspaceId, copyProjectBindingRecord(record))
+  write(record: ProjectBindingRecord): Promise<void> {
+    return new Promise((resolve) => {
+      this.current.set(record.workspaceId, copyProjectBindingRecord(record))
+      resolve()
+    })
   }
 
   /**
@@ -155,24 +164,28 @@ export class MemoryGoalBindingStore implements GoalBindingStore {
    * with changed task, acceptance, or budget data.
    * @param binding - immutable Goal binding to retain.
    */
-  async save(binding: GoalBinding): Promise<void> {
-    const records = this.values.get(binding.controllerSessionId) ?? []
-    const index = records.findIndex(record => record.goalId === binding.goalId)
-    if (index !== -1) {
-      const current = records[index]
-      if (current !== undefined && sameBinding(current, binding)
-        && binding.goalRevision >= current.goalRevision) {
-        records[index] = copyBinding(binding)
-        this.values.set(binding.controllerSessionId, records)
-        return
+  save(binding: GoalBinding): Promise<void> {
+    return new Promise((resolve) => {
+      const records = this.values.get(binding.controllerSessionId) ?? []
+      const index = records.findIndex(record => record.goalId === binding.goalId)
+      if (index !== -1) {
+        const current = records[index]
+        if (current !== undefined && sameBinding(current, binding)
+          && binding.goalRevision >= current.goalRevision) {
+          records[index] = copyBinding(binding)
+          this.values.set(binding.controllerSessionId, records)
+          resolve()
+          return
+        }
+        throw new GoalBindingError(
+          `Goal "${binding.goalId}" already has a different binding`,
+          'GOAL_BINDING_CONFLICT',
+        )
       }
-      throw new GoalBindingError(
-        `Goal "${binding.goalId}" already has a different binding`,
-        'GOAL_BINDING_CONFLICT',
-      )
-    }
-    records.push(copyBinding(binding))
-    this.values.set(binding.controllerSessionId, records)
+      records.push(copyBinding(binding))
+      this.values.set(binding.controllerSessionId, records)
+      resolve()
+    })
   }
 }
 
@@ -362,12 +375,31 @@ export class GoalBindingError extends Error {
 /** Whether this controller admits model/tool work for its current binding. */
 export type GoalAdmission = 'closed' | 'open'
 
+/** Session journal operations required for durable correction accounting. */
+export interface GoalRepairAdmissions {
+  /** Persist or reuse one cause's correction admission through the controller Session journal. */
+  admit(
+    identity: GoalBindingIdentity, cause: DevFrameRepairCause, repairLimit: number, options: DevFrameAppendOptions,
+  ): Promise<RepairRoundAdmission>
+  /** Read correction consumption reconstructed from the controller Session log. */
+  state(identity: GoalBindingIdentity, repairLimit: number): RepairRoundState
+}
+
+/** Current correction consumption for an exact Goal. */
+export interface RepairRoundState {
+  readonly repairLimit: number
+  readonly consumedRepairRounds: number
+  readonly remainingRepairRounds: number
+}
+
 /** Construction dependencies for one controller Session. */
 export interface GoalBindingControllerOptions {
   readonly workspaceId: WorkspaceId
   readonly controllerSessionId: ControllerSessionId
   readonly goals: NativeGoalPort
   readonly store: GoalBindingStore
+  /** Required before any repair operation; absence fails closed. */
+  readonly repairAdmissions?: GoalRepairAdmissions
   /**
    * Deployment-varying repair-round limit for the review-repair cycle
    * (AT1-08): the maximum correction/retest/review rounds admitted after the
@@ -396,8 +428,6 @@ export class GoalBindingController {
   private tail: Promise<void> = Promise.resolve()
   /** Validated repair-round limit resolved from the construction config. */
   private readonly repairLimit: number
-  /** Repair rounds charged per Goal in this process; the initial review consumes none. */
-  private readonly repairRounds = new Map<NativeGoalId, number>()
 
   /**
    * @param options - controller Session identity, native Goal adapter, and store.
@@ -432,7 +462,7 @@ export class GoalBindingController {
           }
         }
         this.loaded = true
-      }, (error) => {
+      }, (error: unknown) => {
         this.loadFailure = error
       })
   }
@@ -640,14 +670,14 @@ export class GoalBindingController {
       }
       if (reviewBinding.controllerSessionId !== binding.controllerSessionId) {
         throw new GoalBindingError(
-          `completion review evidence is recorded under controller Session`
+          'completion review evidence is recorded under controller Session'
             + ` "${reviewBinding.controllerSessionId}", not "${binding.controllerSessionId}"`,
           'GOAL_BINDING_IDENTITY_MISMATCH',
         )
       }
       if (reviewBinding.workspaceId !== binding.workspaceId) {
         throw new GoalBindingError(
-          `completion review evidence is recorded for workspace`
+          'completion review evidence is recorded for workspace'
             + ` "${reviewBinding.workspaceId}", not "${binding.workspaceId}"`,
           'GOAL_BINDING_IDENTITY_MISMATCH',
         )
@@ -690,28 +720,26 @@ export class GoalBindingController {
    * each admitted round is charged when it starts. Exhaustion returns the
    * rejection as data — remaining issues then require human input through the
    * human-authorized {@link GoalBindingController.resume} face, with no
-   * replacement-member or new-run bypass through this seam. Round accounting
-   * is per Goal in this controller instance; the durable side of the cycle is
-   * the evidence chain itself — each round's re-review must be fresh,
-   * gate-authorized evidence naming this Goal with a new snapshot
-   * (`docs/detailDesign-part1.md`), which {@link GoalBindingController.complete}
-   * already consumes by exact identity.
+   * replacement-member or new-run bypass through this seam. The injected Session
+   * journal owns durable round accounting; retries for one cause reuse its receipt.
    * @param identity - controller Session and Goal identity returning to repair.
+   * @param cause - Existing durable failure evidence that requires correction.
+   * @param options - Live authority guards executed at the journal write boundary.
    * @returns the admitted verdict with the charged round number, or the
    *   `repair-limit-exhausted` rejection as data.
    * @throws {@link GoalBindingError} when the identity is unknown, foreign, or
    *   belongs to another workspace.
    */
-  beginRepairRound(identity: GoalBindingIdentity): Promise<RepairRoundAdmission> {
+  beginRepairRound(
+    identity: GoalBindingIdentity, cause: DevFrameRepairCause, options: DevFrameAppendOptions = {},
+  ): Promise<RepairRoundAdmission> {
     return this.enqueue(async () => {
       await this.ensureReady()
       const binding = this.findBinding(identity)
-      const verdict = evaluateRepairRoundAdmission({
-        repairLimit: this.repairLimit,
-        consumedRepairRounds: this.repairRounds.get(binding.goalId) ?? 0,
-      })
-      if (verdict.kind === 'admitted') this.repairRounds.set(binding.goalId, verdict.repairRound)
-      return verdict
+      if (this.options.repairAdmissions === undefined) throw new GoalBindingError(
+        'Repair admission requires a durable controller Session journal', 'GOAL_BINDING_PERSISTENCE',
+      )
+      return await this.options.repairAdmissions.admit(identityOf(binding), cause, this.repairLimit, options)
     })
   }
 
@@ -723,18 +751,12 @@ export class GoalBindingController {
    * @throws {@link GoalBindingError} when the identity is unknown, foreign, or
    *   belongs to another workspace.
    */
-  repairRoundState(identity: GoalBindingIdentity): {
-    readonly repairLimit: number
-    readonly consumedRepairRounds: number
-    readonly remainingRepairRounds: number
-  } {
+  repairRoundState(identity: GoalBindingIdentity): RepairRoundState {
     const binding = this.findBinding(identity)
-    const consumedRepairRounds = this.repairRounds.get(binding.goalId) ?? 0
-    return {
-      repairLimit: this.repairLimit,
-      consumedRepairRounds,
-      remainingRepairRounds: Math.max(0, this.repairLimit - consumedRepairRounds),
-    }
+    if (this.options.repairAdmissions === undefined) throw new GoalBindingError(
+      'Repair admission requires a durable controller Session journal', 'GOAL_BINDING_PERSISTENCE',
+    )
+    return this.options.repairAdmissions.state(identityOf(binding), this.repairLimit)
   }
 
   /**
@@ -925,6 +947,8 @@ export interface CompletionAdmissionAdmitted {
  * so the task's real outcome is failure, not completion.
  */
 export interface CompletionTaskWarningRejection {
+  /** Task identity of the durable warning used to request correction. */
+  readonly taskId: DevFrameTaskWarningEventData['taskId']
   /** Discriminant tag of the {@link CompletionAdmissionVerdict} union. */
   readonly kind: 'rejected'
   /** Evaluation stage that rejected the completion. */
@@ -1011,6 +1035,7 @@ export async function evaluateCompletionAdmission(
     return {
       kind: 'rejected',
       stage: 'task-warning',
+      taskId: failedWarning.taskId,
       warning: failedWarning.warning,
       tool: failedWarning.tool,
       grade: 'fail',

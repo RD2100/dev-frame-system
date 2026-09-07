@@ -9,10 +9,63 @@
  * @module tests/at4-05-request-budget
  */
 
-import { expect, describe, it } from 'vitest'
+import { expect, describe, it, vi } from 'vitest'
 import { harness } from './helpers.ts'
 
 describe('AT4-05 request budget accounting', () => {
+  it('keeps charging closed after an uncertain write and restores persisted usage on reload', async () => {
+    const first = await harness({ requestBudget: 3 })
+    const root = first.root
+    try {
+      first.ctx.projectController.startProject()
+      const domain = first.ctx.storageDomain.get('project_tasks')!
+      const originalSet = domain.global.set.bind(domain.global)
+      const write = vi.spyOn(domain.global, 'set').mockImplementationOnce(async (value) => {
+        await originalSet(value)
+        throw new Error('acknowledgement lost after durable write')
+      })
+      try {
+        const results = await Promise.allSettled([
+          first.ctx.projectController.chargeModelRequest(),
+          first.ctx.projectController.chargeModelRequest(),
+        ])
+        for (const result of results) {
+          expect(result.status).toBe('rejected')
+          if (result.status === 'rejected') {
+            expect(result.reason).toMatchObject({ code: 'PROJECT_CONTROLLER_PERSISTENCE' })
+          }
+        }
+        expect(write).toHaveBeenCalledTimes(1)
+      } finally {
+        write.mockRestore()
+      }
+    } finally {
+      await first.dispose({ keepRoot: true })
+    }
+    const second = await harness({ requestBudget: 3 }, root)
+    try {
+      second.ctx.projectController.startProject()
+      expect(second.ctx.projectController.requestBudgetUsage().chargedRequests).toBe(1)
+      await expect(second.ctx.projectController.chargeModelRequest()).resolves.toMatchObject({ chargedRequests: 2 })
+    } finally {
+      await second.dispose()
+    }
+  })
+
+  it('rejects an expired host authority guard before charging without latching storage failure', async () => {
+    const h = await harness({ requestBudget: 2 })
+    try {
+      h.ctx.projectController.startProject()
+      await expect(h.ctx.projectController.chargeModelRequest({
+        beforePersist() { throw new Error('authority revoked') },
+      })).rejects.toThrow('authority revoked')
+      expect(h.ctx.projectController.requestBudgetUsage().chargedRequests).toBe(0)
+      await expect(h.ctx.projectController.chargeModelRequest()).resolves.toMatchObject({ chargedRequests: 1 })
+    } finally {
+      await h.dispose()
+    }
+  })
+
   it('admits charges within the budget and returns cumulative receipts', async () => {
     const h = await harness({ requestBudget: 3 })
     try {
