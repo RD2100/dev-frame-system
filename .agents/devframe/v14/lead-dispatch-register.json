@@ -963,6 +963,17 @@
         "Open items: B1 12-station real chain in progress (lead active); main-tree verify-no-source-js + snapshot runs await user adjudication of the 85 src/*.js files; D standby."
       ],
       "status": "A closed; C closed (C4 user-ops pending real device); B chain running; D standby"
+    },
+    {
+      "entry": "Governance correction: C2b session role restated as acting lead under controller takeover; rule reaffirmed - no controller-direct Workers going forward",
+      "facts": [
+        "Session 415092bd (C2b/HuoshanStreamArgs fix) was dispatched DIRECTLY by the controller via workflow and mislabeled 'Worker' in the closure records - a three-layer boundary crossing: Workers must be created by their plugin lead, not by the controller.",
+        "Restated role: acting lead (L-llmargs) for an independent slice - it owned the dedicated worktree D:/dsh-devframe-v14-llmargs-lead (branch codex/v14-llmargs), held a bounded write-domain (packages/llm/llm, llm-deepseek, tests, .agents/devframe/v14-llmargs only), landed reviewed commits, and reported completion. Persisted ownership: owner=controller-takeover (per 5 prior C/B-line session failures, standing user authorization), boundary as listed; the acting-lead session is closed and its branch merged.",
+        "The earlier C2 mentions implementation run (c2-mentions-implementation) is likewise restated as controller-takeover execution under the product-lead ownership (branch codex/v14-product-lead), not a Worker dispatch.",
+        "Rule reaffirmed from here on: substantive slices are dispatched to leads; leads create Workers. When a lead is unavailable, the controller either executes the takeover work itself (preserving lead identity/provenance in records) or creates a fresh lead session - never a controller-direct Worker. Existing completed work stands; no retroactive re-parenting is possible, only this restatement.",
+        "C2b code review remains valid and closed (953/953, real-replay PASS, merged bf198278cc/67e2087f1a)."
+      ],
+      "status": "Governance record only; B2/B3 in progress via B-lead; A/C closed; B1 blocked; D standby"
     }
   ]
 }
