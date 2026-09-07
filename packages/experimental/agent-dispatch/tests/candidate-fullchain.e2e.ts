@@ -617,37 +617,47 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
 
       await promptSession('controller-chain-c14: start the host, then plan and dispatch the lead.')
       await waitFor('controller host receipt', () => bodies().some(text => text.includes('admission_open')), 90_000)
-      // The real executed-start evidence: decoded root session log, parsed
-      // event by event. Both the served-turn wait and the final timeline
-      // assertion read this one source of truth.
+      // The real executed-start evidence: decoded session logs, parsed
+      // event by event. The root log answers the start-turn evidence and the
+      // timeline; the worker logs answer the durable delivery and
+      // verification evidence.
       const { scanZstdFrames, createZstdFrameDecoder } = await import('../../../session/session-persistence-jsonl/src/zstd.ts')
-      const rootLogDir = readdirSync(join(dshHome, 'sessions'), { withFileTypes: true, recursive: true })
-        .find(entry => entry.isDirectory() && entry.name.includes('candidate-root-c14'))
-      const readRootStartCalls = async (): Promise<{ time: number; task: string }[]> => {
-        if (rootLogDir === undefined) return []
-        const rootLog = join((rootLogDir as unknown as { parentPath: string }).parentPath, rootLogDir.name, 'session.jsonl.zstd')
-        const rootBuffer = await readFile(rootLog)
+      const decodeSessionLog = async (path: string): Promise<string> => {
+        const buffer = await readFile(path)
         const decoder = createZstdFrameDecoder()
-        let rootPlaintext = ''
         try {
-          for (const frame of decoder.decode(rootBuffer, scanZstdFrames(rootBuffer).frames)) {
-            rootPlaintext += Buffer.from(frame).toString('utf8')
+          let plaintext = ''
+          for (const frame of decoder.decode(buffer, scanZstdFrames(buffer).frames)) {
+            plaintext += Buffer.from(frame).toString('utf8')
           }
+          return plaintext
         } finally {
           decoder.close()
         }
+      }
+      type JournalEvent = { type?: string; time?: number; data?: Record<string, unknown> }
+      const parseLogEvents = (text: string): JournalEvent[] => text.split('\n').flatMap(line => {
+        try {
+          return [JSON.parse(line) as JournalEvent]
+        } catch {
+          return []
+        }
+      })
+      const sessionLogPaths = (): string[] => readdirSync(join(dshHome, 'sessions'), { withFileTypes: true, recursive: true })
+        .filter(entry => entry.isFile() && entry.name === 'session.jsonl.zstd')
+        .map(entry => join((entry as unknown as { parentPath: string }).parentPath, entry.name))
+      const rootLogPath = (): string | undefined => sessionLogPaths()
+        .find(path => path.includes('candidate-root-c14'))
+      const readRootStartCalls = async (): Promise<{ time: number; task: string }[]> => {
+        const rootLog = rootLogPath()
+        if (rootLog === undefined) return []
         const startCalls: { time: number; task: string }[] = []
-        for (const line of rootPlaintext.split('\n')) {
-          let event: { type?: string; time?: number; data?: { name?: string; arguments?: string | { action?: string; taskId?: string } } }
-          try {
-            event = JSON.parse(line) as typeof event
-          } catch {
-            continue
-          }
-          if (event?.type !== 'tool/call' || event.data?.name !== 'project_task' || event.time === undefined) continue
-          const parsed: unknown = typeof event.data.arguments === 'string'
-            ? JSON.parse(event.data.arguments)
-            : event.data.arguments
+        for (const event of parseLogEvents(await decodeSessionLog(rootLog))) {
+          const data = event.data as { name?: string; arguments?: string | { action?: string; taskId?: string } } | undefined
+          if (event.type !== 'tool/call' || data?.name !== 'project_task' || event.time === undefined) continue
+          const parsed: unknown = typeof data.arguments === 'string'
+            ? JSON.parse(data.arguments)
+            : data.arguments
           if (parsed === null || typeof parsed !== 'object') continue
           const args = parsed as { action?: string; taskId?: string }
           if (args.action !== 'start' || args.taskId === undefined) continue
@@ -692,23 +702,41 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         }
       }
 
-      // Success = the real tool results on the wire, keyed by the exact
-      // tool-call identity: the scripted ids tie each result to its call, so
-      // git shell output (which also names the task) can never masquerade as
-      // the project_deliver receipt, and a failed delivery cannot hide
-      // behind a successful shell call.
-      const toolResultByCallId = (needle: string, callId: string): string | undefined => {
-        const flat = replay.requests.filter(request => request.needle === needle)
-          .map(request => JSON.stringify(request.body).replaceAll('\\"', '"'))
-        for (const text of flat) {
-          const match = new RegExp(`"tool_call_id":"${callId}","content":"((?:[^"\\\\]|\\\\.)*)"`, 'u').exec(text)
-          if (match !== null) return JSON.parse(`"${match[1]}"`) as string
+      // Success = the real tool results on the wire, read back from the
+      // captured request objects by the exact tool-call identity (no
+      // stringify-and-regex round trip). The wire carries tool results as
+      // OpenAI-shaped `role: "tool"` messages keyed by tool_call_id, so the
+      // scripted ids tie each result to its call: git shell output can
+      // never masquerade as the project_deliver receipt, and the deliver
+      // receipt itself must be the exact reviewing-and-passed form — a
+      // plain "checks failed" result is not an Error and would otherwise
+      // pass any substring check.
+      const toolResultById = (needle: string, callId: string): string | undefined => {
+        for (const request of replay.requests) {
+          if (request.needle !== needle) continue
+          const messages = (request.body as { messages?: unknown }).messages
+          if (!Array.isArray(messages)) continue
+          for (const message of messages) {
+            const wire = message as { role?: string; tool_call_id?: string; content?: unknown }
+            if (wire.role !== 'tool' || wire.tool_call_id !== callId) continue
+            if (typeof wire.content === 'string') return wire.content
+            if (Array.isArray(wire.content)) {
+              return wire.content.map(part => {
+                const piece = part as { type?: string; text?: string }
+                return typeof piece.text === 'string' ? piece.text : ''
+              }).join('')
+            }
+            return JSON.stringify(wire.content)
+          }
         }
         return undefined
       }
-      // The persisted checks state: the shared ledger resolves each task's
-      // digest to exactly the approved checklist, and the generated patch
-      // pins the same digests as real parsed YAML.
+      // The persisted evidence: the shared ledger resolves each task's
+      // digest to the approved checklist (definitions only), the generated
+      // patch pins the same digests as real parsed YAML, and the worker's
+      // own session log must carry the delivery plus a passed verification
+      // bound to the same delivery id, digest, and worktree — the durable
+      // proof the checks actually executed and passed.
       const ledgerStore = new FileRequiredChecksConfigStore({ path: join(dshHome, 'checks-ledger.json') })
       const patchText = await readFile(digestPatch, 'utf8')
       const parsedPatch = yamlLoad(patchText.replace(/!!js "[^"]*"/u, '"<ledger-path-expression>"')) as {
@@ -716,17 +744,48 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       }[]
       const byTask = parsedPatch[0]?.config?.requiredChecksByTask ?? {}
       const expected = expectedDigests(prepared)
+      const decodedLogs: { path: string; text: string }[] = []
+      for (const path of sessionLogPaths()) decodedLogs.push({ path, text: await decodeSessionLog(path) })
+      const workerLogEvents = (needle: string): JournalEvent[] => {
+        const hit = decodedLogs.find(log => log.text.includes(needle))
+        expect(hit, `worker session log for "${needle}"`).toBeDefined()
+        return parseLogEvents(hit!.text)
+      }
       for (const task of prepared.tasks) {
-        const shellResult = toolResultByCallId(`worker-${task.taskId}-briefing-c14`, `shell-${task.taskId}`)
+        const shellResult = toolResultById(`worker-${task.taskId}-briefing-c14`, `shell-${task.taskId}`)
         expect(shellResult, `shell commit receipt for ${task.taskId}`).toBeDefined()
-        expect(shellResult!.startsWith('Error:'), `shell commit must succeed for ${task.taskId}`).toBe(false)
-        const deliverResult = toolResultByCallId(`worker-${task.taskId}-briefing-c14`, `deliver-${task.taskId}`)
+        expect(shellResult!.startsWith('Error:'), `shell commit must succeed for ${task.taskId}: ${shellResult}`).toBe(false)
+        const deliverResult = toolResultById(`worker-${task.taskId}-briefing-c14`, `deliver-${task.taskId}`)
         expect(deliverResult, `real deliver receipt for ${task.taskId}`).toBeDefined()
-        expect(deliverResult!.startsWith('Error:'), `delivery must succeed for ${task.taskId}: ${deliverResult}`).toBe(false)
-        expect(deliverResult).toContain(task.taskId)
+        expect(deliverResult!.startsWith('Error:'), `delivery must not error for ${task.taskId}: ${deliverResult}`).toBe(false)
+        expect(deliverResult, `delivery must reach reviewing with passed checks for ${task.taskId}`)
+          .toBe(`Task ${task.taskId}: reviewing; checks passed.`)
+        expect(deliverResult).not.toContain('checks failed')
         expect(deliverResult).not.toBe(shellResult)
         expect(await ledgerStore.load(task.digest)).toEqual(approvedChecksFor(task.worktreePath, `artifact-${task.taskId}.txt`))
         expect(byTask[task.taskId]).toBe(expected[task.taskId])
+        const events = workerLogEvents(`worker-${task.taskId}-briefing-c14`)
+        const deliveries = events.filter(event =>
+          event.type === 'devframe/task-delivery' && String((event.data as { taskId?: unknown }).taskId) === task.taskId)
+        expect(deliveries.length, `durable delivery event for ${task.taskId}`).toBeGreaterThanOrEqual(1)
+        const delivery = deliveries.at(-1)!.data as {
+          deliveryId: string; worktreePath: string; sourceCommit: string
+          binding: { goalId?: string }; sourceFingerprint?: string
+        }
+        expect(delivery.deliveryId).toBeTruthy()
+        expect(delivery.worktreePath).toBe(task.worktreePath)
+        expect(delivery.sourceCommit).toBeTruthy()
+        expect(delivery.binding?.goalId).toBeTruthy()
+        const verifications = events.filter(event =>
+          event.type === 'devframe/verification'
+          && (event.data as { deliveryId?: unknown }).deliveryId === delivery.deliveryId)
+        expect(verifications.length, `durable verification event for ${task.taskId}`).toBeGreaterThanOrEqual(1)
+        for (const verification of verifications) {
+          const data = verification.data as { status?: string; requiredChecks?: { digest?: string }; checks?: { status?: string }[] }
+          expect(data.requiredChecks?.digest, `verification digest for ${task.taskId}`).toBe(task.digest)
+          expect(data.status, `verification status for ${task.taskId}`).toBe('passed')
+          for (const check of data.checks ?? []) expect(check.status).toBe('passed')
+        }
         const artifact = join(task.worktreePath, `artifact-${task.taskId}.txt`)
         const content = await readFile(artifact, 'utf8')
         expect(content.trim()).toBe(`${task.taskId} artifact body`)
