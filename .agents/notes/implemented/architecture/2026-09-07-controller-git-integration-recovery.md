@@ -29,6 +29,6 @@ Task deliveries preserve the immutable Goal input binding and separately identif
 
 ## Consequences
 
-The durable intent makes interrupted integration recoverable, but it does not make Git and storage atomic. Prepared intents and applied receipts with a submitted task are valid recovery states. The host must reconcile uncertainty before scheduling another target mutation. Only clean, independent checkouts and fast-forward changes are accepted; conflicts require separate handling.
+The durable intent makes interrupted integration recoverable, but it does not make Git and storage atomic. Prepared intents and applied receipts with a submitted task are valid recovery states. The host must reconcile uncertainty before scheduling another target mutation. Only clean, independent checkouts are accepted. The mode boundary this note once named fast-forward-only has since been extended by the [parallel merge decision](2026-09-08-controller-parallel-branch-merge.md), and conflicts now report the explicit `conflicted` state.
 
 The package's real Git and Loader tests cover authority rejection, changed evidence, explicit retry, ignored-file collision preservation, cancellation, disposal, and receipt/task-write interruptions. Recorded model-session coverage and deployment activation remain separate evidence from these tests. The versioned task domain rejects older formats; this decision does not authorize resetting an existing production domain.

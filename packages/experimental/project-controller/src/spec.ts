@@ -77,6 +77,8 @@ export const mainTreeIntegrationSchema = z.object({
   sourceCommit: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
   targetHead: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
   state: z.enum(['prepared', 'applied']),
+  mode: z.enum(['fast-forward', 'merge']).optional(),
+  appliedHead: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/).optional(),
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
 }).strict()
@@ -89,13 +91,14 @@ export type MainTreeIntegrationRecord = z.infer<typeof mainTreeIntegrationSchema
  * {@link TaskId} plus the request-budget usage global. Records are written
  * through on every transition and rebuilt from this table on start, so the
  * table is the only durable authority for the board; the global is the only
- * durable authority for charged request usage. Version 3 adds integration
- * intents and observed Git outcomes; earlier versions reject at open (pre-release stance:
- * no migration across layout changes).
+ * durable authority for charged request usage. Version 3 added integration
+ * intents and observed Git outcomes; version 4 adds the integration mode
+ * and the applied result head to those records. Earlier versions reject at
+ * open (pre-release stance: no migration across layout changes).
  */
 export const projectTasksDomainSpec = defineDomain({
   name: 'project_tasks',
-  version: 3,
+  version: 4,
   tables: {
     tasks: domainTable<TaskId, TaskRecord>(taskRecordSchema),
     integrations: domainTable<TaskId, MainTreeIntegrationRecord>(mainTreeIntegrationSchema),

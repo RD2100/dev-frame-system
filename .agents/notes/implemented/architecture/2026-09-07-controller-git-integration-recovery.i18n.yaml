@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-07-controller-git-integration-recovery.md
-2026-09-07-controller-git-integration-recovery.md: c4891dcdbb012ac74cc3dd80c54a2463cf2b93b3
-2026-09-07-controller-git-integration-recovery.zh.md: faf87ec37e909334c28fbcbb074d8025f8d786d5
+2026-09-07-controller-git-integration-recovery.md: ac62c2e479eb18bdf6ce10a1207bbfd0478dbf09
+2026-09-07-controller-git-integration-recovery.zh.md: db6656430897cda41b39e4ffcfd8e0a3fb96cbfe

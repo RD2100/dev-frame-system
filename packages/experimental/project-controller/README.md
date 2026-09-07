@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Track a task from assignment through review, integration, and completion, with an explicit recovery plan whenever work blocks or fails. Bound concurrent development without confusing task slots with model-request capacity. A registered root controller can integrate reviewed Worker commits through `project_integrate`; the tool checks current evidence and worktree ownership before a fast-forward. Interrupted operations retain an intent so the controller can inspect what Git actually changed before deciding whether to retry.
+Track a task from assignment through review, integration, and completion, with an explicit recovery plan whenever work blocks or fails. Bound concurrent development without confusing task slots with model-request capacity. A registered root controller can integrate reviewed Worker commits through `project_integrate`; the tool checks current evidence and worktree ownership before a fast-forward, and integrates a diverged reviewed branch as a real merge commit. Interrupted operations retain an intent so the controller can inspect what Git actually changed before deciding whether to retry.
 
 ## Table of Contents
 
@@ -82,12 +82,12 @@ A fresh service starts `stopped`. The host calls `startProject()` before creatin
 
 The integration tool accepts only `taskId` and `action`. It derives the caller from the actual live Agent, verifies the root-controller binding and session directory, and resolves source and target paths through the assigned Worker and controller worktree records. Model arguments cannot supply another caller, paths, check results, or merge markers.
 
-Admission requires a submitted task, a current Goal binding, matching persisted verification and independent plugin-lead review, approved required checks, and no failing task warning. All three hierarchy worktrees must be independent and belong to the same workspace. The Worker and controller must hold their respective source and target writer locks. Source fingerprint, exact Git commits, clean worktrees, and fast-forward ancestry are checked; evidence and ownership are rechecked before Git starts.
+Admission requires a submitted task, a current Goal binding, matching persisted verification and independent plugin-lead review, approved required checks, and no failing task warning. All three hierarchy worktrees must be independent and belong to the same workspace. The Worker and controller must hold their respective source and target writer locks. Source fingerprint, exact Git commits, clean worktrees, and the ancestry the selected mode needs are checked; evidence and ownership are rechecked before Git starts. A read-only relation probe selects the mode explicitly: a diverged reviewed source — the normal shape when two Workers branch from the same base — integrates as a real merge commit whose parents are the observed target head and the exact reviewed source, while every other relation keeps the fast-forward path.
 
 | Action | Behavior |
 |---|---|
-| `integrate` | Prepare a fresh intent, execute one fast-forward, and record `integrated` after observing the applied result. |
-| `reconcile` | Observe a retained intent without repeating Git. An `applied` result can finish recording integration; `unchanged` does not advance the task; `ambiguous` requires investigation. |
+| `integrate` | Prepare a fresh intent, execute one fast-forward or merge, and record `integrated` after observing the applied result. |
+| `reconcile` | Observe a retained intent without repeating Git. An `applied` result can finish recording integration; `unchanged` does not advance the task; a `conflicted` merge left the conflict state for the operator; `ambiguous` requires investigation. |
 | `retry` | Explicitly re-admit a prepared attempt only when its clean target still has the original HEAD. Current evidence and ownership must pass again. |
 
 After interruption, reopen project admission and reconcile using the original controller identity and writer lock. An ordinary `integrate` call does not replace a retained intent. Neither a command error nor cancellation proves that Git left the target unchanged. An ignored local file that conflicts with incoming tracked content is preserved and causes the merge to fail.
@@ -113,7 +113,7 @@ Evidence comes from the existing DevFrame projection and three-level binding reg
 | [`src/task-consumer.ts`](src/task-consumer.ts) | Root-controller planning, registered Worker admission, and briefing delivery. |
 | [`src/delivery-consumer.ts`](src/delivery-consumer.ts) | Explicit Worker delivery, approved checks, and independent lead review. |
 | [`src/integration-evidence.ts`](src/integration-evidence.ts) | Exact task evidence and independent lead authority. |
-| [`src/git-integration.ts`](src/git-integration.ts) | Bounded Git inspection, fast-forward, and outcome observation. |
+| [`src/git-integration.ts`](src/git-integration.ts) | Bounded Git inspection, fast-forward, exact-source merge, and outcome observation. |
 | [`src/spec.ts`](src/spec.ts) | Versioned task, request-budget, and integration-intent storage. |
 
 No runtime invariant companion is published: Git advancement and task persistence can differ after interruption, so reconciliation reports and resolves that recovery state rather than requiring continuous equality. The [controller recovery tests](tests/integration-controller.spec.ts) and [Loader tests](tests/consumer-loader.spec.ts) exercise these relationships; callers must reconcile uncertain outcomes.
@@ -158,8 +158,8 @@ A stable tool definition can remain in a reusable request prefix. Changing tool 
 These constraints matter when choosing the composition and handling interrupted work.
 
 - The lifecycle starts stopped after restart. The host must reopen admission and reassess restored in-flight tasks; process-local markers cannot survive restart.
-- The version 3 storage domain rejects older layouts. Do not activate it against an existing version 2 domain or reset that domain as an implicit upgrade.
-- Integration supports clean, independent worktrees in one repository and fast-forward updates only. It does not reset files, resolve conflicts, or automatically repeat uncertain commands.
+- The version 4 storage domain rejects older layouts. Do not activate it against an existing version 2 or 3 domain or reset that domain as an implicit upgrade.
+- Integration supports clean, independent worktrees in one repository, with fast-forward updates and explicit merges of diverged reviewed sources. It does not reset files, resolve conflicts, or automatically repeat uncertain commands; a conflicted merge leaves the conflict state for the operator and every failure names what it observed.
 - Writer locks require participating hosts to honor ownership. They do not fence unrelated filesystem writers or Git commands that bypass the registries.
 - `maxActiveTasks` counts developing tasks, not live model requests. Request charges persist across restarts, but serialization belongs to one controller service instance; it is not a cross-process compare-and-set. Account and provider limits remain deployment concerns.
 - Loader and real-Git tests verify local composition. They do not establish a shipped-profile rollout, production activation, or real-model completion quality.

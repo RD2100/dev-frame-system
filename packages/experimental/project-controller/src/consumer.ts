@@ -11,6 +11,7 @@ import { realpathNormalize } from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-worktree-registry'
 import { FileRequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe'
 import { TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
+import { observeIntegrationRelation } from './git-integration.ts'
 import type {} from './controller.ts'
 
 /** Loader namespace name; the controller service must be mounted separately. */
@@ -132,8 +133,14 @@ export function apply(ctx: Context, config: Config): void {
       }
       const [sourceCommit, targetHead] = await Promise.all([head(source.path, exec.signal), head(target.path, exec.signal)])
       exec.signal.throwIfAborted()
+      // The relation probe is read-only and selects the integration mode
+      // explicitly: a diverged reviewed source takes the merge path, every
+      // other relation keeps the fast-forward path and its refusals.
+      const relation = await observeIntegrationRelation(
+        { sourcePath: source.path, targetPath: target.path, sourceCommit, targetHead }, options)
+      const mode = relation === 'diverged' ? 'merge' : 'fast-forward'
       const marker = await ctx.projectController.requestMainTreeMerge(callerId, taskId, {
-        git: { sourcePath: source.path, targetPath: target.path, sourceCommit, targetHead },
+        git: { sourcePath: source.path, targetPath: target.path, sourceCommit, targetHead, mode },
         options, requiredChecksStore, retryUnchanged: args.action === 'retry', signal: exec.signal,
       })
       exec.signal.throwIfAborted()

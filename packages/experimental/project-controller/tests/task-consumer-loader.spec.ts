@@ -280,8 +280,19 @@ describe('project task consumer through the real Loader', () => {
   // Delivery cases run four linked worktrees, real checks, and multiple model/tool turns.
   describe('delivery lifecycle', () => {
     it('executes overlapping Worker commits, approved checks, lead model review, and controller integration', async () => {
-      const f = await deliverySetup()
-      await f.start(true)
+      const startedAt = Date.now()
+      // Bounded stage tracer: this process-bound scenario has timed out under
+      // full-suite load, so each phase names itself with its elapsed time and
+      // a hang localizes to one stage instead of the whole test.
+      const stage = async <T>(name: string, run: () => Promise<T>): Promise<T> => {
+        const at = Date.now()
+        console.log(`[stage] ${name} @${Math.round((at - startedAt) / 100) / 10}s`)
+        const result = await run()
+        console.log(`[stage] ${name} done +${Math.round((Date.now() - at) / 100) / 10}s`)
+        return result
+      }
+      const f = await stage('setup', deliverySetup)
+      await stage('start', () => f.start(true))
       expect(f.adapter.maxActive).toBe(2)
       expect(f.ctx.projectController.list().map(task => task.state), JSON.stringify({
         results: [f.workerA, f.workerB].flatMap(worker => worker.session.snapshotEvents().filter(event => event.type === 'tool/result')),
@@ -300,21 +311,27 @@ describe('project task consumer through the real Loader', () => {
         expect(delivery.binding.sourceFingerprint).not.toBe(delivery.sourceFingerprint)
       }
       for (const [taskId, worker] of [['task-a', f.workerA], ['task-b', f.workerB]] as const) {
-        if (taskId === 'task-b') {
-          await f.turn(worker, [
-            { name: 'fixture_commit', arguments: { action: 'rebase' } },
-            { name: 'project_deliver', arguments: { taskId } },
-          ])
-        }
-        await f.turn(f.lead, [{ name: 'project_review', arguments: { taskId, decision: 'pass', findings: [] } }])
-        expect(f.ctx.projectController.find(TaskId(taskId))?.state,
-          JSON.stringify(f.lead.session.snapshotEvents().slice(-12))).toBe('submitted')
-        const result = await f.tool(f.controller, 'project_integrate', { action: 'integrate', taskId })
-        expect(result.isError, JSON.stringify(result)).not.toBe(true)
-        expect(f.ctx.projectController.find(TaskId(taskId))?.state).toBe('integrated')
-        expect(await workloadGit(f.trees[0]!.path, 'rev-parse', 'HEAD'))
-          .toBe(await workloadGit(worker.session.header.cwd!, 'rev-parse', 'HEAD'))
+        await stage(`review ${taskId}`, async () => {
+          await f.turn(f.lead, [{ name: 'project_review', arguments: { taskId, decision: 'pass', findings: [] } }])
+          expect(f.ctx.projectController.find(TaskId(taskId))?.state,
+            JSON.stringify(f.lead.session.snapshotEvents().slice(-12))).toBe('submitted')
+        })
+        await stage(`integrate ${taskId}`, async () => {
+          const result = await f.tool(f.controller, 'project_integrate', { action: 'integrate', taskId })
+          expect(result.isError, JSON.stringify(result)).not.toBe(true)
+          expect(f.ctx.projectController.find(TaskId(taskId))?.state).toBe('integrated')
+        })
       }
+      // Task A fast-forwards; task B diverged and the consumer's relation
+      // probe selects the merge mode. The merge commit's first parent is the
+      // post-A target head, so the two-parent shape pins both landings.
+      const targetHead = await workloadGit(f.trees[0]!.path, 'rev-parse', 'HEAD')
+      const headA = await workloadGit(f.workerA.session.header.cwd!, 'rev-parse', 'HEAD')
+      const headB = await workloadGit(f.workerB.session.header.cwd!, 'rev-parse', 'HEAD')
+      expect(await workloadGit(f.trees[0]!.path, 'rev-list', '--parents', '-n', '1', 'HEAD')).toBe(`${targetHead} ${headA} ${headB}`)
+      const integrations = f.ctx.storageDomain.get('project_tasks')!.table('integrations')
+      expect(integrations.get(TaskId('task-a'))).toMatchObject({ state: 'applied', mode: 'fast-forward', appliedHead: headA })
+      expect(integrations.get(TaskId('task-b'))).toMatchObject({ state: 'applied', mode: 'merge', appliedHead: targetHead })
       expect(await workloadGit(f.trees[0]!.path, 'ls-tree', '--name-only', 'HEAD')).toBe('worker-a.txt\nworker-b.txt')
       for (const taskId of ['task-a', 'task-b']) {
         expect(f.ctx.storageDomain.get('project_tasks')!.table('tasks').get(taskId)).toMatchObject({ state: 'integrated' })
