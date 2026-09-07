@@ -1252,6 +1252,38 @@ describe('built-in conversation node Definitions', () => {
     })
   })
 
+  it('derives live-streamed usage without a reported total or cache buckets (raw chunks + message)', () => {
+    const usageSample = { inputTokens: 700, outputTokens: 500 }
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'block-start', index: 0, blockType: 'text' } }),
+      at(4, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'C3 usage turn settled reply.' } }),
+      at(5, 'assistant/chunk', {
+        turn: 1,
+        step: 1,
+        chunk: { type: 'block-end', index: 0, block: { type: 'text', text: 'C3 usage turn settled reply.' } },
+      }),
+      at(6, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'usage', usage: usageSample } }),
+      at(7, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'finish', reason: { kind: 'stop' } } }),
+      at(8, 'assistant/message', {
+        turn: 1,
+        step: 1,
+        message: assistantMessage('usage-assistant', 'C3 usage turn settled reply.'),
+        usage: usageSample,
+      }, { surfaceOp: 'append' }),
+      at(9, 'step/end', { turn: 1, step: 1 }),
+      at(10, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+    ])
+
+    expect((node(snapshot(value), 'turn-tail')?.data as TurnTailChatData).tokenUsage).toEqual({
+      uncachedInputTokens: 700,
+      outputTokens: 500,
+      totalTokens: 1200,
+      routes: [{ provider: 'fake', model: 'fake' }],
+    })
+  })
+
   it('replays inbox predecessors after prepend and reclassifies the dependent message as steering', () => {
     const value = assembler([
       at(3, 'user/message', textMessage('steer-1', 'change direction'), { surfaceOp: 'append' }),
