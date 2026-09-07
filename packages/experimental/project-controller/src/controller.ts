@@ -517,7 +517,7 @@ export class ProjectController extends Service {
   }
 
   /**
-   * Execute the admitted fast-forward once, then record integration only after observing the exact clean target.
+   * Execute the admitted integration once in its prepared mode, then record integration only after observing the exact clean target.
    * @param taskId - Task to move; the marker must name it.
    * @param marker - The marker minted by {@link ProjectController.requestMainTreeMerge}.
    * @returns the updated record.
@@ -550,12 +550,14 @@ export class ProjectController extends Service {
       if (result.observation.kind !== 'applied' || result.commandError !== undefined) {
         throw new Error(`Integration requires reconciliation: ${result.observation.kind}`, { cause: result.commandError })
       }
-      return await this.recordAppliedIntegration(current, intent)
+      return await this.recordAppliedIntegration(current, intent, result.observation.head)
     })
   }
 
   /**
    * Reconcile a durable intent after interruption without issuing another Git merge.
+   * An applied receipt pins the recorded head exactly; a prepared intent whose
+   * Git already applied repairs recording from the observed merge commit.
    * @param callerSessionId - The same controller that admitted the original operation.
    * @param taskId - Task whose retained intent is being reconciled.
    * @param options - Explicit deployment process limits for read-only Git observations.
@@ -585,7 +587,16 @@ export class ProjectController extends Service {
         throw new Error('Integration reconciliation requires a submitted or integrated task')
       }
       const observation = await reconcileIntegrationGit(intent, options)
-      if (observation.kind === 'applied' && current.state === 'submitted') await this.recordAppliedIntegration(current, intent)
+      if (observation.kind === 'applied') {
+        // A recorded receipt pins the exact applied head: a target amended to
+        // a different commit with the same two parents must never pass. A
+        // prepared intent whose Git already applied (receipt unwritten) is the
+        // second recovery phase and repairs recording from the observation.
+        if (intent.state === 'applied' && observation.head !== intent.appliedHead) {
+          throw new Error('Integration reconciliation requires the recorded applied head; the target HEAD moved after the receipt')
+        }
+        if (current.state === 'submitted') await this.recordAppliedIntegration(current, intent, observation.head)
+      }
       return observation
     })
   }
@@ -668,10 +679,10 @@ export class ProjectController extends Service {
     return { evidence: admission.evidence, guard }
   }
 
-  /** Persist the observed Git result before updating the task; a failed task write remains reconcilable. */
-  private async recordAppliedIntegration(current: TaskRecord, intent: MainTreeIntegrationRecord): Promise<TaskRecord> {
+  /** Persist the observed Git result head before updating the task; a failed task write remains reconcilable. */
+  private async recordAppliedIntegration(current: TaskRecord, intent: MainTreeIntegrationRecord, appliedHead: string): Promise<TaskRecord> {
     await this.requireDomain().table('integrations').put(current.taskId, {
-      ...intent, state: 'applied', updatedAt: new Date().toISOString(),
+      ...intent, state: 'applied', appliedHead, updatedAt: new Date().toISOString(),
     })
     return await this.persist(stamped(current, 'integrated'))
   }

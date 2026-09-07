@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   executeIntegrationGit,
   inspectIntegrationGit,
+  observeIntegrationRelation,
   reconcileIntegrationGit,
   type IntegrationGitOptions,
 } from '../src/git-integration.ts'
@@ -126,6 +127,189 @@ describe('controller Git integration', () => {
   it('rejects a no-op source that cannot distinguish prepared from applied', async () => {
     const request = await fixture()
     await expect(inspectIntegrationGit({ ...request, sourceCommit: request.targetHead }, options)).rejects.toThrow('unapplied source')
+  })
+
+  it('integrates a diverged sibling branch as a real merge commit with the exact reviewed parents', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-integration-git-'))
+    roots.push(root)
+    await git(root, 'init', '-b', 'main')
+    await git(root, 'config', 'user.name', 'Integration Test')
+    await git(root, 'config', 'user.email', 'integration@example.invalid')
+    await git(root, 'config', 'commit.gpgsign', 'false')
+    await git(root, 'config', 'core.autocrlf', 'false')
+    await writeFile(join(root, 'base.txt'), 'base\n')
+    await git(root, 'add', 'base.txt')
+    await git(root, 'commit', '-m', 'base')
+    const targetHead = await git(root, 'rev-parse', 'HEAD')
+
+    const taskA = join(root, '..', `${root.split(/[\\/]/).at(-1)}-task-a`)
+    roots.push(taskA)
+    await git(root, 'worktree', 'add', '-b', 'task-a', taskA)
+    await writeFile(join(taskA, 'a.txt'), 'reviewed-a\n')
+    await git(taskA, 'add', 'a.txt')
+    await git(taskA, 'commit', '-m', 'task a')
+    const commitA = await git(taskA, 'rev-parse', 'HEAD')
+
+    const taskB = join(root, '..', `${root.split(/[\\/]/).at(-1)}-task-b`)
+    roots.push(taskB)
+    await git(root, 'worktree', 'add', '-b', 'task-b', taskB, targetHead)
+    await writeFile(join(taskB, 'b.txt'), 'reviewed-b\n')
+    await git(taskB, 'add', 'b.txt')
+    await git(taskB, 'commit', '-m', 'task b')
+    const commitB = await git(taskB, 'rev-parse', 'HEAD')
+
+    const first = { targetPath: root, sourcePath: taskA, sourceCommit: commitA, targetHead }
+    expect(await observeIntegrationRelation(first, options)).toBe('fast-forward')
+    const appliedA = await executeIntegrationGit(first, options)
+    expect(appliedA.observation).toEqual({ kind: 'applied', head: commitA })
+
+    const second = { targetPath: root, sourcePath: taskB, sourceCommit: commitB, targetHead: commitA, mode: 'merge' as const }
+    expect(await observeIntegrationRelation({ ...second, mode: undefined }, options)).toBe('diverged')
+    const result = await executeIntegrationGit(second, options)
+    expect(result.commandError).toBeUndefined()
+    expect(result.observation.kind).toBe('applied')
+    const mergeHead = result.observation.kind === 'applied' ? result.observation.head : undefined
+    expect(mergeHead).toBeDefined()
+    expect(await git(root, 'rev-list', '--parents', '-n', '1', 'HEAD')).toBe(`${mergeHead} ${commitA} ${commitB}`)
+    expect(await readFile(join(root, 'a.txt'), 'utf8')).toBe('reviewed-a\n')
+    expect(await readFile(join(root, 'b.txt'), 'utf8')).toBe('reviewed-b\n')
+    expect(await git(root, 'status', '--porcelain')).toBe('')
+    expect(await reconcileIntegrationGit(second, options)).toEqual(result.observation)
+    const postMergeHead = await git(root, 'rev-parse', 'HEAD')
+    expect(await observeIntegrationRelation({ ...second, targetHead: postMergeHead, mode: undefined }, options)).toBe('already-integrated')
+    expect(await git(taskB, 'status', '--porcelain')).toBe('')
+    expect(await git(taskB, 'rev-parse', 'HEAD')).toBe(commitB)
+  })
+
+  it('reports an explicit conflict with the merge state left for the operator', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-integration-git-'))
+    roots.push(root)
+    await git(root, 'init', '-b', 'main')
+    await git(root, 'config', 'user.name', 'Integration Test')
+    await git(root, 'config', 'user.email', 'integration@example.invalid')
+    await git(root, 'config', 'commit.gpgsign', 'false')
+    await git(root, 'config', 'core.autocrlf', 'false')
+    await writeFile(join(root, 'conflict.txt'), 'base\n')
+    await git(root, 'add', 'conflict.txt')
+    await git(root, 'commit', '-m', 'base')
+    const targetHead = await git(root, 'rev-parse', 'HEAD')
+
+    const taskA = join(root, '..', `${root.split(/[\\/]/).at(-1)}-task-a`)
+    roots.push(taskA)
+    await git(root, 'worktree', 'add', '-b', 'task-a', taskA)
+    await writeFile(join(taskA, 'conflict.txt'), 'reviewed-a\n')
+    await git(taskA, 'add', 'conflict.txt')
+    await git(taskA, 'commit', '-m', 'task a')
+    const commitA = await git(taskA, 'rev-parse', 'HEAD')
+
+    const taskB = join(root, '..', `${root.split(/[\\/]/).at(-1)}-task-b`)
+    roots.push(taskB)
+    await git(root, 'worktree', 'add', '-b', 'task-b', taskB, targetHead)
+    await writeFile(join(taskB, 'conflict.txt'), 'reviewed-b\n')
+    await git(taskB, 'add', 'conflict.txt')
+    await git(taskB, 'commit', '-m', 'task b')
+    const commitB = await git(taskB, 'rev-parse', 'HEAD')
+
+    expect((await executeIntegrationGit({ targetPath: root, sourcePath: taskA, sourceCommit: commitA, targetHead }, options)).observation)
+      .toEqual({ kind: 'applied', head: commitA })
+
+    const merge = { targetPath: root, sourcePath: taskB, sourceCommit: commitB, targetHead: commitA, mode: 'merge' as const }
+    const result = await executeIntegrationGit(merge, options)
+    expect(result.commandError).toBeDefined()
+    expect(result.observation).toEqual({ kind: 'conflicted', head: commitA })
+    expect(await git(root, 'rev-parse', 'HEAD')).toBe(commitA)
+    expect(await git(root, 'status', '--porcelain')).not.toBe('')
+    expect(await readFile(join(root, 'conflict.txt'), 'utf8')).toContain('<<<<<<<')
+    expect(await reconcileIntegrationGit(merge, options)).toEqual(result.observation)
+    expect(await git(taskB, 'status', '--porcelain')).toBe('')
+    expect(await git(taskB, 'rev-parse', 'HEAD')).toBe(commitB)
+  })
+
+  it('stays ambiguous when the target is dirty with an unchanged HEAD and no merge state', async () => {
+    const request = await fixture()
+    await writeFile(join(request.targetPath, 'user-file.txt'), 'preserve\n')
+    expect(await reconcileIntegrationGit({ ...request, mode: 'merge' }, options)).toEqual({
+      kind: 'ambiguous', head: request.targetHead, clean: false,
+    })
+  })
+
+  it('never reports an octopus merge commit as an applied reviewed merge', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-integration-git-'))
+    roots.push(root)
+    await git(root, 'init', '-b', 'main')
+    await git(root, 'config', 'user.name', 'Integration Test')
+    await git(root, 'config', 'user.email', 'integration@example.invalid')
+    await git(root, 'config', 'commit.gpgsign', 'false')
+    await git(root, 'config', 'core.autocrlf', 'false')
+    await writeFile(join(root, 'base.txt'), 'base\n')
+    await git(root, 'add', 'base.txt')
+    await git(root, 'commit', '-m', 'base')
+    const targetHead = await git(root, 'rev-parse', 'HEAD')
+    for (const name of ['left', 'right']) {
+      const path = join(root, '..', `${root.split(/[\\/]/).at(-1)}-${name}`)
+      roots.push(path)
+      await git(root, 'worktree', 'add', '-b', name, path, targetHead)
+      await writeFile(join(path, `${name}.txt`), `${name}\n`)
+      await git(path, 'add', `${name}.txt`)
+      await git(path, 'commit', '-m', name)
+    }
+    const leftCommit = await git(root, 'rev-parse', 'left')
+    const rightCommit = await git(root, 'rev-parse', 'right')
+    await git(root, 'merge', '--no-edit', leftCommit, rightCommit)
+    const request = { targetPath: root, sourcePath: root, sourceCommit: leftCommit, targetHead, mode: 'merge' as const }
+    expect(await reconcileIntegrationGit(request, options)).toEqual({ kind: 'ambiguous', head: await git(root, 'rev-parse', 'HEAD'), clean: true })
+  })
+
+  it('refuses local custom merge drivers while the fast-forward path keeps its reviewed face', async () => {
+    const request = await fixture()
+    await git(request.targetPath, 'config', 'merge.custom.driver', 'echo merged %A %O %B')
+    await expect(inspectIntegrationGit({ ...request, mode: 'merge' }, options))
+      .rejects.toThrow('no custom merge drivers or external filters')
+    // The fast-forward path keeps its reviewed face and still integrates.
+    expect((await executeIntegrationGit(request, options)).observation.kind).toBe('applied')
+  })
+
+  it('merges through built-in mechanisms only when the reviewed tree names unreachable drivers or filters', async () => {
+    const request = await fixture()
+    // No config anywhere reachable defines these names; global and system
+    // config are stripped from the merge environment, so git can only fall
+    // back to its built-in merge and plain content.
+    await writeFile(join(request.sourcePath, '.gitattributes'), '*.txt merge=custom\nfeature.txt filter=ghost\n')
+    await git(request.sourcePath, 'add', '.gitattributes')
+    await git(request.sourcePath, 'commit', '-m', 'select unreachable mechanisms')
+    const sourceCommit = await git(request.sourcePath, 'rev-parse', 'HEAD')
+    await git(request.targetPath, 'commit', '--allow-empty', '-m', 'target advancement')
+    const targetHead = await git(request.targetPath, 'rev-parse', 'HEAD')
+    const result = await executeIntegrationGit({ ...request, sourceCommit, targetHead, mode: 'merge' }, options)
+    expect(result.commandError).toBeUndefined()
+    expect(result.observation.kind).toBe('applied')
+    expect(await readFile(join(request.targetPath, 'feature.txt'), 'utf8')).toBe('reviewed\n')
+    expect(await reconcileIntegrationGit({ ...request, sourceCommit, targetHead, mode: 'merge' }, options)).toEqual(result.observation)
+  })
+
+  it('refuses merge mode for a fast-forwardable or already-integrated source', async () => {
+    const request = await fixture()
+    await expect(inspectIntegrationGit({ ...request, mode: 'merge' }, options)).rejects.toThrow('use the fast-forward path')
+    const integrated = await executeIntegrationGit(request, options)
+    const mergedHead = integrated.observation.kind === 'applied' ? integrated.observation.head : undefined
+    expect(mergedHead).toBeDefined()
+    // The pre-merge target head is now an ancestor of main; park the source
+    // checkout exactly there so inspection sees a consistent prepared state.
+    await git(request.sourcePath, 'checkout', '--detach', request.targetHead)
+    await expect(inspectIntegrationGit({ ...request, sourceCommit: request.targetHead, targetHead: mergedHead, mode: 'merge' }, options))
+      .rejects.toThrow('the target already contains it')
+  })
+
+  it('rejects unrelated histories instead of merging them', async () => {
+    const request = await fixture()
+    await git(request.sourcePath, 'checkout', '--orphan', 'orphan')
+    await git(request.sourcePath, 'add', 'feature.txt')
+    await git(request.sourcePath, 'commit', '-m', 'unrelated root')
+    const orphanCommit = await git(request.sourcePath, 'rev-parse', 'HEAD')
+    const orphanRequest = { ...request, sourceCommit: orphanCommit }
+    await expect(observeIntegrationRelation(orphanRequest, options)).rejects.toThrow('related source and target histories')
+    await expect(executeIntegrationGit({ ...orphanRequest, mode: 'merge' }, options)).rejects.toThrow('related source and target histories')
+    expect(await git(request.targetPath, 'rev-parse', 'HEAD')).toBe(request.targetHead)
   })
 
 })
