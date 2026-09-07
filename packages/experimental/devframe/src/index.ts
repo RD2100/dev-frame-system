@@ -31,4 +31,7 @@ export {
   type DevFrameLeadRoleLanding,
   type LandingOutcome,
 } from './lead-role-landing.ts'
+import * as taskFailDisarmModule from './task-fail-continuation.ts'
+/** The plugin namespace (name + inject + apply) as cordis plugin mounting expects it. */
+export const taskFailDisarm = taskFailDisarmModule
 export type * from './permissions/events.ts'
