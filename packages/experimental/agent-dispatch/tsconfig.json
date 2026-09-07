@@ -16,6 +16,7 @@
     { "path": "../../workspace/workspace" },
     { "path": "../../workflow/worktree-registry" },
     { "path": "../agent-hierarchy" },
+    { "path": "../command-goal-binding" },
     { "path": "../devframe" },
     { "path": "../project-contracts" },
     { "path": "../project-controller" },

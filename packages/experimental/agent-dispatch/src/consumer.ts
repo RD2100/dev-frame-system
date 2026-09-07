@@ -19,6 +19,8 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { WorktreeId } from '@deepseek-ai/dsh-worktree-registry'
 import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import { apply as requestBudgetApply } from '@deepseek-ai/dsh-experimental-project-controller/request-budget-consumer'
+import { GoalBindingComposition, resolveCommandGoalBindingConfig } from '@deepseek-ai/dsh-experimental-command-goal-binding'
+import type { CommandGoalBindingConfig } from '@deepseek-ai/dsh-experimental-command-goal-binding'
 import { AgentDispatch } from './service.ts'
 import { AgentProjectRun } from './run.ts'
 import { requireNonEmpty, resolveCaller } from './authorization.ts'
@@ -56,6 +58,32 @@ export const TOOL_NAMES = ['agent_dispatch'] as const
 /** The plain pending-state card, titled from the call's arguments. */
 function callCard(title: string, rawInput?: string): ToolCallView {
   return { card: 'generic', title, ...rawInput !== undefined ? { rawInput } : {} }
+}
+
+/**
+ * Mount the one Goal-binding composition for the candidate host on a
+ * dedicated child fiber carrying exactly the configured workspace facts, and
+ * resolve with the live composition once the fiber activates. The default
+ * launch-directory row stays disabled in the candidate overlay, so this is
+ * the composition instance the whole process shares.
+ * @param ctx - The plugin fiber's context (resolves commands/goals/sessions).
+ * @param config - The runtime-resolved workspace configuration.
+ * @returns The mounted composition.
+ */
+function mountGoalComposition(ctx: Context, config: CommandGoalBindingConfig): Promise<GoalBindingComposition> {
+  return new Promise((resolve, reject) => {
+    ctx.plugin({
+      id: 'candidate-goal-binding',
+      inject: ['commands', 'goals', 'sessions', 'sessionProjections'] as const,
+      apply: (goalCtx: Context) => {
+        try {
+          resolve(new GoalBindingComposition(goalCtx, resolveCommandGoalBindingConfig(config)))
+        } catch (error) {
+          reject(error instanceof Error ? error : new Error(String(error)))
+        }
+      },
+    })
+  })
 }
 
 /** The ack shape the tool result carries: the derived state plus the flush verdict. */
@@ -167,6 +195,43 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
           presentCall: () => ({ card: 'generic', title: 'Host bootstrap start' }),
           presentResult: () => ({ card: 'generic' }),
         }))
+      }
+      // The fixed root's first pre-step completes the whole bootstrap face —
+      // hostStart, the formal Goal binding through the public startBoundGoal
+      // entry, and admission — before next() releases the first model stream,
+      // so the budget's first charged request already sees the bound root and
+      // the open admission. The chain never depends on a model tool call to
+      // reach this state.
+      if (config?.candidateRootSessionId !== undefined) {
+        const rootId = config.candidateRootSessionId
+        let bootstrapped = false
+        ctx.on('agent/pre-step', async (_data, next) => {
+          if (bootstrapped) return next()
+          const agent = ctx.agents.currentInitiator()
+          if (agent === undefined || String(agent.session.id) !== rootId) return next()
+          bootstrapped = true
+          const receipt = await run.hostStart(agent.id)
+          const targetPath = run.candidateTargetWorktreePath
+          if (targetPath === undefined) {
+            throw new Error('candidate bootstrap requires a target worktree in the scenario')
+          }
+          const composition = await mountGoalComposition(ctx, {
+            workspaceId: receipt.workspaceId,
+            workspaceRoot: targetPath,
+            // The start gate checks the clean target tree; the workers' own
+            // artifact probes and the final acceptance list stay separate.
+            checks: { version: 1, checks: [{
+              checkId: 'git-diff-check', executable: 'git', arguments: ['diff', '--quiet', 'HEAD'], cwd: targetPath,
+            }] },
+            taskIds: receipt.tasks.map(task => task.taskId),
+            maxAttempts: 4,
+          })
+          const result = await composition.startBoundGoal({ agent, rawInput: 'Run the candidate fullchain: both workers deliver their own artifacts through the lead.' })
+          if (result.kind !== 'success') {
+            throw new Error(`devframe-start refused: ${result.text}`)
+          }
+          return next()
+        })
       }
     })
   }
