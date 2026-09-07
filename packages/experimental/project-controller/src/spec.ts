@@ -47,13 +47,36 @@ export const taskRecordSchema = z.object({
 }) as z.ZodType<TaskRecord>
 
 /**
+ * Durable request-budget usage singleton (AT4-05): the cumulative count of
+ * charged model requests for this project. Charged usage survives provider
+ * retries and process restarts — a fresh process re-enters dispatch with the
+ * budget already spent by the run's earlier requests.
+ */
+export const requestBudgetUsageSchema = z.object({
+  chargedRequests: z.number().int().min(0),
+})
+
+/** Durable request-budget usage shape validated by {@link requestBudgetUsageSchema}. */
+export interface RequestBudgetUsage {
+  /** Cumulative charged model requests for this project. */
+  readonly chargedRequests: number
+}
+
+/**
  * The project-controller domain spec: one `tasks` table keyed by
- * {@link TaskId}. Records are written through on every transition and
- * rebuilt from this table on start, so the table is the only durable
- * authority for the board.
+ * {@link TaskId} plus the request-budget usage global. Records are written
+ * through on every transition and rebuilt from this table on start, so the
+ * table is the only durable authority for the board; the global is the only
+ * durable authority for charged request usage. Version 2 adds the global
+ * slot; a medium stamped with version 1 rejects at open (pre-release stance:
+ * no migration across layout changes).
  */
 export const projectTasksDomainSpec = defineDomain({
   name: 'project_tasks',
-  version: 1,
+  version: 2,
   tables: { tasks: domainTable<TaskId, TaskRecord>(taskRecordSchema) },
+  global: {
+    schema: requestBudgetUsageSchema,
+    initial: { chargedRequests: 0 },
+  },
 })

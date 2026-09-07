@@ -24,7 +24,7 @@
 import { randomUUID } from 'node:crypto'
 import z from '@deepseek-ai/schemastery'
 import { Service, type Context } from '@deepseek-ai/cordis'
-import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
+import type { Domain, KvTable } from '@deepseek-ai/dsh-storage-domain'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ProjectLifecycleState } from '@deepseek-ai/dsh-experimental-devframe/shared'
 import type { PluginId, TaskId, TaskRecord, TaskState } from '@deepseek-ai/dsh-experimental-project-contracts'
@@ -46,6 +46,15 @@ export interface ProjectControllerConfig {
    * dispatch budget with the two-model-request account ceiling.
    */
   readonly maxActiveTasks?: number
+  /**
+   * Cumulative request budget charged to this project (AT4-05): the maximum
+   * granted-and-billed model requests the run may send, raced by controller
+   * and child sessions through {@link ProjectController.chargeModelRequest}.
+   * Charging is durable, so provider retries and process restarts never reset
+   * usage. The default 1 mirrors the acceptance-named scenario (请求预算=1);
+   * deployments raise it via cordis.yml.
+   */
+  readonly requestBudget?: number
 }
 
 /** The config shape after schemastery applied the default. */
@@ -71,6 +80,16 @@ export interface MainTreeMergeMarker {
   readonly callerSessionId: SessionId
   /** ISO-8601 minting instant. */
   readonly createdAt: string
+}
+
+/** Receipt for one model request charged against the project request budget. */
+export interface RequestChargeReceipt {
+  /** Cumulative charged requests after this charge. */
+  readonly chargedRequests: number
+  /** The configured cumulative budget. */
+  readonly requestBudget: number
+  /** Budget units left after this charge. */
+  readonly remainingRequests: number
 }
 
 /** The states a task may be blocked or failed from: every active state. */
@@ -103,20 +122,25 @@ export class ProjectController extends Service {
 
   static Config: z<ProjectControllerConfig> = z.object({
     maxActiveTasks: z.number().default(2),
+    requestBudget: z.number().default(1),
   })
 
   /** Validated config (schemastery applied the defaults before construction). */
   private readonly config: ResolvedConfig
 
+  private domain?: Domain<typeof projectTasksDomainSpec>
   private table?: KvTable<TaskId, TaskRecord>
   private readonly tasks = new Map<TaskId, TaskRecord>()
   private readonly pendingMarkers = new Map<string, MainTreeMergeMarker>()
   private lifecycleState: ProjectLifecycleState = 'stopped'
+  /** In-process mirror of the durable request-budget usage global. */
+  private chargedRequests = 0
   private tail: Promise<unknown> = Promise.resolve()
 
   /**
    * @param ctx - Mounting context.
-   * @param config - Schema-validated config; `maxActiveTasks` must be a positive safe integer.
+   * @param config - Schema-validated config; `maxActiveTasks` and
+   *   `requestBudget` must be positive safe integers.
    */
   constructor(ctx: Context, config: ProjectControllerConfig) {
     super(ctx, 'projectController')
@@ -128,11 +152,18 @@ export class ProjectController extends Service {
         'PROJECT_CONTROLLER_INVALID_CONFIG',
       )
     }
+    if (!Number.isSafeInteger(this.config.requestBudget) || this.config.requestBudget < 1) {
+      throw new ProjectControllerError(
+        'requestBudget must be a positive safe integer',
+        'PROJECT_CONTROLLER_INVALID_CONFIG',
+      )
+    }
   }
 
   protected async [Service.init](): Promise<void> {
     const domain = await this.ctx.storageDomain.open(projectTasksDomainSpec)
     this.ctx.effect(() => () => domain.close(), 'project-controller.domainClose')
+    this.domain = domain
     this.table = domain.table('tasks')
     // Cold restore: the board comes back verbatim; in-flight records need the
     // host's attention because their live workers died with the old process.
@@ -142,6 +173,9 @@ export class ProjectController extends Service {
         left.createdAt.localeCompare(right.createdAt) || String(leftId).localeCompare(String(rightId)))) {
       this.tasks.set(id, Object.freeze({ ...record }))
     }
+    // Charged request usage survives the restart: a resumed run re-enters
+    // dispatch with the budget already spent by its earlier requests.
+    this.chargedRequests = domain.global.get().chargedRequests
   }
 
   // ---- project lifecycle -------------------------------------------------
@@ -477,6 +511,70 @@ export class ProjectController extends Service {
     })
   }
 
+  // ---- request budget (AT4-05) -------------------------------------------
+
+  /**
+   * Charge one granted-and-billed model request against the project's
+   * cumulative budget. The request that fills the last budget slot is
+   * admitted; any further charge is rejected until the deployment raises
+   * `requestBudget`. Concurrent charges from racing controller/child sessions
+   * serialize on the controller's write chain, so a full budget admits
+   * exactly one of them, and the charge persists before the receipt returns —
+   * a retry or a process restart never resets usage.
+   * @returns the receipt with the cumulative charged count, the configured
+   *   budget, and the remaining allowance after this charge.
+   * @throws {@link ProjectControllerError} with
+   *   `PROJECT_CONTROLLER_REQUEST_BUDGET_EXHAUSTED` when every budget unit is
+   *   already spent, `PROJECT_CONTROLLER_ADMISSION_CLOSED` when the project
+   *   lifecycle is not admitting dispatch work, or
+   *   `PROJECT_CONTROLLER_PERSISTENCE` when the usage write failed.
+   */
+  async chargeModelRequest(): Promise<RequestChargeReceipt> {
+    return await this.enqueue(async () => {
+      this.requireAdmissionOpen()
+      const requestBudget = this.config.requestBudget
+      if (this.chargedRequests >= requestBudget) {
+        throw new ProjectControllerError(
+          `the request budget of ${requestBudget} is exhausted (${this.chargedRequests} charged)`,
+          'PROJECT_CONTROLLER_REQUEST_BUDGET_EXHAUSTED',
+        )
+      }
+      const chargedRequests = this.chargedRequests + 1
+      try {
+        await this.requireDomain().global.set({ chargedRequests })
+      } catch (error: unknown) {
+        throw new ProjectControllerError(
+          'request-budget usage could not be persisted',
+          'PROJECT_CONTROLLER_PERSISTENCE',
+          { cause: error },
+        )
+      }
+      this.chargedRequests = chargedRequests
+      return {
+        chargedRequests,
+        requestBudget,
+        remainingRequests: requestBudget - chargedRequests,
+      }
+    })
+  }
+
+  /**
+   * Read the request-budget accounting without charging.
+   * @returns the configured budget, the cumulative charged count, and the
+   *   remaining allowance (clamped at zero once exhausted).
+   */
+  requestBudgetUsage(): {
+    readonly requestBudget: number
+    readonly chargedRequests: number
+    readonly remainingRequests: number
+  } {
+    return {
+      requestBudget: this.config.requestBudget,
+      chargedRequests: this.chargedRequests,
+      remainingRequests: Math.max(0, this.config.requestBudget - this.chargedRequests),
+    }
+  }
+
   // ---- queries -----------------------------------------------------------
 
   /**
@@ -593,5 +691,13 @@ export class ProjectController extends Service {
       throw new ProjectControllerError('the project_tasks domain is not open yet', 'PROJECT_CONTROLLER_PERSISTENCE')
     }
     return this.table
+  }
+
+  /** The opened domain; absent only before Service.init completed. */
+  private requireDomain(): Domain<typeof projectTasksDomainSpec> {
+    if (this.domain === undefined) {
+      throw new ProjectControllerError('the project_tasks domain is not open yet', 'PROJECT_CONTROLLER_PERSISTENCE')
+    }
+    return this.domain
   }
 }
