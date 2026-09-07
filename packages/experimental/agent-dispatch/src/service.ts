@@ -21,11 +21,13 @@
 import { Service, type Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {
   CreateChildAgentOptions,
   CreateChildAgentRequest,
   CreatedChildAgent,
 } from '@deepseek-ai/dsh-experimental-agent-hierarchy'
+import type { AgentBindingRecord, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import type {} from '@deepseek-ai/dsh-experimental-session-identity'
 // Type-only: resolve the opportunistic `ctx.get('agentPresets')` join to the
 // preset roster when composed; a rosterless deployment keeps the no-op.
@@ -59,25 +61,106 @@ export interface DispatchAgentOptions extends CreateChildAgentOptions {
 }
 
 /**
+ * Recovery options: the reserved identity is required and the briefing is
+ * structurally absent — recovery reinstalls the reservation, it never
+ * re-tasks the child.
+ */
+export type RecoverDispatchAgentOptions = Omit<DispatchAgentOptions, 'prompt' | 'sessionId'> & {
+  /** The reserved identity a previous dispatch returned. */
+  readonly sessionId: SessionId
+}
+
+/**
+ * The durable identity an earlier dispatch returned for one parent task.
+ */
+export interface DispatchedIdentity {
+  /** The binding record the engine persisted for that child. */
+  readonly record: AgentBindingRecord
+  /** Whether the child agent is currently live in this process. */
+  readonly live: boolean
+}
+
+/** The per-task gate key: one parent's one task (an absent task still gates per parent). */
+function taskGateKey(parentId: SessionId, taskId: TaskId | undefined): string {
+  return `dispatch:${String(parentId)}:${String(taskId ?? '')}`
+}
+
+/**
  * The host daily-dispatch entry. Hard-injects the real creation engine
  * (`ctx.agentHierarchy`), the role authority (`ctx.agentBindings`), and the
  * worktree registry whose rows make the worktree proof real, and fails at
  * activation when any is absent. Denials raised here are
- * {@link AgentDispatchError}s; the engine's own policy denials propagate
- * unchanged.
+ * {@link AgentDispatchError}s; the engine's own denials — including the
+ * reserved-child recovery refusal for an identity whose session is no longer
+ * live — propagate unchanged.
  */
 export class AgentDispatch extends Service {
-  static inject = ['agentHierarchy', 'agentBindings', 'worktreeRegistry']
+  static inject = ['agentHierarchy', 'agentBindings', 'worktreeRegistry', 'agents']
+
+  /** One settled-before-run chain per parent task, serializing its full dispatch span. */
+  private taskGates = new Map<string, Promise<unknown>>()
 
   constructor(ctx: Context) {
     super(ctx, 'agentDispatch')
   }
 
   /**
+   * Run one parent task's dispatch span — identity judgment, the engine call,
+   * and the first briefing — under a per-task gate. Creation dedupe is not
+   * delivery dedupe: two concurrent same-task requests both observe an empty
+   * registry before the engine serializes their creations into one child, and
+   * each would then deliver a prompt to that child. The gate makes the
+   * identity observation atomic with the delivery decision, so exactly the
+   * caller that held the gate while the identity was absent delivers, and
+   * every later entrant re-reads the durable record and takes the reuse or
+   * guidance path. Re-querying the record inside one span decides nothing
+   * here; ownership of the first briefing belongs to the gate.
+   * @param key - The parent-task gate key.
+   * @param run - The span to serialize.
+   * @returns Whatever `run` resolves to.
+   */
+  private async withTaskGate<T>(key: string, run: () => Promise<T>): Promise<T> {
+    const previous = this.taskGates.get(key) ?? Promise.resolve()
+    const result = previous.then(run, run)
+    const tail = result.then(() => undefined, () => undefined)
+    this.taskGates.set(key, tail)
+    // Cleanup rides the never-rejecting tail: a finally() on `result` would
+    // derive a second rejection with nobody attached to it.
+    void tail.then(() => {
+      if (this.taskGates.get(key) === tail) this.taskGates.delete(key)
+    })
+    return await result
+  }
+
+  /**
+   * Find the durable identity an earlier dispatch returned for one parent
+   * task, if any. The matching rule is the engine's own dedupe key
+   * (`parentSessionId` + `taskId`). A retry reuses the identity only by
+   * passing `record.agentId` back as `options.sessionId`; reuse never
+   * re-delivers a prompt, and a child whose session is no longer live keeps
+   * its engine-owned recovery lane instead of a replacement child.
+   * @param parent - The dispatching parent the child was created for.
+   * @param taskId - The task the child was created for.
+   * @returns The durable identity and its live state, or `undefined` when
+   *   no dispatched child exists for the pair.
+   */
+  findDispatchedChild(parent: Agent, taskId: TaskId): DispatchedIdentity | undefined {
+    const record = this.ctx.agentBindings.list().find(
+      candidate => candidate.parentSessionId === parent.id && candidate.taskId === taskId,
+    )
+    if (record === undefined) return undefined
+    return { record, live: this.ctx.agents.get(record.agentId) !== undefined }
+  }
+
+  /**
    * Validate one dispatch request at the entry and, when it holds, create the
    * child through the real hierarchy engine. The authoritative registry rows
    * prove registration before any live observation runs; a git failure whose
-   * refusal carries the registry's classified kind rethrows unchanged.
+   * refusal carries the registry's classified kind rethrows unchanged. A
+   * parent task that already has a child refuses with
+   * `DISPATCH_IDENTITY_EXISTS` until the caller passes the returned agent id
+   * back as `sessionId` — the engine's own dedupe then answers with the same
+   * child.
    * @param parent - The exact live dispatching agent.
    * @param request - The child creation request; `worktree` is required at
    *   this entry because the dispatched child owns one registered worktree.
@@ -91,6 +174,69 @@ export class AgentDispatch extends Service {
     request: CreateChildAgentRequest,
     options: DispatchAgentOptions,
   ): Promise<CreatedChildAgent> {
+    return await this.withTaskGate(taskGateKey(parent.id, request.taskId), async () => {
+      const { worktree, existing } = await this.entryProof(parent, request, options.workspaceId, options.sessionId)
+      return await this.dispatch(parent, request, options, worktree, existing)
+    })
+  }
+
+  /**
+   * Recover one reserved child through the engine's fixed recovery lane after
+   * the same entry proof the creation path runs. The caller must pass the
+   * reserved identity back as `sessionId`; recovery reuses the same host
+   * assembly as creation — the preset composition join and the registered
+   * worktree's single-writer binding are re-established by the composed
+   * setup on the recovered session — and never delivers a prompt (the type
+   * omits one). The engine decides between resuming the existing session
+   * and, only on a typed missing-log result, republishing under the same
+   * identity. Corruption, cancellation, and foreign-identity failures
+   * propagate unchanged — no replacement child.
+   * @param parent - The exact live dispatching agent recorded by the reservation.
+   * @param request - The original creation request, unchanged.
+   * @param options - The reserved identity, the owner workspace anchoring the
+   *   registry proof, and the factory setup, route, and cancellation to
+   *   reinstall with the recovered session.
+   * @returns The recovered child and its unchanged durable binding record.
+   */
+  async recoverChildAgent(
+    parent: Agent,
+    request: CreateChildAgentRequest,
+    options: RecoverDispatchAgentOptions,
+  ): Promise<CreatedChildAgent> {
+    return await this.withTaskGate(taskGateKey(parent.id, request.taskId), async () => {
+      const { worktree } = await this.entryProof(parent, request, options.workspaceId, options.sessionId)
+      return await this.ctx.agentHierarchy.recoverChildAgent(parent, request, {
+        sessionId: options.sessionId,
+        setup: this.composedSetup(parent, worktree, options.setup),
+        ...(options.agentOptions === undefined ? {} : { agentOptions: options.agentOptions }),
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      })
+    })
+  }
+
+  /**
+   * Run the entry proof both dispatch lanes share: the durable identity
+   * question, the authoritative registry rows, the live observation, and the
+   * dispatch discipline. The engine's own reservation and recovery semantics
+   * stay engine-owned; this proof covers only what the host composition
+   * layer owns.
+   * @param parent - The exact live dispatching agent.
+   * @param request - The child creation request; `worktree` is required at
+   *   this entry because the dispatched child owns one registered worktree.
+   * @param workspaceId - Workspace the requested worktree is registered under.
+   * @param sessionId - The identity a retry passes back, when reusing one.
+   * @returns The proven worktree and the durable identity for the parent
+   *   task, when one exists.
+   */
+  private async entryProof(
+    parent: Agent,
+    request: CreateChildAgentRequest,
+    workspaceId: WorkspaceId,
+    sessionId: SessionId | undefined,
+  ): Promise<{
+    worktree: NonNullable<CreateChildAgentRequest['worktree']>
+    existing: DispatchedIdentity | undefined
+  }> {
     const worktree = request.worktree
     if (worktree === undefined) {
       throw new AgentDispatchError(
@@ -98,11 +244,22 @@ export class AgentDispatch extends Service {
         'DISPATCH_WORKTREE_UNREGISTERED',
       )
     }
-    const { workspaceId } = options
     if (workspaceId === undefined) {
       throw new AgentDispatchError(
         `agent-dispatch: worktree "${worktree.worktreeId}" proof requires the owner workspace id`,
         'DISPATCH_WORKTREE_UNREGISTERED',
+      )
+    }
+    const existing = request.taskId === undefined
+      ? undefined
+      : this.findDispatchedChild(parent, request.taskId)
+    if (existing !== undefined && sessionId === undefined) {
+      // A blind same-task retry must not re-create or silently adopt: the
+      // caller learns the returned identity and passes it back explicitly.
+      throw new AgentDispatchError(
+        `agent-dispatch: parent task already has the dispatched child "${existing.record.agentId}"; `
+        + 'retry by passing that id as sessionId (use findDispatchedChild to recover it)',
+        'DISPATCH_IDENTITY_EXISTS',
       )
     }
     const row = this.registeredRow(workspaceId, worktree.worktreeId)
@@ -129,7 +286,7 @@ export class AgentDispatch extends Service {
     // registry's holder contract is string equality, and an unallocated
     // child identity cannot match any existing binding.
     if (row.lockedBy !== undefined
-      && (options.sessionId === undefined || String(row.lockedBy) !== String(options.sessionId))) {
+      && (sessionId === undefined || String(row.lockedBy) !== String(sessionId))) {
       throw new AgentDispatchError(
         `agent-dispatch: worktree "${worktree.worktreeId}" is bound to writer "${row.lockedBy}"`,
         'DISPATCH_WORKTREE_MISMATCH',
@@ -150,7 +307,40 @@ export class AgentDispatch extends Service {
         'DISPATCH_HIERARCHY_DENIED',
       )
     }
-    return await this.dispatch(parent, request, options, worktree)
+    return { worktree, existing }
+  }
+
+  /**
+   * Compose the engine-facing factory setup both dispatch lanes share: the
+   * child joins its parent's preset composition, then takes the registered
+   * worktree's single-writer binding, and the caller's own setup runs last.
+   * A caller setup failure releases the binding this composition took.
+   * @param parent - The exact live dispatching agent, for the composition join.
+   * @param worktree - The proven registered worktree the child will own.
+   * @param hostSetup - The caller's own factory setup, run after the assembly.
+   * @returns The composed setup for the engine's factory window.
+   */
+  private composedSetup(
+    parent: Agent,
+    worktree: NonNullable<CreateChildAgentRequest['worktree']>,
+    hostSetup: CreateChildAgentOptions['setup'],
+  ): NonNullable<CreateChildAgentOptions['setup']> {
+    return async (childCtx) => {
+      const child = childCtx.agent
+      if (child === undefined) throw new Error('agent-dispatch: factory setup has no Agent')
+      childCtx.get('agentPresets')?.composeFrom(childCtx, parent.ctx)
+      const holder = WorktreeLockHolder(child.session.id)
+      await this.ctx.worktreeRegistry.bind(worktree.worktreeId, holder)
+      try {
+        return await hostSetup?.(childCtx)
+      } catch (error) {
+        await this.ctx.worktreeRegistry.unbind(worktree.worktreeId, holder).catch(() => {
+          // The setup failure is the reportable outcome; a refused release
+          // leaves the holder-mismatch diagnosis to the registry's own error.
+        })
+        throw error
+      }
+    }
   }
 
   /**
@@ -166,31 +356,20 @@ export class AgentDispatch extends Service {
     request: CreateChildAgentRequest,
     options: DispatchAgentOptions,
     worktree: NonNullable<CreateChildAgentRequest['worktree']>,
+    existing: DispatchedIdentity | undefined,
   ): Promise<CreatedChildAgent> {
-    const hostSetup = options.setup
     const engineOptions: CreateChildAgentOptions = {
       ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
       ...(options.agentOptions === undefined ? {} : { agentOptions: options.agentOptions }),
       ...(options.signal === undefined ? {} : { signal: options.signal }),
-      setup: async (childCtx) => {
-        const child = childCtx.agent
-        if (child === undefined) throw new Error('agent-dispatch: factory setup has no Agent')
-        childCtx.get('agentPresets')?.composeFrom(childCtx, parent.ctx)
-        const holder = WorktreeLockHolder(child.session.id)
-        await this.ctx.worktreeRegistry.bind(worktree.worktreeId, holder)
-        try {
-          return await hostSetup?.(childCtx)
-        } catch (error) {
-          await this.ctx.worktreeRegistry.unbind(worktree.worktreeId, holder).catch(() => {
-            // The setup failure is the reportable outcome; a refused release
-            // leaves the holder-mismatch diagnosis to the registry's own error.
-          })
-          throw error
-        }
-      },
+      setup: this.composedSetup(parent, worktree, options.setup),
     }
     const created = await this.ctx.agentHierarchy.createChildAgent(parent, request, engineOptions)
-    if (options.prompt !== undefined) {
+    // Identity reuse answers with the engine's already-published child;
+    // re-delivering the briefing would re-task a running worker. Engine
+    // errors — including the reserved-child recovery refusal and a typed
+    // session-persistence miss — propagate unchanged; no fallback child.
+    if (options.prompt !== undefined && existing === undefined) {
       created.agent.followup(createUserMessage({
         content: [{ type: 'text', text: options.prompt }],
         source: { kind: 'plugin', plugin: 'agent-dispatch' },

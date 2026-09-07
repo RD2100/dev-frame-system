@@ -6,6 +6,8 @@ export type AgentDispatchErrorCode =
   | 'DISPATCH_WORKTREE_UNREGISTERED'
   /** The registry row disagrees with the request or with disk: missing directory, path/branch mismatch, or a foreign single-writer binding. */
   | 'DISPATCH_WORKTREE_MISMATCH'
+  /** The parent task already has a dispatched child; retry by passing the returned agent id back as `sessionId`. */
+  | 'DISPATCH_IDENTITY_EXISTS'
   /** The parent session carries no durable role binding. */
   | 'DISPATCH_PARENT_UNBOUND'
   /** The daily dispatch discipline refused this parent/request pair. */

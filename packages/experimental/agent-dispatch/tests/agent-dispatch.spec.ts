@@ -13,7 +13,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
@@ -21,6 +21,7 @@ import AgentHierarchy, { type AgentHierarchyConfigInput } from '@deepseek-ai/dsh
 import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import AgentBindingRegistry from '@deepseek-ai/dsh-experimental-session-identity'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import Storage from '@deepseek-ai/dsh-storage'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
@@ -67,12 +68,22 @@ interface Harness {
     request: Parameters<AgentDispatch['createChildAgent']>[1],
     options?: Partial<DispatchAgentOptions>,
   ) => ReturnType<AgentDispatch['createChildAgent']>
-  dispose: () => Promise<void>
+  dispose: (options?: { readonly keepRoot?: boolean }) => Promise<void>
+}
+
+interface HarnessOptions {
+  /** Existing storage root to reuse (restart specs pass the previous root). */
+  readonly root?: string
+  /** Skip the repo/workspace seed when restarting over a root that already has one. */
+  readonly seed?: boolean
 }
 
 /** Boot the real composition: agent loop, storage, both registries, engine, dispatch entry. */
-async function harness(leadPluginScopes: AgentHierarchyConfigInput['leadPluginScopes']): Promise<Harness> {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-agent-dispatch-'))
+async function harness(
+  leadPluginScopes: AgentHierarchyConfigInput['leadPluginScopes'],
+  options: HarnessOptions = {},
+): Promise<Harness> {
+  const root = options.root ?? await mkdtemp(join(tmpdir(), 'dsh-agent-dispatch-'))
   const ctx = new Context()
   try {
     await mountAgentLoopTestDependencies(ctx)
@@ -102,29 +113,38 @@ async function harness(leadPluginScopes: AgentHierarchyConfigInput['leadPluginSc
     }))
     await ctx.plugin(AgentHierarchy, { ...rolesConfig, leadPluginScopes: leadPluginScopes ?? {} })
     await ctx.plugin(AgentDispatch)
-    const repo = join(root, 'repo')
-    await mkdir(repo)
-    await git(root, 'init', '-b', 'main', repo)
-    await git(repo, 'config', 'user.email', 'agent-dispatch@test.local')
-    await git(repo, 'config', 'user.name', 'Agent Dispatch Tests')
-    await git(repo, 'commit', '--allow-empty', '-m', 'init')
-    const workspace = await ctx.workspaceRegistry.create(repo)
+    let workspaceId: WorkspaceId
+    if (options.seed !== false) {
+      const repo = join(root, 'repo')
+      await mkdir(repo)
+      await git(root, 'init', '-b', 'main', repo)
+      await git(repo, 'config', 'user.email', 'agent-dispatch@test.local')
+      await git(repo, 'config', 'user.name', 'Agent Dispatch Tests')
+      await git(repo, 'commit', '--allow-empty', '-m', 'init')
+      workspaceId = (await ctx.workspaceRegistry.create(repo)).id
+    } else {
+      const restored = ctx.workspaceRegistry.list()
+      if (restored.length !== 1) {
+        throw new Error(`expected the restarted root to restore exactly one workspace, got ${restored.length}`)
+      }
+      workspaceId = restored[0]!.id
+    }
     return {
       ctx,
       root,
-      workspaceId: workspace.id,
+      workspaceId,
       createWorktree: async (name, branch) => await ctx.worktreeRegistry.create({
-        workspaceId: workspace.id,
+        workspaceId,
         path: join(root, name),
         branch,
       }),
       dispatch: (parent, request, options) => ctx.agentDispatch.createChildAgent(parent, request, {
-        workspaceId: workspace.id,
+        workspaceId,
         ...options,
       }),
-      dispose: async () => {
+      dispose: async (disposeOptions) => {
         await ctx.fiber.dispose()
-        await rm(root, { recursive: true, force: true })
+        if (disposeOptions?.keepRoot !== true) await rm(root, { recursive: true, force: true })
       },
     }
   } catch (error: unknown) {
@@ -328,4 +348,225 @@ it('rejects foreign single-writer bindings, unbound parents, worker dispatchers,
     worktree: { worktreeId: workerTree2.id, worktreePath: workerTree2.path, branch: workerTree2.branch },
   }))
   expect(fromWorker.code).toBe('DISPATCH_HIERARCHY_DENIED')
+})
+
+it('reuses the returned identity without re-delivering the prompt, guides blind retries to it, and passes the engine recovery refusal through', async () => {
+  const h = await harness({ 'dispatch-lead': ['plugin-a', 'plugin-b'] })
+  activeHarnesses.push(h)
+  const controller = (await h.ctx.agents.create({
+    sessionId: SessionId('retry-controller'),
+    meta: { cwd: join(h.root, 'repo') },
+  })).agent
+  await h.ctx.agentBindings.bind({ agentId: controller.id, role: 'controller' })
+  const tree = await h.createWorktree('wt-retry', 'feature/retry')
+  const request = {
+    cwd: tree.path,
+    role: 'lead' as const,
+    taskId: TaskId('retry-task'),
+    pluginId: PluginId('plugin-a'),
+    worktree: { worktreeId: tree.id, worktreePath: tree.path, branch: tree.branch },
+  }
+  const first = await h.dispatch(controller, request, { sessionId: SessionId('retry-lead') })
+  expect(first.record.agentId).toBe('retry-lead')
+
+  const identity = h.ctx.agentDispatch.findDispatchedChild(controller, TaskId('retry-task'))
+  expect(identity?.record.agentId).toBe('retry-lead')
+  expect(identity?.live).toBe(true)
+  expect(h.ctx.agentDispatch.findDispatchedChild(controller, TaskId('other-task'))).toBeUndefined()
+
+  // A blind same-task retry learns the returned identity instead of a
+  // misleading worktree mismatch.
+  const blind = await dispatchError(() => h.dispatch(controller, request))
+  expect(blind.code).toBe('DISPATCH_IDENTITY_EXISTS')
+  expect(blind.message).toContain('retry-lead')
+
+  // Passing the returned id back reuses the engine's own dedupe answer; the
+  // prompt must not be re-delivered to the already-running child.
+  const inserted: UserMessage[] = []
+  first.agent.ctx.on('agent/inbox/inserted', ({ message }) => { inserted.push(message) })
+  const retry = await h.dispatch(controller, request, {
+    sessionId: SessionId('retry-lead'),
+    prompt: 're-briefing that must never arrive',
+  })
+  expect(retry.agent.id).toBe('retry-lead')
+  expect(inserted).toHaveLength(0)
+
+  // Cold restart over the same root: the identity stays durable but is no
+  // longer live, and the engine's own recovery refusal passes through the
+  // adapter unchanged — no wrap, no replacement child.
+  await h.dispose({ keepRoot: true })
+  activeHarnesses.splice(activeHarnesses.indexOf(h), 1)
+  const restarted = await harness({ 'dispatch-lead': ['plugin-a', 'plugin-b'] }, { root: h.root, seed: false })
+  activeHarnesses.push(restarted)
+  expect(restarted.ctx.agentBindings.find(SessionId('retry-lead'))?.taskId).toBe('retry-task')
+  const controller2 = (await restarted.ctx.agents.create({
+    sessionId: SessionId('retry-controller'),
+    meta: { cwd: join(restarted.root, 'repo') },
+  })).agent
+  const restored = restarted.ctx.agentDispatch.findDispatchedChild(controller2, TaskId('retry-task'))
+  expect(restored?.record.agentId).toBe('retry-lead')
+  expect(restored?.live).toBe(false)
+  let recoveryError: unknown
+  try {
+    await restarted.dispatch(controller2, request, { sessionId: SessionId('retry-lead') })
+  } catch (error: unknown) {
+    recoveryError = error
+  }
+  expect(recoveryError).toBeInstanceOf(Error)
+  expect(recoveryError).not.toBeInstanceOf(AgentDispatchError)
+  expect(String((recoveryError as Error).message)).toMatch(/requires session recovery/)
+})
+
+it('routes reserved-identity recovery through the engine lane and passes corruption through unchanged', async () => {
+  const h = await harness({ 'dispatch-lead': ['plugin-a', 'plugin-b'] })
+  activeHarnesses.push(h)
+  const controller = (await h.ctx.agents.create({
+    sessionId: SessionId('recovery-controller'),
+    meta: { cwd: join(h.root, 'repo') },
+  })).agent
+  await h.ctx.agentBindings.bind({ agentId: controller.id, role: 'controller' })
+  const tree = await h.createWorktree('wt-recover', 'feature/recover')
+  const request = {
+    cwd: tree.path,
+    role: 'lead' as const,
+    taskId: TaskId('recover-task'),
+    pluginId: PluginId('plugin-a'),
+    worktree: { worktreeId: tree.id, worktreePath: tree.path, branch: tree.branch },
+  }
+  await h.dispatch(controller, request, { sessionId: SessionId('recover-lead') })
+  // Cold restart over the same root: the reservation stays durable and the
+  // child is no longer live — the state recovery exists for.
+  await h.dispose({ keepRoot: true })
+  activeHarnesses.splice(activeHarnesses.indexOf(h), 1)
+  const restarted = await harness({ 'dispatch-lead': ['plugin-a', 'plugin-b'] }, { root: h.root, seed: false })
+  activeHarnesses.push(restarted)
+  const controller2 = (await restarted.ctx.agents.create({
+    sessionId: SessionId('recovery-controller'),
+    meta: { cwd: join(restarted.root, 'repo') },
+  })).agent
+  const reservation = restarted.ctx.agentDispatch.findDispatchedChild(controller2, TaskId('recover-task'))
+  expect(reservation?.record.agentId).toBe('recover-lead')
+  expect(reservation?.live).toBe(false)
+  // Drop the restored single-writer lock so the later recovery must re-take
+  // it through the recomposed assembly — a stale lock would prove nothing.
+  await restarted.ctx.worktreeRegistry.unbind(tree.id, WorktreeLockHolder('recover-lead'))
+  expect(restarted.ctx.worktreeRegistry.list(restarted.workspaceId).map(row => String(row.lockedBy)))
+    .not.toContain('recover-lead')
+
+  // A corrupted log is not a missing one: while the child is still not live,
+  // the same error instance surfaces unwrapped and no replacement child
+  // appears — the engine refuses at resume without touching the lock.
+  const corrupt = new Error('corrupt log')
+  const corruptResume = vi.spyOn(restarted.ctx.agents, 'resume').mockRejectedValue(corrupt)
+  try {
+    let corruptReason: unknown
+    try {
+      await restarted.ctx.agentDispatch.recoverChildAgent(controller2, request, {
+        sessionId: SessionId('recover-lead'),
+        workspaceId: restarted.workspaceId,
+      })
+    } catch (caught) {
+      corruptReason = caught
+    }
+    expect(corruptResume.mock.calls).toHaveLength(1)
+    expect(corruptReason).toBe(corrupt)
+    expect(restarted.ctx.agentDispatch.findDispatchedChild(controller2, TaskId('recover-task'))?.live).toBe(false)
+    expect(restarted.ctx.worktreeRegistry.list(restarted.workspaceId).map(row => String(row.lockedBy)))
+      .not.toContain('recover-lead')
+  } finally {
+    corruptResume.mockRestore()
+  }
+
+  // The typed missing-log result is the one engine outcome that republishes
+  // under the reserved identity; the recomposed assembly re-takes the lock.
+  const resume = vi.spyOn(restarted.ctx.agents, 'resume')
+    .mockRejectedValue(new SessionPersistenceNotFoundError(SessionId('recover-lead')))
+  try {
+    const recovered = await restarted.ctx.agentDispatch.recoverChildAgent(controller2, request, {
+      sessionId: SessionId('recover-lead'),
+      workspaceId: restarted.workspaceId,
+    })
+    expect(recovered.agent.id).toBe('recover-lead')
+    expect(recovered.record.taskId).toBe('recover-task')
+    expect(restarted.ctx.agentBindings.list()).toHaveLength(2)
+    expect(restarted.ctx.worktreeRegistry.list(restarted.workspaceId).map(row => String(row.lockedBy)))
+      .toContain('recover-lead')
+  } finally {
+    resume.mockRestore()
+  }
+
+  // Recovery without a reservation is the engine's own refusal, unwrapped.
+  await expect(restarted.ctx.agentDispatch.recoverChildAgent(controller2, { ...request, taskId: TaskId('ghost-task') }, {
+    sessionId: SessionId('recover-lead'),
+    workspaceId: restarted.workspaceId,
+  })).rejects.toThrow('existing child reservation')
+
+  // A live child answers through the same entry without re-running anything.
+  const liveTree = await restarted.ctx.worktreeRegistry.create({
+    workspaceId: restarted.workspaceId,
+    path: join(restarted.root, 'wt-live'),
+    branch: 'feature/live',
+  })
+  const live = await restarted.dispatch(controller2, {
+    cwd: liveTree.path,
+    role: 'lead' as const,
+    taskId: TaskId('live-task'),
+    pluginId: PluginId('plugin-a'),
+    worktree: { worktreeId: liveTree.id, worktreePath: liveTree.path, branch: liveTree.branch },
+  }, { sessionId: SessionId('live-lead') })
+  const again = await restarted.ctx.agentDispatch.recoverChildAgent(controller2, {
+    cwd: liveTree.path,
+    role: 'lead' as const,
+    taskId: TaskId('live-task'),
+    pluginId: PluginId('plugin-a'),
+    worktree: { worktreeId: liveTree.id, worktreePath: liveTree.path, branch: liveTree.branch },
+  }, {
+    sessionId: SessionId('live-lead'),
+    workspaceId: restarted.workspaceId,
+  })
+  expect(again.agent.id).toBe(live.agent.id)
+})
+
+it('delivers a concurrent same-task pair exactly one prompt under the per-task gate', async () => {
+  const h = await harness({ 'dispatch-lead': ['plugin-a', 'plugin-b'] })
+  activeHarnesses.push(h)
+  const controller = (await h.ctx.agents.create({
+    sessionId: SessionId('parallel-controller'),
+    meta: { cwd: join(h.root, 'repo') },
+  })).agent
+  await h.ctx.agentBindings.bind({ agentId: controller.id, role: 'controller' })
+  const tree = await h.createWorktree('wt-parallel', 'feature/parallel')
+  const request = {
+    cwd: tree.path,
+    role: 'lead' as const,
+    taskId: TaskId('parallel-task'),
+    pluginId: PluginId('plugin-a'),
+    worktree: { worktreeId: tree.id, worktreePath: tree.path, branch: tree.branch },
+  }
+  const inserted: UserMessage[] = []
+  const briefing = 'the one briefing'
+  const listenerSetup = (childCtx: Parameters<NonNullable<DispatchAgentOptions['setup']>>[0]): void => {
+    childCtx.agent?.ctx.on('agent/inbox/inserted', ({ message }) => { inserted.push(message) })
+  }
+  // Both callers enter together, both carry a briefing, neither has seen the
+  // other. The gate decides once: the first span creates and delivers, the
+  // second re-reads the durable identity and reuses without re-briefing.
+  const [first, second] = await Promise.all([
+    h.dispatch(controller, request, {
+      sessionId: SessionId('parallel-lead'),
+      prompt: briefing,
+      setup: listenerSetup,
+    }),
+    h.dispatch(controller, request, {
+      sessionId: SessionId('parallel-lead'),
+      prompt: briefing,
+    }),
+  ])
+  expect(first.agent.id).toBe('parallel-lead')
+  expect(second.agent.id).toBe('parallel-lead')
+  expect(first.record.agentId).toBe('parallel-lead')
+  expect(second.record.agentId).toBe('parallel-lead')
+  expect(inserted).toHaveLength(1)
+  expect(JSON.stringify(inserted[0])).toContain(briefing)
+  expect(h.ctx.agentBindings.list().filter(record => record.taskId === 'parallel-task')).toHaveLength(1)
 })
