@@ -210,14 +210,34 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
         // chain, which the persisted failure summary drops. The candidate
         // diagnosis needs that chain, so the bootstrap face records it into
         // a run-private diagnostic file inside the candidate home; the
-        // listener only observes, never alters the propagation.
+        // listener only observes, never alters the propagation. Causes may
+        // be non-Error values (cross-realm errors, objects, strings), so
+        // each link records its runtime type and only bounded, redacted
+        // text — never request bodies, headers, or environment.
+        const scrub = (value: string): string => value
+          .replace(/([?&]token=)[^\s&)]+/gu, '$1<redacted>')
+          .replace(/(sk-|Bearer\s+)[^\s"']+/gu, '$1<redacted>')
+          .replace(/((?:api[_-]?key|access[_-]?token|password)\s*[=:]\s*)[^\s"',}]+/giu, '$1<redacted>')
+          .slice(0, 400)
+        const describe = (value: unknown): Record<string, string> => {
+          if (value instanceof Error) {
+            return { kind: 'error', name: value.name, message: scrub(value.message) }
+          }
+          if (typeof value === 'string') {
+            return { kind: 'string', value: scrub(value) }
+          }
+          if (value === null || value === undefined) {
+            return { kind: String(value) }
+          }
+          return { kind: typeof value, tag: Object.prototype.toString.call(value), text: scrub(String(value)) }
+        }
         ctx.on('agent/error', (data: { error: unknown }) => {
-          const chain: { name: string; message: string }[] = []
+          const chain: Record<string, string>[] = []
           let cursor: unknown = data.error
           let depth = 0
-          while (cursor instanceof Error && depth < 6) {
-            chain.push({ name: cursor.name, message: cursor.message })
-            cursor = (cursor as Error & { cause?: unknown }).cause
+          while (cursor !== undefined && cursor !== null && depth < 6) {
+            chain.push(describe(cursor))
+            cursor = (cursor as { cause?: unknown }).cause
             depth += 1
           }
           const home = process.env.DSH_CANDIDATE_HOME
