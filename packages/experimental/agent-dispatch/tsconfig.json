@@ -13,6 +13,7 @@
     { "path": "../../core/session" },
     { "path": "../../session/session-persistence-jsonl" },
     { "path": "../../llm/llm" },
+    { "path": "../../llm/deepseek-llm-api-extensions" },
     { "path": "../../preset/agent-presets" },
     { "path": "../../workspace/workspace" },
     { "path": "../../workflow/worktree-registry" },

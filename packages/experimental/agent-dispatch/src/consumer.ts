@@ -21,6 +21,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { WorktreeId } from '@deepseek-ai/dsh-worktree-registry'
 import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import { apply as requestBudgetApply } from '@deepseek-ai/dsh-experimental-project-controller/request-budget-consumer'
+import type {} from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import { GoalBindingComposition, resolveCommandGoalBindingConfig } from '@deepseek-ai/dsh-experimental-command-goal-binding'
 import type { CommandGoalBindingConfig, GoalBindingCompositionStores } from '@deepseek-ai/dsh-experimental-command-goal-binding'
 import { AgentDispatch } from './service.ts'
@@ -56,6 +57,15 @@ const GUIDANCE = 'The agent dispatch tool is the daily delegation entry over the
 
 /** The tool names this plugin registers, in registration order. */
 export const TOOL_NAMES = ['agent_dispatch'] as const
+
+/** Redact credential-shaped fragments and bound the length of diagnostic text. */
+function scrub(value: string): string {
+  return value
+    .replace(/([?&]token=)[^\s&)]+/gu, '$1<redacted>')
+    .replace(/(sk-|Bearer\s+)[^\s"']+/gu, '$1<redacted>')
+    .replace(/((?:api[_-]?key|access[_-]?token|password)\s*[=:]\s*)[^\s"',}]+/giu, '$1<redacted>')
+    .slice(0, 400)
+}
 
 /** The plain pending-state card, titled from the call's arguments. */
 function callCard(title: string, rawInput?: string): ToolCallView {
@@ -206,50 +216,8 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
       // reach this state.
       if (config?.candidateRootSessionId !== undefined) {
         const rootId = config.candidateRootSessionId
-        // The agent/error event carries the original error with its cause
-        // chain, which the persisted failure summary drops. The candidate
-        // diagnosis needs that chain, so the bootstrap face records it into
-        // a run-private diagnostic file inside the candidate home; the
-        // listener only observes, never alters the propagation. Causes may
-        // be non-Error values (cross-realm errors, objects, strings), so
-        // each link records its runtime type and only bounded, redacted
-        // text — never request bodies, headers, or environment.
-        const scrub = (value: string): string => value
-          .replace(/([?&]token=)[^\s&)]+/gu, '$1<redacted>')
-          .replace(/(sk-|Bearer\s+)[^\s"']+/gu, '$1<redacted>')
-          .replace(/((?:api[_-]?key|access[_-]?token|password)\s*[=:]\s*)[^\s"',}]+/giu, '$1<redacted>')
-          .slice(0, 400)
-        const describe = (value: unknown): Record<string, string> => {
-          if (value instanceof Error) {
-            return { kind: 'error', name: value.name, message: scrub(value.message) }
-          }
-          if (typeof value === 'string') {
-            return { kind: 'string', value: scrub(value) }
-          }
-          if (value === null || value === undefined) {
-            return { kind: String(value) }
-          }
-          return { kind: typeof value, tag: Object.prototype.toString.call(value), text: scrub(String(value)) }
-        }
-        ctx.on('agent/error', (data: { error: unknown }) => {
-          const chain: Record<string, string>[] = []
-          let cursor: unknown = data.error
-          let depth = 0
-          while (cursor !== undefined && cursor !== null && depth < 6) {
-            chain.push(describe(cursor))
-            cursor = (cursor as { cause?: unknown }).cause
-            depth += 1
-          }
-          const home = process.env.DSH_CANDIDATE_HOME
-          if (home === undefined) return
-          const line = `${JSON.stringify({ runTag: String(process.pid), rootId, chain })}\n`
-          void appendFile(join(home, `agent-error-diag-${String(process.pid)}.jsonl`), line).catch(() => {
-            // Diagnostics must never break the agent loop; the session log
-            // still carries the persisted failure summary.
-          })
-        })
         let bootstrapped = false
-        ctx.on('agent/pre-step', async (_data, next) => {
+        ctx.on('agent/pre-step', async (data, next) => {
           if (bootstrapped) return next()
           const agent = ctx.agents.currentInitiator()
           if (agent === undefined || String(agent.session.id) !== rootId) return next()
@@ -281,6 +249,27 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
           const result = await composition.startBoundGoal({ agent, rawInput: 'Run the candidate fullchain: both workers deliver their own artifacts through the lead.' })
           if (result.kind !== 'success') {
             throw new Error(`devframe-start refused: ${result.text}`)
+          }
+          // One controlled extension preparation against the real registry —
+          // no network, no stream: a failing extension's raw message is
+          // redacted into the run's diagnostic file and the error rethrown
+          // unchanged, naming the exact failing field for the fixture owner.
+          const signal = (data as { signal?: AbortSignal }).signal
+          if (signal !== undefined) {
+            try {
+              await ctx.inject(['deepseekLlmApiExtensions'], (extCtx) =>
+                extCtx.deepseekLlmApiExtensions.prepare({ body: {}, sessionId: rootId, signal }))
+            } catch (error) {
+              const home = process.env.DSH_CANDIDATE_HOME
+              const message = error instanceof Error ? error.message : String(error)
+              if (home !== undefined) {
+                const line = `${JSON.stringify({ runTag: String(process.pid), rootId, stage: 'controlled-prepare', message: scrub(message) })}\n`
+                void appendFile(join(home, `agent-error-diag-${String(process.pid)}.jsonl`), line).catch(() => {
+                  // Diagnostics must never break the agent loop.
+                })
+              }
+              throw error
+            }
           }
           return next()
         })
