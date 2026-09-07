@@ -7,6 +7,58 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
 import { harness } from './helpers.ts'
 
+it.each(['header-conflict', 'cancel', 'parent-dispose'] as const)(
+  'preserves the reservation when recovery encounters %s', async (failure) => {
+    const h = await harness()
+    try {
+      const parentHandle = await h.ctx.agents.create({ sessionId: SessionId('boundary-parent'), meta: { cwd: h.root } })
+      const parent = parentHandle.agent
+      await h.ctx.agentBindings.bind({ agentId: parent.id, role: 'controller' })
+      const childId = SessionId('boundary-child')
+      const request = {
+        cwd: join(h.root, 'child'), role: 'lead' as const, taskId: TaskId('task'), pluginId: PluginId('plugin-a'),
+        worktree: { worktreeId: 'boundary-tree' as BoundWorktree['worktreeId'], worktreePath: join(h.root, 'child') },
+      }
+      await expect(h.ctx.agentHierarchy.createChildAgent(parent, request, {
+        sessionId: childId, setup: () => ({ commit() { throw new Error('veto') } }),
+      })).rejects.toThrow('veto')
+      const original = h.ctx.agentBindings.find(childId)
+      const create = vi.spyOn(h.ctx.agents, 'create')
+      const resume = vi.spyOn(h.ctx.agents, 'resume').mockImplementation(options => h.ctx.agents.create({
+        sessionId: options.resumeSessionId,
+        meta: { cwd: failure === 'header-conflict' ? join(h.root, 'wrong') : request.cwd, parentSession: parent.id, delegationDepth: 1 },
+        ...(options.setup === undefined ? {} : { setup: options.setup }),
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      }))
+      const entered = Promise.withResolvers<undefined>()
+      const release = Promise.withResolvers<undefined>()
+      try {
+        const abort = new AbortController()
+        const recovering = h.ctx.agentHierarchy.recoverChildAgent(parent, request, {
+          sessionId: childId, signal: abort.signal,
+          async setup() { entered.resolve(undefined); await release.promise },
+        })
+        const rejected = expect(recovering).rejects.toThrow()
+        if (failure !== 'header-conflict') {
+          await entered.promise
+          if (failure === 'cancel') abort.abort(new Error('recovery cancelled'))
+          else await parentHandle.dispose()
+          release.resolve(undefined)
+        }
+        await rejected
+        expect(create).toHaveBeenCalledTimes(1)
+        expect(h.ctx.agents.get(childId)).toBeUndefined()
+        expect(h.ctx.sessions.get(childId)).toBeUndefined()
+        expect(h.ctx.agentBindings.find(childId)).toEqual(original)
+      } finally {
+        release.resolve(undefined)
+        resume.mockRestore()
+        create.mockRestore()
+      }
+    } finally { await h.dispose() }
+  },
+)
+
 it('recovers the same reservation after an absent-log result and serializes duplicate recovery', async () => {
   const h = await harness()
   try {
