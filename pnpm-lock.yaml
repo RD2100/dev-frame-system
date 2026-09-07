@@ -5053,34 +5053,6 @@ importers:
         specifier: workspace:^
         version: link:../../../vendor/include
 
-  packages/experimental/devframe-profile:
-    dependencies:
-      '@deepseek-ai/dsh-experimental-agent-dispatch':
-        specifier: workspace:^
-        version: link:../agent-dispatch
-      '@deepseek-ai/dsh-experimental-agent-hierarchy':
-        specifier: workspace:^
-        version: link:../agent-hierarchy
-      '@deepseek-ai/dsh-experimental-command-goal-binding':
-        specifier: workspace:^
-        version: link:../command-goal-binding
-      '@deepseek-ai/dsh-experimental-project-memory':
-        specifier: workspace:^
-        version: link:../project-memory
-      '@deepseek-ai/dsh-experimental-session-identity':
-        specifier: workspace:^
-        version: link:../session-identity
-      '@deepseek-ai/dsh-experimental-shadow-router':
-        specifier: workspace:^
-        version: link:../shadow-router
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../../../vendor/cordis
-      '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
-        version: link:../../../vendor/include
-
   packages/experimental/inspector:
     dependencies:
       '@deepseek-ai/dsh-brand':
