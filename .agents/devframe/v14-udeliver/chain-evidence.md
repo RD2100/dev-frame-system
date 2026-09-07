@@ -75,3 +75,8 @@ job_kill(pwsh-213, reason="总控裁定 B1 本轮失败证据收口：停止 boo
 - **收口动作**：boot 进程全停（node chain5 匹配=0，端口 3081/3490/3491 监听=0）；会话日志保留于 chain5-home 供审计；driver JSONL 保留（含碰撞期双 driver-applied 记录及成因注明）。
 - **判定**：B1 12 站链 = **blocked/not_run**（S1-S3b/S8-进程级绿证据保留；S4-S12 未达）。boot/profile/route/缓存/UI 状态不构成验收；模型调用正常（C2b 重放已证），失败面在子链任务执行推进（总控 agent 未在窗口内完成 subagent 派发）。
 - **约束**：不再启动副本/重试；B1 恢复须新证据驱动的新裁定。
+
+## 残留进程复核（监督提醒后，2026-09-07）
+
+- 旧 chain4 node 进程（原 PID 5720）**已不存在**——现 PID 5720 为 WmiPrvSE（系统进程复用 PID，终止请求被系统正确拒绝）；**端口 3490 无监听**；全机 chain/udeliver 关键词 node 进程残留=0。
+- 结论：chain4/chain5 均已干净停止；B1 维持 blocked/not_run；无新 boot 启动。
