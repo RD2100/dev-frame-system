@@ -39,12 +39,6 @@
 # own single composition with the real workspace facts at bootstrap.
 - id: command-goal-binding
   disabled: true
-# DIAGNOSTIC ONLY (elimination): the inventory resolution contract fix is
-# landing separately (h2 f54fd536); until it reaches main this row is
-# disabled so the persona-route fix below can be exercised. Restore for
-# the final verification.
-- id: plugin-package-inventory-deepseek
-  disabled: true
 # The LLM title generation (base row id session-title-llm, first-prompt
 # variant) fires an auxiliary request from the root session that is outside
 # the project hierarchy; its refusal killed the first turn. Titles fall back
