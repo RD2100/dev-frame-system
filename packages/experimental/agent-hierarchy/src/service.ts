@@ -140,7 +140,7 @@ export class AgentHierarchy extends Service {
    * occupied worktrees reject. A persisted child whose Session is unavailable
    * requires recovery rather than replacement.
    * @param parent - Exact live delegating Agent with a durable role binding.
-   * @param request - Child role, task, plugin scope, and registered worktree.
+   * @param request - Child role plus required task, explicit plugin scope, and registered worktree.
    * @param options - Factory composition, model options, and cancellation signal.
    * @returns The published Agent and its durable binding.
    */
@@ -177,6 +177,9 @@ export class AgentHierarchy extends Service {
     }
     if (request.taskId === undefined || request.worktree === undefined) {
       throw new Error('agent-hierarchy: child requires a task and registered worktree')
+    }
+    if (request.pluginId === undefined) {
+      throw new Error('agent-hierarchy: child requires an explicit plugin scope')
     }
     const { taskId, worktree } = request
     if (request.cwd !== request.worktree.worktreePath) {

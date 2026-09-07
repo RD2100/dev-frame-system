@@ -129,8 +129,13 @@ it('rejects missing ownership and a mismatched worktree directory before persist
       .rejects.toThrow('requires a task and registered worktree')
     await expect(h.ctx.agentHierarchy.createChildAgent(parent, {
       cwd: h.root, role: 'lead', taskId: TaskId('task'),
+      pluginId: PluginId('plugin-a'),
       worktree: { worktreeId: 'fixture-tree' as BoundWorktree['worktreeId'], worktreePath: join(h.root, 'other') },
     })).rejects.toThrow('cwd must match')
+    await expect(h.ctx.agentHierarchy.createChildAgent(parent, {
+      cwd: join(h.root, 'unscoped'), role: 'lead', taskId: TaskId('unscoped'),
+      worktree: { worktreeId: 'unscoped-tree' as BoundWorktree['worktreeId'], worktreePath: join(h.root, 'unscoped') },
+    })).rejects.toThrow('explicit plugin scope')
     expect(h.ctx.agentBindings.list()).toHaveLength(1)
   } finally {
     await h.dispose()
@@ -144,6 +149,7 @@ it('reserves the child after publication is vetoed and rejects a replacement ret
     await h.ctx.agentBindings.bind({ agentId: parent.id, role: 'controller' })
     const request = {
       cwd: join(h.root, 'reserved'), role: 'lead' as const, taskId: TaskId('reserved-task'),
+      pluginId: PluginId('plugin-a'),
       worktree: { worktreeId: 'reserved-tree' as BoundWorktree['worktreeId'], worktreePath: join(h.root, 'reserved') },
     }
     const childId = SessionId('veto-child')

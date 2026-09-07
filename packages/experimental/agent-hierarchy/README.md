@@ -52,7 +52,7 @@ Tool executions are guarded automatically. Every non-tool creation entry (host s
 
 The evaluator permits a controller to create only a lead. It rejects requests for another controller or a worker; a lead creates workers only within its approved plugin scope. Returning an allowed decision does not create or bind an agent: the caller must enforce the decision before performing creation.
 
-`createChildAgent(parent, request, options)` validates the live parent, role, depth, task, and worktree ownership, then persists the binding during Agent factory setup before publication. The caller supplies a registry-validated worktree and setup that mounts the required preset. Matching parent/task retries return the live child; conflicting requests and occupied worktrees reject. A reserved child that is unavailable requires explicit recovery. The method activates the Agent without sending a prompt. Hosts may allocate its SessionID beforehand to configure the lead's approved plugin scopes.
+`createChildAgent(parent, request, options)` validates the live parent, role, depth, task, and worktree ownership, then persists the binding during Agent factory setup before publication. Every child requires an explicit plugin scope. The caller supplies a registry-validated worktree and setup that mounts the required preset. Matching parent/task retries return the live child; conflicting requests and occupied worktrees reject. A reserved child that is unavailable requires explicit recovery. The method activates the Agent without sending a prompt. Hosts may allocate its SessionID beforehand to configure the lead's approved plugin scopes.
 
 -----
 
