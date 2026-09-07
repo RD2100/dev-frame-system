@@ -26,9 +26,10 @@ import { requireNonEmpty, resolveCaller } from './authorization.ts'
 export const name = 'agent-dispatch'
 
 /** Plugin config. The formal bootstrap is explicit opt-in, so dispatch-only deployments load unchanged. */
-export const Config: z<{ bootstrap?: boolean; checksLedgerPath?: string }> = z.object({
+export const Config: z<{ bootstrap?: boolean; checksLedgerPath?: string; candidateScenarioPath?: string }> = z.object({
   bootstrap: z.boolean(),
   checksLedgerPath: z.string(),
+  candidateScenarioPath: z.string(),
 })
 
 /** Services required by the plugin; the hierarchy stack missing fails the load. */
@@ -111,7 +112,7 @@ function renderDispatchText(value: {
  * @param ctx - The plugin's context.
  * @param config - The schema-validated plugin config.
  */
-export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedgerPath?: string }): void {
+export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedgerPath?: string; candidateScenarioPath?: string }): void {
   // Constructing AgentDispatch mounts ctx.agentDispatch on this plugin
   // fiber, so the seam lives and dies with the plugin (HMR-safe by
   // construction). The formal host bootstrap is opt-in: deployments that
@@ -119,9 +120,44 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
   // loud when its authorities are missing.
   new AgentDispatch(ctx)
   if (config?.bootstrap === true) {
-    new AgentProjectRun(ctx, config.checksLedgerPath !== undefined
-      ? { checksLedgerPath: config.checksLedgerPath }
-      : {})
+    const runConfig: { checksLedgerPath?: string; candidateScenarioPath?: string } = {}
+    if (config.checksLedgerPath !== undefined) runConfig.checksLedgerPath = config.checksLedgerPath
+    if (config.candidateScenarioPath !== undefined) runConfig.candidateScenarioPath = config.candidateScenarioPath
+    // The controller stack is a dependency of the opt-in bootstrap face only:
+    // the sub-fiber `ctx.inject` establishes the injection context (a bare
+    // `new Service` only provides, it does not resolve static inject), and
+    // the service and tool die with it when the controller is unmounted.
+    // The default dispatch-only face carries zero controller dependency.
+    ctx.inject(['projectController'], (bootstrapCtx) => {
+      const run = new AgentProjectRun(bootstrapCtx, runConfig)
+      if (runConfig.candidateScenarioPath !== undefined) {
+        bootstrapCtx.tools.register(defineTool({
+          name: 'project_host_start',
+          description: 'Host bootstrap for the formal candidate chain: adopt the host-prepared worktrees, bind the calling session as the project controller, take the writer locks, open board admission, and verify the approved check digests against the shared ledger. Every capability input comes from the host-owned scenario file; this tool takes no arguments and must run before any task tool. Re-runnable after a restart to re-acquire the locks and confirm the persisted identity.',
+          parameters: {},
+          output: {
+            schema: { type: 'object', additionalProperties: false, properties: {
+              workspaceId: { type: 'string', required: true },
+              controllerSessionId: { type: 'string', required: true },
+              lifecycle: { type: 'string', required: true },
+              tasks: { type: 'array', required: true, items: { type: 'object', additionalProperties: false, properties: {
+                taskId: { type: 'string', required: true }, worktreeId: { type: 'string', required: true }, digest: { type: 'string', required: true }, coldLockHolder: { type: 'string' },
+              } } },
+            } },
+            render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
+          },
+          isConcurrencySafe: () => false,
+          async execute(_args, exec) {
+            if (exec.agent === undefined) {
+              throw new Error('project_host_start requires a calling agent (exec.agent was undefined)')
+            }
+            return await run.hostStart(exec.agent.id)
+          },
+          presentCall: () => ({ card: 'generic', title: 'Host bootstrap start' }),
+          presentResult: () => ({ card: 'generic' }),
+        }))
+      }
+    })
   }
 
   ctx.systemPrompt.section({

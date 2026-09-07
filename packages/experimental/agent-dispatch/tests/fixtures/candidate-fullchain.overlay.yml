@@ -27,9 +27,9 @@
   config:
     roleToolPolicies:
       controller:
-        inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'read_image', 'str_replace_editor', 'glob', 'grep', 'todo_write', 'worktree_create', 'worktree_list', 'worktree_status', 'agent_dispatch', 'project_task', 'project_integrate']"
+        inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'read_image', 'glob', 'grep', 'todo_write', 'agent_dispatch', 'project_host_start', 'project_task', 'project_integrate']"
       lead:
-        inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'read_image', 'str_replace_editor', 'glob', 'grep', 'todo_write', 'worktree_create', 'worktree_list', 'worktree_status', 'agent_dispatch', 'project_review']"
+        inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'read_image', 'glob', 'grep', 'todo_write', 'agent_dispatch', 'project_review']"
       worker:
         inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'glob', 'grep', 'project_deliver']"
     leadPluginScopes:
@@ -42,6 +42,7 @@
   config:
     bootstrap: true
     checksLedgerPath: !!js "process.env.DSH_CANDIDATE_HOME + '/checks-ledger.json'"
+    candidateScenarioPath: !!js "process.env.DSH_CANDIDATE_HOME + '/candidate-scenario.json'"
 
 - insert:
     # The board service the bootstrap and all task tools consume.
