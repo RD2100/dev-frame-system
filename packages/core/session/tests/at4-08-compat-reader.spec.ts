@@ -44,7 +44,7 @@ function header(id: string, version: number = SESSION_FORMAT_VERSION): SessionHe
 }
 
 /** Deep clone via the same lossless JSON the log itself must survive. */
-function jsonClone(value: unknown): unknown {
+function jsonClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value))
 }
 
