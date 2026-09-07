@@ -2,19 +2,21 @@
  * Host-assembly listener grading memory-surface degradations into per-task
  * `devframe/task-warning` session events. The grading input is explicit host
  * context declared per session — whether the running task requires memory for
- * acceptance — never a message dispatch mode. An optional-memory failure lands
- * exactly one warning event per task; a required-memory failure stays with the
- * raw `tool/result` error and the host's own fail path. The listener only
- * reads session events: it never writes message dispatch modes, and the memory
- * receipt stays the sole record of a successful save.
+ * acceptance — never a message dispatch mode. Every graded failure lands
+ * exactly one event per task carrying its grade: `complete-with-warning` for
+ * a task whose acceptance tolerates the degradation, `fail` for a task whose
+ * acceptance required the memory operation — the durable record the goal
+ * judgment consumes to refuse completion. The listener only reads session
+ * events: it never writes message dispatch modes, and the memory receipt
+ * stays the sole record of a successful save.
  * @module @deepseek-ai/dsh-experimental-devframe/task-warning-listener
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session, SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { TaskId } from './controller/goal-binding.ts'
-import { memoryWarningCode } from './events.ts'
-import type { DevFrameTaskWarningCode } from './events.ts'
+import { gradeMemoryFailure, memoryWarningCode } from './events.ts'
+import type { DevFrameMemoryGrading, DevFrameTaskWarningCode } from './events.ts'
 
 /** The explicit host context one task's memory grading is judged by. */
 export interface DevFrameTaskGradingDeclaration {
@@ -56,6 +58,7 @@ interface PendingWrite {
   readonly taskId: TaskId
   readonly warning: DevFrameTaskWarningCode
   readonly tool: string
+  readonly grade: DevFrameMemoryGrading
 }
 
 /** The deferred appends of one session, cancellable until their drain runs. */
@@ -83,7 +86,10 @@ function memoryToolName(session: Session, event: SessionEvent<'tool/result'>): s
 
 /**
  * Plugin entry: provide the grading declaration seam and fold memory tool
- * failures into at most one `devframe/task-warning` per task. Appends are
+ * failures into at most one graded `devframe/task-warning` per task — the
+ * grade (`complete-with-warning` for optional memory, `fail` for required)
+ * rides the event so the goal judgment can refuse a required task's completion
+ * without re-deriving the runtime declaration. Appends are
  * deferred past the current macrotask so the listener never appends while the
  * store is still publishing the `tool/result` event that triggered it. Dedup
  * reserves the task key at enqueue time — two failures drained together still
@@ -155,7 +161,7 @@ export function apply(ctx: Context): () => void {
         releaseBatch(sessionId, batch)
         return
       }
-      batch.session.append('devframe/task-warning', { version: 1, taskId: write.taskId, warning: write.warning, tool: write.tool })
+      batch.session.append('devframe/task-warning', { version: 1, taskId: write.taskId, warning: write.warning, tool: write.tool, grade: write.grade })
       reserved.delete(warnKey(sessionId, write.taskId))
     }
   }
@@ -173,7 +179,9 @@ export function apply(ctx: Context): () => void {
       if (event.type !== 'tool/result') return
       const sessionId = String(session.id)
       const grading = declared.get(sessionId)
-      if (grading === undefined || grading.memory !== 'optional') return
+      if (grading === undefined) return
+      const grade = gradeMemoryFailure({ memory: grading.memory, code: event.data.error?.code })
+      if (grade === undefined) return
       const warning = memoryWarningCode(event.data.error?.code)
       if (warning === undefined) return
       const tool = memoryToolName(session, event)
@@ -192,7 +200,7 @@ export function apply(ctx: Context): () => void {
           drainSession(sessionId)
         }, 0))
       }
-      batch.writes.push({ taskId: grading.taskId, warning, tool })
+      batch.writes.push({ taskId: grading.taskId, warning, tool, grade })
     }),
     ctx.on('session/disposed', (session: Session) => {
       const sessionId = String(session.id)

@@ -136,6 +136,7 @@ describe('AT3-07 explicit-context grading', () => {
       taskId: 'task-a',
       warning: 'MEMORY_UNAVAILABLE',
       tool: 'memory_append',
+      grade: 'complete-with-warning',
     })
     expect(gradeMemoryFailure({ memory: 'optional', code: 'MEMORY_UNAVAILABLE' })).toBe('complete-with-warning')
     expect(session.snapshotEvents().some(event => event.type === 'memory/receipt'), 'A2: a failed save never commits a receipt').toBe(false)
@@ -149,7 +150,7 @@ describe('AT3-07 explicit-context grading', () => {
     expect(taskWarnings(session)).toHaveLength(1)
   })
 
-  it('A3+counter-example: a required-memory task in the SAME dispatch shape warns nothing and fails', async () => {
+  it('A3+counter-example: a required-memory task in the SAME dispatch shape lands the fail grade', async () => {
     const { ctx, session, root } = await boot()
     // Identical message dispatch shape as A1 — only the explicit host
     // requirement context differs; the mode face is never consulted.
@@ -161,11 +162,14 @@ describe('AT3-07 explicit-context grading', () => {
     appendToolResult(session, 1, 'call-b1', callSeqB1, outcome)
     await drain()
 
-    expect(taskWarnings(session), 'no warning vocabulary for a required-memory failure').toHaveLength(0)
-    expect(gradeMemoryFailure({ memory: 'required', code: 'MEMORY_UNAVAILABLE' })).toBe('fail')
+    // The fail grade is durable on the event — the record the goal judgment
+    // consumes to refuse this task's completion.
+    const warnings = taskWarnings(session)
+    expect(warnings, 'exactly one graded record for a required-memory failure').toHaveLength(1)
+    expect(warnings[0]!.data).toMatchObject({ taskId: 'task-b', warning: 'MEMORY_UNAVAILABLE', tool: 'memory_append', grade: 'fail' })
     expect(session.snapshotEvents().some(event => event.type === 'memory/receipt')).toBe(false)
 
-    // An undeclared session grades nothing either — the conservative default.
+    // An undeclared session grades nothing — the conservative default.
     const undeclared = ctx.sessions.create(undefined, { meta: { cwd: root } })
     const callSeqC1 = appendToolCall(undeclared, 1, 'call-c1', 'memory_append')
     const other = await dispatchMemoryAppend(ctx, undeclared, 'call-c1', 'session-c#event-1')
@@ -273,14 +277,24 @@ describe('AT3-07 explicit-context grading', () => {
       taskId: 'task-a',
       warning: 'MEMORY_UNAVAILABLE',
       tool: 'memory_append',
+      grade: 'fail',
     })
     expect(String(decoded.taskId)).toBe('task-a')
+    expect(decoded.grade).toBe('fail')
     expect(() => decodeDevFramePayload('devframe/task-warning', {
       version: 1,
       taskId: 'task-a',
-      // A hostile log row cannot widen the vocabulary past the closed union.
       warning: 'MEMORY_INVALID_REQUEST',
       tool: 'memory_append',
+      grade: 'fail',
+    })).toThrow()
+    expect(() => decodeDevFramePayload('devframe/task-warning', {
+      version: 1,
+      taskId: 'task-a',
+      warning: 'MEMORY_UNAVAILABLE',
+      tool: 'memory_append',
+      // A hostile log row cannot widen the grading past the closed union.
+      grade: 'silently-complete',
     })).toThrow()
   })
 })

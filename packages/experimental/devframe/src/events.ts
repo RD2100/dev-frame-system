@@ -267,7 +267,11 @@ export type DevFrameTaskWarningCode =
  * Host-graded degradation record for one task's memory surface. It records
  * only degradations: a successful save is recorded solely by the memory
  * receipt (`memory/receipt`) and is never duplicated here. At most one event
- * per task lands in a session log.
+ * per task lands in a session log. The grade is the decision the host's
+ * explicit requirement context produced: `complete-with-warning` for a task
+ * whose acceptance tolerates the degradation, `fail` for a task whose
+ * acceptance required the memory operation — the completion admission
+ * consumes the latter as the task's real failure evidence.
  */
 export interface DevFrameTaskWarningEventData {
   /** Payload schema version. */
@@ -278,6 +282,8 @@ export interface DevFrameTaskWarningEventData {
   readonly warning: DevFrameTaskWarningCode
   /** The memory tool whose execution failed. */
   readonly tool: string
+  /** The grading the host's explicit requirement context produced. */
+  readonly grade: DevFrameMemoryGrading
 }
 
 /** DevFrame event names merged into the native session log vocabulary. */
@@ -304,7 +310,7 @@ declare module '@deepseek-ai/dsh-session/types' {
     'devframe/review': DevFrameReviewEventData
     /** Whole lifecycle observation used to recover stop and writer ownership state. */
     'devframe/lifecycle': DevFrameLifecycleEventData
-    /** Host-graded degradation of one task's optional memory surface; at most one per task. */
+    /** Host-graded degradation of one task's memory surface, carrying the grading the explicit requirement context produced; at most one per task. */
     'devframe/task-warning': DevFrameTaskWarningEventData
   }
 }
@@ -562,6 +568,7 @@ const taskWarningEventSchema = z.object({
   taskId: taskIdSchema,
   warning: z.enum(['MEMORY_UNAVAILABLE', 'MEMORY_WRITE_FAILED', 'MEMORY_RECEIPT_FAILED', 'MEMORY_APPEND_DISABLED']),
   tool: trimmedString,
+  grade: z.enum(['complete-with-warning', 'fail']),
 }).strict() as z.ZodType<DevFrameTaskWarningEventData>
 
 /**
