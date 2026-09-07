@@ -10,6 +10,13 @@ import { writeFileSync } from 'node:fs'
 /** Loader plugin name. */
 export const name = 'v14-llmargs-replay'
 
+/** Services the replay driver needs. */
+export const inject = [
+  'agents',
+  'sessions',
+  'sessionController',
+]
+
 /** Replay evidence path and single-shot task text. */
 export interface ReplayConfig {
   /** JSONL evidence file (absolute). */
@@ -23,7 +30,7 @@ function log(path: string, entry: Record<string, unknown>): void {
 
 /** Activate: create one session under the standard preset and deliver a task
  * whose only sensible action is one small tool call, then await idle. */
-export function apply(ctx: import('@deepseek-ai/cordis').Context, config: ReplayConfig): void {
+export function apply(ctx: any, config: ReplayConfig): void {
   void (async () => {
     try {
       await ctx.get('loader')?.await()
