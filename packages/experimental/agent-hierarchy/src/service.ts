@@ -16,6 +16,7 @@ import { randomUUID } from 'node:crypto'
 import type { Agent, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import type { AgentBindingRecord, AgentRole, CreationIntent } from '@deepseek-ai/dsh-experimental-project-contracts'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
 import { isAgentRole } from '@deepseek-ai/dsh-experimental-project-contracts'
 import type { CreateBoundSessionRequest } from '@deepseek-ai/dsh-experimental-session-identity'
 import { delegationDepthOf } from '@deepseek-ai/dsh-subagent'
@@ -154,11 +155,31 @@ export class AgentHierarchy extends Service {
     return prepared
   }
 
+  /**
+   * Recover one reserved child without replacing its identity or replaying a task.
+   * Existing durable history is resumed; only a missing durable log permits
+   * fresh publication under the same reserved identity.
+   * @param parent - Exact live parent recorded by the reservation.
+   * @param request - Original role, plugin, task, cwd and worktree binding.
+   * @param options - Reserved Session identity and explicit host setup and route.
+   * @returns The recovered child and its unchanged durable binding.
+   */
+  async recoverChildAgent(
+    parent: Agent,
+    request: CreateChildAgentRequest,
+    options: CreateChildAgentOptions & { sessionId: SessionId },
+  ): Promise<CreatedChildAgent> {
+    const prepared = this.preparationTail.then(() => this.createChildAgentSerial(parent, request, options, true))
+    this.preparationTail = prepared.then(() => undefined, () => undefined)
+    return prepared
+  }
+
   /** Serialize ownership lookup and durable creation so duplicate callers cannot reserve two children. */
   private async createChildAgentSerial(
     parent: Agent,
     request: CreateChildAgentRequest,
     options: CreateChildAgentOptions,
+    recover = false,
   ): Promise<CreatedChildAgent> {
     if (this.disposed || this.ctx.agents.get(parent.id) !== parent) {
       throw new Error('agent-hierarchy: child preparation requires an exact live parent')
@@ -198,14 +219,18 @@ export class AgentHierarchy extends Service {
         throw new Error('agent-hierarchy: task already has a different child binding')
       }
       const agent = this.ctx.agents.get(existing.sessionId)
-      if (agent === undefined) throw new Error('agent-hierarchy: reserved child requires session recovery')
-      return { agent, record: existing }
+      if (agent !== undefined) return { agent, record: existing }
+      if (!recover) throw new Error('agent-hierarchy: reserved child requires session recovery')
+    } else if (recover) {
+      throw new Error('agent-hierarchy: recovery requires an existing child reservation')
     }
-    if (records.some(record => record.worktreeId === worktree.worktreeId || record.worktreePath === request.cwd)) {
+    if (existing === undefined
+      && records.some(record => record.worktreeId === worktree.worktreeId || record.worktreePath === request.cwd)) {
       throw new Error('agent-hierarchy: worktree already belongs to another session')
     }
     let record: AgentBindingRecord | undefined
-    const handle = await this.ctx.agents.create({
+    let setupStarted = false
+    const factoryOptions = {
       sessionId: options.sessionId ?? SessionId(`session-${randomUUID()}`),
       ...options,
       meta: {
@@ -215,8 +240,13 @@ export class AgentHierarchy extends Service {
         delegationDepth: depth,
       },
       setup: async (childCtx) => {
+        setupStarted = true
         const child = childCtx.agent
         if (child === undefined) throw new Error('agent-hierarchy: factory setup has no Agent')
+        if (child.session.header.cwd !== request.cwd || child.session.header.parentSession !== parent.id
+          || child.session.header.delegationDepth !== depth) {
+          throw new Error('agent-hierarchy: recovered Session header conflicts with its reservation')
+        }
         const commit = await options.setup?.(childCtx)
         record = await this.ctx.agentBindings.bindPreparedSession(child.session, {
           role: request.role,
@@ -231,7 +261,23 @@ export class AgentHierarchy extends Service {
           commit?.commit()
         } }
       },
-    })
+    } satisfies CreateAgentOptions
+    const publish = async () => {
+      if (existing === undefined) return await this.ctx.agents.create(factoryOptions)
+      try {
+        return await this.ctx.agents.resume({
+          resumeSessionId: existing.sessionId,
+          ...(options.agentOptions === undefined ? {} : { agentOptions: options.agentOptions }),
+          ...(options.signal === undefined ? {} : { signal: options.signal }),
+          setup: factoryOptions.setup,
+        })
+      } catch (error) {
+        if (setupStarted || !(error instanceof SessionPersistenceNotFoundError)
+          || error.sessionId !== existing.sessionId) throw error
+      }
+      return await this.ctx.agents.create({ ...factoryOptions, sessionId: existing.sessionId })
+    }
+    const handle = await publish()
     if (record === undefined) throw new Error('agent-hierarchy: factory published without completing binding setup')
     return { agent: handle.agent, record }
   }

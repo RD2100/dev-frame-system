@@ -17,6 +17,8 @@ Status: implemented
 
 `createChildAgent` 在调用 Agent 工厂前执行此策略：总控只能创建组长，组长只能创建获批范围内的 Worker，Worker 不得创建代理。它在 setup 中通过 `bindPreparedSession` 于发布前持久化身份，Session 的创建和销毁仍由工厂拥有。宿主提供明确的插件范围、已注册工作树和 preset 装配；缺少插件范围时拒绝创建。同一父会话和任务的重试返回已有活跃子 Agent；身份冲突或已保留但不可用的子 Agent 要求显式恢复。这扩展了 [Agent 生命周期所有权契约](2026-06-18-agent-lifecycle-and-ownership-contracts.zh.md)，不改变工厂发布规则。
 
+发布被否决时，可能保留绑定和工作树锁，却没有 Session 日志。`recoverChildAgent` 与创建共用队列，先校验原保留记录，再按原 ID 恢复。只有在宿主 setup 开始前，持久化层针对该 ID 返回带类型的不存在错误，才允许按原 ID 创建。此边界保留损坏历史，防止把 setup 失败误判成日志缺失；任务投递仍由宿主单独负责。
+
 角色策略是三态查找表（`controller`/`lead`/`worker`）；退役 `reviewer` 的语义并入 lead 与 worker 的 deny 面，`send_message` 有意保留在两面之外——它是 worker 的授权汇报通道。每角色的 inherited allow 清单来自 zod 校验的宿主配置，并按作用域安装为限制（首次执法时惰性安装、经 `agent/created`、以及由 init 时对已恢复绑定的冷恢复扫描）；它们只是纵深防御——守卫是唯一执法权威，因此本包不发布 invariant companion。冷恢复不需要注册表事件：init 扫描覆盖仍活的已恢复代理，`agent/created` 覆盖之后的代理，守卫的按执行查找无论时机都覆盖一切。
 
 深度预算 2、deny 面与封闭角色联合是安全不变量，保持固定；部署可变的选项（工具名、每角色工具清单、每 lead 获批范围）是经校验的 `Config` 字段。
