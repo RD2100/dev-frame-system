@@ -75,8 +75,8 @@ export function approvedChecksFor(worktreePath: string): DevFrameRequiredChecksC
  * @param ledgerPath - The single checks ledger every face shares.
  */
 export async function prepareCandidateScenario(root: string, ledgerPath: string): Promise<PreparedScenario> {
-  const anchorPath = join(root, 'anchor')
-  await mkdir(anchorPath, { recursive: true })
+  await mkdir(join(root, 'anchor'), { recursive: true })
+  const anchorPath = await realpath(join(root, 'anchor'))
   await scenarioGit(root, 'init', '-b', 'main', anchorPath)
   await scenarioGit(anchorPath, 'config', 'user.name', 'Candidate Fullchain')
   await scenarioGit(anchorPath, 'config', 'user.email', 'candidate-fullchain@test.invalid')
@@ -86,11 +86,13 @@ export async function prepareCandidateScenario(root: string, ledgerPath: string)
   const store = new FileRequiredChecksConfigStore({ path: ledgerPath })
   const tasks: PreparedTask[] = []
   for (const taskId of ['task-a', 'task-b'] as const) {
-    const worktreePath = await realpath(join(root, `wt-${taskId}`))
+    const worktreePath = join(root, `wt-${taskId}`)
     await scenarioGit(anchorPath, 'worktree', 'add', worktreePath, '-b', `feature/${taskId}`)
+    // git created the directory, so the realpath canon now applies.
+    const canonical = await realpath(worktreePath)
     // Sequential saves: the shared ledger file admits one writer at a time.
-    const digest = await store.save(approvedChecksFor(worktreePath))
-    tasks.push({ taskId, worktreePath, digest })
+    const digest = await store.save(approvedChecksFor(canonical))
+    tasks.push({ taskId, worktreePath: canonical, digest })
   }
   return { anchorPath, tasks }
 }
@@ -137,6 +139,28 @@ export function expectedDigests(prepared: PreparedScenario): Record<string, stri
   return Object.fromEntries(prepared.tasks.map(task => [
     task.taskId, String(requiredChecksDigest(approvedChecksFor(task.worktreePath))),
   ]))
+}
+
+/**
+ * Write the host-owned scenario file the `project_host_start` tool consumes:
+ * capabilities only (anchor, worktrees, digests, approved checks) — the
+ * calling model supplies none of them.
+ * @param home - The isolated home hosting the file.
+ * @param prepared - The prepared scenario.
+ */
+export async function writeScenarioFile(home: string, prepared: PreparedScenario): Promise<string> {
+  const scenario = {
+    anchorPath: prepared.anchorPath,
+    tasks: prepared.tasks.map(task => ({
+      taskId: task.taskId,
+      worktreePath: task.worktreePath,
+      digest: String(task.digest),
+      checks: approvedChecksFor(task.worktreePath),
+    })),
+  }
+  const scenarioPath = join(home, 'candidate-scenario.json')
+  await writeFile(scenarioPath, JSON.stringify(scenario, null, 2), 'utf8')
+  return scenarioPath
 }
 
 export { TaskId }

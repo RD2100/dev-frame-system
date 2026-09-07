@@ -24,16 +24,22 @@
 
 import z from '@deepseek-ai/schemastery'
 import { Service, type Context } from '@deepseek-ai/cordis'
+import { readFile } from 'node:fs/promises'
 import { TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import { WorktreeLockHolder } from '@deepseek-ai/dsh-worktree-registry'
 import {
   FileRequiredChecksConfigStore,
+  RequiredChecksDigest,
   decodeRequiredChecksConfig,
 } from '@deepseek-ai/dsh-experimental-devframe'
 import type {
   DevFrameRequiredChecksConfig,
   RequiredChecksConfigStore,
-  RequiredChecksDigest,
 } from '@deepseek-ai/dsh-experimental-devframe'
+import type {} from '@deepseek-ai/dsh-session-projection'
+import type {} from '@deepseek-ai/dsh-workspace'
+import type {} from '@deepseek-ai/dsh-worktree-registry'
 // Loads the controller's Context augmentation so `ctx.projectController` types here.
 import type {} from '@deepseek-ai/dsh-experimental-project-controller'
 
@@ -51,6 +57,10 @@ export type ProjectRunErrorCode =
   | 'PROJECT_RUN_ADMISSION_CLOSED'
   /** The task is not on the board; the formal chain must plan it first. */
   | 'PROJECT_RUN_TASK_UNKNOWN'
+  /** No host scenario file is configured or it is unreadable. */
+  | 'PROJECT_RUN_SCENARIO_UNAVAILABLE'
+  /** The host scenario does not match the prepared ledger contents. */
+  | 'PROJECT_RUN_SCENARIO_MISMATCH'
 
 /** Structured refusal of a bootstrap act; never a fabricated approval. */
 export class ProjectRunError extends Error {
@@ -77,6 +87,43 @@ export interface ProjectRunConfig {
    * to the SAME file.
    */
   readonly checksLedgerPath?: string
+  /**
+   * Path of the host-owned candidate scenario file the `project_host_start`
+   * tool consumes. Capabilities (anchor, worktrees, digests) come from this
+   * file — never from model arguments. Unset, the tool is not registered.
+   */
+  readonly candidateScenarioPath?: string
+}
+
+/** One host-owned task entry of the candidate scenario file. */
+export interface CandidateScenarioTask {
+  /** The task id the entry serves. */
+  readonly taskId: string
+  /** The pre-built Worker worktree path, normalized. */
+  readonly worktreePath: string
+  /** The digest the prepared ledger holds for this task's checks. */
+  readonly digest: string
+  /** The approved checks the digest must resolve to. */
+  readonly checks: DevFrameRequiredChecksConfig
+}
+
+/** The host-owned candidate scenario file's shape. */
+export interface CandidateScenario {
+  /** The repository the pre-built worktrees hang off. */
+  readonly anchorPath: string
+  readonly tasks: readonly CandidateScenarioTask[]
+}
+
+/** What one successful host start established. */
+export interface CandidateHostReceipt {
+  /** The adopted workspace id (stable across restarts — persisted rows). */
+  readonly workspaceId: string
+  /** The controller session that now holds the binding and the locks. */
+  readonly controllerSessionId: string
+  /** Per task: the worktree row id and the verified digest. */
+  readonly tasks: { taskId: string; worktreeId: string; digest: string; coldLockHolder?: string }[]
+  /** The board lifecycle state after the start. */
+  readonly lifecycle: string
 }
 
 /** One approved task checkset: the task it serves and the approved checklist. */
@@ -93,10 +140,11 @@ export interface TaskChecksApproval {
  * it before the chain runs.
  */
 export class AgentProjectRun extends Service {
-  static inject = ['projectController']
+  static inject = ['projectController', 'agentBindings', 'workspaceRegistry', 'worktreeRegistry']
 
   static Config: z<ProjectRunConfig> = z.object({
     checksLedgerPath: z.string(),
+    candidateScenarioPath: z.string(),
   })
 
   /** Validated config; `checksLedgerPath` may be absent (honest refusals then). */
@@ -174,5 +222,80 @@ export class AgentProjectRun extends Service {
       this.store = new FileRequiredChecksConfigStore({ path: this.config.checksLedgerPath })
     }
     return this.store
+  }
+
+  /**
+   * The candidate host bootstrap: adopt the host-prepared worktrees, bind the
+   * calling session as the project controller, take the worktrees' writer
+   * locks, open board admission, and verify every task's approved digest
+   * against the shared ledger. All capability inputs come from the host-owned
+   * scenario file — the calling model supplies none. Re-entrant after a
+   * restart: the persisted workspace and worktree rows keep their ids, and
+   * the locks are re-acquired for the (possibly new) controller session.
+   * @param controllerSessionId - The calling session, bound as controller.
+   * @returns the established identity receipt.
+   */
+  async hostStart(controllerSessionId: SessionId): Promise<CandidateHostReceipt> {
+    if (this.config.candidateScenarioPath === undefined) {
+      throw new ProjectRunError(
+        'no candidateScenarioPath is configured; the host bootstrap face is unavailable',
+        'PROJECT_RUN_SCENARIO_UNAVAILABLE',
+      )
+    }
+    const scenario = JSON.parse(await readFile(this.config.candidateScenarioPath, 'utf8')) as CandidateScenario
+    if (scenario.tasks.length === 0) {
+      throw new ProjectRunError(
+        `candidate scenario '${this.config.candidateScenarioPath}' lists no tasks`,
+        'PROJECT_RUN_SCENARIO_MISMATCH',
+      )
+    }
+
+    // The workspace row for the anchor persists across restarts; adopt the
+    // pre-built worktrees once and reuse the registered rows afterwards.
+    const known = this.ctx.workspaceRegistry.list().find(row => row.path === scenario.anchorPath)
+      ?? await this.ctx.workspaceRegistry.create(scenario.anchorPath)
+    await this.ctx.worktreeRegistry.reconcile(known.id, { adoptUnregistered: true })
+    const holder = WorktreeLockHolder(controllerSessionId)
+    const tasks: CandidateHostReceipt['tasks'] = []
+    for (const task of scenario.tasks) {
+      // The digest must resolve to exactly the host-approved checks.
+      const digest = RequiredChecksDigest(task.digest)
+      const approved = await this.requireStore().load(digest)
+      if (JSON.stringify(approved) !== JSON.stringify(decodeRequiredChecksConfig(task.checks))) {
+        throw new ProjectRunError(
+          `task '${task.taskId}' digest '${task.digest}' does not resolve to the scenario's approved checks`,
+          'PROJECT_RUN_SCENARIO_MISMATCH',
+        )
+      }
+      const row = this.ctx.worktreeRegistry.list(known.id).find(entry => entry.path === task.worktreePath)
+      if (row === undefined) {
+        throw new ProjectRunError(
+          `task '${task.taskId}' worktree '${task.worktreePath}' is not registered under the adopted workspace`,
+          'PROJECT_RUN_SCENARIO_MISMATCH',
+        )
+      }
+      // One worktree has one writer. After a cold restart the persisted lock
+      // still names the previous controller; the lock row is the durable
+      // identity evidence, so the receipt carries it instead of stealing it.
+      // Stealing needs the holder-resume face and is out of this service's
+      // authority.
+      let coldLockHolder: string | undefined
+      await this.ctx.worktreeRegistry.bind(row.id, holder).catch((error: unknown) => {
+        if ((error as { code?: string }).code !== 'already-locked') throw error
+        coldLockHolder = String(row.lockedBy)
+      })
+      tasks.push({ taskId: task.taskId, worktreeId: String(row.id), digest: String(digest), ...(coldLockHolder !== undefined ? { coldLockHolder } : {}) })
+    }
+    await this.ctx.agentBindings.bind({
+      agentId: controllerSessionId,
+      role: 'controller',
+    })
+    const admission = this.startProject()
+    return {
+      workspaceId: String(known.id),
+      controllerSessionId: String(controllerSessionId),
+      tasks,
+      lifecycle: String(admission),
+    }
   }
 }

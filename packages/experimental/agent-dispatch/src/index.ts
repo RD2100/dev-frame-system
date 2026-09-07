@@ -19,5 +19,12 @@ export type { BriefingAckFold, DispatchAckState, DispatchTaskAck } from './ack.t
 export { AgentDispatch } from './service.ts'
 export type { DispatchAgentOptions, DispatchedIdentity, RecoverDispatchAgentOptions } from './service.ts'
 export { AgentProjectRun, ProjectRunError } from './run.ts'
-export type { ProjectRunConfig, ProjectRunErrorCode, TaskChecksApproval } from './run.ts'
+export type {
+  CandidateHostReceipt,
+  CandidateScenario,
+  CandidateScenarioTask,
+  ProjectRunConfig,
+  ProjectRunErrorCode,
+  TaskChecksApproval,
+} from './run.ts'
 export { name, inject, Config, apply, TOOL_NAMES } from './consumer.ts'

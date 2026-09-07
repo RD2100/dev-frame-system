@@ -10,7 +10,7 @@
 
 import type { ChildProcess } from 'node:child_process'
 import { spawn } from 'node:child_process'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
@@ -19,6 +19,7 @@ import { request as httpRequest } from 'node:http'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { startWireReplayServer } from './fixtures/wire-replay-server.ts'
+import { expectedDigests, prepareCandidateScenario, writeScenarioFile } from './fixtures/candidate-host.ts'
 
 const REPO_ROOT = fileURLToPath(new URL('../../../..', import.meta.url))
 const DSH_SOURCE_BIN = join(REPO_ROOT, 'apps/cli/src/bin.ts')
@@ -185,7 +186,7 @@ function postRpc(port: number, host: string, cookie: string, method: string, pay
 async function expectCandidateRowsActive(running: RunningWeb): Promise<void> {
   const url = new URL(running.launchUrl)
   const cookie = await exchangeLaunchCookie(running.launchUrl)
-  const response = await postRpc(url.port, url.host, cookie, 'pluginInventory/list')
+  const response = await postRpc(Number(url.port), url.host, cookie, 'pluginInventory/list')
   expect(response.status).toBe(200)
   const parsed = JSON.parse(response.body) as {
     type: string
@@ -226,14 +227,14 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       first = undefined
       // A graceful stop on Windows reports signal termination (SIGTERM); a
       // POSIX teardown reports the exit code. Either way the process stopped
-      // on request — the outcome is recorded, never assumed.
+      // on request: the outcome is recorded, never assumed.
       expect(
         stop.signal === 'SIGTERM' || stop.exitCode === 0 || stop.exitCode === 1,
         `stop outcome ${JSON.stringify(stop)}`,
       ).toBe(true)
 
       // Second boot on the SAME home: the restart face the chain's controlled
-      // restart rides — same home, same patches, fresh process.
+      // restart rides: same home, same patches, fresh process.
       second = await startCandidateWeb(root, dshHome)
       const secondUrl = new URL(second.launchUrl)
       expect(Number(secondUrl.port)).not.toBe(3080)
@@ -249,7 +250,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
     }
   })
 
-  // Stage 2a: the session RPC envelope per the smoke-real remoteRpc helper —
+  // Stage 2a: the session RPC envelope per the smoke-real remoteRpc helper:
   // payload wraps the method args, and args carries { request: {...} }.
   it('drives a session turn over the wire-level replay lane through the real RPC face', { timeout: 420_000 }, async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-candidate-fullchain-drive-'))
@@ -271,7 +272,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       const url = new URL(running.launchUrl)
       const cookie = await exchangeLaunchCookie(running.launchUrl)
 
-      const created = await postRpc(url.port, url.host, cookie, 'session/create', { args: { request: {} } })
+      const created = await postRpc(Number(url.port), url.host, cookie, 'session/create', { args: { request: {} } })
       expect(created.status, `session/create status; body=${redact(created.body)}`).toBe(200)
       const createdValue = (JSON.parse(created.body) as { result?: { value?: { sessionId?: string } } }).result?.value
       if (createdValue?.sessionId === undefined) {
@@ -280,7 +281,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       const sessionId = createdValue.sessionId
 
       const prompt = 'candidate-driving-probe: reply with the marker and stop.'
-      const prompted = await postRpc(url.port, url.host, cookie, 'session/prompt', { args: {
+      const prompted = await postRpc(Number(url.port), url.host, cookie, 'session/prompt', { args: {
         request: { requestId: randomUUID(), sessionId, mode: 'queue', content: [{ type: 'text', text: prompt }] },
       } })
       expect(prompted.status, `session/prompt status; body=${redact(prompted.body)}`).toBe(200)
@@ -306,5 +307,125 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       if (running !== undefined) await stopCandidateWeb(running)
       await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 25 })
     }
+  })
+
+  it('performs the host bootstrap through a replayed turn and re-establishes the same identity after restart', { timeout: 420_000 }, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-candidate-fullchain-host-'))
+    const dshHome = join(root, '.dsh')
+    await mkdir(dshHome, { recursive: true })
+    // Host preparation per the digest wiring ruling: pre-built real
+    // worktrees, sequential digest saves into the shared ledger, the
+    // host-owned scenario file, and the approveTaskChecks cross-check.
+    const prepared = await prepareCandidateScenario(root, join(dshHome, 'checks-ledger.json'))
+    await writeScenarioFile(dshHome, prepared)
+    const expected = expectedDigests(prepared)
+    for (const task of prepared.tasks) {
+      expect(String(task.digest), `digest cross-check for ${task.taskId}`).toBe(expected[task.taskId])
+    }
+
+    const hostScript = [{
+      needle: 'host-bootstrap-probe',
+      turns: [
+        { toolCalls: [{ name: 'project_host_start', arguments: {} }] },
+        { text: 'HOST_BOOTSTRAP_OK' },
+      ],
+    }]
+
+    /** Extract the host receipt the wire carried in the tool result. */
+    function receiptFrom(text: string): { workspaceId: string; worktreeIds: string[]; controllerSessionId?: string } {
+      // The receipt rides inside the tool message's string content, so the
+      // body serialization escapes its quotes; unescape before matching.
+      const flat = text.replaceAll('\\"', '"')
+      const workspaceId = /"workspaceId":"([^"]+)"/u.exec(flat)?.[1]
+      if (workspaceId === undefined) throw new Error(`no host receipt in wire body: ${redact(flat.slice(0, 600))}`)
+      const worktreeIds = [...flat.matchAll(/"worktreeId":"([^"]+)"/gu)].map(match => match[1]!)
+      const controllerSessionId = /"controllerSessionId":"([^"]+)"/u.exec(flat)?.[1]
+      return { workspaceId, worktreeIds, ...(controllerSessionId !== undefined ? { controllerSessionId } : {}) }
+    }
+
+    /** Unwrap one RPC response: HTTP 200 is not success until result.ok says so. */
+    function unwrapRpc(name: string, body: string): unknown {
+      const parsed = JSON.parse(body) as { result?: { ok?: boolean; value?: unknown; error?: { code?: string; message?: string } } }
+      const result = parsed.result
+      if (result === undefined) throw new Error(`${name} returned no result envelope; body=${redact(body)}`)
+      if (result.ok !== true) throw new Error(`${name} refused: ${JSON.stringify(result.error ?? result)}; body=${redact(body)}`)
+      return result.value
+    }
+
+    /** Drive one host-bootstrap turn; resume the recorded session on restart. */
+    async function driveHostTurn(replay: Awaited<ReturnType<typeof startWireReplayServer>>, resumeSessionId?: string): Promise<{ sessionId: string; receipt: { workspaceId: string; worktreeIds: string[]; controllerSessionId?: string } }> {
+      const running = await startCandidateWeb(root, dshHome, {
+        DEEPSEEK_API_KEY: 'wire-replay-key',
+        DEEPSEEK_BASE_URL: replay.baseURL,
+      })
+      try {
+        const url = new URL(running.launchUrl)
+        const cookie = await exchangeLaunchCookie(running.launchUrl)
+        let sessionId = resumeSessionId
+        if (sessionId === undefined) {
+          const created = await postRpc(Number(url.port), url.host, cookie, 'session/create', { args: { request: {} } })
+          sessionId = (unwrapRpc('session/create', created.body) as { sessionId: string }).sessionId
+        } else {
+          // The restart leg first verifies the persisted session registry
+          // still carries the recorded controller identity.
+          const listed = await postRpc(Number(url.port), url.host, cookie, 'session/list', { args: { _request: {} } })
+          const listValue = JSON.stringify(unwrapRpc('session/list', listed.body))
+          expect(listValue, `session/list after restart must carry ${sessionId}`).toContain(sessionId)
+        }
+        const prompt = 'host-bootstrap-probe: start the host.'
+        const prompted = await postRpc(Number(url.port), url.host, cookie, 'session/prompt', { args: {
+          request: { requestId: randomUUID(), sessionId, mode: 'queue', content: [{ type: 'text', text: prompt }] },
+        } })
+        expect(prompted.status, `session/prompt status; body=${redact(prompted.body)}`).toBe(200)
+        unwrapRpc('session/prompt', prompted.body)
+        // The web session also fires a title-generation request through the
+        // same lane; scan every captured body for the receipt instead of
+        // assuming request positions.
+        for (let tick = 0; tick < 600; tick++) {
+          const hit = replay.requests.map(request => JSON.stringify(request.body)).find(text => text.includes('admission_open'))
+          if (hit !== undefined) return { sessionId, receipt: receiptFrom(hit) }
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+        throw new Error(`wire replay lane saw ${replay.requests.length} requests in 60s, none carrying the host receipt; tool messages: ${
+          redact(replay.requests.map(request => JSON.stringify(request.body)).filter(text => text.includes('"role":"tool"')).map(text => {
+            const at = text.indexOf('"role":"tool"')
+            return text.slice(at, at + 400)
+          }).join(' | ') || 'none')
+        }\n${redact(running.output())}`)
+      } finally {
+        await stopCandidateWeb(running)
+      }
+    }
+
+    const first = await startWireReplayServer(hostScript)
+    let firstReceipt: { workspaceId: string; worktreeIds: string[] }
+    let controllerSessionId: string
+    try {
+      const driven = await driveHostTurn(first)
+      controllerSessionId = driven.sessionId
+      firstReceipt = driven.receipt
+      expect(firstReceipt.worktreeIds.length, `receipt ${JSON.stringify(firstReceipt)}`).toBe(2)
+    } catch (error) {
+      throw new Error(`${error instanceof Error ? error.message : String(error)}`, { cause: error })
+    } finally {
+      await first.close()
+    }
+
+    // Restart on the SAME home: the SAME controller session id drives the
+    // resumed turn (the registry's lock holder), so the persisted identity is
+    // asserted positively: the model request happens again and the receipt's
+    // workspace, worktree, and controller ids all match the first boot.
+    const second = await startWireReplayServer(hostScript)
+    try {
+      const driven = await driveHostTurn(second, controllerSessionId)
+      expect(driven.receipt.controllerSessionId ?? driven.sessionId).toBe(controllerSessionId)
+      expect(driven.receipt.workspaceId).toBe(firstReceipt.workspaceId)
+      expect([...driven.receipt.worktreeIds].sort()).toEqual([...firstReceipt.worktreeIds].sort())
+    } catch (error) {
+      throw new Error(`${error instanceof Error ? error.message : String(error)}`, { cause: error })
+    } finally {
+      await second.close()
+    }
+    await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 25 })
   })
 })
