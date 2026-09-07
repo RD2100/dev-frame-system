@@ -422,6 +422,8 @@ export interface CompactionPolicyConfig {
   summarizationModel?: string
   /** Provider generation cap for summarization. Defaults to `8192`. */
   maxTokens?: number
+  /** Consecutive automatic token-cap failures before summaries pause across steps and turns. Defaults to `1`. */
+  maxAutomaticSummaryFailures?: number
   /** Extra attempts after the first compaction when pressure remains above threshold. Defaults to `1`. */
   compactionRetries?: number
   /** Maximum retries after canonical context overflow; `0` disables recovery. Defaults to `1`. */
@@ -437,7 +439,7 @@ export interface ModelCompactPolicyConfig extends CompactionPolicyConfig {
 }
 ```
 
-Source: [`packages/compaction/compaction-basic/src/types.ts:38`](../packages/compaction/compaction-basic/src/types.ts)
+Source: [`packages/compaction/compaction-basic/src/types.ts:40`](../packages/compaction/compaction-basic/src/types.ts)
 
 <a id="deepseek-aidsh-compaction-tool-result-pruner"></a>
 
@@ -603,6 +605,50 @@ export interface Config {
 ```
 
 Source: [`packages/experimental/code-runtime-python/src/index.ts:42`](../packages/experimental/code-runtime-python/src/index.ts)
+
+<a id="deepseek-aidsh-experimental-command-goal-binding"></a>
+
+## `@deepseek-ai/dsh-experimental-command-goal-binding`
+
+Requires: `commands` · `goals` · `sessions` · `sessionProjections`
+
+```ts config-catalog
+/** Deployment configuration accepted by the `command-goal-binding` plugin. */
+export interface CommandGoalBindingConfig {
+  /**
+   * Host-owned workspace identity every completion binding and evidence
+   * record of this composition carries. Required.
+   */
+  readonly workspaceId: string
+  /**
+   * Absolute worktree root used when a `/goal-complete` line names no path,
+   * and the only worktree `/devframe-start` binds (objective and path cannot
+   * be split unambiguously on one command line). Optional.
+   */
+  readonly workspaceRoot?: string
+  /**
+   * The human-approved required-checks checklist `/devframe-start` registers
+   * into the required-checks store and executes for real. Required.
+   */
+  readonly checks: DevFrameRequiredChecksConfig
+  /**
+   * Non-empty unique native task ids every start binding carries. Required.
+   */
+  readonly taskIds: readonly string[]
+  /**
+   * Maximum charged attempts frozen into every start binding. Required.
+   */
+  readonly maxAttempts: number
+  /**
+   * Optional continuation round cap frozen into every start binding.
+   */
+  readonly maxGoalRounds?: number
+}
+```
+
+Depends on: `DevFrameRequiredChecksConfig` (`@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts`)
+
+Source: [`packages/experimental/command-goal-binding/src/config.ts:23`](../packages/experimental/command-goal-binding/src/config.ts)
 
 <a id="deepseek-aidsh-experimental-inspector"></a>
 
@@ -1355,7 +1401,7 @@ export interface ReplayModelConfig {
 
 Depends on: [`ModelModality`](../packages/llm/llm/src/index.ts) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts)
 
-Source: [`packages/test-support/llm-replay/src/index.ts:924`](../packages/test-support/llm-replay/src/index.ts)
+Source: [`packages/test-support/llm-replay/src/index.ts:929`](../packages/test-support/llm-replay/src/index.ts)
 
 <a id="deepseek-aidsh-llm-retry"></a>
 
@@ -3453,10 +3499,18 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 - `@deepseek-ai/dsh-cmdline` ([`packages/boot/cmdline/src/index.ts`](../packages/boot/cmdline/src/index.ts))
 - `@deepseek-ai/dsh-composition-smoke` ([`packages/test-support/composition-smoke/src/index.ts`](../packages/test-support/composition-smoke/src/index.ts))
 - `@deepseek-ai/dsh-deque` ([`packages/util/deque/src/index.ts`](../packages/util/deque/src/index.ts))
+- `@deepseek-ai/dsh-experimental-agent-dispatch` ([`packages/experimental/agent-dispatch/src/index.ts`](../packages/experimental/agent-dispatch/src/index.ts))
+- `@deepseek-ai/dsh-experimental-agent-evidence` ([`packages/experimental/agent-evidence/src/index.ts`](../packages/experimental/agent-evidence/src/index.ts))
+- `@deepseek-ai/dsh-experimental-agent-hierarchy` ([`packages/experimental/agent-hierarchy/src/index.ts`](../packages/experimental/agent-hierarchy/src/index.ts))
+- `@deepseek-ai/dsh-experimental-agent-reliability` ([`packages/experimental/agent-reliability/src/index.ts`](../packages/experimental/agent-reliability/src/index.ts))
 - `@deepseek-ai/dsh-experimental-agent-team-profile` ([`packages/experimental/agent-team-profile/src/index.ts`](../packages/experimental/agent-team-profile/src/index.ts))
 - `@deepseek-ai/dsh-experimental-agent-team-web-profile` ([`packages/experimental/agent-team-web-profile/src/index.ts`](../packages/experimental/agent-team-web-profile/src/index.ts))
 - `@deepseek-ai/dsh-experimental-devframe` ([`packages/experimental/devframe/src/index.ts`](../packages/experimental/devframe/src/index.ts))
 - `@deepseek-ai/dsh-experimental-project-contracts` ([`packages/experimental/project-contracts/src/index.ts`](../packages/experimental/project-contracts/src/index.ts))
+- `@deepseek-ai/dsh-experimental-project-controller` ([`packages/experimental/project-controller/src/index.ts`](../packages/experimental/project-controller/src/index.ts))
+- `@deepseek-ai/dsh-experimental-project-memory` ([`packages/experimental/project-memory/src/index.ts`](../packages/experimental/project-memory/src/index.ts))
+- `@deepseek-ai/dsh-experimental-session-identity` ([`packages/experimental/session-identity/src/index.ts`](../packages/experimental/session-identity/src/index.ts))
+- `@deepseek-ai/dsh-experimental-shadow-router` ([`packages/experimental/shadow-router/src/index.ts`](../packages/experimental/shadow-router/src/index.ts))
 - `@deepseek-ai/dsh-experimental-webworker-packer` ([`packages/experimental/webworker-packer/src/index.ts`](../packages/experimental/webworker-packer/src/index.ts))
 - `@deepseek-ai/dsh-experimental-webworker-runtime` ([`packages/experimental/webworker-runtime/src/index.ts`](../packages/experimental/webworker-runtime/src/index.ts))
 - `@deepseek-ai/dsh-home-paths` ([`packages/util/home-paths/src/index.ts`](../packages/util/home-paths/src/index.ts))

@@ -12,6 +12,8 @@ The agent-hierarchy subsystem is the policy service of the pluginized agent hier
 - `roleOf` — resolves an agent's bound role from the live binding registry.
 - `evaluateCreation` — every non-tool creation entry (host services, SDK bridges) must call it with the creator's binding record and a P00 `CreationIntent` before the child exists.
 - `createChildAgent` — validates and creates a child through factory setup, persisting its identity before publication. `CreateChildAgentRequest` carries the required task, plugin scope, and registered worktree; `CreateChildAgentOptions` carries host setup, routing options, cancellation, and an optional allocated SessionID. `CreatedChildAgent` returns the live Agent and durable binding, without sending a prompt. The service owns the Agent lifecycle.
+
+- `recoverChildAgent` — resumes a reserved identity or republishes the same SessionID when its durable log is absent. Corruption and setup failures never fall back to creation; recovery delivers no prompt.
 - Configuration validates once at construction: per-role `roleToolPolicies` (each role keeps the global tools its `inheritedTools` list names) and per-lead `leadPluginScopes`.
 
 ## Contracts
@@ -29,6 +31,33 @@ The registry it reads is documented at [session identity bindings](session-ident
 ## Cordis API
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+
+<a id="ctxagentdispatch--agentdispatch"></a>
+
+### `ctx.agentDispatch` — `AgentDispatch`
+
+The host daily-dispatch entry. Hard-injects the real creation engine (`ctx.agentHierarchy`), the role authority (`ctx.agentBindings`), and the worktree registry whose rows make the worktree proof real, and fails at activation when any is absent. Denials raised here are AgentDispatchErrors; the engine's own policy denials propagate unchanged.
+
+```ts cordis-catalog
+/**
+ * Validate one dispatch request at the entry and, when it holds, create the
+ * child through the real hierarchy engine. The authoritative registry rows
+ * prove registration before any live observation runs; a git failure whose
+ * refusal carries the registry's classified kind rethrows unchanged.
+ * @param parent - The exact live dispatching agent.
+ * @param request - The child creation request; `worktree` is required at
+ *   this entry because the dispatched child owns one registered worktree.
+ * @param options - Factory setup, route, cancellation, preallocated
+ *   identity, the owner workspace anchoring the registry proof, and the
+ *   optional initial prompt delivered after publication.
+ * @returns The published child and its durable binding record.
+ */
+async createChildAgent( parent: Agent, request: CreateChildAgentRequest, options: DispatchAgentOptions, ): Promise<CreatedChildAgent>
+```
+
+Types: [Agent](core.md)
+
+Source: [`packages/experimental/agent-dispatch/src/service.ts`](../../packages/experimental/agent-dispatch/src/service.ts)
 
 <a id="ctxagenthierarchy--agenthierarchy"></a>
 
@@ -69,9 +98,20 @@ evaluateCreation(creator: AgentBindingRecord, intent: CreationIntent): CreationD
  * @returns The published Agent and its durable binding.
  */
 async createChildAgent( parent: Agent, request: CreateChildAgentRequest, options: CreateChildAgentOptions = {}, ): Promise<CreatedChildAgent>
+
+/**
+ * Recover one reserved child without replacing its identity or replaying a task.
+ * Existing durable history is resumed; only a missing durable log permits
+ * fresh publication under the same reserved identity.
+ * @param parent - Exact live parent recorded by the reservation.
+ * @param request - Original role, plugin, task, cwd and worktree binding.
+ * @param options - Reserved Session identity and explicit host setup and route.
+ * @returns The recovered child and its unchanged durable binding.
+ */
+async recoverChildAgent( parent: Agent, request: CreateChildAgentRequest, options: CreateChildAgentOptions & { sessionId: SessionId }, ): Promise<CreatedChildAgent>
 ```
 
-Types: [Agent](core.md)
+Types: [Agent](core.md) · [SessionId](core.md)
 
 Source: [`packages/experimental/agent-hierarchy/src/service.ts`](../../packages/experimental/agent-hierarchy/src/service.ts)
 <!-- END GENERATED cordis-surface -->

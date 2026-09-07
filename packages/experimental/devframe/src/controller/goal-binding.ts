@@ -24,6 +24,7 @@ import type {
   DevFrameReviewEventData,
   DevFrameReviewFinding,
   DevFrameReviewId,
+  DevFrameTaskWarningEventData,
 } from '../events.ts'
 import { evaluateRequiredChecks } from '../required-checks.ts'
 import type {
@@ -319,6 +320,15 @@ export interface CompleteGoalRequest {
    * decision, and the controller rejects evidence naming another Goal.
    */
   readonly review: DevFrameReviewEventData
+  /**
+   * The graded memory-degradation records decoded from the task's session
+   * log (AT3-07): each carries the grade the host's explicit requirement
+   * context produced. A `fail` grade is the task's real failure evidence —
+   * the acceptance required the memory operation — and refuses completion;
+   * `complete-with-warning` records never reject. Empty when the task's
+   * memory operations all succeeded or recorded no degradation.
+   */
+  readonly taskWarnings: readonly DevFrameTaskWarningEventData[]
 }
 
 /** Stable error classifications emitted by this controller seam. */
@@ -650,6 +660,7 @@ export class GoalBindingController {
         requiredChecksDigest: request.requiredChecksDigest,
         requiredChecksStore: request.requiredChecksStore,
         review: request.review,
+        taskWarnings: request.taskWarnings,
       })
       if (verdict.kind === 'rejected') return verdict
 
@@ -889,9 +900,16 @@ export interface CompletionAdmissionRequest {
    * log, so admission consumes only its pass decision.
    */
   readonly review: DevFrameReviewEventData
+  /**
+   * The graded memory-degradation records decoded from the task's session
+   * log (AT3-07). A `fail` grade is the task's real failure evidence — the
+   * acceptance required the memory operation — and refuses completion;
+   * `complete-with-warning` records never reject.
+   */
+  readonly taskWarnings: readonly DevFrameTaskWarningEventData[]
 }
 
-/** Pass arm of the completion admission conjunction: all three predicates hold. */
+/** Pass arm of the completion admission conjunction: all predicates hold. */
 export interface CompletionAdmissionAdmitted {
   /** Discriminant tag of the {@link CompletionAdmissionVerdict} union. */
   readonly kind: 'admitted'
@@ -899,6 +917,24 @@ export interface CompletionAdmissionAdmitted {
   readonly fingerprint: SourceFingerprint
   /** Canonical identity of the stored configuration the evidence covered. */
   readonly requiredChecksDigest: RequiredChecksDigest
+}
+
+/**
+ * Rejection at the first stage: the session log holds a memory degradation
+ * graded `fail` for this task — the acceptance required the memory operation,
+ * so the task's real outcome is failure, not completion.
+ */
+export interface CompletionTaskWarningRejection {
+  /** Discriminant tag of the {@link CompletionAdmissionVerdict} union. */
+  readonly kind: 'rejected'
+  /** Evaluation stage that rejected the completion. */
+  readonly stage: 'task-warning'
+  /** The verbatim memory failure classification of the fail-graded record. */
+  readonly warning: DevFrameTaskWarningEventData['warning']
+  /** The memory tool whose execution failed. */
+  readonly tool: string
+  /** The fail grade the host's explicit requirement context produced. */
+  readonly grade: 'fail'
 }
 
 /** Rejection at the first stage: the worktree no longer matches the recorded fingerprint. */
@@ -938,19 +974,23 @@ export interface CompletionReviewRejection {
 /** Discriminated union returned by {@link evaluateCompletionAdmission}. */
 export type CompletionAdmissionVerdict =
   | CompletionAdmissionAdmitted
+  | CompletionTaskWarningRejection
   | CompletionFingerprintRejection
   | CompletionChecksRejection
   | CompletionReviewRejection
 
 /**
  * Completion admission for the AT1-05 completion domain: the conjunction of
- * three already-landed predicates, evaluated in the fixed evidence-chain
- * order — fingerprint match first (it anchors which tree the evidence is
- * about and is the cheapest invalidation), required checks second (they
- * anchor what really ran on that tree, against the configuration resolved
- * from the store), and the authorized review decision last (it anchors who
- * judged). Rejections are data carrying each stage's own evidence shape
- * (recorded claim vs trustworthy side); this face adds no new predicate.
+ * four already-landed predicates, evaluated in the fixed evidence-chain
+ * order — the graded task warnings first (they are the task's own recorded
+ * outcome evidence and the cheapest invalidation: a `fail` grade means the
+ * acceptance required a memory operation that failed, so no later evidence
+ * can cure it), the fingerprint match second (it anchors which tree the
+ * evidence is about), required checks third (they anchor what really ran on
+ * that tree, against the configuration resolved from the store), and the
+ * authorized review decision last (it anchors who judged). Rejections are
+ * data carrying each stage's own evidence shape (recorded claim vs
+ * trustworthy side).
  *
  * Structural errors fail loud and are never converted into rejections:
  * `SourceFingerprintError` codes from the fingerprint recompute and
@@ -958,13 +998,24 @@ export type CompletionAdmissionVerdict =
  * (`REQUIRED_CHECKS_CONFIG_NOT_FOUND`, `REQUIRED_CHECKS_INVALID_CONFIG`)
  * propagate to the caller unchanged.
  * @param request - worktree, recorded fingerprint, executed checks, registered
- *   configuration reference, and the durable review evidence.
+ *   configuration reference, the durable review evidence, and the graded
+ *   memory-degradation records decoded from the task's session log.
  * @returns a {@link CompletionAdmissionAdmitted} verdict, or the rejection of
  *   the first failing stage.
  */
 export async function evaluateCompletionAdmission(
   request: CompletionAdmissionRequest,
 ): Promise<CompletionAdmissionVerdict> {
+  const failedWarning = request.taskWarnings.find(candidate => candidate.grade === 'fail')
+  if (failedWarning !== undefined) {
+    return {
+      kind: 'rejected',
+      stage: 'task-warning',
+      warning: failedWarning.warning,
+      tool: failedWarning.tool,
+      grade: 'fail',
+    }
+  }
   const verify = await verifySourceFingerprint(request.worktreePath, request.sourceFingerprint)
   if (verify.kind === 'mismatch') {
     return { kind: 'rejected', stage: 'source-fingerprint', mismatch: verify }

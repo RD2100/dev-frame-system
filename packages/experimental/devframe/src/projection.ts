@@ -15,6 +15,7 @@ import {
   type DevFrameLifecycleEventData,
   type DevFrameReviewEventData,
   type DevFrameRolePolicyEventData,
+  type DevFrameTaskWarningEventData,
   type DevFrameUsageEventData,
   type DevFrameVerificationEventData,
 } from './events.ts'
@@ -43,6 +44,8 @@ export interface DevFrameProjectionState {
   verifications: DevFrameVerificationEventData[]
   /** Immutable review records keyed by review identity. */
   reviews: DevFrameReviewEventData[]
+  /** Graded memory-degradation records, at most one per task. */
+  taskWarnings: DevFrameTaskWarningEventData[]
   /** Latest explicit stop/recovery observation. */
   lifecycle: DevFrameLifecycleEventData | null
   /** First replay failure; subsequent records are not interpreted. */
@@ -68,6 +71,7 @@ const devFrameStateSchema = z.object({
   usage: z.array(z.unknown()),
   verifications: z.array(z.unknown()),
   reviews: z.array(z.unknown()),
+  taskWarnings: z.array(z.unknown()),
   lifecycle: z.unknown().nullable(),
   failure: z.string().nullable(),
 }).strict().transform((value, context) => {
@@ -82,6 +86,7 @@ const devFrameStateSchema = z.object({
       usage: value.usage.map(usage => decodeDevFramePayload('devframe/usage', usage)),
       verifications: value.verifications.map(verification => decodeDevFramePayload('devframe/verification', verification)),
       reviews: value.reviews.map(review => decodeDevFramePayload('devframe/review', review)),
+      taskWarnings: value.taskWarnings.map(warning => decodeDevFramePayload('devframe/task-warning', warning)),
       lifecycle: value.lifecycle === null
         ? null
         : decodeDevFramePayload('devframe/lifecycle', value.lifecycle),
@@ -106,6 +111,7 @@ function initialState(header: SessionHeader): DevFrameProjectionState {
     usage: [],
     verifications: [],
     reviews: [],
+    taskWarnings: [],
     lifecycle: null,
     failure: null,
   }
@@ -462,6 +468,18 @@ function applyLifecycle(state: DevFrameProjectionState, lifecycle: DevFrameLifec
   state.lifecycle = cloneLifecycle(lifecycle)
 }
 
+/**
+ * Apply one graded memory-degradation record. The listener guarantees at most
+ * one record per task; a replayed log holding two for one task is corruption
+ * and fails the fold loud.
+ */
+function applyTaskWarning(state: DevFrameProjectionState, warning: DevFrameTaskWarningEventData): void {
+  if (state.taskWarnings.some(candidate => String(candidate.taskId) === String(warning.taskId))) {
+    throw new Error(`DevFrame task warning for task "${String(warning.taskId)}" was recorded twice`)
+  }
+  state.taskWarnings.push(warning)
+}
+
 /** Apply one decoded DevFrame event to a projection state. */
 function applyEvent(state: DevFrameProjectionState, event: SessionEvent): void {
   if (state.failure !== null || !isDevFrameEvent(event)) return
@@ -481,6 +499,9 @@ function applyEvent(state: DevFrameProjectionState, event: SessionEvent): void {
         break
       case 'devframe/review':
         applyReview(state, decodeDevFramePayload(event.type, event.data))
+        break
+      case 'devframe/task-warning':
+        applyTaskWarning(state, decodeDevFramePayload(event.type, event.data))
         break
       case 'devframe/lifecycle':
         applyLifecycle(state, decodeDevFramePayload(event.type, event.data))

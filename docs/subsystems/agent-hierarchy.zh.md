@@ -12,6 +12,8 @@
 - `roleOf` — 从活跃绑定注册表解析 agent 的绑定角色。
 - `evaluateCreation` — 每个非工具创建入口（宿主服务、SDK 桥接）都必须在子级存在之前以创建者的绑定记录和 P00 `CreationIntent` 调用它。
 - `createChildAgent` — 通过工厂 setup 校验并创建子 Agent，在发布前持久化身份。`CreateChildAgentRequest` 携带必需的任务、插件范围和已注册工作树；`CreateChildAgentOptions` 携带宿主 setup、路由选项、取消信号及可选的已分配 SessionID。`CreatedChildAgent` 返回活跃 Agent 和持久绑定，不发送提示词。Agent 生命周期由服务拥有。
+
+- `recoverChildAgent` — 恢复保留身份；持久日志不存在时按原 SessionID 重新发布。日志损坏和 setup 失败不会回退到创建；恢复不投递提示词。
 - 配置在构造时校验一次：每角色 `roleToolPolicies`（各角色保留其 `inheritedTools` 列表点名的全局工具）与每 lead `leadPluginScopes`。
 
 ## 约定要点
@@ -29,6 +31,33 @@
 ## Cordis API
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+
+<a id="ctxagentdispatch--agentdispatch"></a>
+
+### `ctx.agentDispatch` — `AgentDispatch`
+
+The host daily-dispatch entry. Hard-injects the real creation engine (`ctx.agentHierarchy`), the role authority (`ctx.agentBindings`), and the worktree registry whose rows make the worktree proof real, and fails at activation when any is absent. Denials raised here are AgentDispatchErrors; the engine's own policy denials propagate unchanged.
+
+```ts cordis-catalog
+/**
+ * Validate one dispatch request at the entry and, when it holds, create the
+ * child through the real hierarchy engine. The authoritative registry rows
+ * prove registration before any live observation runs; a git failure whose
+ * refusal carries the registry's classified kind rethrows unchanged.
+ * @param parent - The exact live dispatching agent.
+ * @param request - The child creation request; `worktree` is required at
+ *   this entry because the dispatched child owns one registered worktree.
+ * @param options - Factory setup, route, cancellation, preallocated
+ *   identity, the owner workspace anchoring the registry proof, and the
+ *   optional initial prompt delivered after publication.
+ * @returns The published child and its durable binding record.
+ */
+async createChildAgent( parent: Agent, request: CreateChildAgentRequest, options: DispatchAgentOptions, ): Promise<CreatedChildAgent>
+```
+
+Types: [Agent](core.zh.md)
+
+Source: [`packages/experimental/agent-dispatch/src/service.ts`](../../packages/experimental/agent-dispatch/src/service.ts)
 
 <a id="ctxagenthierarchy--agenthierarchy"></a>
 
@@ -69,9 +98,20 @@ evaluateCreation(creator: AgentBindingRecord, intent: CreationIntent): CreationD
  * @returns The published Agent and its durable binding.
  */
 async createChildAgent( parent: Agent, request: CreateChildAgentRequest, options: CreateChildAgentOptions = {}, ): Promise<CreatedChildAgent>
+
+/**
+ * Recover one reserved child without replacing its identity or replaying a task.
+ * Existing durable history is resumed; only a missing durable log permits
+ * fresh publication under the same reserved identity.
+ * @param parent - Exact live parent recorded by the reservation.
+ * @param request - Original role, plugin, task, cwd and worktree binding.
+ * @param options - Reserved Session identity and explicit host setup and route.
+ * @returns The recovered child and its unchanged durable binding.
+ */
+async recoverChildAgent( parent: Agent, request: CreateChildAgentRequest, options: CreateChildAgentOptions & { sessionId: SessionId }, ): Promise<CreatedChildAgent>
 ```
 
-Types: [Agent](core.zh.md)
+Types: [Agent](core.zh.md) · [SessionId](core.zh.md)
 
 Source: [`packages/experimental/agent-hierarchy/src/service.ts`](../../packages/experimental/agent-hierarchy/src/service.ts)
 <!-- END GENERATED cordis-surface -->

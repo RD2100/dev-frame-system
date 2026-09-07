@@ -54,6 +54,8 @@ The evaluator permits a controller to create only a lead. It rejects requests fo
 
 `createChildAgent(parent, request, options)` validates the live parent, role, depth, task, and worktree ownership, then persists the binding during Agent factory setup before publication. Every child requires an explicit plugin scope. The caller supplies a registry-validated worktree and setup that mounts the required preset. Matching parent/task retries return the live child; conflicting requests and occupied worktrees reject. A reserved child that is unavailable requires explicit recovery. The method activates the Agent without sending a prompt. Hosts may allocate its SessionID beforehand to configure the lead's approved plugin scopes.
 
+`recoverChildAgent(parent, request, { sessionId, ...options })` matches the original reservation and resumes its history. Only `SessionPersistenceNotFoundError` for that identity before host setup permits creation under the same SessionID. Corruption, cancellation and setup failures propagate. The binding and creation time remain unchanged; the host supplies preset and worktree setup. Recovery sends no prompt.
+
 -----
 
 <a id="understand-the-implementation"></a>

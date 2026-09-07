@@ -72,6 +72,8 @@ export function renderCompletionRejection(
   verdict: Exclude<CompletionAdmissionVerdict, CompletionAdmissionAdmitted>,
 ): string {
   switch (verdict.stage) {
+    case 'task-warning':
+      return `Completion rejected at task-warning: the session recorded a ${verdict.warning} memory failure (via ${verdict.tool}) graded fail because the task's acceptance required the memory operation. Recover the memory surface and obtain a human-authorized resume before completing.`
     case 'source-fingerprint':
       return 'Completion rejected at source-fingerprint: the worktree no longer matches the source fingerprint recorded when the work was accepted. Re-run verification on the current tree, then obtain a human-authorized resume before completing.'
     case 'required-checks':

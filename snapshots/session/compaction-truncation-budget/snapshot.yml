@@ -1,0 +1,21 @@
+version: 1
+# Authored override supplies two tool calls and a token-capped auxiliary stream;
+# the Windows persisted expectation is harvested through the real headless profile.
+# The platform-neutral event oracle is shared; POSIX retains its own header pin.
+scenario: compaction-truncation-budget
+profile: headless
+composition: compaction-truncation-budget
+recording: authored
+header:
+  class: compaction-truncation-budget
+  pin: true
+  changes: 0
+sessionVariants:
+  win32: true
+expectations:
+  variants:
+    win32:
+      - system-prompt
+      - tool-schemas
+replay:
+  override: true
