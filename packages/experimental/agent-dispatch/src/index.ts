@@ -12,6 +12,8 @@
 export { AgentDispatchError } from './errors.ts'
 export type { AgentDispatchErrorCode } from './errors.ts'
 export { evaluateDispatchEntry } from './entry.ts'
+export { foldBriefingAck } from './ack.ts'
+export type { BriefingAckFold, DispatchAckState, DispatchTaskAck } from './ack.ts'
 export { AgentDispatch } from './service.ts'
 export type { DispatchAgentOptions, DispatchedIdentity, RecoverDispatchAgentOptions } from './service.ts'
 export { name, inject, apply, TOOL_NAMES } from './consumer.ts'

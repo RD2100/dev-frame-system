@@ -27,9 +27,9 @@ import { requireNonEmpty, resolveCaller } from './authorization.ts'
 export const name = 'agent-dispatch'
 
 /** Services required by the plugin; the hierarchy stack missing fails the load. */
-export const inject = ['tools', 'systemPrompt', 'workspaceRegistry', 'worktreeRegistry', 'agentHierarchy', 'agentBindings', 'agents']
+export const inject = ['tools', 'systemPrompt', 'workspaceRegistry', 'worktreeRegistry', 'agentHierarchy', 'agentBindings', 'agents', 'sessions']
 
-const DISPATCH_DESCRIPTION = `Dispatch a child agent for one task onto one registered git worktree: the controller dispatches a lead, and a lead dispatches workers inside its approved plugin scopes. Name the task id, the plugin scope, and the worktree id (get worktree ids from worktree_create or the host), and pass a briefing prompt for a fresh dispatch — the briefing is queued only after the child is published. If this task already has a dispatched child, the tool refuses and names it: pass retry: true to reuse that child instead, which never re-delivers the briefing. The engine owns the child's lifecycle and the hierarchy owns every denial; refusals name the cause and the fix.`
+const DISPATCH_DESCRIPTION = `Dispatch a child agent for one task onto one registered git worktree: the controller dispatches a lead, and a lead dispatches workers inside its approved plugin scopes. Name the task id, the plugin scope, and the worktree id (get worktree ids from worktree_create or the host), and pass a briefing prompt for a fresh dispatch — the briefing is queued only after the child is published. Every result carries ack: what the child's own durable log proves about the task (briefed while pending, claimed while executing, terminal with the turn's recorded ending — completed means the task finished cleanly, dropped when the briefing was cancelled unrun). If this task already has a dispatched child, the tool refuses and names it: pass retry: true to reuse that child instead, which never re-delivers the briefing and reports the task's current ack. The engine owns the child's lifecycle and the hierarchy owns every denial; refusals name the cause and the fix.`
 
 const GUIDANCE = `The agent dispatch tool is the daily delegation entry over the agent hierarchy. The controller dispatches a lead per task onto its own registered worktree; the lead dispatches workers inside the plugin scopes approved for it in the deployment's leadPluginScopes. Every dispatch binds the worktree's single-writer lock to the new child for its whole life. A retried task reuses the existing child (retry: true) — never re-brief a running child.`
 
@@ -39,6 +39,54 @@ export const TOOL_NAMES = ['agent_dispatch'] as const
 /** The plain pending-state card, titled from the call's arguments. */
 function callCard(title: string, rawInput?: string): ToolCallView {
   return { card: 'generic', title, ...rawInput !== undefined ? { rawInput } : {} }
+}
+
+/** The ack shape the tool result carries: the derived state plus the flush verdict. */
+interface DispatchAckValue {
+  readonly state: string
+  readonly durable: boolean
+  readonly degraded?: boolean
+  readonly completed?: boolean
+  readonly reasonKind?: string
+  readonly turn?: number
+}
+
+/**
+ * Render one dispatch or reuse outcome, with the durable-acknowledgment
+ * state the child's log proves. Reuse never re-briefs; its text tells the
+ * model exactly where the task stands so the next decision (wait, recover,
+ * or a new task) is grounded.
+ */
+function renderDispatchText(value: {
+  childId: string
+  role: string
+  taskId: string
+  worktreeId: string
+  reused: boolean
+  ack: DispatchAckValue
+}): string {
+  const head = value.reused
+    ? `Reusing ${value.role} child ${value.childId} for task '${value.taskId}' on worktree ${value.worktreeId}`
+    : `Dispatched ${value.role} child ${value.childId} for task '${value.taskId}' on worktree ${value.worktreeId}, bound as the worktree's single writer`
+  const durability = value.ack.durable ? '' : value.ack.degraded === true
+    ? ' The durability backend failed this check (degraded).'
+    : ' No durability backend participated in the check.'
+  const tail = !value.reused
+    ? '.'
+    : value.ack.state === 'terminal' && value.ack.completed === true
+      ? '; the task\'s terminal state is durable (completed).'
+      : value.ack.state === 'terminal'
+        ? `; the claiming turn ended without completing (reason: ${value.ack.reasonKind ?? 'unknown'}, turn ${String(value.ack.turn ?? '?')}); recover the child or dispatch a new task.`
+        : value.ack.state === 'claimed'
+          ? '; the child is executing the briefing, its terminal state is not recorded yet.'
+          : value.ack.state === 'dropped'
+            ? '; the briefing was cancelled unrun, dispatch a new task.'
+            : value.ack.state === 'unbriefed'
+              ? '; no briefing for this task is recorded in the recovered session.'
+              : value.ack.state === 'unavailable'
+                ? '; the child is not live in this process, recover it through the recovery lane.'
+                : '; the earlier briefing stands, none re-queued.'
+  return head + tail + durability
 }
 
 /**
@@ -105,13 +153,24 @@ export function apply(ctx: Context): void {
           taskId: { type: 'string', required: true },
           worktreeId: { type: 'string', required: true },
           reused: { type: 'boolean', required: true },
+          ack: {
+            type: 'object',
+            required: true,
+            additionalProperties: false,
+            properties: {
+              state: { type: 'string', required: true },
+              durable: { type: 'boolean', required: true },
+              degraded: { type: 'boolean' },
+              completed: { type: 'boolean' },
+              reasonKind: { type: 'string' },
+              turn: { type: 'number' },
+            },
+          },
         },
       },
       render: (_args, value) => [{
         type: 'text',
-        text: value.reused
-          ? `Reusing ${value.role} child ${value.childId} for task '${value.taskId}' on worktree ${value.worktreeId}; the earlier briefing stands, none re-queued.`
-          : `Dispatched ${value.role} child ${value.childId} for task '${value.taskId}' on worktree ${value.worktreeId}, bound as the worktree's single writer.`,
+        text: renderDispatchText(value),
       }],
     },
     isConcurrencySafe: () => false,
@@ -156,12 +215,23 @@ export function apply(ctx: Context): void {
           ? { prompt: args.prompt }
           : {}),
       })
+      const ack = await ctx.agentDispatch.taskAck(caller.agent, taskId)
+      if (ack === undefined) {
+        throw new Error(`the agent dispatch tool: task '${taskId}' has no dispatched child to acknowledge`)
+      }
       return {
         childId: String(child.record.agentId),
         role: args.role,
         taskId,
         worktreeId: String(row.id),
         reused: existing !== undefined,
+        ack: {
+          state: ack.state,
+          durable: ack.durable,
+          ...(ack.degraded === undefined ? {} : { degraded: true }),
+          ...(ack.completed === undefined ? {} : { completed: ack.completed }),
+          ...(ack.turnEnd === undefined ? {} : { reasonKind: ack.turnEnd.reason.kind, turn: ack.turnEnd.turn }),
+        },
       }
     },
     presentCall: args => callCard(`agent dispatch: ${String(args.role)} for '${String(args.taskId)}'`),
