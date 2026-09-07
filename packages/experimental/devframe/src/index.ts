@@ -10,4 +10,17 @@ export * from './source-fingerprint.ts'
 export * from './required-checks.ts'
 export * from './required-checks-file-store.ts'
 export * from './goal-binding-file-store.ts'
+export {
+  gradeMemoryFailure,
+  memoryWarningCode,
+  type DevFrameMemoryGrading,
+  type DevFrameTaskWarningCode,
+  type DevFrameTaskWarningEventData,
+} from './events.ts'
+export {
+  apply as taskWarningListener,
+  name as taskWarningListenerName,
+  type DevFrameTaskGrading,
+  type DevFrameTaskGradingDeclaration,
+} from './task-warning-listener.ts'
 export type * from './permissions/events.ts'

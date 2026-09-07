@@ -249,6 +249,37 @@ export interface DevFrameLifecycleEventData {
   readonly remaining: readonly StopIssue[]
 }
 
+/**
+ * Memory-save degradation codes the host grades as task warnings, verbatim
+ * from the project-memory failure table. Request- and content-shape codes
+ * (`MEMORY_INVALID_*`, `MEMORY_CONTENT_REJECTED`, `MEMORY_PATH_REJECTED`,
+ * scope and size rejections) are ordinary tool errors the model corrects and
+ * never grade as degradations. Extend by adding members; never widen to
+ * `string`.
+ */
+export type DevFrameTaskWarningCode =
+  | 'MEMORY_UNAVAILABLE'
+  | 'MEMORY_WRITE_FAILED'
+  | 'MEMORY_RECEIPT_FAILED'
+  | 'MEMORY_APPEND_DISABLED'
+
+/**
+ * Host-graded degradation record for one task's memory surface. It records
+ * only degradations: a successful save is recorded solely by the memory
+ * receipt (`memory/receipt`) and is never duplicated here. At most one event
+ * per task lands in a session log.
+ */
+export interface DevFrameTaskWarningEventData {
+  /** Payload schema version. */
+  readonly version: 1
+  /** The task whose memory surface degraded. */
+  readonly taskId: TaskId
+  /** The verbatim memory failure classification. */
+  readonly warning: DevFrameTaskWarningCode
+  /** The memory tool whose execution failed. */
+  readonly tool: string
+}
+
 /** DevFrame event names merged into the native session log vocabulary. */
 export type DevFrameEventType =
   | 'devframe/role-policy'
@@ -257,6 +288,7 @@ export type DevFrameEventType =
   | 'devframe/verification'
   | 'devframe/review'
   | 'devframe/lifecycle'
+  | 'devframe/task-warning'
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
@@ -272,6 +304,8 @@ declare module '@deepseek-ai/dsh-session/types' {
     'devframe/review': DevFrameReviewEventData
     /** Whole lifecycle observation used to recover stop and writer ownership state. */
     'devframe/lifecycle': DevFrameLifecycleEventData
+    /** Host-graded degradation of one task's optional memory surface; at most one per task. */
+    'devframe/task-warning': DevFrameTaskWarningEventData
   }
 }
 
@@ -523,6 +557,13 @@ const lifecycleEventSchema = z.object({
   }
 }) as z.ZodType<DevFrameLifecycleEventData>
 
+const taskWarningEventSchema = z.object({
+  version: z.literal(1),
+  taskId: taskIdSchema,
+  warning: z.enum(['MEMORY_UNAVAILABLE', 'MEMORY_WRITE_FAILED', 'MEMORY_RECEIPT_FAILED', 'MEMORY_APPEND_DISABLED']),
+  tool: trimmedString,
+}).strict() as z.ZodType<DevFrameTaskWarningEventData>
+
 /**
  * Whether an arbitrary Session event belongs to the DevFrame log domain.
  * @param event - Event envelope to classify.
@@ -536,6 +577,7 @@ export function isDevFrameEvent(event: SessionEvent): event is SessionEvent<DevF
     case 'devframe/verification':
     case 'devframe/review':
     case 'devframe/lifecycle':
+    case 'devframe/task-warning':
       return true
     default:
       return false
@@ -566,6 +608,8 @@ export function decodeDevFramePayload<T extends DevFrameEventType>(
         return reviewEventSchema.parse(value) as SessionEventMap[T]
       case 'devframe/lifecycle':
         return lifecycleEventSchema.parse(value) as SessionEventMap[T]
+      case 'devframe/task-warning':
+        return taskWarningEventSchema.parse(value) as SessionEventMap[T]
       /* v8 ignore next 2 -- DevFrameEventType is closed and every member is handled above. */
       default:
         return assertNever(type)
@@ -578,6 +622,43 @@ export function decodeDevFramePayload<T extends DevFrameEventType>(
 /** Require a compile-time closed union branch to be handled. */
 function assertNever(value: never): never {
   throw new Error(`unhandled DevFrame event type ${String(value)}`)
+}
+
+/**
+ * Route one memory failure code onto the task-warning vocabulary.
+ * Request- and content-shape codes (`MEMORY_INVALID_*`, scope and size
+ * rejections, `MEMORY_CONTENT_REJECTED`, `MEMORY_PATH_REJECTED`) are ordinary
+ * tool errors the model corrects and never grade as degradations.
+ * @param code - Raw failure classification from a tool result, when any.
+ * @returns The warning vocabulary member, or `undefined` when the code does not grade.
+ */
+export function memoryWarningCode(code: string | undefined): DevFrameTaskWarningCode | undefined {
+  switch (code) {
+    case 'MEMORY_UNAVAILABLE':
+    case 'MEMORY_WRITE_FAILED':
+    case 'MEMORY_RECEIPT_FAILED':
+    case 'MEMORY_APPEND_DISABLED':
+      return code
+    default:
+      return undefined
+  }
+}
+
+/** The host grading one memory failure produces, from the explicit requirement context. */
+export type DevFrameMemoryGrading = 'complete-with-warning' | 'fail'
+
+/**
+ * Grade one memory failure from the host's explicit requirement context: a
+ * task whose acceptance does not require memory completes carrying the
+ * warning event; a task whose acceptance is the memory save itself fails
+ * through the existing fail path. The context is declared by the host
+ * assembly per session — never derived from a message dispatch mode.
+ * @param grading - The declared memory requirement and the raw failure code.
+ * @returns The grading, or `undefined` when the code does not grade.
+ */
+export function gradeMemoryFailure(grading: { readonly memory: 'optional' | 'required'; readonly code: string | undefined }): DevFrameMemoryGrading | undefined {
+  if (memoryWarningCode(grading.code) === undefined) return undefined
+  return grading.memory === 'optional' ? 'complete-with-warning' : 'fail'
 }
 
 /** Retain the binding fields used to match evidence to one Goal. */
