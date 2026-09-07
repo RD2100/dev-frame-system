@@ -42,6 +42,8 @@ kind: "package-reference"
     authorizedRoots: [dshHomePath('projects')]
 ```
 
+想要整套 DevFrame 栈的源码检出用户——本路由器与会话身份、项目记忆、目标绑定、派发并行启用——可以通过 [DevFrame profile 层](../devframe-profile/README.zh.md) 用一个正式层启用，而不必手工组装这些行。
+
 ### 配置
 
 | 字段 | 默认值 | 含义 |
@@ -141,8 +143,9 @@ async function sendProjectWork(
 
 工具模式只声明一次且字节稳定，因此第一次项目调用之前的请求前缀可复用供应商缓存；每次调用的结果追加在其后，不会使共享前缀失效。
 
-<a id="known-limitations-and-deferred-work"></a>
 ## 已知限制与延期工作
+
+<a id="known-limitations-and-deferred-work"></a>
 
 这些限制界定了路由器何时不适配或需要特别的运维注意。它们是当前包约束，不是任务清单。
 

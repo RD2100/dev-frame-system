@@ -42,6 +42,8 @@ Mount the service in a composition that already mounts the storage stack, the se
     authorizedRoots: [dshHomePath('projects')]
 ```
 
+Source-checkout users who want the whole DevFrame stack — this router beside session identity, project memory, goal binding, and dispatch — can enable it as one formal layer with the [DevFrame profile layer](../devframe-profile/README.md) instead of composing these rows by hand.
+
 ### Config
 
 | Field | Default | Meaning |
@@ -141,8 +143,9 @@ Four tool schemas persist in the Shadow scope's tool list on every request; each
 
 The tool schemas are declared once and stay byte-stable, so the request prefix before the first project call reuses provider cache; per-call results append after it and do not invalidate the shared prefix.
 
-<a id="known-limitations-and-deferred-work"></a>
 ## Known Limitations and Deferred Work
+
+<a id="known-limitations-and-deferred-work"></a>
 
 These limits define when the router is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
 

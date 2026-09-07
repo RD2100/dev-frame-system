@@ -7,13 +7,13 @@ import { join } from 'node:path'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { AcceptanceHash, ShadowMessageId, ShadowRequestId } from '../src/index.ts'
-import { harness, seedHarness } from './helpers.ts'
+import { HARNESS_BACKENDS, harness, seedHarness } from './helpers.ts'
 import type { ShadowDeliveryRecord } from '../src/index.ts'
 
 describe('shadow-router stop isolation', () => {
-  it('AT2-07: project A stops idempotently after draining while B continues unaffected', async () => {
+  it.each(HARNESS_BACKENDS)('AT2-07 [%s]: project A stops idempotently after draining while B continues unaffected', async (backend) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-at2-07-'))
-    const h1 = await harness(root, { authorizedRoots: [root] })
+    const h1 = await harness(root, { authorizedRoots: [root] }, { backend })
     const dirA = await h1.makeProjectDir('project-a')
     const dirB = await h1.makeProjectDir('project-b')
     const openA = await h1.router.openProject(h1.shadow, { path: dirA, requestId: 'at2-07-open-a' })
@@ -38,7 +38,7 @@ describe('shadow-router stop isolation', () => {
     await h1.close()
 
     // Crash residue: one queued note in A that stop must drain visibly.
-    const seed = await seedHarness(root)
+    const seed = await seedHarness(root, { backend })
     try {
       const now = new Date().toISOString()
       const queued: ShadowDeliveryRecord = {
@@ -60,7 +60,7 @@ describe('shadow-router stop isolation', () => {
       await seed.dispose()
     }
 
-    const h2 = await harness(root, { authorizedRoots: [root] })
+    const h2 = await harness(root, { authorizedRoots: [root] }, { backend })
     try {
       expect(h2.router.listDeliveries(openA.workspaceId)).toHaveLength(2)
 

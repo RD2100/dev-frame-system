@@ -19,7 +19,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { AcceptanceHash, ShadowMessageId, ShadowRequestId } from '../src/index.ts'
 import type { ShadowBindingRecord, ShadowDeliveryRecord } from '../src/index.ts'
-import { dispatch, failureCode, failureText, harness, seedHarness, seedWorkspaceFact } from './helpers.ts'
+import { HARNESS_BACKENDS, dispatch, failureCode, failureText, harness, seedHarness, seedWorkspaceFact } from './helpers.ts'
 
 /** One settled dispatch outcome: the real tool runtime's discriminated result. */
 type DispatchOutcome = Awaited<ReturnType<typeof dispatch>>
@@ -53,7 +53,7 @@ function numberOf(value: JsonValue, label: string): number {
 }
 
 describe('shadow-router S6 stop-path settlement contrast', () => {
-  it('S6: stopping project A cancels only its queued residue, preserves its accepted input, replays and no-ops safely, and leaves live project B untouched', async () => {
+  it.each(HARNESS_BACKENDS)('S6 [%s]: stopping project A cancels only its queued residue, preserves its accepted input, replays and no-ops safely, and leaves live project B untouched', async (backend) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-s6-stop-'))
     const dirA = join(root, 's6-stop-project-a')
     const dirB = join(root, 's6-stop-project-b')
@@ -65,7 +65,7 @@ describe('shadow-router S6 stop-path settlement contrast', () => {
     // process exists (the delivery-limits seed pattern): a ready binding whose
     // goal is not yet authorized, plus one queued intent whose acceptance
     // never landed.
-    const seed = await seedHarness(root)
+    const seed = await seedHarness(root, { backend })
     try {
       const now = new Date().toISOString()
       await seedWorkspaceFact(seed.workspaceDomain, 'ws-s6-stop-a', canonicalA)
@@ -100,7 +100,7 @@ describe('shadow-router S6 stop-path settlement contrast', () => {
       await seed.dispose()
     }
 
-    const h = await harness(root, { authorizedRoots: [root] })
+    const h = await harness(root, { authorizedRoots: [root] }, { backend })
     try {
       // A opens through the real dispatcher: the crash-residue binding converges.
       const openedAOutcome = await dispatch(h.ctx, h.shadow, 'project_open', { path: dirA, request_id: 's6-stop-open-a' })

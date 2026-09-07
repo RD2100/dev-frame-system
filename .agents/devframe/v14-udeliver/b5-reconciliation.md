@@ -67,3 +67,59 @@
   3. AT1-11 / AT1-03 / AT2-01/02 / AT3-07 / AT4-01 的"真实任务效用/shipped 面"缺口由 **B1 链逐站证据推进**（链结算后补链至本表）。
   4. p22 矩阵的"not_run+旧缺口"中已被树内增量覆盖的：AT1-01/02/06/07、AT2 全组（+S6/P21-S/集成 L1 新证据）、AT3-01、AT4-02/03/04——均已按上表链接，不重跑。
 - 剩余小切片清单（按依赖排序）：①AT2-05 双后端参数化（纯测试改动）②AT1-05 变体 5 用例 ③AT1-08 repairLimit 实现（devframe 属主）④AT4-05 请求预算记账（P06，源码级）⑤AT4-08 语义绑定（dsh-session 属主）⑥AT4-06 在途取消（待总控裁定）⑦AT4-04/07 各一条用例 ⑧fixture 录制批次（snapshots 属主，29 篇草案）。
+
+## 复核修订（huoshan-2 Worker，2026-09-08）
+
+抽核上文行级判定对当前 main（本树 codex/v14-udeliver-lead）的过时项；仅核存在性/翻面，不重跑已绑定版本绿项，全部 AT* 验收态仍 not_run。其余未列行维持原表判定，存疑不深挖。
+
+### 翻面行
+
+| ID | 原判定 | 修订判定 | 证据（路径:行） |
+| --- | --- | --- | --- |
+| AT2-05 | 部分（"双存储后端分句零锚点"） | **覆盖（包级双 backend）**：小切片①已闭合于树内增量 | `shadow-router/tests/helpers.ts:49-51`（`HARNESS_BACKENDS=['json','sqlite']`）；`delivery-recovery.spec.ts:63,111,156`、`s6-cold-restore.spec.ts:17`、`s6-delivery-flow.spec.ts:53`、`s6-crash-window.spec.ts:49` 均已 `it.each(HARNESS_BACKENDS)`（先于本次改动存在，不重跑） |
+| AT1-08 | 缺口（"全树零实现零测试"） | **覆盖（包级，durable consumer 面）**：V1.2 标准下按 main 76080fe40b durable repair-admission 面为准（本树 c469e0863c 并入）——内存 map 包级证据不替代 | `devframe/tests/repair-admissions.spec.ts` 9 用例（controller replacement 重建记账/冷 Session restore 恢复消费与 cause receipt/allowance 共享/拒面/durable 重放拒绝）；`devframe/src/session-journal.ts:150,202-203`（durable append+owned 校验）、`src/projection.ts:616`（fold）、`src/events.ts:369,388`（`devframe/repair-admission` 词汇）；旅程×durable 集成：`command-goal-binding/src/composition.ts:441-453`（task-warning 拒绝按新签名带 reason 记账）+ `real-composition.spec` 修复环三轮在合并树全绿（52 文件/492 通过） |
+| AT3-07 | 部分（"任务级联动缺小切片"） | **覆盖（包级）**：grade 联动已闭合 | `devframe/src/events.ts:344,646,744`（`grade` 字段+`z.enum(['complete-with-warning','fail'])`+`gradeMemoryFailure`）；`devframe/src/task-warning-listener.ts:164,183,203`（每任务至多一条分级 `devframe/task-warning` append）；`devframe/src/controller/goal-binding.ts:1009`（completion-admission 谓词 `taskWarnings.find(grade === 'fail')`）；测试 `task-warning-listener.spec.ts`、`completion-admission.spec.ts:103,123,161`、`goal-binding.spec.ts:646,680` |
+
+### 双 backend 遗漏扫描与新增变体（本次改动，均实测跑绿）
+
+判定标准：套件断言持久化恢复/故障/中断语义（seedHarness 残留、冷重启重开、收敛）且该语义跨存储边界应成立。共补 9 个 sqlite 变体（5 个既有 spec 文件，`it.each(HARNESS_BACKENDS)`，仅改测试不改 src）：
+
+1. `provisioning.spec.ts:49` — reservation 中断恢复（残留→重开收敛同一 reserved session id）
+2. `provisioning.spec.ts:85` — 半成品 root 恢复（reconcile 完成/cwd mismatch 停车）
+3. `provisioning.spec.ts:136` — provisioning 失败回滚+重开重供给
+4. `provisioning.spec.ts:189` — 请求结果冷重启重放/冲突
+5. `delivery-limits.spec.ts:49` — 残留占满有界队列→`SHADOW_QUEUE_FULL` 先于接受拒绝
+6. `delivery-limits.spec.ts:114` — 旧 Goal 残留跨重启收敛 cancelled（本次将 h1 存活期改为世代顺序模式，见下）
+7. `stop-isolation.spec.ts:14` — stop 排干残留+幂等重放+B 隔离（跨冷重启）
+8. `status.spec.ts:96` — provisioning mismatch 残留→`needs_attention` 读出
+9. `s6-stop-settlement.spec.ts:56` — 残留冷恢复后 stop 结算对比（cancelled/received 保持+closed receiver 拒绝）
+
+实施中发现（如实登记）：`delivery-limits.spec.ts` 旧 Goal 用例原结构在 seed/h2 打开期间保持 h1 存活，json 容忍而 sqlite 于 teardown 报 `EBUSY: unlink shadow-state.db`（sqlite 单写者文件锁，断言本身全过）；已按 `s6-crash-window.spec.ts` 的世代顺序模式重构句柄寿命（h1.close → seed → h2），断言零改动，与 crash-residue 语义（"无 router 进程持有 root 时写残留"）更一致。
+
+### 判定"无需双 backend"的套件/用例（不编造缺陷）
+
+- `lifecycle.spec.ts`（AT2-01）：单进程 lifecycle 旅程，无重启/残留/中断断言。
+- `whitelist.spec.ts`（AT2-02）：拒面全部先于变更发生，纯进程内守卫。
+- `aliases.spec.ts`（AT2-04）：规范化/物理重叠/缺失根，纯进程内。
+- `s6-markshadow-scope.spec.ts`：scope 工具安装，内存态 registry 断言。
+- `host-designation.spec.ts`：designation 语义为内存态；其冷重启用例（:190）的 binding 行逐字段恢复断言与已双 backend 的 `s6-cold-restore.spec.ts` 同构，已闭合不重跑。如实登记：该文件 spec-local `boot()` 硬编码 StorageJson/`backend: 'json'`（:69-70），未参数化。
+- 单用例级：provisioning 用例 1（并发重复 open，进程内幂等）、delivery-limits 用例 1（去重/冲突/超长，进程内两写面）、status 用例 1（分页/读出，进程内）、s6-stop-settlement 用例 2（stopping 窗口内 closed-receiver 守卫，无跨重启）。
+
+### 验证（本节改动实测）
+
+- 5 个改动套件 vitest run（provisioning/delivery-limits/stop-isolation/status/s6-stop-settlement）：22/22 passed，exit 0。
+- shadow-router 全量 vitest run：14 files，47 passed + 1 skipped（aliases POSIX 用例按平台 skipIf，Windows 上预期跳过），exit 0。
+- host `tsc -b tsconfig.host.json`：exit 0。
+
+### 归属与合并集成更正（组长，2026-09-08 合并 c469e0863c 后）
+
+- **AT1-05 变体 5**：本线切片**永久取消**——V1.2 已接手（B1 隔离树 owner），fingerprint v2 已落 main（80f74545e3：实际内容指纹+完成拒绝），旧"registered boundary"豁免不再承认；本线不重派不落用例。**原验收要求保持有效并由实现满足，非"待裁定"替代**（总控强化指令 2026-09-08）：合并树实测 source-fingerprint.spec 41 passed+1 平台 skip，exit 0——`:205 includes nonignored untracked files`（指纹含未忽略 untracked 内容）、`:235` size/mtime 还原后仍检出 untracked 字节改动、`:249` 忽略输入排除、`:621 rejects when an untracked file appears after the recorded snapshot`（完成时拒绝面）——"HEAD 相同不能掩盖未跟踪文件变化"由实现闭合。
+- **AT1-08**：上表证据已按 V1.2 证据标准更正为 durable consumer 面（main 76080fe40b → 本树 c469e0863c 并入；worker 初核引用的内存 map 行号即其交付前树态，已过时不再引用）。合并把 main 新签名 `beginRepairRound(identity, {kind:'task-warning', taskId})` 与本线旅程消费臂整合（composition.ts:441-453）。
+- **合并集成修复**：main 新增 `devframe/repair-admission` 事件后 `events.spec.ts` "registers every project event" 断言数组补齐该类型（52 文件/492 通过 + 1 平台 skip，exit 0）。
+- **cordis-catalog 门**：main 新 agent-dispatch `src/run.ts:171` 缺显式返回类型标注致门失败（A2 属主面，本线不碰，登记待修）。
+
+### AT1-09 旅程闭合（组长验收，2026-09-08，232e6fe825）
+
+- **AT1-09 部分→覆盖（包级，单一旅程场景驱动）**：huoshan-2 Worker（显式路由 spawn 参数）在 start-resume harness 落一条 A→B 旅程（command-goal-binding/tests/start-resume-composition.spec.ts，+213/−2，既有 10 用例零改动）：A 起始/消费/授权完成 → B 需求变更（新 goalId/新 hash/新 budget，A 提前起 B 拒、旧审查不收 B 归属门拒）→ **预算跨 restart 保留活性证明**（重启若重置消费投影折叠即闩锁，实测 B 第二次消费折叠成功）→ 迟到 A 结果落 A 完整身份元组不计入 B → B 自身证据到 required-checks 阶段。复用既有判据零新增实现。验收复跑：11/33/267 passed + tsc 0，全 exit 0。
+- **源码级墙（待裁定，旅程诚实登记未掩盖）**：`MemoryRequiredChecksConfigStore` 每进程实例（required-checks.ts:188-223）、插件 apply 无 store 注入缝（index.ts:80-84 硬默认）——任何 goal 在非其 start 所在 boot 完成（含生产跨进程重启）必命中 `REQUIRED_CHECKS_CONFIG_NOT_FOUND`；硬互斥"resume 成功⇔之后可完成"。durable required-checks 注入缝裁定后 AT1-09 (e) 与 AT1-10 跨 boot 完成面才可开展。
+- 附带登记：`devframe/usage` 全树无生产写入者（测试装配与既有 review/role-policy fixture 同型）；task-delivery 迟到面因投影 `currentDeliveryGoal` 约束（delivery goalId 须等于最后一条 open binding）不可用于旅程运行时断言。

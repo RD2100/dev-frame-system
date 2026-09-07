@@ -221,6 +221,7 @@ describe('DevFrame durable event vocabulary', () => {
     expect([...KNOWN_SESSION_EVENT_TYPES].filter(type => type.startsWith('devframe/'))).toEqual([
       'devframe/goal-binding',
       'devframe/lifecycle',
+      'devframe/repair-admission',
       'devframe/review',
       'devframe/role-policy',
       'devframe/task-delivery',

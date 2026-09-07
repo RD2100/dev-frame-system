@@ -35,6 +35,8 @@ pnpm dsh --profile web --patch ./packages/experimental/devframe-profile/cordis.p
 
 profile 必须已包含 Web bundle 层；本层不动其 webserver 行。部署通过后续 `--patch` overlay 收窄安全的机器中立默认值（authorizedRoots、vaultRoot、shadowSessionId、workspace 身份），而不是编辑本文件。
 
+本层的 patch 以 insert 方式加入六行，不指向既有行。不要同时通过这些行自带的包层挂载同一行（例如 `dsh plugin --profile <name> add @deepseek-ai/dsh-experimental-project-memory`）：两个 patch 列表重复插入同一行 id 会让启动以重复行 id 错误失败。收窄某行的默认值时，改用后续按 id 指向的 `--patch` 条目（`- id: project-memory, config: …`）——patch 条目替换目标行的整个配置，每行以最后一次写入为准；覆盖语义由[基础 bundle README](../../bundle/base/README.zh.md) 拥有。
+
 ### 你得到什么
 
 本层插入身份、路由、记忆与目标绑定四行，默认值全部未配置、只读：shadow-router 在声明授权根之前不安装任何 `project_*` 工具；project-memory 在提供真实 vaultRoot 之前保持工具只读。hierarchy 行的 worker 面初始为空（fail closed），不预分配 lead 插件范围；dispatch 行挂载 `agent_dispatch` 消费面。

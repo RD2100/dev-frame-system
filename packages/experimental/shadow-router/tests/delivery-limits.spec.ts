@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { AcceptanceHash, ShadowMessageId, ShadowRequestId } from '../src/index.ts'
-import { harness, seedHarness, seedWorkspaceFact } from './helpers.ts'
+import { HARNESS_BACKENDS, harness, seedHarness, seedWorkspaceFact } from './helpers.ts'
 import type { ShadowDeliveryRecord } from '../src/index.ts'
 
 describe('shadow-router delivery limits and ownership', () => {
@@ -46,14 +46,14 @@ describe('shadow-router delivery limits and ownership', () => {
     }
   })
 
-  it('AT2-06: the pending queue limit rejects new input before acceptance', async () => {
+  it.each(HARNESS_BACKENDS)('AT2-06 [%s]: the pending queue limit rejects new input before acceptance', async (backend) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-at2-06b-'))
     const dir = join(root, 'project-a')
     await mkdir(dir)
     const canonical = await realpath(dir)
     // Crash residue: a ready binding plus two queued intents that already
     // occupy the bounded queue.
-    const seed = await seedHarness(root)
+    const seed = await seedHarness(root, { backend })
     try {
       const now = new Date().toISOString()
       await seedWorkspaceFact(seed.workspaceDomain, 'ws-limit-1', canonical)
@@ -91,7 +91,7 @@ describe('shadow-router delivery limits and ownership', () => {
       await seed.dispose()
     }
 
-    const h = await harness(root, { authorizedRoots: [root], maxPendingDeliveries: 2 })
+    const h = await harness(root, { authorizedRoots: [root], maxPendingDeliveries: 2 }, { backend })
     try {
       h.ctx.sessions.create(SessionId('session-ctrl-l1'), { meta: { cwd: canonical } })
       expect(h.router.listDeliveries(WorkspaceId('ws-limit-1'))).toHaveLength(2)
@@ -111,94 +111,101 @@ describe('shadow-router delivery limits and ownership', () => {
     }
   })
 
-  it('AT2-06: a previous Goal message never reaches the new Goal and its retry limits do not reset', async () => {
+  it.each(HARNESS_BACKENDS)('AT2-06 [%s]: a previous Goal message never reaches the new Goal and its retry limits do not reset', async (backend) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-at2-06c-'))
-    const h1 = await harness(root, { authorizedRoots: [root] })
-    try {
-      const dir = await h1.makeProjectDir('project-a')
-      const open = await h1.router.openProject(h1.shadow, { path: dir, requestId: 'at2-06c-open' })
-      await h1.router.setActiveGoal(open.workspaceId, 'goal-1', 'hash-run-1')
-      const revisionGoal1 = h1.router.findBinding(open.workspaceId)!.bindingRevision
-      const first = await h1.router.sendToProject(h1.shadow, {
-        workspaceId: open.workspaceId,
-        bindingRevision: revisionGoal1,
-        goalId: 'goal-1',
-        acceptanceHash: 'hash-run-1',
-        requestId: 'at2-06c-send-goal-1',
-        mode: 'work',
-        text: 'work bound to goal 1',
-      })
-      expect(first.status).toBe('received')
-
-      // The controller starts another Goal; the association version moves on.
-      await h1.router.setActiveGoal(open.workspaceId, 'goal-2', 'hash-run-2')
-      const revisionGoal2 = h1.router.findBinding(open.workspaceId)!.bindingRevision
-      expect(revisionGoal2).toBeGreaterThan(revisionGoal1)
-
-      // The old revision is stale outright...
-      await expect(h1.router.sendToProject(h1.shadow, {
-        workspaceId: open.workspaceId,
-        bindingRevision: revisionGoal1,
-        goalId: 'goal-1',
-        acceptanceHash: 'hash-run-1',
-        requestId: 'at2-06c-stale-revision',
-        mode: 'work',
-        text: 'old revision',
-      })).rejects.toMatchObject({ code: 'SHADOW_STALE_REVISION' })
-
-      // ...and the current revision with the previous Goal's association is
-      // never accepted as input to the new Goal — repeatedly, without reset.
-      for (let attempt = 0; attempt < 3; attempt++) {
-        await expect(h1.router.sendToProject(h1.shadow, {
-          workspaceId: open.workspaceId,
-          bindingRevision: revisionGoal2,
-          goalId: 'goal-1',
-          acceptanceHash: 'hash-run-1',
-          requestId: `at2-06c-old-goal-${attempt}`,
-          mode: 'work',
-          text: 'old goal association',
-        })).rejects.toMatchObject({ code: 'SHADOW_GOAL_STALE' })
-      }
-      const deliveries = h1.router.listDeliveries(open.workspaceId)
-      expect(deliveries).toHaveLength(1)
-      expect(deliveries[0]!.goalId).toBe('goal-1')
-
-      // Crash residue after the switch: one queued intent still bound to the
-      // old Goal's association, persisted through the real domain.
-      const seed = await seedHarness(root)
+    const h1 = await harness(root, { authorizedRoots: [root] }, { backend })
+    // Generation 1 runs the goal switch to its visible rejection surface.
+    const gen1 = await (async () => {
       try {
-        const now = new Date().toISOString()
-        const delivery: ShadowDeliveryRecord = {
-          messageId: ShadowMessageId('msg-old-goal-queued'),
-          requestId: ShadowRequestId('old-goal-queued'),
-          sourceSessionId: SessionId('session-shadow'),
-          workspaceId: WorkspaceId(open.workspaceId),
+        const dir = await h1.makeProjectDir('project-a')
+        const open = await h1.router.openProject(h1.shadow, { path: dir, requestId: 'at2-06c-open' })
+        await h1.router.setActiveGoal(open.workspaceId, 'goal-1', 'hash-run-1')
+        const revisionGoal1 = h1.router.findBinding(open.workspaceId)!.bindingRevision
+        const first = await h1.router.sendToProject(h1.shadow, {
+          workspaceId: open.workspaceId,
           bindingRevision: revisionGoal1,
           goalId: 'goal-1',
-          acceptanceHash: AcceptanceHash('hash-run-1'),
+          acceptanceHash: 'hash-run-1',
+          requestId: 'at2-06c-send-goal-1',
           mode: 'work',
-          text: 'queued before the Goal switch',
-          state: 'queued',
-          createdAt: now,
-          updatedAt: now,
-        }
-        await seed.domain.table('deliveries').put(delivery.messageId, delivery)
-      } finally {
-        await seed.dispose()
-      }
+          text: 'work bound to goal 1',
+        })
+        expect(first.status).toBe('received')
 
-      // Reopen the real storage: the stale-Goal residue converges to
-      // cancelled, never to the controller's current Goal.
-      const h2 = await harness(root, { authorizedRoots: [root] })
-      try {
-        const recovered = await h2.router.recoverDeliveries(WorkspaceId(open.workspaceId))
-        expect(recovered.map(record => record.state)).toEqual(['cancelled'])
-        expect(recovered[0]!.cancelReason).toBe('goal-no-longer-authorized')
+        // The controller starts another Goal; the association version moves on.
+        await h1.router.setActiveGoal(open.workspaceId, 'goal-2', 'hash-run-2')
+        const revisionGoal2 = h1.router.findBinding(open.workspaceId)!.bindingRevision
+        expect(revisionGoal2).toBeGreaterThan(revisionGoal1)
+
+        // The old revision is stale outright...
+        await expect(h1.router.sendToProject(h1.shadow, {
+          workspaceId: open.workspaceId,
+          bindingRevision: revisionGoal1,
+          goalId: 'goal-1',
+          acceptanceHash: 'hash-run-1',
+          requestId: 'at2-06c-stale-revision',
+          mode: 'work',
+          text: 'old revision',
+        })).rejects.toMatchObject({ code: 'SHADOW_STALE_REVISION' })
+
+        // ...and the current revision with the previous Goal's association is
+        // never accepted as input to the new Goal — repeatedly, without reset.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          await expect(h1.router.sendToProject(h1.shadow, {
+            workspaceId: open.workspaceId,
+            bindingRevision: revisionGoal2,
+            goalId: 'goal-1',
+            acceptanceHash: 'hash-run-1',
+            requestId: `at2-06c-old-goal-${attempt}`,
+            mode: 'work',
+            text: 'old goal association',
+          })).rejects.toMatchObject({ code: 'SHADOW_GOAL_STALE' })
+        }
+        const deliveries = h1.router.listDeliveries(open.workspaceId)
+        expect(deliveries).toHaveLength(1)
+        expect(deliveries[0]!.goalId).toBe('goal-1')
+        return { workspaceId: open.workspaceId, revisionGoal1 }
       } finally {
-        await h2.dispose()
+        // Cold restart: the context stops, the root stays on disk for the
+        // residue seed and the recovery reopen — both write and restore the
+        // root while no router process holds it (each medium is single-writer).
+        await h1.close()
       }
+    })()
+
+    // Crash residue after the switch: one queued intent still bound to the
+    // old Goal's association, persisted through the real domain.
+    const seed = await seedHarness(root, { backend })
+    try {
+      const now = new Date().toISOString()
+      const delivery: ShadowDeliveryRecord = {
+        messageId: ShadowMessageId('msg-old-goal-queued'),
+        requestId: ShadowRequestId('old-goal-queued'),
+        sourceSessionId: SessionId('session-shadow'),
+        workspaceId: WorkspaceId(gen1.workspaceId),
+        bindingRevision: gen1.revisionGoal1,
+        goalId: 'goal-1',
+        acceptanceHash: AcceptanceHash('hash-run-1'),
+        mode: 'work',
+        text: 'queued before the Goal switch',
+        state: 'queued',
+        createdAt: now,
+        updatedAt: now,
+      }
+      await seed.domain.table('deliveries').put(delivery.messageId, delivery)
     } finally {
-      await h1.dispose()
+      await seed.dispose()
+    }
+
+    // Reopen the real storage: the stale-Goal residue converges to
+    // cancelled, never to the controller's current Goal.
+    const h2 = await harness(root, { authorizedRoots: [root] }, { backend })
+    try {
+      const recovered = await h2.router.recoverDeliveries(WorkspaceId(gen1.workspaceId))
+      expect(recovered.map(record => record.state)).toEqual(['cancelled'])
+      expect(recovered[0]!.cancelReason).toBe('goal-no-longer-authorized')
+    } finally {
+      await h2.dispose()
     }
   })
 })

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/shadow-router/README.md
-README.md: 1aca2a7fd681484ef4dc591a5dda89f333f187ef
-README.zh.md: 62824aa441bd083fec2f114f7a7e22217d1637a1
+README.md: 3a0c1e1cec9a1ff7f834d001b6623292a89223a2
+README.zh.md: 163f5fba49e95480cef985fea146b7b58f778ac2

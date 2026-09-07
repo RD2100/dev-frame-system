@@ -11,10 +11,11 @@ import GoalService from '@deepseek-ai/dsh-goal'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import { DevFrameReviewId } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
+import { DevFrameOperationId, DevFrameReviewId } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
 import type {
   DevFrameReviewEventData,
   DevFrameRolePolicyEventData,
+  DevFrameUsageEventData,
 } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
 import type { DevFrameRequiredChecksConfig } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
 import { WorkspaceId } from '@deepseek-ai/dsh-experimental-devframe/shared'
@@ -31,10 +32,11 @@ import {
   START_GOAL_RUNNING_TEXT,
   START_OBJECTIVE_REQUIRED_TEXT,
   START_WORKTREE_REQUIRED_TEXT,
+  renderCompletionSuccess,
   renderResumeSuccess,
   renderStartSuccess,
 } from '../src/command.ts'
-import { compositionRolePolicy, resultTupleOf } from '../src/host-evidence.ts'
+import { acceptanceHashOf, compositionRolePolicy, devFrameStateOf, resultTupleOf } from '../src/host-evidence.ts'
 
 const WORKSPACE_ID = WorkspaceId('ws-v14-compos')
 /** The deterministic policy version the composition lands (host-evidence). */
@@ -587,5 +589,214 @@ describe('configuration loud failure', { timeout: 60_000 }, () => {
       maxAttempts: 3,
       maxGoalRounds: 0,
     })).rejects.toThrow(/maxGoalRounds must be a positive safe integer/)
+  })
+})
+
+describe('AT1-09 A to B journey composition', { timeout: 120_000 }, () => {
+  /**
+   * One schema-valid usage record attributed to a binding's result tuple: the
+   * attempt-budget consumption face the projection folds per Goal identity
+   * (the same judge shape the DevFrame event fixtures use).
+   */
+  function usageRecord(
+    binding: GoalBinding,
+    operationId: string,
+    fields: Pick<DevFrameUsageEventData, 'attempt' | 'consumedAttempts'>
+      & Partial<Pick<DevFrameUsageEventData, 'phase' | 'outcome'>>,
+  ): DevFrameUsageEventData {
+    return {
+      version: 1,
+      operationId: DevFrameOperationId(operationId),
+      binding: resultTupleOf(binding),
+      role: 'worker',
+      attempt: fields.attempt,
+      phase: fields.phase ?? 'reserved',
+      ...(fields.outcome === undefined ? {} : { outcome: fields.outcome }),
+      consumedAttempts: fields.consumedAttempts,
+      maxAttempts: binding.budget.maxAttempts,
+    }
+  }
+
+  /** One passing review record attributed to a binding under its own review id. */
+  function journeyReview(
+    binding: GoalBinding,
+    reviewerSessionId: SessionId,
+    reviewId: string,
+  ): DevFrameReviewEventData {
+    return {
+      ...reviewRecord(binding, reviewerSessionId),
+      reviewId: DevFrameReviewId(reviewId),
+    }
+  }
+
+  it('drives the AT1-09 A to B journey: isolation, stale review, budget across restart, late results', async () => {
+    const fixture = await createCommittedWorktree()
+    const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-command-goal-binding-journey-'))
+    roots.push(storageRoot)
+    const sessionId = SessionId('controller-v14-compos-journey')
+    const reviewerSessionId = SessionId('reviewer-v14-compos-journey')
+    const objectiveA = 'fix the billing bug'
+    const objectiveB = 'migrate the billing schema'
+
+    // Boot 1: Goal A starts on the workspace binding, produces its evidence
+    // chain, consumes one charged attempt, and completes on its own evidence.
+    const first = await boot({
+      checks: startChecks(fixture.root),
+      workspaceRoot: fixture.root,
+      storageRoot,
+      sessionId,
+    })
+    const startedA = await execute(first, `/devframe-start ${objectiveA}`)
+    if (startedA.result.kind !== 'success') throw new Error('expected a success result')
+    expect(startedA.result.text).toBe(renderStartSuccess(1, 'passed'))
+    const goalA = first.ctx.goals.get(first.agent)
+    if (goalA === undefined) throw new Error('goal A is missing after start')
+    expect(goalA.phase).toBe('active')
+    expect(first.composition.admissionOf(first.agent)).toBe('open')
+    const bindingA = goalBindingEvents(first)[0]
+    if (bindingA === undefined) throw new Error('goal A binding is missing')
+    expect(bindingA.goalId).toBe(goalA.id)
+    expect(bindingA.budget).toEqual({ maxAttempts: 3, consumedAttempts: 0 })
+    expect(bindingA.acceptanceHash).toBe(acceptanceHashOf(objectiveA, startChecks(fixture.root)))
+
+    // The requirement change cannot start while A is still running: the same
+    // binding refuses a second unfinished Goal.
+    const refusedB = await execute(first, `/devframe-start ${objectiveB}`)
+    if (refusedB.result.kind !== 'error') throw new Error('expected an error result')
+    expect(refusedB.result.text).toBe(START_GOAL_RUNNING_TEXT)
+    expect(first.ctx.goals.get(first.agent)?.id).toBe(goalA.id)
+
+    // A consumes one charged attempt through the usage face.
+    first.session.append('devframe/usage', usageRecord(bindingA, 'operation-v14-compos-a', { attempt: 1, consumedAttempts: 1 }))
+    expect(devFrameStateOf(first.ctx, first.session).failure).toBeNull()
+    expect(devFrameStateOf(first.ctx, first.session).usage).toHaveLength(1)
+
+    // A completes on its own evidence: reviewer authorized, the review
+    // attributed to A, and the real verification and fingerprint admitted.
+    first.session.append('devframe/role-policy', reviewerPolicyRecord(first.session.id, reviewerSessionId))
+    first.session.append('devframe/review', journeyReview(bindingA, reviewerSessionId, 'review-v14-compos-a'))
+    const completedA = await execute(first, '/goal-complete')
+    if (completedA.result.kind !== 'success') throw new Error('expected a success result')
+    expect(completedA.result.text).toBe(renderCompletionSuccess())
+    expect(first.ctx.goals.get(first.agent)?.phase).toBe('complete')
+    expect(first.composition.admissionOf(first.agent)).toBe('closed')
+
+    await first.ctx.sessions.flush(first.session)
+    contexts.splice(contexts.indexOf(first.ctx), 1)
+    await first.ctx.fiber.dispose()
+
+    // Boot 2: the restart keeps A's consumption readable, the completed A
+    // refuses resume and completion faces, and the requirement change starts
+    // Goal B on the same workspace binding with a new acceptance hash.
+    const second = await boot({
+      checks: startChecks(fixture.root),
+      workspaceRoot: fixture.root,
+      storageRoot,
+      sessionId,
+      restore: true,
+    })
+    const staleA = await execute(second, '/goal-complete')
+    if (staleA.result.kind !== 'error') throw new Error('expected an error result')
+    expect(staleA.result.text).toBe(GOAL_ALREADY_COMPLETE_TEXT)
+    expect(second.ctx.goals.get(second.agent)?.id).toBe(goalA.id)
+    expect(second.ctx.goals.get(second.agent)?.phase).toBe('complete')
+
+    const startedB = await execute(second, `/devframe-start ${objectiveB}`)
+    if (startedB.result.kind !== 'success') throw new Error('expected a success result')
+    const goalB = second.ctx.goals.get(second.agent)
+    if (goalB === undefined) throw new Error('goal B is missing after start')
+    expect(goalB.id).not.toBe(goalA.id)
+    expect(second.composition.admissionOf(second.agent)).toBe('open')
+    const bindingB = goalBindingEvents(second).at(-1)
+    if (bindingB === undefined) throw new Error('goal B binding is missing')
+    expect(bindingB.goalId).toBe(goalB.id)
+    expect(bindingB.acceptanceHash).toBe(acceptanceHashOf(objectiveB, startChecks(fixture.root)))
+    expect(bindingB.acceptanceHash).not.toBe(bindingA.acceptanceHash)
+    expect(bindingB.budget).toEqual({ maxAttempts: 3, consumedAttempts: 0 })
+
+    // B consumes one charged attempt; A's earlier consumption stays on A.
+    second.session.append('devframe/usage', usageRecord(bindingB, 'operation-v14-compos-b', { attempt: 1, consumedAttempts: 1 }))
+    const usageAfterB = devFrameStateOf(second.ctx, second.session).usage
+    expect(usageAfterB).toHaveLength(2)
+    expect(usageAfterB.map(record => record.binding.goalId)).toEqual([goalA.id, goalB.id])
+
+    await second.ctx.sessions.flush(second.session)
+    contexts.splice(contexts.indexOf(second.ctx), 1)
+    await second.ctx.fiber.dispose()
+
+    // Boot 3: B resumes across the restart at revision+1, its consumption
+    // count survives (the next charge must be 2, not a from-zero 1), and A's
+    // late result lands on A's identity tuple without counting into B.
+    const third = await boot({
+      checks: startChecks(fixture.root),
+      workspaceRoot: fixture.root,
+      storageRoot,
+      sessionId,
+      restore: true,
+    })
+    const probe = await execute(third, '/goal-complete')
+    if (probe.result.kind !== 'error') throw new Error('expected an error result')
+    expect(probe.result.text).toContain('no completion binding')
+
+    const resumed = await execute(third, '/devframe-resume')
+    if (resumed.result.kind !== 'success') throw new Error('expected a success result')
+    expect(resumed.result.text).toBe(renderResumeSuccess())
+    const goalResumed = third.ctx.goals.get(third.agent)
+    expect(goalResumed?.id).toBe(goalB.id)
+    expect(goalResumed?.revision).toBe(goalB.revision + 1)
+    expect(third.composition.admissionOf(third.agent)).toBe('open')
+    const landed = goalBindingEvents(third)
+    expect(landed).toHaveLength(3)
+    expect(landed[2]?.goalId).toBe(goalB.id)
+    expect(landed[2]?.goalRevision).toBe(goalB.revision + 1)
+    expect(landed[2]?.lifecycle).toBe('admission_open')
+    expect(landed[2]?.budget).toEqual({ maxAttempts: 3, consumedAttempts: 0 })
+
+    // The preserved count refuses a from-zero charge: the fold only accepts
+    // consumedAttempts 2 when the restored count is still 1, and a failed
+    // fold would latch a projection failure.
+    third.session.append('devframe/usage', usageRecord(bindingB, 'operation-v14-compos-b-2', { attempt: 2, consumedAttempts: 2 }))
+    const usageAfterResume = devFrameStateOf(third.ctx, third.session).usage
+    expect(usageAfterResume.filter(record => record.binding.goalId === goalB.id)).toHaveLength(2)
+
+    // A's late result settles after B exists: it lands on A's identity tuple
+    // and B's consumption stays exactly its own two charges.
+    third.session.append('devframe/usage', {
+      ...usageRecord(bindingA, 'operation-v14-compos-a', { attempt: 1, consumedAttempts: 1 }),
+      phase: 'settled',
+      outcome: 'succeeded',
+    })
+    const usageAfterLateA = devFrameStateOf(third.ctx, third.session).usage
+    const lateA = usageAfterLateA.find(record =>
+      record.operationId === DevFrameOperationId('operation-v14-compos-a') && record.phase === 'settled')
+    if (lateA === undefined) throw new Error('late A settlement is missing')
+    expect(lateA.binding).toEqual(resultTupleOf(bindingA))
+    expect(lateA.binding.goalId).toBe(goalA.id)
+    expect(lateA.binding.acceptanceHash).toBe(bindingA.acceptanceHash)
+    expect(lateA.binding.snapshotId).toBe(bindingA.snapshotId)
+    expect(usageAfterLateA.filter(record => record.binding.goalId === goalB.id).map(record => record.consumedAttempts))
+      .toEqual([1, 2])
+    expect(devFrameStateOf(third.ctx, third.session).failure).toBeNull()
+
+    // A's old review is the log's latest review: B's completion must reject
+    // it at the attribution gate before any predicate runs.
+    await expect(execute(third, '/goal-complete')).rejects.toThrow(
+      `completion review evidence is attributed to Goal "${goalA.id}"`,
+    )
+    expect(third.ctx.goals.get(third.agent)?.phase).toBe('active')
+    expect(third.composition.admissionOf(third.agent)).toBe('closed')
+
+    // With B's own review as the latest one, the completion face passes the
+    // task-warning and source-fingerprint stages (a fingerprint rejection
+    // would be a verdict, not this throw) and then reports the unregistered
+    // digest: the required-checks store is per-process, so the post-restart
+    // completion stops at that structural boundary.
+    third.session.append('devframe/review', journeyReview(bindingB, reviewerSessionId, 'review-v14-compos-b'))
+    await expect(execute(third, '/goal-complete')).rejects.toMatchObject({
+      name: 'RequiredChecksError',
+      code: 'REQUIRED_CHECKS_CONFIG_NOT_FOUND',
+    })
+    expect(third.ctx.goals.get(third.agent)?.phase).toBe('active')
+    expect(third.composition.admissionOf(third.agent)).toBe('closed')
   })
 })
