@@ -52,7 +52,7 @@ lead 通过 spawn/fork 工具委托时，必须携带落在宿主配置 `leadPlu
 
 求值器仅允许总控创建组长，拒绝创建另一个总控或 Worker；组长只能在获批的插件范围内创建 Worker。返回允许决定不会创建或绑定 Agent：调用方必须在执行创建之前落实该决定。
 
-`createChildAgent(parent, request, options)` 校验活跃父 Agent、角色、深度、任务及工作树归属，然后在 Agent 工厂的 setup 阶段持久化绑定，之后才发布 Agent。调用方提供已通过注册表校验的工作树，以及装配所需 preset 的 setup。同一父会话和任务的相同重试返回活跃子 Agent；冲突请求和已被占用的工作树会被拒绝。已保留的子 Agent 不可用时必须显式恢复。此方法激活 Agent，但不发送提示词。宿主可以预先分配 SessionID，以配置组长获准使用的插件范围。
+`createChildAgent(parent, request, options)` 校验活跃父 Agent、角色、深度、任务及工作树归属，然后在 Agent 工厂的 setup 阶段持久化绑定，之后才发布 Agent。每个子 Agent 都必须指定插件范围。调用方提供已通过注册表校验的工作树，以及装配所需 preset 的 setup。同一父会话和任务的相同重试返回活跃子 Agent；冲突请求和已被占用的工作树会被拒绝。已保留的子 Agent 不可用时必须显式恢复。此方法激活 Agent，但不发送提示词。宿主可以预先分配 SessionID，以配置组长获准使用的插件范围。
 
 -----
 
