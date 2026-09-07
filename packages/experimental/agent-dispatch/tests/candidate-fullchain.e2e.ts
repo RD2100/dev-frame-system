@@ -37,6 +37,7 @@ const CANDIDATE_ROWS = [
   '@deepseek-ai/dsh-experimental-agent-hierarchy',
   '@deepseek-ai/dsh-experimental-agent-dispatch',
   '@deepseek-ai/dsh-experimental-project-controller',
+  '@deepseek-ai/dsh-experimental-devframe/lead-role-landing',
   '@deepseek-ai/dsh-experimental-project-controller/task-consumer',
   '@deepseek-ai/dsh-experimental-project-controller/delivery-consumer',
   '@deepseek-ai/dsh-experimental-project-controller/consumer',
