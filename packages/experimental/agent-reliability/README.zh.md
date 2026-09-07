@@ -61,6 +61,10 @@ function startBoundedGeneration(ctx: { agentReliability: AgentReliability }, ide
 }
 ```
 
+需要停止在途工作时，把宿主当前代际的 `StopProjectOptions` 作为 `openAdmission(identity, { deadline, stop })` 的 `stop` 字段传入。定时器到期先关闭服务准入，再调用既有 `stopProject`；清理与 flush 确认后才释放写权。`deadlineStopResult` 在触发后提供结果。未确认的资源保留 `needs_attention`。
+
+显式关闭或重开会撤销尚未触发的定时器。停止期间重开抛出 `AGENT_RELIABILITY_STOP_IN_PROGRESS`，防止旧释放回调作用于新代际。服务释放清除定时器并等待已触发的有界停止。定时器不维持 Node 进程存活；在截止前退出的进程不会运行截止清理。宿主从经验证的 Config 提供截止与 grace，以及真实 Agent、job、持久化和 writer 适配；省略 `stop` 时仅执行原有派发前检查。
+
 ### 对账一次不确定调用
 
 调用结果未知时，把计划交给对账器：探测先查外部状态，重试最多执行一次、且仅在探测证明效果缺失后执行。
@@ -117,7 +121,7 @@ async function flushBeforeRelease(
 - **默认关闭的准入。** 新进程准入从关闭开始，只为一个显式身份打开；前置步骤以不同的稳定错误码区分"关闭"与"身份不匹配"，派发接线得以分辨"从未准入"与"错误代际"。
 - **探测拥有重试决定权。** `reconcileUncertainCall` 构造上不存在盲目重试路径：重试最多调用一次，且仅在探测返回 `absent` 之后。`confirmed` 仅凭探测即可结算；`still_uncertain` 返回未解决且不重发——未 resolve 的调用由调用方决定含义。
 - **刷写屏障保留写者。** 失败的刷写立即关闭准入并报告 `writerRetained: true`；释放写权是宿主的动作，本接缝使"在未刷写日志上释放"无法发生。
-- **截止缝在前置步骤强制执行，而非存储态。** `openAdmission` 可附截止，非有限截止在打开处明确失败且不触碰当前代际；从截止时刻（含）起，前置步骤先于身份检查以 `AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED` 拒绝——截止已过是对窗口的陈述，非对身份的陈述。`admissionState` 仍报告存储的代际决定（`'closed' | 'open'`）；截止只活在派发闸门里，恢复唯显式重开新代际。
+- **截止缝在前置步骤强制执行，而非存储态。** `openAdmission` 可附截止，非有限截止在打开处明确失败且不触碰当前代际；从截止时刻（含）起，前置步骤先于身份检查以 `AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED` 拒绝——截止已过是对窗口的陈述，非对身份的陈述。`admissionState` 仍报告存储的代际决定（`'closed' | 'open'`）；未提供 `stop` 时仅由派发闸门执行截止；提供 `stop` 后定时器显式关闭准入。恢复需在停止结束后显式重开新代际。
 
 ### 源码地图
 
@@ -152,15 +156,16 @@ async function flushBeforeRelease(
 
 与实时请求无关：本包不触碰请求前缀，因此不可能使提供方缓存复用失效。
 
-<a id="known-limitations-and-deferred-work"></a>
 ## 已知限制与延期工作
+
+<a id="known-limitations-and-deferred-work"></a>
 
 这些限制界定了本服务在何种场景下不适用或需要特别运维关注。它们是当前包约束，不是任务清单。
 
 - **准入是进程内且默认关闭的** —— 重启丢失已准入身份，宿主显式重新打开准入前所有前置步骤都会拒绝。
 - **对账器信任其探测** —— `absent` 与 `confirmed` 的答案只与调用方提供的外部状态检查同等可靠；服务无法核实探测检查的是对的资源。
 - **停止原样转发 DevFrame 契约** —— 未解决身份、写者保留与重启对账遵循 DevFrame 停止语义；本服务不添加自己的持久停止状态。
-- **截止不取消在途工作** —— 已通过前置步骤的工作在截止时刻后仍继续运行；AT4-06 的有界取消半边待语义裁定。
+- **自动停止依赖真实宿主适配** —— 未提供 `cutoff.stop` 的部署只拒绝后续派发。项目验收必须覆盖实际宿主与持久写锁。
 
 <a id="dev-note"></a>
 ### 开发备注

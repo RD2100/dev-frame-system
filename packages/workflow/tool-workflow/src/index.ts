@@ -3,8 +3,8 @@
  * subagents, and return the script's final value. It owns the model-facing schema and run lifecycle; script
  * parsing, execution, caps, and cancellation live behind `ctx.workflowEngine`
  * (`@deepseek-ai/dsh-workflow`), so a hardened engine swaps in without touching what the model
- * sees. Execution awaits `run.result` and always disposes the run; non-completed reasons become tool
- * errors, and background collection remains deferred. Presentation is an args-only generic card
+ * sees. Foreground execution awaits and disposes the run; background execution returns an Agent-owned
+ * job whose terminal state follows run disposal. Presentation is an args-only generic card
  * titled from `meta.name`. Explicit-ask usage guidance is registered as the tool's own prompt
  * section rather than deployment persona prose.
  * @module @deepseek-ai/dsh-tool-workflow
@@ -15,6 +15,7 @@ import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolCallView, ToolResultView } from '@deepseek-ai/dsh-tools'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import type { JobOutcome } from '@deepseek-ai/dsh-jobs'
 import type { Session, SessionEventMap } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type {
@@ -27,6 +28,12 @@ import type {
 
 export const name = 'tool-workflow'
 export const inject = ['tools', 'workflowEngine', 'systemPrompt']
+
+declare module '@deepseek-ai/dsh-jobs' {
+  interface JobKindMap {
+    workflow: 'workflow'
+  }
+}
 
 /** Config: the model-facing tool name plus result rendering caps. */
 export interface Config {
@@ -47,6 +54,7 @@ interface WorkflowRecorder {
   start(session: Session, run: WorkflowRun): void
   finish(runId: WorkflowRunId, stopReason: WorkflowStopReason): void
   abandon(runId: WorkflowRunId): void
+  dispose(): Promise<void>
 }
 
 interface ToolWorkflowRecordEventMap {
@@ -71,6 +79,7 @@ function renderRecordingError(error: unknown): string {
  */
 function createWorkflowRecorder(ctx: Context): WorkflowRecorder {
   const active = new Map<WorkflowRunId, Session>()
+  const offLifetime = ctx.effect(() => () => { active.clear() })
   const append = <Type extends keyof ToolWorkflowRecordEventMap>(
     session: Session,
     type: Type,
@@ -91,7 +100,7 @@ function createWorkflowRecorder(ctx: Context): WorkflowRecorder {
     }
   }
 
-  ctx.on('workflow/agent-start', (info, agent) => {
+  const offStart = ctx.on('workflow/agent-start', (info, agent) => {
     const session = active.get(info.id)
     if (session === undefined) return
     const data: ToolWorkflowAgentStartData = {
@@ -103,7 +112,7 @@ function createWorkflowRecorder(ctx: Context): WorkflowRecorder {
     }
     if (!append(session, 'tool-workflow/agent-start', data)) active.delete(info.id)
   })
-  ctx.on('workflow/agent-end', (info, agent) => {
+  const offEnd = ctx.on('workflow/agent-end', (info, agent) => {
     const session = active.get(info.id)
     if (session === undefined) return
     const data: ToolWorkflowAgentEndData = {
@@ -126,6 +135,12 @@ function createWorkflowRecorder(ctx: Context): WorkflowRecorder {
       active.delete(runId)
     },
     abandon: (runId) => { active.delete(runId) },
+    dispose: async () => {
+      offStart()
+      offEnd()
+      await offLifetime()
+      active.clear()
+    },
   }
 }
 
@@ -146,7 +161,7 @@ Script-body hooks:
 
 Misused hooks (bad arguments, unknown options, unsupported schemas, tripped caps) throw errors that ALWAYS kill the script — they never dissolve into a per-item \`null\`.
 
-Constraints: concurrency and total-agent caps apply; no filesystem, network, timers, or Node.js APIs are provided — the agents do the work, the script only coordinates them. The run executes in the foreground: this call returns when the whole script finishes.`
+Constraints: concurrency and total-agent caps apply; no filesystem, network, timers, or Node.js APIs are provided — the agents do the work, the script only coordinates them. By default this call waits for the whole script. Set \`run_in_background: true\` to return a job id and continue other work; use job_output to collect the result or job_kill to cancel. Background execution requires an available job registry and controller. Jobs remain owned by the calling agent and become terminal only after cleanup.`
 
 type WorkflowCallArgs = {
   script: string
@@ -252,20 +267,34 @@ export function apply(ctx: Context, config: Config): void {
         additionalProperties: true,
         description: 'Optional JSON input exposed to the script as the `args` global (wrap a bare list as a field, e.g. {"files": [...]}).',
       },
+      run_in_background: {
+        type: 'boolean',
+        description: 'Return an owned job id immediately instead of waiting for the workflow. Defaults to false. Collect with job_output or cancel with job_kill; the job settles only after the workflow and its children stop.',
+      },
     },
     output: {
       schema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          runId: { type: 'string', required: true },
-          agentsStarted: { type: 'integer', required: true },
-          result: { type: 'json', required: true },
-        },
+        oneOf: [{
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            runId: { type: 'string', required: true },
+            agentsStarted: { type: 'integer', required: true },
+            result: { type: 'json', required: true },
+          },
+        }, {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            jobId: { type: 'string', required: true },
+          },
+        }],
       },
       render: (args, value) => [{
         type: 'text',
-        text: renderResult(args.meta.name, value.agentsStarted, value.result, maxResultChars),
+        text: 'jobId' in value
+          ? `started background workflow job ${value.jobId}`
+          : renderResult(args.meta.name, value.agentsStarted, value.result, maxResultChars),
       }],
     },
     async execute(args, exec) {
@@ -275,6 +304,57 @@ export function apply(ctx: Context, config: Config): void {
         // means a non-agent caller invoked the tool directly, which has no
         // parent to attribute the children to. Fail loud rather than guess.
         throw new Error('workflow tool requires a calling agent (exec.agent was undefined)')
+      }
+
+      if (args.run_in_background === true) {
+        const jobs = ctx.get('jobs')
+        if (jobs === undefined) throw new Error('background workflows require a job registry and job controller')
+        const jobId = jobs.start({
+          kind: 'workflow',
+          label: args.meta.name,
+          owner: parent,
+          run: () => {
+            const controller = new AbortController()
+            const run = ctx.workflowEngine.start({
+              script: args.script,
+              meta: args.meta,
+              ...args.args !== undefined ? { args: args.args } : {},
+              parent,
+              signal: controller.signal,
+            })
+            const recordsRun = exec.parent === undefined
+            // Job lifetime follows the Agent, including when this tool is reloaded.
+            const jobRecorder = recordsRun ? createWorkflowRecorder(ctx.root) : undefined
+            jobRecorder?.start(parent.session, run)
+            const done = async (): Promise<JobOutcome> => {
+              let result: WorkflowResult | undefined
+              try {
+                try {
+                  result = await run.result
+                } finally {
+                  await run.dispose()
+                  if (result !== undefined) jobRecorder?.finish(run.id, result.stopReason)
+                }
+                const error = stopReasonError(result)
+                return error === undefined
+                  ? { status: 'completed', output: renderResult(args.meta.name, result.agentsStarted, result.value as JsonValue, maxResultChars) }
+                  : { status: result.stopReason === 'cancelled' ? 'killed' : 'failed', detail: error }
+              } catch (error: unknown) {
+                return { status: 'failed', detail: renderRecordingError(error) }
+              } finally {
+                await jobRecorder?.dispose()
+              }
+            }
+            return {
+              cancel: (reason?: string) => {
+                run.cancel(reason)
+                controller.abort(reason ?? 'background workflow cancelled')
+              },
+              done: done(),
+            }
+          },
+        })
+        return { jobId }
       }
 
       // Meta/body validation failures (META_INVALID/SCRIPT_PARSE) throw

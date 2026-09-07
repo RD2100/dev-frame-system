@@ -2,6 +2,8 @@
 
 /** Stable, machine-routable failure classifications for the reliability service. */
 export type AgentReliabilityErrorCode =
+  /** Admission cannot reopen while the deadline-triggered stop owns cleanup and writer release. */
+  | 'AGENT_RELIABILITY_STOP_IN_PROGRESS'
   /** A dispatch pre-step ran while admission was closed or before any identity was opened. */
   | 'AGENT_RELIABILITY_ADMISSION_CLOSED'
   /** A dispatch pre-step ran after the admitted generation's cutoff instant; the window is dead. */

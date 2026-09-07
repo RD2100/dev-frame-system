@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-09-06-at406-deadline-admission-seam.md
-2026-09-06-at406-deadline-admission-seam.md: d4eacdc97ea59d17300b53e26c71a5a93aca7432
-2026-09-06-at406-deadline-admission-seam.zh.md: f0c1a0ea932c8a660176487b91b9885436bb784c
+2026-09-06-at406-deadline-admission-seam.md: 8432e194246a73d581c760f583c0109df1c6e034
+2026-09-06-at406-deadline-admission-seam.zh.md: 1255280c9a77daf3e5449b3660210041366b4bfc

@@ -15,10 +15,12 @@ import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolCallView } from '@deepseek-ai/dsh-tools'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { WorktreeId } from '@deepseek-ai/dsh-worktree-registry'
 import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import { apply as requestBudgetApply } from '@deepseek-ai/dsh-experimental-project-controller/request-budget-consumer'
+import type {} from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import { GoalBindingComposition, resolveCommandGoalBindingConfig } from '@deepseek-ai/dsh-experimental-command-goal-binding'
 import type { CommandGoalBindingConfig, GoalBindingCompositionStores } from '@deepseek-ai/dsh-experimental-command-goal-binding'
 import { AgentDispatch } from './service.ts'
@@ -54,6 +56,35 @@ const GUIDANCE = 'The agent dispatch tool is the daily delegation entry over the
 
 /** The tool names this plugin registers, in registration order. */
 export const TOOL_NAMES = ['agent_dispatch'] as const
+
+/**
+ * Resolve the approved parent route a dispatched child inherits: the latest
+ * request header owns provider, model, and reasoning effort after
+ * request-time selection; creation options are the fallback before the
+ * first request and retain the configured output-token limit. Only the
+ * route fields pass — the child never receives the parent's whole option
+ * bag — and the standard persona's required {{model}} variable resolves
+ * from them.
+ * @param parent - the delegating parent agent.
+ * @returns the detached route options for the child's creation.
+ */
+function parentRouteForDelegation(parent: Agent): AgentOptions {
+  const requestConfig = parent.session.requestHeader()?.config
+  if (requestConfig === undefined) {
+    return {
+      ...(parent.options.provider !== undefined ? { provider: parent.options.provider } : {}),
+      ...(parent.options.model !== undefined ? { model: parent.options.model } : {}),
+      ...(parent.options.reasoningEffort !== undefined ? { reasoningEffort: parent.options.reasoningEffort } : {}),
+      ...(parent.options.maxTokens !== undefined ? { maxTokens: parent.options.maxTokens } : {}),
+    }
+  }
+  return {
+    provider: requestConfig.provider,
+    model: requestConfig.model,
+    ...(requestConfig.reasoningEffort === undefined ? {} : { reasoningEffort: requestConfig.reasoningEffort }),
+    ...(parent.options.maxTokens !== undefined ? { maxTokens: parent.options.maxTokens } : {}),
+  }
+}
 
 /** The plain pending-state card, titled from the call's arguments. */
 function callCard(title: string, rawInput?: string): ToolCallView {
@@ -218,6 +249,9 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
           const composition = await mountGoalComposition(ctx, {
             workspaceId: receipt.workspaceId,
             workspaceRoot: targetPath,
+            // The one ledger: the same absolute file the bootstrap's
+            // approvals write, required explicitly by the formal config.
+            requiredChecksPath: run.requiredChecksLedgerPath,
             // The start gate checks the clean target tree; the workers' own
             // artifact probes and the final acceptance list stay separate.
             checks: { version: 1, checks: [{
@@ -355,6 +389,12 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
         ...(existing === undefined && args.prompt !== undefined && requireNonEmpty(args.prompt, 'prompt') !== ''
           ? { prompt: args.prompt }
           : {}),
+        // The child must assemble the standard persona, whose {{model}}
+        // variable resolves from its own agent options: inherit only the
+        // approved parent route (the request header owns provider/model and
+        // effort after request-time selection) and the configured output
+        // limit - never the parent's whole option bag.
+        agentOptions: parentRouteForDelegation(caller.agent),
       })
       const ack = await ctx.agentDispatch.taskAck(caller.agent, taskId)
       if (ack === undefined) {
