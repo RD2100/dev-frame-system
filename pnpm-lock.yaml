@@ -4727,6 +4727,10 @@ importers:
         version: link:../../core/tools
 
   packages/experimental/agent-reliability:
+    dependencies:
+      '@deepseek-ai/dsh-timeout':
+        specifier: workspace:^
+        version: link:../../util/timeout
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^

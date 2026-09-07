@@ -26,5 +26,8 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/dsh-experimental-devframe": "workspace:^"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-timeout": "workspace:^"
   }
 }

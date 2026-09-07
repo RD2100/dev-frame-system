@@ -4,6 +4,8 @@ Status: proposed
 
 [English](2026-09-06-at406-deadline-admission-seam.md) | 中文
 
+仅截止契约仍适用。[原生截止停止](../../implemented/architecture/2026-09-08-admission-deadline-native-stop.zh.md)在宿主提供停止适配器时处理暂缓的在途取消机制；完整项目验收及时钟来源替代方案仍在该机制范围之外。
+
 ## 问题
 
 AT4 交付登记了 GAP AT4-06：短截止过期必须关闭准入并取消有界工作，但 agent-reliability 的 src 没有截止实现缝。树中唯一的截止时刻是 DevFrame stop 的内部宽限界，并未接入准入；anchor-matrix 也注明"无用例，归 P06"。因此派发代际可能无限运行：前置步骤只检查准入关闭与身份，本应在某一时刻结束的窗口会永远放行工作。
