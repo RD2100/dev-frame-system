@@ -1012,7 +1012,9 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       // The merged goal-bound journal folds the delivery and verification
       // evidence into the CONTROLLER's session log (the goal's owner), so
       // the durable projection reads from the root log, not the workers'.
-      const rootEvents = parseLogEvents(await decodeSessionLog(rootLogPath()))
+      const rootLog = rootLogPath()
+      expect(rootLog, 'root session log for the durable projection').toBeDefined()
+      const rootEvents = parseLogEvents(await decodeSessionLog(rootLog!))
       const workerLogEvents = (taskId: string, needle: string): JournalEvent[] => {
         const sessionId = workerSessionIdByTask.get(taskId)
         expect(sessionId, `worker session id for ${taskId}`).toBeTruthy()
