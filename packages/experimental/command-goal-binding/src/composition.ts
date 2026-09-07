@@ -18,8 +18,10 @@ import { AgentEvidenceJournal } from '@deepseek-ai/dsh-experimental-agent-eviden
 import { ControllerSessionId, GoalBindingController, GoalServicePort, MemoryGoalBindingStore, createHumanAuthorization } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
 import type {
   CompleteGoalRequest,
+  CompletionAdmissionVerdict,
   GoalAdmission,
   GoalBinding,
+  GoalBindingIdentity,
   GoalBindingStore,
   GoalBudgetInput,
   TaskId,
@@ -376,7 +378,12 @@ export class GoalBindingComposition extends Service {
     }
     const verdict = await controller.complete({ controllerSessionId, goalId: current.id }, request)
     if (verdict.kind !== 'admitted') {
-      return { kind: 'error', text: renderCompletionRejection(verdict) }
+      const text = await this.renderRejectedCompletion(
+        controller,
+        { controllerSessionId, goalId: current.id },
+        verdict,
+      )
+      return { kind: 'error', text }
     }
     const completed = this.ctx.goals.get(invocation.agent)
     if (completed === undefined) {
@@ -403,6 +410,32 @@ export class GoalBindingComposition extends Service {
       this.controllers.set(agent.id, controller)
     }
     return controller
+  }
+
+  /**
+   * Render a completion rejection, consuming a fail-graded terminal into the
+   * bounded repair cycle (AT1-08): a task-warning rejection charges one
+   * repair round at the same call point a `changes_required` rejection uses,
+   * so the post-fail resume stays inside the repair budget — an admitted
+   * round reports its charge, and exhaustion names the human-authorized
+   * resume as the only continuation. Every other stage renders unchanged.
+   * @param controller - the controller whose repair accounting is charged.
+   * @param identity - the controller Session and Goal the rejection belongs to.
+   * @param verdict - the rejected admission verdict.
+   * @returns the stage-prefixed rejection text with the repair-cycle outcome.
+   */
+  private async renderRejectedCompletion(
+    controller: GoalBindingController,
+    identity: GoalBindingIdentity,
+    verdict: Exclude<CompletionAdmissionVerdict, { kind: 'admitted' }>,
+  ): Promise<string> {
+    const text = renderCompletionRejection(verdict)
+    if (verdict.stage !== 'task-warning') return text
+    const repair = await controller.beginRepairRound(identity)
+    if (repair.kind === 'admitted') {
+      return `${text} Repair round ${repair.repairRound} was charged (${repair.remainingRepairRounds} remaining); resuming the goal requires a human-authorized resume.`
+    }
+    return `${text} The repair limit (${repair.repairLimit}) is exhausted after ${repair.consumedRepairRounds} charged rounds; continuing requires a human-authorized resume.`
   }
 }
 
