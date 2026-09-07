@@ -106,3 +106,85 @@ and is not reproduced here beyond the deferred-items section.
   entry releases only its own bind on caller-setup failure.
 - Product review/admission gate, integrated snapshots, and user-facing
   acceptance including broader Shadow/Memory scope — NOT started.
+
+## ⑤ Identity retry, engine recovery lane, and the concurrency gate
+(merge main → `e881697302`, engine recovery `190271fd4f` in history)
+
+- `findDispatchedChild(parent, taskId)` exposes the durable identity an
+  earlier dispatch returned, keyed by the engine's own dedupe rule
+  (`parentSessionId` + `taskId`), with a `live` flag. A blind same-task
+  retry refuses with `DISPATCH_IDENTITY_EXISTS`, naming the returned agent
+  id; a retry that passes the id back as `sessionId` runs the full registry
+  proof and the engine's dedupe answers with the same child. Reuse never
+  re-delivers a prompt. Engine errors — including the reserved-child
+  recovery refusal — propagate unwrapped; no replacement child.
+- `recoverChildAgent(parent, request, {sessionId, ...})` routes the engine's
+  fixed recovery lane behind the same entry proof and reuses the SAME host
+  assembly as creation: the composed setup re-joins the preset composition
+  and re-takes the worktree single-writer binding on the recovered session,
+  with the identical failure-cleanup face. The recovery type omits `prompt`
+  structurally. Corruption/cancellation surface as the same unwrapped
+  instances; only the typed missing-log result republishes under the
+  reserved identity (engine-owned).
+- Per-task gate: one parent task's full dispatch span — identity judgment,
+  engine call, first delivery — serializes inside one boundary. Creation
+  dedupe is not delivery dedupe: two concurrent same-task requests both
+  observed an empty registry behind the engine's serial creation and each
+  delivered a prompt to the one child. The gate makes the identity
+  observation atomic with the delivery decision; cleanup rides the
+  never-rejecting tail (a `finally` on the gated result derived an unhandled
+  second rejection). Proven by a concurrent pair resolving one child with
+  exactly one briefing.
+- Commits `fd51399465` (identity query + retry face), `c049c8a33f`
+  (recovery lane + gate + one-shot briefing ownership). Evidence:
+  `tsc -b tsconfig.host.json` exit 0; vitest `agent-dispatch.spec.ts` exit 0
+  (6 passed, cold-restart reservation and dropped-lock re-bind proofs);
+  `git diff --cached --check` exit 0 per commit.
+
+## ⑥ Formal consumer: the `agent_dispatch` tool (commit `d24ebb48e6`)
+
+- The composition layer's formal caller: the model-facing tool over
+  `ctx.agentDispatch`, mirroring the agent-worktree seam (service constructed
+  on the plugin fiber, system-prompt guidance, stable tool name). Parameters:
+  `role/taskId/pluginId/worktreeId` required, `prompt` (fresh briefing, never
+  re-sent on retry), `retry` (reuse the returned identity), `childId`
+  (deployment-configured preallocated identity — the `leadPluginScopes`
+  approved sets are keyed by these ids, so a model-dispatched lead must name
+  its configured id).
+- Authorization door: the calling session's workspace resolves from the
+  immutable session header, extended to the workspace's registered worktree
+  directories (a lead working inside its dispatched tree dispatches workers
+  onto sibling trees). The worker role policy hides the tool entirely
+  (restrict makes it unknown before any policy runs).
+- `AgentDispatch` now declares `agents` in its static inject: the loader
+  guard refuses undeclared service access, and the durable-identity query is
+  the first accessor of `ctx.agents`.
+- core/system-prompt allocates `TOOL_AGENT_DISPATCH: 2850` (between
+  `TOOL_SUBAGENT` and `TOOL_REPORT`); shipped profiles do not mount the
+  plugin, so recorded snapshots are unaffected.
+- Evidence: `tsc -b tsconfig.host.json` exit 0; vitest
+  `dispatch-consumer.spec.ts` + `agent-dispatch.spec.ts` exit 0 (11 passed)
+  — schema, lead dispatch with lock/record/post-publication briefing, blind
+  refusal, retry reuse without re-briefing, controller→lead→worker chain
+  with approved-set keying, worker invisibility, unknown-worktree and
+  lead-cascade refusals; `git diff --cached --check` exit 0.
+
+## ⑦ Rows awaiting the controller's single write (verified deltas)
+
+- Resolver manifests: `@deepseek-ai/dsh-experimental-agent-dispatch` is in no
+  manifest that would serve a composition row (apps/cli deps and every bundle
+  union checked); `@deepseek-ai/dsh-experimental-agent-hierarchy` likewise;
+  `@deepseek-ai/dsh-experimental-session-identity` is already an apps/cli
+  dependency. The consumer plugin's inject names: tools, systemPrompt,
+  workspaceRegistry, worktreeRegistry, agentHierarchy, agentBindings, agents
+  — the yml row must sit after the hierarchy stack it requires.
+- Role policy requirement observed by tests: `roleToolPolicies` for
+  `controller` and `lead` must include `agent_dispatch` in `inheritedTools`,
+  or the restrict() install makes the tool invisible to exactly the roles
+  allowed to dispatch.
+- New public types since the controller's catalog pass:
+  `DispatchedIdentity`, `RecoverDispatchAgentOptions` (service.ts), plus the
+  consumer exports (`name/inject/apply/TOOL_NAMES`, `DispatchCaller`,
+  `resolveCaller`, `requireNonEmpty`) — catalog regen (gen-cordis-catalog +
+  api-catalog) owed by the single-write pass. No new session event types;
+  the persistence-catalog gate is unaffected.
