@@ -18,6 +18,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { WorktreeId } from '@deepseek-ai/dsh-worktree-registry'
 import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
+import { apply as requestBudgetApply } from '@deepseek-ai/dsh-experimental-project-controller/request-budget-consumer'
 import { AgentDispatch } from './service.ts'
 import { AgentProjectRun } from './run.ts'
 import { requireNonEmpty, resolveCaller } from './authorization.ts'
@@ -26,10 +27,11 @@ import { requireNonEmpty, resolveCaller } from './authorization.ts'
 export const name = 'agent-dispatch'
 
 /** Plugin config. The formal bootstrap is explicit opt-in, so dispatch-only deployments load unchanged. */
-export const Config: z<{ bootstrap?: boolean; checksLedgerPath?: string; candidateScenarioPath?: string }> = z.object({
+export const Config: z<{ bootstrap?: boolean; checksLedgerPath?: string; candidateScenarioPath?: string; candidateRootSessionId?: string }> = z.object({
   bootstrap: z.boolean(),
   checksLedgerPath: z.string(),
   candidateScenarioPath: z.string(),
+  candidateRootSessionId: z.string(),
 })
 
 /** Services required by the plugin; the hierarchy stack missing fails the load. */
@@ -112,7 +114,15 @@ function renderDispatchText(value: {
  * @param ctx - The plugin's context.
  * @param config - The schema-validated plugin config.
  */
-export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedgerPath?: string; candidateScenarioPath?: string }): void {
+export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedgerPath?: string; candidateScenarioPath?: string; candidateRootSessionId?: string }): void {
+  // The candidate host process is the single project scope: when the root
+  // session id is pinned, the request budget mounts on this same scope, so
+  // every model stream in the process charges this hierarchy's budget and
+  // no other scope exists to mis-reject.
+  if (config?.candidateRootSessionId !== undefined) {
+    const budgetConfig = { controllerSessionId: config.candidateRootSessionId }
+    ctx.plugin({ id: 'candidate-request-budget', inject: ['llm', 'agents', 'agentBindings', 'projectController'] as const, apply: budgetCtx => requestBudgetApply(budgetCtx as never, budgetConfig) })
+  }
   // Constructing AgentDispatch mounts ctx.agentDispatch on this plugin
   // fiber, so the seam lives and dies with the plugin (HMR-safe by
   // construction). The formal host bootstrap is opt-in: deployments that

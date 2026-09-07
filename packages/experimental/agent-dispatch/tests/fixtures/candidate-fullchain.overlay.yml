@@ -43,6 +43,10 @@
     bootstrap: true
     checksLedgerPath: !!js "process.env.DSH_CANDIDATE_HOME + '/checks-ledger.json'"
     candidateScenarioPath: !!js "process.env.DSH_CANDIDATE_HOME + '/candidate-scenario.json'"
+    # The fixed host-selected root session id: it mounts the request budget
+    # on this single-project process scope and must equal the root id the
+    # harness creates the controller session with.
+    candidateRootSessionId: 'candidate-root-c14'
 
 - insert:
     # The board service the bootstrap and all task tools consume.
@@ -50,7 +54,7 @@
       name: '@deepseek-ai/dsh-experimental-project-controller'
       config:
         maxActiveTasks: 2
-        requestBudget: 4
+        requestBudget: 12
     # Lead reviewer assignments land on the controller's role policy from the
     # real dispatch facts (the landing journal rejects review events).
     - id: lead-role-landing
