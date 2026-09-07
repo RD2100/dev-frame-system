@@ -34,3 +34,12 @@
 - **裁决：TaskRecord 扩展不需要**——v14 生产链从不咨询 project-controller（devframe GoalBindingController 经 GoalServicePort 直绑 ctx.goals）；场景断言面是 session.jsonl。与组长亲定判定一致：宿主事件 + 既有 complete/fail 足够。
 - 护栏维持：分级事件只载失败/警告，绝不载 memory_saved 成功事实（receipt 是保存成功唯一权威，场景步骤 5 回执 fault 子案已证）。
 - Worker 全程只读零写入，失败命令为零（退出码 1 均为预期否定）；附注：glob 工具对两个存在模式误报 "No files found"，Worker 经 Get-ChildItem 绕行（工具异常，非 shell 失败）。
+
+## 监听器片实现（总控令：宿主装配监听器片开立，我执行）
+
+- **提交**：36a209f581（ProjectMemoryError extends HarnessError——tool 注册表只对 HarnessError 子类上浮 {name, code}，此前 memory 工具失败在 tool/result 事件上无分类可路由；类形状/名/码不变）+ 9931bfd868（devframe/task-warning 事件族扩展 + task-warning-listener 插件 + 分级纯函数 + 三断言测试）。
+- **事件**：`devframe/task-warning`（version 1 / taskId 品牌化 / warning=封闭四成员保存退化词汇 MEMORY_UNAVAILABLE|WRITE_FAILED|RECEIPT_FAILED|APPEND_DISABLED / tool 名）；入 declare-merge map + zod 解码折叠（decodeDevFramePayload），durable 边界拒绝词汇外扩。
+- **判据（修正后）**：显式宿主上下文 `ctx.devframeTaskGrading.declare(sessionId, {taskId, memory:'optional'|'required'})`；折叠只对 optional 落事件且每任务恰一条（去重）；required 与未声明均不落（保守默认，原始失败仍在 tool/result）。**mode 面零接触**（只读消费者，未写 shadow-router 任何语义）。
+- **微任务延迟**：监听器在 tool/result 发布回调内不直接 append（嵌套发布危害），排队至 microtask 落盘。
+- **测试**（3 例，断言面=会话日志+fold 单测）：A1 optional+真实 MEMORY_UNAVAILABLE（真实工具注册表+缺席 Vault）→恰一条警告、重试仍一条；A2 全程无 memory/receipt（receipt 唯一保存权威）；A3 同构 dispatch+required→零警告+grade=fail、未声明会话零事件；解码再品牌化+词汇外扩拒绝。
+- **真实退出码**：片内 3/3 exit 0；devframe+project-memory 联合回归 **23 files / 261 tests passed exit 0**。路由：零模型调用（unit 层）；隔离 HOME 未涉及（无 boot；若需 boot，home 独立建禁 junction）。TaskRecord/project-contracts **零改动**。
