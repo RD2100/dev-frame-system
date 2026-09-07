@@ -1,0 +1,17 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../agent-dispatch" },
+    { "path": "../agent-hierarchy" },
+    { "path": "../command-goal-binding" },
+    { "path": "../project-memory" },
+    { "path": "../session-identity" },
+    { "path": "../shadow-router" }
+  ]
+}

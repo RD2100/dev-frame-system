@@ -44,6 +44,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-experimental-project-controller/consumer` | `project_integrate` | `ctx.tools`, `ctx.agents`, `ctx.projectController`, `ctx.agentBindings`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry` | `tool/call`, `tool/result`, `project_tasks integrations and tasks`, `Git target worktree` | - | Opt-in controller-only consumer. Integration requires persisted verification, independent lead review, the current Goal, and registered worktree writer locks. Reconciliation observes an interrupted intent without repeating Git. |
 | `@deepseek-ai/dsh-experimental-project-controller/task-consumer` | `project_task` | `ctx.tools`, `ctx.agents`, `ctx.sessions`, `ctx.sessionProjections`, `ctx.projectController`, `ctx.agentBindings`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry` | `tool/call`, `tool/result`, `project_tasks tasks`, `Worker briefing inbox` | - | Opt-in root-controller consumer for planning authorized Goal tasks and starting their registered Workers. Start derives identity and worktree locks from live registries, and queues an optional briefing once after development admission. It does not deliver, review, submit, or complete work. |
 | `@deepseek-ai/dsh-experimental-project-controller/delivery-consumer` | `project_deliver`, `project_review` | `ctx.tools`, `ctx.agents`, `ctx.sessions`, `ctx.sessionProjections`, `ctx.projectController`, `ctx.agentBindings`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry` | `tool/call`, `tool/result`, `DevFrame delivery, verification and review events`, `project_tasks tasks`, `approved check subprocess effects` | - | Opt-in explicit Worker delivery and independent parent-lead review. The host derives source identity and executes preapproved checks. Failed or uncertain checks require explicit retryChecks; identical reviews can repair task-state recording without repeating the review. |
+| `@deepseek-ai/dsh-experimental-agent-dispatch` | `agent_dispatch` | `ctx.tools`, `ctx.systemPrompt`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry`, `ctx.agentHierarchy`, `ctx.agentBindings`, `ctx.agents`, `ctx.sessions`, `a calling Agent (its session cwd authorizes the workspace)` | `tool/call`, `tool/result` | - | The one tool dispatches a hierarchy child for one task onto one registered worktree and holds the worktree single-writer lock for the child's whole life; a task with an existing dispatched child refuses and names it, and retry reuses that child without re-delivering the briefing. Experimental and private: the package ships in no released bundle, and visibility is role-restricted (workers cannot see the tool) through the hierarchy's restrict face. |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
@@ -2529,6 +2530,60 @@ Record your explicit independent lead review of the latest task delivery. Pass s
 Source: [`packages/experimental/project-controller/src/delivery-consumer.ts`](../packages/experimental/project-controller/src/delivery-consumer.ts)
 
 Opt-in explicit Worker delivery and independent parent-lead review. The host derives source identity and executes preapproved checks. Failed or uncertain checks require explicit retryChecks; identical reviews can repair task-state recording without repeating the review.
+
+<a id="deepseek-aidsh-experimental-agent-dispatch"></a>
+
+## `@deepseek-ai/dsh-experimental-agent-dispatch`
+
+### `agent_dispatch`
+
+Dispatch a child agent for one task onto one registered git worktree: the controller dispatches a lead, and a lead dispatches workers inside its approved plugin scopes. Name the task id, the plugin scope, and the worktree id (get worktree ids from worktree_create or the host), and pass a briefing prompt for a fresh dispatch — the briefing is queued only after the child is published. Every result carries ack: what the child's own durable log proves about the task (briefed while pending, claimed while executing, terminal with the turn's recorded ending — completed means the task finished cleanly, dropped when the briefing was cancelled unrun). If this task already has a dispatched child, the tool refuses and names it: pass retry: true to reuse that child instead, which never re-delivers the briefing and reports the task's current ack. The engine owns the child's lifecycle and the hierarchy owns every denial; refusals name the cause and the fix.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "role": {
+      "type": "string",
+      "description": "The child's hierarchy role: 'lead' from the controller, or 'worker' from a lead."
+    },
+    "taskId": {
+      "type": "string",
+      "description": "The task this child owns; one task has at most one dispatched child."
+    },
+    "pluginId": {
+      "type": "string",
+      "description": "The plugin scope the child works under; a lead's worker scope must be in that lead's approved set."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "The registered worktree id the child will own as its single writer, from worktree_create or the host."
+    },
+    "prompt": {
+      "type": "string",
+      "description": "The task briefing queued to a freshly dispatched child after publication. Never re-sent on a retry."
+    },
+    "retry": {
+      "type": "boolean",
+      "description": "Pass true to reuse the child this task already has instead of dispatching a new one; no briefing is queued on reuse."
+    },
+    "childId": {
+      "type": "string",
+      "description": "The preallocated session id for the child, when the deployment configures one (the leadPluginScopes approved sets are keyed by these ids). Omitted, the engine allocates the identity."
+    }
+  },
+  "required": [
+    "role",
+    "taskId",
+    "pluginId",
+    "worktreeId"
+  ]
+}
+```
+
+Source: [`packages/experimental/agent-dispatch/src/consumer.ts`](../packages/experimental/agent-dispatch/src/consumer.ts)
+
+The one tool dispatches a hierarchy child for one task onto one registered worktree and holds the worktree single-writer lock for the child's whole life; a task with an existing dispatched child refuses and names it, and retry reuses that child without re-delivering the briefing. Experimental and private: the package ships in no released bundle, and visibility is role-restricted (workers cannot see the tool) through the hierarchy's restrict face.
 
 <a id="deepseek-aidsh-tool-web"></a>
 

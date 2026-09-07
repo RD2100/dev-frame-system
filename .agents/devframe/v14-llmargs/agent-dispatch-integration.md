@@ -206,3 +206,34 @@ and is not reproduced here beyond the deferred-items section.
   tool-registration assertion.
 - Evidence: `tsc -b tsconfig.host.json` exit 0; vitest all three dispatch
   specs exit 0 (12 passed); `git diff --cached --check` exit 0.
+
+## ⑨ Durable task acknowledgment (commit `3aa5d27de1`, B1 open item closed)
+
+- The dispatch entry mints a deterministic briefing identity from the
+  durable binding facts (parent session id + task id), and
+  `ctx.agentDispatch.taskAck(parent, taskId)` re-derives the account from
+  the child's OWN session log — delivery splice, claiming splice, claiming
+  turn's `turn/end` — so the ack survives restarts and the recovery lane by
+  construction. No parallel in-memory ledger exists to lose.
+- Durability is never inferred: the ack reads a snapshot, drives the
+  session store's flush barrier over it, and grants `durable: true` only
+  when a durability listener participates. A barrier failure reports
+  `durable: false` + `degraded: true` instead of hiding the dispatch
+  outcome behind an exception.
+- States: `briefed` / `claimed` (claiming turn open) / `terminal`
+  (`completed` exactly when the reason is `completed`, other reasons
+  carried verbatim) / `dropped` (canceled unrun) / `unbriefed` (cold
+  recovery republished an empty log) / `unavailable` (child not live).
+- Tool face: the `agent_dispatch` result carries the ack; reuse renders the
+  task's standing (wait, recover, or dispatch a new task). `AgentDispatch`
+  and the consumer declare the `sessions` service for the loader guard.
+- Proven over real jsonl persistence with real turns (scripted adapter,
+  zero model calls): briefed/claimed/terminal(completed/error); unbriefed
+  after a typed missing-log recovery; the terminal account surviving a cold
+  restart through the reloaded log; fold unit cases cover dropped and claim
+  forensics; the stub-harness consumer suite pins `durable: false` when no
+  backend participates.
+- Evidence: `tsc -b tsconfig.host.json` exit 0; vitest all four dispatch
+  suites exit 0 (21 passed, two consecutive runs); `git diff --cached
+  --check` exit 0. Branch tip after main fast-forward merge
+  (`4b3212719f` in history): `3aa5d27de1`.

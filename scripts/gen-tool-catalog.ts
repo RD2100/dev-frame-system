@@ -72,6 +72,7 @@ import * as AgentWorktreeTools from '@deepseek-ai/dsh-experimental-agent-worktre
 import * as ProjectIntegrationTool from '../packages/experimental/project-controller/src/consumer.ts'
 import * as ProjectTaskTool from '../packages/experimental/project-controller/src/task-consumer.ts'
 import * as ProjectDeliveryTool from '../packages/experimental/project-controller/src/delivery-consumer.ts'
+import * as AgentDispatchTools from '@deepseek-ai/dsh-experimental-agent-dispatch'
 import { WorktreeRegistry } from '@deepseek-ai/dsh-worktree-registry'
 import type {
   Worktree, WorktreeCreateRequest, WorktreeId, WorktreeLockHolder, WorktreeReconcileOptions,
@@ -719,6 +720,31 @@ const TOOL_PACKAGES: ToolPackage[] = [
   },
   PROJECT_TASK_TOOL_PACKAGE,
   PROJECT_DELIVERY_TOOL_PACKAGE,
+  {
+    pkg: '@deepseek-ai/dsh-experimental-agent-dispatch',
+    dir: 'agent-dispatch',
+    source: 'packages/experimental/agent-dispatch/src/consumer.ts',
+    requires: [
+      'ctx.tools', 'ctx.systemPrompt', 'ctx.workspaceRegistry', 'ctx.worktreeRegistry',
+      'ctx.agentHierarchy', 'ctx.agentBindings', 'ctx.agents', 'ctx.sessions',
+      'a calling Agent (its session cwd authorizes the workspace)',
+    ],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      // The schemas are static; the dispatch authorization reads the injected
+      // registries and engine config only at execute time, so the harvested
+      // stand-ins satisfy the declared injections without executing anything.
+      ctx.provide('agentHierarchy', { config: { leadPluginScopes: {} } } as never)
+      ctx.provide('agentBindings', { list: () => [] } as never)
+      ctx.provide('agents', {} as never)
+      ctx.provide('sessions', {} as never)
+      ctx.provide('workspaceRegistry', { list: () => [] } as never)
+      await ctx.plugin(CatalogWorktreeRegistry)
+      await ctx.plugin(AgentDispatchTools)
+    },
+    note:
+      'The one tool dispatches a hierarchy child for one task onto one registered worktree and holds the worktree single-writer lock for the child\'s whole life; a task with an existing dispatched child refuses and names it, and retry reuses that child without re-delivering the briefing. Experimental and private: the package ships in no released bundle, and visibility is role-restricted (workers cannot see the tool) through the hierarchy\'s restrict face.',
+  },
   {
     pkg: '@deepseek-ai/dsh-tool-web',
     dir: 'tool-web',

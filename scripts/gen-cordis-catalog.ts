@@ -250,6 +250,7 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
  * appear on more than one page.
  */
 export const LINK_MAP: Readonly<Record<string, string>> = {
+  DispatchTaskAck: '../../packages/experimental/agent-dispatch/README.md',
   MainTreeMergeRequest: '../../packages/experimental/project-controller/README.md',
   TaskMutationOptions: '../../packages/experimental/project-controller/README.md',
   IntegrationGitObservation: '../../packages/experimental/project-controller/README.md',

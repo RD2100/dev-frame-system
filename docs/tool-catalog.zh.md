@@ -48,6 +48,7 @@
 | `@deepseek-ai/dsh-experimental-project-controller/consumer` | `project_integrate` | `ctx.tools`、`ctx.agents`、`ctx.projectController`、`ctx.agentBindings`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry` | `tool/call`、`tool/result`、`project_tasks integrations and tasks`、`Git target worktree` | - | 需显式启用的总控专用消费者。集成需要持久化验证、独立组长评审、当前 Goal 和已注册工作树的写入锁。协调恢复只观察中断的意图，不重复执行 Git。 |
 | `@deepseek-ai/dsh-experimental-project-controller/task-consumer` | `project_task` | `ctx.tools`、`ctx.agents`、`ctx.sessions`、`ctx.sessionProjections`、`ctx.projectController`、`ctx.agentBindings`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry` | `tool/call`、`tool/result`、`project_tasks tasks`、`Worker briefing inbox` | - | 需显式启用的根总控消费者，用于规划当前 Goal 已授权的任务并启动已登记的 Worker。启动时从实时登记信息取得身份和工作树写入锁，并在开发准入后仅投递一次可选任务说明。本工具不交付、评审、提交或完成工作。 |
 | `@deepseek-ai/dsh-experimental-project-controller/delivery-consumer` | `project_deliver`, `project_review` | `ctx.tools`, `ctx.agents`, `ctx.sessions`, `ctx.sessionProjections`, `ctx.projectController`, `ctx.agentBindings`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry` | `tool/call`, `tool/result`, `DevFrame delivery, verification and review events`, `project_tasks tasks`, `approved check subprocess effects` | - | 按需启用显式 Worker 交付与独立父级 lead 审查。宿主推导源身份并执行预先批准的检查。失败或结果不确定的检查要求显式 retryChecks；相同审查可以修复任务状态记录，而不重复审查。 |
+| `@deepseek-ai/dsh-experimental-agent-dispatch` | `agent_dispatch` | `ctx.tools`、`ctx.systemPrompt`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry`、`ctx.agentHierarchy`、`ctx.agentBindings`、`ctx.agents`、`ctx.sessions`、`a calling Agent (its session cwd authorizes the workspace)` | `tool/call`、`tool/result` | - | 唯一的工具为一项任务向一个已注册 worktree 派发层级子 agent，并在子 agent 的整个生命周期内持有该 worktree 的单写锁；任务已有被派发子 agent 时拒绝并点名，retry 复用该子 agent 且不重投简报。实验性私有包：不出现在任何发布 bundle 中，可见性经层级的 restrict 面按角色受限（worker 看不到该工具）。 |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
@@ -2537,6 +2538,60 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
 来源： [`packages/experimental/project-controller/src/delivery-consumer.ts`](../packages/experimental/project-controller/src/delivery-consumer.ts)
 
 按需启用显式 Worker 交付与独立父级 lead 审查。宿主推导源身份并执行预先批准的检查。失败或结果不确定的检查要求显式 retryChecks；相同审查可以修复任务状态记录，而不重复审查。
+
+<a id="deepseek-aidsh-experimental-agent-dispatch"></a>
+
+## `@deepseek-ai/dsh-experimental-agent-dispatch`
+
+### `agent_dispatch`
+
+为一项任务向一个已注册 Git 工作树派发子 agent：controller 派发 lead，lead 在获批插件范围内派发 Worker。指定任务 id、插件范围和工作树 id（从 worktree_create 或宿主取得），并为新派发提供简报 prompt；简报仅在子 agent 发布后入队。每个结果都包含 ack，表示子 agent 自身持久日志能证明的任务状态（待执行时为 briefed，执行中为 claimed，回合记录结束时为 terminal；completed 表示任务正常结束，dropped 表示简报在尚未执行时被取消）。若任务已有被派发的子 agent，工具拒绝并点名；传入 retry: true 可复用该子 agent，不重复投递简报，并报告当前 ack。引擎管理子 agent 生命周期，层级负责每次拒绝；拒绝说明原因与修复方式。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "role": {
+      "type": "string",
+      "description": "The child's hierarchy role: 'lead' from the controller, or 'worker' from a lead."
+    },
+    "taskId": {
+      "type": "string",
+      "description": "The task this child owns; one task has at most one dispatched child."
+    },
+    "pluginId": {
+      "type": "string",
+      "description": "The plugin scope the child works under; a lead's worker scope must be in that lead's approved set."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "The registered worktree id the child will own as its single writer, from worktree_create or the host."
+    },
+    "prompt": {
+      "type": "string",
+      "description": "The task briefing queued to a freshly dispatched child after publication. Never re-sent on a retry."
+    },
+    "retry": {
+      "type": "boolean",
+      "description": "Pass true to reuse the child this task already has instead of dispatching a new one; no briefing is queued on reuse."
+    },
+    "childId": {
+      "type": "string",
+      "description": "The preallocated session id for the child, when the deployment configures one (the leadPluginScopes approved sets are keyed by these ids). Omitted, the engine allocates the identity."
+    }
+  },
+  "required": [
+    "role",
+    "taskId",
+    "pluginId",
+    "worktreeId"
+  ]
+}
+```
+
+来源：[`packages/experimental/agent-dispatch/src/consumer.ts`](../packages/experimental/agent-dispatch/src/consumer.ts)
+
+唯一的工具为一项任务向一个已注册 worktree 派发层级子 agent，并在子 agent 的整个生命周期内持有该 worktree 的单写锁；任务已有被派发子 agent 时拒绝并点名，retry 复用该子 agent 且不重投简报。实验性私有包：不出现在任何发布 bundle 中，可见性经层级的 restrict 面按角色受限（worker 看不到该工具）。
 
 <a id="deepseek-aidsh-tool-web"></a>
 

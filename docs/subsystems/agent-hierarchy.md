@@ -91,9 +91,28 @@ async createChildAgent( parent: Agent, request: CreateChildAgentRequest, options
  * @returns The recovered child and its unchanged durable binding record.
  */
 async recoverChildAgent( parent: Agent, request: CreateChildAgentRequest, options: RecoverDispatchAgentOptions, ): Promise<CreatedChildAgent>
+
+/**
+ * The durable acknowledgment for one dispatched task: what the child's own
+ * log proves about the briefing this entry delivered, backed by the
+ * session store's flush barrier. The derivation is durable by
+ * construction — delivery splice, claiming splice, and the claiming
+ * turn's `turn/end` are all durable session events — and `durable` is
+ * claimed only when a durability listener participates in the barrier. A
+ * barrier refusal or a durability failure never hides the primary
+ * dispatch outcome behind an exception: the ack reports `durable: false`
+ * with `degraded: true`, so a broken backend is visible exactly where the
+ * parent looks, and the child's own turn checkpoints fail loud on their
+ * own boundaries.
+ * @param parent - The exact live dispatching agent the child was created for.
+ * @param taskId - The task the child was created for.
+ * @returns The acknowledgment, or `undefined` when no dispatched child
+ *   exists for the pair.
+ */
+async taskAck(parent: Agent, taskId: TaskId): Promise<DispatchTaskAck | undefined>
 ```
 
-Types: [Agent](core.md)
+Types: [Agent](core.md) · [DispatchTaskAck](../../packages/experimental/agent-dispatch/README.md)
 
 Source: [`packages/experimental/agent-dispatch/src/service.ts`](../../packages/experimental/agent-dispatch/src/service.ts)
 

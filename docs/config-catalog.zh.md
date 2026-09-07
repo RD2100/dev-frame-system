@@ -3641,6 +3641,7 @@ export interface Config {
 - `@deepseek-ai/dsh-experimental-agent-team-profile`（[`packages/experimental/agent-team-profile/src/index.ts`](../packages/experimental/agent-team-profile/src/index.ts)）
 - `@deepseek-ai/dsh-experimental-agent-team-web-profile`（[`packages/experimental/agent-team-web-profile/src/index.ts`](../packages/experimental/agent-team-web-profile/src/index.ts)）
 - `@deepseek-ai/dsh-experimental-devframe`（[`packages/experimental/devframe/src/index.ts`](../packages/experimental/devframe/src/index.ts)）
+- `@deepseek-ai/dsh-experimental-devframe-profile`（[`packages/experimental/devframe-profile/src/index.ts`](../packages/experimental/devframe-profile/src/index.ts)）
 - `@deepseek-ai/dsh-experimental-project-contracts`（[`packages/experimental/project-contracts/src/index.ts`](../packages/experimental/project-contracts/src/index.ts)）
 - `@deepseek-ai/dsh-experimental-project-memory`（[`packages/experimental/project-memory/src/index.ts`](../packages/experimental/project-memory/src/index.ts)）
 - `@deepseek-ai/dsh-experimental-webworker-packer`（[`packages/experimental/webworker-packer/src/index.ts`](../packages/experimental/webworker-packer/src/index.ts)）

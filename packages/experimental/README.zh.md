@@ -32,6 +32,7 @@ kind: "package-group"
 | [`client-ui-agent-team`](client-ui-agent-team/README.zh.md) | Web Team roster、任务板与 teammate 导航 | — |
 | [`code-runtime-python`](code-runtime-python/README.zh.md) | 代码执行 seam 的 CPython 子进程后端 | `ctx.codeRuntime` |
 | [`devframe`](devframe/README.zh.md) | 实验性单项目控制器的共享契约 | — |
+| [`devframe-profile`](devframe-profile/README.zh.md) | 挂载 DevFrame 栈的显式源码 checkout Web profile 层 | — |
 | [`inspector`](inspector/README.zh.md) | 用于 Host 调试、Client Runtime 检查、网络采集与 Cordis 树的跨 realm CDP hub | `ctx.inspector` |
 | [`agent-evidence`](agent-evidence/README.zh.md) | 代理工作的追加式证据台账：任务/Goal 绑定回执、提交回执与验证快照 | `ctx.agentEvidence` |
 | [`agent-reliability`](agent-reliability/README.zh.md) | 进程树停止、准入切断、不确定调用对账与刷写屏障，集于一个服务 | `ctx.agentReliability` |
