@@ -1,0 +1,74 @@
+# Candidate full-chain loop-closure overlay (TEST FIXTURE — never shipped).
+# Applied as the third sibling patch after the example overlay and the private
+# DevFrame profile layer:
+#   dsh --profile web --patch apps/cli/config/examples/cordis/cordis.yml \
+#     --patch packages/experimental/devframe-profile/cordis.patch.yml \
+#     --patch packages/experimental/agent-dispatch/tests/fixtures/candidate-fullchain.overlay.yml
+# It closes the configuration the shipped overlays deliberately leave open:
+# the independent candidate port, the minimal actionable Worker face over the
+# shipped write/shell tools plus the delivery tool, the preallocated lead
+# scope, the project-controller stack rows, and the host bootstrap opt-in.
+# Per-run paths ride DSH_CANDIDATE_HOME (set by the harness to the isolated
+# home), so no run state leaks into this file. Patch semantics replace the
+# targeted row's whole config, exactly like the shipped overlays.
+
+# The candidate owns its port: 0 asks the OS, so concurrent candidate runs and
+# the default 3080 deployment (untouched) never collide.
+- id: webserver
+  config:
+    host: 127.0.0.1
+    port: 0
+
+# Three-role tool faces: controller plans/starts/integrates, lead reviews and
+# dispatches inside its preallocated scope, Worker delivers through the real
+# shipped write/shell tools. agent_dispatch is absent from the Worker face, so
+# the dispatch tool is unknown there (restrict, not deny).
+- id: agent-hierarchy
+  config:
+    roleToolPolicies:
+      controller:
+        inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'read_image', 'str_replace_editor', 'glob', 'grep', 'todo_write', 'worktree_create', 'worktree_list', 'worktree_status', 'agent_dispatch', 'project_task', 'project_integrate']"
+      lead:
+        inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'read_image', 'str_replace_editor', 'glob', 'grep', 'todo_write', 'worktree_create', 'worktree_list', 'worktree_status', 'agent_dispatch', 'project_review']"
+      worker:
+        inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'glob', 'grep', 'project_deliver']"
+    leadPluginScopes:
+      candidate-fullchain-lead: ['candidate-fullchain']
+
+# The host bootstrap rides the dispatch plugin fiber as an explicit opt-in:
+# the deployment must mount the project controller (the row below), and the
+# approved-checks ledger is the same file the delivery tools read.
+- id: agent-dispatch
+  config:
+    bootstrap: true
+    checksLedgerPath: !!js "process.env.DSH_CANDIDATE_HOME + '/checks-ledger.json'"
+
+- insert:
+    # The board service the bootstrap and all task tools consume.
+    - id: project-controller
+      name: '@deepseek-ai/dsh-experimental-project-controller'
+      config:
+        maxActiveTasks: 2
+        requestBudget: 4
+    # Root-only planning and Worker admission (project_task plan/start).
+    - id: project-task-tool
+      name: '@deepseek-ai/dsh-experimental-project-controller/task-consumer'
+    # Worker delivery and independent lead review over the shared ledger.
+    - id: project-delivery-tools
+      name: '@deepseek-ai/dsh-experimental-project-controller/delivery-consumer'
+      config:
+        requiredChecksPath: !!js "process.env.DSH_CANDIDATE_HOME + '/checks-ledger.json'"
+        requiredChecksByTask: {}
+        gitExecutable: git
+        gitTimeoutMs: 15000
+        gitMaxOutputBytes: 1048576
+        checkTimeoutMs: 15000
+        checkMaxOutputBytes: 1048576
+    # Controller-only integration (project_integrate) through the merge gate.
+    - id: project-integration-tool
+      name: '@deepseek-ai/dsh-experimental-project-controller/consumer'
+      config:
+        requiredChecksPath: !!js "process.env.DSH_CANDIDATE_HOME + '/checks-ledger.json'"
+        gitExecutable: git
+        gitTimeoutMs: 15000
+        gitMaxOutputBytes: 1048576
