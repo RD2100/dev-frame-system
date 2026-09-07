@@ -54,6 +54,21 @@ export interface CommandGoalBindingConfig {
    * Optional continuation round cap frozen into every start binding.
    */
   readonly maxGoalRounds?: number
+  /**
+   * Run the full reliability stop chain behind `/devframe-stop`: after the
+   * stop-requested binding lands, admission closes, owned jobs and captured
+   * processes drain within the stop grace, the session state flushes, and
+   * the writer releases only after the confirmed chain. Omitted resolves to
+   * `false` — the vocabulary-only stop face — so deployments turn the chain
+   * on deliberately (the writer-release adapter is host-injected).
+   */
+  readonly stopChain?: boolean
+  /**
+   * Positive drain bound handed to the stop chain's job and process waits.
+   * Omitted resolves to 2000 ms. Values beyond the platform timer cap fail
+   * loud at the first chain run through the reliability stop's own contract.
+   */
+  readonly stopGraceMs?: number
 }
 
 /** Validated configuration held by the composition for its whole lifetime. */
@@ -74,6 +89,10 @@ export interface ResolvedCommandGoalBindingConfig {
   readonly maxAttempts: number
   /** Optional positive continuation round cap. */
   readonly maxGoalRounds?: number
+  /** Whether `/devframe-stop` runs the full reliability stop chain. */
+  readonly stopChain: boolean
+  /** Positive drain bound for the stop chain's job and process waits. */
+  readonly stopGraceMs: number
 }
 
 /** Schema for the approved-checks nested configuration. */
@@ -97,6 +116,8 @@ export const Config: Schema<CommandGoalBindingConfig> = Schema.object({
   taskIds: Schema.array(Schema.string()).min(1).required(),
   maxAttempts: Schema.number().required(),
   maxGoalRounds: Schema.number(),
+  stopChain: Schema.boolean(),
+  stopGraceMs: Schema.number(),
 }) as Schema<CommandGoalBindingConfig>
 
 /** Validate the task-id list shape and uniqueness, returning branded ids. */
@@ -173,6 +194,7 @@ export function resolveCommandGoalBindingConfig(
       ...config.maxGoalRounds === undefined
         ? {}
         : { maxGoalRounds: validatedPositiveInteger(config.maxGoalRounds, 'maxGoalRounds') },
+      ...resolveStopChain(config),
     }
   }
   return {
@@ -185,6 +207,19 @@ export function resolveCommandGoalBindingConfig(
     ...config.maxGoalRounds === undefined
       ? {}
       : { maxGoalRounds: validatedPositiveInteger(config.maxGoalRounds, 'maxGoalRounds') },
+    ...resolveStopChain(config),
+  }
+}
+
+/** Validate the stop-chain face and resolve its defaults. */
+function resolveStopChain(config: CommandGoalBindingConfig): { stopChain: boolean; stopGraceMs: number } {
+  if (config.stopGraceMs !== undefined
+    && (!Number.isFinite(config.stopGraceMs) || config.stopGraceMs <= 0)) {
+    throw new TypeError('command-goal-binding config stopGraceMs must be a positive finite number')
+  }
+  return {
+    stopChain: config.stopChain ?? false,
+    stopGraceMs: config.stopGraceMs ?? 2000,
   }
 }
 

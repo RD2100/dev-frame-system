@@ -10,6 +10,7 @@ import type {
   CompletionAdmissionAdmitted,
   CompletionAdmissionVerdict,
 } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
+import type { StopIssue } from '@deepseek-ai/dsh-experimental-devframe'
 /** The slash-command name this plugin registers (without the leading slash). */
 export const COMMAND_NAME = 'goal-complete'
 
@@ -333,6 +334,31 @@ export const STOP_NO_BINDING_RECORD_TEXT
 export const STOP_ALREADY_PENDING_TEXT
   = 'A stop request is already pending for the current goal; /devframe-stop refuses to issue a second request while the stop flow is unresolved.'
 
+/** Stable data error: the stop chain is already running for the current goal. */
+export const STOP_IN_PROGRESS_TEXT
+  = 'A stop chain is already running for the current goal; /devframe-stop refuses to start another until it settles.'
+
+/** Stable data error appendix: the tree inventory could not be verified. */
+export const STOP_CHAIN_INVENTORY_UNVERIFIED_NOTE
+  = 'The project tree inventory could not be verified, so the writer release was refused.'
+
+/**
+ * Stable data error: the terminal bookkeeping did not settle within the
+ * stop grace bound. The writer state is reported honestly; the next stop
+ * reconciles against whatever landed durably.
+ * @param writerReleased - whether the writer release already succeeded.
+ * @returns the stable bounded-bookkeeping error text.
+ */
+export function renderStopChainBookkeepingUnsettledText(writerReleased: boolean): string {
+  return writerReleased
+    ? 'The stop chain drained the project and released the writer, but its terminal bookkeeping did not settle within the grace bound. Run /devframe-stop again to reconcile; the log converges late if persistence settles.'
+    : 'The stop chain could not finish its terminal bookkeeping within the grace bound and the writer remains held. Run /devframe-stop again to reconcile.'
+}
+
+/** Stable data error: the binding already reached the stopped terminal state. */
+export const STOP_ALREADY_STOPPED_TEXT
+  = 'The current goal binding is already stopped; /devframe-stop has nothing further to request. Use /devframe-abandon to clear the stopped goal.'
+
 /** Stable data error: the abandon line carries unexpected input. */
 export const ABANDON_INPUT_UNEXPECTED_TEXT
   = '/devframe-abandon takes no input. Invoke it as "/devframe-abandon" with nothing after the command name.'
@@ -380,6 +406,28 @@ export function parseDevframeAbandonInput(rawInput: string): string {
  */
 export function renderStopSuccess(): string {
   return 'Bound goal stop requested. The stop-requested binding was recorded in this session log and goal continuation is disarmed; the stop flow owns quiescence confirmation.'
+}
+
+/**
+ * Render the stop-chain stopped adjudication: the reliability chain drained
+ * owned jobs and processes, flushed the session state, and released the
+ * writer only after the confirmed chain.
+ * @returns the stable success text without opaque ids.
+ */
+export function renderStopChainStoppedText(): string {
+  return 'Bound goal stopped. Admission closed, owned jobs and processes drained, and session state flushed before the writer was released; the stopped binding was recorded in this session log.'
+}
+
+/**
+ * Render the stop-chain needs-attention adjudication: the chain could not
+ * confirm quiescence, so the writer stays retained and the listed resources
+ * name what must settle before the chain can run again.
+ * @param remaining - the unresolved resources the chain reported.
+ * @returns the stable error text naming every unresolved resource.
+ */
+export function renderStopChainNeedsAttentionText(remaining: readonly StopIssue[]): string {
+  const list = remaining.map(issue => `${issue.resource}: ${issue.reason}`).join('; ')
+  return `The stop chain could not confirm quiescence (${list}). The writer remains held and the goal stays in the stop flow; resolve the listed resources and run /devframe-stop again.`
 }
 
 /**
