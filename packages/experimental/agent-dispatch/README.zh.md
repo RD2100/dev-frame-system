@@ -64,7 +64,7 @@ The agent dispatch tool is the daily delegation entry over the agent hierarchy. 
 
 #### 模型看到什么
 
-生成的[工具目录](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-agent-dispatch)中的 `agent_dispatch` 条目拥有 schema；消费面未在其之外增加字段。
+生成的[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-experimental-agent-dispatch)中的 `agent_dispatch` 条目拥有 schema；消费面未在其之外增加字段。
 
 #### Token 影响
 
