@@ -419,6 +419,115 @@ describe('checks change composition (AT1-10: the change invalidates evidence, ke
     const resumed = await execute(second, '/devframe-resume')
     if (resumed.result.kind !== 'success') throw new Error('expected a success result')
     expect(resumed.result.text).toBe(renderResumeSuccess())
+    // A plain same-hash resume keeps the acceptance region start: evidence
+    // from the original generation stays valid across the revision advance.
+    const resumedGoal = second.ctx.goals.get(second.agent)
+    if (resumedGoal === undefined) throw new Error('goal is missing after resume')
+    const startedRevision = goalBindingEvents(second)[0]?.goalRevision
+    expect(devFrameStateOf(second.ctx, second.session).acceptanceRegions).toEqual([
+      { goalId: resumedGoal.id, startRevision: startedRevision },
+    ])
+  })
+
+  it('refuses swung-back-generation evidence when the accepted checks return to an earlier acceptance', async () => {
+    const fixture = await createCommittedWorktree()
+    const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-command-goal-binding-checks-cycle-'))
+    roots.push(storageRoot)
+    const sessionId = SessionId('controller-v14-checks-cycle')
+    const objective = 'fix the billing bug'
+
+    // Boot 1 (generation A1): the goal starts under the approved v1
+    // checklist and produces its verification evidence and an authorized
+    // review under the v1 acceptance.
+    const first = await boot({
+      checks: startChecksV1(fixture.root),
+      workspaceRoot: fixture.root,
+      storageRoot,
+      sessionId,
+    })
+    const started = await execute(first, `/devframe-start ${objective}`)
+    if (started.result.kind !== 'success') throw new Error('expected a success result')
+    const bindingA1 = goalBindingEvents(first)[0]
+    if (bindingA1 === undefined) throw new Error('started binding is missing')
+    first.session.append('devframe/usage', usageRecord(bindingA1, 'operation-v14-cycle-a1', { attempt: 1, consumedAttempts: 1 }))
+    const reviewerSessionId = SessionId('reviewer-v14-checks-cycle')
+    first.session.append('devframe/role-policy', reviewerPolicyRecord(first.session.id, reviewerSessionId))
+    const a1Verification = devFrameStateOf(first.ctx, first.session).verifications.at(-1)
+    if (a1Verification === undefined) throw new Error('A1 verification is missing')
+    first.session.append('devframe/review', reviewRecord(bindingA1, reviewerSessionId, 'review-v14-cycle-a1'))
+    await first.ctx.sessions.flush(first.session)
+    contexts.splice(contexts.indexOf(first.ctx), 1)
+    await first.ctx.fiber.dispose()
+
+    // Boot 2 (generation A2): the approved checks change to v2 and the
+    // resume adopts them into a new generation.
+    const second = await boot({
+      checks: startChecksV2(fixture.root),
+      workspaceRoot: fixture.root,
+      storageRoot,
+      sessionId,
+      restore: true,
+    })
+    expect((await execute(second, '/devframe-resume')).result.text).toBe(renderResumeAdoptedSuccess())
+    const bindingA2 = goalBindingEvents(second).at(-1)
+    if (bindingA2 === undefined) throw new Error('A2 binding is missing')
+    await second.ctx.sessions.flush(second.session)
+    contexts.splice(contexts.indexOf(second.ctx), 1)
+    await second.ctx.fiber.dispose()
+
+    // Boot 3 (generation A3): the approved checks swing BACK to v1, so the
+    // re-adopted hash equals the A1 hash — the deterministic acceptance
+    // cannot distinguish the generations, and the region start revision
+    // (carried through both cold restores) must.
+    const third = await boot({
+      checks: startChecksV1(fixture.root),
+      workspaceRoot: fixture.root,
+      storageRoot,
+      sessionId,
+      restore: true,
+    })
+    expect((await execute(third, '/devframe-resume')).result.text).toBe(renderResumeAdoptedSuccess())
+    const bindingA3 = goalBindingEvents(third).at(-1)
+    if (bindingA3 === undefined) throw new Error('A3 binding is missing')
+    expect(bindingA3.goalRevision).toBe(bindingA2.goalRevision + 1)
+    expect(bindingA3.acceptanceHash).toBe(bindingA1.acceptanceHash)
+
+    // The A1 review carries the SAME hash but a revision below the region
+    // start: /goal-complete names the superseded generation's review
+    // instead of completing on it.
+    const staleReview = await execute(third, '/goal-complete')
+    expect(staleReview.result.kind).toBe('error')
+    if (staleReview.result.kind === 'error') expect(staleReview.result.text).toBe(REVIEW_SUPERSEDED_TEXT)
+    expect(devFrameStateOf(third.ctx, third.session).failure).toBeNull()
+
+    // A late A1 verification (same hash, pre-region revision) is refused by
+    // name as well.
+    third.session.append('devframe/verification', {
+      ...a1Verification,
+      verificationId: DevFrameVerificationId('verification-v14-cycle-stale'),
+    })
+    const staleVerificationResult = await execute(third, '/goal-complete')
+    expect(staleVerificationResult.result.kind).toBe('error')
+    if (staleVerificationResult.result.kind === 'error') expect(staleVerificationResult.result.text).toBe(VERIFICATION_SUPERSEDED_TEXT)
+    expect(devFrameStateOf(third.ctx, third.session).failure).toBeNull()
+
+    // Fresh third-generation evidence completes: a verification attributed
+    // to the re-adopted generation plus a current authorized review.
+    const a3Verification = devFrameStateOf(third.ctx, third.session).verifications.find(
+      record => record.binding.goalRevision === bindingA3.goalRevision,
+    )
+    if (a3Verification === undefined) throw new Error('A3 verification is missing')
+    third.session.append('devframe/verification', {
+      ...a3Verification,
+      verificationId: DevFrameVerificationId('verification-v14-cycle-fresh'),
+    })
+    third.session.append('devframe/review', reviewRecord(bindingA3, reviewerSessionId, 'review-v14-cycle-a3'))
+    const completed = await execute(third, '/goal-complete')
+    if (completed.result.kind !== 'success') {
+      throw new Error(`expected a success result: ${completed.result.text} | projection failure: ${devFrameStateOf(third.ctx, third.session).failure}`)
+    }
+    expect(completed.result.text).toBe(renderCompletionSuccess())
+    expect(third.ctx.goals.get(third.agent)?.phase).toBe('complete')
   })
 
   it('refuses to complete a goal that is already complete after the checks change', async () => {
