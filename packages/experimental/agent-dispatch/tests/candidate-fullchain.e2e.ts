@@ -10,7 +10,7 @@
 
 import type { ChildProcess } from 'node:child_process'
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
@@ -523,8 +523,16 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       })
       const url = new URL(running.launchUrl)
       const cookie = await exchangeLaunchCookie(running.launchUrl)
-      const created = await postRpc(Number(url.port), url.host, cookie, 'session/create', { args: { request: {} } })
+      // The host selects the root identity up front: the same fixed id feeds
+      // the budget consumer's config and the create call, and the root
+      // session is born inside the controller's target worktree.
+      const rootSessionId = 'candidate-root-c14'
+      const created = await postRpc(Number(url.port), url.host, cookie, 'session/create', { args: { request: {
+        sessionId: rootSessionId,
+        cwd: prepared.targetWorktreePath,
+      } } })
       const sessionId = (unwrapRpc('session/create', created.body) as { sessionId: string }).sessionId
+      expect(sessionId).toBe(rootSessionId)
 
       const promptSession = async (text: string): Promise<void> => {
         const prompted = await postRpc(Number(url.port), url.host, cookie, 'session/prompt', { args: {
@@ -601,8 +609,21 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         expect(content.trim()).toBe(`${taskId} artifact body`)
       }
     } catch (error) {
+      // Surface the root session's own durable log: turn/end errors live
+      // there, not in the RPC acceptance.
+      let logEvidence = ''
+      try {
+        const entries = await readdir(dshHome, { recursive: true, withFileTypes: true })
+        const logs = entries.filter(entry => entry.isFile() && entry.name.includes('candidate-root-c14'))
+          .map(entry => join(entry.parentPath, entry.name)).slice(0, 6)
+        for (const log of logs) {
+          logEvidence += `\n[log ${log}] ${(await readFile(log, 'utf8')).slice(-1200)}`
+        }
+      } catch {
+        // The home may already be gone; the RPC evidence above still stands.
+      }
       const evidence = running?.output()
-      throw new Error(`${error instanceof Error ? error.message : String(error)}${evidence === undefined ? '' : `\n${redact(evidence)}`}`, { cause: error })
+      throw new Error(`${error instanceof Error ? error.message : String(error)}${logEvidence}${evidence === undefined ? '' : `\n${redact(evidence)}`}`, { cause: error })
     } finally {
       await replay.close()
       if (running !== undefined) await stopCandidateWeb(running)
