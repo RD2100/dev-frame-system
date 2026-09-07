@@ -22,6 +22,7 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import type { ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -64,7 +65,14 @@ function git(cwd: string, ...args: string[]): Promise<string> {
 }
 
 /** Write the cordis.yml under test: the full stack plus this package's namespace mount face. */
-async function writeCompositionConfig(): Promise<string> {
+async function writeCompositionConfig(options?: { bootstrap?: boolean }): Promise<string> {
+  const dispatchConfig: string[] = options?.bootstrap === true
+    ? [
+        '  config:',
+        '    bootstrap: true',
+        `    checksLedgerPath: ${JSON.stringify(join(root as string, 'checks-ledger.json'))}`,
+      ]
+    : []
   const configPath = join(root as string, 'cordis.yml')
   await writeFile(configPath, [
     "- name: '@deepseek-ai/dsh-llm'",
@@ -104,17 +112,21 @@ async function writeCompositionConfig(): Promise<string> {
     "- name: '@deepseek-ai/dsh-subprocess-local'",
     "- name: '@deepseek-ai/dsh-worktree-registry'",
     "- name: '@deepseek-ai/dsh-experimental-agent-dispatch'",
+    ...dispatchConfig,
     '',
   ].join('\n'))
   return configPath
 }
 
-async function loadComposition(configPath: string): Promise<Context> {
+async function loadComposition(configPath: string, prepare?: (ctx: Context) => void): Promise<Context> {
   const ctx = new Context()
   contexts.push(ctx)
   ctx.baseUrl = pathToFileURL(root as string).href + '/'
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
+  // Providers the composition needs before any plugin applies: an opt-in
+  // bootstrap mount resolves its authorities at construction time.
+  prepare?.(ctx)
   const modules = new Map<string, unknown>([
     ['@deepseek-ai/dsh-llm', LlmRuntime],
     ['@deepseek-ai/dsh-session', SessionStore],
@@ -245,5 +257,43 @@ describe('agent dispatch through a real Loader composition', () => {
     }, workerAgent)
     expect(denied.isError).toBe(true)
     expect(textOf(denied)).toContain('unknown tool')
+  })
+
+  it('loads dispatch-only without a project controller, and mounts the bootstrap only on opt-in', async () => {
+    root = await mkdtemp(join(tmpdir(), 'dsh-agent-dispatch-loader-optin-'))
+    const repo = join(root, 'repo')
+    await mkdir(repo)
+    await git(root, 'init', '-b', 'main', repo)
+    await git(repo, 'config', 'user.email', 'agent-dispatch-loader@test.local')
+    await git(repo, 'config', 'user.name', 'Agent Dispatch Loader Tests')
+    await git(repo, 'commit', '--allow-empty', '-m', 'init')
+
+    // Dispatch-only deployment: no project controller service exists, and
+    // the plugin must still load and register the dispatch tool.
+    const dispatchOnly = await loadComposition(await writeCompositionConfig())
+    expect(dispatchOnly.agentDispatch).toBeDefined()
+    expect(dispatchOnly.tools.get('agent_dispatch')).toBeDefined()
+    expect(dispatchOnly.projectRun).toBeUndefined()
+
+    // Opt-in deployment: the bootstrap config turns the host bootstrap on;
+    // the composition must mount the project controller for it, and the
+    // approved-digest registration runs against the real ledger.
+    const formal = await loadComposition(await writeCompositionConfig({ bootstrap: true }), ctx => {
+      ctx.provide('projectController', { find: () => undefined } as never)
+    })
+    expect(formal.projectRun).toBeDefined()
+    const checks = {
+      version: 1 as const,
+      checks: [{
+        checkId: 'probe',
+        executable: process.execPath,
+        arguments: ['-e', 'process.exit(0)'],
+        cwd: root,
+      }],
+    }
+    const digest = await formal.projectRun.approveTaskChecks({ taskId: TaskId('task-1'), checks })
+    expect(digest).toBeDefined()
+    const again = await formal.projectRun.approveTaskChecks({ taskId: TaskId('task-1'), checks })
+    expect(again).toBe(digest)
   })
 })

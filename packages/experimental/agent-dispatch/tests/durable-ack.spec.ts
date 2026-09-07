@@ -172,6 +172,8 @@ async function harness(
       },
     }))
     await ctx.plugin(AgentHierarchy, { ...rolesConfig, leadPluginScopes })
+    // The plugin's formal bootstrap is opt-in; the dispatch/ack faces run
+    // without it, so no project controller is mounted.
     await ctx.plugin(AgentDispatch)
     ctx.llm.registerAdapter(['mock'], adapter)
 

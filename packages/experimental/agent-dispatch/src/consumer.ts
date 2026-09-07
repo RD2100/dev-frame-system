@@ -1,19 +1,17 @@
 /**
  * The model-facing dispatch entry: the `agent_dispatch` tool over
- * `ctx.agentDispatch`. It is the formal consumer the daily journey was
- * missing — the calling session (controller or lead, per the hierarchy
- * discipline) dispatches a child onto one registered worktree it names by
- * id, with the workspace and caller resolved from the immutable session
- * header and the policy left entirely to the dispatch entry and the engine.
- * A task that already has a child is retried by passing `retry`, which
- * reuses the already-returned identity and never re-delivers a briefing;
- * the entry's `DISPATCH_IDENTITY_EXISTS` refusal names that rule. Results
- * ride the ordinary tool call/result session events, so no new session
- * event is owed.
+ * `ctx.agentDispatch` — the daily delegation face — plus the formal host
+ * bootstrap service (`ctx.projectRun`) the host drives before the chain
+ * runs. The task lifecycle's delivery/review/integration moves are owned
+ * downstream (project_task, the delivery tools, and the integration path);
+ * this module registers only the dispatch tool and mounts both services.
+ * Results ride the ordinary tool call/result session events, so no new
+ * session event is owed.
  * @module @deepseek-ai/dsh-experimental-agent-dispatch/consumer
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolCallView } from '@deepseek-ai/dsh-tools'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -21,13 +19,29 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { WorktreeId } from '@deepseek-ai/dsh-worktree-registry'
 import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import { AgentDispatch } from './service.ts'
+import { AgentProjectRun } from './run.ts'
 import { requireNonEmpty, resolveCaller } from './authorization.ts'
 
 /** Cordis plugin name. */
 export const name = 'agent-dispatch'
 
+/** Plugin config. The formal bootstrap is explicit opt-in, so dispatch-only deployments load unchanged. */
+export const Config: z<{ bootstrap?: boolean; checksLedgerPath?: string }> = z.object({
+  bootstrap: z.boolean(),
+  checksLedgerPath: z.string(),
+})
+
 /** Services required by the plugin; the hierarchy stack missing fails the load. */
-export const inject = ['tools', 'systemPrompt', 'workspaceRegistry', 'worktreeRegistry', 'agentHierarchy', 'agentBindings', 'agents', 'sessions']
+export const inject = [
+  'tools',
+  'systemPrompt',
+  'workspaceRegistry',
+  'worktreeRegistry',
+  'agentHierarchy',
+  'agentBindings',
+  'agents',
+  'sessions',
+] as const
 
 const DISPATCH_DESCRIPTION = `Dispatch a child agent for one task onto one registered git worktree: the controller dispatches a lead, and a lead dispatches workers inside its approved plugin scopes. Name the task id, the plugin scope, and the worktree id (get worktree ids from worktree_create or the host), and pass a briefing prompt for a fresh dispatch — the briefing is queued only after the child is published. Every result carries ack: what the child's own durable log proves about the task (briefed while pending, claimed while executing, terminal with the turn's recorded ending — completed means the task finished cleanly, dropped when the briefing was cancelled unrun). If this task already has a dispatched child, the tool refuses and names it: pass retry: true to reuse that child instead, which never re-delivers the briefing and reports the task's current ack. The engine owns the child's lifecycle and the hierarchy owns every denial; refusals name the cause and the fix.`
 
@@ -90,15 +104,23 @@ function renderDispatchText(value: {
 }
 
 /**
- * Mount the model-facing dispatch seam: the dispatch service on the plugin's
- * fiber, then the tool and its usage guidance. Loading without the
- * hierarchy stack (engine, role bindings, registries) fails at activation.
+ * Mount the model-facing dispatch seam: the formal host bootstrap service on
+ * the plugin's fiber, then the dispatch service, then the tool and its usage
+ * guidance. Loading without the hierarchy stack or the project controller
+ * fails at activation.
  * @param ctx - The plugin's context.
+ * @param config - The schema-validated plugin config.
  */
-export function apply(ctx: Context): void {
-  // Constructing the Service mounts ctx.agentDispatch on this plugin fiber,
-  // so the seam lives and dies with the plugin (HMR-safe by construction).
+export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedgerPath?: string }): void {
+  // Constructing AgentDispatch mounts ctx.agentDispatch on this plugin
+  // fiber, so the seam lives and dies with the plugin (HMR-safe by
+  // construction). The formal host bootstrap is opt-in: deployments that
+  // set `bootstrap` must mount the project controller, and the mount fails
+  // loud when its authorities are missing.
   new AgentDispatch(ctx)
+  if (config?.bootstrap === true) {
+    new AgentProjectRun(ctx, { checksLedgerPath: config.checksLedgerPath })
+  }
 
   ctx.systemPrompt.section({
     name: 'tool:agent-dispatch',
