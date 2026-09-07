@@ -96,13 +96,14 @@ export function apply(ctx: Context, config: DriverConfig): void {
 /** Read the devframe projection's goal binding off one session. */
 function bindingOf(ctx: Context, session: { id: { toString(): string } }): Record<string, unknown> {
   const state = ctx.sessionProjections.stateOf(session as never, 'devframe') as {
-    binding?: { goalId?: string, acceptanceHash?: string, controllerSessionId?: string }
+    bindings?: Array<{ goalId?: string, acceptanceHash?: string, controllerSessionId?: string }>
   } | undefined
+  const last = state?.bindings?.at(-1)
   return {
-    goalId: state?.binding?.goalId,
-    acceptanceHash: state?.binding?.acceptanceHash,
-    controllerSessionId: state?.binding?.controllerSessionId,
-    rawKeys: state === undefined ? [] : Object.keys(state),
+    goalId: last?.goalId,
+    acceptanceHash: last?.acceptanceHash,
+    controllerSessionId: last?.controllerSessionId,
+    bindingCount: state?.bindings?.length ?? 0,
   }
 }
 
