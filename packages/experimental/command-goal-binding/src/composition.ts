@@ -237,7 +237,7 @@ export class GoalBindingComposition extends Service {
       return { kind: 'error', text: START_GOAL_RUNNING_TEXT }
     }
     const computed = await computeSourceFingerprint({ worktreePath })
-    const snapshotId = makeSnapshotId(`snapshot-v1-${computed.headCommit}-${computed.trackedStateHash}`)
+    const snapshotId = makeSnapshotId(`snapshot-v2-${computed.headCommit}-${computed.stateHash}`)
     const requiredChecksDigest = await this.requiredChecksStore.save(this.config.checks)
     const binding = await this.startBinding(invocation.agent, {
       objective,

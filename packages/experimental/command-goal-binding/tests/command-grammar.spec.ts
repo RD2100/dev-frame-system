@@ -31,13 +31,13 @@ function fingerprintRejection(): CompletionFingerprintRejection {
     stage: 'source-fingerprint',
     mismatch: {
       kind: 'mismatch',
-      recordedFingerprint: SourceFingerprint('dsh-source-fp-v1-aa-recorded'),
+      recordedFingerprint: SourceFingerprint('dsh-source-fp-v2-aa-recorded'),
       computed: {
-        fingerprint: SourceFingerprint('dsh-source-fp-v1-bb-computed'),
+        fingerprint: SourceFingerprint('dsh-source-fp-v2-bb-computed'),
         headCommit: '0'.repeat(40),
-        trackedStateHash: '1'.repeat(64),
-        trackedEntryCount: 1,
-        algorithm: 'v1',
+        stateHash: '1'.repeat(64),
+        entryCount: 1,
+        algorithm: 'v2',
       },
     },
   }
@@ -75,7 +75,7 @@ describe('/goal-complete verdict rendering', () => {
   it('renders each rejection stage without goal identities', () => {
     const fingerprintText = renderCompletionRejection(fingerprintRejection())
     expect(fingerprintText).toContain('source-fingerprint')
-    expect(fingerprintText).not.toContain('dsh-source-fp-v1')
+    expect(fingerprintText).not.toContain('dsh-source-fp-v2')
 
     const checksText = renderCompletionRejection(checksRejection())
     expect(checksText).toContain('required-checks')

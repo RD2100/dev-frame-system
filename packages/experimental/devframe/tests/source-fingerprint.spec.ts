@@ -6,7 +6,8 @@
  */
 
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, symlink, unlink, utimes, writeFile } from 'node:fs/promises'
+import * as filesystem from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { createServer, type Socket } from 'node:net'
 import { pathToFileURL } from 'node:url'
@@ -16,6 +17,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeSourceFingerprint, SourceFingerprintError, verifySourceFingerprint } from '../src/source-fingerprint.ts'
 import type { SourceFingerprintErrorCode, VerifyVerdict } from '../src/source-fingerprint.ts'
 import { SourceFingerprint as makeSourceFingerprint } from '../src/shared/types.ts'
+
+vi.mock('node:fs/promises', async importOriginal => ({
+  ...await importOriginal<typeof import('node:fs/promises')>(),
+}))
 
 const execFileAsync = promisify(execFile)
 
@@ -130,11 +135,11 @@ describe('computeSourceFingerprint', { timeout: 30_000 }, () => {
     const second = await computeSourceFingerprint({ worktreePath: fixture.root })
 
     expect(second).toEqual(first)
-    expect(first.algorithm).toBe('v1')
-    expect(first.fingerprint).toBe(`dsh-source-fp-v1-${first.headCommit}-${first.trackedStateHash}`)
+    expect(first.algorithm).toBe('v2')
+    expect(first.fingerprint).toBe(`dsh-source-fp-v2-${first.headCommit}-${first.stateHash}`)
     expect(first.headCommit).toMatch(/^[0-9a-f]{40,64}$/)
-    expect(first.trackedStateHash).toMatch(/^[0-9a-f]{64}$/)
-    expect(first.trackedEntryCount).toBeGreaterThan(0)
+    expect(first.stateHash).toMatch(/^[0-9a-f]{64}$/)
+    expect(first.entryCount).toBeGreaterThan(0)
   })
 
   it('changes when a tracked file is staged without committing, with HEAD unchanged', async () => {
@@ -166,7 +171,7 @@ describe('computeSourceFingerprint', { timeout: 30_000 }, () => {
 
     expect(committed.fingerprint).not.toBe(baseline.fingerprint)
     expect(committed.headCommit).not.toBe(baseline.headCommit)
-    expect(committed.trackedStateHash).not.toBe(baseline.trackedStateHash)
+    expect(committed.stateHash).not.toBe(baseline.stateHash)
   })
 
   it('ignores worktree mtime changes when the tracked content is identical', async () => {
@@ -177,40 +182,230 @@ describe('computeSourceFingerprint', { timeout: 30_000 }, () => {
 
     // Rewrite identical bytes for a fresh mtime; never restored (an mtime
     // write-back would assume an NTFS-tick-lossless round trip). The expected
-    // value is the freshly computed baseline, and the fingerprint reads the
-    // index, so the worktree stat change cannot reach it.
+    // value is the freshly computed baseline; timestamps are not hash input.
     await fixture.write('src/main.ts', 'export {}\n')
     const rewritten = await computeSourceFingerprint({ worktreePath: fixture.root })
 
     expect(rewritten.fingerprint).toBe(baseline.fingerprint)
   })
 
-  it('ignores unstaged worktree line-ending rewrites', async () => {
+  it('detects unstaged worktree line-ending rewrites', async () => {
     const fixture = await createRepository()
     await fixture.write('src/main.ts', 'export {}\n')
     await commitAll(fixture, 'initial')
     const baseline = await computeSourceFingerprint({ worktreePath: fixture.root })
 
-    // CRLF rewrite stays unstaged: the index still holds the committed blob,
-    // on every platform, so the worktree line-ending state is invisible.
+    // The index stays unchanged; the bytes read by checks and review do not.
     await writeFile(join(fixture.root, 'src', 'main.ts'), 'export {}\r\n', 'utf8')
     const rewritten = await computeSourceFingerprint({ worktreePath: fixture.root })
 
-    expect(rewritten.fingerprint).toBe(baseline.fingerprint)
+    expect(rewritten.fingerprint).not.toBe(baseline.fingerprint)
   })
 
-  it('ignores untracked files (registered boundary)', async () => {
+  it('includes nonignored untracked files', async () => {
     const fixture = await createRepository()
     await fixture.write('src/main.ts', 'export {}\n')
     await commitAll(fixture, 'initial')
     const baseline = await computeSourceFingerprint({ worktreePath: fixture.root })
 
-    // Registered boundary (fprecompute-design.md): a purely untracked file is
-    // invisible to the HEAD+index fingerprint until it is staged or committed.
     await fixture.write('scratch/untracked.txt', 'unreviewed change\n')
     const withUntracked = await computeSourceFingerprint({ worktreePath: fixture.root })
 
-    expect(withUntracked.fingerprint).toBe(baseline.fingerprint)
+    expect(withUntracked.fingerprint).not.toBe(baseline.fingerprint)
+  })
+
+  it('detects same-size tracked edits and tracked deletions without changing HEAD or index', async () => {
+    const fixture = await createRepository()
+    await fixture.write('src/main.ts', 'export const value = 1\n')
+    await commitAll(fixture, 'initial')
+    const baseline = await computeSourceFingerprint({ worktreePath: fixture.root })
+    const index = await fixture.git(['ls-files', '-s'])
+    await fixture.write('src/main.ts', 'export const value = 2\n')
+    const edited = await computeSourceFingerprint({ worktreePath: fixture.root })
+    expect(edited.headCommit).toBe(baseline.headCommit)
+    expect(edited.fingerprint).not.toBe(baseline.fingerprint)
+    await unlink(join(fixture.root, 'src/main.ts'))
+    const deleted = await computeSourceFingerprint({ worktreePath: fixture.root })
+    expect(deleted.fingerprint).not.toBe(edited.fingerprint)
+    expect(deleted.fingerprint).not.toBe(baseline.fingerprint)
+    expect(deleted.entryCount).toBe(1)
+    expect(await fixture.git(['ls-files', '-s'])).toBe(index)
+  })
+
+  it('detects edits to existing untracked bytes even when size and mtime are restored', async () => {
+    const fixture = await createRepository()
+    await commitAll(fixture, 'initial')
+    await fixture.write('source input 中文.txt', 'before\0bytes')
+    const path = join(fixture.root, 'source input 中文.txt')
+    const metadata = await filesystem.stat(path)
+    const baseline = await computeSourceFingerprint({ worktreePath: fixture.root })
+    await fixture.write('source input 中文.txt', 'edited\0bytes')
+    await utimes(path, metadata.atime, metadata.mtime)
+    expect((await verifySourceFingerprint(fixture.root, baseline.fingerprint)).kind).toBe('mismatch')
+    await unlink(path)
+    expect((await verifySourceFingerprint(fixture.root, baseline.fingerprint)).kind).toBe('mismatch')
+  })
+
+  it('excludes ignored untracked inputs and empty directories', async () => {
+    const fixture = await createRepository()
+    await fixture.write('.gitignore', 'generated/\n')
+    await commitAll(fixture, 'initial')
+    const baseline = await computeSourceFingerprint({ worktreePath: fixture.root })
+    await fixture.write('generated/cache.txt', 'not source')
+    await mkdir(join(fixture.root, 'empty'))
+    expect(await computeSourceFingerprint({ worktreePath: fixture.root })).toEqual(baseline)
+  })
+
+  it('hashes a symlink target without reading the external referent', async ({ skip }) => {
+    const fixture = await createRepository()
+    await commitAll(fixture, 'initial')
+    const outside = join(await createTempRoot(), 'outside.txt')
+    await writeFile(outside, 'outside one')
+    const link = join(fixture.root, 'source-link')
+    try { await symlink(outside, link, 'file') } catch (error) {
+      if (process.platform === 'win32' && (error as NodeJS.ErrnoException).code === 'EPERM') {
+        skip('Windows host does not grant symbolic-link creation')
+        return
+      }
+      throw error
+    }
+    const baseline = await computeSourceFingerprint({ worktreePath: fixture.root })
+    await writeFile(outside, 'outside two')
+    expect(await computeSourceFingerprint({ worktreePath: fixture.root })).toEqual(baseline)
+    await unlink(link)
+    await symlink(outside + '-missing', link, 'file')
+    expect((await verifySourceFingerprint(fixture.root, baseline.fingerprint)).kind).toBe('mismatch')
+  })
+
+  it('refuses a tracked parent replaced with an external directory link', async () => {
+    const fixture = await createRepository()
+    await fixture.write('src/main.ts', 'reviewed')
+    await commitAll(fixture, 'initial')
+    const outside = await createTempRoot()
+    await writeFile(join(outside, 'main.ts'), 'external')
+    await unlink(join(fixture.root, 'src/main.ts'))
+    await filesystem.rmdir(join(fixture.root, 'src'))
+    const link = join(fixture.root, 'src')
+    await symlink(outside, link, process.platform === 'win32' ? 'junction' : 'dir')
+    try {
+      await expectErrorCode(computeSourceFingerprint({ worktreePath: fixture.root }), 'SOURCE_FINGERPRINT_SOURCE_FAILED')
+    } finally { await unlink(link) }
+  })
+
+  it('refuses gitlink entries even when no submodule directory is checked out', async () => {
+    const fixture = await createRepository()
+    const head = await commitAll(fixture, 'initial')
+    await fixture.git(['update-index', '--add', '--cacheinfo', '160000,' + head + ',module'])
+    await expectErrorCode(computeSourceFingerprint({ worktreePath: fixture.root }), 'SOURCE_FINGERPRINT_SOURCE_FAILED')
+  })
+
+  it('refuses a tracked file replaced by an unsupported directory', async () => {
+    const fixture = await createRepository()
+    await fixture.write('source', 'reviewed')
+    await commitAll(fixture, 'initial')
+    await unlink(join(fixture.root, 'source'))
+    await mkdir(join(fixture.root, 'source'))
+    await expectErrorCode(computeSourceFingerprint({ worktreePath: fixture.root }), 'SOURCE_FINGERPRINT_SOURCE_FAILED')
+  })
+
+  it('bounds the aggregate contents of individually small files', async () => {
+    const fixture = await createRepository()
+    await commitAll(fixture, 'initial')
+    await fixture.write('a', 'x'.repeat(3000))
+    await fixture.write('b', 'y'.repeat(3000))
+    await expectErrorCode(computeSourceFingerprint({ worktreePath: fixture.root, maxSourceBytes: 4096 }), 'SOURCE_FINGERPRINT_SOURCE_FAILED')
+    await expect(computeSourceFingerprint({ worktreePath: fixture.root, maxOutputBytes: 4096 })).resolves.toMatchObject({ entryCount: 2 })
+  })
+
+  it('closes an opened file when its request is cancelled before streaming', async () => {
+    const fixture = await createRepository()
+    await fixture.write('source', 'reviewed')
+    await commitAll(fixture, 'initial')
+    const abort = new AbortController()
+    const original = filesystem.open
+    let handle: Awaited<ReturnType<typeof filesystem.open>> | undefined
+    const spy = vi.spyOn(filesystem, 'open').mockImplementation(async (...args) => {
+      const opened = await original(...args)
+      if (args[0] === join(fixture.root, 'source')) { handle = opened; abort.abort() }
+      return opened
+    })
+    try {
+      await expectErrorCode(computeSourceFingerprint({ worktreePath: fixture.root, signal: abort.signal }), 'SOURCE_FINGERPRINT_SOURCE_FAILED')
+      expect(handle?.fd).toBe(-1)
+    } finally { spy.mockRestore() }
+  })
+
+  it('rejects cancellation during the final source observation', async () => {
+    const fixture = await createRepository()
+    await fixture.write('source', 'reviewed')
+    await commitAll(fixture, 'initial')
+    const abort = new AbortController()
+    const original = filesystem.lstat
+    let observations = 0
+    const spy = vi.spyOn(filesystem, 'lstat').mockImplementation(async (...args) => {
+      const result = await original(...args)
+      if (args[0] === join(fixture.root, 'source') && ++observations === 3) abort.abort()
+      return result
+    })
+    try {
+      await expectErrorCode(computeSourceFingerprint({ worktreePath: fixture.root, signal: abort.signal }), 'SOURCE_FINGERPRINT_SOURCE_FAILED')
+      expect(observations).toBe(3)
+    } finally { spy.mockRestore() }
+  })
+
+  it('cancels an active file stream and closes its descriptor', async () => {
+    const fixture = await createRepository()
+    await fixture.write('source', 'x'.repeat(256 * 1024))
+    await commitAll(fixture, 'initial')
+    const abort = new AbortController()
+    const original = filesystem.open
+    let handle: Awaited<ReturnType<typeof filesystem.open>> | undefined
+    let streamed = false
+    const spy = vi.spyOn(filesystem, 'open').mockImplementation(async (...args) => {
+      const opened = await original(...args)
+      if (args[0] === join(fixture.root, 'source')) {
+        handle = opened
+        const create = opened.createReadStream.bind(opened)
+        vi.spyOn(opened, 'createReadStream').mockImplementation((options) => {
+          const stream = create(options)
+          stream.once('data', () => { streamed = true; abort.abort() })
+          return stream
+        })
+      }
+      return opened
+    })
+    try {
+      await expectErrorCode(computeSourceFingerprint({ worktreePath: fixture.root, signal: abort.signal }), 'SOURCE_FINGERPRINT_SOURCE_FAILED')
+      expect(streamed).toBe(true)
+      expect(handle?.fd).toBe(-1)
+    } finally { spy.mockRestore() }
+  })
+
+  it('rejects a file changed between inventory observation and opening and closes its handle', async () => {
+    const fixture = await createRepository()
+    await fixture.write('source', 'reviewed')
+    await commitAll(fixture, 'initial')
+    const original = filesystem.open
+    let handle: Awaited<ReturnType<typeof filesystem.open>> | undefined
+    const spy = vi.spyOn(filesystem, 'open').mockImplementation(async (...args) => {
+      const opened = await original(...args)
+      if (args[0] === join(fixture.root, 'source')) { handle = opened; await fixture.write('source', 'changed while opening') }
+      return opened
+    })
+    try {
+      await expectErrorCode(computeSourceFingerprint({ worktreePath: fixture.root }), 'SOURCE_FINGERPRINT_SOURCE_FAILED')
+      expect(handle?.fd).toBe(-1)
+    } finally { spy.mockRestore() }
+  })
+
+  it.skipIf(process.platform === 'win32')('includes executable-bit changes on POSIX filesystems', async () => {
+    const fixture = await createRepository()
+    await fixture.write('source', 'reviewed')
+    await chmod(join(fixture.root, 'source'), 0o644)
+    await commitAll(fixture, 'initial')
+    const baseline = await computeSourceFingerprint({ worktreePath: fixture.root })
+    await chmod(join(fixture.root, 'source'), 0o755)
+    expect((await verifySourceFingerprint(fixture.root, baseline.fingerprint)).kind).toBe('mismatch')
   })
 
   it('evaluates a nested directory as its containing worktree', async () => {
@@ -344,6 +539,9 @@ describe('computeSourceFingerprint', { timeout: 30_000 }, () => {
       computeSourceFingerprint({ worktreePath: root, maxOutputBytes: 0 }),
       'SOURCE_FINGERPRINT_INVALID_REQUEST',
     )
+    for (const maxSourceBytes of [0, -1, 1.5, Number.POSITIVE_INFINITY]) {
+      await expectErrorCode(computeSourceFingerprint({ worktreePath: root, maxSourceBytes }), 'SOURCE_FINGERPRINT_INVALID_REQUEST')
+    }
   })
 })
 
@@ -400,7 +598,7 @@ describe('verifySourceFingerprint', { timeout: 30_000 }, () => {
 
   it('passes engine errors through with their original codes and shape', async () => {
     const root = await createTempRoot()
-    const recorded = makeSourceFingerprint('dsh-source-fp-v1-verify-probe')
+    const recorded = makeSourceFingerprint('dsh-source-fp-v2-verify-probe')
 
     // Non-repository directory: the engine's own classification, not a wrap.
     await expect(verifySourceFingerprint(root, recorded)).rejects.toThrow(SourceFingerprintError)
@@ -420,19 +618,16 @@ describe('verifySourceFingerprint', { timeout: 30_000 }, () => {
     })
   })
 
-  it('still matches when only untracked files appeared (untracked-invisible boundary)', async () => {
+  it('rejects when an untracked file appears after the recorded snapshot', async () => {
     const fixture = await createRepository()
     await fixture.write('src/main.ts', 'export {}\n')
     await commitAll(fixture, 'initial')
     const recorded = (await computeSourceFingerprint({ worktreePath: fixture.root })).fingerprint
 
-    // Registered boundary (fprecompute-design.md): a purely untracked file is
-    // invisible to the HEAD+index fingerprint, so verify passes until the
-    // change is staged or committed — the same edge the engine suite pins.
     await fixture.write('scratch/untracked.txt', 'unreviewed change\n')
     const verdict = await verifySourceFingerprint(fixture.root, recorded)
 
-    expect(verdict).toEqual({ kind: 'match', fingerprint: recorded })
+    expect(verdict.kind).toBe('mismatch')
   })
 })
 
