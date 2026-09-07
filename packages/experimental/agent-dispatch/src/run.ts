@@ -153,7 +153,7 @@ export class AgentProjectRun extends Service {
         'PROJECT_RUN_TASK_UNKNOWN',
       )
     }
-    if (this.ctx.projectController.lifecycleState !== 'admission_open') {
+    if (this.ctx.projectController.lifecycle !== 'admission_open') {
       throw new ProjectRunError(
         'board admission is closed; the host must start the project first',
         'PROJECT_RUN_ADMISSION_CLOSED',
