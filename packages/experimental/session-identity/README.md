@@ -40,7 +40,7 @@ Mount the service in a composition that already mounts the session store and the
 
 ### Create a bound session
 
-`createBoundSession` is the entry point for agents the host creates itself. The parent must exist; the child depth derives from the parent header (`parent depth + 1`) unless the caller passes `delegationDepth` explicitly.
+`createBoundSession` creates a standalone Session, not a live Agent. The parent must exist; the child depth derives from the parent header (`parent depth + 1`) unless the caller passes `delegationDepth` explicitly.
 
 ```ts
 const { session, record } = await ctx.agentBindings.createBoundSession({
@@ -55,6 +55,8 @@ const { session, record } = await ctx.agentBindings.createBoundSession({
 ### Bind, query, and restore
 
 `bind` registers an agent created through another entry point; an identical rebind is idempotent and a different one fails loud. `find`, `byRole`, and `list` answer from the index restored at start, so a cold process sees every binding without replaying sessions.
+
+Inside Agent factory setup, use `bindPreparedSession(agentCtx.agent.session, request)` to persist the binding before publication. The factory owns Session creation and teardown; a standalone live Session cannot be adopted by a second factory call. Identity and lineage derive from the prepared Session. If later setup or publication fails, the binding remains reserved for explicit recovery instead of silently creating a replacement.
 
 -----
 

@@ -184,6 +184,11 @@ describe('agent-hierarchy guard (real dispatcher)', () => {
       const controllerRecord = h.ctx.agentBindings.find(controller.id)!
       const leadRecord = h.ctx.agentBindings.find(lead.id)!
       const workerRecord = h.ctx.agentBindings.find(worker.id)!
+      for (const requestedRole of ['controller', 'worker'] as const) {
+        expect(h.ctx.agentHierarchy.evaluateCreation(controllerRecord, {
+          parentSessionId: controller.id, requestedRole,
+        })).toMatchObject({ allowed: false, reason: expect.stringContaining('may only create leads') })
+      }
       expect(h.ctx.agentHierarchy.evaluateCreation(controllerRecord, {
         parentSessionId: controller.id, requestedRole: 'lead',
       })).toMatchObject({ allowed: true })

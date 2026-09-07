@@ -12,10 +12,14 @@
  */
 
 import { Service, type Context } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import { randomUUID } from 'node:crypto'
+import type { Agent, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import type { AgentBindingRecord, AgentRole, CreationIntent } from '@deepseek-ai/dsh-experimental-project-contracts'
-import type { SessionId } from '@deepseek-ai/dsh-session'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { isAgentRole } from '@deepseek-ai/dsh-experimental-project-contracts'
+import type { CreateBoundSessionRequest } from '@deepseek-ai/dsh-experimental-session-identity'
+import { delegationDepthOf } from '@deepseek-ai/dsh-subagent'
+import { AGENT_HIERARCHY_DELEGATION_DEPTH_BUDGET } from './policy.ts'
 // Type-only: pull the session-identity Context augmentation (`ctx.agentBindings`)
 // into this program; the registry is a hard injection point, never a value import.
 import type {} from '@deepseek-ai/dsh-experimental-session-identity'
@@ -36,6 +40,21 @@ interface InstalledRestriction {
   readonly release: () => void
 }
 
+/** Child identity and worktree requested by a trusted host creation consumer. */
+export type CreateChildAgentRequest = Omit<CreateBoundSessionRequest, 'parentSessionId' | 'delegationDepth'>
+
+/** Factory setup, route, cancellation, and optional preallocated identity. */
+export type CreateChildAgentOptions = Pick<CreateAgentOptions, 'setup' | 'agentOptions' | 'signal'>
+  & Partial<Pick<CreateAgentOptions, 'sessionId'>>
+
+/** Published child and its durable hierarchy identity; the hierarchy service owns its lifecycle. */
+export interface CreatedChildAgent {
+  /** Published Agent; prompts may be delivered after creation resolves. */
+  readonly agent: Agent
+  /** Binding persisted before publication. */
+  readonly record: AgentBindingRecord
+}
+
 /**
  * The pluginized-hierarchy role and creation policy service. Hard-injects
  * `ctx.agentBindings` (the role authority), `ctx.tools` (the guard and
@@ -51,6 +70,7 @@ export class AgentHierarchy extends Service {
   private readonly disposers: Array<() => void> = []
   private readonly installedRestrictions = new Map<SessionId, InstalledRestriction>()
   private disposed = false
+  private preparationTail: Promise<void> = Promise.resolve()
 
   /**
    * @param ctx - The mounting context; must carry the injected services.
@@ -62,7 +82,7 @@ export class AgentHierarchy extends Service {
     this.config = parseAgentHierarchyConfig(config)
   }
 
-  protected async [Service.init](): Promise<void> {
+  protected [Service.init](): void {
     const registries: GuardRegistries = {
       agents: this.ctx.agents,
       bindings: this.ctx.agentBindings,
@@ -80,7 +100,7 @@ export class AgentHierarchy extends Service {
       this.installedRestrictions.delete(agent.id)
       installed.release()
     }))
-    this.ctx.effect(() => () => this.teardown(), 'agent-hierarchy.dispose')
+    this.ctx.effect(() => () => { this.teardown() }, 'agent-hierarchy.dispose')
     // Cold recovery: the binding registry has already restored its records;
     // reinstall the inherited restriction for every agent that is live right
     // now. Agents created later are covered by the `agent/created` listener.
@@ -109,6 +129,108 @@ export class AgentHierarchy extends Service {
    */
   evaluateCreation(creator: AgentBindingRecord, intent: CreationIntent): CreationDecision {
     return evaluateCreationIntent(this.config, creator, intent)
+  }
+
+  /**
+   * Create a child through the Agent factory with its role persisted in setup.
+   * The caller supplies a registered, independently owned worktree. This
+   * operation does not allocate a worktree or send a prompt.
+   * Persistence failures retain the session-identity registry's recovery semantics.
+   * Matching parent/task retries reuse the stored binding; changed requests and
+   * occupied worktrees reject. A persisted child whose Session is unavailable
+   * requires recovery rather than replacement.
+   * @param parent - Exact live delegating Agent with a durable role binding.
+   * @param request - Child role, task, plugin scope, and registered worktree.
+   * @param options - Factory composition, model options, and cancellation signal.
+   * @returns The published Agent and its durable binding.
+   */
+  async createChildAgent(
+    parent: Agent,
+    request: CreateChildAgentRequest,
+    options: CreateChildAgentOptions = {},
+  ): Promise<CreatedChildAgent> {
+    const prepared = this.preparationTail.then(() => this.createChildAgentSerial(parent, request, options))
+    this.preparationTail = prepared.then(() => undefined, () => undefined)
+    return prepared
+  }
+
+  /** Serialize ownership lookup and durable creation so duplicate callers cannot reserve two children. */
+  private async createChildAgentSerial(
+    parent: Agent,
+    request: CreateChildAgentRequest,
+    options: CreateChildAgentOptions,
+  ): Promise<CreatedChildAgent> {
+    if (this.disposed || this.ctx.agents.get(parent.id) !== parent) {
+      throw new Error('agent-hierarchy: child preparation requires an exact live parent')
+    }
+    const creator = this.ctx.agentBindings.find(parent.id)
+    if (creator === undefined) throw new Error('agent-hierarchy: parent has no role binding')
+    const decision = this.evaluateCreation(creator, {
+      parentSessionId: parent.id,
+      requestedRole: request.role,
+      ...(request.pluginId === undefined ? {} : { pluginScope: request.pluginId }),
+    })
+    if (!decision.allowed) throw new Error(decision.reason)
+    const depth = delegationDepthOf(parent) + 1
+    if (depth > AGENT_HIERARCHY_DELEGATION_DEPTH_BUDGET) {
+      throw new Error('agent-hierarchy: child exceeds the delegation depth budget')
+    }
+    if (request.taskId === undefined || request.worktree === undefined) {
+      throw new Error('agent-hierarchy: child requires a task and registered worktree')
+    }
+    const { taskId, worktree } = request
+    if (request.cwd !== request.worktree.worktreePath) {
+      throw new Error('agent-hierarchy: child cwd must match its registered worktree path')
+    }
+    if (request.worktree.worktreeId === creator.worktreeId || request.cwd === parent.session.header.cwd) {
+      throw new Error('agent-hierarchy: child requires a worktree independent of its parent')
+    }
+    const records = this.ctx.agentBindings.list()
+    const existing = records.find(record => record.parentSessionId === parent.id && record.taskId === request.taskId)
+    if (existing !== undefined) {
+      if (existing.role !== request.role || existing.pluginId !== request.pluginId
+        || (options.sessionId !== undefined && existing.agentId !== options.sessionId)
+        || existing.worktreeId !== request.worktree.worktreeId || existing.worktreePath !== request.cwd
+        || existing.branch !== request.worktree.branch) {
+        throw new Error('agent-hierarchy: task already has a different child binding')
+      }
+      const agent = this.ctx.agents.get(existing.sessionId)
+      if (agent === undefined) throw new Error('agent-hierarchy: reserved child requires session recovery')
+      return { agent, record: existing }
+    }
+    if (records.some(record => record.worktreeId === worktree.worktreeId || record.worktreePath === request.cwd)) {
+      throw new Error('agent-hierarchy: worktree already belongs to another session')
+    }
+    let record: AgentBindingRecord | undefined
+    const handle = await this.ctx.agents.create({
+      sessionId: options.sessionId ?? SessionId(`session-${randomUUID()}`),
+      ...options,
+      meta: {
+        cwd: request.cwd,
+        ...(parent.session.header.agentPreset === undefined ? {} : { agentPreset: parent.session.header.agentPreset }),
+        parentSession: parent.id,
+        delegationDepth: depth,
+      },
+      setup: async (childCtx) => {
+        const child = childCtx.agent
+        if (child === undefined) throw new Error('agent-hierarchy: factory setup has no Agent')
+        const commit = await options.setup?.(childCtx)
+        record = await this.ctx.agentBindings.bindPreparedSession(child.session, {
+          role: request.role,
+          ...(request.pluginId === undefined ? {} : { pluginId: request.pluginId }),
+          taskId,
+          worktree,
+        })
+        return { commit: () => {
+          if (this.disposed || this.ctx.agents.get(parent.id) !== parent) {
+            throw new Error(`agent-hierarchy: parent ended during creation; recover child ${child.id}`)
+          }
+          commit?.commit()
+        } }
+      },
+    })
+    if (record === undefined) throw new Error('agent-hierarchy: factory published without completing binding setup')
+    return { agent: handle.agent, record }
   }
 
   /** Reinstall the inherited restriction for every restored binding whose agent is currently live. */
