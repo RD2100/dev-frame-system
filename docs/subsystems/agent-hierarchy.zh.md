@@ -11,6 +11,7 @@
 - 守卫自动覆盖面向模型的工具执行；拒绝原因会点名绑定角色、`missing role`、插件作用域或深度预算，且工具体绝不运行。
 - `roleOf` — 从活跃绑定注册表解析 agent 的绑定角色。
 - `evaluateCreation` — 每个非工具创建入口（宿主服务、SDK 桥接）都必须在子级存在之前以创建者的绑定记录和 P00 `CreationIntent` 调用它。
+- `createChildAgent` — 通过工厂 setup 校验并创建子 Agent，在发布前持久化身份。`CreateChildAgentRequest` 携带必需的任务、插件范围和已注册工作树；`CreateChildAgentOptions` 携带宿主 setup、路由选项、取消信号及可选的已分配 SessionID。`CreatedChildAgent` 返回活跃 Agent 和持久绑定，不发送提示词。Agent 生命周期由服务拥有。
 - 配置在构造时校验一次：每角色 `roleToolPolicies`（各角色保留其 `inheritedTools` 列表点名的全局工具）与每 lead `leadPluginScopes`。
 
 ## 约定要点
