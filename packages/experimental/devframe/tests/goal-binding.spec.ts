@@ -59,7 +59,7 @@ function nativeAgent(session: Session): Agent {
     cancel() {},
     runMaintenance: task => task(new AbortController().signal),
     whenIdle() { return Promise.resolve() },
-  } as Agent
+  }
 }
 
 /** Mount the native Goal service behind the controller's production port. */
@@ -654,6 +654,7 @@ describe('GoalBindingController completion admission', { timeout: 30_000 }, () =
     expect(verdict).toEqual({
       kind: 'rejected',
       stage: 'task-warning',
+      taskId: binding.taskIds[0],
       warning: 'MEMORY_UNAVAILABLE',
       tool: 'memory_append',
       grade: 'fail',

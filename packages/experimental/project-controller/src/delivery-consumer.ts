@@ -17,6 +17,7 @@ import { FileRequiredChecksConfigStore, computeSourceFingerprint } from '@deepse
 import { DevFrameSessionJournal } from '@deepseek-ai/dsh-experimental-devframe'
 import { TaskId as GoalTaskId } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
 import { RequiredChecksDigest } from '@deepseek-ai/dsh-experimental-devframe'
+import { resolveRepairLimit } from '@deepseek-ai/dsh-experimental-devframe'
 import { DevFrameDeliveryId, DevFrameSnapshotId, deliveryResultBinding } from '@deepseek-ai/dsh-experimental-devframe'
 import type { DevFrameCheckResult, DevFrameTaskDeliveryEventData } from '@deepseek-ai/dsh-experimental-devframe'
 import type {} from '@deepseek-ai/dsh-session-projection'
@@ -28,6 +29,8 @@ export const name = 'project-delivery-tools'
 export const inject = ['tools', 'agents', 'sessions', 'sessionProjections', 'projectController', 'agentBindings', 'workspaceRegistry', 'worktreeRegistry']
 /** Explicit deployment settings; tools cannot choose identities, commands, or approval digests. */
 export interface Config {
+  /** Shared Goal repair-round limit; omitted uses the DevFrame default. */
+  repairLimit?: number
   /** Existing approved-checks ledger. */
   requiredChecksPath: string
   /** Approved checkset digest keyed by task id. */
@@ -45,6 +48,7 @@ export interface Config {
 }
 /** Loader validation for deployment settings. */
 export const Config: z<Config> = z.object({
+  repairLimit: z.number(),
   requiredChecksPath: z.string(), requiredChecksByTask: z.dict(z.string()),
   gitExecutable: z.string().min(1), gitTimeoutMs: z.number().min(1), gitMaxOutputBytes: z.number().min(1),
   checkTimeoutMs: z.number().min(1), checkMaxOutputBytes: z.number().min(1),
@@ -61,6 +65,7 @@ const findingsSchema = validation.array(validation.object({
  * @param config - Approved task checksets and bounded process settings.
  */
 export function apply(ctx: Context, config: Config): void {
+  const repairLimit = resolveRepairLimit(config)
   if (!isAbsolute(config.requiredChecksPath) || [
     config.gitTimeoutMs, config.gitMaxOutputBytes, config.checkTimeoutMs, config.checkMaxOutputBytes,
   ]
@@ -343,6 +348,7 @@ export function apply(ctx: Context, config: Config): void {
           }
         }
         const prior = initial.state.reviews.findLast(item => item.deliveryId === delivery.deliveryId)
+        let review = prior
         if (prior !== undefined) {
           if (prior.reviewerSessionId !== initial.lead.sessionId || prior.decision !== decision
             || JSON.stringify(prior.findings) !== JSON.stringify(findings)) {
@@ -351,7 +357,7 @@ export function apply(ctx: Context, config: Config): void {
         } else {
           if (initial.task.state !== 'reviewing') throw new Error('A new review requires a reviewing task')
           reviewGuard()
-          await new AgentEvidenceJournal({ flush, journal, reviewerDirectory }).recordReview({
+          review = await new AgentEvidenceJournal({ flush, journal, reviewerDirectory }).recordReview({
             session: initial.session, binding: deliveryResultBinding(delivery), deliveryId: delivery.deliveryId,
             reviewerSessionId: initial.lead.sessionId, policyVersion: policy.policyVersion, decision, findings,
             appendOptions: {
@@ -371,6 +377,13 @@ export function apply(ctx: Context, config: Config): void {
           if (current?.state === 'reviewing') await ctx.projectController.submit(taskId, { beforePersist: reviewGuard })
           else if (current?.state !== 'submitted') throw new Error('Task is not ready for review recovery')
         } else {
+          if (review === undefined) throw new Error('Correction requires a recorded review')
+          const repair = await journal.admitRepair(initial.session, {
+            identity: { controllerSessionId: initial.goal.controllerSessionId, goalId: initial.goal.goalId },
+            cause: { kind: 'review', reviewId: review.reviewId },
+            repairLimit,
+          }, { beforeAppend: reviewGuard })
+          if (repair.kind !== 'admitted') throw new Error(`The repair limit (${repair.repairLimit}) is exhausted; correction requires human input`)
           if (current?.state === 'reviewing') await ctx.projectController.returnToDevelopment(taskId, { beforePersist: reviewGuard })
           else if (current?.state !== 'developing') throw new Error('Task is not ready for correction recovery')
         }

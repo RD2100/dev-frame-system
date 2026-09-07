@@ -126,81 +126,12 @@ describe('evaluateRepairRoundAdmission', () => {
 })
 
 describe('GoalBindingController repair rounds (AT1-08)', () => {
-  it('admits the default two rounds after the initial review and rejects the third as data', async () => {
+  it('refuses correction accounting without its durable Session journal', async () => {
     const controller = repairController()
     const identity = await startedIdentity(controller)
-
-    expect(controller.repairRoundState(identity)).toEqual({
-      repairLimit: 2,
-      consumedRepairRounds: 0,
-      remainingRepairRounds: 2,
-    })
-    await expect(controller.beginRepairRound(identity)).resolves.toEqual({
-      kind: 'admitted',
-      repairRound: 1,
-      remainingRepairRounds: 1,
-    })
-    await expect(controller.beginRepairRound(identity)).resolves.toEqual({
-      kind: 'admitted',
-      repairRound: 2,
-      remainingRepairRounds: 0,
-    })
-
-    const rejected = await controller.beginRepairRound(identity)
-    expect(rejected).toEqual({
-      kind: 'rejected',
-      reason: 'repair-limit-exhausted',
-      repairLimit: 2,
-      consumedRepairRounds: 2,
-    })
-    // Exhaustion is data, not a state change: the accounting stays at the
-    // limit and every further attempt is rejected identically.
-    expect(controller.repairRoundState(identity)).toEqual({
-      repairLimit: 2,
-      consumedRepairRounds: 2,
-      remainingRepairRounds: 0,
-    })
-    await expect(controller.beginRepairRound(identity)).resolves.toEqual(rejected)
-  })
-
-  it('admits exactly one round when the configured limit is 1 (boundary)', async () => {
-    const controller = repairController(1)
-    const identity = await startedIdentity(controller)
-
-    await expect(controller.beginRepairRound(identity)).resolves.toEqual({
-      kind: 'admitted',
-      repairRound: 1,
-      remainingRepairRounds: 0,
-    })
-    await expect(controller.beginRepairRound(identity)).resolves.toEqual({
-      kind: 'rejected',
-      reason: 'repair-limit-exhausted',
-      repairLimit: 1,
-      consumedRepairRounds: 1,
-    })
-  })
-
-  it('applies a higher configured limit and keeps per-Goal accounting', async () => {
-    const controller = repairController(3)
-    const identity = await startedIdentity(controller)
-
-    const rounds = [
-      await controller.beginRepairRound(identity),
-      await controller.beginRepairRound(identity),
-      await controller.beginRepairRound(identity),
-    ]
-    expect(rounds).toEqual([
-      { kind: 'admitted', repairRound: 1, remainingRepairRounds: 2 },
-      { kind: 'admitted', repairRound: 2, remainingRepairRounds: 1 },
-      { kind: 'admitted', repairRound: 3, remainingRepairRounds: 0 },
-    ])
-    await expect(controller.beginRepairRound(identity)).resolves.toEqual({
-      kind: 'rejected',
-      reason: 'repair-limit-exhausted',
-      repairLimit: 3,
-      consumedRepairRounds: 3,
-    })
-    expect(controller.repairRoundState(identity)).toMatchObject({ repairLimit: 3, consumedRepairRounds: 3 })
+    await expect(controller.beginRepairRound(identity, { kind: 'task-warning', taskId: TaskId('task-1') }))
+      .rejects.toMatchObject({ code: 'GOAL_BINDING_PERSISTENCE' })
+    expect(() => controller.repairRoundState(identity)).toThrow('durable controller Session journal')
   })
 
   it('fails loud on an invalid configured limit at construction', () => {
@@ -208,25 +139,15 @@ describe('GoalBindingController repair rounds (AT1-08)', () => {
     expect(() => repairController(2.5)).toThrow(RepairLimitError)
   })
 
-  it('rejects repair rounds for unknown or foreign identities', async () => {
+  it('rejects unknown and foreign identities before calling the repair journal', async () => {
     const controller = repairController()
     const identity = await startedIdentity(controller)
-
+    const cause = { kind: 'task-warning' as const, taskId: TaskId('task-1') }
     await expect(controller.beginRepairRound({
-      controllerSessionId: ControllerSessionId('controller-other'),
-      goalId: identity.goalId,
-    })).rejects.toMatchObject({
-      name: 'GoalBindingError',
-      code: 'GOAL_BINDING_IDENTITY_MISMATCH',
-    })
+      controllerSessionId: ControllerSessionId('controller-other'), goalId: identity.goalId,
+    }, cause)).rejects.toMatchObject({ code: 'GOAL_BINDING_IDENTITY_MISMATCH' })
     await expect(controller.beginRepairRound({
-      controllerSessionId: identity.controllerSessionId,
-      goalId: GoalId('goal-unknown'),
-    })).rejects.toMatchObject({
-      name: 'GoalBindingError',
-      code: 'GOAL_BINDING_NOT_FOUND',
-    })
-    // The rejection paths consumed nothing: the bound Goal stays at zero.
-    expect(controller.repairRoundState(identity)).toMatchObject({ consumedRepairRounds: 0 })
+      controllerSessionId: identity.controllerSessionId, goalId: GoalId('goal-unknown'),
+    }, cause)).rejects.toMatchObject({ code: 'GOAL_BINDING_NOT_FOUND' })
   })
 })

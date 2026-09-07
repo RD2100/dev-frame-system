@@ -17,6 +17,8 @@ import {
   isDevFrameEvent,
   type DevFrameLifecycleEventData,
   type DevFrameReviewEventData,
+  type DevFrameRepairAdmissionEventData,
+  type DevFrameRepairCause,
   type DevFrameRolePolicyEventData,
   type DevFrameTaskWarningEventData,
   type DevFrameUsageEventData,
@@ -49,6 +51,8 @@ export interface DevFrameProjectionState {
   verifications: DevFrameVerificationEventData[]
   /** Immutable review records keyed by review identity. */
   reviews: DevFrameReviewEventData[]
+  /** Correction rounds reconstructed from durable admissions. */
+  repairAdmissions: DevFrameRepairAdmissionEventData[]
   /** Graded memory-degradation records, at most one per task. */
   taskWarnings: DevFrameTaskWarningEventData[]
   /** Latest explicit stop/recovery observation. */
@@ -77,6 +81,7 @@ const devFrameStateSchema = z.object({
   deliveries: z.array(z.unknown()),
   verifications: z.array(z.unknown()),
   reviews: z.array(z.unknown()),
+  repairAdmissions: z.array(z.unknown()),
   taskWarnings: z.array(z.unknown()),
   lifecycle: z.unknown().nullable(),
   failure: z.string().nullable(),
@@ -93,6 +98,7 @@ const devFrameStateSchema = z.object({
       deliveries: value.deliveries.map(delivery => decodeDevFramePayload('devframe/task-delivery', delivery)),
       verifications: value.verifications.map(verification => decodeDevFramePayload('devframe/verification', verification)),
       reviews: value.reviews.map(review => decodeDevFramePayload('devframe/review', review)),
+      repairAdmissions: value.repairAdmissions.map(record => decodeDevFramePayload('devframe/repair-admission', record)),
       taskWarnings: value.taskWarnings.map(warning => decodeDevFramePayload('devframe/task-warning', warning)),
       lifecycle: value.lifecycle === null
         ? null
@@ -119,6 +125,7 @@ function initialState(header: SessionHeader): DevFrameProjectionState {
     deliveries: [],
     verifications: [],
     reviews: [],
+    repairAdmissions: [],
     taskWarnings: [],
     lifecycle: null,
     failure: null,
@@ -512,6 +519,50 @@ function applyReview(state: DevFrameProjectionState, review: DevFrameReviewEvent
   state.reviews.push(cloneReview(review))
 }
 
+/**
+ * Compare durable evidence identities without conflating different cause kinds.
+ * @param left - First correction cause.
+ * @param right - Second correction cause.
+ * @returns Whether both causes name the same evidence.
+ */
+export function sameRepairCause(left: DevFrameRepairCause, right: DevFrameRepairCause): boolean {
+  return left.kind === 'review'
+    ? right.kind === 'review' && left.reviewId === right.reviewId
+    : right.kind === 'task-warning' && left.taskId === right.taskId
+}
+
+/**
+ * Validate an admission against the latest Goal and its prior durable evidence.
+ * @param state - Current controller log projection.
+ * @param admission - Next correction admission to validate.
+ */
+export function assertRepairAdmission(state: DevFrameProjectionState, admission: DevFrameRepairAdmissionEventData): void {
+  if (state.failure !== null) throw new Error(`DevFrame projection is unavailable: ${state.failure}`)
+  const binding = state.bindings.at(-1)
+  if (binding === undefined || binding.goalId !== admission.identity.goalId
+    || binding.controllerSessionId !== admission.identity.controllerSessionId
+    || state.controllerSessionId !== admission.identity.controllerSessionId) {
+    throw new Error('Repair admission requires the current controller Goal')
+  }
+  const cause = admission.cause
+  if (cause.kind === 'review') {
+    const review = state.reviews.find(record => record.reviewId === cause.reviewId)
+    if (review === undefined || review.decision !== 'changes_required'
+      || review.binding.goalId !== binding.goalId || review.binding.controllerSessionId !== binding.controllerSessionId) {
+      throw new Error('Repair admission requires a negative review for this Goal')
+    }
+  } else if (!binding.taskIds.includes(cause.taskId)
+    || !state.taskWarnings.some(record => record.taskId === cause.taskId && record.grade === 'fail')) {
+    throw new Error('Repair admission requires a failed task warning for this Goal')
+  }
+  const previous = state.repairAdmissions.filter(record => record.identity.goalId === binding.goalId)
+  if (previous.some(record => sameRepairCause(record.cause, cause))) throw new Error('Repair cause was admitted twice')
+  if (admission.repairRound !== previous.length + 1 || admission.repairRound > admission.repairLimit
+    || previous.some(record => record.repairLimit !== admission.repairLimit)) {
+    throw new Error('Repair admission exceeds or changes the Goal repair budget')
+  }
+}
+
 /** Apply one stop or recovery observation. */
 function applyLifecycle(state: DevFrameProjectionState, lifecycle: DevFrameLifecycleEventData): void {
   const binding = assertResultBinding(state, lifecycle.binding)
@@ -562,6 +613,12 @@ function applyEvent(state: DevFrameProjectionState, event: SessionEvent): void {
       case 'devframe/review':
         applyReview(state, decodeDevFramePayload(event.type, event.data))
         break
+      case 'devframe/repair-admission': {
+        const admission = decodeDevFramePayload(event.type, event.data)
+        assertRepairAdmission(state, admission)
+        state.repairAdmissions.push(admission)
+        break
+      }
       case 'devframe/task-warning':
         applyTaskWarning(state, decodeDevFramePayload(event.type, event.data))
         break
@@ -594,7 +651,7 @@ export function foldDevFrameState(
 /** Host-only projection definition registered by the DevFrame profile. */
 export const devFrameProjectionDefinition = {
   key: 'devframe',
-  stateVersion: 2,
+  stateVersion: 3,
   stateSchema: devFrameStateSchema,
   init: (header: SessionHeader, _inheritedEventCount: SessionLogOffset) => initialState(header),
   apply: (state: DevFrameProjectionState, event: SessionEvent) => {

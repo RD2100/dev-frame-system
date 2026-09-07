@@ -414,6 +414,12 @@ export class GoalBindingComposition extends Service {
         controllerSessionId: ControllerSessionId(agent.id),
         goals: new GoalServicePort({ goals: this.ctx.goals, agent }),
         store: this.bindingStore,
+        repairLimit: this.config.repairLimit,
+        repairAdmissions: {
+          admit: (identity, cause, repairLimit, options) =>
+            this.journal.admitRepair(agent.session, { identity, cause, repairLimit }, options),
+          state: (identity, repairLimit) => this.journal.repairRoundState(agent.session, identity, repairLimit),
+        },
       })
       this.controllers.set(agent.id, controller)
     }
@@ -439,7 +445,7 @@ export class GoalBindingComposition extends Service {
   ): Promise<string> {
     const text = renderCompletionRejection(verdict)
     if (verdict.stage !== 'task-warning') return text
-    const repair = await controller.beginRepairRound(identity)
+    const repair = await controller.beginRepairRound(identity, { kind: 'task-warning', taskId: verdict.taskId })
     if (repair.kind === 'admitted') {
       return `${text} Repair round ${repair.repairRound} was charged (${repair.remainingRepairRounds} remaining); resuming the goal requires a human-authorized resume.`
     }

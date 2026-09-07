@@ -170,6 +170,7 @@ export class ProjectController extends Service {
   private lifecycleState: ProjectLifecycleState = 'stopped'
   /** In-process mirror of the durable request-budget usage global. */
   private chargedRequests = 0
+  private requestChargeFailure?: ProjectControllerError
   private tail: Promise<unknown> = Promise.resolve()
 
   /**
@@ -753,13 +754,16 @@ export class ProjectController extends Service {
   // ---- request budget (AT4-05) -------------------------------------------
 
   /**
-   * Charge one granted-and-billed model request against the project's
+   * Reserve one model sending attempt against the project's
    * cumulative budget. The request that fills the last budget slot is
    * admitted; any further charge is rejected until the deployment raises
    * `requestBudget`. Concurrent charges from racing controller/child sessions
    * serialize on the controller's write chain, so a full budget admits
    * exactly one of them, and the charge persists before the receipt returns —
-   * a retry or a process restart never resets usage.
+   * a retry or a process restart never resets usage. A reservation does not
+   * prove supplier billing and is not refunded after cancellation. An uncertain
+   * storage write closes further charging until the service is reloaded.
+   * @param options - Host authority guard checked inside the charge queue.
    * @returns the receipt with the cumulative charged count, the configured
    *   budget, and the remaining allowance after this charge.
    * @throws {@link ProjectControllerError} with
@@ -768,9 +772,10 @@ export class ProjectController extends Service {
    *   lifecycle is not admitting dispatch work, or
    *   `PROJECT_CONTROLLER_PERSISTENCE` when the usage write failed.
    */
-  async chargeModelRequest(): Promise<RequestChargeReceipt> {
+  async chargeModelRequest(options?: TaskMutationOptions): Promise<RequestChargeReceipt> {
     return await this.enqueue(async () => {
       this.requireAdmissionOpen()
+      if (this.requestChargeFailure) throw this.requestChargeFailure
       const requestBudget = this.config.requestBudget
       if (this.chargedRequests >= requestBudget) {
         throw new ProjectControllerError(
@@ -779,14 +784,16 @@ export class ProjectController extends Service {
         )
       }
       const chargedRequests = this.chargedRequests + 1
+      options?.beforePersist?.()
       try {
         await this.requireDomain().global.set({ chargedRequests })
       } catch (error: unknown) {
-        throw new ProjectControllerError(
+        this.requestChargeFailure = new ProjectControllerError(
           'request-budget usage could not be persisted',
           'PROJECT_CONTROLLER_PERSISTENCE',
           { cause: error },
         )
+        throw this.requestChargeFailure
       }
       this.chargedRequests = chargedRequests
       return {

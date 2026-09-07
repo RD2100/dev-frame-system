@@ -131,6 +131,11 @@ interface SdkAssertions {
 }
 
 const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
+  'project-repair-integrate': {
+    sessionCwd: '.dsh/integration/target',
+    verifyWorkspace: cwd => verifyProjectIntegration(cwd, 'repaired\n'),
+    boundSessionsOnly: true,
+  },
   'project-integrate-success': {
     sessionCwd: '.dsh/integration/target',
     verifyWorkspace: verifyProjectIntegration,
@@ -984,6 +989,25 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
       const actualLogs = ordered.map(log => nestedCwd(log.content))
       const actualSnapshots = normalizeSessionSnapshots(actualLogs, actualContext)
       const expectedSnapshots = normalizeSessionSnapshots(expectedContents, expectedContext)
+      if (scenario.name === 'project-repair-integrate') {
+        const evidence = records(ordered[0]!.content)
+        const repair = evidence.filter(event => event.type === 'devframe/repair-admission')
+        const reviews = evidence.filter(event => event.type === 'devframe/review').map(event => event.data as JsonObject)
+        const deliveries = evidence.filter(event => event.type === 'devframe/task-delivery').map(event => event.data as JsonObject)
+        expect(repair).toHaveLength(1)
+        const goal = evidence.find(event => event.type === 'devframe/goal-binding')!.data as JsonObject
+        expect(repair[0]!.data).toEqual({
+          version: 1, identity: { controllerSessionId: goal.controllerSessionId, goalId: goal.goalId },
+          cause: { kind: 'review', reviewId: 'review-before-repair' }, repairRound: 1, repairLimit: 2,
+        })
+        expect(reviews.map(review => review.decision)).toEqual(['changes_required', 'pass'])
+        expect(deliveries).toHaveLength(2)
+        expect(deliveries[0]!.taskId).toBe(deliveries[1]!.taskId)
+        expect(deliveries[0]!.sourceCommit).not.toBe(deliveries[1]!.sourceCommit)
+        expect(deliveries[0]!.sourceFingerprint).not.toBe(deliveries[1]!.sourceFingerprint)
+        expect(notifications.map(notificationEvent).filter(event => event?.type === 'devframe/repair-admission')
+          .map(event => event!.data)).toEqual(repair.map(event => event.data))
+      }
       for (const [index, actual] of actualSnapshots.entries()) {
         expect(actual, `${scenario.name}: session ${index}`).toBe(expectedSnapshots[index])
       }

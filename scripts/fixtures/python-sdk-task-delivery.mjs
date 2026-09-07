@@ -1,4 +1,4 @@
-/** Authored transport fixture: delivery events only, without development, checks, or review claims. */
+/** SDK transport fixture with journal-backed repair admission; no development, checks, or review claims. */
 import { join } from 'node:path'
 import { DevFrameSessionJournal } from '../../packages/experimental/devframe/lib/types/session-journal.js'
 import { devFrameProjectionDefinition } from '../../packages/experimental/devframe/lib/types/projection.js'
@@ -32,8 +32,24 @@ export function apply(ctx) {
       worktreePath: join(process.cwd(), 'worker'), sourceCommit: 'a'.repeat(40),
       sourceFingerprint: 'transport-output-source', snapshotId: 'transport-output-snapshot',
     })
+    await journal.append(agent.session, 'devframe/task-warning', {
+      version: 1, taskId: 'transport-task', warning: 'MEMORY_WRITE_FAILED', tool: 'project_memory_save', grade: 'fail',
+    })
+    const request = {
+      identity: { controllerSessionId: agent.session.id, goalId: binding.goalId },
+      cause: { kind: 'task-warning', taskId: 'transport-task' }, repairLimit: 2,
+    }
+    const admission = await journal.admitRepair(agent.session, request)
+    const restoredJournal = new DevFrameSessionJournal(session => ctx.sessions.flush(session), {
+      requireReviewer() { throw new Error('Transport fixture must not append review evidence') },
+    })
+    const repeated = await restoredJournal.admitRepair(agent.session, request)
+    if (admission.kind !== 'admitted' || admission.repairRound !== 1
+      || repeated.kind !== 'admitted' || repeated.repairRound !== 1) {
+      throw new Error('The same durable repair cause must retain its first admission across Journal replacement')
+    }
     const state = ctx.sessionProjections.stateOf(agent.session, 'devframe')
-    if (state?.deliveries.length !== 1 || state.failure !== null) {
+    if (state?.deliveries.length !== 1 || state.repairAdmissions.length !== 1 || state.failure !== null) {
       throw new Error('Transport fixture failed the real DevFrame projection')
     }
     initialized.add(agent)

@@ -71,7 +71,16 @@ The host owns validation and persistence. A changed acceptance or source value i
 
 A `devframe/task-delivery` record preserves the original complete Goal input binding and records a task's Worker, registered worktree, exact commit, output fingerprint, and output snapshot separately. `deliveryResultBinding` derives an output evidence binding without rewriting the authorized Goal input.
 
-Verification and review carrying `deliveryId` must match the latest delivery for that task and Goal, including its exact output binding. A passing delivery review requires the latest verification to pass. Whole-Goal evidence without `deliveryId` remains valid under its existing binding rules; it cannot substitute for delivery evidence during task integration. The projection checkpoint is version 2 and requires the deliveries field.
+Verification and review carrying `deliveryId` must match the latest delivery for that task and Goal, including its exact output binding. A passing delivery review requires the latest verification to pass. Whole-Goal evidence without `deliveryId` remains valid under its existing binding rules; it cannot substitute for delivery evidence during task integration. The projection checkpoint is version 3; restore discards older checkpoints and rebuilds the delivery and repair-admission fields from the session log.
+
+<a id="bound-correction-rounds"></a>
+### Bound correction rounds
+
+The host injects a Session-journal repair port into `GoalBindingController`. Each admitted correction consumes one durable `devframe/repair-admission` record for an existing negative review or fail-graded task warning. Both causes share the same controller Session and Goal allowance. `repairLimit` defaults to 2; all consumers of that Goal must use the same positive integer limit. A recorded limit cannot change within the Goal.
+
+The same cause reuses its admission receipt after retry or restart. Goal revision changes do not reset consumption; a fresh Goal starts its own allowance. Historical consumption remains readable, but a superseded Goal cannot admit either a new cause or an old receipt. Exhaustion refuses correction, and a controller without the journal port fails closed.
+
+Journal instances sharing one live Session also share its append queue and persistence-failure latch. Admission rechecks authority inside that queue and returns only after flush succeeds. An uncertain flush blocks subsequent writes, including otherwise-idempotent retries. Hosts must retain a single live writer per Session; this coordination does not provide cross-process compare-and-set.
 
 ### Assemble the three-tier spawn policy
 
@@ -161,7 +170,7 @@ None. Host-only calls leave the model request prefix unchanged.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **Caller-owned admission and persistence** — the library does not discover project roots, create Goals, or append its own session events.
+- **Caller-owned admission and persistence** — the host owns project discovery, native Goal operations, and the Session persistence callback used by the journal.
 - **Completion verdicts are not journaled** — the controller returns the admission verdict to its caller; recording the verdict or a completion receipt, and the host command surface composing `GoalServicePort`, remain deferred host-composition work.
 - **Process handles must be verified** — a missing or uncertain handle is retained as `needs_attention`; the helper never kills by executable name or reused PID.
 - **Single-process coordination** — the contracts do not provide cross-process locking, distributed delivery, or hostile-code isolation.

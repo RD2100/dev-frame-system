@@ -295,6 +295,20 @@ export interface DevFrameReviewEventData {
   readonly findings: readonly DevFrameReviewFinding[]
 }
 
+/** Durable evidence identifying one correction request within its Goal. */
+export type DevFrameRepairCause =
+  | { readonly kind: 'review'; readonly reviewId: DevFrameReviewId }
+  | { readonly kind: 'task-warning'; readonly taskId: TaskId }
+
+/** One durably admitted correction round shared by every consumer of a Goal. */
+export interface DevFrameRepairAdmissionEventData {
+  readonly version: 1
+  readonly identity: GoalBindingIdentity
+  readonly cause: DevFrameRepairCause
+  readonly repairRound: number
+  readonly repairLimit: number
+}
+
 /** Lifecycle observation retained for stop, recovery, and writer ownership. */
 export interface DevFrameLifecycleEventData {
   /** Payload schema version. */
@@ -352,6 +366,7 @@ export type DevFrameEventType =
   | 'devframe/task-delivery'
   | 'devframe/verification'
   | 'devframe/review'
+  | 'devframe/repair-admission'
   | 'devframe/lifecycle'
   | 'devframe/task-warning'
 
@@ -369,6 +384,8 @@ declare module '@deepseek-ai/dsh-session/types' {
     'devframe/verification': DevFrameVerificationEventData
     /** Independent reviewer decision and bounded findings for one source snapshot. */
     'devframe/review': DevFrameReviewEventData
+    /** Durable correction admission attributed to existing failure evidence. */
+    'devframe/repair-admission': DevFrameRepairAdmissionEventData
     /** Whole lifecycle observation used to recover stop and writer ownership state. */
     'devframe/lifecycle': DevFrameLifecycleEventData
     /** Host-graded memory degradation, recorded at most once per task. */
@@ -393,6 +410,17 @@ const verificationIdSchema = trimmedString.transform(value => brandString<DevFra
 const reviewIdSchema = trimmedString.transform(value => brandString<DevFrameReviewId>(value))
 const operationIdSchema = trimmedString.transform(value => brandString<DevFrameOperationId>(value))
 const requiredChecksDigestSchema = trimmedString.transform(value => brandString<RequiredChecksDigest>(value))
+
+const repairAdmissionSchema = z.object({
+  version: z.literal(1),
+  identity: z.object({ controllerSessionId: sessionIdSchema, goalId: goalIdSchema }).strict(),
+  cause: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('review'), reviewId: reviewIdSchema }).strict(),
+    z.object({ kind: z.literal('task-warning'), taskId: taskIdSchema }).strict(),
+  ]),
+  repairRound: positiveInteger,
+  repairLimit: positiveInteger,
+}).strict() as z.ZodType<DevFrameRepairAdmissionEventData>
 
 const lifecycleStateSchema = z.enum([
   'admission_open',
@@ -659,6 +687,7 @@ export function isDevFrameEvent(event: SessionEvent): event is SessionEvent<DevF
     case 'devframe/task-delivery':
     case 'devframe/verification':
     case 'devframe/review':
+    case 'devframe/repair-admission':
     case 'devframe/lifecycle':
     case 'devframe/task-warning':
       return true
@@ -691,6 +720,8 @@ export function decodeDevFramePayload<T extends DevFrameEventType>(
         return verificationEventSchema.parse(value) as SessionEventMap[T]
       case 'devframe/review':
         return reviewEventSchema.parse(value) as SessionEventMap[T]
+      case 'devframe/repair-admission':
+        return repairAdmissionSchema.parse(value) as SessionEventMap[T]
       case 'devframe/lifecycle':
         return lifecycleEventSchema.parse(value) as SessionEventMap[T]
       case 'devframe/task-warning':
