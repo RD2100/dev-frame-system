@@ -16,6 +16,10 @@ The controller persists a prepared intent before Git and an applied receipt befo
 
 The separate Loader consumer derives identities and checkout paths from host registries. Its model arguments contain only the task and the requested action. Git process limits and the checks ledger belong to host configuration. The consumer mounts beside the existing service instead of constructing a second controller.
 
+Task planning and development admission use a separate root-only consumer over the same board. The host rechecks authority inside each serialized write, because authorization before queueing can expire while another task holds the queue. Development admission precedes briefing delivery; a partial failure leaves the board authoritative and does not permit an automatic repeat that could duplicate Worker instructions.
+
+Task deliveries preserve the immutable Goal input binding and separately identify the output revision. Verification and independent lead review refer to the same latest delivery, so a developed commit cannot masquerade as a new Goal confirmation or borrow another task's passing evidence. Checks execute the approved registration; callers explicitly request reruns after failure or interruption. The evidence journal and task board cannot commit atomically, so an identical recorded review can repair task recording without constituting another approval.
+
 ## Alternatives considered
 
 - A marker-only state transition proves authorization but not the filesystem result.

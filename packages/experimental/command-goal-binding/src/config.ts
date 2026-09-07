@@ -13,8 +13,8 @@
 
 import Schema from '@deepseek-ai/schemastery'
 import { isAbsolute } from 'node:path'
-import { decodeRequiredChecksConfig } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
-import type { DevFrameRequiredChecksConfig } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
+import { decodeRequiredChecksConfig } from '@deepseek-ai/dsh-experimental-devframe'
+import type { DevFrameRequiredChecksConfig } from '@deepseek-ai/dsh-experimental-devframe'
 import { TaskId } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
 import type { TaskId as BrandedTaskId } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
 import { WorkspaceId } from '@deepseek-ai/dsh-experimental-devframe/shared'

@@ -16,6 +16,8 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   decodeDevFramePayload,
+  DevFrameDeliveryId,
+  deliveryResultBinding,
   DevFrameOperationId,
   DevFrameReviewId,
   DevFrameSnapshotId,
@@ -26,6 +28,7 @@ import type { DevFrameReviewGate } from '../src/session-journal.ts'
 import { requiredChecksDigest } from '../src/required-checks.ts'
 import type { DevFrameRequiredChecksConfig } from '../src/required-checks.ts'
 import type {
+  DevFrameTaskDeliveryEventData,
   DevFrameLifecycleEventData,
   DevFrameReviewEventData,
   DevFrameRolePolicyEventData,
@@ -47,6 +50,7 @@ import type {
   GoalBinding,
   GoalResultBinding,
 } from '../src/controller/goal-binding.ts'
+import { WorktreeId } from '@deepseek-ai/dsh-worktree-registry'
 import { TaskId } from '../src/controller/goal-binding.ts'
 
 const CONTROLLER = SessionId('devframe-controller')
@@ -219,6 +223,7 @@ describe('DevFrame durable event vocabulary', () => {
       'devframe/lifecycle',
       'devframe/review',
       'devframe/role-policy',
+      'devframe/task-delivery',
       'devframe/task-warning',
       'devframe/usage',
       'devframe/verification',
@@ -294,7 +299,7 @@ describe('DevFrame durable event vocabulary', () => {
     expect(() => decodeDevFramePayload('devframe/verification', {
       ...fullEventSet().verification,
       snapshotId: undefined,
-    } as never)).toThrow(/payload is invalid/)
+    })).toThrow(/payload is invalid/)
     // A weakened verification no longer decodes: the declared required check
     // is not exactly executed by the recorded checks.
     expect(() => decodeDevFramePayload('devframe/verification', {
@@ -343,6 +348,62 @@ describe('DevFrame durable event vocabulary', () => {
     expect(flush).toHaveBeenCalledTimes(1)
     expect(journal.isBlocked(current)).toBe(true)
     expect(current.seq).toBe(1)
+  })
+
+  it('rejects authority revoked while an earlier append owns the flush queue', async () => {
+    const current = session()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const journal = new DevFrameSessionJournal(async () => {
+      entered.resolve(undefined)
+      await release.promise
+      return true
+    }, reviewGate())
+    let authorized = true
+    const prepare = vi.fn(async () => {})
+    const first = journal.append(current, 'devframe/role-policy', rolePolicy())
+    const second = journal.append(current, 'devframe/goal-binding', binding(), {
+      prepare, beforeAppend: () => { if (!authorized) throw new Error('Authority revoked') },
+    })
+    const rejected = expect(second).rejects.toThrow('Authority revoked')
+    try {
+      await entered.promise
+      authorized = false
+      release.resolve(undefined)
+      await first
+      await rejected
+      expect(prepare).not.toHaveBeenCalled()
+      expect(current.snapshotEvents().map(event => event.type)).toEqual(['devframe/role-policy'])
+      expect(journal.isBlocked(current)).toBe(false)
+    } finally {
+      release.resolve(undefined)
+      await Promise.allSettled([first, second])
+    }
+  })
+
+  it('rechecks authority after asynchronous source preparation before publishing an event', async () => {
+    const current = session()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const flush = vi.fn(async () => true)
+    const journal = new DevFrameSessionJournal(flush, reviewGate())
+    let authorized = true
+    const pending = journal.append(current, 'devframe/goal-binding', binding(), {
+      prepare: async () => { entered.resolve(undefined); await release.promise },
+      beforeAppend: () => { if (!authorized) throw new Error('Authority revoked') },
+    })
+    const rejected = expect(pending).rejects.toThrow('Authority revoked')
+    try {
+      await entered.promise
+      authorized = false
+      release.resolve(undefined)
+      await rejected
+      expect(current.snapshotEvents()).toEqual([])
+      expect(flush).not.toHaveBeenCalled()
+    } finally {
+      release.resolve(undefined)
+      await Promise.allSettled([pending])
+    }
   })
 
   it('rejects a review whose submitter holds no reviewer role and keeps the journal writable', async () => {
@@ -572,7 +633,7 @@ describe('DevFrame host projection', () => {
     expect(live?.bindings).toHaveLength(1)
     const checkpoint = ctx.sessionProjections.checkpoint(current)
     const row = checkpoint.devframe
-    expect(row?.ver).toBe(1)
+    expect(row?.ver).toBe(2)
     expect(ctx.sessionProjections.restore(
       checkpoint,
       current.snapshotEvents(),
@@ -611,5 +672,104 @@ describe('DevFrame host projection', () => {
       await ctx.fiber.dispose()
       await rm(root, { recursive: true, force: true })
     }
+  })
+})
+
+
+describe('task delivery evidence replay', () => {
+  function prepared() {
+    const current = session()
+    const goal = binding({ lifecycle: 'admission_open', taskIds: [TASK, TaskId('task-2')] })
+    current.append('devframe/role-policy', rolePolicy())
+    current.append('devframe/goal-binding', goal)
+    const delivery: DevFrameTaskDeliveryEventData = {
+      version: 1, deliveryId: DevFrameDeliveryId('delivery-one'), taskId: TASK,
+      binding: resultBinding(goal), workerSessionId: SessionId('worker-one'),
+      worktreeId: WorktreeId('worker-tree'), worktreePath: 'C:/worker',
+      sourceCommit: 'a'.repeat(40), sourceFingerprint: SourceFingerprint('output-one'),
+      snapshotId: DevFrameSnapshotId('output-snapshot'),
+    }
+    const output = deliveryResultBinding(delivery)
+    const fixtures = fullEventSet()
+    const verification = { ...fixtures.verification, deliveryId: delivery.deliveryId, binding: output, snapshotId: output.snapshotId }
+    const review = { ...fixtures.review, deliveryId: delivery.deliveryId, binding: output, snapshotId: output.snapshotId }
+    return { current, goal, delivery, verification, review }
+  }
+  function restored(current: Session) {
+    const cold = Session.fromRestore(current.id, structuredClone(current.snapshotEvents()), current.header, SessionLogOffset(0))
+    return foldDevFrameState(cold.snapshotEvents(), cold.header)
+  }
+  it('preserves the authorized input and replays output verification and independent review', () => {
+    const { current, goal, delivery, verification, review } = prepared()
+    current.append('devframe/task-delivery', decodeDevFramePayload('devframe/task-delivery', delivery))
+    current.append('devframe/verification', verification)
+    current.append('devframe/review', review)
+    const state = restored(current)
+    expect(state.failure).toBeNull()
+    expect(state.bindings[0]).toEqual(goal)
+    expect(state.deliveries).toEqual([delivery])
+    expect(state.verifications[0]?.binding.sourceFingerprint).toBe(delivery.sourceFingerprint)
+    expect(devFrameProjectionDefinition.stateVersion).toBe(2)
+    const { deliveries: _deliveries, ...oldCheckpoint } = state
+    expect(devFrameProjectionDefinition.stateSchema.safeParse(oldCheckpoint).success).toBe(false)
+  })
+  it.each(['duplicate', 'foreign-task', 'foreign-goal', 'closed', 'lifecycle-closed', 'changed-input'] as const)('rejects %s delivery authority', (variant) => {
+    const { current, delivery, goal } = prepared()
+    if (variant === 'duplicate') current.append('devframe/task-delivery', delivery)
+    if (variant === 'lifecycle-closed') current.append('devframe/lifecycle', { version: 1, binding: resultBinding(goal), state: 'admission_closed', remaining: [] })
+    if (variant === 'closed') current.append('devframe/goal-binding', { ...goal, lifecycle: 'admission_closed' })
+    current.append('devframe/task-delivery', { ...delivery,
+      ...(variant === 'foreign-task' ? { taskId: TaskId('outside') } : {}),
+      binding: { ...delivery.binding,
+        ...(variant === 'foreign-goal' ? { goalId: GoalId('foreign') } : {}),
+        ...(variant === 'changed-input' ? { sourceFingerprint: SourceFingerprint('changed') } : {}),
+      },
+    })
+    expect(restored(current).failure).not.toBeNull()
+  })
+  it.each(['unknown', 'superseded', 'wrong-output', 'wrong-task'] as const)('rejects %s delivery verification', (variant) => {
+    const { current, delivery, verification } = prepared()
+    current.append('devframe/task-delivery', delivery)
+    if (variant === 'superseded') current.append('devframe/task-delivery', { ...delivery, deliveryId: DevFrameDeliveryId('newer') })
+    if (variant === 'wrong-task') current.append('devframe/task-delivery', { ...delivery,
+      deliveryId: DevFrameDeliveryId('other-task'), taskId: TaskId('task-2'), sourceFingerprint: SourceFingerprint('other-output'),
+    })
+    current.append('devframe/verification', { ...verification,
+      ...(variant === 'unknown' ? { deliveryId: DevFrameDeliveryId('absent') } : {}),
+      ...(variant === 'wrong-task' ? { deliveryId: DevFrameDeliveryId('other-task') } : {}),
+      binding: { ...verification.binding, ...(variant === 'wrong-output' ? { sourceFingerprint: SOURCE } : {}) },
+    })
+    expect(restored(current).failure).not.toBeNull()
+  })
+  it('does not borrow another delivery verification or an earlier pass', () => {
+    const { current, delivery, verification, review } = prepared()
+    current.append('devframe/task-delivery', delivery)
+    current.append('devframe/verification', verification)
+    current.append('devframe/task-delivery', { ...delivery, deliveryId: DevFrameDeliveryId('next') })
+    current.append('devframe/review', { ...review, deliveryId: DevFrameDeliveryId('next') })
+    expect(restored(current).failure).toContain('unknown verification')
+    const second = prepared()
+    second.current.append('devframe/task-delivery', second.delivery)
+    second.current.append('devframe/verification', second.verification)
+    second.current.append('devframe/verification', { ...second.verification, verificationId: DevFrameVerificationId('failed'), status: 'failed',
+      checks: second.verification.checks.map(check => ({ ...check, status: 'failed', exitCode: 1 })),
+    })
+    second.current.append('devframe/review', second.review)
+    expect(restored(second.current).failure).toContain('latest verification to pass')
+  })
+  it('retains honest negative review after failed checks', () => {
+    const { current, delivery, verification, review } = prepared()
+    current.append('devframe/task-delivery', delivery)
+    current.append('devframe/verification', { ...verification, status: 'failed',
+      checks: verification.checks.map(check => ({ ...check, status: 'failed', exitCode: 1 })),
+    })
+    current.append('devframe/review', { ...review, decision: 'changes_required' })
+    expect(restored(current).failure).toBeNull()
+  })
+  it('rejects malformed persisted delivery and evidence references', () => {
+    const { delivery, verification } = prepared()
+    expect(() => decodeDevFramePayload('devframe/task-delivery', { ...delivery, sourceCommit: 'HEAD' })).toThrow()
+    expect(() => decodeDevFramePayload('devframe/task-delivery', { ...delivery, deliveryId: '' })).toThrow()
+    expect(() => decodeDevFramePayload('devframe/verification', { ...verification, deliveryId: '' })).toThrow()
   })
 })

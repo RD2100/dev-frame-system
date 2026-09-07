@@ -15,12 +15,22 @@
       "types": "./lib/types/consumer.d.ts",
       "default": "./lib/consumer.js"
     },
+    "./task-consumer": {
+      "types": "./lib/types/task-consumer.d.ts",
+      "default": "./lib/task-consumer.js"
+    },
+    "./delivery-consumer": {
+      "types": "./lib/types/delivery-consumer.d.ts",
+      "default": "./lib/delivery-consumer.js"
+    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
     "lib/consumer.js",
+    "lib/task-consumer.js",
+    "lib/delivery-consumer.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -32,8 +42,10 @@
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-experimental-devframe": "workspace:^",
+    "@deepseek-ai/dsh-experimental-agent-evidence": "workspace:^",
     "@deepseek-ai/dsh-experimental-project-contracts": "workspace:^",
     "@deepseek-ai/dsh-experimental-session-identity": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-session-projection": "workspace:^",
     "@deepseek-ai/dsh-storage-domain": "workspace:^",
@@ -47,6 +59,9 @@
     "@deepseek-ai/cordis-plugin-loader": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-agent-loop": "workspace:^",
+    "@deepseek-ai/dsh-experimental-agent-dispatch": "workspace:^",
+    "@deepseek-ai/dsh-experimental-agent-hierarchy": "workspace:^",
+    "@deepseek-ai/dsh-experimental-agent-evidence": "workspace:^",
     "@deepseek-ai/dsh-experimental-devframe": "workspace:^",
     "@deepseek-ai/dsh-experimental-project-contracts": "workspace:^",
     "@deepseek-ai/dsh-experimental-session-identity": "workspace:^",

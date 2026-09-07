@@ -663,7 +663,7 @@ export interface CommandGoalBindingConfig {
 }
 ```
 
-依赖：`DevFrameRequiredChecksConfig` (`@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts`)
+依赖：[`DevFrameRequiredChecksConfig`](../packages/experimental/devframe/src/index.ts)
 
 来源：[`packages/experimental/command-goal-binding/src/config.ts:23`](../packages/experimental/command-goal-binding/src/config.ts)
 
@@ -784,6 +784,34 @@ export interface Config {
 ```
 
 来源：[`packages/experimental/project-controller/src/consumer.ts:23`](../packages/experimental/project-controller/src/consumer.ts)
+
+<a id="deepseek-aidsh-experimental-project-controllerdelivery-consumer"></a>
+
+## `@deepseek-ai/dsh-experimental-project-controller/delivery-consumer`
+
+依赖： `tools` · `agents` · `sessions` · `sessionProjections` · `projectController` · `agentBindings` · `workspaceRegistry` · `worktreeRegistry`
+
+```ts config-catalog
+/** Explicit deployment settings; tools cannot choose identities, commands, or approval digests. */
+export interface Config {
+  /** Existing approved-checks ledger. */
+  requiredChecksPath: string
+  /** Approved checkset digest keyed by task id. */
+  requiredChecksByTask: Record<string, string>
+  /** Host-selected Git executable. */
+  gitExecutable: string
+  /** Per-Git-process timeout. */
+  gitTimeoutMs: number
+  /** Per-Git-process output cap. */
+  gitMaxOutputBytes: number
+  /** Per-check-process timeout. */
+  checkTimeoutMs: number
+  /** Per-check-process output cap. */
+  checkMaxOutputBytes: number
+}
+```
+
+来源： [`packages/experimental/project-controller/src/delivery-consumer.ts:30`](../packages/experimental/project-controller/src/delivery-consumer.ts)
 
 <a id="deepseek-aidsh-experimental-shadow-router"></a>
 
@@ -3539,6 +3567,7 @@ export interface Config {
 - `@deepseek-ai/dsh-experimental-agent-reliability`（[`packages/experimental/agent-reliability/src/index.ts`](../packages/experimental/agent-reliability/src/index.ts)）
 - `@deepseek-ai/dsh-experimental-agent-worktree` — 需要 `tools` · `workspaceRegistry` · `worktreeRegistry` · `systemPrompt`（[`packages/experimental/agent-worktree/src/index.ts`](../packages/experimental/agent-worktree/src/index.ts)）
 - `@deepseek-ai/dsh-experimental-client-ui-agent-team`（[`packages/experimental/client-ui-agent-team/src/index.ts`](../packages/experimental/client-ui-agent-team/src/index.ts)）
+- `@deepseek-ai/dsh-experimental-project-controller/task-consumer` — 需要 `tools` · `agents` · `sessions` · `sessionProjections` · `projectController` · `agentBindings` · `workspaceRegistry` · `worktreeRegistry`（[`packages/experimental/project-controller/src/task-consumer.ts`](../packages/experimental/project-controller/src/task-consumer.ts)）
 - `@deepseek-ai/dsh-experimental-session-identity` — 需要 `sessions` · `storageDomain`（[`packages/experimental/session-identity/src/index.ts`](../packages/experimental/session-identity/src/index.ts)）
 - `@deepseek-ai/dsh-fs-e2b` — 需要 `e2b`（[`packages/e2b/fs-e2b/src/index.ts`](../packages/e2b/fs-e2b/src/index.ts)）
 - `@deepseek-ai/dsh-fs-observation-policy`（[`packages/fs/fs-observation-policy/src/index.ts`](../packages/fs/fs-observation-policy/src/index.ts)）

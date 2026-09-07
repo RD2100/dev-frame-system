@@ -404,7 +404,7 @@ Source: [`packages/compaction/compaction/src/types.ts:34`](../packages/compactio
 'devframe/goal-binding': GoalBinding
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:311`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:363`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframelifecycle--log-only"></a>
 
@@ -415,7 +415,7 @@ Source: [`packages/experimental/devframe/src/events.ts:311`](../packages/experim
 'devframe/lifecycle': DevFrameLifecycleEventData
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:319`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:373`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframereview--log-only"></a>
 
@@ -426,7 +426,7 @@ Source: [`packages/experimental/devframe/src/events.ts:319`](../packages/experim
 'devframe/review': DevFrameReviewEventData
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:317`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:371`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframerole-policy--log-only"></a>
 
@@ -437,18 +437,29 @@ Source: [`packages/experimental/devframe/src/events.ts:317`](../packages/experim
 'devframe/role-policy': DevFrameRolePolicyEventData
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:309`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:361`](../packages/experimental/devframe/src/events.ts)
+
+<a id="devframetask-delivery--log-only"></a>
+
+#### `devframe/task-delivery` — log-only
+
+```ts persistence-catalog
+/** Explicit Worker output snapshot. */
+'devframe/task-delivery': DevFrameTaskDeliveryEventData
+```
+
+Source: [`packages/experimental/devframe/src/events.ts:367`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframetask-warning--log-only"></a>
 
 #### `devframe/task-warning` — log-only
 
 ```ts persistence-catalog
-/** Host-graded degradation of one task's memory surface, carrying the grading the explicit requirement context produced; at most one per task. */
+/** Host-graded memory degradation, recorded at most once per task. */
 'devframe/task-warning': DevFrameTaskWarningEventData
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:321`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:375`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframeusage--log-only"></a>
 
@@ -459,7 +470,7 @@ Source: [`packages/experimental/devframe/src/events.ts:321`](../packages/experim
 'devframe/usage': DevFrameUsageEventData
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:313`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:365`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframeverification--log-only"></a>
 
@@ -470,7 +481,7 @@ Source: [`packages/experimental/devframe/src/events.ts:313`](../packages/experim
 'devframe/verification': DevFrameVerificationEventData
 ```
 
-Source: [`packages/experimental/devframe/src/events.ts:315`](../packages/experimental/devframe/src/events.ts)
+Source: [`packages/experimental/devframe/src/events.ts:369`](../packages/experimental/devframe/src/events.ts)
 
 ### `feedback/*`
 

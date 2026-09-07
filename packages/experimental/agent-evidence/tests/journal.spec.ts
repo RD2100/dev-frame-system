@@ -11,7 +11,7 @@ import { GoalId } from '@deepseek-ai/dsh-goal'
 import { Session, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import { TaskId as EvidenceTaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import { AcceptanceHash, ConfigurationConfirmationId, SourceFingerprint, WorkspaceId } from '@deepseek-ai/dsh-experimental-devframe/shared'
-import { decodeDevFramePayload, DevFrameSnapshotId } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
+import { decodeDevFramePayload, deliveryResultBinding, DevFrameSnapshotId } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
 import type { DevFrameRolePolicyEventData } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
 import {
   MemoryRequiredChecksConfigStore,
@@ -84,7 +84,7 @@ function reviewerDirectory(): {
 /** A durability callback recording every flush and answering durably true. */
 function durableFlush(): { flush: DevFrameFlush; flushed: Session[] } {
   const flushed: Session[] = []
-  return { flushed, flush: async session => { flushed.push(session); return true } }
+  return { flushed, flush: async (session) => { flushed.push(session); return true } }
 }
 
 /** A fake execution echoing every configured check verbatim with the given statuses. */
@@ -144,6 +144,39 @@ function goalBinding(): GoalBinding {
 }
 
 describe('AgentEvidenceJournal recordVerification', () => {
+  it('records real checks and an independent review against the delivered output while preserving Goal input', async () => {
+    const { store, digest } = await registeredStore()
+    const { directory } = reviewerDirectory()
+    const journal = new AgentEvidenceJournal({ flush: async () => true, reviewerDirectory: directory })
+    const current = session()
+    current.append('devframe/role-policy', rolePolicy())
+    current.append('devframe/goal-binding', { ...goalBinding(), lifecycle: 'admission_open' })
+    const delivery = decodeDevFramePayload('devframe/task-delivery', {
+      version: 1, deliveryId: 'delivery-evjournal', taskId: TASK, binding: BINDING,
+      workerSessionId: 'worker-evjournal', worktreeId: 'worktree-evjournal', worktreePath: tmpdir(),
+      sourceCommit: 'a'.repeat(40), sourceFingerprint: 'delivered-source-evjournal', snapshotId: 'delivered-snapshot-evjournal',
+    })
+    current.append('devframe/task-delivery', delivery)
+    const binding = deliveryResultBinding(delivery)
+    const verification = await journal.recordVerification({
+      session: current, binding, deliveryId: delivery.deliveryId,
+      requiredChecksDigest: digest, requiredChecksStore: store,
+    })
+    const review = await journal.recordReview({
+      session: current, binding, deliveryId: delivery.deliveryId, reviewerSessionId: REVIEWER,
+      policyVersion: POLICY_VERSION, decision: 'pass', findings: [],
+    })
+    const state = devFrameProjectionDefinition.init(current.header, SessionLogOffset(0))
+    for (const event of current.snapshotEvents()) devFrameProjectionDefinition.apply(state, event)
+    expect(state.failure).toBeNull()
+    expect(state.bindings[0]?.sourceFingerprint).toBe(SOURCE)
+    expect(state.bindings[0]?.snapshotId).toBe(SNAPSHOT)
+    expect(verification.deliveryId).toBe(delivery.deliveryId)
+    expect(verification.checks[0]?.exitCode).toBe(0)
+    expect(review.deliveryId).toBe(delivery.deliveryId)
+    expect(state.reviews[0]?.binding.sourceFingerprint).toBe(delivery.sourceFingerprint)
+  })
+
   it('records one verification event from the executed stored checks and returns the accepted data', async () => {
     const h = await harness()
     try {
@@ -321,8 +354,12 @@ describe('AgentEvidenceJournal recordVerification', () => {
       const journal = new AgentEvidenceJournal({ flush: async () => true, reviewerDirectory: directory, execution: executionWith(['passed']) })
       const current = session()
 
-      const first = await journal.recordVerification({ session: current, binding: BINDING, requiredChecksDigest: digest, requiredChecksStore: store })
-      const second = await journal.recordVerification({ session: current, binding: BINDING, requiredChecksDigest: digest, requiredChecksStore: store })
+      const first = await journal.recordVerification({
+        session: current, binding: BINDING, requiredChecksDigest: digest, requiredChecksStore: store,
+      })
+      const second = await journal.recordVerification({
+        session: current, binding: BINDING, requiredChecksDigest: digest, requiredChecksStore: store,
+      })
 
       expect(second.verificationId).not.toBe(first.verificationId)
       const logged = current.snapshotEvents().filter(event => event.type === 'devframe/verification')

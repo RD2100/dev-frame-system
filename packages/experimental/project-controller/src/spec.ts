@@ -10,7 +10,7 @@ import type { TaskRecord } from '@deepseek-ai/dsh-experimental-project-contracts
 import {
   DevFrameReviewId,
   DevFrameVerificationId,
-} from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
+} from '@deepseek-ai/dsh-experimental-devframe'
 
 /** Task identity schema; validation owns the brand factory. */
 const taskId = z.string().min(1).transform(value => TaskId(value))

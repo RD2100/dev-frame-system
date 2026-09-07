@@ -3,13 +3,38 @@ import { describe, expect, it, vi } from 'vitest'
 import { GoalId } from '@deepseek-ai/dsh-goal'
 import { TaskId as GoalTaskId } from '@deepseek-ai/dsh-experimental-devframe/controller'
 import { WorktreeLockHolder } from '@deepseek-ai/dsh-worktree-registry'
-import { DevFrameReviewId } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
+import { DevFrameDeliveryId, DevFrameReviewId } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
+import { DevFrameSnapshotId } from '@deepseek-ai/dsh-experimental-devframe/shared'
+import { computeSourceFingerprint } from '@deepseek-ai/dsh-experimental-devframe/src/source-fingerprint.ts'
 import { prepareIntegration, mountIntegrationRegistries } from './integration-harness.ts'
 import { harness } from './helpers.ts'
 import { executeIntegrationGit } from '../src/git-integration.ts'
 
 // Each case creates three real linked worktrees and may cold-open four durable domains.
 describe('controller integration admission and recovery', { timeout: 30_000 }, () => {
+  it('requires new delivery evidence after the Worker rebases onto a newer target', async () => {
+    const f = await prepareIntegration()
+    try {
+      await f.git(f.request.git.targetPath, 'commit', '--allow-empty', '-m', 'target advancement')
+      const targetHead = await f.git(f.request.git.targetPath, 'rev-parse', 'HEAD')
+      await f.git(f.request.git.sourcePath, 'rebase', 'target')
+      const sourceCommit = await f.git(f.request.git.sourcePath, 'rev-parse', 'HEAD')
+      expect(sourceCommit).not.toBe(f.delivery.sourceCommit)
+      const request = { ...f.request, git: { ...f.request.git, sourceCommit, targetHead } }
+      await expect(f.h.ctx.projectController.requestMainTreeMerge(f.controller.id, f.taskId, request))
+        .rejects.toThrow('source commit does not match')
+      f.controller.append('devframe/task-delivery', {
+        ...f.delivery, deliveryId: DevFrameDeliveryId('delivery-rebased'), sourceCommit,
+        snapshotId: DevFrameSnapshotId('snapshot-rebased'),
+        sourceFingerprint: (await computeSourceFingerprint({ worktreePath: request.git.sourcePath })).fingerprint,
+      })
+      await expect(f.h.ctx.projectController.requestMainTreeMerge(f.controller.id, f.taskId, request))
+        .rejects.toThrow('persisted verification and review')
+      expect(await f.git(request.git.targetPath, 'rev-parse', 'HEAD')).toBe(targetHead)
+      expect(f.h.ctx.projectController.find(f.taskId)?.state).toBe('submitted')
+    } finally { await f.h.dispose() }
+  })
+
   it('fast-forwards a reviewed task once and rejects marker replay and cross-task use', async () => {
     const f = await prepareIntegration()
     try {

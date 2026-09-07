@@ -70,6 +70,8 @@ import * as ToolWorkflow from '@deepseek-ai/dsh-tool-workflow'
 import * as ToolWorktree from '@deepseek-ai/dsh-tool-worktree'
 import * as AgentWorktreeTools from '@deepseek-ai/dsh-experimental-agent-worktree'
 import * as ProjectIntegrationTool from '../packages/experimental/project-controller/src/consumer.ts'
+import * as ProjectTaskTool from '../packages/experimental/project-controller/src/task-consumer.ts'
+import * as ProjectDeliveryTool from '../packages/experimental/project-controller/src/delivery-consumer.ts'
 import { WorktreeRegistry } from '@deepseek-ai/dsh-worktree-registry'
 import type {
   Worktree, WorktreeCreateRequest, WorktreeId, WorktreeLockHolder, WorktreeReconcileOptions,
@@ -232,6 +234,42 @@ export interface ToolPackage {
  * `packages/`). Ordered by package name (the render order); the completeness
  * guard proves it is exhaustive against the on-disk glob.
  */
+/** Schema-only mount for the independently composed project task consumer. */
+export const PROJECT_TASK_TOOL_PACKAGE: ToolPackage = {
+  pkg: '@deepseek-ai/dsh-experimental-project-controller/task-consumer',
+  dir: 'project-controller',
+  source: 'packages/experimental/project-controller/src/task-consumer.ts',
+  requires: ['ctx.tools', 'ctx.agents', 'ctx.sessions', 'ctx.sessionProjections', 'ctx.projectController', 'ctx.agentBindings', 'ctx.workspaceRegistry', 'ctx.worktreeRegistry'],
+  writes: ['tool/call', 'tool/result', 'project_tasks tasks', 'Worker briefing inbox'],
+  async mount(ctx) {
+    // Authorities are consulted only during execution; harvesting never plans or starts a task.
+    for (const key of ['agents', 'sessions', 'projectController', 'agentBindings', 'workspaceRegistry', 'worktreeRegistry'] as const) {
+      ctx.provide(key, {} as never)
+    }
+    await ctx.plugin(ProjectTaskTool)
+  },
+  note: 'Opt-in root-controller consumer for planning authorized Goal tasks and starting their registered Workers. Start derives identity and worktree locks from live registries, and queues an optional briefing once after development admission. It does not deliver, review, submit, or complete work.',
+}
+
+/** Schema-only mount for explicit task delivery and independent review. */
+export const PROJECT_DELIVERY_TOOL_PACKAGE: ToolPackage = {
+  pkg: '@deepseek-ai/dsh-experimental-project-controller/delivery-consumer',
+  dir: 'project-controller', source: 'packages/experimental/project-controller/src/delivery-consumer.ts',
+  requires: ['ctx.tools', 'ctx.agents', 'ctx.sessions', 'ctx.sessionProjections', 'ctx.projectController', 'ctx.agentBindings', 'ctx.workspaceRegistry', 'ctx.worktreeRegistry'],
+  writes: ['tool/call', 'tool/result', 'DevFrame delivery, verification and review events', 'project_tasks tasks', 'approved check subprocess effects'],
+  async mount(ctx) {
+    // Service methods are execution-only; harvesting neither opens the ledger nor runs checks.
+    for (const key of ['agents', 'sessions', 'projectController', 'agentBindings', 'workspaceRegistry', 'worktreeRegistry'] as const) {
+      ctx.provide(key, {} as never)
+    }
+    await ctx.plugin(ProjectDeliveryTool, {
+      requiredChecksPath: resolve(root, 'catalog-unused-required-checks.json'), requiredChecksByTask: {},
+      gitExecutable: 'git', gitTimeoutMs: 1, gitMaxOutputBytes: 1, checkTimeoutMs: 1, checkMaxOutputBytes: 1,
+    })
+  },
+  note: 'Opt-in explicit Worker delivery and independent parent-lead review. The host derives source identity and executes preapproved checks. Failed or uncertain checks require explicit retryChecks; identical reviews can repair task-state recording without repeating the review.',
+}
+
 const TOOL_PACKAGES: ToolPackage[] = [
   {
     pkg: '@deepseek-ai/dsh-tool-ask-user',
@@ -679,6 +717,8 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note: 'Opt-in controller-only consumer. Integration requires persisted verification, independent lead review, the current Goal, and registered worktree writer locks. Reconciliation observes an interrupted intent without repeating Git.',
   },
+  PROJECT_TASK_TOOL_PACKAGE,
+  PROJECT_DELIVERY_TOOL_PACKAGE,
   {
     pkg: '@deepseek-ai/dsh-tool-web',
     dir: 'tool-web',

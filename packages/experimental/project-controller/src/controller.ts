@@ -96,6 +96,12 @@ export interface MainTreeMergeMarker {
   readonly createdAt: string
 }
 
+/** Host authority recheck at the task mutation's serialized persistence boundary. */
+export interface TaskMutationOptions {
+  /** Synchronous check run immediately before the task write; a throw prevents that write. */
+  readonly beforePersist?: () => void
+}
+
 /** Host-owned merge preparation; evidence itself is read from the controller Session projection. */
 export interface MainTreeMergeRequest {
   /** Exact source and target selected by the registered worktree owners. */
@@ -322,9 +328,13 @@ export class ProjectController extends Service {
   /**
    * Add one task in the `planned` state.
    * @param request - Task identity, plugin scope, and title.
+   * @param options - Host authority guard at the serialized write boundary.
    * @returns the stored record.
    */
-  async createTask(request: { readonly taskId: TaskId; readonly pluginId: PluginId; readonly title: string }): Promise<TaskRecord> {
+  async createTask(
+    request: { readonly taskId: TaskId; readonly pluginId: PluginId; readonly title: string },
+    options: TaskMutationOptions = {},
+  ): Promise<TaskRecord> {
     return await this.enqueue(async () => {
       this.requireAdmissionOpen()
       if (this.tasks.has(request.taskId)) {
@@ -342,6 +352,7 @@ export class ProjectController extends Service {
         createdAt: now,
         updatedAt: now,
       })
+      options.beforePersist?.()
       return await this.persist(record)
     })
   }
@@ -350,13 +361,15 @@ export class ProjectController extends Service {
    * Assign a planned task to a session.
    * @param taskId - Task to move.
    * @param assigneeSessionId - Session bound to execute the task.
+   * @param options - Host authority guard at the serialized write boundary.
    * @returns the updated record.
    */
-  async assign(taskId: TaskId, assigneeSessionId: SessionId): Promise<TaskRecord> {
+  async assign(taskId: TaskId, assigneeSessionId: SessionId, options: TaskMutationOptions = {}): Promise<TaskRecord> {
     return await this.enqueue(async () => {
       const current = this.requireTask(taskId)
       this.requireTransition(current, 'planned', 'assigned')
       this.requireAdmissionOpen()
+      options.beforePersist?.()
       return await this.persist({ ...stamped(current, 'assigned'), assigneeSessionId })
     })
   }
@@ -364,9 +377,10 @@ export class ProjectController extends Service {
   /**
    * Move an assigned task into development, consuming one dispatch slot.
    * @param taskId - Task to move.
+   * @param options - Host authority guard at the serialized write boundary.
    * @returns the updated record.
    */
-  async startDevelopment(taskId: TaskId): Promise<TaskRecord> {
+  async startDevelopment(taskId: TaskId, options: TaskMutationOptions = {}): Promise<TaskRecord> {
     return await this.enqueue(async () => {
       const current = this.requireTask(taskId)
       this.requireTransition(current, 'assigned', 'developing')
@@ -378,6 +392,7 @@ export class ProjectController extends Service {
           'PROJECT_CONTROLLER_CONCURRENCY_EXCEEDED',
         )
       }
+      options.beforePersist?.()
       return await this.persist(stamped(current, 'developing'))
     })
   }
@@ -385,13 +400,15 @@ export class ProjectController extends Service {
   /**
    * Move a developing task into lead review.
    * @param taskId - Task to move.
+   * @param options - Host authority guard at the serialized write boundary.
    * @returns the updated record.
    */
-  async beginReview(taskId: TaskId): Promise<TaskRecord> {
+  async beginReview(taskId: TaskId, options: TaskMutationOptions = {}): Promise<TaskRecord> {
     return await this.enqueue(async () => {
       const current = this.requireTask(taskId)
       this.requireTransition(current, 'developing', 'reviewing')
       this.requireAdmissionOpen()
+      options.beforePersist?.()
       return await this.persist(stamped(current, 'reviewing'))
     })
   }
@@ -399,14 +416,35 @@ export class ProjectController extends Service {
   /**
    * Submit a reviewed task for integration.
    * @param taskId - Task to move.
+   * @param options - Host authority guard at the serialized write boundary.
    * @returns the updated record.
    */
-  async submit(taskId: TaskId): Promise<TaskRecord> {
+  async submit(taskId: TaskId, options: TaskMutationOptions = {}): Promise<TaskRecord> {
     return await this.enqueue(async () => {
       const current = this.requireTask(taskId)
       this.requireTransition(current, 'reviewing', 'submitted')
       this.requireAdmissionOpen()
+      options.beforePersist?.()
       return await this.persist(stamped(current, 'submitted'))
+    })
+  }
+
+  /**
+   * Return a reviewed task for correction after an explicit negative review.
+   * @param taskId - Reviewing task to return to its assigned Worker.
+   * @param options - Host authority guard at the serialized write boundary.
+   * @returns Task in developing, consuming one development slot.
+   */
+  async returnToDevelopment(taskId: TaskId, options: TaskMutationOptions = {}): Promise<TaskRecord> {
+    return await this.enqueue(async () => {
+      const current = this.requireTask(taskId)
+      this.requireTransition(current, 'reviewing', 'developing')
+      this.requireAdmissionOpen()
+      if (this.list().filter(task => task.state === 'developing').length >= this.config.maxActiveTasks) {
+        throw new ProjectControllerError('The developing budget is exhausted', 'PROJECT_CONTROLLER_CONCURRENCY_EXCEEDED')
+      }
+      options.beforePersist?.()
+      return await this.persist(stamped(current, 'developing'))
     })
   }
 
@@ -568,7 +606,9 @@ export class ProjectController extends Service {
     const state = session === undefined ? undefined : this.ctx.get('sessionProjections')?.stateOf(session, 'devframe')
     if (state === undefined) throw new Error('Integration requires the live controller evidence projection')
     const expected = state.bindings.at(-1)
-    if (expected?.lifecycle !== 'admission_open' || !expected.taskIds.some(id => String(id) === String(taskId))) {
+    if (expected?.lifecycle !== 'admission_open'
+      || (state.lifecycle !== null && state.lifecycle.binding.goalId === expected.goalId && state.lifecycle.state !== 'admission_open')
+      || !expected.taskIds.some(id => String(id) === String(taskId))) {
       throw new Error('Integration requires the task in the current Goal with open admission')
     }
     const worker = current.assigneeSessionId === undefined ? undefined : this.ctx.agentBindings.find(current.assigneeSessionId)
@@ -577,6 +617,9 @@ export class ProjectController extends Service {
       throw new Error('Integration requires the current Goal binding and registered task hierarchy')
     }
     const evidence = selectIntegrationEvidence({ state, expected, controller: binding, task: current, worker, lead })
+    if (request.git.sourceCommit !== evidence.delivery.sourceCommit) {
+      throw new Error('Integration source commit does not match the current task delivery')
+    }
     if (request.git.sourcePath !== worker.worktreePath || request.git.targetPath !== binding.worktreePath) {
       throw new Error('Integration paths must match the registered Worker and controller worktrees')
     }
@@ -598,7 +641,7 @@ export class ProjectController extends Service {
       signature: JSON.stringify({ expected, evidence, taskWarnings, binding, worker, lead, target, source, reviewer }),
       input: {
         worktreePath: request.git.sourcePath,
-        sourceFingerprint: expected.sourceFingerprint,
+        sourceFingerprint: evidence.delivery.sourceFingerprint,
         checks: evidence.verification.checks,
         requiredChecksDigest: evidence.verification.requiredChecks.digest,
         requiredChecksStore: request.requiredChecksStore,

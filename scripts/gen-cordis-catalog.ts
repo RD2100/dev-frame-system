@@ -251,6 +251,7 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
  */
 export const LINK_MAP: Readonly<Record<string, string>> = {
   MainTreeMergeRequest: '../../packages/experimental/project-controller/README.md',
+  TaskMutationOptions: '../../packages/experimental/project-controller/README.md',
   IntegrationGitObservation: '../../packages/experimental/project-controller/README.md',
   IntegrationGitOptions: '../../packages/experimental/project-controller/README.md',
   Agent: 'core.md',

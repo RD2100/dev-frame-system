@@ -2,11 +2,13 @@
 
 import type { AgentBindingRecord, TaskRecord } from '@deepseek-ai/dsh-experimental-project-contracts'
 import type { GoalResultBinding } from '@deepseek-ai/dsh-experimental-devframe/controller'
-import type { DevFrameProjectionState } from '@deepseek-ai/dsh-experimental-devframe/src/projection.ts'
+import type { DevFrameProjectionState } from '@deepseek-ai/dsh-experimental-devframe'
+import { deliveryResultBinding } from '@deepseek-ai/dsh-experimental-devframe'
 import type {
+  DevFrameTaskDeliveryEventData,
   DevFrameReviewEventData,
   DevFrameVerificationEventData,
-} from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
+} from '@deepseek-ai/dsh-experimental-devframe'
 
 /** Host-resolved identities, read from the task board, binding registry, and current Goal. */
 export interface IntegrationEvidenceRequest {
@@ -41,6 +43,7 @@ function sameBinding(left: GoalResultBinding, right: GoalResultBinding): boolean
  * @returns The paired verification and review for the exact expected work tuple.
  */
 export function selectIntegrationEvidence(request: IntegrationEvidenceRequest): {
+  readonly delivery: DevFrameTaskDeliveryEventData
   readonly verification: DevFrameVerificationEventData
   readonly review: DevFrameReviewEventData
 } {
@@ -68,15 +71,23 @@ export function selectIntegrationEvidence(request: IntegrationEvidenceRequest): 
   // The legacy Goal TaskId and the plugin task-board TaskId share the persisted string identity.
   const namesTask = (binding: GoalResultBinding) => binding.taskIds.some(id => String(id) === String(task.taskId))
   if (!namesTask(expected)) throw new Error('Integration task is absent from the current Goal binding')
-  const verification = state.verifications.findLast(record => namesTask(record.binding))
-  const review = state.reviews.findLast(record => namesTask(record.binding))
+  const delivery = state.deliveries.findLast(record => record.binding.goalId === expected.goalId
+    && String(record.taskId) === String(task.taskId))
+  if (delivery === undefined || !sameBinding(delivery.binding, expected)
+    || delivery.workerSessionId !== worker.sessionId || delivery.worktreeId !== worker.worktreeId
+    || delivery.worktreePath !== worker.worktreePath) {
+    throw new Error('Integration requires the current task delivery from its registered Worker worktree')
+  }
+  const output = deliveryResultBinding(delivery)
+  const verification = state.verifications.findLast(record => record.deliveryId === delivery.deliveryId)
+  const review = state.reviews.findLast(record => record.deliveryId === delivery.deliveryId)
   if (verification === undefined || review === undefined) throw new Error('Integration requires persisted verification and review')
-  if (!sameBinding(verification.binding, expected) || !sameBinding(review.binding, expected)
-    || verification.snapshotId !== expected.snapshotId || review.snapshotId !== expected.snapshotId) {
+  if (!sameBinding(verification.binding, output) || !sameBinding(review.binding, output)
+    || verification.snapshotId !== output.snapshotId || review.snapshotId !== output.snapshotId) {
     throw new Error('Integration evidence does not match the current task, acceptance, and source snapshot')
   }
   if (review.reviewerSessionId !== lead.sessionId) throw new Error('Integration review was not issued by the task plugin lead')
   if (verification.status !== 'passed') throw new Error('Integration verification failed')
   // Required-check configuration and the review decision are evaluated by evaluateCompletionAdmission.
-  return { verification, review }
+  return { delivery, verification, review }
 }

@@ -74,38 +74,51 @@ markAmbiguous(): ProjectLifecycleState
 /**
  * Add one task in the `planned` state.
  * @param request - Task identity, plugin scope, and title.
+ * @param options - Host authority guard at the serialized write boundary.
  * @returns the stored record.
  */
-async createTask(request: { readonly taskId: TaskId; readonly pluginId: PluginId; readonly title: string }): Promise<TaskRecord>
+async createTask( request: { readonly taskId: TaskId; readonly pluginId: PluginId; readonly title: string }, options: TaskMutationOptions = {}, ): Promise<TaskRecord>
 
 /**
  * Assign a planned task to a session.
  * @param taskId - Task to move.
  * @param assigneeSessionId - Session bound to execute the task.
+ * @param options - Host authority guard at the serialized write boundary.
  * @returns the updated record.
  */
-async assign(taskId: TaskId, assigneeSessionId: SessionId): Promise<TaskRecord>
+async assign(taskId: TaskId, assigneeSessionId: SessionId, options: TaskMutationOptions = {}): Promise<TaskRecord>
 
 /**
  * Move an assigned task into development, consuming one dispatch slot.
  * @param taskId - Task to move.
+ * @param options - Host authority guard at the serialized write boundary.
  * @returns the updated record.
  */
-async startDevelopment(taskId: TaskId): Promise<TaskRecord>
+async startDevelopment(taskId: TaskId, options: TaskMutationOptions = {}): Promise<TaskRecord>
 
 /**
  * Move a developing task into lead review.
  * @param taskId - Task to move.
+ * @param options - Host authority guard at the serialized write boundary.
  * @returns the updated record.
  */
-async beginReview(taskId: TaskId): Promise<TaskRecord>
+async beginReview(taskId: TaskId, options: TaskMutationOptions = {}): Promise<TaskRecord>
 
 /**
  * Submit a reviewed task for integration.
  * @param taskId - Task to move.
+ * @param options - Host authority guard at the serialized write boundary.
  * @returns the updated record.
  */
-async submit(taskId: TaskId): Promise<TaskRecord>
+async submit(taskId: TaskId, options: TaskMutationOptions = {}): Promise<TaskRecord>
+
+/**
+ * Return a reviewed task for correction after an explicit negative review.
+ * @param taskId - Reviewing task to return to its assigned Worker.
+ * @param options - Host authority guard at the serialized write boundary.
+ * @returns Task in developing, consuming one development slot.
+ */
+async returnToDevelopment(taskId: TaskId, options: TaskMutationOptions = {}): Promise<TaskRecord>
 
 /**
  * Mint a main-tree merge marker for a submitted task. Only a session whose
@@ -213,7 +226,7 @@ byState(state: TaskState): readonly TaskRecord[]
 list(): readonly TaskRecord[]
 ```
 
-Types: [IntegrationGitObservation](../../packages/experimental/project-controller/README.md) · [IntegrationGitOptions](../../packages/experimental/project-controller/README.md) · [MainTreeMergeRequest](../../packages/experimental/project-controller/README.md) · [SessionId](core.md)
+Types: [IntegrationGitObservation](../../packages/experimental/project-controller/README.md) · [IntegrationGitOptions](../../packages/experimental/project-controller/README.md) · [MainTreeMergeRequest](../../packages/experimental/project-controller/README.md) · [SessionId](core.md) · [TaskMutationOptions](../../packages/experimental/project-controller/README.md)
 
 Source: [`packages/experimental/project-controller/src/controller.ts`](../../packages/experimental/project-controller/src/controller.ts)
 <!-- END GENERATED cordis-surface -->

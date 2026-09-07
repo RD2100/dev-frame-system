@@ -17,9 +17,9 @@ import { githubSlug } from './verify-md-links.ts'
 const root = resolve(import.meta.dirname, '..')
 const OUT = 'docs/config-catalog.md'
 
-/** Public plugin subpaths with deployment config in addition to the package's main entry. */
+/** Public plugin subpaths classified independently of the package's main entry. */
 const SUPPLEMENTAL_PLUGIN_ENTRIES: Readonly<Record<string, readonly string[]>> = {
-  '@deepseek-ai/dsh-experimental-project-controller': ['./consumer'],
+  '@deepseek-ai/dsh-experimental-project-controller': ['./consumer', './task-consumer', './delivery-consumer'],
 }
 
 /** The fenced-block info string for pasted config declarations (skipped by

@@ -11,16 +11,21 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-function fixture(exported: unknown = { default: './lib/consumer.js' }, source = true) {
+function fixture(exported: unknown = { default: './lib/consumer.js' }, source = true, taskExported: unknown = './lib/task-consumer.js') {
   const root = mkdtempSync(join(tmpdir(), 'dsh-config-catalog-'))
   roots.push(root)
   const dir = join(root, 'packages/experimental/project-controller')
   mkdirSync(join(dir, 'src'), { recursive: true })
   writeFileSync(join(dir, 'package.json'), JSON.stringify({
     name: '@deepseek-ai/dsh-experimental-project-controller',
-    exports: exported === null ? {} : { './consumer': exported },
+    exports: { ...(exported === null ? {} : { './consumer': exported }), './task-consumer': taskExported, './delivery-consumer': './lib/delivery-consumer.js' },
   }))
+  writeFileSync(join(dir, 'src/delivery-consumer.ts'), '/** Delivery plugin. */\nexport function apply(): void {}\n')
   writeFileSync(join(dir, 'src/index.ts'), '/** Main library. */\nexport const main = true\n')
+  writeFileSync(join(dir, 'src/task-consumer.ts'), `
+export const inject = ['tools', 'projectController']
+export function apply(_ctx: unknown): void {}
+`)
   if (source) writeFileSync(join(dir, 'src/consumer.ts'), `
 /** Consumer configuration. */
 export interface Config {
@@ -41,12 +46,25 @@ describe('supplemental plugin config entries', () => {
     expect(entries.map(entry => [entry.pkg, entry.kind])).toEqual([
       ['@deepseek-ai/dsh-experimental-project-controller', 'library'],
       ['@deepseek-ai/dsh-experimental-project-controller/consumer', 'config'],
+      ['@deepseek-ai/dsh-experimental-project-controller/delivery-consumer', 'no-config'],
+      ['@deepseek-ai/dsh-experimental-project-controller/task-consumer', 'no-config'],
     ])
     expect(entries[1]).toMatchObject({
       entry: 'packages/experimental/project-controller/src/consumer.ts',
       inject: ['tools'], schemaKeys: ['requiredChecksPath'],
     })
     expect(entries[1]?.pastes?.[0]?.text).toContain('requiredChecksPath: string')
+  })
+
+  it.each([null, { types: './lib/types/task-consumer.d.ts' }, './lib/consumer.js'])('rejects an absent or mismatched task-consumer runtime: %j', (exported) => {
+    const { root } = fixture(undefined, true, exported)
+    expect(() => collectConfigCatalog(root)).toThrow('supplemental plugin must export ./lib/task-consumer.js')
+  })
+
+  it('requires source for the exported task consumer', () => {
+    const { root, dir } = fixture()
+    rmSync(join(dir, 'src/task-consumer.ts'))
+    expect(() => collectConfigCatalog(root)).toThrow('src/task-consumer.ts is missing or unreadable')
   })
 
   it.each([null, { default: './lib/other.js' }, { types: './lib/types/consumer.d.ts' }])('rejects a missing or mismatched runtime export: %j', (exported) => {
@@ -110,4 +128,11 @@ export class Controller {
     writeFileSync(join(dir, 'src/controller.ts'), declaration)
     expect(() => collectConfigCatalog(root)).toThrow(error)
   })
+})
+
+
+it('rejects the delivery export without its independently mounted source', () => {
+  const { root, dir } = fixture()
+  rmSync(join(dir, 'src/delivery-consumer.ts'))
+  expect(() => collectConfigCatalog(root)).toThrow('src/delivery-consumer.ts is missing or unreadable')
 })

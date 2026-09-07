@@ -29,7 +29,7 @@ Use this package for a project with one integration controller, plugin leads, an
 
 ### Composition and configuration
 
-Mount `@deepseek-ai/dsh-experimental-project-controller` once for `ctx.projectController`, alongside storage-domain and session-identity. Mount `@deepseek-ai/dsh-experimental-project-controller/consumer` separately to expose the tool. The consumer uses the existing service; its Loader entry is a function-plugin namespace without a default export.
+Mount `@deepseek-ai/dsh-experimental-project-controller` once for `ctx.projectController`, alongside storage-domain and session-identity. Mount `/consumer` for `project_integrate` and `/task-consumer` for `project_task`, using the full package name before each subpath. Mount `/delivery-consumer` for `project_deliver` and `project_review`. All three consumers use the existing service and export Loader function-plugin namespaces without default exports.
 
 Integration also requires live sessions, the DevFrame session projection, workspace and worktree registries, and persisted verification and review evidence. The tool additionally requires the live Agent registry and tool runtime. The [real Loader test composition](tests/consumer-loader.spec.ts) supplies these prerequisites and exercises the two entries without making model requests.
 
@@ -44,11 +44,33 @@ Integration also requires live sessions, the DevFrame session projection, worksp
 
 The consumer reads the configured ledger; it does not approve checks or create a replacement ledger. Missing registrations and corrupt contents fail admission. The host's controller tool policy must allow `project_integrate`; leads and Workers must not receive it.
 
+### Plan and start tasks
+
+Mounting the task consumer exposes only the `plan` and `start` actions. The host opens project admission with `startProject()`, prepares the current Goal binding, and allows `project_task` in the controller tool policy. Calls require the actual live root controller, the task in its current open Goal, and its registered worktree with the controller writer lock.
+
+`plan` takes `taskId`, `title`, and `pluginId` and records a planned task. `start` takes `taskId` and an optional `briefing`; it derives exactly one live Worker from the task and plugin bindings. The Worker must belong to a matching plugin lead under that controller. Controller, lead, and Worker need independent registered worktrees in the Goal workspace, each with its own writer lock. The host supplies the existing Worker through the hierarchy/dispatch composition; this tool does not create it.
+
+Start assigns a planned task, admits development within `maxActiveTasks`, and queues the optional briefing. Repeated starts reject after development admission and do not re-send the briefing. Ownership is checked again inside the serialized task-write queue and before briefing delivery.
+
+A failed call may leave the task assigned or developing: task writes and briefing delivery are not atomic. Inspect the task board before recovery; an error is not proof that no state changed, and repeating start cannot recover a missing briefing for a developing task.
+
+The [task Loader tests](tests/task-consumer-loader.spec.ts) exercise planning, authorization refusal, refusal after a durable stop request, three queued-write revocations, and two real Workers with overlapping model requests. The seven cases use real local registries, storage, dispatch, and worktrees; a scripted adapter supplies external model responses. They do not demonstrate an online model completing project work.
+
+### Deliver and review work
+
+The delivery consumer uses the same ledger and Git settings as the integration consumer. It additionally requires `requiredChecksByTask`, a host-owned task-to-approved-digest map, and positive `checkTimeoutMs` and `checkMaxOutputBytes` limits per check subprocess. Each registered check must run in the assigned Worker's actual worktree. Allow `project_deliver` for Workers and `project_review` for their independent plugin leads.
+
+A Worker explicitly calls `project_deliver` with `taskId` from a clean, committed worktree. The host derives identities and source data, records a task delivery without changing the original Goal input binding, and runs the existing approved checks. Passing checks advance development to review only while the source still matches. Failed checks retain their results without advancing the task; failed or interrupted attempts require explicit `retryChecks: true` to rerun that approved checkset.
+
+The actual parent lead calls `project_review` with `taskId`, `decision`, and `findings`. A pass requires passing verification for the latest delivery and submits that output; `changes_required` returns the task to development within the active-task limit. Repeating an identical recorded review can repair a failed task-state write without recording another review. A conflicting decision requires a new delivery, and rejected source must change before another delivery. Idle Workers do not constitute delivery or approval.
+
+Evidence and task writes are separate durable operations. The consumer shares one session journal across deliveries, checks, and reviews so its append queue and persistence-failure latch survive individual calls. Inspect retained evidence after an error; successful logging does not prove task advancement. Integration still requires the latest exact task delivery, verification, independent review, and unchanged source commit.
+
 ### Task admission and integration
 
 A fresh service starts `stopped`. The host calls `startProject()` before creating or advancing tasks through `planned → assigned → developing → reviewing → submitted`. A `blocked` or `failed` move requires a reason, next action, and wake condition; `resume` clears those fields and returns the task to `assigned`.
 
-The tool accepts only `taskId` and `action`. It derives the caller from the actual live Agent, verifies the root-controller binding and session directory, and resolves source and target paths through the assigned Worker and controller worktree records. Model arguments cannot supply another caller, paths, check results, or merge markers.
+The integration tool accepts only `taskId` and `action`. It derives the caller from the actual live Agent, verifies the root-controller binding and session directory, and resolves source and target paths through the assigned Worker and controller worktree records. Model arguments cannot supply another caller, paths, check results, or merge markers.
 
 Admission requires a submitted task, a current Goal binding, matching persisted verification and independent plugin-lead review, approved required checks, and no failing task warning. All three hierarchy worktrees must be independent and belong to the same workspace. The Worker and controller must hold their respective source and target writer locks. Source fingerprint, exact Git commits, clean worktrees, and fast-forward ancestry are checked; evidence and ownership are rechecked before Git starts.
 
@@ -77,7 +99,9 @@ Evidence comes from the existing DevFrame projection and three-level binding reg
 | File | Responsibility |
 |---|---|
 | [`src/controller.ts`](src/controller.ts) | Task lifecycle, serialized admission, durable intent, and recovery. |
-| [`src/consumer.ts`](src/consumer.ts) | Loader tool entry, caller authorization, and host configuration. |
+| [`src/consumer.ts`](src/consumer.ts) | Integration tool entry, caller authorization, and host configuration. |
+| [`src/task-consumer.ts`](src/task-consumer.ts) | Root-controller planning, registered Worker admission, and briefing delivery. |
+| [`src/delivery-consumer.ts`](src/delivery-consumer.ts) | Explicit Worker delivery, approved checks, and independent lead review. |
 | [`src/integration-evidence.ts`](src/integration-evidence.ts) | Exact task evidence and independent lead authority. |
 | [`src/git-integration.ts`](src/git-integration.ts) | Bounded Git inspection, fast-forward, and outcome observation. |
 | [`src/spec.ts`](src/spec.ts) | Versioned task, request-budget, and integration-intent storage. |
@@ -101,11 +125,13 @@ No runtime invariant companion is published: Git advancement and task persistenc
 <a id="model-experience"></a>
 ## Model Experience
 
-### Project integration tool
+### Project task and integration tools
 
 #### What the model sees
 
-Mounting the consumer exposes `project_integrate` with `taskId` and `action` parameters. Successful results contain the task id, task state, and integration observation; failures report the refusal through the tool runtime. The ordinary tool call/result log carries these model-visible values. Mounting the service alone does not expose a tool.
+Mounting the consumer exposes `project_integrate` with `taskId` and `action` parameters. Successful results contain the task id, task state, and integration observation; failures report the refusal through the tool runtime. The ordinary tool call/result log carries these model-visible values. Mounting the service alone does not expose a tool. The task consumer separately exposes `project_task`: plan requires a title and plugin scope, while start accepts an optional briefing. Its result reports `taskId`, `state`, and `briefingQueued`; queued instructions do not prove Worker completion.
+
+The delivery consumer also exposes `project_deliver` (task and optional retry flag) and `project_review` (task, explicit decision, and findings). Both return `taskId`, `state`, and `outcome` through ordinary tool call/result logs; models cannot choose identities, source paths, or check commands.
 
 #### Token effect
 

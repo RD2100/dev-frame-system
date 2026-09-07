@@ -46,6 +46,8 @@
 | `@deepseek-ai/dsh-tool-worktree` | `worktree_create`、`worktree_list`、`worktree_prune`、`worktree_remove`、`worktree_status` | `ctx.tools`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry`、`ctx.systemPrompt`、`a calling Agent (its session cwd authorizes the workspace)` | `tool/call`、`tool/result` | - | 五个工具把每次调用都授权到由不可变 session cwd 解析出的调用会话工作区；另一工作区持有的 worktree id 与未知 id 的报告完全一致。上方 schema 不依赖具体哪个 provider 支撑注册表。 |
 | `@deepseek-ai/dsh-experimental-agent-worktree` | `worktree_create`、`worktree_remove`、`worktree_status` | `ctx.tools`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry`、`ctx.systemPrompt`、`a calling Agent (its session cwd authorizes the workspace)` | `tool/call`、`tool/result` | - | 三个工具把每个新建 worktree 绑定为调用会话的单一写入目标：其他会话只能观察，只有绑定持有者能移除。实验性私有包：不出现在任何发布 bundle 中，且与 dsh-tool-worktree 同装一个组合会重复注册共享的工具名。 |
 | `@deepseek-ai/dsh-experimental-project-controller/consumer` | `project_integrate` | `ctx.tools`、`ctx.agents`、`ctx.projectController`、`ctx.agentBindings`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry` | `tool/call`、`tool/result`、`project_tasks integrations and tasks`、`Git target worktree` | - | 需显式启用的总控专用消费者。集成需要持久化验证、独立组长评审、当前 Goal 和已注册工作树的写入锁。协调恢复只观察中断的意图，不重复执行 Git。 |
+| `@deepseek-ai/dsh-experimental-project-controller/task-consumer` | `project_task` | `ctx.tools`、`ctx.agents`、`ctx.sessions`、`ctx.sessionProjections`、`ctx.projectController`、`ctx.agentBindings`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry` | `tool/call`、`tool/result`、`project_tasks tasks`、`Worker briefing inbox` | - | 需显式启用的根总控消费者，用于规划当前 Goal 已授权的任务并启动已登记的 Worker。启动时从实时登记信息取得身份和工作树写入锁，并在开发准入后仅投递一次可选任务说明。本工具不交付、评审、提交或完成工作。 |
+| `@deepseek-ai/dsh-experimental-project-controller/delivery-consumer` | `project_deliver`, `project_review` | `ctx.tools`, `ctx.agents`, `ctx.sessions`, `ctx.sessionProjections`, `ctx.projectController`, `ctx.agentBindings`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry` | `tool/call`, `tool/result`, `DevFrame delivery, verification and review events`, `project_tasks tasks`, `approved check subprocess effects` | - | 按需启用显式 Worker 交付与独立父级 lead 审查。宿主推导源身份并执行预先批准的检查。失败或结果不确定的检查要求显式 retryChecks；相同审查可以修复任务状态记录，而不重复审查。 |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
@@ -2430,6 +2432,111 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
 来源：[`packages/experimental/project-controller/src/consumer.ts`](../packages/experimental/project-controller/src/consumer.ts)
 
 需显式启用的总控专用消费者。集成需要持久化验证、独立组长评审、当前 Goal 和已注册工作树的写入锁。协调恢复只观察中断的意图，不重复执行 Git。
+
+<a id="deepseek-aidsh-experimental-project-controllertask-consumer"></a>
+
+## `@deepseek-ai/dsh-experimental-project-controller/task-consumer`
+
+### `project_task`
+
+规划当前已授权 Goal 中的任务，或启动已登记的 Worker。只有实际的根总控可以调用此工具。plan 要求提供 title 和 pluginId。start 从登记的任务绑定取得 Worker，并可在开发准入成功后投递一次任务说明。重复启动会被拒绝，不会再次投递说明。本工具不完成、评审或提交工作。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "description": "plan or start."
+    },
+    "taskId": {
+      "type": "string",
+      "description": "Task id already authorized by the current Goal."
+    },
+    "title": {
+      "type": "string",
+      "description": "Required for plan: non-empty task title."
+    },
+    "pluginId": {
+      "type": "string",
+      "description": "Required for plan: plugin scope."
+    },
+    "briefing": {
+      "type": "string",
+      "description": "Optional for start: instructions queued once to the registered Worker after admission."
+    }
+  },
+  "required": [
+    "action",
+    "taskId"
+  ]
+}
+```
+
+来源：[`packages/experimental/project-controller/src/task-consumer.ts`](../packages/experimental/project-controller/src/task-consumer.ts)
+
+需显式启用的根总控消费者，用于规划当前 Goal 已授权的任务并启动已登记的 Worker。启动时从实时登记信息取得身份和工作树写入锁，并在开发准入后仅投递一次可选任务说明。本工具不交付、评审、提交或完成工作。
+
+<a id="deepseek-aidsh-experimental-project-controllerdelivery-consumer"></a>
+
+## `@deepseek-ai/dsh-experimental-project-controller/delivery-consumer`
+
+### `project_deliver`
+
+从清洁且已提交的 Worker 工作树显式交付分配给你的任务。宿主记录实际输出并运行现有已批准检查。重复成功交付会复用证据；中断或失败的检查仅在 retryChecks 为 true 时重跑。这不会批准审查或集成工作。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "taskId": {
+      "type": "string",
+      "description": "Your assigned task."
+    },
+    "retryChecks": {
+      "type": "boolean",
+      "description": "Explicitly rerun the approved checks after a failed or interrupted attempt."
+    }
+  },
+  "required": [
+    "taskId"
+  ]
+}
+```
+
+来源： [`packages/experimental/project-controller/src/delivery-consumer.ts`](../packages/experimental/project-controller/src/delivery-consumer.ts)
+
+### `project_review`
+
+记录你对最新任务交付作出的显式独立 lead 审查。通过会提交该确切的已验证输出；changes_required 将其退回修正。重复相同决定会复用已记录审查，仅修复任务状态；冲突决定要求新交付。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "taskId": {
+      "type": "string",
+      "description": "Task assigned to your Worker."
+    },
+    "decision": {
+      "type": "string",
+      "description": "pass or changes_required."
+    },
+    "findings": {
+      "description": "Array of findings with id, severity (blocking, warning, note), message, optional path and line."
+    }
+  },
+  "required": [
+    "taskId",
+    "decision",
+    "findings"
+  ]
+}
+```
+
+来源： [`packages/experimental/project-controller/src/delivery-consumer.ts`](../packages/experimental/project-controller/src/delivery-consumer.ts)
+
+按需启用显式 Worker 交付与独立父级 lead 审查。宿主推导源身份并执行预先批准的检查。失败或结果不确定的检查要求显式 retryChecks；相同审查可以修复任务状态记录，而不重复审查。
 
 <a id="deepseek-aidsh-tool-web"></a>
 

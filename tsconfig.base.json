@@ -237,6 +237,8 @@
       "@deepseek-ai/dsh-experimental-project-memory": ["./packages/experimental/project-memory/src"],
       "@deepseek-ai/dsh-experimental-project-controller": ["./packages/experimental/project-controller/src"],
       "@deepseek-ai/dsh-experimental-project-controller/consumer": ["./packages/experimental/project-controller/src/consumer.ts"],
+      "@deepseek-ai/dsh-experimental-project-controller/task-consumer": ["./packages/experimental/project-controller/src/task-consumer.ts"],
+      "@deepseek-ai/dsh-experimental-project-controller/delivery-consumer": ["./packages/experimental/project-controller/src/delivery-consumer.ts"],
       "@deepseek-ai/dsh-experimental-agent-hierarchy": ["./packages/experimental/agent-hierarchy/src"],
       "@deepseek-ai/dsh-experimental-agent-dispatch": ["./packages/experimental/agent-dispatch/src"],
       "@deepseek-ai/dsh-experimental-shadow-router": ["./packages/experimental/shadow-router/src"],

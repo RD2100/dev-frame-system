@@ -11,8 +11,8 @@ import SubprocessLocal from '@deepseek-ai/dsh-subprocess-local'
 import JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
-import { DevFrameVerificationId } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
-import { ConfigurationConfirmationId, WorkspaceId } from '@deepseek-ai/dsh-experimental-devframe/shared'
+import { DevFrameDeliveryId, DevFrameVerificationId, deliveryResultBinding } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
+import { ConfigurationConfirmationId, DevFrameSnapshotId, WorkspaceId } from '@deepseek-ai/dsh-experimental-devframe/shared'
 import { TaskId as GoalTaskId } from '@deepseek-ai/dsh-experimental-devframe/controller'
 import { computeSourceFingerprint } from '@deepseek-ai/dsh-experimental-devframe/src/source-fingerprint.ts'
 import { MemoryRequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
@@ -63,7 +63,7 @@ export async function prepareIntegration(existing?: Harness) {
     await h.ctx.worktreeRegistry.bind(sourceTree.id, WorktreeLockHolder(worker.id))
     await h.ctx.plugin(SessionProjectionRegistry)
     h.ctx.effect(() => h.ctx.sessionProjections.register(devFrameProjectionDefinition))
-    const { binding, review, verification, requiredChecksStore } = await appendIntegrationEvidence(
+    const { binding, delivery, review, verification, requiredChecksStore } = await appendIntegrationEvidence(
       h, controller, lead, taskId, sourcePath, WorkspaceId(String(workspace.id)),
     )
     h.ctx.projectController.startProject()
@@ -76,7 +76,7 @@ export async function prepareIntegration(existing?: Harness) {
       git: { sourcePath, targetPath, sourceCommit, targetHead },
       options: { executable: 'git', timeoutMs: 15_000, maxOutputBytes: 1024 * 1024 }, requiredChecksStore,
     }
-    return { h, controller, lead, worker, taskId, request, git, review, verification, binding }
+    return { h, controller, lead, worker, taskId, request, git, review, verification, binding, delivery }
   } catch (error) {
     await h.dispose()
     throw error
@@ -90,7 +90,8 @@ export async function appendIntegrationEvidence(
   const original = reviewEvent('pass')
   const binding = {
     ...original.binding, ...(workspaceId === undefined ? {} : { workspaceId }), controllerSessionId: controller.id, goalId: GoalId('goal-integration'),
-    taskIds: [GoalTaskId(String(taskId))], sourceFingerprint: (await computeSourceFingerprint({ worktreePath: sourcePath })).fingerprint,
+    taskIds: [GoalTaskId(String(taskId))],
+    sourceFingerprint: (await computeSourceFingerprint({ worktreePath: controller.header.cwd! })).fingerprint,
   }
   const emptyPolicy = { inheritedTools: [], denyScopedTools: [] }
   controller.append('devframe/role-policy', {
@@ -102,17 +103,34 @@ export async function appendIntegrationEvidence(
     ...binding, version: 1, confirmation: { id: ConfigurationConfirmationId('confirmation-integration'), acceptanceHash: binding.acceptanceHash },
     lifecycle: 'admission_open', budget: { maxAttempts: 10, consumedAttempts: 0 },
   })
+  const worker = h.ctx.agentBindings.list().find(record => record.role === 'worker' && record.taskId === taskId)
+  if (worker?.worktreeId === undefined || worker.worktreePath !== sourcePath) throw new Error('Integration fixture requires its registered task Worker')
+  const sourceCommit = (await exec('git', ['-C', sourcePath, 'rev-parse', 'HEAD'], {
+    windowsHide: true, timeout: 15_000, maxBuffer: 1024 * 1024,
+    env: Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+      !/KEY|SECRET|TOKEN|PASSWORD/i.test(key) && !/^GIT_/i.test(key))),
+  })).stdout.trim()
+  const delivery = {
+    version: 1 as const, deliveryId: DevFrameDeliveryId('delivery-integration'), taskId: GoalTaskId(String(taskId)), binding,
+    workerSessionId: worker.sessionId, worktreeId: worker.worktreeId, worktreePath: sourcePath, sourceCommit,
+    sourceFingerprint: (await computeSourceFingerprint({ worktreePath: sourcePath })).fingerprint,
+    snapshotId: DevFrameSnapshotId('output-snapshot-integration'),
+  }
+  controller.append('devframe/task-delivery', delivery)
+  const output = deliveryResultBinding(delivery)
   const requiredChecksStore = new MemoryRequiredChecksConfigStore()
   const digest = await requiredChecksStore.save(CONFIG)
   const verification = {
-    version: 1 as const, verificationId: DevFrameVerificationId('verification-integration'), binding,
-    snapshotId: binding.snapshotId, status: 'passed' as const,
+    version: 1 as const, verificationId: DevFrameVerificationId('verification-integration'), binding: output,
+    deliveryId: delivery.deliveryId, snapshotId: output.snapshotId, status: 'passed' as const,
     requiredChecks: { config: CONFIG, digest }, checks: CONFIG.checks.map(check => executionFor(check)),
   }
-  const review = { ...original, binding, reviewerSessionId: lead.id }
+  const review = {
+    ...original, binding: output, deliveryId: delivery.deliveryId, snapshotId: output.snapshotId, reviewerSessionId: lead.id,
+  }
   controller.append('devframe/verification', verification)
   controller.append('devframe/review', review)
-  return { binding, review, verification, requiredChecksStore }
+  return { binding, delivery, review, verification, requiredChecksStore }
 }
 
 /** Mount the real durable worktree and workspace providers, including cold restoration. */

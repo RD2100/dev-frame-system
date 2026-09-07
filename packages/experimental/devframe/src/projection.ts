@@ -11,6 +11,9 @@ import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import { z } from 'zod'
 import {
   decodeDevFramePayload,
+  deliveryResultBinding,
+  type DevFrameDeliveryId,
+  type DevFrameTaskDeliveryEventData,
   isDevFrameEvent,
   type DevFrameLifecycleEventData,
   type DevFrameReviewEventData,
@@ -40,6 +43,8 @@ export interface DevFrameProjectionState {
   bindings: GoalBinding[]
   /** Reservation and settlement records keyed by operation identity. */
   usage: DevFrameUsageEventData[]
+  /** Explicit task outputs in delivery order. */
+  deliveries: DevFrameTaskDeliveryEventData[]
   /** Immutable verification records keyed by verification identity. */
   verifications: DevFrameVerificationEventData[]
   /** Immutable review records keyed by review identity. */
@@ -69,6 +74,7 @@ const devFrameStateSchema = z.object({
   rolePolicy: z.unknown().nullable(),
   bindings: z.array(z.unknown()),
   usage: z.array(z.unknown()),
+  deliveries: z.array(z.unknown()),
   verifications: z.array(z.unknown()),
   reviews: z.array(z.unknown()),
   taskWarnings: z.array(z.unknown()),
@@ -84,6 +90,7 @@ const devFrameStateSchema = z.object({
         : decodeDevFramePayload('devframe/role-policy', value.rolePolicy),
       bindings: value.bindings.map(binding => decodeDevFramePayload('devframe/goal-binding', binding)),
       usage: value.usage.map(usage => decodeDevFramePayload('devframe/usage', usage)),
+      deliveries: value.deliveries.map(delivery => decodeDevFramePayload('devframe/task-delivery', delivery)),
       verifications: value.verifications.map(verification => decodeDevFramePayload('devframe/verification', verification)),
       reviews: value.reviews.map(review => decodeDevFramePayload('devframe/review', review)),
       taskWarnings: value.taskWarnings.map(warning => decodeDevFramePayload('devframe/task-warning', warning)),
@@ -109,6 +116,7 @@ function initialState(header: SessionHeader): DevFrameProjectionState {
     rolePolicy: null,
     bindings: [],
     usage: [],
+    deliveries: [],
     verifications: [],
     reviews: [],
     taskWarnings: [],
@@ -242,7 +250,7 @@ function sameBindingIdentity(left: GoalBinding, right: GoalBinding): boolean {
 }
 
 /** Compare a result tuple with a persisted Goal binding, allowing later CAS revisions. */
-function sameResultTuple(binding: GoalBinding, result: GoalResultBinding): boolean {
+function sameResultTuple(binding: GoalResultBinding, result: GoalResultBinding): boolean {
   return binding.workspaceId === result.workspaceId
     && binding.controllerSessionId === result.controllerSessionId
     && binding.goalId === result.goalId
@@ -398,6 +406,38 @@ function applyGoalBinding(state: DevFrameProjectionState, binding: GoalBinding):
   state.bindings[index] = cloneBinding(binding)
 }
 
+/** Require current Goal authorization without rewriting its source input. */
+function currentDeliveryGoal(state: DevFrameProjectionState, delivery: DevFrameTaskDeliveryEventData): GoalBinding {
+  const goal = state.bindings.at(-1)
+  if (goal === undefined || goal.lifecycle !== 'admission_open'
+    || (state.lifecycle !== null && state.lifecycle.binding.goalId === goal.goalId && state.lifecycle.state !== 'admission_open')
+    || goal.goalId !== delivery.binding.goalId
+    || goal.goalRevision !== delivery.binding.goalRevision || !goal.taskIds.includes(delivery.taskId)
+    || !sameResultTuple(goal, delivery.binding)) throw new Error('Task delivery requires its exact current open Goal binding')
+  return goal
+}
+
+/** Record one task output; the original Goal authorization remains immutable. */
+function applyDelivery(state: DevFrameProjectionState, delivery: DevFrameTaskDeliveryEventData): void {
+  assertProjectIdentity(state, delivery.binding.controllerSessionId, delivery.binding.workspaceId)
+  currentDeliveryGoal(state, delivery)
+  if (state.deliveries.some(record => record.deliveryId === delivery.deliveryId)) throw new Error('Task delivery identity was recorded twice')
+  state.deliveries.push({ ...delivery, binding: cloneResultBinding(delivery.binding) })
+}
+
+/** Resolve evidence to the latest delivery for its task and exact output identity. */
+function assertDeliveryEvidence(state: DevFrameProjectionState, deliveryId: DevFrameDeliveryId, binding: GoalResultBinding): void {
+  const delivery = state.deliveries.find(record => record.deliveryId === deliveryId)
+  if (delivery === undefined) throw new Error('Evidence references an unknown task delivery')
+  currentDeliveryGoal(state, delivery)
+  const latest = state.deliveries.findLast(record => record.taskId === delivery.taskId && record.binding.goalId === delivery.binding.goalId)
+  if (latest !== delivery) throw new Error('Evidence references a superseded task delivery')
+  const output = deliveryResultBinding(delivery)
+  if (output.goalRevision !== binding.goalRevision || !sameResultTuple(output, binding)) {
+    throw new Error('Evidence does not match the task delivery output binding')
+  }
+}
+
 /** Apply one reservation or settlement while rejecting duplicate operation identities. */
 function applyUsage(state: DevFrameProjectionState, usage: DevFrameUsageEventData): void {
   const binding = assertResultBinding(state, usage.binding)
@@ -430,7 +470,8 @@ function applyUsage(state: DevFrameProjectionState, usage: DevFrameUsageEventDat
 
 /** Apply one immutable verification record. */
 function applyVerification(state: DevFrameProjectionState, verification: DevFrameVerificationEventData): void {
-  assertResultBinding(state, verification.binding)
+  if (verification.deliveryId === undefined) assertResultBinding(state, verification.binding)
+  else assertDeliveryEvidence(state, verification.deliveryId, verification.binding)
   if (state.verifications.some(record => record.verificationId === verification.verificationId)) {
     throw new Error(`DevFrame verification "${verification.verificationId}" was recorded twice`)
   }
@@ -447,7 +488,8 @@ function applyVerification(state: DevFrameProjectionState, verification: DevFram
  * re-verified by the review consumer.
  */
 function applyReview(state: DevFrameProjectionState, review: DevFrameReviewEventData): void {
-  assertResultBinding(state, review.binding)
+  if (review.deliveryId === undefined) assertResultBinding(state, review.binding)
+  else assertDeliveryEvidence(state, review.deliveryId, review.binding)
   if (state.rolePolicy === null || state.rolePolicy.policyVersion !== review.policyVersion) {
     throw new Error(`DevFrame review "${review.reviewId}" uses an unavailable role policy version`)
   }
@@ -456,9 +498,13 @@ function applyReview(state: DevFrameProjectionState, review: DevFrameReviewEvent
     && (assignment.role === 'reviewer' || assignment.role === 'lead'))) {
     throw new Error(`DevFrame review "${review.reviewId}" was submitted by Session "${review.reviewerSessionId}" without reviewer authority`)
   }
-  if (!state.verifications.some(record => record.snapshotId === review.snapshotId
-    && record.binding.goalId === review.binding.goalId)) {
+  const verification = state.verifications.findLast(record => record.snapshotId === review.snapshotId
+    && record.binding.goalId === review.binding.goalId && record.deliveryId === review.deliveryId)
+  if (verification === undefined) {
     throw new Error(`DevFrame review "${review.reviewId}" references an unknown verification snapshot`)
+  }
+  if (review.deliveryId !== undefined && review.decision === 'pass' && verification.status !== 'passed') {
+    throw new Error('Passing delivery review requires the latest verification to pass')
   }
   if (state.reviews.some(record => record.reviewId === review.reviewId)) {
     throw new Error(`DevFrame review "${review.reviewId}" was recorded twice`)
@@ -507,6 +553,9 @@ function applyEvent(state: DevFrameProjectionState, event: SessionEvent): void {
       case 'devframe/usage':
         applyUsage(state, decodeDevFramePayload(event.type, event.data))
         break
+      case 'devframe/task-delivery':
+        applyDelivery(state, decodeDevFramePayload(event.type, event.data))
+        break
       case 'devframe/verification':
         applyVerification(state, decodeDevFramePayload(event.type, event.data))
         break
@@ -545,7 +594,7 @@ export function foldDevFrameState(
 /** Host-only projection definition registered by the DevFrame profile. */
 export const devFrameProjectionDefinition = {
   key: 'devframe',
-  stateVersion: 1,
+  stateVersion: 2,
   stateSchema: devFrameStateSchema,
   init: (header: SessionHeader, _inheritedEventCount: SessionLogOffset) => initialState(header),
   apply: (state: DevFrameProjectionState, event: SessionEvent) => {
