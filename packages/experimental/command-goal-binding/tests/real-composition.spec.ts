@@ -400,6 +400,49 @@ describe('/goal-complete host command composition', { timeout: 30_000 }, () => {
     expect(test.composition.admissionOf(test.agent)).toBe('closed')
   })
 
+  it('charges the bounded repair cycle when a fail-graded warning rejects completion', async () => {
+    const fixture = await createCommittedWorktree()
+    const test = await boot({ workspaceId: WORKSPACE_ID, workspaceRoot: fixture.root })
+    const binding = await startBinding(test, fixture.fingerprint)
+    await appendEvidence(test, binding)
+    test.session.append('devframe/task-warning', {
+      version: 1,
+      taskId: TaskId('task-v14-hostcmd'),
+      warning: 'MEMORY_UNAVAILABLE',
+      tool: 'memory_append',
+      grade: 'fail',
+    })
+
+    const first = await execute(test, '/goal-complete')
+    const second = await execute(test, '/goal-complete')
+    const third = await execute(test, '/goal-complete')
+
+    if (first.result.kind !== 'error' || second.result.kind !== 'error' || third.result.kind !== 'error') {
+      throw new Error('expected error results')
+    }
+    expect(first.result.text).toContain('task-warning')
+    expect(first.result.text).toContain('Repair round 1 was charged (1 remaining)')
+    expect(second.result.text).toContain('Repair round 2 was charged (0 remaining)')
+    expect(third.result.text).toContain('repair limit (2) is exhausted after 2 charged rounds')
+    expect(third.result.text).toContain('human-authorized resume')
+    expect(test.ctx.goals.get(test.agent)?.phase).toBe('active')
+    expect(hasReceipt(test)).toBe(false)
+  })
+
+  it('renders the task-warning rejection without repair accounting for other stages', async () => {
+    const fixture = await createCommittedWorktree()
+    const test = await boot({ workspaceId: WORKSPACE_ID, workspaceRoot: fixture.root })
+    const binding = await startBinding(test, fixture.fingerprint)
+    await appendEvidence(test, binding)
+    await tamperWorktree(fixture.root)
+
+    const execution = await execute(test, '/goal-complete')
+
+    if (execution.result.kind !== 'error') throw new Error('expected an error result')
+    expect(execution.result.text).toContain('source-fingerprint')
+    expect(execution.result.text).not.toContain('Repair round')
+  })
+
   it('answers a stable data error when no goal is current', async () => {
     const test = await boot({ workspaceId: WORKSPACE_ID, workspaceRoot: 'C:/ws-command-binding' })
 
