@@ -77,7 +77,7 @@
 | ID | 原判定 | 修订判定 | 证据（路径:行） |
 | --- | --- | --- | --- |
 | AT2-05 | 部分（"双存储后端分句零锚点"） | **覆盖（包级双 backend）**：小切片①已闭合于树内增量 | `shadow-router/tests/helpers.ts:49-51`（`HARNESS_BACKENDS=['json','sqlite']`）；`delivery-recovery.spec.ts:63,111,156`、`s6-cold-restore.spec.ts:17`、`s6-delivery-flow.spec.ts:53`、`s6-crash-window.spec.ts:49` 均已 `it.each(HARNESS_BACKENDS)`（先于本次改动存在，不重跑） |
-| AT1-08 | 缺口（"全树零实现零测试"） | **覆盖（包级）**：repairLimit 已实现+测试 | `devframe/src/repair-limit.ts:30`（`DEFAULT_REPAIR_LIMIT=2`）、`:62-71`（`resolveRepairLimit` 校验，`RepairLimitError/REPAIR_LIMIT_INVALID_CONFIG` fail-loud）；`devframe/src/controller/goal-binding.ts:377`（Config 字段）、`:398-410`（构造期校验）、`:727-736`（repair 轮次记账+`remainingRepairRounds`）；`devframe/tests/repair-limit.spec.ts:86-90,100-124,134-203`（非法配置/准入判定/控制器轮次） |
+| AT1-08 | 缺口（"全树零实现零测试"） | **覆盖（包级，durable consumer 面）**：V1.2 标准下按 main 76080fe40b durable repair-admission 面为准（本树 c469e0863c 并入）——内存 map 包级证据不替代 | `devframe/tests/repair-admissions.spec.ts` 9 用例（controller replacement 重建记账/冷 Session restore 恢复消费与 cause receipt/allowance 共享/拒面/durable 重放拒绝）；`devframe/src/session-journal.ts:150,202-203`（durable append+owned 校验）、`src/projection.ts:616`（fold）、`src/events.ts:369,388`（`devframe/repair-admission` 词汇）；旅程×durable 集成：`command-goal-binding/src/composition.ts:441-453`（task-warning 拒绝按新签名带 reason 记账）+ `real-composition.spec` 修复环三轮在合并树全绿（52 文件/492 通过） |
 | AT3-07 | 部分（"任务级联动缺小切片"） | **覆盖（包级）**：grade 联动已闭合 | `devframe/src/events.ts:344,646,744`（`grade` 字段+`z.enum(['complete-with-warning','fail'])`+`gradeMemoryFailure`）；`devframe/src/task-warning-listener.ts:164,183,203`（每任务至多一条分级 `devframe/task-warning` append）；`devframe/src/controller/goal-binding.ts:1009`（completion-admission 谓词 `taskWarnings.find(grade === 'fail')`）；测试 `task-warning-listener.spec.ts`、`completion-admission.spec.ts:103,123,161`、`goal-binding.spec.ts:646,680` |
 
 ### 双 backend 遗漏扫描与新增变体（本次改动，均实测跑绿）
@@ -110,3 +110,10 @@
 - 5 个改动套件 vitest run（provisioning/delivery-limits/stop-isolation/status/s6-stop-settlement）：22/22 passed，exit 0。
 - shadow-router 全量 vitest run：14 files，47 passed + 1 skipped（aliases POSIX 用例按平台 skipIf，Windows 上预期跳过），exit 0。
 - host `tsc -b tsconfig.host.json`：exit 0。
+
+### 归属与合并集成更正（组长，2026-09-08 合并 c469e0863c 后）
+
+- **AT1-05 变体 5**：本线切片**永久取消**——V1.2 已接手（B1 隔离树 owner），fingerprint v2 已落 main（80f74545e3：实际内容指纹+完成拒绝），旧"registered boundary"豁免不再承认；本线不重派不落用例，该缺口在 B1 树闭合。
+- **AT1-08**：上表证据已按 V1.2 证据标准更正为 durable consumer 面（main 76080fe40b → 本树 c469e0863c 并入；worker 初核引用的内存 map 行号即其交付前树态，已过时不再引用）。合并把 main 新签名 `beginRepairRound(identity, {kind:'task-warning', taskId})` 与本线旅程消费臂整合（composition.ts:441-453）。
+- **合并集成修复**：main 新增 `devframe/repair-admission` 事件后 `events.spec.ts` "registers every project event" 断言数组补齐该类型（52 文件/492 通过 + 1 平台 skip，exit 0）。
+- **cordis-catalog 门**：main 新 agent-dispatch `src/run.ts:171` 缺显式返回类型标注致门失败（A2 属主面，本线不碰，登记待修）。
