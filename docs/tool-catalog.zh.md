@@ -45,6 +45,7 @@
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-worktree` | `worktree_create`、`worktree_list`、`worktree_prune`、`worktree_remove`、`worktree_status` | `ctx.tools`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry`、`ctx.systemPrompt`、`a calling Agent (its session cwd authorizes the workspace)` | `tool/call`、`tool/result` | - | 五个工具把每次调用都授权到由不可变 session cwd 解析出的调用会话工作区；另一工作区持有的 worktree id 与未知 id 的报告完全一致。上方 schema 不依赖具体哪个 provider 支撑注册表。 |
 | `@deepseek-ai/dsh-experimental-agent-worktree` | `worktree_create`、`worktree_remove`、`worktree_status` | `ctx.tools`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry`、`ctx.systemPrompt`、`a calling Agent (its session cwd authorizes the workspace)` | `tool/call`、`tool/result` | - | 三个工具把每个新建 worktree 绑定为调用会话的单一写入目标：其他会话只能观察，只有绑定持有者能移除。实验性私有包：不出现在任何发布 bundle 中，且与 dsh-tool-worktree 同装一个组合会重复注册共享的工具名。 |
+| `@deepseek-ai/dsh-experimental-agent-dispatch` | `agent_dispatch` | `ctx.tools`、`ctx.systemPrompt`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry`、`ctx.agentHierarchy`、`ctx.agentBindings`、`ctx.agents`、`a calling Agent (its session cwd authorizes the workspace)` | `tool/call`、`tool/result` | - | 唯一的工具为一项任务向一个已注册 worktree 派发层级子 agent，并在子 agent 的整个生命周期内持有该 worktree 的单写锁；任务已有被派发子 agent 时拒绝并点名，retry 复用该子 agent 且不重投简报。实验性私有包：不出现在任何发布 bundle 中，可见性经层级的 restrict 面按角色受限（worker 看不到该工具）。 |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
@@ -2397,6 +2398,60 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
 来源：[`packages/experimental/agent-worktree/src/index.ts`](../packages/experimental/agent-worktree/src/index.ts)
 
 三个工具把每个新建 worktree 绑定为调用会话的单一写入目标：其他会话只能观察，只有绑定持有者能移除。实验性私有包：不出现在任何发布 bundle 中，且与 dsh-tool-worktree 同装一个组合会重复注册共享的工具名。
+
+<a id="deepseek-aidsh-experimental-agent-dispatch"></a>
+
+## `@deepseek-ai/dsh-experimental-agent-dispatch`
+
+### `agent_dispatch`
+
+为一项任务向一个已注册 git worktree 派发子 agent：controller 派发 lead，lead 在其获批插件范围内派发 worker。给出任务 id、插件范围与 worktree id（worktree id 来自 worktree_create 或宿主），并对全新派发传入简报提示词——简报只在子 agent 发布后入队。若该任务已有被派发子 agent，工具拒绝并点名：改传 retry: true 复用该子 agent，绝不重投简报。引擎拥有子 agent 生命周期，层级拥有每一次拒绝；拒绝会点名原因与修法。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "role": {
+      "type": "string",
+      "description": "The child's hierarchy role: 'lead' from the controller, or 'worker' from a lead."
+    },
+    "taskId": {
+      "type": "string",
+      "description": "The task this child owns; one task has at most one dispatched child."
+    },
+    "pluginId": {
+      "type": "string",
+      "description": "The plugin scope the child works under; a lead's worker scope must be in that lead's approved set."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "The registered worktree id the child will own as its single writer, from worktree_create or the host."
+    },
+    "prompt": {
+      "type": "string",
+      "description": "The task briefing queued to a freshly dispatched child after publication. Never re-sent on a retry."
+    },
+    "retry": {
+      "type": "boolean",
+      "description": "Pass true to reuse the child this task already has instead of dispatching a new one; no briefing is queued on reuse."
+    },
+    "childId": {
+      "type": "string",
+      "description": "The preallocated session id for the child, when the deployment configures one (the leadPluginScopes approved sets are keyed by these ids). Omitted, the engine allocates the identity."
+    }
+  },
+  "required": [
+    "role",
+    "taskId",
+    "pluginId",
+    "worktreeId"
+  ]
+}
+```
+
+来源：[`packages/experimental/agent-dispatch/src/consumer.ts`](../packages/experimental/agent-dispatch/src/consumer.ts)
+
+唯一的工具为一项任务向一个已注册 worktree 派发层级子 agent，并在子 agent 的整个生命周期内持有该 worktree 的单写锁；任务已有被派发子 agent 时拒绝并点名，retry 复用该子 agent 且不重投简报。实验性私有包：不出现在任何发布 bundle 中，可见性经层级的 restrict 面按角色受限（worker 看不到该工具）。
 
 <a id="deepseek-aidsh-tool-web"></a>
 

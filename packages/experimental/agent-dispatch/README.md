@@ -52,13 +52,28 @@ Every parent request in this plugin's registration scope receives the fixed guid
 The agent dispatch tool is the daily delegation entry over the agent hierarchy. The controller dispatches a lead per task onto its own registered worktree; the lead dispatches workers inside the plugin scopes approved for it in the deployment's leadPluginScopes. Every dispatch binds the worktree's single-writer lock to the new child for its whole life. A retried task reuses the existing child (retry: true) — never re-brief a running child.
 ```
 
-### Tools
+#### Token effect
 
-The package registers one model-facing tool:
+Small fixed guidance cost per request while the plugin is active.
 
-- `agent_dispatch` — dispatches a child agent for one task onto one registered git worktree; refuses and names the existing child when the task already has one (`retry: true` reuses it without re-delivering the briefing).
+#### KV Cache effect
 
-<a id="known-limitations-and-deferred-work"></a>
+Prefix-stable while the plugin scope and guidance text are unchanged. Activation or disposal may invalidate reuse from this prompt section.
+
+### Tool schema
+
+#### What the model sees
+
+The `agent_dispatch` entry in the generated [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-agent-dispatch) owns the schema; the consumption face adds no fields beyond it.
+
+#### Token effect
+
+Small fixed cost per dispatch round: one tool call plus its result naming the created child or the refusal cause.
+
+#### KV Cache effect
+
+Append-only per dispatch round; nothing in this package rewrites earlier request tokens.
+
 ## Known Limitations and Deferred Work
 
 - Evidence state: the real-Loader composition suite proves tool registration and the controller/lead/worker visibility faces; the real model round proved the service face and one real dispatch round (worker artifact). The shipped opt-in overlay is wired — its candidate-profile verification (explicit `--patch`, isolated home) is the remaining acceptance step.

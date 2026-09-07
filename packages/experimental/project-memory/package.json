@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-project-memory",
   "description": "Bounded append-only project memory over a user-selected Obsidian Vault subtree: scoped search/read/append tools, exclusive-create notes with session-log receipts, path containment, secret screening, and honest failure reporting",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.2-alpha.4",
   "private": true,
   "type": "module",
   "main": "lib/index.js",
@@ -17,8 +17,8 @@
   },
   "files": [
     "lib/index.js",
-    "lib/types/**/*.d.ts",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
   "dsh": {

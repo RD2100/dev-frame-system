@@ -7,7 +7,7 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
-## 摘要
+## 概述
 
 `dsh-experimental-agent-dispatch` 是横跨 [agent-hierarchy 引擎](../agent-hierarchy/README.zh.md)的宿主侧派发入口。服务定义向组合层调用方暴露 `ctx.agentDispatch.createChildAgent(parent, request, options)`；引擎拥有子 agent 身份与生命周期，本适配器自身绝不实现创建。在引擎调用前，适配器以权威注册表行校验请求：已注册的 worktree id、存在的目录、path/branch 匹配，以及该 workspace 的锁占有着（`status` 只回报 `directoryExists/branch/clean`；path 与 `lockedBy` 来自 `worktreeRegistry.list`）。它复用引擎的批准范围契约（`config.leadPluginScopes[creator.agentId]`）——适配器不复刻角色 policy，引擎拒绝原样透传。装配在入口内部完成：preset `composeFrom(parent.ctx)`、由子 session id 持有的 `worktreeRegistry.bind` 单写锁，然后是引擎的 `bindPreparedSession`；可选 `prompt` 仅在引擎发布之后经 `child.agent.followup` 送达。调用方提供的 `setup` 在装配片之后运行，不得用来供给装配本身。同一包也是 Consumer，暴露 `agent_dispatch` 工具。本包为实验性私有包：不入任何发布 bundle，契约可变。
 
@@ -52,11 +52,27 @@ Service 挂载于插件 fiber，接缝随插件存亡（构造上即 HMR 安全�
 The agent dispatch tool is the daily delegation entry over the agent hierarchy. The controller dispatches a lead per task onto its own registered worktree; the lead dispatches workers inside the plugin scopes approved for it in the deployment's leadPluginScopes. Every dispatch binds the worktree's single-writer lock to the new child for its whole life. A retried task reuses the existing child (retry: true) — never re-brief a running child.
 ```
 
-### 工具
+#### Token 影响
 
-本包注册一个模型可见工具：
+插件激活期间每请求小额固定指导成本。
 
-- `agent_dispatch`——为一项任务向一个已注册 git worktree 派发子 agent；任务已有子 agent 时拒绝并点名（`retry: true` 复用且不重投简报）。
+#### KV Cache 影响
+
+插件范围与指导文本不变时前缀稳定。激活或卸载可能使本提示词节的复用失效。
+
+### 工具 schema
+
+#### 模型看到什么
+
+生成的[工具目录](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-agent-dispatch)中的 `agent_dispatch` 条目拥有 schema；消费面未在其之外增加字段。
+
+#### Token 影响
+
+每派发回合小额固定成本：一次工具调用加一份点名所建子 agent 或拒绝原因的结果。
+
+#### KV Cache 影响
+
+每派发回合仅追加；本包不改写更早的请求 token。
 
 <a id="known-limitations-and-deferred-work"></a>
 ## 已知限制与待办
@@ -65,7 +81,7 @@ The agent dispatch tool is the daily delegation entry over the agent hierarchy. 
 - 中断创建的恢复复用引擎的 `recoverChildAgent` 语义；适配器只新增持久身份查询，身份复用绝不重投 prompt。
 
 <a id="dev-note"></a>
-### 开发注记
+### 开发备注
 
 <details>
 <summary>维护者的工作上下文——点开查看</summary>

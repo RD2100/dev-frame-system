@@ -41,6 +41,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-worktree` | `worktree_create`, `worktree_list`, `worktree_prune`, `worktree_remove`, `worktree_status` | `ctx.tools`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry`, `ctx.systemPrompt`, `a calling Agent (its session cwd authorizes the workspace)` | `tool/call`, `tool/result` | - | The five tools authorize every call against the calling session workspace resolved from the immutable session cwd; a worktree id held by another workspace is reported exactly like an unknown one. The schema above does not depend on which provider backs the registry. |
 | `@deepseek-ai/dsh-experimental-agent-worktree` | `worktree_create`, `worktree_remove`, `worktree_status` | `ctx.tools`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry`, `ctx.systemPrompt`, `a calling Agent (its session cwd authorizes the workspace)` | `tool/call`, `tool/result` | - | The three tools bind every created worktree to the calling session as its single writer: other sessions observe it, only the binding holder removes it. Experimental and private: the package ships in no released bundle, and a composition mounting it alongside dsh-tool-worktree would double-register the shared tool names. |
+| `@deepseek-ai/dsh-experimental-agent-dispatch` | `agent_dispatch` | `ctx.tools`, `ctx.systemPrompt`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry`, `ctx.agentHierarchy`, `ctx.agentBindings`, `ctx.agents`, `a calling Agent (its session cwd authorizes the workspace)` | `tool/call`, `tool/result` | - | The one tool dispatches a hierarchy child for one task onto one registered worktree and holds the worktree single-writer lock for the child's whole life; a task with an existing dispatched child refuses and names it, and retry reuses that child without re-delivering the briefing. Experimental and private: the package ships in no released bundle, and visibility is role-restricted (workers cannot see the tool) through the hierarchy's restrict face. |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
@@ -2389,6 +2390,60 @@ Observe one registered git worktree's live state by id: whether its directory st
 Source: [`packages/experimental/agent-worktree/src/index.ts`](../packages/experimental/agent-worktree/src/index.ts)
 
 The three tools bind every created worktree to the calling session as its single writer: other sessions observe it, only the binding holder removes it. Experimental and private: the package ships in no released bundle, and a composition mounting it alongside dsh-tool-worktree would double-register the shared tool names.
+
+<a id="deepseek-aidsh-experimental-agent-dispatch"></a>
+
+## `@deepseek-ai/dsh-experimental-agent-dispatch`
+
+### `agent_dispatch`
+
+Dispatch a child agent for one task onto one registered git worktree: the controller dispatches a lead, and a lead dispatches workers inside its approved plugin scopes. Name the task id, the plugin scope, and the worktree id (get worktree ids from worktree_create or the host), and pass a briefing prompt for a fresh dispatch — the briefing is queued only after the child is published. If this task already has a dispatched child, the tool refuses and names it: pass retry: true to reuse that child instead, which never re-delivers the briefing. The engine owns the child's lifecycle and the hierarchy owns every denial; refusals name the cause and the fix.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "role": {
+      "type": "string",
+      "description": "The child's hierarchy role: 'lead' from the controller, or 'worker' from a lead."
+    },
+    "taskId": {
+      "type": "string",
+      "description": "The task this child owns; one task has at most one dispatched child."
+    },
+    "pluginId": {
+      "type": "string",
+      "description": "The plugin scope the child works under; a lead's worker scope must be in that lead's approved set."
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "The registered worktree id the child will own as its single writer, from worktree_create or the host."
+    },
+    "prompt": {
+      "type": "string",
+      "description": "The task briefing queued to a freshly dispatched child after publication. Never re-sent on a retry."
+    },
+    "retry": {
+      "type": "boolean",
+      "description": "Pass true to reuse the child this task already has instead of dispatching a new one; no briefing is queued on reuse."
+    },
+    "childId": {
+      "type": "string",
+      "description": "The preallocated session id for the child, when the deployment configures one (the leadPluginScopes approved sets are keyed by these ids). Omitted, the engine allocates the identity."
+    }
+  },
+  "required": [
+    "role",
+    "taskId",
+    "pluginId",
+    "worktreeId"
+  ]
+}
+```
+
+Source: [`packages/experimental/agent-dispatch/src/consumer.ts`](../packages/experimental/agent-dispatch/src/consumer.ts)
+
+The one tool dispatches a hierarchy child for one task onto one registered worktree and holds the worktree single-writer lock for the child's whole life; a task with an existing dispatched child refuses and names it, and retry reuses that child without re-delivering the briefing. Experimental and private: the package ships in no released bundle, and visibility is role-restricted (workers cannot see the tool) through the hierarchy's restrict face.
 
 <a id="deepseek-aidsh-tool-web"></a>
 
