@@ -105,9 +105,9 @@ function renderDispatchText(value: {
 
 /**
  * Mount the model-facing dispatch seam: the formal host bootstrap service on
- * the plugin's fiber, then the dispatch service, then the tool and its usage
- * guidance. Loading without the hierarchy stack or the project controller
- * fails at activation.
+ * the plugin's fiber, then the dispatch tool and its usage guidance.
+ * Loading without the hierarchy stack fails at activation; the formal host
+ * bootstrap additionally requires the project controller when opted in.
  * @param ctx - The plugin's context.
  * @param config - The schema-validated plugin config.
  */
@@ -119,7 +119,9 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
   // loud when its authorities are missing.
   new AgentDispatch(ctx)
   if (config?.bootstrap === true) {
-    new AgentProjectRun(ctx, { checksLedgerPath: config.checksLedgerPath })
+    new AgentProjectRun(ctx, config.checksLedgerPath !== undefined
+      ? { checksLedgerPath: config.checksLedgerPath }
+      : {})
   }
 
   ctx.systemPrompt.section({
