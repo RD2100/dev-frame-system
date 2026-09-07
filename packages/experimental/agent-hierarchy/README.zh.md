@@ -54,6 +54,8 @@ lead 通过 spawn/fork 工具委托时，必须携带落在宿主配置 `leadPlu
 
 `createChildAgent(parent, request, options)` 校验活跃父 Agent、角色、深度、任务及工作树归属，然后在 Agent 工厂的 setup 阶段持久化绑定，之后才发布 Agent。每个子 Agent 都必须指定插件范围。调用方提供已通过注册表校验的工作树，以及装配所需 preset 的 setup。同一父会话和任务的相同重试返回活跃子 Agent；冲突请求和已被占用的工作树会被拒绝。已保留的子 Agent 不可用时必须显式恢复。此方法激活 Agent，但不发送提示词。宿主可以预先分配 SessionID，以配置组长获准使用的插件范围。
 
+`recoverChildAgent(parent, request, { sessionId, ...options })` 匹配原保留记录并恢复历史。只有在宿主 setup 开始前收到该身份的 `SessionPersistenceNotFoundError` 才按原 SessionID 创建。日志损坏、取消和 setup 失败直接报错。绑定及创建时间保持不变；宿主提供 preset 和工作树 setup。恢复不发送提示词。
+
 -----
 
 <a id="understand-the-implementation"></a>

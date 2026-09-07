@@ -12,6 +12,8 @@
 - `roleOf` — 从活跃绑定注册表解析 agent 的绑定角色。
 - `evaluateCreation` — 每个非工具创建入口（宿主服务、SDK 桥接）都必须在子级存在之前以创建者的绑定记录和 P00 `CreationIntent` 调用它。
 - `createChildAgent` — 通过工厂 setup 校验并创建子 Agent，在发布前持久化身份。`CreateChildAgentRequest` 携带必需的任务、插件范围和已注册工作树；`CreateChildAgentOptions` 携带宿主 setup、路由选项、取消信号及可选的已分配 SessionID。`CreatedChildAgent` 返回活跃 Agent 和持久绑定，不发送提示词。Agent 生命周期由服务拥有。
+
+- `recoverChildAgent` — 恢复保留身份；持久日志不存在时按原 SessionID 重新发布。日志损坏和 setup 失败不会回退到创建；恢复不投递提示词。
 - 配置在构造时校验一次：每角色 `roleToolPolicies`（各角色保留其 `inheritedTools` 列表点名的全局工具）与每 lead `leadPluginScopes`。
 
 ## 约定要点
