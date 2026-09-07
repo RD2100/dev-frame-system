@@ -10,7 +10,20 @@ export * from './source-fingerprint.ts'
 export * from './required-checks.ts'
 export * from './required-checks-file-store.ts'
 export * from './goal-binding-file-store.ts'
+export { DevFrameSessionJournal, DevFramePersistenceError } from './session-journal.ts'
+export type { DevFrameAppendOptions, DevFrameFlush, DevFrameReviewGate } from './session-journal.ts'
+export { devFrameProjectionDefinition, type DevFrameProjectionState } from './projection.ts'
 export {
+  DevFrameDeliveryId,
+  DevFrameReviewId,
+  DevFrameVerificationId,
+  deliveryResultBinding,
+  type DevFrameTaskDeliveryEventData,
+  type DevFrameCheckResult,
+  type DevFrameReviewEventData,
+  type DevFrameReviewFinding,
+  type DevFrameRolePolicyEventData,
+  type DevFrameVerificationEventData,
   gradeMemoryFailure,
   memoryWarningCode,
   type DevFrameMemoryGrading,

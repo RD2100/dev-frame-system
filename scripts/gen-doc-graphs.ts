@@ -97,7 +97,54 @@ const GROUP_ORDER = [
   'ui',
 ]
 
-const SERVICE_ROLES: ServiceRole[] = [
+/** Service ownership and direct consumers shown in the capability graph. */
+export const SERVICE_ROLES: readonly ServiceRole[] = [
+  {
+    key: 'agentBindings', pkg: 'experimental-session-identity', title: 'Durable agent bindings', mode: 'core',
+    consumers: ['experimental-agent-dispatch', 'experimental-agent-hierarchy', 'experimental-devframe', 'experimental-project-controller', 'experimental-shadow-router'],
+    note: 'Owns durable role, lineage, and worktree bindings and creates native Sessions with that identity.',
+  },
+  {
+    key: 'agentDispatch', pkg: 'experimental-agent-dispatch', title: 'Hierarchy-authorized dispatch', mode: 'core',
+    consumers: ['experimental-agent-dispatch'],
+    note: 'Validates registered worktrees and holds their writer locks while the hierarchy engine creates children; the package also exposes the dispatch tool.',
+  },
+  {
+    key: 'agentEvidence', pkg: 'experimental-agent-evidence', title: 'Agent evidence ledger', mode: 'core',
+    note: 'Stores binding receipts, submissions, and verification provenance; acceptance remains with Goal bindings and task state.',
+  },
+  {
+    key: 'agentHierarchy', pkg: 'experimental-agent-hierarchy', title: 'Agent creation and role policy', mode: 'core',
+    consumers: ['experimental-agent-dispatch'],
+    note: 'Enforces controller, lead, and worker creation authority, approved plugin scopes, and delegation depth.',
+  },
+  {
+    key: 'agentReliability', pkg: 'experimental-agent-reliability', title: 'Admission and recovery coordination', mode: 'core',
+    note: 'Closes admission before stopping owned work, reconciles uncertain calls, and retains writer ownership until persistence flush succeeds.',
+  },
+  {
+    key: 'devframeLeadRoleLanding', pkg: 'experimental-devframe', title: 'Lead assignment journal landing', mode: 'core',
+    note: 'Consumes published lead creation facts and journals the controller role-policy assignment from durable bindings.',
+  },
+  {
+    key: 'devframeTaskGrading', pkg: 'experimental-devframe', title: 'Task memory failure grading', mode: 'core',
+    note: 'Records host-declared task memory requirements and grades memory failures into task-warning events.',
+  },
+  {
+    key: 'projectController', pkg: 'experimental-project-controller', title: 'Project task and integration authority', mode: 'core',
+    consumers: ['experimental-project-controller'],
+    note: 'Owns task transitions and evidence-bound Git integration; its consumer supplies the controller-authorized integration tool.',
+  },
+  {
+    key: 'projectMemory', pkg: 'experimental-project-memory', title: 'Bounded project memory', mode: 'core',
+    consumers: ['experimental-project-memory'],
+    note: 'Serves bounded memory tools over the configured Vault subtree; memory content never grants execution authority.',
+  },
+  {
+    key: 'shadowRouter', pkg: 'experimental-shadow-router', title: 'Project controller routing', mode: 'core',
+    consumers: ['experimental-shadow-router'],
+    note: 'Owns per-workspace controller roots, durable cross-root delivery, and project controls exposed to the designated Shadow agent.',
+  },
   {
     key: 'attachments',
     pkg: 'attachment',
@@ -728,7 +775,11 @@ function tableCell(value: string): string {
   return value.replace(/\|/g, '\\|').replace(/\n/g, '<br>')
 }
 
-function assertServiceRolesComplete(services: readonly ServiceEntry[]): void {
+/**
+ * Require a live graph classification for every discovered Cordis service.
+ * @param services - Services discovered from the current source tree.
+ */
+export function assertServiceRolesComplete(services: readonly ServiceEntry[]): void {
   const discovered = new Set(services.map(service => service.key))
   const classified = new Set(SERVICE_ROLES.map(role => role.key))
   const missing = [...discovered].filter(key => !classified.has(key)).sort()

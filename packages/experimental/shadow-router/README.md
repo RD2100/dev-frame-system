@@ -58,15 +58,24 @@ Mount the service in a composition that already mounts the storage stack, the se
 `markShadow(agent)` installs the four tools into that agent's scope and nothing else; every other scope resolves none of them. The host calls the same service methods the tools dispatch to, plus host-only seams the model never reaches: `setActiveGoal` authorizes one open run per project, `completeDelivery` settles a received delivery, `confirmProjectStopped` finishes a stop, and `recoverDeliveries` converges interrupted rows on restart.
 
 ```ts
-const shadow = ctx.agentLoop.create(SessionId('session-shadow'), { provider: 'mock', model: 'mock' })
-ctx.shadowRouter.markShadow(shadow)
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { ShadowRouter } from '@deepseek-ai/dsh-experimental-shadow-router'
 
-const open = await ctx.shadowRouter.openProject(shadow, { path: projectRoot, requestId: 'open-1' })
-await ctx.shadowRouter.setActiveGoal(open.workspaceId, goalId, acceptanceHash)
-const receipt = await ctx.shadowRouter.sendToProject(shadow, {
-  workspaceId: open.workspaceId, bindingRevision: open.bindingRevision,
-  goalId, acceptanceHash, requestId: 'send-1', mode: 'work', text: '…',
-})
+async function sendProjectWork(
+  ctx: { shadowRouter: ShadowRouter },
+  shadow: Agent,
+  projectRoot: string,
+  goalId: string,
+  acceptanceHash: string,
+) {
+  ctx.shadowRouter.markShadow(shadow)
+  const project = await ctx.shadowRouter.openProject(shadow, { path: projectRoot, requestId: 'open-1' })
+  await ctx.shadowRouter.setActiveGoal(project.workspaceId, goalId, acceptanceHash)
+  return await ctx.shadowRouter.sendToProject(shadow, {
+    workspaceId: project.workspaceId, bindingRevision: project.bindingRevision,
+    goalId, acceptanceHash, requestId: 'send-1', mode: 'work', text: '…',
+  })
+}
 ```
 
 Compositions can also declare the designation in the row's config: with `shadowSessionId` set, the service performs the `markShadow` invocation itself — immediately when that agent is already live at activation, otherwise when it is created — while session creation stays host-owned. An id that never becomes live installs nothing, and an unconfigured mount keeps the fail-closed `SHADOW_CALLER_FORBIDDEN` behavior.
@@ -132,6 +141,7 @@ Four tool schemas persist in the Shadow scope's tool list on every request; each
 
 The tool schemas are declared once and stay byte-stable, so the request prefix before the first project call reuses provider cache; per-call results append after it and do not invalidate the shared prefix.
 
+<a id="known-limitations-and-deferred-work"></a>
 ## Known Limitations and Deferred Work
 
 These limits define when the router is a poor fit or needs special operational care. They are current package constraints, not a task backlog.

@@ -48,31 +48,45 @@ Use the branded constructors when the host has validated the corresponding value
 import {
   AcceptanceHash, SourceFingerprint, WorkspaceId,
   type ProjectWorkBinding,
-} from '@deepseek-ai/dsh-experimental-devframe'
+} from '@deepseek-ai/dsh-experimental-devframe/shared'
 
-const binding: ProjectWorkBinding = {
-  workspaceId: WorkspaceId('workspace-1'),
-  controllerSessionId,
-  goalId,
-  goalRevision: 1,
-  acceptanceHash: AcceptanceHash('approved-config-digest'),
-  sourceFingerprint: SourceFingerprint('source-digest'),
+function workBinding(
+  controllerSessionId: ProjectWorkBinding['controllerSessionId'],
+  goalId: ProjectWorkBinding['goalId'],
+): ProjectWorkBinding {
+  return {
+    workspaceId: WorkspaceId('workspace-1'),
+    controllerSessionId,
+    goalId,
+    goalRevision: 1,
+    acceptanceHash: AcceptanceHash('approved-config-digest'),
+    sourceFingerprint: SourceFingerprint('source-digest'),
+  }
 }
 ```
 
 The host owns validation and persistence. A changed acceptance or source value is a different binding and must not reuse earlier evidence.
+
+### Preserve Goal input and task output
+
+A `devframe/task-delivery` record preserves the original complete Goal input binding and records a task's Worker, registered worktree, exact commit, output fingerprint, and output snapshot separately. `deliveryResultBinding` derives an output evidence binding without rewriting the authorized Goal input.
+
+Verification and review carrying `deliveryId` must match the latest delivery for that task and Goal, including its exact output binding. A passing delivery review requires the latest verification to pass. Whole-Goal evidence without `deliveryId` remains valid under its existing binding rules; it cannot substitute for delivery evidence during task integration. The projection checkpoint is version 2 and requires the deliveries field.
 
 ### Assemble the three-tier spawn policy
 
 Spread `devframeSpawnOverrides(tier)` into the delegation request when a DevFrame parent spawns a child. A lead carries only the depth budget; a worker also loses the delegation tool, and the child's own executor refuses it (`UNKNOWN_TOOL`) while the durable descriptor reapplies the filter on cold resume.
 
 ```ts
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import { devframeSpawnOverrides } from '@deepseek-ai/dsh-experimental-devframe'
 
 // { maxDepth: 2, toolFilter: { deny: ['subagent'] } } spread into the
 // delegation request; devframeSpawnOverrides('lead') is { maxDepth: 2 }.
-const overrides = devframeSpawnOverrides('worker')
-const request = { prompt: [], parent: leadAgent, ...overrides }
+function workerRequest(leadAgent: Agent) {
+  const overrides = devframeSpawnOverrides('worker')
+  return { prompt: [], parent: leadAgent, ...overrides }
+}
 ```
 
 -----

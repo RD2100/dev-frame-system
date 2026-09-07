@@ -29,9 +29,9 @@ export const name = 'agent-dispatch'
 /** Services required by the plugin; the hierarchy stack missing fails the load. */
 export const inject = ['tools', 'systemPrompt', 'workspaceRegistry', 'worktreeRegistry', 'agentHierarchy', 'agentBindings', 'agents', 'sessions']
 
-const DISPATCH_DESCRIPTION = `Dispatch a child agent for one task onto one registered git worktree: the controller dispatches a lead, and a lead dispatches workers inside its approved plugin scopes. Name the task id, the plugin scope, and the worktree id (get worktree ids from worktree_create or the host), and pass a briefing prompt for a fresh dispatch — the briefing is queued only after the child is published. Every result carries ack: what the child's own durable log proves about the task (briefed while pending, claimed while executing, terminal with the turn's recorded ending — completed means the task finished cleanly, dropped when the briefing was cancelled unrun). If this task already has a dispatched child, the tool refuses and names it: pass retry: true to reuse that child instead, which never re-delivers the briefing and reports the task's current ack. The engine owns the child's lifecycle and the hierarchy owns every denial; refusals name the cause and the fix.`
+const DISPATCH_DESCRIPTION = 'Dispatch a child agent for one task onto one registered git worktree: the controller dispatches a lead, and a lead dispatches workers inside its approved plugin scopes. Name the task id, the plugin scope, and the worktree id (get worktree ids from worktree_create or the host), and pass a briefing prompt for a fresh dispatch — the briefing is queued only after the child is published. Every result carries ack: what the child\'s own durable log proves about the task (briefed while pending, claimed while executing, terminal with the turn\'s recorded ending — completed means the task finished cleanly, dropped when the briefing was cancelled unrun). If this task already has a dispatched child, the tool refuses and names it: pass retry: true to reuse that child instead, which never re-delivers the briefing and reports the task\'s current ack. The engine owns the child\'s lifecycle and the hierarchy owns every denial; refusals name the cause and the fix.'
 
-const GUIDANCE = `The agent dispatch tool is the daily delegation entry over the agent hierarchy. The controller dispatches a lead per task onto its own registered worktree; the lead dispatches workers inside the plugin scopes approved for it in the deployment's leadPluginScopes. Every dispatch binds the worktree's single-writer lock to the new child for its whole life. A retried task reuses the existing child (retry: true) — never re-brief a running child.`
+const GUIDANCE = 'The agent dispatch tool is the daily delegation entry over the agent hierarchy. The controller dispatches a lead per task onto its own registered worktree; the lead dispatches workers inside the plugin scopes approved for it in the deployment\'s leadPluginScopes. Every dispatch binds the worktree\'s single-writer lock to the new child for its whole life. A retried task reuses the existing child (retry: true) — never re-brief a running child.'
 
 /** The tool names this plugin registers, in registration order. */
 export const TOOL_NAMES = ['agent_dispatch'] as const
@@ -118,7 +118,7 @@ export function apply(ctx: Context): void {
       taskId: {
         type: 'string',
         required: true,
-        description: "The task this child owns; one task has at most one dispatched child.",
+        description: 'The task this child owns; one task has at most one dispatched child.',
       },
       pluginId: {
         type: 'string',
@@ -128,11 +128,11 @@ export function apply(ctx: Context): void {
       worktreeId: {
         type: 'string',
         required: true,
-        description: "The registered worktree id the child will own as its single writer, from worktree_create or the host.",
+        description: 'The registered worktree id the child will own as its single writer, from worktree_create or the host.',
       },
       prompt: {
         type: 'string',
-        description: "The task briefing queued to a freshly dispatched child after publication. Never re-sent on a retry.",
+        description: 'The task briefing queued to a freshly dispatched child after publication. Never re-sent on a retry.',
       },
       retry: {
         type: 'boolean',
@@ -140,7 +140,7 @@ export function apply(ctx: Context): void {
       },
       childId: {
         type: 'string',
-        description: "The preallocated session id for the child, when the deployment configures one (the leadPluginScopes approved sets are keyed by these ids). Omitted, the engine allocates the identity.",
+        description: 'The preallocated session id for the child, when the deployment configures one (the leadPluginScopes approved sets are keyed by these ids). Omitted, the engine allocates the identity.',
       },
     },
     output: {

@@ -1,20 +1,9 @@
-/**
- * AT2B-04 任务机九态走通 — anchored from
- * `scenarios/AT2B-04-task-machine-lifecycle.md` (recorded-session 场景草案,
- * 组合挂载波未启动; 本文件把草案断言面落为包内 vitest 测试).
- *
- * 断言面：九态 TaskState 全序走通（七态调度脊 + blocked/failed 往返）；
- * developing 预算恰在进入处拒绝、离开时释放（maxActiveTasks: 1）；每个
- * move 返回更新后 record；非法 move fail loud、record 不变；dispatch 类
- * move 要求 admission_open。
- *
- * @module tests/at2b-04-task-machine-lifecycle
- */
+/** Task dispatch ordering, concurrency, recovery, and missing-evidence refusal. */
 
 import { expect, describe, it } from 'vitest'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
-import { harness } from './helpers.ts'
+import { harness, unavailableMergeRequest } from './helpers.ts'
 
 const TASK1 = TaskId('t-1')
 const TASK2 = TaskId('t-2')
@@ -31,7 +20,7 @@ async function expectMoveRejected(move: Promise<unknown>, code: string, message:
 }
 
 describe('AT2B-04 task machine lifecycle', () => {
-  it('walks the seven-state dispatch spine under a one-slot developing budget', async () => {
+  it('dispatches through submission under a one-slot developing budget', async () => {
     const h = await harness({ maxActiveTasks: 1 })
     try {
       // Dispatch moves require explicit admission: the fresh process starts stopped.
@@ -69,14 +58,9 @@ describe('AT2B-04 task machine lifecycle', () => {
       expect((await h.ctx.projectController.submit(TASK1)).state).toBe('submitted')
       const controller = h.ctx.sessions.create(SessionId('controller-1'), { meta: { cwd: h.root } })
       await h.ctx.agentBindings.bind({ agentId: controller.id, role: 'controller' })
-      const marker = await h.ctx.projectController.requestMainTreeMerge(controller.id, TASK1)
-      expect(marker.taskId).toBe(TASK1)
-      expect(marker.callerSessionId).toBe(controller.id)
-      expect(marker.mergeId).toBeTruthy()
-      expect(marker.createdAt).toBeTruthy()
-      expect((await h.ctx.projectController.integrate(TASK1, marker)).state).toBe('integrated')
-      expect((await h.ctx.projectController.complete(TASK1)).state).toBe('completed')
-      expect(h.ctx.projectController.find(TASK1)?.createdAt).toBe(createdAt)
+      await expect(h.ctx.projectController.requestMainTreeMerge(controller.id, TASK1, unavailableMergeRequest))
+        .rejects.toThrow('evidence projection')
+      expect(h.ctx.projectController.find(TASK1)?.state).toBe('submitted')
 
       // The retry lands now that the budget freed up.
       expect((await h.ctx.projectController.startDevelopment(TASK2)).state).toBe('developing')

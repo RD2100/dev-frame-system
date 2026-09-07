@@ -58,15 +58,24 @@ kind: "package-reference"
 `markShadow(agent)` 只把四个工具装进该代理的作用域，其他作用域一个都解析不到。宿主调用与工具相同的 Service 方法，外加模型永远接触不到的宿主专用缝：`setActiveGoal` 为项目授权一次运行，`completeDelivery` 结清 received 投递，`confirmProjectStopped` 收尾一次停止，`recoverDeliveries` 在重启时收敛中断的行。
 
 ```ts
-const shadow = ctx.agentLoop.create(SessionId('session-shadow'), { provider: 'mock', model: 'mock' })
-ctx.shadowRouter.markShadow(shadow)
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { ShadowRouter } from '@deepseek-ai/dsh-experimental-shadow-router'
 
-const open = await ctx.shadowRouter.openProject(shadow, { path: projectRoot, requestId: 'open-1' })
-await ctx.shadowRouter.setActiveGoal(open.workspaceId, goalId, acceptanceHash)
-const receipt = await ctx.shadowRouter.sendToProject(shadow, {
-  workspaceId: open.workspaceId, bindingRevision: open.bindingRevision,
-  goalId, acceptanceHash, requestId: 'send-1', mode: 'work', text: '…',
-})
+async function sendProjectWork(
+  ctx: { shadowRouter: ShadowRouter },
+  shadow: Agent,
+  projectRoot: string,
+  goalId: string,
+  acceptanceHash: string,
+) {
+  ctx.shadowRouter.markShadow(shadow)
+  const project = await ctx.shadowRouter.openProject(shadow, { path: projectRoot, requestId: 'open-1' })
+  await ctx.shadowRouter.setActiveGoal(project.workspaceId, goalId, acceptanceHash)
+  return await ctx.shadowRouter.sendToProject(shadow, {
+    workspaceId: project.workspaceId, bindingRevision: project.bindingRevision,
+    goalId, acceptanceHash, requestId: 'send-1', mode: 'work', text: '…',
+  })
+}
 ```
 
 组合也可以在行的 config 中声明指定：设置 `shadowSessionId` 后，服务会自行执行 `markShadow` 调用——该代理在激活时已存活则立即标记，否则在其被创建时标记——而会话创建仍由宿主负责。从未成为存活的 id 不会安装任何东西，未配置的挂载保持 fail-closed 的 `SHADOW_CALLER_FORBIDDEN` 行为。
@@ -132,9 +141,8 @@ const receipt = await ctx.shadowRouter.sendToProject(shadow, {
 
 工具模式只声明一次且字节稳定，因此第一次项目调用之前的请求前缀可复用供应商缓存；每次调用的结果追加在其后，不会使共享前缀失效。
 
-## 已知限制与延期工作
-
 <a id="known-limitations-and-deferred-work"></a>
+## 已知限制与延期工作
 
 这些限制界定了路由器何时不适配或需要特别的运维注意。它们是当前包约束，不是任务清单。
 

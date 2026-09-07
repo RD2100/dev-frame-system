@@ -1,0 +1,13 @@
+# Optional controller integration composition; the ordinary headless Agent has no controller binding.
+- insert:
+    - id: integration-session-identity
+      name: '../../../packages/experimental/session-identity/lib/index.js'
+    - id: integration-controller
+      name: '../../../packages/experimental/project-controller/lib/index.js'
+    - id: integration-consumer
+      name: '../../../packages/experimental/project-controller/lib/consumer.js'
+      config:
+        requiredChecksPath: !!js dshHomePath('project-checks.json')
+        gitExecutable: git
+        gitTimeoutMs: 15000
+        gitMaxOutputBytes: 1048576

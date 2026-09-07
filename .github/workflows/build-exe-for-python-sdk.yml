@@ -346,6 +346,24 @@ jobs:
             Pop-Location
           }
 
+      - name: Run source SDK delivery transport (POSIX)
+        if: runner.os != 'Windows'
+        env:
+          PYTHONPATH: ${{ github.workspace }}/python/sdk/src:${{ github.workspace }}/python/sdk-runtime/src
+        run: |
+          set -euo pipefail
+          "${{ steps.smoke-venv-posix.outputs.python }}" scripts/smoke-python-runtime.py \
+            --scenario sdk-task-delivery --exe "$PWD/apps/cli/lib/bin.js"
+
+      - name: Run source SDK delivery transport (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          PYTHONPATH: ${{ github.workspace }}/python/sdk/src;${{ github.workspace }}/python/sdk-runtime/src
+        run: |
+          & "${{ steps.smoke-venv-windows.outputs.python }}" scripts/smoke-python-runtime.py --scenario sdk-task-delivery --exe "$PWD/apps/cli/lib/bin.js"
+          if ($LASTEXITCODE -ne 0) { throw "Source SDK delivery transport failed with exit code $LASTEXITCODE" }
+
       - name: Preflight installed-wheel real API test (POSIX)
         if: >-
           inputs.ci

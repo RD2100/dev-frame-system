@@ -35,7 +35,10 @@ import { isTaskState, PluginId, TaskId } from '@deepseek-ai/dsh-experimental-pro
 
 const pluginId = PluginId('agent-reliability')
 const taskId = TaskId('task-7')
-if (!isTaskState(rawState)) throw new Error('unknown task state')
+function parseTaskState(rawState: unknown) {
+  if (!isTaskState(rawState)) throw new Error('unknown task state')
+  return rawState
+}
 ```
 
 ### 实现存储接缝

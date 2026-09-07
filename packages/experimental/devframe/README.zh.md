@@ -48,31 +48,45 @@ const result = await stopProject(options)
 import {
   AcceptanceHash, SourceFingerprint, WorkspaceId,
   type ProjectWorkBinding,
-} from '@deepseek-ai/dsh-experimental-devframe'
+} from '@deepseek-ai/dsh-experimental-devframe/shared'
 
-const binding: ProjectWorkBinding = {
-  workspaceId: WorkspaceId('workspace-1'),
-  controllerSessionId,
-  goalId,
-  goalRevision: 1,
-  acceptanceHash: AcceptanceHash('approved-config-digest'),
-  sourceFingerprint: SourceFingerprint('source-digest'),
+function workBinding(
+  controllerSessionId: ProjectWorkBinding['controllerSessionId'],
+  goalId: ProjectWorkBinding['goalId'],
+): ProjectWorkBinding {
+  return {
+    workspaceId: WorkspaceId('workspace-1'),
+    controllerSessionId,
+    goalId,
+    goalRevision: 1,
+    acceptanceHash: AcceptanceHash('approved-config-digest'),
+    sourceFingerprint: SourceFingerprint('source-digest'),
+  }
 }
 ```
 
 宿主负责验证和持久化。验收值或源代码值发生变化就构成不同绑定，不能复用早先的证据。
+
+### 保留 Goal 输入与任务输出
+
+`devframe/task-delivery` 记录保留原始完整 Goal 输入绑定，并另行记录任务的 Worker、注册工作树、确切提交、输出指纹和输出快照。`deliveryResultBinding` 推导输出证据绑定，不改写已授权的 Goal 输入。
+
+携带 `deliveryId` 的验证与审查必须匹配该任务和 Goal 的最新交付，包括其确切输出绑定。通过的交付审查要求最新验证通过。不带 `deliveryId` 的整个 Goal 证据仍遵循原有绑定规则，但不能在任务集成时替代交付证据。投影检查点版本为 2，要求包含 deliveries 字段。
 
 ### 组装三层 spawn 策略
 
 DevFrame 父 Agent spawn 子 Agent 时，把 `devframeSpawnOverrides(tier)` 展开进委托请求。组长只携带深度预算；执行 Agent 还会失去委托工具，由子 Agent 自己的执行器拒绝（`UNKNOWN_TOOL`），并且持久描述符会在冷恢复时重新应用过滤器。
 
 ```ts
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import { devframeSpawnOverrides } from '@deepseek-ai/dsh-experimental-devframe'
 
 // { maxDepth: 2, toolFilter: { deny: ['subagent'] } } spread into the
 // delegation request; devframeSpawnOverrides('lead') is { maxDepth: 2 }.
-const overrides = devframeSpawnOverrides('worker')
-const request = { prompt: [], parent: leadAgent, ...overrides }
+function workerRequest(leadAgent: Agent) {
+  const overrides = devframeSpawnOverrides('worker')
+  return { prompt: [], parent: leadAgent, ...overrides }
+}
 ```
 
 -----

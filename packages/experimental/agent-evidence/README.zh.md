@@ -38,49 +38,55 @@ kind: "package-reference"
 每次记录调用经持久化 schema 校验并返回冻结回执；查询按记录顺序返回追加式轨迹。
 
 ```ts
-await ctx.agentEvidence.recordTaskGoalBinding({
-  taskId, controllerSessionId, goalId, goalRevision: 3,
-  workspaceId: WorkspaceId('ws-default'),
-  acceptanceHash: AcceptanceHash('acceptance:sha256:abc'),
-  sourceFingerprint: SourceFingerprint('source:sha256:def'),
-})
-await ctx.agentEvidence.recordSubmission({
-  taskId, submittedBy, commit, changedPaths, inputDigest,
-})
-await ctx.agentEvidence.recordVerification({
-  taskId, command: 'pnpm exec vitest run packages/a', exitCode: 0, artifactPaths,
-})
+import type {
+  AgentEvidenceLedger, SubmissionRequest, TaskGoalBindingRequest, VerificationRequest,
+} from '@deepseek-ai/dsh-experimental-agent-evidence'
 
-const trail = ctx.agentEvidence.byTask(taskId)
-const bindings = ctx.agentEvidence.bindingsByGoal(controllerSessionId, goalId)
+async function recordEvidence(
+  ctx: { agentEvidence: AgentEvidenceLedger },
+  binding: TaskGoalBindingRequest,
+  submission: Omit<SubmissionRequest, 'taskId'>,
+  verification: Omit<VerificationRequest, 'taskId'>,
+) {
+  await ctx.agentEvidence.recordTaskGoalBinding(binding)
+  await ctx.agentEvidence.recordSubmission({ ...submission, taskId: binding.taskId })
+  await ctx.agentEvidence.recordVerification({ ...verification, taskId: binding.taskId })
+  return {
+    trail: ctx.agentEvidence.byTask(binding.taskId),
+    bindings: ctx.agentEvidence.bindingsByGoal(binding.controllerSessionId, binding.goalId),
+  }
+}
 ```
 
 畸形回执以 `AGENT_EVIDENCE_INVALID_RECEIPT` 大声失败；存储拒绝以 `AGENT_EVIDENCE_PERSISTENCE` 呈现。
 
 ### 记录 DevFrame 验证与审查证据
 
+记录任务输出证据时，宿主向两个 journal 方法提供最新任务交付的 `deliveryId`，并以其 `deliveryResultBinding` 作为 `binding`。journal 保留交付引用；DevFrame 投影检查当前 Goal、最新交付和输出身份。原始 Goal 输入保持不变。省略 `deliveryId` 仍会记录整个 Goal 的证据，但不能替代集成所要求的任务交付证据。
+
 journal 生产者是宿主组合的 plain class（非插件挂载）：以 Session 持久化回调与审查者角色权威构造，在验证与审查完成的时刻调用两个 record 方法。
 
 ```ts
 import { AgentEvidenceJournal } from '@deepseek-ai/dsh-experimental-agent-evidence'
+import type {
+  AgentEvidenceJournalOptions, ReviewEvidenceRequest, VerificationEvidenceRequest,
+} from '@deepseek-ai/dsh-experimental-agent-evidence'
 
-const journal = new AgentEvidenceJournal({
-  flush: session => ctx.sessions.flush(session), // native durability callback
-  reviewerDirectory,                             // SessionId-keyed reviewer role authority
-  // execution: optional; defaults to the real subprocess face (10-minute kill guard)
-})
-
-// Verification completed: resolve the stored approved checklist by digest,
-// execute every declared check exactly, and record the real results.
-const verification = await journal.recordVerification({
-  session, binding, requiredChecksDigest, requiredChecksStore,
-})
-
-// Review completed: the reviewer Session is cross-authorized before the event
-// is appended.
-const review = await journal.recordReview({
-  session, binding, reviewerSessionId, policyVersion, decision, findings,
-})
+async function recordJournalEvidence(
+  options: AgentEvidenceJournalOptions,
+  verificationRequest: VerificationEvidenceRequest,
+  reviewRequest: Omit<ReviewEvidenceRequest, 'session' | 'binding'>,
+) {
+  // The host supplies native Session flushing and reviewer role authority.
+  const journal = new AgentEvidenceJournal(options)
+  // Execute the approved checks resolved from the stored digest.
+  const verification = await journal.recordVerification(verificationRequest)
+  // Cross-authorize the reviewer Session before appending its decision.
+  const review = await journal.recordReview({
+    ...reviewRequest, session: verificationRequest.session, binding: verificationRequest.binding,
+  })
+  return { verification, review }
+}
 ```
 
 生产者记录证据，不判定完成。存储失败在任何事件写入前以既有 `RequiredChecksError` 错误码（`REQUIRED_CHECKS_CONFIG_NOT_FOUND`、`REQUIRED_CHECKS_INVALID_CONFIG`）传播；门拒绝以 `AGENT_EVIDENCE_REVIEWER_UNAUTHORIZED` 呈现且不闩锁；持久化失败以 `DevFramePersistenceError` 呈现并闩锁该 Session 的 journal。每条记录在落账前都经持久化 `devframe/verification`/`devframe/review` schema 校验。

@@ -12,18 +12,19 @@
 
 import { randomUUID } from 'node:crypto'
 import type { GoalResultBinding } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
-import { DevFrameReviewId, DevFrameVerificationId } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
+import { DevFrameReviewId, DevFrameVerificationId } from '@deepseek-ai/dsh-experimental-devframe'
 import type {
+  DevFrameDeliveryId,
   DevFrameReviewEventData,
   DevFrameReviewFinding,
   DevFrameVerificationEventData,
-} from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
+} from '@deepseek-ai/dsh-experimental-devframe'
 import type {
   RequiredChecksConfigStore,
   RequiredChecksDigest,
-} from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
-import { DevFrameSessionJournal } from '@deepseek-ai/dsh-experimental-devframe/src/session-journal.ts'
-import type { DevFrameFlush } from '@deepseek-ai/dsh-experimental-devframe/src/session-journal.ts'
+} from '@deepseek-ai/dsh-experimental-devframe'
+import { DevFrameSessionJournal } from '@deepseek-ai/dsh-experimental-devframe'
+import type { DevFrameAppendOptions, DevFrameFlush } from '@deepseek-ai/dsh-experimental-devframe'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import { subprocessRequiredChecksExecution } from './check-runner.ts'
 import type { RequiredChecksExecution } from './check-runner.ts'
@@ -38,14 +39,20 @@ export interface AgentEvidenceJournalOptions {
   readonly reviewerDirectory: EvidenceReviewerDirectory
   /** Execution face for required checks; defaults to `subprocessRequiredChecksExecution`. */
   readonly execution?: RequiredChecksExecution
+  /** Shared authoritative Session writer, including its review gate, append queue and failure latch. */
+  readonly journal?: DevFrameSessionJournal
 }
 
 /** Request accepted by {@link AgentEvidenceJournal.recordVerification}. */
 export interface VerificationEvidenceRequest {
+  /** Recheck source and authority inside the shared Session append queue. */
+  readonly appendOptions?: DevFrameAppendOptions
   /** Controller Session whose log the devframe projection folds. */
   readonly session: Session
   /** Complete work identity the evidence attributes to (host-resolved). */
   readonly binding: GoalResultBinding
+  /** Exact task delivery whose output binding is being checked; absent for whole-Goal evidence. */
+  readonly deliveryId?: DevFrameDeliveryId
   /** Canonical digest of the approved configuration, registered in the store at approval time. */
   readonly requiredChecksDigest: RequiredChecksDigest
   /** Configuration store resolving the digest to the stored approved checklist. */
@@ -54,10 +61,14 @@ export interface VerificationEvidenceRequest {
 
 /** Request accepted by {@link AgentEvidenceJournal.recordReview}. */
 export interface ReviewEvidenceRequest {
+  /** Recheck source and authority inside the shared Session append queue. */
+  readonly appendOptions?: DevFrameAppendOptions
   /** Controller Session whose log the devframe projection folds. */
   readonly session: Session
   /** Complete work identity the evidence attributes to (host-resolved). */
   readonly binding: GoalResultBinding
+  /** Exact task delivery being reviewed; absent for whole-Goal evidence. */
+  readonly deliveryId?: DevFrameDeliveryId
   /** Exact reviewer Session identity; cross-authorized by the gate before append. */
   readonly reviewerSessionId: SessionId
   /** Role-policy revision active during review. */
@@ -79,11 +90,11 @@ export class AgentEvidenceJournal {
 
   /**
    * @param options - Durability callback, reviewer authority, and the optional
-   *   execution face; construction wires the review gate into the journal, so
+   *   execution face and shared journal; the journal owns reviewer authorization, so
    *   a journal without a reviewer authority cannot be built.
    */
   constructor(options: AgentEvidenceJournalOptions) {
-    this.journal = new DevFrameSessionJournal(options.flush, new EvidenceReviewGate(options.reviewerDirectory))
+    this.journal = options.journal ?? new DevFrameSessionJournal(options.flush, new EvidenceReviewGate(options.reviewerDirectory))
     this.execution = options.execution ?? subprocessRequiredChecksExecution
   }
 
@@ -107,11 +118,12 @@ export class AgentEvidenceJournal {
       version: 1,
       verificationId: DevFrameVerificationId(randomUUID()),
       binding: request.binding,
+      ...(request.deliveryId === undefined ? {} : { deliveryId: request.deliveryId }),
       snapshotId: request.binding.snapshotId,
       status,
       requiredChecks: { config, digest: request.requiredChecksDigest },
       checks,
-    })
+    }, request.appendOptions)
     return event.data
   }
 
@@ -133,12 +145,13 @@ export class AgentEvidenceJournal {
       version: 1,
       reviewId: DevFrameReviewId(randomUUID()),
       binding: request.binding,
+      ...(request.deliveryId === undefined ? {} : { deliveryId: request.deliveryId }),
       snapshotId: request.binding.snapshotId,
       reviewerSessionId: request.reviewerSessionId,
       policyVersion: request.policyVersion,
       decision: request.decision,
       findings: request.findings,
-    })
+    }, request.appendOptions)
     return event.data
   }
 }

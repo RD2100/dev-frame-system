@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Keyless full-turn and snapshot smoke for the Python SDK runtime."""
+"""Keyless full-turn and snapshot smoke for the Python SDK runtime.
+
+Source-only event transport: --scenario sdk-task-delivery --exe apps/cli/lib/bin.js
+with the checkout SDK on PYTHONPATH. This uses the internal launch adapter and
+normal dsh --profile sdk; it does not validate an installed wheel or executable.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +15,7 @@ import importlib.metadata
 import json
 import os
 import queue
+import shutil
 import subprocess
 import sys
 import sysconfig
@@ -711,7 +717,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--scenario",
-        choices=("all", "sdk-default", "sdk-custom", "sdk-minimal", "sdk-fs-search", "sdk-mcp", "sdk-snapshot", "sdk-restart", "sdk-profile-plugin", "sdk-live", "direct"),
+        choices=("all", "sdk-default", "sdk-custom", "sdk-minimal", "sdk-fs-search", "sdk-mcp", "sdk-snapshot", "sdk-restart", "sdk-profile-plugin", "sdk-live", "sdk-task-delivery", "direct"),
         default="all",
     )
     parser.add_argument("--exe", type=Path)
@@ -728,12 +734,14 @@ def main() -> None:
         parser.error("--scenario sdk-live requires --installed-wheel")
     if args.scenario == "sdk-profile-plugin" and not args.installed_wheel:
         parser.error("--scenario sdk-profile-plugin requires --installed-wheel")
+    if args.scenario == "sdk-task-delivery" and args.installed_wheel:
+        parser.error("sdk-task-delivery is a source-only built-CLI scenario, not a wheel test")
     if args.installed_wheel:
         args.exe = assert_installed_wheel_environment()
-    if args.scenario in {"all", "sdk-custom", "sdk-minimal", "sdk-fs-search", "sdk-snapshot", "sdk-restart", "direct"} and args.exe is None:
+    if args.scenario in {"all", "sdk-custom", "sdk-minimal", "sdk-fs-search", "sdk-snapshot", "sdk-restart", "sdk-task-delivery", "direct"} and args.exe is None:
         parser.error("--exe is required for custom, minimal, snapshot, and direct scenarios")
-    if args.update_snapshots and args.scenario not in {"all", "sdk-minimal", "sdk-snapshot", "sdk-restart"}:
-        parser.error("--update-snapshots requires --scenario sdk-minimal, sdk-snapshot, sdk-restart, or all")
+    if args.update_snapshots and args.scenario not in {"all", "sdk-minimal", "sdk-snapshot", "sdk-restart", "sdk-task-delivery"}:
+        parser.error("--update-snapshots requires --scenario sdk-minimal, sdk-snapshot, sdk-restart, sdk-task-delivery, or all")
     if args.exe is not None and not args.exe.is_file():
         parser.error(f"runtime executable does not exist: {args.exe}")
 
@@ -743,6 +751,9 @@ def main() -> None:
         return
 
     with MockModel() as model:
+        if args.scenario == "sdk-task-delivery":
+            assert args.exe is not None
+            smoke_sdk_task_delivery(model.url, args.exe.resolve(), args.update_snapshots)
         if args.scenario in {"all", "sdk-default"}:
             smoke_sdk_default(model.url)
         if args.scenario in {"all", "sdk-custom"}:
@@ -1167,6 +1178,70 @@ def smoke_sdk_profile_plugin(base_url: str) -> None:
 
         assert result.final_response == PROFILE_PLUGIN_TEXT, result.final_response
         assert_zstd_session_log(dsh_home / "sessions")
+
+
+def smoke_sdk_task_delivery(base_url: str, executable: Path, update_snapshots: bool) -> None:
+    """Source SDK + built dsh CLI transport; authored events do not prove development or review."""
+    from deepseek_harness import DeepSeekHarness
+
+    repo = Path(__file__).resolve().parent.parent
+    if executable != (repo / "apps/cli/lib/bin.js").resolve():
+        raise AssertionError("sdk-task-delivery requires this checkout's built apps/cli/lib/bin.js")
+    node = shutil.which("node")
+    if node is None:
+        raise AssertionError("Source-only SDK transport requires an existing Node executable")
+    directory = repo / "scripts/snapshots/python-sdk-single-exe/task-delivery"
+    with tempfile.TemporaryDirectory(prefix="dsh-python-delivery-") as temporary:
+        root = Path(temporary).resolve()
+        sessions = root / "home/sessions"
+        patch = write_profile_patch(root, "delivery.patch.yml", sessions, [{"insert": [{
+            "id": "python-sdk-task-delivery",
+            "name": (repo / "scripts/fixtures/python-sdk-task-delivery.mjs").as_uri(),
+        }]}])
+        received = []
+        with DeepSeekHarness(
+            provider="deepseek-official", model="smoke-model", cwd=str(root),
+            _launch_args=(node, str(executable),
+                          "--profile", "sdk", "--patch", str(patch)),
+            dsh_home=str(root / "home"), patches=(str(patch),),
+            env={"DSH_HOME": str(root / "home"), "DSH_PERMISSION_MODE": "danger-full-access",
+                 "DSH_TELEMETRY_DISABLED": "1"},
+            api_key="sk-keyless-smoke", base_url=base_url, request_timeout_seconds=60,
+        ) as harness:
+            result = harness.run("Receive the authored delivery transport fixture.",
+                                 session_id="python-delivery", on_notification=received.append)
+        if result.final_response != EXPECTED_TEXT:
+            raise AssertionError(f"Unexpected delivery transport response: {result.final_response}")
+        logs = read_session_logs(sessions)
+        if set(logs) != {"python-delivery"}:
+            raise AssertionError(f"Unexpected transport sessions: {sorted(logs)}")
+        def evidence(events):
+            return [{"type": event["type"], "data": event["data"]}
+                    for event in events if str(event.get("type", "")).startswith("devframe/")]
+        streamed = evidence(result.events)
+        durable = evidence(logs["python-delivery"])
+        callback = evidence([note.payload["event"] for note in received
+                             if note.method == "session.event" and "event" in note.payload])
+        if streamed != durable or callback != durable:
+            raise AssertionError("Python events, callbacks, and durable evidence disagree")
+        if [event["type"] for event in durable] != ["devframe/goal-binding", "devframe/task-delivery"]:
+            raise AssertionError(f"Unexpected evidence types: {durable}")
+        goal, delivery = (event["data"] for event in durable)
+        binding = delivery["binding"]
+        if any(binding[key] != goal[key] for key in binding):
+            raise AssertionError("Delivery changed the authorized Goal input")
+        if delivery["sourceFingerprint"] == binding["sourceFingerprint"] or delivery["snapshotId"] == binding["snapshotId"]:
+            raise AssertionError("Transport fixture must distinguish input from output")
+        replacements = [(str(root / "worker"), "{{cwd}}/worker"),
+                        (str(root), "{{cwd}}"), (root.as_posix(), "{{cwd}}")]
+        files = {
+            "python-events.json": json.dumps(normalize_snapshot_value({
+                "scope": "authored source-SDK built-CLI delivery transport; no checks or review",
+                "finalResponse": result.final_response, "events": streamed,
+            }, replacements), indent=2, ensure_ascii=False) + "\n",
+            "durable-events.jsonl": render_jsonl(normalize_snapshot_value(durable, replacements)),
+        }
+        compare_snapshot_files(files, update_snapshots, directory, tuple(files))
 
 
 def smoke_sdk_snapshot(base_url: str, executable: Path, update_snapshots: bool) -> None:

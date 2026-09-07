@@ -19,6 +19,14 @@ type AppendDevFrameEvent = <T extends DevFrameEventType>(
 /** Native durability callback used by the DevFrame event writer. */
 export type DevFrameFlush = (session: Session) => Promise<boolean | void>
 
+/** Checks executed inside the Session append queue before an event becomes visible. */
+export interface DevFrameAppendOptions {
+  /** Refresh asynchronous source observations while owning the append queue. */
+  readonly prepare?: () => Promise<void>
+  /** Recheck synchronous authority before preparation and immediately before append. */
+  readonly beforeAppend?: () => void
+}
+
 /**
  * Reviewer authorization seam consulted before any `devframe/review` append.
  * Implementations resolve the submitted `reviewerSessionId` against the
@@ -81,6 +89,7 @@ export class DevFrameSessionJournal {
    * @param session - Controller Session that owns the event.
    * @param type - DevFrame event name.
    * @param data - Event payload to validate before appending.
+   * @param options - Source preparation and authority checks executed inside the append queue.
    * @returns The accepted event after the durability checkpoint completes.
    * @throws {@link DevFramePersistenceError} when persistence is unavailable,
    * failed, or was previously latched failed for this Session.
@@ -91,6 +100,7 @@ export class DevFrameSessionJournal {
     session: Session,
     type: T,
     data: SessionEventMap[T],
+    options: DevFrameAppendOptions = {},
   ): Promise<SessionEvent<T>> {
     const previous = this.tails.get(session) ?? Promise.resolve()
     let event: SessionEvent<T> | undefined
@@ -103,6 +113,9 @@ export class DevFrameSessionJournal {
           { cause: priorFailure },
         )
       }
+      options.beforeAppend?.()
+      if (options.prepare !== undefined) await options.prepare()
+      options.beforeAppend?.()
       const decoded = decodeDevFramePayload(type, data)
       if (type === 'devframe/review') {
         // The discriminant check proves the decoded payload is a review event.

@@ -4,6 +4,7 @@ import { brandString, type Branded } from '@deepseek-ai/dsh-brand'
 import type { GoalId } from '@deepseek-ai/dsh-goal/types'
 import type { SessionEventMap, SessionId, SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { z } from 'zod'
+import type { WorktreeId } from '@deepseek-ai/dsh-worktree-registry'
 import type {
   GoalBinding,
   GoalBindingIdentity,
@@ -29,6 +30,52 @@ import { DevFrameSnapshotId } from './shared/types.ts'
 
 /** Stable identifier for one captured source tree; declared with the shared binding contracts. */
 export { DevFrameSnapshotId } from './shared/types.ts'
+
+/** Stable identifier for one explicit Worker delivery. */
+export type DevFrameDeliveryId = Branded<'DevFrameDeliveryId'>
+
+/**
+ * Brand a validated delivery identity.
+ * @param value - Non-empty delivery identity.
+ * @returns Branded delivery identity.
+ */
+export function DevFrameDeliveryId(value: string): DevFrameDeliveryId {
+  return brandString<DevFrameDeliveryId>(value)
+}
+
+/** A committed task output attributed to its unchanged authorized Goal input. */
+export interface DevFrameTaskDeliveryEventData {
+  /** Payload format version. */
+  readonly version: 1
+  /** Unique identity of this explicit delivery. */
+  readonly deliveryId: DevFrameDeliveryId
+  /** The delivered task within the authorized Goal. */
+  readonly taskId: TaskId
+  /** Original complete Goal input identity, unchanged by development. */
+  readonly binding: GoalResultBinding
+  /** Registered Worker that explicitly delivered the output. */
+  readonly workerSessionId: SessionId
+  /** Registered worktree holding the output. */
+  readonly worktreeId: WorktreeId
+  /** Canonical source worktree path observed by the host. */
+  readonly worktreePath: string
+  /** Exact committed output object id observed by Git. */
+  readonly sourceCommit: string
+  /** Fingerprint of the delivered output, distinct from the Goal input. */
+  readonly sourceFingerprint: SourceFingerprint
+  /** Snapshot identity of the delivered output. */
+  readonly snapshotId: DevFrameSnapshotId
+}
+
+/**
+ * Derive the evidence identity for one delivered output without changing its Goal authorization.
+ * @param delivery - Persisted task delivery with its original Goal binding.
+ * @returns Detached output binding for verification and review.
+ */
+export function deliveryResultBinding(delivery: DevFrameTaskDeliveryEventData): GoalResultBinding {
+  return { ...delivery.binding, taskIds: [...delivery.binding.taskIds],
+    sourceFingerprint: delivery.sourceFingerprint, snapshotId: delivery.snapshotId }
+}
 
 /** Stable identifier for one host-recorded verification. */
 export type DevFrameVerificationId = Branded<'DevFrameVerificationId'>
@@ -198,6 +245,8 @@ export interface DevFrameVerificationEventData {
   readonly version: 1
   /** Stable host-issued verification identity. */
   readonly verificationId: DevFrameVerificationId
+  /** Explicit task output; absent for whole-Goal evidence. */
+  readonly deliveryId?: DevFrameDeliveryId
   /** Complete work identity used to attribute the evidence. */
   readonly binding: GoalResultBinding
   /** Source snapshot referenced by this evidence. */
@@ -230,6 +279,8 @@ export interface DevFrameReviewEventData {
   readonly version: 1
   /** Stable host-issued review identity. */
   readonly reviewId: DevFrameReviewId
+  /** Explicit task output; absent for whole-Goal evidence. */
+  readonly deliveryId?: DevFrameDeliveryId
   /** Complete work identity used to attribute the review. */
   readonly binding: GoalResultBinding
   /** Source snapshot examined by the reviewer. */
@@ -298,6 +349,7 @@ export type DevFrameEventType =
   | 'devframe/role-policy'
   | 'devframe/goal-binding'
   | 'devframe/usage'
+  | 'devframe/task-delivery'
   | 'devframe/verification'
   | 'devframe/review'
   | 'devframe/lifecycle'
@@ -311,13 +363,15 @@ declare module '@deepseek-ai/dsh-session/types' {
     'devframe/goal-binding': GoalBinding
     /** Reservation or settlement of one bounded project execution attempt. */
     'devframe/usage': DevFrameUsageEventData
+    /** Explicit Worker output snapshot. */
+    'devframe/task-delivery': DevFrameTaskDeliveryEventData
     /** Real configured-check results for one exact source snapshot. */
     'devframe/verification': DevFrameVerificationEventData
     /** Independent reviewer decision and bounded findings for one source snapshot. */
     'devframe/review': DevFrameReviewEventData
     /** Whole lifecycle observation used to recover stop and writer ownership state. */
     'devframe/lifecycle': DevFrameLifecycleEventData
-    /** Host-graded degradation of one task's memory surface, carrying the grading the explicit requirement context produced; at most one per task. */
+    /** Host-graded memory degradation, recorded at most once per task. */
     'devframe/task-warning': DevFrameTaskWarningEventData
   }
 }
@@ -480,9 +534,20 @@ const verificationCoverageSchema = z.object({
   digest: requiredChecksDigestSchema,
 }).strict()
 
+const taskDeliveryEventSchema = z.object({
+  version: z.literal(1), deliveryId: trimmedString.transform(DevFrameDeliveryId),
+  taskId: taskIdSchema, binding: goalResultBindingSchema,
+  workerSessionId: sessionIdSchema,
+  worktreeId: trimmedString.transform(value => brandString<WorktreeId>(value)),
+  worktreePath: trimmedString,
+  sourceCommit: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
+  sourceFingerprint: sourceFingerprintSchema, snapshotId: snapshotIdSchema,
+}).strict() as z.ZodType<DevFrameTaskDeliveryEventData>
+
 const verificationEventSchema = z.object({
   version: z.literal(1),
   verificationId: verificationIdSchema,
+  deliveryId: trimmedString.transform(DevFrameDeliveryId).optional(),
   binding: goalResultBindingSchema,
   snapshotId: snapshotIdSchema,
   status: z.enum(['passed', 'failed']),
@@ -540,6 +605,7 @@ const reviewFindingSchema = z.object({
 const reviewEventSchema = z.object({
   version: z.literal(1),
   reviewId: reviewIdSchema,
+  deliveryId: trimmedString.transform(DevFrameDeliveryId).optional(),
   binding: goalResultBindingSchema,
   snapshotId: snapshotIdSchema,
   reviewerSessionId: sessionIdSchema,
@@ -590,6 +656,7 @@ export function isDevFrameEvent(event: SessionEvent): event is SessionEvent<DevF
     case 'devframe/role-policy':
     case 'devframe/goal-binding':
     case 'devframe/usage':
+    case 'devframe/task-delivery':
     case 'devframe/verification':
     case 'devframe/review':
     case 'devframe/lifecycle':
@@ -618,6 +685,8 @@ export function decodeDevFramePayload<T extends DevFrameEventType>(
         return goalBindingSchema.parse(value) as SessionEventMap[T]
       case 'devframe/usage':
         return usageEventSchema.parse(value) as SessionEventMap[T]
+      case 'devframe/task-delivery':
+        return taskDeliveryEventSchema.parse(value) as SessionEventMap[T]
       case 'devframe/verification':
         return verificationEventSchema.parse(value) as SessionEventMap[T]
       case 'devframe/review':

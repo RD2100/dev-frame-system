@@ -71,6 +71,10 @@ export interface SourceFingerprintRequest {
    * `SOURCE_FINGERPRINT_GIT_FAILED` rather than truncating the fingerprint input.
    */
   readonly maxOutputBytes?: number
+  /** Cancel each Git child and wait for its exit before settling. */
+  readonly signal?: AbortSignal
+  /** Positive integer timeout in milliseconds for each Git child; omitted means no deadline. */
+  readonly timeoutMs?: number
 }
 
 /** One computed fingerprint plus the human-readable facts behind it. */
@@ -149,7 +153,7 @@ type GitRun = GitSuccess | GitFailure
  * Compute the source worktree fingerprint for one git worktree directory.
  * Read-only: no git state is mutated. Fail-loud on every unusable input or
  * git failure — there is no fallback value.
- * @param request - worktree directory, optional git command injection, and output cap.
+ * @param request - worktree directory, optional Git command, output cap, cancellation, and per-child timeout.
  * @returns the branded fingerprint with its readable digest fields.
  * @throws {@link SourceFingerprintError} with one of the documented {@link SourceFingerprintErrorCode} values.
  */
@@ -178,6 +182,10 @@ export async function computeSourceFingerprint(
     )
   }
 
+  if (request.timeoutMs !== undefined && (!Number.isSafeInteger(request.timeoutMs) || request.timeoutMs < 1)) {
+    throw new SourceFingerprintError('timeoutMs must be a positive safe integer', 'SOURCE_FINGERPRINT_INVALID_REQUEST')
+  }
+
   const directory = await stat(worktreePath).catch(() => undefined)
   if (directory === undefined || !directory.isDirectory()) {
     throw new SourceFingerprintError(
@@ -187,7 +195,7 @@ export async function computeSourceFingerprint(
   }
 
   const probeArgs = ['rev-parse', '--is-inside-work-tree'] as const
-  const probe = await runGit(gitCommand, worktreePath, probeArgs, maxOutputBytes)
+  const probe = await runGit(gitCommand, worktreePath, probeArgs, maxOutputBytes, request)
   if (!probe.ok) {
     throw classifyFailure(gitCommand, probeArgs, probe, `"${worktreePath}" is not inside a git worktree`)
   }
@@ -200,10 +208,9 @@ export async function computeSourceFingerprint(
   }
 
   const headArgs = ['rev-parse', '--verify', '--quiet', 'HEAD'] as const
-  const head = await runGit(gitCommand, worktreePath, headArgs, maxOutputBytes)
+  const head = await runGit(gitCommand, worktreePath, headArgs, maxOutputBytes, request)
   if (!head.ok) throw classifyHeadFailure(worktreePath, gitCommand, headArgs, head)
   const headCommit = head.stdout.toString('utf8').trim()
-  /* v8 ignore next 5 -- `--verify` exit 0 always emits a resolvable object id; no cross-platform fixture can make a git executable report success with non-hex output (Node refuses .cmd/.bat spawn without a shell). */
   if (!HEAD_HEX_PATTERN.test(headCommit)) {
     throw new SourceFingerprintError(
       `git rev-parse returned an unexpected HEAD value "${headCommit}"`,
@@ -216,7 +223,7 @@ export async function computeSourceFingerprint(
   // byte stream — and therefore the fingerprint — is identical from any
   // entry point inside the same worktree.
   const listingArgs = ['ls-files', '-s', '-z', '--full-name', '--', ':/'] as const
-  const listing = await runGit(gitCommand, worktreePath, listingArgs, maxOutputBytes)
+  const listing = await runGit(gitCommand, worktreePath, listingArgs, maxOutputBytes, request)
   if (!listing.ok) {
     throw classifyFailure(gitCommand, listingArgs, listing)
   }
@@ -279,18 +286,30 @@ async function runGit(
   worktreePath: string,
   args: readonly string[],
   maxOutputBytes: number,
+  limits: Pick<SourceFingerprintRequest, 'signal' | 'timeoutMs'>,
 ): Promise<GitRun> {
   try {
-    const { stdout, stderr } = await execFileAsync(gitCommand, ['-C', worktreePath, ...args], {
+    const pending = execFileAsync(gitCommand, ['-C', worktreePath, ...args], {
       encoding: 'buffer',
       maxBuffer: maxOutputBytes,
       windowsHide: true,
-      env: { ...process.env, LC_ALL: 'C' },
+      ...(limits.signal === undefined ? {} : { signal: limits.signal }),
+      ...(limits.timeoutMs === undefined ? {} : { timeout: limits.timeoutMs }),
+      env: { ...Object.fromEntries(Object.entries(process.env)
+        .filter(([key]) => !/KEY|SECRET|TOKEN|PASSWORD/i.test(key) && !/^GIT_/i.test(key))), LC_ALL: 'C' },
     })
+    // Abort can reject the operation before the child closes its stdio.
+    const closed = new Promise<void>(resolve => pending.child.once('close', () => { resolve() }))
+    let result: Awaited<typeof pending>
+    try {
+      result = await pending
+    } finally {
+      await closed
+    }
+    const { stdout, stderr } = result
     return { ok: true, stdout, stderr: stderr.toString('utf8') }
   } catch (error: unknown) {
     const output = error as Partial<{ stdout: unknown; stderr: unknown }>
-    /* v8 ignore next 2 -- with `encoding: 'buffer'` every execFile failure shape carries Buffer output (empty on spawn failure, probed on Node 24); the non-Buffer arm defends that contract. */
     return {
       ok: false,
       stdout: Buffer.isBuffer(output.stdout) ? output.stdout : Buffer.alloc(0),
@@ -311,7 +330,6 @@ function classifyHeadFailure(
   args: readonly string[],
   run: GitFailure,
 ): SourceFingerprintError {
-  /* v8 ignore start -- after the discovery probe succeeds, the unborn repository is the only reachable failure of this call; every other repo-level fatal already fails discovery, so the generic arm is defensive. */
   if ((run.error as { readonly code?: unknown }).code === 1) {
     return new SourceFingerprintError(
       `repository at "${worktreePath}" has no commits (unborn HEAD)`,
@@ -319,7 +337,6 @@ function classifyHeadFailure(
     )
   }
   return classifyFailure(gitCommand, args, run)
-  /* v8 ignore stop */
 }
 
 /**

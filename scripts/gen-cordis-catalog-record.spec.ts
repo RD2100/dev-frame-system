@@ -10,7 +10,9 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { renderPageRegion } from '@deepseek-ai/dsh-typert-generator'
 import {
+  CORDIS_CATALOG_POLICY,
   localizePageRegion,
   maybeRecordPair,
   REGION_BEGIN,
@@ -150,6 +152,22 @@ describe('spliceRegion', () => {
 })
 
 describe('localizePageRegion', () => {
+  it('links integration signature types to the owning package contract in each locale', () => {
+    const region = renderPageRegion('project-controller.md', [{
+      key: 'projectController', type: 'ProjectControllerService', abstract: false, doc: '',
+      source: 'packages/experimental/project-controller/src/controller.ts:1',
+      methods: [{
+        signature: 'inspect(request: MainTreeMergeRequest, options: IntegrationGitOptions): IntegrationGitObservation',
+        jsDoc: '',
+      }],
+    }], [], CORDIS_CATALOG_POLICY)
+    for (const name of ['MainTreeMergeRequest', 'IntegrationGitOptions', 'IntegrationGitObservation']) {
+      expect(region).toContain(`[${name}](../../packages/experimental/project-controller/README.md)`)
+      expect(localizePageRegion(region, 'docs/subsystems/project-controller.zh.md'))
+        .toContain(`[${name}](../../packages/experimental/project-controller/README.zh.md)`)
+    }
+  })
+
   it('changes only paired Markdown paths for the Chinese generated region', () => {
     const root = mkdtempSync(join(tmpdir(), 'cordis-region-locale-'))
     roots.push(root)

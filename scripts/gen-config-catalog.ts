@@ -17,6 +17,11 @@ import { githubSlug } from './verify-md-links.ts'
 const root = resolve(import.meta.dirname, '..')
 const OUT = 'docs/config-catalog.md'
 
+/** Public plugin subpaths classified independently of the package's main entry. */
+const SUPPLEMENTAL_PLUGIN_ENTRIES: Readonly<Record<string, readonly string[]>> = {
+  '@deepseek-ai/dsh-experimental-project-controller': ['./consumer', './task-consumer', './delivery-consumer'],
+}
+
 /** The fenced-block info string for pasted config declarations (skipped by
  * doc-typecheck, since a lone declaration referencing imports is not
  * standalone-compilable). */
@@ -59,7 +64,7 @@ export interface CatalogEntry {
   pkg: string
   /** Repo-relative package dir, e.g. `packages/core/agent-loop`. */
   dir: string
-  /** Repo-relative entry file, `<dir>/src/index.ts`. */
+  /** Repo-relative source of the package or public plugin subpath. */
   entry: string
   kind: Kind
   /** Service keys the plugin `inject`s (empty when none declared). */
@@ -545,17 +550,51 @@ function findInject(ctx: FileCtx, pluginClass: ts.ClassDeclaration | null, viola
 
 /** Resolve the entry file's default export to its class/function declaration
  * (mirroring the Loader's `unwrapExports`), or null when there is none. */
-function defaultExport(ctx: FileCtx): ts.ClassDeclaration | ts.FunctionDeclaration | null {
+function defaultExport(
+  world: World,
+  ctx: FileCtx,
+  violations: string[],
+  name = 'default',
+  seen = new Set<string>(),
+): { decl: ts.ClassDeclaration | ts.FunctionDeclaration; ctx: FileCtx } | null {
+  const key = `${ctx.abs}#${name}`
+  if (seen.has(key)) {
+    violations.push(`${ctx.rel}: cyclic plugin re-export for '${name}'.`)
+    return null
+  }
+  seen.add(key)
   for (const stmt of ctx.sf.statements) {
-    if (ts.isExportAssignment(stmt) && !stmt.isExportEquals && ts.isIdentifier(stmt.expression)) {
-      const name = stmt.expression.text
+    if (name === 'default' && ts.isExportAssignment(stmt) && !stmt.isExportEquals && ts.isIdentifier(stmt.expression)) {
+      const localName = stmt.expression.text
       for (const s of ctx.sf.statements) {
-        if ((ts.isClassDeclaration(s) || ts.isFunctionDeclaration(s)) && s.name?.text === name) return s
+        if ((ts.isClassDeclaration(s) || ts.isFunctionDeclaration(s)) && s.name?.text === localName) return { decl: s, ctx }
       }
       return null
     }
     if ((ts.isClassDeclaration(stmt) || ts.isFunctionDeclaration(stmt))
-      && stmt.modifiers?.some(m => m.kind === ts.SyntaxKind.DefaultKeyword)) return stmt
+      && (name === 'default'
+        ? stmt.modifiers?.some(m => m.kind === ts.SyntaxKind.DefaultKeyword)
+        : stmt.name?.text === name && stmt.modifiers?.some(m => m.kind === ts.SyntaxKind.ExportKeyword))) {
+      return { decl: stmt, ctx }
+    }
+    if (!ts.isExportDeclaration(stmt) || stmt.isTypeOnly || !stmt.moduleSpecifier
+      || !ts.isStringLiteral(stmt.moduleSpecifier) || !stmt.exportClause || !ts.isNamedExports(stmt.exportClause)) continue
+    const exported = stmt.exportClause.elements.find(element => !element.isTypeOnly && element.name.text === name)
+    if (exported === undefined) continue
+    const specifier = stmt.moduleSpecifier.text
+    if (!specifier.startsWith('.') || !specifier.endsWith('.ts')) {
+      violations.push(`${ctx.rel}: plugin re-export '${specifier}' must be package-relative with an explicit .ts extension.`)
+      return null
+    }
+    let target: FileCtx
+    try { target = loadRelative(world, ctx, specifier) }
+    catch {
+      violations.push(`${ctx.rel}: plugin re-export '${specifier}' is missing or unreadable.`)
+      return null
+    }
+    const resolved = defaultExport(world, target, violations, (exported.propertyName ?? exported.name).text, seen)
+    if (resolved === null) violations.push(`${ctx.rel}: plugin re-export '${name}' from '${specifier}' has no class/function declaration.`)
+    return resolved
   }
   return null
 }
@@ -582,10 +621,15 @@ export function collectConfigCatalog(scanRoot: string = root): CatalogEntry[] {
   // Pre-pass: package name → dir, so schema-path lookups can follow
   // workspace-package imports while individual packages are still being walked.
   const pkgDirByName = new Map<string, string>()
-  const manifests: { dir: string; pkg: string }[] = []
+  const manifests: { dir: string; pkg: string; entryRel: string }[] = []
   for (const manifestRel of globSync('packages/*/*/package.json', { cwd: scanRoot }).map(path => path.split(sep).join('/')).sort()) {
     const dir = manifestRel.slice(0, -'/package.json'.length)
-    const manifest = JSON.parse(readFileSync(resolve(scanRoot, manifestRel), 'utf8')) as { name?: string; os?: string[]; cpu?: string[] }
+    const manifest = JSON.parse(readFileSync(resolve(scanRoot, manifestRel), 'utf8')) as {
+      name?: string
+      os?: string[]
+      cpu?: string[]
+      exports?: Record<string, unknown>
+    }
     const pkg = manifest.name
     if (!pkg) {
       violations.push(`${manifestRel} has no "name".`)
@@ -597,12 +641,22 @@ export function collectConfigCatalog(scanRoot: string = root): CatalogEntry[] {
       continue
     }
     pkgDirByName.set(pkg, dir)
-    manifests.push({ dir, pkg })
+    manifests.push({ dir, pkg, entryRel: `${dir}/src/index.ts` })
+    for (const subpath of SUPPLEMENTAL_PLUGIN_ENTRIES[pkg] ?? []) {
+      const exported = manifest.exports?.[subpath]
+      const runtime = typeof exported === 'string' ? exported
+        : exported !== null && typeof exported === 'object' && 'default' in exported ? exported.default : undefined
+      const stem = subpath.slice(2)
+      if (runtime !== `./lib/${stem}.js`) {
+        violations.push(`${pkg}${subpath.slice(1)}: supplemental plugin must export ./lib/${stem}.js at ${subpath}.`)
+        continue
+      }
+      manifests.push({ dir, pkg: `${pkg}${subpath.slice(1)}`, entryRel: `${dir}/src/${stem}.ts` })
+    }
   }
   const world: World = { scanRoot, cache, pkgDirByName }
 
-  for (const { dir, pkg } of manifests) {
-    const entryRel = `${dir}/src/index.ts`
+  for (const { dir, pkg, entryRel } of manifests) {
     let ctx: FileCtx
     try {
       ctx = loadFile(resolve(scanRoot, entryRel), entryRel, cache)
@@ -616,8 +670,10 @@ export function collectConfigCatalog(scanRoot: string = root): CatalogEntry[] {
     // Classify, mirroring the Loader's unwrapExports: the default export IS
     // the plugin when present; else an exported `apply` makes the module
     // namespace the plugin; else the package is a plain library.
-    const dflt = defaultExport(ctx)
+    const resolvedDefault = defaultExport(world, ctx, violations)
+    const dflt = resolvedDefault?.decl
     const apply = applyExport(ctx)
+    if (resolvedDefault !== null) ctx = resolvedDefault.ctx
     let pluginClass: ts.ClassDeclaration | null = null
     let configParam: ts.ParameterDeclaration | undefined
     let kind: Kind
@@ -655,7 +711,7 @@ export function collectConfigCatalog(scanRoot: string = root): CatalogEntry[] {
 
     // Resolve the config type and paste its package-local transitive closure.
     if (!configParam.type || !ts.isTypeReferenceNode(configParam.type) || !ts.isIdentifier(configParam.type.typeName)) {
-      violations.push(`${pkg}: config parameter type (${pointer(entryRel, ctx.sf, configParam)}) is not a plain type-name reference; declare a named config type.`)
+      violations.push(`${pkg}: config parameter type (${pointer(ctx.rel, ctx.sf, configParam)}) is not a plain type-name reference; declare a named config type.`)
       continue
     }
     const typeName = configParam.type.typeName.text

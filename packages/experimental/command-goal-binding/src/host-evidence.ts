@@ -14,11 +14,11 @@ import { EvidenceReviewGate } from '@deepseek-ai/dsh-experimental-agent-evidence
 import type { EvidenceReviewerDirectory } from '@deepseek-ai/dsh-experimental-agent-evidence'
 import type {
   DevFrameRolePolicyEventData,
-} from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
-import type { DevFrameRequiredChecksConfig } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
-import { DevFrameSessionJournal } from '@deepseek-ai/dsh-experimental-devframe/src/session-journal.ts'
-import type { DevFrameFlush } from '@deepseek-ai/dsh-experimental-devframe/src/session-journal.ts'
-import type { DevFrameProjectionState } from '@deepseek-ai/dsh-experimental-devframe/src/projection.ts'
+} from '@deepseek-ai/dsh-experimental-devframe'
+import type { DevFrameRequiredChecksConfig } from '@deepseek-ai/dsh-experimental-devframe'
+import { DevFrameSessionJournal } from '@deepseek-ai/dsh-experimental-devframe'
+import type { DevFrameFlush } from '@deepseek-ai/dsh-experimental-devframe'
+import type { DevFrameProjectionState } from '@deepseek-ai/dsh-experimental-devframe'
 import type {
   GoalBinding,
   GoalResultBinding,

@@ -202,7 +202,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 }
 ```
 
-来源：[`packages/interaction/user-approval/src/index.ts:32`](../packages/interaction/user-approval/src/index.ts)
+来源：[`packages/interaction/user-approval/src/index.ts:33`](../packages/interaction/user-approval/src/index.ts)
 
 ### `assistant/*`
 
@@ -406,7 +406,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'devframe/goal-binding': GoalBinding
 ```
 
-来源：[`packages/experimental/devframe/src/events.ts:266`](../packages/experimental/devframe/src/events.ts)
+来源：[`packages/experimental/devframe/src/events.ts:363`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframelifecycle--log-only"></a>
 
@@ -417,7 +417,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'devframe/lifecycle': DevFrameLifecycleEventData
 ```
 
-来源：[`packages/experimental/devframe/src/events.ts:274`](../packages/experimental/devframe/src/events.ts)
+来源：[`packages/experimental/devframe/src/events.ts:373`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframereview--log-only"></a>
 
@@ -428,7 +428,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'devframe/review': DevFrameReviewEventData
 ```
 
-来源：[`packages/experimental/devframe/src/events.ts:272`](../packages/experimental/devframe/src/events.ts)
+来源：[`packages/experimental/devframe/src/events.ts:371`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframerole-policy--log-only"></a>
 
@@ -439,18 +439,29 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'devframe/role-policy': DevFrameRolePolicyEventData
 ```
 
-来源：[`packages/experimental/devframe/src/events.ts:264`](../packages/experimental/devframe/src/events.ts)
+来源：[`packages/experimental/devframe/src/events.ts:361`](../packages/experimental/devframe/src/events.ts)
+
+<a id="devframetask-delivery--log-only"></a>
+
+#### `devframe/task-delivery` — log-only
+
+```ts persistence-catalog
+/** Explicit Worker output snapshot. */
+'devframe/task-delivery': DevFrameTaskDeliveryEventData
+```
+
+来源：[`packages/experimental/devframe/src/events.ts:367`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframetask-warning--log-only"></a>
 
 #### `devframe/task-warning` — log-only
 
 ```ts persistence-catalog
-/** Host-graded degradation of one task's memory surface, carrying the grading the explicit requirement context produced; at most one per task. */
+/** Host-graded memory degradation, recorded at most once per task. */
 'devframe/task-warning': DevFrameTaskWarningEventData
 ```
 
-来源：[`packages/experimental/devframe/src/events.ts:321`](../packages/experimental/devframe/src/events.ts)
+来源：[`packages/experimental/devframe/src/events.ts:375`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframeusage--log-only"></a>
 
@@ -461,7 +472,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'devframe/usage': DevFrameUsageEventData
 ```
 
-来源：[`packages/experimental/devframe/src/events.ts:268`](../packages/experimental/devframe/src/events.ts)
+来源：[`packages/experimental/devframe/src/events.ts:365`](../packages/experimental/devframe/src/events.ts)
 
 <a id="devframeverification--log-only"></a>
 
@@ -472,7 +483,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'devframe/verification': DevFrameVerificationEventData
 ```
 
-来源：[`packages/experimental/devframe/src/events.ts:270`](../packages/experimental/devframe/src/events.ts)
+来源：[`packages/experimental/devframe/src/events.ts:369`](../packages/experimental/devframe/src/events.ts)
 
 ### `feedback/*`
 

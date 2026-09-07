@@ -44,8 +44,16 @@ Status: implemented
 ### 服务面
 
 ```ts
+import type { Branded } from '@deepseek-ai/dsh-brand'
+import { Service } from '@deepseek-ai/cordis'
+import type { WorkspaceId } from '@deepseek-ai/dsh-workspace'
+import type {
+  WorktreeLockHolder, WorktreeDanglingRegistration,
+  WorktreeUnregisteredWorktree, WorktreeReconcileOptions,
+} from '@deepseek-ai/dsh-worktree-registry'
+
 export type WorktreeId = Branded<'WorktreeId'>
-export function WorktreeId(id: string): WorktreeId
+export declare function WorktreeId(id: string): WorktreeId
 
 export interface WorktreeCreateRequest {
   workspaceId: WorkspaceId   // owner anchor; resolved through ctx.workspaceRegistry
@@ -78,13 +86,13 @@ export interface WorktreeReconcileReport {
 }
 
 export abstract class WorktreeRegistry extends Service {
-  create(request: WorktreeCreateRequest): Promise<Worktree>
-  bind(id: WorktreeId, holder: WorktreeLockHolder): Promise<Worktree>
-  unbind(id: WorktreeId, holder: WorktreeLockHolder): Promise<Worktree>
-  list(workspaceId: WorkspaceId): readonly Worktree[]
-  status(id: WorktreeId): Promise<WorktreeStatus>
-  remove(id: WorktreeId, options?: { force?: boolean }): Promise<void>
-  reconcile(workspaceId: WorkspaceId, options?: WorktreeReconcileOptions): Promise<WorktreeReconcileReport>
+  abstract create(request: WorktreeCreateRequest): Promise<Worktree>
+  abstract bind(id: WorktreeId, holder: WorktreeLockHolder): Promise<Worktree>
+  abstract unbind(id: WorktreeId, holder: WorktreeLockHolder): Promise<Worktree>
+  abstract list(workspaceId: WorkspaceId): readonly Worktree[]
+  abstract status(id: WorktreeId): Promise<WorktreeStatus>
+  abstract remove(id: WorktreeId, options?: { force?: boolean }): Promise<void>
+  abstract reconcile(workspaceId: WorkspaceId, options?: WorktreeReconcileOptions): Promise<WorktreeReconcileReport>
 }
 ```
 

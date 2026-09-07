@@ -16,6 +16,7 @@
     { "path": "../../subprocess/subprocess" },
     { "path": "../../util/timeout" },
     { "path": "../project-contracts" },
-    { "path": "../session-identity" }
+    { "path": "../session-identity" },
+    { "path": "../../workflow/worktree-registry" }
   ]
 }

@@ -1,18 +1,18 @@
 /**
- * Real-git fixture suite for the source fingerprint engine. Every case runs
- * the engine against a genuine repository in a unique `mkdtemp` root; the
- * engine's git face is the production one (no mocks), with the unavailable-git
- * case asserted through the engine's `gitCommand` injection seam instead of
- * PATH mutation.
+ * Source fingerprints over real Git repositories in private temporary roots.
+ * A Node executable fixture supplies hanging Git calls with socket readiness
+ * to verify cancellation, deadlines, environment isolation, and child exit.
  * @module dsh-experimental-devframe/tests/source-fingerprint
  */
 
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { createServer, type Socket } from 'node:net'
+import { pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeSourceFingerprint, SourceFingerprintError, verifySourceFingerprint } from '../src/source-fingerprint.ts'
 import type { SourceFingerprintErrorCode, VerifyVerdict } from '../src/source-fingerprint.ts'
 import { SourceFingerprint as makeSourceFingerprint } from '../src/shared/types.ts'
@@ -434,4 +434,77 @@ describe('verifySourceFingerprint', { timeout: 30_000 }, () => {
 
     expect(verdict).toEqual({ kind: 'match', fingerprint: recorded })
   })
+})
+
+
+describe('bounded fingerprint Git children', () => {
+  it.each([0, -1, 1.5, Number.POSITIVE_INFINITY])('rejects invalid timeout %s before spawning', async (timeoutMs) => {
+    await expect(computeSourceFingerprint({ worktreePath: await createTempRoot(), timeoutMs }))
+      .rejects.toMatchObject({ code: 'SOURCE_FINGERPRINT_INVALID_REQUEST' })
+  })
+
+  // The timeout case includes native Node startup and an explicit socket handshake.
+  it.each(['probe', 'head', 'listing', 'timeout'] as const)('settles a hung %s child only after exit', async (stage) => {
+    const root = await createTempRoot()
+    const script = join(root, 'git-fixture.mjs')
+    const ready = Promise.withResolvers<number>()
+    const sockets = new Set<Socket>()
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      // Killing the owned child resets its readiness socket on Windows.
+      socket.on('error', (error: NodeJS.ErrnoException) => {
+        if (error.code !== 'ECONNRESET') ready.reject(error)
+      })
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const value: unknown = JSON.parse(data.toString())
+        if (typeof value !== 'object' || value === null || !('pid' in value) || typeof value.pid !== 'number'
+          || !('clean' in value) || value.clean !== true) {
+          ready.reject(new Error('Git child did not receive an isolated environment'))
+        } else ready.resolve(value.pid)
+      })
+    })
+    const abort = new AbortController()
+    let pending: Promise<unknown> | undefined
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject)
+        server.listen(0, '127.0.0.1', () => { server.removeListener('error', reject); resolve() })
+      })
+      const address = server.address()
+      if (address === null || typeof address === 'string') throw new Error('Missing fixture listener')
+      await writeFile(script, [
+        "import { connect } from 'node:net'",
+        "import { writeSync } from 'node:fs'",
+        "const stage = process.argv.includes('--is-inside-work-tree') ? 'probe' : process.argv[1]?.endsWith('ls-files') ? 'listing' : 'head'",
+        'if (stage !== ' + JSON.stringify(stage === 'timeout' ? 'listing' : stage) + ') {',
+        "  writeSync(1, stage === 'probe' ? 'true\\n' : 'a'.repeat(40) + '\\n'); process.exit(0)",
+        '}',
+        'const socket = connect(' + String(address.port) + ", '127.0.0.1', () => socket.write(JSON.stringify({ pid: process.pid, clean: process.env.DSH_FIXTURE_SECRET === undefined && process.env.GIT_INDEX_FILE === undefined })))",
+        'await new Promise(() => {})',
+      ].join('\n'))
+      vi.stubEnv('NODE_OPTIONS', '--import=' + JSON.stringify(pathToFileURL(script).href))
+      vi.stubEnv('DSH_FIXTURE_SECRET', 'fixture-only')
+      vi.stubEnv('GIT_INDEX_FILE', join(root, 'must-not-be-used'))
+      pending = computeSourceFingerprint({ worktreePath: root, gitCommand: process.execPath,
+        signal: abort.signal, ...(stage === 'timeout' ? { timeoutMs: 8_000 } : {}) })
+      const outcome = pending.then(value => ({ value }), (error: unknown) => ({ error }))
+      const pid = await Promise.race([ready.promise, outcome.then((result) => { throw new Error('Child settled before readiness: ' + ('error' in result ? String(result.error) : 'success')) })])
+      if (stage !== 'timeout') abort.abort()
+      expect(await outcome).toMatchObject({ error: { code: 'SOURCE_FINGERPRINT_GIT_FAILED' } })
+      expect(() => process.kill(pid, 0)).toThrow()
+    } finally {
+      abort.abort()
+      if (pending !== undefined) await Promise.allSettled([pending])
+      for (const socket of sockets) socket.destroy()
+      try {
+        if (server.listening) await new Promise<void>((resolve, reject) => server.close((error) => {
+          if (error) reject(error)
+          else resolve()
+        }))
+      } finally {
+        vi.unstubAllEnvs()
+      }
+    }
+  }, 30_000)
 })

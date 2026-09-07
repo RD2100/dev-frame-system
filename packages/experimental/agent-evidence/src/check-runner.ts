@@ -10,8 +10,8 @@
 import { execFile } from 'node:child_process'
 import type { ExecFileOptions } from 'node:child_process'
 import { promisify } from 'node:util'
-import type { DevFrameCheckResult } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
-import type { DevFrameRequiredChecksConfig } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
+import type { DevFrameCheckResult } from '@deepseek-ai/dsh-experimental-devframe'
+import type { DevFrameRequiredChecksConfig } from '@deepseek-ai/dsh-experimental-devframe'
 
 /**
  * Execute every configured required check; one real result per configured check, in config order.
@@ -45,7 +45,7 @@ export function createSubprocessRequiredChecksExecution(
   options?: SubprocessExecutionOptions,
 ): RequiredChecksExecution {
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS
-  return async config => {
+  return async (config) => {
     // Sequential in config order: the result order is the config order by
     // construction, and concurrent spawns of the same workspace are avoided.
     const results: DevFrameCheckResult[] = []

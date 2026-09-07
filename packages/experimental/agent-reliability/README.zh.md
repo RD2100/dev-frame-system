@@ -35,9 +35,16 @@ kind: "package-reference"
 派发代际开始时为恰一个工作绑定身份打开准入，并把 `assertAdmitted` 设为每次派发的第一步；不匹配或过期的绑定在任何模型/工具工作开始前即被拒绝。
 
 ```ts
-ctx.agentReliability.openAdmission({ controllerSessionId, goalId })
-// inside the dispatch path, before any work:
-ctx.agentReliability.assertAdmitted(identity)
+import type { AgentReliability } from '@deepseek-ai/dsh-experimental-agent-reliability'
+import type { GoalBindingIdentity } from '@deepseek-ai/dsh-experimental-devframe/controller'
+
+function startGeneration(ctx: { agentReliability: AgentReliability }, identity: GoalBindingIdentity) {
+  ctx.agentReliability.openAdmission(identity)
+}
+
+function beforeDispatch(ctx: { agentReliability: AgentReliability }, identity: GoalBindingIdentity) {
+  ctx.agentReliability.assertAdmitted(identity)
+}
 ```
 
 ### 以截止时刻限定准入
@@ -45,8 +52,13 @@ ctx.agentReliability.assertAdmitted(identity)
 打开准入时附上 epoch 毫秒截止时刻即可限定派发代际：前置步骤在每次派发时读取墙钟（`Date.now()`），从 `deadline` 时刻（含）起以 `AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED` 拒绝。恢复唯显式重开新代际；非有限截止在打开处明确失败，不触碰当前代际。
 
 ```ts
-ctx.agentReliability.openAdmission({ controllerSessionId, goalId }, { deadline: Date.now() + 60_000 })
-// from `deadline` (inclusive) the pre-step rejects with AGENT_RELIABILITY_ADMISSION_DEADLINE_CLOSED
+import type { AgentReliability } from '@deepseek-ai/dsh-experimental-agent-reliability'
+import type { GoalBindingIdentity } from '@deepseek-ai/dsh-experimental-devframe/controller'
+
+function startBoundedGeneration(ctx: { agentReliability: AgentReliability }, identity: GoalBindingIdentity) {
+  ctx.agentReliability.openAdmission(identity, { deadline: Date.now() + 60_000 })
+  // From the deadline (inclusive), assertAdmitted rejects dispatch.
+}
 ```
 
 ### 对账一次不确定调用
@@ -54,11 +66,21 @@ ctx.agentReliability.openAdmission({ controllerSessionId, goalId }, { deadline: 
 调用结果未知时，把计划交给对账器：探测先查外部状态，重试最多执行一次、且仅在探测证明效果缺失后执行。
 
 ```ts
-const outcome = await ctx.agentReliability.reconcileUncertainCall({
-  operation: 'create-worktree',
-  probe: async () => await probeExternalState(operationId),
-  retry: async () => await createWorktree(request),
-})
+import type {
+  AgentReliability, ReconciliationProbe,
+} from '@deepseek-ai/dsh-experimental-agent-reliability'
+
+async function reconcileWorktree<R>(
+  ctx: { agentReliability: AgentReliability },
+  probeExternalState: () => Promise<ReconciliationProbe>,
+  createWorktree: () => Promise<R>,
+) {
+  return await ctx.agentReliability.reconcileUncertainCall({
+    operation: 'create-worktree',
+    probe: probeExternalState,
+    retry: createWorktree,
+  })
+}
 ```
 
 ### 给刷写设屏障
@@ -66,8 +88,17 @@ const outcome = await ctx.agentReliability.reconcileUncertainCall({
 失败的刷写会关闭准入并保留写权；绝不在未刷写的日志上释放写者。
 
 ```ts
-const barrier = await ctx.agentReliability.flushBarrier(flushSessions)
-if (!barrier.flushed) reportFlushFailure(barrier.failure)
+import type { AgentReliability } from '@deepseek-ai/dsh-experimental-agent-reliability'
+
+async function flushBeforeRelease(
+  ctx: { agentReliability: AgentReliability },
+  flushSessions: () => Promise<void>,
+  reportFlushFailure: (failure: unknown) => void,
+) {
+  const barrier = await ctx.agentReliability.flushBarrier(flushSessions)
+  if (!barrier.flushed) reportFlushFailure(barrier.failure)
+  return barrier
+}
 ```
 
 -----
@@ -121,9 +152,8 @@ if (!barrier.flushed) reportFlushFailure(barrier.failure)
 
 与实时请求无关：本包不触碰请求前缀，因此不可能使提供方缓存复用失效。
 
-## 已知限制与延期工作
-
 <a id="known-limitations-and-deferred-work"></a>
+## 已知限制与延期工作
 
 这些限制界定了本服务在何种场景下不适用或需要特别运维关注。它们是当前包约束，不是任务清单。
 

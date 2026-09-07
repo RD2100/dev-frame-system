@@ -58,3 +58,10 @@ export async function harness(config: ProjectControllerConfig = {}, root?: strin
     },
   }
 }
+
+/** Deliberately incomplete admission used only by early-denial tests. */
+export const unavailableMergeRequest = {
+  git: { sourcePath: '/unavailable-source', targetPath: '/unavailable-target', sourceCommit: 'a'.repeat(40), targetHead: 'b'.repeat(40) },
+  options: { executable: 'git', timeoutMs: 1000, maxOutputBytes: 1024 },
+  requiredChecksStore: { async save() { throw new Error('unavailable') }, async load() { throw new Error('unavailable') } },
+}

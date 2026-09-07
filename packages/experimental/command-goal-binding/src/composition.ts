@@ -26,17 +26,16 @@ import type {
   GoalBudgetInput,
   TaskId,
 } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
-import { computeSourceFingerprint } from '@deepseek-ai/dsh-experimental-devframe/src/source-fingerprint.ts'
+import { computeSourceFingerprint } from '@deepseek-ai/dsh-experimental-devframe'
 import type { AcceptanceHash, DevFrameSnapshotId, SourceFingerprint } from '@deepseek-ai/dsh-experimental-devframe/shared'
 import { DevFrameSnapshotId as makeSnapshotId } from '@deepseek-ai/dsh-experimental-devframe/shared'
-import { MemoryRequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
-import type { RequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
-import { devFrameProjectionDefinition } from '@deepseek-ai/dsh-experimental-devframe/src/projection.ts'
-import type { DevFrameProjectionState } from '@deepseek-ai/dsh-experimental-devframe/src/projection.ts'
-import { DevFrameSessionJournal } from '@deepseek-ai/dsh-experimental-devframe/src/session-journal.ts'
-import type { DevFrameReviewEventData, DevFrameVerificationEventData } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
-import * as taskWarningListenerPlugin from '@deepseek-ai/dsh-experimental-devframe/src/task-warning-listener.ts'
-import * as taskFailDisarmPlugin from '@deepseek-ai/dsh-experimental-devframe/src/task-fail-continuation.ts'
+import { MemoryRequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe'
+import type { RequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe'
+import { devFrameProjectionDefinition } from '@deepseek-ai/dsh-experimental-devframe'
+import type { DevFrameProjectionState } from '@deepseek-ai/dsh-experimental-devframe'
+import { DevFrameSessionJournal } from '@deepseek-ai/dsh-experimental-devframe'
+import type { DevFrameReviewEventData, DevFrameVerificationEventData } from '@deepseek-ai/dsh-experimental-devframe'
+import { taskWarningListener as taskWarningListenerPlugin, taskFailDisarm as taskFailDisarmPlugin } from '@deepseek-ai/dsh-experimental-devframe'
 import {
   GOAL_ALREADY_COMPLETE_TEXT,
   NO_BINDING_TEXT,

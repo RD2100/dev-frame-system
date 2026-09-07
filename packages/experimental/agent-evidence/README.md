@@ -38,49 +38,55 @@ Mount the service beside the storage stack; it hard-injects `ctx.storageDomain` 
 Every recording call validates through the durable schema and returns the frozen receipt; queries serve append-only trails in recorded order.
 
 ```ts
-await ctx.agentEvidence.recordTaskGoalBinding({
-  taskId, controllerSessionId, goalId, goalRevision: 3,
-  workspaceId: WorkspaceId('ws-default'),
-  acceptanceHash: AcceptanceHash('acceptance:sha256:abc'),
-  sourceFingerprint: SourceFingerprint('source:sha256:def'),
-})
-await ctx.agentEvidence.recordSubmission({
-  taskId, submittedBy, commit, changedPaths, inputDigest,
-})
-await ctx.agentEvidence.recordVerification({
-  taskId, command: 'pnpm exec vitest run packages/a', exitCode: 0, artifactPaths,
-})
+import type {
+  AgentEvidenceLedger, SubmissionRequest, TaskGoalBindingRequest, VerificationRequest,
+} from '@deepseek-ai/dsh-experimental-agent-evidence'
 
-const trail = ctx.agentEvidence.byTask(taskId)
-const bindings = ctx.agentEvidence.bindingsByGoal(controllerSessionId, goalId)
+async function recordEvidence(
+  ctx: { agentEvidence: AgentEvidenceLedger },
+  binding: TaskGoalBindingRequest,
+  submission: Omit<SubmissionRequest, 'taskId'>,
+  verification: Omit<VerificationRequest, 'taskId'>,
+) {
+  await ctx.agentEvidence.recordTaskGoalBinding(binding)
+  await ctx.agentEvidence.recordSubmission({ ...submission, taskId: binding.taskId })
+  await ctx.agentEvidence.recordVerification({ ...verification, taskId: binding.taskId })
+  return {
+    trail: ctx.agentEvidence.byTask(binding.taskId),
+    bindings: ctx.agentEvidence.bindingsByGoal(binding.controllerSessionId, binding.goalId),
+  }
+}
 ```
 
 Malformed receipts fail loud with `AGENT_EVIDENCE_INVALID_RECEIPT`; storage refusals surface as `AGENT_EVIDENCE_PERSISTENCE`.
 
 ### Record DevFrame verification and review evidence
 
+For task output evidence, the host supplies the latest task delivery's `deliveryId` and its `deliveryResultBinding` as `binding` to both journal methods. The journal preserves the delivery reference; the DevFrame projection checks its current Goal, latest delivery, and output identity. The original Goal input remains unchanged. Omitting `deliveryId` still records whole-Goal evidence, which does not replace the task delivery evidence required for integration.
+
 The journal producer is a plain class the host composes (no plugin mount): construct it with the Session durability callback and the reviewer role authority, then call the two record methods at the moments verification and review complete.
 
 ```ts
 import { AgentEvidenceJournal } from '@deepseek-ai/dsh-experimental-agent-evidence'
+import type {
+  AgentEvidenceJournalOptions, ReviewEvidenceRequest, VerificationEvidenceRequest,
+} from '@deepseek-ai/dsh-experimental-agent-evidence'
 
-const journal = new AgentEvidenceJournal({
-  flush: session => ctx.sessions.flush(session), // native durability callback
-  reviewerDirectory,                             // SessionId-keyed reviewer role authority
-  // execution: optional; defaults to the real subprocess face (10-minute kill guard)
-})
-
-// Verification completed: resolve the stored approved checklist by digest,
-// execute every declared check exactly, and record the real results.
-const verification = await journal.recordVerification({
-  session, binding, requiredChecksDigest, requiredChecksStore,
-})
-
-// Review completed: the reviewer Session is cross-authorized before the event
-// is appended.
-const review = await journal.recordReview({
-  session, binding, reviewerSessionId, policyVersion, decision, findings,
-})
+async function recordJournalEvidence(
+  options: AgentEvidenceJournalOptions,
+  verificationRequest: VerificationEvidenceRequest,
+  reviewRequest: Omit<ReviewEvidenceRequest, 'session' | 'binding'>,
+) {
+  // The host supplies native Session flushing and reviewer role authority.
+  const journal = new AgentEvidenceJournal(options)
+  // Execute the approved checks resolved from the stored digest.
+  const verification = await journal.recordVerification(verificationRequest)
+  // Cross-authorize the reviewer Session before appending its decision.
+  const review = await journal.recordReview({
+    ...reviewRequest, session: verificationRequest.session, binding: verificationRequest.binding,
+  })
+  return { verification, review }
+}
 ```
 
 The producer records evidence, it does not judge completion. Store failures propagate as the existing `RequiredChecksError` codes (`REQUIRED_CHECKS_CONFIG_NOT_FOUND`, `REQUIRED_CHECKS_INVALID_CONFIG`) before any event is written; gate rejections surface as `AGENT_EVIDENCE_REVIEWER_UNAUTHORIZED` without latching; durability failures surface as `DevFramePersistenceError` and latch the Session's journal. Every record is validated by the durable `devframe/verification`/`devframe/review` schemas before it lands.
@@ -140,6 +146,7 @@ Zero direct tokens on every request.
 
 Independent of live requests: the package never touches a request prefix, so it cannot invalidate provider cache reuse.
 
+<a id="known-limitations-and-deferred-work"></a>
 ## Known Limitations and Deferred Work
 
 These limits define when the ledger is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
