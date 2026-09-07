@@ -372,7 +372,7 @@ describe('project task consumer through the real Loader', () => {
       })
       // Observe queue entry while delegating every append and persistence operation to the real journal.
       const append = Reflect.get(DevFrameSessionJournal.prototype, 'append')
-      const appendSpy = vi.spyOn(DevFrameSessionJournal.prototype, 'append').mockImplementation(function (...args) {
+      const appendSpy = vi.spyOn(DevFrameSessionJournal.prototype, 'append').mockImplementation(function (this: DevFrameSessionJournal, ...args) {
         const pending = append.apply(this, args)
         if (args[1] === 'devframe/task-delivery' && 'taskId' in args[2] && String(args[2].taskId) === 'task-b') {
           queued.resolve(undefined)

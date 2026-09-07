@@ -8,7 +8,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, type Fiber } from '@deepseek-ai/cordis'
 import SessionStore from '@deepseek-ai/dsh-session'
 import Storage from '@deepseek-ai/dsh-storage'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
@@ -32,16 +32,19 @@ export interface Harness {
  * @returns the booted harness; the caller owns disposal, and `dispose()`
  *   removes the root unless `keepRoot` is set.
  */
-export async function harness(config: ProjectControllerConfig = {}, root?: string): Promise<Harness> {
+export async function harness(
+  config: ProjectControllerConfig = {}, root?: string,
+): Promise<Harness & { disposeController: () => Promise<void> }> {
   const resolved = root ?? await mkdtemp(join(tmpdir(), 'dsh-project-controller-'))
   const ctx = new Context()
+  let controllerFiber: Fiber
   try {
     await ctx.plugin(SessionStore)
     await ctx.plugin(Storage)
     await ctx.plugin(StorageJson, { root: resolved })
     await ctx.plugin(StorageDomain, { backend: 'json' })
     await ctx.plugin(AgentBindingRegistry)
-    await ctx.plugin(ProjectController, config)
+    controllerFiber = await ctx.plugin(ProjectController, config)
   } catch (error) {
     await ctx.fiber.dispose()
     await rm(resolved, { recursive: true, force: true })
@@ -50,6 +53,7 @@ export async function harness(config: ProjectControllerConfig = {}, root?: strin
   return {
     ctx,
     root: resolved,
+    disposeController: () => controllerFiber.dispose(),
     async dispose(options) {
       await ctx.fiber.dispose()
       if (options?.keepRoot !== true) {
