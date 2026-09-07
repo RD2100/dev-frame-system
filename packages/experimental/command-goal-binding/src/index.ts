@@ -15,6 +15,7 @@ import { FileRequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-dev
 import { GoalBindingComposition } from './composition.ts'
 import { resolveCommandGoalBindingConfig } from './config.ts'
 import type { CommandGoalBindingConfig } from './config.ts'
+import { resolveHostStopAdapters } from './host-stop.ts'
 
 export { GoalBindingComposition } from './composition.ts'
 export type {
@@ -71,6 +72,13 @@ export {
   resultTupleOf,
   sessionFlush,
 } from './host-evidence.ts'
+export {
+  HostStopProcessInventory,
+  hostStopInventoryOf,
+  resolveHostStopAdapters,
+  createHostStopTree,
+  createHostWriterRelease,
+} from './host-stop.ts'
 
 /** Loader plugin name. */
 export const name = 'command-goal-binding'
@@ -82,7 +90,11 @@ export const inject = ['commands', 'goals', 'sessions', 'sessionProjections']
  * Activate the composition: validate the deployment configuration loudly and
  * construct the {@link GoalBindingComposition}, which registers the devframe
  * projection unit and the effect-wrapped `/goal-complete`, `/devframe-start`,
- * and `/devframe-resume` commands on the calling fiber.
+ * and `/devframe-resume` commands on the calling fiber. The stop store mounts
+ * the real host stop adapters from `./host-stop.ts` — the captured process
+ * inventory always, and the project tree and writer release faces whenever
+ * the fiber carries the agent, workspace, and worktree registries and the
+ * configuration names a worktree root.
  * @param ctx - the plugin fiber's context.
  * @param config - deployment configuration; `workspaceId`, `requiredChecksPath`, `checks`,
  *   `taskIds`, and `maxAttempts` are required.
@@ -96,5 +108,6 @@ export function apply(
   const resolved = resolveCommandGoalBindingConfig(config)
   return new GoalBindingComposition(ctx, resolved, {
     requiredChecks: new FileRequiredChecksConfigStore({ path: resolved.requiredChecksPath }),
+    stop: resolveHostStopAdapters(ctx, resolved),
   })
 }
