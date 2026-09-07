@@ -7,9 +7,9 @@
 
 | ID | 用户功能/项 | 源码 | profile | 运行 | 生产验收 | 证据 | 真实依赖 | 下一步 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| A1 | both-mode-turn 快照绿 | **已修**（normalize.ts 栈帧令牌化：帧=录制宿主属性，异常种类+消息钉住；e0c6a0f582 合入 64625d8268） | n/a | **干净树绿**（用户+组长隔离复验）；主树 collection 被用户 85 src/*.js 遮蔽（0 tests） | 干净树口径通过；主树待用户清理后复跑 | a1a2-repro.md+a1 vitest 输出（.agents/devframe/v14-defects/repro/） | 用户 85 文件裁定 | 主树复跑待用户清理 |
-| A2 | ptc-turn 快照绿 | **已修**（同 A1 同 commit） | n/a | **干净树绿**（用户+组长隔离复验）；主树同被遮蔽 | 同 A1 | 同上 | 同 A1 | 同 A1 |
-| A3 | src/*.js 污染机制查清+防复发 | **已落地**（verify-no-source-js 门禁：local+CI 双挂线、6/6 无效用例 spec；产生机制报告 a3-producer-mechanism.md） | n/a | **主树按设计 fail-loud**（点名 85 用户文件："remove them and fix the producer; never gitignore"） | 门禁防复发生效；85 文件处置待用户 | no-source-js.ts+spec+run-gates 接线+机制报告 | **用户裁定 85 文件** | 用户处置后主树门禁转绿 |
+| A1 | both-mode-turn 快照绿 | **已修**（normalize.ts 栈帧令牌化：帧=录制宿主属性，异常种类+消息钉住；e0c6a0f582 合入 64625d8268） | n/a | **干净树绿**（用户+组长隔离复验）；**主树真因=background workflow 接口 schema 漂移**（V1.2 实跑定谳 2026-09-08：run_in_background 输入+jobId 输出+工具说明——非 src JS 遮蔽） | 干净树口径通过；主树两例实跑仍红=预期快照漂移 | a1a2-repro.md+V1.2 replay 实跑回执（2026-09-08） | 无（旧"85 文件裁定"阻塞解除：no-source-js 主树已实绿） | **V1.2 B1 独占 refresh 两 snapshot 预期**（隔离树无 key）→diff+replay+独立审查→总控合 |
+| A2 | ptc-turn 快照绿 | **已修**（同 A1 同 commit） | n/a | **干净树绿**；主树同=A1 的 background schema 漂移（同 V1.2 定谳） | 同 A1 | 同 A1 | 无 | 同 A1：V1.2 refresh 后我合 |
+| A3 | src/*.js 污染机制查清+防复发 | **已落地**（verify-no-source-js 门禁：local+CI 双挂线、6/6 无效用例 spec；产生机制报告 a3-producer-mechanism.md） | n/a | **主树 2026-09-08 实绿**（V1.2 实跑 exit0——当前主树无 compiler JS 污染） | 门禁防复发生效+主树绿实证 | no-source-js.ts+spec+run-gates 接线+机制报告+V1.2 实跑回执 | 无 | A3 关闭 |
 | A4 | 可逆独立候选启动目录（污染排除的候选版本启动方式） | **已交付**（a4-candidate-launch.md：创建/更新/回滚命令+终验退出码 @ ceb4befc59） | 候选树验证 | **全链绿**：install 0+build 0+gate 0+port 3081 LISTENING | **关闭**——候选树即用户可启动本地候选版本（去 --no-open 自动开浏览器） | a4-candidate-launch.md | 无 | A 线关闭；主工作区只记保护状态 |
 
 ## B 用户组合交付线（负责人：L-UDeliver）
