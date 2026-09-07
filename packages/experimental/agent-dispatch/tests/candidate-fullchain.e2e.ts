@@ -10,7 +10,7 @@
 
 import type { ChildProcess } from 'node:child_process'
 import { spawn } from 'node:child_process'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
@@ -464,6 +464,28 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       ? `Set-Content -Path artifact-${taskId}.txt -Value '${taskId} artifact body' -Encoding utf8; git add artifact-${taskId}.txt; git commit -m '${taskId} artifact'`
       : `printf '${taskId} artifact body' > artifact-${taskId}.txt && git add artifact-${taskId}.txt && git commit -m '${taskId} artifact'`
 
+    /**
+     * The exact registration state project_task start demands: both worker
+     * bindings durably in the identity table. This gates the scripted start
+     * turn so the phase can never be consumed before its precondition.
+     */
+    const registrationsReady = (): boolean => {
+      const tablePath = join(dshHome, 'storages', 'session_identity.json')
+      if (!existsSync(tablePath)) return false
+      try {
+        const table = JSON.parse(readFileSync(tablePath, 'utf8')) as {
+          tables: { bindings: Record<string, { role: string; taskId?: string }> }
+        }
+        const tasks = new Set(Object.values(table.tables.bindings)
+          .filter(record => record.role === 'worker')
+          .map(record => record.taskId))
+        return tasks.has('task-a') && tasks.has('task-b')
+      } catch {
+        // A mid-flush table read races the writer; the next poll retries.
+        return false
+      }
+    }
+
     const controller = {
       needle: 'controller-chain-c14',
       turns: [
@@ -481,13 +503,18 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
           } },
         ] },
         { text: 'CONTROLLER_PHASE1_DONE_C14' },
-        // Served on the second controller prompt, after the lead registered
-        // both workers: start carries the worker briefing (startDevelopment
-        // then followup) — the workers' first model request rides this.
-        { toolCalls: [
-          { name: 'project_task', arguments: { action: 'start', taskId: 'task-a', briefing: 'worker-task-a-briefing-c14: create your own artifact file and commit it, then deliver.' } },
-          { name: 'project_task', arguments: { action: 'start', taskId: 'task-b', briefing: 'worker-task-b-briefing-c14: create your own artifact file and commit it, then deliver.' } },
-        ] },
+        // Goal continuation re-prompts the controller; this turn is served
+        // only once both worker bindings are durably in the identity table —
+        // before that the replay answers a bounded standby without consuming
+        // the phase. Start carries the worker briefing (startDevelopment then
+        // followup) — the workers' first model request rides this.
+        {
+          gate: () => registrationsReady(),
+          toolCalls: [
+            { name: 'project_task', arguments: { action: 'start', taskId: 'task-a', briefing: 'worker-task-a-briefing-c14: create your own artifact file and commit it, then deliver.' } },
+            { name: 'project_task', arguments: { action: 'start', taskId: 'task-b', briefing: 'worker-task-b-briefing-c14: create your own artifact file and commit it, then deliver.' } },
+          ],
+        },
         { text: 'CONTROLLER_CHAIN_DONE_C14' },
       ],
     }
@@ -514,7 +541,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       needle: 'worker-task-a-briefing-c14',
       turns: [
         { toolCalls: [
-          { name: shell, arguments: { command: commitFor('task-a') } },
+          { name: shell, arguments: { command: commitFor('task-a'), description: 'commit the task artifact' } },
           { name: 'project_deliver', arguments: { taskId: 'task-a' } },
         ] },
         { text: 'WORKER_A_DONE_C14' },
@@ -524,7 +551,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       needle: 'worker-task-b-briefing-c14',
       turns: [
         { toolCalls: [
-          { name: shell, arguments: { command: commitFor('task-b') } },
+          { name: shell, arguments: { command: commitFor('task-b'), description: 'commit the task artifact' } },
           { name: 'project_deliver', arguments: { taskId: 'task-b' } },
         ] },
         { text: 'WORKER_B_DONE_C14' },
@@ -557,10 +584,10 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         expect(prompted.status, `session/prompt status; body=${redact(prompted.body)}`).toBe(200)
         unwrapRpc('session/prompt', prompted.body)
       }
-      /** Wait until a predicate over all captured bodies holds. */
-      const waitFor = async (what: string, predicate: () => boolean, ms: number): Promise<void> => {
+      /** Wait until a predicate holds; the predicate may be async. */
+      const waitFor = async (what: string, predicate: () => boolean | Promise<boolean>, ms: number): Promise<void> => {
         for (let tick = 0; tick < Math.ceil(ms / 100); tick++) {
-          if (predicate()) return
+          if (await predicate()) return
           await new Promise(resolve => setTimeout(resolve, 100))
         }
         const toolEvidence = replay.requests.map(request => ({ needle: request.needle, text: JSON.stringify(request.body).replaceAll('\\"', '"') }))
@@ -583,34 +610,54 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
 
       await promptSession('controller-chain-c14: start the host, then plan and dispatch the lead.')
       await waitFor('controller host receipt', () => bodies().some(text => text.includes('admission_open')), 90_000)
-      // Precise routing only: the lead's own requests, never the controller's
-      // input text. Two lead requests alone do not prove registration: the
-      // second request arrives before the dispatch tool results return, so
-      // the children may still be publishing. The durable proof is on disk —
-      // each published child session owns a log under the sessions root, and
-      // project_task start itself refuses without exactly one registered
-      // worker per task — so the wait requires the two worker logs to exist.
-      const sessionLogs = (): number => {
-        // dshHome already IS the .dsh directory: the sessions root sits
-        // directly beneath it.
-        const sessionsRoot = join(dshHome, 'sessions')
-        if (!existsSync(sessionsRoot)) return 0
-        let count = 0
-        const visit = (dir: string): void => {
-          for (const entry of readdirSync(dir, { withFileTypes: true })) {
-            if (entry.isDirectory()) visit(join(dir, entry.name))
-            else if (entry.name === 'session.jsonl' || entry.name === 'session.jsonl.zstd') count += 1
+      // The real executed-start evidence: decoded root session log, parsed
+      // event by event. Both the served-turn wait and the final timeline
+      // assertion read this one source of truth.
+      const { scanZstdFrames, createZstdFrameDecoder } = await import('../../../session/session-persistence-jsonl/src/zstd.ts')
+      const rootLogDir = readdirSync(join(dshHome, 'sessions'), { withFileTypes: true, recursive: true })
+        .find(entry => entry.isDirectory() && entry.name.includes('candidate-root-c14'))
+      const readRootStartCalls = async (): Promise<{ time: number; task: string }[]> => {
+        if (rootLogDir === undefined) return []
+        const rootLog = join((rootLogDir as unknown as { parentPath: string }).parentPath, rootLogDir.name, 'session.jsonl.zstd')
+        const rootBuffer = await readFile(rootLog)
+        const decoder = createZstdFrameDecoder()
+        let rootPlaintext = ''
+        try {
+          for (const frame of decoder.decode(rootBuffer, scanZstdFrames(rootBuffer).frames)) {
+            rootPlaintext += Buffer.from(frame).toString('utf8')
           }
+        } finally {
+          decoder.close()
         }
-        visit(sessionsRoot)
-        return count
+        const startCalls: { time: number; task: string }[] = []
+        for (const line of rootPlaintext.split('\n')) {
+          let event: { type?: string; time?: number; data?: { name?: string; arguments?: string | { action?: string; taskId?: string } } }
+          try {
+            event = JSON.parse(line) as typeof event
+          } catch {
+            continue
+          }
+          if (event?.type !== 'tool/call' || event.data?.name !== 'project_task' || event.time === undefined) continue
+          const parsed: unknown = typeof event.data.arguments === 'string'
+            ? JSON.parse(event.data.arguments)
+            : event.data.arguments
+          if (parsed === null || typeof parsed !== 'object') continue
+          const args = parsed as { action?: string; taskId?: string }
+          if (args.action !== 'start' || args.taskId === undefined) continue
+          startCalls.push({ time: event.time, task: args.taskId })
+        }
+        return startCalls
       }
-      await waitFor('lead registered its workers', () =>
-        replay.requests.filter(request => request.needle === 'lead-briefing-c14').length >= 2
-        && sessionLogs() >= 4, 120_000)
-      // The workers are registered; only now does the controller start the
-      // tasks, and only their briefings give the workers a first model call.
-      await promptSession('controller-chain-c14: the workers are registered, start both tasks now.')
+
+      // The Goal continuation re-prompts the controller on its own; the
+      // replay holds the start turn until both worker bindings are durable.
+      // The served-turn evidence is the real executed project_task start
+      // events in the root session log — never a string match over escaped
+      // wire JSON.
+      await waitFor('controller start turn served after registration', async () => {
+        if (!registrationsReady()) return false
+        return await readRootStartCalls().then(calls => calls.length) >= 2
+      }, 120_000)
       await waitFor('worker a delivery turn', () => {
         const workerRequests = replay.requests.filter(request => request.needle === 'worker-task-a-briefing-c14')
         return workerRequests.length >= 2 && JSON.stringify(workerRequests[1]!.body).includes('task-a')
@@ -619,6 +666,24 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         const workerRequests = replay.requests.filter(request => request.needle === 'worker-task-b-briefing-c14')
         return workerRequests.length >= 2 && JSON.stringify(workerRequests[1]!.body).includes('task-b')
       }, 120_000)
+
+      // The acceptance timeline reuses the one source of truth: exactly two
+      // starts — task-a and task-b — and both stamped after both worker
+      // bindings were durably created.
+      const identityTable = JSON.parse(await readFile(join(dshHome, 'storages', 'session_identity.json'), 'utf8')) as {
+        tables: { bindings: Record<string, { role: string; taskId?: string; createdAt: string }> }
+      }
+      const workerCreatedAt = Object.values(identityTable.tables.bindings)
+        .filter(record => record.role === 'worker')
+        .map(record => Date.parse(record.createdAt))
+      expect(workerCreatedAt).toHaveLength(2)
+      const startCalls = await readRootStartCalls()
+      expect(startCalls.map(call => call.task).sort()).toEqual(['task-a', 'task-b'])
+      for (const startAt of startCalls) {
+        for (const workerAt of workerCreatedAt) {
+          expect(startAt.time).toBeGreaterThan(workerAt)
+        }
+      }
 
       // Success = the real tool results on the wire: the deliver receipts
       // must be non-error results, and the worker trees must hold their own
