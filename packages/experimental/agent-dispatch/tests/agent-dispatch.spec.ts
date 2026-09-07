@@ -67,12 +67,22 @@ interface Harness {
     request: Parameters<AgentDispatch['createChildAgent']>[1],
     options?: Partial<DispatchAgentOptions>,
   ) => ReturnType<AgentDispatch['createChildAgent']>
-  dispose: () => Promise<void>
+  dispose: (options?: { readonly keepRoot?: boolean }) => Promise<void>
+}
+
+interface HarnessOptions {
+  /** Existing storage root to reuse (restart specs pass the previous root). */
+  readonly root?: string
+  /** Skip the repo/workspace seed when restarting over a root that already has one. */
+  readonly seed?: boolean
 }
 
 /** Boot the real composition: agent loop, storage, both registries, engine, dispatch entry. */
-async function harness(leadPluginScopes: AgentHierarchyConfigInput['leadPluginScopes']): Promise<Harness> {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-agent-dispatch-'))
+async function harness(
+  leadPluginScopes: AgentHierarchyConfigInput['leadPluginScopes'],
+  options: HarnessOptions = {},
+): Promise<Harness> {
+  const root = options.root ?? await mkdtemp(join(tmpdir(), 'dsh-agent-dispatch-'))
   const ctx = new Context()
   try {
     await mountAgentLoopTestDependencies(ctx)
@@ -102,29 +112,38 @@ async function harness(leadPluginScopes: AgentHierarchyConfigInput['leadPluginSc
     }))
     await ctx.plugin(AgentHierarchy, { ...rolesConfig, leadPluginScopes: leadPluginScopes ?? {} })
     await ctx.plugin(AgentDispatch)
-    const repo = join(root, 'repo')
-    await mkdir(repo)
-    await git(root, 'init', '-b', 'main', repo)
-    await git(repo, 'config', 'user.email', 'agent-dispatch@test.local')
-    await git(repo, 'config', 'user.name', 'Agent Dispatch Tests')
-    await git(repo, 'commit', '--allow-empty', '-m', 'init')
-    const workspace = await ctx.workspaceRegistry.create(repo)
+    let workspaceId: WorkspaceId
+    if (options.seed !== false) {
+      const repo = join(root, 'repo')
+      await mkdir(repo)
+      await git(root, 'init', '-b', 'main', repo)
+      await git(repo, 'config', 'user.email', 'agent-dispatch@test.local')
+      await git(repo, 'config', 'user.name', 'Agent Dispatch Tests')
+      await git(repo, 'commit', '--allow-empty', '-m', 'init')
+      workspaceId = (await ctx.workspaceRegistry.create(repo)).id
+    } else {
+      const restored = ctx.workspaceRegistry.list()
+      if (restored.length !== 1) {
+        throw new Error(`expected the restarted root to restore exactly one workspace, got ${restored.length}`)
+      }
+      workspaceId = restored[0]!.id
+    }
     return {
       ctx,
       root,
-      workspaceId: workspace.id,
+      workspaceId,
       createWorktree: async (name, branch) => await ctx.worktreeRegistry.create({
-        workspaceId: workspace.id,
+        workspaceId,
         path: join(root, name),
         branch,
       }),
       dispatch: (parent, request, options) => ctx.agentDispatch.createChildAgent(parent, request, {
-        workspaceId: workspace.id,
+        workspaceId,
         ...options,
       }),
-      dispose: async () => {
+      dispose: async (disposeOptions) => {
         await ctx.fiber.dispose()
-        await rm(root, { recursive: true, force: true })
+        if (disposeOptions?.keepRoot !== true) await rm(root, { recursive: true, force: true })
       },
     }
   } catch (error: unknown) {
@@ -328,4 +347,71 @@ it('rejects foreign single-writer bindings, unbound parents, worker dispatchers,
     worktree: { worktreeId: workerTree2.id, worktreePath: workerTree2.path, branch: workerTree2.branch },
   }))
   expect(fromWorker.code).toBe('DISPATCH_HIERARCHY_DENIED')
+})
+
+it('reuses the returned identity without re-delivering the prompt, guides blind retries to it, and passes the engine recovery refusal through', async () => {
+  const h = await harness({ 'dispatch-lead': ['plugin-a', 'plugin-b'] })
+  activeHarnesses.push(h)
+  const controller = (await h.ctx.agents.create({
+    sessionId: SessionId('retry-controller'),
+    meta: { cwd: join(h.root, 'repo') },
+  })).agent
+  await h.ctx.agentBindings.bind({ agentId: controller.id, role: 'controller' })
+  const tree = await h.createWorktree('wt-retry', 'feature/retry')
+  const request = {
+    cwd: tree.path,
+    role: 'lead' as const,
+    taskId: TaskId('retry-task'),
+    pluginId: PluginId('plugin-a'),
+    worktree: { worktreeId: tree.id, worktreePath: tree.path, branch: tree.branch },
+  }
+  const first = await h.dispatch(controller, request, { sessionId: SessionId('retry-lead') })
+  expect(first.record.agentId).toBe('retry-lead')
+
+  const identity = h.ctx.agentDispatch.findDispatchedChild(controller, TaskId('retry-task'))
+  expect(identity?.record.agentId).toBe('retry-lead')
+  expect(identity?.live).toBe(true)
+  expect(h.ctx.agentDispatch.findDispatchedChild(controller, TaskId('other-task'))).toBeUndefined()
+
+  // A blind same-task retry learns the returned identity instead of a
+  // misleading worktree mismatch.
+  const blind = await dispatchError(() => h.dispatch(controller, request))
+  expect(blind.code).toBe('DISPATCH_IDENTITY_EXISTS')
+  expect(blind.message).toContain('retry-lead')
+
+  // Passing the returned id back reuses the engine's own dedupe answer; the
+  // prompt must not be re-delivered to the already-running child.
+  const inserted: UserMessage[] = []
+  first.agent.ctx.on('agent/inbox/inserted', ({ message }) => { inserted.push(message) })
+  const retry = await h.dispatch(controller, request, {
+    sessionId: SessionId('retry-lead'),
+    prompt: 're-briefing that must never arrive',
+  })
+  expect(retry.agent.id).toBe('retry-lead')
+  expect(inserted).toHaveLength(0)
+
+  // Cold restart over the same root: the identity stays durable but is no
+  // longer live, and the engine's own recovery refusal passes through the
+  // adapter unchanged — no wrap, no replacement child.
+  await h.dispose({ keepRoot: true })
+  activeHarnesses.splice(activeHarnesses.indexOf(h), 1)
+  const restarted = await harness({ 'dispatch-lead': ['plugin-a', 'plugin-b'] }, { root: h.root, seed: false })
+  activeHarnesses.push(restarted)
+  expect(restarted.ctx.agentBindings.find(SessionId('retry-lead'))?.taskId).toBe('retry-task')
+  const controller2 = (await restarted.ctx.agents.create({
+    sessionId: SessionId('retry-controller'),
+    meta: { cwd: join(restarted.root, 'repo') },
+  })).agent
+  const restored = restarted.ctx.agentDispatch.findDispatchedChild(controller2, TaskId('retry-task'))
+  expect(restored?.record.agentId).toBe('retry-lead')
+  expect(restored?.live).toBe(false)
+  let recoveryError: unknown
+  try {
+    await restarted.dispatch(controller2, request, { sessionId: SessionId('retry-lead') })
+  } catch (error: unknown) {
+    recoveryError = error
+  }
+  expect(recoveryError).toBeInstanceOf(Error)
+  expect(recoveryError).not.toBeInstanceOf(AgentDispatchError)
+  expect(String((recoveryError as Error).message)).toMatch(/requires session recovery/)
 })

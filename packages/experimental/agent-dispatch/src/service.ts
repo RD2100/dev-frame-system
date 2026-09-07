@@ -26,6 +26,7 @@ import type {
   CreateChildAgentRequest,
   CreatedChildAgent,
 } from '@deepseek-ai/dsh-experimental-agent-hierarchy'
+import type { AgentBindingRecord, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import type {} from '@deepseek-ai/dsh-experimental-session-identity'
 // Type-only: resolve the opportunistic `ctx.get('agentPresets')` join to the
 // preset roster when composed; a rosterless deployment keeps the no-op.
@@ -59,12 +60,23 @@ export interface DispatchAgentOptions extends CreateChildAgentOptions {
 }
 
 /**
+ * The durable identity an earlier dispatch returned for one parent task.
+ */
+export interface DispatchedIdentity {
+  /** The binding record the engine persisted for that child. */
+  readonly record: AgentBindingRecord
+  /** Whether the child agent is currently live in this process. */
+  readonly live: boolean
+}
+
+/**
  * The host daily-dispatch entry. Hard-injects the real creation engine
  * (`ctx.agentHierarchy`), the role authority (`ctx.agentBindings`), and the
  * worktree registry whose rows make the worktree proof real, and fails at
  * activation when any is absent. Denials raised here are
- * {@link AgentDispatchError}s; the engine's own policy denials propagate
- * unchanged.
+ * {@link AgentDispatchError}s; the engine's own denials — including the
+ * reserved-child recovery refusal for an identity whose session is no longer
+ * live — propagate unchanged.
  */
 export class AgentDispatch extends Service {
   static inject = ['agentHierarchy', 'agentBindings', 'worktreeRegistry']
@@ -74,10 +86,34 @@ export class AgentDispatch extends Service {
   }
 
   /**
+   * Find the durable identity an earlier dispatch returned for one parent
+   * task, if any. The matching rule is the engine's own dedupe key
+   * (`parentSessionId` + `taskId`). A retry reuses the identity only by
+   * passing `record.agentId` back as `options.sessionId`; reuse never
+   * re-delivers a prompt, and a child whose session is no longer live keeps
+   * its engine-owned recovery lane instead of a replacement child.
+   * @param parent - The dispatching parent the child was created for.
+   * @param taskId - The task the child was created for.
+   * @returns The durable identity and its live state, or `undefined` when
+   *   no dispatched child exists for the pair.
+   */
+  findDispatchedChild(parent: Agent, taskId: TaskId): DispatchedIdentity | undefined {
+    const record = this.ctx.agentBindings.list().find(
+      candidate => candidate.parentSessionId === parent.id && candidate.taskId === taskId,
+    )
+    if (record === undefined) return undefined
+    return { record, live: this.ctx.agents.get(record.agentId) !== undefined }
+  }
+
+  /**
    * Validate one dispatch request at the entry and, when it holds, create the
    * child through the real hierarchy engine. The authoritative registry rows
    * prove registration before any live observation runs; a git failure whose
-   * refusal carries the registry's classified kind rethrows unchanged.
+   * refusal carries the registry's classified kind rethrows unchanged. A
+   * parent task that already has a child refuses with
+   * `DISPATCH_IDENTITY_EXISTS` until the caller passes the returned agent id
+   * back as `sessionId` — the engine's own dedupe then answers with the same
+   * child.
    * @param parent - The exact live dispatching agent.
    * @param request - The child creation request; `worktree` is required at
    *   this entry because the dispatched child owns one registered worktree.
@@ -103,6 +139,18 @@ export class AgentDispatch extends Service {
       throw new AgentDispatchError(
         `agent-dispatch: worktree "${worktree.worktreeId}" proof requires the owner workspace id`,
         'DISPATCH_WORKTREE_UNREGISTERED',
+      )
+    }
+    const existing = request.taskId === undefined
+      ? undefined
+      : this.findDispatchedChild(parent, request.taskId)
+    if (existing !== undefined && options.sessionId === undefined) {
+      // A blind same-task retry must not re-create or silently adopt: the
+      // caller learns the returned identity and passes it back explicitly.
+      throw new AgentDispatchError(
+        `agent-dispatch: parent task already has the dispatched child "${existing.record.agentId}"; `
+        + 'retry by passing that id as sessionId (use findDispatchedChild to recover it)',
+        'DISPATCH_IDENTITY_EXISTS',
       )
     }
     const row = this.registeredRow(workspaceId, worktree.worktreeId)
@@ -150,7 +198,7 @@ export class AgentDispatch extends Service {
         'DISPATCH_HIERARCHY_DENIED',
       )
     }
-    return await this.dispatch(parent, request, options, worktree)
+    return await this.dispatch(parent, request, options, worktree, existing)
   }
 
   /**
@@ -166,6 +214,7 @@ export class AgentDispatch extends Service {
     request: CreateChildAgentRequest,
     options: DispatchAgentOptions,
     worktree: NonNullable<CreateChildAgentRequest['worktree']>,
+    existing: DispatchedIdentity | undefined,
   ): Promise<CreatedChildAgent> {
     const hostSetup = options.setup
     const engineOptions: CreateChildAgentOptions = {
@@ -190,7 +239,11 @@ export class AgentDispatch extends Service {
       },
     }
     const created = await this.ctx.agentHierarchy.createChildAgent(parent, request, engineOptions)
-    if (options.prompt !== undefined) {
+    // Identity reuse answers with the engine's already-published child;
+    // re-delivering the briefing would re-task a running worker. Engine
+    // errors — including the reserved-child recovery refusal and a typed
+    // session-persistence miss — propagate unchanged; no fallback child.
+    if (options.prompt !== undefined && existing === undefined) {
       created.agent.followup(createUserMessage({
         content: [{ type: 'text', text: options.prompt }],
         source: { kind: 'plugin', plugin: 'agent-dispatch' },
