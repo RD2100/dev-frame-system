@@ -248,10 +248,9 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
     }
   })
 
-  // Stage 2a (in progress): the RPC envelope for session/create|prompt needs
-  // the web scaffold's remoteRpc helper semantics (payload/args wrapping and
-  // response unwrapping) read from apps/web/tests before this drives green.
-  it.skip('drives a session turn over the wire-level replay lane through the real RPC face', { timeout: 420_000 }, async () => {
+  // Stage 2a: the session RPC envelope per the smoke-real remoteRpc helper —
+  // payload wraps the method args, and args carries { request: {...} }.
+  it('drives a session turn over the wire-level replay lane through the real RPC face', { timeout: 420_000 }, async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-candidate-fullchain-drive-'))
     const dshHome = join(root, '.dsh')
     const replay = await startWireReplayServer([
@@ -271,7 +270,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       const url = new URL(running.launchUrl)
       const cookie = await exchangeLaunchCookie(running.launchUrl)
 
-      const created = await postRpc(url.port, url.host, cookie, 'session/create', { request: {} })
+      const created = await postRpc(url.port, url.host, cookie, 'session/create', { args: { request: {} } })
       expect(created.status, `session/create status; body=${redact(created.body)}`).toBe(200)
       const createdValue = (JSON.parse(created.body) as { result?: { value?: { sessionId?: string } } }).result?.value
       if (createdValue?.sessionId === undefined) {
@@ -280,9 +279,9 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       const sessionId = createdValue.sessionId
 
       const prompt = 'candidate-driving-probe: reply with the marker and stop.'
-      const prompted = await postRpc(url.port, url.host, cookie, 'session/prompt', {
+      const prompted = await postRpc(url.port, url.host, cookie, 'session/prompt', { args: {
         request: { requestId: randomUUID(), sessionId, mode: 'queue', content: [{ type: 'text', text: prompt }] },
-      })
+      } })
       expect(prompted.status, `session/prompt status; body=${redact(prompted.body)}`).toBe(200)
 
       // The turn is proven by the wire lane: the real CLI session sends the
