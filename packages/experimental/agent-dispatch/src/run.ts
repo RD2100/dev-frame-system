@@ -168,6 +168,22 @@ export class AgentProjectRun extends Service {
     return this.cachedScenario?.targetWorktreePath
   }
 
+  /**
+   * The one absolute required-checks ledger path this service writes — the
+   * same path every other consumer in the process must read.
+   * @returns The configured absolute ledger path.
+   */
+  get requiredChecksLedgerPath(): string {
+    const path = this.config.checksLedgerPath
+    if (path === undefined) {
+      throw new ProjectRunError(
+        'no checksLedgerPath is configured; the shared required-checks ledger is unavailable',
+        'PROJECT_RUN_SCENARIO_UNAVAILABLE',
+      )
+    }
+    return path
+  }
+
   /** The task ids from the cached scenario, when hostStart ran. */
   get candidateTaskIds(): readonly string[] | undefined {
     return this.cachedScenario?.tasks.map(task => task.taskId)
@@ -338,13 +354,25 @@ export class AgentProjectRun extends Service {
       role: 'controller',
       ...(controllerWorktree !== undefined ? { worktree: controllerWorktree } : {}),
     })
-    const admission = this.startProject()
+    // The pre-step bootstrap may already have opened admission (the fixed
+    // root's first turn runs this hostStart twice: once in the hook, once as
+    // the model's own first tool call). An already-open board is the same
+    // end state, so the idempotent re-run swallows only that transition
+    // refusal and reports the current state.
+    let admission: string
+    try {
+      admission = String(this.startProject())
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'PROJECT_CONTROLLER_ILLEGAL_TRANSITION'
+        || !(error instanceof Error) || !error.message.includes('requires stopped')) throw error
+      admission = 'admission_open'
+    }
     return {
       workspaceId: String(known.id),
       controllerSessionId: String(controllerSessionId),
       tasks,
       ...(leadWorktreeId !== undefined ? { leadWorktreeId } : {}),
-      lifecycle: String(admission),
+      lifecycle: admission,
     }
   }
 }

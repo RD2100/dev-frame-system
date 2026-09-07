@@ -39,6 +39,12 @@
 # own single composition with the real workspace facts at bootstrap.
 - id: command-goal-binding
   disabled: true
+# DIAGNOSTIC ONLY (elimination): the plugin-package-inventory extension's
+# prepare is the remaining suspect for the root request's
+# REQUEST_EXTENSION failure. Disable it for one run; restore once the
+# cause is confirmed.
+- id: plugin-package-inventory-deepseek
+  disabled: true
 # The LLM title generation (base row id session-title-llm, first-prompt
 # variant) fires an auxiliary request from the root session that is outside
 # the project hierarchy; its refusal killed the first turn. Titles fall back

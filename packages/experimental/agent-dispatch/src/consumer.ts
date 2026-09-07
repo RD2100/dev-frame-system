@@ -12,6 +12,8 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import { appendFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolCallView } from '@deepseek-ai/dsh-tools'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -204,6 +206,28 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
       // reach this state.
       if (config?.candidateRootSessionId !== undefined) {
         const rootId = config.candidateRootSessionId
+        // The agent/error event carries the original error with its cause
+        // chain, which the persisted failure summary drops. The candidate
+        // diagnosis needs that chain, so the bootstrap face records it into
+        // a run-private diagnostic file inside the candidate home; the
+        // listener only observes, never alters the propagation.
+        ctx.on('agent/error', (data: { error: unknown }) => {
+          const chain: { name: string; message: string }[] = []
+          let cursor: unknown = data.error
+          let depth = 0
+          while (cursor instanceof Error && depth < 6) {
+            chain.push({ name: cursor.name, message: cursor.message })
+            cursor = (cursor as Error & { cause?: unknown }).cause
+            depth += 1
+          }
+          const home = process.env.DSH_CANDIDATE_HOME
+          if (home === undefined) return
+          const line = `${JSON.stringify({ runTag: String(process.pid), rootId, chain })}\n`
+          void appendFile(join(home, `agent-error-diag-${String(process.pid)}.jsonl`), line).catch(() => {
+            // Diagnostics must never break the agent loop; the session log
+            // still carries the persisted failure summary.
+          })
+        })
         let bootstrapped = false
         ctx.on('agent/pre-step', async (_data, next) => {
           if (bootstrapped) return next()
@@ -218,6 +242,9 @@ export function apply(ctx: Context, config?: { bootstrap?: boolean; checksLedger
           const composition = await mountGoalComposition(ctx, {
             workspaceId: receipt.workspaceId,
             workspaceRoot: targetPath,
+            // The one ledger: the same absolute file the bootstrap's
+            // approvals write, required explicitly by the formal config.
+            requiredChecksPath: run.requiredChecksLedgerPath,
             // The start gate checks the clean target tree; the workers' own
             // artifact probes and the final acceptance list stay separate.
             checks: { version: 1, checks: [{
