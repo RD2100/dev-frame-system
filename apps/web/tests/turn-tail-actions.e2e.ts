@@ -7,7 +7,7 @@
 // construction rather than by timing; stopping from that park writes the
 // `turn/end` that hands the footer to the turn's transcript tail.
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
@@ -17,26 +17,104 @@ import { afterEach, describe, expect, it, onTestFailed } from 'vitest'
 import type { ReplayOverrideDoc } from '@deepseek-ai/dsh-llm-replay'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import {
+  parseSnapshotManifest,
+  platformExpectationVariant,
+  resolveSessionFixturePath,
+  sessionFixtureFileName,
+} from '@deepseek-ai/dsh-session-snapshot'
+import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, recordFixture, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/turn-tail-actions', import.meta.url))
-const FIXTURE = join(SNAPSHOT_DIR, 'session.jsonl')
-// Three goldens for the same message: parked mid-turn, aborted, and completed.
-const RUNNING_EXPECTED = join(SNAPSHOT_DIR, 'running.expected.md')
-const SETTLED_EXPECTED = join(SNAPSHOT_DIR, 'settled.expected.md')
-const USAGE_EXPANDED_EXPECTED = join(SNAPSHOT_DIR, 'usage-expanded.expected.md')
-const COMPLETED_EXPECTED = join(SNAPSHOT_DIR, 'completed.expected.md')
-const FOCUSED_EXPECTED = join(SNAPSHOT_DIR, 'focused.expected.md')
+const MANIFEST_PATH = join(SNAPSHOT_DIR, 'snapshot.yml')
+const MANIFEST = parseSnapshotManifest(readFileSync(MANIFEST_PATH, 'utf8'), MANIFEST_PATH)
 const MODE = webSnapshotMode()
+// Every platform-dependent read resolves through the session-snapshot
+// vocabulary: the recording (both replay-script and persisted-comparison
+// roles) carries a win32 variant because the standard composition gates the
+// persistent shell on the platform seam (bash on POSIX, pwsh on win32).
+// In record mode the variant file is this run's write target, so the first
+// win32 recording resolves the name without an existence check; every other
+// mode keeps the resolver's fail-loud missing-file seam.
+const FIXTURE = MODE === 'record'
+  ? join(SNAPSHOT_DIR, sessionFixtureFileName(MANIFEST, process.platform))
+  : resolveSessionFixturePath({ dir: SNAPSHOT_DIR, manifest: MANIFEST, platform: process.platform })
+const WIN32 = platformExpectationVariant(process.platform) === 'win32'
+// Three goldens for the same message: parked mid-turn, aborted, and completed.
+// Each carries a committed win32 variant: the tool card title embeds the
+// shell's tool name and the model-authored command description.
+function goldenPath(stem: string): string {
+  return join(SNAPSHOT_DIR, WIN32 ? `${stem}.win32.expected.md` : `${stem}.expected.md`)
+}
+const RUNNING_EXPECTED = goldenPath('running')
+const SETTLED_EXPECTED = goldenPath('settled')
+const USAGE_EXPANDED_EXPECTED = goldenPath('usage-expanded')
+const COMPLETED_EXPECTED = goldenPath('completed')
+const FOCUSED_EXPECTED = goldenPath('focused')
+
+// The win32 recording rides the scenario's own approved gateway route (the
+// standard composition has no DeepSeek key there); its identity is pinned by
+// the manifest-owned fixture itself, not restated here.
+const WIN32_ROUTE = 'huoshan-1'
+const WIN32_MODEL = 'deepseek-v4-flash-ga-260731'
+const WIN32_BASE_URL = 'https://ark.cn-beijing.volces.com/api/coding/v3'
+const WIN32_API_KEY_ENV = 'HUOSHAN_1_API_KEY'
+// Replay re-serves the route the recording rode through the replay adapter,
+// and the same set tells the scaffold that record mode owns its credential
+// arrangement (the shipped DEEPSEEK_API_KEY gate applies only to the default
+// set). The contextWindow is the request/context value the recording actually
+// rode, so the replayed session's request/context matches the fixture.
+const WIN32_PROVIDERS = [{
+  id: WIN32_ROUTE,
+  name: WIN32_ROUTE,
+  models: [{ id: WIN32_MODEL, name: 'DeepSeek-V4-Flash-GA', contextWindow: 262_144 }],
+}]
 
 // The recording must carry text in the SAME assistant message as the tool
 // call; a Think-only step would leave nothing for the footer to attach to and
-// the scenario would pass against either implementation.
+// the scenario would pass against either implementation. The shell tool named
+// here follows the platform seam the composition actually serves.
 const NARRATION = 'Reading the workspace now.'
-const PROMPT = `Begin your reply with the plain sentence "${NARRATION}" as text, and in that same message call the bash tool with the command "echo alpha". After the tool result, reply with the single word DONE and stop.`
+const PROMPT = WIN32
+  ? `Begin your reply with the plain sentence "${NARRATION}" as text, and in that same message call the pwsh tool with the command "Write-Output alpha". After the tool result, reply with the single word DONE and stop.`
+  : `Begin your reply with the plain sentence "${NARRATION}" as text, and in that same message call the bash tool with the command "echo alpha". After the tool result, reply with the single word DONE and stop.`
+
+// The tool card's collapsed title pairs the shell's tool label with the
+// model-authored call description; each platform's recorded turn pins its own.
+// The tool card's collapsed title pairs the shell's tool label with the
+// model-authored call description; each platform's recorded turn pins its own.
+const TOOL_CARD_NAME = WIN32 ? 'Pwsh Output the word alpha' : 'Bash Print alpha to stdout'
+
+// The completed-Turn usage disclosure pins each platform's recorded samples:
+// the pill's compact total and the dialog's exact facts. The win32 recording
+// rides its own route and carries its own provider-reported usage, pinned
+// from that recording — the POSIX figures are never restated as win32 facts.
+// The win32 recording's first attempt reported no cache bucket, so the
+// aggregate carries none and its dialog has no cache rows (null = absent).
+const USAGE = WIN32
+  ? {
+      pill: /Usage \d+(\.\d+)?[KM]? tok/,
+      pillText: 'Usage 17.5K tok',
+      route: `${WIN32_ROUTE}/${WIN32_MODEL}`,
+      cacheHit: null,
+      input: '9,215 tok',
+      cacheRead: null,
+      output: '73 tok',
+      total: '17,480 tok',
+    }
+  : {
+      pill: /Usage 15\.8K tok/,
+      pillText: 'Usage 15.8K tok',
+      route: 'deepseek-official/deepseek-v4-flash',
+      cacheHit: '49.7%' as const,
+      input: '7,891 tok',
+      cacheRead: '7,808 tok' as const,
+      output: '112 tok (42 tok reasoning)',
+      total: '15,811 tok',
+    }
 
 describe('web e2e: assistant IconActions wait for the turn to end', () => {
   let scaffold: WebScaffold | undefined
@@ -75,14 +153,46 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
     }
     scaffold = await launchWebScaffold(
       MODE === 'record'
-        ? {}
+        ? {
+          // Record mode owns its credential arrangement: WIN32_PROVIDERS
+          // tells the scaffold the shipped DEEPSEEK_API_KEY gate does not
+          // apply, the real adapter answers, and the fixture is this run's
+          // harvest target.
+          ...WIN32 ? { replayProviders: WIN32_PROVIDERS } : {},
+        }
         : {
           replayFixture: FIXTURE,
+          ...WIN32 ? { replayProviders: WIN32_PROVIDERS } : {},
           ...(overridePath === undefined ? {} : { replayOverride: overridePath }),
           compareReplaySession: overridePath === undefined,
           ...(paceMs === undefined ? {} : { paceMs }),
         },
     )
+    if (WIN32) {
+      if (MODE === 'record') {
+        // The win32 recording rides the scenario's approved gateway route: the
+        // key comes from the runner's environment, the credential never lands
+        // in this file, and the isolated harness home holds the provider profile.
+        if (process.env[WIN32_API_KEY_ENV] === undefined || process.env[WIN32_API_KEY_ENV]?.length === 0) {
+          throw new Error(`turn-tail-actions win32 record needs ${WIN32_API_KEY_ENV} (env or repo-root .env)`)
+        }
+        await scaffold.ctx.settings.update('llm-pi-ai', {
+          providers: {
+            [WIN32_ROUTE]: {
+              displayName: 'Huoshan',
+              api: 'openai-completions',
+              baseURL: WIN32_BASE_URL,
+              apiKeyEnv: WIN32_API_KEY_ENV,
+              models: [{ id: WIN32_MODEL, name: 'DeepSeek-V4-Flash-GA' }],
+            },
+          },
+        })
+      }
+      // Both modes ride the same route the recording rode: record through the
+      // real adapter, replay through the replay adapter registered above — no
+      // pi-ai profile keyless, so no real adapter conflicts.
+      await scaffold.ctx.settings.update('agent-default-model', { provider: WIN32_ROUTE, model: WIN32_MODEL })
+    }
     scaffold.ctx.on('session/event', (_session, event: SessionEvent) => { sessionEvents.push(event) })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
@@ -173,12 +283,12 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
     const { settled } = await sendPrompt(120_000)
     await settled
 
-    const trigger = page.getByRole('button', { name: /Usage 15\.8K tok/ })
+    const trigger = page.getByRole('button', { name: USAGE.pill })
     await expect.poll(() => trigger.count(), { timeout: 10_000 }).toBe(1)
     expect(await trigger.getAttribute('aria-expanded')).toBe('false')
     // The usage pill carries the icon and the turn total; the time pill beside
     // it carries the run time, and both keep their details dialog-only.
-    expect(await trigger.textContent()).toBe('Usage 15.8K tok')
+    expect(await trigger.textContent()).toBe(USAGE.pillText)
     const timeTrigger = page.getByRole('button', { name: /^Ran for \S+$/ })
     expect(await timeTrigger.count()).toBe(1)
     expect(await page.locator('[data-turn-tail]').getByText(/tok\/s|TTFT/).count()).toBe(0)
@@ -188,12 +298,12 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
     expect(await trigger.getAttribute('aria-expanded')).toBe('true')
     const dialog = page.getByRole('dialog', { name: 'Turn usage' })
     expect(await dialog.count()).toBe(1)
-    expect(await dialog.getByText('deepseek-official/deepseek-v4-flash', { exact: true }).count()).toBe(1)
-    expect(await dialog.getByText('49.7%', { exact: true }).count()).toBe(1)
-    expect(await dialog.getByText('7,891 tok', { exact: true }).count()).toBe(1)
-    expect(await dialog.getByText('7,808 tok', { exact: true }).count()).toBe(1)
-    expect(await dialog.getByText('112 tok (42 tok reasoning)', { exact: true }).count()).toBe(1)
-    expect(await dialog.getByText('15,811 tok', { exact: true }).count()).toBe(1)
+    expect(await dialog.getByText(USAGE.route, { exact: true }).count()).toBe(1)
+    if (USAGE.cacheHit !== null) expect(await dialog.getByText(USAGE.cacheHit, { exact: true }).count()).toBe(1)
+    expect(await dialog.getByText(USAGE.input, { exact: true }).count()).toBe(1)
+    if (USAGE.cacheRead !== null) expect(await dialog.getByText(USAGE.cacheRead, { exact: true }).count()).toBe(1)
+    expect(await dialog.getByText(USAGE.output, { exact: true }).count()).toBe(1)
+    expect(await dialog.getByText(USAGE.total, { exact: true }).count()).toBe(1)
     await page.keyboard.press('Escape')
     expect(await page.getByRole('dialog').count()).toBe(0)
 
@@ -239,7 +349,7 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
     const { settled } = await sendPrompt()
     await settled
     const process = page.locator('[data-turn-process]')
-    const tool = page.getByRole('button', { name: 'Bash Print alpha to stdout' })
+    const tool = page.getByRole('button', { name: TOOL_CARD_NAME })
     await process.waitFor({ timeout: 10_000 })
     expect(await process.getAttribute('aria-expanded')).toBe('false')
     expect(await tool.isVisible()).toBe(false)
@@ -271,7 +381,7 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
     await launch(undefined, 200)
     onTestFailed(() => saveFailureShot(page, 'web-e2e-turn-tail-actions-focused'))
     const { settled } = await sendPrompt()
-    const tool = page.getByRole('button', { name: 'Bash Print alpha to stdout' })
+    const tool = page.getByRole('button', { name: TOOL_CARD_NAME })
     await tool.waitFor({ timeout: 30_000 })
     await tool.focus()
     expect(await tool.evaluate(element => element.ownerDocument.activeElement === element)).toBe(true)
@@ -291,8 +401,12 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
     await assertFixtureInventory(
       SNAPSHOT_DIR,
       [
-        'completed.expected.md', 'focused.expected.md', 'running.expected.md', 'session.jsonl',
-        'settled.expected.md', 'usage-expanded.expected.md',
+        'completed.expected.md', 'completed.win32.expected.md',
+        'focused.expected.md', 'focused.win32.expected.md',
+        'running.expected.md', 'running.win32.expected.md',
+        'session.jsonl',
+        'settled.expected.md', 'settled.win32.expected.md',
+        'usage-expanded.expected.md', 'usage-expanded.win32.expected.md',
       ],
     )
   })
