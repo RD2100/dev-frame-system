@@ -1159,6 +1159,71 @@ describe('dsh-workflow-worker-thread', { timeout: 120_000 }, () => {
       expect(order.indexOf('run-end')).toBe(order.length - 1)
       await handle.dispose()
     })
+
+    it('dispose() on a completed run takes its real worker thread down: the exit is observed before dispose resolves', async () => {
+      const { ctx, parent } = await setup()
+      const handle = ctx.workflowEngine.start({ ...scripted('return 42'), parent })
+      const worker = (handle as unknown as { worker: Worker }).worker
+      // Registered BEFORE dispose: the flag can only flip through the real
+      // 'exit' event, and dispose() awaits worker.terminate(), so by the time
+      // dispose resolves the event must already have fired. The assertions
+      // below are immediate and wait-free on purpose — a post-hoc bounded
+      // wait would not prove the ordering, only that the thread died later.
+      let exited = false
+      let exitCode: number | undefined
+      worker.once('exit', code => { exited = true; exitCode = code })
+      await expect(handle.result).resolves.toMatchObject({ value: 42, stopReason: 'completed' })
+      await handle.dispose()
+      expect(exited).toBe(true)
+      expect(exitCode).toBe(1)
+    })
+
+    it('the grace force-settle takes the wedged thread down on the grace: the exit lands at the bound, not eventually', async () => {
+      const GRACE = 100
+      const { ctx, parent, provider } = await setup({
+        manual: true,
+        config: { provider: 'stub', maxConcurrentAgents: 2, disposeGraceMs: GRACE },
+      })
+      const handle = ctx.workflowEngine.start({
+        // Readiness is proven by the child-start crossing below; afterwards
+        // the script seizes the worker's loop for far longer than both the
+        // grace and the assertion bound, so the Cancel message can never be
+        // processed and only the grace force-settle with its terminate can
+        // settle this run — the observed exit is the grace path's own thread
+        // teardown, not a worker that raced the cancel.
+        ...scripted(`
+          agent('wedged until the grace')
+          for (let i = 0; i < 20; i++) await null
+          const end = Date.now() + 3000
+          while (Date.now() < end) {}
+          return 'unreachable'
+        `),
+        parent,
+      })
+      const worker = (handle as unknown as { worker: Worker }).worker
+      const exit = Promise.withResolvers<number>()
+      let exitAt = 0
+      worker.once('exit', code => { exitAt = Date.now(); exit.resolve(code) })
+      await waitFor(() => { expect(provider.runs).toHaveLength(1) })
+      const cancelAt = Date.now()
+      handle.cancel('force termination')
+      await expect(handle.result).resolves.toMatchObject({ stopReason: 'cancelled' })
+      // The grace path does not await its terminate (void, host.ts), so the
+      // exit is bounded rather than synchronous. The wait below only bounds
+      // the observation; the promptness claim is pinned by the recorded
+      // timestamps against the grace-sized bound. Both bounds sit far inside
+      // the case budget, and the 3s spin makes the alternative (no grace
+      // terminate: the thread stays alive past this bound) unambiguous.
+      const exitCode = await Promise.race([
+        exit.promise,
+        new Promise<never>((_, reject) => setTimeout(
+          () => reject(new Error(`worker exit not observed within ${GRACE + 2_000}ms of cancel()`)), GRACE + 2_000,
+        ).unref()),
+      ])
+      expect(exitCode).toBe(1)
+      expect(exitAt - cancelAt).toBeLessThan(GRACE + 2_000)
+      await handle.dispose()
+    }, 90_000)
   })
 
   describe('worker death', () => {
