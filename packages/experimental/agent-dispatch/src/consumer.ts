@@ -432,6 +432,15 @@ export function apply(ctx: Context, config?: {
           + 'dispatch fresh without followup',
         )
       }
+      // Fail loud on a followup without instructions: silently dispatching
+      // or reusing without delivering anything would hide the caller's
+      // mistake behind an honest-looking receipt.
+      if (args.followup === true && (args.prompt === undefined || requireNonEmpty(args.prompt, 'prompt') === '')) {
+        throw new Error(
+          `the agent dispatch tool: task '${taskId}' passed followup: true without a prompt; `
+          + 'pass the continuation instructions with the followup, or dispatch without followup',
+        )
+      }
       const child = await ctx.agentDispatch.createChildAgent(caller.agent, {
         cwd: row.path,
         role: args.role,
