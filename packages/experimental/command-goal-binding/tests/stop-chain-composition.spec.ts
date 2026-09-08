@@ -87,9 +87,9 @@ interface BootOptions {
   readonly bindings?: GoalBindingStore
   readonly stopAdapters?: {
     /** The host-verified project tree; absent means an unverifiable inventory. */
-    readonly tree?: () => readonly Agent[]
+    readonly tree?: (root: Agent) => readonly Agent[]
     readonly processes?: () => readonly { readonly ownerSession: SessionId; readonly label: string; readonly handle: SubprocessHandle }[]
-    readonly releaseWriter?: () => void
+    readonly releaseWriter?: (root: Agent) => void | Promise<void>
   }
 }
 
@@ -413,6 +413,8 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
       mountJobs: true,
       stopAdapters: {
         tree: () => [first.agent],
+        // The host asserts its captured-process inventory explicitly.
+        processes: () => [],
         releaseWriter: () => { writerReleased = true },
       },
     })
@@ -462,6 +464,8 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
       mountJobs: true,
       stopAdapters: {
         tree: () => treeAgents,
+        // The host asserts its captured-process inventory explicitly.
+        processes: () => [],
         releaseWriter: () => {},
       },
     })
@@ -494,6 +498,7 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
       mountJobs: true,
       stopAdapters: {
         tree: () => secondTreeAgents,
+        processes: () => [],
         releaseWriter: () => {},
       },
     })
@@ -532,6 +537,7 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
       mountJobs: true,
       stopAdapters: {
         tree: () => treeAgents,
+        processes: () => [],
         releaseWriter: () => {},
       },
     })
@@ -558,6 +564,7 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
       mountJobs: true,
       stopAdapters: {
         tree: () => [first.agent],
+        processes: () => [],
         releaseWriter: () => {},
       },
     })
@@ -593,7 +600,11 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
       storageRoot,
       sessionId,
       mountJobs: true,
-      stopAdapters: { tree: () => [first.agent] },
+      stopAdapters: {
+        tree: () => [first.agent],
+        // The host asserts its captured-process inventory explicitly.
+        processes: () => [],
+      },
     })
     expect((await execute(first, '/devframe-start fix the billing bug')).result.kind).toBe('success')
     const stopped = await execute(first, '/devframe-stop')
@@ -716,6 +727,8 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
       mountJobs: true,
       stopAdapters: {
         tree: () => [first.agent],
+        // The host asserts its captured-process inventory explicitly.
+        processes: () => [],
         releaseWriter: () => {
           releaseCalls += 1
           if (releaseCalls === 1) throw new Error('the writer file is locked by another process')
@@ -767,6 +780,8 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
       mountJobs: true,
       stopAdapters: {
         tree: () => [first.agent],
+        // The host asserts its captured-process inventory explicitly.
+        processes: () => [],
         releaseWriter: () => { writerReleased = true },
       },
     })
@@ -828,6 +843,8 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
       bindings: hangingStore,
       stopAdapters: {
         tree: () => [first.agent],
+        // The host asserts its captured-process inventory explicitly.
+        processes: () => [],
         releaseWriter: () => { writerReleased = true },
       },
     })
@@ -864,6 +881,8 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
       mountJobs: true,
       stopAdapters: {
         tree: () => treeAgents,
+        // The host asserts its captured-process inventory explicitly.
+        processes: () => [],
         releaseWriter: () => {},
       },
     })
@@ -893,6 +912,8 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
       mountJobs: true,
       stopAdapters: {
         tree: () => secondTreeAgents,
+        // The host asserts its captured-process inventory explicitly.
+        processes: () => [],
         releaseWriter: () => { writerReleased = true },
       },
     })
@@ -935,6 +956,8 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
         // that agent was never re-registered after the restart: the owner
         // identity fact is missing and the recovery must fail closed.
         tree: () => [first.agent, phantomChild],
+        // The host asserts its captured-process inventory explicitly.
+        processes: () => [],
         releaseWriter: () => { writerReleased = true },
       },
     })

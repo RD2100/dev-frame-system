@@ -37,8 +37,6 @@ import {
 import { devFrameStateOf } from '../src/host-evidence.ts'
 
 const WORKSPACE_ID = WorkspaceId('ws-v14-stop-abandon')
-/** The deterministic policy version the composition lands (host-evidence). */
-const POLICY_VERSION = `policy-${WORKSPACE_ID}-v1`
 
 const roots: string[] = []
 const contexts: Context[] = []

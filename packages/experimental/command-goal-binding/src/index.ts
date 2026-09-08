@@ -73,8 +73,6 @@ export {
   sessionFlush,
 } from './host-evidence.ts'
 export {
-  HostStopProcessInventory,
-  hostStopInventoryOf,
   resolveHostStopAdapters,
   createHostStopTree,
   createHostWriterRelease,
@@ -91,10 +89,13 @@ export const inject = ['commands', 'goals', 'sessions', 'sessionProjections']
  * construct the {@link GoalBindingComposition}, which registers the devframe
  * projection unit and the effect-wrapped `/goal-complete`, `/devframe-start`,
  * and `/devframe-resume` commands on the calling fiber. The stop store mounts
- * the real host stop adapters from `./host-stop.ts` — the captured process
- * inventory always, and the project tree and writer release faces whenever
- * the fiber carries the agent, workspace, and worktree registries and the
- * configuration names a worktree root.
+ * the real host stop adapters from `./host-stop.ts` — the dispatch-lineage
+ * project tree whenever the fiber carries the agent registry, and the
+ * owner-checked writer release whenever the configuration names a worktree
+ * root and the fiber carries the workspace and worktree registries. No
+ * process face mounts: until a real capture feed owns descendant processes,
+ * the chain fails closed on the absent inventory instead of reading
+ * emptiness as quiescence.
  * @param ctx - the plugin fiber's context.
  * @param config - deployment configuration; `workspaceId`, `requiredChecksPath`, `checks`,
  *   `taskIds`, and `maxAttempts` are required.

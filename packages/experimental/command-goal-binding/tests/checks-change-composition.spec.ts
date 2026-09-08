@@ -9,6 +9,7 @@ import CommandRuntime from '@deepseek-ai/dsh-commands'
 import type { CommandExecution } from '@deepseek-ai/dsh-commands'
 import GoalService from '@deepseek-ai/dsh-goal'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionEventMap, SessionEventType } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { DevFrameOperationId, DevFrameReviewId, DevFrameVerificationId } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
@@ -41,7 +42,6 @@ const POLICY_VERSION = `policy-${WORKSPACE_ID}-v1`
 
 const roots: string[] = []
 const contexts: Context[] = []
-let bootNumber = 0
 
 afterEach(async () => {
   for (const ctx of contexts.splice(0).reverse()) await ctx.fiber.dispose()
@@ -232,6 +232,14 @@ function reviewRecord(
 }
 
 /**
+ * One well-typed event a probe folds: the type/data pair stays together, so
+ * the probe's `append` call is an ordinary typed call without assertions.
+ */
+type ProbeEvent = {
+  readonly [T in SessionEventType]-?: { readonly type: T; readonly data: SessionEventMap[T] }
+}[SessionEventType]
+
+/**
  * Fold-probe the usage and acceptance criteria on one throwaway Session:
  * the records are re-attributed to the probe Session so the live projection
  * of the resumed goal never latches a deliberately invalid record.
@@ -239,10 +247,10 @@ function reviewRecord(
 function foldProbe(
   test: TestComposition,
   probeId: string,
-  build: (controllerSessionId: ControllerSessionId) => Array<{ readonly type: string; readonly data: unknown }>,
+  build: (controllerSessionId: ControllerSessionId) => readonly ProbeEvent[],
 ): string | null {
   const probe = test.ctx.sessions.create(SessionId(probeId))
-  for (const record of build(ControllerSessionId(probeId))) probe.append(record.type as never, record.data)
+  for (const event of build(ControllerSessionId(probeId))) probe.append(event.type, event.data)
   return devFrameStateOf(test.ctx, probe).failure
 }
 
