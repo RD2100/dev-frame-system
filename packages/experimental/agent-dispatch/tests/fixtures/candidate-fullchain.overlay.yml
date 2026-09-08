@@ -29,7 +29,7 @@
       controller:
         inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'read_image', 'glob', 'grep', 'todo_write', 'agent_dispatch', 'project_host_start', 'project_task', 'project_integrate']"
       lead:
-        inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'read_image', 'glob', 'grep', 'todo_write', 'agent_dispatch', 'project_review']"
+        inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'read_image', 'glob', 'grep', 'todo_write', 'agent_dispatch', 'project_review', 'project_evidence']"
       worker:
         inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'glob', 'grep', 'project_deliver', 'project_commit']"
     leadPluginScopes:
