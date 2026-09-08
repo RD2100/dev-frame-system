@@ -12,6 +12,8 @@ Status: implemented
 
 [项目请求预算消费方](../../../../packages/experimental/project-controller/src/request-budget-consumer.ts)在委托 `llm/stream` 瀑布前预占一次发送尝试。宿主选定的根将实际活跃发起 Agent、其插件组长及执行 Agent 限定到同一个总控服务预算。AgentLoop 重试经过相同准入。服务串行记账，在返回前持久化每次用量；结果不确定的写入会关闭计费准入，直到服务重新加载。持久化后的取消不退还预占额度。用量表示发送准入，不表示供应商计费，也不能证明发生过 HTTP 请求。
 
+[agent-dispatch 消费方](../../../../packages/experimental/agent-dispatch/src/consumer.ts)在配置候选根时等待嵌套请求预算插件 fiber 完成。Loader 的就绪状态因此包含准入监听器的激活，dispatch 工具不会在监听器能够为首个流记账之前发布。
+
 [DevFrame 会话日志](../../../../packages/experimental/devframe/src/session-journal.ts)通过 `devframe/repair-admission` 拥有修复准入。已有负评和评级为 fail 的任务告警共用以总控会话和 Goal 为键的额度。原因引用已有审查标识或该任务唯一的持久化告警。相同重试返回原回执；Goal revision 和人类授权的 resume 保留累计用量。新 Goal 获得独立额度，已被替代的 Goal 无法通过新原因或历史回执重新开启工作。
 
 配置项 `repairLimit` 为正整数，默认值为二，Goal 记录准入后不能改变。使用同一活跃会话的日志实例共用队列和结果不确定的刷新失败锁。权限在队列内检查，调用方只有在持久化后才能获得准入。审查证据、修复准入和任务状态推进仍是独立写入；恢复复用它们的持久身份，不假定出错意味着未发生写入。投影检查点版本三从事件日志重建较旧检查点。

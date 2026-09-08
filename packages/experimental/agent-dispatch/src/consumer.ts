@@ -242,7 +242,13 @@ export async function apply(ctx: Context, config?: {
   // no other scope exists to mis-reject.
   if (config?.candidateRootSessionId !== undefined) {
     const budgetConfig = { controllerSessionId: config.candidateRootSessionId }
-    ctx.plugin({ id: 'candidate-request-budget', inject: ['llm', 'agents', 'agentBindings', 'projectController'] as const, apply: (budgetCtx) => { requestBudgetApply(budgetCtx, budgetConfig) } })
+    // Await the child fiber so the Loader cannot report this host active before
+    // the admission listener has joined the model-stream waterfall.
+    await ctx.plugin({
+      id: 'candidate-request-budget',
+      inject: ['llm', 'agents', 'agentBindings', 'projectController'] as const,
+      apply: (budgetCtx) => { requestBudgetApply(budgetCtx, budgetConfig) },
+    })
   }
   // Constructing AgentDispatch mounts ctx.agentDispatch on this plugin
   // fiber, so the seam lives and dies with the plugin (HMR-safe by

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-07-durable-project-attempt-and-repair-admission.md
-2026-09-07-durable-project-attempt-and-repair-admission.md: c1f5d8d15f18475d0a4ddfd365fe6441f2505da3
-2026-09-07-durable-project-attempt-and-repair-admission.zh.md: 76b7deba8776df66c118bae38e9cf35c97289e79
+2026-09-07-durable-project-attempt-and-repair-admission.md: c14acf7949b09867469513f8a6cfe18b941ba7f1
+2026-09-07-durable-project-attempt-and-repair-admission.zh.md: 9ee88e9a7bd65b9284fd905400b7e1497ab11a35
