@@ -34,6 +34,41 @@ function fixture() {
 }
 
 describe('project stop', () => {
+  it('awaits owned lifecycle disposal before writer release', async () => {
+    const f = fixture()
+    const started = Promise.withResolvers<undefined>()
+    const released = Promise.withResolvers<undefined>()
+    const result = stopProject({
+      ...f.options,
+      processes: () => [{ ownerSession: f.agent.id, label: 'pty', operationId: 'pty:owner', drain: async () => {
+        started.resolve(undefined)
+        await released.promise
+      } }],
+    })
+    await started.promise
+    expect(f.options.releaseWriter).not.toHaveBeenCalled()
+    released.resolve(undefined)
+    expect(await result).toEqual({ status: 'stopped', remaining: [] })
+  })
+
+  it('retains the writer after failed owned lifecycle disposal and rejects foreign ownership', async () => {
+    const f = fixture()
+    const foreign = vi.fn(async () => {})
+    const result = await stopProject({
+      ...f.options,
+      processes: () => [
+        { ownerSession: f.agent.id, label: 'pty', drain: async () => { throw new Error('close failed') } },
+        { ownerSession: SessionId('foreign'), label: 'foreign', drain: foreign },
+      ],
+    })
+    expect(result).toEqual({ status: 'needs_attention', remaining: [
+      { resource: 'process:foreign', reason: 'identity_unknown' },
+      { resource: 'process:pty', reason: 'operation_failed' },
+    ] })
+    expect(foreign).not.toHaveBeenCalled()
+    expect(f.options.releaseWriter).not.toHaveBeenCalled()
+  })
+
   it('keeps pending inbox work and releases only after quiescence and flush', async () => {
     const f = fixture()
     expect(await stopProject(f.options)).toEqual({ status: 'stopped', remaining: [] })

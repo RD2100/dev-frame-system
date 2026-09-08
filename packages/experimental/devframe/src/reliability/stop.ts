@@ -15,6 +15,8 @@ export interface StopProcess {
   /** Stable operation identity retained across inventory refreshes and restart. */
   readonly operationId?: string
   readonly handle?: SubprocessHandle
+  /** Await provider-owned startup rollback and resource close; rejects unless quiescence is confirmed. */
+  readonly drain?: () => Promise<void>
 }
 
 /** A resource whose cancellation, cleanup, or durable state is unconfirmed. */
@@ -157,7 +159,15 @@ export async function stopProject(options: StopProjectOptions): Promise<StopResu
         seenProcesses.add(identity)
         const resource = processResource(process)
         const handle = process.handle
-        if (!owners.has(process.ownerSession) || handle === undefined) {
+        if (!owners.has(process.ownerSession)) {
+          issues.push({ resource, reason: 'identity_unknown' })
+          continue
+        }
+        if (process.drain !== undefined) {
+          waits.push(drain(resource, process.drain))
+          continue
+        }
+        if (handle === undefined) {
           issues.push({ resource, reason: 'identity_unknown' })
           continue
         }

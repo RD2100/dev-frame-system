@@ -187,7 +187,7 @@ async function admissionRequest(
 }
 
 /** Narrow a verdict to its rejection arm and assert the stage. */
-function rejectionStage(verdict: Awaited<ReturnType<typeof evaluateCompletionAdmission>>): 'source-fingerprint' | 'required-checks' | 'review' | 'task-warning' {
+function rejectionStage(verdict: Awaited<ReturnType<typeof evaluateCompletionAdmission>>): 'source-fingerprint' | 'required-checks' | 'review' | 'task-warning' | 'final-integration' {
   expect(verdict.kind).toBe('rejected')
   if (verdict.kind !== 'rejected') throw new Error('expected a rejection verdict')
   return verdict.stage

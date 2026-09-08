@@ -3,9 +3,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { DevFrameSessionJournal, DevFrameReviewId } from '@deepseek-ai/dsh-experimental-devframe'
-import { resultTupleOf } from '@deepseek-ai/dsh-experimental-command-goal-binding'
-import type {} from '@deepseek-ai/dsh-experimental-command-goal-binding'
+import { DevFrameSessionJournal, DevFrameReviewId } from '../../../packages/experimental/devframe/lib/index.js'
+import { resultTupleOf } from '../../../packages/experimental/command-goal-binding/lib/index.js'
+import type {} from '../../../packages/experimental/command-goal-binding/lib/index.js'
 
 export const name = 'goal-complete-restart-fixture'
 export const inject = ['agents', 'commands', 'goals', 'sessions', 'sessionProjections', 'commandGoalBinding']
@@ -50,7 +50,14 @@ export function apply(ctx: Context): void {
         decision: 'pass', findings: [],
       })
     } else {
-      await command('/devframe-resume')
+      let sawDeferredResume = false
+      const dispose = ctx.on('session/event', (session, event) => {
+        if (session !== agent.session || event.type !== 'goal/change' || event.data.operation !== 'resume') return
+        if (ctx.goals.get(agent)?.activation !== 'disarmed') throw new Error('Resume armed before its binding was durable')
+        sawDeferredResume = true
+      })
+      try { await command('/devframe-resume') } finally { dispose() }
+      if (!sawDeferredResume || ctx.goals.get(agent)?.activation !== 'armed') throw new Error('Durable resume did not activate continuation')
       await command('/goal-complete')
       if (ctx.goals.get(agent)?.phase !== 'complete') throw new Error('Restart completion did not complete the native Goal')
     }

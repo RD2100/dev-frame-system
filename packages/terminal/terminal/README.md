@@ -53,6 +53,8 @@ Every session is owned by the exact agent that opened it. Operations that name a
 
 ### Observable outcomes and failures
 
+Hosts can call `drainOwned(owner)` to close new terminal admission for one exact Agent and await both unpublished startup rollback and published backend close. Cleanup failure keeps the owned activity visible and rejects the drain. After a host-authorized resume, `reopenOwned(owner)` reopens admission only if the same Agent is still live and all terminal resources have closed; other owners remain available throughout.
+
 A successful open returns the session id, type, pid when the backend has one, status, and a bounded startup message. Sends settle with a wait reason: `stdin_read` (the shell is waiting for input), `inferred_idle` (output silence), `timeout`, or `session_exit` (the top-level shell exited). Failures carry stable machine-routable codes: a missing backend type (`NO_BACKEND`), an unknown session (`NO_SESSION`), another agent's session (`FOREIGN_SESSION`), a second concurrent send (`SEND_ACTIVE`), or an owner that is no longer live (`OWNER_NOT_LIVE`). Backend setup failures reject the open before anything is published, and a failed cleanup rejects the close rather than claiming success.
 
 -----

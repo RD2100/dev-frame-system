@@ -186,9 +186,11 @@ export interface ResolvedConfig {
 /** Process-local activation state crossing the synchronous append boundary. */
 interface GoalRuntimeState {
   activation: GoalActivation
+  pendingResume: object | undefined
   pendingActivation: {
     readonly offset: SessionLogOffset
     readonly activation: GoalActivation
+    readonly resumeToken?: object
   } | undefined
 }
 
@@ -294,11 +296,15 @@ export class GoalService extends TypertRemoteService {
     }
     ctx.on('agent/session-start', ({ agent }) => {
       this.runtimeState(agent.session).activation = 'disarmed'
+      this.runtimeState(agent.session).pendingResume = undefined
     })
     ctx.sessionProjections.register(goalProjectionDefinition)
     ctx.on('session/event', (session, event) => {
       if (event.type !== 'goal/change') return
       const runtime = this.runtimeState(session)
+      runtime.pendingResume = runtime.pendingActivation !== undefined
+        && SessionSeq(runtime.pendingActivation.offset) === event.seq
+        ? runtime.pendingActivation.resumeToken : undefined
       runtime.activation = runtime.pendingActivation !== undefined
         && SessionSeq(runtime.pendingActivation.offset) === event.seq
         ? runtime.pendingActivation.activation
@@ -328,6 +334,7 @@ export class GoalService extends TypertRemoteService {
     this.assertLive(agent)
     const runtime = this.runtimeState(agent.session)
     runtime.activation = 'disarmed'
+    runtime.pendingResume = undefined
     return this.view(this.state(agent.session), runtime)
   }
 
@@ -400,6 +407,46 @@ export class GoalService extends TypertRemoteService {
    */
   @Remote('resume')
   resume(agent: Agent, ref: GoalRef): GoalView {
+    return this.resumeWithActivation(agent, ref, 'armed')
+  }
+
+  /**
+   * Record a resume while withholding continuation until host preparation is durable.
+   * Disarm, another Goal mutation, or loss of the live Agent invalidates activation.
+   * @param agent - owning live agent.
+   * @param ref - expected current revision.
+   * @returns the disarmed resumed view and a one-use activation capability.
+   */
+  prepareResume(agent: Agent, ref: GoalRef): { readonly goal: GoalView; readonly activate: (commit?: () => void) => GoalView } {
+    const token = {}
+    const goal = this.resumeWithActivation(agent, ref, 'disarmed', token)
+    const runtime = this.runtimeState(agent.session)
+    return {
+      goal,
+      activate: (commit) => {
+        const [state] = this.prepareMutation(agent)
+        this.expectCurrent(state, goal)
+        if (runtime.pendingResume !== token) {
+          throw new GoalError('the prepared resume is no longer current', 'GOAL_INVALID_TRANSITION')
+        }
+        commit?.()
+        this.expectCurrent(this.state(agent.session), goal)
+        this.assertLive(agent)
+        if (runtime.pendingResume !== token) {
+          throw new GoalError('resource commit invalidated the prepared resume', 'GOAL_INVALID_TRANSITION')
+        }
+        runtime.pendingResume = undefined
+        runtime.activation = 'armed'
+        const activated = { ...goal, activation: 'armed' as const }
+        agentEvents(this.ctx, agent).emit('goal/changed', {
+          change: { operation: 'resume', ref: { id: goal.id, revision: goal.revision }, goal: activated },
+        })
+        return activated
+      },
+    }
+  }
+
+  private resumeWithActivation(agent: Agent, ref: GoalRef, activation: GoalActivation, resumeToken?: object): GoalView {
     const [state, runtime] = this.prepareMutation(agent)
     const currentState = this.expectCurrent(state, ref)
     const current = currentState.goal
@@ -416,7 +463,7 @@ export class GoalService extends TypertRemoteService {
         'GOAL_INVALID_TRANSITION',
       )
     }
-    return this.commitCurrent(agent, currentState, runtime, 'resume', this.withPhase(current, 'active'), 'armed')
+    return this.commitCurrent(agent, currentState, runtime, 'resume', this.withPhase(current, 'active'), activation, resumeToken)
   }
 
   /**
@@ -556,6 +603,7 @@ export class GoalService extends TypertRemoteService {
     if (runtime !== undefined) return runtime
     runtime = {
       activation: 'disarmed',
+      pendingResume: undefined,
       pendingActivation: undefined,
     }
     this.runtimeStates.set(session, runtime)
@@ -605,6 +653,7 @@ export class GoalService extends TypertRemoteService {
     operation: Exclude<GoalOperation, 'create' | 'clear' | 'receipt'>,
     goal: GoalSnapshot,
     activation: GoalActivation,
+    resumeToken?: object,
   ): GoalView {
     return this.commitSnapshot(
       agent,
@@ -615,6 +664,7 @@ export class GoalService extends TypertRemoteService {
       state.createdAt,
       this.nextMutationTime(state),
       activation,
+      resumeToken,
     )
   }
 
@@ -633,6 +683,7 @@ export class GoalService extends TypertRemoteService {
     createdAt: number,
     updatedAt: number,
     activation: GoalActivation,
+    resumeToken?: object,
   ): GoalView {
     const change: GoalSnapshotChangeMeta = {
       kind: 'goal/change',
@@ -643,7 +694,7 @@ export class GoalService extends TypertRemoteService {
       createdAt,
       updatedAt,
     }
-    this.commit(agent, runtime, change, activation)
+    this.commit(agent, runtime, change, activation, resumeToken)
     return {
       ...goal,
       roundsStarted,
@@ -654,9 +705,9 @@ export class GoalService extends TypertRemoteService {
   }
 
   /** Commit one mutation into the goal log and live event stream. */
-  private commit(agent: Agent, runtime: GoalRuntimeState, change: GoalChangeMeta, activation: GoalActivation): void {
+  private commit(agent: Agent, runtime: GoalRuntimeState, change: GoalChangeMeta, activation: GoalActivation, resumeToken?: object): void {
     const ref = goalChangeRef(change)
-    runtime.pendingActivation = { offset: agent.session.seq, activation }
+    runtime.pendingActivation = { offset: agent.session.seq, activation, ...resumeToken === undefined ? {} : { resumeToken } }
     try {
       const event = agent.session.append('goal/change', change)
       /* v8 ignore next -- Session.append returns the event committed at the pre-append seq. */

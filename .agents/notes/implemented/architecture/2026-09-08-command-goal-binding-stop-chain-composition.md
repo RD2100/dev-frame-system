@@ -18,6 +18,8 @@ The confirmed-quiescence record is the durable pre-release prerequisite. The sto
 
 Interrupted flows converge on the repeat stop. A log left at `stop_requested` (a crash while the chain waited in its drain — a normal failure window for a stop the human explicitly asked for) re-enters the drain through `resumeStopRequestedStop` over the host's current inventory and live registry identities; a log left at `quiescence_confirmed` re-enters the release through `finishConfirmedStop`. Missing live identities surface as `needs_attention` naming the resource with the writer held — never a silent bypass, and interrupted goal work is never restarted.
 
+Resume checks writer ownership and prepares all resource reopen operations before mutating the native Goal. A deferred native resume records its phase with activation withheld while the binding and journal settle. Its guarded activation capability performs the final synchronous resource commit only after checking the live Agent and revision. Failed prerequisites preserve the paused Goal; later failures leave an active but disarmed Goal, closed admission, and a `needs_attention` store record. A latched journal failure blocks corrective appends and is reported as incomplete bookkeeping rather than a successful rollback. Cold sessions never inherit activation.
+
 ## Alternatives considered
 
 **Enumerating descendants inside the composition.** The composition would guess project membership and duplicate the host's owner and worktree verification. The host already owns the live registry and the captured handles, so the verified-inventory face keeps membership authoritative and lets the composition fail closed on what it cannot verify.

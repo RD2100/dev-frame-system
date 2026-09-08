@@ -53,6 +53,8 @@ kind: "package-reference"
 
 ### 可观察结果与失败
 
+host 可以调用 `drainOwned(owner)`，关闭一个确切 Agent 的新终端入口，并等待未发布启动的回滚及已发布后端的关闭。清理失败时，该所有者的活动仍然可见，排空操作会拒绝。host 授权恢复后，`reopenOwned(owner)` 只有在同一个 Agent 仍存活且所有终端资源均已关闭时才重新开放入口；其他所有者在此期间始终可用。
+
 成功打开会返回会话 id、类型、后端存在时的 pid、状态与有界启动消息。发送以等待原因结算：`stdin_read`（shell 正在等待输入）、`inferred_idle`（输出静默）、`timeout` 或 `session_exit`（顶层 shell 已退出）。失败携带稳定的机器可路由错误码：后端类型缺失（`NO_BACKEND`）、会话未知（`NO_SESSION`）、属于其他 agent 的会话（`FOREIGN_SESSION`）、并发第二次发送（`SEND_ACTIVE`），或所有者不再存活（`OWNER_NOT_LIVE`）。后端设置失败会在发布任何内容之前拒绝打开；清理失败会拒绝关闭，而不是声称成功。
 
 -----

@@ -143,11 +143,15 @@ export interface GoalBindingCompositionStores {
    * never drained. `processes` returns every captured descendant process
    * scoped to the receiving root; a composition without it has no provable
    * process inventory, and the chain fails closed on it instead of reading
-   * emptiness as quiescence. `resumeResources` releases the root-scoped
-   * resources a resume lane reacquires after resource admission; the
-   * composition carries the face so the resume lane can invoke it with the
-   * same receiving root. `releaseWriter` is the owner-checked writer release
-   * for the given
+   * emptiness as quiescence. `prepareResumeResources` prepares the root-scoped
+   * resources without reopening admission and returns their synchronous
+   * commit; both preparation and commit revalidate current ownership.
+   * `acquireWriter` reacquires
+   * the receiving root's writer lock during resume — the authorization
+   * becomes effective only once the lock is held again, it must tolerate
+   * repeat invocation because a retry after a later failure re-enters it,
+   * and an acquire failure refuses the resume with the writer untouched.
+   * `releaseWriter` is the owner-checked writer release for the given
    * receiving root; it may be asynchronous and the chain reports `stopped`
    * only after it settles, and it must tolerate repeat invocation because
    * the confirmed-stop recovery path retries it. The chain fails closed: a
@@ -158,7 +162,8 @@ export interface GoalBindingCompositionStores {
   readonly stop?: {
     readonly tree?: (root: Agent) => readonly Agent[]
     readonly processes?: (root: Agent) => readonly StopProcess[]
-    readonly resumeResources?: (root: Agent) => void
+    readonly prepareResumeResources?: (root: Agent) => () => void
+    readonly acquireWriter?: (root: Agent) => Promise<void>
     readonly releaseWriter?: (root: Agent) => void | Promise<void>
   }
 }
@@ -215,8 +220,10 @@ export class GoalBindingComposition extends Service {
   private readonly sessionFlusher: DevFrameFlush
   /** Host-captured descendant processes handed to the stop chain; absent means no provable inventory. */
   private readonly stopProcesses: ((root: Agent) => readonly StopProcess[]) | undefined
-  /** Host-captured root-scoped resources a resume lane releases after admission. */
-  readonly stopResumeResources: ((root: Agent) => void) | undefined
+  /** Root-scoped preparation returning the final synchronous resource commit. */
+  readonly stopPrepareResumeResources: ((root: Agent) => () => void) | undefined
+  /** Host writer-lock reacquisition; the resume authorization-effective boundary. */
+  private readonly stopAcquireWriter: ((root: Agent) => Promise<void>) | undefined
   /** Host-verified project tree (root plus descendants); absent fails closed. */
   private readonly stopTree: ((root: Agent) => readonly Agent[]) | undefined
   /** Host writer release; absent means the chain retains the writer loudly. */
@@ -249,7 +256,8 @@ export class GoalBindingComposition extends Service {
     const flush = sessionFlush(ctx)
     this.sessionFlusher = flush
     this.stopProcesses = stores.stop?.processes
-    this.stopResumeResources = stores.stop?.resumeResources
+    this.stopPrepareResumeResources = stores.stop?.prepareResumeResources
+    this.stopAcquireWriter = stores.stop?.acquireWriter
     this.stopTree = stores.stop?.tree
     this.stopReleaseWriter = stores.stop?.releaseWriter
     const reviewerDirectory = new ProjectionEvidenceReviewerDirectory(ctx)
@@ -466,8 +474,18 @@ export class GoalBindingComposition extends Service {
       { controllerSessionId, goalId: current.id },
       createHumanAuthorization(`devframe-resume:${invocation.agent.id}:${Date.now()}`),
       adoption,
+      {
+        prepare: async () => {
+          if (this.config.stopChain && (this.stopAcquireWriter === undefined || this.stopPrepareResumeResources === undefined)) {
+            throw new Error('the writer acquisition and resource preparation must be wired before resume')
+          }
+          const commit = this.stopPrepareResumeResources?.(invocation.agent) ?? (() => {})
+          await this.stopAcquireWriter?.(invocation.agent)
+          return commit
+        },
+        persist: binding => landGoalBinding(this.journal, invocation.agent.session, binding),
+      },
     )
-    await landGoalBinding(this.journal, invocation.agent.session, resumed)
     if (adoption !== undefined) {
       const requiredChecksDigest = await this.requiredChecksStore.save(this.config.checks)
       await this.evidenceJournal.recordVerification({
@@ -668,10 +686,10 @@ export class GoalBindingComposition extends Service {
     // verified zero-jobs state: the throwing adapter turns into a chain
     // issue, so the primitive refuses the release instead of trusting an
     // unverifiable empty job inventory (absent ≠ quiet).
-    const jobs = this.ctx.jobs ?? {
+    const jobs = this.ctx.get('jobs') ?? {
       list: () => { throw new Error('no jobs registry is mounted for this composition') },
       kill: () => { throw new Error('no jobs registry is mounted for this composition') },
-      wait: async () => { throw new Error('no jobs registry is mounted for this composition') },
+      wait: () => Promise.reject(new Error('no jobs registry is mounted for this composition')),
     }
     const options: StopProjectOptions = {
       agents,
@@ -937,7 +955,8 @@ export class GoalBindingComposition extends Service {
     const controller = this.controllerFor(invocation.agent)
     const controllerSessionId = ControllerSessionId(invocation.agent.id)
     const bindings = await this.bindingStore.load(controllerSessionId)
-    if (!bindings.some(binding => binding.goalId === current.id)) {
+    const storedBinding = bindings.find(binding => binding.goalId === current.id)
+    if (storedBinding === undefined) {
       return { kind: 'error', text: NO_BINDING_TEXT }
     }
     const durableEvidenceUnchanged = await this.journal.checkpoint(invocation.agent.session)
@@ -962,7 +981,7 @@ export class GoalBindingComposition extends Service {
     // that check instead of being silently filtered here.
     const review = latestReview(state)
     if (review === undefined) return { kind: 'error', text: NO_REVIEW_TEXT }
-    if (currentBinding !== undefined && review.binding.goalId === current.id
+    if (review.binding.goalId === current.id
       && !isCurrentGeneration(review, currentBinding, regionStart)) {
       return { kind: 'error', text: REVIEW_SUPERSEDED_TEXT }
     }
@@ -972,7 +991,7 @@ export class GoalBindingComposition extends Service {
       finalIntegration = selectGoalCompletionEvidence({
         state,
         goalId: current.id,
-        boundTaskIds: bindings.find(binding => binding.goalId === current.id)?.taskIds ?? [],
+        boundTaskIds: storedBinding.taskIds,
         integrations: this.goalCompletionIntegrations(invocation.agent.session.id),
       })
       if (finalIntegration !== undefined) {
@@ -986,7 +1005,7 @@ export class GoalBindingComposition extends Service {
     }
     // Merged evidence must retain the current acceptance generation.
     if (finalIntegration !== undefined) {
-      if (currentBinding === undefined || !isCurrentGeneration(finalIntegration.verification, currentBinding, regionStart)) {
+      if (!isCurrentGeneration(finalIntegration.verification, currentBinding, regionStart)) {
         return { kind: 'error', text: VERIFICATION_SUPERSEDED_TEXT }
       }
       if (!isCurrentGeneration(finalIntegration.review, currentBinding, regionStart)) {
@@ -1006,7 +1025,7 @@ export class GoalBindingComposition extends Service {
         if (finalIntegration !== undefined) {
           this.goalCompletionGuard(invocation.agent, finalIntegration.targetPath, currentBinding.workspaceId)
           const latest = selectGoalCompletionEvidence({ state: devFrameStateOf(this.ctx, invocation.agent.session),
-            goalId: current.id, boundTaskIds: bindings.find(binding => binding.goalId === current.id)!.taskIds,
+            goalId: current.id, boundTaskIds: storedBinding.taskIds,
             integrations: this.goalCompletionIntegrations(invocation.agent.session.id) })
           if (JSON.stringify(latest) !== JSON.stringify(finalIntegration)) throw new Error('Goal completion integration evidence changed during admission')
         }

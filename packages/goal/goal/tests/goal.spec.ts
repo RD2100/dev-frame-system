@@ -65,8 +65,8 @@ async function harness(config: { defaultMaxGoalRounds?: number } = {}) {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(GoalService, config)
   const stub = stubAgentForSession(ctx.sessions.create(SessionId(`goal-test-${Math.random()}`)))
-  ctx.agents.register(stub.agent)
-  return { ctx, ...stub }
+  const unregister = ctx.agents.register(stub.agent)
+  return { ctx, unregister, ...stub }
 }
 
 /** Append one admitted goal round as a balanced user-message turn. */
@@ -1026,5 +1026,61 @@ describe('goal replay validation', () => {
     appendChange(completeThenClear, clear)
     appendChange(completeThenClear, receiptChange(complete))
     expect(() => foldGoal(completeThenClear.snapshotEvents())).toThrow('goal receipt requires a current goal')
+  })
+})
+
+describe('prepared resume activation', () => {
+  it.each(['disarm', 'pause', 'dispose', 'repeat'] as const)('invalidates activation after %s', async (change) => {
+    const test = await harness()
+    try {
+      const created = test.ctx.goals.create(test.agent, { objective: 'deferred resume' })
+      test.ctx.goals.disarm(test.agent)
+      const prepared = test.ctx.goals.prepareResume(test.agent, created)
+      expect(prepared.goal.activation).toBe('disarmed')
+      expect(test.ctx.goals.get(test.agent)?.activation).toBe('disarmed')
+      const commit = vi.fn()
+      if (change === 'disarm') test.ctx.goals.disarm(test.agent)
+      if (change === 'pause') test.ctx.goals.pause(test.agent, prepared.goal)
+      if (change === 'dispose') test.unregister()
+      if (change === 'repeat') expect(prepared.activate().activation).toBe('armed')
+      expect(() => prepared.activate(commit)).toThrow()
+      expect(commit).not.toHaveBeenCalled()
+    } finally { await test.ctx.fiber.dispose() }
+  })
+
+  it('does not arm on a failing synchronous resource commit', async () => {
+    const test = await harness()
+    try {
+      const created = test.ctx.goals.create(test.agent, { objective: 'deferred resume' })
+      test.ctx.goals.disarm(test.agent)
+      const prepared = test.ctx.goals.prepareResume(test.agent, created)
+      expect(() => prepared.activate(() => { throw new Error('resource lost') })).toThrow('resource lost')
+      expect(test.ctx.goals.get(test.agent)?.activation).toBe('disarmed')
+      expect(prepared.activate().activation).toBe('armed')
+    } finally { await test.ctx.fiber.dispose() }
+  })
+})
+
+describe('prepared resume observer cancellation', () => {
+  it.each(['goal/changed', 'session/event'] as const)('preserves synchronous disarm by a %s observer', async (channel) => {
+    const test = await harness()
+    try {
+      const created = test.ctx.goals.create(test.agent, { objective: 'observer cancellation' })
+      test.ctx.goals.disarm(test.agent)
+      if (channel === 'goal/changed') {
+        test.ctx.on('goal/changed', ({ change }) => {
+          if (change.operation === 'resume') test.ctx.goals.disarm(test.agent)
+        })
+      } else {
+        test.ctx.on('session/event', (_session, event) => {
+          if (event.type === 'goal/change' && event.data.operation === 'resume') test.ctx.goals.disarm(test.agent)
+        })
+      }
+      const prepared = test.ctx.goals.prepareResume(test.agent, created)
+      const commit = vi.fn()
+      expect(() => prepared.activate(commit)).toThrow()
+      expect(commit).not.toHaveBeenCalled()
+      expect(test.ctx.goals.get(test.agent)?.activation).toBe('disarmed')
+    } finally { await test.ctx.fiber.dispose() }
   })
 })

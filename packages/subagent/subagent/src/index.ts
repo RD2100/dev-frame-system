@@ -76,6 +76,7 @@ import type { SubagentDescendantListEntry, SubagentListEntry } from './list-chil
 import { snapshotSubagentDescriptor } from './descriptor.ts'
 import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from './projection.ts'
 import { queueSubagentPrompt } from './internal.ts'
+import { OwnedRuns } from './owned-runs.ts'
 
 export * from './out-of-process.ts'
 export { AssistantOutputFold, finalAssistantOutput } from './assistant-output.ts'
@@ -106,7 +107,7 @@ export type {
   SubagentDescriptorInput,
 } from './descriptor.ts'
 export { seedDescriptorTurn } from './descriptor-seed.ts'
-export { SubagentError } from './error.ts'
+export { SubagentError, SubagentStartupCleanupError } from './error.ts'
 export { settleRun } from './run-settlement.ts'
 export { assertSubagentMaxDepth, delegationDepthOf } from './depth.ts'
 export {
@@ -189,6 +190,7 @@ interface BrowserPromptSource {
 
 /** Named provider registry with one-shot runs, durable discovery, and continuable-child operations. */
 export class SubagentRuntime extends TypertRemoteService {
+  private readonly ownedRuns = new OwnedRuns()
   private providers = new Map<string, SubagentProvider>()
   private continuations: SubagentContinuationManager | undefined
   /**
@@ -200,6 +202,7 @@ export class SubagentRuntime extends TypertRemoteService {
 
   constructor(ctx: Context) {
     super(ctx, 'subagents')
+    ctx.effect(() => () => this.ownedRuns.dispose(), 'subagents.ownedRuns()')
     this.emitLifecycle = createLifecycleEmitter(this.ctx, parent => scopeTarget(this, parent))
     ctx.inject(['agents'], (childCtx: Context) => {
       const manager = new SubagentContinuationManager(childCtx, {
@@ -561,7 +564,46 @@ export class SubagentRuntime extends TypertRemoteService {
       ...request.label !== undefined ? { label: request.label } : {},
     })
     const resolved: ResolvedSubagentStartRequest = { ...request, descriptor }
-    return observeRun(this.emitLifecycle, name, request.parent, await provider.start(resolved))
+    return this.ownedRuns.start(request.parent, request.signal, async signal =>
+      observeRun(this.emitLifecycle, name, request.parent, await provider.start({ ...resolved, signal })))
+  }
+
+  /**
+   * Inspect one-shot starts and runs that have not released their resources.
+   * @param parent - exact delegating Agent.
+   * @returns true during provider setup and until successful run disposal.
+   */
+  hasOwnerActivity(parent: Agent): boolean {
+    return this.ownedRuns.has(parent)
+  }
+
+  /**
+   * Fence one-shot admission for this exact parent and release its owned runs.
+   * Result settlement alone does not prove resource release; disposal is awaited.
+   * @param parent - exact delegating Agent; unrelated parents remain live.
+   * @returns after pending startup rollback and published run disposal settle.
+   */
+  drainOwnedRuns(parent: Agent): Promise<void> {
+    return this.ownedRuns.drain(parent)
+  }
+
+  /**
+   * Reopen one-shot admission after the host authorizes a drained parent's resume.
+   * @param parent - exact Agent whose owned runs have all released resources.
+   * @throws when resources remain or the service is disposing.
+   */
+  reopenOwnedRuns(parent: Agent): void {
+    this.ownedRuns.reopen(parent)
+  }
+
+  /**
+   * Prepare one-shot reopening without changing admission.
+   * @param parent - exact Agent checked before a synchronous host reopen.
+   * @returns a non-throwing commit; call without yielding after all services prepare.
+   * @throws when resources remain or the service is disposing.
+   */
+  prepareReopenOwnedRuns(parent: Agent): () => void {
+    return this.ownedRuns.prepareReopen(parent)
   }
 
   /**

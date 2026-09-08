@@ -239,6 +239,11 @@ export interface NativeGoalPort {
   get(): NativeGoalState | undefined
   /** Resume one exact native Goal revision and arm continuation. */
   resume(ref: { readonly id: NativeGoalId; readonly revision: number }): NativeGoalState
+  /** Record a disarmed resume and return its guarded continuation activation. */
+  prepareResume?(ref: { readonly id: NativeGoalId; readonly revision: number }): {
+    readonly goal: NativeGoalState
+    readonly activate: (commit?: () => void) => NativeGoalState
+  }
   /** Mark the current native Goal complete at one exact revision and disarm it. */
   complete(ref: { readonly id: NativeGoalId; readonly revision: number }): NativeGoalState
   /**
@@ -283,6 +288,14 @@ export class GoalServicePort implements NativeGoalPort {
 
   resume(ref: { readonly id: NativeGoalId; readonly revision: number }): NativeGoalState {
     return toNativeGoalState(this.options.goals.resume(this.options.agent, ref))
+  }
+
+  prepareResume(ref: { readonly id: NativeGoalId; readonly revision: number }): {
+    readonly goal: NativeGoalState
+    readonly activate: (commit?: () => void) => NativeGoalState
+  } {
+    const prepared = this.options.goals.prepareResume(this.options.agent, ref)
+    return { goal: toNativeGoalState(prepared.goal), activate: commit => toNativeGoalState(prepared.activate(commit)) }
   }
 
   complete(ref: { readonly id: NativeGoalId; readonly revision: number }): NativeGoalState {
@@ -644,6 +657,8 @@ export class GoalBindingController {
    *   across this strict revision advance, the superseded generation's
    *   evidence stops satisfying completion, and usage bridges by Goal
    *   identity; the fold enforces the confirmation/hash match.
+   * @param activation - optional host preparation and durable journal hooks;
+   *   continuation stays disarmed until the journal, store, and resource commit settle.
    * @returns the binding retained for the resumed Goal — the historical
    *   acceptance, or the adopted generation when `adopt` was given.
    */
@@ -651,6 +666,10 @@ export class GoalBindingController {
     identity: GoalBindingIdentity,
     authorization: HumanAuthorization,
     adopt?: GenerationAdoption,
+    activation?: {
+      readonly prepare: () => Promise<() => void>
+      readonly persist: (binding: GoalBinding) => Promise<void>
+    },
   ): Promise<GoalBinding> {
     return this.enqueue(async () => {
       await this.ensureReady()
@@ -679,7 +698,14 @@ export class GoalBindingController {
         )
       }
 
-      const resumed = this.options.goals.resume({ id: current.id, revision: current.revision })
+      const prepareResume = this.options.goals.prepareResume?.bind(this.options.goals)
+      if (activation !== undefined && prepareResume === undefined) {
+        throw new GoalBindingError('the native Goal port cannot defer resume activation', 'GOAL_BINDING_IDENTITY_MISMATCH')
+      }
+      const commitResources = await activation?.prepare()
+      const prepared = activation === undefined ? undefined
+        : prepareResume?.({ id: current.id, revision: current.revision })
+      const resumed = prepared?.goal ?? this.options.goals.resume({ id: current.id, revision: current.revision })
       assertNativeRevision(resumed.revision)
       if (resumed.id !== identity.goalId) {
         throw new GoalBindingError(
@@ -697,9 +723,32 @@ export class GoalBindingController {
           confirmation: adopt.confirmation,
         }),
       }
-      await this.saveBinding(admitted, adopt !== undefined)
-      this.activeIdentity = identityOf(admitted)
-      this.admission = 'open'
+      try {
+        if (activation !== undefined) await this.saveBinding({ ...admitted, lifecycle: 'ambiguous' }, adopt !== undefined)
+        await activation?.persist(admitted)
+        await this.saveBinding(admitted, adopt !== undefined)
+        const admit = (): void => {
+          commitResources?.()
+          this.activeIdentity = identityOf(admitted)
+          this.admission = 'open'
+        }
+        if (prepared === undefined) admit()
+        else prepared.activate(admit)
+      } catch (error) {
+        this.closeAdmission()
+        const failures: unknown[] = []
+        try { this.options.goals.disarm() } catch (disarmError) { failures.push(disarmError) }
+        if (activation !== undefined) {
+          const failed = { ...admitted, lifecycle: 'needs_attention' as const }
+          const repairs = await Promise.allSettled([
+            this.saveBinding(failed, adopt !== undefined),
+            activation.persist(failed),
+          ])
+          failures.push(...repairs.filter(result => result.status === 'rejected').map(result => result.reason as unknown))
+        }
+        if (failures.length > 0) throw new AggregateError([error, ...failures], 'resume failed and recovery bookkeeping is incomplete')
+        throw error
+      }
       return copyBinding(admitted)
     })
   }

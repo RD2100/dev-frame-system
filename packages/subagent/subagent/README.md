@@ -95,6 +95,8 @@ The manager reserves a child identity, resolves the durable descriptor, creates 
 
 ### Ownership and invariants
 
+The service retains one-shot ownership from provider startup until successful run disposal. `hasOwnerActivity(parent)` includes pending starts and completed results whose resources remain open. `drainOwnedRuns(parent)` closes admission for that exact parent, cancels pending startup, and awaits resource disposal without stopping unrelated parents. Failed disposal remains visible for retry; an aggregated startup cleanup failure without a provider retry remains unresolved. A host-authorized resume can call `reopenOwnedRuns(parent)` only after all retained runs release their resources.
+
 - **Publication is the boundary** — before it the provider owns the setup and must roll back on failure; after it the caller owns the run and must dispose it.
 - **Registration is effect-scoped** — removing a provider blocks new starts but never revokes accepted runs.
 - **Agent-message authority is exact adjacency** — `sendMessage()` requires the exact live sender; every sender may target a direct continuable child, while only a sender with a resident continuable Activation may target its direct parent.

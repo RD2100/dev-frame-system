@@ -109,6 +109,7 @@ export class TerminalSessionService extends Service {
   private readonly pendingSpawns = new Map<Agent, Set<PendingSpawn>>()
   private readonly ownerCleanups = new Map<Agent, () => Promise<void> | void>()
   private readonly disposedOwners = new WeakSet<Agent>()
+  private readonly drainedOwners = new WeakSet<Agent>()
   private nextId = 0
   private disposing = false
 
@@ -234,6 +235,40 @@ export class TerminalSessionService extends Service {
   }
 
   /**
+   * Fence new spawns for one owner and await unpublished rollback and PTY close.
+   * Failed cleanup remains observable and may be retried for the same owner.
+   * @param owner - exact Agent whose terminal resources must drain.
+   * @returns after all owned backend resources close, rejecting on cleanup failure.
+   */
+  async drainOwned(owner: Agent): Promise<void> {
+    this.drainedOwners.add(owner)
+    await this.disposeOwned(owner)
+  }
+
+  /**
+   * Reopen terminal admission after the host authorizes an owner's resume.
+   * @param owner - exact live Agent whose prior terminal resources are closed.
+   * @throws when resources remain, the owner is stale, or the service is disposing.
+   */
+  reopenOwned(owner: Agent): void {
+    this.prepareReopenOwned(owner)()
+  }
+
+  /**
+   * Prepare terminal reopening without changing admission.
+   * @param owner - exact Agent checked before a synchronous host reopen.
+   * @returns a non-throwing commit; call without yielding after all services prepare.
+   * @throws when resources remain, the owner is stale, or the service is disposing.
+   */
+  prepareReopenOwned(owner: Agent): () => void {
+    this.assertActive()
+    if (this.disposedOwners.has(owner) || this.ctx.get('agents')?.get(owner.id) !== owner || this.hasOwnerActivity(owner)) {
+      throw new TerminalError('PTY owner is not quiescent and live', 'OWNER_NOT_LIVE')
+    }
+    return () => { this.drainedOwners.delete(owner) }
+  }
+
+  /**
    * Start one exclusive interactive send.
    * @param owner - exact session owner.
    * @param id - target PTY identity.
@@ -316,7 +351,7 @@ export class TerminalSessionService extends Service {
   }
 
   private isLiveOwner(owner: Agent): boolean {
-    return !this.disposedOwners.has(owner) && this.ctx.get('agents')?.get(owner.id) === owner
+    return !this.disposedOwners.has(owner) && !this.drainedOwners.has(owner) && this.ctx.get('agents')?.get(owner.id) === owner
   }
 
   private ensureOwnerCleanup(owner: Agent): void {
@@ -378,7 +413,9 @@ export class TerminalSessionService extends Service {
     for (const spawn of pending) spawn.controller.abort(reason)
     await Promise.all(pending.map(spawn => spawn.settled))
     const failures = pending.flatMap(spawn => spawn.cleanupFailure === undefined ? [] : [spawn.cleanupFailure.error])
-    for (const spawn of pending) this.removePendingSpawn(spawn)
+    for (const spawn of pending) {
+      if (spawn.cleanupFailure === undefined) this.removePendingSpawn(spawn)
+    }
     if (failures.length > 0) {
       throw new AggregateError(failures, 'failed to roll back unpublished PTY setup')
     }

@@ -23,7 +23,7 @@ import type { GoalBinding } from '@deepseek-ai/dsh-experimental-devframe/control
 import type { DevFrameRequiredChecksConfig } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
 import { createCommittedWorktree, drainWorktreeFixtures } from '../../devframe/tests/completion-fixtures.ts'
 import { apply } from '../src/index.ts'
-import { createHostStopTree, createHostWriterRelease } from '../src/host-stop.ts'
+import { createHostStopTree, createHostWriterAcquire, createHostWriterRelease } from '../src/host-stop.ts'
 import { resolveCommandGoalBindingConfig } from '../src/config.ts'
 import { GoalBindingComposition } from '../src/composition.ts'
 import {
@@ -183,7 +183,7 @@ function startSlowCancelJob(test: TestComposition, owner: Agent, settleMs: numbe
     run: (): JobHooks => ({
       cancel: () => {
         cancelRequested = true
-        void delay(settleMs).then(() => settleJob({ status: 'killed', detail: 'project stop' }))
+        void delay(settleMs).then(() => { settleJob({ status: 'killed', detail: 'project stop' }) })
       },
       done,
     }),
@@ -246,12 +246,13 @@ describe('host writer release', () => {
     readonly registry: WorktreeRegistry
     readonly workspaces: WorkspaceRegistry
     readonly released: Array<{ readonly id: string; readonly holder: string }>
+    readonly bound: Array<{ readonly id: string; readonly holder: string }>
     bindRow(holder: WorktreeLockHolder | undefined): void
     rejectUnbindWith(error: Error): void
   }
 
   /** A worktree registry standing in for the durable rows the adapter reads. */
-  function fakeRegistries(worktreePath: string): FakeRegistry {
+  function fakeRegistries(worktreePath: string, extraWorkspacePath?: string): FakeRegistry {
     const mutableRow = {
       id: 'wt-1',
       workspaceId: WORKSPACE_ID,
@@ -262,6 +263,7 @@ describe('host writer release', () => {
       lockedBy: undefined as WorktreeLockHolder | undefined,
     }
     const released: FakeRegistry['released'] = []
+    const bound: FakeRegistry['bound'] = []
     let unbindError: Error | undefined
     const registry = {
       list: (workspaceId: typeof WORKSPACE_ID) => (workspaceId === WORKSPACE_ID ? [mutableRow] : []),
@@ -271,16 +273,30 @@ describe('host writer release', () => {
         mutableRow.lockedBy = undefined
         return mutableRow
       },
+      // The registry contract: an unbound row or the same holder re-binds; a
+      // foreign holder is refused without displacement.
+      bind: async (id: string, holder: WorktreeLockHolder) => {
+        if (mutableRow.lockedBy !== undefined && mutableRow.lockedBy !== holder) {
+          throw new Error('already-locked')
+        }
+        bound.push({ id, holder: String(holder) })
+        mutableRow.lockedBy = holder
+        return mutableRow
+      },
     }
     const workspaces = {
-      list: () => [{ id: WORKSPACE_ID, path: worktreePath }],
+      list: () => [
+        { id: WORKSPACE_ID, path: worktreePath },
+        ...(extraWorkspacePath === undefined ? [] : [{ id: WorkspaceId('ws-v14-host-stop-extra'), path: extraWorkspacePath }]),
+      ],
     } as unknown as WorkspaceRegistry
     return {
       registry: registry as unknown as WorktreeRegistry,
       workspaces,
       released,
-      bindRow: holder => { mutableRow.lockedBy = holder },
-      rejectUnbindWith: error => { unbindError = error },
+      bound,
+      bindRow: (holder) => { mutableRow.lockedBy = holder },
+      rejectUnbindWith: (error) => { unbindError = error },
     }
   }
 
@@ -334,6 +350,63 @@ describe('host writer release', () => {
     fake.bindRow(undefined)
     await expect(release(agent)).resolves.toBeUndefined()
     expect(fake.released).toHaveLength(0)
+  })
+
+  it('re-takes the binding on resume and stays idempotent for the same writer', async () => {
+    const worktree = tempRoot()
+    const { ctx, agent } = await boot({ checks: startChecks(worktree), workspaceRoot: worktree, storageRoot: tempRoot(), sessionId: SessionId('acquire-root') })
+    const fake = fakeRegistries(worktree)
+
+    const acquire = createHostWriterAcquire(
+      { agents: ctx.agents, workspaceRegistry: fake.workspaces, worktreeRegistry: fake.registry },
+      { workspaceRoot: worktree },
+    )
+    await acquire(agent)
+    expect(fake.bound).toHaveLength(1)
+    expect(fake.bound[0]!.holder).toBe(String(agent.session.id))
+
+    // The confirmed-stop recovery path may re-enter over the writer's own binding.
+    fake.bindRow(WorktreeLockHolder(String(agent.session.id)))
+    await acquire(agent)
+    expect(fake.bound).toHaveLength(2)
+  })
+
+  it('refuses a foreign-held binding without displacing the writer', async () => {
+    const worktree = tempRoot()
+    const { ctx, agent } = await boot({ checks: startChecks(worktree), workspaceRoot: worktree, storageRoot: tempRoot(), sessionId: SessionId('acquire-foreign') })
+    const fake = fakeRegistries(worktree)
+    fake.bindRow(WorktreeLockHolder('foreign-session'))
+
+    const acquire = createHostWriterAcquire(
+      { agents: ctx.agents, workspaceRegistry: fake.workspaces, worktreeRegistry: fake.registry },
+      { workspaceRoot: worktree },
+    )
+    await expect(acquire(agent)).rejects.toThrow('already-locked')
+    expect(fake.bound).toHaveLength(0)
+    expect(fake.released).toHaveLength(0)
+  })
+
+  it('refuses a receiving root that is not live and a worktree outside its registered row', async () => {
+    const worktree = tempRoot()
+    const rowlessRoot = tempRoot()
+    const { ctx, agent } = await boot({ checks: startChecks(worktree), workspaceRoot: worktree, storageRoot: tempRoot(), sessionId: SessionId('acquire-gate') })
+    const fake = fakeRegistries(worktree, rowlessRoot)
+    const acquire = createHostWriterAcquire(
+      { agents: ctx.agents, workspaceRegistry: fake.workspaces, worktreeRegistry: fake.registry },
+      { workspaceRoot: worktree },
+    )
+
+    const ghost = stubAgent(ctx.sessions.create(SessionId('acquire-ghost'), {}))
+    await expect(acquire(ghost)).rejects.toThrow('not a live agent')
+    expect(fake.bound).toHaveLength(0)
+
+    // The extra workspace is registered but owns no row at that path.
+    const rowless = createHostWriterAcquire(
+      { agents: ctx.agents, workspaceRegistry: fake.workspaces, worktreeRegistry: fake.registry },
+      { workspaceRoot: rowlessRoot },
+    )
+    await expect(rowless(agent)).rejects.toThrow('no registered worktree row')
+    expect(fake.bound).toHaveLength(0)
   })
 })
 
@@ -409,7 +482,6 @@ describe('stop chain over the real host adapters', () => {
     const childSessionId = SessionId('chain-independent-worker')
     // The face evaluates when the chain runs, after the boot hands back the
     // registry the real face walks.
-    let treeFace: ((root: Agent) => readonly Agent[]) | undefined
     const first = await boot({
       checks: startChecks(fixture.root),
       workspaceRoot: fixture.root,
@@ -417,17 +489,18 @@ describe('stop chain over the real host adapters', () => {
       sessionId,
       mountJobs: true,
       stopAdapters: {
-        tree: root => treeFace!(root),
+        tree: root => treeFace(root),
         // The host asserts its captured-process inventory explicitly.
         processes: () => [],
         releaseWriter: () => {},
       },
     })
-    treeFace = createHostStopTree(first.ctx.agents)
+    const treeFace = createHostStopTree(first.ctx.agents)
     // The counterexample's positive case: an explicit-bound worker whose own
     // cwd is an independent worktree — the lineage tree face includes it and
     // the chain drains its owned job.
-    const child = stubAgent(first.ctx.sessions.create(childSessionId, { meta: { cwd: independent, parentSession: first.agent.session.id } }))
+    const childSession = first.ctx.sessions.create(childSessionId, { meta: { cwd: independent, parentSession: first.agent.session.id } })
+    const child = stubAgent(childSession)
     first.ctx.agents.register(child)
     const childJob = startSlowCancelJob(first, child, 150)
 
@@ -445,7 +518,6 @@ describe('stop chain over the real host adapters', () => {
     const fixture = await createCommittedWorktree()
     const storageRoot = tempRoot()
     const sessionId = SessionId('chain-no-inventory-root')
-    let self: TestComposition | undefined
     let releaseCalls = 0
     const first = await boot({
       checks: startChecks(fixture.root),
@@ -458,7 +530,7 @@ describe('stop chain over the real host adapters', () => {
         releaseWriter: () => { releaseCalls += 1 },
       },
     })
-    self = first
+    const self = first
     expect((await execute(first, '/devframe-start fix the billing bug')).result.kind).toBe('success')
 
     // No mounted inventory face means the chain has no provable process
@@ -483,7 +555,6 @@ describe('stop chain over the real host adapters', () => {
     let releaseCalls = 0
     // The face evaluates when the chain runs, after the boot hands back the
     // root the fixture tree returns.
-    let self: TestComposition | undefined
     const first = await boot({
       checks: startChecks(fixture.root),
       workspaceRoot: fixture.root,
@@ -500,7 +571,7 @@ describe('stop chain over the real host adapters', () => {
         },
       },
     })
-    self = first
+    const self = first
     expect((await execute(first, '/devframe-start fix the billing bug')).result.kind).toBe('success')
 
     const stopped = await execute(first, '/devframe-stop')
@@ -529,7 +600,6 @@ describe('stop chain over the real host adapters', () => {
     const storageRoot = tempRoot()
     const sessionId = SessionId('chain-reject-root')
     let rejections = 1
-    let self: TestComposition | undefined
     const first = await boot({
       checks: startChecks(fixture.root),
       workspaceRoot: fixture.root,
@@ -547,7 +617,7 @@ describe('stop chain over the real host adapters', () => {
         },
       },
     })
-    self = first
+    const self = first
     expect((await execute(first, '/devframe-start fix the billing bug')).result.kind).toBe('success')
 
     const stopped = await execute(first, '/devframe-stop')
@@ -595,7 +665,6 @@ describe('stop chain over the real host adapters', () => {
     await first.ctx.fiber.dispose()
 
     const releaseOrder: string[] = []
-    let secondSelf: TestComposition | undefined
     const second = await boot({
       checks: startChecks(fixture.root),
       workspaceRoot: fixture.root,
@@ -609,7 +678,7 @@ describe('stop chain over the real host adapters', () => {
         releaseWriter: () => { releaseOrder.push('releaseWriter') },
       },
     })
-    secondSelf = second
+    const secondSelf = second
     const stopped = await execute(second, '/devframe-stop')
     expect(stopped.result.kind).toBe('success')
     if (stopped.result.kind === 'success') expect(stopped.result.text).toBe(renderStopChainStoppedText())

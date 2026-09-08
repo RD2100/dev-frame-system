@@ -6,7 +6,7 @@ English | [中文](2026-09-08-command-goal-binding-host-stop-adapters.zh.md)
 
 ## Problem
 
-The stop chain composition left the three host faces — the project tree, the captured descendant processes, and the writer release — as constructor injection points with no real wiring: `apply` passed only the required-checks store, so every standard-profile deployment ran the chain fail-closed (`inventoryUnverified`, unwired release) no matter what the fiber carried. The faces were real only for tests that built their own adapters, which is exactly the gap the stop-chain note deferred to a host wiring slice.
+The stop chain composition left the three host faces — the project tree, the captured descendant processes, and the writer release — as constructor injection points with no real wiring: `apply` passed only the required-checks store, so every standard-profile deployment ran the chain fail-closed (`inventoryUnverified`, unwired release) no matter what the fiber carried. The faces were real only for tests that built their own adapters, which is exactly the gap the stop-chain note deferred to a host wiring slice. The stop chain also had no resume-side admission: after a drain fenced an owner nothing re-opened it, and nothing re-took the released writer.
 
 ## Decision
 
@@ -16,7 +16,9 @@ The tree face is dispatch lineage: the receiving root plus every live agent whos
 
 The release face performs the owner gate and awaits the registry's asynchronous `unbind`: the worktree must be a registered row of the workspace that owns the configured root, an unbound row is an already-completed release (repeat-tolerant), and a bound row releases only when its holder is the session id of a live tree agent — a foreign writer is never released and a throw retains the writer. Because the release settles inside the stop primitive's bounded window, a pending or rejected release reports `needs_attention` with the writer held; the durable registry row is the release truth, and the repeat stop re-enters the release and reconciles against it.
 
-No process inventory mounts. The capture seam had no feed: no dispatch face records descendant processes, so a mounted inventory could only ever be empty, and an empty list would read as provable quiescence — exactly what the chain must refuse. Until a real capture feed owns descendant processes, the chain fails closed on the absent face, the same direction as the missing-jobs refusal.
+The process face is a real feed now. `createHostStopResources` scopes the two services that own one-shot child runs and persistent terminals to the lineage: each live tree owner yields at most one `subagents` and one `terminals` entry whose `drain` runs the provider-owned cleanup inside the chain's bounded window, and a fresh activity observation re-arms an entry after its drain, so a failed or resurrected owner stays drainable instead of being read as silence. `prepareResumeResources` checks both services without reopening admission. Its returned commit revalidates the live owner tree and prepares every service again before synchronously reopening them; a changed tree or rejected service leaves admission fenced.
+
+The release face has a resume counterpart: `createHostWriterAcquire` re-takes the single-writer binding under the same workspace and row gates with a live receiving-root gate of its own, and the registry's `bind` accepts an unbound row or the same holder while refusing to displace a foreign writer. The authorized resume re-takes the writer before reopening resources, so a foreign-held worktree fails the resume without stealing the lock and the durable row stays the truth.
 
 ## Alternatives considered
 
@@ -28,4 +30,4 @@ No process inventory mounts. The capture seam had no feed: no dispatch face reco
 
 ## Consequences
 
-Standard-profile `stopChain` deployments get a real tree and a real writer release without extra host code, while deployments without the registries keep the previous fail-closed behavior byte-identically. The process drain has nothing to drain until a capture feed lands and mounts an inventory face; the absence is loud, not quiet. A release that never settles still returns bounded: the pending timeout names `writer:release`, the writer stays held, and the repeat stop re-enters.
+Standard-profile `stopChain` deployments drain real owned resources through the bounded window, and an authorized resume re-takes the writer and re-opens admission without widening either fence. Deployments without the registries keep the previous fail-closed behavior byte-identically. A release that never settles still returns bounded: the pending timeout names `writer:release`, the writer stays held, and the repeat stop re-enters the release over the durable row.

@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -72,6 +72,7 @@ interface TestComposition {
   readonly agent: Agent
   readonly session: Session
   readonly composition: GoalBindingComposition
+  readonly unregister: () => void
 }
 
 interface BootOptions {
@@ -90,6 +91,8 @@ interface BootOptions {
     readonly tree?: (root: Agent) => readonly Agent[]
     readonly processes?: () => readonly { readonly ownerSession: SessionId; readonly label: string; readonly handle: SubprocessHandle }[]
     readonly releaseWriter?: (root: Agent) => void | Promise<void>
+    readonly acquireWriter?: (root: Agent) => Promise<void>
+    readonly prepareResumeResources?: (root: Agent) => () => void
   }
 }
 
@@ -144,6 +147,7 @@ async function boot(options: BootOptions): Promise<TestComposition> {
   const composition = new GoalBindingComposition(ctx, resolved, {
     ...(options.bindings === undefined ? {} : { bindings: options.bindings }),
     stop: options.stopAdapters === undefined ? {} : {
+      ...options.stopAdapters,
       ...(options.stopAdapters.tree === undefined ? {} : { tree: options.stopAdapters.tree }),
       ...(options.stopAdapters.processes === undefined ? {} : { processes: options.stopAdapters.processes }),
       ...(options.stopAdapters.releaseWriter === undefined ? {} : { releaseWriter: options.stopAdapters.releaseWriter }),
@@ -162,8 +166,8 @@ async function boot(options: BootOptions): Promise<TestComposition> {
     session = ctx.sessions.create(options.sessionId)
   }
   const agent = stubAgent(session)
-  ctx.agents.register(agent)
-  return { ctx, agent, session, composition }
+  const unregister = ctx.agents.register(agent)
+  return { ctx, agent, session, composition, unregister }
 }
 
 /** Execute one slash command through the same registry boundary as a UI adapter. */
@@ -272,7 +276,7 @@ function startSlowCancelJob(
     run: (): JobHooks => ({
       cancel: () => {
         cancelRequested = true
-        void delay(settleMs).then(() => settleJob({ status: 'killed', detail: 'project stop' }))
+        void delay(settleMs).then(() => { settleJob({ status: 'killed', detail: 'project stop' }) })
       },
       done,
     }),
@@ -287,7 +291,6 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
     roots.push(storageRoot)
     const sessionId = SessionId('controller-v14-stop-chain-ordered')
     const releaseOrder: string[] = []
-    let publishedPid: number | undefined
     // The verified tree is captured after the boot hands back the root
     // agent; the face evaluates when the chain runs.
     const treeAgents: Agent[] = []
@@ -309,7 +312,7 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
     if (started.result.kind !== 'success') throw new Error('expected a success result')
     expect(started.result.text).toBe(renderStartSuccess(1, 'passed'))
     // Readiness: the real child has actually been beating before anything stops it.
-    publishedPid = await awaitHeartbeats(heartbeatPath, 2)
+    const publishedPid = await awaitHeartbeats(heartbeatPath, 2)
 
     const stopped = await execute(first, '/devframe-stop')
     if (stopped.result.kind !== 'success') {
@@ -498,6 +501,7 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
       mountJobs: true,
       stopAdapters: {
         tree: () => secondTreeAgents,
+        acquireWriter: async () => {}, prepareResumeResources: () => () => {},
         processes: () => [],
         releaseWriter: () => {},
       },
@@ -912,6 +916,7 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
       mountJobs: true,
       stopAdapters: {
         tree: () => secondTreeAgents,
+        acquireWriter: async () => {}, prepareResumeResources: () => () => {},
         // The host asserts its captured-process inventory explicitly.
         processes: () => [],
         releaseWriter: () => { writerReleased = true },
@@ -979,5 +984,123 @@ describe('stop chain composition (AT4-06: the real chain behind /devframe-stop)'
     expect(writerReleased).toBe(false)
     expect(lifecycleSequence(first).at(-1)).toBe('needs_attention')
     expect(first.ctx.goals.get(first.agent)?.phase).not.toBe('complete')
+  })
+})
+
+describe('resume prerequisites', { timeout: 60_000 }, () => {
+  it.each(['writer', 'resources', 'missing-writer', 'missing-resources'] as const)(
+    'keeps the stopped goal and binding closed when %s refuses', async (failure) => {
+      const fixture = await createCommittedWorktree()
+      const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-resume-prerequisites-'))
+      roots.push(storageRoot)
+      let refuse = true
+      let acquired = false
+      let resourceCommits = 0
+      const test = await boot({
+        checks: startChecks(fixture.root), workspaceRoot: fixture.root, storageRoot,
+        sessionId: SessionId('resume-prerequisites'), mountJobs: true,
+        stopAdapters: {
+          tree: root => [root], processes: () => [], releaseWriter: () => { acquired = false },
+          ...(failure === 'missing-writer' ? {} : { acquireWriter: async () => {
+            if (failure === 'writer' && refuse) throw new Error('foreign writer')
+            acquired = true
+          } }),
+          ...(failure === 'missing-resources' ? {} : { prepareResumeResources: () => {
+            if (failure === 'resources' && refuse) throw new Error('resource preparation refused')
+            return () => { resourceCommits++ }
+          } }),
+        },
+      })
+      expect((await execute(test, '/devframe-start repair')).result.kind).toBe('success')
+      expect((await execute(test, '/devframe-stop')).result.kind).toBe('success')
+      const before = test.ctx.goals.get(test.agent)
+      const binding = goalBindingEvents(test).at(-1)
+      await expect(execute(test, '/devframe-resume')).rejects.toThrow()
+      expect(test.ctx.goals.get(test.agent)).toEqual(before)
+      expect(test.composition.admissionOf(test.agent)).not.toBe('open')
+      expect(goalBindingEvents(test).at(-1)).toEqual(binding)
+      expect((await test.composition.bindingStore.load(ControllerSessionId(test.agent.id))).at(-1)?.lifecycle).toBe('stopped')
+      expect(resourceCommits).toBe(0)
+      if (failure.startsWith('missing')) return
+      refuse = false
+      expect((await execute(test, '/devframe-resume')).result.kind).toBe('success')
+      expect(acquired).toBe(true)
+      expect(resourceCommits).toBe(1)
+      expect(test.ctx.goals.get(test.agent)?.activation).toBe('armed')
+      expect(test.composition.admissionOf(test.agent)).toBe('open')
+    },
+  )
+})
+
+describe('resume durable activation', { timeout: 60_000 }, () => {
+  it.each(['flush', 'commit', 'owner'] as const)('keeps continuation fenced and records recovery after %s failure', async (failure) => {
+    const fixture = await createCommittedWorktree()
+    const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-resume-durability-'))
+    roots.push(storageRoot)
+    const sessionId = SessionId('resume-durability')
+    let refuse = true
+    let resourceCommits = 0
+    let writerHeld = false
+    const adapters = {
+      tree: (root: Agent) => [root], processes: () => [],
+      releaseWriter: () => { writerHeld = false },
+      acquireWriter: async () => { writerHeld = true },
+      prepareResumeResources: () => () => {
+        if (failure === 'commit' && refuse) throw new Error('resource owner changed')
+        resourceCommits++
+      },
+    }
+    const first = await boot({
+      checks: startChecks(fixture.root), workspaceRoot: fixture.root, storageRoot, sessionId,
+      mountJobs: true, stopAdapters: adapters,
+    })
+    expect((await execute(first, '/devframe-start repair')).result.kind).toBe('success')
+    expect((await execute(first, '/devframe-stop')).result.kind).toBe('success')
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const originalFlush = first.ctx.sessions.flush.bind(first.ctx.sessions)
+    let intercepted = false
+    const flush = vi.spyOn(first.ctx.sessions, 'flush').mockImplementation(async (session) => {
+      if (!intercepted && goalBindingEvents(first).at(-1)?.lifecycle === 'admission_open') {
+        intercepted = true
+        entered.resolve(undefined)
+        await release.promise
+        if (failure === 'flush') throw new Error('journal unavailable')
+      }
+      return originalFlush(session)
+    })
+    const running = execute(first, '/devframe-resume')
+    const rejected = expect(running).rejects.toThrow()
+    try {
+      await entered.promise
+      expect(first.ctx.goals.get(first.agent)?.activation).toBe('disarmed')
+      expect(first.composition.admissionOf(first.agent)).toBe('closed')
+      expect((await first.composition.bindingStore.load(ControllerSessionId(sessionId))).at(-1)?.lifecycle).toBe('ambiguous')
+      expect(writerHeld).toBe(true)
+      expect(resourceCommits).toBe(0)
+      if (failure === 'owner') first.unregister()
+      release.resolve(undefined)
+      await rejected
+    } finally { release.resolve(undefined); flush.mockRestore() }
+    if (failure === 'owner') expect(() => first.ctx.goals.get(first.agent)).toThrow()
+    else expect(first.ctx.goals.get(first.agent)).toMatchObject({ phase: 'active', activation: 'disarmed' })
+    expect(first.composition.admissionOf(first.agent)).toBe('closed')
+    expect(goalBindingEvents(first).at(-1)?.lifecycle).toBe(failure === 'flush' ? 'admission_open' : 'needs_attention')
+    expect((await first.composition.bindingStore.load(ControllerSessionId(sessionId))).at(-1)?.lifecycle).toBe('needs_attention')
+    expect(resourceCommits).toBe(0)
+    expect(devFrameStateOf(first.ctx, first.session).failure).toBeNull()
+    await first.ctx.sessions.flush(first.session)
+    contexts.splice(contexts.indexOf(first.ctx), 1)
+    await first.ctx.fiber.dispose()
+    refuse = false
+    const second = await boot({
+      checks: startChecks(fixture.root), workspaceRoot: fixture.root, storageRoot, sessionId,
+      restore: true, mountJobs: true, stopAdapters: adapters,
+    })
+    expect(second.ctx.goals.get(second.agent)?.activation).toBe('disarmed')
+    expect((await execute(second, '/devframe-resume')).result.kind).toBe('success')
+    expect(second.ctx.goals.get(second.agent)?.activation).toBe('armed')
+    expect(second.composition.admissionOf(second.agent)).toBe('open')
+    expect(resourceCommits).toBe(1)
   })
 })

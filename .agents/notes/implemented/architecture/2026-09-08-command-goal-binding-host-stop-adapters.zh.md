@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-停止链组合把三个宿主面——项目树、已捕获后代进程、writer 释放——留作构造器注入点且没有任何真实接线：`apply` 只传必需检查存储，因此每个标准 profile 部署的链都运行在 fail-closed（`inventoryUnverified`、释放未接线）下，无论 fiber 携带什么。这些面只对手工构建适配器的测试是真实的，这正是停止链 note 遗留给宿主接线切片的缺口。
+停止链组合把三个宿主面——项目树、已捕获后代进程、writer 释放——留作构造器注入点且没有任何真实接线：`apply` 只传必需检查存储，因此每个标准 profile 部署的链都运行在 fail-closed（`inventoryUnverified`、释放未接线）下，无论 fiber 携带什么。这些面只对手工构建适配器的测试是真实的，这正是停止链 note 遗留给宿主接线切片的缺口。停止链同样没有 resume 侧的准入：owner 被排空并围栏后没有任何东西重新打开它，被释放的 writer 也没有任何东西重新获取。
 
 ## 决策
 
@@ -16,7 +16,9 @@ apply 面通过 `resolveHostStopAdapters` 从 fiber 解析 stop 存储。当 fib
 
 释放面执行 owner 门并 await 注册表的异步 `unbind`：worktree 必须是拥有所配置根的 workspace 的已注册行，未绑定的行视为已完成的释放（可重复进入），已绑定的行只有在其 holder 是某个活跃树 agent 的会话 id 时才释放——外来 writer 永不释放，抛错即保留 writer。由于释放在停止原语的有界窗口内 settle，悬挂或被拒绝的释放都以 `needs_attention` 呈现且 writer 保持持有；持久的注册表行就是释放真相，重复停止重新进入释放并对照它收敛。
 
-不挂载任何进程 inventory。捕获 seam 没有喂源：没有任何分发面记录后代进程，挂载的 inventory 只能永远为空，而空列表会被读成可证明的静止——恰恰是链必须拒绝的。在真实捕获喂源接管后代进程之前，链对缺失的面 fail-closed，与缺 jobs 注册表的拒绝同向。
+进程面现在是真实喂源。`createHostStopResources` 把拥有一次性子运行与持久终端的两个服务圈定到血缘内：每个活跃树 owner 至多产生一条 `subagents` 与一条 `terminals` 条目，其 `drain` 在链的有界窗口内运行 provider 拥有的清理；条目排空后由一次新鲜的活动观察重新武装，失败或复活过的 owner 保持可排空，而不是被读成静默。`prepareResumeResources` 检查两个服务而不重新开放准入。它返回的提交操作重新验证活跃 owner 树，并再次预检所有服务后才同步开放它们；树变化或任一服务拒绝时，准入保持关闭。
+
+释放面有其 resume 对应面：`createHostWriterAcquire` 在同样的 workspace 与行门下重新获取单写绑定，并自带接收根必须活跃的门；注册表的 `bind` 接受未绑定的行或同一 holder，同时拒绝挤走外来 writer。经授权的 resume 在重开资源之前先重取 writer，因此外来持有的 worktree 使 resume 失败而不偷锁，持久注册表行保持为真相。
 
 ## 考虑过的替代
 
@@ -28,4 +30,4 @@ apply 面通过 `resolveHostStopAdapters` 从 fiber 解析 stop 存储。当 fib
 
 ## 后果
 
-标准 profile 的 `stopChain` 部署无需额外宿主代码即获得真实的树与真实的 writer 释放，而缺少注册表的部署与之前的 fail-closed 行为逐字节一致。在捕获喂源落地并挂载 inventory 面之前，进程 drain 无可排空之物；这种缺席是大声的，不是安静的。永不 settle 的释放仍有界返回：悬挂超时具名 `writer:release`，writer 保持持有，重复停止重新进入。
+标准 profile 的 `stopChain` 部署经有界窗口排空真实拥有的资源，经授权的 resume 重取 writer 并重开准入而不扩大任一围栏。缺少注册表的部署与之前的 fail-closed 行为逐字节一致。永不 settle 的释放仍有界返回：悬挂超时具名 `writer:release`，writer 保持持有，重复停止对照持久行重新进入释放。

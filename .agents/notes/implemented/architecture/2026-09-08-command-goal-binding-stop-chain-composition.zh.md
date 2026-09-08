@@ -18,6 +18,8 @@ Status: implemented
 
 被中断的流程在重复停止时收敛。日志停在 `stop_requested`（链在 drain 中等待时崩溃——这是用户明确要求的停止的正常失败窗口）时，`resumeStopRequestedStop` 基于宿主当前 inventory 与活跃注册表身份重新进入 drain；日志停在 `quiescence_confirmed` 时，`finishConfirmedStop` 重新进入释放。缺失的活跃身份以 `needs_attention` 具名呈现且 writer 保持持有——绝不静默绕过，也绝不重启被中断的 goal 工作。
 
+恢复在变更原生 Goal 前检查写入锁所有权，并准备所有资源重新开放操作。延迟激活的原生恢复记录阶段变更，但在绑定和日志完成持久化前不启用续行。其受保护的激活能力检查活跃 Agent 与版本后，才执行最终同步资源提交。前置条件失败保留暂停的 Goal；后续失败留下 active 但续行停用的 Goal、关闭的准入和 `needs_attention` 存储记录。日志锁存失败会阻止纠正性追加，必须报告记账未完成，不能宣称回滚成功。冷启动会话从不继承续行激活状态。
+
 ## 已考虑的替代方案
 
 **在组合层内枚举后代。** 组合层将猜测项目成员关系，并复制宿主的 owner 与 worktree 验证。宿主本就拥有活跃注册表与已捕获句柄，经验证的 inventory 面让成员关系保持权威，并让组合层对无法验证的内容 fail-closed。

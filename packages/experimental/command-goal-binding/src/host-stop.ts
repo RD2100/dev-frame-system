@@ -1,15 +1,4 @@
-/**
- * Real host stop adapters for the goal-binding composition's stop chain: the
- * host-verified project tree face (dispatch lineage) and the owner-checked
- * single-writer release over the worktree registry. The apply face mounts
- * them whenever the corresponding host services are present on the fiber, so
- * a `stopChain` deployment gets real wiring instead of the fail-closed
- * unwired defaults; a fiber without the services keeps exactly the previous
- * fail-closed behavior. No process inventory is mounted: until a real
- * capture feed owns descendant processes, an empty inventory would fabricate
- * quiescence, so the chain fails closed on the absent face instead.
- * @module @deepseek-ai/dsh-experimental-command-goal-binding/host-stop
- */
+/** Host-owned lineage, resource drainage, and owner-checked writer release. */
 
 import { realpathSync } from 'node:fs'
 import type { Agent, AgentRegistry } from '@deepseek-ai/dsh-agent'
@@ -17,6 +6,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
 import { WorktreeLockHolder } from '@deepseek-ai/dsh-worktree-registry'
 import type { WorktreeRegistry } from '@deepseek-ai/dsh-worktree-registry'
+import type { StopProcess } from '@deepseek-ai/dsh-experimental-devframe'
+import type { SubagentRuntime } from '@deepseek-ai/dsh-subagent'
+import type { TerminalSessionService } from '@deepseek-ai/dsh-terminal'
 import type { ResolvedCommandGoalBindingConfig } from './config.ts'
 import type { GoalBindingCompositionStores } from './composition.ts'
 
@@ -89,8 +81,90 @@ export function createHostStopTree(agents: AgentRegistry): (root: Agent) => read
   return root => agents.list().filter(agent => belongsToTree(agent, root, agents))
 }
 
-/** The host services the writer release needs; apply resolves them from the fiber. */
+/**
+ * Enumerate provider-owned cleanup for exactly the selected dispatch lineage.
+ * Each service first fences its owner's admission, even when presently idle;
+ * only successful cleanup plus a fresh activity observation removes its entry.
+ * @param agents - live registry used to resolve exact owners and lineage.
+ * @param subagents - service retaining one-shot starts through run disposal.
+ * @param terminals - service retaining unpublished spawns through backend close.
+ * @returns scoped drain inventory and a resume preflight that defers admission until its returned closure runs.
+ */
+export function createHostStopResources(
+  agents: AgentRegistry,
+  subagents: SubagentRuntime,
+  terminals: TerminalSessionService,
+): {
+  processes: (root: Agent) => readonly StopProcess[]
+  prepareResumeResources: (root: Agent) => () => void
+} {
+  const drainedRuns = new WeakSet<Agent>()
+  const drainedTerminals = new WeakSet<Agent>()
+  const tree = createHostStopTree(agents)
+  const processes = (root: Agent): readonly StopProcess[] => tree(root).flatMap((owner) => {
+    const resources: StopProcess[] = []
+    if (!drainedRuns.has(owner) || subagents.hasOwnerActivity(owner)) {
+      resources.push({
+        ownerSession: owner.session.id,
+        label: 'owned subagents',
+        operationId: `subagents:${owner.session.id}`,
+        drain: async () => {
+          await subagents.drainOwnedRuns(owner)
+          drainedRuns.add(owner)
+        },
+      })
+    }
+    if (!drainedTerminals.has(owner) || terminals.hasOwnerActivity(owner)) {
+      resources.push({
+        ownerSession: owner.session.id,
+        label: 'owned terminals',
+        operationId: `terminals:${owner.session.id}`,
+        drain: async () => {
+          await terminals.drainOwned(owner)
+          drainedTerminals.add(owner)
+        },
+      })
+    }
+    return resources
+  })
+  return {
+    processes,
+    prepareResumeResources: (root) => {
+      if (agents.get(root.id) !== root) throw new Error('stop resource owner is not live')
+      const owners = tree(root)
+      // Complete preflight before any service admission changes. These checks
+      // and reopen operations are synchronous and invoke no user callbacks.
+      const prepare = () => owners.flatMap(owner => [
+        subagents.prepareReopenOwnedRuns(owner),
+        terminals.prepareReopenOwned(owner),
+      ])
+      prepare()
+      return () => {
+        if (agents.get(root.id) !== root) throw new Error('stop resource owner is not live')
+        const current = tree(root)
+        if (current.length !== owners.length || current.some(owner => !owners.includes(owner))) {
+          throw new Error('stop resource owner tree changed during resume preparation')
+        }
+        const reopen = prepare()
+        for (const commit of reopen) commit()
+        for (const owner of owners) {
+          drainedRuns.delete(owner)
+          drainedTerminals.delete(owner)
+        }
+      }
+    },
+  }
+}
+
+/** The host services the writer release and acquisition need; apply resolves them from the fiber. */
 export interface HostWriterReleaseDependencies {
+  readonly workspaceRegistry: WorkspaceRegistry
+  readonly worktreeRegistry: WorktreeRegistry
+}
+
+/** The host services the writer acquisition needs, including the live-owner gate. */
+export interface HostWriterAcquireDependencies {
+  readonly agents: AgentRegistry
   readonly workspaceRegistry: WorkspaceRegistry
   readonly worktreeRegistry: WorktreeRegistry
 }
@@ -141,13 +215,53 @@ export function createHostWriterRelease(
 }
 
 /**
+ * Build the owner-checked writer acquisition — the resume face of the
+ * release. After a confirmed stop released the binding, the same receiving
+ * root re-takes it under the host's fresh authorization: the receiving root
+ * must be live, the worktree must be a registered row of the workspace that
+ * owns the configured root, and the registry's `bind` accepts an unbound row
+ * or a re-bind by the same holder while refusing to displace a foreign
+ * writer with `WorktreeLockError` (`already-locked`). The refusal propagates,
+ * so a resume under a foreign-held worktree fails without stealing the
+ * binding; the durable row stays the truth and the repeat resume re-enters
+ * the acquisition.
+ * @param dependencies - the fiber's agent, workspace, and worktree registries.
+ * @param options - the configured worktree root.
+ * @returns the acquisition face; the receiving root argument names the
+ *   writer that re-takes the binding.
+ */
+export function createHostWriterAcquire(
+  dependencies: HostWriterAcquireDependencies,
+  options: {
+    readonly workspaceRoot: string
+  },
+): (root: Agent) => Promise<void> {
+  const canonicalRoot = canonicalDirectory(options.workspaceRoot)
+  return async (root: Agent) => {
+    if (dependencies.agents.get(root.id) !== root) {
+      throw new Error('the receiving root is not a live agent; the writer acquisition is refused')
+    }
+    const workspace = dependencies.workspaceRegistry.list()
+      .find(entry => sameDirectory(entry.path, canonicalRoot))
+    if (workspace === undefined) {
+      throw new Error(`the configured worktree '${canonicalRoot}' is not a registered workspace; the writer acquisition is refused`)
+    }
+    const row = dependencies.worktreeRegistry.list(workspace.id)
+      .find(entry => sameDirectory(entry.path, canonicalRoot))
+    if (row === undefined) {
+      throw new Error(`the configured worktree '${canonicalRoot}' has no registered worktree row; the writer acquisition is refused`)
+    }
+    await dependencies.worktreeRegistry.bind(row.id, WorktreeLockHolder(String(root.session.id)))
+  }
+}
+
+/**
  * Resolve the composition's stop store from the fiber: the tree face mounts
  * when the fiber carries the agent registry, and the release face mounts
  * when the configuration names a worktree root and the fiber carries the
- * workspace and worktree registries. No process face mounts — until a real
- * capture feed owns descendant processes, an empty inventory would fabricate
- * quiescence, so the chain fails closed on the absent face. Absent faces stay
- * absent so the chain fails closed exactly as before.
+ * workspace and worktree registries. The resource face requires both services
+ * that own one-shot child runs and persistent terminals. Missing coverage
+ * leaves that face absent so stop fails closed.
  * @param ctx - the plugin fiber's context.
  * @param config - the resolved deployment configuration.
  * @returns the stop store for the composition constructor.
@@ -159,23 +273,36 @@ export function resolveHostStopAdapters(
   // Optional reads: the stop faces are host-wired when the fiber carries the
   // registries, not declared injections — a fiber without them keeps the
   // fail-closed unwired chain.
-  const agents = ctx.get('agents') as AgentRegistry | undefined
+  const agents = ctx.get('agents')
+  const subagents = ctx.get('subagents')
+  const terminals = ctx.get('terminals')
   const stop: {
     tree?: (root: Agent) => readonly Agent[]
+    processes?: (root: Agent) => readonly StopProcess[]
+    prepareResumeResources?: (root: Agent) => () => void
     releaseWriter?: (root: Agent) => Promise<void>
+    acquireWriter?: (root: Agent) => Promise<void>
   } = {}
   if (agents !== undefined) {
+    if (subagents !== undefined && terminals !== undefined) {
+      Object.assign(stop, createHostStopResources(agents, subagents, terminals))
+    }
     const tree = createHostStopTree(agents)
     stop.tree = tree
     const workspaceRoot = config.workspaceRoot
-    const workspaceRegistry = ctx.get('workspaceRegistry') as WorkspaceRegistry | undefined
-    const worktreeRegistry = ctx.get('worktreeRegistry') as WorktreeRegistry | undefined
+    const workspaceRegistry = ctx.get('workspaceRegistry')
+    const worktreeRegistry = ctx.get('worktreeRegistry')
     if (workspaceRoot !== undefined && workspaceRegistry !== undefined && worktreeRegistry !== undefined) {
       // The release face receives the receiving root at call time and builds
-      // its owner gate from the live tree of that root.
+      // its owner gate from the live tree of that root; the acquisition face
+      // gates on the live receiving root itself and names it as the writer.
       stop.releaseWriter = createHostWriterRelease(
         { workspaceRegistry, worktreeRegistry },
         { workspaceRoot, tree },
+      )
+      stop.acquireWriter = createHostWriterAcquire(
+        { agents, workspaceRegistry, worktreeRegistry },
+        { workspaceRoot },
       )
     }
   }
