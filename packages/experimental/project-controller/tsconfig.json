@@ -10,6 +10,7 @@
     { "path": "../../../vendor/schemastery" },
     { "path": "../../core/agent" },
     { "path": "../../core/tools" },
+    { "path": "../../goal/goal" },
     { "path": "../../llm/llm" },
     { "path": "../devframe" },
     { "path": "../agent-evidence" },

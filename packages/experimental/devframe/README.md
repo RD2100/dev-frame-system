@@ -80,7 +80,7 @@ Computation streams source bytes without changing Git state. `maxOutputBytes` li
 
 A `devframe/task-delivery` record preserves the original complete Goal input binding and records a task's Worker, registered worktree, exact commit, output fingerprint, and output snapshot separately. `deliveryResultBinding` derives an output evidence binding without rewriting the authorized Goal input.
 
-Verification and review carrying `deliveryId` must match the latest delivery for that task and Goal, including its exact output binding. A passing delivery review requires the latest verification to pass. Whole-Goal evidence without `deliveryId` remains valid under its existing binding rules; it cannot substitute for delivery evidence during task integration. The projection checkpoint is version 3; restore discards older checkpoints and rebuilds the delivery and repair-admission fields from the session log.
+Verification and review carrying `deliveryId` must match the latest delivery for that task and Goal, including its exact output binding. A passing delivery review requires the latest verification to pass. Whole-Goal evidence without `deliveryId` may name the merged output after every bound task delivers, while retaining the authorized controller, workspace, Goal, tasks, and acceptance. Completion separately requires applied integration receipts and a matching live fingerprint; whole-Goal records cannot substitute for task integration evidence. Projection checkpoint version 5 rebuilds older cached state from the session log.
 
 <a id="bound-correction-rounds"></a>
 ### Bound correction rounds

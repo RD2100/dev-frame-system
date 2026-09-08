@@ -26,7 +26,8 @@ import z from '@deepseek-ai/schemastery'
 import { Service, type Context } from '@deepseek-ai/cordis'
 import type { Domain, KvTable } from '@deepseek-ai/dsh-storage-domain'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import type { ProjectLifecycleState } from '@deepseek-ai/dsh-experimental-devframe/shared'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { ProjectLifecycleState, WorkspaceId } from '@deepseek-ai/dsh-experimental-devframe/shared'
 import { evaluateCompletionAdmission } from '@deepseek-ai/dsh-experimental-devframe/controller'
 import type { RequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe'
 import type {} from '@deepseek-ai/dsh-session-projection'
@@ -225,6 +226,37 @@ export class ProjectController extends Service {
   /** The current process-local project lifecycle; a fresh process starts `stopped`. */
   get lifecycle(): ProjectLifecycleState {
     return this.lifecycleState
+  }
+
+  /**
+   * Read the durable integration receipts owned by one controller Session.
+   * @param controllerSessionId - Controller whose completion reads these receipts.
+   * @returns Detached receipts, including unfinished integration attempts.
+   */
+  integrationReceipts(controllerSessionId: SessionId): readonly MainTreeIntegrationRecord[] {
+    return [...this.requireDomain().table('integrations').entries()]
+      .map(([, record]) => record)
+      .filter(record => record.controllerSessionId === controllerSessionId)
+      .map(record => ({ ...record }))
+  }
+
+  /**
+   * Require the live root controller to retain its registered integration target.
+   * @param agent - Exact invoking Agent.
+   * @param targetPath - Target persisted in the integration receipts.
+   * @param workspaceId - Workspace authorized by the current Goal.
+   */
+  assertCompletionOwner(agent: Agent, targetPath: string, workspaceId: WorkspaceId): void {
+    const binding = this.ctx.agentBindings.find(agent.session.id)
+    const registries = this.integrationWorktrees()
+    const tree = registries.workspaces.list().flatMap(workspace => registries.worktrees.list(workspace.id))
+      .find(row => row.id === binding?.worktreeId)
+    if (this.ctx.get('agents')?.get(agent.id) !== agent || binding?.role !== 'controller'
+      || binding.parentSessionId !== undefined || binding.agentId !== agent.id
+      || binding.worktreePath !== targetPath || agent.session.header.cwd !== targetPath
+      || tree?.path !== targetPath || String(tree.workspaceId) !== workspaceId || String(tree.lockedBy) !== String(agent.session.id)) {
+      throw new Error('Goal completion requires its live registered controller and integration worktree writer lock')
+    }
   }
 
   /**

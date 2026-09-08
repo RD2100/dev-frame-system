@@ -97,7 +97,11 @@ Worker 从清洁且已提交的工作树显式调用 `project_deliver`，提供 
 
 中断后，重新开放项目准入，并使用原 controller 身份与写入锁进行核对。普通 `integrate` 调用不会替换保留的意图。命令错误或取消均不能证明 Git 没有改变目标。若被忽略的本地文件与即将写入的已跟踪内容冲突，该文件会被保留，合并则失败。
 
-宿主消费者先调用 `requestMainTreeMerge(callerSessionId, taskId, request)`，再将返回的标记直接交给 `integrate(taskId, marker)`。请求携带确切 Git 路径与提交、进程限制、已批准检查配置存储，以及可选的 `retryUnchanged` 和取消信号。标记是一次性对象能力，不是可传递的 JSON。服务的 `reconcileMainTreeIntegration(callerSessionId, taskId, options)` 读取持久化意图。集成不会自动调用 `complete`。Goal 完成是独立的门：`selectGoalCompletionIntegration` 从已应用的集成回执加上该 Goal 的 whole-Goal 验证与审查构建最终合并契约，完成准入随后把指纹阶段重锚到合并后的树——初始启动指纹永不被改写进最终态。生产入口面是 `selectGoalCompletionEvidence`：工作从未进入 controller 树的 Goal 保留普通完成通道；一旦存在任一集成回执或 whole-Goal 记录，门即介入，完成必须携带完整证据，未完成的门按名拒绝。
+宿主消费者先调用 `requestMainTreeMerge(callerSessionId, taskId, request)`，再把一次性标记直接交给 `integrate(taskId, marker)`。请求携带确切 Git 路径与提交、进程限制、已批准检查存储，以及可选的 `retryUnchanged` 和取消信号。`reconcileMainTreeIntegration` 观察持久化的中断尝试。集成不会完成 Goal。
+
+按需挂载的 `./completion-consumer` 向根 controller 提供 `project_goal_verify`，向独立直属 lead 提供 `project_goal_review`。宿主配置现有的 whole-Goal 检查账本与摘要，以及显式 Git 和检查限制。每次当前交付必须在 controller 树中具有已应用回执。验证在该树执行批准的命令；审查指明 lead 已检查源代码对应的确切验证。两项操作都要求当前原生 Goal 处于 active、已注册的写者所有权、干净且已提交的树、未变化的源代码及持久证据。检查失败保留为失败证据。
+
+`/goal-complete` 从本服务读取 `integrationReceipts(controllerSessionId)`，并从 controller 投影选取 whole-Goal 证据。交付、controller 所属集成回执，或超出启动源代码的 whole-Goal 证据，都会要求最终合并契约。缺少回执不能退回普通完成。准入重算合并指纹并要求独立通过审查；原始 Goal 绑定保持不变。 记录的目标必须仍是存活且已注册的 controller 工作树，并由其持有写锁；指纹相等的保留副本也不能替代。完成会等待共享证据持久化检查点，并在原生完成前立即重查证据与所有权。
 
 -----
 

@@ -109,6 +109,13 @@ export function apply(
   const resolved = resolveCommandGoalBindingConfig(config)
   return new GoalBindingComposition(ctx, resolved, {
     requiredChecks: new FileRequiredChecksConfigStore({ path: resolved.requiredChecksPath }),
+    goalCompletionIntegrations: controllerSessionId =>
+      ctx.get('projectController')?.integrationReceipts(controllerSessionId) ?? [],
+    goalCompletionGuard: (agent, targetPath, workspaceId) => {
+      const controller = ctx.get('projectController')
+      if (controller === undefined) throw new Error('Goal completion controller ownership is unavailable')
+      controller.assertCompletionOwner(agent, targetPath, workspaceId)
+    },
     stop: resolveHostStopAdapters(ctx, resolved),
   })
 }

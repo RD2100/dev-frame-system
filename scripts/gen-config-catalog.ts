@@ -19,7 +19,7 @@ const OUT = 'docs/config-catalog.md'
 
 /** Public plugin subpaths classified independently of the package's main entry. */
 const SUPPLEMENTAL_PLUGIN_ENTRIES: Readonly<Record<string, readonly string[]>> = {
-  '@deepseek-ai/dsh-experimental-project-controller': ['./consumer', './task-consumer', './delivery-consumer'],
+  '@deepseek-ai/dsh-experimental-project-controller': ['./consumer', './task-consumer', './delivery-consumer', './completion-consumer'],
 }
 
 /** The fenced-block info string for pasted config declarations (skipped by

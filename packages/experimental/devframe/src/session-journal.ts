@@ -232,4 +232,30 @@ export class DevFrameSessionJournal {
   isBlocked(session: Session): boolean {
     return failures.has(session)
   }
+
+  /**
+   * Join prior evidence writes and flush the current Session before admission.
+   * @param session - Session whose evidence must be durable.
+   * @returns A synchronous guard refusing failure or any later queued evidence write.
+   * @throws DevFramePersistenceError if the checkpoint fails or its guard is stale.
+   */
+  async checkpoint(session: Session): Promise<() => void> {
+    const barrier = this.enqueue(session, async () => {
+      try {
+        if (await this.flush(session) === false) throw new DevFramePersistenceError('Completion persistence is unavailable', 'unavailable')
+      } catch (error) {
+        const failure = error instanceof DevFramePersistenceError ? error
+          : new DevFramePersistenceError('Completion evidence could not be persisted', 'failed', { cause: error })
+        failures.set(session, failure)
+        throw failure
+      }
+    })
+    const checkpoint = tails.get(session)
+    await barrier
+    return () => {
+      if (failures.has(session) || tails.get(session) !== checkpoint) {
+        throw new DevFramePersistenceError('Completion evidence changed or its durability failed after the checkpoint', 'blocked')
+      }
+    }
+  }
 }

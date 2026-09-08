@@ -4,7 +4,21 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { expect, it } from 'vitest'
-import { assertToolsHarvested, PROJECT_TASK_TOOL_PACKAGE, PROJECT_DELIVERY_TOOL_PACKAGE } from './gen-tool-catalog.ts'
+import { assertToolsHarvested, PROJECT_TASK_TOOL_PACKAGE, PROJECT_DELIVERY_TOOL_PACKAGE, PROJECT_GOAL_EVIDENCE_TOOL_PACKAGE } from './gen-tool-catalog.ts'
+
+it('harvests whole-Goal tools without opening the checks ledger or executing processes', async () => {
+  const ctx = new Context()
+  try {
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await PROJECT_GOAL_EVIDENCE_TOOL_PACKAGE.mount(ctx)
+    const schemas = ctx.tools.schemas()
+    expect(schemas.map(schema => schema.name)).toEqual(['project_goal_verify', 'project_goal_review'])
+    expect(schemas[1]?.parameters.required).toEqual(['verificationId', 'decision', 'findings'])
+    expect(() => assertToolsHarvested(PROJECT_GOAL_EVIDENCE_TOOL_PACKAGE, 0)).toThrow('booted without registering a single tool')
+  } finally { await ctx.fiber.dispose() }
+})
 
 it('harvests the independently mounted project task schema', async () => {
   const ctx = new Context()
@@ -39,7 +53,7 @@ it('harvests delivery and review schemas without executing their service placeho
     await ctx.plugin(ToolRuntime)
     await PROJECT_DELIVERY_TOOL_PACKAGE.mount(ctx)
     const schemas = ctx.tools.schemas()
-    expect(schemas.map(schema => schema.name)).toEqual(['project_deliver', 'project_review'])
+    expect(schemas.map(schema => schema.name)).toEqual(['project_deliver', 'project_review', 'project_commit'])
     expect(schemas[0]?.parameters.required).toEqual(['taskId'])
     expect(Object.keys(schemas[0]?.parameters.properties ?? {})).toEqual(['taskId', 'retryChecks'])
     expect(schemas[1]?.parameters.required).toEqual(['taskId', 'decision', 'findings'])

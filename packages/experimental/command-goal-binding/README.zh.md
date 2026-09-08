@@ -108,7 +108,7 @@ kind: "package-reference"
 
 ### 设计
 
-- **读取本包拥有的 projection。** 激活时注册 devframe projection 单元，各处理器为调用会话读取其状态：归属到当前 goal 的最新验证证据，加上最新审查记录。审查证据不按 goal 预过滤——其归属由准入结构性强制，遇到外来审查时以 fail-closed 方式失败。
+- **完成证据来自持久化所有者。** 命令读取调用方 Session 投影及 controller 所属集成回执。一旦任务交付、发生集成尝试或存在合并后的 whole-Goal 证据，就要求最终树验证与独立 whole-Goal 审查；缺少回执会拒绝完成。否则消费启动树证据。最终证据生产者见 [project-controller](../project-controller/README.zh.md)。 最终完成拒绝把工作树覆盖为记录的集成目标之外的路径，等待先前证据写入刷盘，并在更改原生 Goal 前重查所有权及检查点有效性。
 - **每个启动事实都由宿主采集。** `/devframe-start` 计算工作树的[实际源码指纹](../devframe/README.zh.md#fingerprint-source-contents)，使用完整状态哈希派生 `snapshot-v2-<headCommit>-<stateHash>`，并将已批准的目标和检查清单哈希为验收摘要。命令适配器提供人类授权；模型输入不写入证据，四态检查结果如实记录。
 - **角色权威由日志派生。** 审查者目录从会话 devframe projection 折叠出的 role-policy 快照解析某个会话的角色——不依赖宿主内存另册——因此审查门的权威就是会话日志自身的记录，未指派的角色一律 fail-closed。
 - **日志实例共享会话持久化。** 组合日志和证据日志都通过 `ctx.sessions.flush` 刷新。使用同一活跃会话的所有日志共享追加队列和失败锁；一次结果不确定的刷新会阻止它们之后的写入。

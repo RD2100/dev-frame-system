@@ -337,6 +337,31 @@ describe('DevFrame durable event vocabulary', () => {
     ])
   })
 
+  it('joins pending writes before exposing a durable checkpoint and invalidates it on another write', async () => {
+    const current = session()
+    const entered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<boolean>()
+    let calls = 0
+    const writer = new DevFrameSessionJournal(async () => {
+      if (++calls === 1) { entered.resolve(); return release.promise }
+      return true
+    }, reviewGate())
+    const reader = new DevFrameSessionJournal(async () => true, reviewGate())
+    const append = writer.append(current, 'devframe/role-policy', rolePolicy())
+    await entered.promise
+    let checkpointReady = false
+    const checkpoint = reader.checkpoint(current).then(guard => { checkpointReady = true; return guard })
+    await Promise.resolve()
+    expect(checkpointReady).toBe(false)
+    release.resolve(true)
+    await append
+    const guard = await checkpoint
+    expect(guard).not.toThrow()
+    const next = writer.append(current, 'devframe/goal-binding', binding())
+    expect(guard).toThrow('changed')
+    await next
+  })
+
   it('latches a failed flush and never admits a later DevFrame mutation', async () => {
     const current = session()
     const flush = vi.fn(async () => false)
@@ -681,7 +706,7 @@ describe('DevFrame host projection', () => {
     expect(live?.acceptanceRegions).toEqual([{ goalId: GoalId('goal-1'), startRevision: 1 }])
     const checkpoint = ctx.sessionProjections.checkpoint(current)
     const row = checkpoint.devframe
-    expect(row?.ver).toBe(4)
+    expect(row?.ver).toBe(5)
     expect(ctx.sessionProjections.restore(
       checkpoint,
       current.snapshotEvents(),
@@ -752,6 +777,38 @@ describe('task delivery evidence replay', () => {
     const cold = Session.fromRestore(current.id, structuredClone(current.snapshotEvents()), current.header, SessionLogOffset(0))
     return foldDevFrameState(cold.snapshotEvents(), cold.header)
   }
+  it('replays merged whole-Goal evidence without replacing the authorized input', () => {
+    const { current, goal, delivery } = prepared()
+    current.append('devframe/task-delivery', delivery)
+    current.append('devframe/task-delivery', { ...delivery, taskId: TaskId('task-2'), deliveryId: DevFrameDeliveryId('second') })
+    const records = fullEventSet()
+    const output = { ...resultBinding(goal), sourceFingerprint: SourceFingerprint('merged-output'), snapshotId: DevFrameSnapshotId('merged-snapshot') }
+    current.append('devframe/verification', { ...records.verification, binding: output, snapshotId: output.snapshotId })
+    current.append('devframe/review', { ...records.review, binding: output, snapshotId: output.snapshotId })
+    const state = restored(current)
+    expect(state.failure).toBeNull()
+    expect(state.bindings).toEqual([goal])
+    expect(state.verifications[0]?.binding).toEqual(output)
+    expect(state.reviews[0]?.binding).toEqual(output)
+  })
+  it.each(['missing-delivery', 'foreign-goal', 'foreign-controller', 'foreign-workspace', 'different-tasks', 'different-acceptance'] as const)(
+    'refuses merged whole-Goal evidence with %s', variant => {
+      const { current, goal, delivery } = prepared()
+      current.append('devframe/task-delivery', delivery)
+      if (variant !== 'missing-delivery') current.append('devframe/task-delivery', {
+        ...delivery, taskId: TaskId('task-2'), deliveryId: DevFrameDeliveryId('second'),
+      })
+      const output = { ...resultBinding(goal), sourceFingerprint: SourceFingerprint('merged-output'),
+        ...(variant === 'foreign-goal' ? { goalId: GoalId('other') } : {}),
+        ...(variant === 'foreign-controller' ? { controllerSessionId: SessionId('other') } : {}),
+        ...(variant === 'foreign-workspace' ? { workspaceId: WorkspaceId('other') } : {}),
+        ...(variant === 'different-tasks' ? { taskIds: [TASK] } : {}),
+        ...(variant === 'different-acceptance' ? { acceptanceHash: AcceptanceHash('other') } : {}),
+      }
+      current.append('devframe/verification', { ...fullEventSet().verification, binding: output })
+      expect(restored(current).failure).not.toBeNull()
+    },
+  )
   it('preserves the authorized input and replays output verification and independent review', () => {
     const { current, goal, delivery, verification, review } = prepared()
     current.append('devframe/task-delivery', decodeDevFramePayload('devframe/task-delivery', delivery))
@@ -762,7 +819,7 @@ describe('task delivery evidence replay', () => {
     expect(state.bindings[0]).toEqual(goal)
     expect(state.deliveries).toEqual([delivery])
     expect(state.verifications[0]?.binding.sourceFingerprint).toBe(delivery.sourceFingerprint)
-    expect(devFrameProjectionDefinition.stateVersion).toBe(4)
+    expect(devFrameProjectionDefinition.stateVersion).toBe(5)
     const { deliveries: _deliveries, ...oldCheckpoint } = state
     expect(devFrameProjectionDefinition.stateSchema.safeParse(oldCheckpoint).success).toBe(false)
   })

@@ -11,6 +11,7 @@
  */
 
 import { Service, type Context } from '@deepseek-ai/cordis'
+import { realpathSync } from 'node:fs'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { CommandResult } from '@deepseek-ai/dsh-commands'
 import type { Session } from '@deepseek-ai/dsh-session'
@@ -21,6 +22,7 @@ import { ControllerSessionId, GoalBindingController, GoalServicePort, MemoryGoal
 import type {
   CompleteGoalRequest,
   CompletionAdmissionVerdict,
+  FinalIntegrationContract,
   GoalAdmission,
   GoalBinding,
   GoalBindingIdentity,
@@ -29,6 +31,8 @@ import type {
   GoalResultBinding,
   TaskId,
 } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
+import { selectGoalCompletionEvidence } from '@deepseek-ai/dsh-experimental-project-controller'
+import type { MainTreeIntegrationRecord } from '@deepseek-ai/dsh-experimental-project-controller'
 import {
   acceptanceRegionStartOf,
   computeSourceFingerprint,
@@ -43,6 +47,7 @@ import type {
   AcceptanceHash,
   DevFrameSnapshotId,
   SourceFingerprint,
+  WorkspaceId,
 } from '@deepseek-ai/dsh-experimental-devframe/shared'
 import { ConfigurationConfirmationId, DevFrameSnapshotId as makeSnapshotId } from '@deepseek-ai/dsh-experimental-devframe/shared'
 import { MemoryRequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe'
@@ -94,6 +99,7 @@ import {
   renderAbandonSuccess,
   renderCompletionRejection,
   renderCompletionSuccess,
+  renderFinalMergeIncomplete,
   renderResumeAdoptedSuccess,
   renderResumeSuccess,
   renderStartSuccess,
@@ -121,15 +127,27 @@ export interface GoalBindingCompositionStores {
   /** Approved-checks configuration store; defaults to the in-memory reference implementation. */
   readonly requiredChecks?: RequiredChecksConfigStore
   /**
+   * Durable integration receipts scoped to the invoking controller Session.
+   * Loader activation reads the owning project controller. Missing receipts
+   * refuse completion once a task delivers or merged evidence is recorded.
+   */
+  readonly goalCompletionIntegrations?: (controllerSessionId: Session['id']) => readonly MainTreeIntegrationRecord[]
+  /** Validate live registered controller ownership of the authoritative final target. */
+  readonly goalCompletionGuard?: (agent: Agent, targetPath: string, workspaceId: WorkspaceId) => void
+  /**
    * Host-injected stop-chain adapters (AT4-06). `tree` returns the project's
    * participating agents — the receiving root plus every real descendant
    * agent — host-verified through the dispatch lineage: an agent belongs when
    * its session's `parentSession` chain reaches the given root, so workers on
    * independent worktrees are included and unrelated projects' sessions are
-   * never drained. `processes` returns every captured descendant process; a
-   * composition without it has no provable process inventory, and the chain
-   * fails closed on it instead of reading emptiness as quiescence.
-   * `releaseWriter` is the owner-checked writer release for the given
+   * never drained. `processes` returns every captured descendant process
+   * scoped to the receiving root; a composition without it has no provable
+   * process inventory, and the chain fails closed on it instead of reading
+   * emptiness as quiescence. `resumeResources` releases the root-scoped
+   * resources a resume lane reacquires after resource admission; the
+   * composition carries the face so the resume lane can invoke it with the
+   * same receiving root. `releaseWriter` is the owner-checked writer release
+   * for the given
    * receiving root; it may be asynchronous and the chain reports `stopped`
    * only after it settles, and it must tolerate repeat invocation because
    * the confirmed-stop recovery path retries it. The chain fails closed: a
@@ -139,7 +157,8 @@ export interface GoalBindingCompositionStores {
    */
   readonly stop?: {
     readonly tree?: (root: Agent) => readonly Agent[]
-    readonly processes?: () => readonly StopProcess[]
+    readonly processes?: (root: Agent) => readonly StopProcess[]
+    readonly resumeResources?: (root: Agent) => void
     readonly releaseWriter?: (root: Agent) => void | Promise<void>
   }
 }
@@ -187,12 +206,17 @@ export class GoalBindingComposition extends Service {
   readonly evidenceJournal: AgentEvidenceJournal
 
   private readonly controllers = new Map<string, GoalBindingController>()
+  /** Host-supplied durable integration rows for the final-merge completion gate. */
+  private readonly goalCompletionIntegrations: (controllerSessionId: Session['id']) => readonly MainTreeIntegrationRecord[]
+  private readonly goalCompletionGuard: NonNullable<GoalBindingCompositionStores['goalCompletionGuard']>
   /** One in-flight stop chain per agent; concurrent chains refuse. */
   private readonly stopChains = new Map<string, Promise<CommandResult>>()
   /** The native flush closure the journals and the stop chain share. */
   private readonly sessionFlusher: DevFrameFlush
   /** Host-captured descendant processes handed to the stop chain; absent means no provable inventory. */
-  private readonly stopProcesses: (() => readonly StopProcess[]) | undefined
+  private readonly stopProcesses: ((root: Agent) => readonly StopProcess[]) | undefined
+  /** Host-captured root-scoped resources a resume lane releases after admission. */
+  readonly stopResumeResources: ((root: Agent) => void) | undefined
   /** Host-verified project tree (root plus descendants); absent fails closed. */
   private readonly stopTree: ((root: Agent) => readonly Agent[]) | undefined
   /** Host writer release; absent means the chain retains the writer loudly. */
@@ -220,9 +244,12 @@ export class GoalBindingComposition extends Service {
     super(ctx, 'commandGoalBinding')
     this.bindingStore = stores.bindings ?? new MemoryGoalBindingStore()
     this.requiredChecksStore = stores.requiredChecks ?? new MemoryRequiredChecksConfigStore()
+    this.goalCompletionIntegrations = stores.goalCompletionIntegrations ?? (() => [])
+    this.goalCompletionGuard = stores.goalCompletionGuard ?? (() => { throw new Error('Goal completion controller ownership is unavailable') })
     const flush = sessionFlush(ctx)
     this.sessionFlusher = flush
     this.stopProcesses = stores.stop?.processes
+    this.stopResumeResources = stores.stop?.resumeResources
     this.stopTree = stores.stop?.tree
     this.stopReleaseWriter = stores.stop?.releaseWriter
     const reviewerDirectory = new ProjectionEvidenceReviewerDirectory(ctx)
@@ -651,9 +678,12 @@ export class GoalBindingComposition extends Service {
       registry: this.ctx.agents,
       goals: this.ctx.goals,
       jobs,
-      processes: this.stopProcesses ?? (() => {
-        throw new Error('no captured process inventory is mounted for this composition')
-      }),
+      processes: () => {
+        if (this.stopProcesses === undefined) {
+          throw new Error('no captured process inventory is mounted for this composition')
+        }
+        return this.stopProcesses(agent)
+      },
       graceMs: this.config.stopGraceMs,
       closeAdmission: () => {
         controller.closeAdmission()
@@ -910,6 +940,7 @@ export class GoalBindingComposition extends Service {
     if (!bindings.some(binding => binding.goalId === current.id)) {
       return { kind: 'error', text: NO_BINDING_TEXT }
     }
+    const durableEvidenceUnchanged = await this.journal.checkpoint(invocation.agent.session)
     const state = devFrameStateOf(this.ctx, invocation.agent.session)
     if (state.failure !== null) return { kind: 'error', text: PROJECTION_FAILURE_TEXT }
     // AT1-10: the completion evidence must belong to the goal's current
@@ -935,6 +966,33 @@ export class GoalBindingComposition extends Service {
       && !isCurrentGeneration(review, currentBinding, regionStart)) {
       return { kind: 'error', text: REVIEW_SUPERSEDED_TEXT }
     }
+    // Delivered work requires whole-Goal evidence and durable integration receipts.
+    let finalIntegration: FinalIntegrationContract | undefined
+    try {
+      finalIntegration = selectGoalCompletionEvidence({
+        state,
+        goalId: current.id,
+        boundTaskIds: bindings.find(binding => binding.goalId === current.id)?.taskIds ?? [],
+        integrations: this.goalCompletionIntegrations(invocation.agent.session.id),
+      })
+      if (finalIntegration !== undefined) {
+        if (realpathSync(worktreePath) !== realpathSync(finalIntegration.targetPath)) {
+          throw new Error('Goal completion must use the controller worktree named by its integration receipts')
+        }
+        this.goalCompletionGuard(invocation.agent, finalIntegration.targetPath, currentBinding.workspaceId)
+      }
+    } catch (error) {
+      return { kind: 'error', text: renderFinalMergeIncomplete(error instanceof Error ? error.message : String(error)) }
+    }
+    // Merged evidence must retain the current acceptance generation.
+    if (finalIntegration !== undefined) {
+      if (currentBinding === undefined || !isCurrentGeneration(finalIntegration.verification, currentBinding, regionStart)) {
+        return { kind: 'error', text: VERIFICATION_SUPERSEDED_TEXT }
+      }
+      if (!isCurrentGeneration(finalIntegration.review, currentBinding, regionStart)) {
+        return { kind: 'error', text: REVIEW_SUPERSEDED_TEXT }
+      }
+    }
     // The graded memory-degradation records attributed to the current goal's
     // bound tasks (AT3-07): a fail-graded record is the task's real failure
     // evidence the admission consumes.
@@ -943,12 +1001,23 @@ export class GoalBindingComposition extends Service {
     )
     const taskWarnings = state.taskWarnings.filter(warning => boundTaskIds.has(String(warning.taskId)))
     const request: CompleteGoalRequest = {
+      beforeComplete: () => {
+        durableEvidenceUnchanged()
+        if (finalIntegration !== undefined) {
+          this.goalCompletionGuard(invocation.agent, finalIntegration.targetPath, currentBinding.workspaceId)
+          const latest = selectGoalCompletionEvidence({ state: devFrameStateOf(this.ctx, invocation.agent.session),
+            goalId: current.id, boundTaskIds: bindings.find(binding => binding.goalId === current.id)!.taskIds,
+            integrations: this.goalCompletionIntegrations(invocation.agent.session.id) })
+          if (JSON.stringify(latest) !== JSON.stringify(finalIntegration)) throw new Error('Goal completion integration evidence changed during admission')
+        }
+      },
       worktreePath,
-      checks: verification.checks,
-      requiredChecksDigest: verification.requiredChecks.digest,
+      checks: (finalIntegration?.verification ?? verification).checks,
+      requiredChecksDigest: (finalIntegration?.verification ?? verification).requiredChecks.digest,
       requiredChecksStore: this.requiredChecksStore,
-      review,
+      review: finalIntegration?.review ?? review,
       taskWarnings,
+      ...(finalIntegration === undefined ? {} : { finalIntegration }),
     }
     const verdict = await controller.complete({ controllerSessionId, goalId: current.id }, request)
     if (verdict.kind !== 'admitted') {

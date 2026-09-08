@@ -353,6 +353,8 @@ export interface StartGoalRequest {
  * name.
  */
 export interface FinalIntegrationContract {
+  /** Authoritative controller worktree named by every applied integration receipt. */
+  readonly targetPath: string
   /**
    * One applied integration receipt per bound task, read from the durable
    * integration domain. The receipt's applied state is what the integration
@@ -390,10 +392,11 @@ export interface FinalIntegrationContract {
  * merged-tree fingerprint after the final-integration stage validates it.
  */
 export interface CompleteGoalRequest {
+  /** Recheck durable evidence and live host ownership immediately before native completion. */
+  readonly beforeComplete?: () => void
   /**
-   * Absolute path to any directory inside the git worktree the fingerprint is
-   * recomputed against; the recompute is an explicit admission call (three
-   * git subprocesses) and never runs on the binding hot path.
+   * Worktree to fingerprint for plain completion. Final-integration completion
+   * always fingerprints the authoritative targetPath carried by its receipts.
    */
   readonly worktreePath: string
   /** Real executed check results, e.g. `checks` from the decoded verification evidence. */
@@ -945,6 +948,7 @@ export class GoalBindingController {
         }
         admission = {
           ...admission,
+          worktreePath: request.finalIntegration.targetPath,
           sourceFingerprint: final.verification.binding.sourceFingerprint,
           checks: final.verification.checks,
           requiredChecksDigest: final.verification.requiredChecks.digest,
@@ -955,6 +959,12 @@ export class GoalBindingController {
       const verdict = await evaluateCompletionAdmission(admission)
       if (verdict.kind === 'rejected') return verdict
 
+      if (request.finalIntegration !== undefined) {
+        // Approved-check resolution may await storage after the first source observation.
+        const finalSource = await verifySourceFingerprint(admission.worktreePath, admission.sourceFingerprint)
+        if (finalSource.kind === 'mismatch') return { kind: 'rejected', stage: 'source-fingerprint', mismatch: finalSource }
+      }
+      request.beforeComplete?.()
       const completed = this.options.goals.complete({ id: current.id, revision: current.revision })
       assertNativeRevision(completed.revision)
       if (completed.id !== binding.goalId) {
