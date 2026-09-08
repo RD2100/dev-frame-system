@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-experimental-command-goal-binding` 为用户提供 DevFrame goal 绑定流程的启动、恢复、停止与完成动词。`/devframe-start <objective>` 将新 goal 绑定到配置的 worktree 并产出真实验证证据：宿主计算 worktree 的源指纹、注册已批准的必需检查清单、通过控制器启动 goal，并把 role-policy、goal-binding 与 verification 记录落到控制器会话日志，其中每项声明检查都通过真实子进程执行。`/devframe-resume` 在停止或重启后恢复当前绑定的 goal，从会话日志 projection 或绑定存储重建绑定。`/devframe-stop` 通过真实可靠性停止链结束当前 goal：关闭准入、排空项目树的作业与已捕获进程、刷新每个参与会话，且只在链确认静止后才释放 writer。`/goal-complete` 只有通过已验证的完成准入时才会完成当前 goal：源指纹必须能从 worktree 重新推导、已注册的必需检查必须全部通过、授权审查必须通过。每一类可预期的拒绝都以稳定、直接的命令错误返回，指明失败的阶段但不暴露 goal 身份，适配器可以将其作为命令输出渲染。这是一个实验性 wave 包：它为宿主命令面组装准入 seam，除这些命令本身外不提供任何宿主面。
+`dsh-experimental-command-goal-binding` 为用户提供 DevFrame goal 绑定流程的启动、恢复、停止与完成动词。`/devframe-start <objective>` 将新 goal 绑定到配置的 worktree 并产出真实验证证据：宿主计算 worktree 的源指纹、注册已批准的必需检查清单、通过控制器启动 goal，并把 role-policy、goal-binding 与 verification 记录落到控制器会话日志，其中每项声明检查都通过真实子进程执行。`/devframe-resume` 在停止或重启后恢复当前绑定的 goal，从会话日志 projection 或绑定存储重建绑定。`/devframe-stop` 通过真实可靠性停止链结束当前 goal：关闭准入、排空项目树的作业与已捕获进程、刷新每个参与会话，且只在链确认静止后才释放 writer。`/goal-complete` 只有通过已验证的完成准入时才会完成当前 goal：源指纹必须能从 worktree 重新推导、已注册的必需检查必须全部通过、授权审查必须通过。每一类可预期的拒绝都以稳定、直接的命令错误返回，指明失败的阶段但不暴露 goal 身份，适配器可以将其作为命令输出渲染。这是一个实验性 wave 包：它为宿主命令面组装准入 seam，并在这些命令之外附带停止链的宿主适配器。
 
 ## 目录
 
@@ -114,7 +114,7 @@ kind: "package-reference"
 - **日志实例共享会话持久化。** 组合日志和证据日志都通过 `ctx.sessions.flush` 刷新。使用同一活跃会话的所有日志共享追加队列和失败锁；一次结果不确定的刷新会阻止它们之后的写入。
 - **分发前先 fail closed。** 各处理器在到达准入之前，会因缺失 goal、缺失绑定、缺失证据或已锁存的 projection 重放失败而拒绝，并显式解析 worktree 路径，使缺失根路径成为数据错误而非结构性失败。
 - **回执只在准入之后。** 获得准入的完成会通过准入的 compare-and-set 推进原生 goal，并通过 goal 服务记录一条 `completion-admission` 证据条目；拒绝则保持 goal phase、绑定与准入状态不变。
-- **停止链是可选项且由宿主接线。** 项目树面、已捕获的后代进程与 writer 释放是组合服务上的注入点——不是 config：宿主捕获并做 owner 验证项目树（根加上每个真实后代 agent）并拥有释放。链在树 inventory 缺失或为空、作业注册表缺失、释放钩子未接线时一律 fail-closed——缺失绝不等于安静。
+- **停止链是可选项且由宿主接线。** 项目树面、已捕获的后代进程与 writer 释放是组合服务上的注入点——不是 config：宿主捕获并做 owner 验证项目树（根加上每个真实后代 agent）并拥有释放。当 fiber 携带 agent、workspace 与 worktree 注册表时，apply 面挂载真实适配器：基于 `ctx.agents` 按规范化 worktree cwd 过滤的活跃树、可通过 `hostStopInventoryOf` 访问的已捕获进程 inventory、以及 owner 检查的 worktree writer 释放；缺少这些注册表的 fiber 保持 fail-closed 的未接线链。链在树 inventory 缺失或为空、作业注册表缺失、释放钩子未接线时一律 fail-closed——缺失绝不等于安静。
 - **writer 只在链确认后释放。** 确认静止的记录是持久的释放前前置；stopped 终态记录、存储条目与检查点只在该次释放真实成功之后落盘，每次落盘都受停止宽限期约束，永不 settle 的持久化面会返回而不是挂起。释放失败折叠为 `needs_attention`，绝不落 `stopped`。
 - **被中断的停止流程在重复停止时收敛。** 日志停在 `stop_requested`（drain 期间崩溃）时，恢复会基于宿主当前 inventory 重新进入 drain；日志停在 `quiescence_confirmed` 时重新进入释放。缺失的活跃身份以 `needs_attention` 呈现且 writer 保持持有——绝不静默绕过，也绝不重启被中断的 goal 工作。
 
@@ -127,6 +127,7 @@ kind: "package-reference"
 | [`src/command.ts`](src/command.ts) | 命令语法、数据错误文本、拒绝渲染、回执证据 |
 | [`src/host-evidence.ts`](src/host-evidence.ts) | flush 闭包、projection 派生审查者目录、role-policy/goal-binding 落账 helper、验收摘要 |
 | [`src/config.ts`](src/config.ts) | config 模式与校验 |
+| [`src/host-stop.ts`](src/host-stop.ts) | 真实宿主停止适配器：worktree 身份项目树、已捕获进程 inventory、owner 检查的 worktree writer 释放 |
 | — | 不发布运行时不变式伴生入口；准入语义由 devframe 包拥有并测试，命令行为由包内测试覆盖。 |
 
 </details>
@@ -143,6 +144,7 @@ kind: "package-reference"
 - [goal 服务](../../goal/goal/README.zh.md)——准入所完成的原生 goal 生命周期与回执所依附的状态。
 - [宿主命令面 Agent Note](../../../.agents/notes/implemented/architecture/2026-09-06-command-goal-binding-host-command-surface.zh.md)——组合与归属决策。
 - [停止链组合 Agent Note](../../../.agents/notes/implemented/architecture/2026-09-08-command-goal-binding-stop-chain-composition.zh.md)——树 fail-closed、确认后释放、有界记账与恢复决策。
+- [宿主停止适配器 Agent Note](../../../.agents/notes/implemented/architecture/2026-09-08-command-goal-binding-host-stop-adapters.zh.md)——apply 面默认接线、cwd 身份边界与同步释放的收敛。
 
 -----
 
