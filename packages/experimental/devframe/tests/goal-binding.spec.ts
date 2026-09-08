@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -7,7 +9,9 @@ import GoalService from '@deepseek-ai/dsh-goal'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MemoryRequiredChecksConfigStore, requiredChecksDigest } from '../src/required-checks.ts'
+import { computeSourceFingerprint } from '../src/source-fingerprint.ts'
 import { AcceptanceHash, ConfigurationConfirmationId, DevFrameSnapshotId, SourceFingerprint, WorkspaceId } from '../src/shared/types.ts'
+import { DevFrameDeliveryId, DevFrameReviewId, DevFrameVerificationId } from '../src/events.ts'
 import {
   ControllerSessionId,
   GoalBindingController,
@@ -867,6 +871,178 @@ async function completionRequest(
     ...overrides,
   }
 }
+
+describe('GoalBindingController final-merge completion contract', { timeout: 30_000 }, () => {
+  // The final merge moves the controller worktree past the binding's initial
+  // start fingerprint; every case runs the whole admission against a real git
+  // worktree, so the budget stays above the runner default for that cost.
+
+  /**
+   * Start one two-task Goal whose controller worktree then receives the final
+   * merge, and build the whole-Goal evidence contract the completion
+   * admission consumes in the final-merge lane.
+   */
+  async function finalMergeFixture(workspaceId: string) {
+    const fixture = await createCommittedWorktree()
+    const initial = fixture.fingerprint
+    // Simulate the final merge landing in the controller worktree: the tree
+    // moves past the initial claim before completion is attempted.
+    await writeFile(join(fixture.root, 'merged.ts'), 'export const merged = true\n')
+    const merged = await computeSourceFingerprint({ worktreePath: fixture.root })
+    const trace: string[] = []
+    const goals = fakeGoals(trace)
+    const store = new MemoryGoalBindingStore()
+    const controller = new GoalBindingController({
+      workspaceId: WorkspaceId(workspaceId),
+      controllerSessionId: ControllerSessionId(workspaceId),
+      goals,
+      store,
+    })
+    const binding = await controller.start(request({
+      taskIds: [TaskId('task-a'), TaskId('task-b')],
+      sourceFingerprint: initial,
+    }))
+    const checksStore = new MemoryRequiredChecksConfigStore()
+    const digest = await checksStore.save(CONFIG)
+    const mergedBinding = {
+      controllerSessionId: binding.controllerSessionId,
+      goalId: binding.goalId,
+      goalRevision: binding.goalRevision,
+      taskIds: binding.taskIds,
+      acceptanceHash: binding.acceptanceHash,
+      workspaceId: binding.workspaceId,
+      sourceFingerprint: merged.fingerprint,
+      snapshotId: DevFrameSnapshotId('snapshot-final-merge'),
+    }
+    const verification = {
+      version: 1 as const,
+      verificationId: DevFrameVerificationId('verification-final-merge'),
+      binding: mergedBinding,
+      snapshotId: mergedBinding.snapshotId,
+      status: 'passed' as const,
+      requiredChecks: { config: CONFIG, digest },
+      checks: CONFIG.checks.map(check => executionFor(check)),
+    }
+    const review = reviewEvent('pass', {
+      reviewId: DevFrameReviewId('review-final-merge'),
+      binding: mergedBinding,
+      snapshotId: mergedBinding.snapshotId,
+      reviewerSessionId: SessionId('final-reviewer'),
+    })
+    const contract = {
+      tasks: [
+        { taskId: TaskId('task-a'), appliedHead: 'a'.repeat(40) },
+        { taskId: TaskId('task-b'), appliedHead: 'b'.repeat(40) },
+      ],
+      verification, review,
+      workerSessionIds: [SessionId('worker-a'), SessionId('worker-b')],
+    }
+    const completeRequest: CompleteGoalRequest = {
+      worktreePath: fixture.root,
+      checks: verification.checks,
+      requiredChecksDigest: digest,
+      requiredChecksStore: checksStore,
+      review,
+      taskWarnings: [],
+      finalIntegration: contract,
+    }
+    return { fixture, initial, merged, trace, goals, store, controller, binding, contract, completeRequest }
+  }
+
+  it('completes at the merged fingerprint and leaves the stored initial claim untouched', async () => {
+    const f = await finalMergeFixture('workspace-final-merge')
+    const verdict = await f.controller.complete(f.binding, f.completeRequest)
+    expect(verdict).toEqual({
+      kind: 'admitted',
+      fingerprint: f.merged.fingerprint,
+      requiredChecksDigest: requiredChecksDigest(CONFIG),
+    })
+    expect(f.goals.current).toMatchObject({ id: 'goal-1', revision: 3, phase: 'complete', activation: 'disarmed' })
+    // No silent rebind: the durable binding keeps the initial start claim.
+    await expect(f.store.read(WorkspaceId('workspace-final-merge'))).resolves.toMatchObject({
+      sourceFingerprint: f.initial,
+      goalRevision: 3,
+    })
+  })
+
+  it('refuses a bound task worker standing in as the final-merge reviewer', async () => {
+    const f = await finalMergeFixture('workspace-final-merge-worker-review')
+    const request: CompleteGoalRequest = { ...f.completeRequest, finalIntegration: {
+      ...f.contract, review: { ...f.contract.review, reviewerSessionId: SessionId('worker-a') },
+    } }
+    const verdict = await f.controller.complete(f.binding, request)
+    expect(verdict).toEqual({ kind: 'rejected', stage: 'final-integration', reason: 'reviewer-not-independent' })
+    expect(f.goals.current).toMatchObject({ id: 'goal-1', revision: 2, phase: 'active' })
+  })
+
+  it('refuses delivery-bound evidence masquerading as the final-merge gate', async () => {
+    const f = await finalMergeFixture('workspace-final-merge-delivery-bound')
+    const request: CompleteGoalRequest = { ...f.completeRequest, finalIntegration: {
+      ...f.contract,
+      verification: { ...f.contract.verification, deliveryId: DevFrameDeliveryId('delivery-final') },
+      review: { ...f.contract.review, deliveryId: DevFrameDeliveryId('delivery-final') },
+    } }
+    const verdict = await f.controller.complete(f.binding, request)
+    expect(verdict).toEqual({ kind: 'rejected', stage: 'final-integration', reason: 'delivery-bound-evidence' })
+    expect(f.goals.current).toMatchObject({ id: 'goal-1', revision: 2, phase: 'active' })
+  })
+
+  it('refuses a contract that does not cover exactly the bound tasks', async () => {
+    const f = await finalMergeFixture('workspace-final-merge-coverage')
+    const request: CompleteGoalRequest = { ...f.completeRequest, finalIntegration: {
+      ...f.contract, tasks: [f.contract.tasks[0]!],
+    } }
+    const verdict = await f.controller.complete(f.binding, request)
+    expect(verdict).toEqual({ kind: 'rejected', stage: 'final-integration', reason: 'coverage', taskId: TaskId('task-b') })
+    expect(f.goals.current).toMatchObject({ id: 'goal-1', revision: 2, phase: 'active' })
+  })
+
+  it('refuses when the claimed merged fingerprint does not match the live tree', async () => {
+    const f = await finalMergeFixture('workspace-final-merge-fp')
+    const phantom = SourceFingerprint('dsh-source-fp-v1-phantom-merge')
+    const phantomBinding = { ...f.contract.verification.binding, sourceFingerprint: phantom }
+    const request: CompleteGoalRequest = { ...f.completeRequest, finalIntegration: {
+      ...f.contract,
+      verification: { ...f.contract.verification, binding: phantomBinding },
+      review: { ...f.contract.review, binding: phantomBinding },
+    } }
+    const verdict = await f.controller.complete(f.binding, request)
+    if (verdict.kind !== 'rejected' || verdict.stage !== 'source-fingerprint') {
+      throw new Error('expected the merged-fingerprint claim to face the live recompute')
+    }
+    expect(verdict.mismatch.recordedFingerprint).toBe(phantom)
+    expect(verdict.mismatch.computed.fingerprint).toBe(f.merged.fingerprint)
+    expect(f.goals.current).toMatchObject({ id: 'goal-1', revision: 2, phase: 'active' })
+  })
+
+  it('refuses the plain lane on the moved tree instead of letting the initial claim pass the final state', async () => {
+    const f = await finalMergeFixture('workspace-final-merge-plain')
+    const plain: CompleteGoalRequest = {
+      worktreePath: f.completeRequest.worktreePath,
+      checks: f.completeRequest.checks,
+      requiredChecksDigest: f.completeRequest.requiredChecksDigest,
+      requiredChecksStore: f.completeRequest.requiredChecksStore,
+      review: reviewEvent('pass', { binding: resultReference(f.binding), snapshotId: f.binding.snapshotId }),
+      taskWarnings: [],
+    }
+    const verdict = await f.controller.complete(f.binding, plain)
+    if (verdict.kind !== 'rejected' || verdict.stage !== 'source-fingerprint') {
+      throw new Error('expected the initial fingerprint to fail against the merged tree')
+    }
+    expect(verdict.mismatch.recordedFingerprint).toBe(f.initial)
+    expect(verdict.mismatch.computed.fingerprint).toBe(f.merged.fingerprint)
+    expect(f.goals.current).toMatchObject({ id: 'goal-1', revision: 2, phase: 'active' })
+  })
+
+  it('refuses submitted completion evidence that is not the supplied final-merge evidence', async () => {
+    const f = await finalMergeFixture('workspace-final-merge-evidence')
+    const staleReview = reviewEvent('pass', { binding: resultReference(f.binding), snapshotId: f.binding.snapshotId })
+    await expect(f.controller.complete(f.binding, { ...f.completeRequest, review: staleReview }))
+      .rejects.toThrow('completion evidence must be the supplied final-merge evidence')
+    expect(f.goals.current).toMatchObject({ id: 'goal-1', revision: 2, phase: 'active' })
+    expect(f.controller.admissionState).toBe('closed')
+  })
+})
 
 describe('GoalBindingController stop and abandon (AT1-10)', () => {
   it('records a human-authorized stop request with disarmed native continuation', async () => {
