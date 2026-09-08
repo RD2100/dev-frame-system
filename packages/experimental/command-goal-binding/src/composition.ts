@@ -143,11 +143,14 @@ export interface GoalBindingCompositionStores {
    * never drained. `processes` returns every captured descendant process
    * scoped to the receiving root; a composition without it has no provable
    * process inventory, and the chain fails closed on it instead of reading
-   * emptiness as quiescence. `resumeResources` releases the root-scoped
-   * resources a resume lane reacquires after resource admission; the
-   * composition carries the face so the resume lane can invoke it with the
-   * same receiving root. `releaseWriter` is the owner-checked writer release
-   * for the given
+   * emptiness as quiescence. `resumeResources` prepares the root-scoped
+   * resources a resume lane reacquires after resource admission; it is
+   * synchronous, prepare-all, and re-enterable. `acquireWriter` reacquires
+   * the receiving root's writer lock during resume — the authorization
+   * becomes effective only once the lock is held again, it must tolerate
+   * repeat invocation because a retry after a later failure re-enters it,
+   * and an acquire failure refuses the resume with the writer untouched.
+   * `releaseWriter` is the owner-checked writer release for the given
    * receiving root; it may be asynchronous and the chain reports `stopped`
    * only after it settles, and it must tolerate repeat invocation because
    * the confirmed-stop recovery path retries it. The chain fails closed: a
@@ -159,6 +162,7 @@ export interface GoalBindingCompositionStores {
     readonly tree?: (root: Agent) => readonly Agent[]
     readonly processes?: (root: Agent) => readonly StopProcess[]
     readonly resumeResources?: (root: Agent) => void
+    readonly acquireWriter?: (root: Agent) => Promise<void>
     readonly releaseWriter?: (root: Agent) => void | Promise<void>
   }
 }
@@ -215,8 +219,10 @@ export class GoalBindingComposition extends Service {
   private readonly sessionFlusher: DevFrameFlush
   /** Host-captured descendant processes handed to the stop chain; absent means no provable inventory. */
   private readonly stopProcesses: ((root: Agent) => readonly StopProcess[]) | undefined
-  /** Host-captured root-scoped resources a resume lane releases after admission. */
+  /** Host-captured root-scoped resources a resume lane prepares after admission. */
   readonly stopResumeResources: ((root: Agent) => void) | undefined
+  /** Host writer-lock reacquisition; the resume authorization-effective boundary. */
+  private readonly stopAcquireWriter: ((root: Agent) => Promise<void>) | undefined
   /** Host-verified project tree (root plus descendants); absent fails closed. */
   private readonly stopTree: ((root: Agent) => readonly Agent[]) | undefined
   /** Host writer release; absent means the chain retains the writer loudly. */
@@ -250,6 +256,7 @@ export class GoalBindingComposition extends Service {
     this.sessionFlusher = flush
     this.stopProcesses = stores.stop?.processes
     this.stopResumeResources = stores.stop?.resumeResources
+    this.stopAcquireWriter = stores.stop?.acquireWriter
     this.stopTree = stores.stop?.tree
     this.stopReleaseWriter = stores.stop?.releaseWriter
     const reviewerDirectory = new ProjectionEvidenceReviewerDirectory(ctx)
@@ -467,6 +474,13 @@ export class GoalBindingComposition extends Service {
       createHumanAuthorization(`devframe-resume:${invocation.agent.id}:${Date.now()}`),
       adoption,
     )
+    // Writer reacquisition is the authorization-effective boundary: the
+    // resumed binding counts on the host only once the root's writer lock is
+    // held again, and an acquire failure refuses the resume with the writer
+    // untouched. The resource face is prepare-all synchronous and
+    // re-enterable, so a retry after a later failure re-enters both faces.
+    if (this.stopAcquireWriter !== undefined) await this.stopAcquireWriter(invocation.agent)
+    if (this.stopResumeResources !== undefined) this.stopResumeResources(invocation.agent)
     await landGoalBinding(this.journal, invocation.agent.session, resumed)
     if (adoption !== undefined) {
       const requiredChecksDigest = await this.requiredChecksStore.save(this.config.checks)
