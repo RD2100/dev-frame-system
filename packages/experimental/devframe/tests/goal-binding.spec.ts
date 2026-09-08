@@ -930,6 +930,7 @@ describe('GoalBindingController final-merge completion contract', { timeout: 30_
       reviewerSessionId: SessionId('final-reviewer'),
     })
     const contract = {
+      targetPath: fixture.root,
       tasks: [
         { taskId: TaskId('task-a'), appliedHead: 'a'.repeat(40) },
         { taskId: TaskId('task-b'), appliedHead: 'b'.repeat(40) },

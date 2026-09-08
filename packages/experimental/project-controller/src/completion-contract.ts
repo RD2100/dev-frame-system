@@ -45,10 +45,18 @@ export interface GoalCompletionIntegrationRequest {
 export function selectGoalCompletionIntegration(request: GoalCompletionIntegrationRequest): FinalIntegrationContract {
   const { state, goalId, boundTaskIds, integrations } = request
   if (state.failure !== null) throw new Error('Goal completion selection requires an intact evidence projection')
+  let targetPath: string | undefined
   const tasks = boundTaskIds.map(id => {
-    const row = integrations.find(candidate => String(candidate.taskId) === String(id))
+    const row = integrations.find(candidate => candidate.controllerSessionId === state.controllerSessionId
+      && String(candidate.taskId) === String(id))
     if (row === undefined || row.state !== 'applied' || row.appliedHead === undefined) {
       throw new Error(`Goal completion requires the applied integration receipt for task "${String(id)}"`)
+    }
+    if (targetPath !== undefined && targetPath !== row.targetPath) throw new Error('Goal completion receipts name different controller worktrees')
+    targetPath = row.targetPath
+    const delivery = state.deliveries.findLast(record => record.binding.goalId === goalId && String(record.taskId) === String(id))
+    if (delivery !== undefined && (row.sourceCommit !== delivery.sourceCommit || row.sourcePath !== delivery.worktreePath)) {
+      throw new Error(`Goal completion integration receipt does not cover the current delivery for task "${String(id)}"`)
     }
     return { taskId: id, appliedHead: row.appliedHead }
   })
@@ -72,5 +80,6 @@ export function selectGoalCompletionIntegration(request: GoalCompletionIntegrati
     }
     return delivery.workerSessionId
   })
-  return { tasks, verification, review, workerSessionIds }
+  if (targetPath === undefined) throw new Error('Goal completion requires an integration target worktree')
+  return { targetPath, tasks, verification, review, workerSessionIds }
 }

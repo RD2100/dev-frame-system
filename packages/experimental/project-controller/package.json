@@ -23,6 +23,10 @@
       "types": "./lib/types/delivery-consumer.d.ts",
       "default": "./lib/delivery-consumer.js"
     },
+    "./completion-consumer": {
+      "types": "./lib/types/completion-consumer.d.ts",
+      "default": "./lib/completion-consumer.js"
+    },
     "./request-budget-consumer": {
       "types": "./lib/types/request-budget-consumer.d.ts",
       "default": "./lib/request-budget-consumer.js"
@@ -35,6 +39,7 @@
     "lib/consumer.js",
     "lib/task-consumer.js",
     "lib/delivery-consumer.js",
+    "lib/completion-consumer.js",
     "lib/request-budget-consumer.js",
     "lib/types/**/*.d.ts"
   ],
@@ -44,6 +49,7 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
+    "@deepseek-ai/dsh-goal": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-experimental-devframe": "workspace:^",
@@ -59,6 +65,9 @@
     "@deepseek-ai/dsh-worktree-registry": "workspace:^"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-commands": "workspace:^",
+    "@deepseek-ai/dsh-goal": "workspace:^",
+    "@deepseek-ai/dsh-experimental-command-goal-binding": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/cordis-plugin-include": "workspace:^",
     "@deepseek-ai/cordis-plugin-loader": "workspace:^",

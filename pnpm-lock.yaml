@@ -4954,6 +4954,9 @@ importers:
       '@deepseek-ai/dsh-experimental-devframe':
         specifier: workspace:^
         version: link:../devframe
+      '@deepseek-ai/dsh-experimental-project-controller':
+        specifier: workspace:^
+        version: link:../project-controller
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
@@ -4967,6 +4970,9 @@ importers:
       '@deepseek-ai/dsh-commands':
         specifier: workspace:^
         version: link:../../interaction/commands
+      '@deepseek-ai/dsh-experimental-project-contracts':
+        specifier: workspace:^
+        version: link:../project-contracts
       '@deepseek-ai/dsh-goal':
         specifier: workspace:^
         version: link:../../goal/goal
@@ -4979,6 +4985,9 @@ importers:
       '@deepseek-ai/dsh-session-projection':
         specifier: workspace:^
         version: link:../../session/session-projection
+      '@deepseek-ai/dsh-worktree-registry':
+        specifier: workspace:^
+        version: link:../../workflow/worktree-registry
 
   packages/experimental/devframe:
     dependencies:
@@ -5139,6 +5148,15 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@deepseek-ai/dsh-commands':
+        specifier: workspace:^
+        version: link:../../interaction/commands
+      '@deepseek-ai/dsh-experimental-command-goal-binding':
+        specifier: workspace:^
+        version: link:../command-goal-binding
+      '@deepseek-ai/dsh-goal':
+        specifier: workspace:^
+        version: link:../../goal/goal
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../../vendor/cordis

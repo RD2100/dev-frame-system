@@ -1,15 +1,4 @@
-/**
- * Production entry face for the final-merge completion gate: decide whether
- * the gate is engaged for one Goal, and select the evidence contract when it
- * is.
- *
- * The command face consumes this before building `CompleteGoalRequest`. A
- * Goal whose work never entered the controller tree keeps the plain
- * completion lane; once any integration receipt or whole-Goal record exists,
- * the gate is engaged and completion must carry the complete final-merge
- * evidence — a half-integrated Goal cannot complete through the plain lane.
- * @module @deepseek-ai/dsh-experimental-project-controller/goal-completion-entry
- */
+/** Select the final-merge completion requirements without changing the authorized Goal binding. */
 
 import type { DevFrameProjectionState, GoalResultBinding } from '@deepseek-ai/dsh-experimental-devframe'
 import type { FinalIntegrationContract, TaskId as GoalTaskId } from '@deepseek-ai/dsh-experimental-devframe/controller'
@@ -29,26 +18,26 @@ export interface GoalCompletionGateInput {
 }
 
 /**
- * Whether the final-merge completion gate applies to this Goal: any
- * integration receipt in any state naming a bound task, or any whole-Goal
- * verification or review recorded for the Goal, means the work entered the
- * controller tree and completion must carry the final-merge evidence. The
- * integration rows persist no goal id, so a receipt engages by its bound task
- * name under this controller, while whole-Goal records are goal-scoped. A
- * projection with a replay failure is treated as engaged fail-closed, so a
- * broken evidence face cannot silently route completion to the plain lane.
- * @param input - the projection, Goal identity, bound tasks, and durable receipts.
- * @returns Whether completion must go through the final-merge evidence contract.
+ * Require final-merge evidence once this Goal has a delivery, a controller-owned
+ * integration receipt, or whole-Goal evidence beyond its original source.
+ * Projection failure also engages the requirement so corruption cannot select
+ * the plain completion lane.
+ * @param input - Goal projection and controller-owned durable integration receipts.
+ * @returns Whether completion requires final merged-tree evidence.
  */
 export function goalCompletionGateEngaged(input: GoalCompletionGateInput): boolean {
   const { state, goalId, boundTaskIds, integrations } = input
   if (state.failure !== null) return true
+  if (state.deliveries.some(delivery => delivery.binding.goalId === goalId)) return true
   const namesBoundTask = (taskId: unknown) =>
     boundTaskIds.some(id => String(id) === String(taskId))
-  if (integrations.some(row => namesBoundTask(row.taskId))) return true
-  const wholeGoal = (record: { readonly deliveryId?: unknown; readonly binding: { readonly goalId: GoalResultBinding['goalId'] } }) =>
-    record.deliveryId === undefined && record.binding.goalId === goalId
-  return state.verifications.some(wholeGoal) || state.reviews.some(wholeGoal)
+  if (integrations.some(row => row.controllerSessionId === state.controllerSessionId && namesBoundTask(row.taskId))) return true
+  const startClaim = state.bindings.filter(binding => binding.goalId === goalId).at(-1)
+  const movedWholeGoal = (record: { readonly deliveryId?: unknown; readonly binding: { readonly goalId: GoalResultBinding['goalId']; readonly sourceFingerprint: GoalResultBinding['sourceFingerprint'] } }) =>
+    record.deliveryId === undefined
+    && record.binding.goalId === goalId
+    && (startClaim === undefined || record.binding.sourceFingerprint !== startClaim.sourceFingerprint)
+  return state.verifications.some(movedWholeGoal) || state.reviews.some(movedWholeGoal)
 }
 
 /**

@@ -206,6 +206,8 @@ export function expectedDshPackageFiles(manifest: PackageManifest): readonly str
     ...exportDefault(manifest, './consumer') === './lib/consumer.js' ? ['lib/consumer.js'] : [],
     ...exportDefault(manifest, './task-consumer') === './lib/task-consumer.js' ? ['lib/task-consumer.js'] : [],
     ...exportDefault(manifest, './delivery-consumer') === './lib/delivery-consumer.js' ? ['lib/delivery-consumer.js'] : [],
+    ...exportDefault(manifest, './completion-consumer') === './lib/completion-consumer.js' ? ['lib/completion-consumer.js'] : [],
+    ...exportDefault(manifest, './request-budget-consumer') === './lib/request-budget-consumer.js' ? ['lib/request-budget-consumer.js'] : [],
     ...extras,
     // Subpaths whose runtime default is the tsc-emitted tree (lib/types/*.js —
     // browser-safe source channels rehomed off src so plain Node can import

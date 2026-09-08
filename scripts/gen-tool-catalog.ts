@@ -72,6 +72,7 @@ import * as AgentWorktreeTools from '@deepseek-ai/dsh-experimental-agent-worktre
 import * as ProjectIntegrationTool from '../packages/experimental/project-controller/src/consumer.ts'
 import * as ProjectTaskTool from '../packages/experimental/project-controller/src/task-consumer.ts'
 import * as ProjectDeliveryTool from '../packages/experimental/project-controller/src/delivery-consumer.ts'
+import * as ProjectGoalEvidenceTool from '../packages/experimental/project-controller/src/completion-consumer.ts'
 import * as AgentDispatchTools from '@deepseek-ai/dsh-experimental-agent-dispatch'
 import { WorktreeRegistry } from '@deepseek-ai/dsh-worktree-registry'
 import type {
@@ -276,6 +277,24 @@ export const PROJECT_DELIVERY_TOOL_PACKAGE: ToolPackage = {
     })
   },
   note: 'Opt-in explicit Worker delivery, independent parent-lead review, and Worker artifact commits. The host derives source identity and executes preapproved checks, commits only host-registered per-task paths, refuses while the caller has non-terminal background jobs, and re-verifies branch and expected HEAD inside the registry commit Service. Failed or uncertain checks require explicit retryChecks; identical reviews can repair task-state recording without repeating the review.',
+}
+
+/** Schema-only mount for final merged-tree checks and independent whole-Goal review. */
+export const PROJECT_GOAL_EVIDENCE_TOOL_PACKAGE: ToolPackage = {
+  pkg: '@deepseek-ai/dsh-experimental-project-controller/completion-consumer',
+  dir: 'project-controller', source: 'packages/experimental/project-controller/src/completion-consumer.ts',
+  requires: ['ctx.tools', 'ctx.agents', 'ctx.goals', 'ctx.sessions', 'ctx.sessionProjections', 'ctx.projectController', 'ctx.agentBindings', 'ctx.workspaceRegistry', 'ctx.worktreeRegistry'],
+  writes: ['tool/call', 'tool/result', 'DevFrame whole-Goal verification and review events', 'approved check subprocess effects'],
+  async mount(ctx) {
+    for (const key of ['agents', 'goals', 'sessions', 'projectController', 'agentBindings', 'workspaceRegistry', 'worktreeRegistry'] as const) {
+      ctx.provide(key, {} as never)
+    }
+    await ctx.plugin(ProjectGoalEvidenceTool, {
+      requiredChecksPath: resolve(root, 'catalog-unused-required-checks.json'), requiredChecksDigest: 'catalog-unused-digest',
+      gitExecutable: 'git', gitTimeoutMs: 1, gitMaxOutputBytes: 1, checkTimeoutMs: 1, checkMaxOutputBytes: 1,
+    })
+  },
+  note: 'Opt-in whole-Goal checks over the clean final controller tree and review by an independent direct lead. The host requires every current delivery to have an applied integration receipt and rechecks source, writer ownership, and authority before durable evidence recording. Completion remains the separate /goal-complete command.',
 }
 
 const TOOL_PACKAGES: ToolPackage[] = [
@@ -727,6 +746,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
   },
   PROJECT_TASK_TOOL_PACKAGE,
   PROJECT_DELIVERY_TOOL_PACKAGE,
+  PROJECT_GOAL_EVIDENCE_TOOL_PACKAGE,
   {
     pkg: '@deepseek-ai/dsh-experimental-agent-dispatch',
     dir: 'agent-dispatch',

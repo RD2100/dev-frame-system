@@ -586,9 +586,27 @@ function applyUsage(state: DevFrameProjectionState, usage: DevFrameUsageEventDat
   state.usage.push(cloneUsage(usage))
 }
 
+/**
+ * Whole-Goal evidence may name the merged output after every task delivers.
+ * Authorization stays on the original Goal; completion separately requires
+ * applied integration receipts and recomputes this output fingerprint.
+ */
+function assertWholeGoalEvidence(state: DevFrameProjectionState, binding: GoalResultBinding): void {
+  const goal = bindingFor(state, binding.goalId)
+  if (goal !== undefined && goal.taskIds.length > 0
+    && goal.taskIds.every(taskId => state.deliveries.some(delivery =>
+      delivery.taskId === taskId && delivery.binding.goalId === goal.goalId))) {
+    assertResultBinding(state, {
+      ...binding, sourceFingerprint: goal.sourceFingerprint, snapshotId: goal.snapshotId,
+    })
+    return
+  }
+  assertResultBinding(state, binding)
+}
+
 /** Apply one immutable verification record. */
 function applyVerification(state: DevFrameProjectionState, verification: DevFrameVerificationEventData): void {
-  if (verification.deliveryId === undefined) assertResultBinding(state, verification.binding)
+  if (verification.deliveryId === undefined) assertWholeGoalEvidence(state, verification.binding)
   else assertDeliveryEvidence(state, verification.deliveryId, verification.binding)
   if (state.verifications.some(record => record.verificationId === verification.verificationId)) {
     throw new Error(`DevFrame verification "${verification.verificationId}" was recorded twice`)
@@ -606,7 +624,7 @@ function applyVerification(state: DevFrameProjectionState, verification: DevFram
  * re-verified by the review consumer.
  */
 function applyReview(state: DevFrameProjectionState, review: DevFrameReviewEventData): void {
-  if (review.deliveryId === undefined) assertResultBinding(state, review.binding)
+  if (review.deliveryId === undefined) assertWholeGoalEvidence(state, review.binding)
   else assertDeliveryEvidence(state, review.deliveryId, review.binding)
   if (state.rolePolicy === null || state.rolePolicy.policyVersion !== review.policyVersion) {
     throw new Error(`DevFrame review "${review.reviewId}" uses an unavailable role policy version`)
@@ -762,7 +780,7 @@ export function foldDevFrameState(
 /** Host-only projection definition registered by the DevFrame profile. */
 export const devFrameProjectionDefinition = {
   key: 'devframe',
-  stateVersion: 4,
+  stateVersion: 5,
   stateSchema: devFrameStateSchema,
   init: (header: SessionHeader, _inheritedEventCount: SessionLogOffset) => initialState(header),
   apply: (state: DevFrameProjectionState, event: SessionEvent) => {

@@ -80,7 +80,7 @@ function workBinding(
 
 `devframe/task-delivery` 记录保留原始完整 Goal 输入绑定，并另行记录任务的 Worker、注册工作树、确切提交、输出指纹和输出快照。`deliveryResultBinding` 推导输出证据绑定，不改写已授权的 Goal 输入。
 
-携带 `deliveryId` 的验证和审查必须匹配该任务与 Goal 的最新交付，包括其精确输出绑定。通过的交付审查要求最新验证通过。不带 `deliveryId` 的整 Goal 证据仍遵循既有绑定规则；任务集成时不能用它替代交付证据。投影检查点版本为 3；恢复会丢弃较旧的检查点，从会话日志重建交付和修复准入字段。
+携带 `deliveryId` 的验证与审查必须匹配该任务和 Goal 的最新交付，包括确切输出绑定。通过的交付审查要求最新验证通过。不带 `deliveryId` 的 whole-Goal 证据可在每个绑定任务都交付后指明合并输出，同时保留已授权的 controller、工作区、Goal、任务和验收条件。完成另行要求已应用集成回执及匹配的实时指纹；whole-Goal 记录不能替代任务集成证据。投影检查点版本 5 从会话日志重建旧缓存状态。
 
 <a id="bound-correction-rounds"></a>
 ### 限制修复轮次

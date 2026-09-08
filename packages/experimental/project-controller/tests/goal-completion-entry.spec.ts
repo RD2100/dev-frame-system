@@ -91,6 +91,24 @@ function fixture() {
 }
 
 describe('goal completion gate entry', () => {
+  it('requires final evidence after delivery even when the receipt reader is absent', () => {
+    const { input } = fixture()
+    const missing = { ...input, integrations: [] }
+    expect(goalCompletionGateEngaged(missing)).toBe(true)
+    expect(() => selectGoalCompletionEvidence(missing)).toThrow('applied integration receipt')
+  })
+
+  it('does not borrow another controller receipt with the same task name', () => {
+    const { input } = fixture()
+    const foreign = { ...input, integrations: input.integrations.map(row => ({ ...row, controllerSessionId: SessionId('other-controller') })) }
+    expect(() => selectGoalCompletionEvidence(foreign)).toThrow('applied integration receipt')
+  })
+
+  it('refuses a receipt for an older task delivery', () => {
+    const { input } = fixture()
+    const stale = { ...input, integrations: input.integrations.map(row => ({ ...row, sourceCommit: 'c'.repeat(40) })) }
+    expect(() => selectGoalCompletionEvidence(stale)).toThrow('does not cover the current delivery')
+  })
   it('delivers the complete contract when every gate obligation is met', () => {
     const { input } = fixture()
     const contract = selectGoalCompletionEvidence(input)
@@ -106,7 +124,7 @@ describe('goal completion gate entry', () => {
     const plain = {
       ...input,
       integrations: [] as MainTreeIntegrationRecord[],
-      state: { ...input.state, verifications: [], reviews: [] },
+      state: { ...input.state, deliveries: [], verifications: [], reviews: [] },
     }
     expect(goalCompletionGateEngaged(plain)).toBe(false)
     expect(selectGoalCompletionEvidence(plain)).toBeUndefined()
@@ -117,6 +135,7 @@ describe('goal completion gate entry', () => {
     const foreign = {
       state: {
         ...state,
+        deliveries: [],
         verifications: [{ ...state.verifications[0]!, binding: { ...state.verifications[0]!.binding, goalId: otherGoalId } }],
         reviews: [{ ...state.reviews[0]!, binding: { ...state.reviews[0]!.binding, goalId: otherGoalId } }],
       },

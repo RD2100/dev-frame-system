@@ -16,20 +16,26 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { requiredChecksDigest } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
 import type { DevFrameRequiredChecksConfig } from '@deepseek-ai/dsh-experimental-devframe/src/required-checks.ts'
-import { DevFrameReviewId, DevFrameVerificationId } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
+import { DevFrameDeliveryId, DevFrameReviewId, DevFrameVerificationId } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
 import type {
   DevFrameCheckResult,
   DevFrameReviewEventData,
   DevFrameRolePolicyEventData,
+  DevFrameTaskDeliveryEventData,
   DevFrameVerificationEventData,
 } from '@deepseek-ai/dsh-experimental-devframe/src/events.ts'
+import { computeSourceFingerprint } from '@deepseek-ai/dsh-experimental-devframe/src/source-fingerprint.ts'
 import { AcceptanceHash, DevFrameSnapshotId, SourceFingerprint, WorkspaceId } from '@deepseek-ai/dsh-experimental-devframe/shared'
 import { ControllerSessionId, TaskId } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
 import type { GoalBinding } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
+import { WorktreeId } from '@deepseek-ai/dsh-worktree-registry'
+import { TaskId as PluginTaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
+import type { MainTreeIntegrationRecord } from '@deepseek-ai/dsh-experimental-project-controller'
+import { FileRequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe'
 import { createCommittedWorktree, drainWorktreeFixtures, executionFor } from '../../devframe/tests/completion-fixtures.ts'
 import * as commandGoalBinding from '../src/index.ts'
 import { GoalBindingComposition } from '../src/composition.ts'
-import { renderCompletionSuccess } from '../src/command.ts'
+import { renderCompletionSuccess, renderFinalMergeIncomplete } from '../src/command.ts'
 const execFileAsync = promisify(execFile)
 
 const WORKSPACE_ID = WorkspaceId('ws-v14-hostcmd')
@@ -110,6 +116,7 @@ function stubAgent(session: Session): Agent {
 async function boot(config: {
   readonly workspaceId: WorkspaceId
   readonly workspaceRoot?: string
+  readonly gateRows?: readonly MainTreeIntegrationRecord[]
 }): Promise<TestComposition> {
   const ctx = new Context()
   contexts.push(ctx)
@@ -121,21 +128,29 @@ async function boot(config: {
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(GoalService)
-  await ctx.plugin(commandGoalBinding, {
+  const requiredChecksPath = join(storageRoot, 'required-checks.json')
+  const startConfig = {
     ...BOOT_START_CONFIG,
-    requiredChecksPath: join(storageRoot, 'required-checks.json'),
+    requiredChecksPath,
     workspaceId: config.workspaceId,
     ...(config.workspaceRoot === undefined ? {} : { workspaceRoot: config.workspaceRoot }),
-  })
+  }
+  let composition: GoalBindingComposition
+  if (config.gateRows === undefined) {
+    await ctx.plugin(commandGoalBinding, startConfig)
+    composition = Reflect.get(ctx, 'commandGoalBinding') as GoalBindingComposition
+  } else {
+    const resolved = commandGoalBinding.resolveCommandGoalBindingConfig(startConfig)
+    composition = new GoalBindingComposition(ctx, resolved, {
+      requiredChecks: new FileRequiredChecksConfigStore({ path: requiredChecksPath }),
+      goalCompletionIntegrations: () => config.gateRows ?? [],
+      goalCompletionGuard: () => {},
+    })
+  }
   const session = ctx.sessions.create(SessionId(`controller-v14-hostcmd-${bootNumber}`))
   const agent = stubAgent(session)
   ctx.agents.register(agent)
-  return {
-    ctx,
-    agent,
-    session,
-    composition: Reflect.get(ctx, 'commandGoalBinding') as GoalBindingComposition,
-  }
+  return { ctx, agent, session, composition }
 }
 
 /** Execute `/goal-complete` through the same registry boundary as a UI adapter. */
@@ -606,6 +621,121 @@ describe('/goal-complete host command composition', { timeout: 30_000 }, () => {
     await ctx.plugin(GoalService)
     await expect(ctx.plugin(commandGoalBinding, { ...BOOT_START_CONFIG, requiredChecksPath: join(storageRoot, 'required-checks.json'), workspaceId: '' }))
       .rejects.toThrow(/workspaceId/)
+  })
+})
+
+/** One durable integration receipt for the bound task in the gate's reader. */
+function integrationRow(overrides: Partial<MainTreeIntegrationRecord> = {}): MainTreeIntegrationRecord {
+  const now = '2026-09-08T01:00:00.000Z'
+  return {
+    taskId: PluginTaskId('task-v14-hostcmd'),
+    controllerSessionId: SessionId('controller-v14-hostcmd-0'),
+    reviewId: DevFrameReviewId('review-v14-hostcmd'),
+    verificationId: DevFrameVerificationId('verify-v14-hostcmd'),
+    sourcePath: 'C:/wt-v14-hostcmd',
+    targetPath: 'C:/controller-v14-hostcmd',
+    sourceCommit: 'c'.repeat(40),
+    targetHead: 'b'.repeat(40),
+    state: 'applied',
+    appliedHead: 'b'.repeat(40),
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  }
+}
+
+/** One explicit Worker delivery of the bound task's committed output. */
+function deliveryRecord(binding: GoalBinding, workerSessionId: SessionId): DevFrameTaskDeliveryEventData {
+  return {
+    version: 1,
+    deliveryId: DevFrameDeliveryId('delivery-v14-hostcmd'),
+    taskId: TaskId('task-v14-hostcmd'),
+    binding: resultBindingOf(binding),
+    workerSessionId,
+    worktreeId: WorktreeId('tree-v14-hostcmd'),
+    worktreePath: 'C:/wt-v14-hostcmd',
+    sourceCommit: 'c'.repeat(40),
+    sourceFingerprint: binding.sourceFingerprint,
+    snapshotId: binding.snapshotId,
+  }
+}
+
+/** The whole-Goal result tuple re-anchored at the merged controller tree. */
+function mergedBindingOf(binding: GoalBinding, merged: SourceFingerprint) {
+  return {
+    ...resultBindingOf(binding),
+    sourceFingerprint: merged,
+    snapshotId: DevFrameSnapshotId('snapshot-final-merge-v14-hostcmd'),
+  }
+}
+
+describe('/goal-complete final-merge completion gate', { timeout: 30_000 }, () => {
+  it('completes through the whole-Goal contract anchored at the merged tree', async () => {
+    const fixture = await createCommittedWorktree()
+    const test = await boot({
+      workspaceId: WORKSPACE_ID,
+      workspaceRoot: fixture.root,
+      gateRows: [integrationRow({ targetPath: fixture.root, controllerSessionId: SessionId(`controller-v14-hostcmd-${bootNumber + 1}`) })],
+    })
+    const binding = await startBinding(test, fixture.fingerprint)
+    await appendEvidence(test, binding)
+    // The integration moved the controller tree past the start fingerprint.
+    await writeFile(join(fixture.root, 'merged.ts'), 'export const merged = true\n', 'utf8')
+    const { fingerprint: merged } = await computeSourceFingerprint({ worktreePath: fixture.root })
+    const reviewerSessionId = SessionId(`reviewer-v14-hostcmd-${bootNumber}`)
+    const mergedBinding = mergedBindingOf(binding, merged)
+    test.session.append('devframe/task-delivery', deliveryRecord(binding, SessionId('worker-v14-hostcmd')))
+    test.session.append('devframe/verification', {
+      version: 1,
+      verificationId: DevFrameVerificationId('verify-final-merge-v14-hostcmd'),
+      binding: mergedBinding,
+      snapshotId: mergedBinding.snapshotId,
+      status: 'passed',
+      requiredChecks: { config: APPROVED_CONFIG, digest: requiredChecksDigest(APPROVED_CONFIG) },
+      checks: APPROVED_CONFIG.checks.map(check => executionFor(check)),
+    })
+    test.session.append('devframe/review', {
+      version: 1,
+      reviewId: DevFrameReviewId('review-final-merge-v14-hostcmd'),
+      binding: mergedBinding,
+      snapshotId: mergedBinding.snapshotId,
+      reviewerSessionId,
+      policyVersion: POLICY_VERSION,
+      decision: 'pass',
+      findings: [],
+    })
+
+    const execution = await execute(test, '/goal-complete')
+
+    const result = execution.result
+    expect(result.kind, result.text).toBe('success')
+    expect(result.text).toBe(renderCompletionSuccess())
+    const goal = test.ctx.goals.get(test.agent)!
+    expect(goal.phase).toBe('complete')
+    // The binding record keeps its start claim: completion anchored at the
+    // merged tree through the evidence, never by rewriting the authorization.
+    const bindings = await test.composition.bindingStore.load(ControllerSessionId(test.agent.id))
+    expect(bindings.find(record => record.goalId === goal.id)?.sourceFingerprint).toBe(fixture.fingerprint)
+  })
+
+  it('refuses a prepared receipt by the named applied-receipt absence', async () => {
+    const fixture = await createCommittedWorktree()
+    const test = await boot({
+      workspaceId: WORKSPACE_ID,
+      workspaceRoot: fixture.root,
+      gateRows: [integrationRow({ controllerSessionId: SessionId(`controller-v14-hostcmd-${bootNumber + 1}`), state: 'prepared', appliedHead: undefined })],
+    })
+    const binding = await startBinding(test, fixture.fingerprint)
+    await appendEvidence(test, binding)
+
+    const execution = await execute(test, '/goal-complete')
+
+    const result = execution.result
+    if (result.kind !== 'error') throw new Error('expected an error result')
+    expect(result.text).toBe(renderFinalMergeIncomplete(
+      'Goal completion requires the applied integration receipt for task "task-v14-hostcmd"',
+    ))
+    expect(test.ctx.goals.get(test.agent)?.phase).not.toBe('complete')
   })
 })
 

@@ -80,6 +80,25 @@ describe('experimental workspace constraints', () => {
 
 describe('package payload constraints', () => {
   it.each([
+    [{ './request-budget-consumer': './lib/request-budget-consumer.js' }, true],
+    [{ './request-budget-consumer': { types: './lib/types/request-budget-consumer.d.ts' } }, false],
+  ] as const)('requires the request-budget payload only for its runtime export: %j', (exports, included) => {
+    expect(expectedDshPackageFiles({ exports })).toEqual([
+      'lib/index.js', ...(included ? ['lib/request-budget-consumer.js'] : []), 'lib/types/**/*.d.ts',
+    ])
+  })
+  it.each([
+    [{ './completion-consumer': './lib/completion-consumer.js' }, true],
+    [{ './completion-consumer': { default: './lib/completion-consumer.js', types: './lib/types/completion-consumer.d.ts' } }, true],
+    [{ './completion-consumer': './src/completion-consumer.ts' }, false],
+    [{ './completion-consumer': { types: './lib/types/completion-consumer.d.ts' } }, false],
+    [{ './other': './lib/completion-consumer.js' }, false],
+  ] as const)('matches the completion consumer payload to its runtime export: %j', (exports, included) => {
+    expect(expectedDshPackageFiles({ exports })).toEqual([
+      'lib/index.js', ...(included ? ['lib/completion-consumer.js'] : []), 'lib/types/**/*.d.ts',
+    ])
+  })
+  it.each([
     [{ './delivery-consumer': './lib/delivery-consumer.js' }, true],
     [{ './delivery-consumer': { default: './lib/delivery-consumer.js', types: './lib/types/delivery-consumer.d.ts' } }, true],
     [{ './delivery-consumer': './src/delivery-consumer.ts' }, false],

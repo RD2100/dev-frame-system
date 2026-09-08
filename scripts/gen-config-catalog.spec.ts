@@ -18,9 +18,10 @@ function fixture(exported: unknown = { default: './lib/consumer.js' }, source = 
   mkdirSync(join(dir, 'src'), { recursive: true })
   writeFileSync(join(dir, 'package.json'), JSON.stringify({
     name: '@deepseek-ai/dsh-experimental-project-controller',
-    exports: { ...(exported === null ? {} : { './consumer': exported }), './task-consumer': taskExported, './delivery-consumer': './lib/delivery-consumer.js' },
+    exports: { ...(exported === null ? {} : { './consumer': exported }), './task-consumer': taskExported, './delivery-consumer': './lib/delivery-consumer.js', './completion-consumer': './lib/completion-consumer.js' },
   }))
   writeFileSync(join(dir, 'src/delivery-consumer.ts'), '/** Delivery plugin. */\nexport function apply(): void {}\n')
+  writeFileSync(join(dir, 'src/completion-consumer.ts'), '/** Completion plugin. */\nexport function apply(): void {}\n')
   writeFileSync(join(dir, 'src/index.ts'), '/** Main library. */\nexport const main = true\n')
   writeFileSync(join(dir, 'src/task-consumer.ts'), `
 export const inject = ['tools', 'projectController']
@@ -40,20 +41,26 @@ export function apply(_ctx: unknown, config: Config): void { void config }
 }
 
 describe('supplemental plugin config entries', () => {
+  it('requires source for the completion consumer', () => {
+    const { root, dir } = fixture()
+    rmSync(join(dir, 'src/completion-consumer.ts'))
+    expect(() => collectConfigCatalog(root)).toThrow('src/completion-consumer.ts is missing or unreadable')
+  })
   it.each([{ default: './lib/consumer.js' }, './lib/consumer.js'])('retains the main entry and catalogs the exported consumer: %j', (exported) => {
     const { root } = fixture(exported)
     const entries = collectConfigCatalog(root)
     expect(entries.map(entry => [entry.pkg, entry.kind])).toEqual([
       ['@deepseek-ai/dsh-experimental-project-controller', 'library'],
+      ['@deepseek-ai/dsh-experimental-project-controller/completion-consumer', 'no-config'],
       ['@deepseek-ai/dsh-experimental-project-controller/consumer', 'config'],
       ['@deepseek-ai/dsh-experimental-project-controller/delivery-consumer', 'no-config'],
       ['@deepseek-ai/dsh-experimental-project-controller/task-consumer', 'no-config'],
     ])
-    expect(entries[1]).toMatchObject({
+    expect(entries[2]).toMatchObject({
       entry: 'packages/experimental/project-controller/src/consumer.ts',
       inject: ['tools'], schemaKeys: ['requiredChecksPath'],
     })
-    expect(entries[1]?.pastes?.[0]?.text).toContain('requiredChecksPath: string')
+    expect(entries[2]?.pastes?.[0]?.text).toContain('requiredChecksPath: string')
   })
 
   it.each([null, { types: './lib/types/task-consumer.d.ts' }, './lib/consumer.js'])('rejects an absent or mismatched task-consumer runtime: %j', (exported) => {

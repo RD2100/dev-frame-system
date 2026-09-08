@@ -15,6 +15,7 @@
     { "path": "../../interaction/commands" },
     { "path": "../../session/session-projection" },
     { "path": "../agent-evidence" },
-    { "path": "../devframe" }
+    { "path": "../devframe" },
+    { "path": "../project-controller" }
   ]
 }
