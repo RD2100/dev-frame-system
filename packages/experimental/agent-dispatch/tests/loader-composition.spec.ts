@@ -11,7 +11,7 @@
  */
 
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -20,7 +20,8 @@ import { Context } from '@deepseek-ai/cordis'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import type { ToolExecutionResult } from '@deepseek-ai/dsh-tools'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { LlmAdapter, ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
@@ -45,6 +46,20 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 let root: string | undefined
 const contexts: Context[] = []
 
+/** Deterministic answers keep the recovery test on the real loop without a provider call. */
+class RecoveryAdapter extends LlmAdapter {
+  override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+    return Promise.resolve({ provider, id: model, name: model })
+  }
+
+  async *stream(): AsyncIterable<StreamChunk> {
+    yield { type: 'block-start', index: 0, blockType: 'text' }
+    yield { type: 'text-delta', index: 0, text: 'review saved' }
+    yield { type: 'block-end', index: 0, block: { type: 'text', text: 'review saved' } }
+    yield { type: 'finish', reason: { kind: 'stop' } }
+  }
+}
+
 afterEach(async () => {
   await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
   if (root !== undefined) await rm(root, { recursive: true, force: true })
@@ -56,22 +71,22 @@ function git(cwd: string, ...args: string[]): Promise<string> {
   return new Promise((resolvePromise, rejectPromise) => {
     execFile('git', args, { cwd, windowsHide: true }, (error, stdout, stderr) => {
       if (error !== null) {
-        rejectPromise(new Error(`git ${args.join(' ')} failed: ${error.message} stderr=${String(stderr ?? '')}`))
+        rejectPromise(new Error(`git ${args.join(' ')} failed: ${error.message} stderr=${stderr ?? ''}`))
       } else {
-        resolvePromise(String(stdout))
+        resolvePromise(stdout)
       }
     })
   })
 }
 
 /** Write the cordis.yml under test: the full stack plus this package's namespace mount face. */
-async function writeCompositionConfig(options?: { bootstrap?: boolean }): Promise<string> {
+async function writeCompositionConfig(options?: { bootstrap?: boolean; compression?: 'none' | 'zstd' }): Promise<string> {
   const dispatchConfig: string[] = options?.bootstrap === true
     ? [
-        '  config:',
-        '    bootstrap: true',
-        `    checksLedgerPath: ${JSON.stringify(join(root as string, 'checks-ledger.json'))}`,
-      ]
+      '  config:',
+      '    bootstrap: true',
+      `    checksLedgerPath: ${JSON.stringify(join(root as string, 'checks-ledger.json'))}`,
+    ]
     : []
   const configPath = join(root as string, 'cordis.yml')
   await writeFile(configPath, [
@@ -80,7 +95,7 @@ async function writeCompositionConfig(options?: { bootstrap?: boolean }): Promis
     "- name: '@deepseek-ai/dsh-session-persistence-jsonl'",
     '  config:',
     `    root: ${JSON.stringify(join(root as string, 'sessions'))}`,
-    '    compression: none',
+    `    compression: ${options?.compression ?? 'none'}`,
     '    writeBatchMaxDelayMs: 1',
     "- name: '@deepseek-ai/dsh-system-prompt'",
     "- name: '@deepseek-ai/dsh-tools'",
@@ -182,6 +197,77 @@ function execute(ctx: Context, name: string, args: unknown, agent: Agent): Promi
 }
 
 describe('agent dispatch through a real Loader composition', () => {
+  it('restores a compressed child history through a cold followup without repeating its briefing', async () => {
+    root = await mkdtemp(join(tmpdir(), 'dsh-agent-dispatch-loader-recovery-'))
+    const repo = join(root, 'repo')
+    await mkdir(repo)
+    await git(root, 'init', '-b', 'main', repo)
+    await git(repo, 'config', 'user.email', 'agent-dispatch-loader@test.local')
+    await git(repo, 'config', 'user.name', 'Agent Dispatch Loader Tests')
+    await git(repo, 'commit', '--allow-empty', '-m', 'init')
+    const configPath = await writeCompositionConfig({ compression: 'zstd' })
+    const first = await loadComposition(configPath)
+    first.llm.registerAdapter(['mock'], new RecoveryAdapter())
+    const workspace = await first.workspaceRegistry.create(repo)
+    const tree = await first.worktreeRegistry.create({
+      workspaceId: workspace.id,
+      path: join(root, 'wt-lead'),
+      branch: 'feature/lead',
+    })
+    const controller = (await first.agents.create({
+      sessionId: SessionId('loader-controller'),
+      meta: { cwd: repo },
+      agentOptions: { provider: 'mock', model: 'mock' },
+    })).agent
+    await first.agentBindings.bind({ agentId: controller.id, role: 'controller' })
+    const request = {
+      role: 'lead', taskId: 'task-1', pluginId: 'plugin-a',
+      worktreeId: String(tree.id), childId: 'dispatch-lead',
+    }
+    const dispatched = await execute(first, 'agent_dispatch', { ...request, prompt: 'original briefing' }, controller)
+    expect(dispatched.isError, textOf(dispatched)).toBe(false)
+    await expect.poll(async () => (await first.agentDispatch.taskAck(controller, TaskId('task-1')))?.state)
+      .toBe('terminal')
+    const childId = SessionId('dispatch-lead')
+    const child = first.agents.get(childId)!
+    const location = first.sessionPersistence.locate(child.session.header)!
+    expect(location.path).toMatch(/\.zstd$/)
+    await first.fiber.dispose()
+    contexts.splice(contexts.indexOf(first), 1)
+    expect((await readFile(location.path)).subarray(0, 4)).toEqual(Buffer.from([0x28, 0xb5, 0x2f, 0xfd]))
+
+    const second = await loadComposition(configPath)
+    second.llm.registerAdapter(['mock'], new RecoveryAdapter())
+    const before = await second.sessionPersistence.load(childId)
+    expect(before.events.some(event => event.type === 'turn/end')).toBe(true)
+    expect(second.agents.get(childId)).toBeUndefined()
+    const resumedController = (await second.agents.resume({ resumeSessionId: controller.id })).agent
+    const followed = await execute(second, 'agent_dispatch', {
+      ...request, followup: true, prompt: 'continue from the saved review',
+    }, resumedController)
+    expect(followed.isError, textOf(followed)).toBe(false)
+    expect(followed.value).toMatchObject({ childId, reused: true, followup: true })
+    const recovered = second.agents.get(childId)!
+    expect(recovered).not.toBe(child)
+    expect(recovered.session.header.cwd).toBe(tree.path)
+    expect(second.worktreeRegistry.list(workspace.id).find(row => row.id === tree.id)?.lockedBy).toBe(childId)
+    const previousEnds = before.events.filter(event => event.type === 'turn/end').length
+    await expect.poll(async () => {
+      const persisted = await second.sessionPersistence.load(childId)
+      return persisted.events.filter(event => event.type === 'turn/end').length
+    }).toBe(previousEnds + 1)
+    await expect(second.agentDispatch.taskAck(resumedController, TaskId('task-1')))
+      .resolves.toMatchObject({ state: 'terminal', completed: true, durable: true })
+    const after = await second.sessionPersistence.load(childId)
+    expect(after.events.slice(0, before.events.length)).toEqual(before.events)
+    const insertions = after.events
+      .filter(event => event.type === 'agent/inbox/spliced')
+      .flatMap(event => event.data.inserted)
+    expect(insertions.filter(message => JSON.stringify(message).includes('original briefing'))).toHaveLength(1)
+    expect(insertions.filter(message => JSON.stringify(message).includes('continue from the saved review'))).toHaveLength(1)
+    expect(after.events.filter(event => event.type === 'request/header')).toHaveLength(2)
+  })
+
   it('registers the tool on the namespace face and shows it per role policy', async () => {
     root = await mkdtemp(join(tmpdir(), 'dsh-agent-dispatch-loader-'))
     const repo = join(root, 'repo')
@@ -223,7 +309,7 @@ describe('agent dispatch through a real Loader composition', () => {
       prompt: 'build it',
     }, controller)
     expect(lead.isError, `lead dispatch failed: ${textOf(lead)}`).toBe(false)
-    expect(String((lead.value as { childId: string }).childId)).toBe('dispatch-lead')
+    expect((lead.value as { childId: string }).childId).toBe('dispatch-lead')
     const row = ctx.worktreeRegistry.list(workspace.id).find(entry => String(entry.id) === String(tree.id))
     expect(String(row?.lockedBy)).toBe('dispatch-lead')
 
@@ -278,7 +364,7 @@ describe('agent dispatch through a real Loader composition', () => {
     // Opt-in deployment: the bootstrap config turns the host bootstrap on;
     // the composition must mount the project controller for it, and the
     // approved-digest registration runs against the real ledger.
-    const formal = await loadComposition(await writeCompositionConfig({ bootstrap: true }), ctx => {
+    const formal = await loadComposition(await writeCompositionConfig({ bootstrap: true }), (ctx) => {
       ctx.provide('projectController', { find: () => undefined } as never)
     })
     expect(formal.projectRun).toBeDefined()
