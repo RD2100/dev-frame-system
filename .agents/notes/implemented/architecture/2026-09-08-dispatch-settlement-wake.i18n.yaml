@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-08-dispatch-settlement-wake.md
-2026-09-08-dispatch-settlement-wake.md: aec7224cea2e1c6bfb8d136b5f26dd104d20dafe
-2026-09-08-dispatch-settlement-wake.zh.md: eefb8cdc75369e68b7287d77e68aaf0affd0d2b9
+2026-09-08-dispatch-settlement-wake.md: d9c31e870555c374e069b0020bac521aeaf050f2
+2026-09-08-dispatch-settlement-wake.zh.md: 1edf329c280b81b15b87990f7b68059b89c68251

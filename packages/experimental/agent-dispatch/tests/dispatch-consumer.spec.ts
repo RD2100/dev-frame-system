@@ -320,6 +320,33 @@ describe('agent dispatch tool behavior over the real engine', () => {
     expect(JSON.stringify(followups[0])).toContain('lead-review-c14: review the delivered work now.')
   })
 
+  it('refuses a followup without instructions instead of silently reusing the child', async () => {
+    const { controller, createWorktree, execute } = await setup({
+      'dispatch-lead': ['plugin-a'],
+    })
+    const tree = await createWorktree('wt-followup-bare', 'feature/followup-bare')
+    await execute('agent_dispatch', {
+      role: 'lead',
+      taskId: 'task-1',
+      pluginId: 'plugin-a',
+      worktreeId: tree.id,
+    }, controller)
+
+    // followup: true with no prompt is a caller mistake: it fails loud
+    // instead of degrading to a no-op reuse that hides the missing
+    // instructions behind an honest-looking receipt.
+    const bare = await execute('agent_dispatch', {
+      role: 'lead',
+      taskId: 'task-1',
+      pluginId: 'plugin-a',
+      worktreeId: tree.id,
+      followup: true,
+    }, controller)
+    expect(bare.isError).toBe(true)
+    expect(textOf(bare)).toContain('passed followup: true without a prompt')
+    expect(textOf(bare)).toContain('dispatch without followup')
+  })
+
   it('carries the controller-to-lead-to-worker chain through the model face', async () => {
     const { ctx, controller, createWorktree, execute } = await setup({
       // Approved sets are keyed by durable identities: the configured lead id
