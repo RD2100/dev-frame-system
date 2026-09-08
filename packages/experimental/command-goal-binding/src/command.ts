@@ -66,6 +66,18 @@ export const WORKTREE_REQUIRED_TEXT
   = '/goal-complete needs a worktree path: pass "/goal-complete <worktreePath>" or configure workspaceRoot on the plugin.'
 
 /**
+ * Stable data error: the final-merge completion gate is engaged — an
+ * integration receipt or whole-Goal record exists for the goal — but the
+ * evidence is incomplete. The rendered text carries the named absence so the
+ * caller knows which gate to finish.
+ * @param reason - the named absence the evidence selector threw.
+ * @returns The stable refusal text without goal identities.
+ */
+export function renderFinalMergeIncomplete(reason: string): string {
+  return `The goal's work has entered the controller tree, so completion requires the final-merge evidence and it is incomplete: ${reason} Finish every applied integration receipt, the whole-Goal verification and review of the merged result, and the independent review before /goal-complete.`
+}
+
+/**
  * Parse the raw text following `/goal-complete`. The whole trimmed remainder
  * is one worktree path (paths may contain spaces); an empty remainder selects
  * the configured fallback.
