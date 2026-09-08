@@ -132,16 +132,17 @@ export function deliverToAgent(agent: Agent, message: UserMessage): void {
  * gets, because the engine ships no parent notification.
  *
  * The account is warranted, not assumed: the child's own log must hold a
- * `turn/end` (the finished turn), and that record must flush durably
- * before the notice is delivered — the same checkpoint boundary the
- * acknowledgment face uses. Dedupe is layered: an in-process delivery
- * claim keyed by child+turn identity stops concurrent watches (a duplicate
- * dispatch or a re-mount) from double-delivering, and the parent's own
- * durable facts — the logged notice, or the queued one still parked in its
- * inbox — stop re-delivery after a process restart. Delivery failure is
- * logged and dropped: retaining the child to retry a notice would pin
- * the parent, and the child's own session log stays the durable record
- * either way.
+ * `turn/end` — any terminal ending, completed or failed, because a
+ * failure-ended turn must still wake the chain — and that record must
+ * flush durably before the notice is delivered — the same checkpoint
+ * boundary the acknowledgment face uses. Dedupe is layered: an in-process
+ * delivery claim keyed by child+turn identity stops concurrent watches (a
+ * duplicate dispatch or a re-mount) from double-delivering, and the
+ * parent's own durable facts — the logged notice, or the queued one still
+ * parked in its inbox — stop re-delivery after a process restart. Delivery
+ * failure is logged and dropped: retaining the child to retry a notice
+ * would pin the parent, and the child's own session log stays the durable
+ * record either way.
  * @param ctx - The host context the status events fire on.
  * @param sessions - The checkpoint boundary the notice's durability rides.
  * @param parent - The exact live parent the child was dispatched for.
@@ -176,14 +177,22 @@ export function watchChildSettlement(
       .some(message => matches(message.source))
     return parked
   }
+  // The watch dies with its host context: while a flush window is in flight
+  // the host can be disposed (the parent chain tearing down), and the revoked
+  // context's service registry must not be touched afterwards. The dispose
+  // state is the watcher's own effect, so the post-flush gate below is exact,
+  // and the logger is borrowed once at mount so no post-flush path — including
+  // the owned catch — ever performs a registry lookup on a dead context.
+  const logger = ctx.logger
+  let active = true
+  ctx.effect(() => () => { active = false }, 'agent-dispatch.settlementWatch')
   ctx.on('agent/status', (payload: { agent: Agent; status: string }) => {
     if (payload.agent !== child) return
     if (payload.status !== 'idle') return
     // The settlement must name a real finished turn: read the child's log
     // for its latest `turn/end` and report once per turn identity.
     const turnEnd = child.session.snapshotEvents()
-      .filter(event => event.type === 'turn/end')
-      .at(-1)
+      .findLast(event => event.type === 'turn/end')
     if (turnEnd === undefined) return
     const turn = (turnEnd.data as { turn?: unknown }).turn
     const turnIdentity = `${String(turnEnd.seq)}:${String(typeof turn === 'number' ? turn : '')}`
@@ -209,26 +218,40 @@ export function watchChildSettlement(
         } catch {
           durable = false
         }
+        // The flush window may have outlived this watch: a disposed host has
+        // revoked its service registry, so everything after the await is
+        // gated on the watch's own dispose state. The gate and the delivery
+        // below are one synchronous block — no await in between — so the
+        // state cannot flip mid-block.
+        if (!active) return
         if (!durable) {
-          ctx.logger.warn(
+          logger.warn(
             `agent-dispatch: settlement notice for child "${String(child.id)}" turn ${String(turn ?? '?')} `
             + 'was withheld: the turn\'s end record did not flush durably',
           )
           return
         }
-        // The flush window may have outlived the parent or let another
-        // watch deliver: re-check both against the same durable facts
-        // before the delivery.
+        // The flush window may have let another watch deliver: re-check the
+        // parent's durable facts before the delivery.
         if (ctx.agents.get(parent.id) !== parent) return
         if (parentAlreadyNoticed(turnIdentity)) return
         try {
           deliverToAgent(parent, settlementNotice(taskId, child.id, typeof turn === 'number' ? turn : undefined, turnIdentity))
         } catch (error: unknown) {
-          ctx.logger.warn(
+          logger.warn(
             `agent-dispatch: settlement notice for child "${String(child.id)}" was not delivered to its parent: `
             + errorChain(error),
           )
         }
+      } catch (error: unknown) {
+        // Owned convergence for the race the dispose gate cannot close (a
+        // parent or host dying inside the synchronous block): the notice is
+        // dropped, the drop is logged through the borrowed logger, and the
+        // claim is released in the finally — never an unhandled rejection.
+        logger.warn(
+          `agent-dispatch: settlement watch for child "${String(child.id)}" turn ${String(turn ?? '?')} stopped delivering: `
+          + errorChain(error),
+        )
       } finally {
         claims.delete(turnIdentity)
       }

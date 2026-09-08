@@ -53,6 +53,13 @@ class TextAdapter extends LlmAdapter {
   }
 }
 
+/** A failing adapter: the model stream always throws, so the turn ends with the structured error reason. */
+class FailingAdapter extends LlmAdapter {
+  async * stream(): AsyncIterable<StreamChunk> {
+    throw new Error('child model failure')
+  }
+}
+
 /** Poll until the probe returns a truthy value or the budget expires. */
 async function until(probe: () => unknown, budgetMs = 5_000): Promise<void> {
   const deadline = Date.now() + budgetMs
@@ -841,6 +848,97 @@ it('withholds the settlement notice when the turn end never flushes durably', as
   expect(controller.session.snapshotEvents().some(event =>
     event.type === 'user/message'
     && (event.data as { source?: DispatchSettledMessageSource }).source?.kind === 'dispatch-settled')).toBe(false)
+})
+
+it('does not deliver the settlement notice when the watch\'s host is disposed during the flush window', async () => {
+  const h = await harness({ 'dispatch-lead': ['plugin-a'] })
+  activeHarnesses.push(h)
+  h.ctx.llm.registerAdapter(['mock'], new TextAdapter())
+  ctxOnSessionFlush(h.ctx)
+  const controller = (await h.ctx.agents.create({
+    sessionId: SessionId('dispose-controller'),
+    meta: { cwd: join(h.root, 'repo') },
+    agentOptions: { provider: 'mock', model: 'mock' },
+  })).agent
+  await h.ctx.agentBindings.bind({ agentId: controller.id, role: 'controller' })
+  const tree = await h.createWorktree('wt-dispose', 'feature/dispose')
+  // Park the settlement watch inside its flush window: the barrier resolves
+  // only after the host context has been disposed, so the post-flush code
+  // runs against a revoked context — the exact race that used to escape as an
+  // unhandled rejection.
+  const barrier = Promise.withResolvers<boolean>()
+  let flushEntered = false
+  const sessions = h.ctx.sessions as unknown as { flush: (session: unknown) => Promise<boolean> }
+  sessions.flush = async () => {
+    flushEntered = true
+    // Resolving `true` (not consulting the real backend) drives the watch past
+    // the durability verdict straight into the post-flush delivery gate.
+    return await barrier.promise
+  }
+  await h.dispatch(controller, {
+    cwd: tree.path,
+    role: 'lead',
+    taskId: TaskId('dispose-task'),
+    pluginId: PluginId('plugin-a'),
+    worktree: { worktreeId: tree.id, worktreePath: tree.path, branch: tree.branch },
+  }, { sessionId: SessionId('dispose-lead'), prompt: 'child briefing: do the work', agentOptions: { provider: 'mock', model: 'mock' } })
+
+  const child = h.ctx.agents.get(SessionId('dispose-lead'))
+  await until(() => child!.session.snapshotEvents().some(event =>
+    event.type === 'turn/end'
+    && (event.data as { reason?: { kind?: string } }).reason?.kind === 'completed'))
+  await until(() => flushEntered)
+
+  await h.dispose()
+  activeHarnesses.splice(activeHarnesses.indexOf(h), 1)
+  barrier.resolve(true)
+
+  // Give the parked continuation every chance to run and to reject: a
+  // regression here surfaces as an unhandled rejection that fails this run.
+  await new Promise(resolve => setTimeout(resolve, 300))
+  expect(controller.session.snapshotEvents().some(event =>
+    event.type === 'user/message'
+    && (event.data as { source?: DispatchSettledMessageSource }).source?.kind === 'dispatch-settled')).toBe(false)
+})
+
+it('wakes the parent on a failed child turn too — any terminal turn/end settles', async () => {
+  const h = await harness({ 'dispatch-lead': ['plugin-a'] })
+  activeHarnesses.push(h)
+  // The child's model stream always fails: the turn still ends (reason kind
+  // error), and that terminal record settles — a failure-ended turn must
+  // wake the parent or a failing chain would stall without any event.
+  h.ctx.llm.registerAdapter(['mock'], new FailingAdapter())
+  ctxOnSessionFlush(h.ctx)
+  const controller = (await h.ctx.agents.create({
+    sessionId: SessionId('failed-wake-controller'),
+    meta: { cwd: join(h.root, 'repo') },
+    agentOptions: { provider: 'mock', model: 'mock' },
+  })).agent
+  await h.ctx.agentBindings.bind({ agentId: controller.id, role: 'controller' })
+  const tree = await h.createWorktree('wt-failed-wake', 'feature/failed-wake')
+  await h.dispatch(controller, {
+    cwd: tree.path,
+    role: 'lead',
+    taskId: TaskId('failed-wake-task'),
+    pluginId: PluginId('plugin-a'),
+    worktree: { worktreeId: tree.id, worktreePath: tree.path, branch: tree.branch },
+  }, { sessionId: SessionId('failed-wake-lead'), prompt: 'child briefing: do the work', agentOptions: { provider: 'mock', model: 'mock' } })
+
+  const child = h.ctx.agents.get(SessionId('failed-wake-lead'))
+  await until(() => child!.session.snapshotEvents().some(event =>
+    event.type === 'turn/end'
+    && (event.data as { reason?: { kind?: string } }).reason?.kind === 'error'))
+  const parentNotices = (): DispatchSettledMessageSource[] => [
+    ...controller.session.snapshotEvents()
+      .filter(event => event.type === 'user/message')
+      .map(event => (event.data as { source?: DispatchSettledMessageSource }).source),
+    ...controller.inbox.nextTurn.map(message => message.source),
+  ].filter((source): source is DispatchSettledMessageSource =>
+    source?.kind === 'dispatch-settled' && source.senderSessionId === 'failed-wake-lead')
+  await until(() => parentNotices().length >= 1)
+  await new Promise(resolve => setTimeout(resolve, 300))
+  expect(parentNotices()).toHaveLength(1)
+  expect(parentNotices()[0]!.turnIdentity).toMatch(/^\d+:1$/)
 })
 
 it('delivers an explicit followup to an existing child without re-creating, and a fresh creation ignores one', async () => {
