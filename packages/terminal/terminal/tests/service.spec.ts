@@ -153,6 +153,56 @@ describe('TerminalSessionService backend registry', () => {
 })
 
 describe('TerminalSessionService ownership and lifecycle', () => {
+  it('drains unpublished setup through backend close without touching another owner', async () => {
+    const ctx = await harness()
+    const owner = stubAgent(ctx, 'drained')
+    const foreign = stubAgent(ctx, 'retained')
+    ctx.agents.register(owner)
+    ctx.agents.register(foreign)
+    const setup = Promise.withResolvers<TerminalBackendSession>()
+    const session = new StubSession()
+    session.closeGate = Promise.withResolvers<undefined>()
+    ctx.terminals.registerBackend({ type: 'pending', spawn: () => setup.promise })
+    const b = backend()
+    ctx.terminals.registerBackend(b.provider)
+    await ctx.terminals.spawn(foreign, { type: 'stub' })
+    const pending = ctx.terminals.spawn(owner, { type: 'pending' })
+    const rejected = expect(pending).rejects.toMatchObject({ code: 'OWNER_NOT_LIVE' })
+    let finished = false
+    const drain = ctx.terminals.drainOwned(owner).then(() => { finished = true })
+    setup.resolve(session)
+    await expect.poll(() => session.closed.length).toBe(1)
+    expect(finished).toBe(false)
+    expect(ctx.terminals.hasOwnerActivity(owner)).toBe(true)
+    expect(b.sessions[0]?.closed).toEqual([])
+    expect(() => ctx.terminals.reopenOwned(owner)).toThrow('not quiescent and live')
+    session.closeGate.resolve(undefined)
+    await Promise.all([rejected, drain])
+    expect(ctx.terminals.hasOwnerActivity(owner)).toBe(false)
+    await expect(ctx.terminals.spawn(owner, { type: 'stub' })).rejects.toMatchObject({ code: 'OWNER_NOT_LIVE' })
+    ctx.terminals.reopenOwned(owner)
+    await ctx.terminals.spawn(owner, { type: 'stub' })
+    await ctx.terminals.drainOwned(owner)
+    await ctx.terminals.drainOwned(foreign)
+    await ctx.fiber.dispose()
+  })
+
+  it('retains a failed backend close for owner drain retry', async () => {
+    const ctx = await harness()
+    const owner = stubAgent(ctx, 'retry')
+    ctx.agents.register(owner)
+    const b = backend()
+    ctx.terminals.registerBackend(b.provider)
+    await ctx.terminals.spawn(owner, { type: 'stub' })
+    b.sessions[0]!.rejectClose = true
+    await expect(ctx.terminals.drainOwned(owner)).rejects.toThrow('failed to clean up PTY lifecycle')
+    expect(ctx.terminals.hasOwnerActivity(owner)).toBe(true)
+    b.sessions[0]!.rejectClose = false
+    await ctx.terminals.drainOwned(owner)
+    expect(ctx.terminals.hasOwnerActivity(owner)).toBe(false)
+    await ctx.fiber.dispose()
+  })
+
   it('publishes only after spawn and fences every operation to the exact owner', async () => {
     const ctx = await harness()
     const b = backend()
@@ -315,7 +365,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     }
     const disposal = scope === 'owner' ? internal.disposeOwned(owner) : internal.disposeAll()
     await expect(disposal).rejects.toThrow('failed to clean up PTY lifecycle')
-    expect(ctx.terminals.hasOwnerActivity(owner)).toBe(false)
+    expect(ctx.terminals.hasOwnerActivity(owner)).toBe(scope === 'owner')
   })
 
   it.each([

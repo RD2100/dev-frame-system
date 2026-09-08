@@ -16,6 +16,10 @@
     { "path": "../../session/session-projection" },
     { "path": "../agent-evidence" },
     { "path": "../devframe" },
-    { "path": "../project-controller" }
+    { "path": "../project-controller" },
+    { "path": "../../subagent/subagent" },
+    { "path": "../../terminal/terminal" },
+    { "path": "../../workspace/workspace" },
+    { "path": "../../workflow/worktree-registry" }
   ]
 }

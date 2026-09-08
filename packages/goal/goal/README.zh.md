@@ -68,6 +68,8 @@ goal 经历四种持久 phase——`active`、`paused`、`blocked`、`complete`�
 
 pause、complete、block 和 clear 都会停用续行。block 是唯一保留策略自有 lower-kebab-case 代码与自由文本说明的 phase，因此提供方限制、预算耗尽、执行错误与请求人工输入共用一种持久 phase，而不是扩增生命周期状态。resume 只在 Round 上限仍有剩余容量时接受已停止的 goal，或 active 但已停用续行的 goal，并清除任何先前的 blocker reason。已完成的 goal 接受完成回执：`recordReceipt` 携带该完成 goal 的精确 `{ id, revision }` 与至少一条 evidence 条目（`kind`、`summary`、`at`、可选 `ref`），把回执作为 `goal/change` 事件追加，并保持 phase 与 revision 不变。
 
+需要在续行前持久化授权的宿主使用 `prepareResume(agent, ref)`。它记录恢复后的 active 阶段，但保持续行停用；一次性的 `activate` 能力先验证同一活跃 Agent 和版本，再提交同步资源准备并启用续行。停用、其他 Goal 变更或会话重启会使该能力失效。持久化失败时，恢复后的阶段仍为 active，但续行保持停用。
+
 ### 什么会保留，什么不会
 
 每项被接受的变更都会持久记录到会话日志——goal 状态的唯一存储——因此 goal 状态绝不依赖临时消息投递。会话 resume 或 fork 后，goal、其 phase、其 revision 与已准入 Round 数量都仍然存在。自动续行是例外：任何会话开始边界之后，`active` 的 goal 都会被停用续行——在有人显式 resume 之前，agent 不会自行继续。

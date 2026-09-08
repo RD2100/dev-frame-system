@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-08-command-goal-binding-stop-chain-composition.md
-2026-09-08-command-goal-binding-stop-chain-composition.md: 86508c462b68ce050f202c033a952f79f582843e
-2026-09-08-command-goal-binding-stop-chain-composition.zh.md: 2ac1b7848038faf4616941698e54ed708de39197
+2026-09-08-command-goal-binding-stop-chain-composition.md: 6d5f92c951a520e601037efebc25e5d6e2568938
+2026-09-08-command-goal-binding-stop-chain-composition.zh.md: 394489438a8d29d8cdb754dbe99ef97b491822a2

@@ -19,7 +19,7 @@ import {
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import { AssistantOutputFold, settleRunResult, subprocessRunHandle } from '@deepseek-ai/dsh-subagent'
+import { AssistantOutputFold, settleRunResult, subprocessRunHandle, SubagentStartupCleanupError } from '@deepseek-ai/dsh-subagent'
 import type { SubagentResult, SubagentRun, SubagentStartRequest, SubagentStopReason } from '@deepseek-ai/dsh-subagent'
 import type { SubprocessHandle, SubprocessOutcome, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 
@@ -527,11 +527,14 @@ export async function startAcpRun(request: SubagentStartRequest, spec: AcpRunSpe
         ...(processOutcome === undefined ? {} : { outcome: processOutcome }),
       }, cleanupError)
       if (startup.kind === 'cancelled') {
-        throw new AggregateError([cleanupFailure], cleanupFailure.message)
+        throw new SubagentStartupCleanupError(
+          [cleanupFailure], cleanupFailure.message, () => disposeAcpChild(child, spec.disposeEofGraceMs),
+        )
       }
-      throw new AggregateError(
+      throw new SubagentStartupCleanupError(
         [startup.failure, cleanupFailure],
         `${startup.failure.message}; ${cleanupFailure.message}`,
+        () => disposeAcpChild(child, spec.disposeEofGraceMs),
       )
     }
     if (startup.kind === 'cancelled') {

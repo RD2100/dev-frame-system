@@ -31,6 +31,10 @@
     "@deepseek-ai/dsh-goal": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-session-projection": "workspace:^",
+    "@deepseek-ai/dsh-subagent": "workspace:^",
+    "@deepseek-ai/dsh-terminal": "workspace:^",
+    "@deepseek-ai/dsh-workspace": "workspace:^",
+    "@deepseek-ai/dsh-worktree-registry": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^"
   },
   "devDependencies": {
@@ -39,12 +43,15 @@
     "@deepseek-ai/dsh-commands": "workspace:^",
     "@deepseek-ai/dsh-experimental-agent-evidence": "workspace:^",
     "@deepseek-ai/dsh-experimental-devframe": "workspace:^",
-    "@deepseek-ai/dsh-experimental-project-controller": "workspace:^",
     "@deepseek-ai/dsh-experimental-project-contracts": "workspace:^",
+    "@deepseek-ai/dsh-experimental-project-controller": "workspace:^",
     "@deepseek-ai/dsh-goal": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:^",
     "@deepseek-ai/dsh-session-projection": "workspace:^",
+    "@deepseek-ai/dsh-subagent": "workspace:^",
+    "@deepseek-ai/dsh-terminal": "workspace:^",
+    "@deepseek-ai/dsh-workspace": "workspace:^",
     "@deepseek-ai/dsh-worktree-registry": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^"
   }

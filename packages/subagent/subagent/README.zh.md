@@ -95,6 +95,8 @@ kind: "package-reference"
 
 ### 所有权与不变式
 
+服务从提供方启动开始保留一次性运行的所有权，直到运行成功释放资源。`hasOwnerActivity(parent)` 包括尚未完成的启动，以及结果已完成但资源仍未关闭的运行。`drainOwnedRuns(parent)` 关闭该确切 parent 的新运行入口，取消待完成的启动，并等待资源释放，不会停止其他 parent。释放失败的运行仍可见，以便重试；如果启动清理的聚合错误没有提供方重试能力，则始终保持未解决状态。host 授权恢复后，只有全部保留运行均已释放资源，才能调用 `reopenOwnedRuns(parent)`。
+
 - **发布即边界**——发布前提供方拥有设置并须在失败时回滚；发布后调用方拥有运行并须 dispose（资源释放）它。
 - **注册受 effect 作用域约束**——移除提供方会阻止新启动，但绝不撤销已接受的运行。
 - **Agent 消息权限基于确切相邻关系**——`sendMessage()` 要求确切在线 sender；每个 sender 都可以指定直接可继续 child，只有具备驻留可继续 Activation 的 sender 可以指定自己的直接 parent。

@@ -43,6 +43,8 @@ kind: "package-reference"
 
 ### 稳定拒绝
 
+启用 `stopChain` 的恢复要求同时接入写入锁获取与资源准备。适配器缺失或前置条件失败时，已停止的 Goal 保持不变。日志刷新期间，恢复后的原生 Goal 保持续行停用，绑定存储保持 `ambiguous`；只有持久绑定证据和成功的资源提交才授权续行。后续失败关闭准入，并在持久化仍可用时记录 `needs_attention`。日志锁存失败会阻止纠正性写入，并报告记账未完成；新会话仍停用续行，需要再次显式恢复。
+
 可预期的拒绝都是带固定文本的直接命令错误。启动拒绝：缺少 objective、config 缺少 `workspaceRoot`（启动行无法在 objective 之外无歧义地给出 worktree）、以及已有未完成的当前 goal。恢复拒绝：命令名后带意外输入、没有当前 goal、goal 已完成、以及会话日志 projection 与绑定存储中都没有绑定记录。停止拒绝（启用 `stopChain` 时）：命令名后带意外输入、没有当前 goal、没有绑定记录、停止链已在运行中的第二次调用、以及已经 stopped 的绑定。一次未确认的停止——未解决的作业或进程、缺失的活跃 agent 身份、未接线的释放钩子、不可验证的项目树、或缺失的作业注册表——返回稳定的 needs-attention 错误，逐一列出剩余资源（例如 `job:<id>: timeout` 或 `writer:release: operation_failed`），报告 writer 仍被持有，并在项目树无法验证时附加 inventory 附注；该流程保持可重入，重复停止会重新进入 drain 或 release，而不是被拒绝。完成拒绝：没有当前 goal、该 goal 没有完成绑定、没有归属的验证证据、goal 已完成、projection 重放失败已锁存、以及命令行与配置都未给出 worktree 路径。被拒绝的准入会指明其阶段——`source-fingerprint`、`required-checks` 或 `review`——但不暴露 goal id 或 revision。结构性错误（`GoalBindingError`、`SourceFingerprintError`、`RequiredChecksError`、`DevFramePersistenceError`）不会被捕获：它们使分发失败，适配器会报告命令失败。
 
 评级为 fail 的任务告警也会报告修复准入。同一告警重试会复用持久化回执，重启后仍然如此；项目负评消耗同一 Goal 的额度。`repairLimit` 默认为 2。人类授权的 resume 不会重置这项记账，该 Goal 的所有消费方必须使用一致的上限。参见 [DevFrame 修复契约](../devframe/README.zh.md#bound-correction-rounds)。

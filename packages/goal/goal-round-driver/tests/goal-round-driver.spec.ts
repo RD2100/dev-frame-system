@@ -1200,3 +1200,37 @@ describe('same-session goal driving', () => {
     expect(test.ctx.agents.get(handle.agent.id)).toBeUndefined()
   })
 })
+
+describe('deferred native resume', () => {
+  it('keeps the real driver at zero requests until durable host activation', async () => {
+    const test = await harness([textResponse('one authorized round')])
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    let checkpoints = 0
+    const originalFlush = test.ctx.sessions.flush.bind(test.ctx.sessions)
+    const flush = vi.spyOn(test.ctx.sessions, 'flush').mockImplementation(async (session) => {
+      checkpoints++
+      if (checkpoints === 1) { entered.resolve(undefined); await release.promise }
+      return originalFlush(session)
+    })
+    try {
+      const created = test.ctx.goals.create(test.agent, { objective: 'deferred authorization', maxGoalRounds: 1 })
+      test.ctx.goals.disarm(test.agent)
+      const prepared = test.ctx.goals.prepareResume(test.agent, created)
+      await entered.promise
+      expect(test.adapter.requests).toHaveLength(0)
+      release.resolve(undefined)
+      await vi.waitFor(() => { expect(checkpoints).toBeGreaterThanOrEqual(2) })
+      expect(test.ctx.goals.get(test.agent)?.activation).toBe('disarmed')
+      expect(test.adapter.requests).toHaveLength(0)
+      const commit = vi.fn(() => { expect(test.adapter.requests).toHaveLength(0) })
+      prepared.activate(commit)
+      await waitForRequests(test.adapter, 1)
+      await test.agent.whenIdle()
+      expect(commit).toHaveBeenCalledOnce()
+      expect(test.adapter.requests).toHaveLength(1)
+      expect(() => prepared.activate(commit)).toThrow()
+      expect(commit).toHaveBeenCalledOnce()
+    } finally { release.resolve(undefined); flush.mockRestore() }
+  })
+})

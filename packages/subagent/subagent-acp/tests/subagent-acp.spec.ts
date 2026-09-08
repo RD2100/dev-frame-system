@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { PassThrough, type Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
-import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentRuntime, { SubagentStartupCleanupError } from '@deepseek-ai/dsh-subagent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
@@ -717,7 +717,17 @@ describe('dsh-subagent-acp', () => {
       disposeGraceMs: 10,
       spawn: (spec) => {
         realChild = spawnSubprocess(spec)
-        return rejectFinalExitWaitAfterExit(realChild, rawCleanup)
+        const child = realChild
+        let failurePending = true
+        return {
+          ...child,
+          waitForExit: (signal?: AbortSignal) => {
+            if (!failurePending) return child.waitForExit(signal)
+            if (signal !== undefined) return Promise.resolve(false)
+            failurePending = false
+            return child.done.then(() => { throw new Error(rawCleanup) })
+          },
+        }
       },
       onError: (failure) => { errors.push(failure.message) },
     }).catch((cause: unknown) => cause)
@@ -729,6 +739,8 @@ describe('dsh-subagent-acp', () => {
     expect((error as Error).message).not.toContain(rawCleanup)
     expect(errors).toContain('ACP child published without a session id')
     expect(errors).toContain(rawCleanup)
+    expect(error).toBeInstanceOf(SubagentStartupCleanupError)
+    await (error as SubagentStartupCleanupError).cleanup()
     await realChild?.done
   })
 

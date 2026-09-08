@@ -321,7 +321,10 @@ export interface SubagentProvider {
    * capability is supported and resolved `request.descriptor`, so a
    * session-backed implementation appends that descriptor inside the child's
    * initial turn. Before fulfillment, the provider owns setup and cleans any
-   * unpublished partial resources before rejecting. Ownership transfers on
+   * unpublished partial resources before rejecting. Failed rollback throws
+   * `SubagentStartupCleanupError` with an awaited cleanup retry; an aggregate
+   * failure without that retry remains unresolved in the owner's inventory.
+   * Ownership transfers on
    * fulfillment; subsequent turn or infrastructure failure settles through
    * the returned run. Distinct starts may overlap; cancellation, failure,
    * result settlement, and disposal remain independent for each run.
