@@ -4,7 +4,7 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import TerminalSessionService from '@deepseek-ai/dsh-terminal'
+import TerminalSessionService, { TerminalOwnershipRegistry } from '@deepseek-ai/dsh-terminal'
 import type {
   TerminalBackend,
   TerminalBackendSession,
@@ -318,6 +318,7 @@ async function setup(
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRegistry)
   await ctx.plugin(AgentRegistry)
+  await ctx.plugin(TerminalOwnershipRegistry)
   await ctx.plugin(TerminalSessionService)
   const stub = stubBackend(initialMode)
   ctx.terminals.registerBackend(stub.backend)
@@ -585,6 +586,7 @@ describe('tool-pwsh-persistent', () => {
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRegistry)
     await ctx.plugin(AgentRegistry)
+    await ctx.plugin(TerminalOwnershipRegistry)
     await ctx.plugin(TerminalSessionService)
     const spawnStarted = Promise.withResolvers<undefined>()
     const spawnAborted = Promise.withResolvers<undefined>()

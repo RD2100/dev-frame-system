@@ -50,6 +50,9 @@
     - id: pty
       name: '@deepseek-ai/dsh-terminal'
 
+    - id: terminal-ownership
+      name: '@deepseek-ai/dsh-terminal/ownership'
+
     - id: terminal-bash
       name: '@deepseek-ai/dsh-terminal-bash'
       disabled: !!js process.platform === 'win32'

@@ -3,7 +3,7 @@ import { join, posix } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
-import { Inbox } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import {
@@ -11,7 +11,7 @@ import {
   Sandbox,
   SandboxNotFoundError,
 } from '@deepseek-ai/dsh-e2b'
-import TerminalSessionService, { TerminalSessionId } from '@deepseek-ai/dsh-terminal'
+import TerminalSessionService, { TerminalOwnershipRegistry, TerminalSessionId } from '@deepseek-ai/dsh-terminal'
 import { BashTerminalBackend } from '@deepseek-ai/dsh-terminal-bash'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -58,7 +58,14 @@ describe.skipIf(!process.env.E2B_API_KEY)('E2B live Loader composition', () => {
         mode: 'danger-full-access',
         workspaceRoot: '/home/user',
       })
+      // Cordis never fails on missing injects: without `ctx.agents` the
+      // ownership directory (inject 'agents') and the PTY service (inject
+      // 'terminalOwnership') would both stay PENDING and silently never load.
+      await ctx.plugin(AgentRegistry)
+      await ctx.plugin(TerminalOwnershipRegistry)
       const ptyFiber = await ctx.plugin(TerminalSessionService)
+      expect(ctx.terminalOwnership).toBeInstanceOf(TerminalOwnershipRegistry)
+      expect(ctx.terminals).toBeInstanceOf(TerminalSessionService)
       const subprocessFiber = await ctx.plugin(E2BSubprocessRuntime)
       const node = await ctx.subprocess.resolveExecutable('node')
       const relativeNodePath = posix.relative(ctx.e2b.cwd, posix.dirname(node)) || '.'

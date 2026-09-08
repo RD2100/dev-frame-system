@@ -30,6 +30,9 @@
     mode: danger-full-access
     workspaceRoot: !!js process.cwd()
 
+- id: terminal-ownership
+  name: '@deepseek-ai/dsh-terminal/ownership'
+
 - id: pty
   name: '@deepseek-ai/dsh-terminal'
 

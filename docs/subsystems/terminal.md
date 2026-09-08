@@ -98,6 +98,52 @@ interface TerminalSendResult {
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxterminalownership--terminalownershipregistry"></a>
+
+### `ctx.terminalOwnership` — `TerminalOwnershipRegistry`
+
+Retain every terminal provider until its owned resources have quiesced.
+
+```ts cordis-catalog
+/**
+ * Register one instance from its own effect scope.
+ * @param instance - terminal service contributing its complete resource inventory.
+ * @returns disposer to call only after instance cleanup succeeds.
+ */
+register(instance: TerminalSessionService): () => void
+
+/**
+ * Reject admission before a service reserves or starts backend work.
+ * @param owner - exact Agent receiving terminal resources.
+ */
+assertAdmission(owner: Agent): void
+
+/**
+ * Fence an owner even with zero instances, then await all current instances.
+ * @param owner - exact Agent whose resources must close.
+ * @returns after all owned resources quiesce; cleanup failures retain the fence.
+ */
+async drainOwned(owner: Agent): Promise<void>
+
+/**
+ * Observe published sessions and pending rollback in every registered instance.
+ * @param owner - exact Agent whose activity is queried.
+ * @returns whether any provider still owns resources for the Agent.
+ */
+hasOwnerActivity(owner: Agent): boolean
+
+/**
+ * Preflight a project owner's entire terminal lineage without partial reopening.
+ * @param owners - exact Agents sharing one host resume transaction.
+ * @returns commit that validates every captured drain and provider before opening any owner.
+ */
+prepareReopenOwners(owners: readonly Agent[]): () => void
+```
+
+Types: [Agent](core.md)
+
+Source: [`packages/terminal/terminal/src/ownership.ts`](../../packages/terminal/terminal/src/ownership.ts)
+
 <a id="ctxterminals--terminalsessionservice"></a>
 
 ### `ctx.terminals` — `TerminalSessionService`
@@ -133,6 +179,29 @@ async spawn(owner: Agent, request: TerminalSpawnRequest, signal?: AbortSignal): 
  * @returns true across the entire spawn-to-close interval, with no publication gap.
  */
 hasOwnerActivity(owner: Agent): boolean
+
+/**
+ * Fence new spawns for one owner and await unpublished rollback and PTY close.
+ * Failed cleanup remains observable and may be retried for the same owner.
+ * @param owner - exact Agent whose terminal resources must drain.
+ * @returns after all owned backend resources close, rejecting on cleanup failure.
+ */
+async drainOwned(owner: Agent): Promise<void>
+
+/**
+ * Reopen terminal admission after the host authorizes an owner's resume.
+ * @param owner - exact live Agent whose prior terminal resources are closed.
+ * @throws when resources remain, the owner is stale, or the service is disposing.
+ */
+reopenOwned(owner: Agent): void
+
+/**
+ * Prepare terminal reopening without changing admission.
+ * @param owner - exact Agent checked before a synchronous host reopen.
+ * @returns a non-throwing commit; call without yielding after all services prepare.
+ * @throws when resources remain, the owner is stale, or the service is disposing.
+ */
+prepareReopenOwned(owner: Agent): () => void
 
 /**
  * Start one exclusive interactive send.

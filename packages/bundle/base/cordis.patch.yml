@@ -67,6 +67,9 @@
     - id: agent
       name: '@deepseek-ai/dsh-agent'
 
+    - id: terminal-ownership
+      name: '@deepseek-ai/dsh-terminal/ownership'
+
     - id: plugin-package-inventory-deepseek
       name: '@deepseek-ai/dsh-plugin-package-inventory-deepseek'
 

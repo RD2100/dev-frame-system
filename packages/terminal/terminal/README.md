@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-terminal` provides persistent, owner-scoped terminal sessions to the harness: a session keeps shell or REPL state across tool calls, and every operation is fenced to the exact agent that created it. It provides the `ctx.terminals` service, which mints opaque session ids, routes session creation through registered backends, and waits for quiescent cleanup when an owner or the service disposes. It defines no terminal mechanics itself: backends such as the shipped `dsh-terminal-bash` own spawning and readiness, and the model-facing tools in `dsh-tool-terminal` own presentation. Sessions are process-local: they do not survive a harness restart.
+`dsh-terminal` provides persistent, owner-scoped terminal sessions to the harness: a session keeps shell or REPL state across tool calls, and every operation is fenced to the exact agent that created it. It provides the `ctx.terminals` service, which mints opaque session ids, routes session creation through registered backends, and waits for quiescent cleanup when an owner or the service disposes. A shared `ctx.terminalOwnership` registry spans every mounted terminal instance, so the host can fence one agent's admission across all of them. It defines no terminal mechanics itself: backends such as the shipped `dsh-terminal-bash` own spawning and readiness, and the model-facing tools in `dsh-tool-terminal` own presentation. Sessions are process-local: they do not survive a harness restart.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount `@deepseek-ai/dsh-terminal` whenever a composition needs terminal sessions whose state survives across tool calls. The service alone does nothing useful: pair it with a backend such as `@deepseek-ai/dsh-terminal-bash` and a tool package such as `@deepseek-ai/dsh-tool-terminal`, and load all three in one composition.
+Mount `@deepseek-ai/dsh-terminal` whenever a composition needs terminal sessions whose state survives across tool calls. The service alone does nothing useful: pair it with a backend such as `@deepseek-ai/dsh-terminal-bash` and a tool package such as `@deepseek-ai/dsh-tool-terminal`, and load all four — the shared ownership plugin included — in one composition.
 
 ### When to choose it
 
@@ -36,6 +36,7 @@ Choose persistent terminals for work whose state lives in the terminal rather th
 Load the session service together with a backend and a tool package:
 
 ```yaml
+- name: '@deepseek-ai/dsh-terminal/ownership'
 - name: '@deepseek-ai/dsh-terminal'
 - name: '@deepseek-ai/dsh-terminal-bash'
 - name: '@deepseek-ai/dsh-tool-terminal'
@@ -53,7 +54,7 @@ Every session is owned by the exact agent that opened it. Operations that name a
 
 ### Observable outcomes and failures
 
-Hosts can call `drainOwned(owner)` to close new terminal admission for one exact Agent and await both unpublished startup rollback and published backend close. Cleanup failure keeps the owned activity visible and rejects the drain. After a host-authorized resume, `reopenOwned(owner)` reopens admission only if the same Agent is still live and all terminal resources have closed; other owners remain available throughout.
+Mount `@deepseek-ai/dsh-terminal/ownership` once at the host root; every terminal service requires this shared directory, including services in isolated Agent presets. Hosts call `ctx.terminalOwnership.drainOwned(owner)` to fence the exact Agent across all instances and await unpublished rollback and backend close. The fence also rejects spawns from instances mounted after the stop, including when the directory was empty. Failed cleanup retains the instance and its activity. `prepareReopenOwners(owners)` prepares an entire lineage without opening admission; its commit rejects changed directory membership, another drain, stale owners, or remaining resources before reopening any owner. Local service drainage does not replace this host-wide operation.
 
 A successful open returns the session id, type, pid when the backend has one, status, and a bounded startup message. Sends settle with a wait reason: `stdin_read` (the shell is waiting for input), `inferred_idle` (output silence), `timeout`, or `session_exit` (the top-level shell exited). Failures carry stable machine-routable codes: a missing backend type (`NO_BACKEND`), an unknown session (`NO_SESSION`), another agent's session (`FOREIGN_SESSION`), a second concurrent send (`SEND_ACTIVE`), or an owner that is no longer live (`OWNER_NOT_LIVE`). Backend setup failures reject the open before anything is published, and a failed cleanup rejects the close rather than claiming success.
 
@@ -77,6 +78,7 @@ The service owns everything except terminal mechanics: session identity, publica
 |---|---|
 | [`src/index.ts`](src/index.ts) | `TerminalSessionService`: backend registry, spawn/send/read/signal/kill/list, owner cleanups, disposal |
 | [`src/types.ts`](src/types.ts) | Shared contracts: backend interface, session types, wait reasons, signal set, error codes |
+| [`src/ownership.ts`](src/ownership.ts) | `TerminalOwnershipRegistry`, published as the `@deepseek-ai/dsh-terminal/ownership` subpath: shared instance directory, exact-Agent admission fence, host-wide drain, and reopen commit |
 | — | No runtime invariant companion is published; backend and owner-scoped session registries are private mutable state, and the service exposes neither an independent lifecycle stream nor an unscoped snapshot. |
 
 ### Data model and lifecycle
@@ -137,6 +139,7 @@ These limits define when the service is a poor fit. They are current package con
 - **Process-local sessions** — sessions and raw scrollback live only in this process and do not survive a harness restart; durable work must be committed to files or another persistent system.
 - **No cross-agent sharing** — sessions are intentionally single-owner, with no path to share or transfer a session.
 - **No declarative auto-start** — sessions are created only during agent tool calls.
+- **Shared ownership plugin required** — every composition that mounts a terminal service must also mount `@deepseek-ai/dsh-terminal/ownership`; without it the unmet cordis injection leaves the service PENDING, so `ctx.terminals` silently never activates.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import TerminalSessionService, { TerminalBackendCleanupError, TerminalError, TerminalSessionId } from '@deepseek-ai/dsh-terminal'
+import TerminalSessionService, { TerminalBackendCleanupError, TerminalError, TerminalSessionId, TerminalOwnershipRegistry } from '@deepseek-ai/dsh-terminal'
 import type {
   TerminalBackend,
   TerminalBackendSession,
@@ -120,6 +120,7 @@ function backend(type = 'stub') {
 async function harness() {
   const ctx = new Context()
   await ctx.plugin(AgentRegistry)
+  await ctx.plugin(TerminalOwnershipRegistry)
   const fiber = await ctx.plugin(TerminalSessionService)
   ptyServiceDisposers.set(ctx, async () => { await fiber.dispose() })
   return ctx
@@ -130,6 +131,111 @@ async function disposeTerminalSessionService(ctx: Context): Promise<void> {
   if (dispose === undefined) throw new Error('missing PTY service fiber')
   await dispose()
 }
+
+describe('TerminalOwnershipRegistry', () => {
+  it('fences zero instances and a subsequently mounted service until explicit resume', async () => {
+    const ctx = new Context()
+    await ctx.plugin(AgentRegistry)
+    await ctx.plugin(TerminalOwnershipRegistry)
+    const owner = stubAgent(ctx, 'zero-instances')
+    ctx.agents.register(owner)
+    try {
+      await ctx.terminalOwnership.drainOwned(owner)
+      const stale = ctx.terminalOwnership.prepareReopenOwners([owner])
+      await ctx.plugin(TerminalSessionService)
+      const b = backend()
+      ctx.terminals.registerBackend(b.provider)
+      await expect(ctx.terminals.spawn(owner, { type: 'stub' })).rejects.toMatchObject({ code: 'OWNER_NOT_LIVE' })
+      expect(b.sessions).toEqual([])
+      expect(stale).toThrow('directory changed')
+      const commit = ctx.terminalOwnership.prepareReopenOwners([owner])
+      expect(() => { ctx.terminalOwnership.assertAdmission(owner) }).toThrowError(expect.objectContaining({ code: 'OWNER_NOT_LIVE', message: 'PTY owner admission is closed' }))
+      commit()
+      await ctx.terminals.spawn(owner, { type: 'stub' })
+      expect(ctx.terminalOwnership.hasOwnerActivity(owner)).toBe(true)
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('drains all isolated services while leaving a foreign owner available', async () => {
+    const ctx = await harness()
+    const owner = stubAgent(ctx, 'isolated-owner')
+    const foreign = stubAgent(ctx, 'isolated-foreign')
+    ctx.agents.register(owner)
+    ctx.agents.register(foreign)
+    const isolated = ctx.isolate('terminals')
+    const fiber = await isolated.plugin(TerminalSessionService)
+    const first = backend()
+    const second = backend()
+    ctx.terminals.registerBackend(first.provider)
+    isolated.terminals.registerBackend(second.provider)
+    try {
+      await ctx.terminals.spawn(owner, { type: 'stub' })
+      await isolated.terminals.spawn(owner, { type: 'stub' })
+      await isolated.terminals.spawn(foreign, { type: 'stub' })
+      await ctx.terminalOwnership.drainOwned(owner)
+      expect(first.sessions[0]?.closed).toHaveLength(1)
+      expect(second.sessions[0]?.closed).toHaveLength(1)
+      expect(second.sessions[1]?.closed).toEqual([])
+      expect(ctx.terminalOwnership.hasOwnerActivity(owner)).toBe(false)
+      expect(ctx.terminalOwnership.hasOwnerActivity(foreign)).toBe(true)
+      await fiber.dispose()
+      ctx.terminalOwnership.prepareReopenOwners([owner])()
+      await ctx.terminals.spawn(owner, { type: 'stub' })
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('invalidates a prepared reopen when a new stop closes the same owner', async () => {
+    const ctx = await harness()
+    const owner = stubAgent(ctx, 'stop-generation')
+    ctx.agents.register(owner)
+    try {
+      await ctx.terminalOwnership.drainOwned(owner)
+      const commit = ctx.terminalOwnership.prepareReopenOwners([owner])
+      await ctx.terminalOwnership.drainOwned(owner)
+      expect(commit).toThrow('drain changed')
+      expect(() => { ctx.terminalOwnership.assertAdmission(owner) }).toThrowError(expect.objectContaining({ code: 'OWNER_NOT_LIVE', message: 'PTY owner admission is closed' }))
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('retains failed service disposal until the same resources close on retry', async () => {
+    const ctx = await harness()
+    const owner = stubAgent(ctx, 'failed-disposal')
+    ctx.agents.register(owner)
+    const b = backend()
+    ctx.terminals.registerBackend(b.provider)
+    await ctx.terminals.spawn(owner, { type: 'stub' })
+    const session = b.sessions[0]!
+    session.rejectClose = true
+    const internal = ctx.terminals as unknown as { disposeAll(): Promise<void> }
+    try {
+      await expect(internal.disposeAll()).rejects.toThrow()
+      expect(ctx.terminalOwnership.hasOwnerActivity(owner)).toBe(true)
+      await expect(ctx.terminalOwnership.drainOwned(owner)).rejects.toThrow('terminal owner cleanup failed')
+      session.rejectClose = false
+      await ctx.terminalOwnership.drainOwned(owner)
+      expect(ctx.terminalOwnership.hasOwnerActivity(owner)).toBe(false)
+      expect(() => { ctx.terminalOwnership.prepareReopenOwners([owner])() }).not.toThrow()
+    } finally { session.rejectClose = false; await ctx.fiber.dispose() }
+  })
+
+  it('keeps every owner fenced when a later owner is stopped after batch preparation', async () => {
+    const ctx = await harness()
+    const root = stubAgent(ctx, 'batch-root')
+    const child = stubAgent(ctx, 'batch-child')
+    ctx.agents.register(root)
+    ctx.agents.register(child)
+    try {
+      await ctx.terminalOwnership.drainOwned(root)
+      await ctx.terminalOwnership.drainOwned(child)
+      const commit = ctx.terminalOwnership.prepareReopenOwners([root, child])
+      await ctx.terminalOwnership.drainOwned(child)
+      expect(commit).toThrow('drain changed')
+      for (const owner of [root, child]) expect(() => { ctx.terminalOwnership.assertAdmission(owner) }).toThrowError(expect.objectContaining({ code: 'OWNER_NOT_LIVE', message: 'PTY owner admission is closed' }))
+      ctx.terminalOwnership.prepareReopenOwners([root, child])()
+      for (const owner of [root, child]) expect(() => { ctx.terminalOwnership.assertAdmission(owner) }).not.toThrow()
+    } finally { await ctx.fiber.dispose() }
+  })
+})
 
 describe('TerminalSessionService backend registry', () => {
   it('preserves the id brand and disposes exact backend contributions', async () => {
@@ -175,7 +281,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     expect(finished).toBe(false)
     expect(ctx.terminals.hasOwnerActivity(owner)).toBe(true)
     expect(b.sessions[0]?.closed).toEqual([])
-    expect(() => ctx.terminals.reopenOwned(owner)).toThrow('not quiescent and live')
+    expect(() => { ctx.terminals.reopenOwned(owner) }).toThrow('not quiescent and live')
     session.closeGate.resolve(undefined)
     await Promise.all([rejected, drain])
     expect(ctx.terminals.hasOwnerActivity(owner)).toBe(false)
@@ -306,7 +412,8 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     expect(ctx.terminals.hasOwnerActivity(owner)).toBe(true)
     const internal = ctx.terminals as unknown as { disposeAll(): Promise<void> }
     await expect(internal.disposeAll()).rejects.toThrow('failed to clean up PTY lifecycle')
-    expect(ctx.terminals.hasOwnerActivity(owner)).toBe(false)
+    expect(ctx.terminals.hasOwnerActivity(owner)).toBe(true)
+    expect(ctx.terminalOwnership.hasOwnerActivity(owner)).toBe(true)
     expect(session.closed).toEqual(['PTY spawn rolled back'])
   })
 
@@ -334,7 +441,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     await expect(pending).rejects.toBe(reason)
   })
 
-  it.each(['owner', 'service'] as const)('retains caller-triggered backend cleanup failure until %s disposal', async (scope) => {
+  it.each(['owner', 'service'] as const)('retains caller-triggered backend cleanup failure after failed %s disposal', async (scope) => {
     const ctx = await harness()
     const started = Promise.withResolvers<undefined>()
     const cleanupFailure = new Error('backend cleanup failed')
@@ -365,7 +472,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     }
     const disposal = scope === 'owner' ? internal.disposeOwned(owner) : internal.disposeAll()
     await expect(disposal).rejects.toThrow('failed to clean up PTY lifecycle')
-    expect(ctx.terminals.hasOwnerActivity(owner)).toBe(scope === 'owner')
+    expect(ctx.terminals.hasOwnerActivity(owner)).toBe(true)
   })
 
   it.each([
@@ -649,5 +756,20 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     await expect(internal.disposeAll()).rejects.toThrow('failed to clean up PTY lifecycle')
     expect(internal.backends.size).toBe(0)
     expect(internal.ownerCleanups.size).toBe(0)
+  })
+})
+
+describe('TerminalSessionService silent deactivation contract', () => {
+  it('deactivates silently without the ownership registry and leaves ctx.terminals unavailable, as documented', async () => {
+    // Documented in README "Known Limitations and Deferred Work": mounting the
+    // service without `@deepseek-ai/dsh-terminal/ownership` leaves the unmet
+    // `terminalOwnership` injection holding the cordis fiber in PENDING, and
+    // `Fiber.await()` (vendor/cordis/src/fiber.ts) resolves for a PENDING
+    // fiber, so `ctx.terminals` never activates and no mount error surfaces.
+    const ctx = new Context()
+    try {
+      await ctx.plugin(TerminalSessionService)
+      expect(ctx.terminals).toBeUndefined()
+    } finally { await ctx.fiber.dispose() }
   })
 })

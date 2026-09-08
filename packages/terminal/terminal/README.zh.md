@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-terminal` 为 harness 提供持久且限定所有者范围的终端会话：会话让 shell 或 REPL 状态跨工具调用存活，且每个操作都被限制在创建它的那个确切 agent（智能体）内。本包提供 `ctx.terminals` 服务，负责生成不透明的会话 id、通过已注册的后端路由会话创建，并在所有者或服务 dispose（资源释放）时等待完全停稳的清理。它本身不定义任何终端机制：`dsh-terminal-bash` 之类的后端负责启动与就绪检测，`dsh-tool-terminal` 中的面向模型工具负责呈现。会话只存在于进程本地：harness 重启后不会恢复。
+`dsh-terminal` 为 harness 提供持久且限定所有者范围的终端会话：会话让 shell 或 REPL 状态跨工具调用存活，且每个操作都被限制在创建它的那个确切 agent（智能体）内。本包提供 `ctx.terminals` 服务，负责生成不透明的会话 id、通过已注册的后端路由会话创建，并在所有者或服务 dispose（资源释放）时等待完全停稳的清理。共享的 `ctx.terminalOwnership` 注册表横跨每个已挂载的终端实例，让 host 能跨全部实例封闭某个 agent 的准入。它本身不定义任何终端机制：`dsh-terminal-bash` 之类的后端负责启动与就绪检测，`dsh-tool-terminal` 中的面向模型工具负责呈现。会话只存在于进程本地：harness 重启后不会恢复。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当组合需要状态跨工具调用存活的终端会话时，挂载 `@deepseek-ai/dsh-terminal`。单独的服务本身没有用处：请与 `@deepseek-ai/dsh-terminal-bash` 之类的后端、`@deepseek-ai/dsh-tool-terminal` 之类的工具包配对，并在同一个组合中一起加载。
+当组合需要状态跨工具调用存活的终端会话时，挂载 `@deepseek-ai/dsh-terminal`。单独的服务本身没有用处：请与 `@deepseek-ai/dsh-terminal-bash` 之类的后端、`@deepseek-ai/dsh-tool-terminal` 之类的工具包配对，并在同一个组合中一起加载全部四个插件——包括共享所有权插件。
 
 ### 何时选择
 
@@ -36,6 +36,7 @@ kind: "package-reference"
 将会话服务与后端、工具包一起加载：
 
 ```yaml
+- name: '@deepseek-ai/dsh-terminal/ownership'
 - name: '@deepseek-ai/dsh-terminal'
 - name: '@deepseek-ai/dsh-terminal-bash'
 - name: '@deepseek-ai/dsh-tool-terminal'
@@ -53,7 +54,7 @@ kind: "package-reference"
 
 ### 可观察结果与失败
 
-host 可以调用 `drainOwned(owner)`，关闭一个确切 Agent 的新终端入口，并等待未发布启动的回滚及已发布后端的关闭。清理失败时，该所有者的活动仍然可见，排空操作会拒绝。host 授权恢复后，`reopenOwned(owner)` 只有在同一个 Agent 仍存活且所有终端资源均已关闭时才重新开放入口；其他所有者在此期间始终可用。
+在 host 根部挂载一次 `@deepseek-ai/dsh-terminal/ownership`；每个终端服务都依赖这个共享目录，包括隔离 Agent preset 中的服务。host 调用 `ctx.terminalOwnership.drainOwned(owner)`，在所有实例上封闭该确切 Agent 的入口，并等待未发布启动回滚及后端关闭。停止后挂载的实例也不能绕过限制，即使停止时目录为空。清理失败会保留实例及其活动。`prepareReopenOwners(owners)` 准备整条谱系的恢复而不开放入口；其提交会在开放任何所有者之前，拒绝目录成员变化、再次排空、失效所有者或尚存资源。单个服务的局部排空不能替代此 host 级操作。
 
 成功打开会返回会话 id、类型、后端存在时的 pid、状态与有界启动消息。发送以等待原因结算：`stdin_read`（shell 正在等待输入）、`inferred_idle`（输出静默）、`timeout` 或 `session_exit`（顶层 shell 已退出）。失败携带稳定的机器可路由错误码：后端类型缺失（`NO_BACKEND`）、会话未知（`NO_SESSION`）、属于其他 agent 的会话（`FOREIGN_SESSION`）、并发第二次发送（`SEND_ACTIVE`），或所有者不再存活（`OWNER_NOT_LIVE`）。后端设置失败会在发布任何内容之前拒绝打开；清理失败会拒绝关闭，而不是声称成功。
 
@@ -77,6 +78,7 @@ host 可以调用 `drainOwned(owner)`，关闭一个确切 Agent 的新终端入
 |---|---|
 | [`src/index.ts`](src/index.ts) | `TerminalSessionService`：后端注册表、spawn/send/read/signal/kill/list、所有者清理与 dispose |
 | [`src/types.ts`](src/types.ts) | 共享约定：后端接口、会话类型、等待原因、信号集合、错误码 |
+| [`src/ownership.ts`](src/ownership.ts) | `TerminalOwnershipRegistry`，以 `@deepseek-ai/dsh-terminal/ownership` 子路径入口发布：共享实例目录、确切 Agent 准入限制、host 级排空与恢复提交 |
 | — | 不发布运行时不变式伴生入口；注册表是私有可变状态。 |
 
 ### 数据模型与生命周期
@@ -137,6 +139,7 @@ host 可以调用 `drainOwned(owner)`，关闭一个确切 Agent 的新终端入
 - **进程本地会话**——会话与原始 scrollback 只存在于本进程中，harness 重启后不会恢复；需要持久的工作必须写入文件或其他持久系统。
 - **不支持跨 agent 共享**——会话有意保持单一所有者，没有共享或转移会话的途径。
 - **没有声明式自动启动**——会话只在 agent 工具调用期间创建。
+- **必须挂载共享所有权插件**——凡挂载终端服务的组合都必须同时挂载 `@deepseek-ai/dsh-terminal/ownership`；缺失时 cordis 注入无法满足，服务停留在 PENDING，`ctx.terminals` 静默不激活。
 
 <a id="dev-note"></a>
 ### 开发备注

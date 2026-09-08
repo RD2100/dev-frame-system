@@ -41,6 +41,7 @@ export type {
   TerminalWaitReason,
 } from './types.ts'
 export { TerminalBackendCleanupError } from './types.ts'
+export { TerminalOwnershipRegistry } from './ownership.ts'
 
 /** Opaque identity minted by {@link TerminalSessionService} for one live PTY session. */
 export type TerminalSessionId = TerminalSessionIdValue
@@ -103,6 +104,7 @@ interface SpawnReservation {
 
 /** In-process registry for replaceable PTY backends and exact-Agent sessions. */
 export class TerminalSessionService extends Service {
+  static inject = ['terminalOwnership']
   private readonly backends = new Map<string, TerminalBackend>()
   private readonly sessions = new Map<TerminalSessionId, SessionRecord>()
   private readonly reservedNames = new Map<Agent, Set<string>>()
@@ -112,10 +114,14 @@ export class TerminalSessionService extends Service {
   private readonly drainedOwners = new WeakSet<Agent>()
   private nextId = 0
   private disposing = false
+  private unregisterOwnership: (() => void) | undefined
 
   constructor(ctx: Context) {
     super(ctx, 'terminals')
-    ctx.effect(() => () => this.disposeAll(), 'pty teardown')
+    ctx.effect(() => {
+      this.unregisterOwnership = ctx.terminalOwnership.register(this)
+      return () => this.disposeAll()
+    }, 'pty teardown')
   }
 
   /**
@@ -154,6 +160,7 @@ export class TerminalSessionService extends Service {
    */
   async spawn(owner: Agent, request: TerminalSpawnRequest, signal?: AbortSignal): Promise<TerminalSpawnResult> {
     this.assertActive()
+    this.ctx.terminalOwnership.assertAdmission(owner)
     signal?.throwIfAborted()
     this.ensureOwnerCleanup(owner)
     const backend = this.backends.get(request.type)
@@ -243,6 +250,7 @@ export class TerminalSessionService extends Service {
   async drainOwned(owner: Agent): Promise<void> {
     this.drainedOwners.add(owner)
     await this.disposeOwned(owner)
+    if (this.disposing) await this.disposeAll()
   }
 
   /**
@@ -483,11 +491,12 @@ export class TerminalSessionService extends Service {
     } finally {
       this.backends.clear()
       this.reservedNames.clear()
-      this.pendingSpawns.clear()
       const cleanups = [...this.ownerCleanups.values()]
       this.ownerCleanups.clear()
       await Promise.all(cleanups.map(cleanup => Promise.resolve(cleanup())))
     }
+    this.unregisterOwnership?.()
+    this.unregisterOwnership = undefined
   }
 
   private async closeRecords(records: SessionRecord[], reason: string): Promise<void> {
