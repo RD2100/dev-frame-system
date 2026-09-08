@@ -140,10 +140,14 @@ export interface GoalBindingCompositionStores {
    * agent — host-verified through the dispatch lineage: an agent belongs when
    * its session's `parentSession` chain reaches the given root, so workers on
    * independent worktrees are included and unrelated projects' sessions are
-   * never drained. `processes` returns every captured descendant process; a
-   * composition without it has no provable process inventory, and the chain
-   * fails closed on it instead of reading emptiness as quiescence.
-   * `releaseWriter` is the owner-checked writer release for the given
+   * never drained. `processes` returns every captured descendant process
+   * scoped to the receiving root; a composition without it has no provable
+   * process inventory, and the chain fails closed on it instead of reading
+   * emptiness as quiescence. `resumeResources` releases the root-scoped
+   * resources a resume lane reacquires after resource admission; the
+   * composition carries the face so the resume lane can invoke it with the
+   * same receiving root. `releaseWriter` is the owner-checked writer release
+   * for the given
    * receiving root; it may be asynchronous and the chain reports `stopped`
    * only after it settles, and it must tolerate repeat invocation because
    * the confirmed-stop recovery path retries it. The chain fails closed: a
@@ -153,7 +157,8 @@ export interface GoalBindingCompositionStores {
    */
   readonly stop?: {
     readonly tree?: (root: Agent) => readonly Agent[]
-    readonly processes?: () => readonly StopProcess[]
+    readonly processes?: (root: Agent) => readonly StopProcess[]
+    readonly resumeResources?: (root: Agent) => void
     readonly releaseWriter?: (root: Agent) => void | Promise<void>
   }
 }
@@ -209,7 +214,9 @@ export class GoalBindingComposition extends Service {
   /** The native flush closure the journals and the stop chain share. */
   private readonly sessionFlusher: DevFrameFlush
   /** Host-captured descendant processes handed to the stop chain; absent means no provable inventory. */
-  private readonly stopProcesses: (() => readonly StopProcess[]) | undefined
+  private readonly stopProcesses: ((root: Agent) => readonly StopProcess[]) | undefined
+  /** Host-captured root-scoped resources a resume lane releases after admission. */
+  readonly stopResumeResources: ((root: Agent) => void) | undefined
   /** Host-verified project tree (root plus descendants); absent fails closed. */
   private readonly stopTree: ((root: Agent) => readonly Agent[]) | undefined
   /** Host writer release; absent means the chain retains the writer loudly. */
@@ -242,6 +249,7 @@ export class GoalBindingComposition extends Service {
     const flush = sessionFlush(ctx)
     this.sessionFlusher = flush
     this.stopProcesses = stores.stop?.processes
+    this.stopResumeResources = stores.stop?.resumeResources
     this.stopTree = stores.stop?.tree
     this.stopReleaseWriter = stores.stop?.releaseWriter
     const reviewerDirectory = new ProjectionEvidenceReviewerDirectory(ctx)
@@ -670,9 +678,12 @@ export class GoalBindingComposition extends Service {
       registry: this.ctx.agents,
       goals: this.ctx.goals,
       jobs,
-      processes: this.stopProcesses ?? (() => {
-        throw new Error('no captured process inventory is mounted for this composition')
-      }),
+      processes: () => {
+        if (this.stopProcesses === undefined) {
+          throw new Error('no captured process inventory is mounted for this composition')
+        }
+        return this.stopProcesses(agent)
+      },
       graceMs: this.config.stopGraceMs,
       closeAdmission: () => {
         controller.closeAdmission()

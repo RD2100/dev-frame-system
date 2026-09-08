@@ -22,6 +22,24 @@ import * as goalCommand from '@deepseek-ai/dsh-experimental-command-goal-binding
 import * as consumer from '../src/completion-consumer.ts'
 import { prepareIntegration } from './integration-harness.ts'
 
+/**
+ * Test-controlled hook firing inside the source-observation window the
+ * consumer must close: between the receipt ancestry check and the fingerprint
+ * bind. Only the barrier test arms it; every other test leaves it null and
+ * the mock delegates unchanged.
+ */
+const sourceObservationBarrier: { fire: null | (() => Promise<void>) } = { fire: null }
+vi.mock('@deepseek-ai/dsh-experimental-devframe', async importOriginal => {
+  const actual = await importOriginal<typeof import('@deepseek-ai/dsh-experimental-devframe')>()
+  return {
+    ...actual,
+    computeSourceFingerprint: async (...args: Parameters<typeof actual.computeSourceFingerprint>) => {
+      await sourceObservationBarrier.fire?.()
+      return actual.computeSourceFingerprint(...args)
+    },
+  }
+})
+
 const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup() })
 
@@ -235,5 +253,22 @@ describe('whole-Goal completion producer', { timeout: 90_000, hookTimeout: 90_00
     const f = await setup("import { writeFileSync } from 'node:fs'; writeFileSync('feature.txt','changed')")
     expect((await f.execute(f.root, 'project_goal_verify')).isError).toBe(true)
     expect(f.state().verifications.some(item => item.deliveryId === undefined && item.binding.goalId === f.binding.goalId)).toBe(false)
+  })
+
+  it('refuses verification when HEAD moves between the ancestry check and the fingerprint', async () => {
+    const f = await setup()
+    let fired = false
+    sourceObservationBarrier.fire = async () => {
+      fired = true
+      // A forward empty commit keeps every receipt an ancestor of the moved
+      // head, so only the pinned-head ordering can reject this observation.
+      await f.git(f.path, 'commit', '--allow-empty', '-m', 'barrier-moved-head')
+    }
+    try {
+      const verified = await f.execute(f.root, 'project_goal_verify')
+      expect(fired, 'the barrier must fire inside the observation window').toBe(true)
+      expect(verified.isError, JSON.stringify(verified)).toBe(true)
+      expect(f.state().verifications.some(item => item.deliveryId === undefined && item.binding.goalId === f.binding.goalId)).toBe(false)
+    } finally { sourceObservationBarrier.fire = null }
   })
 })

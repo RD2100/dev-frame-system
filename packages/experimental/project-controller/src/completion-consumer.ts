@@ -131,11 +131,17 @@ export function apply(ctx: Context, config: Config): void {
     const git = async (...args: string[]) => (await execFileAsync(config.gitExecutable, ['-C', path, ...args], {
       env: env(), signal, windowsHide: true, timeout: config.gitTimeoutMs, maxBuffer: config.gitMaxOutputBytes, encoding: 'utf8',
     })).stdout.trim()
+    // Pin HEAD first: the receipt ancestry is validated for exactly the head
+    // the fingerprint will bind, so a HEAD move anywhere inside this
+    // observation is rejected instead of self-consistently passing against a
+    // head whose ancestry was never checked.
+    const head = await git('rev-parse', '--verify', 'HEAD')
     if (await git('status', '--porcelain=v1', '--untracked-files=all') !== '') throw new Error('Whole-Goal evidence requires a clean committed controller tree')
-    for (const row of receipts) await git('merge-base', '--is-ancestor', row.appliedHead!, 'HEAD')
+    for (const row of receipts) await git('merge-base', '--is-ancestor', row.appliedHead!, head)
     const source = await computeSourceFingerprint({ worktreePath: path, gitCommand: config.gitExecutable,
       maxOutputBytes: config.gitMaxOutputBytes, timeoutMs: config.gitTimeoutMs, signal })
-    if (await git('rev-parse', 'HEAD') !== source.headCommit || await git('status', '--porcelain=v1', '--untracked-files=all') !== '') {
+    if (source.headCommit !== head || await git('rev-parse', 'HEAD') !== head
+      || await git('status', '--porcelain=v1', '--untracked-files=all') !== '') {
       throw new Error('Controller source changed during observation')
     }
     return source
