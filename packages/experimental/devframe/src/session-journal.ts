@@ -80,15 +80,20 @@ export class DevFramePersistenceError extends Error {
  * cannot be built without wiring the deployed reviewer role authority.
  */
 export class DevFrameSessionJournal {
+  private readonly flush: DevFrameFlush
+  private readonly reviewGate: DevFrameReviewGate
 
   /**
    * @param flush - Native `ctx.sessions.flush`-compatible durability callback.
    * @param reviewGate - Reviewer role authority consulted for every review append.
    */
   constructor(
-    private readonly flush: DevFrameFlush,
-    private readonly reviewGate: DevFrameReviewGate,
-  ) {}
+    flush: DevFrameFlush,
+    reviewGate: DevFrameReviewGate,
+  ) {
+    this.flush = flush
+    this.reviewGate = reviewGate
+  }
 
   /**
    * Validate, cross-authorize, append, and durably flush one DevFrame event in order.
