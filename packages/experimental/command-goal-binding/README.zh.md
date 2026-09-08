@@ -37,7 +37,7 @@ kind: "package-reference"
 |---|---|
 | `/devframe-start <objective>` | 针对配置的 worktree 启动新绑定的 goal：把 role-policy、goal-binding 与 verification 记录落到控制器会话日志，并报告真实执行的检查数与验证状态 |
 | `/devframe-resume` | 在停止或重启后恢复并续跑当前绑定的 goal，从会话日志 projection 或绑定存储重建绑定 |
-| `/devframe-stop` | 启用 `stopChain` 时运行停止链：跨项目树关闭准入、排空拥有的作业与已捕获的后代进程、刷新每个参与会话，且只在链确认静止后才释放 writer；被中断的停止流程在重复停止时收敛 |
+| `/devframe-stop` | 启用 `stopChain` 时运行停止链：跨项目树关闭准入、排空拥有的作业以及已捕获的 subagent 运行与终端会话、刷新每个参与会话，且只在链确认静止后才释放 writer；被中断的停止流程在重复停止时收敛 |
 | `/goal-complete` | 在配置的 worktree 上通过完成准入完成当前 goal，并记录一条完成回执 |
 | `/goal-complete <worktreePath>` | 针对给定 worktree 完成当前 goal，覆盖配置的根路径 |
 
@@ -116,7 +116,7 @@ kind: "package-reference"
 - **日志实例共享会话持久化。** 组合日志和证据日志都通过 `ctx.sessions.flush` 刷新。使用同一活跃会话的所有日志共享追加队列和失败锁；一次结果不确定的刷新会阻止它们之后的写入。
 - **分发前先 fail closed。** 各处理器在到达准入之前，会因缺失 goal、缺失绑定、缺失证据或已锁存的 projection 重放失败而拒绝，并显式解析 worktree 路径，使缺失根路径成为数据错误而非结构性失败。
 - **回执只在准入之后。** 获得准入的完成会通过准入的 compare-and-set 推进原生 goal，并通过 goal 服务记录一条 `completion-admission` 证据条目；拒绝则保持 goal phase、绑定与准入状态不变。
-- **停止链是可选项且由宿主接线。** 项目树面与 writer 释放是组合服务上的注入点——不是 config：宿主捕获并做 owner 验证项目树（接收根加上每个 dispatch 血缘后代，通过活跃 agent 注册表上的会话 `parentSession` 链解析）并拥有释放。当 fiber 携带 agent、workspace 与 worktree 注册表时，apply 面挂载真实适配器：基于 `ctx.agents` 按血缘解析的活跃树——独立 worktree 上的 worker 属于树内，无关项目的会话绝不属于——以及 owner 检查的 worktree writer 释放；缺少这些注册表的 fiber 保持 fail-closed 的未接线链。不挂载任何进程 inventory：在真实捕获喂源接管后代进程之前，宿主无法证明的 inventory 会把空数组读成静止，因此链对缺失的面 fail-closed。链在树 inventory 缺失或为空、作业注册表缺失、释放钩子未接线时同样 fail-closed——缺失绝不等于安静。
+- **停止链是可选项且由宿主接线。** 项目树面与 writer 释放是组合服务上的注入点——不是 config：宿主捕获并做 owner 验证项目树（接收根加上每个 dispatch 血缘后代，通过活跃 agent 注册表上的会话 `parentSession` 链解析）并拥有释放。fiber 携带 agent 注册表时，apply 面即挂载基于 `ctx.agents` 按血缘解析的活跃树——独立 worktree 上的 worker 属于树内，无关项目的会话绝不属于；config 另行命名 worktree 根且 fiber 携带 workspace 与 worktree 注册表时，再挂载 owner 检查的 worktree writer 释放；fiber 无法支撑的面保持缺席，链因此 fail-closed。进程覆盖要求 subagent runtime 与宿主终端所有权目录；已捕获 inventory 记录每个树 owner 的 subagent 运行与终端会话，一次性 subprocess 作业仍由链的作业排空与各树 agent 的 cancel/whenIdle 兜底。目录先对每个 exact Agent 关闭所有隔离终端服务的准入再排空，包括停止后首次挂载的服务；缺少目录时进程面保持未接线。恢复在重新开放全部已准备 owner 前核对原 owner 树与目录 generation。链在树 inventory 缺失或为空、作业注册表缺失、释放钩子未接线时同样 fail-closed——缺失绝不等于安静。
 - **writer 只在链确认后释放。** 确认静止的记录是持久的释放前前置；stopped 终态记录、存储条目与检查点只在该次释放真实成功之后落盘。异步的注册表释放在停止宽限界限内被 await，悬挂或被拒绝的释放都以 `needs_attention` 呈现且 writer 保持持有——警告绝不冒充释放，注册表未证明清空之前绝不落 `stopped`。
 - **被中断的停止流程在重复停止时收敛。** 日志停在 `stop_requested`（drain 期间崩溃）时，恢复会基于宿主当前 inventory 重新进入 drain；日志停在 `quiescence_confirmed` 时重新进入释放。持久的注册表行是跨重启的释放真相，重复停止对照它收敛。缺失的活跃身份以 `needs_attention` 呈现且 writer 保持持有——绝不静默绕过，也绝不重启被中断的 goal 工作。
 

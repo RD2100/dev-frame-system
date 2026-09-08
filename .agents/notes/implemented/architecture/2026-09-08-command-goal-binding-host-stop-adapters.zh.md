@@ -10,15 +10,17 @@ Status: implemented
 
 ## 决策
 
-apply 面通过 `resolveHostStopAdapters` 从 fiber 解析 stop 存储。当 fiber 携带 agent、workspace 与 worktree 注册表且配置命名了 worktree 根时，树面与释放面随之挂载；注册表通过可选的 `ctx.get(name)` 读取，绝不走属性代理，因为插件没有把它们声明为注入，而拓扑敏感的属性读取会在把它们挂载在别处的 fiber 上抛错。
+apply 面通过 `resolveHostStopAdapters` 从 fiber 解析 stop 存储。fiber 携带 agent 注册表时树面随之挂载；释放面还需要配置的 worktree 根与 workspace、worktree 注册表；注册表通过可选的 `ctx.get(name)` 读取，绝不走属性代理，因为插件没有把它们声明为注入，而拓扑敏感的属性读取会在把它们挂载在别处的 fiber 上抛错。
 
 树面是 dispatch 血缘：接收根加上每个会话 header `parentSession` 链——沿活跃 agent 注册表回溯、有环界——能到达该根的活跃 agent。根身份在调用时传入：链自行提供调用 agent，这也是释放面的 owner 门所需的作用域。血缘就是项目边界——带显式父绑定的独立 worktree worker 属于树内，离开活跃注册表的血缘不可证明而被排除——因此同一仓库中血缘之外的会话绝不被排空。
 
-释放面执行 owner 门并 await 注册表的异步 `unbind`：worktree 必须是拥有所配置根的 workspace 的已注册行，未绑定的行视为已完成的释放（可重复进入），已绑定的行只有在其 holder 是某个活跃树 agent 的会话 id 时才释放——外来 writer 永不释放，抛错即保留 writer。由于释放在停止原语的有界窗口内 settle，悬挂或被拒绝的释放都以 `needs_attention` 呈现且 writer 保持持有；持久的注册表行就是释放真相，重复停止重新进入释放并对照它收敛。
+配置的 workspace id 选择 workspace，规范 worktree 路径选择其中的目标行，因此 linked worktree 无须等于 workspace 锚点。释放面执行 owner 门并 await 注册表的异步 `unbind`：worktree 必须是拥有所配置根的 workspace 的已注册行，未绑定的行视为已完成的释放（可重复进入），已绑定的行只有在其 holder 是某个活跃树 agent 的会话 id 时才释放——外来 writer 永不释放，抛错即保留 writer。由于释放在停止原语的有界窗口内 settle，悬挂或被拒绝的释放都以 `needs_attention` 呈现且 writer 保持持有；持久的注册表行就是释放真相，重复停止重新进入释放并对照它收敛。
 
-进程面现在是真实喂源。`createHostStopResources` 把拥有一次性子运行与持久终端的两个服务圈定到血缘内：每个活跃树 owner 至多产生一条 `subagents` 与一条 `terminals` 条目，其 `drain` 在链的有界窗口内运行 provider 拥有的清理；条目排空后由一次新鲜的活动观察重新武装，失败或复活过的 owner 保持可排空，而不是被读成静默。`prepareResumeResources` 检查两个服务而不重新开放准入。它返回的提交操作重新验证活跃 owner 树，并再次预检所有服务后才同步开放它们；树变化或任一服务拒绝时，准入保持关闭。
+进程面消费宿主 subagent runtime 与[终端宿主所有权](2026-09-08-terminal-host-ownership.zh.md)所述的终端所有权目录。每个活跃血缘 owner 最多产生一个 subagent 与一个 terminal 排空条目；目录覆盖全部隔离终端实例，并在没有实例时仍阻止未来 spawn。`prepareResumeResources` 保留目录批量预检，重新验证原活跃 owner 树，并在提交前准备 subagent owner。树、目录或 owner 排空 generation 发生变化时，准入保持关闭。
 
-释放面有其 resume 对应面：`createHostWriterAcquire` 在同样的 workspace 与行门下重新获取单写绑定，并自带接收根必须活跃的门；注册表的 `bind` 接受未绑定的行或同一 holder，同时拒绝挤走外来 writer。经授权的 resume 在重开资源之前先重取 writer，因此外来持有的 worktree 使 resume 失败而不偷锁，持久注册表行保持为真相。
+释放面有其 resume 对应面：`createHostWriterAcquire` 在同样的 workspace 与行门下重新获取单写绑定，并自带接收根必须活跃的门；注册表的 `bind` 接受未绑定的行或同一 holder，同时拒绝挤走外来 writer。经授权的 resume 在重开资源之前先重取 writer，因此外来持有的 worktree 使 resume 失败而不偷锁，持久注册表行保持为真相。宿主携带项目控制器时，资源提交还会在原生 Goal 续行激活前打开其已停止的请求准入；准备阶段拒绝未完成停止，提交阶段复核捕获的生命周期。
+
+冷启动后的 stop 将匹配的投影绑定恢复到空进程存储，不恢复 native Goal 的运行；其他 Goal 的投影不能满足当前绑定要求。
 
 ## 考虑过的替代
 

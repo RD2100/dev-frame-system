@@ -12,9 +12,10 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { FileRequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe'
+import type { RequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe'
 import { GoalBindingComposition } from './composition.ts'
 import { resolveCommandGoalBindingConfig } from './config.ts'
-import type { CommandGoalBindingConfig } from './config.ts'
+import type { CommandGoalBindingConfig, ResolvedCommandGoalBindingConfig } from './config.ts'
 import { resolveHostStopAdapters } from './host-stop.ts'
 
 export { GoalBindingComposition } from './composition.ts'
@@ -92,10 +93,9 @@ export const inject = ['commands', 'goals', 'sessions', 'sessionProjections']
  * the real host stop adapters from `./host-stop.ts` — the dispatch-lineage
  * project tree whenever the fiber carries the agent registry, and the
  * owner-checked writer release whenever the configuration names a worktree
- * root and the fiber carries the workspace and worktree registries. No
- * process face mounts: until a real capture feed owns descendant processes,
- * the chain fails closed on the absent inventory instead of reading
- * emptiness as quiescence.
+ * root and the fiber carries the workspace and worktree registries. Resource
+ * coverage requires both the subagent and terminal owners; missing owners
+ * leave stop fail-closed.
  * @param ctx - the plugin fiber's context.
  * @param config - deployment configuration; `workspaceId`, `requiredChecksPath`, `checks`,
  *   `taskIds`, and `maxAttempts` are required.
@@ -107,8 +107,24 @@ export function apply(
   config: CommandGoalBindingConfig,
 ): GoalBindingComposition {
   const resolved = resolveCommandGoalBindingConfig(config)
+  return createHostGoalBinding(ctx, resolved, new FileRequiredChecksConfigStore({ path: resolved.requiredChecksPath }))
+}
+
+/**
+ * Construct the host composition with its existing approved-checks ledger.
+ * Completion authority and stop resources always come from the actual host services.
+ * @param ctx - Host context carrying commands, Goals, sessions and registries.
+ * @param resolved - Validated deployment configuration.
+ * @param requiredChecks - The host's single approved-checks store.
+ * @returns The registered host command composition.
+ */
+export function createHostGoalBinding(
+  ctx: Context,
+  resolved: ResolvedCommandGoalBindingConfig,
+  requiredChecks: RequiredChecksConfigStore,
+): GoalBindingComposition {
   return new GoalBindingComposition(ctx, resolved, {
-    requiredChecks: new FileRequiredChecksConfigStore({ path: resolved.requiredChecksPath }),
+    requiredChecks,
     goalCompletionIntegrations: controllerSessionId =>
       ctx.get('projectController')?.integrationReceipts(controllerSessionId) ?? [],
     goalCompletionGuard: (agent, targetPath, workspaceId) => {

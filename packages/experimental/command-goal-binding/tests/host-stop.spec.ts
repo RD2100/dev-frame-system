@@ -95,6 +95,7 @@ interface BootOptions {
   readonly sessionId: SessionId
   readonly restore?: boolean
   readonly stopGraceMs?: number
+  readonly stopChain?: boolean
   readonly mountJobs?: boolean
   /** Explicit host stop adapters; absent faces stay absent and fail closed. */
   readonly stopAdapters?: {
@@ -125,7 +126,7 @@ async function boot(options: BootOptions): Promise<TestComposition> {
     taskIds: ['task-v14-host-stop'],
     maxAttempts: 3,
     workspaceRoot: options.workspaceRoot,
-    stopChain: true,
+    stopChain: options.stopChain ?? true,
     ...(options.stopGraceMs === undefined ? {} : { stopGraceMs: options.stopGraceMs }),
   })
   const composition = new GoalBindingComposition(ctx, resolved, {
@@ -252,7 +253,7 @@ describe('host writer release', () => {
   }
 
   /** A worktree registry standing in for the durable rows the adapter reads. */
-  function fakeRegistries(worktreePath: string, extraWorkspacePath?: string): FakeRegistry {
+  function fakeRegistries(worktreePath: string, extraWorkspacePath?: string, anchorPath = worktreePath): FakeRegistry {
     const mutableRow = {
       id: 'wt-1',
       workspaceId: WORKSPACE_ID,
@@ -286,7 +287,7 @@ describe('host writer release', () => {
     }
     const workspaces = {
       list: () => [
-        { id: WORKSPACE_ID, path: worktreePath },
+        { id: WORKSPACE_ID, path: anchorPath },
         ...(extraWorkspacePath === undefined ? [] : [{ id: WorkspaceId('ws-v14-host-stop-extra'), path: extraWorkspacePath }]),
       ],
     } as unknown as WorkspaceRegistry
@@ -309,12 +310,30 @@ describe('host writer release', () => {
 
     const release = createHostWriterRelease(
       { workspaceRegistry: fake.workspaces, worktreeRegistry: fake.registry },
-      { workspaceRoot: worktree, tree },
+      { workspaceId: WORKSPACE_ID, workspaceRoot: worktree, tree },
     )
     await release(agent)
 
     expect(fake.released).toHaveLength(1)
     expect(fake.released[0]!.holder).toBe(String(agent.session.id))
+  })
+
+  it('selects the configured workspace identity when its anchor differs from the target worktree', async () => {
+    const target = tempRoot()
+    const anchor = tempRoot()
+    const { ctx, agent } = await boot({ checks: startChecks(target), workspaceRoot: target, storageRoot: tempRoot(), sessionId: SessionId('linked-target') })
+    const fake = fakeRegistries(target, undefined, anchor)
+    const dependencies = { agents: ctx.agents, workspaceRegistry: fake.workspaces, worktreeRegistry: fake.registry }
+    const options = { workspaceId: WORKSPACE_ID, workspaceRoot: target, tree: createHostStopTree(ctx.agents) }
+    await createHostWriterAcquire(dependencies, options)(agent)
+    await createHostWriterRelease(dependencies, options)(agent)
+    expect(fake.bound).toHaveLength(1)
+    expect(fake.released).toHaveLength(1)
+    const foreign = { ...options, workspaceId: WorkspaceId('unregistered-workspace') }
+    await expect(createHostWriterAcquire(dependencies, foreign)(agent)).rejects.toThrow('not registered')
+    await expect(createHostWriterRelease(dependencies, foreign)(agent)).rejects.toThrow('not registered')
+    expect(fake.bound).toHaveLength(1)
+    expect(fake.released).toHaveLength(1)
   })
 
   it('propagates a rejected unbind so the chain reports the writer as retained', async () => {
@@ -327,7 +346,7 @@ describe('host writer release', () => {
 
     const release = createHostWriterRelease(
       { workspaceRegistry: fake.workspaces, worktreeRegistry: fake.registry },
-      { workspaceRoot: worktree, tree },
+      { workspaceId: WORKSPACE_ID, workspaceRoot: worktree, tree },
     )
 
     await expect(release(agent)).rejects.toThrow('durable write failed')
@@ -343,7 +362,7 @@ describe('host writer release', () => {
 
     const release = createHostWriterRelease(
       { workspaceRegistry: fake.workspaces, worktreeRegistry: fake.registry },
-      { workspaceRoot: worktree, tree },
+      { workspaceId: WORKSPACE_ID, workspaceRoot: worktree, tree },
     )
     await expect(release(agent)).rejects.toThrow('not a live project tree session')
 
@@ -359,7 +378,7 @@ describe('host writer release', () => {
 
     const acquire = createHostWriterAcquire(
       { agents: ctx.agents, workspaceRegistry: fake.workspaces, worktreeRegistry: fake.registry },
-      { workspaceRoot: worktree },
+      { workspaceId: WORKSPACE_ID, workspaceRoot: worktree },
     )
     await acquire(agent)
     expect(fake.bound).toHaveLength(1)
@@ -379,7 +398,7 @@ describe('host writer release', () => {
 
     const acquire = createHostWriterAcquire(
       { agents: ctx.agents, workspaceRegistry: fake.workspaces, worktreeRegistry: fake.registry },
-      { workspaceRoot: worktree },
+      { workspaceId: WORKSPACE_ID, workspaceRoot: worktree },
     )
     await expect(acquire(agent)).rejects.toThrow('already-locked')
     expect(fake.bound).toHaveLength(0)
@@ -393,7 +412,7 @@ describe('host writer release', () => {
     const fake = fakeRegistries(worktree, rowlessRoot)
     const acquire = createHostWriterAcquire(
       { agents: ctx.agents, workspaceRegistry: fake.workspaces, worktreeRegistry: fake.registry },
-      { workspaceRoot: worktree },
+      { workspaceId: WORKSPACE_ID, workspaceRoot: worktree },
     )
 
     const ghost = stubAgent(ctx.sessions.create(SessionId('acquire-ghost'), {}))
@@ -403,7 +422,7 @@ describe('host writer release', () => {
     // The extra workspace is registered but owns no row at that path.
     const rowless = createHostWriterAcquire(
       { agents: ctx.agents, workspaceRegistry: fake.workspaces, worktreeRegistry: fake.registry },
-      { workspaceRoot: rowlessRoot },
+      { workspaceId: WORKSPACE_ID, workspaceRoot: rowlessRoot },
     )
     await expect(rowless(agent)).rejects.toThrow('no registered worktree row')
     expect(fake.bound).toHaveLength(0)
@@ -687,4 +706,52 @@ describe('stop chain over the real host adapters', () => {
     const stored = await second.composition.bindingStore.load(ControllerSessionId(second.agent.id))
     expect(stored.at(-1)?.lifecycle).toBe('stopped')
   })
+})
+
+it.each([false, true])('restores only the current projected binding before a cold stop (chain=%s)', async (stopChain) => {
+  const fixture = await createCommittedWorktree()
+  const storageRoot = tempRoot()
+  const sessionId = SessionId(`cold-open-${stopChain}`)
+  const first = await boot({ checks: startChecks(fixture.root), workspaceRoot: fixture.root, storageRoot, sessionId, stopChain })
+  expect((await execute(first, '/devframe-start preserve this identity')).result.kind).toBe('success')
+  const original = first.ctx.goals.get(first.agent)!
+  const originalChanges = first.session.snapshotEvents().filter(event => event.type === 'goal/change').length
+  await first.ctx.sessions.flush(first.session)
+  contexts.splice(contexts.indexOf(first.ctx), 1)
+  await first.ctx.fiber.dispose()
+  const second = await boot({
+    checks: startChecks(fixture.root), workspaceRoot: fixture.root, storageRoot, sessionId, stopChain,
+    restore: true, mountJobs: true,
+    stopAdapters: { tree: owner => [owner], processes: () => [], releaseWriter: () => {} },
+  })
+  expect(await second.composition.bindingStore.load(ControllerSessionId(sessionId))).toEqual([])
+  expect((await execute(second, '/devframe-stop')).result.kind).toBe('success')
+  const stored = await second.composition.bindingStore.load(ControllerSessionId(sessionId))
+  expect(stored).toHaveLength(1)
+  expect(stored[0]).toMatchObject({ goalId: original.id, lifecycle: stopChain ? 'stopped' : 'stop_requested' })
+  expect(second.ctx.goals.get(second.agent)).toMatchObject({ id: original.id, revision: original.revision + (stopChain ? 1 : 0) })
+  expect(second.session.snapshotEvents().filter(event => event.type === 'goal/change')
+    .slice(originalChanges).map(event => (event.data as { operation?: string }).operation)).toEqual(stopChain ? ['pause'] : [])
+})
+
+it.each([false, true])('refuses a cold stop when the projected binding belongs to another Goal (chain=%s)', async (stopChain) => {
+  const fixture = await createCommittedWorktree()
+  const storageRoot = tempRoot()
+  const sessionId = SessionId(`cold-mismatched-${stopChain}`)
+  const first = await boot({ checks: startChecks(fixture.root), workspaceRoot: fixture.root, storageRoot, sessionId, stopChain })
+  expect((await execute(first, '/devframe-start first goal')).result.kind).toBe('success')
+  const original = first.ctx.goals.get(first.agent)!
+  first.ctx.goals.complete(first.agent, original)
+  first.ctx.goals.create(first.agent, { objective: 'a separate unbound goal' })
+  await first.ctx.sessions.flush(first.session)
+  contexts.splice(contexts.indexOf(first.ctx), 1)
+  await first.ctx.fiber.dispose()
+  const second = await boot({
+    checks: startChecks(fixture.root), workspaceRoot: fixture.root, storageRoot, sessionId, stopChain, restore: true,
+  })
+  const current = second.ctx.goals.get(second.agent)
+  const result = await execute(second, '/devframe-stop')
+  expect(result.result.kind).toBe('error')
+  expect(await second.composition.bindingStore.load(ControllerSessionId(sessionId))).toEqual([])
+  expect(second.ctx.goals.get(second.agent)).toEqual(current)
 })

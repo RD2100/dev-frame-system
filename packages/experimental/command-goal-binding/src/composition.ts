@@ -140,8 +140,11 @@ export interface GoalBindingCompositionStores {
    * agent — host-verified through the dispatch lineage: an agent belongs when
    * its session's `parentSession` chain reaches the given root, so workers on
    * independent worktrees are included and unrelated projects' sessions are
-   * never drained. `processes` returns every captured descendant process
-   * scoped to the receiving root; a composition without it has no provable
+   * never drained. `processes` returns the captured descendant resources
+   * scoped to the receiving root — each tree owner's subagent runs and
+   * terminal sessions; one-shot subprocess runs are not part of this
+   * inventory, staying owned by the jobs drain and the tree agents'
+   * cancel/whenIdle. A composition without it has no provable
    * process inventory, and the chain fails closed on it instead of reading
    * emptiness as quiescence. `prepareResumeResources` prepares the root-scoped
    * resources without reopening admission and returns their synchronous
@@ -218,7 +221,8 @@ export class GoalBindingComposition extends Service {
   private readonly stopChains = new Map<string, Promise<CommandResult>>()
   /** The native flush closure the journals and the stop chain share. */
   private readonly sessionFlusher: DevFrameFlush
-  /** Host-captured descendant processes handed to the stop chain; absent means no provable inventory. */
+  /** Host-captured descendant resource inventory (subagent runs and terminal
+   * sessions) handed to the stop chain; absent means no provable inventory. */
   private readonly stopProcesses: ((root: Agent) => readonly StopProcess[]) | undefined
   /** Root-scoped preparation returning the final synchronous resource commit. */
   readonly stopPrepareResumeResources: ((root: Agent) => () => void) | undefined
@@ -500,6 +504,52 @@ export class GoalBindingComposition extends Service {
   }
 
   /**
+   * Resolve the stop lanes' binding record for the current goal: the log
+   * projection and the binding-store row, refusing the no-record data
+   * refusal. A lifecycle the caller refuses returns its stable error result
+   * and nothing persists; only a stop the flow continues adopts the
+   * projected binding the store lacks — persisted, with the stale cached
+   * controller evicted so the rebuilt one loads the durable record.
+   * @param agent - the receiving agent whose binding the lane resolves.
+   * @param goalId - the current goal the stop targets.
+   * @param refuseLifecycle - returns the stable error result for a lifecycle
+   *   that must not enter the stop flow, or `undefined` to continue.
+   * @returns the stable refusal, if any, plus the resolved projection, store
+   *   row, and effective lifecycle.
+   */
+  private async resolveStopBinding(
+    agent: Agent,
+    goalId: GoalId,
+    refuseLifecycle: (lifecycle: GoalBinding['lifecycle']) => CommandResult | undefined,
+  ): Promise<{
+    readonly refusal: CommandResult | undefined
+    readonly projected: GoalBinding | undefined
+    readonly stored: GoalBinding | undefined
+    readonly currentLifecycle: GoalBinding['lifecycle'] | undefined
+  }> {
+    const controllerSessionId = ControllerSessionId(agent.id)
+    const projected = devFrameStateOf(this.ctx, agent.session)
+      .bindings.find(binding => binding.goalId === goalId)
+    const stored = (await this.bindingStore.load(controllerSessionId))
+      .find(binding => binding.goalId === goalId)
+    if (projected === undefined && stored === undefined) {
+      return {
+        refusal: { kind: 'error', text: STOP_NO_BINDING_RECORD_TEXT },
+        projected,
+        stored,
+        currentLifecycle: undefined,
+      }
+    }
+    const currentLifecycle = projected?.lifecycle ?? stored?.lifecycle
+    const refusal = currentLifecycle === undefined ? undefined : refuseLifecycle(currentLifecycle)
+    if (refusal === undefined && stored === undefined && projected !== undefined) {
+      await this.bindingStore.save(projected)
+      this.controllers.delete(agent.id)
+    }
+    return { refusal, projected, stored, currentLifecycle }
+  }
+
+  /**
    * Execute one `/devframe-stop` invocation: record a human-authorized stop
    * request for the agent's current unfinished bound goal. The lane resolves
    * the binding between the log projection and the binding store, refuses
@@ -536,18 +586,12 @@ export class GoalBindingComposition extends Service {
     if (current === undefined) return { kind: 'error', text: STOP_NO_CURRENT_GOAL_TEXT }
     if (current.phase === 'complete') return { kind: 'error', text: GOAL_ALREADY_COMPLETE_TEXT }
     if (!this.config.stopChain) {
+      const resolved = await this.resolveStopBinding(invocation.agent, current.id, lifecycle =>
+        lifecycle === 'stop_requested' || lifecycle === 'quiescence_confirmed'
+          ? { kind: 'error', text: STOP_ALREADY_PENDING_TEXT }
+          : undefined)
+      if (resolved.refusal !== undefined) return resolved.refusal
       const controllerSessionId = ControllerSessionId(invocation.agent.id)
-      const projected = devFrameStateOf(this.ctx, invocation.agent.session)
-        .bindings.find(binding => binding.goalId === current.id)
-      const stored = (await this.bindingStore.load(controllerSessionId))
-        .find(binding => binding.goalId === current.id)
-      if (projected === undefined && stored === undefined) {
-        return { kind: 'error', text: STOP_NO_BINDING_RECORD_TEXT }
-      }
-      const currentLifecycle = projected?.lifecycle ?? stored?.lifecycle
-      if (currentLifecycle === 'stop_requested' || currentLifecycle === 'quiescence_confirmed') {
-        return { kind: 'error', text: STOP_ALREADY_PENDING_TEXT }
-      }
       const stopped = await this.controllerFor(invocation.agent).stop(
         { controllerSessionId, goalId: current.id },
         createHumanAuthorization(`devframe-stop:${invocation.agent.id}:${Date.now()}`),
@@ -589,30 +633,22 @@ export class GoalBindingComposition extends Service {
    * @returns a success result after the confirmed stop, or a stable error.
    */
   private async runStopChain(agent: Agent, current: { readonly id: GoalId }): Promise<CommandResult> {
+    const resolved = await this.resolveStopBinding(agent, current.id, lifecycle =>
+      lifecycle === 'stopped' ? { kind: 'error', text: STOP_ALREADY_STOPPED_TEXT } : undefined)
+    if (resolved.refusal !== undefined) return resolved.refusal
     const controllerSessionId = ControllerSessionId(agent.id)
-    const projected = devFrameStateOf(this.ctx, agent.session)
-      .bindings.find(binding => binding.goalId === current.id)
-    const stored = (await this.bindingStore.load(controllerSessionId))
-      .find(binding => binding.goalId === current.id)
-    if (projected === undefined && stored === undefined) {
-      return { kind: 'error', text: STOP_NO_BINDING_RECORD_TEXT }
-    }
-    const currentLifecycle = projected?.lifecycle ?? stored?.lifecycle
-    if (currentLifecycle === 'stopped') {
-      return { kind: 'error', text: STOP_ALREADY_STOPPED_TEXT }
-    }
-    if (currentLifecycle === 'stop_requested') {
+    if (resolved.currentLifecycle === 'stop_requested') {
       // A crash while the chain waited in its drain leaves the log here —
       // a normal failure window for a stop the human explicitly asked for.
       // Re-enter the drain instead of refusing the repeat.
-      const requested = projected ?? stored
+      const requested = resolved.projected ?? resolved.stored
       if (requested !== undefined) return this.resumeStopRequestedStop(agent, requested)
       return { kind: 'error', text: STOP_NO_BINDING_RECORD_TEXT }
     }
-    if (currentLifecycle === 'quiescence_confirmed') {
+    if (resolved.currentLifecycle === 'quiescence_confirmed') {
       // The drain already confirmed; only the release and the terminal
       // bookkeeping remain. Re-enter there instead of refusing the repeat.
-      const confirmed = projected ?? stored
+      const confirmed = resolved.projected ?? resolved.stored
       if (confirmed !== undefined) return this.finishConfirmedStop(agent, confirmed)
       return { kind: 'error', text: STOP_NO_BINDING_RECORD_TEXT }
     }

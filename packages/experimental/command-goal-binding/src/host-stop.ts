@@ -8,7 +8,7 @@ import { WorktreeLockHolder } from '@deepseek-ai/dsh-worktree-registry'
 import type { WorktreeRegistry } from '@deepseek-ai/dsh-worktree-registry'
 import type { StopProcess } from '@deepseek-ai/dsh-experimental-devframe'
 import type { SubagentRuntime } from '@deepseek-ai/dsh-subagent'
-import type { TerminalSessionService } from '@deepseek-ai/dsh-terminal'
+import type { TerminalOwnershipRegistry } from '@deepseek-ai/dsh-terminal'
 import type { ResolvedCommandGoalBindingConfig } from './config.ts'
 import type { GoalBindingCompositionStores } from './composition.ts'
 
@@ -87,13 +87,13 @@ export function createHostStopTree(agents: AgentRegistry): (root: Agent) => read
  * only successful cleanup plus a fresh activity observation removes its entry.
  * @param agents - live registry used to resolve exact owners and lineage.
  * @param subagents - service retaining one-shot starts through run disposal.
- * @param terminals - service retaining unpublished spawns through backend close.
+ * @param terminals - Host directory fencing every terminal provider for the exact owner.
  * @returns scoped drain inventory and a resume preflight that defers admission until its returned closure runs.
  */
 export function createHostStopResources(
   agents: AgentRegistry,
   subagents: SubagentRuntime,
-  terminals: TerminalSessionService,
+  terminals: TerminalOwnershipRegistry,
 ): {
   processes: (root: Agent) => readonly StopProcess[]
   prepareResumeResources: (root: Agent) => () => void
@@ -134,11 +134,9 @@ export function createHostStopResources(
       const owners = tree(root)
       // Complete preflight before any service admission changes. These checks
       // and reopen operations are synchronous and invoke no user callbacks.
-      const prepare = () => owners.flatMap(owner => [
-        subagents.prepareReopenOwnedRuns(owner),
-        terminals.prepareReopenOwned(owner),
-      ])
+      const prepare = () => owners.map(owner => subagents.prepareReopenOwnedRuns(owner))
       prepare()
+      const reopenTerminals = terminals.prepareReopenOwners(owners)
       return () => {
         if (agents.get(root.id) !== root) throw new Error('stop resource owner is not live')
         const current = tree(root)
@@ -146,6 +144,7 @@ export function createHostStopResources(
           throw new Error('stop resource owner tree changed during resume preparation')
         }
         const reopen = prepare()
+        reopenTerminals()
         for (const commit of reopen) commit()
         for (const owner of owners) {
           drainedRuns.delete(owner)
@@ -173,8 +172,8 @@ export interface HostWriterAcquireDependencies {
  * Build the owner-checked writer release over the worktree registry's
  * single-writer binding for the configured worktree. The face performs the
  * full owner gate and settles only when the registry has provably released
- * the binding: the worktree must be a registered row of the workspace that
- * owns the configured root, an unbound row is an already-completed release
+ * the binding: the worktree must be a registered row of the configured
+ * workspace, an unbound row is an already-completed release
  * (the confirmed-stop recovery path may re-enter), and a bound row releases
  * only when its holder is the session id of a live project-tree agent — a
  * foreign writer is never released. The asynchronous `unbind` is awaited, so
@@ -182,13 +181,15 @@ export interface HostWriterAcquireDependencies {
  * `needs_attention` with the writer retained; the durable registry row stays
  * the truth and the repeat stop re-enters the release.
  * @param dependencies - the fiber's workspace and worktree registries.
- * @param options - the configured worktree root and the verified tree face.
+ * @param options - the configured workspace id, the configured worktree
+ *   root, and the verified tree face.
  * @returns the release face; the receiving root argument scopes the live
  *   sessions that may own the writer.
  */
 export function createHostWriterRelease(
   dependencies: HostWriterReleaseDependencies,
   options: {
+    readonly workspaceId: ResolvedCommandGoalBindingConfig['workspaceId']
     readonly workspaceRoot: string
     readonly tree: (root: Agent) => readonly Agent[]
   },
@@ -196,9 +197,9 @@ export function createHostWriterRelease(
   const canonicalRoot = canonicalDirectory(options.workspaceRoot)
   return async (root: Agent) => {
     const workspace = dependencies.workspaceRegistry.list()
-      .find(entry => sameDirectory(entry.path, canonicalRoot))
+      .find(entry => entry.id === options.workspaceId)
     if (workspace === undefined) {
-      throw new Error(`the configured worktree '${canonicalRoot}' is not a registered workspace; the writer release is refused`)
+      throw new Error(`the configured workspace '${options.workspaceId}' is not registered; the writer release is refused`)
     }
     const row = dependencies.worktreeRegistry.list(workspace.id)
       .find(entry => sameDirectory(entry.path, canonicalRoot))
@@ -218,21 +219,22 @@ export function createHostWriterRelease(
  * Build the owner-checked writer acquisition — the resume face of the
  * release. After a confirmed stop released the binding, the same receiving
  * root re-takes it under the host's fresh authorization: the receiving root
- * must be live, the worktree must be a registered row of the workspace that
- * owns the configured root, and the registry's `bind` accepts an unbound row
+ * must be live, the worktree must be a registered row of the configured
+ * workspace, and the registry's `bind` accepts an unbound row
  * or a re-bind by the same holder while refusing to displace a foreign
  * writer with `WorktreeLockError` (`already-locked`). The refusal propagates,
  * so a resume under a foreign-held worktree fails without stealing the
  * binding; the durable row stays the truth and the repeat resume re-enters
  * the acquisition.
  * @param dependencies - the fiber's agent, workspace, and worktree registries.
- * @param options - the configured worktree root.
+ * @param options - the configured workspace id and worktree root.
  * @returns the acquisition face; the receiving root argument names the
  *   writer that re-takes the binding.
  */
 export function createHostWriterAcquire(
   dependencies: HostWriterAcquireDependencies,
   options: {
+    readonly workspaceId: ResolvedCommandGoalBindingConfig['workspaceId']
     readonly workspaceRoot: string
   },
 ): (root: Agent) => Promise<void> {
@@ -242,9 +244,9 @@ export function createHostWriterAcquire(
       throw new Error('the receiving root is not a live agent; the writer acquisition is refused')
     }
     const workspace = dependencies.workspaceRegistry.list()
-      .find(entry => sameDirectory(entry.path, canonicalRoot))
+      .find(entry => entry.id === options.workspaceId)
     if (workspace === undefined) {
-      throw new Error(`the configured worktree '${canonicalRoot}' is not a registered workspace; the writer acquisition is refused`)
+      throw new Error(`the configured workspace '${options.workspaceId}' is not registered; the writer acquisition is refused`)
     }
     const row = dependencies.worktreeRegistry.list(workspace.id)
       .find(entry => sameDirectory(entry.path, canonicalRoot))
@@ -259,8 +261,13 @@ export function createHostWriterAcquire(
  * Resolve the composition's stop store from the fiber: the tree face mounts
  * when the fiber carries the agent registry, and the release face mounts
  * when the configuration names a worktree root and the fiber carries the
- * workspace and worktree registries. The resource face requires both services
- * that own one-shot child runs and persistent terminals. Missing coverage
+ * workspace and worktree registries. The resource face requires the one-shot
+ * child runtime and the host terminal ownership directory. When the fiber
+ * also carries a project controller, the returned `prepareResumeResources`
+ * additionally fences its admission: preparation requires the controller
+ * lifecycle to be `stopped` or `admission_open` (anything else throws), and
+ * the commit rechecks the unchanged lifecycle before reopening resources,
+ * starting the project when it prepared from `stopped`. Missing coverage
  * leaves that face absent so stop fails closed.
  * @param ctx - the plugin fiber's context.
  * @param config - the resolved deployment configuration.
@@ -275,7 +282,7 @@ export function resolveHostStopAdapters(
   // fail-closed unwired chain.
   const agents = ctx.get('agents')
   const subagents = ctx.get('subagents')
-  const terminals = ctx.get('terminals')
+  const terminals = ctx.get('terminalOwnership')
   const stop: {
     tree?: (root: Agent) => readonly Agent[]
     processes?: (root: Agent) => readonly StopProcess[]
@@ -298,12 +305,28 @@ export function resolveHostStopAdapters(
       // gates on the live receiving root itself and names it as the writer.
       stop.releaseWriter = createHostWriterRelease(
         { workspaceRegistry, worktreeRegistry },
-        { workspaceRoot, tree },
+        { workspaceId: config.workspaceId, workspaceRoot, tree },
       )
       stop.acquireWriter = createHostWriterAcquire(
         { agents, workspaceRegistry, worktreeRegistry },
-        { workspaceRoot },
+        { workspaceId: config.workspaceId, workspaceRoot },
       )
+    }
+  }
+  const controller = ctx.get('projectController')
+  const prepareResources = stop.prepareResumeResources
+  if (controller !== undefined && prepareResources !== undefined) {
+    stop.prepareResumeResources = (root) => {
+      const lifecycle = controller.lifecycle
+      if (lifecycle !== 'stopped' && lifecycle !== 'admission_open') {
+        throw new Error(`project admission cannot resume from ${lifecycle}`)
+      }
+      const commit = prepareResources(root)
+      return () => {
+        if (controller.lifecycle !== lifecycle) throw new Error('project admission changed during resume preparation')
+        commit()
+        if (lifecycle === 'stopped') controller.startProject()
+      }
     }
   }
   return stop
