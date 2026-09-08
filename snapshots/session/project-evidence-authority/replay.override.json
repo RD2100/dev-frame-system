@@ -1,0 +1,130 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "project_evidence_authority_1",
+        "name": "project_evidence",
+        "argumentsDelta": "{\"taskId\":\"task-a\"}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "project_evidence_authority_1",
+          "name": "project_evidence",
+          "arguments": "{\"taskId\":\"task-a\"}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "project_evidence_authority_2",
+        "name": "project_review",
+        "argumentsDelta": "{\"taskId\":\"task-a\",\"decision\":\"pass\",\"findings\":\"[]\"}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "project_evidence_authority_2",
+          "name": "project_review",
+          "arguments": "{\"taskId\":\"task-a\",\"decision\":\"pass\",\"findings\":\"[]\"}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "project_evidence_authority_3",
+        "name": "project_review",
+        "argumentsDelta": "{\"taskId\":\"task-a\",\"decision\":\"pass\",\"findings\":[]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "project_evidence_authority_3",
+          "name": "project_review",
+          "arguments": "{\"taskId\":\"task-a\",\"decision\":\"pass\",\"findings\":[]}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "text"
+      },
+      {
+        "type": "text-delta",
+        "index": 0,
+        "text": "SCHEMA_AND_AUTHORITY_REFUSED"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "text",
+          "text": "SCHEMA_AND_AUTHORITY_REFUSED"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "stop"
+        }
+      }
+    ]
+  }
+]

@@ -1,0 +1,17 @@
+# Authored model responses pin authority refusal and the structural review-findings schema.
+version: 1
+scenario: project-evidence-authority
+profile: headless
+composition: project-evidence-authority
+recording: authored
+header:
+  class: project-evidence-authority
+  pin: true
+  changes: 0
+sessionVariants:
+  win32: true
+expectations:
+  variants:
+    win32: [system-prompt, tool-schemas]
+replay:
+  override: true

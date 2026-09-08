@@ -1,4 +1,4 @@
-/** Explicit Worker delivery and independent lead review over host-owned task evidence. */
+/** Explicit Worker delivery, read-only evidence, and independent lead review over host-owned records. */
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { isAbsolute } from 'node:path'
@@ -44,7 +44,7 @@ export interface Config {
   gitMaxOutputBytes: number
   /** Per-check-process timeout. */
   checkTimeoutMs: number
-  /** Per-check-process output cap. */
+  /** Per-check-process output cap and complete evidence-result byte limit. */
   checkMaxOutputBytes: number
   /** Host-registered commit paths per task bounding what project_commit may commit. */
   commitPathsByTask?: Record<string, string[]>
@@ -64,7 +64,7 @@ const findingsSchema = validation.array(validation.object({
 }).strict())
 
 /**
- * Register explicit delivery and review tools without creating another controller or approving checks.
+ * Register delivery, evidence inspection, and review tools over the existing controller and approved checks.
  * @param ctx - Existing host services and durable role authority.
  * @param config - Approved task checksets and bounded process settings.
  */
@@ -304,15 +304,110 @@ export function apply(ctx: Context, config: Config): void {
     presentCall: args => ({ card: 'generic', title: `Deliver task ${args.taskId}` }), presentResult: () => ({ card: 'generic' }),
   }))
   ctx.tools.register(defineTool({
+    name: 'project_evidence',
+    description: 'Inspect the latest delivery, actual check results, and recorded review for a task assigned to your Worker before project_review. Read-only: identities come from your current Lead assignment and Goal. Missing or stale evidence is explicit; this does not run checks, approve review, or advance the task.',
+    parameters: { taskId: { type: 'string', required: true, description: 'Task assigned to your Worker.' } },
+    output: {
+      schema: { type: 'object', additionalProperties: false, properties: {
+        taskId: { type: 'string', required: true }, state: { type: 'string', required: true },
+        goalId: { type: 'string', required: true }, goalRevision: { type: 'integer', required: true },
+        status: { type: 'string', required: true }, reason: { type: 'string', required: true },
+        requiredChecksDigest: { type: 'json', required: true }, delivery: { type: 'json', required: true },
+        verification: { type: 'json', required: true }, review: { type: 'json', required: true },
+      } },
+      render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    isConcurrencySafe: () => true,
+    async execute(args, exec) {
+      const taskId = parseTask(args.taskId)
+      return await serial(String(taskId), async () => {
+        const initial = resolve(exec.agent, taskId, 'lead', exec.signal)
+        if (!initial.state.rolePolicy?.assignments.some(item => item.sessionId === initial.lead.sessionId && item.role === 'lead')) {
+          throw new Error('Evidence inspection requires the current recorded lead role policy')
+        }
+        const delivery = initial.state.deliveries.findLast(item =>
+          String(item.taskId) === String(taskId) && item.binding.goalId === initial.goal.goalId)
+        const verification = delivery === undefined ? undefined
+          : initial.state.verifications.findLast(item => item.deliveryId === delivery.deliveryId)
+        const review = delivery === undefined ? undefined
+          : initial.state.reviews.findLast(item => item.deliveryId === delivery.deliveryId)
+        const requiredChecksDigest = config.requiredChecksByTask[String(taskId)] ?? null
+        const result = {
+          taskId: String(taskId), state: initial.task.state,
+          goalId: String(initial.goal.goalId), goalRevision: initial.goal.goalRevision, requiredChecksDigest,
+          delivery: delivery === undefined ? null : {
+            deliveryId: String(delivery.deliveryId), workerSessionId: String(delivery.workerSessionId),
+            worktreeId: String(delivery.worktreeId), worktreePath: delivery.worktreePath,
+            sourceCommit: delivery.sourceCommit, sourceFingerprint: String(delivery.sourceFingerprint),
+            snapshotId: String(delivery.snapshotId), goalRevision: delivery.binding.goalRevision,
+          },
+          verification: verification === undefined ? null : {
+            verificationId: String(verification.verificationId), status: verification.status,
+            requiredChecksDigest: String(verification.requiredChecks.digest),
+            checks: verification.checks.map(check => ({ ...check, arguments: [...check.arguments] })),
+          },
+          review: review === undefined ? null : {
+            reviewId: String(review.reviewId), reviewerSessionId: String(review.reviewerSessionId),
+            policyVersion: review.policyVersion, decision: review.decision,
+            findings: review.findings.map(finding => ({ ...finding })),
+          },
+        }
+        const report = (status: string, reason: string) => {
+          const value = { ...result, status, reason }
+          const content = [{ type: 'text', text: JSON.stringify(value) }]
+          if (Buffer.byteLength(JSON.stringify(content), 'utf8') > config.checkMaxOutputBytes) {
+            throw new Error('Task evidence exceeds checkMaxOutputBytes; the host must raise the evidence output limit')
+          }
+          return value
+        }
+        if (delivery === undefined) return report('missing_delivery', 'The assigned Worker has not delivered this task in the current Goal.')
+        if (delivery.workerSessionId !== initial.worker.sessionId || delivery.worktreeId !== initial.sourceId
+          || delivery.worktreePath !== initial.sourcePath || delivery.binding.goalRevision !== initial.goal.goalRevision) {
+          return report('stale_delivery', 'The recorded delivery does not match the current Worker assignment or Goal revision.')
+        }
+        const observed = await snapshot(initial.sourcePath, exec.signal)
+        const current = resolve(exec.agent, taskId, 'lead', exec.signal)
+        if (current.signature !== initial.signature) throw new Error('Evidence inspection authority changed')
+        const latest = current.state.deliveries.findLast(item =>
+          String(item.taskId) === String(taskId) && item.binding.goalId === initial.goal.goalId)
+        const latestVerification = current.state.verifications.findLast(item => item.deliveryId === delivery.deliveryId)
+        const latestReview = current.state.reviews.findLast(item => item.deliveryId === delivery.deliveryId)
+        if (latest?.deliveryId !== delivery.deliveryId
+          || latestVerification?.verificationId !== verification?.verificationId || latestReview?.reviewId !== review?.reviewId) {
+          throw new Error('Task evidence changed during inspection; inspect it again')
+        }
+        if (observed.head !== delivery.sourceCommit || observed.fingerprint !== delivery.sourceFingerprint) {
+          return report('stale_delivery', 'Worker source changed after delivery; a new delivery is required.')
+        }
+        if (verification === undefined) return report('missing_verification', 'No verification is recorded for this delivery.')
+        if (requiredChecksDigest === null || verification.requiredChecks.digest !== requiredChecksDigest) {
+          return report('stale_verification', 'Recorded verification does not match the current host-approved checkset.')
+        }
+        if (verification.status !== 'passed') return report('checks_failed', 'Required checks did not pass; inspect their recorded results.')
+        return review === undefined
+          ? report('review_ready', 'The current delivery has passing checks and awaits your independent project_review.')
+          : report('review_recorded', 'This delivery already has the recorded review shown here.')
+      })
+    },
+    presentCall: args => ({ card: 'generic', title: `Inspect task ${args.taskId} evidence` }), presentResult: () => ({ card: 'generic' }),
+  }))
+  ctx.tools.register(defineTool({
     name: 'project_review',
     description: 'Record your explicit independent lead review of the latest task delivery. Pass submits that exact verified output; changes_required returns it for correction. Repeated identical decisions reuse the recorded review and repair only the task state; a conflicting decision requires a new delivery.',
     parameters: { taskId: { type: 'string', required: true, description: 'Task assigned to your Worker.' },
-      decision: { type: 'string', required: true, description: 'pass or changes_required.' },
-      findings: { type: 'json', required: true, description: 'Array of findings with id, severity (blocking, warning, note), message, optional path and line.' } },
+      decision: { type: 'string', required: true, enum: ['pass', 'changes_required'], description: 'Your independent review decision.' },
+      findings: { type: 'array', required: true, description: 'Review findings as a JSON array; use [] when there are none.',
+        items: { type: 'object', additionalProperties: false, properties: {
+          id: { type: 'string', required: true, description: 'Non-empty finding identifier.' },
+          severity: { type: 'string', required: true, enum: ['blocking', 'warning', 'note'] },
+          message: { type: 'string', required: true, description: 'Non-empty explanation of the finding.' },
+          path: { type: 'string', description: 'Non-empty repository-relative path, when applicable.' },
+          line: { type: 'integer', description: 'Positive one-based source line, when applicable.' },
+        } },
+      } },
     output, isConcurrencySafe: () => false,
     async execute(args, exec) {
       const taskId = parseTask(args.taskId)
-      if (args.decision !== 'pass' && args.decision !== 'changes_required') throw new Error('Review decision must be pass or changes_required')
       const decision = args.decision
       const findings = findingsSchema.parse(args.findings).map(finding => ({
         id: finding.id, severity: finding.severity, message: finding.message,
