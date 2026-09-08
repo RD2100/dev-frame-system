@@ -1632,6 +1632,9 @@ function sameBinding(left: GoalBinding, right: GoalBinding): boolean {
  * lane's authorized adoption of changed approved checks (AT1-10: changing
  * checks invalidates the superseded generation's evidence without resetting
  * usage). Any other difference stays an identity-reuse conflict.
+ * @param current - the stored binding the update must legally advance.
+ * @param binding - the incoming binding update under adoption.
+ * @returns whether the update is a legal generation advance over `current`.
  */
 export function isGenerationAdvance(current: GoalBinding, binding: GoalBinding): boolean {
   return binding.goalRevision > current.goalRevision
