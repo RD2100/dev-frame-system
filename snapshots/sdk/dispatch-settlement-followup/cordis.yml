@@ -1,0 +1,38 @@
+# Authored dispatch scenario over real SDK services and run-owned Git worktrees.
+# Shell tools are outside this scenario and contribute platform-specific prompt sections.
+- id: tool-bash
+  disabled: true
+- id: tool-pwsh
+  disabled: true
+
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    includeDefaultRoots: false
+
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+
+- insert:
+    - id: session-identity
+      name: '../../../packages/experimental/session-identity/src/index.ts'
+
+    - id: agent-hierarchy
+      name: '../../../packages/experimental/agent-hierarchy/src/index.ts'
+      config:
+        roleToolPolicies:
+          controller:
+            inheritedTools: [agent_dispatch]
+          lead:
+            inheritedTools: [agent_dispatch]
+          worker:
+            inheritedTools: []
+
+    - id: agent-dispatch
+      name: '../../../packages/experimental/agent-dispatch/src/index.ts'
+
+    - id: dispatch-settlement-followup
+      name: '../../../packages/experimental/agent-dispatch/tests/fixtures/settlement-snapshot.ts'

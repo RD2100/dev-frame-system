@@ -141,6 +141,11 @@ const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
     verifyWorkspace: verifyProjectIntegration,
     boundSessionsOnly: true,
   },
+  // Hierarchy-created children use native sessions rather than the subagent seam.
+  'dispatch-settlement-followup': {
+    sessionCwd: '.dsh/dispatch/repo',
+    boundSessionsOnly: true,
+  },
   'subagent-dsh-sdk-diagnostic': {
     environment: { DSH_TEST_CHILD_PATCH: dshSdkDiagnosticChildPatch },
   },
@@ -868,6 +873,8 @@ async function verifyHeaders(
   for (const [logIndex, log] of ordered.entries()) {
     const headers = normalizedHeaders(scrubSystemPrompts(log.content), ctx)
     const prompts = normalizedSystemPrompts(log.content, ctx)
+    expect(formatSystemPromptSnapshot(prompts[0] as string, prompts.slice(1)),
+      `${scenario.name}: session ${logIndex} system prompts`).toBe(childPrompts.get(logIndex) ?? prompt)
     for (const [index, header] of headers.entries()) {
       const selectedSchemas = childSchemas.get(logIndex)?.[index]
       const base = reconstructed[index] ?? reconstructed[0]
@@ -878,8 +885,6 @@ async function verifyHeaders(
         ? configured
         : { ...configured as JsonObject, tools: selectedSchemas }
       expect(header, `${scenario.name}: session ${logIndex} header ${index + 1}`).toEqual(expected)
-      expect(formatSystemPromptSnapshot(prompts[index] as string), `${scenario.name}: session ${logIndex} prompt ${index + 1}`)
-        .toBe(childPrompts.get(logIndex) ?? prompt)
     }
   }
 }
@@ -989,6 +994,36 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
       const actualLogs = ordered.map(log => nestedCwd(log.content))
       const actualSnapshots = normalizeSessionSnapshots(actualLogs, actualContext)
       const expectedSnapshots = normalizeSessionSnapshots(expectedContents, expectedContext)
+      if (scenario.name === 'dispatch-settlement-followup') {
+        expect(ordered).toHaveLength(2)
+        const [parent, child] = ordered as [PersistedLog, PersistedLog]
+        const parentEvents = records(parent.content)
+        const childEvents = records(child.content)
+        const parentEnds = parentEvents.filter(event => event.type === 'turn/end')
+        const childEnds = childEvents.filter(event => event.type === 'turn/end')
+        expect(parentEnds.map(event => event.data)).toEqual([1, 2, 3, 4].map(turn => ({ turn, reason: { kind: 'completed' } })))
+        expect(childEnds.map(event => event.data)).toEqual([1, 2].map(turn => ({ turn, reason: { kind: 'completed' } })))
+        expect(child.header.parentSession).toBe(parent.header.id)
+        const messages = (events: JsonObject[]) => events.filter(event => event.type === 'user/message')
+          .map(event => event.data as JsonObject)
+        const source = (message: JsonObject) => message.source as JsonObject
+        const notices = messages(parentEvents).filter(message => source(message).kind === 'dispatch-settled')
+        expect(notices.map(source)).toEqual(childEnds.map(event => ({
+          kind: 'dispatch-settled', form: 'notice', senderSessionId: child.header.id, taskId: 'review-1',
+          turnIdentity: String(event.seq) + ':' + String((event.data as JsonObject).turn),
+          summary: 'Dispatch task review-1: child ' + String(child.header.id) + ' settled turn '
+            + String((event.data as JsonObject).turn) + '.',
+        })))
+        expect(messages(parentEvents).filter(message => source(message).kind === 'user')).toHaveLength(2)
+        const childInputs = messages(childEvents).filter(message => source(message).plugin === 'agent-dispatch')
+        expect(childInputs.map(message => message.content)).toEqual([
+          [{ type: 'text', text: 'Acknowledge this briefing.' }],
+          [{ type: 'text', text: 'Confirm that this is a followup to the same task.' }],
+        ])
+        const calls = parentEvents.filter(event => event.type === 'tool/call').map(event => event.data as JsonObject)
+        expect(calls.map(call => [call.turn, call.name, JSON.parse(String(call.arguments)).followup]))
+          .toEqual([[1, 'agent_dispatch', undefined], [3, 'agent_dispatch', true]])
+      }
       if (scenario.name === 'project-repair-integrate') {
         const evidence = records(ordered[0]!.content)
         const repair = evidence.filter(event => event.type === 'devframe/repair-admission')

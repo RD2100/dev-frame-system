@@ -407,6 +407,9 @@ export function apply(ctx: Context, config?: {
       if (args.role !== 'lead' && args.role !== 'worker') {
         throw new Error(`the agent dispatch tool: 'role' must be 'lead' or 'worker', got '${String(args.role)}'`)
       }
+      // Capture the narrowed role before any await: later dispatch-building
+      // code sits behind calls that would widen the property back to string.
+      const dispatchRole: 'lead' | 'worker' = args.role
       const caller = await resolveCaller(exec.agent, ctx.workspaceRegistry.list(), ctx.worktreeRegistry)
       const worktreeId = brandString<WorktreeId>(requireNonEmpty(args.worktreeId, 'worktreeId'))
       const row = ctx.worktreeRegistry.list(caller.workspace.id).find(entry => entry.id === worktreeId)
@@ -432,9 +435,23 @@ export function apply(ctx: Context, config?: {
           + 'dispatch fresh without followup',
         )
       }
-      const child = await ctx.agentDispatch.createChildAgent(caller.agent, {
+      // Fail loud on a followup without instructions: silently dispatching
+      // or reusing without delivering anything would hide the caller's
+      // mistake behind an honest-looking receipt.
+      if (args.followup === true && (args.prompt === undefined || requireNonEmpty(args.prompt, 'prompt') === '')) {
+        throw new Error(
+          `the agent dispatch tool: task '${taskId}' passed followup: true without a prompt; `
+          + 'pass the continuation instructions with the followup, or dispatch without followup',
+        )
+      }
+      // A restart leaves the reserved child's durable binding without a live
+      // instance. The recovery lane restores the exact identity and worktree
+      // (no re-briefing, no replacement child); the followup, if any, rides
+      // the second hot-reuse call below, because the recovery lane never
+      // re-tasks a child.
+      const dispatchRequest = {
         cwd: row.path,
-        role: args.role,
+        role: dispatchRole,
         taskId,
         pluginId: PluginId(requireNonEmpty(args.pluginId, 'pluginId')),
         worktree: {
@@ -442,23 +459,42 @@ export function apply(ctx: Context, config?: {
           worktreePath: row.path,
           ...(row.branch !== undefined ? { branch: row.branch } : {}),
         },
-      }, {
-        workspaceId: caller.workspace.id,
-        ...(args.childId !== undefined ? { sessionId: brandString<SessionId>(requireNonEmpty(args.childId, 'childId')) } : {}),
-        ...(existing !== undefined ? { sessionId: existing.record.agentId } : {}),
-        ...(existing === undefined && args.prompt !== undefined && requireNonEmpty(args.prompt, 'prompt') !== ''
-          ? { prompt: args.prompt }
-          : {}),
-        ...(existing !== undefined && args.followup === true && args.prompt !== undefined && requireNonEmpty(args.prompt, 'prompt') !== ''
-          ? { followupPrompt: args.prompt }
-          : {}),
-        // The child must assemble the standard persona, whose {{model}}
-        // variable resolves from its own agent options: inherit only the
-        // approved parent route (the request header owns provider/model and
-        // effort after request-time selection) and the configured output
-        // limit - never the parent's whole option bag.
-        agentOptions: parentRouteForDelegation(caller.agent),
-      })
+      }
+      const cold = existing !== undefined && !existing.live
+      const child = cold
+        ? await ctx.agentDispatch.recoverChildAgent(caller.agent, dispatchRequest, {
+          workspaceId: caller.workspace.id,
+          sessionId: existing.record.agentId,
+          agentOptions: parentRouteForDelegation(caller.agent),
+        })
+        : await ctx.agentDispatch.createChildAgent(caller.agent, dispatchRequest, {
+          workspaceId: caller.workspace.id,
+          ...(args.childId !== undefined ? { sessionId: brandString<SessionId>(requireNonEmpty(args.childId, 'childId')) } : {}),
+          ...(existing !== undefined ? { sessionId: existing.record.agentId } : {}),
+          ...(existing === undefined && args.prompt !== undefined && requireNonEmpty(args.prompt, 'prompt') !== ''
+            ? { prompt: args.prompt }
+            : {}),
+          ...(existing !== undefined && args.followup === true && args.prompt !== undefined && requireNonEmpty(args.prompt, 'prompt') !== ''
+            ? { followupPrompt: args.prompt }
+            : {}),
+          // The child must assemble the standard persona, whose {{model}}
+          // variable resolves from its own agent options: inherit only the
+          // approved parent route (the request header owns provider/model and
+          // effort after request-time selection) and the configured output
+          // limit - never the parent's whole option bag.
+          agentOptions: parentRouteForDelegation(caller.agent),
+        })
+      if (cold && args.followup === true && args.prompt !== undefined && requireNonEmpty(args.prompt, 'prompt') !== '') {
+        // The recovered child is live again; the hot-reuse lane delivers the
+        // continuation under the deterministic followup identity. The engine
+        // dedupe answers with the same child, so no second child exists.
+        await ctx.agentDispatch.createChildAgent(caller.agent, dispatchRequest, {
+          workspaceId: caller.workspace.id,
+          sessionId: existing.record.agentId,
+          followupPrompt: args.prompt,
+          agentOptions: parentRouteForDelegation(caller.agent),
+        })
+      }
       const ack = await ctx.agentDispatch.taskAck(caller.agent, taskId)
       if (ack === undefined) {
         throw new Error(`the agent dispatch tool: task '${taskId}' has no dispatched child to acknowledge`)

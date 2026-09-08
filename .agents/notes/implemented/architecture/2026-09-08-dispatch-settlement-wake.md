@@ -10,11 +10,11 @@ English | [中文](2026-09-08-dispatch-settlement-wake.zh.md)
 
 ## Decision
 
-The dispatch service mounts a settlement watch on every live dispatched child, including cold-recovered ones. When the child's own log records a completed `turn/end` and that record flushes durably, the watch delivers a typed `dispatch-settled` notice to the parent as the parent's next ordinary turn (`followup()`): an idle parent opens a turn immediately, a busy parent claims the notice right after its in-flight turn ends. Steering is not used — a steered message targets a step boundary the turn may never reach and strands the notice.
+The dispatch service mounts a settlement watch on every live dispatched child, including cold-recovered ones. When the child's own log records a terminal `turn/end` — completed, error, or aborted: the watch deliberately does not filter on the reason, because a failure-ended turn must still wake the chain — and that record flushes durably, the watch delivers a typed `dispatch-settled` notice to the parent as the parent's next ordinary turn (`followup()`): an idle parent opens a turn immediately, a busy parent claims the notice right after its in-flight turn ends. Steering is not used — a steered message targets a step boundary the turn may never reach and strands the notice.
 
 Deduplication is layered. A per-live-child claim set, taken synchronously when the settlement is observed, stops concurrent watches from double-delivering; it is scoped to the exact Agent instance, so an independent context that reuses a session id holds its own claims. The parent's durable facts — the logged notice, or the queued one still parked in its inbox — stop re-delivery across remounts. A withheld delivery releases its claim and retries on the next idle edge.
 
-A `followup: true` dispatch argument with a prompt now delivers explicit continuation instructions to the task's existing child and refuses a blind followup; a fresh dispatch never queues a followup, and reuse without the field behaves exactly as before. Recovery without a prompt stays side-effect free.
+A `followup: true` dispatch argument with a prompt now delivers explicit continuation instructions to the task's existing child and refuses a blind followup; a followup without a prompt also refuses instead of silently degrading; a fresh dispatch never queues a followup, and reuse without the field behaves exactly as before. Recovery without a prompt stays side-effect free.
 
 ## Alternatives considered
 
@@ -24,4 +24,6 @@ A `followup: true` dispatch argument with a prompt now delivers explicit continu
 
 ## Consequences
 
-Parents wake on real child completions without any scripted re-prompt, and callers can continue a settled child explicitly. Every settlement opens one parent turn, so request budgets must cover wake-driven requests. Notice delivery failure is logged and dropped: the child is never retained to retry a notice, because the child's own log remains the durable record either way.
+Parents wake on real child settlements without any scripted re-prompt, and callers can continue a settled child explicitly. Every settlement opens one parent turn, so request budgets must cover wake-driven requests. Notice delivery failure is logged and dropped: the child is never retained to retry a notice, because the child's own log remains the durable record either way.
+
+The [authored SDK scenario](../../../../snapshots/sdk/dispatch-settlement-followup/snapshot.yml) runs the real dispatch, hierarchy, worktree registry, and persistence services with scripted model responses. It checks both child settlements against their parent notice identities and delivers one explicitly requested followup to the same child. Complete prompt sequences are pinned, including changed parent headers and the child's own prompt. This keyless evidence does not establish real-model task acceptance.

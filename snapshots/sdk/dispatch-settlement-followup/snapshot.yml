@@ -1,0 +1,10 @@
+version: 1
+scenario: dispatch-settlement-followup
+profile: sdk
+composition: sdk-dispatch-settlement-followup
+recording: authored
+header:
+  class: dispatch-settlement-followup
+  pin: true
+  childSystemPrompts: [1]
+  childToolSchemas: [1]
