@@ -25,3 +25,5 @@ A `followup: true` dispatch argument with a prompt now delivers explicit continu
 ## Consequences
 
 Parents wake on real child settlements without any scripted re-prompt, and callers can continue a settled child explicitly. Every settlement opens one parent turn, so request budgets must cover wake-driven requests. Notice delivery failure is logged and dropped: the child is never retained to retry a notice, because the child's own log remains the durable record either way.
+
+The [authored SDK scenario](../../../../snapshots/sdk/dispatch-settlement-followup/snapshot.yml) runs the real dispatch, hierarchy, worktree registry, and persistence services with scripted model responses. It checks both child settlements against their parent notice identities and delivers one explicitly requested followup to the same child. Complete prompt sequences are pinned, including changed parent headers and the child's own prompt. This keyless evidence does not establish real-model task acceptance.

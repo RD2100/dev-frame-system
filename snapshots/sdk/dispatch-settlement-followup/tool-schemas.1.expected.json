@@ -1,0 +1,52 @@
+{
+  "initial": [
+    {
+      "name": "agent_dispatch",
+      "description": "Dispatch a child agent for one task onto one registered git worktree: the controller dispatches a lead, and a lead dispatches workers inside its approved plugin scopes. Name the task id, the plugin scope, and the worktree id (get worktree ids from worktree_create or the host), and pass a briefing prompt for a fresh dispatch — the briefing is queued only after the child is published. Every result carries ack: what the child's own durable log proves about the task (briefed while pending, claimed while executing, terminal with the turn's recorded ending — completed means the task finished cleanly, dropped when the briefing was cancelled unrun). If this task already has a dispatched child, the tool refuses and names it: pass retry: true to reuse that child instead, which never re-delivers the briefing and reports the task's current ack, or pass followup: true with a new prompt to continue that child with explicit instructions. The engine owns the child's lifecycle and the hierarchy owns every denial; refusals name the cause and the fix.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "description": "The child's hierarchy role: 'lead' from the controller, or 'worker' from a lead."
+          },
+          "taskId": {
+            "type": "string",
+            "description": "The task this child owns; one task has at most one dispatched child."
+          },
+          "pluginId": {
+            "type": "string",
+            "description": "The plugin scope the child works under; a lead's worker scope must be in that lead's approved set."
+          },
+          "worktreeId": {
+            "type": "string",
+            "description": "The registered worktree id the child will own as its single writer, from worktree_create or the host."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "The task briefing queued to a freshly dispatched child after publication. Never re-sent on a retry; with followup: true it is the continuation instructions for the existing child instead."
+          },
+          "retry": {
+            "type": "boolean",
+            "description": "Pass true to reuse the child this task already has instead of dispatching a new one; no briefing is queued on reuse."
+          },
+          "followup": {
+            "type": "boolean",
+            "description": "Pass true with a prompt to deliver explicit continuation instructions to the child this task already has: the instructions queue as the child's next ordinary turn and wake it. Requires an existing dispatched child; a fresh dispatch never queues a followup."
+          },
+          "childId": {
+            "type": "string",
+            "description": "The preallocated session id for the child, when the deployment configures one (the leadPluginScopes approved sets are keyed by these ids). Omitted, the engine allocates the identity."
+          }
+        },
+        "required": [
+          "role",
+          "taskId",
+          "pluginId",
+          "worktreeId"
+        ]
+      }
+    }
+  ],
+  "changes": []
+}
