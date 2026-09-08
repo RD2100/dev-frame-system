@@ -140,9 +140,13 @@ controller 串行执行任务变更与集成尝试。任务记录、累计请求
 
 #### 模型看到什么
 
-挂载消费者会暴露带 `taskId` 和 `action` 参数的 `project_integrate`。成功结果包含任务 id、任务状态和集成观察；失败通过工具运行时报告拒绝原因。普通工具调用与结果日志承载这些模型可见值。仅挂载服务不会暴露工具。任务消费者单独暴露 `project_task`：规划需要标题与插件范围，启动接受可选 briefing。结果报告 `taskId`、`state` 和 `briefingQueued`；指令入队不代表 Worker 已完成。
+挂载消费者会暴露带 `taskId` 和 `action` 参数的 `project_integrate`。成功结果包含任务 id、任务状态和集成观察；失败通过工具运行时报告拒绝原因。普通工具调用与结果日志承载这些模型可见值。仅挂载服务不会暴露工具。任务消费者单独暴露 `project_task`：规划需要标题与插件范围，启动接受可选 briefing。结果报告 `taskId`、`state` 和 `briefingQueued`；指令入队不代表 Worker 已完成。交付消费者还提供 `project_deliver`（任务与可选重试标志）、`project_review`（任务、显式决定与发现项）和 `project_commit`（任务、显式相对路径与可选提交说明）；模型不能指定身份、源码路径、检查命令，也不能越过宿主登记的提交范围。
 
-交付消费者还提供 `project_deliver`（任务与可选重试标志）、`project_review`（任务、显式决定与发现项）和 `project_commit`（任务、显式相对路径与可选提交说明）。三者返回 `taskId`、`state` 和 `outcome`，通过普通工具调用与结果日志展示；模型不能指定身份、源码路径、检查命令，也不能越过宿主登记的提交范围。
+##### 交付、审查与提交结果
+
+```markdown
+Task <taskId>: <state>; <outcome>.
+```
 
 #### Token 影响
 

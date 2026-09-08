@@ -140,9 +140,13 @@ No runtime invariant companion is published: Git advancement and task persistenc
 
 #### What the model sees
 
-Mounting the consumer exposes `project_integrate` with `taskId` and `action` parameters. Successful results contain the task id, task state, and integration observation; failures report the refusal through the tool runtime. The ordinary tool call/result log carries these model-visible values. Mounting the service alone does not expose a tool. The task consumer separately exposes `project_task`: plan requires a title and plugin scope, while start accepts an optional briefing. Its result reports `taskId`, `state`, and `briefingQueued`; queued instructions do not prove Worker completion.
+Mounting the consumer exposes `project_integrate` with `taskId` and `action` parameters. Successful results contain the task id, task state, and integration observation; failures report the refusal through the tool runtime. The ordinary tool call/result log carries these model-visible values. Mounting the service alone does not expose a tool. The task consumer separately exposes `project_task`: plan requires a title and plugin scope, while start accepts an optional briefing. Its result reports `taskId`, `state`, and `briefingQueued`; queued instructions do not prove Worker completion. The delivery consumer also exposes `project_deliver` (task and optional retry flag), `project_review` (task, explicit decision, and findings), and `project_commit` (task, explicit relative paths, and optional message); models cannot choose identities, source paths, check commands, or a commit scope beyond the host-registered one.
 
-The delivery consumer also exposes `project_deliver` (task and optional retry flag), `project_review` (task, explicit decision, and findings), and `project_commit` (task, explicit relative paths, and optional message). All return `taskId`, `state`, and `outcome` through ordinary tool call/result logs; models cannot choose identities, source paths, check commands, or a commit scope beyond the host-registered one.
+##### Delivery, review, and commit results
+
+```markdown
+Task <taskId>: <state>; <outcome>.
+```
 
 #### Token effect
 
