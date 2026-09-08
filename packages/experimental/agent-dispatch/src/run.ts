@@ -25,7 +25,7 @@
 import z from '@deepseek-ai/schemastery'
 import { Service, type Context } from '@deepseek-ai/cordis'
 import { readFile } from 'node:fs/promises'
-import { TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
+import { TaskId, type TaskRecord } from '@deepseek-ai/dsh-experimental-project-contracts'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { WorktreeLockHolder } from '@deepseek-ai/dsh-worktree-registry'
 import type { WorktreeId as WorktreeIdBrand } from '@deepseek-ai/dsh-worktree-registry'
@@ -36,6 +36,7 @@ import {
 } from '@deepseek-ai/dsh-experimental-devframe'
 import type {
   DevFrameRequiredChecksConfig,
+  ProjectLifecycleState,
   RequiredChecksConfigStore,
 } from '@deepseek-ai/dsh-experimental-devframe'
 import type {} from '@deepseek-ai/dsh-session-projection'
@@ -204,7 +205,7 @@ export class AgentProjectRun extends Service {
    * refuses every board move until it does.
    * @returns the lifecycle state after the start.
    */
-  startProject() {
+  startProject(): ProjectLifecycleState {
     return this.ctx.projectController.startProject()
   }
 
@@ -239,7 +240,7 @@ export class AgentProjectRun extends Service {
    * @param taskId - The task the preflight serves.
    * @returns the task's board record, admitted.
    */
-  requireAdmittedTask(taskId: TaskId) {
+  requireAdmittedTask(taskId: TaskId): TaskRecord {
     const record = this.ctx.projectController.find(taskId)
     if (record === undefined) {
       throw new ProjectRunError(
@@ -282,6 +283,16 @@ export class AgentProjectRun extends Service {
    * @returns the established identity receipt.
    */
   async hostStart(controllerSessionId: SessionId): Promise<CandidateHostReceipt> {
+    const scenario = await this.loadCandidateScenario()
+
+    return this.startCandidateScenario(controllerSessionId, scenario)
+  }
+
+  /**
+   * Read the host-owned scenario without opening admission or acquiring locks.
+   * @returns The configured workspace and approved task facts.
+   */
+  async loadCandidateScenario(): Promise<CandidateScenario> {
     if (this.config.candidateScenarioPath === undefined) {
       throw new ProjectRunError(
         'no candidateScenarioPath is configured; the host bootstrap face is unavailable',
@@ -297,6 +308,10 @@ export class AgentProjectRun extends Service {
       )
     }
 
+    return scenario
+  }
+
+  private async startCandidateScenario(controllerSessionId: SessionId, scenario: CandidateScenario): Promise<CandidateHostReceipt> {
     // The workspace row for the anchor persists across restarts; adopt the
     // pre-built worktrees once and reuse the registered rows afterwards.
     const known = this.ctx.workspaceRegistry.list().find(row => row.path === scenario.anchorPath)
@@ -361,7 +376,7 @@ export class AgentProjectRun extends Service {
     // refusal and reports the current state.
     let admission: string
     try {
-      admission = String(this.startProject())
+      admission = this.startProject()
     } catch (error) {
       if ((error as { code?: string }).code !== 'PROJECT_CONTROLLER_ILLEGAL_TRANSITION'
         || !(error instanceof Error) || !error.message.includes('requires stopped')) throw error

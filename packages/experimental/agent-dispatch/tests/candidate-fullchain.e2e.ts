@@ -58,7 +58,7 @@ interface HttpResult {
   readonly body: string
 }
 
-type JournalEvent = { type?: string; time?: number; data?: Record<string, unknown> }
+type JournalEvent = { type?: string; seq?: number; time?: number; id?: string; data?: Record<string, unknown> }
 
 /** The repository zstd reader: every structurally complete frame decodes. */
 const { scanZstdFrames, createZstdFrameDecoder } = await import('../../../session/session-persistence-jsonl/src/zstd.ts')
@@ -104,6 +104,42 @@ async function decodeSessionLogs(dshHome: string): Promise<{ path: string; text:
   const decoded: { path: string; text: string }[] = []
   for (const path of sessionLogPaths(dshHome)) decoded.push({ path, text: await decodeSessionLog(path) })
   return decoded
+}
+
+/** Merge every durable segment belonging to the exact session identity. */
+async function mergedSessionEvents(dshHome: string, sessionId: string): Promise<JournalEvent[]> {
+  const bySequence = new Map<number, JournalEvent>()
+  for (const path of sessionLogPaths(dshHome)) {
+    const events = parseLogEvents(await decodeSessionLog(path))
+    if (!events.some(event => event.type === 'session' && event.id === sessionId)) continue
+    for (const event of events) {
+      if (event.type === 'session') continue
+      if (!Number.isSafeInteger(event.seq)) throw new Error(`session ${sessionId} has an event without an integer sequence`)
+      const sequence = event.seq!
+      const previous = bySequence.get(sequence)
+      if (previous !== undefined && JSON.stringify(previous) !== JSON.stringify(event)) {
+        throw new Error(`session ${sessionId} has conflicting records at sequence ${sequence}`)
+      }
+      bySequence.set(sequence, event)
+    }
+  }
+  return [...bySequence.values()].sort((a, b) => a.seq! - b.seq! || (a.time ?? 0) - (b.time ?? 0))
+}
+
+/** Wait for a durable state predicate, retaining timeout as an assertion failure. */
+async function waitForSessionEvents(
+  dshHome: string,
+  sessionId: string,
+  predicate: (events: JournalEvent[]) => boolean | Promise<boolean>,
+  description: string,
+): Promise<JournalEvent[]> {
+  const deadline = Date.now() + 10_000
+  do {
+    const events = await mergedSessionEvents(dshHome, sessionId)
+    if (await predicate(events)) return events
+    if (Date.now() >= deadline) throw new Error(`session ${sessionId} did not persist ${description}; last sequence ${events.at(-1)?.seq ?? 'none'}`)
+    await new Promise(resolve => setTimeout(resolve, 25))
+  } while (true)
 }
 
 /**
@@ -157,10 +193,10 @@ async function startCandidateWeb(
   // packages only when the profile carries the production node_modules
   // layout. Mirror it with a junction to the repository's installed
   // workspace so loader-generated imports behave like the shipped app.
-  const profileDir = join(dshHome, '.dsh', 'profiles', 'web')
+  const profileDir = join(dshHome, 'profiles', 'web')
   await mkdir(profileDir, { recursive: true })
-  await symlink(join(REPO_ROOT, 'node_modules'), join(profileDir, 'node_modules'), 'junction').catch((error: NodeJS.ErrnoException) => {
-    if (error.code !== 'EEXIST') throw error
+  await symlink(join(REPO_ROOT, 'node_modules'), join(profileDir, 'node_modules'), 'junction').catch((error: unknown) => {
+    if (!(error instanceof Error) || !('code' in error) || error.code !== 'EEXIST') throw error
   })
   const patches = [EXAMPLE_OVERLAY, DEVFRAME_PATCH, CANDIDATE_OVERLAY]
   // The generated digest patch is the last sibling: the deployment's
@@ -444,7 +480,10 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
     }
   })
 
-  it('performs the host bootstrap through a replayed turn and re-establishes the same identity after restart', { timeout: 420_000 }, async () => {
+  it.each([
+    { explicitCommands: true, title: 'explicit stop and resume' },
+    { explicitCommands: false, title: 'plain cold restart' },
+  ])('$title', { timeout: 420_000 }, async ({ explicitCommands }) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-candidate-fullchain-host-'))
     const dshHome = join(root, '.dsh')
     await mkdir(dshHome, { recursive: true })
@@ -453,6 +492,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
     // host-owned scenario file, and the approveTaskChecks cross-check.
     const prepared = await prepareCandidateScenario(root, join(dshHome, 'checks-ledger.json'))
     await writeScenarioFile(dshHome, prepared)
+    const digestPatchPath = await writeDigestPatch(dshHome, prepared)
     const expected = expectedDigests(prepared)
     for (const task of prepared.tasks) {
       expect(String(task.digest), `digest cross-check for ${task.taskId}`).toBe(expected[task.taskId])
@@ -465,14 +505,16 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         { text: 'HOST_BOOTSTRAP_OK' },
       ],
     }]
-    // The restart leg confirms the persisted identity: the current goal
-    // resumes, so the leg drives a plain turn — re-invoking the bootstrap
-    // would refuse with "a goal is already current", which is the fold's
-    // correct behavior, not a recovery path.
+    // Public resume queues its own goal round. Hold its response while the
+    // test checks the admitted request and shuts down the owned process.
     const resumeScript = [{
-      needle: 'host-resume-probe',
-      turns: [{ text: 'HOST_RESUME_OK' }],
+      needle: '<goal_round>',
+      turns: [{ text: 'HOST_RESUME_OK', gate: () => false }],
     }]
+    let explicitResumeBindings: unknown[] | undefined
+    const childExits: Array<{ exitCode: number | null; signal: NodeJS.Signals | null }> = []
+    let stoppedLifecycles: string[] = []
+    let writerReleased = false
 
     /** Extract the host receipt the wire carried in the tool result. */
     function receiptFrom(text: string): { workspaceId: string; worktreeIds: string[]; controllerSessionId?: string } {
@@ -511,10 +553,16 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       const running = await startCandidateWeb(root, dshHome, {
         DEEPSEEK_API_KEY: 'wire-replay-key',
         DEEPSEEK_BASE_URL: replay.baseURL,
-      })
+      }, digestPatchPath)
       try {
         const url = new URL(running.launchUrl)
         const cookie = await exchangeLaunchCookie(running.launchUrl)
+        const inventory = await postRpc(Number(url.port), url.host, cookie, 'pluginInventory/list')
+        const entries = (unwrapRpc('pluginInventory/list', inventory.body) as {
+          entries: { moduleName: string; enabled: boolean; fiberPhase: string | null }[]
+        }).entries
+        expect(entries.find(entry => entry.moduleName === '@deepseek-ai/dsh-experimental-project-controller/completion-consumer'))
+          .toMatchObject({ enabled: true, fiberPhase: 'active' })
         let sessionId = resumeSessionId
         if (sessionId === undefined) {
           // The request-budget consumer admits only the configured root, so
@@ -527,25 +575,68 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
           const listed = await postRpc(Number(url.port), url.host, cookie, 'session/list', { args: { _request: {} } })
           const listValue = JSON.stringify(unwrapRpc('session/list', listed.body))
           expect(listValue, `session/list after restart must carry ${sessionId}`).toContain(sessionId)
+          const chargedBeforeCommands = await chargedRequestsOf()
+          const requestsBeforeCommands = replay.requests.length
+          for (const line of explicitCommands ? ['/devframe-stop', '/devframe-resume'] : []) {
+            const executed = await postRpc(Number(url.port), url.host, cookie, 'commands/execute', {
+              args: { agentId: sessionId, line, images: [] },
+            })
+            expect(executed.status, `${line}: ${redact(executed.body)}`).toBe(200)
+            const value = unwrapRpc('commands/execute', executed.body) as { result: { kind: string } }
+            expect(value.result.kind, `${line}: ${redact(executed.body)}`).toBe('success')
+            if (line === '/devframe-stop') {
+              const stoppedEvents = await waitForSessionEvents(dshHome, sessionId, async (events) => {
+                const latest = events.filter(event => event.type === 'devframe/goal-binding').at(-1)?.data
+                if (latest?.lifecycle !== 'stopped' || latest.goalId !== beforeGoalId) return false
+                const registry = JSON.parse(await readFile(join(dshHome, 'storages', 'worktree_registry.json'), 'utf8')) as {
+                  tables: { worktrees: Record<string, { path: string; lockedBy?: string }> }
+                }
+                const target = Object.values(registry.tables.worktrees).find(row => row.path === prepared.targetWorktreePath)
+                return target !== undefined && target.lockedBy === undefined
+              }, 'stopped binding and released writer')
+              const bindings = stoppedEvents
+                .filter(event => event.type === 'devframe/goal-binding')
+              expect(bindings.at(-1)?.data).toMatchObject({ lifecycle: 'stopped' })
+              stoppedLifecycles = bindings.map(event => (event.data as { lifecycle: string }).lifecycle).slice(-3)
+              expect(stoppedLifecycles)
+                .toEqual(['stop_requested', 'quiescence_confirmed', 'stopped'])
+              const registry = JSON.parse(await readFile(join(dshHome, 'storages', 'worktree_registry.json'), 'utf8')) as {
+                tables: { worktrees: Record<string, { path: string; lockedBy?: string }> }
+              }
+              const target = Object.values(registry.tables.worktrees).find(row => row.path === prepared.targetWorktreePath)
+              expect(target).toBeDefined()
+              expect(target?.lockedBy).toBeUndefined()
+              writerReleased = target !== undefined && target.lockedBy === undefined
+              expect(await chargedRequestsOf()).toBe(chargedBeforeCommands)
+              expect(replay.requests.length).toBe(requestsBeforeCommands)
+            }
+          }
+          if (explicitCommands) {
+            explicitResumeBindings = (await waitForSessionEvents(dshHome, sessionId, (events) => {
+              const latest = events.filter(event => event.type === 'devframe/goal-binding').at(-1)?.data
+              return latest?.lifecycle === 'admission_open' && latest.goalId === beforeGoalId && latest.goalRevision === beforeRevision + 2
+            }, 'explicit resumed binding'))
+              .filter(event => event.type === 'devframe/goal-binding')
+          }
         }
-        const prompted = await postRpc(Number(url.port), url.host, cookie, 'session/prompt', { args: {
-          request: { requestId: randomUUID(), sessionId, mode: 'queue', content: [{ type: 'text', text: prompt }] },
-        } })
-        expect(prompted.status, `session/prompt status; body=${redact(prompted.body)}`).toBe(200)
-        unwrapRpc('session/prompt', prompted.body)
+        if (resumeSessionId === undefined || !explicitCommands) {
+          const prompted = await postRpc(Number(url.port), url.host, cookie, 'session/prompt', { args: {
+            request: { requestId: randomUUID(), sessionId, mode: 'queue', content: [{ type: 'text', text: prompt }] },
+          } })
+          expect(prompted.status, `session/prompt status; body=${redact(prompted.body)}`).toBe(200)
+          unwrapRpc('session/prompt', prompted.body)
+        }
         // The web session also fires a title-generation request through the
         // same lane; scan every captured body for the turn's own request
-        // instead of assuming request positions. The resume leg lands here
-        // too: the consumer's pre-step resumes the current goal through the
-        // public resume lane and releases the model stream, so a real
-        // post-restart model request is the acceptance evidence.
+        // instead of assuming request positions. The resume command queues
+        // the native goal round without a second user prompt.
         for (let tick = 0; tick < 600; tick++) {
           const bodies = replay.requests.map(request => JSON.stringify(request.body))
           // The receipt lands only after the turn executes project_host_start,
           // so the bootstrap leg keeps polling past its own prompt request.
           const receiptHit = bodies.find(text => text.includes('admission_open'))
           if (receiptHit !== undefined) return { sessionId, receipt: receiptFrom(receiptHit) }
-          if (!requireReceipt && bodies.some(text => text.includes(prompt))) return { sessionId }
+          if (!requireReceipt && bodies.some(text => text.includes('<goal_round>') && text.includes('"tools"'))) return { sessionId }
           await new Promise(resolve => setTimeout(resolve, 100))
         }
         throw new Error(`wire replay lane saw ${replay.requests.length} requests in 60s, none carrying "${prompt}"; tool messages: ${
@@ -555,7 +646,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
           }).join(' | ') || 'none')
         }\n${redact(running.output())}`)
       } finally {
-        await stopCandidateWeb(running)
+        childExits.push(await stopCandidateWeb(running))
       }
     }
 
@@ -573,9 +664,8 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       expect(firstReceipt.worktreeIds.length, `receipt ${JSON.stringify(firstReceipt)}`).toBe(2)
       // The ruled capability evidence, captured before the restart: the
       // bootstrap bound one goal at one revision, folded at admission_open.
-      const controllerLog = sessionLogPaths(dshHome).find(path => path.includes(controllerSessionId))
-      expect(controllerLog, 'controller session log after the first bootstrap').toBeDefined()
-      const beforeBindings = parseLogEvents(await decodeSessionLog(controllerLog!))
+      const beforeBindings = (await waitForSessionEvents(dshHome, controllerSessionId,
+        events => events.some(event => event.type === 'devframe/goal-binding' && event.data?.lifecycle === 'admission_open'), 'initial open binding'))
         .filter(event => event.type === 'devframe/goal-binding')
       expect(beforeBindings.length, 'one binding record after the first bootstrap').toBe(1)
       beforeGoalId = String((beforeBindings[0]!.data as { goalId?: unknown }).goalId)
@@ -586,7 +676,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       chargedBeforeResume = await chargedRequestsOf()
       expect(chargedBeforeResume, 'the first bootstrap charged the budget').toBeGreaterThanOrEqual(1)
     } catch (error) {
-      throw new Error(`${error instanceof Error ? error.message : String(error)}`, { cause: error })
+      throw new Error(error instanceof Error ? error.message : String(error), { cause: error })
     } finally {
       await first.close()
     }
@@ -600,26 +690,45 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
     try {
       const driven = await driveHostTurn(second, 'host-resume-probe: confirm the persisted host identity.', false, controllerSessionId)
       expect(driven.sessionId).toBe(controllerSessionId)
-      const resumedLog = sessionLogPaths(dshHome).find(path => path.includes(controllerSessionId))
-      expect(resumedLog, 'controller session log after the restart leg').toBeDefined()
+      expect(second.requests.filter((request) => {
+        const body = JSON.stringify(request.body)
+        return body.includes('<goal_round>') && body.includes('"tools"')
+      }), 'one native continuation request after public resume').toHaveLength(1)
       // Binding face: the resumed turn belongs to the SAME goal — every
       // record names the identical goal id, the resume landed a new binding
       // record on top of the pre-restart one, and that record advanced the
       // revision.
-      const afterEvents = parseLogEvents(await decodeSessionLog(resumedLog!))
+      const afterEvents = await waitForSessionEvents(dshHome, controllerSessionId, (events) => {
+        const latest = events.filter(event => event.type === 'devframe/goal-binding').at(-1)?.data
+        return latest?.lifecycle === 'admission_open' && latest.goalId === beforeGoalId
+          && latest.goalRevision === beforeRevision + (explicitCommands ? 2 : 1)
+      }, 'revision-advanced open binding')
       const afterBindings = afterEvents.filter(event => event.type === 'devframe/goal-binding')
+      if (explicitCommands) {
+        expect(explicitResumeBindings).toBeDefined()
+        expect(afterBindings, 'the first model pre-step does not repeat the explicit resume').toEqual(explicitResumeBindings)
+      } else {
+        expect(afterBindings, 'cold pre-step restores exactly one binding').toHaveLength(beforeBindingCount + 1)
+        expect(afterEvents.filter(event => event.type === 'command/done'), 'cold restoration needs no manual command').toHaveLength(0)
+      }
       for (const binding of afterBindings) {
         expect(String((binding.data as { goalId?: unknown }).goalId), 'the resume stayed on the same goal').toBe(beforeGoalId)
       }
       expect(afterBindings.length, 'the resume landed a new binding record').toBeGreaterThan(beforeBindingCount)
       const afterRevision = Math.max(...afterBindings.map(binding => Number((binding.data as { goalRevision?: unknown }).goalRevision)))
       expect(afterRevision, 'the resumed binding advanced the revision').toBeGreaterThan(beforeRevision)
-      assertGoalBindingAdmissionOpen(afterEvents, 'the restart leg')
+      expect(afterRevision).toBe(beforeRevision + (explicitCommands ? 2 : 1))
+      expect(afterBindings.at(-1)?.data, 'the resumed binding has open admission')
+        .toMatchObject({ lifecycle: 'admission_open', goalId: beforeGoalId, goalRevision: afterRevision })
       // Project face: the durable charged-usage global accumulated across
       // the restart (the project-level contract, no goal bucketing).
       const chargedAfterResume = await chargedRequestsOf()
       expect(chargedAfterResume, 'the resumed request charged the same durable budget')
         .toBeGreaterThan(chargedBeforeResume)
+      console.log('candidate cold lifecycle receipt', JSON.stringify({
+        goalId: beforeGoalId, beforeRevision, afterRevision, stoppedLifecycles, writerReleased,
+        resumeRequests: second.requests.length, duplicateBinding: false, childExits,
+      }))
     } catch (error) {
       // Archive the controller log before the finally deletes the home: the
       // resumed turn's own error lives there. Best effort only.
@@ -632,11 +741,13 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         // The archive is diagnostic convenience; the original error still
         // propagates.
       }
-      throw new Error(`${error instanceof Error ? error.message : String(error)}`, { cause: error })
+      throw new Error(error instanceof Error ? error.message : String(error), { cause: error })
     } finally {
       await second.close()
     }
     await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 25 })
+    expect(existsSync(root)).toBe(false)
+    console.log('candidate cold cleanup receipt', JSON.stringify({ homeRemoved: !existsSync(root), childExits }))
   })
 
   it('recovers a failed first bootstrap through the same composition without double charging', { timeout: 420_000 }, async () => {
@@ -718,7 +829,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         // The archive is diagnostic convenience; the original error still
         // propagates.
       }
-      throw new Error(`${error instanceof Error ? error.message : String(error)}`, { cause: error })
+      throw new Error(error instanceof Error ? error.message : String(error), { cause: error })
     } finally {
       await replay.close()
       if (running !== undefined) await stopCandidateWeb(running)
@@ -778,6 +889,97 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       }
     }
 
+    /** Read one durable task state without making the replay gate async. */
+    const taskStateOf = (taskId: string): string | undefined => {
+      const tablePath = join(dshHome, 'storages', 'project_tasks.json')
+      if (!existsSync(tablePath)) return undefined
+      try {
+        const document = JSON.parse(readFileSync(tablePath, 'utf8')) as {
+          tables?: { tasks?: Record<string, { state?: string }> }
+        }
+        return document.tables?.tasks?.[taskId]?.state
+      } catch {
+        // A partially flushed domain file is retried by the next gate poll.
+        return undefined
+      }
+    }
+
+    const allTasksIn = (state: string): boolean => taskStateOf('task-a') === state && taskStateOf('task-b') === state
+    const allTasksSubmitted = (): boolean => allTasksIn('submitted')
+    const allTasksIntegrated = (): boolean => allTasksIn('integrated')
+
+    /** Read one tool result from a provider request body for dynamic ids. */
+    const toolResultTextFromBody = (body: string, callId: string): string | undefined => {
+      try {
+        const parsed = JSON.parse(body) as { messages?: unknown[] }
+        if (!Array.isArray(parsed.messages)) return undefined
+        for (const message of [...parsed.messages].reverse()) {
+          const wire = message as { role?: string; tool_call_id?: string; content?: unknown }
+          if (wire.role !== 'tool' || wire.tool_call_id !== callId) continue
+          if (typeof wire.content === 'string') return wire.content
+          if (Array.isArray(wire.content)) {
+            return wire.content.map((part) => {
+              const piece = part as { text?: string }
+              return typeof piece.text === 'string' ? piece.text : ''
+            }).join('')
+          }
+          return JSON.stringify(wire.content)
+        }
+      } catch {
+        // The provider body is only a replay input; a malformed body cannot
+        // provide a dynamic identity and the next gate poll will retry.
+      }
+      return undefined
+    }
+
+    /** Extract the exact whole-Goal verification id from the rendered receipt. */
+    const verificationIdFrom = (body: string): string | undefined => {
+      const content = toolResultTextFromBody(body, 'whole-goal-verify') ?? body
+      return /(?:GOAL_VERIFICATION_C14:|verification\s+)([0-9a-f]{8}-[0-9a-f-]{27,})/iu.exec(content)?.[1]
+    }
+
+    /** Extract the compare-and-set Goal reference returned by get_goal. */
+    const goalRefFrom = (body: string): { goal_id: string; revision: number; action: 'complete' } => {
+      const content = toolResultTextFromBody(body, 'current-goal')
+      if (content === undefined) throw new Error('goal completion replay did not receive get_goal output')
+      const parsed = JSON.parse(content) as { goal?: { id?: unknown; revision?: unknown } }
+      if (typeof parsed.goal?.id !== 'string' || !Number.isSafeInteger(parsed.goal.revision)) {
+        throw new Error(`goal completion replay received an invalid get_goal result: ${content}`)
+      }
+      return { goal_id: parsed.goal.id, revision: parsed.goal.revision, action: 'complete' }
+    }
+
+    // Whole-Goal review is written to the lead session journal rather than
+    // the project_tasks board. Keep a small async observer so the final root
+    // gate waits for the durable review event, not merely for the lead model
+    // request to have been served.
+    let wholeGoalReviewRecorded = false
+    let reviewScanInFlight = false
+    const reviewScanner = setInterval(() => {
+      if (wholeGoalReviewRecorded || reviewScanInFlight) return
+      reviewScanInFlight = true
+      void (async () => {
+        try {
+          for (const path of sessionLogPaths(dshHome)) {
+            try {
+              const events = parseLogEvents(await decodeSessionLog(path))
+              if (events.some(event => event.type === 'devframe/review'
+                && event.data?.deliveryId === undefined
+                && event.data?.decision === 'pass')) {
+                wholeGoalReviewRecorded = true
+                return
+              }
+            } catch {
+              // The active zstd tail can be torn while a review is flushing.
+            }
+          }
+        } finally {
+          reviewScanInFlight = false
+        }
+      })()
+    }, 50)
+    reviewScanner.unref()
+
     const controller = {
       needle: 'controller-chain-c14',
       turns: [
@@ -808,6 +1010,46 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
           ],
         },
         { text: 'CONTROLLER_CHAIN_DONE_C14' },
+        // The lead settles after its two Worker children finish.  Consume
+        // that durable child notification explicitly so the controller does
+        // not turn an expected settlement into an exhausted replay lane.
+        { text: 'CONTROLLER_LEAD_SETTLED_C14' },
+        // Once both task reviews are submitted, integrate both reviewed
+        // sources in the controller tree. The remaining closeout steps are
+        // split across model responses because later calls need exact tool
+        // receipts from the preceding response.
+        {
+          gate: () => allTasksSubmitted(),
+          toolCalls: [
+            { id: 'integrate-task-a', name: 'project_integrate', arguments: { taskId: 'task-a', action: 'integrate' } },
+            { id: 'integrate-task-b', name: 'project_integrate', arguments: { taskId: 'task-b', action: 'integrate' } },
+          ],
+        },
+        {
+          gate: () => allTasksIntegrated(),
+          toolCalls: [{ id: 'whole-goal-verify', name: 'project_goal_verify', arguments: {} }],
+        },
+        {
+          toolCalls: [{ id: 'dispatch-goal-review', name: 'agent_dispatch', arguments: (body: string) => {
+            const verificationId = verificationIdFrom(body)
+            if (verificationId === undefined) throw new Error('whole-Goal verification receipt is missing before lead follow-up')
+            const ids = worktreeIdsFrom(body)
+            return {
+              role: 'lead', taskId: 'task-a', worktreeId: ids['lead'], pluginId: 'candidate-fullchain',
+              childId: 'candidate-fullchain-lead', followup: true,
+              prompt: `lead-goal-review-c14: inspect the final merged tree and record an independent whole-Goal pass for GOAL_VERIFICATION_C14:${verificationId}`,
+            }
+          } }],
+        },
+        {
+          gate: () => wholeGoalReviewRecorded,
+          toolCalls: [{ id: 'current-goal', name: 'get_goal', arguments: {} }],
+        },
+        {
+          gate: () => wholeGoalReviewRecorded,
+          toolCalls: [{ id: 'complete-goal', name: 'update_goal', arguments: (body: string) => goalRefFrom(body) }],
+        },
+        { text: 'CONTROLLER_GOAL_COMPLETE_C14' },
       ],
     }
     const lead = {
@@ -827,6 +1069,31 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
           } },
         ] },
         { text: 'LEAD_DISPATCHED_C14' },
+        {
+          gate: () => taskStateOf('task-a') === 'reviewing',
+          toolCalls: [
+            { id: 'evidence-task-a', name: 'project_evidence', arguments: { taskId: 'task-a' } },
+            { id: 'review-task-a', name: 'project_review', arguments: { taskId: 'task-a', decision: 'pass', findings: [] } },
+          ],
+        },
+        { text: 'LEAD_WORKER_A_REVIEWED_C14' },
+        {
+          gate: () => taskStateOf('task-b') === 'reviewing',
+          toolCalls: [
+            { id: 'evidence-task-b', name: 'project_evidence', arguments: { taskId: 'task-b' } },
+            { id: 'review-task-b', name: 'project_review', arguments: { taskId: 'task-b', decision: 'pass', findings: [] } },
+          ],
+        },
+        { text: 'LEAD_WORKER_B_REVIEWED_C14' },
+        {
+          gate: (body: string) => verificationIdFrom(body) !== undefined,
+          toolCalls: [{ id: 'review-whole-goal', name: 'project_goal_review', arguments: (body: string) => {
+            const verificationId = verificationIdFrom(body)
+            if (verificationId === undefined) throw new Error('lead whole-Goal review has no verification id')
+            return { verificationId, decision: 'pass', findings: [] }
+          } }],
+        },
+        { text: 'LEAD_GOAL_REVIEWED_C14' },
       ],
     }
     const workerA = {
@@ -939,6 +1206,20 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         const workerRequests = replay.requests.filter(request => request.needle === 'worker-task-b-briefing-c14')
         return workerRequests.length >= 2 && JSON.stringify(workerRequests[1]!.body).includes('task-b')
       }, 120_000)
+      // The delivery notices wake the Lead and the controller concurrently.
+      // Do not inspect a partial projection: wait for the final Goal change,
+      // which is persisted only after integration, whole-Goal review, and the
+      // compare-and-set completion update have all succeeded.
+      await waitFor('whole chain Goal completion', async () => {
+        const path = rootLogPath()
+        if (path === undefined) return false
+        try {
+          return parseLogEvents(await decodeSessionLog(path)).some(event =>
+            event.type === 'goal/change' && event.data?.operation === 'complete')
+        } catch {
+          return false
+        }
+      }, 120_000)
 
       // The acceptance timeline reuses the one source of truth: exactly two
       // starts — task-a and task-b — and both stamped after both worker
@@ -1003,7 +1284,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       // proof the checks actually executed and passed.
       const ledgerStore = new FileRequiredChecksConfigStore({ path: join(dshHome, 'checks-ledger.json') })
       const patchText = await readFile(digestPatch, 'utf8')
-      const parsedPatch = yamlLoad(patchText.replace(/!!js "[^"]*"/u, '"<ledger-path-expression>"')) as {
+      const parsedPatch = yamlLoad(patchText.replace(/!!js "[^"]*"/gu, '"<ledger-path-expression>"')) as {
         config?: { requiredChecksByTask?: Record<string, string> }
       }[]
       const byTask = parsedPatch[0]?.config?.requiredChecksByTask ?? {}
@@ -1073,6 +1354,60 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
         const content = await readFile(artifact, 'utf8')
         expect(content.trim()).toBe(`${task.taskId} artifact body`)
       }
+
+      // Closeout evidence: every model-visible transition returned a success
+      // receipt, and the durable board/Goal reached its terminal state.
+      const allToolResults = replay.requests.flatMap((request) => {
+        const messages = (request.body as { messages?: unknown[] }).messages
+        if (!Array.isArray(messages)) return []
+        return messages.filter((message): message is { role: string; content?: unknown } =>
+          typeof message === 'object' && message !== null && (message as { role?: unknown }).role === 'tool')
+          .map(message => typeof message.content === 'string' ? message.content : JSON.stringify(message.content))
+      })
+      expect(allToolResults.filter(content => content.startsWith('Error:')), 'no closeout tool call may fail').toEqual([])
+      expect(toolResultById('controller-chain-c14', 'integrate-task-a')).toBe('Task task-a: integrated; integration applied.')
+      expect(toolResultById('controller-chain-c14', 'integrate-task-b')).toBe('Task task-b: integrated; integration applied.')
+      expect(toolResultById('controller-chain-c14', 'whole-goal-verify')).toMatch(/^Whole-Goal passed; verification [0-9a-f-]+; review source /u)
+      expect(toolResultById('controller-chain-c14', 'dispatch-goal-review')).toContain('Followup delivered')
+      const completionReceipt = toolResultById('controller-chain-c14', 'complete-goal')
+      expect(completionReceipt).toBeDefined()
+      expect(JSON.parse(completionReceipt!).goal.phase).toBe('complete')
+      expect(toolResultById('lead-briefing-c14', 'review-task-a')).toBe('Task task-a: submitted; pass.')
+      expect(toolResultById('lead-briefing-c14', 'review-task-b')).toBe('Task task-b: submitted; pass.')
+      // The lead session ends with the whole-Goal review tool call: the
+      // settlement notifies the root and the lead's turn closes without a
+      // further provider request, so no request body can ever carry that
+      // assistant message (the recorded failure runs end the lead log right
+      // after the tool/call). Prove the two observable halves instead — the
+      // review followup request was served to the lead session, and the
+      // lead's own durable log carries the assistant's review tool call;
+      // the scanner above owns the durable decision record.
+      const leadReviewTurnServed = replay.requests.some(request =>
+        request.needle === 'lead-briefing-c14'
+        && JSON.stringify(request.body).includes('lead-goal-review-c14'))
+      expect(leadReviewTurnServed, 'the whole-Goal review followup was served to the lead session').toBe(true)
+      const leadLog = decodedLogs.find(log => log.path.includes('candidate-fullchain-lead'))
+      expect(leadLog, 'lead session log for the whole-Goal review').toBeDefined()
+      const leadReviewCallRecorded = parseLogEvents(leadLog!.text).some((event) => {
+        if (event.type !== 'tool/call') return false
+        const data = event.data as { callId?: string; name?: string }
+        return data.callId === 'review-whole-goal' && data.name === 'project_goal_review'
+      })
+      expect(leadReviewCallRecorded, 'the lead session log carries the assistant whole-Goal review tool call').toBe(true)
+      expect(wholeGoalReviewRecorded, 'Lead whole-goal review was durably recorded').toBe(true)
+
+      const projectTasks = JSON.parse(await readFile(join(dshHome, 'storages', 'project_tasks.json'), 'utf8')) as {
+        tables?: {
+          tasks?: Record<string, { state?: string }>
+          integrations?: Record<string, { state?: string }>
+        }
+        global?: { chargedRequests?: number }
+      }
+      expect(projectTasks.tables?.tasks?.['task-a']?.state).toBe('integrated')
+      expect(projectTasks.tables?.tasks?.['task-b']?.state).toBe('integrated')
+      expect(projectTasks.tables?.integrations?.['task-a']?.state).toBe('applied')
+      expect(projectTasks.tables?.integrations?.['task-b']?.state).toBe('applied')
+      expect(projectTasks.global?.chargedRequests).toBe(replay.requests.length)
     } catch (error) {
       // Read the root session's own durable log: turn/end and step/end
       // errors live there, not in the RPC acceptance. The log is a
@@ -1163,6 +1498,7 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
     } finally {
       await replay.close()
       if (running !== undefined) await stopCandidateWeb(running)
+      clearInterval(reviewScanner)
       await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 25 })
     }
   })

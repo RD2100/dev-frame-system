@@ -37,6 +37,8 @@ The Service mounts on the plugin fiber, so the seam lives and dies with the plug
 
 No runtime invariant companion is published: every guarantee the adapter makes (worktree registration, path/branch match, lock exclusivity, scope approval) is derived from the same authoritative registry rows and engine evaluation it calls, and the rejections are observable at the `AgentDispatchError` surface those calls return, so no independent observation exists that could diverge.
 
+The candidate host reuses the formal command/Goal composition with the bootstrap ledger, controller completion authority, integration receipts, and actual stop resource owners. On an existing workspace, Loader activation registers the commands without opening admission or issuing a model request; the public command RPC resolves the persisted controller session. The generated candidate digest patch grants Goal verification to the Controller and independent Goal review to the Lead.
+
 <a id="model-experience"></a>
 ## Model Experience
 

@@ -36,6 +36,21 @@ The project controller: task board, dispatch budget, lifecycle, and merge gate.
 
 ```ts cordis-catalog
 /**
+ * Read the durable integration receipts owned by one controller Session.
+ * @param controllerSessionId - Controller whose completion reads these receipts.
+ * @returns Detached receipts, including unfinished integration attempts.
+ */
+integrationReceipts(controllerSessionId: SessionId): readonly MainTreeIntegrationRecord[]
+
+/**
+ * Require the live root controller to retain its registered integration target.
+ * @param agent - Exact invoking Agent.
+ * @param targetPath - Target persisted in the integration receipts.
+ * @param workspaceId - Workspace authorized by the current Goal.
+ */
+assertCompletionOwner(agent: Agent, targetPath: string, workspaceId: WorkspaceId): void
+
+/**
  * Open project admission after a fresh boot or a completed stop.
  * @returns the new lifecycle state.
  */
@@ -132,7 +147,7 @@ async returnToDevelopment(taskId: TaskId, options: TaskMutationOptions = {}): Pr
 async requestMainTreeMerge( callerSessionId: SessionId, taskId: TaskId, request: MainTreeMergeRequest, ): Promise<MainTreeMergeMarker>
 
 /**
- * Execute the admitted fast-forward once, then record integration only after observing the exact clean target.
+ * Execute the admitted integration once in its prepared mode, then record integration only after observing the exact clean target.
  * @param taskId - Task to move; the marker must name it.
  * @param marker - The marker minted by {@link ProjectController.requestMainTreeMerge}.
  * @returns the updated record.
@@ -141,6 +156,8 @@ async integrate(taskId: TaskId, marker: MainTreeMergeMarker): Promise<TaskRecord
 
 /**
  * Reconcile a durable intent after interruption without issuing another Git merge.
+ * An applied receipt pins the recorded head exactly; a prepared intent whose
+ * Git already applied repairs recording from the observed merge commit.
  * @param callerSessionId - The same controller that admitted the original operation.
  * @param taskId - Task whose retained intent is being reconciled.
  * @param options - Explicit deployment process limits for read-only Git observations.
@@ -229,7 +246,7 @@ byState(state: TaskState): readonly TaskRecord[]
 list(): readonly TaskRecord[]
 ```
 
-Types: [IntegrationGitObservation](../../packages/experimental/project-controller/README.zh.md) · [IntegrationGitOptions](../../packages/experimental/project-controller/README.zh.md) · [MainTreeMergeRequest](../../packages/experimental/project-controller/README.zh.md) · [SessionId](core.zh.md) · [TaskMutationOptions](../../packages/experimental/project-controller/README.zh.md)
+Types: [Agent](core.zh.md) · [IntegrationGitObservation](../../packages/experimental/project-controller/README.zh.md) · [IntegrationGitOptions](../../packages/experimental/project-controller/README.zh.md) · [MainTreeIntegrationRecord](../../packages/experimental/project-controller/README.zh.md) · [MainTreeMergeRequest](../../packages/experimental/project-controller/README.zh.md) · [SessionId](core.zh.md) · [TaskMutationOptions](../../packages/experimental/project-controller/README.zh.md) · [WorkspaceId](workspace.zh.md)
 
 Source: [`packages/experimental/project-controller/src/controller.ts`](../../packages/experimental/project-controller/src/controller.ts)
 <!-- END GENERATED cordis-surface -->

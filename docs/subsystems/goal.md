@@ -303,6 +303,15 @@ create(agent: Agent, request: CreateGoalRequest): GoalView
 @Remote('resume') resume(agent: Agent, ref: GoalRef): GoalView
 
 /**
+ * Record a resume while withholding continuation until host preparation is durable.
+ * Disarm, another Goal mutation, or loss of the live Agent invalidates activation.
+ * @param agent - owning live agent.
+ * @param ref - expected current revision.
+ * @returns the disarmed resumed view and a one-use activation capability.
+ */
+prepareResume(agent: Agent, ref: GoalRef): { readonly goal: GoalView; readonly activate: (commit?: () => void) => GoalView }
+
+/**
  * Mark a current non-complete goal complete and disarm it.
  * @param agent - owning live agent.
  * @param ref - expected current revision.

@@ -171,4 +171,71 @@ async recoverChildAgent( parent: Agent, request: CreateChildAgentRequest, option
 Types: [Agent](core.zh.md) · [SessionId](core.zh.md)
 
 Source: [`packages/experimental/agent-hierarchy/src/service.ts`](../../packages/experimental/agent-hierarchy/src/service.ts)
+
+<a id="ctxprojectrun--agentprojectrun"></a>
+
+### `ctx.projectRun` — `AgentProjectRun`
+
+The formal host bootstrap over the real board admission and the real registration ledger. Mounted by the agent-dispatch plugin; the host calls it before the chain runs.
+
+```ts cordis-catalog
+/**
+ * Open board admission — the host's writer-ownership act. A fresh process
+ * starts `stopped`; only the host re-opens the project, and the controller
+ * refuses every board move until it does.
+ * @returns the lifecycle state after the start.
+ */
+startProject(): ProjectLifecycleState
+
+/**
+ * The one required-checks store this service owns — the same file-backed
+ * ledger the bootstrap's approvals write and every other consumer in the
+ * process must read, so the ledger has a single writer and a single path.
+ * @returns The lazily built file store over the configured absolute path.
+ */
+sharedChecksStore(): RequiredChecksConfigStore
+
+/**
+ * Register one human-approved required-checks configuration for one task
+ * under its canonical digest in the deployment's registration ledger — the
+ * digest the delivery tools' `requiredChecksByTask` wiring carries for the
+ * task. Idempotent: an identical configuration returns the existing
+ * digest without touching the ledger.
+ * @param approval - The task and its approved checklist.
+ * @returns the registered digest.
+ */
+async approveTaskChecks(approval: TaskChecksApproval): Promise<RequiredChecksDigest>
+
+/**
+ * Confirm the board is open for admission — a host-facing preflight the
+ * bootstrap composition can run before dispatching. The controller's own
+ * admission error is the honest verdict; this face only names it earlier.
+ * @param taskId - The task the preflight serves.
+ * @returns the task's board record, admitted.
+ */
+requireAdmittedTask(taskId: TaskId): TaskRecord
+
+/**
+ * The candidate host bootstrap: adopt the host-prepared worktrees, bind the
+ * calling session as the project controller, take the worktrees' writer
+ * locks, open board admission, and verify every task's approved digest
+ * against the shared ledger. All capability inputs come from the host-owned
+ * scenario file — the calling model supplies none. Re-entrant after a
+ * restart: the persisted workspace and worktree rows keep their ids, and
+ * the locks are re-acquired for the (possibly new) controller session.
+ * @param controllerSessionId - The calling session, bound as controller.
+ * @returns the established identity receipt.
+ */
+async hostStart(controllerSessionId: SessionId): Promise<CandidateHostReceipt>
+
+/**
+ * Read the host-owned scenario without opening admission or acquiring locks.
+ * @returns The configured workspace and approved task facts.
+ */
+async loadCandidateScenario(): Promise<CandidateScenario>
+```
+
+Types: [CandidateHostReceipt](../../packages/experimental/agent-dispatch/README.zh.md) · [CandidateScenario](../../packages/experimental/agent-dispatch/README.zh.md) · [RequiredChecksConfigStore](../../packages/experimental/devframe/README.zh.md) · [RequiredChecksDigest](../../packages/experimental/devframe/README.zh.md) · [SessionId](core.zh.md) · [TaskChecksApproval](../../packages/experimental/agent-dispatch/README.zh.md)
+
+Source: [`packages/experimental/agent-dispatch/src/run.ts`](../../packages/experimental/agent-dispatch/src/run.ts)
 <!-- END GENERATED cordis-surface -->

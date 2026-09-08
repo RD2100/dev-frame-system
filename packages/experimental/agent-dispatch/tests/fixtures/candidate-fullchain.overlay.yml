@@ -27,9 +27,9 @@
   config:
     roleToolPolicies:
       controller:
-        inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'read_image', 'glob', 'grep', 'todo_write', 'agent_dispatch', 'project_host_start', 'project_task', 'project_integrate']"
+        inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'read_image', 'glob', 'grep', 'todo_write', 'agent_dispatch', 'project_host_start', 'project_task', 'project_integrate', 'project_goal_verify', 'get_goal', 'update_goal']"
       lead:
-        inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'read_image', 'glob', 'grep', 'todo_write', 'agent_dispatch', 'project_review', 'project_evidence']"
+        inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'read_image', 'glob', 'grep', 'todo_write', 'agent_dispatch', 'project_review', 'project_evidence', 'project_goal_review']"
       worker:
         inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'glob', 'grep', 'project_deliver', 'project_commit']"
     leadPluginScopes:
@@ -60,12 +60,19 @@
     candidateRootSessionId: 'candidate-root-c14'
 
 - insert:
+    - id: project-goal-evidence
+      name: '@deepseek-ai/dsh-experimental-project-controller/completion-consumer'
+      disabled: true
     # The board service the bootstrap and all task tools consume.
     - id: project-controller
       name: '@deepseek-ai/dsh-experimental-project-controller'
       config:
         maxActiveTasks: 2
-        requestBudget: 12
+        # Twelve controller responses, eight lead responses (task reviews and
+        # the whole-Goal review), and two responses for each Worker: the bound
+        # budget admits the complete scripted closeout while leaving two slots
+        # for a diagnosable provider retry.
+        requestBudget: 26
     # Lead reviewer assignments land on the controller's role policy from the
     # real dispatch facts (the landing journal rejects review events).
     - id: lead-role-landing

@@ -19,10 +19,12 @@ import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { WorktreeId } from '@deepseek-ai/dsh-worktree-registry'
 import { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
+import { ControllerSessionId } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
 import { apply as requestBudgetApply } from '@deepseek-ai/dsh-experimental-project-controller/request-budget-consumer'
 import type {} from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
-import { GoalBindingComposition, resolveCommandGoalBindingConfig, START_GOAL_RUNNING_TEXT } from '@deepseek-ai/dsh-experimental-command-goal-binding'
-import type { CommandGoalBindingConfig, GoalBindingCompositionStores } from '@deepseek-ai/dsh-experimental-command-goal-binding'
+import { createHostGoalBinding, resolveCommandGoalBindingConfig, START_GOAL_RUNNING_TEXT } from '@deepseek-ai/dsh-experimental-command-goal-binding'
+import type { CommandGoalBindingConfig, GoalBindingComposition } from '@deepseek-ai/dsh-experimental-command-goal-binding'
+import type { RequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe'
 import { AgentDispatch } from './service.ts'
 import { AgentProjectRun } from './run.ts'
 import { requireNonEmpty, resolveCaller } from './authorization.ts'
@@ -96,33 +98,73 @@ function callCard(title: string, rawInput?: string): ToolCallView {
   return { card: 'generic', title, ...rawInput !== undefined ? { rawInput } : {} }
 }
 
+/** The services the candidate Goal-binding composition fiber requires, in mount order. */
+const GOAL_BINDING_INJECT = [
+  'commands',
+  'goals',
+  'sessions',
+  'sessionProjections',
+  'agents',
+  'subagents',
+  'terminalOwnership',
+  'projectController',
+  'agentBindings',
+  'workspaceRegistry',
+  'worktreeRegistry',
+] as const
+
+/**
+ * The bounded wait for the composition fiber to activate. A configured
+ * deployment activates within its load turn; only a missing dependency
+ * keeps the fiber PENDING to the bound.
+ */
+const GOAL_BINDING_MOUNT_TIMEOUT_MS = 10_000
+
 /**
  * Mount the one Goal-binding composition for the candidate host on a
  * dedicated child fiber carrying exactly the configured workspace facts, and
  * resolve with the live composition once the fiber activates. The default
  * launch-directory row stays disabled in the candidate overlay, so this is
  * the composition instance the whole process shares.
- * @param ctx - The plugin fiber's context (resolves commands/goals/sessions).
+ *
+ * The declared injections order the fiber's activation after
+ * `terminalOwnership`, so the mounted stop tree is complete. A missing
+ * service would otherwise leave the fiber PENDING forever with no rejection
+ * path, so the mount is bounded: past the timeout the stuck fiber is
+ * disposed (a late provider must not double-mount behind this failure) and
+ * the service store is probed with `ctx.get` to name the missing services
+ * in the thrown error.
+ * @param ctx - The plugin fiber's context the composition fiber mounts on.
  * @param config - The runtime-resolved workspace configuration.
+ * @param requiredChecks - The candidate host's shared approved-checks store.
  * @returns The mounted composition.
  */
 function mountGoalComposition(
   ctx: Context,
   config: CommandGoalBindingConfig,
-  stores: GoalBindingCompositionStores,
+  requiredChecks: RequiredChecksConfigStore,
 ): Promise<GoalBindingComposition> {
   return new Promise((resolve, reject) => {
-    ctx.plugin({
+    const fiber = ctx.plugin({
       id: 'candidate-goal-binding',
-      inject: ['commands', 'goals', 'sessions', 'sessionProjections'] as const,
+      inject: [...GOAL_BINDING_INJECT],
       apply: (goalCtx: Context) => {
         try {
-          resolve(new GoalBindingComposition(goalCtx, resolveCommandGoalBindingConfig(config), stores))
+          clearTimeout(timer)
+          resolve(createHostGoalBinding(goalCtx, resolveCommandGoalBindingConfig(config), requiredChecks))
         } catch (error) {
+          clearTimeout(timer)
           reject(error instanceof Error ? error : new Error(String(error)))
         }
       },
     })
+    const timer = setTimeout(() => {
+      void fiber.dispose()
+      const missing = GOAL_BINDING_INJECT.filter(name => ctx.get(name) === undefined)
+      reject(new Error(
+        `candidate-goal-binding did not activate within ${GOAL_BINDING_MOUNT_TIMEOUT_MS}ms; `
+        + `missing or inactive required services: ${missing.join(', ') || 'none reported (the fiber never activated)'}`))
+    }, GOAL_BINDING_MOUNT_TIMEOUT_MS)
   })
 }
 
@@ -186,20 +228,21 @@ function renderDispatchText(value: {
  * bootstrap additionally requires the project controller when opted in.
  * @param ctx - The plugin's context.
  * @param config - The schema-validated plugin config.
+ * @returns Resolves once the opted-in host and cold candidate commands are mounted.
  */
-export function apply(ctx: Context, config?: {
+export async function apply(ctx: Context, config?: {
   bootstrap?: boolean
   checksLedgerPath?: string
   candidateScenarioPath?: string
   candidateRootSessionId?: string
-}): void {
+}): Promise<void> {
   // The candidate host process is the single project scope: when the root
   // session id is pinned, the request budget mounts on this same scope, so
   // every model stream in the process charges this hierarchy's budget and
   // no other scope exists to mis-reject.
   if (config?.candidateRootSessionId !== undefined) {
     const budgetConfig = { controllerSessionId: config.candidateRootSessionId }
-    ctx.plugin({ id: 'candidate-request-budget', inject: ['llm', 'agents', 'agentBindings', 'projectController'] as const, apply: budgetCtx => requestBudgetApply(budgetCtx as never, budgetConfig) })
+    ctx.plugin({ id: 'candidate-request-budget', inject: ['llm', 'agents', 'agentBindings', 'projectController'] as const, apply: (budgetCtx) => { requestBudgetApply(budgetCtx, budgetConfig) } })
   }
   // Constructing AgentDispatch mounts ctx.agentDispatch on this plugin
   // fiber, so the seam lives and dies with the plugin (HMR-safe by
@@ -216,7 +259,7 @@ export function apply(ctx: Context, config?: {
     // `new Service` only provides, it does not resolve static inject), and
     // the service and tool die with it when the controller is unmounted.
     // The default dispatch-only face carries zero controller dependency.
-    ctx.inject(['projectController'], (bootstrapCtx) => {
+    await ctx.inject(config.candidateRootSessionId === undefined ? ['projectController'] : ['projectController', 'goals'], async (bootstrapCtx) => {
       const run = new AgentProjectRun(bootstrapCtx, runConfig)
       if (runConfig.candidateScenarioPath !== undefined) {
         bootstrapCtx.tools.register(defineTool({
@@ -252,18 +295,52 @@ export function apply(ctx: Context, config?: {
       // so the budget's first charged request already sees the bound root and
       // the open admission. The chain never depends on a model tool call to
       // reach this state.
-      if (config?.candidateRootSessionId !== undefined) {
+      if (config.candidateRootSessionId !== undefined) {
         const rootId = config.candidateRootSessionId
         let bootstrapped = false
         // The mounted composition survives a failed start/resume: the fiber
         // carries the one process-shared composition, and mounting it again
         // would register its commands and listeners a second time.
         let composition: GoalBindingComposition | undefined
+        const mount = async (workspaceId: string, targetPath: string) => {
+          return await mountGoalComposition(ctx, {
+            workspaceId,
+            workspaceRoot: targetPath,
+            // The one ledger: the same absolute file the bootstrap's
+            // approvals write, required explicitly by the formal config.
+            requiredChecksPath: run.requiredChecksLedgerPath,
+            // The start gate checks the clean target tree; the workers' own
+            // artifact probes and the final acceptance list stay separate.
+            checks: { version: 1, checks: [{
+              checkId: 'git-diff-check', executable: 'git', arguments: ['diff', '--quiet', 'HEAD'], cwd: targetPath,
+            }] },
+            taskIds: run.candidateTaskIds ?? [],
+            maxAttempts: 4,
+            stopChain: true,
+          }, run.sharedChecksStore())
+        }
+        if (bootstrapCtx.workspaceRegistry.list().length > 0) {
+          const scenario = await run.loadCandidateScenario()
+          const existingWorkspace = bootstrapCtx.workspaceRegistry.list().find(row => row.path === scenario.anchorPath)
+          if (existingWorkspace !== undefined) {
+            if (scenario.targetWorktreePath === undefined) throw new Error('candidate bootstrap requires a target worktree in the scenario')
+            composition = await mount(existingWorkspace.id, scenario.targetWorktreePath)
+          }
+        }
         let bootstrap: Promise<void> | undefined
-        ctx.on('agent/pre-step', async (_data, next) => {
+        bootstrapCtx.on('agent/pre-step', async (_data, next) => {
           if (bootstrapped) return next()
-          const agent = ctx.agents.currentInitiator()
+          const agent = bootstrapCtx.agents.currentInitiator()
           if (agent === undefined || String(agent.session.id) !== rootId) return next()
+          if (composition !== undefined) {
+            const currentGoal = bootstrapCtx.goals.get(agent)
+            const restored = (await composition.bindingStore.load(ControllerSessionId(agent.id)))
+              .find(binding => binding.goalId === currentGoal?.id)
+            if (restored?.lifecycle === 'admission_open' && restored.goalRevision === currentGoal?.revision) {
+              bootstrapped = true
+              return next()
+            }
+          }
           if (bootstrap === undefined) {
             bootstrap = (async () => {
               const receipt = await run.hostStart(agent.id)
@@ -271,25 +348,7 @@ export function apply(ctx: Context, config?: {
               if (targetPath === undefined) {
                 throw new Error('candidate bootstrap requires a target worktree in the scenario')
               }
-              composition ??= await mountGoalComposition(ctx, {
-                workspaceId: receipt.workspaceId,
-                workspaceRoot: targetPath,
-                // The one ledger: the same absolute file the bootstrap's
-                // approvals write, required explicitly by the formal config.
-                requiredChecksPath: run.requiredChecksLedgerPath,
-                // The start gate checks the clean target tree; the workers' own
-                // artifact probes and the final acceptance list stay separate.
-                checks: { version: 1, checks: [{
-                  checkId: 'git-diff-check', executable: 'git', arguments: ['diff', '--quiet', 'HEAD'], cwd: targetPath,
-                }] },
-                taskIds: receipt.tasks.map(task => task.taskId),
-                maxAttempts: 4,
-              }, {
-                // The composition reads the one file-backed ledger the
-                // bootstrap writes — never its own memory default, never a
-                // second path.
-                requiredChecks: run.sharedChecksStore(),
-              })
+              composition ??= await mount(receipt.workspaceId, targetPath)
               const result = await composition.startBoundGoal({ agent, rawInput: 'Run the candidate fullchain: both workers deliver their own artifacts through the lead.' })
               if (result.kind !== 'success') {
                 // A restart re-enters this pre-step while the goal is still
@@ -405,7 +464,7 @@ export function apply(ctx: Context, config?: {
     isConcurrencySafe: () => false,
     async execute(args, exec) {
       if (args.role !== 'lead' && args.role !== 'worker') {
-        throw new Error(`the agent dispatch tool: 'role' must be 'lead' or 'worker', got '${String(args.role)}'`)
+        throw new Error(`the agent dispatch tool: 'role' must be 'lead' or 'worker', got '${args.role}'`)
       }
       // Capture the narrowed role before any await: later dispatch-building
       // code sits behind calls that would widen the property back to string.
@@ -457,7 +516,7 @@ export function apply(ctx: Context, config?: {
         worktree: {
           worktreeId: row.id,
           worktreePath: row.path,
-          ...(row.branch !== undefined ? { branch: row.branch } : {}),
+          branch: row.branch,
         },
       }
       const cold = existing !== undefined && !existing.live
@@ -515,7 +574,7 @@ export function apply(ctx: Context, config?: {
         },
       }
     },
-    presentCall: args => callCard(`agent dispatch: ${String(args.role)} for '${String(args.taskId)}'`),
+    presentCall: args => callCard(`agent dispatch: ${args.role} for '${args.taskId}'`),
     presentResult: () => ({ card: 'generic' }),
   }))
 }

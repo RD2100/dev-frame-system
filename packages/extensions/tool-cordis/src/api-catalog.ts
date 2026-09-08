@@ -1040,6 +1040,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the active view.',
       },
       {
+        signature: 'prepareResume(agent: Agent, ref: GoalRef): { readonly goal: GoalView; readonly activate: (commit?: () => void) => GoalView }',
+        description: 'Record a resume while withholding continuation until host preparation is durable. Disarm, another Goal mutation, or loss of the live Agent invalidates activation.',
+        parameters: [{ name: 'agent', description: 'owning live agent.' }, { name: 'ref', description: 'expected current revision.' }],
+        returns: 'the disarmed resumed view and a one-use activation capability.',
+      },
+      {
         signature: '@Remote(\'complete\') complete(agent: Agent, ref: GoalRef): GoalView',
         description: 'Mark a current non-complete goal complete and disarm it.',
         parameters: [{ name: 'agent', description: 'owning live agent.' }, { name: 'ref', description: 'expected current revision.' }],
@@ -2348,6 +2354,31 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'name', description: 'the provider to use.' }, { name: 'request', description: 'child label, prompt, parent, signal, and optional capabilities.' }],
         returns: 'the published holder-owned run.',
       },
+      {
+        signature: 'hasOwnerActivity(parent: Agent): boolean',
+        description: 'Inspect one-shot starts and runs that have not released their resources.',
+        parameters: [{ name: 'parent', description: 'exact delegating Agent.' }],
+        returns: 'true during provider setup and until successful run disposal.',
+      },
+      {
+        signature: 'drainOwnedRuns(parent: Agent): Promise<void>',
+        description: 'Fence one-shot admission for this exact parent and release its owned runs. Result settlement alone does not prove resource release; disposal is awaited.',
+        parameters: [{ name: 'parent', description: 'exact delegating Agent; unrelated parents remain live.' }],
+        returns: 'after pending startup rollback and published run disposal settle.',
+      },
+      {
+        signature: 'reopenOwnedRuns(parent: Agent): void',
+        description: 'Reopen one-shot admission after the host authorizes a drained parent\'s resume.',
+        parameters: [{ name: 'parent', description: 'exact Agent whose owned runs have all released resources.' }],
+        throws: ['when resources remain or the service is disposing.'],
+      },
+      {
+        signature: 'prepareReopenOwnedRuns(parent: Agent): () => void',
+        description: 'Prepare one-shot reopening without changing admission.',
+        parameters: [{ name: 'parent', description: 'exact Agent checked before a synchronous host reopen.' }],
+        returns: 'a non-throwing commit; call without yielding after all services prepare.',
+        throws: ['when resources remain or the service is disposing.'],
+      },
     ],
   },
   {
@@ -2431,6 +2462,42 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'terminalOwnership',
+    summary: 'Retain every terminal provider until its owned resources have quiesced.',
+    description: 'Retain every terminal provider until its owned resources have quiesced.',
+    methods: [
+      {
+        signature: 'register(instance: TerminalSessionService): () => void',
+        description: 'Register one instance from its own effect scope.',
+        parameters: [{ name: 'instance', description: 'terminal service contributing its complete resource inventory.' }],
+        returns: 'disposer to call only after instance cleanup succeeds.',
+      },
+      {
+        signature: 'assertAdmission(owner: Agent): void',
+        description: 'Reject admission before a service reserves or starts backend work.',
+        parameters: [{ name: 'owner', description: 'exact Agent receiving terminal resources.' }],
+      },
+      {
+        signature: 'async drainOwned(owner: Agent): Promise<void>',
+        description: 'Fence an owner even with zero instances, then await all current instances.',
+        parameters: [{ name: 'owner', description: 'exact Agent whose resources must close.' }],
+        returns: 'after all owned resources quiesce; cleanup failures retain the fence.',
+      },
+      {
+        signature: 'hasOwnerActivity(owner: Agent): boolean',
+        description: 'Observe published sessions and pending rollback in every registered instance.',
+        parameters: [{ name: 'owner', description: 'exact Agent whose activity is queried.' }],
+        returns: 'whether any provider still owns resources for the Agent.',
+      },
+      {
+        signature: 'prepareReopenOwners(owners: readonly Agent[]): () => void',
+        description: 'Preflight a project owner\'s entire terminal lineage without partial reopening.',
+        parameters: [{ name: 'owners', description: 'exact Agents sharing one host resume transaction.' }],
+        returns: 'commit that validates every captured drain and provider before opening any owner.',
+      },
+    ],
+  },
+  {
     key: 'terminals',
     summary: 'In-process registry for replaceable PTY backends and exact-Agent sessions.',
     description: 'In-process registry for replaceable PTY backends and exact-Agent sessions.',
@@ -2458,6 +2525,25 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Test whether an exact owner has a published session or unpublished spawn.',
         parameters: [{ name: 'owner', description: 'exact live owner to inspect.' }],
         returns: 'true across the entire spawn-to-close interval, with no publication gap.',
+      },
+      {
+        signature: 'async drainOwned(owner: Agent): Promise<void>',
+        description: 'Fence new spawns for one owner and await unpublished rollback and PTY close. Failed cleanup remains observable and may be retried for the same owner.',
+        parameters: [{ name: 'owner', description: 'exact Agent whose terminal resources must drain.' }],
+        returns: 'after all owned backend resources close, rejecting on cleanup failure.',
+      },
+      {
+        signature: 'reopenOwned(owner: Agent): void',
+        description: 'Reopen terminal admission after the host authorizes an owner\'s resume.',
+        parameters: [{ name: 'owner', description: 'exact live Agent whose prior terminal resources are closed.' }],
+        throws: ['when resources remain, the owner is stale, or the service is disposing.'],
+      },
+      {
+        signature: 'prepareReopenOwned(owner: Agent): () => void',
+        description: 'Prepare terminal reopening without changing admission.',
+        parameters: [{ name: 'owner', description: 'exact Agent checked before a synchronous host reopen.' }],
+        returns: 'a non-throwing commit; call without yielding after all services prepare.',
+        throws: ['when resources remain, the owner is stale, or the service is disposing.'],
       },
       {
         signature: 'startSend(owner: Agent, id: TerminalSessionId, request: TerminalSendRequest): TerminalSendOperation',
@@ -5639,7 +5725,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentRuntime',
-    declaration: 'export class SubagentRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    async startContinuable(spec: ContinuableStartSpec): Promise<ContinuableStart>;\n    async sendMessage(sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions): Promise<MessageId>;\n    interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void;\n    async drainContinuableDescendants(parents: readonly Agent[]): Promise<void>;\n    async drainContinuableChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void>;\n    listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentListEntry[]>;\n    listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;\n    @Remote(\'list\')\n    async remoteExportList(parentSessionId: SessionId, signal: AbortSignal): Promise<SubagentCatalog>;\n    @Remote(\'prompt\')\n    async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt>;\n    @Remote(\'interruptByParent\')\n    interruptByParent(childSessionId: SessionId, parentSessionId: SessionId, mode: \'continuable\'): SubagentInterruptReceipt;\n    registerProvider(provider: SubagentProvider): () => void;\n    getProvider(name: string): SubagentProvider | undefined;\n    @Remote(\'providers\')\n    list(): string[];\n    async start(name: string, request: SubagentStartRequest): Promise<SubagentRun>;\n}',
+    declaration: 'export class SubagentRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    async startContinuable(spec: ContinuableStartSpec): Promise<ContinuableStart>;\n    async sendMessage(sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions): Promise<MessageId>;\n    interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void;\n    async drainContinuableDescendants(parents: readonly Agent[]): Promise<void>;\n    async drainContinuableChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void>;\n    listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentListEntry[]>;\n    listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;\n    @Remote(\'list\')\n    async remoteExportList(parentSessionId: SessionId, signal: AbortSignal): Promise<SubagentCatalog>;\n    @Remote(\'prompt\')\n    async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt>;\n    @Remote(\'interruptByParent\')\n    interruptByParent(childSessionId: SessionId, parentSessionId: SessionId, mode: \'continuable\'): SubagentInterruptReceipt;\n    registerProvider(provider: SubagentProvider): () => void;\n    getProvider(name: string): SubagentProvider | undefined;\n    @Remote(\'providers\')\n    list(): string[];\n    async start(name: string, request: SubagentStartRequest): Promise<SubagentRun>;\n    hasOwnerActivity(parent: Agent): boolean;\n    dr /* …truncated — full shape in source */',
   },
   {
     name: 'SubagentSendMessageOptions',
@@ -5836,6 +5922,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TerminalSessionIdValue',
     declaration: 'export type TerminalSessionIdValue = Branded<\'TerminalSessionId\'>;',
+  },
+  {
+    name: 'TerminalSessionService',
+    declaration: 'export class TerminalSessionService extends Service {\n    static inject;\n    constructor(ctx: Context);\n    registerBackend(backend: TerminalBackend): () => void;\n    listBackends(): string[];\n    async spawn(owner: Agent, request: TerminalSpawnRequest, signal?: AbortSignal): Promise<TerminalSpawnResult>;\n    hasOwnerActivity(owner: Agent): boolean;\n    async drainOwned(owner: Agent): Promise<void>;\n    reopenOwned(owner: Agent): void;\n    prepareReopenOwned(owner: Agent): () => void;\n    startSend(owner: Agent, id: TerminalSessionId, request: TerminalSendRequest): TerminalSendOperation;\n    read(owner: Agent, id: TerminalSessionId, request: TerminalReadRequest = {}): TerminalReadResult;\n    signal(owner: Agent, id: TerminalSessionId, signal: TerminalSignal): Promise<TerminalSignalResult>;\n    async kill(owner: Agent, id: TerminalSessionId, reason: string = \'model request\'): Promise<boolean>;\n    list(owner: Agent): TerminalSessionSnapshot[];\n}',
   },
   {
     name: 'TerminalSessionSnapshot',

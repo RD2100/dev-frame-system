@@ -37,6 +37,8 @@ Service 挂载于插件 fiber，接缝随插件存亡（构造上即 HMR 安全�
 
 不发布运行时 invariant 伴随物：适配器承诺的每一项保证（worktree 注册、path/branch 匹配、锁排他、范围批准）都从它所调用的同一批权威注册表行与引擎求值推导，拒绝在其调用返回的 `AgentDispatchError` 面上可观察，因此不存在可能分叉的独立观察。
 
+候选 host 复用正式命令/Goal 组合及 bootstrap 账本、controller 完成权威、集成回执与实际停止资源 owner。已有 workspace 冷启动时，Loader 激活注册命令，不打开准入或发起模型请求；公开命令 RPC 解析持久 controller session。生成的候选 digest patch 向 Controller 授予 Goal 验证工具，向 Lead 授予独立 Goal 审查工具。
+
 <a id="model-experience"></a>
 ## 模型体验
 

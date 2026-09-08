@@ -681,6 +681,36 @@ getProvider(name: string): SubagentProvider | undefined
  * @returns the published holder-owned run.
  */
 async start(name: string, request: SubagentStartRequest): Promise<SubagentRun>
+
+/**
+ * Inspect one-shot starts and runs that have not released their resources.
+ * @param parent - exact delegating Agent.
+ * @returns true during provider setup and until successful run disposal.
+ */
+hasOwnerActivity(parent: Agent): boolean
+
+/**
+ * Fence one-shot admission for this exact parent and release its owned runs.
+ * Result settlement alone does not prove resource release; disposal is awaited.
+ * @param parent - exact delegating Agent; unrelated parents remain live.
+ * @returns after pending startup rollback and published run disposal settle.
+ */
+drainOwnedRuns(parent: Agent): Promise<void>
+
+/**
+ * Reopen one-shot admission after the host authorizes a drained parent's resume.
+ * @param parent - exact Agent whose owned runs have all released resources.
+ * @throws when resources remain or the service is disposing.
+ */
+reopenOwnedRuns(parent: Agent): void
+
+/**
+ * Prepare one-shot reopening without changing admission.
+ * @param parent - exact Agent checked before a synchronous host reopen.
+ * @returns a non-throwing commit; call without yielding after all services prepare.
+ * @throws when resources remain or the service is disposing.
+ */
+prepareReopenOwnedRuns(parent: Agent): () => void
 ```
 
 Types: [Agent](core.zh.md) · [ContentBlock](llm-streaming.zh.md) · [MessageId](llm-streaming.zh.md) · [SessionId](core.zh.md)
