@@ -49,9 +49,9 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
 })
 
-async function load(delivery = false, mutateDuringCheck = false) {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-project-integration-loader-'))
-  cleanups.push(() => rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 25 }))
+async function load(delivery = false, checkOutcome: 'pass' | 'mutate' | 'fail' = 'pass', persistedRoot?: string) {
+  const root = persistedRoot ?? await mkdtemp(join(tmpdir(), 'dsh-project-integration-loader-'))
+  if (persistedRoot === undefined) cleanups.push(() => rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 25 }))
   const ctx = new Context()
   cleanups.push(() => ctx.fiber.dispose())
   const modules = new Map<string, unknown>([
@@ -94,9 +94,10 @@ async function load(delivery = false, mutateDuringCheck = false) {
     const store = new FileRequiredChecksConfigStore({ path: requiredChecksPath })
     const requiredChecksByTask: Record<string, string> = {}
     for (const suffix of ['a', 'b']) {
-      const script = mutateDuringCheck
+      const script = checkOutcome === 'mutate'
         ? `import { writeFileSync } from 'node:fs'; writeFileSync('worker-${suffix}.txt', 'changed during checks')`
-        : `import { readFileSync } from 'node:fs'; import { strict as assert } from 'node:assert'; assert.equal(readFileSync('worker-${suffix}.txt', 'utf8'), 'implemented\\n')`
+        : checkOutcome === 'fail' ? 'process.exit(1)'
+          : `import { readFileSync } from 'node:fs'; import { strict as assert } from 'node:assert'; assert.equal(readFileSync('worker-${suffix}.txt', 'utf8'), 'implemented\\n')`
       const digest = await store.save({ version: 1, checks: [
         { checkId: 'workload', executable: process.execPath, arguments: ['--input-type=module', '-e', script], cwd: join(root, 'worker-' + suffix) },
         { checkId: 'diff-check', executable: 'git', arguments: ['diff', '--check'], cwd: join(root, 'worker-' + suffix) },
@@ -113,9 +114,10 @@ async function load(delivery = false, mutateDuringCheck = false) {
     settings['@deepseek-ai/dsh-experimental-project-controller/consumer'] = processSettings
     settings['@deepseek-ai/dsh-experimental-agent-hierarchy'] = {
       roleToolPolicies: {
-        controller: { inheritedTools: ['project_task', 'agent_dispatch', 'project_integrate'] },
-        lead: { inheritedTools: ['project_review', 'agent_dispatch'] },
-        worker: { inheritedTools: ['fixture_commit', 'project_deliver'] },
+        // Evidence is visible to every fixture role so refusals exercise its executor authority.
+        controller: { inheritedTools: ['project_task', 'agent_dispatch', 'project_integrate', 'project_evidence'] },
+        lead: { inheritedTools: ['project_evidence', 'project_review', 'agent_dispatch'] },
+        worker: { inheritedTools: ['fixture_commit', 'project_deliver', 'project_evidence'] },
       }, leadPluginScopes: { lead: ['plugin-a'] },
     }
   }
@@ -180,8 +182,8 @@ class WorkerAdapter extends LlmAdapter {
   }
 }
 
-async function setup(planTasks = false, delivery = false, mutateDuringCheck = false) {
-  const { ctx, root } = await load(delivery, mutateDuringCheck)
+async function setup(planTasks = false, delivery = false, checkOutcome: 'pass' | 'mutate' | 'fail' = 'pass') {
+  const { ctx, root } = await load(delivery, checkOutcome)
   const exec = promisify(execFile)
   const repo = join(root, 'repo')
   await mkdir(repo)
@@ -243,8 +245,8 @@ async function setup(planTasks = false, delivery = false, mutateDuringCheck = fa
   return { ctx, root, controller, lead, workerA, workerB, adapter, trees }
 }
 
-async function deliverySetup(mutateDuringCheck = false) {
-  const f = await setup(true, true, mutateDuringCheck)
+async function deliverySetup(checkOutcome: 'pass' | 'mutate' | 'fail' = 'pass') {
+  const f = await setup(true, true, checkOutcome)
   const adapter = new DeliveryAdapter()
   f.ctx.llm.registerAdapter(['test'], adapter)
   const policy = { inheritedTools: [], denyScopedTools: [] }
@@ -310,9 +312,12 @@ describe('project task consumer through the real Loader', () => {
         expect(verification.checks.map(check => check.exitCode)).toEqual([0, 0])
         expect(delivery.binding.sourceFingerprint).not.toBe(delivery.sourceFingerprint)
       }
-      for (const [taskId, worker] of [['task-a', f.workerA], ['task-b', f.workerB]] as const) {
+      for (const taskId of ['task-a', 'task-b']) {
         await stage(`review ${taskId}`, async () => {
-          await f.turn(f.lead, [{ name: 'project_review', arguments: { taskId, decision: 'pass', findings: [] } }])
+          await f.turn(f.lead, [
+            { name: 'project_evidence', arguments: { taskId } },
+            { name: 'project_review', arguments: { taskId, decision: 'pass', findings: [] } },
+          ])
           expect(f.ctx.projectController.find(TaskId(taskId))?.state,
             JSON.stringify(f.lead.session.snapshotEvents().slice(-12))).toBe('submitted')
         })
@@ -338,10 +343,185 @@ describe('project task consumer through the real Loader', () => {
       }
       expect(f.lead.session.snapshotEvents().filter(event => event.type === 'tool/call' && event.data.name === 'project_review'))
         .toHaveLength(2)
+      const leadEvents = f.lead.session.snapshotEvents()
+      const header = leadEvents.find(event => event.type === 'request/header')
+      expect(header?.type === 'request/header' && header.data.header.tools?.find(tool => tool.name === 'project_review')?.parameters)
+        .toMatchObject({ properties: { findings: { type: 'array', items: {
+          type: 'object', additionalProperties: false, required: ['id', 'severity', 'message'],
+          properties: { severity: { enum: ['blocking', 'warning', 'note'] }, line: { type: 'integer' } },
+        } } } })
+      expect(JSON.stringify(leadEvents.filter(event => event.type === 'tool/result'))).toContain('review_ready')
+      for (const call of leadEvents.filter(event => event.type === 'tool/call' && event.data.name === 'project_evidence')) {
+        if (call.type !== 'tool/call') throw new Error('Expected an evidence tool call')
+        const result = leadEvents.find(event => event.type === 'tool/result' && event.data.message.source.callId === call.data.callId)
+        const block = result?.type === 'tool/result' ? result.data.message.content[0] : undefined
+        const content = block?.type === 'tool-result' ? block.content[0] : undefined
+        if (content?.type !== 'text') throw new Error('Expected the logged evidence JSON result')
+        const taskId = call.data.arguments.includes('task-a') ? 'task-a' : 'task-b'
+        const delivery = state.deliveries.find(item => String(item.taskId) === taskId)!
+        const verification = state.verifications.find(item => item.deliveryId === delivery.deliveryId)!
+        expect(JSON.parse(content.text)).toMatchObject({ taskId, status: 'review_ready',
+          delivery: { deliveryId: delivery.deliveryId, sourceCommit: delivery.sourceCommit, sourceFingerprint: delivery.sourceFingerprint },
+          verification: { verificationId: verification.verificationId, status: 'passed', checks: verification.checks }, review: null })
+      }
+    })
+
+    it('restores retained Worker evidence from the real JSONL and storage providers', async () => {
+      const f = await deliverySetup()
+      await f.start(true)
+      const initial = await f.tool(f.lead, 'project_evidence', { taskId: 'task-a' })
+      expect(initial.value).toMatchObject({ status: 'review_ready' })
+      await f.ctx.fiber.dispose()
+      const { ctx } = await load(true, 'pass', f.root)
+      ctx.effect(() => ctx.sessionProjections.register(devFrameProjectionDefinition))
+      ctx.projectController.startProject()
+      const restored = []
+      for (const agent of [f.controller, f.lead, f.workerA, f.workerB]) {
+        restored.push((await ctx.agents.resume({ resumeSessionId: agent.id })).agent)
+      }
+      const lead = restored[1]!
+      expect(lead.session).not.toBe(f.lead.session)
+      const result = await ctx.tools.execute({ name: 'project_evidence', arguments: { taskId: 'task-a' },
+        agent: lead, callId: ToolCallId('restored-evidence'), signal: new AbortController().signal })
+      expect(result.value, JSON.stringify(result.content)).toEqual(initial.value)
+      expect(ctx.sessionProjections.stateOf(restored[0]!.session, 'devframe')?.verifications).toHaveLength(2)
+      expect(ctx.projectController.list().map(task => task.state)).toEqual(['reviewing', 'reviewing'])
+      expect(restored.slice(2).flatMap(worker => worker.session.snapshotEvents()
+        .filter(event => event.type === 'tool/call' && event.data.name === 'project_deliver'))).toHaveLength(2)
+    })
+
+    it('reads retained evidence after consumer reload, bounds the whole result, and rejects string findings', async () => {
+      const f = await deliverySetup()
+      await f.start(true)
+      const evidenceEvents = () => f.controller.session.snapshotEvents().filter(event => event.type.startsWith('devframe/'))
+      const controllerEvents = evidenceEvents()
+      const tasks = f.ctx.projectController.list()
+      const state = f.ctx.sessionProjections.stateOf(f.controller.session, 'devframe')!
+      const delivery = state.deliveries.find(item => String(item.taskId) === 'task-a')!
+      const verification = state.verifications.find(item => item.deliveryId === delivery.deliveryId)!
+      const read = () => f.tool(f.lead, 'project_evidence', { taskId: 'task-a', controllerSessionId: 'forged', sourceCommit: 'forged' })
+      const initial = await read()
+      expect(initial.value).toMatchObject({ taskId: 'task-a', state: 'reviewing', status: 'review_ready', review: null,
+        delivery: { deliveryId: delivery.deliveryId, workerSessionId: f.workerA.id, sourceCommit: delivery.sourceCommit,
+          sourceFingerprint: delivery.sourceFingerprint, snapshotId: delivery.snapshotId, worktreePath: f.trees[2]!.path },
+        verification: { verificationId: verification.verificationId, status: 'passed',
+          requiredChecksDigest: verification.requiredChecks.digest, checks: verification.checks },
+      })
+      expect(evidenceEvents()).toEqual(controllerEvents)
+      expect(f.ctx.projectController.list()).toEqual(tasks)
+      const entry = [...f.ctx.loader.entries()].find(item => item.options.name.endsWith('/delivery-consumer'))!
+      await entry.update({ disabled: true })
+      expect(f.ctx.tools.get('project_evidence')).toBeUndefined()
+      expect(f.ctx.tools.get('project_review')).toBeUndefined()
+      await entry.update({ disabled: false })
+      expect((await read()).value).toEqual(initial.value)
+      expect(f.ctx.sessionProjections.stateOf(f.controller.session, 'devframe')?.deliveries).toEqual(state.deliveries)
+
+      const args = { taskId: 'task-a', decision: 'pass', findings: [{ id: 'output', severity: 'note',
+        message: '成果物を確認した', path: 'worker-a.txt', line: 1 }] }
+      const invalid = await f.tool(f.lead, 'project_review', { ...args, findings: JSON.stringify(args.findings) })
+      expect(invalid.isError).toBe(true)
+      expect(JSON.stringify(invalid.content)).toContain('findings')
+      expect(evidenceEvents()).toEqual(controllerEvents)
+      expect((await f.tool(f.lead, 'project_review', args)).isError).not.toBe(true)
+      const reviewed = await read()
+      expect(reviewed.value).toMatchObject({ status: 'review_recorded', state: 'submitted',
+        review: { reviewerSessionId: f.lead.id, decision: 'pass', findings: args.findings } })
+      const bytes = Buffer.byteLength(JSON.stringify(reviewed.content), 'utf8')
+      expect(bytes).toBeGreaterThan(JSON.stringify(reviewed.content).length)
+      const config = entry.options.config as deliveryConsumer.Config
+      await entry.update({ config: Object.assign({}, config, { checkMaxOutputBytes: bytes }) })
+      expect((await read()).value).toEqual(reviewed.value)
+      for (const limit of [bytes - 1, 1]) {
+        await entry.update({ config: Object.assign({}, config, { checkMaxOutputBytes: limit }) })
+        const oversized = await read()
+        expect(oversized.isError).toBe(true)
+        expect(JSON.stringify(oversized.content)).toContain('exceeds checkMaxOutputBytes')
+      }
+    })
+
+    it('reports missing delivery and refuses foreign callers, tasks, revoked ownership, and a closed Goal', async () => {
+      const f = await deliverySetup()
+      await f.start(false)
+      const before = f.controller.session.snapshotEvents()
+      expect((await f.tool(f.lead, 'project_evidence', { taskId: 'task-a' })).value)
+        .toMatchObject({ status: 'missing_delivery', delivery: null, verification: null, review: null })
+      for (const [caller, reason] of [[f.workerA, /independent parent lead/], [f.controller, /independent parent lead/],
+        [Object.create(f.lead) as Agent, /stale Agent identity/]] as const) {
+        const result = await f.tool(caller, 'project_evidence', { taskId: 'task-a', callerSessionId: f.lead.id })
+        expect(result.isError).toBe(true)
+        expect(JSON.stringify(result.content)).toMatch(reason)
+      }
+      for (const taskId of ['task-outside', ' task-a']) {
+        expect((await f.tool(f.lead, 'project_evidence', { taskId })).isError).toBe(true)
+      }
+      expect(f.controller.session.snapshotEvents()).toEqual(before)
+      await f.ctx.worktreeRegistry.unbind(f.trees[2]!.id, WorktreeLockHolder(f.workerA.id))
+      const revoked = await f.tool(f.lead, 'project_evidence', { taskId: 'task-a' })
+      expect(revoked.isError).toBe(true)
+      expect(JSON.stringify(revoked.content)).toContain('writer locks')
+      await f.ctx.worktreeRegistry.bind(f.trees[2]!.id, WorktreeLockHolder(f.workerA.id))
+      const goal = f.ctx.sessionProjections.stateOf(f.controller.session, 'devframe')!.bindings.at(-1)!
+      f.controller.session.append('devframe/goal-binding', { ...goal, lifecycle: 'stop_requested' })
+      expect((await f.tool(f.lead, 'project_evidence', { taskId: 'task-a' })).isError).toBe(true)
+    })
+
+    it('distinguishes failed checks, stale approved checks, source commits, and Goal revisions', async () => {
+      const f = await deliverySetup('fail')
+      await f.start(true)
+      const read = () => f.tool(f.lead, 'project_evidence', { taskId: 'task-a' })
+      expect((await read()).value).toMatchObject({ status: 'checks_failed', state: 'developing',
+        verification: { status: 'failed', checks: [{ checkId: 'workload', status: 'failed', exitCode: 1 },
+          { checkId: 'diff-check', status: 'passed', exitCode: 0 }] } })
+      const entry = [...f.ctx.loader.entries()].find(item => item.options.name.endsWith('/delivery-consumer'))!
+      const config = entry.options.config as deliveryConsumer.Config
+      for (const requiredChecksByTask of [{ 'task-a': 'a'.repeat(64) }, {}]) {
+        await entry.update({ config: Object.assign({}, config, { requiredChecksByTask }) })
+        expect((await read()).value).toMatchObject({ status: 'stale_verification' })
+      }
+      await entry.update({ config })
+      await workloadGit(f.trees[2]!.path, 'commit', '--allow-empty', '-m', 'Advance Worker source after delivery')
+      const changedSource = await read()
+      expect(changedSource.value).toMatchObject({ status: 'stale_delivery' })
+      expect(JSON.stringify(changedSource.content)).toContain('source changed')
+      const state = f.ctx.sessionProjections.stateOf(f.controller.session, 'devframe')!
+      const goal = state.bindings.at(-1)!
+      f.controller.session.append('devframe/goal-binding', { ...goal, goalRevision: goal.goalRevision + 1 })
+      const changedGoal = await read()
+      expect(changedGoal.value).toMatchObject({ status: 'stale_delivery' })
+      expect(JSON.stringify(changedGoal.content)).toContain('Goal revision')
+      expect(f.ctx.sessionProjections.stateOf(f.controller.session, 'devframe')?.failure).toBeNull()
+      expect(f.ctx.projectController.list().map(task => task.state)).toEqual(['developing', 'developing'])
+    })
+
+    it('rechecks recorded Lead authority after the asynchronous source observation', async () => {
+      const f = await deliverySetup()
+      await f.start(true)
+      const state = f.ctx.sessionProjections.stateOf(f.controller.session, 'devframe')!
+      const policy = state.rolePolicy!
+      const original = f.ctx.sessionProjections.stateOf.bind(f.ctx.sessionProjections)
+      let reads = 0
+      const spy = vi.spyOn(f.ctx.sessionProjections, 'stateOf').mockImplementation((session, key) => {
+        if (session === f.controller.session && key === 'devframe' && ++reads === 2) {
+          f.controller.session.append('devframe/role-policy', { ...policy, policyVersion: 'updated-policy' })
+        }
+        return original(session, key)
+      })
+      try {
+        const result = await f.tool(f.lead, 'project_evidence', { taskId: 'task-a' })
+        expect(result.isError).toBe(true)
+        expect(JSON.stringify(result.content)).toContain('authority changed')
+      } finally { spy.mockRestore() }
+      f.controller.session.append('devframe/role-policy', { ...policy, policyVersion: 'lead-revoked',
+        assignments: [{ role: 'controller', sessionId: f.controller.id }] })
+      const result = await f.tool(f.lead, 'project_evidence', { taskId: 'task-a' })
+      expect(result.isError).toBe(true)
+      expect(JSON.stringify(result.content)).toContain('recorded lead role policy')
+      expect(f.ctx.sessionProjections.stateOf(f.controller.session, 'devframe')?.reviews).toEqual([])
     })
 
     it('does not record a passing verification when an approved check changes the source', async () => {
-      const f = await deliverySetup(true)
+      const f = await deliverySetup('mutate')
       await f.start(true)
       const state = f.ctx.sessionProjections.stateOf(f.controller.session, 'devframe')!
       expect(state.deliveries).toHaveLength(2)
@@ -351,6 +531,10 @@ describe('project task consumer through the real Loader', () => {
       for (const worker of [f.workerA, f.workerB]) {
         expect(await workloadGit(worker.session.header.cwd!, 'status', '--porcelain')).toContain('M worker-')
       }
+      expect((await f.tool(f.lead, 'project_evidence', { taskId: 'task-a' })).isError).toBe(true)
+      await workloadGit(f.workerA.session.header.cwd!, 'restore', 'worker-a.txt')
+      expect((await f.tool(f.lead, 'project_evidence', { taskId: 'task-a' })).value)
+        .toMatchObject({ status: 'missing_verification', verification: null, review: null })
     })
 
     it('refuses another task append after its shared controller journal flush failed', async () => {
