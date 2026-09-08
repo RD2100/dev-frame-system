@@ -24,6 +24,7 @@ import type { ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import AgentHierarchy, { type AgentHierarchyConfigInput } from '@deepseek-ai/dsh-experimental-agent-hierarchy'
 import AgentBindingRegistry from '@deepseek-ai/dsh-experimental-session-identity'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import Storage from '@deepseek-ai/dsh-storage'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
@@ -99,6 +100,12 @@ async function setup(leadPluginScopes: AgentHierarchyConfigInput['leadPluginScop
       list: async () => [],
       load: () => { throw new Error('event bodies must not be loaded') },
       inspect: () => { throw new Error('event bodies must not be inspected') },
+      // The recovery lane calls prepare for the reserved child; the stub
+      // harness persists no durable log, so the typed miss is the honest
+      // answer and the engine republishes under the same reserved identity.
+      prepare: async (sessionId: SessionId) => {
+        throw new SessionPersistenceNotFoundError(sessionId)
+      },
     } as never)
     await ctx.plugin(WorkspaceRegistry)
     await ctx.plugin(SubprocessLocal)
@@ -318,6 +325,77 @@ describe('agent dispatch tool behavior over the real engine', () => {
       .filter(message => typeof message.id === 'string' && message.id.startsWith('dispatch-followup:'))
     expect(followups).toHaveLength(1)
     expect(JSON.stringify(followups[0])).toContain('lead-review-c14: review the delivered work now.')
+  })
+
+  it('recovers a cold reserved child through retry and delivers a followup once', async () => {
+    const { ctx, controller, createWorktree, execute } = await setup({
+      'dispatch-lead': ['plugin-a'],
+    })
+    const tree = await createWorktree('wt-cold-recover', 'feature/cold-recover')
+    const first = valueOf(await execute('agent_dispatch', {
+      role: 'lead',
+      taskId: 'task-1',
+      pluginId: 'plugin-a',
+      worktreeId: tree.id,
+      prompt: 'review the delivered work.',
+    }, controller)) as { childId: string }
+
+    // The restart simulation: the durable reservation stays, the live
+    // instance goes away. Neither registry exposes a public teardown for a
+    // foreign holder, so the test drops the exact agent and session entries —
+    // the same state `agent/disposed` teardown leaves behind, minus the
+    // events. The next retry must recover the exact identity instead of
+    // refusing with a recovery requirement.
+    const agentsRegistry = ctx.agents as unknown as { store: Map<string, unknown> }
+    const sessionsRegistry = ctx.sessions as unknown as { store: Map<string, unknown> }
+    expect(agentsRegistry.store.delete(first.childId)).toBe(true)
+    expect(sessionsRegistry.store.delete(first.childId)).toBe(true)
+    expect(ctx.agents.get(SessionId(first.childId))).toBeUndefined()
+    expect(ctx.sessions.get(SessionId(first.childId))).toBeUndefined()
+
+    const recovered = valueOf(await execute('agent_dispatch', {
+      role: 'lead',
+      taskId: 'task-1',
+      pluginId: 'plugin-a',
+      worktreeId: tree.id,
+      retry: true,
+    }, controller)) as { childId: string; reused: boolean }
+    expect(recovered.childId).toBe(first.childId)
+    expect(recovered.reused).toBe(true)
+
+    // The recovery lane itself delivers nothing — the resumed-or-republished
+    // child starts with an empty inbox, so no briefing or other message is
+    // re-queued by the act of recovering.
+    const liveChild = ctx.agents.get(SessionId(first.childId))
+    expect(liveChild).toBeDefined()
+    const recoveredInsertions = liveChild!.session.snapshotEvents()
+      .filter(event => event.type === 'agent/inbox/spliced')
+      .flatMap(event => (event.data as { inserted?: Array<{ id?: string }> }).inserted ?? [])
+    expect(recoveredInsertions).toHaveLength(0)
+
+    // The followup rides the second, hot lane: exactly one followup message
+    // on the recovered child's inbox under the deterministic identity. The
+    // recovery lane itself delivers nothing, so the briefing the first
+    // dispatch queued stays the only one, and inbox identity keeps a
+    // same-id double-pend structurally impossible.
+    const followed = valueOf(await execute('agent_dispatch', {
+      role: 'lead',
+      taskId: 'task-1',
+      pluginId: 'plugin-a',
+      worktreeId: tree.id,
+      followup: true,
+      prompt: 'cold-recover-c14: summarize the review.',
+    }, controller)) as { followup: boolean }
+    expect(followed.followup).toBe(true)
+    const childAgent = ctx.agents.get(SessionId(first.childId))
+    expect(childAgent).toBeDefined()
+    const inserted = childAgent!.session.snapshotEvents()
+      .filter(event => event.type === 'agent/inbox/spliced')
+      .flatMap(event => (event.data as { inserted?: Array<{ id?: string; content?: unknown }> }).inserted ?? [])
+    const followups = inserted.filter(message => typeof message.id === 'string'
+      && message.id.startsWith('dispatch-followup:'))
+    expect(followups).toHaveLength(1)
+    expect(JSON.stringify(followups[0])).toContain('cold-recover-c14: summarize the review.')
   })
 
   it('refuses a followup without instructions instead of silently reusing the child', async () => {
