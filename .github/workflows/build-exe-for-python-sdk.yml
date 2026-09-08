@@ -346,7 +346,7 @@ jobs:
             Pop-Location
           }
 
-      - name: Run source SDK delivery transport (POSIX)
+      - name: Run source SDK delivery and resume transport (POSIX)
         if: runner.os != 'Windows'
         env:
           PYTHONPATH: ${{ github.workspace }}/python/sdk/src:${{ github.workspace }}/python/sdk-runtime/src
@@ -354,8 +354,10 @@ jobs:
           set -euo pipefail
           "${{ steps.smoke-venv-posix.outputs.python }}" scripts/smoke-python-runtime.py \
             --scenario sdk-task-delivery --exe "$PWD/apps/cli/lib/bin.js"
+          "${{ steps.smoke-venv-posix.outputs.python }}" scripts/smoke-python-runtime.py \
+            --scenario sdk-goal-resume --exe "$PWD/apps/cli/lib/bin.js"
 
-      - name: Run source SDK delivery transport (Windows)
+      - name: Run source SDK delivery and resume transport (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         env:
@@ -363,6 +365,8 @@ jobs:
         run: |
           & "${{ steps.smoke-venv-windows.outputs.python }}" scripts/smoke-python-runtime.py --scenario sdk-task-delivery --exe "$PWD/apps/cli/lib/bin.js"
           if ($LASTEXITCODE -ne 0) { throw "Source SDK delivery transport failed with exit code $LASTEXITCODE" }
+          & "${{ steps.smoke-venv-windows.outputs.python }}" scripts/smoke-python-runtime.py --scenario sdk-goal-resume --exe "$PWD/apps/cli/lib/bin.js"
+          if ($LASTEXITCODE -ne 0) { throw "Source SDK goal resume failed with exit code $LASTEXITCODE" }
 
       - name: Preflight installed-wheel real API test (POSIX)
         if: >-

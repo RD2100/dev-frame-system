@@ -22,6 +22,7 @@ import sysconfig
 import tempfile
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
@@ -717,7 +718,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--scenario",
-        choices=("all", "sdk-default", "sdk-custom", "sdk-minimal", "sdk-fs-search", "sdk-mcp", "sdk-snapshot", "sdk-restart", "sdk-profile-plugin", "sdk-live", "sdk-task-delivery", "direct"),
+        choices=("all", "sdk-default", "sdk-custom", "sdk-minimal", "sdk-fs-search", "sdk-mcp", "sdk-snapshot", "sdk-restart", "sdk-profile-plugin", "sdk-live", "sdk-task-delivery", "sdk-goal-resume", "direct"),
         default="all",
     )
     parser.add_argument("--exe", type=Path)
@@ -734,11 +735,11 @@ def main() -> None:
         parser.error("--scenario sdk-live requires --installed-wheel")
     if args.scenario == "sdk-profile-plugin" and not args.installed_wheel:
         parser.error("--scenario sdk-profile-plugin requires --installed-wheel")
-    if args.scenario == "sdk-task-delivery" and args.installed_wheel:
+    if args.scenario in {"sdk-task-delivery", "sdk-goal-resume"} and args.installed_wheel:
         parser.error("sdk-task-delivery is a source-only built-CLI scenario, not a wheel test")
     if args.installed_wheel:
         args.exe = assert_installed_wheel_environment()
-    if args.scenario in {"all", "sdk-custom", "sdk-minimal", "sdk-fs-search", "sdk-snapshot", "sdk-restart", "sdk-task-delivery", "direct"} and args.exe is None:
+    if args.scenario in {"all", "sdk-custom", "sdk-minimal", "sdk-fs-search", "sdk-snapshot", "sdk-restart", "sdk-task-delivery", "sdk-goal-resume", "direct"} and args.exe is None:
         parser.error("--exe is required for custom, minimal, snapshot, and direct scenarios")
     if args.update_snapshots and args.scenario not in {"all", "sdk-minimal", "sdk-snapshot", "sdk-restart", "sdk-task-delivery"}:
         parser.error("--update-snapshots requires --scenario sdk-minimal, sdk-snapshot, sdk-restart, sdk-task-delivery, or all")
@@ -751,6 +752,9 @@ def main() -> None:
         return
 
     with MockModel() as model:
+        if args.scenario == "sdk-goal-resume":
+            assert args.exe is not None
+            smoke_sdk_goal_resume(model.url, args.exe.resolve())
         if args.scenario == "sdk-task-delivery":
             assert args.exe is not None
             smoke_sdk_task_delivery(model.url, args.exe.resolve(), args.update_snapshots)
@@ -1251,6 +1255,128 @@ def smoke_sdk_task_delivery(base_url: str, executable: Path, update_snapshots: b
             "durable-events.jsonl": render_jsonl(normalize_snapshot_value(durable, replacements)),
         }
         compare_snapshot_files(files, update_snapshots, directory, tuple(files))
+
+
+
+def smoke_sdk_goal_resume(base_url: str, executable: Path) -> None:
+    """Compare Python SDK Goal events with real JSONL across paused, held, and activated states."""
+    from deepseek_harness import DeepSeekHarness
+
+    repo = Path(__file__).resolve().parent.parent
+    if executable != (repo / "apps/cli/lib/bin.js").resolve():
+        raise AssertionError("sdk-goal-resume requires this checkout's built dsh CLI")
+    node = shutil.which("node")
+    if node is None:
+        raise AssertionError("The source SDK probe requires an existing Node executable")
+    with tempfile.TemporaryDirectory(prefix="dsh-python-goal-resume-") as temporary:
+        root = Path(temporary).resolve()
+        sessions = root / "home/sessions"
+        entered: queue.Queue[dict[str, object]] = queue.Queue()
+        release = threading.Event()
+        failures: list[BaseException] = []
+        durable = threading.Event()
+        first_request = len(MockModelHandler.requests)
+        session_id = "python-goal-resume"
+
+        def goal_events(events):
+            return [event["data"] for event in events if event.get("type") == "goal/change"]
+
+        class Barrier(BaseHTTPRequestHandler):
+            def do_POST(self) -> None:
+                try:
+                    body = json.loads(self.rfile.read(int(self.headers.get("content-length", "0"))))
+                    if self.path == "/held":
+                        entered.put(body)
+                        if not release.wait(60):
+                            raise AssertionError("Resume release barrier timed out")
+                    elif self.path == "/durable":
+                        latest = goal_events(read_session_logs(sessions)[session_id])[-1]
+                        if latest["operation"] != "resume" or latest["goal"]["revision"] != 3:
+                            raise AssertionError("Resume activation preceded its durable native event")
+                        if len(MockModelHandler.requests) - first_request != 1:
+                            raise AssertionError("Continuation reached the model before the durability acknowledgement")
+                        durable.set()
+                    else:
+                        raise AssertionError("Unexpected probe endpoint")
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write(b"acknowledged")
+                except BaseException as error:
+                    failures.append(error)
+                    self.send_response(500)
+                    self.end_headers()
+
+            def log_message(self, _format: str, *_args: object) -> None:
+                return
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Barrier)
+        serving = threading.Thread(target=server.serve_forever, daemon=True)
+        serving.start()
+        barrier_url = f"http://127.0.0.1:{server.server_port}"
+        patch = write_profile_patch(root, "resume.patch.json", sessions, [{"insert": [{
+            "id": "python-sdk-goal-resume",
+            "name": (repo / "scripts/fixtures/python-sdk-task-delivery.mjs").as_uri(),
+            "config": {"resumeBarrierUrl": barrier_url},
+        }]}])
+        try:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                with DeepSeekHarness(
+                    provider="deepseek-official", model="smoke-model", cwd=str(root),
+                    _launch_args=(node, str(executable), "--profile", "sdk", "--patch", str(patch)),
+                    dsh_home=str(root / "home"), patches=(str(patch),),
+                    env={"DSH_HOME": str(root / "home"), "DSH_PERMISSION_MODE": "danger-full-access",
+                         "DSH_TELEMETRY_DISABLED": "1"},
+                    api_key="sk-keyless-smoke", base_url=base_url, request_timeout_seconds=60,
+                ) as harness:
+                    with harness.client.subscribe_notifications() as subscription:
+                        def collect():
+                            events = []
+                            while True:
+                                note = subscription.next()
+                                event = note.payload.get("event")
+                                if note.method != "session.event" or not isinstance(event, dict):
+                                    continue
+                                if event.get("type") == "goal/change":
+                                    events.append(event["data"])
+                                    if event["data"]["operation"] == "block":
+                                        return events
+
+                        collected = pool.submit(collect)
+                        try:
+                            first = harness.run("Prepare a paused transport goal.", session_id=session_id)
+                            if first.final_response != EXPECTED_TEXT:
+                                raise AssertionError("The first scripted model response was missing")
+                            if goal_events(first.events) != goal_events(read_session_logs(sessions)[session_id]):
+                                raise AssertionError("Python run events differ from the paused durable Goal")
+                            resuming = pool.submit(harness.run, "Resume the paused transport goal.", session_id=session_id)
+                            held = entered.get(timeout=60)
+                            if (held["phase"], held["activation"], held["revision"]) != ("active", "disarmed", 3):
+                                raise AssertionError("The prepared resume was not disarmed")
+                            if len(MockModelHandler.requests) - first_request != 1 or durable.is_set():
+                                raise AssertionError("The pending resume admitted model work")
+                            release.set()
+                            resuming.result(timeout=60)
+                            streamed = collected.result(timeout=60)
+                        finally:
+                            release.set()
+                            harness.close()
+                if failures:
+                    raise AssertionError("The host durability probe failed") from failures[0]
+                persisted = goal_events(read_session_logs(sessions)[session_id])
+                if streamed != persisted:
+                    raise AssertionError("Python notification events differ from durable Goal events")
+                phases = [(event["operation"], event["goal"]["phase"], event["goal"]["revision"]) for event in persisted]
+                if phases != [("create", "active", 1), ("pause", "paused", 2), ("resume", "active", 3), ("block", "blocked", 4)]:
+                    raise AssertionError(f"Unexpected Goal lifecycle projection: {phases}")
+                if not durable.is_set() or len(MockModelHandler.requests) - first_request != 2:
+                    raise AssertionError("Expected one initial request and exactly one durable continuation")
+        finally:
+            release.set()
+            server.shutdown()
+            server.server_close()
+            serving.join(timeout=5)
+            if serving.is_alive():
+                raise AssertionError("The owned HTTP barrier did not stop")
 
 
 def smoke_sdk_snapshot(base_url: str, executable: Path, update_snapshots: bool) -> None:
