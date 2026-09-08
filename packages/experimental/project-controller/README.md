@@ -92,7 +92,7 @@ Admission requires a submitted task, a current Goal binding, matching persisted 
 
 After interruption, reopen project admission and reconcile using the original controller identity and writer lock. An ordinary `integrate` call does not replace a retained intent. Neither a command error nor cancellation proves that Git left the target unchanged. An ignored local file that conflicts with incoming tracked content is preserved and causes the merge to fail.
 
-A host consumer uses `requestMainTreeMerge(callerSessionId, taskId, request)`, then passes the returned marker directly to `integrate(taskId, marker)`. The request carries exact Git paths and commits, process limits, the approved-checks store, and optional `retryUnchanged` and cancellation signal. Markers are single-use object capabilities, not transferable JSON. The service's `reconcileMainTreeIntegration(callerSessionId, taskId, options)` reads the durable intent. Integration does not call `complete` automatically.
+A host consumer uses `requestMainTreeMerge(callerSessionId, taskId, request)`, then passes the returned marker directly to `integrate(taskId, marker)`. The request carries exact Git paths and commits, process limits, the approved-checks store, and optional `retryUnchanged` and cancellation signal. Markers are single-use object capabilities, not transferable JSON. The service's `reconcileMainTreeIntegration(callerSessionId, taskId, options)` reads the durable intent. Integration does not call `complete` automatically. Goal completion is its own gate: `selectGoalCompletionIntegration` builds the final-merge contract from the applied integration receipts plus the whole-Goal verification and review recorded for the Goal, and the completion admission then re-anchors its fingerprint stage at the merged tree — the initial start fingerprint is never rewritten into the final state.
 
 -----
 
@@ -113,6 +113,7 @@ Evidence comes from the existing DevFrame projection and three-level binding reg
 | [`src/task-consumer.ts`](src/task-consumer.ts) | Root-controller planning, registered Worker admission, and briefing delivery. |
 | [`src/delivery-consumer.ts`](src/delivery-consumer.ts) | Explicit Worker delivery, approved checks, and independent lead review. |
 | [`src/integration-evidence.ts`](src/integration-evidence.ts) | Exact task evidence and independent lead authority. |
+| [`src/completion-contract.ts`](src/completion-contract.ts) | Final-merge completion contract from applied receipts and whole-Goal evidence. |
 | [`src/git-integration.ts`](src/git-integration.ts) | Bounded Git inspection, fast-forward, exact-source merge, and outcome observation. |
 | [`src/spec.ts`](src/spec.ts) | Versioned task, request-budget, and integration-intent storage. |
 

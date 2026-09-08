@@ -92,7 +92,7 @@ Worker 从清洁且已提交的工作树显式调用 `project_deliver`，提供 
 
 中断后，重新开放项目准入，并使用原 controller 身份与写入锁进行核对。普通 `integrate` 调用不会替换保留的意图。命令错误或取消均不能证明 Git 没有改变目标。若被忽略的本地文件与即将写入的已跟踪内容冲突，该文件会被保留，合并则失败。
 
-宿主消费者先调用 `requestMainTreeMerge(callerSessionId, taskId, request)`，再将返回的标记直接交给 `integrate(taskId, marker)`。请求携带确切 Git 路径与提交、进程限制、已批准检查配置存储，以及可选的 `retryUnchanged` 和取消信号。标记是一次性对象能力，不是可传递的 JSON。服务的 `reconcileMainTreeIntegration(callerSessionId, taskId, options)` 读取持久化意图。集成不会自动调用 `complete`。
+宿主消费者先调用 `requestMainTreeMerge(callerSessionId, taskId, request)`，再将返回的标记直接交给 `integrate(taskId, marker)`。请求携带确切 Git 路径与提交、进程限制、已批准检查配置存储，以及可选的 `retryUnchanged` 和取消信号。标记是一次性对象能力，不是可传递的 JSON。服务的 `reconcileMainTreeIntegration(callerSessionId, taskId, options)` 读取持久化意图。集成不会自动调用 `complete`。Goal 完成是独立的门：`selectGoalCompletionIntegration` 从已应用的集成回执加上该 Goal 的 whole-Goal 验证与审查构建最终合并契约，完成准入随后把指纹阶段重锚到合并后的树——初始启动指纹永不被改写进最终态。
 
 -----
 
@@ -113,6 +113,7 @@ controller 串行执行任务变更与集成尝试。任务记录、累计请求
 | [`src/task-consumer.ts`](src/task-consumer.ts) | 根 controller 规划、注册 Worker 准入与 briefing 投递。 |
 | [`src/delivery-consumer.ts`](src/delivery-consumer.ts) | 显式 Worker 交付、已批准检查与独立 lead 审查。 |
 | [`src/integration-evidence.ts`](src/integration-evidence.ts) | 确切任务证据与独立 lead 权限。 |
+| [`src/completion-contract.ts`](src/completion-contract.ts) | 从已应用回执与 whole-Goal 证据选取最终合并完成契约。 |
 | [`src/git-integration.ts`](src/git-integration.ts) | 有界 Git 检查、快进、确切源合并与结果观察。 |
 | [`src/spec.ts`](src/spec.ts) | 带版本的任务、请求预算与集成意图存储。 |
 

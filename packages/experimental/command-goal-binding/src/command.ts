@@ -99,6 +99,8 @@ export function renderCompletionRejection(
         .join('; ')}).`
     case 'review':
       return `Completion rejected at review: the authorized review decided ${verdict.decision} with ${verdict.findings.length} finding(s). Address the findings and obtain a passing review before completing.`
+    case 'final-integration':
+      return `Completion rejected at final-integration: the supplied final-merge evidence failed its ${verdict.reason} obligation. Every bound task needs an applied integration receipt, the whole-Goal verification and review must cover the final merged result, and the review must be independent of every delivering worker.`
     /* v8 ignore next 2 -- CompletionAdmissionVerdict is closed and every rejection stage is handled above */
     default:
       return assertNeverStage(verdict)

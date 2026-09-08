@@ -26,6 +26,7 @@ import type {
   DevFrameReviewId,
   DevFrameRepairCause,
   DevFrameTaskWarningEventData,
+  DevFrameVerificationEventData,
 } from '../events.ts'
 import { evaluateRequiredChecks } from '../required-checks.ts'
 import type {
@@ -345,10 +346,48 @@ export interface StartGoalRequest {
 }
 
 /**
+ * Durable evidence that the final merged result of one Goal's bound tasks is
+ * real, verified, and independently reviewed. The host composition builds it
+ * from the durable integration domain and the controller's session projection;
+ * the completion admission never accepts it for a task the binding does not
+ * name.
+ */
+export interface FinalIntegrationContract {
+  /**
+   * One applied integration receipt per bound task, read from the durable
+   * integration domain. The receipt's applied state is what the integration
+   * domain recorded after its Git merge; admission requires the set of task
+   * ids to equal the binding's.
+   */
+  readonly tasks: readonly {
+    readonly taskId: TaskId
+    /** The head the applied integration recorded for the target worktree. */
+    readonly appliedHead: string
+  }[]
+  /**
+   * Whole-Goal verification covering the final merged result: `deliveryId`
+   * absent, and its binding carries the merged tree's fingerprint, which the
+   * admission recomputes against the live worktree instead of the binding's
+   * initial start fingerprint.
+   */
+  readonly verification: DevFrameVerificationEventData
+  /**
+   * Whole-Goal review covering the final merged result: `deliveryId` absent,
+   * same work tuple as the verification, issued by a Session that delivered
+   * none of the bound tasks — the per-task lead reviews do not substitute.
+   */
+  readonly review: DevFrameReviewEventData
+  /** Session identities that delivered each bound task; the independence anchor. */
+  readonly workerSessionIds: readonly SessionId[]
+}
+
+/**
  * Evidence-side input for one controller completion attempt: everything
  * {@link evaluateCompletionAdmission} consumes except the recorded source
  * fingerprint, which {@link GoalBindingController.complete} takes from the
- * durable binding instead of trusting the caller.
+ * durable binding instead of trusting the caller — or, when
+ * {@link FinalIntegrationContract} evidence is supplied, from that evidence's
+ * merged-tree fingerprint after the final-integration stage validates it.
  */
 export interface CompleteGoalRequest {
   /**
@@ -367,7 +406,8 @@ export interface CompleteGoalRequest {
    * The durable, gate-authorized review evidence attributed to this Goal:
    * the journal write gate already enforced reviewer authorization before
    * this record entered the log, so admission consumes only its pass
-   * decision, and the controller rejects evidence naming another Goal.
+   * decision, and the controller rejects evidence naming another Goal. With
+   * final-merge evidence supplied this must be that evidence's review.
    */
   readonly review: DevFrameReviewEventData
   /**
@@ -379,6 +419,15 @@ export interface CompleteGoalRequest {
    * memory operations all succeeded or recorded no degradation.
    */
   readonly taskWarnings: readonly DevFrameTaskWarningEventData[]
+  /**
+   * Final-merge evidence for a Goal whose bound tasks were integrated into
+   * the controller worktree. Supplied, it replaces the binding's initial
+   * fingerprint as the admission anchor with the merged-tree fingerprint the
+   * whole-Goal verification carries; the binding record itself is never
+   * rewritten. Absent, completion anchors to the initial fingerprint exactly
+   * as before.
+   */
+  readonly finalIntegration?: FinalIntegrationContract
 }
 
 /** Stable error classifications emitted by this controller seam. */
@@ -801,7 +850,11 @@ export class GoalBindingController {
    * @param identity - controller Session and Goal identity to complete.
    * @param request - worktree path, executed checks, registered
    *   required-checks configuration reference, and the review evidence
-   *   attributed to this Goal.
+   *   attributed to this Goal. With {@link CompleteGoalRequest.finalIntegration}
+   *   supplied, the admission first validates that final-merge contract and
+   *   re-anchors the fingerprint stage at the merged-tree fingerprint its
+   *   whole-Goal verification carries; the binding's recorded fingerprint is
+   *   left untouched either way.
    * @returns the {@link CompletionAdmissionAdmitted} verdict after the native
    *   Goal completed, or the first failing stage's rejection verdict with the
    *   native Goal untouched.
@@ -862,7 +915,13 @@ export class GoalBindingController {
         )
       }
 
-      const verdict = await evaluateCompletionAdmission({
+      // The final-merge lane: with whole-Goal merged-result evidence supplied,
+      // the stage validates the contract, the submitted review must be that
+      // evidence's review, and the admission re-anchors at the merged-tree
+      // fingerprint the whole-Goal verification carries — the binding's
+      // initial start fingerprint is neither consulted for the final state
+      // nor rewritten into it.
+      let admission = {
         worktreePath: request.worktreePath,
         sourceFingerprint: binding.sourceFingerprint,
         checks: request.checks,
@@ -870,7 +929,30 @@ export class GoalBindingController {
         requiredChecksStore: request.requiredChecksStore,
         review: request.review,
         taskWarnings: request.taskWarnings,
-      })
+      }
+      if (request.finalIntegration !== undefined) {
+        const final = evaluateFinalIntegrationStage({
+          contract: request.finalIntegration,
+          boundTaskIds: binding.taskIds,
+        })
+        if (final.kind === 'rejected') return final
+        if (request.review.reviewId !== final.review.reviewId
+          || request.requiredChecksDigest !== final.verification.requiredChecks.digest) {
+          throw new GoalBindingError(
+            'completion evidence must be the supplied final-merge evidence',
+            'GOAL_BINDING_INVALID_REQUEST',
+          )
+        }
+        admission = {
+          ...admission,
+          sourceFingerprint: final.verification.binding.sourceFingerprint,
+          checks: final.verification.checks,
+          requiredChecksDigest: final.verification.requiredChecks.digest,
+          review: final.review,
+        }
+      }
+
+      const verdict = await evaluateCompletionAdmission(admission)
       if (verdict.kind === 'rejected') return verdict
 
       const completed = this.options.goals.complete({ id: current.id, revision: current.revision })
@@ -1185,13 +1267,97 @@ export interface CompletionReviewRejection {
   readonly findings: readonly DevFrameReviewFinding[]
 }
 
-/** Discriminated union returned by {@link evaluateCompletionAdmission}. */
+/** Why the supplied final-merge evidence cannot anchor this completion. */
+export type FinalIntegrationRejectionReason =
+  | 'coverage'
+  | 'delivery-bound-evidence'
+  | 'binding-mismatch'
+  | 'reviewer-not-independent'
+
+/** Rejection at the final-integration stage: the merged-result evidence is not usable as supplied. */
+export interface CompletionFinalIntegrationRejection {
+  /** Discriminant tag of the {@link CompletionAdmissionVerdict} union. */
+  readonly kind: 'rejected'
+  /** Evaluation stage that rejected the completion. */
+  readonly stage: 'final-integration'
+  /** Which final-merge obligation the evidence failed. */
+  readonly reason: FinalIntegrationRejectionReason
+  /** The bound task the evidence fails for, when the reason is task-scoped. */
+  readonly taskId?: TaskId
+}
+
+/** Discriminated union returned by {@link evaluateCompletionAdmission} and {@link evaluateFinalIntegrationStage}. */
 export type CompletionAdmissionVerdict =
   | CompletionAdmissionAdmitted
   | CompletionTaskWarningRejection
   | CompletionFingerprintRejection
   | CompletionChecksRejection
   | CompletionReviewRejection
+  | CompletionFinalIntegrationRejection
+
+/**
+ * Evaluate the final-integration stage of one completion: whether the supplied
+ * {@link FinalIntegrationContract} can anchor the completion at the final
+ * merged result. The stage runs before the regular conjunction, which then
+ * consumes the contract's evidence with the merged-tree fingerprint as the
+ * recorded claim. Structural rules, each naming its obligation:
+ *
+ * - `coverage` — the contract's applied receipts name exactly the binding's
+ *   task set: no bound task may lack its applied integration and no extra
+ *   task may ride in.
+ * - `delivery-bound-evidence` — both the verification and the review must be
+ *   whole-Goal records (`deliveryId` absent). A delivery-bound record is one
+ *   task's own evidence and cannot stand in for the final-merge gate.
+ * - `binding-mismatch` — the verification and the review must carry the same
+ *   work tuple; their common binding is what anchors the merged tree.
+ * - `reviewer-not-independent` — the final review's Session must differ from
+ *   every bound task's delivering worker Session.
+ *
+ * @param request - the contract plus the binding's task ids it must cover.
+ * @returns the contract's verification and review when the stage holds, or
+ *   the first failing obligation's rejection.
+ */
+export function evaluateFinalIntegrationStage(request: {
+  readonly contract: FinalIntegrationContract
+  readonly boundTaskIds: readonly TaskId[]
+}): { kind: 'ok'; verification: DevFrameVerificationEventData; review: DevFrameReviewEventData }
+  | CompletionFinalIntegrationRejection {
+  const { contract, boundTaskIds } = request
+  const contractTaskIds = contract.tasks.map(task => task.taskId)
+  const missing = boundTaskIds.filter(id => !contractTaskIds.some(candidate => candidate === id))
+  const extra = contract.tasks.filter(task => !boundTaskIds.some(id => id === task.taskId))
+  if (missing.length > 0 || extra.length > 0) {
+    const firstMissing = missing[0]
+    const firstExtra = extra[0]
+    if (firstMissing !== undefined) {
+      return { kind: 'rejected', stage: 'final-integration', reason: 'coverage', taskId: firstMissing }
+    }
+    if (firstExtra !== undefined) {
+      return { kind: 'rejected', stage: 'final-integration', reason: 'coverage', taskId: firstExtra.taskId }
+    }
+    return { kind: 'rejected', stage: 'final-integration', reason: 'coverage' }
+  }
+  if (contract.verification.deliveryId !== undefined || contract.review.deliveryId !== undefined) {
+    return { kind: 'rejected', stage: 'final-integration', reason: 'delivery-bound-evidence' }
+  }
+  if (!sameResultBinding(contract.verification.binding, contract.review.binding)) {
+    return { kind: 'rejected', stage: 'final-integration', reason: 'binding-mismatch' }
+  }
+  if (contract.workerSessionIds.some(worker => worker === contract.review.reviewerSessionId)) {
+    return { kind: 'rejected', stage: 'final-integration', reason: 'reviewer-not-independent' }
+  }
+  return { kind: 'ok', verification: contract.verification, review: contract.review }
+}
+
+/** Compare the complete work identity of two result bindings; task order is not authority. */
+function sameResultBinding(left: GoalResultBinding, right: GoalResultBinding): boolean {
+  return left.controllerSessionId === right.controllerSessionId
+    && left.goalId === right.goalId && left.goalRevision === right.goalRevision
+    && left.workspaceId === right.workspaceId && left.acceptanceHash === right.acceptanceHash
+    && left.sourceFingerprint === right.sourceFingerprint && left.snapshotId === right.snapshotId
+    && left.taskIds.length === right.taskIds.length
+    && left.taskIds.every(id => right.taskIds.includes(id))
+}
 
 /**
  * Completion admission for the AT1-05 completion domain: the conjunction of
@@ -1204,7 +1370,11 @@ export type CompletionAdmissionVerdict =
  * that tree, against the configuration resolved from the store), and the
  * authorized review decision last (it anchors who judged). Rejections are
  * data carrying each stage's own evidence shape (recorded claim vs
- * trustworthy side).
+ * trustworthy side). The recorded fingerprint is the caller's anchor claim:
+ * the plain completion lane passes the binding's initial fingerprint, and the
+ * final-merge lane passes the whole-Goal verification's merged-tree
+ * fingerprint after {@link evaluateFinalIntegrationStage} validated the
+ * contract, so the live recompute always names the tree the evidence claims.
  *
  * Structural errors fail loud and are never converted into rejections:
  * `SourceFingerprintError` codes from the fingerprint recompute and
