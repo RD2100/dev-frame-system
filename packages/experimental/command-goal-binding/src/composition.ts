@@ -122,20 +122,25 @@ export interface GoalBindingCompositionStores {
   readonly requiredChecks?: RequiredChecksConfigStore
   /**
    * Host-injected stop-chain adapters (AT4-06). `tree` returns the project's
-   * participating agents — the root plus every real descendant agent, each
-   * host-verified for owner and worktree identity so unrelated projects are
-   * never drained. `processes` returns every captured descendant process.
-   * `releaseWriter` is the synchronous owner-checked writer release; it
-   * must tolerate repeat invocation because the confirmed-stop recovery
-   * path retries it. The chain fails closed: a missing or empty tree
-   * inventory refuses the writer release, and a composition constructed
-   * without `releaseWriter` reports `needs_attention` and retains the
-   * writer — never a silent release.
+   * participating agents — the receiving root plus every real descendant
+   * agent — host-verified through the dispatch lineage: an agent belongs when
+   * its session's `parentSession` chain reaches the given root, so workers on
+   * independent worktrees are included and unrelated projects' sessions are
+   * never drained. `processes` returns every captured descendant process; a
+   * composition without it has no provable process inventory, and the chain
+   * fails closed on it instead of reading emptiness as quiescence.
+   * `releaseWriter` is the owner-checked writer release for the given
+   * receiving root; it may be asynchronous and the chain reports `stopped`
+   * only after it settles, and it must tolerate repeat invocation because
+   * the confirmed-stop recovery path retries it. The chain fails closed: a
+   * missing or empty tree inventory refuses the writer release, and a
+   * composition constructed without `releaseWriter` reports
+   * `needs_attention` and retains the writer — never a silent release.
    */
   readonly stop?: {
-    readonly tree?: () => readonly Agent[]
+    readonly tree?: (root: Agent) => readonly Agent[]
     readonly processes?: () => readonly StopProcess[]
-    readonly releaseWriter?: () => void
+    readonly releaseWriter?: (root: Agent) => void | Promise<void>
   }
 }
 
@@ -186,12 +191,12 @@ export class GoalBindingComposition extends Service {
   private readonly stopChains = new Map<string, Promise<CommandResult>>()
   /** The native flush closure the journals and the stop chain share. */
   private readonly sessionFlusher: DevFrameFlush
-  /** Host-captured descendant processes handed to the stop chain. */
-  private readonly stopProcesses: () => readonly StopProcess[]
+  /** Host-captured descendant processes handed to the stop chain; absent means no provable inventory. */
+  private readonly stopProcesses: (() => readonly StopProcess[]) | undefined
   /** Host-verified project tree (root plus descendants); absent fails closed. */
-  private readonly stopTree: (() => readonly Agent[]) | undefined
+  private readonly stopTree: ((root: Agent) => readonly Agent[]) | undefined
   /** Host writer release; absent means the chain retains the writer loudly. */
-  private readonly stopReleaseWriter: (() => void) | undefined
+  private readonly stopReleaseWriter: ((root: Agent) => void | Promise<void>) | undefined
 
   /**
    * Construct the composition inside the owning plugin fiber: registering the
@@ -217,7 +222,7 @@ export class GoalBindingComposition extends Service {
     this.requiredChecksStore = stores.requiredChecks ?? new MemoryRequiredChecksConfigStore()
     const flush = sessionFlush(ctx)
     this.sessionFlusher = flush
-    this.stopProcesses = stores.stop?.processes ?? (() => [])
+    this.stopProcesses = stores.stop?.processes
     this.stopTree = stores.stop?.tree
     this.stopReleaseWriter = stores.stop?.releaseWriter
     const reviewerDirectory = new ProjectionEvidenceReviewerDirectory(ctx)
@@ -618,12 +623,16 @@ export class GoalBindingComposition extends Service {
     // retains the writer instead of releasing over a lost record.
     const recordLandings: Array<Promise<unknown>> = []
     // Project-tree stop (AT4-06): the host's verified tree face supplies the
-    // root plus every real descendant agent, so the primitive's owner filters
-    // see descendant jobs and processes and the flush covers every
-    // participating session. A missing or empty inventory is fail-closed:
+    // receiving root plus every real descendant agent, so the primitive's
+    // owner filters see descendant jobs and processes and the flush covers
+    // every participating session. A missing or empty inventory is fail-closed:
     // the root still drains, but the writer release is refused instead of
-    // claiming a clean tree stop over an unverifiable inventory.
-    const treeAgents = this.stopTree?.call(undefined) ?? []
+    // claiming a clean tree stop over an unverifiable inventory. The process
+    // inventory is fail-closed the same way: a composition without a mounted
+    // capture face has no provable inventory, and the primitive's inventory
+    // attempt turns that refusal into a chain issue instead of reading
+    // emptiness as quiescence.
+    const treeAgents = this.stopTree?.(agent) ?? []
     const inventoryUnverified = this.stopTree === undefined || treeAgents.length === 0
     const agents = [agent, ...treeAgents.filter(candidate => candidate.id !== agent.id)]
     const treeSessions = new Map<string, Session>()
@@ -642,7 +651,9 @@ export class GoalBindingComposition extends Service {
       registry: this.ctx.agents,
       goals: this.ctx.goals,
       jobs,
-      processes: this.stopProcesses,
+      processes: this.stopProcesses ?? (() => {
+        throw new Error('no captured process inventory is mounted for this composition')
+      }),
       graceMs: this.config.stopGraceMs,
       closeAdmission: () => {
         controller.closeAdmission()
@@ -672,7 +683,10 @@ export class GoalBindingComposition extends Service {
         if (this.stopReleaseWriter === undefined) {
           throw new Error('the writer release is not wired for this composition')
         }
-        this.stopReleaseWriter()
+        // The face's promise IS the release: returning it lets the primitive
+        // await the actual settlement, so a pending or rejected release folds
+        // needs_attention instead of reporting stopped over a held writer.
+        return this.stopReleaseWriter(agent)
       },
     }
     const result = await stopProject(options)
@@ -755,7 +769,7 @@ export class GoalBindingComposition extends Service {
    * @returns a success result after the released stop, or a stable error.
    */
   private async finishConfirmedStop(agent: Agent, confirmed: GoalBinding): Promise<CommandResult> {
-    const treeAgents = this.stopTree?.call(undefined) ?? []
+    const treeAgents = this.stopTree?.(agent) ?? []
     const inventoryUnverified = this.stopTree === undefined || treeAgents.length === 0
     try {
       await this.boundedStopWork((async () => {
@@ -775,7 +789,10 @@ export class GoalBindingComposition extends Service {
       }
     }
     try {
-      this.stopReleaseWriter()
+      // The release settles inside the grace bound: a pending or rejected
+      // async release folds needs_attention, so `stopped` never lands over a
+      // writer the host has not provably released.
+      await this.boundedStopWork(Promise.resolve(this.stopReleaseWriter(agent)))
     } catch {
       await this.landTerminalBookkeeping(agent, { ...confirmed, lifecycle: 'needs_attention' })
       return {

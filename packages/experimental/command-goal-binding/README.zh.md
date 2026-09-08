@@ -114,9 +114,9 @@ kind: "package-reference"
 - **日志实例共享会话持久化。** 组合日志和证据日志都通过 `ctx.sessions.flush` 刷新。使用同一活跃会话的所有日志共享追加队列和失败锁；一次结果不确定的刷新会阻止它们之后的写入。
 - **分发前先 fail closed。** 各处理器在到达准入之前，会因缺失 goal、缺失绑定、缺失证据或已锁存的 projection 重放失败而拒绝，并显式解析 worktree 路径，使缺失根路径成为数据错误而非结构性失败。
 - **回执只在准入之后。** 获得准入的完成会通过准入的 compare-and-set 推进原生 goal，并通过 goal 服务记录一条 `completion-admission` 证据条目；拒绝则保持 goal phase、绑定与准入状态不变。
-- **停止链是可选项且由宿主接线。** 项目树面、已捕获的后代进程与 writer 释放是组合服务上的注入点——不是 config：宿主捕获并做 owner 验证项目树（根加上每个真实后代 agent）并拥有释放。当 fiber 携带 agent、workspace 与 worktree 注册表时，apply 面挂载真实适配器：基于 `ctx.agents` 按规范化 worktree cwd 过滤的活跃树、可通过 `hostStopInventoryOf` 访问的已捕获进程 inventory、以及 owner 检查的 worktree writer 释放；缺少这些注册表的 fiber 保持 fail-closed 的未接线链。链在树 inventory 缺失或为空、作业注册表缺失、释放钩子未接线时一律 fail-closed——缺失绝不等于安静。
-- **writer 只在链确认后释放。** 确认静止的记录是持久的释放前前置；stopped 终态记录、存储条目与检查点只在该次释放真实成功之后落盘，每次落盘都受停止宽限期约束，永不 settle 的持久化面会返回而不是挂起。释放失败折叠为 `needs_attention`，绝不落 `stopped`。
-- **被中断的停止流程在重复停止时收敛。** 日志停在 `stop_requested`（drain 期间崩溃）时，恢复会基于宿主当前 inventory 重新进入 drain；日志停在 `quiescence_confirmed` 时重新进入释放。缺失的活跃身份以 `needs_attention` 呈现且 writer 保持持有——绝不静默绕过，也绝不重启被中断的 goal 工作。
+- **停止链是可选项且由宿主接线。** 项目树面与 writer 释放是组合服务上的注入点——不是 config：宿主捕获并做 owner 验证项目树（接收根加上每个 dispatch 血缘后代，通过活跃 agent 注册表上的会话 `parentSession` 链解析）并拥有释放。当 fiber 携带 agent、workspace 与 worktree 注册表时，apply 面挂载真实适配器：基于 `ctx.agents` 按血缘解析的活跃树——独立 worktree 上的 worker 属于树内，无关项目的会话绝不属于——以及 owner 检查的 worktree writer 释放；缺少这些注册表的 fiber 保持 fail-closed 的未接线链。不挂载任何进程 inventory：在真实捕获喂源接管后代进程之前，宿主无法证明的 inventory 会把空数组读成静止，因此链对缺失的面 fail-closed。链在树 inventory 缺失或为空、作业注册表缺失、释放钩子未接线时同样 fail-closed——缺失绝不等于安静。
+- **writer 只在链确认后释放。** 确认静止的记录是持久的释放前前置；stopped 终态记录、存储条目与检查点只在该次释放真实成功之后落盘。异步的注册表释放在停止宽限界限内被 await，悬挂或被拒绝的释放都以 `needs_attention` 呈现且 writer 保持持有——警告绝不冒充释放，注册表未证明清空之前绝不落 `stopped`。
+- **被中断的停止流程在重复停止时收敛。** 日志停在 `stop_requested`（drain 期间崩溃）时，恢复会基于宿主当前 inventory 重新进入 drain；日志停在 `quiescence_confirmed` 时重新进入释放。持久的注册表行是跨重启的释放真相，重复停止对照它收敛。缺失的活跃身份以 `needs_attention` 呈现且 writer 保持持有——绝不静默绕过，也绝不重启被中断的 goal 工作。
 
 ### 源码地图
 
@@ -127,7 +127,7 @@ kind: "package-reference"
 | [`src/command.ts`](src/command.ts) | 命令语法、数据错误文本、拒绝渲染、回执证据 |
 | [`src/host-evidence.ts`](src/host-evidence.ts) | flush 闭包、projection 派生审查者目录、role-policy/goal-binding 落账 helper、验收摘要 |
 | [`src/config.ts`](src/config.ts) | config 模式与校验 |
-| [`src/host-stop.ts`](src/host-stop.ts) | 真实宿主停止适配器：worktree 身份项目树、已捕获进程 inventory、owner 检查的 worktree writer 释放 |
+| [`src/host-stop.ts`](src/host-stop.ts) | 真实宿主停止适配器：dispatch 血缘项目树、owner 检查的 worktree writer 释放 |
 | — | 不发布运行时不变式伴生入口；准入语义由 devframe 包拥有并测试，命令行为由包内测试覆盖。 |
 
 </details>
