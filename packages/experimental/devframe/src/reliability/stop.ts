@@ -50,8 +50,8 @@ export interface StopProjectOptions {
   readonly record: (observation: StopObservation) => void
   /** Flush all participating Session state through native persistence. */
   readonly flush: () => Promise<void>
-  /** Synchronous owner-checked release; a throw must retain the writer. */
-  readonly releaseWriter: () => void
+  /** Synchronous or asynchronous owner-checked release; a throw or rejection must retain the writer. */
+  readonly releaseWriter: () => void | Promise<void>
 }
 
 /** Wait within the shared stop deadline without interpreting timeout as settlement. */
@@ -94,7 +94,7 @@ export async function stopProject(options: StopProjectOptions): Promise<StopResu
   const observe = (status: StopObservation['status']): void => {
     attempt('session:record', () => { options.record({ status, remaining: [...issues] }) })
   }
-  const drain = (resource: string, action: () => Promise<boolean | void>): Promise<void> => {
+  const drain = (resource: string, action: () => boolean | void | Promise<boolean | void>): Promise<void> => {
     pending.add(resource)
     return Promise.resolve().then(action).then((confirmed) => {
       pending.delete(resource)
@@ -183,6 +183,14 @@ export async function stopProject(options: StopProjectOptions): Promise<StopResu
   observe(issues.length === 0 ? 'quiescence_confirmed' : 'needs_attention')
   await bounded(drain('session:flush', options.flush), bound.signal)
   if (pending.has('session:flush')) issues.push({ resource: 'session:flush', reason: 'timeout' })
-  if (issues.length === 0) attempt('writer:release', options.releaseWriter)
+  // The release settles INSIDE the bounded window, before the status: a
+  // pending or rejected async release is a real remaining resource — reporting
+  // `stopped` over a release that has not succeeded would misstate the writer
+  // as released. A release still pending at the deadline surfaces as a timeout
+  // issue; the durable row stays the truth and the repeat stop re-enters.
+  if (issues.length === 0) {
+    await bounded(drain('writer:release', options.releaseWriter), bound.signal)
+    if (pending.has('writer:release')) issues.push({ resource: 'writer:release', reason: 'timeout' })
+  }
   return { status: issues.length === 0 ? 'stopped' : 'needs_attention', remaining: [...issues] }
 }
