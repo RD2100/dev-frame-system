@@ -26,13 +26,13 @@ it('waits for the candidate request-budget child before mounting the dispatch fa
 
   const release = Promise.withResolvers<undefined>()
   let candidateMountSettled = false
-  const originalPlugin = ctx.plugin.bind(ctx)
+  const originalPlugin = ctx.plugin.bind(ctx) as (plugin: unknown, ...args: unknown[]) => ReturnType<Context['plugin']>
   ctx.plugin = ((plugin: unknown, ...args: unknown[]) => {
     if (typeof plugin === 'object' && plugin !== null
       && (plugin as { id?: unknown }).id === 'candidate-request-budget') {
       return release.promise.then(() => { candidateMountSettled = true }) as unknown as ReturnType<Context['plugin']>
     }
-    return originalPlugin(plugin as never, ...args as never[])
+    return originalPlugin(plugin, ...args)
   }) as unknown as Context['plugin']
 
   let applied = false
@@ -44,7 +44,7 @@ it('waits for the candidate request-budget child before mounting the dispatch fa
   expect(candidateMountSettled).toBe(false)
   expect(ctx.tools.get('agent_dispatch')).toBeUndefined()
 
-  release.resolve()
+  release.resolve(undefined)
   await applying
 
   expect(applied).toBe(true)

@@ -43,7 +43,8 @@ function fixture(): IntegrationEvidenceRequest {
     },
     state: {
       controllerSessionId: controllerId, workspaceId: expected.workspaceId, failure: null,
-      rolePolicy: null, bindings: [], usage: [], lifecycle: null, taskWarnings: [], repairAdmissions: [],
+      rolePolicy: null, bindings: [], superseded: [], acceptanceRegions: [], usage: [],
+      lifecycle: null, taskWarnings: [], repairAdmissions: [],
       deliveries: [delivery],
       reviews: [{ ...review, deliveryId: delivery.deliveryId, binding: output, snapshotId: output.snapshotId }],
       verifications: [{

@@ -14,7 +14,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import type { AgentBindingRegistry } from '@deepseek-ai/dsh-experimental-session-identity/src/registry.ts'
+import type { AgentBindingRegistry } from '@deepseek-ai/dsh-experimental-session-identity'
 import type { WorkspaceId } from './shared/types.ts'
 import { DevFrameSessionJournal } from './session-journal.ts'
 import type { DevFrameReviewGate } from './session-journal.ts'

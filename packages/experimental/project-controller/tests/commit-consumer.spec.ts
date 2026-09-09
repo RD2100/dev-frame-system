@@ -246,7 +246,7 @@ describe('project commit consumer through the real Loader', () => {
         tools: { register: (definition: unknown) => { registered.push(definition); return () => undefined } } as unknown as Context['tools'],
         registry: {} as never,
         resolveWorker: () => { throw new Error('unused') },
-        serial: async <T>(run: () => Promise<T>): Promise<T> => await run(),
+        serial: async <T>(_key: string, run: () => Promise<T>): Promise<T> => await run(),
         gitEnvironment: () => ({}),
         commitPathsByTask: new Map(),
         jobs: () => undefined,

@@ -322,7 +322,7 @@ describe('controller Git integration', () => {
     // The pre-merge target head is now an ancestor of main; park the source
     // checkout exactly there so inspection sees a consistent prepared state.
     await git(request.sourcePath, 'checkout', '--detach', request.targetHead)
-    await expect(inspectIntegrationGit({ ...request, sourceCommit: request.targetHead, targetHead: mergedHead, mode: 'merge' }, options))
+    await expect(inspectIntegrationGit({ ...request, sourceCommit: request.targetHead, targetHead: mergedHead!, mode: 'merge' }, options))
       .rejects.toThrow('the target already contains it')
   })
 

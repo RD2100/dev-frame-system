@@ -943,10 +943,11 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       const content = toolResultTextFromBody(body, 'current-goal')
       if (content === undefined) throw new Error('goal completion replay did not receive get_goal output')
       const parsed = JSON.parse(content) as { goal?: { id?: unknown; revision?: unknown } }
-      if (typeof parsed.goal?.id !== 'string' || !Number.isSafeInteger(parsed.goal.revision)) {
+      const revision = parsed.goal?.revision
+      if (typeof parsed.goal?.id !== 'string' || typeof revision !== 'number' || !Number.isSafeInteger(revision)) {
         throw new Error(`goal completion replay received an invalid get_goal result: ${content}`)
       }
-      return { goal_id: parsed.goal.id, revision: parsed.goal.revision, action: 'complete' }
+      return { goal_id: parsed.goal.id, revision, action: 'complete' }
     }
 
     // Whole-Goal review is written to the lead session journal rather than

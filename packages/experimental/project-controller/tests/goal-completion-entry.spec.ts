@@ -75,7 +75,8 @@ function fixture() {
   const { verification, review } = wholeGoalEvidence()
   const state: DevFrameProjectionState = {
     controllerSessionId: controllerId, workspaceId, failure: null,
-    rolePolicy: null, bindings: [], usage: [], lifecycle: null, taskWarnings: [], repairAdmissions: [],
+    rolePolicy: null, bindings: [], superseded: [], acceptanceRegions: [], usage: [],
+    lifecycle: null, taskWarnings: [], repairAdmissions: [],
     deliveries: [delivery('task-a', workerA), delivery('task-b', workerB)],
     verifications: [verification], reviews: [review],
   }

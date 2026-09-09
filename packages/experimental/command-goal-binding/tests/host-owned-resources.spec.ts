@@ -177,7 +177,7 @@ const processTerminalBackend: TerminalBackend = {
     const closed = once(child, 'close')
     await once(child, 'spawn')
     return {
-      pid: child.pid,
+      ...(child.pid === undefined ? {} : { pid: child.pid }),
       motd: 'ready',
       startSend() { throw new Error('idle fixture does not send') },
       read() { return { text: '', totalLines: 0, lineBegin: 0, lineEnd: 0, truncated: false } },
@@ -227,7 +227,7 @@ it('drains actual terminals across isolated Loader realms and keeps a foreign ow
   const commit = resources.prepareResumeResources(controller)
   await expect(first.spawn(lead, { type: 'owned-process' })).rejects.toMatchObject({ code: 'OWNER_NOT_LIVE', message: 'PTY owner admission is closed' })
   await ctx.loader.create({
-    id: 'late-realm', name: 'cordis:group', group: true, isolate: { terminals: true },
+    name: 'cordis:group', group: true, isolate: { terminals: true },
     config: [{ id: 'late', name: 'terminals' }],
   })
   await ctx.loader.await()

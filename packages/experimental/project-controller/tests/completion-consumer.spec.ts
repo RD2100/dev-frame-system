@@ -29,7 +29,7 @@ import { prepareIntegration } from './integration-harness.ts'
  * the mock delegates unchanged.
  */
 const sourceObservationBarrier: { fire: null | (() => Promise<void>) } = { fire: null }
-vi.mock('@deepseek-ai/dsh-experimental-devframe', async importOriginal => {
+vi.mock('@deepseek-ai/dsh-experimental-devframe', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@deepseek-ai/dsh-experimental-devframe')>()
   return {
     ...actual,
@@ -87,7 +87,9 @@ async function setup(checkScript = "import { readFileSync } from 'node:fs'; impo
   } } as unknown as NonNullable<typeof ctx.loader.internal>
   await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } })
   await ctx.loader.await()
-  expect([...ctx.loader.entries()].filter(entry => entry.fiber === undefined && !entry.disabled).map(entry => entry.options.name)).toEqual([])
+  expect(
+    [...ctx.loader.entries()].filter(entry => entry.fiber === undefined && !entry.disabled).map(entry => entry.options.name),
+  ).toEqual([])
   const composition = ctx.get('commandGoalBinding')!
   const binding = await composition.startBinding(root, { objective: 'integrate reviewed feature',
     taskIds: f.binding.taskIds, acceptanceHash: f.binding.acceptanceHash, sourceFingerprint: f.binding.sourceFingerprint,
@@ -112,7 +114,7 @@ async function setup(checkScript = "import { readFileSync } from 'node:fs'; impo
   return { ...f, ctx, root, lead, worker, path, binding, composition, execute, state }
 }
 
-describe('whole-Goal completion producer', { timeout: 90_000, hookTimeout: 90_000 }, () => {
+describe('whole-Goal completion producer', { timeout: 90_000 }, () => {
   it('refuses a preserved reviewed checkout when the actual integration target changed', async () => {
     const f = await setup()
     await f.execute(f.root, 'project_goal_verify')
@@ -133,12 +135,12 @@ describe('whole-Goal completion producer', { timeout: 90_000, hookTimeout: 90_00
     await f.execute(f.root, 'project_goal_verify')
     const verification = f.state().verifications.at(-1)!
     await f.execute(f.lead, 'project_goal_review', { verificationId: verification.verificationId, decision: 'pass', findings: [] })
-    const entered = Promise.withResolvers<void>()
-    const release = Promise.withResolvers<void>()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
     const load = f.composition.requiredChecksStore.load.bind(f.composition.requiredChecksStore)
-    const spy = vi.spyOn(f.composition.requiredChecksStore, 'load').mockImplementation(async digest => {
+    const spy = vi.spyOn(f.composition.requiredChecksStore, 'load').mockImplementation(async (digest) => {
       const config = await load(digest)
-      entered.resolve()
+      entered.resolve(undefined)
       await release.promise
       return config
     })
@@ -148,22 +150,22 @@ describe('whole-Goal completion producer', { timeout: 90_000, hookTimeout: 90_00
       await entered.promise
       const owner = f.ctx.agentBindings.find(f.root.session.id)!
       await f.ctx.worktreeRegistry.unbind(owner.worktreeId!, WorktreeLockHolder(f.root.session.id))
-      release.resolve()
+      release.resolve(undefined)
       await rejected
       expect(f.ctx.goals.get(f.root)?.phase).toBe('active')
-    } finally { release.resolve(); spy.mockRestore() }
+    } finally { release.resolve(undefined); spy.mockRestore() }
   })
 
   it('refuses the visible passing review when its pending durability checkpoint fails', async () => {
     const f = await setup()
     await f.execute(f.root, 'project_goal_verify')
     const verification = f.state().verifications.at(-1)!
-    const entered = Promise.withResolvers<void>()
+    const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<boolean>()
     const flush = f.ctx.sessions.flush.bind(f.ctx.sessions)
-    const spy = vi.spyOn(f.ctx.sessions, 'flush').mockImplementation(async session => {
+    const spy = vi.spyOn(f.ctx.sessions, 'flush').mockImplementation(async (session) => {
       if (session === f.controller && f.state().reviews.at(-1)?.deliveryId === undefined) {
-        entered.resolve()
+        entered.resolve(undefined)
         return release.promise
       }
       return flush(session)
@@ -186,12 +188,12 @@ describe('whole-Goal completion producer', { timeout: 90_000, hookTimeout: 90_00
     await f.execute(f.root, 'project_goal_verify')
     const verification = f.state().verifications.at(-1)!
     await f.execute(f.lead, 'project_goal_review', { verificationId: verification.verificationId, decision: 'pass', findings: [] })
-    const entered = Promise.withResolvers<void>()
-    const release = Promise.withResolvers<void>()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
     const load = f.composition.requiredChecksStore.load.bind(f.composition.requiredChecksStore)
-    const spy = vi.spyOn(f.composition.requiredChecksStore, 'load').mockImplementation(async digest => {
+    const spy = vi.spyOn(f.composition.requiredChecksStore, 'load').mockImplementation(async (digest) => {
       const config = await load(digest)
-      entered.resolve()
+      entered.resolve(undefined)
       await release.promise
       return config
     })
@@ -199,11 +201,11 @@ describe('whole-Goal completion producer', { timeout: 90_000, hookTimeout: 90_00
     try {
       await entered.promise
       await writeFile(join(f.path, 'feature.txt'), 'changed during admission\n')
-      release.resolve()
+      release.resolve(undefined)
       const result = await completion
       expect(result.kind, result.text).toBe('error')
       expect(f.ctx.goals.get(f.root)?.phase).toBe('active')
-    } finally { release.resolve(); spy.mockRestore() }
+    } finally { release.resolve(undefined); spy.mockRestore() }
   })
   it('records actual final-tree checks and independent review then completes the same native Goal', async () => {
     const f = await setup()
@@ -219,7 +221,9 @@ describe('whole-Goal completion producer', { timeout: 90_000, hookTimeout: 90_00
     const completion = await f.composition.completeCurrent({ agent: f.root })
     expect(completion.kind, completion.text).toBe('success')
     expect(f.ctx.goals.get(f.root)).toMatchObject({ id: f.binding.goalId, phase: 'complete' })
-    expect((await f.composition.bindingStore.load(ControllerSessionId(f.root.id))).at(-1)?.sourceFingerprint).toBe(f.binding.sourceFingerprint)
+    expect(
+      (await f.composition.bindingStore.load(ControllerSessionId(f.root.id))).at(-1)?.sourceFingerprint,
+    ).toBe(f.binding.sourceFingerprint)
     const replay = foldDevFrameState(f.controller.snapshotEvents(), f.controller.header)
     expect(replay.failure).toBeNull()
     expect(replay.verifications.at(-1)).toEqual(verification)
