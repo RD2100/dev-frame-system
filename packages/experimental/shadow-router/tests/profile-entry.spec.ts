@@ -84,16 +84,21 @@ describe('shadow-router profile-config entry', () => {
     }
   })
 
-  it('a relative or missing authorizedRoot never activates the router (no half-configured shadow)', async () => {
-    for (const authorizedRoots of [['./relative-root'], [join(tmpdir(), 'dsh-shadow-entry-missing-xyz')]]) {
-      const ctx = new Context()
-      await ctx.plugin(ShadowRouter, { authorizedRoots })
-      // Cordis settles the mount before the Service.init failure lands; the
-      // observable composition fact is that the router never provides, so no
-      // project_* entry can exist. The nonzero exit itself is boot-level
-      // installFailLoud.
-      expect(ctx.shadowRouter).toBeUndefined()
-      await ctx.fiber.dispose()
+  it('a relative or missing authorizedRoot fails the load loud instead of booting half-configured', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-entry-invalid-'))
+    try {
+      const cases: [authorizedRoots: string[], message: string][] = [
+        [['./relative-root'], 'must be an absolute path'],
+        [[join(root, 'missing-root')], 'must be an existing directory at load'],
+      ]
+      for (const [authorizedRoots, message] of cases) {
+        // The full dependency mount is required: on a bare context the
+        // router's injected services never arrive, the fiber stays PENDING,
+        // and no validation runs at all.
+        await expect(mount(root, { authorizedRoots })).rejects.toThrowError(message)
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true })
     }
   })
 })
