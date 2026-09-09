@@ -1,0 +1,29 @@
+# Shadow entry overlay: turn the fail-closed shadow-router row into a live entry.
+# Prerequisite: the DevFrame profile layer (which inserts the shadow-router row)
+# is already in the composition — boot with
+#   dsh web --patch packages/experimental/devframe-profile/cordis.patch.yml --patch <this file>
+# or paste this row into $DSH_HOME/profiles/web/cordis.patch.yml (patchReload:
+# live profiles hot-reload the file without a restart).
+#
+# A patch replaces the targeted row's whole config, and the shadow-router row
+# ships with no config on purpose: with no shadowSessionId the router installs
+# no project_* tools anywhere (fail-closed). This overlay is the explicit
+# choice that opens it.
+#
+# shadowSessionId: the session id that acts as the Shadow controller. The
+#   router marks that agent when it is created (or immediately if already
+#   live); only that scope sees the four project_* tools.
+# authorizedRoots: absolute directories a project root may live in. Relative
+#   or missing entries fail the load loud (SHADOW_INVALID_CONFIG) — the host
+#   refuses to boot with a half-configured shadow.
+- id: shadow-router
+  config:
+    shadowSessionId: REPLACE_WITH_YOUR_SESSION_ID
+    authorizedRoots:
+      # Example: D:/projects — replace with real absolute directories.
+      - D:/projects
+# For compositions that do not already insert the row (no DevFrame layer),
+# add the insert next to the config row instead:
+# - insert:
+#     - id: shadow-router
+#       name: '@deepseek-ai/dsh-experimental-shadow-router'
