@@ -41,6 +41,18 @@ profile 必须已包含 Web bundle 层；本层不动其 webserver 行。部署�
 
 本层插入身份、路由、记忆与目标绑定四行，默认值全部未配置、只读：shadow-router 在声明授权根之前不安装任何 `project_*` 工具；project-memory 在提供真实 vaultRoot 之前保持工具只读。hierarchy 行的 worker 面初始为空（fail closed），不预分配 lead 插件范围；dispatch 行挂载 `agent_dispatch` 消费面。
 
+### 启用 Shadow
+
+本层插入的 shadow-router 行刻意不带 config：没有授权根、没有声明的 Shadow 会话时，router 不在任何作用域安装 `project_*` 工具，[profile-entry spec](../../shadow-router/tests/profile-entry.spec.ts) 锁定了这一 fail-closed 默认。三步把该行变成生效条目：
+
+1. 若 profile 缺少 router 包依赖，用 `dsh plugin --profile web add @deepseek-ai/dsh-experimental-shadow-router` 安装；该包未声明 bundle，因此这一步只安装依赖，不新增它自己的层。
+2. 给该行真实 config：把 [shadow 示例 patch](../../../apps/cli/config/examples/shadow/cordis.patch.yml) 中的 `shadow-router` 条目粘入 `$DSH_HOME/profiles/web/cordis.patch.yml`，或把该文件作为又一个 `--patch` overlay 传入，并把 `shadowSessionId` 占位符替换为控制器会话 id、`authorizedRoots` 替换为真实值。
+3. 让变更按 profile 的 `patchReload` 策略生效：`live` profile（随附的 web 模板）热应用 profile 自身 patch 文件的编辑，`startup` profile 在下次重启时应用。
+
+每个授权根必须是已存在的绝对目录：相对或不存在的条目会在加载时以 `SHADOW_INVALID_CONFIG` 失败，宿主以非零状态退出，而不是带着配置不完整的 shadow 启动。
+
+变更生效后，被声明的会话在创建时被标记——若其已存活则立即标记——其作用域恰好获得 `project_open`、`project_send`、`project_status`、`project_stop` 四个工具；其他作用域一个也解析不到。
+
 -----
 
 <a id="understand-the-implementation"></a>

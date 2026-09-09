@@ -41,6 +41,18 @@ This layer's patch inserts its six rows; it does not target existing rows. Do no
 
 The layer inserts the identity, routing, memory, and goal-binding rows with unconfigured, read-only defaults: shadow-router installs no `project_*` tools until authorized roots are declared, and project-memory keeps its tools read-only until a real vaultRoot is supplied. The hierarchy row starts the worker face empty (fail closed) and preallocates no lead plugin scopes; the dispatch row mounts the `agent_dispatch` consumption face.
 
+### Enabling Shadow
+
+The shadow-router row ships without config on purpose: with no authorized roots and no declared Shadow session, the router installs no `project_*` tools in any scope, and the [profile-entry spec](../../shadow-router/tests/profile-entry.spec.ts) locks in that fail-closed default. Three steps turn the row into a live entry:
+
+1. If the profile lacks the router package as a dependency, install it with `dsh plugin --profile web add @deepseek-ai/dsh-experimental-shadow-router`; the package declares no bundle, so this installs the dependency without adding a layer of its own.
+2. Give the row a real config: paste the `shadow-router` entry from the [shadow example patch](../../../apps/cli/config/examples/shadow/cordis.patch.yml) into `$DSH_HOME/profiles/web/cordis.patch.yml`, or pass that file as one more `--patch` overlay, replacing the `shadowSessionId` placeholder with the controller session's id and `authorizedRoots` with real values.
+3. Pick up the change per the profile's `patchReload` policy: a `live` profile (the shipped web template) hot-applies an edit of the profile's own patch file, while a `startup` profile applies it at the next restart.
+
+Every authorized root must be an existing absolute directory: a relative or missing entry fails the load with `SHADOW_INVALID_CONFIG`, and the host exits nonzero rather than booting a half-configured shadow.
+
+Once the change applies, the declared session is marked when created — or immediately when it is already live — and its scope gains exactly the four tools `project_open`, `project_send`, `project_status`, and `project_stop`; every other scope resolves none of them.
+
 -----
 
 <a id="understand-the-implementation"></a>
