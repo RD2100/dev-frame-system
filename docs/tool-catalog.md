@@ -44,6 +44,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-experimental-project-controller/consumer` | `project_integrate` | `ctx.tools`, `ctx.agents`, `ctx.projectController`, `ctx.agentBindings`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry` | `tool/call`, `tool/result`, `project_tasks integrations and tasks`, `Git target worktree` | - | Opt-in controller-only consumer. Integration requires persisted verification, independent lead review, the current Goal, and registered worktree writer locks. Reconciliation observes an interrupted intent without repeating Git. |
 | `@deepseek-ai/dsh-experimental-project-controller/task-consumer` | `project_task` | `ctx.tools`, `ctx.agents`, `ctx.sessions`, `ctx.sessionProjections`, `ctx.projectController`, `ctx.agentBindings`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry` | `tool/call`, `tool/result`, `project_tasks tasks`, `Worker briefing inbox` | - | Opt-in root-controller consumer for planning authorized Goal tasks and starting their registered Workers. Start derives identity and worktree locks from live registries, and queues an optional briefing once after development admission. It does not deliver, review, submit, or complete work. |
 | `@deepseek-ai/dsh-experimental-project-controller/delivery-consumer` | `project_commit`, `project_deliver`, `project_evidence`, `project_review` | `ctx.tools`, `ctx.agents`, `ctx.sessions`, `ctx.sessionProjections`, `ctx.projectController`, `ctx.agentBindings`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry` | `tool/call`, `tool/result`, `DevFrame delivery, verification and review events`, `project_tasks tasks`, `approved check subprocess effects`, `Worker worktree commits through the registry commit Service` | - | Opt-in explicit Worker delivery, independent parent-lead review, and Worker artifact commits. The host derives source identity and executes preapproved checks, commits only host-registered per-task paths, refuses while the caller has non-terminal background jobs, and re-verifies branch and expected HEAD inside the registry commit Service. Failed or uncertain checks require explicit retryChecks; identical reviews can repair task-state recording without repeating the review. |
+| `@deepseek-ai/dsh-experimental-project-controller/completion-consumer` | `project_goal_review`, `project_goal_verify` | `ctx.tools`, `ctx.agents`, `ctx.goals`, `ctx.sessions`, `ctx.sessionProjections`, `ctx.projectController`, `ctx.agentBindings`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry` | `tool/call`, `tool/result`, `DevFrame whole-Goal verification and review events`, `approved check subprocess effects` | - | Opt-in whole-Goal checks over the clean final controller tree and review by an independent direct lead. The host requires every current delivery to have an applied integration receipt and rechecks source, writer ownership, and authority before durable evidence recording. Completion remains the separate /goal-complete command. |
 | `@deepseek-ai/dsh-experimental-agent-dispatch` | `agent_dispatch` | `ctx.tools`, `ctx.systemPrompt`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry`, `ctx.agentHierarchy`, `ctx.agentBindings`, `ctx.agents`, `ctx.sessions`, `a calling Agent (its session cwd authorizes the workspace)` | `tool/call`, `tool/result` | - | The one tool dispatches a hierarchy child for one task onto one registered worktree and holds the worktree single-writer lock for the child's whole life; a task with an existing dispatched child refuses and names it, and retry reuses that child without re-delivering the briefing. Experimental and private: the package ships in no released bundle, and visibility is role-restricted (workers cannot see the tool) through the hierarchy's restrict face. |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
 
@@ -2628,6 +2629,55 @@ Record your explicit independent lead review of the latest task delivery. Pass s
 Source: [`packages/experimental/project-controller/src/delivery-consumer.ts`](../packages/experimental/project-controller/src/delivery-consumer.ts)
 
 Opt-in explicit Worker delivery, independent parent-lead review, and Worker artifact commits. The host derives source identity and executes preapproved checks, commits only host-registered per-task paths, refuses while the caller has non-terminal background jobs, and re-verifies branch and expected HEAD inside the registry commit Service. Failed or uncertain checks require explicit retryChecks; identical reviews can repair task-state recording without repeating the review.
+
+<a id="deepseek-aidsh-experimental-project-controllercompletion-consumer"></a>
+
+## `@deepseek-ai/dsh-experimental-project-controller/completion-consumer`
+
+### `project_goal_review`
+
+Record your independent review of the exact final merged source identified by project_goal_verify. Inspect that controller source and the whole Goal before deciding. Only a live independent direct lead may submit; source or evidence changes require a new review. Does not complete the Goal.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "verificationId": {
+      "type": "string",
+      "description": "Exact verification identity from project_goal_verify whose source you inspected."
+    },
+    "decision": {
+      "type": "string",
+      "description": "pass or changes_required."
+    },
+    "findings": {
+      "description": "Array of findings with id, severity (blocking, warning, note), message, optional path and line."
+    }
+  },
+  "required": [
+    "verificationId",
+    "decision",
+    "findings"
+  ]
+}
+```
+
+Source: [`packages/experimental/project-controller/src/completion-consumer.ts`](../packages/experimental/project-controller/src/completion-consumer.ts)
+
+### `project_goal_verify`
+
+Run the host-approved whole-Goal checks on the clean final merged controller tree after every task is integrated. Returns the exact verification identity and source to give an independent lead for review. Does not complete the Goal.
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+Source: [`packages/experimental/project-controller/src/completion-consumer.ts`](../packages/experimental/project-controller/src/completion-consumer.ts)
+
+Opt-in whole-Goal checks over the clean final controller tree and review by an independent direct lead. The host requires every current delivery to have an applied integration receipt and rechecks source, writer ownership, and authority before durable evidence recording. Completion remains the separate /goal-complete command.
 
 <a id="deepseek-aidsh-experimental-agent-dispatch"></a>
 

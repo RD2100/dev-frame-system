@@ -49,7 +49,7 @@ import * as ToolCordis from '@deepseek-ai/dsh-tool-cordis'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
 import * as ToolFsSearch from '@deepseek-ai/dsh-tool-fs-search'
 import * as ToolStrReplaceEditor from '@deepseek-ai/dsh-tool-str-replace-editor'
-import TerminalSessionService from '@deepseek-ai/dsh-terminal'
+import TerminalSessionService, { TerminalOwnershipRegistry } from '@deepseek-ai/dsh-terminal'
 import * as ToolPty from '@deepseek-ai/dsh-tool-terminal'
 import * as ToolGoal from '@deepseek-ai/dsh-tool-goal'
 import * as ToolSchedule from '@deepseek-ai/dsh-schedule'
@@ -390,6 +390,11 @@ const TOOL_PACKAGES: ToolPackage[] = [
     requires: ['ctx.tools', 'ctx.terminals', 'an owning Agent at execution time'],
     writes: ['tool/call', 'PTY shell state', 'tool/result'],
     async mount(ctx) {
+      // The terminal service injects terminalOwnership, whose registry injects
+      // agents (shared host-wide directory; mount order per the base bundle:
+      // agent, then ownership, then the terminal service).
+      await ctx.plugin(AgentRegistry)
+      await ctx.plugin(TerminalOwnershipRegistry)
       await ctx.plugin(TerminalSessionService)
       await ctx.plugin(ToolBashPersistent)
     },
@@ -403,6 +408,9 @@ const TOOL_PACKAGES: ToolPackage[] = [
     requires: ['ctx.tools', 'ctx.terminals', 'an owning Agent at execution time'],
     writes: ['tool/call', 'PTY shell state', 'tool/result'],
     async mount(ctx) {
+      // Same ownership chain as the persistent bash tool above.
+      await ctx.plugin(AgentRegistry)
+      await ctx.plugin(TerminalOwnershipRegistry)
       await ctx.plugin(TerminalSessionService)
       await ctx.plugin(ToolPwshPersistent)
     },
@@ -464,6 +472,9 @@ const TOOL_PACKAGES: ToolPackage[] = [
     requires: ['ctx.tools', 'ctx.terminals', 'ctx.systemPrompt', 'ctx.jobs at call time for run_in_background'],
     writes: ['tool/call', 'tool/result'],
     async mount(ctx) {
+      // Same ownership chain as the persistent bash tool above.
+      await ctx.plugin(AgentRegistry)
+      await ctx.plugin(TerminalOwnershipRegistry)
       await ctx.plugin(TerminalSessionService)
       await ctx.plugin(ToolPty)
     },

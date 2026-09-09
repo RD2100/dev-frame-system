@@ -47,7 +47,8 @@
 | `@deepseek-ai/dsh-experimental-agent-worktree` | `worktree_create`、`worktree_remove`、`worktree_status` | `ctx.tools`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry`、`ctx.systemPrompt`、`a calling Agent (its session cwd authorizes the workspace)` | `tool/call`、`tool/result` | - | 三个工具把每个新建 worktree 绑定为调用会话的单一写入目标：其他会话只能观察，只有绑定持有者能移除。实验性私有包：不出现在任何发布 bundle 中，且与 dsh-tool-worktree 同装一个组合会重复注册共享的工具名。 |
 | `@deepseek-ai/dsh-experimental-project-controller/consumer` | `project_integrate` | `ctx.tools`、`ctx.agents`、`ctx.projectController`、`ctx.agentBindings`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry` | `tool/call`、`tool/result`、`project_tasks integrations and tasks`、`Git target worktree` | - | 需显式启用的总控专用消费者。集成需要持久化验证、独立组长评审、当前 Goal 和已注册工作树的写入锁。协调恢复只观察中断的意图，不重复执行 Git。 |
 | `@deepseek-ai/dsh-experimental-project-controller/task-consumer` | `project_task` | `ctx.tools`、`ctx.agents`、`ctx.sessions`、`ctx.sessionProjections`、`ctx.projectController`、`ctx.agentBindings`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry` | `tool/call`、`tool/result`、`project_tasks tasks`、`Worker briefing inbox` | - | 需显式启用的根总控消费者，用于规划当前 Goal 已授权的任务并启动已登记的 Worker。启动时从实时登记信息取得身份和工作树写入锁，并在开发准入后仅投递一次可选任务说明。本工具不交付、评审、提交或完成工作。 |
-| `@deepseek-ai/dsh-experimental-project-controller/delivery-consumer` | `project_deliver`, `project_review` | `ctx.tools`, `ctx.agents`, `ctx.sessions`, `ctx.sessionProjections`, `ctx.projectController`, `ctx.agentBindings`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry` | `tool/call`, `tool/result`, `DevFrame delivery, verification and review events`, `project_tasks tasks`, `approved check subprocess effects` | - | 按需启用显式 Worker 交付与独立父级 lead 审查。宿主推导源身份并执行预先批准的检查。失败或结果不确定的检查要求显式 retryChecks；相同审查可以修复任务状态记录，而不重复审查。 |
+| `@deepseek-ai/dsh-experimental-project-controller/delivery-consumer` | `project_commit`, `project_deliver`, `project_evidence`, `project_review` | `ctx.tools`, `ctx.agents`, `ctx.sessions`, `ctx.sessionProjections`, `ctx.projectController`, `ctx.agentBindings`, `ctx.workspaceRegistry`, `ctx.worktreeRegistry` | `tool/call`, `tool/result`, `DevFrame delivery, verification and review events`, `project_tasks tasks`, `approved check subprocess effects`, `Worker worktree commits through the registry commit Service` | - | 按需启用显式 Worker 交付、独立父级 lead 审查与 Worker 工件提交。宿主推导源身份并执行预先批准的检查，只提交宿主为各任务登记的路径，在调用方存在未结束后台作业时拒绝，并在 registry commit Service 内复核分支与预期 HEAD。失败或结果不确定的检查要求显式 retryChecks；相同审查可以修复任务状态记录，而不重复审查。 |
+| `@deepseek-ai/dsh-experimental-project-controller/completion-consumer` | `project_goal_review`、`project_goal_verify` | `ctx.tools`、`ctx.agents`、`ctx.goals`、`ctx.sessions`、`ctx.sessionProjections`、`ctx.projectController`、`ctx.agentBindings`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry` | `tool/call`、`tool/result`、`DevFrame whole-Goal verification and review events`、`approved check subprocess effects` | - | 按需启用对清洁最终 controller 树的 whole-Goal 检查与独立直属 lead 审查。宿主要求每项当前交付都具有已应用的集成回执，并在持久证据记录之前复核源代码、写者所有权与权限。完成仍是单独的 /goal-complete 命令。 |
 | `@deepseek-ai/dsh-experimental-agent-dispatch` | `agent_dispatch` | `ctx.tools`、`ctx.systemPrompt`、`ctx.workspaceRegistry`、`ctx.worktreeRegistry`、`ctx.agentHierarchy`、`ctx.agentBindings`、`ctx.agents`、`ctx.sessions`、`a calling Agent (its session cwd authorizes the workspace)` | `tool/call`、`tool/result` | - | 唯一的工具为一项任务向一个已注册 worktree 派发层级子 agent，并在子 agent 的整个生命周期内持有该 worktree 的单写锁；任务已有被派发子 agent 时拒绝并点名，retry 复用该子 agent 且不重投简报。实验性私有包：不出现在任何发布 bundle 中，可见性经层级的 restrict 面按角色受限（worker 看不到该工具）。 |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
 
@@ -2486,6 +2487,39 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
 
 ## `@deepseek-ai/dsh-experimental-project-controller/delivery-consumer`
 
+### `project_commit`
+
+通过宿主受控提交，在你的 Worker 工作树中确切提交所分配任务已变更的工件文件。传入你产出文件的显式相对路径；宿主只提交为你的任务登记的路径，并逐一在工作树内验证；你点名的任何其他内容、存在未结束的后台作业时、以及伪造身份都会被拒绝。提交后仍保留的待定变更未经验证；工作树完全干净后才调用 project_deliver。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "taskId": {
+      "type": "string",
+      "description": "Your assigned task."
+    },
+    "paths": {
+      "type": "array",
+      "description": "The artifact file paths you changed, relative to the worktree root.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "message": {
+      "type": "string",
+      "description": "Optional single-line commit message; the host derives one from the task and goal otherwise."
+    }
+  },
+  "required": [
+    "taskId",
+    "paths"
+  ]
+}
+```
+
+来源：[`packages/experimental/project-controller/src/delivery-consumer.ts`](../packages/experimental/project-controller/src/delivery-consumer.ts)
+
 ### `project_deliver`
 
 从清洁且已提交的 Worker 工作树显式交付分配给你的任务。宿主记录实际输出并运行现有已批准检查。重复成功交付会复用证据；中断或失败的检查仅在 retryChecks 为 true 时重跑。这不会批准审查或集成工作。
@@ -2511,6 +2545,27 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
 
 来源： [`packages/experimental/project-controller/src/delivery-consumer.ts`](../packages/experimental/project-controller/src/delivery-consumer.ts)
 
+### `project_evidence`
+
+在 project_review 之前，检查分配给你 Worker 的任务的最新交付、实际检查结果与已记录审查。只读：身份来自你当前的 Lead 指派与 Goal。缺失或过期的证据会被显式标明；本工具不运行检查、不批准审查，也不推进任务。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "taskId": {
+      "type": "string",
+      "description": "Task assigned to your Worker."
+    }
+  },
+  "required": [
+    "taskId"
+  ]
+}
+```
+
+来源：[`packages/experimental/project-controller/src/delivery-consumer.ts`](../packages/experimental/project-controller/src/delivery-consumer.ts)
+
 ### `project_review`
 
 记录你对最新任务交付作出的显式独立 lead 审查。通过会提交该确切的已验证输出；changes_required 将其退回修正。重复相同决定会复用已记录审查，仅修复任务状态；冲突决定要求新交付。
@@ -2525,10 +2580,50 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
     },
     "decision": {
       "type": "string",
-      "description": "pass or changes_required."
+      "description": "Your independent review decision.",
+      "enum": [
+        "pass",
+        "changes_required"
+      ]
     },
     "findings": {
-      "description": "Array of findings with id, severity (blocking, warning, note), message, optional path and line."
+      "type": "array",
+      "description": "Review findings as a JSON array; use [] when there are none.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Non-empty finding identifier."
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "blocking",
+              "warning",
+              "note"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "Non-empty explanation of the finding."
+          },
+          "path": {
+            "type": "string",
+            "description": "Non-empty repository-relative path, when applicable."
+          },
+          "line": {
+            "type": "integer",
+            "description": "Positive one-based source line, when applicable."
+          }
+        },
+        "required": [
+          "id",
+          "severity",
+          "message"
+        ]
+      }
     }
   },
   "required": [
@@ -2541,7 +2636,56 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
 
 来源： [`packages/experimental/project-controller/src/delivery-consumer.ts`](../packages/experimental/project-controller/src/delivery-consumer.ts)
 
-按需启用显式 Worker 交付与独立父级 lead 审查。宿主推导源身份并执行预先批准的检查。失败或结果不确定的检查要求显式 retryChecks；相同审查可以修复任务状态记录，而不重复审查。
+按需启用显式 Worker 交付、独立父级 lead 审查与 Worker 工件提交。宿主推导源身份并执行预先批准的检查，只提交宿主为各任务登记的路径，在调用方存在未结束后台作业时拒绝，并在 registry commit Service 内复核分支与预期 HEAD。失败或结果不确定的检查要求显式 retryChecks；相同审查可以修复任务状态记录，而不重复审查。
+
+<a id="deepseek-aidsh-experimental-project-controllercompletion-consumer"></a>
+
+## `@deepseek-ai/dsh-experimental-project-controller/completion-consumer`
+
+### `project_goal_review`
+
+记录你对 project_goal_verify 所识别的确切最终合并源代码的独立审查。在决定之前检查该 controller 源代码与整个 Goal。只有存活的独立直属 lead 可以提交；源代码或证据变化要求新的审查。不会完成 Goal。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "verificationId": {
+      "type": "string",
+      "description": "Exact verification identity from project_goal_verify whose source you inspected."
+    },
+    "decision": {
+      "type": "string",
+      "description": "pass or changes_required."
+    },
+    "findings": {
+      "description": "Array of findings with id, severity (blocking, warning, note), message, optional path and line."
+    }
+  },
+  "required": [
+    "verificationId",
+    "decision",
+    "findings"
+  ]
+}
+```
+
+来源：[`packages/experimental/project-controller/src/completion-consumer.ts`](../packages/experimental/project-controller/src/completion-consumer.ts)
+
+### `project_goal_verify`
+
+在每项任务集成后，对清洁的最终合并 controller 树运行宿主批准的 whole-Goal 检查。返回确切的验证身份与源代码，交由独立 lead 审查。不会完成 Goal。
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+来源：[`packages/experimental/project-controller/src/completion-consumer.ts`](../packages/experimental/project-controller/src/completion-consumer.ts)
+
+按需启用对清洁最终 controller 树的 whole-Goal 检查与独立直属 lead 审查。宿主要求每项当前交付都具有已应用的集成回执，并在持久证据记录之前复核源代码、写者所有权与权限。完成仍是单独的 /goal-complete 命令。
 
 <a id="deepseek-aidsh-experimental-agent-dispatch"></a>
 
@@ -2549,7 +2693,7 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
 
 ### `agent_dispatch`
 
-为一项任务向一个已注册 Git 工作树派发子 agent：controller 派发 lead，lead 在获批插件范围内派发 Worker。指定任务 id、插件范围和工作树 id（从 worktree_create 或宿主取得），并为新派发提供简报 prompt；简报仅在子 agent 发布后入队。每个结果都包含 ack，表示子 agent 自身持久日志能证明的任务状态（待执行时为 briefed，执行中为 claimed，回合记录结束时为 terminal；completed 表示任务正常结束，dropped 表示简报在尚未执行时被取消）。若任务已有被派发的子 agent，工具拒绝并点名；传入 retry: true 可复用该子 agent，不重复投递简报，并报告当前 ack。引擎管理子 agent 生命周期，层级负责每次拒绝；拒绝说明原因与修复方式。
+为一项任务向一个已注册 Git 工作树派发子 agent：controller 派发 lead，lead 在获批插件范围内派发 Worker。指定任务 id、插件范围和工作树 id（从 worktree_create 或宿主取得），并为新派发提供简报 prompt；简报仅在子 agent 发布后入队。每个结果都包含 ack，表示子 agent 自身持久日志能证明的任务状态（待执行时为 briefed，执行中为 claimed，回合记录结束时为 terminal；completed 表示任务正常结束，dropped 表示简报在尚未执行时被取消）。若任务已有被派发的子 agent，工具拒绝并点名；传入 retry: true 可复用该子 agent，不重复投递简报，并报告当前 ack；或传入 followup: true 与新 prompt，以显式指令继续该子 agent。引擎管理子 agent 生命周期，层级负责每次拒绝；拒绝说明原因与修复方式。
 
 ```json
 {
@@ -2573,11 +2717,15 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
     },
     "prompt": {
       "type": "string",
-      "description": "The task briefing queued to a freshly dispatched child after publication. Never re-sent on a retry."
+      "description": "The task briefing queued to a freshly dispatched child after publication. Never re-sent on a retry; with followup: true it is the continuation instructions for the existing child instead."
     },
     "retry": {
       "type": "boolean",
       "description": "Pass true to reuse the child this task already has instead of dispatching a new one; no briefing is queued on reuse."
+    },
+    "followup": {
+      "type": "boolean",
+      "description": "Pass true with a prompt to deliver explicit continuation instructions to the child this task already has: the instructions queue as the child's next ordinary turn and wake it. Requires an existing dispatched child; a fresh dispatch never queues a followup."
     },
     "childId": {
       "type": "string",
