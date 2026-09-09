@@ -179,6 +179,35 @@ export interface ProjectStatusResult {
   readonly observedAt: string
 }
 
+/** One binding row projected for host status surfaces: association facts only. */
+export interface ShadowStatusBinding {
+  /** The workspace registry's stable project identity. */
+  readonly workspaceId: WorkspaceId
+  /** Canonical root the registry recorded. */
+  readonly canonicalPath: string
+  /** Association version. */
+  readonly bindingRevision: number
+  /** Provisioning/operation state; see the type for the order. */
+  readonly state: ShadowBindingState
+}
+
+/**
+ * The read-only aggregate host status surfaces (the Web Shadow card) display:
+ * designation, controller liveness, authorized roots, and the binding index.
+ * Unlike `projectStatus` it is host-plane (no Shadow-caller gate), synchronous,
+ * and unpaginated — the deployment's own facts, not a model-facing readout.
+ */
+export interface ShadowRouterStatus {
+  /** Controller session id the host composition declared, absent when unconfigured. */
+  readonly shadowSessionId?: string
+  /** Whether the designated session is currently marked as the Shadow. */
+  readonly shadowLive: boolean
+  /** Canonical authorized roots resolved at load, in configuration order. */
+  readonly authorizedRoots: readonly string[]
+  /** Every binding in stable (createdAt, workspaceId) order. */
+  readonly bindings: readonly ShadowStatusBinding[]
+}
+
 /** Host-level request shapes; the model-facing wrappers live in `tools.ts`. */
 export interface ProjectOpenRequest {
   /** Existing, authorized root directory. */
@@ -243,7 +272,10 @@ function isWithinPath(child: string, parent: string): boolean {
 /** SHA-256 of one operation's normalized input, for request replay checks. */
 function inputHash(kind: ShadowRequestKind, input: Record<string, string | number>): string {
   const canonical = Object.keys(input).sort()
-    .map(key => `${key}=${String(input[key]!)}`)
+    .map((key) => {
+      const value = input[key]
+      return `${key}=${String(value)}`
+    })
     .join('\u0000')
   return createHash('sha256').update(`${kind}\u0000${canonical}`).digest('hex')
 }
@@ -468,7 +500,9 @@ export class ShadowRouter extends Service {
         // Overlapping simultaneous writers are rejected segment-aware, against
         // every claimed root — a bare string prefix would confuse `D:\a` with
         // `D:\ab`, and this workspace's own row is checked by convergence.
-        const overlapping = [...this.bindings.values()].find(claim => isWithinPath(canonical, claim.canonicalPath) || isWithinPath(claim.canonicalPath, canonical))
+        const overlapping = [...this.bindings.values()].find(
+          claim => isWithinPath(canonical, claim.canonicalPath) || isWithinPath(claim.canonicalPath, canonical),
+        )
         if (overlapping !== undefined) {
           throw new ShadowRouterError(
             `root "${canonical}" physically overlaps project "${overlapping.workspaceId}" at "${overlapping.canonicalPath}"`,
@@ -878,6 +912,29 @@ export class ShadowRouter extends Service {
         left.createdAt.localeCompare(right.createdAt) || left.messageId.localeCompare(right.messageId))
   }
 
+  /**
+   * Read the host-facing aggregate status: the configured Shadow designation,
+   * its liveness, the canonical authorized roots, and every binding row. The
+   * read is synchronous and side-effect free, and never model-facing — host
+   * status surfaces (the Web Shadow card) consume it through the Shadow
+   * controller, so it carries no Shadow-caller gate and no page bounds.
+   * @returns the aggregate status snapshot.
+   */
+  readStatus(): ShadowRouterStatus {
+    const configured = this.config.shadowSessionId
+    return {
+      ...(configured === undefined ? {} : { shadowSessionId: configured }),
+      shadowLive: configured !== undefined && this.shadowAgents.has(SessionId(configured)),
+      authorizedRoots: [...this.authorizedRoots],
+      bindings: this.listBindings().map(record => ({
+        workspaceId: record.workspaceId,
+        canonicalPath: record.canonicalPath,
+        bindingRevision: record.bindingRevision,
+        state: record.state,
+      })),
+    }
+  }
+
   // ---- internals ---------------------------------------------------------
 
   /** Serialize mutations so concurrent routing operations cannot interleave. */
@@ -944,7 +1001,12 @@ export class ShadowRouter extends Service {
   }
 
   /** Persist one successful request result for replay. */
-  private async storeRequest(kind: ShadowRequestKind, requestId: ShadowRequestId, input: Record<string, string | number>, result: unknown): Promise<void> {
+  private async storeRequest(
+    kind: ShadowRequestKind,
+    requestId: ShadowRequestId,
+    input: Record<string, string | number>,
+    result: unknown,
+  ): Promise<void> {
     const record: ShadowRequestRecord = Object.freeze({
       requestId,
       kind,
@@ -1043,7 +1105,11 @@ export class ShadowRouter extends Service {
    * reserved controller root session, persist the controller role, and land
    * `ready` — the same persistence order a crash-residue recovery follows.
    */
-  private async provisionNewBinding(workspaceId: WorkspaceId, canonicalPath: string, requestId: ShadowRequestId): Promise<ShadowBindingRecord> {
+  private async provisionNewBinding(
+    workspaceId: WorkspaceId,
+    canonicalPath: string,
+    requestId: ShadowRequestId,
+  ): Promise<ShadowBindingRecord> {
     const reserved = await this.reserveBinding(workspaceId, canonicalPath, requestId)
     await this.createControllerSession(reserved)
     return await this.completeProvisioning({ ...reserved, state: 'provisioning' })

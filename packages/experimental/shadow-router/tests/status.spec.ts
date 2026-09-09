@@ -193,4 +193,57 @@ describe('shadow-router status', () => {
       await h.dispose()
     }
   })
+
+  it('reads the host aggregate status: unconfigured reads disabled, designation and bindings read verbatim', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-status-aggregate-'))
+    const h = await harness(root, { authorizedRoots: [root] })
+    try {
+      // Unconfigured deployment: honest empty designation, no live mark, the
+      // canonicalized roots, and no binding rows yet.
+      const before = h.router.readStatus()
+      expect(before.shadowSessionId).toBeUndefined()
+      expect(before.shadowLive).toBe(false)
+      expect(before.authorizedRoots).toEqual([await realpath(root)])
+      expect(before.bindings).toEqual([])
+
+      const dir = await h.makeProjectDir('aggregate-project')
+      const opened = await h.router.openProject(h.shadow, { path: dir, requestId: 'status-aggregate-open' })
+      const after = h.router.readStatus()
+      expect(after.bindings).toEqual([{
+        workspaceId: opened.workspaceId,
+        canonicalPath: opened.canonicalPath,
+        bindingRevision: opened.bindingRevision,
+        state: opened.state,
+      }])
+      // The read is a projection: the durable index is untouched by it.
+      expect(after.bindings).not.toBe(h.router.listBindings())
+    } finally {
+      await h.dispose()
+    }
+  })
+
+  it('reads the designated controller as live only while its host designation holds', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-status-live-'))
+    const h = await harness(root, { authorizedRoots: [root], shadowSessionId: 'session-shadow' })
+    try {
+      const status = h.router.readStatus()
+      expect(status.shadowSessionId).toBe('session-shadow')
+      expect(status.shadowLive).toBe(true)
+    } finally {
+      await h.dispose()
+    }
+
+    // An id that was never marked (and never becomes live) reads as not live.
+    const coldRoot = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-status-cold-'))
+    const cold = await harness(coldRoot, { authorizedRoots: [coldRoot], shadowSessionId: 'session-never-created' })
+    try {
+      expect(cold.router.readStatus()).toMatchObject({
+        shadowSessionId: 'session-never-created',
+        shadowLive: false,
+        bindings: [],
+      })
+    } finally {
+      await cold.dispose()
+    }
+  })
 })

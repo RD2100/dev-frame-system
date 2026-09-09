@@ -1,0 +1,10 @@
+# Private Shadow Web layer. Apply after dsh-web-app so the sidebar mounts the
+# resident Shadow entry card. The card reads the `shadow` Remote namespace, so
+# apply this layer beside (or after) a composition that also mounts the
+# shadow-controller host row — the DevFrame profile layer carries it next to
+# its shadow-router row; on a composition without the router the card still
+# mounts and reads the honest not-mounted state.
+
+- insert:
+    - id: ui-shadow-entry
+      name: '@deepseek-ai/dsh-experimental-client-ui-shadow-entry'

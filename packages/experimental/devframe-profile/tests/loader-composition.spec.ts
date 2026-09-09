@@ -1,14 +1,15 @@
 /**
  * The DevFrame profile layer through a REAL Loader composition: a cordis.yml
- * carrying the six patch rows' full content (session identity, shadow router,
- * project memory, command goal binding, the three-role hierarchy policy, and
- * dispatch) over the necessary base stack is booted by the actual Loader, so
- * the mount face under test is the one the shipped `--patch` invocation uses.
- * The assertions are the ones the static parse suite cannot see: every row
- * mounts (zero unloaded entries), the four services exist beside the global
- * `agent_dispatch` and memory tools, the Shadow project tools stay uninstalled
- * until the host designates a Shadow, and the memory tools fail closed for
- * real against the absent Vault this composition configures.
+ * carrying the seven patch rows' full content (session identity, shadow router,
+ * the shadow status controller, project memory, command goal binding, the
+ * three-role hierarchy policy, and dispatch) over the necessary base stack is
+ * booted by the actual Loader, so the mount face under test is the one the
+ * shipped `--patch` invocation uses. The assertions are the ones the static
+ * parse suite cannot see: every row mounts (zero unloaded entries), the
+ * services exist beside the global `agent_dispatch` and memory tools, the
+ * Shadow project tools stay uninstalled until the host designates a Shadow,
+ * and the memory tools fail closed for real against the absent Vault this
+ * composition configures.
  * @module tests/loader-composition
  */
 
@@ -40,7 +41,8 @@ import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
 import SubprocessLocal from '@deepseek-ai/dsh-subprocess-local'
 import GitWorktreeRegistry from '@deepseek-ai/dsh-worktree-registry'
 import AgentBindingRegistry from '@deepseek-ai/dsh-experimental-session-identity'
-import ShadowRouter, { SHADOW_TOOL_NAMES } from '@deepseek-ai/dsh-experimental-shadow-router'
+import ShadowRouter, { SHADOW_TOOL_NAMES, type ShadowRouterStatus } from '@deepseek-ai/dsh-experimental-shadow-router'
+import ShadowController from '@deepseek-ai/dsh-experimental-shadow-controller'
 import AgentHierarchy from '@deepseek-ai/dsh-experimental-agent-hierarchy'
 import * as agentDispatch from '@deepseek-ai/dsh-experimental-agent-dispatch'
 import * as commandGoalBinding from '@deepseek-ai/dsh-experimental-command-goal-binding'
@@ -57,7 +59,7 @@ afterEach(async () => {
 
 /**
  * Write the cordis.yml under test: the base stack every DevFrame row needs
- * plus the six rows' full patch content. The row configs mirror
+ * plus the seven rows' full patch content. The row configs mirror
  * `cordis.patch.yml`, with the two documented deviations a composition test
  * needs: project-memory names a Vault root that does not exist (load
  * succeeds, every call fails closed) and the `!!js process.cwd()` defaults
@@ -92,9 +94,10 @@ async function writeCompositionConfig(): Promise<string> {
     "- name: '@deepseek-ai/dsh-workspace'",
     "- name: '@deepseek-ai/dsh-subprocess-local'",
     "- name: '@deepseek-ai/dsh-worktree-registry'",
-    // The six DevFrame rows, in cordis.patch.yml order and with its content.
+    // The seven DevFrame rows, in cordis.patch.yml order and with its content.
     "- name: '@deepseek-ai/dsh-experimental-session-identity'",
     "- name: '@deepseek-ai/dsh-experimental-shadow-router'",
+    "- name: '@deepseek-ai/dsh-experimental-shadow-controller'",
     "- name: '@deepseek-ai/dsh-experimental-project-memory'",
     '  config:',
     '    workspaceId: default',
@@ -104,6 +107,7 @@ async function writeCompositionConfig(): Promise<string> {
     '  config:',
     '    workspaceId: default',
     `    workspaceRoot: ${JSON.stringify(root as string)}`,
+    `    requiredChecksPath: ${JSON.stringify(join(root as string, 'required-checks.json'))}`,
     '    taskIds: [devframe-goal]',
     '    maxAttempts: 3',
     '    maxGoalRounds: 8',
@@ -115,9 +119,9 @@ async function writeCompositionConfig(): Promise<string> {
     '  config:',
     '    roleToolPolicies:',
     '      controller:',
-    `        inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'read_image', 'str_replace_editor', 'glob', 'grep', 'web_fetch', 'web_search', 'skill', 'todo_write', 'job_kill', 'job_list', 'job_output', 'subagent', 'subagent_fork', 'interrupt_agent', 'send_message', 'list_agents', 'workflow', 'worktree_create', 'worktree_list', 'worktree_prune', 'worktree_remove', 'worktree_status', 'create_goal', 'get_goal', 'update_goal', 'ralph', 'ralph-loop', 'cordis_define', 'cordis_inspect_list', 'cordis_inspect_query', 'cordis_inspect_self', 'cordis_run', 'cordis_stop', 'cordis_undefine', 'agent_dispatch']"`,
+    '        inheritedTools: !!js "[...(process.platform === \'win32\' ? [\'pwsh\'] : [\'bash\']), \'read\', \'write\', \'edit\', \'read_image\', \'str_replace_editor\', \'glob\', \'grep\', \'web_fetch\', \'web_search\', \'skill\', \'todo_write\', \'job_kill\', \'job_list\', \'job_output\', \'subagent\', \'subagent_fork\', \'interrupt_agent\', \'send_message\', \'list_agents\', \'workflow\', \'worktree_create\', \'worktree_list\', \'worktree_prune\', \'worktree_remove\', \'worktree_status\', \'create_goal\', \'get_goal\', \'update_goal\', \'ralph\', \'ralph-loop\', \'cordis_define\', \'cordis_inspect_list\', \'cordis_inspect_query\', \'cordis_inspect_self\', \'cordis_run\', \'cordis_stop\', \'cordis_undefine\', \'agent_dispatch\']"',
     '      lead:',
-    `        inheritedTools: !!js "[...(process.platform === 'win32' ? ['pwsh'] : ['bash']), 'read', 'write', 'edit', 'read_image', 'str_replace_editor', 'glob', 'grep', 'web_fetch', 'web_search', 'skill', 'todo_write', 'job_kill', 'job_list', 'job_output', 'subagent', 'subagent_fork', 'interrupt_agent', 'send_message', 'list_agents', 'workflow', 'worktree_create', 'worktree_list', 'worktree_prune', 'worktree_remove', 'worktree_status', 'create_goal', 'get_goal', 'update_goal', 'ralph', 'ralph-loop', 'cordis_define', 'cordis_inspect_list', 'cordis_inspect_query', 'cordis_inspect_self', 'cordis_run', 'cordis_stop', 'cordis_undefine', 'agent_dispatch']"`,
+    '        inheritedTools: !!js "[...(process.platform === \'win32\' ? [\'pwsh\'] : [\'bash\']), \'read\', \'write\', \'edit\', \'read_image\', \'str_replace_editor\', \'glob\', \'grep\', \'web_fetch\', \'web_search\', \'skill\', \'todo_write\', \'job_kill\', \'job_list\', \'job_output\', \'subagent\', \'subagent_fork\', \'interrupt_agent\', \'send_message\', \'list_agents\', \'workflow\', \'worktree_create\', \'worktree_list\', \'worktree_prune\', \'worktree_remove\', \'worktree_status\', \'create_goal\', \'get_goal\', \'update_goal\', \'ralph\', \'ralph-loop\', \'cordis_define\', \'cordis_inspect_list\', \'cordis_inspect_query\', \'cordis_inspect_self\', \'cordis_run\', \'cordis_stop\', \'cordis_undefine\', \'agent_dispatch\']"',
     '      worker:',
     '        inheritedTools: []',
     '    leadPluginScopes: {}',
@@ -153,6 +157,7 @@ async function loadComposition(): Promise<Context> {
     ['@deepseek-ai/dsh-worktree-registry', GitWorktreeRegistry],
     ['@deepseek-ai/dsh-experimental-session-identity', AgentBindingRegistry],
     ['@deepseek-ai/dsh-experimental-shadow-router', ShadowRouter],
+    ['@deepseek-ai/dsh-experimental-shadow-controller', ShadowController],
     ['@deepseek-ai/dsh-experimental-project-memory', projectMemory],
     ['@deepseek-ai/dsh-experimental-command-goal-binding', commandGoalBinding],
     ['@deepseek-ai/dsh-experimental-agent-hierarchy', AgentHierarchy],
@@ -201,11 +206,15 @@ async function boot(): Promise<{ ctx: Context; agent: Agent }> {
 }
 
 describe('the DevFrame profile layer through a real Loader composition', () => {
-  it('mounts all six rows: every service, the memory tools, and agent_dispatch are live', async () => {
+  it('mounts all seven rows: every service, the memory tools, and agent_dispatch are live', async () => {
     const { ctx } = await boot()
 
     expect(ctx.agentBindings).toBeDefined()
     expect(ctx.shadowRouter).toBeDefined()
+    expect(ctx.shadowController).toBeDefined()
+    const status: ShadowRouterStatus = ctx.shadowController.readStatus()
+    expect(status).toMatchObject({ mounted: true, shadowLive: false, bindings: [] })
+    expect(status.shadowSessionId).toBeUndefined()
     expect(ctx.projectMemory).toBeDefined()
     expect(ctx.reflect.get('agentHierarchy')).toBeDefined()
     expect(ctx.reflect.get('commandGoalBinding')).toBeDefined()

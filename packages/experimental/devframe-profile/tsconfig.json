@@ -12,6 +12,7 @@
     { "path": "../command-goal-binding" },
     { "path": "../project-memory" },
     { "path": "../session-identity" },
+    { "path": "../shadow-controller" },
     { "path": "../shadow-router" }
   ]
 }

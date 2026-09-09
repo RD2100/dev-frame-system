@@ -37,6 +37,8 @@ export type {
   ProjectStopRequest,
   ProjectStopResult,
   ShadowRouterConfig,
+  ShadowRouterStatus,
+  ShadowStatusBinding,
 } from './service.ts'
 export { SHADOW_TOOL_NAMES, installShadowTools } from './tools.ts'
 export { ShadowRouter as default } from './service.ts'

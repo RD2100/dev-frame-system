@@ -297,6 +297,9 @@ export default defineConfig({
         // The Team browser entry binds its source-covered mount lifecycle to
         // the generated Team Remote contribution, which likewise exists only in lib.
         'packages/experimental/client-ui-agent-team/src/client/index.ts',
+        // The Shadow browser entry binds its source-covered mount lifecycle to
+        // the generated Shadow Remote contribution, which likewise exists only in lib.
+        'packages/experimental/client-ui-shadow-entry/src/client/index.ts',
         // Slash/command/input round: per-file gaps deferred with the same
         // client-lane debt. TODO(gui): cover and remove with the lane above.
         'packages/client/connection/src/client/fixture.ts',

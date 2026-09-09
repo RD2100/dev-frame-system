@@ -20,6 +20,11 @@
       name: '@deepseek-ai/dsh-experimental-session-identity'
     - id: shadow-router
       name: '@deepseek-ai/dsh-experimental-shadow-router'
+    # Read-only Remote owner of the router's status snapshot; the Web Shadow
+    # entry card (shadow-web-profile layer) reads it. Mounted beside its
+    # provider so the card reports the mounted deployment's real facts.
+    - id: shadow-controller
+      name: '@deepseek-ai/dsh-experimental-shadow-controller'
     - id: project-memory
       name: '@deepseek-ai/dsh-experimental-project-memory'
       config:

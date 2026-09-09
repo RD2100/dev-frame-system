@@ -40,6 +40,9 @@ kind: "package-group"
 | [`project-controller`](project-controller/README.zh.md) | 项目任务板：TaskState 流转、有界开发预算、生命周期与仅限 controller 的合并门禁 | `ctx.projectController` |
 | [`project-memory`](project-memory/README.zh.md) | 基于用户选定 Obsidian Vault 子树的有界追加式项目记忆：作用域化搜索/读取/追加工具、会话日志回执、路径包含与如实失败报告 | 库服务，不使用 ctx key |
 | [`session-identity`](session-identity/README.zh.md) | 持久代理绑定注册表与准确 cwd 的原生会话创建 | `ctx.agentBindings` |
+| [`shadow-controller`](shadow-controller/README.zh.md) | Shadow 路由器聚合状态的只读 Remote 拥有者，供宿主状态面板调用 | `ctx.shadowController` |
+| [`shadow-web-profile`](shadow-web-profile/README.zh.md) | 常驻 Shadow 入口卡片的显式源码 checkout Web 层 | — |
+| [`client-ui-shadow-entry`](client-ui-shadow-entry/README.zh.md) | 设置按钮上方的常驻 Web Shadow 入口卡片与诚实状态面板 | — |
 | [`tool-agent-team`](tool-agent-team/README.zh.md) | 让模型创建、发消息与协调 teammate 的十个工具 | 按作用域注册工具到 `ctx.tools` |
 | [`webworker-packer`](webworker-packer/README.zh.md) | 构建浏览器 worker 预览所消费的 gzip 压缩 VFS 镜像 | 库与 CLI，不使用 ctx key |
 | [`webworker-runtime`](webworker-runtime/README.zh.md) | 在专用浏览器 worker 中运行 harness 插件树 | 库与 worker 入口，不使用 ctx key |

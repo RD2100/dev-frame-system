@@ -40,6 +40,9 @@ The experimental group contains prototype capabilities that are not part of any 
 | [`project-controller`](project-controller/README.md) | Project task board: TaskState transitions, a bounded developing budget, lifecycle, and the controller-only merge gate | `ctx.projectController` |
 | [`project-memory`](project-memory/README.md) | Bounded append-only project memory over a user-selected Obsidian Vault subtree: scoped search/read/append tools, session-log receipts, path containment, and honest failure reporting | library service — no ctx key |
 | [`session-identity`](session-identity/README.md) | Durable agent binding registry and exact-cwd native Session creation | `ctx.agentBindings` |
+| [`shadow-controller`](shadow-controller/README.md) | Read-only Remote owner of the Shadow router status snapshot for host status surfaces | `ctx.shadowController` |
+| [`shadow-web-profile`](shadow-web-profile/README.md) | Explicit source-checkout Web layer for the resident Shadow entry card | — |
+| [`client-ui-shadow-entry`](client-ui-shadow-entry/README.md) | Resident Web Shadow entry card above Settings with the honest status panel | — |
 | [`tool-agent-team`](tool-agent-team/README.md) | Ten tools that let the model create, message, and coordinate teammates | registers scoped tools on `ctx.tools` |
 | [`webworker-packer`](webworker-packer/README.md) | Builds the gzip-compressed VFS image consumed by the browser worker preview | library and CLI — no ctx key |
 | [`webworker-runtime`](webworker-runtime/README.md) | Runs the harness plugin tree inside a dedicated browser worker | library and worker entry — no ctx key |
