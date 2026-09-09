@@ -13,12 +13,15 @@ function routerStub(status: ShadowRouterStatus): ShadowRouter {
   return { readStatus: () => status } as unknown as ShadowRouter
 }
 
+const wid = (id: string): ShadowRouterStatus['bindings'][number]['workspaceId'] =>
+  id as ShadowRouterStatus['bindings'][number]['workspaceId']
+
 const configured: ShadowRouterStatus = {
   shadowSessionId: 'session-shadow',
   shadowLive: true,
   authorizedRoots: ['D:/projects'],
   bindings: [{
-    workspaceId: 'ws-1',
+    workspaceId: wid('ws-1'),
     canonicalPath: 'D:/projects/alpha',
     bindingRevision: 3,
     state: 'ready',

@@ -16,10 +16,10 @@ const VIEW: ShadowStatusView = {
 /** A port whose reads are released one call at a time under test control. */
 function gatedPort(): {
   port: ShadowStatusPort
-  releaseNext: (answer?: { ok: false; error: RemoteError }) => void
+  releaseNext: (answer?: { ok: false; error: RemoteError<'gateway/internal'> }) => void
   calls: () => number
 } {
-  const pending: ((answer?: { ok: false; error: RemoteError }) => void)[] = []
+  const pending: ((answer?: { ok: false; error: RemoteError<'gateway/internal'> }) => void)[] = []
   let calls = 0
   const port: ShadowStatusPort = () => {
     calls += 1

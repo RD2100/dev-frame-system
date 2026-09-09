@@ -110,7 +110,8 @@
     "tests/workflow-run.e2e.ts",
     "tests/c1-agent-tree-actions.e2e.ts",
     "tests/c2-subagent-mentions.e2e.ts",
-    "tests/c3-sidebar-session-model-usage.e2e.ts"
+    "tests/c3-sidebar-session-model-usage.e2e.ts",
+    "tests/dispatch-gate.e2e.ts"
   ],
   "references": [
     {

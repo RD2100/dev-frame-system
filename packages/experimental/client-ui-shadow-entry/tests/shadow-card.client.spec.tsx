@@ -4,24 +4,31 @@
 import { useSyncExternalStore } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { ShadowStatusView } from '@deepseek-ai/dsh-experimental-shadow-controller'
+import type { ShadowStatusBinding } from '@deepseek-ai/dsh-experimental-shadow-router'
 import { ShadowCard, type ShadowCardProps } from '../src/client/ShadowCard.tsx'
-import { zh } from '../src/client/locales.ts'
+import { zh, type ShadowKey } from '../src/client/locales.ts'
 import { ShadowStatusController, type ShadowStatusPort } from '../src/client/shadow-store.ts'
 
-const t = ((key, params) => {
+const t = ((key: ShadowKey, params?: Record<string, string | number>) => {
   const text = zh[key]
   return params === undefined
     ? text
     : Object.entries(params).reduce((acc, [name, value]) => acc.replaceAll(`{${name}}`, String(value)), text)
 }) as unknown as ShadowCardProps['t']
 
-const ONLINE_VIEW = {
+// The card consumes only the status face; the seat's standard hooks stay
+// unused, so their stubs fail loud if a future edit starts reading them.
+const unusedHook = (() => { throw new Error('unused by the shadow card') }) as never
+const wid = (id: string): ShadowStatusBinding['workspaceId'] => id as ShadowStatusBinding['workspaceId']
+
+const ONLINE_VIEW: ShadowStatusView = {
   mounted: true,
   shadowSessionId: 'session-shadow',
   shadowLive: true,
   authorizedRoots: ['D:/projects'],
   bindings: [{
-    workspaceId: 'ws-1',
+    workspaceId: wid('ws-1'),
     canonicalPath: 'D:/projects/alpha',
     bindingRevision: 7,
     state: 'ready' as const,
@@ -53,6 +60,9 @@ function bench(answer: TestAnswer = { ok: true, value: { ...ONLINE_VIEW } }): {
       useSyncExternalStore(controller.store.subscribe, () => selector(controller.store.getSnapshot()))) as unknown as ShadowCardProps['useStatus'],
     onRefresh,
     t,
+    useSessions: unusedHook,
+    useSessionPendingInteraction: unusedHook,
+    useWorkspaces: unusedHook,
   } satisfies ShadowCardProps
   return { controller, onRefresh, props }
 }
@@ -98,7 +108,7 @@ describe('the sidebar Shadow entry card', () => {
   })
 
   it('keeps the not-enabled copy honest while the router is mounted but unconfigured', async () => {
-    const b = bench({ ok: true, value: { ...ONLINE_VIEW, shadowSessionId: undefined, bindings: [] } })
+    const b = bench({ ok: true, value: { mounted: true, shadowLive: true, authorizedRoots: ['D:/projects'], bindings: [] } })
     const { container } = render(<ShadowCard {...b.props} />)
     await act(async () => { await Promise.resolve() })
     expect(container.querySelector('[data-shadow-phase="disabled"]')).not.toBeNull()
@@ -110,7 +120,7 @@ describe('the sidebar Shadow entry card', () => {
   })
 
   it('reads an absent router as the honest not-enabled state with its own detail', async () => {
-    const b = bench({ ok: true, value: { ...ONLINE_VIEW, mounted: false, shadowSessionId: undefined, authorizedRoots: [], bindings: [] } })
+    const b = bench({ ok: true, value: { mounted: false, shadowLive: true, authorizedRoots: [], bindings: [] } })
     const { container } = render(<ShadowCard {...b.props} />)
     await act(async () => { await Promise.resolve() })
     expect(container.querySelector('[data-shadow-phase="unmounted"]')).not.toBeNull()

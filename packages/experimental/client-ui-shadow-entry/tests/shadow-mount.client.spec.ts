@@ -9,6 +9,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
 import type { TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import { ShadowCard } from '../src/client/ShadowCard.tsx'
 import { inject, mountShadowEntryUi } from '../src/client/mount.ts'
@@ -37,7 +38,7 @@ async function bench(options: { registrationFailure?: boolean; readFailure?: boo
   fiber: ReturnType<Context['plugin']>
   calls: string[]
   remote: RemoteStub
-  entry: () => { options: { id?: string; order?: number }; locale?: string; inject?: () => unknown } | undefined
+  entry: () => StoredEntry | undefined
 }> {
   const ctx = new Context()
   const calls: string[] = []

@@ -6,13 +6,15 @@ import type { ShadowStatusView } from '@deepseek-ai/dsh-experimental-shadow-cont
 import { presentShadowStatus } from '../src/client/shadow-presenter.ts'
 import type { ShadowStatusSnapshot } from '../src/client/shadow-store.ts'
 
+const wid = (id: string): ShadowStatusBinding['workspaceId'] => id as ShadowStatusBinding['workspaceId']
+
 const READY_VIEW: ShadowStatusView = {
   mounted: true,
   shadowSessionId: 'session-shadow',
   shadowLive: true,
   authorizedRoots: ['D:/projects'],
   bindings: [{
-    workspaceId: 'ws-1',
+    workspaceId: wid('ws-1'),
     canonicalPath: 'D:/projects/alpha',
     bindingRevision: 7,
     state: 'ready',
@@ -44,7 +46,7 @@ describe('the Shadow card presentation fold', () => {
 
   it('reads an unmounted deployment as the honest not-enabled phase', () => {
     const model = presentShadowStatus(snapshotOf({
-      view: { ...READY_VIEW, mounted: false, shadowSessionId: undefined, authorizedRoots: [], bindings: [] },
+      view: { mounted: false, shadowLive: true, authorizedRoots: [], bindings: [] },
     }))
     expect(model.phase).toBe('unmounted')
     expect(model.shadowSessionId).toBeNull()
@@ -52,7 +54,7 @@ describe('the Shadow card presentation fold', () => {
 
   it('reads a mounted router without a designation as the not-enabled phase', () => {
     const model = presentShadowStatus(snapshotOf({
-      view: { ...READY_VIEW, shadowSessionId: undefined, bindings: [] },
+      view: { mounted: true, shadowLive: true, authorizedRoots: ['D:/projects'], bindings: [] },
     }))
     expect(model.phase).toBe('disabled')
     expect(model.shadowSessionId).toBeNull()
@@ -85,7 +87,7 @@ describe('the Shadow card presentation fold', () => {
       shadowLive: false,
       authorizedRoots: [],
       bindings: states.map((state, index) => ({
-        workspaceId: `ws-${String(index)}`,
+        workspaceId: wid(`ws-${String(index)}`),
         canonicalPath: `D:/projects/${String(index)}`,
         bindingRevision: index + 1,
         state,
