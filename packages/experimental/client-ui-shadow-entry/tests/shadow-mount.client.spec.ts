@@ -59,6 +59,18 @@ async function bench(options: { registrationFailure?: boolean; readFailure?: boo
           },
         })
     },
+    openProject: (request: { path: string }) => {
+      calls.push(`shadow/openProject:${request.path}`)
+      return Promise.resolve({ ok: true as const, value: { workspaceId: 'ws-2', controllerSessionId: 'session-controller', bindingRevision: 1, state: 'ready' as const, canonicalPath: request.path } })
+    },
+    sendToController: (request: { workspaceId: string; text: string }) => {
+      calls.push(`shadow/sendToController:${request.workspaceId}:${request.text}`)
+      return Promise.resolve({ ok: true as const, value: { status: 'received' as const, messageId: 'msg-1' } })
+    },
+    releaseProject: (request: { workspaceId: string }) => {
+      calls.push(`shadow/releaseProject:${request.workspaceId}`)
+      return Promise.resolve({ ok: true as const, value: { status: 'stopped' as const } })
+    },
   })
   ctx.provide('locale', new LocaleRuntime(ctx))
   await ctx.plugin(SlotRegistry).await()
@@ -88,12 +100,30 @@ describe('ui-shadow-entry browser plugin', () => {
     })
     expect(b.remote.mount).toHaveBeenCalledExactlyOnceWith(CONTRIBUTION)
 
-    const face = (b.entry()!.inject as unknown as () => { hooks: { status: { getSnapshot: () => unknown } }; onRefresh: () => void })()
+    const face = (b.entry()!.inject as unknown as () => {
+      hooks: { status: { getSnapshot: () => unknown } }
+      onRefresh: () => void
+      onOpenProject: (path: string) => Promise<{ ok: boolean }>
+      onSendToController: (workspaceId: string, text: string) => Promise<{ ok: boolean }>
+      onReleaseProject: (workspaceId: string) => Promise<{ ok: boolean }>
+    })()
     expect(face.hooks.status.getSnapshot()).toEqual({ view: undefined, error: undefined })
     face.onRefresh()
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(b.calls).toEqual(['shadow/readStatus'])
     expect(face.hooks.status.getSnapshot()).toMatchObject({ view: { shadowSessionId: 'session-shadow' } })
+
+    // The three write verbs pass through to the generated namespace untouched;
+    // request ids are the controller's job, so the client sends none.
+    await expect(face.onOpenProject('D:/projects/beta')).resolves.toMatchObject({ ok: true })
+    await expect(face.onSendToController('ws-1', 'ship it')).resolves.toMatchObject({ ok: true })
+    await expect(face.onReleaseProject('ws-1')).resolves.toMatchObject({ ok: true })
+    expect(b.calls).toEqual([
+      'shadow/readStatus',
+      'shadow/openProject:D:/projects/beta',
+      'shadow/sendToController:ws-1:ship it',
+      'shadow/releaseProject:ws-1',
+    ])
 
     await b.fiber.dispose()
     expect(b.entry()).toBeUndefined()

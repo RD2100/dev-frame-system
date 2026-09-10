@@ -57,7 +57,7 @@ Source-checkout users who want the whole DevFrame stack — this router beside s
 
 ### Designate the Shadow and call the tools
 
-`markShadow(agent)` installs the four tools into that agent's scope and nothing else; every other scope resolves none of them. The host calls the same service methods the tools dispatch to, plus host-only seams the model never reaches: `setActiveGoal` authorizes one open run per project, `completeDelivery` settles a received delivery, `confirmProjectStopped` finishes a stop, and `recoverDeliveries` converges interrupted rows on restart.
+`markShadow(agent)` installs the four tools into that agent's scope and nothing else; every other scope resolves none of them. The host calls the same service methods the tools dispatch to, plus host-only seams the model never reaches: `setActiveGoal` authorizes one open run per project, `completeDelivery` settles a received delivery, `confirmProjectStopped` finishes a stop, and `recoverDeliveries` converges interrupted rows on restart. Three write bridges run the gated flows for host status surfaces (the Web Shadow card) under the designated Shadow's own authority — `openProjectForHost`, `sendToProjectForHost` (the router supplies the binding's revision and authorized run), and `releaseProjectForHost` (stop plus quiescence confirmation in one step).
 
 ```ts
 import type { Agent } from '@deepseek-ai/dsh-agent'

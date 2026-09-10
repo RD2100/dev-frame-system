@@ -82,44 +82,8 @@ export interface ShadowRouterConfig {
 /** The config shape after schemastery applied the defaults; `shadowSessionId` keeps its optional face. */
 type ResolvedConfig = Omit<Required<ShadowRouterConfig>, 'shadowSessionId'> & Pick<ShadowRouterConfig, 'shadowSessionId'>
 
-/** The receipt `project_open` returns: one workspace's controller association. */
-export interface ProjectOpenResult {
-  /** The workspace registry's stable project identity. */
-  readonly workspaceId: WorkspaceId
-  /** The reserved (then actual) controller root session. */
-  readonly controllerSessionId: SessionId
-  /** Association version after the open. */
-  readonly bindingRevision: number
-  /** Provisioning state at return; `ready` is the usable one. */
-  readonly state: ShadowBindingState
-  /** Canonical root the registry recorded. */
-  readonly canonicalPath: string
-}
-
-/**
- * The receipt `project_send` returns. `status` is `received`: durable target
- * acceptance of the input — never a claim that the work ran or succeeded.
- */
-export interface ProjectSendResult {
-  /** Stable delivery identity, derived from the request id. */
-  readonly messageId: ShadowMessageId
-  /** Receiving project. */
-  readonly workspaceId: WorkspaceId
-  /** The durable receipt state; always `received` at send time. */
-  readonly status: 'received'
-}
-
-/** The receipt `project_stop` returns for one project's stop. */
-export interface ProjectStopResult {
-  /** The stopped project. */
-  readonly workspaceId: WorkspaceId
-  /** `stopping` until the host confirms quiescence, then `stopped`. */
-  readonly status: 'stopping' | 'stopped'
-  /** Pending deliveries cancelled by this stop; they stay visible, never dropped. */
-  readonly cancelledDeliveries: number
-  /** Association version after the stop. */
-  readonly bindingRevision: number
-}
+import type { ProjectOpenResult, ProjectSendResult, ProjectStopResult } from './types.ts'
+export type { ProjectOpenResult, ProjectSendResult, ProjectStopResult } from './types.ts'
 
 /** One bounded delivery row inside a status read. */
 export interface ProjectDeliverySummary {
@@ -764,6 +728,96 @@ export class ShadowRouter extends Service {
       }
       return await this.persistBinding({ ...binding, state: 'stopped', updatedAt: new Date().toISOString() })
     })
+  }
+
+  /**
+   * Resolve the live agent the host composition designated as its Shadow.
+   * Host write bridges ride that designation — the same authority the
+   * model-facing project tools run under — instead of bypassing the caller
+   * gate; an undeclared or never-marked designation fails loud here.
+   * @returns the designated Shadow agent.
+   */
+  private requireDesignatedShadowAgent(): Agent {
+    const designated = this.config.shadowSessionId
+    const agent = designated === undefined ? undefined : this.ctx.agents.get(SessionId(designated))
+    if (agent === undefined || !this.shadowAgents.has(agent.id)) {
+      throw new ShadowRouterError(
+        designated === undefined
+          ? 'the host composition declares no Shadow session; host project writes are unavailable'
+          : `the designated Shadow session "${designated}" is not live; host project writes are unavailable`,
+        'SHADOW_CALLER_FORBIDDEN',
+      )
+    }
+    return agent
+  }
+
+  /**
+   * Host-plane open: the same gated flow the `project_open` tool runs, driven
+   * by the designated Shadow's authority for host status surfaces (the Web
+   * Shadow card). Path canonicalization, authorization, replay, and
+   * provisioning are identical to the tool path.
+   * @param request - Existing authorized path and stable request id.
+   * @returns the controller association.
+   */
+  async openProjectForHost(request: ProjectOpenRequest): Promise<ProjectOpenResult> {
+    return await this.openProject(this.requireDesignatedShadowAgent(), request)
+  }
+
+  /**
+   * Host-plane delivery: one `work` message to a project's controller through
+   * the same delivery channel the `project_send` tool runs, with the binding's
+   * current revision and authorized open run supplied by the router itself.
+   * @param request - Target workspace, bounded message text, and stable request id.
+   * @returns the delivery receipt.
+   */
+  async sendToProjectForHost(
+    request: { readonly workspaceId: string; readonly text: string; readonly requestId: string },
+  ): Promise<ProjectSendResult> {
+    const agent = this.requireDesignatedShadowAgent()
+    const workspaceId = this.requireWorkspaceId(request.workspaceId)
+    const binding = this.requireBinding(workspaceId)
+    this.requireAdmitting(binding)
+    if (binding.activeGoalId === undefined || binding.activeAcceptanceHash === undefined) {
+      throw new ShadowRouterError(
+        `workspace "${workspaceId}" records no authorized open run; nothing can be delivered against one`,
+        'SHADOW_GOAL_NOT_AUTHORIZED',
+      )
+    }
+    return await this.sendToProject(agent, {
+      workspaceId,
+      bindingRevision: binding.bindingRevision,
+      goalId: binding.activeGoalId,
+      acceptanceHash: binding.activeAcceptanceHash,
+      requestId: request.requestId,
+      mode: 'work',
+      text: request.text,
+    })
+  }
+
+  /**
+   * Host-plane release: stop the project through the same gated flow the
+   * `project_stop` tool runs and confirm quiescence in one step, so the
+   * host surface's release closes the project instead of parking it
+   * mid-stop. Pending deliveries stay visible as cancelled.
+   * @param request - Target workspace and stable request id.
+   * @returns the stop receipt; `status` reflects the completed stop.
+   */
+  async releaseProjectForHost(
+    request: { readonly workspaceId: string; readonly requestId: string },
+  ): Promise<ProjectStopResult> {
+    const agent = this.requireDesignatedShadowAgent()
+    const workspaceId = this.requireWorkspaceId(request.workspaceId)
+    const binding = this.requireBinding(workspaceId)
+    const stop = await this.stopProject(agent, {
+      workspaceId,
+      expectedRevision: binding.bindingRevision,
+      requestId: request.requestId,
+    })
+    if (stop.status === 'stopping') {
+      await this.confirmProjectStopped(workspaceId)
+      return { ...stop, status: 'stopped' }
+    }
+    return stop
   }
 
   /**

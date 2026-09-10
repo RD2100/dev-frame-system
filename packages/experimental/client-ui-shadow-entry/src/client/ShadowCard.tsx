@@ -1,17 +1,24 @@
 /**
  * The resident sidebar-foot Shadow entry: a trigger row (icon, label, status
- * dot) above Settings, plus the fixed status panel it opens. The panel shows
- * the honest phase — unmounted and disabled deployments read "Shadow is not
- * enabled" — and, when configured, the controller session, the authorized
- * roots, and the binding rows with workspace, path, and revision.
+ * dot) above Settings, plus the fixed action panel it opens. The panel is the
+ * human's global Shadow surface: an honest phase line, the authorized roots,
+ * the multi-project list of open projects with per-project send and release
+ * actions, and the open-project form. Every action runs through the injected
+ * write verbs and shows the service's success or failure verbatim.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import { IconBranchOutline16, useDismissOnOutsidePointer } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
-import type { ShadowCardFace } from './slots.ts'
-import { presentShadowStatus, type ShadowPhase } from './shadow-presenter.ts'
+import type { ShadowCardFace, ShadowWorkspaceId } from './slots.ts'
+import {
+  presentShadowStatus,
+  presentWriteOutcome,
+  type ShadowPhase,
+  type ShadowWriteKind,
+  type ShadowWriteOutcome,
+} from './shadow-presenter.ts'
 import type { ShadowKey } from './locales.ts'
 import css from './ShadowCard.module.css'
 
@@ -37,11 +44,15 @@ const PHASE_DETAILS: Partial<Record<ShadowPhase, ShadowKey>> = {
 }
 
 /** Render the resident Shadow entry card. */
-export function ShadowCard({ wide, useStatus, onRefresh, t }: ShadowCardProps) {
+export function ShadowCard({ wide, useStatus, onRefresh, onOpenProject, onSendToController, onReleaseProject, t }: ShadowCardProps) {
   const status = useStatus(status => status)
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const [anchor, setAnchor] = useState<{ left: number; bottom: number }>()
+  const [path, setPath] = useState('')
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [busy, setBusy] = useState<string>()
+  const [outcome, setOutcome] = useState<ShadowWriteOutcome>({ state: 'idle' })
 
   // The panel is fixed so the sidebar's overflow clip cannot cut it; the
   // offsets are measured from the trigger before paint and re-measured on
@@ -49,7 +60,8 @@ export function ShadowCard({ wide, useStatus, onRefresh, t }: ShadowCardProps) {
   useLayoutEffect(() => {
     if (!open) return
     const place = (): void => {
-      const rect = rootRef.current?.getBoundingClientRect()
+      const rect = /* v8 ignore next -- the ref is mounted before the panel can open */
+        rootRef.current?.getBoundingClientRect()
       if (rect !== undefined) setAnchor({ left: rect.left, bottom: window.innerHeight - rect.top + 8 })
     }
     place()
@@ -67,7 +79,47 @@ export function ShadowCard({ wide, useStatus, onRefresh, t }: ShadowCardProps) {
   }, [onRefresh, open])
 
   const model = presentShadowStatus(status)
+  const write = presentWriteOutcome(outcome)
   const detail = PHASE_DETAILS[model.phase]
+  const actionsLocked = busy !== undefined
+
+  /** Run one panel write: lock the actions, land the outcome, refresh and clear the draft on success. */
+  const runWrite = (
+    key: string,
+    kind: ShadowWriteKind,
+    action: () => Promise<{ ok: boolean; error?: { message: string } }>,
+    onSuccess?: () => void,
+  ): void => {
+    setBusy(key)
+    setOutcome({ state: 'busy', kind })
+    void action().then((result) => {
+      setBusy(undefined)
+      if (result.ok) {
+        setOutcome({ state: 'ok', kind })
+        onRefresh()
+        onSuccess?.()
+      } else {
+        setOutcome({ state: 'failed', kind, message: result.error?.message ?? String(result.error) })
+      }
+    })
+  }
+
+  const submitOpen = (): void => {
+    const trimmed = path.trim()
+    if (trimmed.length === 0 || actionsLocked) return
+    runWrite('open', 'open', async () => await onOpenProject(trimmed), () => setPath(''))
+  }
+
+  const submitSend = (workspaceId: ShadowWorkspaceId): void => {
+    const text = (drafts[workspaceId] ?? '').trim()
+    if (text.length === 0 || actionsLocked) return
+    runWrite(`send:${workspaceId}`, 'send', async () => await onSendToController(workspaceId, text), () => setDrafts(drafts => ({ ...drafts, [workspaceId]: '' })))
+  }
+
+  const submitRelease = (workspaceId: ShadowWorkspaceId): void => {
+    if (actionsLocked) return
+    runWrite(`release:${workspaceId}`, 'release', async () => await onReleaseProject(workspaceId))
+  }
 
   return (
     <div ref={rootRef} className={clsx(css.layer, !wide && css.rail)}>
@@ -75,6 +127,9 @@ export function ShadowCard({ wide, useStatus, onRefresh, t }: ShadowCardProps) {
         <section className={css.panel} style={anchor} role="dialog" aria-label={t('panel.aria')} data-shadow-panel>
           <header className={css.header}>
             <h2 className={css.title}>{t('panel.title')}</h2>
+            <button type="button" className={css.refreshButton} data-shadow-refresh aria-label={t('panel.refresh')} disabled={actionsLocked} onClick={() => { onRefresh() }}>
+              {t('panel.refresh')}
+            </button>
           </header>
           <div className={css.body}>
             <p className={css.statusLine} data-shadow-status={model.phase}>
@@ -84,6 +139,11 @@ export function ShadowCard({ wide, useStatus, onRefresh, t }: ShadowCardProps) {
             {detail !== undefined && <p className={css.note}>{t(detail)}</p>}
             {model.error !== null && (
               <p className={css.readError} role="alert" data-shadow-error>{t('status.readFailed', { message: model.error })}</p>
+            )}
+            {write !== undefined && (
+              <p className={css.writeLine} role="status" aria-live="polite" data-shadow-write={write.tone}>
+                {t(write.key, write.params)}
+              </p>
             )}
             {(model.phase === 'configured' || model.phase === 'online') && (
               <>
@@ -96,25 +156,93 @@ export function ShadowCard({ wide, useStatus, onRefresh, t }: ShadowCardProps) {
                   {model.authorizedRoots.length === 0
                     ? <p className={css.note}>{t('panel.rootsEmpty')}</p>
                     : (
-                      <ul className={css.roots}>
-                        {model.authorizedRoots.map(root => <li key={root} className={css.mono}>{root}</li>)}
-                      </ul>
+                      <>
+                        <p className={css.note}>{t('panel.rootsHint')}</p>
+                        <ul className={css.roots}>
+                          {model.authorizedRoots.map(root => <li key={root} className={css.mono}>{root}</li>)}
+                        </ul>
+                      </>
                     )}
                 </section>
                 <section className={css.section}>
-                  <h3 className={css.group}>{t('panel.bindings')}</h3>
-                  {model.bindings.length === 0
-                    ? <p className={css.note}>{t('panel.bindingsEmpty')}</p>
+                  <h3 className={css.group}>{t('panel.openTitle')}</h3>
+                  <div className={css.rowActions}>
+                    <input
+                      type="text"
+                      className={css.rowInput}
+                      value={path}
+                      placeholder={t('open.pathPlaceholder')}
+                      aria-label={t('open.inputAria')}
+                      disabled={actionsLocked}
+                      data-shadow-open-input
+                      onChange={(event) => { setPath(event.currentTarget.value) }}
+                    />
+                    <button
+                      type="button"
+                      className={css.rowButton}
+                      disabled={actionsLocked || path.trim().length === 0}
+                      data-shadow-open
+                      onClick={() => { submitOpen() }}
+                    >
+                      {t('open.submit')}
+                    </button>
+                  </div>
+                </section>
+                <section className={css.section}>
+                  <h3 className={css.group}>{t('panel.projects')}</h3>
+                  {model.projects.length === 0
+                    ? <p className={css.note}>{t('panel.projectsEmpty')}</p>
                     : (
-                      <ul className={css.bindings}>
-                        {model.bindings.map(row => (
-                          <li key={row.workspaceId} className={css.binding} data-shadow-binding>
-                            <span className={clsx(css.bindingPath, css.mono)}>{row.canonicalPath}</span>
-                            <span className={css.bindingMeta}>
-                              <span className={css.mono}>{row.workspaceId}</span>
-                              <span>{t('binding.revision', { revision: row.bindingRevision })}</span>
-                              <span>{t(row.stateKey)}</span>
-                            </span>
+                      <ul className={css.projects}>
+                        {model.projects.map(row => (
+                          <li key={row.workspaceId} className={css.project} data-shadow-project>
+                            <div className={css.projectHead}>
+                              <span className={clsx(css.projectPath, css.mono)}>{row.canonicalPath}</span>
+                              <span className={css.projectMeta}>
+                                <span className={css.mono}>{row.workspaceId}</span>
+                                <span>{t('project.revision', { revision: row.bindingRevision })}</span>
+                                <span>{t(row.stateKey)}</span>
+                              </span>
+                            </div>
+                            {row.stateKey === 'state.ready' && (
+                              <div className={css.rowActions}>
+                                <input
+                                  type="text"
+                                  className={css.rowInput}
+                                  value={drafts[row.workspaceId] ?? ''}
+                                  placeholder={t('send.placeholder')}
+                                  aria-label={t('send.inputAria')}
+                                  disabled={actionsLocked}
+                                  data-shadow-send-input={row.workspaceId}
+                                  onChange={(event) => {
+                                    const { value } = event.currentTarget
+                                    setDrafts(previous => ({ ...previous, [row.workspaceId]: value }))
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  className={css.rowButton}
+                                  disabled={actionsLocked}
+                                  data-shadow-send={row.workspaceId}
+                                  onClick={() => { submitSend(row.workspaceId) }}
+                                >
+                                  {t('send.submit')}
+                                </button>
+                              </div>
+                            )}
+                            {row.stateKey !== 'state.stopping' && row.stateKey !== 'state.stopped' && (
+                              <div className={css.rowActions}>
+                                <button
+                                  type="button"
+                                  className={css.releaseButton}
+                                  disabled={actionsLocked}
+                                  data-shadow-release={row.workspaceId}
+                                  onClick={() => { submitRelease(row.workspaceId) }}
+                                >
+                                  {t('release.button')}
+                                </button>
+                              </div>
+                            )}
                           </li>
                         ))}
                       </ul>

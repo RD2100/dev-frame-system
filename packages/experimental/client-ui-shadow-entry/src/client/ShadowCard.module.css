@@ -110,6 +110,28 @@
   font-weight: 600;
 }
 
+.refreshButton {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.refreshButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.refreshButton:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
 .body {
   flex: 1;
   min-height: 0;
@@ -139,6 +161,26 @@
   color: var(--dsw-alias-state-error-primary);
   font-size: 12px;
   line-height: 18px;
+}
+
+/* The write outcome line: neutral while busy, success green, service failure
+   red with the router's own message shown verbatim. */
+.writeLine {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.writeLine[data-shadow-write='busy'] {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.writeLine[data-shadow-write='ok'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.writeLine[data-shadow-write='failed'] {
+  color: var(--dsw-alias-state-error-primary);
 }
 
 .section {
@@ -179,7 +221,7 @@
   list-style: none;
 }
 
-.bindings {
+.projects {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -188,23 +230,105 @@
   list-style: none;
 }
 
-.binding {
+.project {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
   padding: 6px 8px;
   border-radius: 8px;
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-.bindingPath {
+.projectHead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.projectPath {
   color: var(--dsw-alias-label-primary);
 }
 
-.bindingMeta {
+.projectMeta {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 12px;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
+}
+
+.projectMeta .mono {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rowInput {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--dsw-specific-menu);
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.rowInput::placeholder {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.rowInput:disabled {
+  opacity: 0.5;
+}
+
+.rowInput:focus-visible {
+  outline: 1px solid var(--dsw-alias-border-l2);
+}
+
+.rowButton {
+  flex: none;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 8px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.rowButton:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.rowButton:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.releaseButton {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-state-error-primary);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.releaseButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.releaseButton:disabled {
+  cursor: default;
+  opacity: 0.5;
 }

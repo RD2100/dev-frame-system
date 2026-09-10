@@ -57,7 +57,7 @@ kind: "package-reference"
 
 ### 指定 Shadow 并调用工具
 
-`markShadow(agent)` 只把四个工具装进该代理的作用域，其他作用域一个都解析不到。宿主调用与工具相同的 Service 方法，外加模型永远接触不到的宿主专用缝：`setActiveGoal` 为项目授权一次运行，`completeDelivery` 结清 received 投递，`confirmProjectStopped` 收尾一次停止，`recoverDeliveries` 在重启时收敛中断的行。
+`markShadow(agent)` 只把四个工具装进该代理的作用域，其他作用域一个都解析不到。宿主调用与工具相同的 Service 方法，外加模型永远接触不到的宿主专用缝：`setActiveGoal` 为项目授权一次运行，`completeDelivery` 结清 received 投递，`confirmProjectStopped` 收尾一次停止，`recoverDeliveries` 在重启时收敛中断的行。三条写入桥以指定 Shadow 自身的授权为宿主状态面板（Web Shadow 卡片）运行受门禁的流程——`openProjectForHost`、`sendToProjectForHost`（路由器自行补足绑定的修订与已授权运行）与 `releaseProjectForHost`（停止与静默确认一步完成）。
 
 ```ts
 import type { Agent } from '@deepseek-ai/dsh-agent'

@@ -26,6 +26,9 @@ function registerUi(ctx: ClientContext): void {
   const face: ShadowCardFace = {
     hooks: { status: controller.store },
     onRefresh: () => { void controller.refresh() },
+    onOpenProject: async path => await ctx.remote.shadow.openProject({ path }),
+    onSendToController: async (workspaceId, text) => await ctx.remote.shadow.sendToController({ workspaceId, text }),
+    onReleaseProject: async workspaceId => await ctx.remote.shadow.releaseProject({ workspaceId }),
   }
   ctx.slots.inject(
     'sidebar.footer.action',
