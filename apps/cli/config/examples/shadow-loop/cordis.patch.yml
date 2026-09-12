@@ -1,0 +1,191 @@
+# Shadow closed-loop overlay: mounts the delivery chain beside the DevFrame
+# profile so work sent through the Shadow conversation actually drives the
+# project task board — router work becomes a controller followup, the
+# controller plans and starts tasks, Workers deliver and commit, plugin leads
+# review, and the controller integrates reviewed work.
+#
+# Layer position: third over the web profile. Apply after the DevFrame profile
+# layer (which inserts the fail-closed shadow-router row) and after — or
+# instead of — the shadow overlay (one command; shown wrapped):
+#   dsh web --patch packages/experimental/devframe-profile/cordis.patch.yml \
+#     --patch apps/cli/config/examples/shadow/cordis.patch.yml \
+#     --patch apps/cli/config/examples/shadow-loop/cordis.patch.yml
+# A patch replaces the targeted row's whole config with the last write winning
+# per row; the restate below repeats both shadow-router fields, so this file
+# is safe before or after the shadow overlay.
+#
+# Prerequisites before boot:
+# 1. The inserted packages are not on the app's dependency surface. In a
+#    profile deployment, install each into the profile first (the same step
+#    the DevFrame profile README describes for shadow-router):
+#      dsh plugin --profile web add @deepseek-ai/dsh-experimental-shadow-bridge
+#      dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-evidence
+#      dsh plugin --profile web add @deepseek-ai/dsh-experimental-project-controller
+# 2. The approved-checks ledger must exist and hold the registrations the
+#    consumers read ($DSH_HOME/required-checks.json below). The consumers read
+#    the ledger; they never create or approve it — missing registrations and
+#    corrupt contents fail admission.
+# 3. Tool faces: see the hierarchy note at the bottom of this file. The
+#    profile layer ships the worker face empty and no project_* tool on any
+#    hierarchy role; a deployment that runs the loop expands the faces.
+#
+# Placeholders to replace (each fails or refuses loudly when used unedited):
+#   REPLACE_WITH_YOUR_SESSION_ID                the Shadow conversation session the router marks
+#   REPLACE_WITH_PROJECT_CONTROLLER_SESSION_ID  the project's independent controller root session
+#   D:/projects                                 real absolute authorized root directories
+#   REPLACE_WITH_TASK_ID                        a planned task id
+#   REPLACE_WITH_APPROVED_DIGEST                the approved checkset digest for that task
+#   REPLACE_WITH_COMMIT_PATH                    relative paths the task may commit
+#
+# Rows the dsh-base bundle and the DevFrame profile already mount — the
+# storage stack, session identity, session projections, and the workspace and
+# worktree registries — are not repeated here; the consumers below inject
+# them.
+
+# shadow-router restate: opens the fail-closed router row the DevFrame profile
+# layer inserts, exactly like the shadow overlay does. The router marks the
+# declared session when it is created (or immediately when already live) and
+# installs the four project_* tools (project_open, project_send,
+# project_status, project_stop) for that scope only. authorizedRoots entries
+# must be existing absolute directories: a relative or missing entry fails the
+# load loud (SHADOW_INVALID_CONFIG).
+- id: shadow-router
+  config:
+    shadowSessionId: REPLACE_WITH_YOUR_SESSION_ID
+    authorizedRoots:
+      # Example: D:/projects — replace with real absolute directories.
+      - D:/projects
+
+- insert:
+    # Forwards work the router has received (state `received`, bound to an
+    # authorized open run) into the bound controller session as a durable
+    # followup — model-visible and reconstructable from the session log — so
+    # a delivery drives real controller work instead of stalling in the
+    # router queue. The shadow_bridge storage domain records each forwarded
+    # messageId for exactly-once across restarts; v1 forwards to a live
+    # controller only and never completes the delivery itself. The bridge
+    # package README owns the full contract.
+    - id: shadow-bridge
+      name: '@deepseek-ai/dsh-experimental-shadow-bridge'
+      config:
+        # Delivery scan cadence. Lower values forward received work sooner
+        # but poll the storage domain more often; 15s keeps delivery latency
+        # human-scale without a busy loop. Required — the deployment states
+        # its cadence explicitly.
+        intervalMs: 15000
+        # Upper bound for one forwarded work text: the followup enters the
+        # controller conversation, so every char is request context. Large
+        # enough for a full task brief; raise for bigger briefs and accept
+        # the larger context cost. Required — no silent default.
+        followupMaxChars: 12000
+    # The append-only evidence ledger (ctx.agentEvidence): task/Goal binding
+    # receipts, submission receipts, and verification snapshots over the
+    # agent_evidence storage domain. Takes no config; it hard-injects the
+    # storage domain, which the dsh-base bundle already mounts.
+    - id: agent-evidence
+      name: '@deepseek-ai/dsh-experimental-agent-evidence'
+    # The project task board service (ctx.projectController): task lifecycle,
+    # the request budget, and the integration gate. It exposes no tool
+    # itself; the consumer rows below mount the tool faces.
+    - id: project-controller
+      name: '@deepseek-ai/dsh-experimental-project-controller'
+      config:
+        # Shipped default: at most two tasks in `developing`, aligned with
+        # the two-model-request account ceiling.
+        maxActiveTasks: 2
+        # Cumulative model sending attempts shared by the controller, its
+        # leads, and their workers. Charging is durable — restarts never
+        # restore usage — and every AgentLoop retry consumes one. The shipped
+        # default is 1 (the acceptance scenario); this example raises it so a
+        # real plan -> deliver -> review -> integrate round can complete.
+        # Size for the deployment.
+        requestBudget: 64
+    # Integration tool face: project_integrate, for the root controller.
+    - id: project-controller-consumer
+      name: '@deepseek-ai/dsh-experimental-project-controller/consumer'
+      config:
+        # The same ledger the DevFrame profile's command-goal-binding row
+        # registers goal checks into, so goal checks and task checks share
+        # one approved-checks source. Must be absolute.
+        requiredChecksPath: !!js dshHomePath('required-checks.json')
+        # Deployment-selected Git executable; `git` resolves from PATH. Pin
+        # an absolute path when the deployment needs a specific client.
+        gitExecutable: git
+        # Per-Git-subprocess timeout. Integration runs bounded local
+        # commands (rev-parse, fast-forward, merge); one minute covers local
+        # repository operations — raise for very large repositories.
+        gitTimeoutMs: 60000
+        # Per-Git-subprocess output cap: a command producing more fails that
+        # Git step instead of buffering without bound.
+        gitMaxOutputBytes: 10485760
+    # Task tool face: project_task (plan/start), for the root controller.
+    # Takes no config — planning and start derive every authority from the
+    # live Goal binding, the hierarchy bindings, and the registered
+    # worktrees.
+    - id: project-controller-task-consumer
+      name: '@deepseek-ai/dsh-experimental-project-controller/task-consumer'
+    # Delivery tool faces: project_deliver and project_commit for Workers,
+    # project_evidence and project_review for their independent plugin leads.
+    - id: project-controller-delivery-consumer
+      name: '@deepseek-ai/dsh-experimental-project-controller/delivery-consumer'
+      config:
+        # Shared Goal correction limit. Keep it equal to the
+        # command-goal-binding row's maxAttempts (3 in the DevFrame profile
+        # layer); omitting it would fall back to the DevFrame default 2.
+        repairLimit: 3
+        requiredChecksPath: !!js dshHomePath('required-checks.json')
+        # Host-owned map of task id -> approved checkset digest. Delivery
+        # runs exactly the registered checks in the assigned Worker's own
+        # worktree; a task without an entry refuses to deliver.
+        requiredChecksByTask:
+          REPLACE_WITH_TASK_ID: REPLACE_WITH_APPROVED_DIGEST
+        gitExecutable: git
+        gitTimeoutMs: 60000
+        gitMaxOutputBytes: 10485760
+        # Per-check-subprocess timeout: approved checks run real commands
+        # (builds, tests), so this example allows ten minutes per check.
+        checkTimeoutMs: 600000
+        # Per-check-subprocess output cap — and the cap for the COMPLETE
+        # rendered evidence result, wrapper and UTF-8 encoding included: an
+        # oversized result refuses until the host raises this limit.
+        checkMaxOutputBytes: 1048576
+        # Optional host-registered commit scope per task: project_commit
+        # refuses a task without an entry. Paths are relative and matched
+        # exactly and case-sensitively.
+        commitPathsByTask:
+          REPLACE_WITH_TASK_ID:
+            - REPLACE_WITH_COMMIT_PATH
+    # Model sending admission for the project scope: every llm/stream is
+    # charged to the budget above, and only that project's root controller,
+    # its plugin lead, or the lead's scoped worker is admitted. The consumer
+    # is dedicated to one project — the README directs deployments to use
+    # separate plugin scopes for unrelated model traffic — so a multi-project
+    # deployment mounts one request-budget row per project scope. This
+    # example is single-project.
+    - id: project-controller-request-budget-consumer
+      name: '@deepseek-ai/dsh-experimental-project-controller/request-budget-consumer'
+      config:
+        # The project's independent controller root session id — NOT the
+        # Shadow conversation session. The router reserves the controller
+        # session id in the project binding store and provisions each
+        # project's controller as an independent root with the project's
+        # approved cwd and preset ("do not set Shadow as its subagent
+        # parent", docs/detailDesign-part2.md §Routing); the shadow-router
+        # README documents the reserving -> provisioning -> ready state
+        # machine and its reserved-id guarantee. Fill in the
+        # reserved/provisioned id read from that project's binding row after
+        # project_open.
+        controllerSessionId: REPLACE_WITH_PROJECT_CONTROLLER_SESSION_ID
+
+# Tool faces this overlay intentionally does not set. The DevFrame profile
+# layer ships the agent-hierarchy row with the worker face empty (fail
+# closed) and no project_* tool on the controller or lead faces; running the
+# loop means restating that row's FULL config in a later patch — a patch
+# replaces the whole config, so restate the complete roleToolPolicies, do not
+# merge — and adding per role:
+#   controller: project_task, project_integrate
+#   lead:       project_evidence, project_review
+#   worker:     project_deliver, project_commit
+# The Shadow conversation scope is separate: the router installs its four
+# tools (project_open, project_send, project_status, project_stop) for the
+# marked shadowSessionId scope.
