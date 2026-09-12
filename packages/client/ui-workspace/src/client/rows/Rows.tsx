@@ -71,7 +71,7 @@ function useSessionIdCopy(sessionId: SessionNode['id']) {
     if (pending.current) return
     pending.current = true
     const request = ++epoch.current
-    void writeClipboard(String(sessionId)).then(success => {
+    void writeClipboard(String(sessionId)).then((success) => {
       if (request !== epoch.current) return
       pending.current = false
       setNotice({ seq: request, success })

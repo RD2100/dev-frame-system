@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-10-shadow-conversation-reachability.md
+2026-09-10-shadow-conversation-reachability.md: 8bed1810d59957c21db3cefd01e143ef82d7097d
+2026-09-10-shadow-conversation-reachability.zh.md: b93be3e7e7c73729824e7e62e8584caa5e316d19

@@ -354,6 +354,38 @@ describe('deriveSearchResults archive filtering', () => {
   })
 })
 
+describe('internal session filtering', () => {
+  it('hides a plugin-classified internal session from groups, flat rows, and search', () => {
+    const kept = summary('kept', 1, '/projects/first')
+    const dedicated = { ...summary('shadow', 9, '/projects/first'), internal: true }
+    const sessions = list(kept, dedicated)
+    const groups = deriveGroups(
+      sessions, [workspace('first', ['kept', 'shadow'])], noArchive, noAttention, view(['first']),
+    )
+    expect(groups[0]!.sessions.map(node => node.id)).toEqual([kept.id])
+    expect(groups[0]!.sessionCount).toBe(1)
+    expect(deriveFlat(sessions, noArchive, noAttention).map(row => row.id)).toEqual([kept.id])
+    // Neither the local title scan nor a Host content hit surfaces the row.
+    const search = deriveSearchResults(
+      sessions,
+      [],
+      'shadow',
+      noArchive,
+      noAttention,
+      { items: [{ sessionId: dedicated.id, snippet: 'shadow body' }], hasMore: false },
+      10,
+    )
+    expect(search.items).toEqual([])
+  })
+
+  it('keeps an internal session hidden even as the current blank selection', () => {
+    const dedicated = { ...summary('shadow', 9), internal: true, blank: true }
+    const sessions = { ...list(dedicated), current: dedicated.id }
+    expect(deriveFlat(sessions, noArchive, noAttention)).toEqual([])
+    expect(deriveGroups(sessions, [], noArchive, noAttention, view([UNGROUPED_KEY]))).toEqual([])
+  })
+})
+
 describe('deriveSearchResults', () => {
   it('merges local title/Workspace matches before ranked content hits and enriches duplicates', () => {
     const titleHit = summary('title-hit', 30, '/projects/a')

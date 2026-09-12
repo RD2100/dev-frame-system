@@ -433,6 +433,23 @@ describe('WorkspaceBrowser', () => {
     expect(screen.queryByText('gone-s')).toBeNull()
   })
 
+  it('renders no row for a session a plugin classified as internal, in both modes', () => {
+    mount({
+      useSessions: hook(sessionState([
+        summary('kept-s', 2),
+        summary('shadow-s', 1, { internal: true }),
+      ])),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['kept-s', 'shadow-s'])])),
+    })
+    fireEvent.click(screen.getByText('alpha'))
+    expect(screen.getByText('kept-s')).toBeTruthy()
+    expect(screen.queryByText('shadow-s')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '单列表' }))
+    expect(screen.getByText('kept-s')).toBeTruthy()
+    expect(screen.queryByText('shadow-s')).toBeNull()
+  })
+
   it('logs and keeps the tree when the archive call rejects', async () => {
     const rejection = new Error('archive exploded')
     const archiveSession = vi.fn(async () => { throw rejection })

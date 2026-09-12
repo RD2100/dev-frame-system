@@ -96,25 +96,25 @@ const TOOL_CARD_NAME = WIN32 ? 'Pwsh Output the word alpha' : 'Bash Print alpha 
 // aggregate carries none and its dialog has no cache rows (null = absent).
 const USAGE = WIN32
   ? {
-      pill: /Usage \d+(\.\d+)?[KM]? tok/,
-      pillText: 'Usage 17.5K tok',
-      route: `${WIN32_ROUTE}/${WIN32_MODEL}`,
-      cacheHit: null,
-      input: '9,215 tok',
-      cacheRead: null,
-      output: '73 tok',
-      total: '17,480 tok',
-    }
+    pill: /Usage \d+(\.\d+)?[KM]? tok/,
+    pillText: 'Usage 17.5K tok',
+    route: `${WIN32_ROUTE}/${WIN32_MODEL}`,
+    cacheHit: null,
+    input: '9,215 tok',
+    cacheRead: null,
+    output: '73 tok',
+    total: '17,480 tok',
+  }
   : {
-      pill: /Usage 15\.8K tok/,
-      pillText: 'Usage 15.8K tok',
-      route: 'deepseek-official/deepseek-v4-flash',
-      cacheHit: '49.7%' as const,
-      input: '7,891 tok',
-      cacheRead: '7,808 tok' as const,
-      output: '112 tok (42 tok reasoning)',
-      total: '15,811 tok',
-    }
+    pill: /Usage 15\.8K tok/,
+    pillText: 'Usage 15.8K tok',
+    route: 'deepseek-official/deepseek-v4-flash',
+    cacheHit: '49.7%' as const,
+    input: '7,891 tok',
+    cacheRead: '7,808 tok' as const,
+    output: '112 tok (42 tok reasoning)',
+    total: '15,811 tok',
+  }
 
 describe('web e2e: assistant IconActions wait for the turn to end', () => {
   let scaffold: WebScaffold | undefined

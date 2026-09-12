@@ -74,7 +74,7 @@ describe('Session-ID menu action', () => {
       renderSessionRow(sessionNode(id, 'Alpha'))
       copySessionIdFromMenu('Alpha')
 
-      await waitFor(() => expect(writeText).toHaveBeenCalledWith(id))
+      await waitFor(() =>{  expect(writeText).toHaveBeenCalledWith(id) })
       expect(screen.queryByRole('dialog')).toBeNull()
       expect(screen.getByRole('alert').textContent).toBe(zh['sessionId.copied'])
     } finally {
@@ -90,7 +90,7 @@ describe('Session-ID menu action', () => {
       renderAgentRow(agentNode(id, 'Lead'))
       copySessionIdFromMenu('Lead')
 
-      await waitFor(() => expect(writeText).toHaveBeenCalledWith(id))
+      await waitFor(() =>{  expect(writeText).toHaveBeenCalledWith(id) })
       expect(screen.queryByRole('dialog')).toBeNull()
       expect(screen.getByRole('alert').textContent).toBe(zh['sessionId.copied'])
     } finally {
@@ -106,7 +106,7 @@ describe('Session-ID menu action', () => {
       copySessionIdFromMenu('Title session-denied')
 
       const alert = await screen.findByRole('alert')
-      await waitFor(() => expect(alert.textContent).toBe(zh['sessionId.copyFailed']))
+      await waitFor(() =>{  expect(alert.textContent).toBe(zh['sessionId.copyFailed']) })
       expect(screen.queryByText(zh['sessionId.copied'])).toBeNull()
     } finally {
       restore()

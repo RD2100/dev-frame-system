@@ -198,7 +198,7 @@ export class TestSessions implements ISessions {
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
     method: 'create' | 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
-      | 'clear' | 'refresh' | 'search' | 'fork'
+      | 'clear' | 'refresh' | 'search' | 'fork' | 'markInternal'
     args: unknown[]
   }[] = []
 
@@ -468,6 +468,26 @@ export class TestSessions implements ISessions {
   refreshSubagents(parentSessionId: SessionId): Promise<void> {
     this.calls.push({ method: 'refreshSubagents', args: [parentSessionId] })
     return Promise.resolve()
+  }
+
+  /**
+   * Record one internal-session classification and stamp the fixture row the
+   * browsing surface reads; the returned disposer withdraws the stamp. Like
+   * every other verb here, an unknown id fails loud: fixtures are declared
+   * through {@link TestSessions.add} before a feature can address them.
+   * @param sessionId - fixture session owned by a dedicated surface.
+   * @returns withdraws the classification.
+   */
+  markInternal(sessionId: SessionId): () => void {
+    this.calls.push({ method: 'markInternal', args: [sessionId] })
+    const record = this.require(sessionId)
+    const apply = (internal: boolean): void => {
+      const { internal: _stale, ...rest } = record.summary
+      record.summary = internal ? { ...rest, internal: true } : rest
+      this.list.update((draft) => { draft.byId[sessionId] = record.summary })
+    }
+    apply(true)
+    return () => { apply(false) }
   }
 
   /** Clear the current selection (recorded; the production no-session flow). */

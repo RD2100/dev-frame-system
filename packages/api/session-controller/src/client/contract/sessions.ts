@@ -65,6 +65,18 @@ export interface ISessions {
    * @returns completion of the current or newly started refresh.
    */
   refreshSubagents(parentSessionId: SessionId): Promise<void>
+  /**
+   * Classify a Session as belonging to a dedicated surface rather than the
+   * browsing list (the deployment's Shadow conversation is the current
+   * provider). The row stays in the list store and stays addressable —
+   * `open`, `refresh`, and history are unaffected — while the browsing surface
+   * renders no entry for it. Classification is client-local: it neither
+   * changes the Host list nor survives a reload, so the owning plugin
+   * re-registers on mount and withdraws on unload.
+   * @param sessionId - Session owned by a dedicated surface.
+   * @returns withdraws the classification.
+   */
+  markInternal(sessionId: SessionId): () => void
 
   /** Clear the current selection into the no-session view state. */
   clear(): void

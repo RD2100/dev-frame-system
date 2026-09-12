@@ -53,19 +53,19 @@ const PROMPT = "Use the bash tool to run exactly: printf 'MINIMAL_BASH_CARD_OK\\
  */
 const SHELL = platformExpectationVariant(process.platform) === 'win32'
   ? {
-      name: 'pwsh',
-      cardRow: '[data-tool="pwsh"] [data-disclosure-row]',
-      setState: (stateDir: string): string => `Set-Location -LiteralPath ${JSON.stringify(stateDir)}; $env:DSH_MINIMAL_STATE = 'PERSISTED'`,
-      readState: 'Write-Output "${env:DSH_MINIMAL_STATE}:$PWD"',
-      commandProbe: /"command": "Write-Output 'MINIMAL_BASH_CARD_OK/,
-    }
+    name: 'pwsh',
+    cardRow: '[data-tool="pwsh"] [data-disclosure-row]',
+    setState: (stateDir: string): string => `Set-Location -LiteralPath ${JSON.stringify(stateDir)}; $env:DSH_MINIMAL_STATE = 'PERSISTED'`,
+    readState: 'Write-Output "${env:DSH_MINIMAL_STATE}:$PWD"',
+    commandProbe: /"command": "Write-Output 'MINIMAL_BASH_CARD_OK/,
+  }
   : {
-      name: 'bash',
-      cardRow: '[data-sample="bash"]',
-      setState: (stateDir: string): string => `cd ${JSON.stringify(stateDir)} && export DSH_MINIMAL_STATE=PERSISTED`,
-      readState: 'printf \'%s:%s\n\' "$DSH_MINIMAL_STATE" "$PWD"',
-      commandProbe: /"command": "printf 'MINIMAL_BASH_CARD_OK/,
-    }
+    name: 'bash',
+    cardRow: '[data-sample="bash"]',
+    setState: (stateDir: string): string => `cd ${JSON.stringify(stateDir)} && export DSH_MINIMAL_STATE=PERSISTED`,
+    readState: 'printf \'%s:%s\n\' "$DSH_MINIMAL_STATE" "$PWD"',
+    commandProbe: /"command": "printf 'MINIMAL_BASH_CARD_OK/,
+  }
 
 describe('minimal agent preset', () => {
   let scaffold: WebScaffold

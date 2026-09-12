@@ -46,6 +46,14 @@ export interface SessionSummary {
   parentId?: SessionId
   /** Coarse durable origin for navigation filtering; not a continuation capability. */
   origin?: 'subagent'
+  /**
+   * A mounted plugin declared this Session as belonging to a dedicated surface
+   * rather than the browsing list (the deployment's Shadow conversation is the
+   * current provider). The row stays listed and addressable — `open`,
+   * `refresh`, and history are unaffected — while the browsing surface renders
+   * no entry for it. Absent = false.
+   */
+  internal?: boolean
   running: boolean
   /** Finished while not selected and not yet opened — the sidebar's green "done" reminder. Absent = false. */
   completed?: boolean
@@ -213,6 +221,13 @@ export class ClientSessions implements ISessions {
   private watched: SessionId | undefined
   /** Removed-while-staged sessions whose teardown waits for the stage to move away. */
   private readonly deferredRemovals = new Set<SessionId>()
+  /**
+   * Sessions a mounted plugin declared as belonging to a dedicated surface
+   * (see {@link ClientSessions.markInternal}). Client-local classification:
+   * `projectList` stamps it onto the row, and nothing else in the domain reads
+   * it — the browsing surface owns the rendering decision.
+   */
+  private readonly internalSessions = new Set<SessionId>()
 
   /**
    * @param ctx - client root context (scope fibers mount under it).
@@ -277,6 +292,25 @@ export class ClientSessions implements ISessions {
    */
   openSubagent(address: SubagentAddress): void {
     this.manager.selectSubagent(address)
+  }
+
+  /**
+   * Classify a Session as belonging to a dedicated surface rather than the
+   * browsing list — the deployment's Shadow conversation is the current
+   * provider. The row stays listed and addressable; the browsing surface
+   * renders no entry for it. Classification is client-local (it neither
+   * changes the Host list nor survives a reload), so the owning plugin
+   * re-registers on every mount and drops the registration on unload.
+   * @param sessionId - Session owned by a dedicated surface.
+   * @returns withdraws the classification.
+   */
+  markInternal(sessionId: SessionId): () => void {
+    this.internalSessions.add(sessionId)
+    this.projectList()
+    return () => {
+      this.internalSessions.delete(sessionId)
+      this.projectList()
+    }
   }
 
   /**
@@ -596,6 +630,7 @@ export class ClientSessions implements ISessions {
         ...(entry.cwd !== undefined ? { cwd: entry.cwd } : {}),
         ...(entry.parentSessionId !== undefined ? { parentId: entry.parentSessionId } : {}),
         ...(entry.origin !== undefined ? { origin: entry.origin } : {}),
+        ...(this.internalSessions.has(entry.sessionId) ? { internal: true } : {}),
       }
     }
     if (current !== undefined && currentAddress !== undefined) {

@@ -39,3 +39,40 @@ export interface ShadowProjectSendInput {
 export interface ShadowProjectReleaseInput {
   readonly workspaceId: ShadowWorkspaceId
 }
+
+/** Host conversation input: one human message for the Shadow session. */
+export interface ShadowConversationPostInput {
+  readonly text: string
+}
+
+/** The accepted receipt of one posted human message. */
+export interface ShadowConversationAccepted {
+  readonly messageId: string
+}
+
+/** Host conversation read input: optional continuation cursor and page bound. */
+export interface ShadowConversationReadInput {
+  /** Sequence number to read beyond; absent reads the latest tail. */
+  readonly after?: number
+  /** Maximum rows in the page, 1 through 200; defaults to 50. */
+  readonly limit?: number
+}
+
+/** One conversation row: a human message or the Shadow's reply. */
+export interface ShadowConversationMessage {
+  /** Sequence number of the session log event the row folds. */
+  readonly seq: number
+  /** `'user'` for the human's message, `'shadow'` for the agent's reply. */
+  readonly role: 'user' | 'shadow'
+  /** The row's text content. */
+  readonly text: string
+  /** ISO-8601 instant the event entered the log. */
+  readonly at: string
+}
+
+/** One bounded conversation page plus the cursor to continue from. */
+export interface ShadowConversationPage {
+  readonly messages: readonly ShadowConversationMessage[]
+  /** Pass back as `after` to read the next page. */
+  readonly cursor: number
+}

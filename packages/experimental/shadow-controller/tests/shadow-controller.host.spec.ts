@@ -4,6 +4,7 @@ import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
 import type { ProjectOpenResult, ProjectSendResult, ProjectStopResult } from '@deepseek-ai/dsh-experimental-shadow-router'
 import type { ShadowRouter, ShadowRouterStatus } from '@deepseek-ai/dsh-experimental-shadow-router'
 import ShadowController, { type ShadowStatusView } from '../src/index.ts'
+import type { ShadowAgent } from '../src/shadow-agent.ts'
 
 /**
  * A router double carrying the read and the three host bridges the controller
@@ -24,6 +25,14 @@ function routerStub(status: ShadowRouterStatus, writes?: Partial<RecordedWrites>
     sendToProjectForHost: writes?.sendToProjectForHost ?? (async () => ({}) as ProjectSendResult),
     releaseProjectForHost: writes?.releaseProjectForHost ?? (async () => ({}) as ProjectStopResult),
   } as unknown as ShadowRouter
+}
+
+/** A conversation-host double carrying only the verbs the controller delegates. */
+function hostStub(): ShadowAgent {
+  return {
+    postMessage: async (text: string) => ({ messageId: `msg-for-${text}` }),
+    readConversation: async (request: { after?: number; limit?: number }) => ({ messages: [], cursor: request.after ?? 0 }),
+  } as unknown as ShadowAgent
 }
 
 const wid = (id: string): ShadowRouterStatus['bindings'][number]['workspaceId'] =>
@@ -53,6 +62,8 @@ describe('the shadow Remote namespace a host status surface calls', () => {
       { method: 'openProject', invocation: { kind: 'direct' } },
       { method: 'sendToController', invocation: { kind: 'direct' } },
       { method: 'releaseProject', invocation: { kind: 'direct' } },
+      { method: 'postMessage', invocation: { kind: 'direct' } },
+      { method: 'readConversation', invocation: { kind: 'direct' } },
     ])
   })
 
@@ -106,7 +117,7 @@ describe('the shadow Remote namespace a host status surface calls', () => {
     await expect(controller.openProject({ path: 'D:/projects/alpha' })).resolves.toBeDefined()
     expect(openProjectForHost).toHaveBeenCalledExactlyOnceWith({
       path: 'D:/projects/alpha',
-      requestId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      requestId: expect.stringMatching(/^[0-9a-f-]{36}$/) as string,
     })
   })
 
@@ -119,7 +130,7 @@ describe('the shadow Remote namespace a host status surface calls', () => {
     expect(sendToProjectForHost).toHaveBeenCalledExactlyOnceWith({
       workspaceId: 'ws-1',
       text: 'ship it',
-      requestId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      requestId: expect.stringMatching(/^[0-9a-f-]{36}$/) as string,
     })
   })
 
@@ -131,7 +142,7 @@ describe('the shadow Remote namespace a host status surface calls', () => {
     await expect(controller.releaseProject({ workspaceId: wid('ws-1') })).resolves.toMatchObject({ status: 'stopped' })
     expect(releaseProjectForHost).toHaveBeenCalledExactlyOnceWith({
       workspaceId: 'ws-1',
-      requestId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      requestId: expect.stringMatching(/^[0-9a-f-]{36}$/) as string,
     })
   })
 
@@ -144,5 +155,24 @@ describe('the shadow Remote namespace a host status surface calls', () => {
       .rejects.toThrow('this deployment has no shadow router mounted')
     await expect(controller.releaseProject({ workspaceId: wid('ws-1') }))
       .rejects.toThrow('this deployment has no shadow router mounted')
+  })
+
+  it('delegates the conversation faces to the conversation host', async () => {
+    const ctx = new Context()
+    ctx.provide('shadowAgent', hostStub())
+    const controller = new ShadowController(ctx)
+    await expect(controller.postMessage({ text: 'open alpha' }))
+      .resolves.toEqual({ messageId: 'msg-for-open alpha' })
+    await expect(controller.readConversation({ after: 7, limit: 3 }))
+      .resolves.toEqual({ messages: [], cursor: 7 })
+  })
+
+  it('fails the conversation faces loud when no conversation host is mounted', async () => {
+    const ctx = new Context()
+    const controller = new ShadowController(ctx)
+    await expect(controller.postMessage({ text: 'hello' }))
+      .rejects.toThrow('this deployment has no shadow conversation host mounted')
+    await expect(controller.readConversation({}))
+      .rejects.toThrow('this deployment has no shadow conversation host mounted')
   })
 })

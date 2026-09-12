@@ -85,6 +85,7 @@ function fakeSessions(ctx: Context): { sessions: ISessions; binding: SessionBind
     subagentAddress: () => undefined,
     setSubagentCatalogOpen: () => {},
     refreshSubagents: () => Promise.reject(new Error('unused fake Sessions operation')),
+    markInternal: () => () => {},
     clear: () => {},
     refresh: () => Promise.reject(new Error('unused fake Sessions operation')),
     search: () => Promise.reject(new Error('unused fake Sessions operation')),

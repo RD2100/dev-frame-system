@@ -27,7 +27,7 @@ interface Harness {
 }
 
 /** Render one agent row with a Set-backed expansion predicate. */
-function renderAgent(node: AgentNode, harness: Harness, currentId: string | undefined = undefined): void {
+function renderAgent(node: AgentNode, harness: Harness, currentId?: string  ): void {
   render(
     <AgentNodeItem
       node={node}

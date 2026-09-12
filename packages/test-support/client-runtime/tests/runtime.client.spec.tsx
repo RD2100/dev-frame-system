@@ -170,6 +170,15 @@ describe('sessions', () => {
       .toMatchObject({ displayTitle: 'renamed', running: true })
     runtime.sessions.setSubagentCatalogOpen('s2' as SessionId, true)
     await runtime.sessions.refreshSubagents('s2' as SessionId)
+    // The internal-session classification stamps the fixture row it names and
+    // withdraws on its disposer, leaving the sibling row ordinary.
+    const releaseInternal = runtime.sessions.markInternal('s2' as SessionId)
+    await runtime.flush()
+    expect(runtime.sessions.list.getSnapshot().byId['s2' as SessionId]?.internal).toBe(true)
+    expect(runtime.sessions.list.getSnapshot().byId['s1' as SessionId]?.internal).toBeUndefined()
+    releaseInternal()
+    await runtime.flush()
+    expect(runtime.sessions.list.getSnapshot().byId['s2' as SessionId]?.internal).toBeUndefined()
     runtime.sessions.open('s1' as SessionId)
     await runtime.flush()
     expect(runtime.sessions.list.getSnapshot().current).toBe('s1')
@@ -184,6 +193,7 @@ describe('sessions', () => {
       { method: 'openSubagent', args: [address] },
       { method: 'setSubagentCatalogOpen', args: ['s2', true] },
       { method: 'refreshSubagents', args: ['s2'] },
+      { method: 'markInternal', args: ['s2'] },
       { method: 'open', args: ['s1'] },
       { method: 'clear', args: [] },
       { method: 'fork', args: [{ sessionId: 's1', atSeq: 7, increaseTitle: true }] },

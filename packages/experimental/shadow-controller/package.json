@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-experimental-shadow-controller",
-  "description": "Read-only Remote owner of the Shadow router status snapshot for host status surfaces",
+  "description": "Remote owner of the Shadow router status snapshot, the panel write faces, and the persistent Shadow conversation host",
   "version": "0.1.2-alpha.4",
   "private": true,
   "repository": {
@@ -15,6 +15,10 @@
     ".": {
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
+    },
+    "./shadow-agent": {
+      "types": "./lib/types/shadow-agent.d.ts",
+      "default": "./lib/shadow-agent.js"
     },
     "./typert": {
       "types": "./lib/typert.host.d.ts",
@@ -33,6 +37,7 @@
   },
   "files": [
     "lib/index.js",
+    "lib/shadow-agent.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts",
     "lib/typert.host.js",
@@ -43,12 +48,32 @@
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-experimental-shadow-router": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/dsh-typert-protocol": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:^",
+    "@deepseek-ai/dsh-agent": "workspace:^",
+    "@deepseek-ai/dsh-agent-default-model": "workspace:^",
+    "@deepseek-ai/dsh-agent-loop": "workspace:^",
+    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:^",
+    "@deepseek-ai/dsh-experimental-session-identity": "workspace:^",
     "@deepseek-ai/dsh-experimental-shadow-router": "workspace:^",
-    "@deepseek-ai/dsh-typert-protocol": "workspace:^"
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-session-persistence": "workspace:^",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:^",
+    "@deepseek-ai/dsh-session-projection": "workspace:^",
+    "@deepseek-ai/dsh-storage": "workspace:^",
+    "@deepseek-ai/dsh-storage-domain": "workspace:^",
+    "@deepseek-ai/dsh-storage-json": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/dsh-typert-protocol": "workspace:^",
+    "@deepseek-ai/dsh-workspace": "workspace:^"
   }
 }

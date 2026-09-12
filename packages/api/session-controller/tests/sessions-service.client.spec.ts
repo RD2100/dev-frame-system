@@ -106,6 +106,28 @@ describe('list store projection', () => {
     await Promise.resolve()
     expect(b.svc.list.getSnapshot().ids).toContain('s2')
   })
+
+  it('stamps a plugin-classified internal session and withdraws the stamp on dispose', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 's1' }, { id: 's2' }])
+    const release = b.svc.markInternal(sid('s1'))
+    // The classification is per row: the sibling session stays ordinary.
+    expect(b.svc.list.getSnapshot().byId[sid('s1')]?.internal).toBe(true)
+    expect(b.svc.list.getSnapshot().byId[sid('s2')]?.internal).toBeUndefined()
+    // The row itself survives: the browsing surface owns the rendering call.
+    expect(b.svc.list.getSnapshot().ids).toEqual([sid('s1'), sid('s2')])
+    release()
+    expect(b.svc.list.getSnapshot().byId[sid('s1')]?.internal).toBeUndefined()
+  })
+
+  it('carries a classification made before the classified row lands', async () => {
+    const b = bench()
+    const release = b.svc.markInternal(sid('s1'))
+    await feedList(b, [{ id: 's1' }])
+    expect(b.svc.list.getSnapshot().byId[sid('s1')]?.internal).toBe(true)
+    release()
+    expect(b.svc.list.getSnapshot().byId[sid('s1')]?.internal).toBeUndefined()
+  })
 })
 
 describe('search', () => {

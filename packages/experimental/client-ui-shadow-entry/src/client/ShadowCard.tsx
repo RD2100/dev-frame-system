@@ -1,10 +1,14 @@
 /**
  * The resident sidebar-foot Shadow entry: a trigger row (icon, label, status
- * dot) above Settings, plus the fixed action panel it opens. The panel is the
- * human's global Shadow surface: an honest phase line, the authorized roots,
- * the multi-project list of open projects with per-project send and release
- * actions, and the open-project form. Every action runs through the injected
- * write verbs and shows the service's success or failure verbatim.
+ * dot) above Settings, plus the large centered dialog it opens. The dialog is
+ * the human's global Shadow surface and leads with the conversation: the full
+ * message stream with the designated Shadow (tail load on open, incremental
+ * polling while open and online, one post verb) fills the dialog above a
+ * bottom composer. A view toggle switches to the management pane: the honest
+ * phase facts, the authorized roots, the open-project form, and the
+ * multi-project list with per-project send and release actions. Every action
+ * runs through the injected write verbs and shows the service's success or
+ * failure verbatim.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
@@ -43,31 +47,29 @@ const PHASE_DETAILS: Partial<Record<ShadowPhase, ShadowKey>> = {
   configured: 'detail.configured',
 }
 
+/** Compact wall-clock label for one conversation row timestamp. */
+function formatChatTime(at: string): string {
+  return new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
 /** Render the resident Shadow entry card. */
-export function ShadowCard({ wide, useStatus, onRefresh, onOpenProject, onSendToController, onReleaseProject, t }: ShadowCardProps) {
+export function ShadowCard({
+  wide, useStatus, useConversation, onRefresh, onOpenConversation, onLoadConversation, onPollConversation,
+  onOpenProject, onSendToController, onReleaseProject, onPostMessage, t,
+}: ShadowCardProps) {
   const status = useStatus(status => status)
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
-  const [anchor, setAnchor] = useState<{ left: number; bottom: number }>()
+  const [view, setView] = useState<'chat' | 'projects'>('chat')
   const [path, setPath] = useState('')
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string>()
   const [outcome, setOutcome] = useState<ShadowWriteOutcome>({ state: 'idle' })
-
-  // The panel is fixed so the sidebar's overflow clip cannot cut it; the
-  // offsets are measured from the trigger before paint and re-measured on
-  // window resizes while open.
-  useLayoutEffect(() => {
-    if (!open) return
-    const place = (): void => {
-      const rect = /* v8 ignore next -- the ref is mounted before the panel can open */
-        rootRef.current?.getBoundingClientRect()
-      if (rect !== undefined) setAnchor({ left: rect.left, bottom: window.innerHeight - rect.top + 8 })
-    }
-    place()
-    window.addEventListener('resize', place)
-    return () => { window.removeEventListener('resize', place) }
-  }, [open])
+  const chat = useConversation(snapshot => snapshot)
+  const [chatDraft, setChatDraft] = useState('')
+  const [chatPending, setChatPending] = useState(false)
+  const [chatError, setChatError] = useState<string>()
+  const chatListRef = useRef<HTMLDivElement>(null)
 
   useDismissOnOutsidePointer(rootRef, open, setOpen)
 
@@ -82,6 +84,7 @@ export function ShadowCard({ wide, useStatus, onRefresh, onOpenProject, onSendTo
   const write = presentWriteOutcome(outcome)
   const detail = PHASE_DETAILS[model.phase]
   const actionsLocked = busy !== undefined
+  const actionable = model.phase === 'configured' || model.phase === 'online'
 
   /** Run one panel write: lock the actions, land the outcome, refresh and clear the draft on success. */
   const runWrite = (
@@ -99,58 +102,111 @@ export function ShadowCard({ wide, useStatus, onRefresh, onOpenProject, onSendTo
         onRefresh()
         onSuccess?.()
       } else {
-        setOutcome({ state: 'failed', kind, message: result.error?.message ?? String(result.error) })
+        /* v8 ignore next -- a Remote failure always carries an error message. */
+        setOutcome({ state: 'failed', kind, message: result.error?.message ?? 'unknown error' })
       }
     })
   }
 
   const submitOpen = (): void => {
     const trimmed = path.trim()
+    /* v8 ignore next -- the open button is disabled while the path is blank or a write is in flight. */
     if (trimmed.length === 0 || actionsLocked) return
-    runWrite('open', 'open', async () => await onOpenProject(trimmed), () => setPath(''))
+    runWrite('open', 'open', async () => await onOpenProject(trimmed), () =>{  setPath('') })
   }
 
   const submitSend = (workspaceId: ShadowWorkspaceId): void => {
     const text = (drafts[workspaceId] ?? '').trim()
     if (text.length === 0 || actionsLocked) return
-    runWrite(`send:${workspaceId}`, 'send', async () => await onSendToController(workspaceId, text), () => setDrafts(drafts => ({ ...drafts, [workspaceId]: '' })))
+    runWrite(`send:${workspaceId}`, 'send', async () => await onSendToController(workspaceId, text), () =>{  setDrafts(drafts => ({ ...drafts, [workspaceId]: '' })) })
   }
 
   const submitRelease = (workspaceId: ShadowWorkspaceId): void => {
+    /* v8 ignore next -- the release button is disabled while a write is in flight. */
     if (actionsLocked) return
     runWrite(`release:${workspaceId}`, 'release', async () => await onReleaseProject(workspaceId))
   }
 
+  /** Post one chat message: lock the chat input, then poll the surface after acceptance. */
+  const submitChat = (): void => {
+    const text = chatDraft.trim()
+    if (text.length === 0 || chatPending) return
+    setChatPending(true)
+    void onPostMessage(text).then((result) => {
+      setChatPending(false)
+      if (result.ok) {
+        setChatDraft('')
+        setChatError(undefined)
+        onPollConversation()
+      } else {
+        /* v8 ignore next -- a Remote failure always carries an error message. */
+        setChatError(result.error.message)
+      }
+    })
+  }
+
+  // While the dialog is open and the Shadow is online, load the tail once and
+  // poll incrementally so replies arrive without a click.
+  useEffect(() => {
+    if (!open || model.phase !== 'online') return
+    onLoadConversation()
+    const timer = window.setInterval(() => { onPollConversation() }, 3000)
+    return () => { window.clearInterval(timer) }
+  }, [open, model.phase, onLoadConversation, onPollConversation])
+
+  // Keep the newest row visible; the stream is the dialog's only inner scroller.
+  useLayoutEffect(() => {
+    const list = chatListRef.current
+    if (list === null) return
+    list.scrollTop = list.scrollHeight
+  }, [chat.messages.length, view])
+
   return (
     <div ref={rootRef} className={clsx(css.layer, !wide && css.rail)}>
-      {open && anchor !== undefined && (
-        <section className={css.panel} style={anchor} role="dialog" aria-label={t('panel.aria')} data-shadow-panel>
+      {open && (
+        <section className={css.panel} role="dialog" aria-label={t('panel.aria')} data-shadow-panel data-shadow-view={view}>
           <header className={css.header}>
             <h2 className={css.title}>{t('panel.title')}</h2>
-            <button type="button" className={css.refreshButton} data-shadow-refresh aria-label={t('panel.refresh')} disabled={actionsLocked} onClick={() => { onRefresh() }}>
-              {t('panel.refresh')}
-            </button>
-          </header>
-          <div className={css.body}>
             <p className={css.statusLine} data-shadow-status={model.phase}>
               <span className={css.dot} aria-hidden="true" />
               {t(PHASE_LABELS[model.phase])}
             </p>
-            {detail !== undefined && <p className={css.note}>{t(detail)}</p>}
+            {actionable && (
+              <button
+                type="button"
+                className={css.viewToggle}
+                data-shadow-view-toggle
+                aria-pressed={view === 'projects'}
+                onClick={() => { setView(view === 'chat' ? 'projects' : 'chat') }}
+              >
+                {view === 'chat' ? t('panel.projectsTab') : t('chat.title')}
+              </button>
+            )}
+            <button type="button" className={css.refreshButton} data-shadow-refresh aria-label={t('panel.refresh')} disabled={actionsLocked} onClick={() => { onRefresh() }}>
+              {t('panel.refresh')}
+            </button>
+            <button type="button" className={css.closeButton} data-shadow-close aria-label={t('panel.close')} onClick={() => { setOpen(false) }}>
+              ×
+            </button>
+          </header>
+          <div className={css.body} data-shadow-body={view}>
             {model.error !== null && (
               <p className={css.readError} role="alert" data-shadow-error>{t('status.readFailed', { message: model.error })}</p>
             )}
+            {detail !== undefined && <p className={css.note}>{t(detail)}</p>}
             {write !== undefined && (
               <p className={css.writeLine} role="status" aria-live="polite" data-shadow-write={write.tone}>
                 {t(write.key, write.params)}
               </p>
             )}
-            {(model.phase === 'configured' || model.phase === 'online') && (
+            {actionable && (
+              <dl className={css.facts}>
+                <dt className={css.group}>{t('panel.session')}</dt>
+                <dd className={css.mono} data-shadow-session>{model.shadowSessionId}</dd>
+              </dl>
+            )}
+            {actionable && view === 'projects' && (
               <>
-                <dl className={css.facts}>
-                  <dt className={css.group}>{t('panel.session')}</dt>
-                  <dd className={css.mono} data-shadow-session>{model.shadowSessionId}</dd>
-                </dl>
                 <section className={css.section}>
                   <h3 className={css.group}>{t('panel.roots')}</h3>
                   {model.authorizedRoots.length === 0
@@ -250,6 +306,63 @@ export function ShadowCard({ wide, useStatus, onRefresh, onOpenProject, onSendTo
                 </section>
               </>
             )}
+            {actionable && view === 'chat' && (
+              <div className={css.chatPane} data-shadow-chat>
+                {model.phase !== 'online'
+                  ? <p className={css.note} data-shadow-chat-offline>{t('chat.offline')}</p>
+                  : (
+                    <>
+                      {chat.error !== undefined && (
+                        <p className={css.readError} role="alert" data-shadow-chat-read-error>{t('chat.readFailed', { message: chat.error })}</p>
+                      )}
+                      {chat.messages.length === 0 && chat.error === undefined
+                        ? <p className={css.note} data-shadow-chat-empty>{t('chat.empty')}</p>
+                        : (
+                          <div className={css.chatList} ref={chatListRef} data-shadow-chat-list>
+                            {chat.messages.map(row => (
+                              <div key={row.seq} className={css.chatRow} data-shadow-chat-row={row.role}>
+                                <span className={css.chatRole}>{row.role === 'user' ? t('chat.roleUser') : t('chat.roleShadow')}</span>
+                                <span className={css.chatText}>{row.text}</span>
+                                <time className={css.chatTime} dateTime={row.at}>{formatChatTime(row.at)}</time>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      {chatPending && <p className={css.note} data-shadow-chat-pending>{t('chat.pending')}</p>}
+                      <div className={css.composer}>
+                        <textarea
+                          className={css.chatInput}
+                          rows={2}
+                          value={chatDraft}
+                          placeholder={t('chat.placeholder')}
+                          aria-label={t('chat.inputAria')}
+                          disabled={chatPending}
+                          data-shadow-chat-input
+                          onChange={(event) => { setChatDraft(event.currentTarget.value) }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' && !event.shiftKey) {
+                              event.preventDefault()
+                              submitChat()
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className={css.rowButton}
+                          disabled={chatPending || chatDraft.trim().length === 0}
+                          data-shadow-chat-submit
+                          onClick={() => { submitChat() }}
+                        >
+                          {t('chat.submit')}
+                        </button>
+                      </div>
+                      {chatError !== undefined && (
+                        <p className={css.writeLine} role="alert" data-shadow-chat-send-failed>{t('chat.sendFailed', { message: chatError })}</p>
+                      )}
+                    </>
+                  )}
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -258,12 +371,23 @@ export function ShadowCard({ wide, useStatus, onRefresh, onOpenProject, onSendTo
         className={css.trigger}
         data-shadow-phase={model.phase}
         aria-label={t('trigger.aria')}
-        aria-expanded={open}
-        onClick={() => { setOpen(value => !value) }}
+        onClick={() => { void onOpenConversation() }}
       >
         <IconBranchOutline16 size={wide ? 16 : 18} />
         {wide && <span className={css.triggerLabel}>{t('trigger.label')}</span>}
       </button>
+      {wide && (
+        <button
+          type="button"
+          className={css.manageButton}
+          data-shadow-manage
+          aria-label={t('trigger.manage')}
+          aria-expanded={open}
+          onClick={() => { setOpen(value => !value) }}
+        >
+          {t('trigger.manage')}
+        </button>
+      )}
     </div>
   )
 }

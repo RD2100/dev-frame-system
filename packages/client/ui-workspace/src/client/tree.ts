@@ -145,11 +145,13 @@ function byRecency(a: SessionSummary, b: SessionSummary): number {
 /**
  * Ordinary sessions are visible; among blank sessions, only the current one
  * is visible. Subagent children use their parent header catalog; archived
- * sessions are visible nowhere, while their accounting slots remain so
- * unarchiving restores position.
+ * sessions and sessions a mounted plugin classified as internal (a dedicated
+ * surface's own conversation, e.g. the Shadow) are visible nowhere, while
+ * their accounting slots remain so unarchiving restores position.
  */
 function sessionVisible(session: SessionSummary, current: SessionId | undefined, archived: ReadonlySet<SessionId>): boolean {
-  return session.origin !== 'subagent'
+  return session.internal !== true
+    && session.origin !== 'subagent'
     && !archived.has(session.id)
     && (!session.blank || session.id === current)
 }
@@ -363,9 +365,10 @@ function agentNode(
  * Every group shows; sessions populate under expanded groups in the selected
  * local order, each carrying its direct subagent-origin subtree as
  * {@link AgentNode.children}. Blank sessions are excluded except for the
- * selected provisional New Session row; archived sessions are excluded
- * everywhere, and archiving a parent hides its whole subtree. Content search
- * lives outside this derivation (see {@link deriveSearchResults}).
+ * selected provisional New Session row; archived sessions and internal
+ * sessions (a dedicated surface's own conversation) are excluded everywhere,
+ * and archiving a parent hides its whole subtree. Content search lives
+ * outside this derivation (see {@link deriveSearchResults}).
  * @param list - sessions list snapshot (`current` feeds containsCurrent).
  * @param workspaces - real workspaces in stable Host order.
  * @param archivedSessionIds - registry-global archive set.
