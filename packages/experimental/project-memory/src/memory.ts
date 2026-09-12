@@ -99,7 +99,7 @@ function wrapFsFailure(label: string, code: 'MEMORY_WRITE_FAILED' | 'MEMORY_UNAV
 
 /** Sleep between bounded retries. */
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     setTimeout(resolve, ms)
   })
 }

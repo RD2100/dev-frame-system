@@ -490,9 +490,9 @@ describe('assertDeclaredVariantFiles', () => {
         '      - system-prompt',
         '',
       ].join('\n'))
-      expect(() => assertDeclaredVariantFiles(dir, 'guard-pin', manifest, false))
+      expect(() =>{  assertDeclaredVariantFiles(dir, 'guard-pin', manifest, false) })
         .toThrow('guard-pin/system-prompt.win32.expected.md declared platform variant must exist')
-      expect(() => assertDeclaredVariantFiles(dir, 'guard-pin', manifest, true)).not.toThrow()
+      expect(() =>{  assertDeclaredVariantFiles(dir, 'guard-pin', manifest, true) }).not.toThrow()
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -503,7 +503,7 @@ describe('assertDeclaredVariantFiles', () => {
     try {
       writeFileSync(join(dir, 'session.jsonl'), '')
       const manifest = parseSnapshotManifest('version: 1\nprofile: acp\nsessionVariants:\n  win32: true\n')
-      expect(() => assertDeclaredVariantFiles(dir, 'guard-session', manifest, true))
+      expect(() =>{  assertDeclaredVariantFiles(dir, 'guard-session', manifest, true) })
         .toThrow('guard-session/session.win32.jsonl declared platform variant must exist')
     } finally {
       rmSync(dir, { recursive: true, force: true })

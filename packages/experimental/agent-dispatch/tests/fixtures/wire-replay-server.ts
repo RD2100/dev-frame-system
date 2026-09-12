@@ -33,9 +33,10 @@ export interface WireReplayTurn {
      * Exact JSON arguments, or a callback evaluated against the captured
      * request body when the turn is served — earlier tool receipts (host
      * bootstrap worktree ids, dispatch briefings) flow back into later
-     * scripts without hardcoding per-run identifiers.
+     * scripts without hardcoding per-run identifiers. A callback argument
+     * narrows through `typeof === 'function'` at the serving site.
      */
-    readonly arguments: unknown | ((body: string) => unknown)
+    readonly arguments: unknown
   }[]
 }
 
@@ -121,7 +122,7 @@ export async function startWireReplayServer(sessions: readonly WireReplaySession
       requests.push({ index, needle: matched?.needle ?? null, body: parsed })
       if (matched === undefined) {
         response.writeHead(500, { 'content-type': 'application/json' })
-        response.end(JSON.stringify({ error: { message: `wire replay: no session script matches this request`, code: 'WIRE_REPLAY_UNROUTED' } }))
+        response.end(JSON.stringify({ error: { message: 'wire replay: no session script matches this request', code: 'WIRE_REPLAY_UNROUTED' } }))
         return
       }
       const cursor = cursors.get(matched.needle) ?? 0

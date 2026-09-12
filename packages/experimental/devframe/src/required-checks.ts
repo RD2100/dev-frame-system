@@ -193,14 +193,18 @@ export class MemoryRequiredChecksConfigStore implements RequiredChecksConfigStor
    * @param config - validated configuration from the typed approval boundary.
    * @returns the digest the configuration is registered under.
    */
-  async save(config: DevFrameRequiredChecksConfig): Promise<RequiredChecksDigest> {
-    const digest = requiredChecksDigest(config)
-    // The registration is content-addressed: a repeated digest is by
-    // construction the same approved set, so the first registration stands.
-    if (!this.registrations.has(digest)) {
-      this.registrations.set(digest, JSON.stringify(config))
-    }
-    return digest
+  save(config: DevFrameRequiredChecksConfig): Promise<RequiredChecksDigest> {
+    // The chain preserves the seam's rejection semantics: every failure,
+    // including digest computation, settles the promise instead of throwing.
+    return Promise.resolve().then(() => {
+      const digest = requiredChecksDigest(config)
+      // The registration is content-addressed: a repeated digest is by
+      // construction the same approved set, so the first registration stands.
+      if (!this.registrations.has(digest)) {
+        this.registrations.set(digest, JSON.stringify(config))
+      }
+      return digest
+    })
   }
 
   /**
@@ -210,15 +214,19 @@ export class MemoryRequiredChecksConfigStore implements RequiredChecksConfigStor
    * @throws {@link RequiredChecksError} with `REQUIRED_CHECKS_CONFIG_NOT_FOUND`
    *   when the digest has no registration.
    */
-  async load(digest: RequiredChecksDigest): Promise<DevFrameRequiredChecksConfig> {
-    const payload = this.registrations.get(digest)
-    if (payload === undefined) {
-      throw new RequiredChecksError(
-        `no required-checks configuration is registered under "${digest}"`,
-        'REQUIRED_CHECKS_CONFIG_NOT_FOUND',
-      )
-    }
-    return decodeRequiredChecksConfig(JSON.parse(payload))
+  load(digest: RequiredChecksDigest): Promise<DevFrameRequiredChecksConfig> {
+    // The chain preserves the seam's rejection semantics: a missing digest
+    // and a decode failure settle the promise instead of throwing.
+    return Promise.resolve().then(() => {
+      const payload = this.registrations.get(digest)
+      if (payload === undefined) {
+        throw new RequiredChecksError(
+          `no required-checks configuration is registered under "${digest}"`,
+          'REQUIRED_CHECKS_CONFIG_NOT_FOUND',
+        )
+      }
+      return decodeRequiredChecksConfig(JSON.parse(payload))
+    })
   }
 }
 

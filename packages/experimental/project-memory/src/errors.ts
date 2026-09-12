@@ -42,14 +42,7 @@ export type ProjectMemoryErrorCode =
  * and diagnostics can route on the code alone. Extending {@link HarnessError}
  * keeps the `{ name, code }` classification on the tool result and its
  * `tool/result` session event, so host consumers route without parsing text.
+ * Construction is the inherited `(message, code, options)` form; `code` draws
+ * from {@link ProjectMemoryErrorCode} by caller discipline.
  */
-export class ProjectMemoryError extends HarnessError {
-  /**
-   * @param message - Human-readable rejection reason; carries no note content.
-   * @param code - Stable failure classification.
-   * @param options - Original filesystem or seam failure, when one exists.
-   */
-  constructor(message: string, code: ProjectMemoryErrorCode, options?: ErrorOptions) {
-    super(message, code, options)
-  }
-}
+export class ProjectMemoryError extends HarnessError {}

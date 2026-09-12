@@ -70,7 +70,7 @@ describe('AT4-01 queued-work pre-step injection journey', () => {
     const first = await bootReliability()
     try {
       first.service.openAdmission(IDENTITY)
-      expect(() => first.service.assertAdmitted(IDENTITY)).not.toThrow()
+      expect(() =>{  first.service.assertAdmitted(IDENTITY) }).not.toThrow()
     } finally {
       // The interruption: the host dies with the first context (in-process
       // model, at4-02 journey precedent).
@@ -83,9 +83,9 @@ describe('AT4-01 queued-work pre-step injection journey', () => {
       expect(reopened.service.admissionState).toBe('closed')
       // The interrupted task's pre-stage rejects fail-closed: no auto-resume,
       // no replay of the queued work.
-      expectAssertRejected(() => reopened.service.assertAdmitted(IDENTITY), ADMISSION_CLOSED)
+      expectAssertRejected(() =>{  reopened.service.assertAdmitted(IDENTITY) }, ADMISSION_CLOSED)
       // The cutoff holds for the whole queue, not one identity.
-      expectAssertRejected(() => reopened.service.assertAdmitted(GOAL_SWAPPED), ADMISSION_CLOSED)
+      expectAssertRejected(() =>{  reopened.service.assertAdmitted(GOAL_SWAPPED) }, ADMISSION_CLOSED)
     } finally {
       await reopened.dispose()
     }
@@ -102,18 +102,18 @@ describe('AT4-01 queued-work pre-step injection journey', () => {
     const reopened = await bootReliability()
     try {
       // Without the explicit resume there is no retry path.
-      expectAssertRejected(() => reopened.service.assertAdmitted(IDENTITY), ADMISSION_CLOSED)
+      expectAssertRejected(() =>{  reopened.service.assertAdmitted(IDENTITY) }, ADMISSION_CLOSED)
 
       // The host's explicit resume reopens admission for the SAME identity.
       reopened.service.openAdmission(IDENTITY)
       expect(reopened.service.admissionState).toBe('open')
       // The queued work's pre-step passes again: the not-started step is resumable.
-      expect(() => reopened.service.assertAdmitted(IDENTITY)).not.toThrow()
+      expect(() =>{  reopened.service.assertAdmitted(IDENTITY) }).not.toThrow()
 
       // The resumed generation admits exactly that identity: each swapped half
       // is its own rejection with the stable mismatch code (identity preservation).
-      expectAssertRejected(() => reopened.service.assertAdmitted(GOAL_SWAPPED), IDENTITY_MISMATCH)
-      expectAssertRejected(() => reopened.service.assertAdmitted(SESSION_SWAPPED), IDENTITY_MISMATCH)
+      expectAssertRejected(() =>{  reopened.service.assertAdmitted(GOAL_SWAPPED) }, IDENTITY_MISMATCH)
+      expectAssertRejected(() =>{  reopened.service.assertAdmitted(SESSION_SWAPPED) }, IDENTITY_MISMATCH)
     } finally {
       await reopened.dispose()
     }

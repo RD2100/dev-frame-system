@@ -886,7 +886,7 @@ describe('AT1-09 A to B journey composition', { timeout: 120_000 }, () => {
     if (receipt === undefined || receipt.type !== 'goal/change') throw new Error('completion receipt for goal B is missing')
     expect(receipt.data).toMatchObject({
       ref: { id: goalB.id, revision: goalB.revision + 2 },
-      evidence: [{ kind: 'completion-admission', summary: expect.stringContaining(goalB.id) }],
+      evidence: [{ kind: 'completion-admission', summary: expect.stringContaining(goalB.id) as string }],
     })
     const usageAfterComplete = devFrameStateOf(third.ctx, third.session).usage
     expect(usageAfterComplete).toEqual(usageBeforeComplete)

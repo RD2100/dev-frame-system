@@ -49,15 +49,15 @@ describe('AT2C-05 admission cutoff fail closed', () => {
       await ctx.plugin(AgentReliability)
       const service = ctx.agentReliability
 
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY1), ADMISSION_CLOSED)
+      expectAssertRejected(() =>{  service.assertAdmitted(IDENTITY1) }, ADMISSION_CLOSED)
 
       service.openAdmission(IDENTITY1)
       expect(service.admissionState).toBe('open')
-      expect(() => service.assertAdmitted(IDENTITY1)).not.toThrow()
+      expect(() =>{  service.assertAdmitted(IDENTITY1) }).not.toThrow()
 
       // Each mismatched half is its own probe, same stable code.
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY2), IDENTITY_MISMATCH)
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY2B), IDENTITY_MISMATCH)
+      expectAssertRejected(() =>{  service.assertAdmitted(IDENTITY2) }, IDENTITY_MISMATCH)
+      expectAssertRejected(() =>{  service.assertAdmitted(IDENTITY2B) }, IDENTITY_MISMATCH)
     } finally {
       await ctx.fiber.dispose()
     }
@@ -71,8 +71,8 @@ describe('AT2C-05 admission cutoff fail closed', () => {
       service.openAdmission(IDENTITY1)
 
       service.openAdmission(IDENTITY3)
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY1), IDENTITY_MISMATCH)
-      expect(() => service.assertAdmitted(IDENTITY3)).not.toThrow()
+      expectAssertRejected(() =>{  service.assertAdmitted(IDENTITY1) }, IDENTITY_MISMATCH)
+      expect(() =>{  service.assertAdmitted(IDENTITY3) }).not.toThrow()
 
       const result = await service.flushBarrier(async () => undefined)
       expect(result).toEqual({ flushed: true, admissionClosed: false, writerRetained: false, failure: undefined })
@@ -100,10 +100,10 @@ describe('AT2C-05 admission cutoff fail closed', () => {
       expect(service.admissionState).toBe('closed')
 
       // Fail-closed in fact, not just in report: dispatch is cut off...
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY3), ADMISSION_CLOSED)
+      expectAssertRejected(() =>{  service.assertAdmitted(IDENTITY3) }, ADMISSION_CLOSED)
       // ...and the only way back is the host's explicit reopen.
       service.openAdmission(IDENTITY3)
-      expect(() => service.assertAdmitted(IDENTITY3)).not.toThrow()
+      expect(() =>{  service.assertAdmitted(IDENTITY3) }).not.toThrow()
     } finally {
       await ctx.fiber.dispose()
     }

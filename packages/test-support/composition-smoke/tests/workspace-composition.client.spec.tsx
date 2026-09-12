@@ -76,7 +76,7 @@ describe('workspace composition smoke', () => {
     try {
       fireEvent.click(screen.getByRole('menuitem', { name: zh['menu.sessionId'], hidden: true }))
       // The complete id reaches the clipboard verbatim through the composed assembly.
-      await waitFor(() => expect(writeText).toHaveBeenCalledWith('session-alpha'))
+      await waitFor(() =>{  expect(writeText).toHaveBeenCalledWith('session-alpha') })
       expect(screen.queryByRole('dialog')).toBeNull()
       expect(runtime.sessions.calls.filter(call => call.method === 'open')).toHaveLength(0)
     } finally {

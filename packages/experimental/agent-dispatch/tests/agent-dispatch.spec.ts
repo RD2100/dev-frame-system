@@ -75,9 +75,9 @@ function git(cwd: string, ...args: string[]): Promise<string> {
   return new Promise((resolvePromise, rejectPromise) => {
     execFile('git', args, { cwd, windowsHide: true }, (error, stdout, stderr) => {
       if (error !== null) {
-        rejectPromise(new Error(`git ${args.join(' ')} failed: ${error.message} stderr=${String(stderr ?? '')}`))
+        rejectPromise(new Error(`git ${args.join(' ')} failed: ${error.message} stderr=${stderr ?? ''}`))
       } else {
-        resolvePromise(String(stdout))
+        resolvePromise(stdout)
       }
     })
   })
@@ -449,7 +449,7 @@ it('reuses the returned identity without re-delivering the prompt, guides blind 
   }
   expect(recoveryError).toBeInstanceOf(Error)
   expect(recoveryError).not.toBeInstanceOf(AgentDispatchError)
-  expect(String((recoveryError as Error).message)).toMatch(/requires session recovery/)
+  expect((recoveryError as Error).message).toMatch(/requires session recovery/)
 })
 
 it('routes reserved-identity recovery through the engine lane and passes corruption through unchanged', async () => {
@@ -755,7 +755,7 @@ it('wakes the parent again after a cold recovery remounts the settlement watch',
   } finally {
     resume.mockRestore()
   }
-  expect(recoveredAgent!.id).toBe('recover-wake-lead')
+  expect(recoveredAgent.id).toBe('recover-wake-lead')
   // A recovered-but-idle child owes no notice: the fresh controller session
   // starts empty and recovery replays no stale settlement.
   await new Promise(resolve => setTimeout(resolve, 300))

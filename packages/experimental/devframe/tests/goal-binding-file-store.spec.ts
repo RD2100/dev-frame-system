@@ -211,8 +211,7 @@ function validCurrentEntry(overrides: Record<string, unknown> = {}): Record<stri
 
 /** Drop one field from an otherwise valid binding entry. */
 function bindingEntryWithout(field: string): Record<string, unknown> {
-  const entry = validBindingEntry()
-  delete entry[field]
+  const { [field]: _omitted, ...entry } = validBindingEntry()
   return entry
 }
 

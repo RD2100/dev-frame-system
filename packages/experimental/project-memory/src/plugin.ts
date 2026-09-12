@@ -51,7 +51,7 @@ export const Config: z<Config> = z.object({
   userScopeEnabled: z.boolean().default(false),
   workspaceId: z.string().required(),
   currentSnapshot: z.string(),
-}) as unknown as z<Config>
+})
 
 declare module '@deepseek-ai/cordis' {
   interface Context {

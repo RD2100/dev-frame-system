@@ -119,7 +119,7 @@ describe('SubagentRuntime', () => {
 
     expect(provider.lastRequest).toEqual({
       ...request,
-      signal: expect.any(AbortSignal),
+      signal: expect.any(AbortSignal) as AbortSignal,
       descriptor: {
         version: SUBAGENT_DESCRIPTOR_VERSION,
         mode: 'one-shot',

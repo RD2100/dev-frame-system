@@ -71,7 +71,7 @@ export async function resolveCaller(
  * @param id - The model-supplied worktree id.
  * @returns the registered worktree when authorized.
  */
-export async function authorizedWorktree(
+export function authorizedWorktree(
   registry: WorktreeRegistry,
   workspaceId: WorkspaceId,
   id: WorktreeId,
@@ -80,7 +80,7 @@ export async function authorizedWorktree(
   if (worktree === undefined) {
     throw new Error(`worktree '${id}' is not registered for this workspace; list the workspace's worktrees to get a valid id`)
   }
-  return worktree
+  return Promise.resolve(worktree)
 }
 
 /** Windows directories are case-insensitive; fold case there only. */

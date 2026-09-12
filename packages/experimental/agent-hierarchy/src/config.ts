@@ -105,5 +105,5 @@ export function parseAgentHierarchyConfig(input: AgentHierarchyConfigInput | und
     const detail = result.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join('; ')
     throw new AgentHierarchyError(`invalid agent-hierarchy config: ${detail}`, 'HIERARCHY_INVALID_CONFIG')
   }
-  return result.data as AgentHierarchyConfig
+  return result.data
 }

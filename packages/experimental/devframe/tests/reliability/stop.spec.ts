@@ -13,10 +13,12 @@ import { stopProject, type StopObservation, type StopProjectOptions } from '../.
 function fixture() {
   const events: string[] = []
   const records: StopObservation[] = []
+  const cancel = vi.fn(() => { events.push('cancel') })
+  const whenIdle = vi.fn(async () => { events.push('idle') })
   const agent = {
     id: SessionId('stop-owner'),
-    cancel: vi.fn(() => { events.push('cancel') }),
-    whenIdle: vi.fn(async () => { events.push('idle') }),
+    cancel,
+    whenIdle,
   } as unknown as Agent
   const options: StopProjectOptions = {
     agents: [agent],
@@ -26,11 +28,11 @@ function fixture() {
     processes: () => [],
     graceMs: 1000,
     closeAdmission: vi.fn(() => { events.push('closed') }),
-    record: vi.fn((record) => { records.push(record); events.push(record.status) }),
+    record: vi.fn((record: StopObservation) => { records.push(record); events.push(record.status) }),
     flush: vi.fn(async () => { events.push('flushed') }),
     releaseWriter: vi.fn(() => { events.push('released') }),
   }
-  return { agent, options, events, records }
+  return { agent, cancel, whenIdle, options, events, records }
 }
 
 describe('project stop', () => {
@@ -72,13 +74,13 @@ describe('project stop', () => {
   it('keeps pending inbox work and releases only after quiescence and flush', async () => {
     const f = fixture()
     expect(await stopProject(f.options)).toEqual({ status: 'stopped', remaining: [] })
-    expect(f.agent.cancel).toHaveBeenCalledWith({ kind: 'user' }, { keepInbox: true })
+    expect(f.cancel).toHaveBeenCalledWith({ kind: 'user' }, { keepInbox: true })
     expect(f.events).toEqual(['closed', 'stop_requested', 'cancel', 'idle', 'quiescence_confirmed', 'flushed', 'released'])
   })
 
   it('retains ownership for an agent that ignores cancellation', async () => {
     const f = fixture()
-    vi.mocked(f.agent.whenIdle).mockReturnValue(new Promise(() => {}))
+    vi.mocked(f.whenIdle).mockReturnValue(new Promise(() => {}))
     const result = await stopProject({ ...f.options, graceMs: 20 })
     expect(result.status).toBe('needs_attention')
     expect(result.remaining).toContainEqual({ resource: 'agent:stop-owner', reason: 'timeout' })
@@ -151,7 +153,7 @@ describe('project stop', () => {
     const late = job('bash-2', f.agent.id)
     const unowned = job('bash-3')
     let drained = false
-    vi.mocked(f.agent.whenIdle).mockImplementation(async () => { drained = true })
+    vi.mocked(f.whenIdle).mockImplementation(async () => { drained = true })
     const kill = vi.fn<(id: ReturnType<typeof JobId>, agent: Agent, reason: string) => 'requested'>(() => 'requested')
     const result = await stopProject({ ...f.options, jobs: {
       list: () => drained ? [own, late, unowned] : [own, unowned],

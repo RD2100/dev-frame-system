@@ -17,11 +17,12 @@ export function createMemoryReceiptStore(entries?: readonly MemoryReceipt[]): Me
   const receipts = new Map<NoteId, MemoryReceipt>()
   for (const receipt of entries ?? []) receipts.set(brandString<NoteId>(receipt.noteId), receipt)
   return {
-    async read(noteId) {
-      return receipts.get(noteId)
+    read(noteId) {
+      return Promise.resolve(receipts.get(noteId))
     },
-    async write(receipt) {
+    write(receipt) {
       receipts.set(brandString<NoteId>(receipt.noteId), receipt)
+      return Promise.resolve()
     },
   }
 }

@@ -101,7 +101,7 @@ describe('controller Git integration', () => {
     // Deterministically scheduled closure: the microtask fires inside the
     // async preflight, so the refusal must come from the spawn-adjacent
     // recheck and the mutating merge must never run.
-    queueMicrotask(() => gate.abort(new Error('admission closed during preflight')))
+    queueMicrotask(() =>{  gate.abort(new Error('admission closed during preflight')) })
     await expect(executeIntegrationGit(request, options, gate.signal)).rejects.toThrow('admission closed during preflight')
     expect(await git(request.targetPath, 'rev-parse', 'HEAD')).toBe(request.targetHead)
     expect(await reconcileIntegrationGit(request, options)).toEqual({ kind: 'unchanged', head: request.targetHead })

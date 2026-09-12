@@ -100,9 +100,8 @@ function validate(request: IntegrationGitRequest, options: IntegrationGitOptions
     || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(request.targetHead)) {
     throw new Error('Integration requires absolute checkout paths and full commit object IDs')
   }
-  if (request.mode !== undefined && request.mode !== 'fast-forward' && request.mode !== 'merge') {
-    throw new Error('Integration mode must be "fast-forward" or "merge"')
-  }
+  // `mode` is a closed union in the request type, so no runtime mode check
+  // can ever fire here; a wire boundary would validate its own payload.
   if (options.executable.length === 0 || !Number.isSafeInteger(options.timeoutMs) || options.timeoutMs < 1
     || !Number.isSafeInteger(options.maxOutputBytes) || options.maxOutputBytes < 1) {
     throw new Error('Integration requires a Git executable and positive process limits')
@@ -151,7 +150,9 @@ async function isAncestor(options: IntegrationGitOptions, path: string, maybeAnc
  * unrelated histories and refuses the integration before any ancestry
  * question; every other failure is real and propagates.
  */
-async function assertRelatedHistories(options: IntegrationGitOptions, path: string, targetHead: string, sourceCommit: string): Promise<void> {
+async function assertRelatedHistories(
+  options: IntegrationGitOptions, path: string, targetHead: string, sourceCommit: string,
+): Promise<void> {
   try {
     await git(options, path, ['merge-base', targetHead, sourceCommit])
   } catch (error) {

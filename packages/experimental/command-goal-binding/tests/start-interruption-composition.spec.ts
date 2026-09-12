@@ -88,7 +88,7 @@ function flakyBindingStore(): GoalBindingStore & { readonly saveCount: () => num
   let saves = 0
   return {
     load: async controllerSessionId => inner.load(controllerSessionId),
-    save: async binding => {
+    save: async (binding) => {
       saves += 1
       if (saves === 1) throw new Error('injected persistence outage')
       await inner.save(binding)

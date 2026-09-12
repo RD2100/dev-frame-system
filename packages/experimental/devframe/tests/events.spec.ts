@@ -339,18 +339,18 @@ describe('DevFrame durable event vocabulary', () => {
 
   it('joins pending writes before exposing a durable checkpoint and invalidates it on another write', async () => {
     const current = session()
-    const entered = Promise.withResolvers<void>()
+    const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<boolean>()
     let calls = 0
     const writer = new DevFrameSessionJournal(async () => {
-      if (++calls === 1) { entered.resolve(); return release.promise }
+      if (++calls === 1) { entered.resolve(undefined); return release.promise }
       return true
     }, reviewGate())
     const reader = new DevFrameSessionJournal(async () => true, reviewGate())
     const append = writer.append(current, 'devframe/role-policy', rolePolicy())
     await entered.promise
     let checkpointReady = false
-    const checkpoint = reader.checkpoint(current).then(guard => { checkpointReady = true; return guard })
+    const checkpoint = reader.checkpoint(current).then((guard) => { checkpointReady = true; return guard })
     await Promise.resolve()
     expect(checkpointReady).toBe(false)
     release.resolve(true)
@@ -792,7 +792,7 @@ describe('task delivery evidence replay', () => {
     expect(state.reviews[0]?.binding).toEqual(output)
   })
   it.each(['missing-delivery', 'foreign-goal', 'foreign-controller', 'foreign-workspace', 'different-tasks', 'different-acceptance'] as const)(
-    'refuses merged whole-Goal evidence with %s', variant => {
+    'refuses merged whole-Goal evidence with %s', (variant) => {
       const { current, goal, delivery } = prepared()
       current.append('devframe/task-delivery', delivery)
       if (variant !== 'missing-delivery') current.append('devframe/task-delivery', {

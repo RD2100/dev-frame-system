@@ -45,7 +45,7 @@ function header(id: string, version: number = SESSION_FORMAT_VERSION): SessionHe
 
 /** Deep clone via the same lossless JSON the log itself must survive. */
 function jsonClone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value))
+  return JSON.parse(JSON.stringify(value)) as T
 }
 
 describe('AT4-08 compatibility binding', () => {

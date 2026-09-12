@@ -8,7 +8,6 @@
  * @module @deepseek-ai/dsh-experimental-agent-worktree/provider
  */
 
-import type { Context } from '@deepseek-ai/cordis'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { WorktreeLockError } from '@deepseek-ai/dsh-worktree-registry'
 import type { Worktree, WorktreeId, WorktreeLockHolder, WorktreeRegistry } from '@deepseek-ai/dsh-worktree-registry'
@@ -23,10 +22,6 @@ import type { AgentWorktreeCreateRequest, AgentWorktreeStatus, AgentWorktreeView
  */
 export class RegistryAgentWorktree extends AgentWorktree {
   static inject = ['worktreeRegistry']
-
-  constructor(ctx: Context) {
-    super(ctx)
-  }
 
   private get registry(): WorktreeRegistry {
     return this.ctx.worktreeRegistry

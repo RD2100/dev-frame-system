@@ -29,9 +29,9 @@ export function git(cwd: string, ...args: string[]): Promise<string> {
     execFile('git', args, { cwd, windowsHide: true }, (error, stdout, stderr) => {
       if (error !== null) {
         const code = typeof (error as NodeJS.ErrnoException).code === 'string' ? ` code=${(error as NodeJS.ErrnoException).code}` : ''
-        rejectPromise(new Error(`git ${args.join(' ')} failed${code}: ${error.message} stderr=${String(stderr ?? '')}`))
+        rejectPromise(new Error(`git ${args.join(' ')} failed${code}: ${error.message} stderr=${stderr ?? ''}`))
       } else {
-        resolvePromise(String(stdout))
+        resolvePromise(stdout)
       }
     })
   })

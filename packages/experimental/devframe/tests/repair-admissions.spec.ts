@@ -188,7 +188,7 @@ describe('durable correction admission', () => {
     expect(state.failure).toContain('admitted twice')
     const valid = foldDevFrameState(session.snapshotEvents(), session.header)
     const { repairAdmissions: _admissions, ...oldCheckpoint } = valid
-    expect(devFrameProjectionDefinition.stateVersion).toBe(3)
+    expect(devFrameProjectionDefinition.stateVersion).toBe(5)
     expect(devFrameProjectionDefinition.stateSchema.safeParse(oldCheckpoint).success).toBe(false)
     expect(devFrameProjectionDefinition.stateSchema.safeParse(valid).success).toBe(true)
   })

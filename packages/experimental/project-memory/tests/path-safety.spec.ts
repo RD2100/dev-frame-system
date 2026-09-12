@@ -25,9 +25,9 @@ describe('AT3-04: traversal, unauthorized namespaces, and escape probes', () => 
   })
 
   it('rejects unsafe workspace identities at spec resolution', () => {
-    for (const probe of ['../evil', 'a\\b', 'CON', 'ws:alpha', '.', '..', ' ws', 'ws ', `${'x'.repeat(129)}`]) {
+    for (const probe of ['../evil', 'a\\b', 'CON', 'ws:alpha', '.', '..', ' ws', 'ws ', 'x'.repeat(129)]) {
       expect(() => resolveMemorySpec({ vaultRoot: 'unused', workspaceId: probe }))
-        .toThrowError(expect.objectContaining({ code: 'MEMORY_INVALID_WORKSPACE_ID' }))
+        .toThrow(expect.objectContaining({ code: 'MEMORY_INVALID_WORKSPACE_ID' }))
     }
     expect(resolveMemorySpec({ vaultRoot: 'unused', workspaceId: 'ws.alpha-01' }).workspaceId).toBe('ws.alpha-01')
   })

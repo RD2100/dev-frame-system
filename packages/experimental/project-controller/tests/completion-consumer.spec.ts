@@ -19,6 +19,7 @@ import { FileRequiredChecksConfigStore, DevFrameDeliveryId, DevFrameVerification
 import { foldDevFrameState } from '@deepseek-ai/dsh-experimental-devframe/src/projection.ts'
 import { ControllerSessionId } from '@deepseek-ai/dsh-experimental-devframe/controller'
 import * as goalCommand from '@deepseek-ai/dsh-experimental-command-goal-binding'
+import type { GoalBindingComposition } from '@deepseek-ai/dsh-experimental-command-goal-binding'
 import * as consumer from '../src/completion-consumer.ts'
 import { prepareIntegration } from './integration-harness.ts'
 
@@ -90,7 +91,9 @@ async function setup(checkScript = "import { readFileSync } from 'node:fs'; impo
   expect(
     [...ctx.loader.entries()].filter(entry => entry.fiber === undefined && !entry.disabled).map(entry => entry.options.name),
   ).toEqual([])
-  const composition = ctx.get('commandGoalBinding')!
+  // The composition seam is deliberately unmerged from the Context service
+  // map, so the in-process test resolves it by name and asserts the class.
+  const composition = ctx.get('commandGoalBinding') as GoalBindingComposition
   const binding = await composition.startBinding(root, { objective: 'integrate reviewed feature',
     taskIds: f.binding.taskIds, acceptanceHash: f.binding.acceptanceHash, sourceFingerprint: f.binding.sourceFingerprint,
     snapshotId: f.binding.snapshotId, budget: { maxAttempts: 10 }, confirmationId: 'completion-test' })

@@ -113,11 +113,12 @@ export function foldMemoryReceipts(events: readonly SessionEvent[]): Map<NoteId,
  */
 export function createSessionLogReceiptStore(session: Session): MemoryReceiptStore {
   return {
-    async read(noteId: NoteId): Promise<MemoryReceipt | undefined> {
-      return foldMemoryReceipts(session.snapshotEvents()).get(noteId)
+    read(noteId: NoteId): Promise<MemoryReceipt | undefined> {
+      return Promise.resolve(foldMemoryReceipts(session.snapshotEvents()).get(noteId))
     },
-    async write(receipt: MemoryReceipt): Promise<void> {
+    write(receipt: MemoryReceipt): Promise<void> {
       appendMemoryReceipt(session, receipt)
+      return Promise.resolve()
     },
   }
 }

@@ -169,7 +169,7 @@ function corruptError(path: string, summary: string, cause?: unknown): GoalBindi
  *   bytes are not JSON, fail the ledger envelope or a record schema, or
  *   repeat a binding identity or workspace current.
  */
-async function parseLedger(raw: string, path: string): Promise<ValidatedLedger> {
+function parseLedger(raw: string, path: string): ValidatedLedger {
   let document: unknown
   try {
     document = JSON.parse(raw)
@@ -248,14 +248,14 @@ async function parseLedger(raw: string, path: string): Promise<ValidatedLedger> 
  * @throws {@link GoalBindingError} per {@link parseLedger}.
  */
 async function readLedger(path: string): Promise<ValidatedLedger | undefined> {
-  const raw = await readFile(path, 'utf8').catch((error: NodeJS.ErrnoException) => {
+  const raw = await readFile(path, 'utf8').catch((error: unknown) => {
     // ENOENT is absence (an empty ledger, not an error); every other fs
     // failure is a real IO error rethrown raw so its true cause reaches
     // the caller.
-    if (error.code !== 'ENOENT') throw error
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     return undefined
   })
-  return raw === undefined ? undefined : await parseLedger(raw, path)
+  return raw === undefined ? undefined : parseLedger(raw, path)
 }
 
 /**

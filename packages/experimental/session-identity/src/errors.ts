@@ -2,7 +2,8 @@
 
 /** Stable, machine-routable failure classifications for session identity. */
 export type SessionIdentityErrorCode =
-  /** A request was malformed: unknown role, incomplete worktree binding, a depth without a parent, or a session creation the store rejected. */
+  /** A request was malformed: unknown role, incomplete worktree binding, a depth without a parent,
+   * or a session creation the store rejected. */
   | 'SESSION_IDENTITY_INVALID_REQUEST'
   /** The requested parent session does not exist in the session store. */
   | 'SESSION_IDENTITY_PARENT_UNKNOWN'

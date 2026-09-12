@@ -100,7 +100,7 @@ export function apply(ctx: Context, config: Config): void {
       throw new Error('Whole-Goal evidence requires the controller worktree writer lock')
     }
     const integrations = ctx.projectController.integrationReceipts(session.id)
-    const receipts = goal.taskIds.map(id => {
+    const receipts = goal.taskIds.map((id) => {
       const task = ctx.projectController.find(TaskId(String(id)))
       const delivery = state.deliveries.findLast(item => item.taskId === id && item.binding.goalId === goal.goalId)
       const row = integrations.find(item => String(item.taskId) === String(id))
@@ -137,7 +137,12 @@ export function apply(ctx: Context, config: Config): void {
     // head whose ancestry was never checked.
     const head = await git('rev-parse', '--verify', 'HEAD')
     if (await git('status', '--porcelain=v1', '--untracked-files=all') !== '') throw new Error('Whole-Goal evidence requires a clean committed controller tree')
-    for (const row of receipts) await git('merge-base', '--is-ancestor', row.appliedHead!, head)
+    for (const row of receipts) {
+      // resolve() refuses a receipt whose applied head is missing, so the
+      // re-check here only turns the narrowed invariant loud for the reader.
+      if (row.appliedHead === undefined) throw new Error('Whole-Goal receipt is missing its applied head')
+      await git('merge-base', '--is-ancestor', row.appliedHead, head)
+    }
     const source = await computeSourceFingerprint({ worktreePath: path, gitCommand: config.gitExecutable,
       maxOutputBytes: config.gitMaxOutputBytes, timeoutMs: config.gitTimeoutMs, signal })
     if (source.headCommit !== head || await git('rev-parse', 'HEAD') !== head
@@ -191,7 +196,7 @@ export function apply(ctx: Context, config: Config): void {
             throw new Error('Whole-Goal checks must run in the controller worktree')
           }
         }
-        const evidence = new AgentEvidenceJournal({ flush, journal, reviewerDirectory, execution: async checks => {
+        const evidence = new AgentEvidenceJournal({ flush, journal, reviewerDirectory, execution: async (checks) => {
           if (JSON.stringify(checks) !== JSON.stringify(approved)) throw new Error('Approved whole-Goal checks changed')
           const results: DevFrameCheckResult[] = []
           for (const check of checks.checks) {
@@ -213,10 +218,12 @@ export function apply(ctx: Context, config: Config): void {
         const verification = await evidence.recordVerification({ session: initial.session,
           binding: { controllerSessionId: initial.goal.controllerSessionId, goalId: initial.goal.goalId,
             goalRevision: initial.goal.goalRevision, taskIds: initial.goal.taskIds, workspaceId: initial.goal.workspaceId,
-            acceptanceHash: initial.goal.acceptanceHash, sourceFingerprint: source.fingerprint, snapshotId: DevFrameSnapshotId(randomUUID()) },
+            acceptanceHash: initial.goal.acceptanceHash, sourceFingerprint: source.fingerprint,
+            snapshotId: DevFrameSnapshotId(randomUUID()) },
           requiredChecksDigest: digest, requiredChecksStore: store, appendOptions: { beforeAppend: guard, prepare: unchanged } })
         await unchanged()
-        return { verificationId: String(verification.verificationId), outcome: verification.status, sourcePath: initial.tree.path, sourceCommit: source.headCommit }
+        return { verificationId: String(verification.verificationId), outcome: verification.status,
+          sourcePath: initial.tree.path, sourceCommit: source.headCommit }
       })
     },
     presentCall: () => ({ card: 'generic', title: 'Verify whole Goal' }), presentResult: () => ({ card: 'generic' }),
@@ -238,10 +245,18 @@ export function apply(ctx: Context, config: Config): void {
       const owner = resolve(exec.agent, 'lead', exec.signal)
       return serial(owner.session.id, async () => {
         const initial = resolve(exec.agent, 'lead', exec.signal)
-        const verification = initial.state.verifications.findLast(item => item.deliveryId === undefined && item.binding.goalId === initial.goal.goalId)
-        if (verification === undefined || verification.verificationId !== args.verificationId || verification.requiredChecks.digest !== digest
-          || verification.binding.goalRevision !== initial.goal.goalRevision || verification.binding.acceptanceHash !== initial.goal.acceptanceHash
-          || (decision === 'pass' && verification.status !== 'passed')) throw new Error('Whole-Goal review requires the current matching verification')
+        // resolve(..., 'lead') refuses a state without a lead-assigned role
+        // policy, so the null check only makes that invariant loud.
+        if (initial.state.rolePolicy === null) throw new Error('Whole-Goal review requires the controller role policy')
+        const verification = initial.state.verifications.findLast(item =>
+          item.deliveryId === undefined && item.binding.goalId === initial.goal.goalId)
+        if (verification === undefined || verification.verificationId !== args.verificationId
+          || verification.requiredChecks.digest !== digest
+          || verification.binding.goalRevision !== initial.goal.goalRevision
+          || verification.binding.acceptanceHash !== initial.goal.acceptanceHash
+          || (decision === 'pass' && verification.status !== 'passed')) {
+          throw new Error('Whole-Goal review requires the current matching verification')
+        }
         const guard = () => {
           const current = resolve(exec.agent, 'lead', exec.signal)
           if (current.signature !== initial.signature || current.state.verifications.findLast(item =>
@@ -258,11 +273,12 @@ export function apply(ctx: Context, config: Config): void {
         const source = await unchanged()
         await new AgentEvidenceJournal({ flush, journal, reviewerDirectory }).recordReview({
           session: initial.session, binding: verification.binding, reviewerSessionId: initial.caller.sessionId,
-          policyVersion: initial.state.rolePolicy!.policyVersion, decision, findings,
+          policyVersion: initial.state.rolePolicy.policyVersion, decision, findings,
           appendOptions: { beforeAppend: guard, prepare: async () => { await unchanged() } },
         })
         await unchanged()
-        return { verificationId: String(verification.verificationId), outcome: decision, sourcePath: initial.tree.path, sourceCommit: source.headCommit }
+        return { verificationId: String(verification.verificationId), outcome: decision,
+          sourcePath: initial.tree.path, sourceCommit: source.headCommit }
       })
     },
     presentCall: () => ({ card: 'generic', title: 'Review whole Goal' }), presentResult: () => ({ card: 'generic' }),

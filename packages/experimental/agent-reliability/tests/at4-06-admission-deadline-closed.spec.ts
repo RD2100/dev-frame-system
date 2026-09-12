@@ -75,20 +75,20 @@ describe('AT4-06 admission deadline closed', () => {
       service.openAdmission(IDENTITY1, { deadline })
 
       vi.setSystemTime(deadline - 1)
-      expect(() => service.assertAdmitted(IDENTITY1)).not.toThrow()
+      expect(() =>{  service.assertAdmitted(IDENTITY1) }).not.toThrow()
 
       // The deadline instant itself is inclusive: already rejected.
       vi.setSystemTime(deadline)
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY1), DEADLINE_CLOSED)
+      expectAssertRejected(() =>{  service.assertAdmitted(IDENTITY1) }, DEADLINE_CLOSED)
 
       vi.setSystemTime(deadline + 5)
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY1), DEADLINE_CLOSED)
+      expectAssertRejected(() =>{  service.assertAdmitted(IDENTITY1) }, DEADLINE_CLOSED)
 
       // A generation whose deadline is already past opens fine ...
       service.openAdmission(IDENTITY2, { deadline: BASE - 1000 })
       expect(service.admissionState).toBe('open')
       // ... and its first pre-step call rejects DEADLINE_CLOSED.
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY2), DEADLINE_CLOSED)
+      expectAssertRejected(() =>{  service.assertAdmitted(IDENTITY2) }, DEADLINE_CLOSED)
     } finally {
       await ctx.fiber.dispose()
     }
@@ -102,18 +102,18 @@ describe('AT4-06 admission deadline closed', () => {
       const deadline = BASE + 1000
 
       // closed stays its own code before anything is opened.
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY1), ADMISSION_CLOSED)
+      expectAssertRejected(() =>{  service.assertAdmitted(IDENTITY1) }, ADMISSION_CLOSED)
 
       service.openAdmission(IDENTITY1, { deadline })
       vi.setSystemTime(deadline - 1)
       // Before the deadline the wrong identity is the visible failure ...
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY2), IDENTITY_MISMATCH)
+      expectAssertRejected(() =>{  service.assertAdmitted(IDENTITY2) }, IDENTITY_MISMATCH)
 
       vi.setSystemTime(deadline)
       // ... after it even that wrong identity reports the dead window:
       // the deadline check precedes the identity check.
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY2), DEADLINE_CLOSED)
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY1), DEADLINE_CLOSED)
+      expectAssertRejected(() =>{  service.assertAdmitted(IDENTITY2) }, DEADLINE_CLOSED)
+      expectAssertRejected(() =>{  service.assertAdmitted(IDENTITY1) }, DEADLINE_CLOSED)
     } finally {
       await ctx.fiber.dispose()
     }
@@ -126,13 +126,13 @@ describe('AT4-06 admission deadline closed', () => {
       const service = ctx.agentReliability
       service.openAdmission(IDENTITY1)
 
-      expectAssertRejected(() => service.openAdmission(IDENTITY2, { deadline: Number.NaN }), DEADLINE_INVALID)
-      expectAssertRejected(() => service.openAdmission(IDENTITY2, { deadline: Number.POSITIVE_INFINITY }), DEADLINE_INVALID)
+      expectAssertRejected(() =>{  service.openAdmission(IDENTITY2, { deadline: Number.NaN }) }, DEADLINE_INVALID)
+      expectAssertRejected(() =>{  service.openAdmission(IDENTITY2, { deadline: Number.POSITIVE_INFINITY }) }, DEADLINE_INVALID)
 
       // Validation precedes mutation: the current generation survives both
       // rejected opens unchanged.
-      expect(() => service.assertAdmitted(IDENTITY1)).not.toThrow()
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY2), IDENTITY_MISMATCH)
+      expect(() =>{  service.assertAdmitted(IDENTITY1) }).not.toThrow()
+      expectAssertRejected(() =>{  service.assertAdmitted(IDENTITY2) }, IDENTITY_MISMATCH)
       expect(service.admissionState).toBe('open')
       expect(service.admissionCutoff).toBeUndefined()
     } finally {
@@ -153,11 +153,11 @@ describe('AT4-06 admission deadline closed', () => {
       expect(service.admissionState).toBe('open')
       expect(service.admissionCutoff).toBe(deadline)
       // ... while the pre-step enforces the dead window.
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY1), DEADLINE_CLOSED)
+      expectAssertRejected(() =>{  service.assertAdmitted(IDENTITY1) }, DEADLINE_CLOSED)
 
       service.closeAdmission()
       expect(service.admissionState).toBe('closed')
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY1), ADMISSION_CLOSED)
+      expectAssertRejected(() =>{  service.assertAdmitted(IDENTITY1) }, ADMISSION_CLOSED)
     } finally {
       await ctx.fiber.dispose()
     }
@@ -170,14 +170,14 @@ describe('AT4-06 admission deadline closed', () => {
       const service = ctx.agentReliability
       service.openAdmission(IDENTITY1, { deadline: BASE + 1000 })
       vi.setSystemTime(BASE + 1000)
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY1), DEADLINE_CLOSED)
+      expectAssertRejected(() =>{  service.assertAdmitted(IDENTITY1) }, DEADLINE_CLOSED)
 
       // The reopen is a fresh generation: new identity, new cutoff.
       service.openAdmission(IDENTITY2, { deadline: Date.now() + 1000 })
-      expect(() => service.assertAdmitted(IDENTITY2)).not.toThrow()
+      expect(() =>{  service.assertAdmitted(IDENTITY2) }).not.toThrow()
       expect(service.admissionCutoff).toBe(BASE + 2000)
       // The old identity is now a plain mismatch of the new generation.
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY1), IDENTITY_MISMATCH)
+      expectAssertRejected(() =>{  service.assertAdmitted(IDENTITY1) }, IDENTITY_MISMATCH)
     } finally {
       await ctx.fiber.dispose()
     }
@@ -193,9 +193,9 @@ describe('AT4-06 admission deadline closed', () => {
 
       // Arbitrary clock advances never close an unbounded generation.
       vi.setSystemTime(BASE + 3_600_000)
-      expect(() => service.assertAdmitted(IDENTITY1)).not.toThrow()
+      expect(() =>{  service.assertAdmitted(IDENTITY1) }).not.toThrow()
       vi.setSystemTime(BASE + 86_400_000)
-      expect(() => service.assertAdmitted(IDENTITY1)).not.toThrow()
+      expect(() =>{  service.assertAdmitted(IDENTITY1) }).not.toThrow()
       expect(service.admissionCutoff).toBeUndefined()
     } finally {
       await ctx.fiber.dispose()
@@ -268,7 +268,7 @@ describe('AT4-06 admission deadline closed', () => {
       vi.setSystemTime(BASE + 1000)
       // A manually closed window reports closed, not the dead deadline.
       expect(service.admissionState).toBe('closed')
-      expectAssertRejected(() => service.assertAdmitted(IDENTITY1), ADMISSION_CLOSED)
+      expectAssertRejected(() =>{  service.assertAdmitted(IDENTITY1) }, ADMISSION_CLOSED)
     } finally {
       await ctx.fiber.dispose()
     }

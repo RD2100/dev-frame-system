@@ -186,10 +186,10 @@ describe('file-backed corrupt ledger boundary', () => {
   })
 
   it.each([
-    ['a missing registrations field', `{"version":1}`],
-    ['a future ledger version', `{"version":2,"registrations":[]}`],
-    ['an unknown top-level key', `{"version":1,"registrations":[],"extra":true}`],
-    ['a non-array registrations value', `{"version":1,"registrations":"none"}`],
+    ['a missing registrations field', '{"version":1}'],
+    ['a future ledger version', '{"version":2,"registrations":[]}'],
+    ['an unknown top-level key', '{"version":1,"registrations":[],"extra":true}'],
+    ['a non-array registrations value', '{"version":1,"registrations":"none"}'],
     ['a non-object root', '[]'],
     ['a string root', '"ledger"'],
     ['a registration missing its digest', `{"version":1,"registrations":[{"config":${CONFIG_JSON}}]}`],

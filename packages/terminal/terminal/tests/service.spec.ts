@@ -149,7 +149,7 @@ describe('TerminalOwnershipRegistry', () => {
       expect(b.sessions).toEqual([])
       expect(stale).toThrow('directory changed')
       const commit = ctx.terminalOwnership.prepareReopenOwners([owner])
-      expect(() => { ctx.terminalOwnership.assertAdmission(owner) }).toThrowError(expect.objectContaining({ code: 'OWNER_NOT_LIVE', message: 'PTY owner admission is closed' }))
+      expect(() => { ctx.terminalOwnership.assertAdmission(owner) }).toThrow(expect.objectContaining({ code: 'OWNER_NOT_LIVE', message: 'PTY owner admission is closed' }))
       commit()
       await ctx.terminals.spawn(owner, { type: 'stub' })
       expect(ctx.terminalOwnership.hasOwnerActivity(owner)).toBe(true)
@@ -193,7 +193,7 @@ describe('TerminalOwnershipRegistry', () => {
       const commit = ctx.terminalOwnership.prepareReopenOwners([owner])
       await ctx.terminalOwnership.drainOwned(owner)
       expect(commit).toThrow('drain changed')
-      expect(() => { ctx.terminalOwnership.assertAdmission(owner) }).toThrowError(expect.objectContaining({ code: 'OWNER_NOT_LIVE', message: 'PTY owner admission is closed' }))
+      expect(() => { ctx.terminalOwnership.assertAdmission(owner) }).toThrow(expect.objectContaining({ code: 'OWNER_NOT_LIVE', message: 'PTY owner admission is closed' }))
     } finally { await ctx.fiber.dispose() }
   })
 
@@ -230,7 +230,7 @@ describe('TerminalOwnershipRegistry', () => {
       const commit = ctx.terminalOwnership.prepareReopenOwners([root, child])
       await ctx.terminalOwnership.drainOwned(child)
       expect(commit).toThrow('drain changed')
-      for (const owner of [root, child]) expect(() => { ctx.terminalOwnership.assertAdmission(owner) }).toThrowError(expect.objectContaining({ code: 'OWNER_NOT_LIVE', message: 'PTY owner admission is closed' }))
+      for (const owner of [root, child]) expect(() => { ctx.terminalOwnership.assertAdmission(owner) }).toThrow(expect.objectContaining({ code: 'OWNER_NOT_LIVE', message: 'PTY owner admission is closed' }))
       ctx.terminalOwnership.prepareReopenOwners([root, child])()
       for (const owner of [root, child]) expect(() => { ctx.terminalOwnership.assertAdmission(owner) }).not.toThrow()
     } finally { await ctx.fiber.dispose() }

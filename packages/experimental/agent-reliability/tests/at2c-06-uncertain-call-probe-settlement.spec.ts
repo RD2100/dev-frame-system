@@ -31,7 +31,7 @@ describe('AT2C-06 uncertain call probe settlement', () => {
         operation,
         probe: async (): Promise<ReconciliationProbe> => {
           order.push('probe')
-          return { status: probeStatus } as ReconciliationProbe
+          return { status: probeStatus }
         },
         ...withRetry ? {
           retry: async (): Promise<string> => {

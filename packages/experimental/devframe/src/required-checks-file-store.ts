@@ -77,7 +77,7 @@ interface ValidatedLedger {
  *   fails its schema, and with `REQUIRED_CHECKS_STORE_CORRUPT` when a
  *   registration's digest disagrees with its configuration's canonical digest.
  */
-async function parseLedger(raw: string, path: string): Promise<ValidatedLedger> {
+function parseLedger(raw: string, path: string): ValidatedLedger {
   let document: unknown
   try {
     document = JSON.parse(raw)

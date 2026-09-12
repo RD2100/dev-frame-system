@@ -67,6 +67,8 @@ SDK 预置 lead/worker 会话（scaffold 身份、进程内脚本回合）仍是
 
 单一 vitest 运行——从启动到重启——exit 0 即设计被接受实施：全部 patch 行挂载；两 Worker 重叠窗由日志时间戳满足；两条 verification 事件携带真实已执行 check 结果；lead 审查获授权并入折叠；两任务经 marker 消费达 `integrated`；重启后折叠在持久事实上逐字节同一；每个具名拒绝以稳定码断言；降级 ack 探针钉死。真实 provider 轮另行 exit 0，其实际响应层按工作清单三层格式记录。运行全程不预制造任何终态，措辞永不宣称默认 3080 激活。
 
+候选组合必须通过正式 host 构造入口复用已有 approved-checks store、完成所有权守卫、集成回执与真实停止适配器。冷 Loader 必须在模型回合前注册公开命令；命令 RPC 通过 Agent wire resolver 恢复原 Controller。重启用例检查冷 stop 不计费模型请求，公开 resume 放行一次原生 goal-round 请求，无需额外用户 prompt，也不重复绑定。此回放证据不代表真实 provider 已完成闭环。
+
 ## Risks
 
 - **新夹具面**：wire 级回放服务器尚不存在（web 车道为进程内回放）；这是唯一真正的新建件，其协议覆盖须匹配真实 provider 流式形状——由授权真实轮交叉核对兜底。

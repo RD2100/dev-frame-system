@@ -46,7 +46,7 @@ export function selectGoalCompletionIntegration(request: GoalCompletionIntegrati
   const { state, goalId, boundTaskIds, integrations } = request
   if (state.failure !== null) throw new Error('Goal completion selection requires an intact evidence projection')
   let targetPath: string | undefined
-  const tasks = boundTaskIds.map(id => {
+  const tasks = boundTaskIds.map((id) => {
     const row = integrations.find(candidate => candidate.controllerSessionId === state.controllerSessionId
       && String(candidate.taskId) === String(id))
     if (row === undefined || row.state !== 'applied' || row.appliedHead === undefined) {
@@ -72,7 +72,7 @@ export function selectGoalCompletionIntegration(request: GoalCompletionIntegrati
   if (review === undefined) {
     throw new Error('Goal completion requires the whole-Goal review of the final merged result')
   }
-  const workerSessionIds = boundTaskIds.map(id => {
+  const workerSessionIds = boundTaskIds.map((id) => {
     const delivery = state.deliveries
       .findLast(record => record.binding.goalId === goalId && String(record.taskId) === String(id))
     if (delivery === undefined) {

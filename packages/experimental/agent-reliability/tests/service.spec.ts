@@ -21,7 +21,7 @@ describe('admission cutoff', () => {
     const { service, dispose } = await reliabilityHarness()
     try {
       expect(service.admissionState).toBe('closed')
-      expect(() => service.assertAdmitted(IDENTITY)).toThrow(AgentReliabilityError)
+      expect(() =>{  service.assertAdmitted(IDENTITY) }).toThrow(AgentReliabilityError)
     } finally {
       await dispose()
     }
@@ -32,11 +32,11 @@ describe('admission cutoff', () => {
     try {
       service.openAdmission(IDENTITY)
       expect(service.admissionState).toBe('open')
-      expect(() => service.assertAdmitted(IDENTITY)).not.toThrow()
-      expect(() => service.assertAdmitted({ controllerSessionId: ControllerSessionId('session-ctrl'), goalId: GoalId('goal-2') }))
-        .toThrowError(/does not match the admitted identity/)
-      expect(() => service.assertAdmitted({ controllerSessionId: ControllerSessionId('session-other'), goalId: GoalId('goal-1') }))
-        .toThrowError(/does not match the admitted identity/)
+      expect(() =>{  service.assertAdmitted(IDENTITY) }).not.toThrow()
+      expect(() =>{  service.assertAdmitted({ controllerSessionId: ControllerSessionId('session-ctrl'), goalId: GoalId('goal-2') }) })
+        .toThrow(/does not match the admitted identity/)
+      expect(() =>{  service.assertAdmitted({ controllerSessionId: ControllerSessionId('session-other'), goalId: GoalId('goal-1') }) })
+        .toThrow(/does not match the admitted identity/)
     } finally {
       await dispose()
     }
@@ -48,10 +48,10 @@ describe('admission cutoff', () => {
       service.openAdmission(IDENTITY)
       const next = { controllerSessionId: ControllerSessionId('session-ctrl'), goalId: GoalId('goal-2') }
       service.openAdmission(next)
-      expect(() => service.assertAdmitted(next)).not.toThrow()
-      expect(() => service.assertAdmitted(IDENTITY)).toThrow(AgentReliabilityError)
+      expect(() =>{  service.assertAdmitted(next) }).not.toThrow()
+      expect(() =>{  service.assertAdmitted(IDENTITY) }).toThrow(AgentReliabilityError)
       service.closeAdmission()
-      expect(() => service.assertAdmitted(next)).toThrowError(/admission is closed/)
+      expect(() =>{  service.assertAdmitted(next) }).toThrow(/admission is closed/)
     } finally {
       await dispose()
     }
@@ -142,7 +142,7 @@ describe('flush barrier', () => {
       expect(result.writerRetained).toBe(true)
       expect(result.failure).toBe(boom)
       // The cutoff wiring holds after a failed flush: no further dispatch passes.
-      expect(() => service.assertAdmitted(IDENTITY)).toThrowError(/admission is closed/)
+      expect(() =>{  service.assertAdmitted(IDENTITY) }).toThrow(/admission is closed/)
     } finally {
       await dispose()
     }

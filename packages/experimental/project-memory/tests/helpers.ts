@@ -52,7 +52,7 @@ export async function makeHarness(options: HarnessOptions = {}): Promise<Harness
   const backing = createMemoryReceiptStore()
   const receipts: MemoryReceiptStore = {
     read: noteId => backing.read(noteId),
-    write: async receipt => {
+    write: async (receipt) => {
       committed.push(receipt)
       await backing.write(receipt)
     },

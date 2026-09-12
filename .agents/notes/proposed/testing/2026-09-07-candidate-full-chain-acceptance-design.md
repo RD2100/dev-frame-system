@@ -67,6 +67,8 @@ SDK-preset lead/worker sessions (scaffolded identities, scripted turns mounted i
 
 The design is accepted for implementation when a single vitest run — boot to restart — exits 0 with: all patch rows mounted; the two-Worker overlap window satisfied from log timestamps; both verification events carrying real executed-check results; the lead review authorized and folded; both tasks `integrated` after marker consumption; the post-restart fold byte-identical on durable facts; every named denial asserted with its stable code; and the degraded-ack probe pinned. The real-provider round separately exits 0 and its actual-response layer is recorded in the worklist's three-layer format. Nothing in the run pre-mints a terminal state, and the run's own wording never claims default-3080 activation.
 
+The candidate composition must use the formal host constructor with the existing approved-checks store, completion ownership guard, integration receipts, and real stop adapters. A cold Loader must register the public commands before a model turn; command RPC restores the original Controller through its Agent wire resolver. The restart case checks that cold stop charges no model request and that public resume admits one native goal-round request without an additional user prompt or repeated binding. This replay evidence does not establish real-provider completion.
+
 ## Risks
 
 - **New fixture surface**: the wire-level replay server does not exist yet (the web lane replays in-process); it is the one genuinely new piece, and its protocol coverage must match the real provider's streaming shape — bounded by the authorized real round's cross-check.

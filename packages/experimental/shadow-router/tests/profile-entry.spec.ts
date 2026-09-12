@@ -49,8 +49,8 @@ describe('shadow-router profile-config entry', () => {
     try {
       // A worker created before the declared session stays toolless: the
       // entry opens exactly one scope, the declared one.
-      const worker = await ctx.agentLoop.create(SessionId('session-worker'), { provider: 'mock', model: 'mock' })
-      const declared = await ctx.agentLoop.create(SessionId('session-declared'), { provider: 'mock', model: 'mock' })
+      const worker = ctx.agentLoop.create(SessionId('session-worker'), { provider: 'mock', model: 'mock' })
+      const declared = ctx.agentLoop.create(SessionId('session-declared'), { provider: 'mock', model: 'mock' })
       const workerStatus = await dispatch(ctx, worker, 'project_status', {})
       expect(workerStatus.isError).toBe(true)
       expect(failureText(workerStatus)).toContain('unknown tool "project_status"')
@@ -73,7 +73,7 @@ describe('shadow-router profile-config entry', () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-entry-closed-'))
     const ctx = await mount(root, {})
     try {
-      const agent = await ctx.agentLoop.create(SessionId('session-anyone'), { provider: 'mock', model: 'mock' })
+      const agent = ctx.agentLoop.create(SessionId('session-anyone'), { provider: 'mock', model: 'mock' })
       const status = await dispatch(ctx, agent, 'project_status', {})
       expect(status.isError).toBe(true)
       expect(failureText(status)).toContain('unknown tool "project_status"')
@@ -95,7 +95,7 @@ describe('shadow-router profile-config entry', () => {
         // The full dependency mount is required: on a bare context the
         // router's injected services never arrive, the fiber stays PENDING,
         // and no validation runs at all.
-        await expect(mount(root, { authorizedRoots })).rejects.toThrowError(message)
+        await expect(mount(root, { authorizedRoots })).rejects.toThrow(message)
       }
     } finally {
       await rm(root, { recursive: true, force: true })

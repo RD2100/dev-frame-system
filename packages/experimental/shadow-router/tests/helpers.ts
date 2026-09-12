@@ -83,7 +83,7 @@ export async function harness(root?: string, routerConfig: ShadowRouterConfig = 
     await ctx.plugin(AgentBindingRegistry)
     await ctx.plugin(ShadowRouter, routerConfig)
     ctx.llm.registerAdapter(['mock'], new MockAdapter([]))
-    shadow = await ctx.agentLoop.create(SessionId('session-shadow'), { provider: 'mock', model: 'mock' })
+    shadow = ctx.agentLoop.create(SessionId('session-shadow'), { provider: 'mock', model: 'mock' })
   } catch (error) {
     await ctx.fiber.dispose()
     await rm(resolved, { recursive: true, force: true })
@@ -91,7 +91,7 @@ export async function harness(root?: string, routerConfig: ShadowRouterConfig = 
   }
   const router = ctx.shadowRouter
   router.markShadow(shadow)
-  const worker = await ctx.agentLoop.create(SessionId('session-worker'), { provider: 'mock', model: 'mock' })
+  const worker = ctx.agentLoop.create(SessionId('session-worker'), { provider: 'mock', model: 'mock' })
   return {
     ctx,
     root: resolved,
@@ -203,12 +203,19 @@ export function resultText(result: { readonly content?: readonly { readonly type
 }
 
 /** The rejection text of one failed dispatch: the typed failure message, or the rendered blocks. */
-export function failureText(result: { readonly isError: boolean; readonly error?: { readonly message?: string }; readonly content?: readonly { readonly type: string; readonly text?: string }[] }): string {
+export function failureText(result: {
+  readonly isError: boolean
+  readonly error?: { readonly message?: string }
+  readonly content?: readonly { readonly type: string; readonly text?: string }[]
+}): string {
   return result.isError ? (result.error?.message ?? resultText(result)) : ''
 }
 
 /** The structured HarnessError code a failed dispatch carried, when any. */
-export function failureCode(result: { readonly isError: boolean; readonly error?: { readonly info?: { readonly code?: string } } }): string | undefined {
+export function failureCode(result: {
+  readonly isError: boolean
+  readonly error?: { readonly info?: { readonly code?: string } }
+}): string | undefined {
   return result.isError ? result.error?.info?.code : undefined
 }
 

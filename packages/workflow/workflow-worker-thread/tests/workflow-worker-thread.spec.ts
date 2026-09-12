@@ -1171,7 +1171,7 @@ describe('dsh-workflow-worker-thread', { timeout: 120_000 }, () => {
       // wait would not prove the ordering, only that the thread died later.
       let exited = false
       let exitCode: number | undefined
-      worker.once('exit', code => { exited = true; exitCode = code })
+      worker.once('exit', (code) => { exited = true; exitCode = code })
       await expect(handle.result).resolves.toMatchObject({ value: 42, stopReason: 'completed' })
       await handle.dispose()
       expect(exited).toBe(true)
@@ -1203,7 +1203,7 @@ describe('dsh-workflow-worker-thread', { timeout: 120_000 }, () => {
       const worker = (handle as unknown as { worker: Worker }).worker
       const exit = Promise.withResolvers<number>()
       let exitAt = 0
-      worker.once('exit', code => { exitAt = Date.now(); exit.resolve(code) })
+      worker.once('exit', (code) => { exitAt = Date.now(); exit.resolve(code) })
       await waitFor(() => { expect(provider.runs).toHaveLength(1) })
       const cancelAt = Date.now()
       handle.cancel('force termination')
@@ -1217,7 +1217,7 @@ describe('dsh-workflow-worker-thread', { timeout: 120_000 }, () => {
       const exitCode = await Promise.race([
         exit.promise,
         new Promise<never>((_, reject) => setTimeout(
-          () => reject(new Error(`worker exit not observed within ${GRACE + 2_000}ms of cancel()`)), GRACE + 2_000,
+          () =>{  reject(new Error(`worker exit not observed within ${GRACE + 2_000}ms of cancel()`)) }, GRACE + 2_000,
         ).unref()),
       ])
       expect(exitCode).toBe(1)

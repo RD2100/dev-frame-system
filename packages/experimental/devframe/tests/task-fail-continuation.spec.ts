@@ -53,8 +53,8 @@ async function boot(options: {
   goals?: Map<Agent, FakeGoal>
   refuse?: boolean
 } = {}): Promise<{ ctx: Context; session: Session; agent: Agent; disarmed: Agent[] }> {
-  const agentMap = options.agents ?? new Map()
-  const goalMap = options.goals ?? new Map()
+  const agentMap = options.agents ?? new Map<string, Agent>()
+  const goalMap = options.goals ?? new Map<Agent, FakeGoal>()
   const { service, disarmed } = stubGoals(goalMap, options.refuse ?? false)
   const ctx = new Context()
   CONTEXTS.push(ctx)
@@ -132,7 +132,7 @@ describe('task-fail continuation consumption', () => {
       refuse: true,
     })
 
-    expect(() => appendWarning(session, 'fail')).not.toThrow()
+    expect(() =>{  appendWarning(session, 'fail') }).not.toThrow()
     expect(disarmed).toEqual([])
     expect(session.snapshotEvents().some(event =>
       event.type === 'devframe/task-warning' && event.data.grade === 'fail')).toBe(true)

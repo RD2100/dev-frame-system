@@ -16,7 +16,7 @@ it('harvests whole-Goal tools without opening the checks ledger or executing pro
     const schemas = ctx.tools.schemas()
     expect(schemas.map(schema => schema.name)).toEqual(['project_goal_verify', 'project_goal_review'])
     expect(schemas[1]?.parameters.required).toEqual(['verificationId', 'decision', 'findings'])
-    expect(() => assertToolsHarvested(PROJECT_GOAL_EVIDENCE_TOOL_PACKAGE, 0)).toThrow('booted without registering a single tool')
+    expect(() =>{  assertToolsHarvested(PROJECT_GOAL_EVIDENCE_TOOL_PACKAGE, 0) }).toThrow('booted without registering a single tool')
   } finally { await ctx.fiber.dispose() }
 })
 

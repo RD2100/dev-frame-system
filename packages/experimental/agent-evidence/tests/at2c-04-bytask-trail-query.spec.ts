@@ -136,7 +136,10 @@ describe('AT2C-04 byTask trail query', () => {
       expect(h.ctx.agentEvidence.byTask(T1).bindings).toHaveLength(2)
       expect(h.ctx.agentEvidence.byTask(T2).submissions).toHaveLength(1)
       expect(h.ctx.agentEvidence.bindingsByGoal(CONTROLLER1, GOAL1)).toHaveLength(3)
-      const all = [...h.ctx.agentEvidence.byTask(T1).bindings, ...h.ctx.agentEvidence.byTask(T2).bindings, ...h.ctx.agentEvidence.byTask(T3).bindings]
+      const all = [
+        ...h.ctx.agentEvidence.byTask(T1).bindings, ...h.ctx.agentEvidence.byTask(T2).bindings,
+        ...h.ctx.agentEvidence.byTask(T3).bindings,
+      ]
       expect(all).toHaveLength(4)
       expect([
         ...h.ctx.agentEvidence.byTask(T1).submissions, ...h.ctx.agentEvidence.byTask(T2).submissions,

@@ -22,15 +22,18 @@ import { harness, type Harness } from './helpers.ts'
 import type { MainTreeMergeRequest } from '../src/controller.ts'
 
 const exec = promisify(execFile)
+
+/** One secrets-scrubbed bounded Git invocation shared by both integration preparations. */
+const git = async (cwd: string, ...args: string[]) => (await exec('git', ['-C', cwd, ...args], {
+  windowsHide: true, timeout: 15_000, maxBuffer: 1024 * 1024,
+  env: Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+    !/KEY|SECRET|TOKEN|PASSWORD/i.test(key) && !/^GIT_/i.test(key))),
+})).stdout.trim()
+
 /** Prepare one independent submitted task with persisted passing evidence; the caller disposes h. */
 export async function prepareIntegration(existing?: Harness) {
   const h = existing ?? await harness()
   try {
-    const git = async (cwd: string, ...args: string[]) => (await exec('git', ['-C', cwd, ...args], {
-      windowsHide: true, timeout: 15_000, maxBuffer: 1024 * 1024,
-      env: Object.fromEntries(Object.entries(process.env).filter(([key]) =>
-        !/KEY|SECRET|TOKEN|PASSWORD/i.test(key) && !/^GIT_/i.test(key))),
-    })).stdout.trim()
     const anchor = join(h.root, 'anchor')
     const targetPath = join(h.root, 'target')
     const sourcePath = join(h.root, 'source')
@@ -218,11 +221,6 @@ export async function mountIntegrationRegistries(h: Harness): Promise<void> {
 export async function prepareParallelIntegration() {
   const h = await harness()
   try {
-    const git = async (cwd: string, ...args: string[]) => (await exec('git', ['-C', cwd, ...args], {
-      windowsHide: true, timeout: 15_000, maxBuffer: 1024 * 1024,
-      env: Object.fromEntries(Object.entries(process.env).filter(([key]) =>
-        !/KEY|SECRET|TOKEN|PASSWORD/i.test(key) && !/^GIT_/i.test(key))),
-    })).stdout.trim()
     const anchor = join(h.root, 'anchor')
     const targetPath = join(h.root, 'target')
     const sourceA = join(h.root, 'source-a')

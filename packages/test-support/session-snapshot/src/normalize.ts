@@ -410,7 +410,7 @@ export function normalizeSessionLog(
       if (data.operation === 'receipt') {
         if ('recordedAt' in data) data.recordedAt = 0
         if (Array.isArray(data.evidence)) {
-          for (const evidence of data.evidence) {
+          for (const evidence of data.evidence as unknown[]) {
             if (evidence !== null && typeof evidence === 'object' && 'at' in evidence) evidence.at = 0
           }
         }
@@ -419,7 +419,7 @@ export function normalizeSessionLog(
     if (record.type === 'devframe/verification' && record.data !== null && typeof record.data === 'object') {
       const data = record.data as Record<string, unknown>
       if (Array.isArray(data.checks)) {
-        for (const check of data.checks) {
+        for (const check of data.checks as unknown[]) {
           if (check !== null && typeof check === 'object' && 'durationMs' in check) check.durationMs = 0
         }
       }

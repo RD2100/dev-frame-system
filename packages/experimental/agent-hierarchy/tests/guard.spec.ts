@@ -187,7 +187,7 @@ describe('agent-hierarchy guard (real dispatcher)', () => {
       for (const requestedRole of ['controller', 'worker'] as const) {
         expect(h.ctx.agentHierarchy.evaluateCreation(controllerRecord, {
           parentSessionId: controller.id, requestedRole,
-        })).toMatchObject({ allowed: false, reason: expect.stringContaining('may only create leads') })
+        })).toMatchObject({ allowed: false, reason: expect.stringContaining('may only create leads') as string })
       }
       expect(h.ctx.agentHierarchy.evaluateCreation(controllerRecord, {
         parentSessionId: controller.id, requestedRole: 'lead',
@@ -197,16 +197,16 @@ describe('agent-hierarchy guard (real dispatcher)', () => {
       })).toMatchObject({ allowed: true })
       expect(h.ctx.agentHierarchy.evaluateCreation(leadRecord, {
         parentSessionId: lead.id, requestedRole: 'worker', pluginScope: PluginId('plugin-z'),
-      })).toMatchObject({ allowed: false, reason: expect.stringContaining('not in the approved set') })
+      })).toMatchObject({ allowed: false, reason: expect.stringContaining('not in the approved set') as string })
       expect(h.ctx.agentHierarchy.evaluateCreation(leadRecord, {
         parentSessionId: lead.id, requestedRole: 'lead', pluginScope: PluginId('plugin-a'),
-      })).toMatchObject({ allowed: false, reason: expect.stringContaining('may only create workers') })
+      })).toMatchObject({ allowed: false, reason: expect.stringContaining('may only create workers') as string })
       expect(h.ctx.agentHierarchy.evaluateCreation(leadRecord, {
         parentSessionId: lead.id, requestedRole: 'worker',
-      })).toMatchObject({ allowed: false, reason: expect.stringContaining('carries no pluginScope') })
+      })).toMatchObject({ allowed: false, reason: expect.stringContaining('carries no pluginScope') as string })
       expect(h.ctx.agentHierarchy.evaluateCreation(workerRecord, {
         parentSessionId: worker.id, requestedRole: 'worker',
-      })).toMatchObject({ allowed: false, reason: expect.stringContaining('cannot create agents') })
+      })).toMatchObject({ allowed: false, reason: expect.stringContaining('cannot create agents') as string })
     } finally {
       await h.dispose()
     }

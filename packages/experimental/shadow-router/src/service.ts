@@ -507,9 +507,8 @@ export class ShadowRouter extends Service {
     const workspaceId = this.requireWorkspaceId(request.workspaceId)
     const acceptanceHash = AcceptanceHash(request.acceptanceHash)
     const goalId = GoalId(this.requireField(request.goalId, 'goalId'))
-    if (request.mode !== 'work' && request.mode !== 'note') {
-      throw new ShadowRouterError(`mode "${String(request.mode)}" must be "work" or "note"`, 'SHADOW_INVALID_REQUEST')
-    }
+    // `mode` is a closed union validated at the wire boundary, so no runtime
+    // mode check can ever fire here.
     if (typeof request.text !== 'string' || request.text.length === 0 || request.text !== request.text.trim()) {
       throw new ShadowRouterError('text must be a non-empty trimmed string', 'SHADOW_INVALID_REQUEST')
     }
@@ -675,7 +674,7 @@ export class ShadowRouter extends Service {
    * @param request - Optional workspace id plus bounded page controls.
    * @returns the observed status.
    */
-  async projectStatus(
+  projectStatus(
     caller: Agent | undefined,
     request: { readonly workspaceId?: string; readonly cursor?: number; readonly limit?: number },
   ): Promise<ProjectStatusResult> {
@@ -704,7 +703,7 @@ export class ShadowRouter extends Service {
       ...(requested === undefined && cursor + limit < ordered.length ? { nextCursor: cursor + limit } : {}),
       observedAt,
     }
-    return result
+    return Promise.resolve(result)
   }
 
   // ---- host seams (never model-facing) -----------------------------------

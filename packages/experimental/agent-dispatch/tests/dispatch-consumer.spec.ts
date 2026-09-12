@@ -41,9 +41,9 @@ function git(cwd: string, ...args: string[]): Promise<string> {
   return new Promise((resolvePromise, rejectPromise) => {
     execFile('git', args, { cwd, windowsHide: true }, (error, stdout, stderr) => {
       if (error !== null) {
-        rejectPromise(new Error(`git ${args.join(' ')} failed: ${error.message} stderr=${String(stderr ?? '')}`))
+        rejectPromise(new Error(`git ${args.join(' ')} failed: ${error.message} stderr=${stderr ?? ''}`))
       } else {
-        resolvePromise(String(stdout))
+        resolvePromise(stdout)
       }
     })
   })

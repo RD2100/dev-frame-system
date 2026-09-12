@@ -1372,7 +1372,8 @@ describe('candidate full-chain: real CLI boot, rows, and restart on an isolated 
       expect(toolResultById('controller-chain-c14', 'dispatch-goal-review')).toContain('Followup delivered')
       const completionReceipt = toolResultById('controller-chain-c14', 'complete-goal')
       expect(completionReceipt).toBeDefined()
-      expect(JSON.parse(completionReceipt!).goal.phase).toBe('complete')
+      const completion = JSON.parse(completionReceipt!) as { goal: { phase: string } }
+      expect(completion.goal.phase).toBe('complete')
       expect(toolResultById('lead-briefing-c14', 'review-task-a')).toBe('Task task-a: submitted; pass.')
       expect(toolResultById('lead-briefing-c14', 'review-task-b')).toBe('Task task-b: submitted; pass.')
       // The lead session ends with the whole-Goal review tool call: the

@@ -77,10 +77,11 @@ describe('AT3-08: invalid and secret-bearing content, bounded retries', () => {
           body,
         }))
         await expect(attempt).rejects.toMatchObject({ code: 'MEMORY_CONTENT_REJECTED' })
-        await attempt.catch((error: Error) => {
-          expect(error.message).toContain(rule)
-          expect(error.message.includes(secret)).toBe(false)
-          expect(error.message.includes(body)).toBe(false)
+        await attempt.catch((error: unknown) => {
+          const message = (error as Error).message
+          expect(message).toContain(rule)
+          expect(message.includes(secret)).toBe(false)
+          expect(message.includes(body)).toBe(false)
         })
       }
       expect(h.committedReceipts).toHaveLength(0)

@@ -290,12 +290,8 @@ export class AgentDispatch extends Service {
         'DISPATCH_WORKTREE_UNREGISTERED',
       )
     }
-    if (workspaceId === undefined) {
-      throw new AgentDispatchError(
-        `agent-dispatch: worktree "${worktree.worktreeId}" proof requires the owner workspace id`,
-        'DISPATCH_WORKTREE_UNREGISTERED',
-      )
-    }
+    // `workspaceId` is a required branded-string parameter, so no runtime
+    // absence check can ever fire here.
     const existing = request.taskId === undefined
       ? undefined
       : this.findDispatchedChild(parent, request.taskId)

@@ -96,8 +96,8 @@ export function settlementNotice(
   turnIdentity: string,
 ): UserMessage {
   const summary = taskId === undefined
-    ? `Dispatch child ${String(childId)} settled turn ${String(turn ?? '?')}.`
-    : `Dispatch task ${String(taskId)}: child ${String(childId)} settled turn ${String(turn ?? '?')}.`
+    ? `Dispatch child ${String(childId)} settled turn ${turn === undefined ? '?' : JSON.stringify(turn)}.`
+    : `Dispatch task ${String(taskId)}: child ${String(childId)} settled turn ${turn === undefined ? '?' : JSON.stringify(turn)}.`
   return createUserMessage({
     content: [{ type: 'text', text: summary }],
     source: {
@@ -226,7 +226,7 @@ export function watchChildSettlement(
         if (!active) return
         if (!durable) {
           logger.warn(
-            `agent-dispatch: settlement notice for child "${String(child.id)}" turn ${String(turn ?? '?')} `
+            `agent-dispatch: settlement notice for child "${String(child.id)}" turn ${turn === undefined || turn === null ? '?' : JSON.stringify(turn)} `
             + 'was withheld: the turn\'s end record did not flush durably',
           )
           return
@@ -249,7 +249,7 @@ export function watchChildSettlement(
         // dropped, the drop is logged through the borrowed logger, and the
         // claim is released in the finally — never an unhandled rejection.
         logger.warn(
-          `agent-dispatch: settlement watch for child "${String(child.id)}" turn ${String(turn ?? '?')} stopped delivering: `
+          `agent-dispatch: settlement watch for child "${String(child.id)}" turn ${turn === undefined || turn === null ? '?' : JSON.stringify(turn)} stopped delivering: `
           + errorChain(error),
         )
       } finally {
