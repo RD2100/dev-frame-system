@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/shadow-bridge/README.md
-README.md: d0f6b9fd06f044b1b8caf6f97929d03fe566bb68
-README.zh.md: 93e5c51308d42ff69b54948a53fad6699918bca7
+README.md: a16c066879c2dc173a1cacdad1f2cc097d38be6d
+README.zh.md: fe9f7a7e62fadedab3de3db3444615a37a196190

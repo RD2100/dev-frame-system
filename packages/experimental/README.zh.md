@@ -40,6 +40,7 @@ kind: "package-group"
 | [`project-controller`](project-controller/README.zh.md) | 项目任务板：TaskState 流转、有界开发预算、生命周期与仅限 controller 的合并门禁 | `ctx.projectController` |
 | [`project-memory`](project-memory/README.zh.md) | 基于用户选定 Obsidian Vault 子树的有界追加式项目记忆：作用域化搜索/读取/追加工具、会话日志回执、路径包含与如实失败报告 | 库服务，不使用 ctx key |
 | [`session-identity`](session-identity/README.zh.md) | 持久代理绑定注册表与准确 cwd 的原生会话创建 | `ctx.agentBindings` |
+| [`shadow-routing`](shadow-routing/README.zh.md) | shadow 路由缝的 Service Definition：抽象路由契约、路由词汇与 `shadow/delivery-received` 事件 | `ctx.shadowRouter` |
 | [`shadow-controller`](shadow-controller/README.zh.md) | Shadow 路由器聚合状态的只读 Remote 拥有者，供宿主状态面板调用 | `ctx.shadowController` |
 | [`shadow-web-profile`](shadow-web-profile/README.zh.md) | 常驻 Shadow 入口卡片的显式源码 checkout Web 层 | — |
 | [`client-ui-shadow-entry`](client-ui-shadow-entry/README.zh.md) | 设置按钮上方的常驻 Web Shadow 入口卡片与诚实状态面板 | — |

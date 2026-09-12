@@ -1,17 +1,18 @@
 /**
- * Unit evidence for the bridge's forwarder and loop: the delivery gate's every
- * rejection branch, exactly-once marking across polls, containment of follow-up
- * and marker failures, the bounded follow-up text, and the timer loop's
- * quiescing disposal. The wired composition behavior is covered by the
- * real-Loader spec.
+ * Unit evidence for the bridge's forwarder and safety-net loop: the delivery
+ * gate's every rejection branch, the event path and the reconciliation polls
+ * converging on exactly-once marking, containment of follow-up, marker, and
+ * initiator-boundary failures, the bounded follow-up text, and the timer
+ * loop's quiescing disposal. The wired composition behavior is covered by
+ * the real-Loader spec.
  * @module tests/gate
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentRegistry } from '@deepseek-ai/dsh-agent'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
-import { AcceptanceHash, ShadowMessageId, ShadowRequestId } from '@deepseek-ai/dsh-experimental-shadow-router'
-import type { ShadowBindingRecord, ShadowDeliveryRecord, ShadowRouter } from '@deepseek-ai/dsh-experimental-shadow-router'
+import { AcceptanceHash, ShadowMessageId, ShadowRequestId } from '@deepseek-ai/dsh-experimental-shadow-routing'
+import type { ShadowBindingRecord, ShadowDeliveryRecord, ShadowRouter } from '@deepseek-ai/dsh-experimental-shadow-routing'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
@@ -22,6 +23,8 @@ import type { ShadowBridgeForwardedRecord } from '../src/spec.ts'
 
 const WORKSPACE = WorkspaceId('ws-test')
 const CONTROLLER = 'session-ctrl' as SessionId
+
+const sleep = (ms: number): Promise<void> => new Promise<void>((resolve) => { setTimeout(resolve, ms) })
 
 /** Flatten one message's text blocks. */
 function textOf(message: UserMessage): string {
@@ -120,6 +123,7 @@ function forwarder(options: {
   markers?: KvTable<ShadowMessageId, ShadowBridgeForwardedRecord>
   maxChars?: number
   router?: ShadowRouter | undefined
+  withoutInitiator?: Pick<AgentRegistry, 'withoutInitiator'>['withoutInitiator']
 } = {}): { forwarder: DeliveryForwarder; markers: KvTable<ShadowMessageId, ShadowBridgeForwardedRecord>; logs: string[] } {
   const markers = options.markers ?? markerTable().table
   // An omitted binding list defaults to the one binding the default delivery
@@ -137,14 +141,13 @@ function forwarder(options: {
       agents: { get: (id: SessionId) => agents.get(id) },
       table: markers,
       maxChars: options.maxChars ?? 10_000,
+      withoutInitiator: options.withoutInitiator ?? (operation => operation()),
       log: (message: string) => { logs.push(message) },
     }),
     markers,
     logs,
   }
 }
-
-const sleep = (ms: number): Promise<void> => new Promise<void>((resolve) => { setTimeout(resolve, ms) })
 
 describe('the follow-up text', () => {
   it('opens with the deterministic header naming the delivery and workspace', () => {
@@ -335,13 +338,140 @@ describe('the forwarder poll', () => {
   })
 })
 
-describe('the poll loop', () => {
+describe('the delivery-received event path', () => {
+  it('forwards the recorded delivery once and lets the next poll skip it', async () => {
+    const { agent, texts } = fakeAgent()
+    const markers = markerTable()
+    const h = forwarder({
+      deliveries: [delivery()],
+      agents: new Map([[CONTROLLER, agent]]),
+      markers: markers.table,
+    })
+    await h.forwarder.onDeliveryReceived(delivery())
+    expect(texts).toEqual(['[Shadow delivery msg-test-1 for workspace ws-test]\nPlease check the gate.'])
+    expect(markers.puts).toEqual([delivery().messageId])
+    await h.forwarder.poll()
+    expect(texts).toHaveLength(1)
+    expect(markers.puts).toHaveLength(1)
+  })
+
+  it('converges on exactly-once across events, polls, and restarts, in both orders', async () => {
+    const { agent, texts } = fakeAgent()
+    const markers = markerTable()
+    // Event first, then the reconciliation poll.
+    const eventFirst = forwarder({
+      deliveries: [delivery()],
+      agents: new Map([[CONTROLLER, agent]]),
+      markers: markers.table,
+    })
+    await eventFirst.forwarder.onDeliveryReceived(delivery())
+    await eventFirst.forwarder.poll()
+    expect(texts).toHaveLength(1)
+    expect(markers.puts).toEqual([delivery().messageId])
+    // Poll first, then the event, on a restarted forwarder over the same marker domain.
+    const pollFirst = forwarder({
+      deliveries: [delivery()],
+      agents: new Map([[CONTROLLER, agent]]),
+      markers: markers.table,
+    })
+    await pollFirst.forwarder.poll()
+    await pollFirst.forwarder.onDeliveryReceived(delivery())
+    expect(texts).toHaveLength(1)
+    expect(markers.puts).toEqual([delivery().messageId])
+  })
+
+  it('applies the same gate on the event path', async () => {
+    const { agent, texts } = fakeAgent()
+    const markers = markerTable()
+    const stopped = forwarder({
+      deliveries: [delivery()],
+      bindings: [binding({ state: 'stopped' })],
+      agents: new Map([[CONTROLLER, agent]]),
+      markers: markers.table,
+    })
+    await stopped.forwarder.onDeliveryReceived(delivery())
+    const note = forwarder({
+      deliveries: [delivery({ mode: 'note', messageId: ShadowMessageId('msg-test-n') })],
+      agents: new Map([[CONTROLLER, agent]]),
+      markers: markers.table,
+    })
+    await note.forwarder.onDeliveryReceived(delivery({ mode: 'note', messageId: ShadowMessageId('msg-test-n') }))
+    expect(texts).toEqual([])
+    expect(markers.puts).toEqual([])
+  })
+
+  it('contains a closing initiator scope and leaves the delivery for the safety net', async () => {
+    const { agent, texts } = fakeAgent()
+    const markers = markerTable()
+    const h = forwarder({
+      deliveries: [delivery()],
+      agents: new Map([[CONTROLLER, agent]]),
+      markers: markers.table,
+      withoutInitiator: () => { throw new Error('initiator scope disposed') },
+    })
+    await expect(h.forwarder.onDeliveryReceived(delivery())).resolves.toBeUndefined()
+    expect(texts).toEqual([])
+    expect(markers.puts).toEqual([])
+    expect(h.logs.some(message => message.includes('initiator scope disposed'))).toBe(true)
+  })
+
+  it('rejects the reconciliation poll when the initiator boundary is closing, so the loop contains it', async () => {
+    const { agent, texts } = fakeAgent()
+    const markers = markerTable()
+    const h = forwarder({
+      deliveries: [delivery()],
+      agents: new Map([[CONTROLLER, agent]]),
+      markers: markers.table,
+      withoutInitiator: () => { throw new Error('initiator scope disposed') },
+    })
+    await expect(h.forwarder.poll()).rejects.toThrow('initiator scope disposed')
+    expect(texts).toEqual([])
+    expect(markers.puts).toEqual([])
+  })
+
+  it('resolves settle only after the enqueued unit finishes', async () => {
+    const { agent, texts } = fakeAgent()
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    let released = false
+    const rows = new Map<string, ShadowBridgeForwardedRecord>()
+    const puts: ShadowMessageId[] = []
+    const table = {
+      keys: () => [].values(),
+      put: async (key: ShadowMessageId, value: ShadowBridgeForwardedRecord): Promise<void> => {
+        if (!released) await gate
+        rows.set(key, value)
+        puts.push(key)
+      },
+    } as unknown as KvTable<ShadowMessageId, ShadowBridgeForwardedRecord>
+    const h = forwarder({ deliveries: [delivery()], agents: new Map([[CONTROLLER, agent]]), markers: table })
+    const pending = h.forwarder.onDeliveryReceived(delivery())
+    const draining = h.forwarder.settle()
+    let settled = false
+    void draining.then(() => { settled = true })
+    // One microtask turn: the unit starts and blocks inside the marker write.
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    released = true
+    release()
+    await expect(draining).resolves.toBeUndefined()
+    await pending
+    expect(puts).toEqual([delivery().messageId])
+    expect(texts).toHaveLength(1)
+  })
+
+  it('resolves settle on an idle chain', async () => {
+    const h = forwarder()
+    await expect(h.forwarder.settle()).resolves.toBeUndefined()
+  })
+})
+
+describe('the safety-net loop', () => {
   it('keeps polling until dispose, then stops', async () => {
     let runs = 0
     const loop = new PollLoop({
       intervalMs: 1,
       run: async () => { runs += 1 },
-      withoutInitiator: operation => operation(),
       log: () => {},
     })
     loop.start()
@@ -361,26 +491,12 @@ describe('the poll loop', () => {
         runs += 1
         if (runs < 3) throw new Error('router unavailable')
       },
-      withoutInitiator: operation => operation(),
       log: (message: string) => { logs.push(message) },
     })
     loop.start()
     await vi.waitFor(() => { expect(runs).toBeGreaterThanOrEqual(3) })
     await loop.dispose()
     expect(logs.some(message => message.includes('router unavailable'))).toBe(true)
-  })
-
-  it('contains a rejected initiator boundary without running the poll', async () => {
-    const logs: string[] = []
-    const loop = new PollLoop({
-      intervalMs: 1,
-      run: async () => { throw new Error('must not run') },
-      withoutInitiator: () => { throw new Error('initiator scope disposed') },
-      log: (message: string) => { logs.push(message) },
-    })
-    loop.start()
-    await vi.waitFor(() => { expect(logs.some(message => message.includes('initiator scope disposed'))).toBe(true) })
-    await loop.dispose()
   })
 
   it('disposes to quiescence by awaiting the in-flight poll', async () => {
@@ -393,7 +509,6 @@ describe('the poll loop', () => {
         await sleep(30)
         finished = true
       },
-      withoutInitiator: operation => operation(),
       log: () => {},
     })
     loop.start()
@@ -407,7 +522,6 @@ describe('the poll loop', () => {
     const loop = new PollLoop({
       intervalMs: 50,
       run: async () => { runs += 1 },
-      withoutInitiator: operation => operation(),
       log: () => {},
     })
     await loop.dispose()

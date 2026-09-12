@@ -3436,6 +3436,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'ns', description: 'the namespace whose resolved value changed.' }, { name: 'next', description: 'the new resolved value.' }, { name: 'prev', description: 'the previous resolved value.' }, { name: 'source', description: 'whether the change entered through `update()` or the provider.' }],
   },
   {
+    name: 'shadow/delivery-received',
+    mode: 'emit',
+    signature: '\'shadow/delivery-received\'(workspaceId: WorkspaceId, delivery: ShadowDeliveryRecord): void',
+    summary: 'One delivery entered `received` — the durable target-acceptance transition.',
+    description: 'One delivery entered `received` — the durable target-acceptance transition. Observe-only: listeners forward or record the accepted input, but the router\'s durable rows stay the only authority, and the event never exposes a mutation verb. A listener mounted after the transition (or a process restart) still converges through the provider\'s recovery and index reads.',
+    parameters: [{ name: 'workspaceId', description: 'The project the delivery belongs to.' }, { name: 'delivery', description: 'The frozen delivery record snapshot as it entered `received`.' }],
+  },
+  {
     name: 'skills/change',
     mode: 'emit',
     signature: '\'skills/change\'(): void',
@@ -5526,6 +5534,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SettingsUpdateSource',
     declaration: 'export type SettingsUpdateSource = \'update\' | \'provider\';',
+  },
+  {
+    name: 'ShadowDeliveryMode',
+    declaration: 'export type ShadowDeliveryMode = \'work\' | \'note\';',
+  },
+  {
+    name: 'ShadowDeliveryRecord',
+    declaration: 'export interface ShadowDeliveryRecord {\n    readonly messageId: ShadowMessageId;\n    readonly requestId: ShadowRequestId;\n    readonly sourceSessionId: SessionId;\n    readonly workspaceId: WorkspaceId;\n    readonly bindingRevision: number;\n    readonly goalId: string;\n    readonly acceptanceHash: AcceptanceHash;\n    readonly mode: ShadowDeliveryMode;\n    readonly text: string;\n    readonly state: ShadowDeliveryState;\n    readonly cancelReason?: string;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n    readonly receivedAt?: string;\n    readonly completedAt?: string;\n}',
+  },
+  {
+    name: 'ShadowDeliveryState',
+    declaration: 'export type ShadowDeliveryState = \'queued\' | \'received\' | \'completed\' | \'cancelled\';',
+  },
+  {
+    name: 'ShadowMessageId',
+    declaration: 'export type ShadowMessageId = Branded<\'ShadowMessageId\'>;',
+  },
+  {
+    name: 'ShadowRequestId',
+    declaration: 'export type ShadowRequestId = Branded<\'ShadowRequestId\'>;',
   },
   {
     name: 'ShellExecRequest',

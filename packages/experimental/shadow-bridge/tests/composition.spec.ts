@@ -34,10 +34,10 @@ import {
   AcceptanceHash,
   ShadowMessageId,
   ShadowRequestId,
-  ShadowRouter,
-  shadowRouterDomainSpec,
-} from '@deepseek-ai/dsh-experimental-shadow-router'
-import type { ShadowBindingRecord, ShadowDeliveryRecord } from '@deepseek-ai/dsh-experimental-shadow-router'
+} from '@deepseek-ai/dsh-experimental-shadow-routing'
+import type { ShadowBindingRecord, ShadowDeliveryRecord } from '@deepseek-ai/dsh-experimental-shadow-routing'
+// Loader plugin values: the concrete provider class and its domain spec.
+import { ShadowRouter, shadowRouterDomainSpec } from '@deepseek-ai/dsh-experimental-shadow-router'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import * as bridge from '../src/index.ts'
 
@@ -54,8 +54,9 @@ interface Boot {
  * row through the module map, so the bridge and router rows run through the
  * same namespace/config resolution a shipped composition uses.
  * @param root - Existing storage root shared by JSON storage and session logs.
- * @param bridgeConfig - The bridge row's config; the happy default polls fast
- *   and bounds forwarded text generously. A partial config must fail the boot.
+ * @param bridgeConfig - The bridge row's config; the happy default keeps a
+ *   fast safety net and bounds forwarded text generously. A partial config
+ *   must fail the boot.
  * @returns the booted context, its scripted adapter, and the disposer.
  */
 async function boot(root: string, bridgeConfig: Record<string, unknown> = { intervalMs: 5, followupMaxChars: 4000 }): Promise<Boot> {

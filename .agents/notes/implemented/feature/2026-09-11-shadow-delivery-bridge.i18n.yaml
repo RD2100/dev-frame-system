@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-11-shadow-delivery-bridge.md
-2026-09-11-shadow-delivery-bridge.md: 66e9471df77f53157d89f573ff59a6c6828cef03
-2026-09-11-shadow-delivery-bridge.zh.md: cd5ae703dfa72e1fc58876cf7a78a66545427199
+2026-09-11-shadow-delivery-bridge.md: f5246c86607aad0b9be388f2326f714872f5e8b5
+2026-09-11-shadow-delivery-bridge.zh.md: 72124c78c0037a6918a88175519edfa550017874

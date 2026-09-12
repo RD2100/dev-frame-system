@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-experimental-shadow-router` mounts `ctx.shadowRouter`, the Shadow-side router of the pluginized agent hierarchy. It keeps one controller binding per workspace in its own `shadow_router` storage domain (JSON documents under the composition's storages root), provisions each project's independent controller root session with exact `cwd` metadata, persists every cross-root delivery twice — the sender's `queued` intent and the target-accepted `received` input — with `completed` as a separate durable state, and installs exactly four project tools (`project_open`, `project_send`, `project_status`, `project_stop`) into the one agent scope the host designates as Shadow. Stopping is per-project: other bindings, their controllers, and their queues are untouched. The package is a private experimental host-side service; it registers no prompt sections and no session events, so the TypeScript and Python SDK projections are untouched.
+`dsh-experimental-shadow-router` mounts `ctx.shadowRouter`, the Shadow-side router of the pluginized agent hierarchy. It keeps one controller binding per workspace in its own `shadow_router` storage domain (JSON documents under the composition's storages root), provisions each project's independent controller root session with exact `cwd` metadata, persists every cross-root delivery twice — the sender's `queued` intent and the target-accepted `received` input — with `completed` as a separate durable state, and installs exactly four project tools (`project_open`, `project_send`, `project_status`, `project_stop`) into the one agent scope the host designates as Shadow. Every real transition of a delivery into `received` — on the send path and on recovery convergence — emits the observe-only `shadow/delivery-received` event the sibling Service Definition declares. Stopping is per-project: other bindings, their controllers, and their queues are untouched. The contract vocabulary and the abstract service this package implements live in [`dsh-experimental-shadow-routing`](../shadow-routing/README.md), which this package re-exports so family consumers keep one import root until they switch. The package is a private experimental host-side service; it registers no prompt sections and no session events, so the TypeScript and Python SDK projections are untouched.
 
 ## Table of Contents
 
@@ -111,12 +111,11 @@ This section explains the design decisions behind the feature and points at the 
 
 | File | Role |
 |---|---|
-| [`src/service.ts`](src/service.ts) | The `ctx.shadowRouter` service: binding lifecycle, delivery persistence, replay, status, host seams |
+| [`src/service.ts`](src/service.ts) | The `ctx.shadowRouter` provider: binding lifecycle, delivery persistence, replay, status, host seams, and the delivery-received emits |
 | [`src/tools.ts`](src/tools.ts) | The four project tools and their Shadow-scope installation |
 | [`src/spec.ts`](src/spec.ts) | The `shadow_router` domain spec: bindings, deliveries, and requests tables |
-| [`src/ids.ts`](src/ids.ts) | Branded request, message, and acceptance-hash ids |
-| [`src/errors.ts`](src/errors.ts) | `ShadowRouterError` and its stable code union |
-| [`src/index.ts`](src/index.ts) | Package entry and default export |
+| [`src/index.ts`](src/index.ts) | Package entry, default export, and the routing-vocabulary re-exports |
+| [`dsh-experimental-shadow-routing`](../shadow-routing/README.md) | The sibling Service Definition owning the abstract contract, the vocabulary, and the event |
 
 ### Invariant
 

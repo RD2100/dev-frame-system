@@ -15,7 +15,7 @@
     { "path": "../../client/ui-sidebar" },
     { "path": "../../client/ui-slots" },
     { "path": "../shadow-controller" },
-    { "path": "../shadow-router" },
+    { "path": "../shadow-routing" },
     { "path": "../../typert/protocol" }
   ]
 }

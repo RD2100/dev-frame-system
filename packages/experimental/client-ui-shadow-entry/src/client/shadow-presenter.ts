@@ -7,7 +7,7 @@
  * its `t` seat.
  */
 
-import type { ShadowBindingState } from '@deepseek-ai/dsh-experimental-shadow-router'
+import type { ShadowBindingState } from '@deepseek-ai/dsh-experimental-shadow-routing'
 import type { ShadowStatusView } from '@deepseek-ai/dsh-experimental-shadow-controller'
 import type { ShadowKey } from './locales.ts'
 import type { ShadowStatusSnapshot } from './shadow-store.ts'

@@ -5,7 +5,7 @@
  * @module @deepseek-ai/dsh-experimental-shadow-bridge/text
  */
 
-import type { ShadowDeliveryRecord, ShadowMessageId } from '@deepseek-ai/dsh-experimental-shadow-router'
+import type { ShadowDeliveryRecord, ShadowMessageId } from '@deepseek-ai/dsh-experimental-shadow-routing'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 
 /**

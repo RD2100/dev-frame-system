@@ -1,4 +1,4 @@
-/** Branded cross-boundary identifiers owned by the shadow-router vocabulary. */
+/** Branded cross-boundary identifiers owned by the shadow-routing vocabulary. */
 
 import { brandString, type Branded } from '@deepseek-ai/dsh-brand'
 import { ShadowRouterError } from './errors.ts'

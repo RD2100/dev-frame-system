@@ -1,38 +1,39 @@
-# 交接文档：影子对话（Shadow Conversation Entry）
+# Handover doc: Shadow Conversation Entry
 
-> 交接时间：2026-09-11。前一模型：DeepSeek（glm-5.3-flash），主会话运行于 DSH Web GUI（127.0.0.1:3080，宿主进程内）。
-> 工作区：`D:\dsh-devframe`（所有路径相对此根，除非写明绝对路径）。
+English | [中文](handoff-shadow-conversation.zh.md)
 
----
-
-## 1. 用户需求的最终语义（务必先读懂，避免重蹈覆辙）
-
-用户需求在本会话中逐步收敛，每一步都否定了前一种实现。**最终语义**：
-
-> **影子 = 一个永久独立的 agent。** 侧栏「影子」按钮打开它自己的那一个固定对话（指定会话），走标准 DSH 会话界面渲染；每次点击进的是**同一个**对话；**不得**每次点击新建会话，**不得**在会话列表里产生"未分组/新对话"之类的杂项条目。
-
-被用户明确否定的实现（不要再做回去）：
-1. ❌ 自制弹窗聊天面板（纯文本行 + 轮询）——"你搞的是个什么东西？"
-2. ❌ 任何自制对话框替代标准会话视图——影子必须用和主聊天**一模一样**的标准对话 UI。
-3. ❌ 指向旧指定会话 session-8c2ada33（带满历史）——用户要求"重开一个"，已改为新指定会话（见 §4 配置）。
-4. ❌ 每次点击新建一个全新会话——会在右侧会话列表出现"未分组"分类和"新对话"标签，用户明确拒绝。
-
-保留的次要入口：宽侧栏「影子」触发键旁有一个**「管理」**小按钮（`data-shadow-manage`），打开原对话框（状态 + 项目管理 + 对话只读区），作为二级入口存在。
+> Handover time: 2026-09-11. Previous model: DeepSeek (glm-5.3-flash); the main session ran in the DSH Web GUI (127.0.0.1:3080, inside the host process). Workspace: `D:\dsh-devframe` (all paths are relative to this root unless written as absolute).
 
 ---
 
-## 2. 当前代码状态（接手时的确切位置）
+## 1. The final semantics of the user's request (read this first, do not repeat the mistakes)
 
-包：`packages/experimental/client-ui-shadow-entry`（`@deepseek-ai/dsh-experimental-client-ui-shadow-entry`）
+The user's request converged step by step in that session; every step rejected the previous implementation. **Final semantics**:
 
-### ⚠️ 未完成状态：测试当前是红的
-最后一次全绿（55/55 + 100% 覆盖率门 + tsc + bundle 重建）是在"每次点击新建会话"版本上。之后我又改了两个文件，**尚未重跑测试**：
+> **The Shadow = one permanent, independent agent.** The sidebar "影子" (Shadow) button opens its own one fixed conversation (the designated session), rendered with the standard DSH session UI; every click enters **the same** conversation; it must **not** create a new session per click, and it must **not** produce junk entries like "Ungrouped/New chat" in the session list.
 
-1. `src/client/mount.ts` — 已改好（最终语义）：`onOpenConversation` = `readStatus` → 未列出则 `refresh()` → `open(sessionId)`。**绝不再调用 `sessions.create`**（原因见 §3）。
-2. `tests/shadow-mount.client.spec.ts` — 只改了 bench stub（sessions 增加 `list`/`refresh`，新增 bench 选项 `sessionNotListed`），**断言数组还没更新**，按旧 adopt 语义断言 `sessions/create:session-shadow`，会失败。
+Implementations explicitly rejected by the user (do not go back to these):
+1. ❌ A self-made popup chat panel (plain text lines + polling) — "你搞的是个什么东西？" ("what on earth is this thing you built?")
+2. ❌ Any self-made dialog replacing the standard session view — the Shadow must use the **exact same** standard conversation UI as the main chat.
+3. ❌ Pointing at the old designated session session-8c2ada33 (with full history) — the user asked to "start a new one"; it was switched to a new designated session (see §4 config).
+4. ❌ Creating a brand-new session per click — that would add an "Ungrouped" category and "New chat" labels in the session list; the user explicitly refused.
 
-### 接替者第一步：完成 spec（预计 15 分钟）
-- `registers one disposable footer action...` 的期望数组改为（去掉 create）：
+Retained secondary entry: next to the wide sidebar's "影子" (Shadow) trigger there is a small **"管理" (Manage)** button (`data-shadow-manage`) that opens the original dialog (status + project management + read-only conversation area) as a secondary entry.
+
+---
+
+## 2. Current code state (the exact position at handover)
+
+Package: `packages/experimental/client-ui-shadow-entry` (`@deepseek-ai/dsh-experimental-client-ui-shadow-entry`)
+
+### ⚠️ Unfinished state: tests are currently red
+The last all-green run (55/55 + the 100% coverage gate + tsc + bundle rebuild) was on the "create a session per click" version. After that I changed two more files and **have not re-run the tests**:
+
+1. `src/client/mount.ts` — finished (final semantics): `onOpenConversation` = `readStatus` → if not listed, `refresh()` → `open(sessionId)`. **Never call `sessions.create` again** (reason in §3).
+2. `tests/shadow-mount.client.spec.ts` — only the bench stub was changed (`sessions` gained `list`/`refresh`, a new bench option `sessionNotListed`); **the assertion array has not been updated yet**; it still asserts the old adopt semantics `sessions/create:session-shadow`, so it will fail.
+
+### First step for the successor: finish the spec (about 15 minutes)
+- Change the expectation array of `registers one disposable footer action...` to (create removed):
   ```
   ['shadow/readStatus',
    'shadow/openProject:D:/projects/beta',
@@ -43,7 +44,7 @@
    'shadow/readStatus',
    'sessions/open:session-shadow']
   ```
-- 新增分支测试（覆盖率门要求，代码正好 4 条路径：ok+已列出 / ok+未列出 / readFailure / 无 sessionId）：
+- Add the branch test (the coverage gate requires it; the code has exactly 4 paths: ok+listed / ok+not-listed / readFailure / no sessionId):
   ```ts
   it('opens the designated session without create when it is not listed yet', async () => {
     const b = await bench({ sessionNotListed: true })
@@ -52,10 +53,10 @@
     expect(b.calls).toEqual(['shadow/readStatus', 'sessions/refresh', 'sessions/open:session-shadow'])
   })
   ```
-- 现有 `does not adopt a session when the status read fails or names no session`（readFailure + sessionIdMissing 两臂，期望 `['shadow/readStatus']`）保持不变。
-- bench 里 sessions stub 的 `create` 成员现已无人调用，可留可删（测试代码，不影响覆盖率门）。
+- The existing `does not adopt a session when the status read fails or names no session` (the readFailure and sessionIdMissing arms, expecting `['shadow/readStatus']`) stays unchanged.
+- The `create` member of the sessions stub in the bench is now called nowhere and may stay or be deleted (test code; does not affect the coverage gate).
 
-### 然后跑三件套
+### Then run the three checks
 ```
 # 1) 测试 + 逐文件 100% 覆盖率门
 node_modules\vitest\vitest.mjs run packages/experimental/client-ui-shadow-entry --coverage.thresholds.100 --coverage.include='packages/experimental/client-ui-shadow-entry/src/**'
@@ -65,23 +66,23 @@ node_modules\typescript\bin\tsc -b packages/experimental/client-ui-shadow-entry/
 cd packages\experimental\client-ui-shadow-entry
 node D:\dsh-devframe\node_modules\tsdown\dist\run.mjs
 ```
-全部绿后**让用户刷新页面即可**（纯客户端改动，不需要重启宿主）。
+Once everything is green, **just have the user refresh the page** (pure client changes; no host restart needed).
 
-### 本会话已改动的全部文件（均未提交，叠加在白天会话的大未提交集之上）
-- `packages/experimental/client-ui-shadow-entry/src/client/mount.ts` — inject 增加 `'sessions'`；face 增加 `onOpenConversation`（refresh-then-open 版本，见上）。
-- `src/client/slots.ts` — face 增加 `onOpenConversation(): Promise<void>`（JSDoc：永久独立 agent 的固定对话）。
-- `src/client/ShadowCard.tsx` — 触发键 onClick → `void onOpenConversation()`（触发键不再开面板）；宽模式新增「管理」按钮开面板；对话框为大尺寸居中对话优先视图（默认 chat 视图 + `[data-shadow-view-toggle]` 切项目管理）。
-- `src/client/ShadowCard.module.css` — `.trigger`（flex:1）、`.manageButton`、`.rail .trigger`（flex:none）、居中对话框、`.chatPane/.composer/.chatInput` 等。
-- `src/client/locales.ts` — `trigger.aria`='打开影子对话'/'Open the Shadow conversation'；`trigger.manage`='管理'/'Manage'；另有 `panel.projectsTab`、`panel.close`。
-- `tests/shadow-card.client.spec.tsx` — 29 用例全绿：`openPanel` 助手改为点「管理」开面板；`showProjects(b)` 助手点视图切换；触发键断言名 `打开影子对话`；新增视图往返/关闭用例。bench 已含 `onOpenConversation: vi.fn(async ...)`。
-- `tests/shadow-mount.client.spec.ts` — 见上，**待完成**。
-- **未做**：包 README.md / README.zh.md 尚未更新为"永久独立 agent 对话入口"语义（双语行对齐）；本改动尚未写 Agent Note（仓库规则要求非平凡改动配 note；已有 `​.agents/notes/implemented/bug-fix/2026-09-10-shadow-conversation-reachability.*` 三件套覆盖对话接线，触发键语义变化可更新该 note 或新写）。
+### Every file changed in that session (all uncommitted, stacked on top of the daytime session's large uncommitted set)
+- `packages/experimental/client-ui-shadow-entry/src/client/mount.ts` — inject gained `'sessions'`; the face gained `onOpenConversation` (the refresh-then-open version, see above).
+- `src/client/slots.ts` — the face gained `onOpenConversation(): Promise<void>` (JSDoc: the fixed conversation of the permanent independent agent).
+- `src/client/ShadowCard.tsx` — the trigger's onClick → `void onOpenConversation()` (the trigger no longer opens the panel); wide mode gained a "管理" (Manage) button that opens the panel; the dialog became a large centered conversation-first view (default chat view + `[data-shadow-view-toggle]` to switch to project management).
+- `src/client/ShadowCard.module.css` — `.trigger` (flex:1), `.manageButton`, `.rail .trigger` (flex:none), the centered dialog, `.chatPane/.composer/.chatInput`, etc.
+- `src/client/locales.ts` — `trigger.aria`='打开影子对话'/'Open the Shadow conversation'; `trigger.manage`='管理'/'Manage'; plus `panel.projectsTab`, `panel.close`.
+- `tests/shadow-card.client.spec.tsx` — 29 cases all green: the `openPanel` helper now clicks "管理" to open the panel; the `showProjects(b)` helper clicks the view toggle; the trigger asserts the name `打开影子对话`; new view round-trip/close cases. The bench already includes `onOpenConversation: vi.fn(async ...)`.
+- `tests/shadow-mount.client.spec.ts` — see above, **to be finished**.
+- **Not done**: the package README.md / README.zh.md have not been updated to the "permanent independent agent conversation entry" semantics (bilingual lines aligned); this change has no Agent Note yet (repo rules require a note for non-trivial changes; the existing `.agents/notes/implemented/bug-fix/2026-09-10-shadow-conversation-reachability.*` triplet covers the conversation wiring — the trigger-semantics change can update that note or add a new one).
 
 ---
 
-## 3. 刚发现的关键根因（接替者必须知道）
+## 3. The critical root cause just discovered (the successor must know this)
 
-**`session/create` RPC 对指定影子会话必然失败**：
+**The `session/create` RPC always fails for the designated Shadow session**:
 
 ```
 POST /api/session/create  {args:{request:{sessionId:"session-0e48cb66-..."}}}
@@ -89,28 +90,28 @@ POST /api/session/create  {args:{request:{sessionId:"session-0e48cb66-..."}}}
    "message":"session \"...\" records no cwd and cannot be adopted for \"D:\\dsh-devframe\""}}
 ```
 
-影子代理在宿主启动时创建指定会话**不记录 cwd**，而 create 的 adopt 路径要求已存在会话的 recorded cwd 与请求 cwd 匹配 → 永远 conflict。之前对旧会话 session-8c2ada33 的 create"成功"是因为那个会话记录了 cwd。
+The Shadow agent creates the designated session at host startup **without recording a cwd**, while create's adopt path requires an existing session's recorded cwd to match the request cwd → always conflict. The earlier create "success" against the old session session-8c2ada33 happened because that session had recorded a cwd.
 
-**结论**：客户端打开影子会话的唯一正确路径 = `open()`（配合 `refresh()` 兜底），绝不 `create()`。若未来必须走 create（例如会话不在列表且 refresh 拿不到），正确修法在宿主侧：`shadow-controller/src/shadow-agent.ts` 创建指定会话时传入 cwd（ensureSession 调用点约在 202 行附近 `const id = SessionId(designation)` 之后）。
+**Conclusion**: the only correct client path to open the Shadow session = `open()` (with `refresh()` as the fallback), never `create()`. If create must ever be used (for example the session is not in the list and refresh cannot fetch it), the correct fix is host-side: pass a cwd when `shadow-controller/src/shadow-agent.ts` creates the designated session (the ensureSession call site is around line 202, right after `const id = SessionId(designation)`).
 
-另：`open(id)` 对不在列表的 id "fail loud"（契约写明 unknown ids fail loud），refresh() 拉权威列表就是为了这个 race。错误如果被 `void onOpenConversation()` 吞掉就是"点了没反应"——目前实现里 readStatus 失败/无 sessionId 是静默 return（有意），open 失败会变成 unhandled rejection（控制台可见）。如需用户可见错误，考虑后续给 face 加错误通道。
+Also: `open(id)` "fails loud" for ids not in the list (the contract says unknown ids fail loud); `refresh()` fetches the authoritative list exactly for this race. If the error is swallowed by `void onOpenConversation()`, the symptom is "click and nothing happens" — in the current implementation a readStatus failure / missing sessionId returns silently (deliberate), and an open failure becomes an unhandled rejection (visible in the console). If a user-visible error is needed, consider adding an error channel to the face later.
 
 ---
 
-## 4. 环境、路径、活体状态（全部实测过）
+## 4. Environment, paths, and live state (all verified in practice)
 
-### 二进制与命令
-- Node（不在 PATH）：`C:\Users\25313\.workbuddy-ai\binaries\node\versions\22.22.2-2\node.exe`
-- Git（不在 PATH）：`C:\Users\25313\.cache\codex-runtimes\codex-primary-runtime\dependencies\native\git\cmd\git.exe`
-- 只有 Windows PowerShell 5.1（`powershell.exe`），**没有 pwsh 7**。注意 `Set-Content -Encoding utf8` 会写 **BOM**；写无 BOM 用 `[System.IO.File]::WriteAllText($path,$text,[System.Text.UTF8Encoding]::new($false))`。
-- tsdown 入口是 `dist/run.mjs`（不是 run.js）。
+### Binaries and commands
+- Node (not on PATH): `C:\Users\25313\.workbuddy-ai\binaries\node\versions\22.22.2-2\node.exe`
+- Git (not on PATH): `C:\Users\25313\.cache\codex-runtimes\codex-primary-runtime\dependencies\native\git\cmd\git.exe`
+- Only Windows PowerShell 5.1 (`powershell.exe`); **no pwsh 7**. Note that `Set-Content -Encoding utf8` writes a **BOM**; to write without one use `[System.IO.File]::WriteAllText($path,$text,[System.Text.UTF8Encoding]::new($false))`.
+- The tsdown entry is `dist/run.mjs` (not run.js).
 
-### 宿主与配置
-- 宿主 supervisor 状态：`C:\Users\25313\.dsh\dsh-web-supervisor.json`（含 url+token、startedAt、restartCount）。宿主已于 2026-09-11T07:17:49Z 重启，**已加载新指定会话**。
-- 部署补丁（影子指定在这里）：`C:\Users\25313\.dsh\profiles\web\devframe-deployment.yml` → `shadowSessionId: session-0e48cb66-32d0-413f-a034-904e8997f6d5`（已生效，probe 证实）。**该文件目前带 UTF-8 BOM**（我写坏过一次；YAML 解析器容忍了、probe 正常，但建议顺手去掉 BOM 并保留结尾换行）。原文件备份：同目录 `devframe-deployment.yml.bak.20260910-shadow-reset`。
-- 影子路由配置事实：`shadowSessionId` 是 `shadow-router` 的 Config 字段，`devframe-deployment.yml` 是最后一层 --patch 覆盖；`devframe-profile` 仓内补丁声明三件套：shadow-router / shadow-controller / shadow-agent（`packages/experimental/devframe-profile/cordis.patch.yml` 26-39 行附近）。
+### Host and configuration
+- Host supervisor state: `C:\Users\25313\.dsh\dsh-web-supervisor.json` (contains url+token, startedAt, restartCount). The host was restarted at 2026-09-11T07:17:49Z and **has loaded the new designated session**.
+- Deployment patch (the Shadow designation lives here): `C:\Users\25313\.dsh\profiles\web\devframe-deployment.yml` → `shadowSessionId: session-0e48cb66-32d0-413f-a034-904e8997f6d5` (in effect, confirmed by probe). **That file currently carries a UTF-8 BOM** (I broke it once; the YAML parser tolerated it and the probe works, but it is worth removing the BOM and keeping the trailing newline). A backup of the original sits in the same directory as `devframe-deployment.yml.bak.20260910-shadow-reset`.
+- Shadow routing configuration facts: `shadowSessionId` is a `shadow-router` Config field, and `devframe-deployment.yml` is the last `--patch` override layer; the in-repo `devframe-profile` patch declares the triplet shadow-router / shadow-controller / shadow-agent (around lines 26-39 of `packages/experimental/devframe-profile/cordis.patch.yml`).
 
-### 活体 RPC 探针（已验证可用的信封格式）
+### Live RPC probe (verified working envelope format)
 ```
 # 先拿会话 cookie
 Invoke-WebRequest -Uri "{base}/?token={token}" -SessionVariable ws
@@ -119,29 +120,29 @@ POST {base}/api/shadow/readStatus
 body: {"type":"client-request","rpcId":"p4","method":"shadow/readStatus","payload":{"args":{}}}
 → {"ok":true,"value":{"mounted":true,"shadowSessionId":"session-0e48cb66-...","shadowLive":true,"authorizedRoots":["D:\\dsh-devframe"],"bindings":[]}}
 ```
-路由是**斜杠**形式 `/api/shadow/readStatus`（点号 404）。写方法的 args 形如 `{"request":{...}}`（按参数名 `request` 键控）。
+The route is the **slash** form `/api/shadow/readStatus` (the dotted form 404s). Write methods' args look like `{"request":{...}}` (keyed by the parameter name `request`).
 
-### 宿主侧架构事实（勿重新推导）
-- `shadow-controller/src/shadow-agent.ts`：宿主启动时 create-or-resume 指定会话并跑影子 agent（Fix B：先 `await this.ctx.get("loader")?.await()` 再 ensureOnce，防启动竞态；lib 里已含此修复）。
-- 客户端 `ctx.sessions` 运行时是 `ClientSessions`（实现 `ISessions`），但**类型层**与宿主 `dsh-session` 的 `SessionStore` 同名声明合并，属性代理类型不对 → 一律 `ctx.sessions as unknown as ISessions` 收口（mount.ts 现状）。`ISessions` 契约在 `packages/api/session-controller/src/client/contract/sessions.ts`：`list`（ObservableSnapshot，`SessionListState.ids`）、`open(id)`、`refresh()`、`create({workspaceId?,cwd?,sessionId?})`。
-- mount.ts 的 `inject` 导出（dsh.client 信息性清单）现在是 `['remote','slots','locale','sessions']`；实际 cordis 注入 `ctx.inject(['remote.shadow','slots','locale','sessions'], registerUi)`。
-- Web GUI 通过 `lib/client.js`（rev 参数）供包；**tsdown 重建后刷新页面即可**看到新客户端代码，无需 dev:web、无需重启宿主。宿主重启才会重读 yml 配置。
+### Host-side architecture facts (do not re-derive)
+- `shadow-controller/src/shadow-agent.ts`: at host startup it create-or-resumes the designated session and runs the Shadow agent (Fix B: `await this.ctx.get("loader")?.await()` before ensureOnce, against the startup race; the fix is already in lib).
+- The client `ctx.sessions` runtime is `ClientSessions` (implementing `ISessions`), but at the **type layer** it shares a declaration merge with the host `dsh-session`'s `SessionStore`, so the property proxy's type is wrong → always funnel through `ctx.sessions as unknown as ISessions` (the current mount.ts state). The `ISessions` contract lives in `packages/api/session-controller/src/client/contract/sessions.ts`: `list` (ObservableSnapshot, `SessionListState.ids`), `open(id)`, `refresh()`, `create({workspaceId?,cwd?,sessionId?})`.
+- mount.ts's `inject` export (the informational dsh.client manifest) is now `['remote','slots','locale','sessions']`; the actual cordis injection is `ctx.inject(['remote.shadow','slots','locale','sessions'], registerUi)`.
+- The Web GUI is served the package through `lib/client.js` (the rev parameter); **after a tsdown rebuild, refreshing the page is enough** to see the new client code — no dev:web, no host restart. Only a host restart re-reads the yml config.
 
 ---
 
-## 5. 接替者行动清单（按序）
+## 5. Successor action list (in order)
 
-1. **完成 spec**（§2 第一步的期望数组 + 未列出分支测试）。
-2. **跑三件套**（vitest+coverage / tsc / tsdown），全绿。
-3. **让用户刷新页面**，点「影子」验证：应打开 session-0e48cb66 的标准对话（干净空会话），重复点击进同一个，会话列表不新增条目。
-4. **收尾文档**：更新包 README.md/README.zh.md（双语行对齐）为最终语义；更新/新写 Agent Note（触发键语义：永久独立 agent 对话 + create-conflict 根因 + open/refresh 路径）。
-5. **已知遗留（按需向用户提议，勿擅自扩做）**：
-   - 指定会话在会话列表里会有一条记录（标题在第一条消息后自动生成，之前显示"新对话"）。用户可能要求**彻底从列表隐藏**——那要改 sessions 域的列表过滤（对象层/宿主），是独立设计决定，需用户拍板。
-   - 影子代理创建会话不记 cwd（§3 的宿主侧修复选项）。
-   - 点击失败目前对用户静默（void 吞错）；如要求可见错误，需给 face 加错误通道。
+1. **Finish the spec** (the expectation array from §2 step one + the not-listed branch test).
+2. **Run the three checks** (vitest+coverage / tsc / tsdown), all green.
+3. **Have the user refresh the page** and click "影子" (Shadow) to verify: it should open the standard conversation of session-0e48cb66 (a clean empty session); repeated clicks enter the same one; the session list gains no new entries.
+4. **Close out the docs**: update the package README.md/README.zh.md (bilingual lines aligned) to the final semantics; update/write the Agent Note (trigger semantics: permanent independent agent conversation + the create-conflict root cause + the open/refresh path).
+5. **Known leftovers** (propose to the user as needed; do not expand on your own):
+   - The designated session will have one entry in the session list (the title is auto-generated after the first message; it previously showed "New chat"). The user may ask to **hide it from the list entirely** — that requires changing the list filtering of the sessions domain (object layer/host), an independent design decision needing the user's sign-off.
+   - The Shadow agent creates the session without recording a cwd (the host-side fix option in §3).
+   - Click failures are currently silent to the user (void-swallowed); if a visible error is required, the face needs an error channel.
 
-## 6. 用户偏好提醒
-- 全程中文交流；先说结果再给理由；不要堆日志哈希。
-- 用户是"动手看效果"型：每改一步要给明确的"你现在做什么"（刷新页面 / 重启宿主）。
-- **重启宿主前先告知用户**（那是他正在用的 GUI；且本会话就跑在宿主进程里，杀进程等于杀自己）。
-- 不要把治理性动作（隐藏会话列表条目等）当成本任务目标擅自扩做——最终语义见 §1，超出部分先问。
+## 6. User preference reminders
+- Communicate in Chinese throughout; results first, reasons after; do not dump log hashes.
+- The user is a "hands-on, look at the effect" type: after each change, state clearly "what you do now" (refresh the page / restart the host).
+- **Tell the user before restarting the host** (it is the GUI they are using; and this session itself runs inside the host process — killing the process kills yourself).
+- Do not treat governance-style actions (hiding session-list entries etc.) as this task's goal or expand on your own — the final semantics are in §1; ask first about anything beyond it.

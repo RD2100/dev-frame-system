@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
-import type { ProjectOpenResult, ProjectSendResult, ProjectStopResult } from '@deepseek-ai/dsh-experimental-shadow-router'
-import type { ShadowRouter, ShadowRouterStatus } from '@deepseek-ai/dsh-experimental-shadow-router'
+import type {
+  ProjectOpenResult,
+  ProjectSendResult,
+  ProjectStopResult,
+  ShadowRouter,
+  ShadowRouterStatus,
+} from '@deepseek-ai/dsh-experimental-shadow-routing'
 import ShadowController, { type ShadowStatusView } from '../src/index.ts'
 import type { ShadowAgent } from '../src/shadow-agent.ts'
 

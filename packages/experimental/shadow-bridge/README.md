@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-experimental-shadow-bridge` closes the delivery loop of the pluginized Shadow hierarchy. It polls `ctx.shadowRouter`'s public read face and turns every `received` `work` delivery that still matches its binding's authorized open run into one durable follow-up on the live agent of the bound controller session, so delivered input finally reaches a model and enters the controller's session log as a `user/message` event. Each forwarded messageId is recorded in the package's own `shadow_bridge` storage domain and restored at start, so a restart re-forwards nothing. Forwarding never settles a delivery: `completed` remains a controller-side fact, and the router's rows remain the durable record of what was sent, received, and completed. The package registers no tools, no prompt sections, and no session events, so the TypeScript and Python SDK projections are untouched.
+`dsh-experimental-shadow-bridge` closes the delivery loop of the pluginized Shadow hierarchy. It subscribes to the shadow router's observe-only `shadow/delivery-received` event and turns every `received` `work` delivery that still matches its binding's authorized open run into one durable follow-up on the live agent of the bound controller session, so delivered input finally reaches a model and enters the controller's session log as a `user/message` event. A mount-time and a loader-settled full reconciliation poll, plus a low-frequency safety-net timer, cover deliveries that entered `received` outside the listener's window — before mount, in a previous process, or while the composition was still settling. Each forwarded messageId is recorded in the package's own `shadow_bridge` storage domain and restored at start, so a restart re-forwards nothing. Forwarding never settles a delivery: `completed` remains a controller-side fact, and the router's rows remain the durable record of what was sent, received, and completed. The package registers no tools, no prompt sections, and no session events, so the TypeScript and Python SDK projections are untouched.
 
 ## Table of Contents
 
@@ -24,7 +24,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the plugin in a composition that already mounts the shadow router, the storage stack, and the agent registry; it hard-injects `ctx.agents` and `ctx.storageDomain`, and fails its load when either is absent. The router is read through `ctx.get('shadowRouter')` at each poll, so either mount order works, and a boot whose router mounts later simply polls nothing until it does.
+Mount the plugin in a composition that already mounts the shadow router, the storage stack, and the agent registry; it hard-injects `ctx.agents` and `ctx.storageDomain`, and fails its load when either is absent. The bridge subscribes to `shadow/delivery-received` at mount, and every forwarding unit re-resolves the router through `ctx.get('shadowRouter')`, so either mount order works: a boot whose router mounts later simply forwards nothing until its reconciliation polls and safety net see it.
 
 ```yaml
 - name: '@deepseek-ai/dsh-experimental-shadow-router'
@@ -33,7 +33,7 @@ Mount the plugin in a composition that already mounts the shadow router, the sto
     shadowSessionId: session-shadow
 - name: '@deepseek-ai/dsh-experimental-shadow-bridge'
   config:
-    intervalMs: 2000
+    intervalMs: 60000
     followupMaxChars: 8000
 ```
 
@@ -41,14 +41,14 @@ Mount the plugin in a composition that already mounts the shadow router, the sto
 
 | Field | Default | Meaning |
 |---|---|---|
-| `intervalMs` | Required | Positive safe integer: milliseconds between one delivery poll and the next. |
+| `intervalMs` | Required | Positive safe integer: milliseconds between two safety-net reconciliation polls. The `shadow/delivery-received` event carries live transitions, so this bounds only how long a delivery the event path missed may wait. |
 | `followupMaxChars` | Required | Positive safe integer: upper bound in characters on one forwarded follow-up text, header included. |
 
 Both fields are required with no defaults: a row missing either fails the load.
 
 ### What reaches the controller
 
-A forwardable delivery becomes one follow-up on the controller's live agent: a deterministic header naming the Shadow delivery and its workspace, then the verbatim delivery text, truncated from the tail when the total exceeds `followupMaxChars`. The follow-up enters the controller's inbox and becomes a `user/message` session event, so the model sees it on its next turn and the log records it. A delivery whose controller has no live agent is left for a later poll — the bridge never creates, resumes, or disposes agents. A delivery is forwardable only while its binding is not `stopping` or `stopped`, the binding still records an authorized open run, and the delivery's Goal and acceptance association equal that run's, so a Goal switch after receipt keeps the previous Goal's message out of the controller's current Goal. Forwarding never writes `completed`; a forwarded row stays `received` until the controller side settles it.
+A forwardable delivery becomes one follow-up on the controller's live agent: a deterministic header naming the Shadow delivery and its workspace, then the verbatim delivery text, truncated from the tail when the total exceeds `followupMaxChars`. The follow-up enters the controller's inbox and becomes a `user/message` session event, so the model sees it on its next turn and the log records it. A delivery whose controller has no live agent is left for the safety net — the bridge never creates, resumes, or disposes agents. A delivery is forwardable only while its binding is not `stopping` or `stopped`, the binding still records an authorized open run, and the delivery's Goal and acceptance association equal that run's, so a Goal switch after receipt keeps the previous Goal's message out of the controller's current Goal. Forwarding never writes `completed`; a forwarded row stays `received` until the controller side settles it.
 
 -----
 
@@ -62,19 +62,20 @@ This section explains the design decisions behind the feature and points at the 
 
 ### Design decisions
 
-- **The router's public read face is the only seam.** The poll reads `listDeliveries()` and `findBinding()` — no events, no writes into the router, no new router-side contract. Mount order and restart tolerance come from re-resolving the router per poll.
+- **The observe-only event is the primary channel; the read face is the reconciliation seam.** The router emits `shadow/delivery-received` exactly once per real `queued` → `received` transition — on the send path and on recovery convergence alike — carrying a frozen delivery snapshot and no mutation verb. The bridge forwards from that event and re-reads the router's public face (`listDeliveries()`/`findBinding()`) per unit, which keeps mount order and restart tolerance without writing into the router.
+- **One serialized forwarding chain.** Event units and polled units run on one promise chain, so the event and a reconciliation pass can never interleave on one delivery; the in-memory forwarded set plus the marker table make every later unit — in this process or after a restart — skip already forwarded deliveries.
 - **The detailed design's delivery gate, enforced again at forwarding.** The router already validates Goal ownership at admission; the bridge re-checks the current run before every forward, which is what keeps a delivery owned by a previous Goal out of a controller whose open run has since moved on.
-- **Send, then mark.** The follow-up enters the controller's inbox first; only then is the marker row written. A crash between the two can forward one delivery twice after restart — a visible duplicate carrying the identical header — while the reverse order could silently lose input. Every follow-up or marker failure is contained per delivery and retried on a later poll.
+- **Send, then mark.** The follow-up enters the controller's inbox first; only then is the marker row written. A crash between the two can forward one delivery twice after restart — a visible duplicate carrying the identical header — while the reverse order could silently lose input. Every follow-up or marker failure is contained per unit and retried by a later one.
 - **One marker table, rebuilt at start.** The `shadow_bridge` domain's `forwarded` table is the only durable bridge state; the in-memory forwarded set is a write-through projection of it, restored at construction.
 
 ### Source map
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | The function-plugin face: config, injections, domain open, and the poll loop wiring |
-| [`src/forwarder.ts`](src/forwarder.ts) | The delivery gate, live-agent resolution, follow-up send, and marker writes |
+| [`src/index.ts`](src/index.ts) | The function-plugin face: config, injections, domain open, the event subscription, startup reconciliation, and the safety-net loop wiring |
+| [`src/forwarder.ts`](src/forwarder.ts) | The serialized forwarding chain, the delivery gate, live-agent resolution, follow-up send, and marker writes |
 | [`src/text.ts`](src/text.ts) | The deterministic header and the bounded follow-up text |
-| [`src/loop.ts`](src/loop.ts) | The self-rescheduling poll timer with contained failures and quiescing disposal |
+| [`src/loop.ts`](src/loop.ts) | The low-frequency safety-net timer with contained failures and quiescing disposal |
 | [`src/spec.ts`](src/spec.ts) | The `shadow_bridge` domain spec and the forwarded-record schema |
 
 ### Invariant
@@ -96,7 +97,7 @@ The controller session receives one identified user-role message per forwarded d
 
 #### Token effect
 
-Each forwarded delivery adds one bounded user turn — header plus text, at most `followupMaxChars` characters — and its model response, both retained for the rest of the controller session. Polls that forward nothing add no requests and no tokens.
+Each forwarded delivery adds one bounded user turn — header plus text, at most `followupMaxChars` characters — and its model response, both retained for the rest of the controller session. Units that forward nothing add no requests and no tokens.
 
 #### KV Cache effect
 
@@ -112,7 +113,7 @@ These limits define when the bridge is a poor fit or needs special operational c
 - **Forwarding does not settle deliveries** — `completed` is a controller-side durable fact; this package never calls the router's completion seam, so a forwarded delivery stays `received` until the host or a later round settles it through `completeDelivery`.
 - **A crash between follow-up and marker can forward twice** — the marker is recorded after the follow-up enters the inbox, so an interrupted process re-forwards one delivery at the next start; the duplicate carries the identical header and messageId, and this order is chosen over one that could silently lose input.
 - **`note` deliveries are not forwarded** — only `work` deliveries schedule follow-ups in this round; notes stay `received`.
-- **Delivery latency is bounded by the poll** — input reaches the controller up to `intervalMs` late, and one poll forwards serially in the router's stable delivery order.
+- **Missed-event work waits for the safety net** — a live transition forwards on the event, but a delivery whose transition happened outside the listener's window, and one whose controller only became live later, wait up to `intervalMs` for the next safety-net pass; one pass forwards serially in the router's stable delivery order.
 
 <a id="dev-note"></a>
 ### Dev Note

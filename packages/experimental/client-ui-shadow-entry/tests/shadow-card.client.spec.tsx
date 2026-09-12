@@ -4,7 +4,7 @@
 import { useSyncExternalStore } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ProjectOpenResult, ProjectSendResult, ProjectStopResult, ShadowMessageId, ShadowStatusBinding } from '@deepseek-ai/dsh-experimental-shadow-router'
+import type { ProjectOpenResult, ProjectSendResult, ProjectStopResult, ShadowMessageId, ShadowStatusBinding } from '@deepseek-ai/dsh-experimental-shadow-routing'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ShadowConversationAccepted, ShadowConversationMessage, ShadowConversationPage, ShadowConversationReadInput, ShadowStatusView } from '@deepseek-ai/dsh-experimental-shadow-controller'
 import { ShadowCard, type ShadowCardProps } from '../src/client/ShadowCard.tsx'

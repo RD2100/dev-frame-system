@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-experimental-shadow-router` 挂载 `ctx.shadowRouter`，是插件化代理层级的 Shadow 侧路由器。它在自己的 `shadow_router` 存储域（组合 storages 根下的 JSON 文档）中为每个工作区保存一条控制器绑定；为每个项目创建带精确 `cwd` 元数据的独立控制器根会话；把每条跨根投递持久化两次——发送方的 `queued` 意图与目标已接受的 `received` 输入——并将 `completed` 作为一个独立的持久状态；且只向宿主指定为 Shadow 的那一个代理作用域安装四个项目工具（`project_open`、`project_send`、`project_status`、`project_stop`）。停止按项目隔离：其他绑定、它们的控制器与队列都不受影响。本包是私有的实验性宿主侧服务；它不注册提示词分区与会话事件，TypeScript 与 Python SDK 投影不受影响。
+`dsh-experimental-shadow-router` 挂载 `ctx.shadowRouter`，是插件化代理层级的 Shadow 侧路由器。它在自己的 `shadow_router` 存储域（组合 storages 根下的 JSON 文档）中为每个工作区保存一条控制器绑定；为每个项目创建带精确 `cwd` 元数据的独立控制器根会话；把每条跨根投递持久化两次——发送方的 `queued` 意图与目标已接受的 `received` 输入——并将 `completed` 作为一个独立的持久状态；且只向宿主指定为 Shadow 的那一个代理作用域安装四个项目工具（`project_open`、`project_send`、`project_status`、`project_stop`）。投递每一次真实进入 `received` 的转移——发送路径与恢复收敛路径——都会发出姊妹 Service Definition 声明的观察型 `shadow/delivery-received` 事件。停止按项目隔离：其他绑定、它们的控制器与队列都不受影响。契约词汇与本包实现的抽象服务位于姊妹包 [`dsh-experimental-shadow-routing`](../shadow-routing/README.zh.md)，本包对其再导出，让家族消费者在切换前保留同一个导入根。本包是私有的实验性宿主侧服务；它不注册提示词分区与会话事件，TypeScript 与 Python SDK 投影不受影响。
 
 ## 目录
 
@@ -111,12 +111,11 @@ async function sendProjectWork(
 
 | 文件 | 角色 |
 |---|---|
-| [`src/service.ts`](src/service.ts) | `ctx.shadowRouter` 服务：绑定生命周期、投递持久化、重放、状态、宿主缝 |
+| [`src/service.ts`](src/service.ts) | `ctx.shadowRouter` Provider：绑定生命周期、投递持久化、重放、状态、宿主缝与 delivery-received 发射 |
 | [`src/tools.ts`](src/tools.ts) | 四个项目工具及其 Shadow 作用域安装 |
 | [`src/spec.ts`](src/spec.ts) | `shadow_router` 域规格：bindings、deliveries、requests 三张表 |
-| [`src/ids.ts`](src/ids.ts) | 请求、消息与验收哈希的品牌化 id |
-| [`src/errors.ts`](src/errors.ts) | `ShadowRouterError` 及其稳定错误码联合 |
-| [`src/index.ts`](src/index.ts) | 包入口与默认导出 |
+| [`src/index.ts`](src/index.ts) | 包入口、默认导出与路由词汇再导出 |
+| [`dsh-experimental-shadow-routing`](../shadow-routing/README.zh.md) | 姊妹 Service Definition：抽象契约、词汇与事件的属主 |
 
 ### 不变式
 

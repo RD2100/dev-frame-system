@@ -11,7 +11,7 @@ import { z } from 'zod'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace'
-import { ShadowMessageId } from '@deepseek-ai/dsh-experimental-shadow-router'
+import { ShadowMessageId } from '@deepseek-ai/dsh-experimental-shadow-routing'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 
 /**
@@ -31,7 +31,7 @@ export interface ShadowBridgeForwardedRecord {
   readonly forwardedAt: string
 }
 
-/** Message identity schema at the durable boundary; the router owns the brand factory. */
+/** Message identity schema at the durable boundary; the routing vocabulary owns the brand factory. */
 const messageId = z.string().min(1).transform(value => ShadowMessageId(value))
 
 /** Session identity schema at the durable boundary; the id is opaque here. */

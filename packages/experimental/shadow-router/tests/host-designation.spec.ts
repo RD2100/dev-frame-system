@@ -27,6 +27,9 @@ import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
 import { MockAdapter } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { SHADOW_TOOL_NAMES, ShadowRouter } from '../src/index.ts'
+// The harness types the mounted service by the abstract seam contract; the
+// concrete class is only the plugin value mounted below.
+import type { ShadowRouter as ShadowRouterSeam } from '@deepseek-ai/dsh-experimental-shadow-routing'
 import type { ShadowRouterConfig } from '../src/index.ts'
 import { dispatch, failureText } from './helpers.ts'
 
@@ -45,7 +48,7 @@ interface DesignationHarness {
   /** Create one real directory under the root and return its path. */
   makeProjectDir: (name: string) => Promise<string>
   /** Mount the router row: the declarative designation enters here. */
-  mountRouter: (config: ShadowRouterConfig) => Promise<ShadowRouter>
+  mountRouter: (config: ShadowRouterConfig) => Promise<ShadowRouterSeam>
   /** Stop the context but keep the root on disk, so a restart can reuse it. */
   close: () => Promise<void>
   /** Stop the context and delete the temp root. */

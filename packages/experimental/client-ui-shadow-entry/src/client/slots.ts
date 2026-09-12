@@ -2,7 +2,7 @@
  * verbs, and the four panel write verbs. */
 
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { ProjectOpenResult, ProjectSendResult, ProjectStopResult } from '@deepseek-ai/dsh-experimental-shadow-router'
+import type { ProjectOpenResult, ProjectSendResult, ProjectStopResult } from '@deepseek-ai/dsh-experimental-shadow-routing'
 import type { ShadowConversationAccepted, ShadowProjectSendInput } from '@deepseek-ai/dsh-experimental-shadow-controller'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ShadowStatusSnapshot } from './shadow-store.ts'

@@ -1,11 +1,13 @@
 /**
- * The shadow router (`ctx.shadowRouter`): the Cordis service that routes user
- * intent between independent project roots. It owns the durable controller
+ * The shadow router Service Provider (`ctx.shadowRouter`): the Cordis service
+ * that routes user intent between independent project roots. It owns the durable controller
  * binding index (`shadow_router` domain: `bindings`, `deliveries`,
  * `requests`), the provisioning state machine with failure rollback, the
  * cross-root delivery persistence that keeps `received` and `completed` as
  * distinct durable states, the request deduplication ledger, and the
- * Shadow-only whitelist that installs the four project tools.
+ * Shadow-only whitelist that installs the four project tools. The contract
+ * vocabulary and the abstract service live in
+ * `@deepseek-ai/dsh-experimental-shadow-routing`.
  *
  * Workspace facts (canonical identity, alias resolution) come from the native
  * workspace registry; controller role persistence comes from the
@@ -30,26 +32,28 @@ import { SessionId, type Session } from '@deepseek-ai/dsh-session'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 // Loads the session-identity Context augmentation so `ctx.agentBindings` types the controller-role bind.
 import type {} from '@deepseek-ai/dsh-experimental-session-identity'
-import { installShadowTools } from './tools.ts'
-import { ShadowRouterError } from './errors.ts'
-import { AcceptanceHash, ShadowMessageId, ShadowRequestId } from './ids.ts'
-import { shadowRouterDomainSpec } from './spec.ts'
+// Loads the shadow-routing Context augmentation (the `ctx.shadowRouter` key and the
+// `shadow/delivery-received` event) and supplies the implemented contract.
+import { AcceptanceHash, ShadowMessageId, ShadowRequestId, ShadowRouter as ShadowRouterContract, ShadowRouterError } from '@deepseek-ai/dsh-experimental-shadow-routing'
 import type {
+  ProjectDeliverySummary,
+  ProjectOpenRequest,
+  ProjectOpenResult,
+  ProjectSendRequest,
+  ProjectSendResult,
+  ProjectStatusEntry,
+  ProjectStatusResult,
+  ProjectStopRequest,
+  ProjectStopResult,
   ShadowBindingRecord,
   ShadowBindingState,
-  ShadowDeliveryMode,
   ShadowDeliveryRecord,
-  ShadowDeliveryState,
   ShadowRequestKind,
   ShadowRequestRecord,
-} from './spec.ts'
-
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    /** The mounted shadow router: binding store, delivery persistence, and the Shadow whitelist. */
-    shadowRouter: ShadowRouter
-  }
-}
+  ShadowRouterStatus,
+} from '@deepseek-ai/dsh-experimental-shadow-routing'
+import { installShadowTools } from './tools.ts'
+import { shadowRouterDomainSpec } from './spec.ts'
 
 /** Plugin config (all optional — `static Config` supplies the defaults). */
 export interface ShadowRouterConfig {
@@ -63,12 +67,12 @@ export interface ShadowRouterConfig {
   controllerProfile?: string
   /**
    * Session id the host composition declares as its Shadow. The router
-   * performs the real {@link ShadowRouter.markShadow} invocation itself at
-   * the earliest resolvable point: immediately when that agent is already
-   * live at activation, otherwise when it is created. An id that never
-   * becomes live installs nothing (fail-closed, same as unconfigured);
-   * marking is idempotent; disposal cleanup stays with the existing
-   * `agent/disposed` effect.
+   * performs the real `markShadow` invocation itself at the earliest
+   * resolvable point: immediately when that agent is already live at
+   * activation, otherwise when it is created. An id that never becomes live
+   * installs nothing (fail-closed, same as unconfigured); marking is
+   * idempotent; disposal cleanup stays with the existing `agent/disposed`
+   * effect.
    */
   shadowSessionId?: string
   /** Per-workspace limit of pending (queued, not yet received) deliveries. */
@@ -81,132 +85,6 @@ export interface ShadowRouterConfig {
 
 /** The config shape after schemastery applied the defaults; `shadowSessionId` keeps its optional face. */
 type ResolvedConfig = Omit<Required<ShadowRouterConfig>, 'shadowSessionId'> & Pick<ShadowRouterConfig, 'shadowSessionId'>
-
-import type { ProjectOpenResult, ProjectSendResult, ProjectStopResult } from './types.ts'
-export type { ProjectOpenResult, ProjectSendResult, ProjectStopResult } from './types.ts'
-
-/** One bounded delivery row inside a status read. */
-export interface ProjectDeliverySummary {
-  /** Stable delivery identity. */
-  readonly messageId: ShadowMessageId
-  /** Delivery mode. */
-  readonly mode: ShadowDeliveryMode
-  /** Work ownership the delivery asserts. */
-  readonly goalId: string
-  /** Durable delivery state; `received` is never read as `completed`. */
-  readonly state: ShadowDeliveryState
-  /** ISO-8601 sender-intent instant. */
-  readonly createdAt: string
-  /** ISO-8601 target-acceptance instant, when received. */
-  readonly receivedAt?: string
-  /** ISO-8601 completion instant, when completed. */
-  readonly completedAt?: string
-  /** Why the delivery was cancelled, when cancelled. */
-  readonly cancelReason?: string
-}
-
-/** One project row inside a status read. */
-export interface ProjectStatusEntry {
-  /** The workspace registry's stable project identity. */
-  readonly workspaceId: WorkspaceId
-  /** Canonical root the registry recorded. */
-  readonly canonicalPath: string
-  /** The current controller root session. */
-  readonly controllerSessionId: SessionId
-  /** Whether the controller session is live in this process right now. */
-  readonly controllerLive: boolean
-  /** Controller profile the binding pins. */
-  readonly profileKey: string
-  /** Association version. */
-  readonly bindingRevision: number
-  /** Provisioning/operation state. */
-  readonly state: ShadowBindingState
-  /** Durable failure reason, when `needs_attention` or `failed`. */
-  readonly failureReason?: string
-  /** The authorized open run's Goal, when one is recorded. */
-  readonly activeGoalId?: string
-  /** What blocks the project, computed from durable state at read time. */
-  readonly blockedReason?: string
-  /** First page of the project's deliveries, oldest first. */
-  deliveries: ProjectDeliverySummary[]
-  /** Whether more delivery rows exist beyond the bounded page. */
-  readonly deliveriesTruncated: boolean
-}
-
-/** The bounded, read-only result `project_status` returns. */
-export interface ProjectStatusResult {
-  /** One page of authorized projects. */
-  projects: ProjectStatusEntry[]
-  /** Offset of the next page, when more projects exist. */
-  readonly nextCursor?: number
-  /** ISO-8601 instant the observation was taken. */
-  readonly observedAt: string
-}
-
-/** One binding row projected for host status surfaces: association facts only. */
-export interface ShadowStatusBinding {
-  /** The workspace registry's stable project identity. */
-  readonly workspaceId: WorkspaceId
-  /** Canonical root the registry recorded. */
-  readonly canonicalPath: string
-  /** Association version. */
-  readonly bindingRevision: number
-  /** Provisioning/operation state; see the type for the order. */
-  readonly state: ShadowBindingState
-}
-
-/**
- * The read-only aggregate host status surfaces (the Web Shadow card) display:
- * designation, controller liveness, authorized roots, and the binding index.
- * Unlike `projectStatus` it is host-plane (no Shadow-caller gate), synchronous,
- * and unpaginated — the deployment's own facts, not a model-facing readout.
- */
-export interface ShadowRouterStatus {
-  /** Controller session id the host composition declared, absent when unconfigured. */
-  readonly shadowSessionId?: string
-  /** Whether the designated session is currently marked as the Shadow. */
-  readonly shadowLive: boolean
-  /** Canonical authorized roots resolved at load, in configuration order. */
-  readonly authorizedRoots: readonly string[]
-  /** Every binding in stable (createdAt, workspaceId) order. */
-  readonly bindings: readonly ShadowStatusBinding[]
-}
-
-/** Host-level request shapes; the model-facing wrappers live in `tools.ts`. */
-export interface ProjectOpenRequest {
-  /** Existing, authorized root directory. */
-  readonly path: string
-  /** Stable request id; replays return the prior result. */
-  readonly requestId: string
-}
-
-/** Host-level request to deliver one message into an authorized project. */
-export interface ProjectSendRequest {
-  /** Receiving project. */
-  readonly workspaceId: string
-  /** Association version the sender asserts. */
-  readonly bindingRevision: number
-  /** Work ownership the message asserts. */
-  readonly goalId: string
-  /** Acceptance association the message asserts. */
-  readonly acceptanceHash: string
-  /** Stable request id; retries reuse it. */
-  readonly requestId: string
-  /** `work` schedules follow-up; `note` is quiet input. */
-  readonly mode: ShadowDeliveryMode
-  /** Bounded message text. */
-  readonly text: string
-}
-
-/** Host-level request to stop one authorized project. */
-export interface ProjectStopRequest {
-  /** Project to stop. */
-  readonly workspaceId: string
-  /** Association version the caller asserts. */
-  readonly expectedRevision: number
-  /** Stable request id; replays return the prior result. */
-  readonly requestId: string
-}
 
 /** The states that still admit deliveries. */
 const ADMITTING_STATES: readonly ShadowBindingState[] = ['ready']
@@ -245,7 +123,7 @@ function inputHash(kind: ShadowRequestKind, input: Record<string, string | numbe
 }
 
 /** The shadow router: binding store, cross-root delivery, and the Shadow tool whitelist. */
-export class ShadowRouter extends Service {
+export class ShadowRouter extends ShadowRouterContract {
   static inject = ['sessions', 'storageDomain', 'workspaceRegistry', 'agentBindings', 'agents']
 
   static Config: z<ShadowRouterConfig> = z.object({
@@ -279,7 +157,7 @@ export class ShadowRouter extends Service {
    * @param config - Schema-validated config; limits must be positive safe integers.
    */
   constructor(ctx: Context, config: ShadowRouterConfig) {
-    super(ctx, 'shadowRouter')
+    super(ctx)
     // Schemastery fills the defaults before construction; the type does not encode that step.
     this.config = config as ResolvedConfig
     if (!Number.isSafeInteger(this.config.maxPendingDeliveries) || this.config.maxPendingDeliveries < 1) {
@@ -309,7 +187,8 @@ export class ShadowRouter extends Service {
     this.requestsTable = domain.table('requests')
     // Cold restore: rebuild every index from the durable tables in stable
     // (createdAt, key) order. The maps hold detached frozen copies so the
-    // durable rows stay untouched.
+    // durable rows stay untouched. Restoring a row that was already
+    // `received` on disk is a reload, not a transition, so it emits nothing.
     for (const [id, record] of [...this.bindingsTable.entries()]
       .sort(([, left], [, right]) => left.createdAt.localeCompare(right.createdAt) || left.workspaceId.localeCompare(right.workspaceId))) {
       this.bindings.set(id, Object.freeze({ ...record }))
@@ -1223,15 +1102,22 @@ export class ShadowRouter extends Service {
     })
   }
 
-  /** Mark one queued delivery received (durable target acceptance). */
+  /**
+   * Mark one queued delivery received (durable target acceptance), then emit
+   * `shadow/delivery-received` — the single transition into `received`, so
+   * the send path and the recovery convergence emit identically, after the
+   * durable write commits.
+   */
   private async markDeliveryReceived(record: ShadowDeliveryRecord): Promise<ShadowDeliveryRecord> {
     const now = new Date().toISOString()
-    return await this.persistDelivery({
+    const received = await this.persistDelivery({
       ...record,
       state: 'received',
       receivedAt: now,
       updatedAt: now,
     })
+    this.emitDeliveryReceived(received.workspaceId, received)
+    return received
   }
 
   /** Assert a crashed delivery row carries the retried request's exact ownership. */

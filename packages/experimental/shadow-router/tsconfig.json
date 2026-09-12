@@ -15,6 +15,7 @@
     { "path": "../../storage/storage-domain" },
     { "path": "../../util/brand" },
     { "path": "../session-identity" },
+    { "path": "../shadow-routing" },
     { "path": "../../workspace/workspace" }
   ]
 }

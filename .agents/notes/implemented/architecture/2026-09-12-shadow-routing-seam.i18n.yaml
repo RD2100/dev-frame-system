@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-12-shadow-routing-seam.md
+2026-09-12-shadow-routing-seam.md: 250e797bdbda5a6c1ac3f4185aed8dad8b1ea704
+2026-09-12-shadow-routing-seam.zh.md: 8f5a7ad702ba25c4455d09b7c019c6da654e3d84

@@ -21,12 +21,13 @@
 
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
+// The router service type and the receipts are the abstract seam contract of the Service Definition.
 import type {
   ProjectOpenResult,
   ProjectSendResult,
   ProjectStopResult,
   ShadowRouter,
-} from '@deepseek-ai/dsh-experimental-shadow-router'
+} from '@deepseek-ai/dsh-experimental-shadow-routing'
 import type {
   ShadowConversationAccepted,
   ShadowConversationPage,

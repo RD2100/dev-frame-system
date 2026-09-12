@@ -7,6 +7,7 @@
   "include": ["src"],
   "references": [
     { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/loader" },
     { "path": "../../../vendor/schemastery" },
     { "path": "../../core/agent" },
     { "path": "../../core/session" },
@@ -14,6 +15,6 @@
     { "path": "../../storage/storage-domain" },
     { "path": "../../util/brand" },
     { "path": "../../workspace/workspace" },
-    { "path": "../shadow-router" }
+    { "path": "../shadow-routing" }
   ]
 }

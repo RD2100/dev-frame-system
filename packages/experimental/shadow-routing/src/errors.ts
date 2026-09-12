@@ -1,4 +1,4 @@
-/** The stable error type for shadow-router failures. */
+/** The stable error type for shadow routing failures, owned by the routing vocabulary. */
 
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 

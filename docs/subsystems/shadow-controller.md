@@ -1,0 +1,114 @@
+# Shadow controller
+
+English | [中文](shadow-controller.zh.md)
+
+The host-side owner of the Shadow panel's Remote faces: the `shadow` Remote namespace that the Web Shadow card drives. `ctx.shadowController` ([`ShadowController`](../../packages/experimental/shadow-controller), a Typert Remote service) serves the honest aggregate status read and the three panel write faces, each delegating to the shadow router's host bridges under the designated Shadow's own authority — validation, the caller gate, replay, and the delivery channel stay the router's own, and request ids are minted per panel action because each one is a fresh intent. `ctx.shadowAgent` ([`ShadowAgent`](../../packages/experimental/shadow-controller), same package) is the persistent Shadow conversation host: one durable agent session that IS the deployment's designated Shadow, serving the human's post-and-read conversation faces. The controller stays registered when the deployment mounts no shadow router or conversation host: the read answers `mounted: false` and every other verb fails loud, so a surface renders the honest disabled state instead of a transport failure. The package is experimental and private: it ships in no released bundle.
+
+Source: [`packages/experimental/shadow-controller/src/index.ts`](../../packages/experimental/shadow-controller/src/index.ts)
+
+<!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
+
+<a id="cordis-surface"></a>
+
+## Cordis API
+
+Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+
+<a id="ctxshadowagent--shadowagent"></a>
+
+### `ctx.shadowAgent` — `ShadowAgent`
+
+Host service behind the controller's conversation verbs. Registered as `ctx.shadowAgent`; every verb resolves the designated session on demand.
+
+```ts cordis-catalog
+/**
+ * Resolve the live Shadow agent, creating or restoring the designated
+ * session on first use. Memoized; a failure is not memoized, so the next
+ * verb retries.
+ * @returns the live Shadow agent.
+ */
+async ensure(): Promise<Agent>
+
+/**
+ * Post one human message into the Shadow session. The agent loop claims it
+ * and runs the turn; the reply lands on the persisted conversation surface,
+ * observable through {@link readConversation}.
+ * @param text - Non-empty message text from the human.
+ * @returns the accepted message's stable id.
+ */
+async postMessage(text: string): Promise<{ readonly messageId: string }>
+
+/**
+ * Read the Shadow conversation surface, bounded and cursor-addressed.
+ * Without `after`, the last up-to-`limit` rows; with `after`, the rows
+ * beyond that sequence number. `cursor` is the log length at read time, or
+ * the last returned row when the page truncated — poll by passing it back.
+ * @param request - Optional cursor and page bound.
+ * @returns the page of rows plus the continuation cursor.
+ */
+async readConversation(request: { readonly after?: number; readonly limit?: number }): Promise<ShadowConversationPage>
+```
+
+Types: [Agent](core.md)
+
+Source: [`packages/experimental/shadow-controller/src/shadow-agent.ts`](../../packages/experimental/shadow-controller/src/shadow-agent.ts)
+
+<a id="ctxshadowcontroller--shadowcontroller"></a>
+
+### `ctx.shadowController` — `ShadowController`
+
+Host service backing the generated `ctx.remote.shadow` namespace. The read never mutates router state; every write runs through the router's host bridges under the designated Shadow's authority, and the conversation verbs run through the conversation host's persistent session.
+
+```ts cordis-catalog
+/**
+ * Read the aggregate Shadow status: mount presence, designation, controller
+ * liveness, authorized roots, and open-project rows.
+ * @returns the router's snapshot, or the honest `mounted: false` answer when
+ *   this deployment composes no shadow router.
+ */
+@Remote readStatus(): ShadowStatusView
+
+/**
+ * Open the project at one path under an authorized root: validate, provision
+ * the project's controller session, and persist the controller role.
+ * @param request - The project path to open.
+ * @returns the controller association.
+ */
+@Remote async openProject(request: ShadowProjectOpenInput): Promise<ProjectOpenResult>
+
+/**
+ * Deliver one `work` message to a project's controller session through the
+ * router's delivery channel, with the binding's current revision and
+ * authorized open run supplied by the router.
+ * @param request - Target workspace and bounded message text.
+ * @returns the delivery receipt.
+ */
+@Remote async sendToController(request: ShadowProjectSendInput): Promise<ProjectSendResult>
+
+/**
+ * Release (stop and close) one project: cancel pending deliveries and land
+ * the row on `stopped`, staying visible in the panel.
+ * @param request - The workspace to release.
+ * @returns the stop receipt.
+ */
+@Remote async releaseProject(request: ShadowProjectReleaseInput): Promise<ProjectStopResult>
+
+/**
+ * Post one human message into the designated Shadow session. The session's
+ * agent loop claims it and runs the turn; the reply lands on the persisted
+ * conversation surface.
+ * @param request - The human's message text.
+ * @returns the accepted message's stable id.
+ */
+@Remote async postMessage(request: ShadowConversationPostInput): Promise<ShadowConversationAccepted>
+
+/**
+ * Read the Shadow conversation surface, bounded and cursor-addressed.
+ * @param request - Optional continuation cursor and page bound.
+ * @returns the page of conversation rows plus the continuation cursor.
+ */
+@Remote async readConversation(request: ShadowConversationReadInput): Promise<ShadowConversationPage>
+```
+
+Source: [`packages/experimental/shadow-controller/src/index.ts`](../../packages/experimental/shadow-controller/src/index.ts)
+<!-- END GENERATED cordis-surface -->

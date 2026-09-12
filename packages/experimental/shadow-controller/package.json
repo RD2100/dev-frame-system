@@ -49,7 +49,7 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",
-    "@deepseek-ai/dsh-experimental-shadow-router": "workspace:^",
+    "@deepseek-ai/dsh-experimental-shadow-routing": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
@@ -64,6 +64,7 @@
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:^",
     "@deepseek-ai/dsh-experimental-session-identity": "workspace:^",
     "@deepseek-ai/dsh-experimental-shadow-router": "workspace:^",
+    "@deepseek-ai/dsh-experimental-shadow-routing": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-session-persistence": "workspace:^",

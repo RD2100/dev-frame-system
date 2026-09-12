@@ -27,13 +27,16 @@ import { MockAdapter } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import ShadowRouter, { shadowRouterDomainSpec } from '../src/index.ts'
 import { workspaceDomainSpec, WorkspaceId } from '@deepseek-ai/dsh-workspace'
+// The harness types the mounted service by the abstract seam contract; the
+// concrete class is only the plugin value mounted below.
+import type { ShadowRouter as ShadowRouterSeam } from '@deepseek-ai/dsh-experimental-shadow-routing'
 import type { ShadowRouterConfig } from '../src/index.ts'
 
 /** The per-spec harness: one temp root, one booted context, one marked Shadow. */
 export interface Harness {
   ctx: Context
   root: string
-  router: ShadowRouter
+  router: ShadowRouterSeam
   /** The host-designated Shadow session every authorized call goes through. */
   shadow: Agent
   /** A live agent that is never marked as Shadow (the worker probe). */

@@ -40,6 +40,7 @@ The experimental group contains prototype capabilities that are not part of any 
 | [`project-controller`](project-controller/README.md) | Project task board: TaskState transitions, a bounded developing budget, lifecycle, and the controller-only merge gate | `ctx.projectController` |
 | [`project-memory`](project-memory/README.md) | Bounded append-only project memory over a user-selected Obsidian Vault subtree: scoped search/read/append tools, session-log receipts, path containment, and honest failure reporting | library service — no ctx key |
 | [`session-identity`](session-identity/README.md) | Durable agent binding registry and exact-cwd native Session creation | `ctx.agentBindings` |
+| [`shadow-routing`](shadow-routing/README.md) | Service Definition for the shadow routing seam: the abstract router contract, routing vocabulary, and the `shadow/delivery-received` event | `ctx.shadowRouter` |
 | [`shadow-controller`](shadow-controller/README.md) | Read-only Remote owner of the Shadow router status snapshot for host status surfaces | `ctx.shadowController` |
 | [`shadow-web-profile`](shadow-web-profile/README.md) | Explicit source-checkout Web layer for the resident Shadow entry card | — |
 | [`client-ui-shadow-entry`](client-ui-shadow-entry/README.md) | Resident Web Shadow entry card above Settings with the honest status panel | — |

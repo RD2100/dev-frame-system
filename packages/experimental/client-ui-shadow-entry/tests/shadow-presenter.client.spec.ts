@@ -1,7 +1,7 @@
 /** The presenter folds: every honest phase, the multi-project projection, and the write outcome lines. */
 
 import { describe, expect, it } from 'vitest'
-import type { ShadowRouterStatus, ShadowStatusBinding } from '@deepseek-ai/dsh-experimental-shadow-router'
+import type { ShadowRouterStatus, ShadowStatusBinding } from '@deepseek-ai/dsh-experimental-shadow-routing'
 import type { ShadowStatusView } from '@deepseek-ai/dsh-experimental-shadow-controller'
 import {
   presentShadowStatus,

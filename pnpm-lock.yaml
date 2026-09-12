@@ -4975,9 +4975,9 @@ importers:
       '@deepseek-ai/dsh-experimental-shadow-controller':
         specifier: workspace:^
         version: link:../shadow-controller
-      '@deepseek-ai/dsh-experimental-shadow-router':
+      '@deepseek-ai/dsh-experimental-shadow-routing':
         specifier: workspace:^
-        version: link:../shadow-router
+        version: link:../shadow-routing
       '@deepseek-ai/dsh-typert-protocol':
         specifier: workspace:^
         version: link:../../typert/protocol
@@ -5401,6 +5401,9 @@ importers:
       '@deepseek-ai/dsh-experimental-shadow-router':
         specifier: workspace:^
         version: link:../shadow-router
+      '@deepseek-ai/dsh-experimental-shadow-routing':
+        specifier: workspace:^
+        version: link:../shadow-routing
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
         version: link:../../llm/llm
@@ -5458,6 +5461,9 @@ importers:
       '@deepseek-ai/dsh-experimental-shadow-router':
         specifier: workspace:^
         version: link:../shadow-router
+      '@deepseek-ai/dsh-experimental-shadow-routing':
+        specifier: workspace:^
+        version: link:../shadow-routing
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
         version: link:../../llm/llm
@@ -5494,6 +5500,9 @@ importers:
 
   packages/experimental/shadow-router:
     dependencies:
+      '@deepseek-ai/dsh-experimental-shadow-routing':
+        specifier: workspace:^
+        version: link:../shadow-routing
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
@@ -5543,6 +5552,27 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: workspace:^
         version: link:../../core/tools
+      '@deepseek-ai/dsh-workspace':
+        specifier: workspace:^
+        version: link:../../workspace/workspace
+
+  packages/experimental/shadow-routing:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:^
+        version: link:../../core/agent
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:^
+        version: link:../../util/brand
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:^
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:^
+        version: link:../../core/session
       '@deepseek-ai/dsh-workspace':
         specifier: workspace:^
         version: link:../../workspace/workspace

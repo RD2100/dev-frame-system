@@ -27,7 +27,15 @@ flowchart LR
   svc_projectController["ctx.projectController<br/>Project task and integration authority"]
   pkg_experimental_project_memory["experimental-project-memory"]
   svc_projectMemory["ctx.projectMemory<br/>Bounded project memory"]
-  svc_shadowRouter["ctx.shadowRouter<br/>Project controller routing"]
+  pkg_experimental_shadow_routing["experimental-shadow-routing"]
+  svc_shadowRouter["ctx.shadowRouter<br/>Shadow routing seam"]
+  pkg_experimental_shadow_bridge["experimental-shadow-bridge"]
+  pkg_experimental_shadow_controller["experimental-shadow-controller"]
+  svc_shadowController["ctx.shadowController<br/>Shadow panel Remote owner"]
+  svc_shadowAgent["ctx.shadowAgent<br/>Shadow conversation host"]
+  svc_projectRun["ctx.projectRun<br/>Dispatch project run"]
+  pkg_terminal["terminal"]
+  svc_terminalOwnership["ctx.terminalOwnership<br/>Terminal ownership registry"]
   pkg_attachment["attachment"]
   svc_attachments["ctx.attachments<br/>Durable binary attachment storage"]
   pkg_attachment_local["attachment-local"]
@@ -173,7 +181,6 @@ flowchart LR
   pkg_tool_pwsh["tool-pwsh"]
   pkg_shell_env["shell-env"]
   svc_shellEnv["ctx.shellEnv<br/>Managed bash environment registry"]
-  pkg_terminal["terminal"]
   svc_terminals["ctx.terminals<br/>Persistent PTY session registry"]
   pkg_sandbox["sandbox"]
   svc_sandbox["ctx.sandbox<br/>Process-sandbox seam"]
@@ -276,6 +283,7 @@ flowchart LR
   pkg_deepseek_llm_api_extensions --> svc_deepseekLlmApiExtensions
   pkg_e2b --> svc_e2b
   pkg_experimental_agent_dispatch --> svc_agentDispatch
+  pkg_experimental_agent_dispatch --> svc_projectRun
   pkg_experimental_agent_evidence --> svc_agentEvidence
   pkg_experimental_agent_hierarchy --> svc_agentHierarchy
   pkg_experimental_agent_reliability --> svc_agentReliability
@@ -286,7 +294,10 @@ flowchart LR
   pkg_experimental_project_controller --> svc_projectController
   pkg_experimental_project_memory --> svc_projectMemory
   pkg_experimental_session_identity --> svc_agentBindings
+  pkg_experimental_shadow_controller --> svc_shadowAgent
+  pkg_experimental_shadow_controller --> svc_shadowController
   pkg_experimental_shadow_router --> svc_shadowRouter
+  pkg_experimental_shadow_routing --> svc_shadowRouter
   pkg_file_reference --> svc_fileReferences
   pkg_file_reference_local --> svc_fileReferences
   pkg_fs --> svc_fs
@@ -354,6 +365,7 @@ flowchart LR
   pkg_subprocess_e2b --> svc_subprocess
   pkg_subprocess_local --> svc_subprocess
   pkg_system_prompt --> svc_systemPrompt
+  pkg_terminal --> svc_terminalOwnership
   pkg_terminal --> svc_terminals
   pkg_terminal_bash --> svc_terminals
   pkg_token_meter --> svc_tokenMeter
@@ -455,7 +467,8 @@ flowchart LR
   svc_settings --> pkg_api_settings_controller
   svc_settings --> pkg_llm_deepseek
   svc_settings --> pkg_llm_pi_ai
-  svc_shadowRouter --> pkg_experimental_shadow_router
+  svc_shadowRouter --> pkg_experimental_shadow_bridge
+  svc_shadowRouter --> pkg_experimental_shadow_controller
   svc_shell --> pkg_hooks_claude_code
   svc_shell --> pkg_hooks_codex
   svc_shell --> pkg_tool_bash
@@ -524,7 +537,11 @@ flowchart LR
 | `ctx.devframeTaskGrading` | `core` | [`experimental-devframe`](../packages/experimental/devframe) | - | - | - | 记录宿主声明的任务记忆要求，并将记忆操作失败分级为任务警告事件。 |
 | `ctx.projectController` | `core` | [`experimental-project-controller`](../packages/experimental/project-controller) | - | [`experimental-project-controller`](../packages/experimental/project-controller) | - | 负责任务状态迁移及绑定证据的 Git 集成；同包消费者提供仅 controller 获准调用的集成工具。 |
 | `ctx.projectMemory` | `core` | [`experimental-project-memory`](../packages/experimental/project-memory) | - | [`experimental-project-memory`](../packages/experimental/project-memory) | - | 通过有界记忆工具访问配置的 Vault 子树；记忆内容永不授予执行权限。 |
-| `ctx.shadowRouter` | `core` | [`experimental-shadow-router`](../packages/experimental/shadow-router) | - | [`experimental-shadow-router`](../packages/experimental/shadow-router) | - | 负责各工作区的 controller 根会话、持久跨根投递，以及向指定 Shadow 代理开放的项目控制。 |
+| `ctx.shadowRouter` | `seam` | [`experimental-shadow-routing`](../packages/experimental/shadow-routing) | [`experimental-shadow-router`](../packages/experimental/shadow-router) | [`experimental-shadow-bridge`](../packages/experimental/shadow-bridge), [`experimental-shadow-controller`](../packages/experimental/shadow-controller) | - | 鎷ユ湁鍚勫伐浣滃尯鎺у埗鍣ㄧ粦瀹氬绾︺€佽法鏍规姇閫掕瘝姹囦笌 shadow/delivery-received 浜嬩欢锛汸rovider 璐熻矗鎸佷箙鍖栵紝妗ヨ礋璐ｈ浆鍙戙€?|
+| `ctx.shadowController` | `core` | [`experimental-shadow-controller`](../packages/experimental/shadow-controller) | - | - | - | 鎻愪緵 Shadow 鍗＄墖璇诲彇涓庨潰鏉垮啓鍏ラ潰锛岀粡璺敱鍣ㄥ涓绘ˉ浠ユ寚瀹?Shadow 鐨勬巿鏉冭繍琛屻€?|
+| `ctx.shadowAgent` | `core` | [`experimental-shadow-controller`](../packages/experimental/shadow-controller) | - | - | - | 鎷ユ湁瀵硅瘽鍙戝竷涓庤鍙栭潰鑳屽悗鐨勬寔涔呮寚瀹?Shadow 浼氳瘽銆?|
+| `ctx.projectRun` | `core` | [`experimental-agent-dispatch`](../packages/experimental/agent-dispatch) | - | - | - | 鎷ユ湁涓€娆℃淳鍙戝€欓€夊叏閾捐矾杩愯锛歭ead 閫夋嫨銆佷换鍔¤瘎绾т笌鎸佷箙钀借处銆?|
+| `ctx.terminalOwnership` | `core` | [`terminal`](../packages/terminal/terminal) | - | - | - | 鎷ユ湁浼氳瘽鍒扮粓绔殑灞炰富鍏崇郴锛屽彧鏈夊睘涓讳細璇濊兘鎺у埗璇ョ粓绔€?|
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | [`api-session-controller`](../packages/api/session-controller), [`tool-fs`](../packages/fs/tool-fs), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-deepseek`](../packages/llm/llm-deepseek) | - | 宿主会在会话事件之前提交已接受的图片；提供方适配器将已授权的持久引用解析为提供方原生内容。 |
 | `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | 适配器注册提供方实现；agent loop（智能体循环）与压缩功能调用提供方无关的流服务。 |
 | `ctx.deepseekLlmApiExtensions` | `seam` | [`deepseek-llm-api-extensions`](../packages/llm/deepseek-llm-api-extensions) | [`session-log-deepseek`](../packages/session/session-log-deepseek), [`plugin-package-inventory-deepseek`](../packages/llm/plugin-package-inventory-deepseek) | [`llm-deepseek`](../packages/llm/llm-deepseek) | - | 插件准备彼此独立的顶层字段；官方适配器会合并这些字段，并在 HTTP 接受后提交其交付状态。 |

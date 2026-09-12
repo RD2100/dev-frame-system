@@ -13,7 +13,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { InferValue, ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
-import { ShadowRouterError } from './errors.ts'
+import { ShadowRouterError } from '@deepseek-ai/dsh-experimental-shadow-routing'
 import type { ShadowRouter } from './service.ts'
 
 /** The tool names the Shadow whitelist contributes, in registration order. */

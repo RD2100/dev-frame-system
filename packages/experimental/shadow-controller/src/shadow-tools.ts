@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { InferValue, ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
-import type { ShadowRouter } from '@deepseek-ai/dsh-experimental-shadow-router'
+import type { ShadowRouter } from '@deepseek-ai/dsh-experimental-shadow-routing'
 
 /** The conversational tool names, in registration order. */
 export const SHADOW_CONVERSATION_TOOL_NAMES = [

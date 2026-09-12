@@ -16,7 +16,7 @@
     { "path": "../../session/session-persistence" },
     { "path": "../../typert/protocol" },
     { "path": "../session-identity" },
-    { "path": "../shadow-router" },
+    { "path": "../shadow-routing" },
     { "path": "../../storage/storage" },
     { "path": "../../storage/storage-domain" },
     { "path": "../../storage/storage-json" },

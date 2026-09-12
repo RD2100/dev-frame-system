@@ -61,18 +61,21 @@
     # authorized open run) into the bound controller session as a durable
     # followup — model-visible and reconstructable from the session log — so
     # a delivery drives real controller work instead of stalling in the
-    # router queue. The shadow_bridge storage domain records each forwarded
-    # messageId for exactly-once across restarts; v1 forwards to a live
-    # controller only and never completes the delivery itself. The bridge
-    # package README owns the full contract.
+    # router queue. The router's shadow/delivery-received event triggers the
+    # forward; the shadow_bridge storage domain records each forwarded
+    # messageId for exactly-once across restarts, and a mount-time plus a
+    # loader-settled reconciliation poll cover work that predates this
+    # process. v1 forwards to a live controller only and never completes the
+    # delivery itself. The bridge package README owns the full contract.
     - id: shadow-bridge
       name: '@deepseek-ai/dsh-experimental-shadow-bridge'
       config:
-        # Delivery scan cadence. Lower values forward received work sooner
-        # but poll the storage domain more often; 15s keeps delivery latency
-        # human-scale without a busy loop. Required — the deployment states
-        # its cadence explicitly.
-        intervalMs: 15000
+        # Safety-net cadence, not the delivery trigger: live transitions
+        # forward on the router's shadow/delivery-received event, and this
+        # bounds only how long work the event path missed may wait. 60s is
+        # ample because live latency does not depend on it. Required — the
+        # deployment states its cadence explicitly.
+        intervalMs: 60000
         # Upper bound for one forwarded work text: the followup enters the
         # controller conversation, so every char is request context. Large
         # enough for a full task brief; raise for bigger briefs and accept

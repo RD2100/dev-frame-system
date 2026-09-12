@@ -59,5 +59,6 @@
 | [session-telemetry.md](session-telemetry.zh.md) | 对外会话上报能力 seam：`SessionTelemetryRecord`/`SessionTelemetrySeverity`、`SessionTelemetrySink` 约定和 `session-telemetry/record` 脱敏 waterfall |
 | [worktree-registry.md](worktree-registry.zh.md) | 每工作区 git worktree 注册表：branded WorktreeId、经 git provider 的 WorktreeRegistry 服务、create/bind/status/remove/reconcile 语义与 worktrees 存储域 |
 | [agent-worktree.md](agent-worktree.zh.md) | 每 Agent 的 worktree seam：构建在 worktree registry 上的 AgentWorktree 服务、单一写入者绑定，以及 worktree_create/worktree_status/worktree_remove 三个工具 |
+| [shadow-controller.md](shadow-controller.zh.md) | Shadow 面板 Remote 属主与对话宿主：`ctx.shadowController` 与 `ctx.shadowAgent`、构建在路由器宿主桥上的宿主写入面，以及如实的禁用态 |
 
 > 这些页面上的类型声明及其 JSDoc 与源码等价，并由 `pnpm run verify-type-equiv` 检查漂移（见 [development.md](../development.zh.md#documenting-types-verbatim-ts-type-equiv)）。普通块保留完整声明；`public-api` 块保留去除实现体的公开 class 声明。Cordis 服务与事件使用每页生成的 **Cordis API** 小节。

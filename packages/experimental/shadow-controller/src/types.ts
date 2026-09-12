@@ -6,14 +6,14 @@
 import type {
   ShadowRouterStatus,
   ShadowStatusBinding,
-} from '@deepseek-ai/dsh-experimental-shadow-router'
+} from '@deepseek-ai/dsh-experimental-shadow-routing'
 
 export type {
   ProjectOpenResult,
   ProjectSendResult,
   ProjectStopResult,
   ShadowRouterStatus,
-} from '@deepseek-ai/dsh-experimental-shadow-router'
+} from '@deepseek-ai/dsh-experimental-shadow-routing'
 
 /** The workspace id vocabulary the status rows and write inputs carry. */
 export type ShadowWorkspaceId = ShadowStatusBinding['workspaceId']

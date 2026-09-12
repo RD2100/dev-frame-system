@@ -25,7 +25,15 @@ flowchart LR
   svc_projectController["ctx.projectController<br/>Project task and integration authority"]
   pkg_experimental_project_memory["experimental-project-memory"]
   svc_projectMemory["ctx.projectMemory<br/>Bounded project memory"]
-  svc_shadowRouter["ctx.shadowRouter<br/>Project controller routing"]
+  pkg_experimental_shadow_routing["experimental-shadow-routing"]
+  svc_shadowRouter["ctx.shadowRouter<br/>Shadow routing seam"]
+  pkg_experimental_shadow_bridge["experimental-shadow-bridge"]
+  pkg_experimental_shadow_controller["experimental-shadow-controller"]
+  svc_shadowController["ctx.shadowController<br/>Shadow panel Remote owner"]
+  svc_shadowAgent["ctx.shadowAgent<br/>Shadow conversation host"]
+  svc_projectRun["ctx.projectRun<br/>Dispatch project run"]
+  pkg_terminal["terminal"]
+  svc_terminalOwnership["ctx.terminalOwnership<br/>Terminal ownership registry"]
   pkg_attachment["attachment"]
   svc_attachments["ctx.attachments<br/>Durable binary attachment storage"]
   pkg_attachment_local["attachment-local"]
@@ -171,7 +179,6 @@ flowchart LR
   pkg_tool_pwsh["tool-pwsh"]
   pkg_shell_env["shell-env"]
   svc_shellEnv["ctx.shellEnv<br/>Managed bash environment registry"]
-  pkg_terminal["terminal"]
   svc_terminals["ctx.terminals<br/>Persistent PTY session registry"]
   pkg_sandbox["sandbox"]
   svc_sandbox["ctx.sandbox<br/>Process-sandbox seam"]
@@ -274,6 +281,7 @@ flowchart LR
   pkg_deepseek_llm_api_extensions --> svc_deepseekLlmApiExtensions
   pkg_e2b --> svc_e2b
   pkg_experimental_agent_dispatch --> svc_agentDispatch
+  pkg_experimental_agent_dispatch --> svc_projectRun
   pkg_experimental_agent_evidence --> svc_agentEvidence
   pkg_experimental_agent_hierarchy --> svc_agentHierarchy
   pkg_experimental_agent_reliability --> svc_agentReliability
@@ -284,7 +292,10 @@ flowchart LR
   pkg_experimental_project_controller --> svc_projectController
   pkg_experimental_project_memory --> svc_projectMemory
   pkg_experimental_session_identity --> svc_agentBindings
+  pkg_experimental_shadow_controller --> svc_shadowAgent
+  pkg_experimental_shadow_controller --> svc_shadowController
   pkg_experimental_shadow_router --> svc_shadowRouter
+  pkg_experimental_shadow_routing --> svc_shadowRouter
   pkg_file_reference --> svc_fileReferences
   pkg_file_reference_local --> svc_fileReferences
   pkg_fs --> svc_fs
@@ -352,6 +363,7 @@ flowchart LR
   pkg_subprocess_e2b --> svc_subprocess
   pkg_subprocess_local --> svc_subprocess
   pkg_system_prompt --> svc_systemPrompt
+  pkg_terminal --> svc_terminalOwnership
   pkg_terminal --> svc_terminals
   pkg_terminal_bash --> svc_terminals
   pkg_token_meter --> svc_tokenMeter
@@ -453,7 +465,8 @@ flowchart LR
   svc_settings --> pkg_api_settings_controller
   svc_settings --> pkg_llm_deepseek
   svc_settings --> pkg_llm_pi_ai
-  svc_shadowRouter --> pkg_experimental_shadow_router
+  svc_shadowRouter --> pkg_experimental_shadow_bridge
+  svc_shadowRouter --> pkg_experimental_shadow_controller
   svc_shell --> pkg_hooks_claude_code
   svc_shell --> pkg_hooks_codex
   svc_shell --> pkg_tool_bash
@@ -522,7 +535,11 @@ flowchart LR
 | `ctx.devframeTaskGrading` | `core` | [`experimental-devframe`](../packages/experimental/devframe) | - | - | - | Records host-declared task memory requirements and grades memory failures into task-warning events. |
 | `ctx.projectController` | `core` | [`experimental-project-controller`](../packages/experimental/project-controller) | - | [`experimental-project-controller`](../packages/experimental/project-controller) | - | Owns task transitions and evidence-bound Git integration; its consumer supplies the controller-authorized integration tool. |
 | `ctx.projectMemory` | `core` | [`experimental-project-memory`](../packages/experimental/project-memory) | - | [`experimental-project-memory`](../packages/experimental/project-memory) | - | Serves bounded memory tools over the configured Vault subtree; memory content never grants execution authority. |
-| `ctx.shadowRouter` | `core` | [`experimental-shadow-router`](../packages/experimental/shadow-router) | - | [`experimental-shadow-router`](../packages/experimental/shadow-router) | - | Owns per-workspace controller roots, durable cross-root delivery, and project controls exposed to the designated Shadow agent. |
+| `ctx.shadowRouter` | `seam` | [`experimental-shadow-routing`](../packages/experimental/shadow-routing) | [`experimental-shadow-router`](../packages/experimental/shadow-router) | [`experimental-shadow-bridge`](../packages/experimental/shadow-bridge), [`experimental-shadow-controller`](../packages/experimental/shadow-controller) | - | Owns the per-workspace controller binding contract, cross-root delivery vocabulary, and the shadow/delivery-received event; the provider persists and the bridge forwards. |
+| `ctx.shadowController` | `core` | [`experimental-shadow-controller`](../packages/experimental/shadow-controller) | - | - | - | Serves the Shadow card reads and panel write faces over the router host bridges under the designated Shadow authority. |
+| `ctx.shadowAgent` | `core` | [`experimental-shadow-controller`](../packages/experimental/shadow-controller) | - | - | - | Owns the persistent designated Shadow session behind the conversation post and read faces. |
+| `ctx.projectRun` | `core` | [`experimental-agent-dispatch`](../packages/experimental/agent-dispatch) | - | - | - | Owns one dispatch candidate full-chain run: lead selection, task grading, and durable settlement. |
+| `ctx.terminalOwnership` | `core` | [`terminal`](../packages/terminal/terminal) | - | - | - | Owns session-to-terminal ownership so only the owning session controls a terminal. |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | [`api-session-controller`](../packages/api/session-controller), [`tool-fs`](../packages/fs/tool-fs), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-deepseek`](../packages/llm/llm-deepseek) | - | The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content. |
 | `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | Adapters register provider implementations; the loop and compaction call the provider-neutral stream service. |
 | `ctx.deepseekLlmApiExtensions` | `seam` | [`deepseek-llm-api-extensions`](../packages/llm/deepseek-llm-api-extensions) | [`session-log-deepseek`](../packages/session/session-log-deepseek), [`plugin-package-inventory-deepseek`](../packages/llm/plugin-package-inventory-deepseek) | [`llm-deepseek`](../packages/llm/llm-deepseek) | - | Plugins prepare independent top-level fields; the official adapter merges them and commits their delivery state after HTTP acceptance. |

@@ -141,9 +141,26 @@ export const SERVICE_ROLES: readonly ServiceRole[] = [
     note: 'Serves bounded memory tools over the configured Vault subtree; memory content never grants execution authority.',
   },
   {
-    key: 'shadowRouter', pkg: 'experimental-shadow-router', title: 'Project controller routing', mode: 'core',
-    consumers: ['experimental-shadow-router'],
-    note: 'Owns per-workspace controller roots, durable cross-root delivery, and project controls exposed to the designated Shadow agent.',
+    key: 'shadowRouter', pkg: 'experimental-shadow-routing', title: 'Shadow routing seam', mode: 'seam',
+    implementations: ['experimental-shadow-router'],
+    consumers: ['experimental-shadow-bridge', 'experimental-shadow-controller'],
+    note: 'Owns the per-workspace controller binding contract, cross-root delivery vocabulary, and the shadow/delivery-received event; the provider persists and the bridge forwards.',
+  },
+  {
+    key: 'shadowController', pkg: 'experimental-shadow-controller', title: 'Shadow panel Remote owner', mode: 'core',
+    note: 'Serves the Shadow card reads and panel write faces over the router host bridges under the designated Shadow authority.',
+  },
+  {
+    key: 'shadowAgent', pkg: 'experimental-shadow-controller', title: 'Shadow conversation host', mode: 'core',
+    note: 'Owns the persistent designated Shadow session behind the conversation post and read faces.',
+  },
+  {
+    key: 'projectRun', pkg: 'experimental-agent-dispatch', title: 'Dispatch project run', mode: 'core',
+    note: 'Owns one dispatch candidate full-chain run: lead selection, task grading, and durable settlement.',
+  },
+  {
+    key: 'terminalOwnership', pkg: 'terminal', title: 'Terminal ownership registry', mode: 'core',
+    note: 'Owns session-to-terminal ownership so only the owning session controls a terminal.',
   },
   {
     key: 'attachments',
