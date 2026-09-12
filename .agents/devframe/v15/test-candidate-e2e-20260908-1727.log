@@ -1,0 +1,491 @@
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+
+ RUN  v4.1.8 D:/dsh-devframe
+
+ ❯ packages/experimental/agent-dispatch/tests/candidate-fullchain.e2e.ts (6 tests | 1 failed) 147699ms
+     × drives the candidate chain over the wire lane: plan, lead dispatch, worker delivery with real checks 94662ms (retry x2)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/experimental/agent-dispatch/tests/candidate-fullchain.e2e.ts > candidate full-chain: real CLI boot, rows, and restart on an isolated home > drives the candidate chain over the wire lane: plan, lead dispatch, worker delivery with real checks
+Error: Lead whole-goal review tool call reached the wire: expected false to be true // Object.is equality
+[line 31] {"type":"step/end","seq":29,"time":1788855608685,"data":{"turn":1,"step":1}}
+[line 39] {"type":"step/end","seq":37,"time":1788855608722,"data":{"turn":1,"step":2}}
+[line 40] {"type":"turn/end","seq":38,"time":1788855608722,"data":{"turn":1,"reason":{"kind":"completed"}}}
+[line 72] {"type":"step/end","seq":29,"time":1788855607966,"data":{"turn":1,"step":1}}
+[line 80] {"type":"step/end","seq":37,"time":1788855608011,"data":{"turn":1,"step":2}}
+[line 81] {"type":"turn/end","seq":38,"time":1788855608012,"data":{"turn":1,"reason":{"kind":"completed"}}}
+[line 109] {"type":"step/end","seq":25,"time":1788855602514,"data":{"turn":1,"step":1}}
+[line 131] {"type":"step/end","seq":47,"time":1788855602747,"data":{"turn":1,"step":2}}
+[line 139] {"type":"step/end","seq":55,"time":1788855602798,"data":{"turn":1,"step":3}}
+[line 140] {"type":"turn/end","seq":56,"time":1788855602799,"data":{"turn":1,"reason":{"kind":"completed"}}}
+[line 160] {"type":"step/end","seq":76,"time":1788855603130,"data":{"turn":2,"step":1}}
+[line 168] {"type":"step/end","seq":84,"time":1788855603210,"data":{"turn":2,"step":2}}
+[line 169] {"type":"turn/end","seq":85,"time":1788855603210,"data":{"turn":2,"reason":{"kind":"completed"}}}
+[line 181] {"type":"step/end","seq":97,"time":1788855603296,"data":{"turn":3,"step":1}}
+[line 182] {"type":"turn/end","seq":98,"time":1788855603297,"data":{"turn":3,"reason":{"kind":"completed"}}}
+[line 209] {"type":"step/end","seq":125,"time":1788855619496,"data":{"turn":4,"step":1}}
+[line 220] {"type":"step/end","seq":136,"time":1788855622994,"data":{"turn":4,"step":2}}
+[line 230] {"type":"step/end","seq":146,"time":1788855623134,"data":{"turn":4,"step":3}}
+[line 241] {"type":"step/end","seq":157,"time":1788855624840,"data":{"turn":4,"step":4}}
+[line 253] {"type":"step/end","seq":169,"time":1788855624885,"data":{"turn":4,"step":5}}
+[line 263] {"type":"step/end","seq":179,"time":1788855624914,"data":{"turn":4,"step":6}}
+[line 264] {"type":"turn/end","seq":180,"time":1788855624914,"data":{"turn":4,"reason":{"kind":"completed"}}}
+[line 293] {"type":"step/end","seq":24,"time":1788855603142,"data":{"turn":1,"step":1}}
+[line 301] {"type":"step/end","seq":32,"time":1788855603243,"data":{"turn":1,"step":2}}
+[line 302] {"type":"turn/end","seq":33,"time":1788855603243,"data":{"turn":1,"reason":{"kind":"completed"}}}
+[line 322] {"type":"step/end","seq":53,"time":1788855610639,"data":{"turn":2,"step":1}}
+[line 330] {"type":"step/end","seq":61,"time":1788855610671,"data":{"turn":2,"step":2}}
+[line 331] {"type":"turn/end","seq":62,"time":1788855610671,"data":{"turn":2,"reason":{"kind":"completed"}}}
+[line 349] {"type":"step/end","seq":80,"time":1788855613594,"data":{"turn":3,"step":1}}
+[line 357] {"type":"step/end","seq":88,"time":1788855613628,"data":{"turn":3,"step":2}}
+[line 358] {"type":"turn/end","seq":89,"time":1788855613628,"data":{"turn":3,"reason":{"kind":"completed"}}} [archived root-session-dump.jsonl from 4 log(s), 371 lines]
+[session_identity.json] {
+  "unit": {
+    "name": "session_identity",
+    "version": 1
+  },
+  "global": null,
+  "tables": {
+    "bindings": {
+      "candidate-root-c14": {
+        "agentId": "candidate-root-c14",
+        "sessionId": "candidate-root-c14",
+        "role": "controller",
+        "worktreeId": "85331f0a-0269-4d0b-ba53-262e475a7a92",
+        "worktreePath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-15FhXl\\wt-target",
+        "createdAt": "2026-09-08T08:20:01.727Z"
+      },
+      "candidate-fullchain-lead": {
+        "agentId": "candidate-fullchain-lead",
+        "sessionId": "candidate-fullchain-lead",
+        "parentSessionId": "candidate-root-c14",
+        "role": "lead",
+        "pluginId": "candidate-fullchain",
+        "taskId": "task-a",
+        "worktreeId": "329cb4ef-88af-464c-9fb7-1bb49be76b38",
+        "worktreePath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-15FhXl\\wt-lead",
+        "branch": "feature/lead",
+        "createdAt": "2026-09-08T08:20:02.698Z"
+      },
+      "session-7a99918f-ae34-48e2-92fd-cdd534a1a651": {
+        "agentId": "session-7a99918f-ae34-48e2-92fd-cdd534a1a651",
+        "sessionId": "session-7a99918f-ae34-48e2-92fd-cdd534a1a651",
+        "parentSessionId": "candidate-fullchain-lead",
+        "role": "worker",
+        "pluginId": "candidate-fullchain",
+        "taskId": "task-a",
+        "worktreeId": "e4e15ad5-088b-4f59-88e1-98177883db67",
+        "worktreePath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-15FhXl\\wt-task-a",
+        "branch": "feature/task-a",
+        "createdAt": "2026-09-08T08:20:02.896Z"
+      },
+      "session-98578959-c752-4026-a21c-0324fb8326cd": {
+        "agentId": "session-98578959-c752-4026-a21c-0324fb8326cd",
+        "sessionId": "session-98578959-c752-4026-a21c-0324fb8326cd",
+        "parentSessionId": "candidate-fullchain-lead",
+        "role": "worker",
+        "pluginId": "candidate-fullchain",
+        "taskId": "task-b",
+        "worktreeId": "88a2b07b-c98b-4077-a8e2-cb23a6e58236",
+        "worktreePath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-15FhXl\\wt-task-b",
+        "branch": "feature/task-b",
+        "createdAt": "2026-09-08T08:20:03.040Z"
+      }
+    }
+  }
+}
+
+[worktree_registry.json] {
+  "unit": {
+    "name": "worktree_registry",
+    "version": 2
+  },
+  "global": null,
+  "tables": {
+    "worktrees": {
+      "329cb4ef-88af-464c-9fb7-1bb49be76b38": {
+        "workspaceId": "cc258891-6432-4d6b-920e-2d73bfe92687",
+        "path": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-15FhXl\\wt-lead",
+        "branch": "feature/lead",
+        "createdAt": "2026-09-08T08:20:01.556Z",
+        "updatedAt": "2026-09-08T08:20:02.693Z",
+        "lockedBy": "candidate-fullchain-lead",
+        "lockedAt": "2026-09-08T08:20:02.693Z"
+      },
+      "85331f0a-0269-4d0b-ba53-262e475a7a92": {
+        "workspaceId": "cc258891-6432-4d6b-920e-2d73bfe92687",
+        "path": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-15FhXl\\wt-target",
+        "branch": "feature/target",
+        "createdAt": "2026-09-08T08:20:01.604Z",
+        "updatedAt": "2026-09-08T08:20:01.709Z",
+        "lockedBy": "candidate-root-c14",
+        "lockedAt": "2026-09-08T08:20:01.709Z"
+      },
+      "e4e15ad5-088b-4f59-88e1-98177883db67": {
+        "workspaceId": "cc258891-6432-4d6b-920e-2d73bfe92687",
+        "path": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-15FhXl\\wt-task-a",
+        "branch": "feature/task-a",
+        "createdAt": "2026-09-08T08:20:01.652Z",
+        "updatedAt": "2026-09-08T08:20:02.892Z",
+        "lockedBy": "session-7a99918f-ae34-48e2-92fd-cdd534a1a651",
+        "lockedAt": "2026-09-08T08:20:02.892Z"
+      },
+      "88a2b07b-c98b-4077-a8e2-cb23a6e58236": {
+        "workspaceId": "cc258891-6432-4d6b-920e-2d73bfe92687",
+        "path": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-15FhXl\\wt-task-b",
+        "branch": "feature/task-b",
+        "createdAt": "2026-09-08T08:20:01.702Z",
+        "updatedAt": "2026-09-08T08:20:03.035Z",
+        "lockedBy": "session-98578959-c752-4026-a21c-0324fb8326cd",
+        "lockedAt": "2026-09-08T08:20:03.035Z"
+      }
+    }
+  }
+}
+
+dsh web: http://127.0.0.1:58079/?token=<redacted>
+
+ ❯ packages/experimental/agent-dispatch/tests/candidate-fullchain.e2e.ts:1491:13
+    1489|       }
+    1490|       const evidence = running?.output()
+    1491|       throw new Error(`${error instanceof Error ? error.message : Stri…
+       |             ^
+    1492|     } finally {
+    1493|       await replay.close()
+
+Caused by: AssertionError: Lead whole-goal review tool call reached the wire: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ packages/experimental/agent-dispatch/tests/candidate-fullchain.e2e.ts:1390:88
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  packages/experimental/agent-dispatch/tests/candidate-fullchain.e2e.ts > candidate full-chain: real CLI boot, rows, and restart on an isolated home > drives the candidate chain over the wire lane: plan, lead dispatch, worker delivery with real checks
+Error: Lead whole-goal review tool call reached the wire: expected false to be true // Object.is equality
+[line 31] {"type":"step/end","seq":29,"time":1788855639249,"data":{"turn":1,"step":1}}
+[line 39] {"type":"step/end","seq":37,"time":1788855639281,"data":{"turn":1,"step":2}}
+[line 40] {"type":"turn/end","seq":38,"time":1788855639282,"data":{"turn":1,"reason":{"kind":"completed"}}}
+[line 72] {"type":"step/end","seq":29,"time":1788855638517,"data":{"turn":1,"step":1}}
+[line 80] {"type":"step/end","seq":37,"time":1788855638554,"data":{"turn":1,"step":2}}
+[line 81] {"type":"turn/end","seq":38,"time":1788855638554,"data":{"turn":1,"reason":{"kind":"completed"}}}
+[line 109] {"type":"step/end","seq":25,"time":1788855632885,"data":{"turn":1,"step":1}}
+[line 131] {"type":"step/end","seq":47,"time":1788855633094,"data":{"turn":1,"step":2}}
+[line 139] {"type":"step/end","seq":55,"time":1788855633169,"data":{"turn":1,"step":3}}
+[line 140] {"type":"turn/end","seq":56,"time":1788855633170,"data":{"turn":1,"reason":{"kind":"completed"}}}
+[line 161] {"type":"step/end","seq":77,"time":1788855633478,"data":{"turn":2,"step":1}}
+[line 169] {"type":"step/end","seq":85,"time":1788855633539,"data":{"turn":2,"step":2}}
+[line 170] {"type":"turn/end","seq":86,"time":1788855633539,"data":{"turn":2,"reason":{"kind":"completed"}}}
+[line 181] {"type":"step/end","seq":97,"time":1788855633591,"data":{"turn":3,"step":1}}
+[line 182] {"type":"turn/end","seq":98,"time":1788855633591,"data":{"turn":3,"reason":{"kind":"completed"}}}
+[line 209] {"type":"step/end","seq":125,"time":1788855650703,"data":{"turn":4,"step":1}}
+[line 220] {"type":"step/end","seq":136,"time":1788855653983,"data":{"turn":4,"step":2}}
+[line 230] {"type":"step/end","seq":146,"time":1788855654104,"data":{"turn":4,"step":3}}
+[line 241] {"type":"step/end","seq":157,"time":1788855655796,"data":{"turn":4,"step":4}}
+[line 253] {"type":"step/end","seq":169,"time":1788855655828,"data":{"turn":4,"step":5}}
+[line 263] {"type":"step/end","seq":179,"time":1788855655859,"data":{"turn":4,"step":6}}
+[line 264] {"type":"turn/end","seq":180,"time":1788855655859,"data":{"turn":4,"reason":{"kind":"completed"}}}
+[line 295] {"type":"step/end","seq":24,"time":1788855633416,"data":{"turn":1,"step":1}}
+[line 303] {"type":"step/end","seq":32,"time":1788855633459,"data":{"turn":1,"step":2}}
+[line 304] {"type":"turn/end","seq":33,"time":1788855633459,"data":{"turn":1,"reason":{"kind":"completed"}}}
+[line 324] {"type":"step/end","seq":53,"time":1788855641561,"data":{"turn":2,"step":1}}
+[line 332] {"type":"step/end","seq":61,"time":1788855641588,"data":{"turn":2,"step":2}}
+[line 333] {"type":"turn/end","seq":62,"time":1788855641589,"data":{"turn":2,"reason":{"kind":"completed"}}}
+[line 351] {"type":"step/end","seq":80,"time":1788855644880,"data":{"turn":3,"step":1}}
+[line 359] {"type":"step/end","seq":88,"time":1788855644922,"data":{"turn":3,"step":2}}
+[line 360] {"type":"turn/end","seq":89,"time":1788855644922,"data":{"turn":3,"reason":{"kind":"completed"}}} [archived root-session-dump.jsonl from 4 log(s), 373 lines]
+[session_identity.json] {
+  "unit": {
+    "name": "session_identity",
+    "version": 1
+  },
+  "global": null,
+  "tables": {
+    "bindings": {
+      "candidate-root-c14": {
+        "agentId": "candidate-root-c14",
+        "sessionId": "candidate-root-c14",
+        "role": "controller",
+        "worktreeId": "a6344b07-33f6-4332-a16f-4ddd9a574a7f",
+        "worktreePath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-6EykmY\\wt-target",
+        "createdAt": "2026-09-08T08:20:32.245Z"
+      },
+      "candidate-fullchain-lead": {
+        "agentId": "candidate-fullchain-lead",
+        "sessionId": "candidate-fullchain-lead",
+        "parentSessionId": "candidate-root-c14",
+        "role": "lead",
+        "pluginId": "candidate-fullchain",
+        "taskId": "task-a",
+        "worktreeId": "33f17c9d-84dd-4dcb-94c6-701e78e8fb2f",
+        "worktreePath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-6EykmY\\wt-lead",
+        "branch": "feature/lead",
+        "createdAt": "2026-09-08T08:20:33.042Z"
+      },
+      "session-dd19aa2d-94c4-4d10-a997-a7dd4cabd095": {
+        "agentId": "session-dd19aa2d-94c4-4d10-a997-a7dd4cabd095",
+        "sessionId": "session-dd19aa2d-94c4-4d10-a997-a7dd4cabd095",
+        "parentSessionId": "candidate-fullchain-lead",
+        "role": "worker",
+        "pluginId": "candidate-fullchain",
+        "taskId": "task-a",
+        "worktreeId": "db16f61e-eff8-40dd-95e5-634c38389f76",
+        "worktreePath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-6EykmY\\wt-task-a",
+        "branch": "feature/task-a",
+        "createdAt": "2026-09-08T08:20:33.252Z"
+      },
+      "session-e62ec29e-678a-4d41-be25-06e8b1b89dac": {
+        "agentId": "session-e62ec29e-678a-4d41-be25-06e8b1b89dac",
+        "sessionId": "session-e62ec29e-678a-4d41-be25-06e8b1b89dac",
+        "parentSessionId": "candidate-fullchain-lead",
+        "role": "worker",
+        "pluginId": "candidate-fullchain",
+        "taskId": "task-b",
+        "worktreeId": "55fb389a-d6ca-4aae-b27b-a0e493f35c04",
+        "worktreePath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-6EykmY\\wt-task-b",
+        "branch": "feature/task-b",
+        "createdAt": "2026-09-08T08:20:33.381Z"
+      }
+    }
+  }
+}
+
+[worktree_registry.json] {
+  "unit": {
+    "name": "worktree_registry",
+    "version": 2
+  },
+  "global": null,
+  "tables": {
+    "worktrees": {
+      "33f17c9d-84dd-4dcb-94c6-701e78e8fb2f": {
+        "workspaceId": "7bb6bf60-b7a9-4dd2-b54c-95f6b9f01e0f",
+        "path": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-6EykmY\\wt-lead",
+        "branch": "feature/lead",
+        "createdAt": "2026-09-08T08:20:32.091Z",
+        "updatedAt": "2026-09-08T08:20:33.037Z",
+        "lockedBy": "candidate-fullchain-lead",
+        "lockedAt": "2026-09-08T08:20:33.037Z"
+      },
+      "a6344b07-33f6-4332-a16f-4ddd9a574a7f": {
+        "workspaceId": "7bb6bf60-b7a9-4dd2-b54c-95f6b9f01e0f",
+        "path": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-6EykmY\\wt-target",
+        "branch": "feature/target",
+        "createdAt": "2026-09-08T08:20:32.138Z",
+        "updatedAt": "2026-09-08T08:20:32.234Z",
+        "lockedBy": "candidate-root-c14",
+        "lockedAt": "2026-09-08T08:20:32.234Z"
+      },
+      "db16f61e-eff8-40dd-95e5-634c38389f76": {
+        "workspaceId": "7bb6bf60-b7a9-4dd2-b54c-95f6b9f01e0f",
+        "path": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-6EykmY\\wt-task-a",
+        "branch": "feature/task-a",
+        "createdAt": "2026-09-08T08:20:32.183Z",
+        "updatedAt": "2026-09-08T08:20:33.247Z",
+        "lockedBy": "session-dd19aa2d-94c4-4d10-a997-a7dd4cabd095",
+        "lockedAt": "2026-09-08T08:20:33.247Z"
+      },
+      "55fb389a-d6ca-4aae-b27b-a0e493f35c04": {
+        "workspaceId": "7bb6bf60-b7a9-4dd2-b54c-95f6b9f01e0f",
+        "path": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-6EykmY\\wt-task-b",
+        "branch": "feature/task-b",
+        "createdAt": "2026-09-08T08:20:32.229Z",
+        "updatedAt": "2026-09-08T08:20:33.377Z",
+        "lockedBy": "session-e62ec29e-678a-4d41-be25-06e8b1b89dac",
+        "lockedAt": "2026-09-08T08:20:33.377Z"
+      }
+    }
+  }
+}
+
+dsh web: http://127.0.0.1:63601/?token=<redacted>
+
+ ❯ packages/experimental/agent-dispatch/tests/candidate-fullchain.e2e.ts:1491:13
+    1489|       }
+    1490|       const evidence = running?.output()
+    1491|       throw new Error(`${error instanceof Error ? error.message : Stri…
+       |             ^
+    1492|     } finally {
+    1493|       await replay.close()
+
+Caused by: AssertionError: Lead whole-goal review tool call reached the wire: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ packages/experimental/agent-dispatch/tests/candidate-fullchain.e2e.ts:1390:88
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  packages/experimental/agent-dispatch/tests/candidate-fullchain.e2e.ts > candidate full-chain: real CLI boot, rows, and restart on an isolated home > drives the candidate chain over the wire lane: plan, lead dispatch, worker delivery with real checks
+Error: Lead whole-goal review tool call reached the wire: expected false to be true // Object.is equality
+[line 31] {"type":"step/end","seq":29,"time":1788855672938,"data":{"turn":1,"step":1}}
+[line 39] {"type":"step/end","seq":37,"time":1788855672967,"data":{"turn":1,"step":2}}
+[line 40] {"type":"turn/end","seq":38,"time":1788855672968,"data":{"turn":1,"reason":{"kind":"completed"}}}
+[line 72] {"type":"step/end","seq":29,"time":1788855672204,"data":{"turn":1,"step":1}}
+[line 80] {"type":"step/end","seq":37,"time":1788855672233,"data":{"turn":1,"step":2}}
+[line 81] {"type":"turn/end","seq":38,"time":1788855672233,"data":{"turn":1,"reason":{"kind":"completed"}}}
+[line 109] {"type":"step/end","seq":25,"time":1788855665771,"data":{"turn":1,"step":1}}
+[line 131] {"type":"step/end","seq":47,"time":1788855666096,"data":{"turn":1,"step":2}}
+[line 139] {"type":"step/end","seq":55,"time":1788855666165,"data":{"turn":1,"step":3}}
+[line 140] {"type":"turn/end","seq":56,"time":1788855666165,"data":{"turn":1,"reason":{"kind":"completed"}}}
+[line 161] {"type":"step/end","seq":77,"time":1788855666717,"data":{"turn":2,"step":1}}
+[line 169] {"type":"step/end","seq":85,"time":1788855666874,"data":{"turn":2,"step":2}}
+[line 170] {"type":"turn/end","seq":86,"time":1788855666874,"data":{"turn":2,"reason":{"kind":"completed"}}}
+[line 181] {"type":"step/end","seq":97,"time":1788855667016,"data":{"turn":3,"step":1}}
+[line 182] {"type":"turn/end","seq":98,"time":1788855667016,"data":{"turn":3,"reason":{"kind":"completed"}}}
+[line 209] {"type":"step/end","seq":125,"time":1788855683973,"data":{"turn":4,"step":1}}
+[line 220] {"type":"step/end","seq":136,"time":1788855687483,"data":{"turn":4,"step":2}}
+[line 230] {"type":"step/end","seq":146,"time":1788855687636,"data":{"turn":4,"step":3}}
+[line 241] {"type":"step/end","seq":157,"time":1788855689584,"data":{"turn":4,"step":4}}
+[line 253] {"type":"step/end","seq":169,"time":1788855689627,"data":{"turn":4,"step":5}}
+[line 263] {"type":"step/end","seq":179,"time":1788855689661,"data":{"turn":4,"step":6}}
+[line 264] {"type":"turn/end","seq":180,"time":1788855689662,"data":{"turn":4,"reason":{"kind":"completed"}}}
+[line 295] {"type":"step/end","seq":24,"time":1788855666576,"data":{"turn":1,"step":1}}
+[line 303] {"type":"step/end","seq":32,"time":1788855666608,"data":{"turn":1,"step":2}}
+[line 304] {"type":"turn/end","seq":33,"time":1788855666609,"data":{"turn":1,"reason":{"kind":"completed"}}}
+[line 324] {"type":"step/end","seq":53,"time":1788855675139,"data":{"turn":2,"step":1}}
+[line 332] {"type":"step/end","seq":61,"time":1788855675166,"data":{"turn":2,"step":2}}
+[line 333] {"type":"turn/end","seq":62,"time":1788855675166,"data":{"turn":2,"reason":{"kind":"completed"}}}
+[line 351] {"type":"step/end","seq":80,"time":1788855677715,"data":{"turn":3,"step":1}}
+[line 359] {"type":"step/end","seq":88,"time":1788855677739,"data":{"turn":3,"step":2}}
+[line 360] {"type":"turn/end","seq":89,"time":1788855677739,"data":{"turn":3,"reason":{"kind":"completed"}}} [archived root-session-dump.jsonl from 4 log(s), 373 lines]
+[session_identity.json] {
+  "unit": {
+    "name": "session_identity",
+    "version": 1
+  },
+  "global": null,
+  "tables": {
+    "bindings": {
+      "candidate-root-c14": {
+        "agentId": "candidate-root-c14",
+        "sessionId": "candidate-root-c14",
+        "role": "controller",
+        "worktreeId": "3b9f9271-97e1-4453-bd95-12b1df9d5a0e",
+        "worktreePath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-LARLQq\\wt-target",
+        "createdAt": "2026-09-08T08:21:04.832Z"
+      },
+      "candidate-fullchain-lead": {
+        "agentId": "candidate-fullchain-lead",
+        "sessionId": "candidate-fullchain-lead",
+        "parentSessionId": "candidate-root-c14",
+        "role": "lead",
+        "pluginId": "candidate-fullchain",
+        "taskId": "task-a",
+        "worktreeId": "9524b1e9-73f1-4fb0-b866-942747de10d8",
+        "worktreePath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-LARLQq\\wt-lead",
+        "branch": "feature/lead",
+        "createdAt": "2026-09-08T08:21:06.038Z"
+      },
+      "session-30650370-d76b-42b6-9708-e750d724d662": {
+        "agentId": "session-30650370-d76b-42b6-9708-e750d724d662",
+        "sessionId": "session-30650370-d76b-42b6-9708-e750d724d662",
+        "parentSessionId": "candidate-fullchain-lead",
+        "role": "worker",
+        "pluginId": "candidate-fullchain",
+        "taskId": "task-a",
+        "worktreeId": "c2ffa72c-e635-4dd2-a0b4-eefc6c27cb5b",
+        "worktreePath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-LARLQq\\wt-task-a",
+        "branch": "feature/task-a",
+        "createdAt": "2026-09-08T08:21:06.298Z"
+      },
+      "session-56bb167b-71ea-4d3b-b79e-209ce83967f7": {
+        "agentId": "session-56bb167b-71ea-4d3b-b79e-209ce83967f7",
+        "sessionId": "session-56bb167b-71ea-4d3b-b79e-209ce83967f7",
+        "parentSessionId": "candidate-fullchain-lead",
+        "role": "worker",
+        "pluginId": "candidate-fullchain",
+        "taskId": "task-b",
+        "worktreeId": "4ee527e8-f863-412c-bb20-35bfc7aefc07",
+        "worktreePath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-LARLQq\\wt-task-b",
+        "branch": "feature/task-b",
+        "createdAt": "2026-09-08T08:21:06.529Z"
+      }
+    }
+  }
+}
+
+[worktree_registry.json] {
+  "unit": {
+    "name": "worktree_registry",
+    "version": 2
+  },
+  "global": null,
+  "tables": {
+    "worktrees": {
+      "9524b1e9-73f1-4fb0-b866-942747de10d8": {
+        "workspaceId": "77dc372c-85aa-4d93-a1b3-dae8077b2b8a",
+        "path": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-LARLQq\\wt-lead",
+        "branch": "feature/lead",
+        "createdAt": "2026-09-08T08:21:04.610Z",
+        "updatedAt": "2026-09-08T08:21:06.032Z",
+        "lockedBy": "candidate-fullchain-lead",
+        "lockedAt": "2026-09-08T08:21:06.032Z"
+      },
+      "3b9f9271-97e1-4453-bd95-12b1df9d5a0e": {
+        "workspaceId": "77dc372c-85aa-4d93-a1b3-dae8077b2b8a",
+        "path": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-LARLQq\\wt-target",
+        "branch": "feature/target",
+        "createdAt": "2026-09-08T08:21:04.678Z",
+        "updatedAt": "2026-09-08T08:21:04.813Z",
+        "lockedBy": "candidate-root-c14",
+        "lockedAt": "2026-09-08T08:21:04.813Z"
+      },
+      "c2ffa72c-e635-4dd2-a0b4-eefc6c27cb5b": {
+        "workspaceId": "77dc372c-85aa-4d93-a1b3-dae8077b2b8a",
+        "path": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-LARLQq\\wt-task-a",
+        "branch": "feature/task-a",
+        "createdAt": "2026-09-08T08:21:04.738Z",
+        "updatedAt": "2026-09-08T08:21:06.293Z",
+        "lockedBy": "session-30650370-d76b-42b6-9708-e750d724d662",
+        "lockedAt": "2026-09-08T08:21:06.293Z"
+      },
+      "4ee527e8-f863-412c-bb20-35bfc7aefc07": {
+        "workspaceId": "77dc372c-85aa-4d93-a1b3-dae8077b2b8a",
+        "path": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-LARLQq\\wt-task-b",
+        "branch": "feature/task-b",
+        "createdAt": "2026-09-08T08:21:04.806Z",
+        "updatedAt": "2026-09-08T08:21:06.523Z",
+        "lockedBy": "session-56bb167b-71ea-4d3b-b79e-209ce83967f7",
+        "lockedAt": "2026-09-08T08:21:06.523Z"
+      }
+    }
+  }
+}
+
+dsh web: http://127.0.0.1:52992/?token=<redacted>
+
+ ❯ packages/experimental/agent-dispatch/tests/candidate-fullchain.e2e.ts:1491:13
+    1489|       }
+    1490|       const evidence = running?.output()
+    1491|       throw new Error(`${error instanceof Error ? error.message : Stri…
+       |             ^
+    1492|     } finally {
+    1493|       await replay.close()
+
+Caused by: AssertionError: Lead whole-goal review tool call reached the wire: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ packages/experimental/agent-dispatch/tests/candidate-fullchain.e2e.ts:1390:88
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 passed (6)
+   Start at  17:19:00
+   Duration  149.14s (transform 1.02s, setup 310ms, import 940ms, tests 147.70s, environment 0ms)

@@ -1,0 +1,769 @@
+{
+  "capturedAt": "2026-09-08T17:17:26.7418438+09:00",
+  "mainTip": "117f87f1490786483f45ddfbc523025125c9218c",
+  "entryCount": 127,
+  "entries": [
+    {
+      "code": " M",
+      "path": ".agents/notes/implemented/architecture/2026-09-08-command-goal-binding-host-stop-adapters.i18n.yaml",
+      "sha256": "A1A75F3E0F0373475149FAEA7B7F922FF4D5ED8B764D2509DCD69E013AF179F8",
+      "bytes": 580
+    },
+    {
+      "code": " M",
+      "path": ".agents/notes/implemented/architecture/2026-09-08-command-goal-binding-host-stop-adapters.md",
+      "sha256": "F4210290A07884BEB7022DA3E6BF7104E47D8C13BB4631AA011ED552EE1BF680",
+      "bytes": 6153
+    },
+    {
+      "code": " M",
+      "path": ".agents/notes/implemented/architecture/2026-09-08-command-goal-binding-host-stop-adapters.zh.md",
+      "sha256": "EF2864727756E3B430FCFE5C967030C416AB570B0333F4216CD6838244A6C60A",
+      "bytes": 5320
+    },
+    {
+      "code": " M",
+      "path": ".agents/notes/proposed/testing/2026-09-07-candidate-full-chain-acceptance-design.i18n.yaml",
+      "sha256": "1E42585C70BFD2D5EB5C6A3A2CAD8FACC90908DF83E360512ED96EAE9A258598",
+      "bytes": 569
+    },
+    {
+      "code": " M",
+      "path": ".agents/notes/proposed/testing/2026-09-07-candidate-full-chain-acceptance-design.md",
+      "sha256": "78132FE7DB7672F5696BDC7A691D162A3A5ADC9EE7F899AE2393F6E30D87CC6A",
+      "bytes": 14061
+    },
+    {
+      "code": " M",
+      "path": ".agents/notes/proposed/testing/2026-09-07-candidate-full-chain-acceptance-design.zh.md",
+      "sha256": "D248628934DF812A73523C908DABAF5A62BE044EBDAF1B8572B20AB55D4DD67F",
+      "bytes": 12151
+    },
+    {
+      "code": " M",
+      "path": ".agents/skills/dsh-doc/SKILL.md",
+      "sha256": "AB3943751F42805E176F2A8CDD003889F6E3D19B68989F7916D8466AF161081B",
+      "bytes": 18590
+    },
+    {
+      "code": " M",
+      "path": ".agents/skills/dsh-doc/references/review.md",
+      "sha256": "97ECD3B30FB8E063104EB1186EFC2605F98CBAEC1761AF887C9FCBF8375AF948",
+      "bytes": 5730
+    },
+    {
+      "code": " M",
+      "path": ".agents/skills/dsh-doc/references/website-sync.md",
+      "sha256": "C54028FEB9FB01222EB4966A3046FCED11FC0698E1AEBA7B0D5EA06D6398EC9D",
+      "bytes": 7045
+    },
+    {
+      "code": " M",
+      "path": ".agents/skills/dsh-doc/templates/package-bundle.md",
+      "sha256": "8885A0183C6BA3ECB894A959E74EA854F66A987762F70B76BAA0803527D081D2",
+      "bytes": 3566
+    },
+    {
+      "code": " M",
+      "path": ".agents/skills/dsh-doc/templates/package-reference.md",
+      "sha256": "4DEBAE867B29F41119EE395D4C0FAFB7C720B4FF302FB201E4213934228BE00D",
+      "bytes": 3883
+    },
+    {
+      "code": " M",
+      "path": ".agents/skills/dsh-pre-push-checks/SKILL.md",
+      "sha256": "58E21DA0526ADA12A8DDAC610426E641E9D26BB89BBAF930F0398FB27655568B",
+      "bytes": 10052
+    },
+    {
+      "code": " M",
+      "path": "AGENTS.md",
+      "sha256": "B894CBB205A804A88CD4CCC4CF420967149C5213E041C349DB1F5931D315A2A4",
+      "bytes": 13057
+    },
+    {
+      "code": " M",
+      "path": "docs/working/devframe-qa-2026-09-04.i18n.yaml",
+      "sha256": "30A0049485A5CE29C2DCC6C621AA545C06BA5AB52121C5975B444C813A048CF3",
+      "bytes": 470
+    },
+    {
+      "code": " M",
+      "path": "docs/working/devframe-qa-2026-09-04.md",
+      "sha256": "04E7F923C99D5E017E3E68CF7C51F0A5FA6489E62CD70B8EF9D050E180FFE6B3",
+      "bytes": 8583
+    },
+    {
+      "code": " M",
+      "path": "docs/working/devframe-qa-2026-09-04.zh.md",
+      "sha256": "D68C7C22677AC3B0B2B7CD12FD7989524C08EB37A14CDB63A390C5E2EF1F9A83",
+      "bytes": 7963
+    },
+    {
+      "code": " D",
+      "path": "docs/working/handoff-2026-09-03.i18n.yaml",
+      "sha256": "ABSENT",
+      "bytes": 0
+    },
+    {
+      "code": " D",
+      "path": "docs/working/handoff-2026-09-03.md",
+      "sha256": "ABSENT",
+      "bytes": 0
+    },
+    {
+      "code": " D",
+      "path": "docs/working/handoff-2026-09-03.zh.md",
+      "sha256": "ABSENT",
+      "bytes": 0
+    },
+    {
+      "code": " M",
+      "path": "packages/bundle/base/cordis.patch.yml",
+      "sha256": "EEF302F05BF97A700871F35C56DED665FE0275D907041FD73BDEBF240DB83755",
+      "bytes": 20386
+    },
+    {
+      "code": " M",
+      "path": "packages/bundle/base/package.json",
+      "sha256": "4852A02911664B4826508A83871E4315CFDD662F279B87B0849E39F3D549537B",
+      "bytes": 5736
+    },
+    {
+      "code": " M",
+      "path": "packages/bundle/sdk-minimal/cordis.patch.yml",
+      "sha256": "01AA93C13256B4021BFAC5F7CC8B1A8030052F1C5EB4677DCA4900909AF1494A",
+      "bytes": 5737
+    },
+    {
+      "code": " M",
+      "path": "packages/e2b/e2b/tests/composition.e2e.ts",
+      "sha256": "40EC00CC5952878EE4F8B5FBB469513AEF3D9816C8EF3F2D005EDB6A2B8066AB",
+      "bytes": 8676
+    },
+    {
+      "code": " M",
+      "path": "packages/e2b/e2b/tests/fixtures/composition/cordis.yml",
+      "sha256": "38BB106D45BD8F55DFF36B32E1824AD3829DA9325D80EED842F561C9ECA19953",
+      "bytes": 1412
+    },
+    {
+      "code": " M",
+      "path": "packages/experimental/agent-dispatch/README.i18n.yaml",
+      "sha256": "A4CA739D133972E3BFE25CE477FBF4C06FEE3274AF5EEAEF45005301FE46FB01",
+      "bytes": 446
+    },
+    {
+      "code": " M",
+      "path": "packages/experimental/agent-dispatch/README.md",
+      "sha256": "54AED485D8A7F3C8887132F66BFD63F6E8A13C136FCB8EBFC1861308FA04C7B9",
+      "bytes": 8262
+    },
+    {
+      "code": " M",
+      "path": "packages/experimental/agent-dispatch/README.zh.md",
+      "sha256": "680C61231F7ADF0496C50B7CB8BF9E851234D86C02B5BE4C6C53743E8E9E90E2",
+      "bytes": 7211
+    },
+    {
+      "code": " M",
+      "path": "packages/experimental/agent-dispatch/src/consumer.ts",
+      "sha256": "7895F7D5A982719D30FF6F558AD5E698AA62CE97F5831063008C3E03D7C6B5A8",
+      "bytes": 28637
+    },
+    {
+      "code": " M",
+      "path": "packages/experimental/agent-dispatch/src/run.ts",
+      "sha256": "A92490CC270068D83896E4989572980D9B83BB7311E010D938C0679560BB300B",
+      "bytes": 16916
+    },
+    {
+      "code": " M",
+      "path": "packages/experimental/agent-dispatch/tests/candidate-fullchain.e2e.ts",
+      "sha256": "9C09606535E5A805E11F009993474FEA4C709A352A50C86D5FDED5C4BC473D49",
+      "bytes": 82837
+    },
+    {
+      "code": " M",
+      "path": "packages/experimental/agent-dispatch/tests/fixtures/candidate-fullchain.overlay.yml",
+      "sha256": "AB4457D413D86C8F555CF540F7BC67E8783889B2595955A7D5F1049E4B9DE3A1",
+      "bytes": 5717
+    },
+    {
+      "code": " M",
+      "path": "packages/experimental/agent-dispatch/tests/fixtures/candidate-host.ts",
+      "sha256": "DFAC389BC1E1637C314D4EDD149C130CDDB8FB632B8FDCFC674F8E78F8521DBB",
+      "bytes": 9634
+    },
+    {
+      "code": " M",
+      "path": "packages/experimental/command-goal-binding/README.i18n.yaml",
+      "sha256": "8F86D6D100900100097FE7CBB0CAED82E4969AE84084E2052EE19EA9863194E2",
+      "bytes": 452
+    },
+    {
+      "code": " M",
+      "path": "packages/experimental/command-goal-binding/README.md",
+      "sha256": "767A6D43463A5ACD53F5B30BDD4FDE954405C56F77E3DCCF8E3D5793DED2C3A4",
+      "bytes": 21568
+    },
+    {
+      "code": " M",
+      "path": "packages/experimental/command-goal-binding/README.zh.md",
+      "sha256": "3003BC82A703DFC00EC64F07050B4FBE006511ABD1E8510A47C31920C9203EE1",
+      "bytes": 18926
+    },
+    {
+      "code": " M",
+      "path": "packages/experimental/command-goal-binding/src/composition.ts",
+      "sha256": "7A4BAA5C68DCFFF29BA6A7675FEDA4D19E91F2DE1EDA8A0F7EA36B4A643B26FA",
+      "bytes": 60579
+    },
+    {
+      "code": " M",
+      "path": "packages/experimental/command-goal-binding/src/host-stop.ts",
+      "sha256": "202D228C44FCB092AECB83B51C42ED7F194B28E0F90A99A32726B506567B73BF",
+      "bytes": 15125
+    },
+    {
+      "code": " M",
+      "path": "packages/experimental/command-goal-binding/src/index.ts",
+      "sha256": "AF4D354D89DAC2EFDBEFEDC53D94FDA26E3599DDB63CF0E56B30E8E6C6AEFBB4",
+      "bytes": 5521
+    },
+    {
+      "code": " M",
+      "path": "packages/experimental/command-goal-binding/tests/host-owned-resources.spec.ts",
+      "sha256": "2CCF0E7A2D7BD3C0C77D9B4AAD89BF1DE83ACF2F3F35E7A5C165A5ACB0086A34",
+      "bytes": 13046
+    },
+    {
+      "code": " M",
+      "path": "packages/experimental/command-goal-binding/tests/host-stop.spec.ts",
+      "sha256": "BF18A0722471ED8E0A4492BA0EA8AB147546B991AA186F0ADF43E95D8C198D14",
+      "bytes": 34690
+    },
+    {
+      "code": " M",
+      "path": "packages/shell/tool-bash-persistent/tests/loader-composition.spec.ts",
+      "sha256": "19308817847789261D4D8A1C280297050B5A15108ACDD407AD98A7567360070D",
+      "bytes": 7589
+    },
+    {
+      "code": " M",
+      "path": "packages/shell/tool-bash-persistent/tests/tools.spec.ts",
+      "sha256": "171CF010E956FC27C6379876DF08052DBA5A948518C68BD4CC01416CC91DEC44",
+      "bytes": 23834
+    },
+    {
+      "code": " M",
+      "path": "packages/shell/tool-pwsh-persistent/tests/loader-composition.spec.ts",
+      "sha256": "83E2D811403CDF0F00EE787B24EC48D97C7CC86E57E4DACB455111B5692A2E03",
+      "bytes": 7210
+    },
+    {
+      "code": " M",
+      "path": "packages/shell/tool-pwsh-persistent/tests/tools.spec.ts",
+      "sha256": "45D373311CF88534158873CF20240B866D2131A6FF82FD40178C1FCA5B21BCA9",
+      "bytes": 25407
+    },
+    {
+      "code": " M",
+      "path": "packages/terminal/terminal-bash/tests/index.spec.ts",
+      "sha256": "7C1696E70102A2DBA4D7CF1490B98152DE2FCDA27D75548A8F39D85E016A9CE4",
+      "bytes": 28990
+    },
+    {
+      "code": " M",
+      "path": "packages/terminal/terminal-bash/tests/local.spec.ts",
+      "sha256": "7FBF8F927FDC0A5EB875647233B26D137277E3B4B1CB79EB169DEEE7151CBBED",
+      "bytes": 17602
+    },
+    {
+      "code": " M",
+      "path": "packages/terminal/terminal/README.i18n.yaml",
+      "sha256": "35FAD3CA27E10388BE649FE0E71553F6499B7934D873DBF8E8D42C77CE20674D",
+      "bytes": 436
+    },
+    {
+      "code": " M",
+      "path": "packages/terminal/terminal/README.md",
+      "sha256": "5B7FB61886943D088DE1D8E146F6BA534647FF29AB8E078AB658455C1070DA68",
+      "bytes": 10118
+    },
+    {
+      "code": " M",
+      "path": "packages/terminal/terminal/README.zh.md",
+      "sha256": "96DFC5BA5297B369BDD1F6ACFD8A946077ED9C8DF9B8D8430BC5ADD2B0044CAA",
+      "bytes": 9251
+    },
+    {
+      "code": " M",
+      "path": "packages/terminal/terminal/package.json",
+      "sha256": "449F8F951B3A8897B449A2757D44C64856DDF0BEA2860B4D976B9ED83BF1670B",
+      "bytes": 1291
+    },
+    {
+      "code": " M",
+      "path": "packages/terminal/terminal/src/index.ts",
+      "sha256": "EBFD155A8EBCF637A2B2692559E668A7308B40173D7B98BB9887B21378EF33CC",
+      "bytes": 19440
+    },
+    {
+      "code": " M",
+      "path": "packages/terminal/terminal/tests/service.spec.ts",
+      "sha256": "508D6D9AA739F9327BE13E0B6DBFBD7D0B5667BB7CEF04CDA9555E163A370F71",
+      "bytes": 33524
+    },
+    {
+      "code": " M",
+      "path": "packages/terminal/tool-terminal/tests/loader-composition.spec.ts",
+      "sha256": "9D0F2D79E1B2216D505C7724ABC0237E215C5D9289087D2BE2B92B1DA9E9B526",
+      "bytes": 5925
+    },
+    {
+      "code": " M",
+      "path": "packages/terminal/tool-terminal/tests/tools.spec.ts",
+      "sha256": "402D5D564C7C2B460764535F787CDBAED6E710AC64D3581EBCD7F3970AFF9DDB",
+      "bytes": 23655
+    },
+    {
+      "code": " M",
+      "path": "pnpm-lock.yaml",
+      "sha256": "6D31B8B2F8318890F471890A5302563C19A0683F9422DDB5B9CDD1EB09A16B25",
+      "bytes": 771231
+    },
+    {
+      "code": " M",
+      "path": "tsconfig.base.json",
+      "sha256": "3F896F1AABB2165810A6FF2A42D712A0FF426E5E55C6AA3F72077B80E87A411B",
+      "bytes": 38528
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/candidate-fullchain-lead.dump.jsonl",
+      "sha256": "1B6005050FC5E928B3E0086F115498E3F1A12087FA63DE4E9FF4E3DC0725B884",
+      "bytes": 63314
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/candidate-fullchain-lead.raw.zstd",
+      "sha256": "827FE0D1EF55F7547194403044622D35FBCE27634BE950B37F1B1BDEDAF03B51",
+      "bytes": 23665
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/candidate-root-c14.raw.zstd",
+      "sha256": "9225E0762702FCFBEDF35C8FC94318281CFD54938DF8C931C95EA5D10AC33CD8",
+      "bytes": 85703
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/consumer-draft/b6-acceptance-log-check.ts",
+      "sha256": "6703FB5DE90FA89514B224DDBCF8B9369AEA9799C26D18418C9C0DA63AEE203E",
+      "bytes": 19328
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/consumer-draft/b6-acceptance-plan.md",
+      "sha256": "1B1A550566F7E007283A35FF1100AE5544836C130E99B22AB722ACBF9B484611",
+      "bytes": 5857
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/consumer-draft/b6-background-workflow-acceptance.ts",
+      "sha256": "F1095D1B3485F7933245D8823A0C806D3158034300ABB6DC965641475B6E1ED9",
+      "bytes": 16619
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/consumer-draft/b6-cleanup-check.ts",
+      "sha256": "65DB20C055EC25C920E266A4C53B6EA2EFC1F00C79D46888B3F3DE063810889E",
+      "bytes": 11072
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/consumer-draft/b6-inspect-once.ts",
+      "sha256": "2BEFD803B64E79FC65D7C3818C9FC22B1A6751C0C1B0B0EB86BCD09A2ACEDB12",
+      "bytes": 1292
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/consumer-draft/resource-audit-exit-evidence.log",
+      "sha256": "CC8B006C754E7FEE4DCA931BECC7E5EB6207AA102D7E33D196D6604B2AA8D8EB",
+      "bytes": 471
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/consumer-draft/resource-audit-vitest-reaps.log",
+      "sha256": "CFD79BCFD1BF05D96883E93F267EC0FD8989F3E151E44CC8C09360EC0832C1B3",
+      "bytes": 911
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/consumer-draft/resource-audit-worker-exit.ts",
+      "sha256": "2C9BF2B3880E54F4E4925060EDCF50422C1FB48112EFC098FC99890CD22255B4",
+      "bytes": 3851
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/consumer-draft/resource-release-audit.md",
+      "sha256": "0F3C34247FC859E6F8B045F764D6519AF140DCBA6E105908C8FC6161C8B329BA",
+      "bytes": 4667
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/consumer-draft/tsconfig.json",
+      "sha256": "D939FD6100A484E8A5016C0B3773E9553AA4668FC254F59BD392B37FEAF5EE8A",
+      "bytes": 716
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/host-candidate-root-c14.dump.jsonl",
+      "sha256": "3576BF433B8C9D5554D84921DF615450797374FDE28D371467D5FEBB482C0FAF",
+      "bytes": 172100
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/root-session-dump.jsonl",
+      "sha256": "416DE97E658EF2CAFF435E65D71A356F59445E3105442098E78788F81F785D8A",
+      "bytes": 236885
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-366173aa-462b-4a16-bfe9-0aa6e4fd8c28.dump.jsonl",
+      "sha256": "234F4BE228C016C5FE80988E57E1ADC20E46EDC83498DE9C54CEC0547DE4A5E2",
+      "bytes": 37902
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-366173aa-462b-4a16-bfe9-0aa6e4fd8c28.raw.zstd",
+      "sha256": "B6F2E0ACAAEE4620320E155BFF1288D4FEA20C699DE59049ECFC7175770BA111",
+      "bytes": 14070
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-3d0f0445-7fa5-4c9a-bf61-3fd6bb08e34d.dump.jsonl",
+      "sha256": "82356FAD5946F6584112365AE225FE328F6C8C9376090968B9352C56B0A9C5C3",
+      "bytes": 37902
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-3d0f0445-7fa5-4c9a-bf61-3fd6bb08e34d.raw.zstd",
+      "sha256": "0811A5792F7DAE60213B0AE84C167FA45C2F8320BF36C77E9D906C4AC7729200",
+      "bytes": 14060
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-3deaa101-a43e-4597-9bbf-04a327e18496.dump.jsonl",
+      "sha256": "E1FBD31081C6ABD0C15B315B610ED23043CE373F71E88CB93972B7FCD9E98801",
+      "bytes": 37902
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-3deaa101-a43e-4597-9bbf-04a327e18496.raw.zstd",
+      "sha256": "F6DFF3EBF1F24B83DDB78730792BA5E9BA45CB35725005E981A010D6118F9C4B",
+      "bytes": 14060
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-67774f9c-61d5-46e4-b5d3-b4b8600e312d.dump.jsonl",
+      "sha256": "1FC58D6F58A7864C60E3DF9DAD4D5CAF7E003C8B701D809A98E26B21F645F8E9",
+      "bytes": 37902
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-67774f9c-61d5-46e4-b5d3-b4b8600e312d.raw.zstd",
+      "sha256": "09E34EB98039D2D601B44FA8B44C00F1A39AA9A93460B9178C568B31E3FDA5D9",
+      "bytes": 14068
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-6ec495d3-63e0-4887-844e-5cd99786d741.dump.jsonl",
+      "sha256": "61A6162E8E0AC487B1F4CFA793DDC66199D5878491A83DF27F55BAA41A225F24",
+      "bytes": 38999
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-6ec495d3-63e0-4887-844e-5cd99786d741.raw.zstd",
+      "sha256": "414266698B6F73BBCF4DC72D214314F21D2A38A54D61FCBB25AD52C50F4427A4",
+      "bytes": 14342
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-7281bf2d-0d6d-457b-bb05-af2074a46253.dump.jsonl",
+      "sha256": "924723DFC45FCC5CE07B9ED8F6C4D2C0A68E214726A5772535F12255DC91D1E2",
+      "bytes": 38999
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-7281bf2d-0d6d-457b-bb05-af2074a46253.raw.zstd",
+      "sha256": "2458654A5922252DECA605CF2FABFE825E8F518E4348F39737353ED795ABFAA7",
+      "bytes": 14335
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-7a6372ab-416c-4dc7-8556-eafaca442176.dump.jsonl",
+      "sha256": "40A4678B794F2253F03FF0CBE1FF0619A50C5593C3D03C74E94666FEC9372DA4",
+      "bytes": 38999
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-7a6372ab-416c-4dc7-8556-eafaca442176.raw.zstd",
+      "sha256": "5D95BB2F1ABB02AC0DC153C2EBF7B20C861AD42FB47B6EA5D6B37169CF39418D",
+      "bytes": 14332
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-7f1ed457-b79f-419e-a9d9-6a0bc0cdeb15.dump.jsonl",
+      "sha256": "DEA15E295FB4D63C4BC849941870937247CE500D3F0FA31EAFC5A83E6688F802",
+      "bytes": 37902
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-7f1ed457-b79f-419e-a9d9-6a0bc0cdeb15.raw.zstd",
+      "sha256": "50FD6F9C7149CCF9DC5FE2D39735FA990A60B57742F48E9BD7354E10067261A4",
+      "bytes": 14066
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-80682f2b-c9c5-40f7-98b3-62f7efc51884.dump.jsonl",
+      "sha256": "6D1B668F24ED54984F9AEF6B1442786D634C3C84DA59C5C58BED60C916BE7D12",
+      "bytes": 37902
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-80682f2b-c9c5-40f7-98b3-62f7efc51884.raw.zstd",
+      "sha256": "F1101E6FBFCBFE916BE58CA360322A555AC81C7AC5E619F198372E177161FAFF",
+      "bytes": 14062
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-8b67a151-f4a3-4df6-907f-c374c02c6830.dump.jsonl",
+      "sha256": "225D3665ECCFF43A8C91046A311E60F4A818D109C5AB453922637812F91FB843",
+      "bytes": 38999
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-8b67a151-f4a3-4df6-907f-c374c02c6830.raw.zstd",
+      "sha256": "EE248FE7A248689A5E01F74C37C3E07BA5B3D9796100D17FEDAC1D4148B7DA01",
+      "bytes": 14324
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-99ddfd2a-6dcd-48c9-a7be-02a8358003a7.dump.jsonl",
+      "sha256": "ACB40EFC81AE2C9FC687CAC04F25539C2CAE9848A05271961892A2CDAB3F89A7",
+      "bytes": 37902
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-99ddfd2a-6dcd-48c9-a7be-02a8358003a7.raw.zstd",
+      "sha256": "141239D65A70071E9A468223325E00AFAD2604133D83A4D19184AB3FE0DA7B4B",
+      "bytes": 14068
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-ae4c2850-c34d-47cf-9969-a7c4929f00b5.dump.jsonl",
+      "sha256": "052DD37827FD1995EB105B88FEFBBD8707CDC176CF1CA8A1F3F1821F77DEF724",
+      "bytes": 37902
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-ae4c2850-c34d-47cf-9969-a7c4929f00b5.raw.zstd",
+      "sha256": "5062BD47B17437F33ADD36E376E5400512FC8164DF62034EF0A442D67296DCE7",
+      "bytes": 14064
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-b36a7dde-1d0c-4e5e-9f89-295d6259269a.dump.jsonl",
+      "sha256": "DB8DB7057C724BB7CA034806619D4AEA00B6A85B36B6A34B20B1F055A5C77834",
+      "bytes": 38999
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-b36a7dde-1d0c-4e5e-9f89-295d6259269a.raw.zstd",
+      "sha256": "467F10E592B24006BF2FEC393C2E9638538CFAA089CBD58F83FC09EA68685926",
+      "bytes": 14337
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-bf7c0a4e-e5f1-4781-a9bc-936d7d175215.dump.jsonl",
+      "sha256": "7B462B2AD0B93719AD1676B64EF5DEAD61CA2F4B9763A58D0FBF73AEE70654ED",
+      "bytes": 38999
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-bf7c0a4e-e5f1-4781-a9bc-936d7d175215.raw.zstd",
+      "sha256": "70EFCFD30B48DFA04B47EF35CD25A1085E00A0B2DF3907E05CC52A718E731B46",
+      "bytes": 14340
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-c3276991-3719-4e61-a76d-96ad00fafcd1.dump.jsonl",
+      "sha256": "4A37505ED81D1DDFC61E1C67F96C17F7E714D2A915F5D5F83C947F3C5FE05A92",
+      "bytes": 38999
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-c3276991-3719-4e61-a76d-96ad00fafcd1.raw.zstd",
+      "sha256": "1863D689668EA6CC5825E5F98ADB4718EB57C7221808CA42BBEA984AD8A40B63",
+      "bytes": 14353
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-ca23a423-cca6-4443-8c1c-d972d556c0f6.dump.jsonl",
+      "sha256": "A8761A15C0186B0DA7B5A6E3357F7974140BA9E208E24FC649CB5FA5DE2D14F3",
+      "bytes": 37902
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-ca23a423-cca6-4443-8c1c-d972d556c0f6.raw.zstd",
+      "sha256": "501E44224EFBF83DC589720B21D76CCC5781700723DF6E5644473A8174DE442C",
+      "bytes": 14046
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-d45625bc-5a91-498c-837f-6491cc3db7c7.dump.jsonl",
+      "sha256": "423CC1C73F4C3D22020C1A2746CE0979E34352B0CACA75D5564E94C922928712",
+      "bytes": 37902
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-d45625bc-5a91-498c-837f-6491cc3db7c7.raw.zstd",
+      "sha256": "2AD62ECC4C69C764BD09013591F1C390970739861E942053C423185423E31149",
+      "bytes": 14059
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-de9b06cb-67c6-4a32-ace3-ccaf10dc1cdd.dump.jsonl",
+      "sha256": "B531A0E377FDC01C683E9E4432226DA9A54F00878CEDC42BD7C314C43B53B581",
+      "bytes": 37902
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-de9b06cb-67c6-4a32-ace3-ccaf10dc1cdd.raw.zstd",
+      "sha256": "1F8411CA158A85C69E20FA407C86478BAA0F533354521B0BD825F5F99DE0DECF",
+      "bytes": 14073
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-e2c34e9a-4e05-430b-9a8d-6232d333ff03.dump.jsonl",
+      "sha256": "CD8E192D5EC31ECA960DE4F49E00DA7A8BABDEF91D1C1ECA2EC466F5A6F45602",
+      "bytes": 38999
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-e2c34e9a-4e05-430b-9a8d-6232d333ff03.raw.zstd",
+      "sha256": "87F9D57CCCF8CC8236C62E845D93AB2A0449B9FC7A4E246E48D8F0FC53AA715B",
+      "bytes": 14328
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-e47bd035-4500-4ccf-8b12-7d18a941fbc1.dump.jsonl",
+      "sha256": "12869755512959897BAFCC5038BF6364AF1F667391DB241D9BB58706E06B2A78",
+      "bytes": 37902
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session-e47bd035-4500-4ccf-8b12-7d18a941fbc1.raw.zstd",
+      "sha256": "2954BE9AED230AD09A5B61A8B7786BC919E6E8022FC03F8CBF129B74CA023B06",
+      "bytes": 14054
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/session_identity.json",
+      "sha256": "6290425E8FB46A77E426C8632F28279ED6A82A0F157C7FB29266ACC599AE6E10",
+      "bytes": 2277
+    },
+    {
+      "code": "??",
+      "path": ".agents/devframe/v14/remaining/worktree_registry.json",
+      "sha256": "FB9734812FFEC3EA210CC46C10EA063282343BB23609AEABDE165843D720D405",
+      "bytes": 1985
+    },
+    {
+      "code": "??",
+      "path": ".agents/notes/implemented/architecture/2026-09-08-terminal-host-ownership.i18n.yaml",
+      "sha256": "273CCE645F1C632816624C0945A4CF51DBF7F344512C3BC8904AFE822DB08780",
+      "bytes": 532
+    },
+    {
+      "code": "??",
+      "path": ".agents/notes/implemented/architecture/2026-09-08-terminal-host-ownership.md",
+      "sha256": "CD0BD3581F8FA7DCFC5F7F23493171B30D0167FBA8FF42C275596C9EE573FBCF",
+      "bytes": 1708
+    },
+    {
+      "code": "??",
+      "path": ".agents/notes/implemented/architecture/2026-09-08-terminal-host-ownership.zh.md",
+      "sha256": "6713730F4F1CEF0585A94E803720F8515BAD081AE84DE674AB9CF1D8681D16A6",
+      "bytes": 1495
+    },
+    {
+      "code": "??",
+      "path": ".agents/notes/proposed/architecture/2026-09-05-pluginized-agent-topology-and-dispatch.i18n.yaml",
+      "sha256": "621C02B9AC72F9834653DB0C2A7F660D91E2FA5D458252C40EC0FFB3E200F19C",
+      "bytes": 574
+    },
+    {
+      "code": "??",
+      "path": ".agents/notes/proposed/architecture/2026-09-05-pluginized-agent-topology-and-dispatch.md",
+      "sha256": "86F3361F5F7787FCEB377CE8B1413EA06CB5DBEE32FC69770630EE44BBA2D3BB",
+      "bytes": 4402
+    },
+    {
+      "code": "??",
+      "path": ".agents/notes/proposed/architecture/2026-09-05-pluginized-agent-topology-and-dispatch.zh.md",
+      "sha256": "DCB396F1CFAC9DEED619EBD8842A68BF0B3FF1ED73FB2CAE238FAA4100615720",
+      "bytes": 3881
+    },
+    {
+      "code": "??",
+      "path": "docs/env.i18n.yaml",
+      "sha256": "7E735689500E1E8A476243E8ECA5375A0E041FA74E1587FFFB9BFAC0D9E8CA0B",
+      "bytes": 405
+    },
+    {
+      "code": "??",
+      "path": "docs/env.md",
+      "sha256": "CD53F101F32889AB40AC7C52A8C4624BB640E688BF12AD967C70BE551DDA0AE1",
+      "bytes": 6296
+    },
+    {
+      "code": "??",
+      "path": "docs/env.zh.md",
+      "sha256": "86AE15DAD1177F1BF20AB697E3C133C99C5BFD8A8B42CEC60561A1E16613AB23",
+      "bytes": 5947
+    },
+    {
+      "code": "??",
+      "path": "docs/working/dsh-pluginized-development-handoff-2026-09-05.i18n.yaml",
+      "sha256": "BCECE3B5D42542FA8BABC56A7F06BB173506B1153550E5023171313CC77B9EFB",
+      "bytes": 539
+    },
+    {
+      "code": "??",
+      "path": "docs/working/dsh-pluginized-development-handoff-2026-09-05.md",
+      "sha256": "FD60906BA3ACB90E5391BA8F8F6F98D40BB881D963657EFD7745C7322746DD59",
+      "bytes": 13948
+    },
+    {
+      "code": "??",
+      "path": "docs/working/dsh-pluginized-development-handoff-2026-09-05.zh.md",
+      "sha256": "CBCEEC8BB861EDB827E3A06A70426A5CDBBCF2862D5C7A7AC7CA6D8B91032935",
+      "bytes": 13236
+    },
+    {
+      "code": "??",
+      "path": "packages/terminal/terminal/src/ownership.ts",
+      "sha256": "100CDA297459E3217A64228296FAD237C9017604F9180C69AEB8A89073E86D85",
+      "bytes": 4318
+    },
+    {
+      "code": "??",
+      "path": "packages/terminal/terminal/tsdown.config.ts",
+      "sha256": "E5320653ADF6089DE5FAA8A8E9A0489C5682FCDF55548622DB27A57F70AB9302",
+      "bytes": 361
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "name": "@deepseek-ai/dsh-experimental-shadow-controller",
+  "description": "Read-only Remote owner of the Shadow router status snapshot for host status surfaces",
+  "version": "0.1.2-alpha.4",
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RD2100/dsh-devframe.git"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./typert": {
+      "types": "./lib/typert.host.d.ts",
+      "default": "./lib/typert.host.js"
+    },
+    "./types": {
+      "types": "./lib/types/types.d.ts",
+      "default": "./lib/types/types.js"
+    },
+    "./remote": {
+      "types": "./lib/typert.remote-client.d.ts",
+      "default": "./lib/typert.remote-client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/types/**/*.js",
+    "lib/types/**/*.d.ts",
+    "lib/typert.host.js",
+    "lib/typert.host.d.ts",
+    "lib/typert.remote-client.js",
+    "lib/typert.remote-client.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=0.1.2-alpha.4 <1.0.0",
+    "@deepseek-ai/dsh-experimental-shadow-router": ">=0.1.2-alpha.4 <1.0.0",
+    "@deepseek-ai/dsh-typert-protocol": ">=0.1.2-alpha.4 <1.0.0"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  }
+}

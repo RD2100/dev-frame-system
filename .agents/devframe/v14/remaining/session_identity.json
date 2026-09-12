@@ -1,0 +1,55 @@
+{
+  "unit": {
+    "name": "session_identity",
+    "version": 1
+  },
+  "global": null,
+  "tables": {
+    "bindings": {
+      "candidate-root-c14": {
+        "agentId": "candidate-root-c14",
+        "sessionId": "candidate-root-c14",
+        "role": "controller",
+        "worktreeId": "3b9f9271-97e1-4453-bd95-12b1df9d5a0e",
+        "worktreePath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-LARLQq\\wt-target",
+        "createdAt": "2026-09-08T08:21:04.832Z"
+      },
+      "candidate-fullchain-lead": {
+        "agentId": "candidate-fullchain-lead",
+        "sessionId": "candidate-fullchain-lead",
+        "parentSessionId": "candidate-root-c14",
+        "role": "lead",
+        "pluginId": "candidate-fullchain",
+        "taskId": "task-a",
+        "worktreeId": "9524b1e9-73f1-4fb0-b866-942747de10d8",
+        "worktreePath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-LARLQq\\wt-lead",
+        "branch": "feature/lead",
+        "createdAt": "2026-09-08T08:21:06.038Z"
+      },
+      "session-30650370-d76b-42b6-9708-e750d724d662": {
+        "agentId": "session-30650370-d76b-42b6-9708-e750d724d662",
+        "sessionId": "session-30650370-d76b-42b6-9708-e750d724d662",
+        "parentSessionId": "candidate-fullchain-lead",
+        "role": "worker",
+        "pluginId": "candidate-fullchain",
+        "taskId": "task-a",
+        "worktreeId": "c2ffa72c-e635-4dd2-a0b4-eefc6c27cb5b",
+        "worktreePath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-LARLQq\\wt-task-a",
+        "branch": "feature/task-a",
+        "createdAt": "2026-09-08T08:21:06.298Z"
+      },
+      "session-56bb167b-71ea-4d3b-b79e-209ce83967f7": {
+        "agentId": "session-56bb167b-71ea-4d3b-b79e-209ce83967f7",
+        "sessionId": "session-56bb167b-71ea-4d3b-b79e-209ce83967f7",
+        "parentSessionId": "candidate-fullchain-lead",
+        "role": "worker",
+        "pluginId": "candidate-fullchain",
+        "taskId": "task-b",
+        "worktreeId": "4ee527e8-f863-412c-bb20-35bfc7aefc07",
+        "worktreePath": "C:\\Users\\25313\\AppData\\Local\\Temp\\dsh-candidate-fullchain-chain-LARLQq\\wt-task-b",
+        "branch": "feature/task-b",
+        "createdAt": "2026-09-08T08:21:06.529Z"
+      }
+    }
+  }
+}

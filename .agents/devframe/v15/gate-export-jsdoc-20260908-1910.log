@@ -1,0 +1,4 @@
+verify-export-jsdoc: 3 JSDoc completeness violation(s) (see AGENTS.md):
+  exported function 'isGenerationAdvance' (packages/experimental/devframe/src/controller/goal-binding.ts:1636) is missing @param current.
+  exported function 'isGenerationAdvance' (packages/experimental/devframe/src/controller/goal-binding.ts:1636) is missing @param binding.
+  exported function 'isGenerationAdvance' (packages/experimental/devframe/src/controller/goal-binding.ts:1636) is missing @returns (return type: boolean).

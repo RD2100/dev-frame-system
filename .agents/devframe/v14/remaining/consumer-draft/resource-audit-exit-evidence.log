@@ -1,0 +1,4 @@
+[evidence] normal path: result completed at t=1788819902173; dispose() resolved at t=1788819902179
+[evidence] worker exit event OBSERVED after dispose(): exit code 1 at t=1788819902178 (the engine's terminate() took the real thread down)
+[evidence] active resources tagged 'Worker': before dispose=0, after dispose=0 (corroboration only: the tag set is Node-version dependent)
+RESOURCE AUDIT: NORMAL-PATH WORKER EXIT FACE PROVEN (an assertion no existing test makes)

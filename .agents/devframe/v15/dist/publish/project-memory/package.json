@@ -1,0 +1,48 @@
+{
+  "name": "@deepseek-ai/dsh-experimental-project-memory",
+  "description": "Bounded append-only project memory over a user-selected Obsidian Vault subtree: scoped search/read/append tools, exclusive-create notes with session-log receipts, path containment, secret screening, and honest failure reporting",
+  "version": "0.1.2-alpha.4",
+  "private": false,
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./src/*": "./src/*",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.2",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-llm": ">=0.1.2-alpha.4 <1.0.0",
+    "@deepseek-ai/dsh-agent": ">=0.1.2-alpha.4 <1.0.0",
+    "@deepseek-ai/dsh-brand": ">=0.1.2-alpha.4 <1.0.0",
+    "@deepseek-ai/dsh-session": ">=0.1.2-alpha.4 <1.0.0",
+    "@deepseek-ai/dsh-tools": ">=0.1.2-alpha.4 <1.0.0",
+    "@deepseek-ai/cordis": ">=0.1.2-alpha.4 <1.0.0"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RD2100/dsh-devframe.git"
+  }
+}

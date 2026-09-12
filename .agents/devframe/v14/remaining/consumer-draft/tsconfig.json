@@ -1,0 +1,21 @@
+{
+  "extends": "../../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "incremental": false
+  },
+  "include": [
+    "b6-acceptance-log-check.ts",
+    "b6-cleanup-check.ts",
+    "../../../../../packages/session/session-persistence-jsonl/src/**/*.ts",
+    "../../../../../packages/session/session-persistence/src/**/*.ts",
+    "../../../../../packages/core/session/src/**/*.ts",
+    "../../../../../packages/attachment/attachment/src/**/*.ts",
+    "../../../../../packages/util/brand/src/**/*.ts",
+    "../../../../../packages/util/values/src/**/*.ts",
+    "../../../../../vendor/schemastery/src/**/*.ts"
+  ]
+}

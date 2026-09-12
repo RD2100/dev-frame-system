@@ -1,0 +1,44 @@
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+
+ RUN  v4.1.8 D:/dsh-devframe
+
+ ❯ |thread-safe| packages/shell/tool-pwsh-persistent/tests/loader-composition.spec.ts (1 test | 1 failed) 66ms
+     × preserves cwd and environment across calls 64ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |thread-safe| packages/shell/tool-pwsh-persistent/tests/loader-composition.spec.ts > persistent pwsh through a real cordis.yml Loader composition > preserves cwd and environment across calls
+Error: failed to apply loader entry c62d522a (cordis:include): failed to import loader entry 886de7bb (@deepseek-ai/dsh-terminal/ownership): unexpected Loader import: @deepseek-ai/dsh-terminal/ownership
+ ❯ updateError vendor/loader/src/config/entry.ts:26:10
+     24| function updateError(stage: 'import' | 'dispose' | 'apply' | 'rollback…
+     25|   const detail = cause instanceof Error ? cause.message : String(cause)
+     26|   return new Error(`failed to ${stage} loader entry ${options.id} (${o…
+       |          ^
+     27| }
+     28|
+ ❯ Entry._init vendor/loader/src/config/entry.ts:287:13
+ ❯ Entry.init vendor/loader/src/config/entry.ts:261:7
+ ❯ Entry.update vendor/loader/src/config/entry.ts:172:41
+ ❯ EntryGroup.create vendor/loader/src/config/group.ts:30:7
+ ❯ Proxy.create vendor/loader/src/config/tree.ts:99:16
+ ❯ packages/shell/tool-pwsh-persistent/tests/loader-composition.spec.ts:130:5
+
+Caused by: Error: failed to import loader entry 886de7bb (@deepseek-ai/dsh-terminal/ownership): unexpected Loader import: @deepseek-ai/dsh-terminal/ownership
+ ❯ updateError vendor/loader/src/config/entry.ts:26:10
+ ❯ Entry._init vendor/loader/src/config/entry.ts:282:13
+ ❯ Entry.init vendor/loader/src/config/entry.ts:261:7
+ ❯ Entry.update vendor/loader/src/config/entry.ts:172:41
+ ❯ EntryGroup.create vendor/loader/src/config/group.ts:30:7
+ ❯ EntryGroup.update vendor/loader/src/config/group.ts:71:24
+ ❯ Include._apply vendor/include/src/index.ts:317:5
+
+Caused by: Error: unexpected Loader import: @deepseek-ai/dsh-terminal/ownership
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 3 passed | 2 skipped (6)
+      Tests  1 failed | 54 passed | 2 skipped (57)
+   Start at  17:18:16
+   Duration  2.49s (transform 6.17s, setup 2.13s, import 7.12s, tests 1.54s, environment 1ms)
