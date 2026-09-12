@@ -14,6 +14,11 @@
 # command-goal-binding: binds the launch directory as the goal worktree;
 # /devframe-start executes the required checks below as real subprocesses.
 - insert:
+    # Console exporter for the host process logger: the web composition mounts
+    # no other exporter, so without this row every ctx.logger.warn/error —
+    # including plugin startup failures — is silently dropped.
+    - id: logger-console
+      name: '@deepseek-ai/cordis-plugin-logger-console'
     # cordis-host-runner is already inserted by the web-app bundle layer; this
     # layer adds only the rows below.
     - id: session-identity
@@ -25,6 +30,13 @@
     # provider so the card reports the mounted deployment's real facts.
     - id: shadow-controller
       name: '@deepseek-ai/dsh-experimental-shadow-controller'
+    # The persistent Shadow conversation host: creates/restores the designated
+    # session and serves the human's chat faces (postMessage/readConversation).
+    # Inert (fail-closed) while the shadow-router row declares no
+    # shadowSessionId; with one declared, the designated session becomes the
+    # human's conversational Shadow.
+    - id: shadow-agent
+      name: '@deepseek-ai/dsh-experimental-shadow-controller/shadow-agent'
     - id: project-memory
       name: '@deepseek-ai/dsh-experimental-project-memory'
       config:

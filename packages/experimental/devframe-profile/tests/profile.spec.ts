@@ -8,7 +8,7 @@ import * as yaml from 'js-yaml'
 import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 
 describe('DevFrame profile bundle', () => {
-  it('declares a private parseable layer mounting the seven DevFrame rows', () => {
+  it('declares a private parseable layer mounting the nine DevFrame rows', () => {
     const root = fileURLToPath(new URL('..', import.meta.url))
     const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as {
       private?: boolean
@@ -37,15 +37,18 @@ describe('DevFrame profile bundle', () => {
     const patches = parsed as { insert?: { id?: string; name?: string }[] }[]
     const inserted = patches.flatMap(patch => patch.insert ?? [])
     expect(inserted.map(row => row.id)).toEqual([
+      'logger-console',
       'session-identity',
       'shadow-router',
       'shadow-controller',
+      'shadow-agent',
       'project-memory',
       'command-goal-binding',
       'agent-hierarchy',
       'agent-dispatch',
     ])
     expect(inserted.find(row => row.id === 'shadow-controller')?.name).toBe('@deepseek-ai/dsh-experimental-shadow-controller')
+    expect(inserted.find(row => row.id === 'shadow-agent')?.name).toBe('@deepseek-ai/dsh-experimental-shadow-controller/shadow-agent')
     expect(inserted.find(row => row.id === 'project-memory')?.name).toBe('@deepseek-ai/dsh-experimental-project-memory')
     expect(inserted.find(row => row.id === 'agent-dispatch')?.name).toBe('@deepseek-ai/dsh-experimental-agent-dispatch')
   })

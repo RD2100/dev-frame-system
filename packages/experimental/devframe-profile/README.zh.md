@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-`dsh-experimental-devframe-profile` 是把 DevFrame 栈挂载到 Web profile（`dsh-base` + `dsh-web-app`）之上的私有 profile 层。它的 patch 插入 session-identity、shadow-router、project-memory、command-goal-binding 四行，外加三角色 agent-hierarchy 策略与 agent-dispatch 消费面。必须把本包显式加入已初始化的源码 checkout profile；正式发布排除本包。
+`dsh-experimental-devframe-profile` 是把 DevFrame 栈挂载到 Web profile（`dsh-base` + `dsh-web-app`）之上的私有 profile 层。它的 patch 插入 console 日志导出器，以及 session-identity、shadow-router、shadow-controller、Shadow 对话宿主、project-memory、command-goal-binding 六行，外加三角色 agent-hierarchy 策略与 agent-dispatch 消费面。必须把本包显式加入已初始化的源码 checkout profile；正式发布排除本包。
 
 ## 目录
 
@@ -35,15 +35,15 @@ pnpm dsh --profile web --patch ./packages/experimental/devframe-profile/cordis.p
 
 profile 必须已包含 Web bundle 层；本层不动其 webserver 行。部署通过后续 `--patch` overlay 收窄安全的机器中立默认值（authorizedRoots、vaultRoot、shadowSessionId、workspace 身份），而不是编辑本文件。
 
-本层的 patch 以 insert 方式加入六行，不指向既有行。不要同时通过这些行自带的包层挂载同一行（例如 `dsh plugin --profile <name> add @deepseek-ai/dsh-experimental-project-memory`）：两个 patch 列表重复插入同一行 id 会让启动以重复行 id 错误失败。收窄某行的默认值时，改用后续按 id 指向的 `--patch` 条目（`- id: project-memory, config: …`）——patch 条目替换目标行的整个配置，每行以最后一次写入为准；覆盖语义由[基础 bundle README](../../bundle/base/README.zh.md) 拥有。
+本层的 patch 以 insert 方式加入九行，不指向既有行。不要同时通过这些行自带的包层挂载同一行（例如 `dsh plugin --profile <name> add @deepseek-ai/dsh-experimental-project-memory`）：两个 patch 列表重复插入同一行 id 会让启动以重复行 id 错误失败。收窄某行的默认值时，改用后续按 id 指向的 `--patch` 条目（`- id: project-memory, config: …`）——patch 条目替换目标行的整个配置，每行以最后一次写入为准；覆盖语义由[基础 bundle README](../../bundle/base/README.zh.md) 拥有。
 
 ### 你得到什么
 
-本层插入身份、路由、记忆与目标绑定四行，默认值全部未配置、只读：shadow-router 在声明授权根之前不安装任何 `project_*` 工具；project-memory 在提供真实 vaultRoot 之前保持工具只读。hierarchy 行的 worker 面初始为空（fail closed），不预分配 lead 插件范围；dispatch 行挂载 `agent_dispatch` 消费面。
+本层插入身份、路由、状态、对话、记忆与目标绑定各行，默认值全部未配置、只读：shadow-router 在声明授权根之前不安装任何 `project_*` 工具；Shadow 对话宿主在声明 `shadowSessionId` 之前保持惰性；project-memory 在提供真实 vaultRoot 之前保持工具只读。hierarchy 行的 worker 面初始为空（fail closed），不预分配 lead 插件范围；dispatch 行挂载 `agent_dispatch` 消费面；logger-console 行把宿主进程的插件日志输出导出到 stdout。
 
 ### 启用 Shadow
 
-本层插入的 shadow-router 行刻意不带 config：没有授权根、没有声明的 Shadow 会话时，router 不在任何作用域安装 `project_*` 工具，[profile-entry spec](../../shadow-router/tests/profile-entry.spec.ts) 锁定了这一 fail-closed 默认。三步把该行变成生效条目：
+本层插入的 shadow-router 行刻意不带 config：没有授权根、没有声明的 Shadow 会话时，router 不在任何作用域安装 `project_*` 工具，[profile-entry spec](../shadow-router/tests/profile-entry.spec.ts) 锁定了这一 fail-closed 默认。三步把该行变成生效条目：
 
 1. 若 profile 缺少 router 包依赖，用 `dsh plugin --profile web add @deepseek-ai/dsh-experimental-shadow-router` 安装；该包未声明 bundle，因此这一步只安装依赖，不新增它自己的层。
 2. 给该行真实 config：把 [shadow 示例 patch](../../../apps/cli/config/examples/shadow/cordis.patch.yml) 中的 `shadow-router` 条目粘入 `$DSH_HOME/profiles/web/cordis.patch.yml`，或把该文件作为又一个 `--patch` overlay 传入，并把 `shadowSessionId` 占位符替换为控制器会话 id、`authorizedRoots` 替换为真实值。
@@ -61,7 +61,7 @@ profile 必须已包含 Web bundle 层；本层不动其 webserver 行。部署�
 <details>
 <summary>实现内部——点击展开</summary>
 
-本包的运行时内容是 [`cordis.patch.yml`](cordis.patch.yml)。在 Web bundle 层之后应用时，patch 按安全默认值插入上述六行；不配置其他内容。
+本包的运行时内容是 [`cordis.patch.yml`](cordis.patch.yml)。在 Web bundle 层之后应用时，patch 按安全默认值插入上述九行；不配置其他内容。
 
 | 文件 | 角色 |
 |---|---|
@@ -93,7 +93,7 @@ profile 必须已包含 Web bundle 层；本层不动其 webserver 行。部署�
 
 #### Token 影响
 
-本包加入六行被挂载行贡献的提示词文本与 schema；自身不加入任何。
+本包加入九行被挂载行贡献的提示词文本与 schema；自身不加入任何。
 
 #### KV Cache 影响
 

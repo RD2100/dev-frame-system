@@ -1,8 +1,10 @@
 /**
  * The DevFrame profile layer through a REAL Loader composition: a cordis.yml
- * carrying the seven patch rows' full content (session identity, shadow router,
- * the shadow status controller, project memory, command goal binding, the
- * three-role hierarchy policy, and dispatch) over the necessary base stack is
+ * carrying the nine patch rows' full content (the console logger exporter,
+ * session identity, shadow router, the shadow status controller, the Shadow
+ * conversation host, project memory, command goal binding, the three-role
+ * hierarchy policy, and dispatch) over
+ * the necessary base stack is
  * booted by the actual Loader, so the mount face under test is the one the
  * shipped `--patch` invocation uses. The assertions are the ones the static
  * parse suite cannot see: every row mounts (zero unloaded entries), the
@@ -43,10 +45,12 @@ import GitWorktreeRegistry from '@deepseek-ai/dsh-worktree-registry'
 import AgentBindingRegistry from '@deepseek-ai/dsh-experimental-session-identity'
 import ShadowRouter, { SHADOW_TOOL_NAMES, type ShadowRouterStatus } from '@deepseek-ai/dsh-experimental-shadow-router'
 import ShadowController from '@deepseek-ai/dsh-experimental-shadow-controller'
+import ShadowAgent from '@deepseek-ai/dsh-experimental-shadow-controller/shadow-agent'
 import AgentHierarchy from '@deepseek-ai/dsh-experimental-agent-hierarchy'
 import * as agentDispatch from '@deepseek-ai/dsh-experimental-agent-dispatch'
 import * as commandGoalBinding from '@deepseek-ai/dsh-experimental-command-goal-binding'
 import * as projectMemory from '@deepseek-ai/dsh-experimental-project-memory'
+import ConsoleExporter from '../../../../vendor/logger-console/src/index.ts'
 
 let root: string | undefined
 const contexts: Context[] = []
@@ -59,7 +63,7 @@ afterEach(async () => {
 
 /**
  * Write the cordis.yml under test: the base stack every DevFrame row needs
- * plus the seven rows' full patch content. The row configs mirror
+ * plus the eight rows' full patch content. The row configs mirror
  * `cordis.patch.yml`, with the two documented deviations a composition test
  * needs: project-memory names a Vault root that does not exist (load
  * succeeds, every call fails closed) and the `!!js process.cwd()` defaults
@@ -94,10 +98,12 @@ async function writeCompositionConfig(): Promise<string> {
     "- name: '@deepseek-ai/dsh-workspace'",
     "- name: '@deepseek-ai/dsh-subprocess-local'",
     "- name: '@deepseek-ai/dsh-worktree-registry'",
-    // The seven DevFrame rows, in cordis.patch.yml order and with its content.
+    // The nine DevFrame rows, in cordis.patch.yml order and with its content.
+    "- name: '@deepseek-ai/cordis-plugin-logger-console'",
     "- name: '@deepseek-ai/dsh-experimental-session-identity'",
     "- name: '@deepseek-ai/dsh-experimental-shadow-router'",
     "- name: '@deepseek-ai/dsh-experimental-shadow-controller'",
+    "- name: '@deepseek-ai/dsh-experimental-shadow-controller/shadow-agent'",
     "- name: '@deepseek-ai/dsh-experimental-project-memory'",
     '  config:',
     '    workspaceId: default',
@@ -106,7 +112,7 @@ async function writeCompositionConfig(): Promise<string> {
     "- name: '@deepseek-ai/dsh-experimental-command-goal-binding'",
     '  config:',
     '    workspaceId: default',
-    `    workspaceRoot: ${JSON.stringify(root as string)}`,
+    `    workspaceRoot: ${JSON.stringify(root)}`,
     `    requiredChecksPath: ${JSON.stringify(join(root as string, 'required-checks.json'))}`,
     '    taskIds: [devframe-goal]',
     '    maxAttempts: 3',
@@ -114,7 +120,7 @@ async function writeCompositionConfig(): Promise<string> {
     '    checks:',
     '      version: 1',
     '      checks:',
-    `        - { checkId: git-diff-check, executable: git, arguments: ['diff', '--check'], cwd: ${JSON.stringify(root as string)} }`,
+    `        - { checkId: git-diff-check, executable: git, arguments: ['diff', '--check'], cwd: ${JSON.stringify(root)} }`,
     "- name: '@deepseek-ai/dsh-experimental-agent-hierarchy'",
     '  config:',
     '    roleToolPolicies:',
@@ -139,6 +145,7 @@ async function loadComposition(): Promise<Context> {
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
   const modules = new Map<string, unknown>([
+    ['@deepseek-ai/cordis-plugin-logger-console', ConsoleExporter],
     ['@deepseek-ai/dsh-llm', LlmRuntime],
     ['@deepseek-ai/dsh-session', SessionStore],
     ['@deepseek-ai/dsh-session-persistence-jsonl', JsonlSessionPersistence],
@@ -158,6 +165,7 @@ async function loadComposition(): Promise<Context> {
     ['@deepseek-ai/dsh-experimental-session-identity', AgentBindingRegistry],
     ['@deepseek-ai/dsh-experimental-shadow-router', ShadowRouter],
     ['@deepseek-ai/dsh-experimental-shadow-controller', ShadowController],
+    ['@deepseek-ai/dsh-experimental-shadow-controller/shadow-agent', ShadowAgent],
     ['@deepseek-ai/dsh-experimental-project-memory', projectMemory],
     ['@deepseek-ai/dsh-experimental-command-goal-binding', commandGoalBinding],
     ['@deepseek-ai/dsh-experimental-agent-hierarchy', AgentHierarchy],
@@ -206,15 +214,20 @@ async function boot(): Promise<{ ctx: Context; agent: Agent }> {
 }
 
 describe('the DevFrame profile layer through a real Loader composition', () => {
-  it('mounts all seven rows: every service, the memory tools, and agent_dispatch are live', async () => {
+  it('mounts all eight rows: every service, the memory tools, and agent_dispatch are live', async () => {
     const { ctx } = await boot()
 
     expect(ctx.agentBindings).toBeDefined()
     expect(ctx.shadowRouter).toBeDefined()
     expect(ctx.shadowController).toBeDefined()
+    expect(ctx.shadowAgent).toBeDefined()
     const status: ShadowRouterStatus = ctx.shadowController.readStatus()
     expect(status).toMatchObject({ mounted: true, shadowLive: false, bindings: [] })
     expect(status.shadowSessionId).toBeUndefined()
+    // The conversation host mounts but stays inert under the fail-closed
+    // router: the read face fails loud instead of inventing a session.
+    await expect(ctx.shadowAgent.readConversation({}))
+      .rejects.toThrow('declares no Shadow session')
     expect(ctx.projectMemory).toBeDefined()
     expect(ctx.reflect.get('agentHierarchy')).toBeDefined()
     expect(ctx.reflect.get('commandGoalBinding')).toBeDefined()
