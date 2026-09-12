@@ -40,7 +40,7 @@ Three to five sentences: what a profile gains from this layer, which profiles al
 
 ### Install into a profile
 
-The verified install path — run it against the current checkout before writing:
+The install path supported by source/tests; reproduce only with installation and profile-write authorization in an isolated scratch profile, per the fact-check procedure:
 
 ```text
 dsh plugin --profile <name> add @deepseek-ai/dsh-<name>
@@ -99,5 +99,5 @@ None.
 ## Rules
 
 - **Only `dsh.bundle.patch` packages use this template.** Verify the declaration in `package.json` before classifying; the `dsh plugin` reconcile activates a layer for exactly these packages.
-- **Test the install path.** Run `dsh plugin --profile <name> add <this-package>` in a scratch profile and reproduce the documented warning, layer activation, and failure modes before writing them.
+- **Validate the install path.** Inspect source and tests first. Run `dsh plugin --profile <name> add <this-package>` only with installation/profile-write authorization in an isolated scratch profile. Otherwise retain supported claims with the verification limitation, following the [fact-check procedure](../SKILL.md#fact-check-procedure-test-do-not-assume).
 - Re-run `pnpm run verify-translation-pairing --write packages/<group>/<pkg>/README.md` after editing the pair.

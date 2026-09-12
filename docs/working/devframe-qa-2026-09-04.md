@@ -84,7 +84,7 @@ The build and hygiene failures point to candidate or repository prerequisites ow
 ## Reviewer Index
 
 - Changed QA test: `packages/experimental/agent-team/tests/devframe-qa-composition.spec.ts`.
-- Changed documentation: `docs/working/handoff-2026-09-03.md`, `docs/working/handoff-2026-09-03.zh.md`, this paired report, and the paired testing note at `.agents/notes/proposed/testing/2026-09-04-devframe-cross-group-qa-evidence.md`.
+- Changed documentation: this paired report and the paired testing note at `.agents/notes/proposed/testing/2026-09-04-devframe-cross-group-qa-evidence.md`.
 - Critical paths reviewed: Team task tool dispatch, native Goal create/disarm/resume, JSONL event inspection, role-denial recovery, and owned-process stopping.
 - Generated artifacts: no committed snapshot JSONL, prompt, schema, protocol, or build output was added.
 - Review focus: keep the partial statuses, blocker ownership, exact test scope, and no-snapshot decision intact when other groups repair the candidate.

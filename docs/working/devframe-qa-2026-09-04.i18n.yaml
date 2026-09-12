@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/working/devframe-qa-2026-09-04.md
-devframe-qa-2026-09-04.md: 46e32b8c99bd90bfa3f4cfb927a4620b143987f9
-devframe-qa-2026-09-04.zh.md: 775cec7cbb367ce75b520fc240991d609840befa
+devframe-qa-2026-09-04.md: f96e6da472af6c5282a44c26f69485886baaaa5e
+devframe-qa-2026-09-04.zh.md: 61fc549a5bc479702007c19432923859de8e1f2b

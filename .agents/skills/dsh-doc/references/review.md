@@ -21,7 +21,7 @@ A professional engineer with no repository context should answer the following a
 
 Check each material statement against its strongest owner. Use package metadata for names and entry points, public types and JSDoc for API contracts, runtime code for behavior, tests for exercised failure paths, generated catalogs for exhaustive inventories, and active Agent Notes for rationale. Never treat a prior README, discussion, or report as stronger than current code and tests.
 
-For every operational claim — a CLI command, a config snippet, a default value, an error message, a platform difference — the evidence is running it, not reading it. Execute the exact command or mount the exact configuration against the current checkout before the page may state its behavior; quote only observed output, warnings, and failures. Claims that depend on unavailable keys or networks name their verification owner instead of asserting behavior. For pre-existing pages, compare against latest `origin/master` and re-verify stale statements against code.
+For operational claims, apply the [fact-check procedure](../SKILL.md#fact-check-procedure-test-do-not-assume): use owning source, relevant tests and authorized isolated reproduction; distinguish fresh execution from existing evidence. Review/audit stays read-only. Missing environment or permission is a verification limitation, not contrary evidence or permission to install, change profiles, fetch, or run shared builds.
 
 Classify the package before reviewing its install guidance: `dsh.bundle.patch` in `package.json` makes it a bundle (installable via `dsh plugin --profile <name> add <package>`, the only shape that command activates as a layer); an `apply` export or default service export makes it a plugin (mounted as a `cordis.yml` row); a plain module API makes it a library (a dependency with no install path). Reject install guidance written for another shape.
 
@@ -50,15 +50,7 @@ The `session-persistence-jsonl` README pair ([English](../../../../packages/sess
 
 ## Verification
 
-Run the smallest focused checks while iterating, then the standing documentation checks:
-
-```sh
-pnpm run test:docs
-pnpm run verify-translation-pairing --write <pair>
-pnpm run doc-sync
-pnpm run lint
-git diff --check
-```
+Select the smallest relevant checks through [Validation](../SKILL.md#validation), including side-effect inspection, shared-build coordination and evidence reuse. Only authorized paired edits re-record sidecars; read-only review does not run `--write`. Do not mechanically chain test:docs, doc-sync and lint.
 
 Also run the repository's skill-invocation metadata check for skill changes and compare English/Chinese physical line counts for a line-aligned pair. Re-read the final diff once for factual completeness and once for brevity, navigation, and ownership.
 

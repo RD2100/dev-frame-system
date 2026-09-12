@@ -97,7 +97,7 @@ None.
 
 ## Rules
 
-- **Fact-check before writing.** Mount the package in a test composition and run every command, config field, default, and behavior claim this README makes. Delete anything you did not reproduce; link the generated config catalog instead of restating fields.
+- **Fact-check before writing.** Apply the [fact-check procedure](../SKILL.md#fact-check-procedure-test-do-not-assume): validate against owning source/tests and authorized isolated reproduction. Missing permission or environment limits execution evidence; correct or delete claims only when contrary evidence warrants it. Link the generated config catalog instead of restating fields.
 - **Installation guidance.** A plugin package mounts through `cordis.yml` rows. Only a package declaring `dsh.bundle.patch` installs as a profile layer via `dsh plugin --profile <name> add <package>` — if this package lacks that declaration, say how it mounts in a composition, never `dsh plugin add`.
 - **Model Experience and Known Limitations are gate-owned.** Match the exact headings and per-package forms the two gates enforce; update the gates' audited lists in the same change when behavior moves a package between forms.
 - Re-run `pnpm run verify-translation-pairing --write packages/<group>/<pkg>/README.md` after editing the pair.

@@ -84,7 +84,7 @@ pnpm.cmd exec vitest run packages/experimental/devframe/tests packages/experimen
 ## Reviewer Index
 
 - QA 测试改动：`packages/experimental/agent-team/tests/devframe-qa-composition.spec.ts`。
-- 文档改动：`docs/working/handoff-2026-09-03.md`、`docs/working/handoff-2026-09-03.zh.md`、本双语报告，以及 `.agents/notes/proposed/testing/2026-09-04-devframe-cross-group-qa-evidence.md` 的双语 testing note。
+- 文档改动：本双语报告，以及 `.agents/notes/proposed/testing/2026-09-04-devframe-cross-group-qa-evidence.md` 的双语 testing note。
 - 复核的关键路径：Team task tool dispatch、native Goal create/disarm/resume、JSONL event inspection、role-denial recovery 和 owned-process stopping。
 - 生成产物：没有新增已提交的 snapshot JSONL、prompt、schema、protocol 或 build output。
 - 复核重点：其他组修复候选时，保留局部状态、阻断责任、精确测试范围和不创建快照的决定。

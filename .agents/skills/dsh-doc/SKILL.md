@@ -25,7 +25,9 @@ The DeepSeek Harness documentation standard: make every page searchable, newcome
 
 ## Workflow
 
-Follow this sequence for each requested scope. Keep the common reader path brief, but do not delete failures, ownership, limitations, or other required contracts merely to reduce words.
+Select the task mode first. Review/audit is read-only: inspect the requested scope and report findings without changing metadata, bilingual text, sidecars, profiles, or generated files. Run only read-only checks whose side effects have been inspected; do not start a shared build merely to review prose. Explicit edit/fix/create requests use the authoring sequence below. Existing specific approval remains valid for its operation and scope; only a missing dependent permission pauses that operation.
+
+Follow this sequence for each authorized editing scope. Keep the common reader path brief, but do not delete failures, ownership, limitations, or other required contracts merely to reduce words.
 
 1. Read root and more-specific `AGENTS.md`, [the documentation standard](../../../docs/AGENTS.md), the target page, its source/tests, navigation owner, and bilingual record.
 2. Classify the page by one primary job and reader: product quick start, user task guide, contributor tutorial, architecture overview, package/subsystem reference, generated reference, agent instruction, decision record, or scratch.
@@ -33,18 +35,18 @@ Follow this sequence for each requested scope. Keep the common reader path brief
 4. Define the reader's starting state, observable outcome, likely failure, recovery path, and next useful depth before writing details.
 5. Add or revise YAML metadata — assign the `kind` that maps to the template for this document's job — then write `Summary`, `Table of Contents`, user-facing content, developer-facing content, optional `Further Exploration`, and final `Dev Note` in that order where the document type permits.
 6. Update the bilingual counterpart in the same pass. Keep headings, lists, tables, code, links, frontmatter layout, and physical line count aligned.
-7. Verify every claim against code, tests, generators, package metadata, or a current decision owner — and run the operations the page instructs, per the fact-check procedure below. Update the owner before any derivative artifact.
-8. Run focused checks, then `pnpm run test:docs`, `pnpm run doc-sync`, `pnpm run lint`, and `git diff --check`; re-read the complete diff for correctness and then for brevity and repository fit.
+7. Verify every claim against code, tests, generators, package metadata, or a current decision owner — and validate applicable operations within existing authorization and isolation, per the fact-check procedure below. Update the owner before any derivative artifact.
+8. Select the relevant checks using [Validation](#validation), reuse still-valid evidence, and run `git diff --check`; re-read the complete diff for correctness and then for brevity and repository fit.
 
 ## Fact-check procedure: test, do not assume
 
-Documentation states how the product behaves today, and the only admissible evidence for an operation claim is having run it. This procedure is mandatory for every new document and every new paragraph that claims an operation, command, default, error, or platform difference.
+Documentation claims need evidence from their owning implementation, relevant tests, or an authorized reproduction. Distinguish fresh execution from source inspection and existing test evidence. Apply the following procedure to changed operational claims; reading a command does not authorize executing it.
 
 1. **Classify the subject before writing install guidance.** Read the facts, never the folder name: `package.json` for a `dsh.bundle.patch` declaration, and the entry file for the plugin shape (`apply` export or a default service export is a plugin; a plain module API is a library). A bundle installs with `dsh plugin --profile <name> add <package>` and is the only package shape for which that command activates a profile layer; a plugin mounts as a `cordis.yml` row; a library is a dependency with no install path of its own. Packages with special status (libraries, bundles) get their own README template — never a plugin README with install guidance that does not apply.
-2. **Run every claimed operation against the current checkout.** Execute each CLI command, config snippet, and profile or patch example exactly as the document will show it; write down only what you observed, including the exact output, warnings, and failure modes. If a claim depends on a key or a network you do not have, say so and name the verification owner instead of asserting the behavior.
-3. **Delete what you could not reproduce.** Never carry a command, field, default value, or behavior from memory, analogy, or a neighboring package's README. When a claim fails to reproduce, fix the claim — not the test.
-4. **Check old docs against latest master.** Before revising pre-existing pages, `git fetch origin` and compare the section against `origin/master`; the pairing sidecar recovers the last-confirmed text of either side. A stale statement on master is still wrong: correct it against the code, not against the old prose.
-5. **Re-record the pair after every edit.** Each paired edit re-runs `pnpm run verify-translation-pairing --write <pair>` so the sidecar tracks the confirmed pair.
+2. **Inspect side effects before reproduction.** Run only operations already authorized and appropriately isolated. Installation, profile changes, paid model calls, network access, and shared builds keep their own approval and coordination gates. For unavailable environments or permissions, retain claims supported by current source or relevant existing tests, state the evidence type and verification limitation, and name the remaining check. Continue independent validation.
+3. **Correct claims when evidence contradicts them.** An unavailable environment is not contrary evidence. Do not delete a supported fact merely because reproduction is blocked. For an unsupported claim, qualify it or report the evidence gap; when source, tests, or a valid reproduction disproves it, correct or remove it. Never change a test to manufacture support.
+4. **Check the authorized checkout.** Verify the current root and revision before revising pages; use an already available comparison ref only when relevant. Fetching requires its own applicable authorization and is not a prerequisite to local review; the pairing sidecar recovers the last-confirmed text of either side. A stale statement on master is still wrong: correct it against the code, not against the old prose.
+5. **Re-record authorized paired edits.** Read-only review never writes a sidecar. Each authorized paired edit re-runs `pnpm run verify-translation-pairing --write <pair>` so the sidecar tracks the confirmed pair.
 
 ## Kind system and templates
 
@@ -118,10 +120,12 @@ Validate the affected format, not merely Markdown syntax. A strong promise needs
 - Bilingual pages: verify structure, exact line count, terminology, link parity, and the sidecar record.
 - Tutorials: exercise the documented entry path or name an explicit manual verification owner.
 - Generated references: run the deterministic freshness check and report retrieval-size measures.
-- Package READMEs: run model-experience and limitation checks, then package-focused tests when behavior claims changed; re-run every command the README instructs before merging a claim about it.
+- Package READMEs: run model-experience and limitation checks, then package-focused tests when behavior claims changed; validate changed operational claims under the fact-check procedure; report unexecuted checks without claiming they passed.
 - Skills: run the repository's skill-invocation metadata check.
 
-Run `pnpm run test:docs` for the quick comprehensive documentation checks (pairing, wrap, links, README gates, budgets, skill metadata, Agent Note gates) before the full `pnpm run doc-sync`.
+Choose the smallest relevant existing gate from [scripts/run-gates.ts](../../../scripts/run-gates.ts). `test:docs` selects the quick documentation checks without Host or website builds; `doc-sync` includes those quick checks plus `doc-typecheck` and the website build. `lint` and `doc-typecheck` each invoke `build:lib:host`; website builds write `website/.generated`, cache/dist and build dependencies. Check [package.json](../../../package.json) and command implementations for current side effects. Do not mechanically chain overlapping aggregates.
+
+For a shared checkout, use the root [coordination rule](../../../AGENTS.md#shared-checkout-validation). Reuse evidence only when command, input revision/content, dependencies, environment, exit code, and outputs still match. Use existing `:contracts-ready` commands only with a verified matching Host build; otherwise schedule the needed build with its owner or isolate it. Report a deferred build as unverified, and do not interrupt another task's process.
 
 ## Dev Note
 

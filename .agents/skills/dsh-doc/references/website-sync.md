@@ -75,14 +75,7 @@ pnpm docs:check
 
 If Markdown link checks pass but the site build reports a missing fragment, follow the `verify-doc-site-fragments` source and target paths. Preserve the English GitHub id with an explicit alias in authored Markdown or in the owning generator.
 
-Before committing a documentation-site change, run:
-
-```sh
-pnpm run test:docs
-pnpm run doc-sync
-pnpm run lint
-git diff --check
-```
+For authorized documentation-site edits, select checks via [Validation](../SKILL.md#validation). `docs:check` includes a website build; coordinate its shared output paths before running it. Reuse matching evidence and avoid overlapping test:docs/doc-sync/lint aggregates. Read-only audits do not build or regenerate the site.
 
 Use [dsh-pre-push-checks](../../dsh-pre-push-checks/SKILL.md) before pushing. Report the canonical files changed, manifest entries added or removed, public routes affected, and the exact checks run.
 
