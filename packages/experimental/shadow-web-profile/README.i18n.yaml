@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/shadow-web-profile/README.md
-README.md: de027c2f1e85f4936e2237a954f8ee19bd363298
-README.zh.md: a251fa95e4e26301907b2d7954eed8e4f8763fae
+README.md: c20f2908747c7f8be42dd6968a848f0f07edc007
+README.zh.md: 03d82dcc03b21abe5ef8a4416f11829f24550e45

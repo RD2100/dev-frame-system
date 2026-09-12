@@ -18,7 +18,7 @@ kind: "package-bundle"
 - [延伸阅读](#further-exploration)
 - [模型体验](#model-experience)
 - [已知限制与推迟事项](#known-limitations-and-deferred-work)
-- [Dev Note](#dev-note)
+- [开发备注](#dev-note)
 
 -----
 
@@ -72,11 +72,19 @@ pnpm dsh plugin --profile web add ./packages/experimental/shadow-web-profile
 <a id="model-experience"></a>
 ## 模型体验
 
-无。这个 Web bundle 不新增模型请求内容；Shadow 域没有面向模型的面。
+### Shadow Web 补丁层
 
-#### KV Cache 效应
+#### 模型看到什么
 
-无——本 bundle 不贡献提示词、工具或 schema 内容。
+没有任何内容到达模型请求。本包是静态 Web 补丁：它唯一的 `cordis.patch.yml` insert 行挂载常驻浏览器入口卡片，bundle 自身不注册工具、提示词段落或会话事件；Shadow 域没有面向模型的面。
+
+#### Token 影响
+
+对每次请求的直接 token 影响为零。
+
+#### KV Cache 影响
+
+与实时请求无关：本 bundle 不贡献提示词、工具或 schema 内容，因此不可能使提供方缓存复用失效。
 
 ## 已知限制与推迟事项
 
@@ -86,7 +94,7 @@ pnpm dsh plugin --profile web add ./packages/experimental/shadow-web-profile
 - **仅限源码 checkout**——正式 CLI、Web、npm 与 Python 发布负载排除此私有包。
 
 <a id="dev-note"></a>
-### Dev Note
+### 开发备注
 
 <details>
 <summary>维护者的工作上下文——点击展开</summary>

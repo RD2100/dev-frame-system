@@ -146,8 +146,9 @@ async function recordJournalEvidence(
 
 与实时请求无关：本包不触碰请求前缀，因此不可能使提供方缓存复用失效。
 
-<a id="known-limitations-and-deferred-work"></a>
 ## 已知限制与延期工作
+
+<a id="known-limitations-and-deferred-work"></a>
 
 这些限制界定了台账在何种场景下不适用或需要特别运维关注。它们是当前包约束，不是任务清单。
 

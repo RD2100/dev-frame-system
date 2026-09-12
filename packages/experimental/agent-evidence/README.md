@@ -146,8 +146,9 @@ Zero direct tokens on every request.
 
 Independent of live requests: the package never touches a request prefix, so it cannot invalidate provider cache reuse.
 
-<a id="known-limitations-and-deferred-work"></a>
 ## Known Limitations and Deferred Work
+
+<a id="known-limitations-and-deferred-work"></a>
 
 These limits define when the ledger is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
 

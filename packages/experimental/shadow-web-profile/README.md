@@ -72,11 +72,19 @@ The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied
 <a id="model-experience"></a>
 ## Model Experience
 
-None. This Web bundle adds no model request content; the Shadow domain has no model-facing face.
+### Shadow Web patch layer
+
+#### What the model sees
+
+Nothing reaches a model request. The package is a static Web patch: its single `cordis.patch.yml` insert mounts the resident browser entry card, and the bundle registers no tools, prompt sections, or session events of its own; the Shadow domain has no model-facing face.
+
+#### Token effect
+
+Zero direct tokens on every request.
 
 #### KV Cache effect
 
-None — the bundle contributes no prompt, tool, or schema content.
+Independent of live requests: the bundle contributes no prompt, tool, or schema content, so it cannot invalidate provider cache reuse.
 
 ## Known Limitations and Deferred Work
 
