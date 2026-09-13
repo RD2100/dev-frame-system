@@ -25,10 +25,6 @@ export const inject = ['remote', 'slots', 'locale', 'sessions']
 
 function registerUi(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'client-ui-shadow-entry: dictionaries')
-  // The Host and Client compiler faces merge different `ctx.sessions` types,
-  // so the Client face's ISessions is reached through an explicit conversion
-  // that one face's type-aware lint cannot see as necessary.
-  // oxlint-disable-next-line typescript/no-unnecessary-type-assertion
   const sessions = ctx.sessions as unknown as ISessions
   // The designated conversation is a dedicated surface, not a browsable
   // session: every status read classifies its id as internal so the session
@@ -54,9 +50,6 @@ function registerUi(ctx: ClientContext): void {
     onRefresh: () => { void controller.refresh() },
     onLoadConversation: () => { void conversation.loadTail() },
     onPollConversation: () => { void conversation.poll() },
-    onOpenProject: async path => await ctx.remote.shadow.openProject({ path }),
-    onSendToController: async (workspaceId, text) => await ctx.remote.shadow.sendToController({ workspaceId, text }),
-    onReleaseProject: async workspaceId => await ctx.remote.shadow.releaseProject({ workspaceId }),
     onPostMessage: async text => await ctx.remote.shadow.postMessage({ text }),
     // The Shadow is one permanent independent agent conversation: select its
     // designated Session so every trigger opens the same durable conversation

@@ -76,18 +76,6 @@ async function bench(
           },
         })
     },
-    openProject: (request: { path: string }) => {
-      calls.push(`shadow/openProject:${request.path}`)
-      return Promise.resolve({ ok: true as const, value: { workspaceId: 'ws-2', controllerSessionId: 'session-controller', bindingRevision: 1, state: 'ready' as const, canonicalPath: request.path } })
-    },
-    sendToController: (request: { workspaceId: string; text: string }) => {
-      calls.push(`shadow/sendToController:${request.workspaceId}:${request.text}`)
-      return Promise.resolve({ ok: true as const, value: { status: 'received' as const, messageId: 'msg-1' } })
-    },
-    releaseProject: (request: { workspaceId: string }) => {
-      calls.push(`shadow/releaseProject:${request.workspaceId}`)
-      return Promise.resolve({ ok: true as const, value: { status: 'stopped' as const } })
-    },
     readConversation: (request: { after?: number }) => {
       calls.push(`shadow/readConversation:${JSON.stringify(request)}`)
       return Promise.resolve({ ok: true as const, value: { messages: [], cursor: 0 } })
@@ -132,9 +120,6 @@ describe('ui-shadow-entry browser plugin', () => {
       onLoadConversation: () => void
       onPollConversation: () => void
       onPostMessage: (text: string) => Promise<{ ok: boolean }>
-      onOpenProject: (path: string) => Promise<{ ok: boolean }>
-      onSendToController: (workspaceId: string, text: string) => Promise<{ ok: boolean }>
-      onReleaseProject: (workspaceId: string) => Promise<{ ok: boolean }>
     })()
     expect(face.hooks.status.getSnapshot()).toEqual({ view: undefined, error: undefined })
     expect(face.hooks.conversation.getSnapshot()).toEqual({ messages: [], cursor: undefined, error: undefined })
@@ -142,18 +127,6 @@ describe('ui-shadow-entry browser plugin', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(b.calls).toEqual(['shadow/readStatus'])
     expect(face.hooks.status.getSnapshot()).toMatchObject({ view: { shadowSessionId: 'session-shadow' } })
-
-    // The three write verbs pass through to the generated namespace untouched;
-    // request ids are the controller's job, so the client sends none.
-    await expect(face.onOpenProject('D:/projects/beta')).resolves.toMatchObject({ ok: true })
-    await expect(face.onSendToController('ws-1', 'ship it')).resolves.toMatchObject({ ok: true })
-    await expect(face.onReleaseProject('ws-1')).resolves.toMatchObject({ ok: true })
-    expect(b.calls).toEqual([
-      'shadow/readStatus',
-      'shadow/openProject:D:/projects/beta',
-      'shadow/sendToController:ws-1:ship it',
-      'shadow/releaseProject:ws-1',
-    ])
 
     // The conversation face loads the tail on demand and posts verbatim.
     face.onLoadConversation()
@@ -175,9 +148,6 @@ describe('ui-shadow-entry browser plugin', () => {
 
     expect(b.calls).toEqual([
       'shadow/readStatus',
-      'shadow/openProject:D:/projects/beta',
-      'shadow/sendToController:ws-1:ship it',
-      'shadow/releaseProject:ws-1',
       'shadow/readConversation:{}',
       'shadow/readConversation:{"after":0}',
       'shadow/postMessage:hello shadow',

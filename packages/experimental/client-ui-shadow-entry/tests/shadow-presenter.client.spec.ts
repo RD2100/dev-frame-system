@@ -5,8 +5,6 @@ import type { ShadowRouterStatus, ShadowStatusBinding } from '@deepseek-ai/dsh-e
 import type { ShadowStatusView } from '@deepseek-ai/dsh-experimental-shadow-controller'
 import {
   presentShadowStatus,
-  presentWriteOutcome,
-  type ShadowWriteOutcome,
 } from '../src/client/shadow-presenter.ts'
 import type { ShadowStatusSnapshot } from '../src/client/shadow-store.ts'
 
@@ -118,31 +116,5 @@ describe('the Shadow card presentation fold', () => {
       'state.reserving', 'state.provisioning', 'state.ready',
       'state.stopping', 'state.stopped', 'state.needsAttention', 'state.failed',
     ])
-  })
-})
-
-describe('the write outcome fold', () => {
-  it('keeps an idle outcome unrendered', () => {
-    expect(presentWriteOutcome({ state: 'idle' })).toBeUndefined()
-  })
-
-  it('reads a busy outcome as the neutral working line', () => {
-    expect(presentWriteOutcome({ state: 'busy', kind: 'open' })).toEqual({ tone: 'busy', key: 'write.busy' })
-    expect(presentWriteOutcome({ state: 'busy', kind: 'send' })).toEqual({ tone: 'busy', key: 'write.busy' })
-  })
-
-  it('reads each completed kind as its own honest success line', () => {
-    expect(presentWriteOutcome({ state: 'ok', kind: 'open' })).toEqual({ tone: 'ok', key: 'write.openDone' })
-    expect(presentWriteOutcome({ state: 'ok', kind: 'send' })).toEqual({ tone: 'ok', key: 'write.sendDone' })
-    expect(presentWriteOutcome({ state: 'ok', kind: 'release' })).toEqual({ tone: 'ok', key: 'write.releaseDone' })
-  })
-
-  it('carries the service failure message verbatim into the failed line', () => {
-    const outcome: ShadowWriteOutcome = { state: 'failed', kind: 'release', message: 'workspace "ws-1" is stopping' }
-    expect(presentWriteOutcome(outcome)).toEqual({
-      tone: 'failed',
-      key: 'write.failed',
-      params: { message: 'workspace "ws-1" is stopping' },
-    })
   })
 })
