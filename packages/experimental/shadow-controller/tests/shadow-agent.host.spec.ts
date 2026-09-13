@@ -317,7 +317,9 @@ describe('the Shadow conversation host', () => {
       const agent = await b.host.ensure()
       await agent.whenIdle()
 
-      // The tool really ran the router's host bridge: one ready binding exists.
+      // The tool really ran the router's host bridge: one ready binding exists,
+      // and the conversation-driven open is the authorization action, so the
+      // bridge recorded the authorized run (revision bumped past the receipt).
       const status = await dispatch(b.ctx, agent, 'shadow_status', {})
       const facts = JSON.parse(resultText(status)) as {
         projects: Array<{ canonical_path: string; state: string; binding_revision: number }>
@@ -325,7 +327,7 @@ describe('the Shadow conversation host', () => {
       expect(facts.projects).toEqual([{
         workspace_id: expect.any(String) as string,
         canonical_path: b.projectDirs.alpha,
-        binding_revision: 1,
+        binding_revision: 2,
         state: 'ready',
       }])
 

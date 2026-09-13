@@ -128,7 +128,7 @@ export class ShadowRouter extends ShadowRouterContract {
 
   static Config: z<ShadowRouterConfig> = z.object({
     authorizedRoots: z.array(z.string()).default([]),
-    controllerProfile: z.string().default('devframe'),
+    controllerProfile: z.string().default('standard'),
     // Optional face: schemastery omits an absent key and validates a present
     // string, so the declared id reaches the constructor only when configured.
     shadowSessionId: z.string(),
@@ -632,13 +632,39 @@ export class ShadowRouter extends ShadowRouterContract {
   /**
    * Host-plane open: the same gated flow the `project_open` tool runs, driven
    * by the designated Shadow's authority for host status surfaces (the Web
-   * Shadow card). Path canonicalization, authorization, replay, and
-   * provisioning are identical to the tool path.
+   * Shadow card) and the Shadow conversation's `shadow_open_project` tool.
+   * Path canonicalization, authorization, replay, and provisioning are
+   * identical to the tool path. A human-initiated open is the authorization
+   * action, so when the open lands `ready` and the binding records no
+   * authorized open run, this bridge records one — the model-facing
+   * `project_open` tool path never does.
    * @param request - Existing authorized path and stable request id.
    * @returns the controller association.
    */
   async openProjectForHost(request: ProjectOpenRequest): Promise<ProjectOpenResult> {
-    return await this.openProject(this.requireDesignatedShadowAgent(), request)
+    const agent = this.requireDesignatedShadowAgent()
+    const opened = await this.openProject(agent, request)
+    // The run label rides the receipt's revision. A repeated open, a replayed
+    // request, or a later host `setActiveGoal` never re-mints one here, so the
+    // durable revision may sit one past the receipt's. The hash pads the
+    // `open-<revision>` shape past the declared 8-char acceptance floor.
+    if (opened.state === 'ready') await this.establishHostOpenRun(WorkspaceId(opened.workspaceId), opened.bindingRevision)
+    return opened
+  }
+
+  /**
+   * Record one authorized open run for a freshly ready host-opened binding.
+   * The binding facts are re-read inside the operation chain, so a stop that
+   * landed between the open and this recording skips instead of authorizing a
+   * closed receiver. Runs at most once per binding: a run already on record
+   * stays authoritative.
+   * @param workspaceId - The project the host open provisioned.
+   * @param bindingRevision - The revision the open receipt may predate.
+   */
+  private async establishHostOpenRun(workspaceId: WorkspaceId, bindingRevision: number): Promise<void> {
+    const binding = this.findBinding(workspaceId)
+    if (binding === undefined || binding.state !== 'ready' || binding.activeGoalId !== undefined) return
+    await this.setActiveGoal(workspaceId, `host-run-${String(bindingRevision)}`, `open-run-${String(bindingRevision)}`)
   }
 
   /**

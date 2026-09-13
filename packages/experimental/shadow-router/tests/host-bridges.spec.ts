@@ -19,10 +19,17 @@ describe('shadow-router host write bridges', () => {
       const opened = await h.router.openProjectForHost({ path: dir, requestId: 'host-open-1' })
       expect(opened.state).toBe('ready')
       expect(opened.bindingRevision).toBe(1)
+      // A human-initiated open is the authorization action: the bridge records
+      // the authorized open run, which bumps the binding past the receipt.
+      expect(h.router.findBinding(opened.workspaceId)).toMatchObject({
+        activeGoalId: 'host-run-1',
+        activeAcceptanceHash: 'open-run-1',
+        bindingRevision: 2,
+      })
       expect(h.router.readStatus().bindings).toEqual([{
         workspaceId: opened.workspaceId,
         canonicalPath: opened.canonicalPath,
-        bindingRevision: opened.bindingRevision,
+        bindingRevision: 2,
         state: 'ready',
       }])
       // The controller session the open provisions really exists.
@@ -85,7 +92,8 @@ describe('shadow-router host write bridges', () => {
     const h = await harness(root, { authorizedRoots: [root], shadowSessionId: 'session-shadow' })
     try {
       const dir = await h.makeProjectDir('host-send-noauth')
-      const opened = await h.router.openProjectForHost({ path: dir, requestId: 'host-send-open-2' })
+      // The model-facing tool path records no run — only a host-plane open does.
+      const opened = await h.router.openProject(h.shadow, { path: dir, requestId: 'host-send-open-2' })
       await expect(h.router.sendToProjectForHost({
         workspaceId: opened.workspaceId, text: 'no run yet', requestId: 'host-send-2',
       })).rejects.toThrow('records no authorized open run')
@@ -107,7 +115,8 @@ describe('shadow-router host write bridges', () => {
       expect(released.status).toBe('stopped')
       const row = h.router.readStatus().bindings[0]
       expect(row).toMatchObject({ workspaceId: opened.workspaceId, state: 'stopped' })
-      expect(row?.bindingRevision).toBe(opened.bindingRevision + 1)
+      // The open's recorded run took the binding to revision 2; the stop adds one.
+      expect(row?.bindingRevision).toBe(3)
     } finally {
       await h.dispose()
     }
@@ -120,6 +129,50 @@ describe('shadow-router host write bridges', () => {
       await expect(h.router.releaseProjectForHost({
         workspaceId: 'ws-never-opened', requestId: 'host-release-2',
       })).rejects.toThrow('no controller binding exists')
+    } finally {
+      await h.dispose()
+    }
+  })
+
+  it('delivers after a host open with no manual authorization step', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-host-openauth-'))
+    const h = await harness(root, { authorizedRoots: [root], shadowSessionId: 'session-shadow' })
+    try {
+      const dir = await h.makeProjectDir('host-open-send')
+      const opened = await h.router.openProjectForHost({ path: dir, requestId: 'host-openauth-open' })
+      expect(opened.state).toBe('ready')
+      const sent = await h.router.sendToProjectForHost({
+        workspaceId: opened.workspaceId, text: 'first work after open', requestId: 'host-openauth-send',
+      })
+      expect(sent).toMatchObject({ status: 'received' })
+      expect(h.router.listDeliveries(opened.workspaceId).at(-1)).toMatchObject({
+        goalId: 'host-run-1',
+        acceptanceHash: 'open-run-1',
+        state: 'received',
+      })
+    } finally {
+      await h.dispose()
+    }
+  })
+
+  it('keeps repeated and replayed host opens idempotent over the recorded run', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-host-repeat-'))
+    const h = await harness(root, { authorizedRoots: [root], shadowSessionId: 'session-shadow' })
+    try {
+      const dir = await h.makeProjectDir('host-repeat-project')
+      const first = await h.router.openProjectForHost({ path: dir, requestId: 'host-repeat-1' })
+      const again = await h.router.openProjectForHost({ path: dir, requestId: 'host-repeat-2' })
+      const replay = await h.router.openProjectForHost({ path: dir, requestId: 'host-repeat-1' })
+      expect(replay).toEqual(first)
+      // Only the first open establishes the run: later opens and replays keep
+      // the recorded run and its revision instead of re-minting one.
+      expect(h.router.findBinding(first.workspaceId)).toMatchObject({
+        activeGoalId: 'host-run-1',
+        activeAcceptanceHash: 'open-run-1',
+        bindingRevision: 2,
+      })
+      expect(again.bindingRevision).toBe(2)
+      expect(h.router.listDeliveries(first.workspaceId)).toHaveLength(0)
     } finally {
       await h.dispose()
     }

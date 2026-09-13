@@ -45,7 +45,7 @@ await ctx.remote.shadow.sendToController({ workspaceId, text: 'ship the release'
 await ctx.remote.shadow.releaseProject({ workspaceId }) // ProjectStopResult, status 'stopped'
 ```
 
-失败以 `{ ok: false, error: { code, message } }` 解析，并逐字携带路由器自己的拒绝理由——未授权根、路径不存在、项目已关闭——因此界面显示服务的原因而不是编造一个。没有挂载路由器时，读取保持诚实（`mounted: false`），每个写入都大声失败。
+失败以 `{ ok: false, error: { code, message } }` 解析，并逐字携带路由器自己的拒绝理由——未授权根、路径不存在、项目已关闭——因此界面显示服务的原因而不是编造一个。没有挂载路由器时，读取保持诚实（`mounted: false`），每个写入都大声失败。落到 `ready` 的 open 还会在路由器中记录该项目的授权运行——人类发起的 open 即授权动作——因此第一次 `sendToController` 无需额外的宿主设置。
 
 ### 与影子对话
 

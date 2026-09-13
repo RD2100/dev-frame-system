@@ -49,7 +49,7 @@ kind: "package-reference"
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `authorizedRoots` | `[]` | 项目根允许位于其下的绝对目录。为空表示任何项目都无法打开（fail-closed）。 |
-| `controllerProfile` | `'devframe'` | 每条绑定固定的 profile 键；已绑定到其他 profile 的绑定会被拒绝。 |
+| `controllerProfile` | `'standard'` | 每条绑定固定的 profile 键；已绑定到其他 profile 的绑定会被拒绝。 |
 | `shadowSessionId` | 未设置 | 组合声明为 Shadow 的会话 id。该代理已存活（激活时）或被创建时，服务自行执行 `markShadow` 调用；缺省或从未创建则不安装任何工具（fail-closed）。 |
 | `maxPendingDeliveries` | `16` | 每个项目 `queued` 投递的上限；队列已满时，新输入在接受前即被拒绝。 |
 | `maxMessageChars` | `20000` | 单条投递文本的长度上限。 |
@@ -57,7 +57,7 @@ kind: "package-reference"
 
 ### 指定 Shadow 并调用工具
 
-`markShadow(agent)` 只把四个工具装进该代理的作用域，其他作用域一个都解析不到。宿主调用与工具相同的 Service 方法，外加模型永远接触不到的宿主专用缝：`setActiveGoal` 为项目授权一次运行，`completeDelivery` 结清 received 投递，`confirmProjectStopped` 收尾一次停止，`recoverDeliveries` 在重启时收敛中断的行。三条写入桥以指定 Shadow 自身的授权为宿主状态面板（Web Shadow 卡片）运行受门禁的流程——`openProjectForHost`、`sendToProjectForHost`（路由器自行补足绑定的修订与已授权运行）与 `releaseProjectForHost`（停止与静默确认一步完成）。
+`markShadow(agent)` 只把四个工具装进该代理的作用域，其他作用域一个都解析不到。宿主调用与工具相同的 Service 方法，外加模型永远接触不到的宿主专用缝：`setActiveGoal` 为项目授权一次运行，`completeDelivery` 结清 received 投递，`confirmProjectStopped` 收尾一次停止，`recoverDeliveries` 在重启时收敛中断的行。三条写入桥以指定 Shadow 自身的授权为宿主状态面板（Web Shadow 卡片）运行受门禁的流程——`openProjectForHost`、`sendToProjectForHost`（路由器自行补足绑定的修订与已授权运行）与 `releaseProjectForHost`（停止与静默确认一步完成）。人类通过面板或 Shadow 对话发起的 open 即授权动作：当 `openProjectForHost` 落到 `ready` 且绑定尚未记录授权运行时，桥会至多一次地记录运行（`host-run-<revision>` / `open-run-<revision>`），因此 open 后的宿主发送无需再单独 `setActiveGoal`；模型侧的 `project_open` 工具路径从不自授权。
 
 ```ts
 import type { Agent } from '@deepseek-ai/dsh-agent'

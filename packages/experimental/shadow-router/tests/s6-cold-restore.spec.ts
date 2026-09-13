@@ -32,8 +32,8 @@ describe('shadow-router S6 binding row-level cold recovery', () => {
         expect(openB.state).toBe('ready')
         expect(openA.workspaceId).not.toBe(openB.workspaceId)
         expect(openA.controllerSessionId).not.toBe(openB.controllerSessionId)
-        expect(h1.router.findBinding(openA.workspaceId)!.profileKey).toBe('devframe')
-        expect(h1.router.findBinding(openB.workspaceId)!.profileKey).toBe('devframe')
+        expect(h1.router.findBinding(openA.workspaceId)!.profileKey).toBe('standard')
+        expect(h1.router.findBinding(openB.workspaceId)!.profileKey).toBe('standard')
 
         await h1.router.setActiveGoal(openA.workspaceId, 's6-goal-a', 's6-hash-a')
         await h1.router.setActiveGoal(openB.workspaceId, 's6-goal-b', 's6-hash-b')

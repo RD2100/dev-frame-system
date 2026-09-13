@@ -73,7 +73,7 @@ describe('shadow-router S6 stop-path settlement contrast', () => {
         workspaceId: WorkspaceId('ws-s6-stop-a'),
         canonicalPath: canonicalA,
         controllerSessionId: SessionId('session-ctrl-s6-stop-a'),
-        profileKey: 'devframe',
+        profileKey: 'standard',
         bindingRevision: 1,
         requestId: 'seed-open-s6-stop-a',
         state: 'ready',

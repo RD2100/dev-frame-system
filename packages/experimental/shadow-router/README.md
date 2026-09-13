@@ -49,7 +49,7 @@ Source-checkout users who want the whole DevFrame stack — this router beside s
 | Field | Default | Meaning |
 |---|---|---|
 | `authorizedRoots` | `[]` | Absolute directories a project root may live under. Empty means nothing can be opened (fail-closed). |
-| `controllerProfile` | `'devframe'` | Profile key pinned on every binding; an existing binding pinned to another profile is rejected. |
+| `controllerProfile` | `'standard'` | Profile key pinned on every binding; an existing binding pinned to another profile is rejected. |
 | `shadowSessionId` | not set | Session id the composition declares as its Shadow. The service performs the `markShadow` invocation itself when that agent is live (at activation) or created; absent or never-created installs nothing (fail-closed). |
 | `maxPendingDeliveries` | `16` | Per-project cap on `queued` deliveries; a full queue rejects new input before acceptance. |
 | `maxMessageChars` | `20000` | Upper bound on one delivery's text. |
@@ -57,7 +57,7 @@ Source-checkout users who want the whole DevFrame stack — this router beside s
 
 ### Designate the Shadow and call the tools
 
-`markShadow(agent)` installs the four tools into that agent's scope and nothing else; every other scope resolves none of them. The host calls the same service methods the tools dispatch to, plus host-only seams the model never reaches: `setActiveGoal` authorizes one open run per project, `completeDelivery` settles a received delivery, `confirmProjectStopped` finishes a stop, and `recoverDeliveries` converges interrupted rows on restart. Three write bridges run the gated flows for host status surfaces (the Web Shadow card) under the designated Shadow's own authority — `openProjectForHost`, `sendToProjectForHost` (the router supplies the binding's revision and authorized run), and `releaseProjectForHost` (stop plus quiescence confirmation in one step).
+`markShadow(agent)` installs the four tools into that agent's scope and nothing else; every other scope resolves none of them. The host calls the same service methods the tools dispatch to, plus host-only seams the model never reaches: `setActiveGoal` authorizes one open run per project, `completeDelivery` settles a received delivery, `confirmProjectStopped` finishes a stop, and `recoverDeliveries` converges interrupted rows on restart. Three write bridges run the gated flows for host status surfaces (the Web Shadow card) under the designated Shadow's own authority — `openProjectForHost`, `sendToProjectForHost` (the router supplies the binding's revision and authorized run), and `releaseProjectForHost` (stop plus quiescence confirmation in one step). A human-initiated open through the panel or the Shadow conversation is the authorization action: when `openProjectForHost` lands `ready` and the binding records no authorized open run, the bridge records one (`host-run-<revision>` / `open-run-<revision>`) at most once per binding, so an open followed by a host send needs no separate `setActiveGoal`; the model-facing `project_open` tool path never self-authorizes.
 
 ```ts
 import type { Agent } from '@deepseek-ai/dsh-agent'

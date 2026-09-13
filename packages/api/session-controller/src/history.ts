@@ -157,7 +157,10 @@ export class SessionHistoryController {
           ? { asOfSeq: cursor, values: {} }
           : projectionBlock(source.projections),
       }
-      if (address.kind === 'session' && source.source === 'prepared') {
+      if (address.kind === 'session' && source.source === 'prepared' && source.header.cwd !== undefined) {
+        // A cwd-less session has no generic agent face to activate (its owner,
+        // such as the Shadow conversation host, resumes it itself), so history
+        // following must not schedule a promotion that can only fail.
         const promotion = source.retain()
         try {
           this.promote(promotion)
@@ -200,10 +203,9 @@ export class SessionHistoryController {
         signal,
         projectionMode: withProjections || address.kind === 'subagent' ? 'all' : 'none',
       })
-      if (observation.header.cwd === undefined) {
-        observation[Symbol.dispose]()
-        rejectNotFound(address)
-      }
+      // A persisted cwd-less session (for example the Shadow conversation, whose
+      // durable home is `sessions/_no-cwd/`) is a first-class read source here;
+      // only the generic agent face still scopes resumption to a project cwd.
       try {
         validateAddress(
           address,

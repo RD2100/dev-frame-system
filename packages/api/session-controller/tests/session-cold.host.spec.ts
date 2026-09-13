@@ -97,6 +97,19 @@ describe('sessions.list cold merge', () => {
         }
       }
       if (id === sid('read-failure')) throw new Error('simulated read failure')
+      if (id === sid('missing-cwd')) {
+        return {
+          meta: metas[8]!,
+          events: [
+            { type: 'turn/start', seq: SessionSeq(0), time: 850, data: { turn: 1 } },
+            {
+              type: 'user/message', seq: SessionSeq(1), time: 860,
+              data: createUserMessage({ content: [{ type: 'text', text: 'no-cwd row' }], source: { kind: 'user' } }),
+              surfaceOp: 'append',
+            },
+          ] satisfies SessionEvent[],
+        }
+      }
       throw new Error(`unexpected cold read: ${id}`)
     })
     providePersistence(ctx, {
@@ -147,13 +160,49 @@ describe('sessions.list cold merge', () => {
     })
     expect(byId['vanished']).toMatchObject({ blank: false, updatedAt: 600 })
     expect(byId['read-failure']).toMatchObject({ blank: false, updatedAt: 700 })
-    expect(byId['missing-cwd']).toBeUndefined()
-    expect(inspect).toHaveBeenCalledTimes(3)
+    // A cwd-less cold session lists like any other persisted row.
+    expect(byId['missing-cwd']).toMatchObject({ blank: false, updatedAt: 860 })
+    expect(inspect).toHaveBeenCalledTimes(4)
     expect(inspect.mock.calls.map(([id]) => id)).toEqual(expect.arrayContaining([
       sid('small-blank'),
       sid('small-conversation'),
+      sid('missing-cwd'),
       sid('read-failure'),
     ]))
+  })
+
+  it('lists a persisted _no-cwd session and serves its history page', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    const root = mkdtempSync(join(tmpdir(), 'dsh-no-cwd-row-'))
+    const logPath = join(root, 'session.log')
+    writeFileSync(logPath, 'x')
+    const meta = { version: 0, id: sid('no-cwd-row'), createdAt: 100, isSeeded: false } satisfies SessionHeader
+    const events = [
+      { type: 'turn/start', seq: SessionSeq(0), time: 110, data: { turn: 1 } },
+      {
+        type: 'user/message', seq: SessionSeq(1), time: 120,
+        data: createUserMessage({ content: [{ type: 'text', text: 'shadow turn' }], source: { kind: 'user' } }),
+        surfaceOp: 'append',
+      },
+    ] satisfies SessionEvent[]
+    providePersistence(ctx, {
+      list: () => Promise.resolve([meta]),
+      locate: () => ({ kind: 'jsonl' as const, path: logPath }),
+      inspect: () => Promise.resolve({ meta, events }),
+    })
+    const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+
+    const response = await remote.list(request({}))
+    if (!response.ok) throw new Error('list failed')
+    expect(response.value.items).toEqual([
+      expect.objectContaining({ sessionId: meta.id, blank: false, updatedAt: 120 }),
+    ])
+    const history = new SessionHistoryController(ctx, () => undefined)
+    await expect(history.page({
+      address: { kind: 'session', sessionId: meta.id },
+      throughSeq: 1,
+    }, new AbortController().signal)).resolves.toMatchObject({ hasMore: false })
   })
 
   it('can disable bounded cold observations without hiding cold Sessions', async () => {

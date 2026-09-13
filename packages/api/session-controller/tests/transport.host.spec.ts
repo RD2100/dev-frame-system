@@ -543,35 +543,39 @@ describe('SessionHistoryController', () => {
     expect(inspect).toHaveBeenCalledTimes(2)
   })
 
-  it('rejects incomplete cold metadata before serving a source', async () => {
-    const first = await setup()
-    const sessionId = SessionId('incomplete')
+  it('serves cold history for a persisted _no-cwd session without promoting it', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    installSessionReadTestServices(ctx)
+    const sessionId = SessionId('no-cwd-cold')
     const address = { kind: 'session' as const, sessionId }
-    const firstHeader = { version: 0, id: sessionId, createdAt: 1, isSeeded: false }
-    first.ctx.provide('sessionPersistence', testSessionPersistence(first.ctx, {
-      list: () => Promise.resolve([firstHeader]),
+    const meta = { version: 0, id: sessionId, createdAt: 1, isSeeded: false }
+    ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
+      list: () => Promise.resolve([meta]),
       inspect: () => Promise.resolve({
-        meta: firstHeader,
+        meta,
         inheritedEventCount: SessionLogOffset(0),
-        events: [],
+        events: [event('turn/start', SessionSeq(0)), event('fixture/gap', SessionSeq(1))],
       }),
     }) as never)
-    await expect(first.transport.page({ address, throughSeq: -1 }, signal()))
-      .rejects.toMatchObject({ code: 'session/not-found' })
+    const promote = vi.fn()
+    const transport = new SessionHistoryController(ctx, promote)
 
-    const second = await setup()
-    const listed = { version: 0, id: sessionId, createdAt: 1, cwd: '/workspace', isSeeded: false }
-    const inspected = { version: 0, id: sessionId, createdAt: 1, isSeeded: false }
-    second.ctx.provide('sessionPersistence', testSessionPersistence(second.ctx, {
-      list: () => Promise.resolve([listed]),
-      inspect: () => Promise.resolve({
-        meta: inspected,
-        inheritedEventCount: SessionLogOffset(0),
-        events: [],
-      }),
-    }) as never)
-    await expect(second.transport.page({ address, throughSeq: -1 }, signal()))
-      .rejects.toMatchObject({ code: 'session/not-found' })
+    await expect(transport.page({ address, throughSeq: 0 }, signal()))
+      .resolves.toMatchObject({ hasMore: false })
+
+    const abort = new AbortController()
+    const iterator = transport.follow({ address }, abort.signal)[Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toMatchObject({
+      value: { type: 'snapshot', cursor: 1 },
+    })
+    // A cwd-less source has no generic agent face (its owner, such as the
+    // Shadow conversation host, resumes it itself), so following serves the
+    // snapshot without scheduling a doomed background activation.
+    expect(promote).not.toHaveBeenCalled()
+    abort.abort()
+    await expect(iterator.next()).resolves.toMatchObject({ done: true })
+    await ctx.fiber.dispose()
   })
 
   it('serves cold ordinary history and validates every durable subagent descriptor state', async () => {

@@ -146,7 +146,9 @@ export class ApiSessionList {
         items.push(this.summaryFor(live))
         continue
       }
-      if (record.header.cwd === undefined) continue
+      // A cwd-less cold session (for example the Shadow conversation) is listed
+      // like any other persisted row; only the generic agent face stays
+      // project-scoped.
       cold.push(record.header)
     }
     for (let offset = 0; offset < cold.length; offset += COLD_SUMMARY_BATCH_SIZE) {

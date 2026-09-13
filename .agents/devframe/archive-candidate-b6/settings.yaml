@@ -1,0 +1,14 @@
+llm-pi-ai:
+  providers:
+    huoshan-2:
+      apiKeyEnv: HUOSHAN_2_API_KEY
+      api: openai-completions
+      baseURL: https://ark.cn-beijing.volces.com/api/coding/v3
+      models:
+        - id: glm-5.3-flash
+          name: glm-5.3-flash
+        - id: glm-5.3
+          name: glm-5.3
+agent-default-model:
+  provider: huoshan-2
+  model: glm-5.3-flash

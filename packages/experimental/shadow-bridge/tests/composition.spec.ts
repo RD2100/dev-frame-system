@@ -297,6 +297,59 @@ describe('the shadow delivery bridge through a real Loader composition', () => {
     }
   })
 
+  it('forwards a work delivery after a host open establishes the authorized run', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-bridge-openauth-'))
+    const boots: Boot[] = []
+    try {
+      const projectDir = join(root, 'project-open-auth')
+      await mkdir(projectDir)
+      // First process: the panel/conversation open path with no seeded binding
+      // and no manual setActiveGoal — the host bridge itself records the
+      // authorized run and provisions the controller session.
+      const first = await boot(root)
+      boots.push(first)
+      await createShadow(first.ctx)
+      const opened = await first.ctx.shadowRouter.openProjectForHost({ path: projectDir, requestId: 'host-open-auth-1' })
+      expect(opened.state).toBe('ready')
+      expect(first.ctx.shadowRouter.findBinding(opened.workspaceId)).toMatchObject({
+        activeGoalId: 'host-run-1',
+        activeAcceptanceHash: 'open-run-1',
+      })
+      // The host duty this exercise depends on: persistence is lazy, so the
+      // freshly provisioned controller session is materialized before the
+      // restart, the way an adopting host surface persists it.
+      await first.ctx.sessionPersistence.ensureMaterialized(first.ctx.sessions.get(opened.controllerSessionId)!)
+      await first.close()
+
+      // Restart: the run record and the provisioned controller session survive,
+      // so a host send forwards into the resumed controller without any
+      // re-authorization.
+      const second = await boot(root)
+      boots.push(second)
+      await createShadow(second.ctx)
+      await second.ctx.agents.resume({
+        resumeSessionId: opened.controllerSessionId,
+        agentOptions: { provider: 'mock', model: 'mock' },
+      })
+      const send = await second.ctx.shadowRouter.sendToProjectForHost({
+        workspaceId: opened.workspaceId,
+        text: 'Verify the open path authorizes the run.',
+        requestId: 'send-open-auth-1',
+      })
+      expect(send).toMatchObject({ messageId: 'msg-send-open-auth-1', status: 'received' })
+      const texts = await vi.waitFor(() => {
+        const rows = userMessageTexts(second.ctx, opened.controllerSessionId)
+        expect(rows).toHaveLength(1)
+        return rows
+      })
+      expect(texts[0]).toContain(`[Shadow delivery msg-send-open-auth-1 for workspace ${opened.workspaceId}]`)
+      expect(texts[0]).toContain('Verify the open path authorizes the run.')
+    } finally {
+      for (const instance of boots.reverse()) await instance.close()
+      await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 25 })
+    }
+  })
+
   it('does not forward without an authorized open run or into a stopped project', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-bridge-gates-'))
     const boots: Boot[] = []

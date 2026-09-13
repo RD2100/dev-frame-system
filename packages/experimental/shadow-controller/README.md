@@ -45,7 +45,7 @@ await ctx.remote.shadow.sendToController({ workspaceId, text: 'ship the release'
 await ctx.remote.shadow.releaseProject({ workspaceId }) // ProjectStopResult, status 'stopped'
 ```
 
-Failures resolve as `{ ok: false, error: { code, message } }` and carry the router's own rejection verbatim — an unauthorized root, a missing path, a closed project — so a surface shows the service's reason instead of inventing one. With no router mounted, the read stays honest (`mounted: false`) and every write fails loud.
+Failures resolve as `{ ok: false, error: { code, message } }` and carry the router's own rejection verbatim — an unauthorized root, a missing path, a closed project — so a surface shows the service's reason instead of inventing one. With no router mounted, the read stays honest (`mounted: false`) and every write fails loud. An open that lands `ready` also records the project's authorized open run in the router — the human-initiated open is the authorization action — so the first `sendToController` needs no separate host setup.
 
 ### Talk to the Shadow
 

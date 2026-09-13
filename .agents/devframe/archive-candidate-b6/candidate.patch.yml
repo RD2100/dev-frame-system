@@ -1,0 +1,7 @@
+# B6 candidate isolation overlay: point the settings document at this
+# candidate-local file (explicit flash route) without touching the user's
+# global $DSH_HOME/settings.yaml. Credentials still resolve through the
+# original home's managed store.
+- id: settings
+  config:
+    path: D:/dsh-devframe-candidate-b6/settings.yaml
