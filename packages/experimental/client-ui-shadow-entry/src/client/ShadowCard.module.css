@@ -129,18 +129,16 @@
   background: var(--dsw-alias-state-success-primary);
 }
 
-/* The chat dialog: opens beside the sidebar over the page content — its left
-   edge sits just past the trigger row's right edge, so its width is bounded
-   by what remains of the viewport. */
+/* The chat dialog: portaled to document.body and fixed-placed beside the
+   sidebar footer (the sidebar column clips overflow, so in-place absolute
+   positioning can never reach the page area); placement and the viewport
+   size caps arrive inline from the placement hook. */
 .chatDialog {
-  position: absolute;
-  z-index: 30;
-  left: calc(100% + 8px);
-  bottom: calc(100% + 8px);
+  position: fixed;
+  z-index: 1000;
   display: flex;
   flex-direction: column;
-  width: min(760px, calc(100vw - 100% - 32px));
-  max-height: min(72vh, 680px);
+  width: min(760px, calc(100vw - 24px));
   overflow: hidden;
   border: 0;
   border-radius: 12px;
@@ -367,14 +365,12 @@
   word-break: break-all;
 }
 
-/* The manage dropdown: a compact settings list anchored above the manage
-   button — the button sits at the window's bottom edge, so the menu opens
-   upward to stay in the viewport — using the shared Menu design tokens. */
+/* The manage dropdown: a compact settings list portaled to document.body and
+   fixed-placed above the manage button (the button sits at the window's
+   bottom edge), using the shared Menu design tokens. */
 .manageMenu {
-  position: absolute;
-  bottom: calc(100% + 4px);
-  right: 0;
-  z-index: 100;
+  position: fixed;
+  z-index: 1100;
   min-width: 220px;
   max-width: 360px;
   display: flex;

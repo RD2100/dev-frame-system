@@ -141,42 +141,43 @@ describe('the sidebar Shadow entry card', () => {
   })
 
   it('opens the chat dialog on trigger click and shows the conversation surface', async () => {
-    const b = await openChat()
+    await openChat()
     const dialog = screen.getByRole('dialog', { name: '对话' })
     expect(dialog).not.toBeNull()
-    expect(b.container.querySelector('[data-shadow-chat-dialog]')).not.toBeNull()
+    // The dialog is portaled to document.body (the sidebar column clips
+    // overflow), so its content lives outside the render container.
+    expect(document.querySelector('[data-shadow-chat-dialog]')).not.toBeNull()
     // The dialog renders its body when actionable (online/configured); with no
     // messages it shows the empty-state paragraph, with messages the list.
-    const hasChatSurface = b.container.querySelector('[data-shadow-chat-list]') !== null
-      || b.container.querySelector('[data-shadow-chat-empty]') !== null
+    const hasChatSurface = document.querySelector('[data-shadow-chat-list]') !== null
+      || document.querySelector('[data-shadow-chat-empty]') !== null
     if (!hasChatSurface) {
       console.log('FULL DIALOG HTML:', dialog.innerHTML)
-      console.log('FULL CONTAINER:', b.container.innerHTML.substring(0, 500))
+      console.log('FULL DIALOG:', document.body.innerHTML.substring(0, 500))
     }
     expect(hasChatSurface).toBe(true)
-    expect(b.container.querySelector('[data-shadow-chat-input]')).not.toBeNull()
-    expect(b.container.querySelector('[data-shadow-chat-input]')).not.toBeNull()
-    expect(b.container.querySelector('[data-shadow-chat-submit]')).not.toBeNull()
+    expect(document.querySelector('[data-shadow-chat-input]')).not.toBeNull()
+    expect(document.querySelector('[data-shadow-chat-submit]')).not.toBeNull()
   })
 
   it('shows the empty-state copy when the conversation has no rows', async () => {
-    const b = await openChat()
+    await openChat()
     await act(async () => { await Promise.resolve() })
-    expect(b.container.querySelector('[data-shadow-chat-empty]')?.textContent).toBe('还没有消息——发一条开始对话。')
-    expect(b.container.querySelector('[data-shadow-chat-list]')).toBeNull()
+    expect(document.querySelector('[data-shadow-chat-empty]')?.textContent).toBe('还没有消息——发一条开始对话。')
+    expect(document.querySelector('[data-shadow-chat-list]')).toBeNull()
   })
 
   it('loads the conversation tail when the chat dialog opens online and renders the rows', async () => {
     const chat = chatBench()
     chat.reads.mockResolvedValueOnce({ ok: true, value: { messages: [CHAT_ROW, CHAT_REPLY], cursor: 5 } })
-    const b = await openChat(undefined, chat)
+    await openChat(undefined, chat)
     await act(async () => { await Promise.resolve() })
     expect(chat.reads).toHaveBeenCalledExactlyOnceWith({})
-    expect(b.container.querySelectorAll('[data-shadow-chat-list] [data-shadow-chat-row]')).toHaveLength(2)
-    expect(b.container.querySelector('[data-shadow-chat-row="user"]')?.textContent).toContain('帮我把 demo 跑起来')
-    expect(b.container.querySelector('[data-shadow-chat-row="shadow"]')?.textContent).toContain('好的，正在启动。')
-    expect(b.container.textContent).toContain('你')
-    expect(b.container.textContent).toContain('影子')
+    expect(document.querySelectorAll('[data-shadow-chat-list] [data-shadow-chat-row]')).toHaveLength(2)
+    expect(document.querySelector('[data-shadow-chat-row="user"]')?.textContent).toContain('帮我把 demo 跑起来')
+    expect(document.querySelector('[data-shadow-chat-row="shadow"]')?.textContent).toContain('好的，正在启动。')
+    expect(document.body.textContent).toContain('你')
+    expect(document.body.textContent).toContain('影子')
   })
 
   it('offers no conversation input while the Shadow is not online', async () => {
@@ -194,41 +195,41 @@ describe('the sidebar Shadow entry card', () => {
   it('shows the conversation read failure verbatim', async () => {
     const chat = chatBench()
     chat.reads.mockResolvedValue({ ok: false, error: { code: 'gateway/internal', message: 'conversation host missing', details: {} } })
-    const b = await openChat(undefined, chat)
+    await openChat(undefined, chat)
     await act(async () => { await Promise.resolve() })
-    expect(b.container.querySelector('[data-shadow-chat-read-error]')?.textContent).toBe('读取对话失败：conversation host missing')
+    expect(document.querySelector('[data-shadow-chat-read-error]')?.textContent).toBe('读取对话失败：conversation host missing')
   })
 
   it('posts one chat message, polls for the surface, and clears the draft', async () => {
     const chat = chatBench()
-    const b = await openChat(undefined, chat)
+    await openChat(undefined, chat)
     await act(async () => { await Promise.resolve() })
     chat.reads.mockResolvedValueOnce({ ok: true, value: { messages: [CHAT_ROW], cursor: 4 } })
-    const input = b.container.querySelector('[data-shadow-chat-input]') as HTMLTextAreaElement
+    const input = document.querySelector('[data-shadow-chat-input]') as HTMLTextAreaElement
     await act(async () => { fireEvent.change(input, { target: { value: '  帮我把 demo 跑起来  ' } }) })
-    await act(async () => { fireEvent.click(b.container.querySelector('[data-shadow-chat-submit]') as HTMLElement) })
+    await act(async () => { fireEvent.click(document.querySelector('[data-shadow-chat-submit]') as HTMLElement) })
     expect(chat.onPostMessage).toHaveBeenCalledExactlyOnceWith('帮我把 demo 跑起来')
     expect(chat.reads).toHaveBeenCalledWith({ after: 0 })
-    expect(b.container.querySelector('[data-shadow-chat-row="user"]')?.textContent).toContain('帮我把 demo 跑起来')
-    expect((b.container.querySelector('[data-shadow-chat-input]') as HTMLTextAreaElement).value).toBe('')
+    expect(document.querySelector('[data-shadow-chat-row="user"]')?.textContent).toContain('帮我把 demo 跑起来')
+    expect((document.querySelector('[data-shadow-chat-input]') as HTMLTextAreaElement).value).toBe('')
   })
 
   it('shows the pending line while a chat post is in flight', async () => {
     const chat = chatBench()
     chat.onPostMessage.mockReturnValueOnce(new Promise<RemoteResult<ShadowConversationAccepted>>(() => {}))
-    const b = await openChat(undefined, chat)
+    await openChat(undefined, chat)
     await act(async () => { await Promise.resolve() })
-    const input = b.container.querySelector('[data-shadow-chat-input]') as HTMLTextAreaElement
+    const input = document.querySelector('[data-shadow-chat-input]') as HTMLTextAreaElement
     await act(async () => { fireEvent.change(input, { target: { value: 'hello shadow' } }) })
-    await act(async () => { fireEvent.click(b.container.querySelector('[data-shadow-chat-submit]') as HTMLElement) })
-    expect(b.container.querySelector('[data-shadow-chat-pending]')).not.toBeNull()
+    await act(async () => { fireEvent.click(document.querySelector('[data-shadow-chat-submit]') as HTMLElement) })
+    expect(document.querySelector('[data-shadow-chat-pending]')).not.toBeNull()
   })
 
   it('submits the chat draft on Enter', async () => {
     const chat = chatBench()
-    const b = await openChat(undefined, chat)
+    await openChat(undefined, chat)
     await act(async () => { await Promise.resolve() })
-    const input = b.container.querySelector('[data-shadow-chat-input]') as HTMLTextAreaElement
+    const input = document.querySelector('[data-shadow-chat-input]') as HTMLTextAreaElement
     await act(async () => { fireEvent.change(input, { target: { value: 'hello shadow' } }) })
     await act(async () => { fireEvent.keyDown(input, { key: 'Enter' }) })
     expect(chat.onPostMessage).toHaveBeenCalledExactlyOnceWith('hello shadow')
@@ -236,9 +237,9 @@ describe('the sidebar Shadow entry card', () => {
 
   it('ignores a blank chat draft on Enter and leaves other keys alone', async () => {
     const chat = chatBench()
-    const b = await openChat(undefined, chat)
+    await openChat(undefined, chat)
     await act(async () => { await Promise.resolve() })
-    const input = b.container.querySelector('[data-shadow-chat-input]') as HTMLTextAreaElement
+    const input = document.querySelector('[data-shadow-chat-input]') as HTMLTextAreaElement
     await act(async () => { fireEvent.keyDown(input, { key: 'Enter' }) })
     await act(async () => { fireEvent.keyDown(input, { key: 'a' }) })
     await act(async () => { fireEvent.keyDown(input, { key: 'Enter', shiftKey: true }) })
@@ -248,31 +249,30 @@ describe('the sidebar Shadow entry card', () => {
   it('shows the send failure verbatim and keeps the draft', async () => {
     const chat = chatBench()
     chat.onPostMessage.mockResolvedValue({ ok: false, error: { code: 'gateway/internal', message: 'the conversation is unavailable' } })
-    const b = await openChat(undefined, chat)
+    await openChat(undefined, chat)
     await act(async () => { await Promise.resolve() })
-    const input = b.container.querySelector('[data-shadow-chat-input]') as HTMLTextAreaElement
+    const input = document.querySelector('[data-shadow-chat-input]') as HTMLTextAreaElement
     await act(async () => { fireEvent.change(input, { target: { value: 'hello shadow' } }) })
-    await act(async () => { fireEvent.click(b.container.querySelector('[data-shadow-chat-submit]') as HTMLElement) })
-    expect(b.container.querySelector('[data-shadow-chat-send-failed]')?.textContent).toBe('发送失败：the conversation is unavailable')
-    expect((b.container.querySelector('[data-shadow-chat-input]') as HTMLTextAreaElement).value).toBe('hello shadow')
+    await act(async () => { fireEvent.click(document.querySelector('[data-shadow-chat-submit]') as HTMLElement) })
+    expect(document.querySelector('[data-shadow-chat-send-failed]')?.textContent).toBe('发送失败：the conversation is unavailable')
+    expect((document.querySelector('[data-shadow-chat-input]') as HTMLTextAreaElement).value).toBe('hello shadow')
   })
 
   it('polls the conversation on an interval while the chat dialog is open and online', async () => {
     vi.useFakeTimers()
     try {
       const chat = chatBench()
-      const b = await openChat(undefined, chat)
+      await openChat(undefined, chat)
       await act(async () => { await Promise.resolve() })
       const readsAfterOpen = chat.reads.mock.calls.length
       expect(readsAfterOpen).toBeGreaterThanOrEqual(1) // the tail load on open
       await act(async () => { await vi.advanceTimersByTimeAsync(6500) })
       expect(chat.reads.mock.calls.length).toBeGreaterThan(readsAfterOpen)
-      const closing = b
       fireEvent.click(screen.getByRole('button', { name: '关闭' }))
       await act(async () => { await Promise.resolve() })
-      const readsAfterClose = closing.chat.reads.mock.calls.length
+      const readsAfterClose = chat.reads.mock.calls.length
       await act(async () => { await vi.advanceTimersByTimeAsync(9000) })
-      expect(closing.chat.reads.mock.calls.length).toBe(readsAfterClose)
+      expect(chat.reads.mock.calls.length).toBe(readsAfterClose)
     } finally {
       vi.useRealTimers()
     }
@@ -348,8 +348,8 @@ describe('the sidebar Shadow entry card', () => {
     const trigger = screen.getByRole('button', { name: '打开影子对话' })
     fireEvent.click(trigger)
     expect(screen.getByRole('dialog', { name: '对话' })).not.toBeNull()
-    expect(container.textContent).toContain('控制者会话尚未标记为 Shadow。')
-    expect(container.textContent).toContain('session-shadow')
+    expect(document.body.textContent).toContain('控制者会话尚未标记为 Shadow。')
+    expect(document.body.textContent).toContain('session-shadow')
   })
 
   it('shows the read failure instead of pretending a state', async () => {

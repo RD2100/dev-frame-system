@@ -8,6 +8,8 @@
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { CSSProperties, RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import {
   IconBranchOutline16,
@@ -53,6 +55,68 @@ function formatChatTime(at: string): string {
   return new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+/** Viewport margin kept between a portal surface and the window edges. */
+const VIEWPORT_MARGIN = 12
+
+/**
+ * Fixed style for the chat dialog portaled to document.body: the left edge
+ * sits just past the entry row's right edge, the bottom edge just above the
+ * entry row's top, size-capped to the space actually available so the
+ * surface never leaves the viewport without measuring itself. Repositions
+ * on window resize while open.
+ */
+function useBesideAnchorStyle(open: boolean, anchor: RefObject<HTMLElement | null>): CSSProperties | null {
+  const [style, setStyle] = useState<CSSProperties | null>(null)
+  useLayoutEffect(() => {
+    if (!open) { setStyle(null); return }
+    const place = (): void => {
+      const rect = anchor.current?.getBoundingClientRect()
+      if (rect === undefined) return
+      const left = Math.min(rect.right + 8, window.innerWidth - VIEWPORT_MARGIN)
+      setStyle({
+        position: 'fixed',
+        left,
+        bottom: window.innerHeight - rect.top + 8,
+        maxWidth: Math.max(window.innerWidth - left - VIEWPORT_MARGIN, 240),
+        maxHeight: Math.max(Math.min(window.innerHeight * 0.72, 680, rect.top - 20), 120),
+      })
+    }
+    place()
+    window.addEventListener('resize', place)
+    return () => { window.removeEventListener('resize', place) }
+  }, [open, anchor])
+  return style
+}
+
+/**
+ * Fixed style for the manage dropdown portaled to document.body: right-aligned
+ * to the manage button and opened above it — the button sits at the window's
+ * bottom edge, so opening downward would leave the viewport — clamped to the
+ * viewport edges like the chat dialog.
+ */
+function useAboveEndAnchorStyle(open: boolean, anchor: RefObject<HTMLElement | null>): CSSProperties | null {
+  const [style, setStyle] = useState<CSSProperties | null>(null)
+  useLayoutEffect(() => {
+    if (!open) { setStyle(null); return }
+    const place = (): void => {
+      const rect = anchor.current?.getBoundingClientRect()
+      if (rect === undefined) return
+      const right = Math.max(window.innerWidth - rect.right, VIEWPORT_MARGIN)
+      setStyle({
+        position: 'fixed',
+        right,
+        bottom: window.innerHeight - rect.top + 4,
+        maxWidth: Math.max(window.innerWidth - right - VIEWPORT_MARGIN, 200),
+        maxHeight: Math.max(Math.min(window.innerHeight * 0.72, 480), 120),
+      })
+    }
+    place()
+    window.addEventListener('resize', place)
+    return () => { window.removeEventListener('resize', place) }
+  }, [open, anchor])
+  return style
+}
+
 /** Render the resident Shadow entry card. */
 export function ShadowCard({
   wide, useStatus, useConversation, onRefresh, onOpenConversation, onLoadConversation, onPollConversation,
@@ -62,7 +126,8 @@ export function ShadowCard({
   const [chatOpen, setChatOpen] = useState(false)
   const [manageOpen, setManageOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
-  const manageRef = useRef<HTMLDivElement>(null)
+  const manageButtonRef = useRef<HTMLButtonElement>(null)
+  const manageMenuRef = useRef<HTMLDivElement>(null)
   const chatRef = useRef<HTMLElement>(null)
   const [chatDraft, setChatDraft] = useState('')
   const [chatPending, setChatPending] = useState(false)
@@ -71,7 +136,9 @@ export function ShadowCard({
   const chatListRef = useRef<HTMLDivElement>(null)
 
   useDismissOnOutsidePointer(rootRef, chatOpen, setChatOpen, chatRef)
-  useDismissOnOutsidePointer(manageRef, manageOpen, setManageOpen)
+  useDismissOnOutsidePointer(manageButtonRef, manageOpen, setManageOpen, manageMenuRef)
+  const chatStyle = useBesideAnchorStyle(chatOpen, rootRef)
+  const manageMenuStyle = useAboveEndAnchorStyle(manageOpen, manageButtonRef)
 
   // One read on mount keeps the resident card honest without a click, and
   // every chat open re-reads so a long-lived page converges on the current facts.
@@ -124,8 +191,8 @@ export function ShadowCard({
 
   return (
     <div ref={rootRef} className={clsx(css.layer, !wide && css.rail)}>
-      {actionable && chatOpen && (
-        <section ref={chatRef} className={css.chatDialog} role="dialog" aria-label={t('chat.title')} data-shadow-chat-dialog>
+      {actionable && chatOpen && createPortal(
+        <section ref={chatRef} className={css.chatDialog} style={chatStyle ?? undefined} role="dialog" aria-label={t('chat.title')} data-shadow-chat-dialog>
           <header className={css.chatHeader}>
             <div className={css.chatHeaderLeft}>
               <IconBranchOutline16 size={16} />
@@ -204,7 +271,8 @@ export function ShadowCard({
                 </>
               )}
           </div>
-        </section>
+        </section>,
+        document.body,
       )}
       <div className={css.triggerRow}>
         <button
@@ -226,8 +294,9 @@ export function ShadowCard({
           <span className={css.triggerDetail} data-shadow-detail>{t(detail)}</span>
         )}
         {wide && (
-          <div ref={manageRef} className={css.manageAnchor}>
+          <div className={css.manageAnchor}>
             <button
+              ref={manageButtonRef}
               type="button"
               className={css.manageButton}
               data-shadow-manage
@@ -237,8 +306,8 @@ export function ShadowCard({
             >
               <IconSettingsOutline16 size={14} />
             </button>
-            {manageOpen && (
-              <div className={css.manageMenu} role="menu" data-shadow-manage-menu>
+            {manageOpen && createPortal(
+              <div ref={manageMenuRef} className={css.manageMenu} style={manageMenuStyle ?? undefined} role="menu" data-shadow-manage-menu>
                 <div className={css.menuGroup}>
                   <div className={css.menuLabel} role="presentation">{t('manage.group.status')}</div>
                   <div className={css.menuItem} role="menuitem" tabIndex={0}>
@@ -274,7 +343,8 @@ export function ShadowCard({
                     <span className={css.menuValue}>standard</span>
                   </div>
                 </div>
-              </div>
+              </div>,
+              document.body,
             )}
           </div>
         )}
