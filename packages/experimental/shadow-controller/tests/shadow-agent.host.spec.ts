@@ -98,6 +98,8 @@ interface BenchOptions {
   seedBindings?: readonly Record<string, unknown>[]
   /** Project directory names to pre-create under the root. */
   projects?: readonly string[]
+  /** Persona template mounted as the deployment persona (SystemPrompt config) to exercise variable resolution. */
+  personaTemplate?: string
   /** No-op tools registered into the global layer before the conversation host mounts. */
   globalTools?: readonly string[]
   /** Configuration forwarded to the tool registry (presentation mode under test). */
@@ -136,7 +138,10 @@ async function bench(options: BenchOptions = {}, existingRoot?: string): Promise
       await mkdir(dir, { recursive: true })
       projectDirs[name] = dir
     }
-    await mountAgentLoopTestDependencies(ctx, { ...(options.tools === undefined ? {} : { tools: options.tools }) })
+    await mountAgentLoopTestDependencies(ctx, {
+      ...(options.tools === undefined ? {} : { tools: options.tools }),
+      ...(options.personaTemplate === undefined ? {} : { systemPrompt: { persona: options.personaTemplate } }),
+    })
     for (const name of options.globalTools ?? []) {
       ctx.tools.register(namedTool(name))
     }
@@ -185,6 +190,25 @@ async function bench(options: BenchOptions = {}, existingRoot?: string): Promise
 }
 
 describe('the Shadow conversation host', () => {
+  it('resolves the cwd variable honestly so a persona referencing it cannot fail assembly', async () => {
+    const b = await bench({
+      designation: 'session-shadow',
+      personaTemplate: 'You are a coding agent. Your working directory is {{cwd}}.',
+      script: () => [textResponse('Routing, not doing.')],
+    })
+    try {
+      await b.host.ensure()
+      await b.host.postMessage('Open the trial project.')
+      const agent = await b.host.ensure()
+      await agent.whenIdle()
+      const request = JSON.stringify(b.adapter.requests[0])
+      expect(request).toContain('not fixed — you are the Shadow')
+      expect(request).not.toContain('{{cwd}}')
+    } finally {
+      await b.dispose()
+    }
+  })
+
   it('creates the designated session and exposes the conversational tools to its scope only', async () => {
     const b = await bench({ designation: 'session-shadow' })
     try {

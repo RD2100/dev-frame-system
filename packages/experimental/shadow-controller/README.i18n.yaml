@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/shadow-controller/README.md
-README.md: b9619a36ac0cb050a3080dba6fb43b66916b2eef
-README.zh.md: 457c303c5ec89f3b64cbd369e834f3a3ad4a4ce3
+README.md: 1178b00c0dcf1449be582f9a8690b16d4789ce35
+README.zh.md: 603ba29f1e36d1a857082118e3b1f1731acd994f

@@ -4,8 +4,9 @@
  * failed or raced startup must not poison later calls — the host creates or
  * restores that session through the core agent registry, composes its scoped
  * world in the factory setup (the four conversational tools, the persona
- * section, the design tool allowlist over the session's model face, and, on a
- * fresh session, the host default model selection), and then serves the two
+ * section, the design tool allowlist over the session's model face, a scoped
+ * honest cwd variable for cwd-less persona templates, and, on a fresh
+ * session, the host default model selection), and then serves the two
  * conversation verbs: post one human message into the session (the loop
  * claims and runs it) and read the persisted conversation surface back,
  * bounded and cursor-addressed.
@@ -55,6 +56,16 @@ const SHADOW_EXECUTION_ALLOWLIST: ReadonlySet<string> = new Set([
   ...MEMORY_TOOL_NAMES,
 ])
 
+/**
+ * The designated session records no cwd (the host creates it outside any
+ * workspace), so the loop's `cwd` variable resolves undefined and any persona
+ * template referencing it — the presets' deployment persona does — fails
+ * strict interpolation before the first model call. The scoped value shadows
+ * the global provider with what the Shadow honestly is.
+ */
+const SHADOW_CWD_VARIABLE =
+  'not fixed — you are the Shadow: you route work across authorized projects and never do project work yourself'
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Persistent Shadow conversation host over the designated session. */
@@ -93,8 +104,8 @@ function enabledMemoryTools(agentCtx: Context): string[] {
 /**
  * Compose one Shadow agent's scoped world inside the factory setup: the four
  * conversational tools, the persona section, the design tool allowlist over
- * the session's model face, and, on a fresh session, the host default model
- * selection.
+ * the session's model face, the scoped honest cwd variable, and, on a fresh
+ * session, the host default model selection.
  */
 function shadowSetup(router: ShadowRouter, selection: ModelSelection, fresh: boolean) {
   return (agentCtx: Context): void => {
@@ -109,6 +120,7 @@ function shadowSetup(router: ShadowRouter, selection: ModelSelection, fresh: boo
     agentCtx.tools.presentAs('native')
     agentCtx.tools.restrict({ allow: enabledMemoryTools(agentCtx) })
     agentCtx.tools.guard(shadowAllowlistGuard)
+    agentCtx.systemPrompt.variable('cwd', () => SHADOW_CWD_VARIABLE)
     if (fresh) installModelSelection(agentCtx, { current: selection, assembled: undefined })
   }
 }
