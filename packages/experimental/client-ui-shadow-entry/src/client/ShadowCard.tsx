@@ -81,9 +81,10 @@ function useAboveEndAnchorStyle(open: boolean, anchor: RefObject<HTMLElement | n
 
 /** Render the resident Shadow entry card. */
 export function ShadowCard({
-  wide, useStatus, onRefresh, onOpenConversation, t,
+  wide, useStatus, useSessions, onRefresh, onOpenConversation, t,
 }: ShadowCardProps) {
   const status = useStatus(status => status)
+  const currentSession = useSessions(state => state.current)
   const [manageOpen, setManageOpen] = useState(false)
   const manageButtonRef = useRef<HTMLButtonElement>(null)
   const manageMenuRef = useRef<HTMLDivElement>(null)
@@ -99,6 +100,13 @@ export function ShadowCard({
   const model = presentShadowStatus(status)
   const detail = PHASE_DETAILS[model.phase]
   const actionable = model.phase === 'configured' || model.phase === 'online'
+  // The designated conversation may already be the current session — the
+  // trigger opened it earlier, or the human resumed it — so the click lands
+  // on the same conversation with no visible change. Surface that fact on
+  // the trigger instead of leaving the click feeling dead.
+  const shadowCurrent = actionable
+    && model.shadowSessionId !== null
+    && currentSession === model.shadowSessionId
 
   // Close the manage dropdown when the phase changes (a refresh may
   // invalidate the configuration the menu reflects).
@@ -112,6 +120,8 @@ export function ShadowCard({
           className={css.trigger}
           data-shadow-phase={model.phase}
           data-shadow-error={model.error ?? undefined}
+          data-shadow-active={shadowCurrent || undefined}
+          aria-pressed={shadowCurrent}
           aria-label={t('trigger.aria')}
           onClick={() => { void onOpenConversation() }}
         >

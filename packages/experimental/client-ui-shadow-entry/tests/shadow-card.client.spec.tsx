@@ -19,9 +19,16 @@ const t = ((key: ShadowKey, params?: Record<string, string | number>) => {
     : Object.entries(params).reduce((acc, [name, value]) => acc.replaceAll(`{${name}}`, String(value)), text)
 }) as unknown as ShadowCardProps['t']
 
-// The card consumes only the status face; the seat's standard hooks stay
-// unused, so their stubs fail loud if a future edit starts reading them.
+// The card consumes the status face and the sessions feed's current selection;
+// the seat's remaining standard hooks stay unused, so their stubs fail loud if
+// a future edit starts reading them.
 const unusedHook = (() => { throw new Error('unused by the shadow card') }) as never
+
+/** The sessions-feed state the card reads: the current selection only. */
+function useSessionsBench(current?: string) {
+  return ((selector: (s: { current: string | undefined }) => string | undefined) =>
+    selector({ current })) as unknown as ShadowCardProps['useSessions']
+}
 
 const ONLINE_VIEW: ShadowStatusView = {
   mounted: true,
@@ -41,6 +48,7 @@ interface Bench {
 
 function bench(
   answer: { ok: true; value: ShadowStatusView } | { ok: false; error: { code: string; message: string; details: Record<string, never> } } | 'hang' = { ok: true, value: { ...ONLINE_VIEW } },
+  current?: string,
 ): Bench {
   const port: ShadowStatusPort = () => {
     if (answer === 'hang') return new Promise(() => {})
@@ -58,10 +66,10 @@ function bench(
   const props: ShadowCardProps = {
     wide: true,
     useStatus,
+    useSessions: useSessionsBench(current),
     onRefresh,
     onOpenConversation,
     t,
-    useSessions: unusedHook,
     useSessionPendingInteraction: unusedHook,
     useWorkspaces: unusedHook,
   } satisfies ShadowCardProps
@@ -174,6 +182,31 @@ describe('the sidebar Shadow entry card', () => {
     const b = bench('hang')
     const { container } = render(<ShadowCard {...b.props} />)
     expect(container.querySelector('[data-shadow-phase="loading"]')).not.toBeNull()
+  })
+
+  it('marks the trigger active while the designated conversation is the current session', async () => {
+    const b = bench({ ok: true, value: { ...ONLINE_VIEW } }, 'session-shadow')
+    render(<ShadowCard {...b.props} />)
+    await act(async () => { await Promise.resolve() })
+    const trigger = screen.getByRole('button', { name: '打开影子对话' })
+    expect(trigger.getAttribute('data-shadow-active')).toBe('true')
+    expect(trigger.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('keeps the trigger inactive for another current session or a not-enabled service', async () => {
+    const b = bench({ ok: true, value: { ...ONLINE_VIEW } }, 'session-other')
+    const first = render(<ShadowCard {...b.props} />)
+    await act(async () => { await Promise.resolve() })
+    const trigger = screen.getByRole('button', { name: '打开影子对话' })
+    expect(trigger.getAttribute('data-shadow-active')).toBeNull()
+    expect(trigger.getAttribute('aria-pressed')).toBe('false')
+    first.unmount()
+
+    const disabled = bench({ ok: true, value: { mounted: true, shadowLive: true, authorizedRoots: ['D:/projects'], bindings: [] } }, 'session-shadow')
+    render(<ShadowCard {...disabled.props} />)
+    await act(async () => { await Promise.resolve() })
+    const disabledTrigger = screen.getByRole('button', { name: '打开影子对话' })
+    expect(disabledTrigger.getAttribute('data-shadow-active')).toBeNull()
   })
 
   it('shows the empty-copy line when the enabled deployment has no roots', async () => {

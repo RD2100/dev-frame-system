@@ -31,7 +31,7 @@ Add the [shadow-controller host layer](../shadow-controller/README.md) (the [Dev
 
 ### What you get
 
-- The resident trigger (icon plus label in the wide sidebar, icon only in the rail). Clicking it opens the Shadow's designated session — one permanent conversation, the same one every time, rendered by the standard conversation surface the main chat uses — and the session list carries no row for it.
+- The resident trigger (icon plus label in the wide sidebar, icon only in the rail). Clicking it opens the Shadow's designated session — one permanent conversation, the same one every time, rendered by the standard conversation surface the main chat uses — and the session list carries no row for it. While that conversation is the current session the trigger renders its active fill (`aria-pressed`), so an already-there click is explained instead of feeling dead.
 - The Manage button beside the trigger (wide sidebar) opening a read-only dropdown portaled beside the sidebar: the honest phase with its detail copy for the not-enabled phases, the designated session id, the authorized roots (or the explicit empty copy), and the controller preset. A detail line beside the trigger carries the same honest copy in the wide sidebar without opening anything.
 
 -----

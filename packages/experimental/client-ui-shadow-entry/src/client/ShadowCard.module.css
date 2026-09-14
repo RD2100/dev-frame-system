@@ -51,6 +51,13 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+/* Active state: the designated conversation is the current session. The
+   click still routes there, but the fill tells the human they are already
+   inside the Shadow's conversation. */
+.trigger[data-shadow-active] {
+  background: var(--dsw-specific-sidebar-nav-item-active);
+}
+
 .triggerLabel {
   min-width: 0;
   overflow: hidden;
