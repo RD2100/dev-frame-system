@@ -57,6 +57,8 @@ Initial configurable limits are 8 KiB per note, 16 KiB total returned content, 1
 
 Search begins with project-local files plus explicitly allowed user notes, using deterministic filename/metadata selection and bounded text matching. No background indexing process is required. Larger corpora require a measured retrieval problem before adding an index or vector store.
 
+Notes carry host-canonicalized **entity tags**: the model proposes the subjects a note is about, the host normalizes them (bounded, single-subject shape, secret-screened) and auto-anchors every project note to its workspace. `memory_search` accepts an entity filter, so "everything about X" is one deterministic lookup; the supersession chain supplies the validity window. The tags are a knowledge graph's entity anchoring without a graph database, an extraction pipeline, or relation edges between entities — notes themselves are the fact nodes, and richer structure waits for a measured need.
+
 Transient read/append failures use the bounded retry policy in [Part 4](detailDesign-part4.md#limits), retaining the same operation identity and candidate content. Permission errors, conflicts, and incomplete notes are not retried automatically.
 
 <a id="storage"></a>

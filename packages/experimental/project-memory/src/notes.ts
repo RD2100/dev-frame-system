@@ -92,6 +92,12 @@ const noteMetaSchema = z
     snapshot: z.string().min(1).optional(),
     status: z.enum(['confirmed', 'observed', 'inferred']),
     supersedes: z.string().regex(/^[0-9a-f]{64}$/).transform(value => NoteId(value)).optional(),
+    // On disk the tag list is one comma-separated line; the canonical form
+    // bans commas inside a tag, so the split is unambiguous.
+    entities: z
+      .string()
+      .transform(value => value.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0))
+      .optional(),
     bodyDigest: z.string().regex(/^sha256:[0-9a-f]{64}$/),
   })
   .strict() as z.ZodType<MemoryNoteMeta>
@@ -134,6 +140,9 @@ export function serializeNote(meta: MemoryNoteMeta, body: string): string {
     ...(meta.snapshot === undefined ? [] : [`snapshot: ${meta.snapshot}`]),
     `status: ${meta.status}`,
     ...(meta.supersedes === undefined ? [] : [`supersedes: ${meta.supersedes}`]),
+    ...(meta.entities === undefined || meta.entities.length === 0
+      ? []
+      : [`entities: ${meta.entities.join(', ')}`]),
     `bodyDigest: ${meta.bodyDigest}`,
     '---',
     '',
@@ -156,6 +165,7 @@ export function buildNoteMeta(args: {
   readonly source: string
   readonly snapshot: string | undefined
   readonly supersedes: NoteId | undefined
+  readonly entities: readonly string[] | undefined
   readonly body: string
 }): MemoryNoteMeta {
   const meta: {
@@ -168,6 +178,7 @@ export function buildNoteMeta(args: {
     snapshot?: string
     status: MemoryNoteMeta['status']
     supersedes?: NoteId
+    entities?: readonly string[]
     bodyDigest: string
   } = {
     schema: NOTE_SCHEMA_VERSION,
@@ -181,6 +192,7 @@ export function buildNoteMeta(args: {
   }
   if (args.snapshot !== undefined) meta.snapshot = args.snapshot
   if (args.supersedes !== undefined) meta.supersedes = args.supersedes
+  if (args.entities !== undefined && args.entities.length > 0) meta.entities = args.entities
   return meta
 }
 
@@ -244,6 +256,11 @@ export function parseNote(contents: string): NoteParseResult {
  * @returns `true` when both record the same note content.
  */
 export function sameNoteContent(existing: MemoryNote, candidate: MemoryNote): boolean {
+  const sameEntities = (existing.entities === undefined && candidate.entities === undefined) ||
+    (existing.entities !== undefined &&
+      candidate.entities !== undefined &&
+      existing.entities.length === candidate.entities.length &&
+      existing.entities.every((tag, index) => tag === candidate.entities[index]))
   return (
     existing.noteId === candidate.noteId &&
     existing.namespace === candidate.namespace &&
@@ -252,6 +269,7 @@ export function sameNoteContent(existing: MemoryNote, candidate: MemoryNote): bo
     existing.status === candidate.status &&
     existing.snapshot === candidate.snapshot &&
     existing.supersedes === candidate.supersedes &&
+    sameEntities &&
     existing.bodyDigest === candidate.bodyDigest
   )
 }

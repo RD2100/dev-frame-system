@@ -16,6 +16,7 @@
 import { open, readdir, readFile, stat, realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ProjectMemoryError } from './errors.ts'
+import { canonicalizeEntities, entitiesInclude } from './entities.ts'
 import { deriveNoteId, NoteId, validateSourceRef } from './ids.ts'
 import {
   buildNoteMeta,
@@ -327,6 +328,9 @@ export class ProjectMemoryService {
     }
     const rootReal = await this.requireVaultRoot()
     const namespace = this.namespace(request.scope)
+    // Entity filter: canonicalized the same way as append-time tags, so the
+    // filter matches regardless of the caller's casing or spacing.
+    const entityFilter = canonicalizeEntities(request.entity === undefined ? [] : [request.entity])[0]
     const dir = join(rootReal, MEMORY_DIR, ...namespace.split('/'))
     let entries: string[]
     try {
@@ -358,6 +362,7 @@ export class ProjectMemoryService {
     let usedBytes = 0
     for (const note of complete) {
       if (superseded.has(note.meta.noteId)) continue
+      if (entityFilter !== undefined && !entitiesInclude(note.meta.entities, entityFilter)) continue
       const matchIndex = note.body.toLowerCase().indexOf(loweredQuery)
       if (matchIndex < 0) continue
       const hit: MemorySearchHit = {
@@ -369,6 +374,7 @@ export class ProjectMemoryService {
         snapshot: note.meta.snapshot,
         freshness: freshnessOf(note.meta.snapshot, this.spec.currentSnapshot),
         source: note.meta.source,
+        entities: note.meta.entities,
       }
       const hitBytes = utf8ByteLength(JSON.stringify(hit))
       if (hits.length >= limit || usedBytes + hitBytes > this.spec.limits.maxReturnBytes) {
@@ -470,6 +476,12 @@ export class ProjectMemoryService {
     if (request.supersedes === noteId) {
       throw new ProjectMemoryError('a note cannot supersede itself', 'MEMORY_INVALID_NOTE')
     }
+    // Entity anchoring: the model's proposed tags, host-canonicalized; a
+    // project-scope note always carries its workspace as an implicit entity.
+    const proposed = request.scope === 'project'
+      ? [this.spec.workspaceId, ...(request.entities ?? [])]
+      : request.entities ?? []
+    const entities = canonicalizeEntities(proposed)
     const relativePath = noteRelativePath(namespace, noteId)
     const rootReal = await this.requireVaultRoot()
     const meta = buildNoteMeta({
@@ -480,6 +492,7 @@ export class ProjectMemoryService {
       source: sourceRef,
       snapshot: request.snapshot,
       supersedes: request.supersedes,
+      entities,
       body,
     })
 

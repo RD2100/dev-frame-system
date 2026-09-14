@@ -71,6 +71,13 @@ export interface MemoryNoteMeta {
   readonly status: AssertionStatus
   /** Optional id of the same-namespace note this note explicitly supersedes. */
   readonly supersedes?: NoteId
+  /**
+   * Canonical entity tags the note is anchored to — the subjects it is
+   * about, host-normalized from the model's proposals. The flat-file
+   * equivalent of a knowledge graph's entity anchoring: `memory_search`
+   * filters on them, and a project-scope note always carries its workspace.
+   */
+  readonly entities?: readonly string[]
   /** `sha256:<hex>` digest of the exact stored body. */
   readonly bodyDigest: string
 }
@@ -176,6 +183,8 @@ export interface MemorySearchRequest {
   readonly scope: MemoryScope
   /** Bounded text query matched against note bodies. */
   readonly query: string
+  /** Optional entity tag filter: only notes anchored to this subject. */
+  readonly entity?: string
   /** Optional result cap below the configured maximum. */
   readonly limit?: number
 }
@@ -198,6 +207,8 @@ export interface MemorySearchHit {
   readonly freshness: MemoryFreshness
   /** Stable source session/event reference (provenance). */
   readonly source: string
+  /** Canonical entity tags the note is anchored to, when any. */
+  readonly entities: readonly string[] | undefined
 }
 
 /** Result of `memory_search`. */
@@ -253,6 +264,12 @@ export interface MemoryAppendRequest {
   readonly snapshot?: string
   /** Optional id of the same-namespace note this append supersedes (append-only). */
   readonly supersedes?: NoteId
+  /**
+   * Model-proposed entity tags the note should be anchored to. The host
+   * canonicalizes them (normalize, validate, dedupe, secret-screen) and a
+   * project-scope note always carries its workspace tag additionally.
+   */
+  readonly entities?: readonly string[]
   /**
    * Reference to the explicit human confirmation event; required when
    * appending a `confirmed` user preference — neither Shadow nor a

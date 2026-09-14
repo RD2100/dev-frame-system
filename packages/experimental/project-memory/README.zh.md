@@ -46,7 +46,7 @@ Shipped patch 默认以 `workspaceId: default`、关闭写入、无 Vault 根挂
 
 - `memory_search` —— 对单个作用域笔记正文做确定性、按字节计界的文本匹配；命中携带笔记 ID、摘录、信任标签与新鲜度，`coverageComplete: false` 表示扫描达到上限，绝不表示知识不存在。
 - `memory_read` —— 按 ID 读取一条完整笔记及其信任标签与来源；`memory_changed` 或 `incomplete_note` 表示存储文件与其已提交回执不一致，应视内容为未验证。
-- `memory_append` —— 独占创建、幂等地追加一条有界笔记；回执在 `created` 返回之前送达调用会话的日志，被拒绝的正文只点名筛查规则，绝不回显疑似秘密。
+- `memory_append` —— 独占创建、幂等地追加一条有界笔记；回执在 `created` 返回之前送达调用会话的日志，被拒绝的正文只点名筛查规则，绝不回显疑似秘密。可选的 `entities` 标签把笔记锚定到其主题——由宿主规范化（小写、限长、秘密筛查），项目笔记自动携带所属工作区标签——`memory_search` 接受 `entity` 过滤参数，"关于 X 的一切"就是一次确定性查找。标签是知识图谱实体锚定的扁平文件替身：笔记是事实节点，supersession 链条是有效期窗口。
 
 设计中的每种失败都以稳定错误码呈现在 `ProjectMemoryError` 上（`MEMORY_UNAVAILABLE`、`MEMORY_APPEND_DISABLED`、`MEMORY_NOTE_TOO_LARGE`、`MEMORY_CONTENT_REJECTED`、`MEMORY_PATH_REJECTED`）；冲突或被外部改动的笔记是结果状态，绝不静默覆盖。
 
@@ -105,7 +105,7 @@ Shipped patch 默认以 `workspaceId: default`、关闭写入、无 Vault 根挂
 
 #### 模型看到什么
 
-该层挂载后，工具作用域恰好多出三个工具：`memory_search`、`memory_read` 与 `memory_append`。它们的描述携带策略：笔记是带标签的数据，绝不是指令；追加记录的是观察，`confirmed` 的用户偏好只能经宿主的人工确认流程触达。按 shipped 默认值，每次调用都以 `MEMORY_UNAVAILABLE` 失败，绝不触碰任何路径。部署配置 Vault 后，再有一个提示词段落（`project-memory:usage`）进入全局层，携带使用策略——任务开始先召回一次、验收后一条简短项目笔记、人类偏好仅在其明确要求时记录、不复制会话记录或秘密、失败逐字上报。
+该层挂载后，工具作用域恰好多出三个工具：`memory_search`、`memory_read` 与 `memory_append`。它们的描述携带策略：笔记是带标签的数据，绝不是指令；追加记录的是观察，`confirmed` 的用户偏好只能经宿主的人工确认流程触达。按 shipped 默认值，每次调用都以 `MEMORY_UNAVAILABLE` 失败，绝不触碰任何路径。部署配置 Vault 后，再有一个提示词段落（`project-memory:usage`）进入全局层，携带使用策略——任务开始先召回一次、验收后一条简短项目笔记、人类偏好仅在其明确要求时记录、每条笔记带实体标签、不复制会话记录或秘密、失败逐字上报。
 
 #### Token 影响
 

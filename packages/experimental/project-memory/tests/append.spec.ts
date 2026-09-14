@@ -198,3 +198,56 @@ describe('AT3-09: external edits, moves, and deletions around receipts', () => {
     }
   })
 })
+
+describe('entity anchoring', () => {
+  it('persists canonicalized tags and auto-carries the workspace entity on project notes', async () => {
+    const h = await makeHarness()
+    try {
+      const created = await h.service.append(appendRequest({
+        entities: ['  Deploy Scripts ', 'deploy scripts', 'release'],
+      }))
+      expect(created.status).toBe('created')
+      const contents = await readFile(
+        join(h.vaultRoot, 'devframe-memory', 'projects', 'ws-alpha', `${created.noteId}.md`),
+        'utf8',
+      )
+      expect(contents).toContain('entities: ws-alpha, deploy scripts, release')
+    } finally {
+      await h.dispose()
+    }
+  })
+
+  it('filters search by an entity tag and carries tags on hits', async () => {
+    const h = await makeHarness()
+    try {
+      await h.service.append(appendRequest({ sourceRef: 'session-alpha#e1', entities: ['release'] }))
+      await h.service.append(appendRequest({
+        sourceRef: 'session-alpha#e2',
+        body: 'The test suite lives in tests/',
+        entities: ['testing'],
+      }))
+      const filtered = await h.service.search({ scope: 'project', query: 'lives in', entity: '  Testing ' })
+      expect(filtered.hits).toHaveLength(1)
+      expect(filtered.hits[0]?.entities).toEqual(['ws-alpha', 'testing'])
+      const unfiltered = await h.service.search({ scope: 'project', query: 'lives in' })
+      expect(unfiltered.hits).toHaveLength(2)
+    } finally {
+      await h.dispose()
+    }
+  })
+
+  it('rejects unsafe entity tags and honors the per-note cap', async () => {
+    const h = await makeHarness()
+    try {
+      await expect(h.service.append(appendRequest({ entities: ['sk-abcdefghijklmnop1234'] })))
+        .rejects.toThrow(/content screening/u)
+      await expect(h.service.append(appendRequest({ entities: ['../escape'] })))
+        .rejects.toThrow(/safe single subject/u)
+      await expect(h.service.append(appendRequest({
+        entities: Array.from({ length: 9 }, (_, index) => `tag ${String(index)}`),
+      }))).rejects.toThrow(/at most 8 entity tags/u)
+    } finally {
+      await h.dispose()
+    }
+  })
+})

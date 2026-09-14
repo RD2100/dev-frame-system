@@ -7,6 +7,7 @@
  */
 
 export { ProjectMemoryError, type ProjectMemoryErrorCode } from './errors.ts'
+export { canonicalizeEntities, entitiesInclude, MAX_ENTITY_CHARS, MAX_NOTE_ENTITIES } from './entities.ts'
 export { deriveNoteId, MAX_SOURCE_REF_BYTES, NoteId, validateSourceRef } from './ids.ts'
 export {
   DEFAULT_MEMORY_LIMITS,

@@ -35,10 +35,11 @@ export const MEMORY_USAGE_SECTION_NAME = 'project-memory:usage'
 /** The usage-policy text registered under {@link MEMORY_USAGE_SECTION_NAME}. */
 export const MEMORY_USAGE_SECTION = `This deployment carries project memory — bounded, append-only notes over the operator's vault, addressed as scope 'project' (this workspace's own notes) and scope 'user' (the user-wide namespace).
 
-- At the start of a task, search project memory once (memory_search) for prior context about the work; read a full note (memory_read) only when an excerpt is not enough.
+- At the start of a task, search project memory once (memory_search) for prior context about the work; read a full note (memory_read) only when an excerpt is not enough. To ask "everything about a subject", pass its entity tag.
 - After your work on a task is accepted, append one short project note (memory_append, scope 'project') summarizing what was done and the outcome, with yourself as the source. A note you write is an observation — never a confirmed preference.
+- Tag every note with the subjects it is about (the entities parameter), reusing the same tag for the same subject — a project's own tag is added automatically. Entity tags make "everything about X" retrievable.
 - Record the human's own preferences in scope 'user' only when the human explicitly asks to keep them.
-- Never copy transcripts, secrets, credentials, or environment dumps into a note; keep notes short and name where the full detail lives.
+- Never copy transcripts, secrets, credentials, or environment dumps into a note or a tag; keep notes short and name where the full detail lives.
 - Report every memory failure verbatim — an unavailable vault, a read-only deployment, a rejected or conflicting note — and continue the task without memory.`
 
 /** Load configuration for the project-memory plugin. */
@@ -149,6 +150,7 @@ export function createMemoryTools(service: ProjectMemoryService, spec: MemorySpe
       parameters: {
         scope: SCOPE_PARAM,
         query: { type: 'string', required: true, description: 'Text to match against note bodies.' },
+        entity: { type: 'string', description: 'Optional entity tag filter: only notes anchored to this subject (canonicalized like append-time tags).' },
         limit: { type: 'integer', description: 'Optional result cap below the configured maximum.' },
       },
       output: {
@@ -171,6 +173,7 @@ export function createMemoryTools(service: ProjectMemoryService, spec: MemorySpe
                   snapshot: { type: 'string' },
                   freshness: { type: 'string', required: true, enum: ['current', 'potentially_stale'] },
                   source: { type: 'string', required: true },
+                  entities: { type: 'array', items: { type: 'string' } },
                 },
               },
             },
@@ -185,6 +188,7 @@ export function createMemoryTools(service: ProjectMemoryService, spec: MemorySpe
         const result = await service.search({
           scope: args.scope,
           query: args.query,
+          ...args.entity === undefined ? {} : { entity: args.entity },
           ...args.limit === undefined ? {} : { limit: args.limit },
         })
         return {
@@ -197,6 +201,7 @@ export function createMemoryTools(service: ProjectMemoryService, spec: MemorySpe
             ...hit.snapshot === undefined ? {} : { snapshot: hit.snapshot },
             freshness: hit.freshness,
             source: hit.source,
+            ...hit.entities === undefined ? {} : { entities: [...hit.entities] },
           })),
           truncated: result.truncated,
           coverageComplete: result.coverageComplete,
@@ -281,6 +286,11 @@ export function createMemoryTools(service: ProjectMemoryService, spec: MemorySpe
         },
         kind: { type: 'string', required: true, enum: ['fact', 'preference', 'lesson', 'question'], description: 'What the note records.' },
         body: { type: 'string', required: true, description: 'The note text. Size-bounded and screened.' },
+        entities: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional subject tags the note is about (canonicalized by the host; a project-scope note always carries its workspace tag too). Reuse the same tag for the same subject.',
+        },
         supersedes_note_id: {
           type: 'string',
           description: 'Optional id of the same-scope note this append explicitly supersedes (append-only; the old note is preserved).',
@@ -316,6 +326,7 @@ export function createMemoryTools(service: ProjectMemoryService, spec: MemorySpe
           // host's human-confirmation flow and is unreachable from tools.
           assertionStatus: 'observed',
           ...spec.currentSnapshot === undefined ? {} : { snapshot: spec.currentSnapshot },
+          ...args.entities === undefined ? {} : { entities: args.entities },
           ...args.supersedes_note_id === undefined ? {} : { supersedes: NoteId(args.supersedes_note_id) },
         })
         if (result.status !== 'created') {

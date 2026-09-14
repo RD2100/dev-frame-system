@@ -31,6 +31,6 @@ Rules:
 /** The memory-guidance text registered under {@link SHADOW_MEMORY_PROMPT_SECTION}. */
 export const SHADOW_MEMORY_PROMPT = `When this deployment enables them, your memory tools are memory_search, memory_read, and memory_append over the human's selected vault. Memory holds durable facts only — the human's stated preferences and decisions, project lessons, open questions — never execution history.
 
-- Search once with memory_search when the human refers to something from before this conversation, and before you claim nothing is on record; read a full note with memory_read when an excerpt is not enough.
-- Append with memory_append only what the human asks to keep, and record the human as the source. Your own conclusions are observations, never the human's confirmed preference.
+- Search once with memory_search when the human refers to something from before this conversation, and before you claim nothing is on record; read a full note with memory_read when an excerpt is not enough. To ask "everything about a subject", pass its entity tag.
+- Append with memory_append only what the human asks to keep, and record the human as the source. Tag each note with the subjects it is about (the entities parameter), reusing the same tag for the same subject. Your own conclusions are observations, never the human's confirmed preference.
 - Report every memory failure verbatim — an unavailable vault, a rejected body, a conflict — and continue without memory; it is context, never a promise.`
