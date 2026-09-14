@@ -114,10 +114,14 @@ abstract projectStatus( caller: Agent | undefined, request: { readonly workspace
 abstract confirmProjectStopped(workspaceId: WorkspaceId): Promise<ShadowBindingRecord>
 
 /**
- * Host-plane open: the same gated flow the `project_open` tool runs, driven
- * by the designated Shadow's authority for host status surfaces (the Web
- * Shadow card). Path canonicalization, authorization, replay, and
- * provisioning are identical to the tool path.
+ * Host-plane open: the same gated flow the `project_open` tool path runs,
+ * driven by the designated Shadow's authority for host status surfaces (the
+ * Web Shadow card) and the Shadow conversation's `shadow_open_project`
+ * tool. Path canonicalization, authorization, replay, and provisioning are
+ * identical to the tool path. A human-initiated open is the authorization
+ * action: when the open lands `ready` and the binding records no authorized
+ * open run, the bridge records one — the model-facing tool path never
+ * self-authorizes.
  * @param request - Existing authorized path and stable request id.
  * @returns the controller association.
  */
