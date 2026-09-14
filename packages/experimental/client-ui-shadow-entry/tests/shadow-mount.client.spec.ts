@@ -76,14 +76,6 @@ async function bench(
           },
         })
     },
-    readConversation: (request: { after?: number }) => {
-      calls.push(`shadow/readConversation:${JSON.stringify(request)}`)
-      return Promise.resolve({ ok: true as const, value: { messages: [], cursor: 0 } })
-    },
-    postMessage: (request: { text: string }) => {
-      calls.push(`shadow/postMessage:${request.text}`)
-      return Promise.resolve({ ok: true as const, value: { messageId: 'msg-chat-1' } })
-    },
   })
   ctx.provide('locale', new LocaleRuntime(ctx))
   await ctx.plugin(SlotRegistry).await()
@@ -114,29 +106,15 @@ describe('ui-shadow-entry browser plugin', () => {
     expect(b.remote.mount).toHaveBeenCalledExactlyOnceWith(CONTRIBUTION)
 
     const face = (b.entry()!.inject as unknown as () => {
-      hooks: { status: { getSnapshot: () => unknown }; conversation: { getSnapshot: () => unknown } }
+      hooks: { status: { getSnapshot: () => unknown } }
       onRefresh: () => void
       onOpenConversation: () => Promise<void>
-      onLoadConversation: () => void
-      onPollConversation: () => void
-      onPostMessage: (text: string) => Promise<{ ok: boolean }>
     })()
     expect(face.hooks.status.getSnapshot()).toEqual({ view: undefined, error: undefined })
-    expect(face.hooks.conversation.getSnapshot()).toEqual({ messages: [], cursor: undefined, error: undefined })
     face.onRefresh()
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(b.calls).toEqual(['shadow/readStatus'])
     expect(face.hooks.status.getSnapshot()).toMatchObject({ view: { shadowSessionId: 'session-shadow' } })
-
-    // The conversation face loads the tail on demand and posts verbatim.
-    face.onLoadConversation()
-    await new Promise(resolve => setTimeout(resolve, 0))
-    expect(face.hooks.conversation.getSnapshot()).toEqual({ messages: [], cursor: 0, error: undefined })
-    // A poll continues from the cursor the tail load settled.
-    face.onPollConversation()
-    await new Promise(resolve => setTimeout(resolve, 0))
-    expect(b.calls).toContain('shadow/readConversation:{"after":0}')
-    await expect(face.onPostMessage('hello shadow')).resolves.toMatchObject({ ok: true })
 
     // Opening the conversation selects the Shadow's permanent designated
     // session — the same durable conversation every time — and never creates
@@ -148,9 +126,6 @@ describe('ui-shadow-entry browser plugin', () => {
 
     expect(b.calls).toEqual([
       'shadow/readStatus',
-      'shadow/readConversation:{}',
-      'shadow/readConversation:{"after":0}',
-      'shadow/postMessage:hello shadow',
       'shadow/readStatus',
       'sessions/open:session-shadow',
     ])

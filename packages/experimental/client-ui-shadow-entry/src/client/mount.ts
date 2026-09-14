@@ -14,7 +14,6 @@ import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
-import { ShadowConversationController } from './shadow-conversation-store.ts'
 import { ShadowStatusController } from './shadow-store.ts'
 import { ShadowCard } from './ShadowCard.tsx'
 import type { ShadowCardFace } from './slots.ts'
@@ -43,14 +42,10 @@ function registerUi(ctx: ClientContext): void {
     if (result.ok) classifyDesignation(result.value.shadowSessionId)
     return result
   })
-  const conversation = new ShadowConversationController(async request => await ctx.remote.shadow.readConversation(request))
 
   const face: ShadowCardFace = {
-    hooks: { status: controller.store, conversation: conversation.store },
+    hooks: { status: controller.store },
     onRefresh: () => { void controller.refresh() },
-    onLoadConversation: () => { void conversation.loadTail() },
-    onPollConversation: () => { void conversation.poll() },
-    onPostMessage: async text => await ctx.remote.shadow.postMessage({ text }),
     // The Shadow is one permanent independent agent conversation: select its
     // designated Session so every trigger opens the same durable conversation
     // through the standard surface. The session is host-created at boot, so it

@@ -1,10 +1,12 @@
 /**
  * The resident sidebar-foot Shadow entry: a trigger row (icon, label, status
- * dot) above Settings, a chat dialog it opens, and a manage dropdown with
- * configuration items. The chat dialog is the human's conversation with the
- * Shadow: tail load on open, incremental polling while open and online, one
- * post verb. The manage dropdown holds read-only configuration views and
- * actions that do not belong in the primary chat surface.
+ * dot) above Settings and a manage dropdown with read-only configuration
+ * items. The trigger opens the Shadow's one permanent conversation — the
+ * deployment's designated session — through the standard conversation
+ * surface; the card renders no conversation of its own. The manage dropdown
+ * holds the honest phase facts, the designated session, the authorized
+ * roots, and the controller preset, portaled beside the sidebar because the
+ * sidebar column clips overflow.
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -13,19 +15,14 @@ import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import {
   IconBranchOutline16,
-  IconCloseOutline16,
   IconRefreshOutline16,
-  IconSendOutline16,
   IconSettingsOutline16,
   useDismissOnOutsidePointer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { ShadowCardFace } from './slots.ts'
-import {
-  presentShadowStatus,
-  type ShadowPhase,
-} from './shadow-presenter.ts'
+import { presentShadowStatus, type ShadowPhase } from './shadow-presenter.ts'
 import type { ShadowKey } from './locales.ts'
 import css from './ShadowCard.module.css'
 
@@ -50,49 +47,14 @@ const PHASE_DETAILS: Partial<Record<ShadowPhase, ShadowKey>> = {
   configured: 'detail.configured',
 }
 
-/** Compact wall-clock label for one conversation row timestamp. */
-function formatChatTime(at: string): string {
-  return new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
-/** Viewport margin kept between a portal surface and the window edges. */
+/** Viewport margin kept between the portaled menu and the window edges. */
 const VIEWPORT_MARGIN = 12
-
-/**
- * Fixed style for the chat dialog portaled to document.body: the left edge
- * sits just past the entry row's right edge, the bottom edge just above the
- * entry row's top, size-capped to the space actually available so the
- * surface never leaves the viewport without measuring itself. Repositions
- * on window resize while open.
- */
-function useBesideAnchorStyle(open: boolean, anchor: RefObject<HTMLElement | null>): CSSProperties | null {
-  const [style, setStyle] = useState<CSSProperties | null>(null)
-  useLayoutEffect(() => {
-    if (!open) { setStyle(null); return }
-    const place = (): void => {
-      const rect = anchor.current?.getBoundingClientRect()
-      if (rect === undefined) return
-      const left = Math.min(rect.right + 8, window.innerWidth - VIEWPORT_MARGIN)
-      setStyle({
-        position: 'fixed',
-        left,
-        bottom: window.innerHeight - rect.top + 8,
-        maxWidth: Math.max(window.innerWidth - left - VIEWPORT_MARGIN, 240),
-        maxHeight: Math.max(Math.min(window.innerHeight * 0.72, 680, rect.top - 20), 120),
-      })
-    }
-    place()
-    window.addEventListener('resize', place)
-    return () => { window.removeEventListener('resize', place) }
-  }, [open, anchor])
-  return style
-}
 
 /**
  * Fixed style for the manage dropdown portaled to document.body: right-aligned
  * to the manage button and opened above it — the button sits at the window's
- * bottom edge, so opening downward would leave the viewport — clamped to the
- * viewport edges like the chat dialog.
+ * bottom edge, so opening downward would leave the viewport — size-capped to
+ * the space actually available. Repositions on window resize while open.
  */
 function useAboveEndAnchorStyle(open: boolean, anchor: RefObject<HTMLElement | null>): CSSProperties | null {
   const [style, setStyle] = useState<CSSProperties | null>(null)
@@ -119,161 +81,31 @@ function useAboveEndAnchorStyle(open: boolean, anchor: RefObject<HTMLElement | n
 
 /** Render the resident Shadow entry card. */
 export function ShadowCard({
-  wide, useStatus, useConversation, onRefresh, onOpenConversation, onLoadConversation, onPollConversation,
-  onPostMessage, t,
+  wide, useStatus, onRefresh, onOpenConversation, t,
 }: ShadowCardProps) {
   const status = useStatus(status => status)
-  const [chatOpen, setChatOpen] = useState(false)
   const [manageOpen, setManageOpen] = useState(false)
-  const rootRef = useRef<HTMLDivElement>(null)
   const manageButtonRef = useRef<HTMLButtonElement>(null)
   const manageMenuRef = useRef<HTMLDivElement>(null)
-  const chatRef = useRef<HTMLElement>(null)
-  const [chatDraft, setChatDraft] = useState('')
-  const [chatPending, setChatPending] = useState(false)
-  const [chatError, setChatError] = useState<string>()
-  const chat = useConversation(snapshot => snapshot)
-  const chatListRef = useRef<HTMLDivElement>(null)
 
-  useDismissOnOutsidePointer(rootRef, chatOpen, setChatOpen, chatRef)
   useDismissOnOutsidePointer(manageButtonRef, manageOpen, setManageOpen, manageMenuRef)
-  const chatStyle = useBesideAnchorStyle(chatOpen, rootRef)
   const manageMenuStyle = useAboveEndAnchorStyle(manageOpen, manageButtonRef)
 
   // One read on mount keeps the resident card honest without a click, and
-  // every chat open re-reads so a long-lived page converges on the current facts.
+  // every manage open re-reads so a long-lived page converges on the current
+  // facts.
   useEffect(() => { onRefresh() }, [onRefresh])
-  useEffect(() => {
-    if (chatOpen) onRefresh()
-  }, [onRefresh, chatOpen])
 
   const model = presentShadowStatus(status)
   const detail = PHASE_DETAILS[model.phase]
   const actionable = model.phase === 'configured' || model.phase === 'online'
 
-  /** Post one chat message: lock the chat input, then poll the surface after acceptance. */
-  const submitChat = (): void => {
-    const text = chatDraft.trim()
-    if (text.length === 0 || chatPending) return
-    setChatPending(true)
-    void onPostMessage(text).then((result) => {
-      setChatPending(false)
-      if (result.ok) {
-        setChatDraft('')
-        setChatError(undefined)
-        onPollConversation()
-      } else {
-        /* v8 ignore next -- a Remote failure always carries an error message. */
-        setChatError(result.error.message)
-      }
-    })
-  }
-
-  // While the chat dialog is open and the Shadow is online, load the tail once
-  // and poll incrementally so replies arrive without a click.
-  useEffect(() => {
-    if (!chatOpen || model.phase !== 'online') return
-    onLoadConversation()
-    const timer = window.setInterval(() => { onPollConversation() }, 3000)
-    return () => { window.clearInterval(timer) }
-  }, [chatOpen, model.phase, onLoadConversation, onPollConversation])
-
-  // Keep the newest row visible; the stream is the dialog's only inner scroller.
-  useLayoutEffect(() => {
-    const list = chatListRef.current
-    if (list === null) return
-    list.scrollTop = list.scrollHeight
-  }, [chat.messages.length])
-
-  // Close the manage dropdown when the phase changes (status refresh may
+  // Close the manage dropdown when the phase changes (a refresh may
   // invalidate the configuration the menu reflects).
   useEffect(() => { setManageOpen(false) }, [model.phase])
 
   return (
-    <div ref={rootRef} className={clsx(css.layer, !wide && css.rail)}>
-      {actionable && chatOpen && createPortal(
-        <section ref={chatRef} className={css.chatDialog} style={chatStyle ?? undefined} role="dialog" aria-label={t('chat.title')} data-shadow-chat-dialog>
-          <header className={css.chatHeader}>
-            <div className={css.chatHeaderLeft}>
-              <IconBranchOutline16 size={16} />
-              <span className={css.chatTitle}>{t('chat.title')}</span>
-            </div>
-            <p className={css.chatStatusLine} data-shadow-status={model.phase}>
-              <span className={css.dot} aria-hidden="true" />
-              {t(PHASE_LABELS[model.phase])}
-            </p>
-            <button type="button" className={css.closeButton} data-shadow-chat-close aria-label={t('panel.close')} onClick={() => { setChatOpen(false) }}>
-              <IconCloseOutline16 size={14} />
-            </button>
-          </header>
-          <div className={css.chatBody} data-shadow-chat-body>
-            {model.error !== null && (
-              <p className={css.readError} role="alert" data-shadow-error>{t('status.readFailed', { message: model.error })}</p>
-            )}
-            {detail !== undefined && <p className={css.note}>{t(detail)}</p>}
-            {actionable && model.shadowSessionId !== null && (
-              <dl className={css.facts}>
-                <dt className={css.group}>{t('panel.session')}</dt>
-                <dd className={css.mono} data-shadow-session>{model.shadowSessionId}</dd>
-              </dl>
-            )}
-            {model.phase !== 'online'
-              ? <p className={css.chatOffline} data-shadow-chat-offline>{t('chat.offline')}</p>
-              : (
-                <>
-                  {chat.error !== undefined && (
-                    <p className={css.readError} role="alert" data-shadow-chat-read-error>{t('chat.readFailed', { message: chat.error })}</p>
-                  )}
-                  {chat.messages.length === 0 && chat.error === undefined
-                    ? <p className={css.note} data-shadow-chat-empty>{t('chat.empty')}</p>
-                    : (
-                      <div className={css.chatList} ref={chatListRef} data-shadow-chat-list>
-                        {chat.messages.map(row => (
-                          <div key={row.seq} className={css.chatRow} data-shadow-chat-row={row.role}>
-                            <span className={css.chatRole}>{row.role === 'user' ? t('chat.roleUser') : t('chat.roleShadow')}</span>
-                            <span className={css.chatText}>{row.text}</span>
-                            <time className={css.chatTime} dateTime={row.at}>{formatChatTime(row.at)}</time>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  {chatPending && <p className={css.note} data-shadow-chat-pending>{t('chat.pending')}</p>}
-                  <div className={css.composer}>
-                    <textarea
-                      className={css.chatInput}
-                      rows={2}
-                      value={chatDraft}
-                      placeholder={t('chat.placeholder')}
-                      aria-label={t('chat.inputAria')}
-                      disabled={chatPending}
-                      data-shadow-chat-input
-                      onChange={(event) => { setChatDraft(event.currentTarget.value) }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' && !event.shiftKey) {
-                          event.preventDefault()
-                          submitChat()
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className={css.sendButton}
-                      disabled={chatPending || chatDraft.trim().length === 0}
-                      data-shadow-chat-submit
-                      onClick={() => { submitChat() }}
-                    >
-                      <IconSendOutline16 size={14} />
-                    </button>
-                  </div>
-                  {chatError !== undefined && (
-                    <p className={css.writeLine} role="alert" data-shadow-chat-send-failed>{t('chat.sendFailed', { message: chatError })}</p>
-                  )}
-                </>
-              )}
-          </div>
-        </section>,
-        document.body,
-      )}
+    <div className={clsx(css.layer, !wide && css.rail)}>
       <div className={css.triggerRow}>
         <button
           type="button"
@@ -281,16 +113,12 @@ export function ShadowCard({
           data-shadow-phase={model.phase}
           data-shadow-error={model.error ?? undefined}
           aria-label={t('trigger.aria')}
-          onClick={() => {
-            void onOpenConversation()
-            if (actionable) setChatOpen(value => !value)
-          }}
-          onPointerDown={(event) => { event.stopPropagation() }}
+          onClick={() => { void onOpenConversation() }}
         >
           <IconBranchOutline16 size={wide ? 16 : 18} />
           {wide && <span className={css.triggerLabel}>{t('trigger.label')}</span>}
         </button>
-        {!actionable && model.phase !== 'loading' && detail !== undefined && (
+        {detail !== undefined && (
           <span className={css.triggerDetail} data-shadow-detail>{t(detail)}</span>
         )}
         {wide && (
@@ -302,7 +130,10 @@ export function ShadowCard({
               data-shadow-manage
               aria-label={t('trigger.manage')}
               aria-expanded={manageOpen}
-              onClick={() => { setManageOpen(value => !value) }}
+              onClick={() => {
+                setManageOpen(value => !value)
+                if (!manageOpen) onRefresh()
+              }}
             >
               <IconSettingsOutline16 size={14} />
             </button>

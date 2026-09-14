@@ -1,26 +1,16 @@
-/** The presenter folds: every honest phase, the multi-project projection, and the write outcome lines. */
+/** The presenter folds: every honest phase of the Shadow card's display model. */
 
 import { describe, expect, it } from 'vitest'
-import type { ShadowRouterStatus, ShadowStatusBinding } from '@deepseek-ai/dsh-experimental-shadow-routing'
 import type { ShadowStatusView } from '@deepseek-ai/dsh-experimental-shadow-controller'
-import {
-  presentShadowStatus,
-} from '../src/client/shadow-presenter.ts'
+import { presentShadowStatus } from '../src/client/shadow-presenter.ts'
 import type { ShadowStatusSnapshot } from '../src/client/shadow-store.ts'
-
-const wid = (id: string): ShadowStatusBinding['workspaceId'] => id as ShadowStatusBinding['workspaceId']
 
 const READY_VIEW: ShadowStatusView = {
   mounted: true,
   shadowSessionId: 'session-shadow',
   shadowLive: true,
   authorizedRoots: ['D:/projects'],
-  bindings: [{
-    workspaceId: wid('ws-1'),
-    canonicalPath: 'D:/projects/alpha',
-    bindingRevision: 7,
-    state: 'ready',
-  }],
+  bindings: [],
 }
 
 function snapshotOf(partial: Partial<ShadowStatusSnapshot>): ShadowStatusSnapshot {
@@ -33,7 +23,6 @@ describe('the Shadow card presentation fold', () => {
       phase: 'loading',
       shadowSessionId: null,
       authorizedRoots: [],
-      projects: [],
       error: null,
     })
   })
@@ -43,7 +32,7 @@ describe('the Shadow card presentation fold', () => {
     expect(model.phase).toBe('error')
     expect(model.error).toBe('offline')
     expect(model.shadowSessionId).toBeNull()
-    expect(model.projects).toEqual([])
+    expect(model.authorizedRoots).toEqual([])
   })
 
   it('reads an unmounted deployment as the honest not-enabled phase', () => {
@@ -60,61 +49,35 @@ describe('the Shadow card presentation fold', () => {
     }))
     expect(model.phase).toBe('disabled')
     expect(model.shadowSessionId).toBeNull()
+    expect(model.authorizedRoots).toEqual(['D:/projects'])
   })
 
-  it('projects every open project as one row beside the session and roots', () => {
-    const model = presentShadowStatus(snapshotOf({
-      view: { ...READY_VIEW, bindings: [...READY_VIEW.bindings, {
-        workspaceId: wid('ws-2'),
-        canonicalPath: 'D:/projects/beta',
-        bindingRevision: 3,
-        state: 'needs_attention' as const,
-      }] },
-    }))
+  it('reads a live designated session as the online phase with its session and roots', () => {
+    const model = presentShadowStatus(snapshotOf({ view: READY_VIEW }))
     expect(model.phase).toBe('online')
     expect(model.shadowSessionId).toBe('session-shadow')
     expect(model.authorizedRoots).toEqual(['D:/projects'])
-    expect(model.projects).toEqual([
-      {
+    expect(model.error).toBeNull()
+  })
+
+  it('reads a configured designation whose session is not live as configured, not online', () => {
+    const model = presentShadowStatus(snapshotOf({ view: { ...READY_VIEW, shadowLive: false } }))
+    expect(model.phase).toBe('configured')
+    expect(model.shadowSessionId).toBe('session-shadow')
+  })
+
+  it('keeps open-project bindings out of the display model the card renders', () => {
+    // The manage dropdown surfaces only the phase, the session, and the
+    // authorized roots; binding rows stay in the wire view untouched.
+    const model = presentShadowStatus(snapshotOf({
+      view: { ...READY_VIEW, bindings: [{
         workspaceId: 'ws-1',
         canonicalPath: 'D:/projects/alpha',
         bindingRevision: 7,
-        stateKey: 'state.ready',
-      },
-      {
-        workspaceId: 'ws-2',
-        canonicalPath: 'D:/projects/beta',
-        bindingRevision: 3,
-        stateKey: 'state.needsAttention',
-      },
-    ])
-  })
-
-  it('reads a live designated session as the online phase with no projects when none are open', () => {
-    const model = presentShadowStatus(snapshotOf({ view: { ...READY_VIEW, bindings: [] } }))
+        state: 'ready',
+      } as ShadowStatusView['bindings'][number]] },
+    }))
     expect(model.phase).toBe('online')
-    expect(model.projects).toEqual([])
-  })
-
-  it('projects every durable project state to its locale key', () => {
-    const states: readonly ShadowStatusBinding['state'][] = [
-      'reserving', 'provisioning', 'ready', 'stopping', 'stopped', 'needs_attention', 'failed',
-    ]
-    const status: ShadowRouterStatus = {
-      shadowSessionId: 'session-shadow',
-      shadowLive: false,
-      authorizedRoots: [],
-      bindings: states.map((state, index) => ({
-        workspaceId: wid(`ws-${String(index)}`),
-        canonicalPath: `D:/projects/${String(index)}`,
-        bindingRevision: index + 1,
-        state,
-      })),
-    }
-    const model = presentShadowStatus(snapshotOf({ view: { ...READY_VIEW, bindings: status.bindings } }))
-    expect(model.projects.map(row => row.stateKey)).toEqual([
-      'state.reserving', 'state.provisioning', 'state.ready',
-      'state.stopping', 'state.stopped', 'state.needsAttention', 'state.failed',
-    ])
+    expect(model).not.toHaveProperty('projects')
   })
 })
