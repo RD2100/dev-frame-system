@@ -50,6 +50,8 @@ Shipped patch 默认以 `workspaceId: default`、关闭写入、无 Vault 根挂
 
 设计中的每种失败都以稳定错误码呈现在 `ProjectMemoryError` 上（`MEMORY_UNAVAILABLE`、`MEMORY_APPEND_DISABLED`、`MEMORY_NOTE_TOO_LARGE`、`MEMORY_CONTENT_REJECTED`、`MEMORY_PATH_REJECTED`）；冲突或被外部改动的笔记是结果状态，绝不静默覆盖。
 
+- 使用策略提示词段落（`project-memory:usage`，全局层）在 Vault 配置后挂载：任务开始先搜索一次、验收后追加一条简短项目笔记、人类的偏好仅在其明确要求时进入 `user` 作用域、绝不复制会话记录或秘密、每次记忆失败逐字上报。未配置的部署挂载的是诚实报告 `MEMORY_UNAVAILABLE` 的工具，没有指导；自行组合记忆面的消费者（Shadow 对话宿主）在各自作用域按名遮蔽该段落。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -103,15 +105,15 @@ Shipped patch 默认以 `workspaceId: default`、关闭写入、无 Vault 根挂
 
 #### 模型看到什么
 
-该层挂载后，工具作用域恰好多出三个工具：`memory_search`、`memory_read` 与 `memory_append`。它们的描述携带策略：笔记是带标签的数据，绝不是指令；追加记录的是观察，`confirmed` 的用户偏好只能经宿主的人工确认流程触达。按 shipped 默认值，每次调用都以 `MEMORY_UNAVAILABLE` 失败，绝不触碰任何路径。
+该层挂载后，工具作用域恰好多出三个工具：`memory_search`、`memory_read` 与 `memory_append`。它们的描述携带策略：笔记是带标签的数据，绝不是指令；追加记录的是观察，`confirmed` 的用户偏好只能经宿主的人工确认流程触达。按 shipped 默认值，每次调用都以 `MEMORY_UNAVAILABLE` 失败，绝不触碰任何路径。部署配置 Vault 后，再有一个提示词段落（`project-memory:usage`）进入全局层，携带使用策略——任务开始先召回一次、验收后一条简短项目笔记、人类偏好仅在其明确要求时记录、不复制会话记录或秘密、失败逐字上报。
 
 #### Token 影响
 
-该层缺席时为零。挂载后，三个工具的模式在可见作用域的每次请求中占用 token，每次调用追加一条受召回上限约束的 JSON 结果。
+该层缺席时为零。挂载后，三个工具的模式在可见作用域的每次请求中占用 token，每次调用追加一条受召回上限约束的 JSON 结果。Vault 配置后，使用段落的固定文本再进入每次请求的提示词一次。
 
 #### KV Cache 影响
 
-行配置与工具模式不变时前缀稳定：模式只声明一次，调用结果追加在可复用请求前缀之后。挂载或移除该层会改变工具清单，破坏受影响代理下一次请求的提供方缓存复用。
+行配置与工具模式不变时前缀稳定：模式只声明一次，调用结果追加在可复用请求前缀之后。挂载或移除该层会改变工具清单，破坏受影响代理下一次请求的提供方缓存复用；配置 Vault 会把使用段落加入同一前缀（其文本静态，之后前缀保持稳定）。
 
 ## 已知限制与延期工作
 

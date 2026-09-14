@@ -18,7 +18,7 @@ The conversation host registers one more scoped prompt section — `experimental
 
 **Let project-memory contribute the guidance as its own prompt section.** Rejected: a package-level section would reach every agent scope that inherits the global prompt, while the design scopes user-memory access to the Shadow's face; the guidance belongs to the scope the allowlist composes, where the probe already knows the truth.
 
-**Wait for the controller-side memory behavior (recall at task start, append the final summary after acceptance) and ship both together.** Deferred, not rejected: the controller behavior lives with the presets and the dispatch flow, changes every controller session's tokens, and needs its own decision; the Shadow guidance stands alone and unblocks the human's standing conversation today.
+**Wait for the controller-side memory behavior (recall at task start, append the final summary after acceptance) and ship both together.** Deferred, not rejected: the controller behavior lives with the presets and the dispatch flow, changes every controller session's tokens, and needs its own decision; the Shadow guidance stands alone and unblocks the human's standing conversation today. The controller side has since landed as [the global usage-policy section](2026-09-14-project-memory-usage-policy.md), which this scope shadows by name.
 
 ## Consequences
 

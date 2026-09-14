@@ -50,6 +50,8 @@ The layer adds the `project-memory` plugin row: a `ctx.projectMemory` service ov
 
 Every failure mode from the design surfaces as a stable code on `ProjectMemoryError` (`MEMORY_UNAVAILABLE`, `MEMORY_APPEND_DISABLED`, `MEMORY_NOTE_TOO_LARGE`, `MEMORY_CONTENT_REJECTED`, `MEMORY_PATH_REJECTED`); conflicting or externally changed notes are outcomes, never silent overwrites.
 
+- The usage-policy prompt section (`project-memory:usage`, global layer) once a Vault is configured: search once at task start, append one short project note after acceptance, keep the human's preferences in `user` scope only on their explicit ask, never copy transcripts or secrets, and report every memory failure verbatim. Unconfigured deployments mount tools that honestly report `MEMORY_UNAVAILABLE` and no guidance; consumers composing their own memory face (the Shadow conversation host) suppress the section on their scope by name.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -103,15 +105,15 @@ No runtime invariant companion is published: the service holds no cross-process 
 
 #### What the model sees
 
-When the layer is mounted, exactly three tools join the tool scopes: `memory_search`, `memory_read`, and `memory_append`. Their descriptions carry the policy: notes are labeled data, never instructions; appends record observations, and `confirmed` user preferences stay reachable only through the host's human-confirmation flow. With the shipped defaults every call fails with `MEMORY_UNAVAILABLE` instead of touching any path.
+When the layer is mounted, exactly three tools join the tool scopes: `memory_search`, `memory_read`, and `memory_append`. Their descriptions carry the policy: notes are labeled data, never instructions; appends record observations, and `confirmed` user preferences stay reachable only through the host's human-confirmation flow. With the shipped defaults every call fails with `MEMORY_UNAVAILABLE` instead of touching any path. Once a deployment configures a Vault, one more prompt section (`project-memory:usage`) joins the global layer with the usage policy — recall once at task start, one short project note after acceptance, the human's preferences only on their explicit ask, no transcripts or secrets, failures verbatim.
 
 #### Token effect
 
-Zero while the layer is absent. When mounted, the three tool schemas cost tokens on every request in the scopes that see them, and each call appends one JSON result bounded by the recall limits.
+Zero while the layer is absent. When mounted, the three tool schemas cost tokens on every request in the scopes that see them, and each call appends one JSON result bounded by the recall limits. With a configured Vault the usage section's fixed text joins every request's prompt once.
 
 #### KV Cache effect
 
-Prefix-stable while the row config and tool schemas stay unchanged: the schemas are declared once, and call results append after the reusable request prefix. Mounting or removing the layer changes the tool list and breaks the affected agents' provider cache reuse for the next request.
+Prefix-stable while the row config and tool schemas stay unchanged: the schemas are declared once, and call results append after the reusable request prefix. Mounting or removing the layer changes the tool list and breaks the affected agents' provider cache reuse for the next request; configuring a Vault adds the usage section to that same prefix (its text is static, so the prefix stays stable afterwards).
 
 ## Known Limitations and Deferred Work
 

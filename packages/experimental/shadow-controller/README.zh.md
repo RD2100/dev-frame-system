@@ -73,7 +73,7 @@ const page = await ctx.remote.shadow.readConversation({})
 <details>
 <summary>实现细节——点击展开</summary>
 
-`ShadowController` 以服务键 `shadowController`、Remote 命名空间 `shadow` 继承 `TypertRemoteService`；`ShadowAgent`（同包 `./shadow-agent` 入口）是键为 `shadowAgent` 的普通 Service，注入 agents 注册表。每个 `@Remote` 方法都由装饰器注册；typert 生成器在 `lib/` 下产出宿主 face 与 Client contribution。项目写入调用 `ctx.get('shadowRouter')` 与路由器的宿主桥，并以每次操作铸造的 `randomUUID()` 请求 id。`ShadowAgent.ensure()` 从路由器快照解析指定会话 id，按原样复用存活会话（绝不拥有另一行的生命周期），等待完整应用就绪，然后经 `ctx.agents` 恢复持久会话或创建它；工厂 setup 组合作用域世界——四个对话工具（`installShadowConversationTools`）、人设段落、会话模型面上的设计工具 allowlist（原生呈现钉死、继承工具收敛到显式启用的 memory 访问、以及单调执行守卫）、部署挂载完整记忆三件套时的记忆指引段落（对先前上下文的引用先搜索一次、只追加人类要求保留的内容、失败逐字上报）、面向无 cwd persona 模板的 scoped 诚实 cwd 变量，以及全新会话上的宿主默认模型选择。只有本宿主创建或恢复的会话才随它释放。
+`ShadowController` 以服务键 `shadowController`、Remote 命名空间 `shadow` 继承 `TypertRemoteService`；`ShadowAgent`（同包 `./shadow-agent` 入口）是键为 `shadowAgent` 的普通 Service，注入 agents 注册表。每个 `@Remote` 方法都由装饰器注册；typert 生成器在 `lib/` 下产出宿主 face 与 Client contribution。项目写入调用 `ctx.get('shadowRouter')` 与路由器的宿主桥，并以每次操作铸造的 `randomUUID()` 请求 id。`ShadowAgent.ensure()` 从路由器快照解析指定会话 id，按原样复用存活会话（绝不拥有另一行的生命周期），等待完整应用就绪，然后经 `ctx.agents` 恢复持久会话或创建它；工厂 setup 组合作用域世界——四个对话工具（`installShadowConversationTools`）、人设段落、会话模型面上的设计工具 allowlist（原生呈现钉死、继承工具收敛到显式启用的 memory 访问、以及单调执行守卫）、部署挂载完整记忆三件套时的记忆指引段落（对先前上下文的引用先搜索一次、只追加人类要求保留的内容、失败逐字上报）、对 project-memory 层全局使用段落的按名遮蔽、面向无 cwd persona 模板的 scoped 诚实 cwd 变量，以及全新会话上的宿主默认模型选择。只有本宿主创建或恢复的会话才随它释放。
 
 | 文件 | 职责 |
 |---|---|
@@ -106,7 +106,7 @@ const page = await ctx.remote.shadow.readConversation({})
 
 #### 模型看到什么
 
-对话宿主给指定的 Shadow 会话一个模型可见面：一个作用域人设段落（`experimental:shadow`——人类的全局代理、人类 → 影子 → 项目总控 → worker 的层级，以及诚实规则）与四个工具——`shadow_open_project`、`shadow_message_controller`、`shadow_release_project` 与 `shadow_status`——其 schema 只携带任务概念，其执行运行路由器的宿主桥。deployment persona 的 `{{cwd}}` 引用仅在本作用域内解析为宿主的诚实 cwd 变量（"not fixed — you are the Shadow: you route work across authorized projects and never do project work yourself"）。当部署挂载完整记忆三件套时，再增加一个作用域段落（`experimental:shadow-memory`）教其使用：对先前上下文的引用先搜索一次、只追加人类要求保留的内容且以人为来源、每次记忆失败逐字上报。其他任何代理作用域都看不到这些段落与工具。宿主还跨组合出的会话模型面强制设计 allowlist：呈现钉死为原生，除显式启用的用户 memory（`memory_search`、`memory_read`、`memory_append`）外，每个继承的部署工具都从面上隐藏，并由单调守卫拒绝该作用域携带的任何其他执行——包括路由器同层的 `project_*` 白名单，其 schema 作为已记录的残余保持可见。Remote 面本身保持宿主面，绝不回答模型。
+对话宿主给指定的 Shadow 会话一个模型可见面：一个作用域人设段落（`experimental:shadow`——人类的全局代理、人类 → 影子 → 项目总控 → worker 的层级，以及诚实规则）与四个工具——`shadow_open_project`、`shadow_message_controller`、`shadow_release_project` 与 `shadow_status`——其 schema 只携带任务概念，其执行运行路由器的宿主桥。deployment persona 的 `{{cwd}}` 引用仅在本作用域内解析为宿主的诚实 cwd 变量（"not fixed — you are the Shadow: you route work across authorized projects and never do project work yourself"）。当部署挂载完整记忆三件套时，再增加一个作用域段落（`experimental:shadow-memory`）教其使用：对先前上下文的引用先搜索一次、只追加人类要求保留的内容且以人为来源、每次记忆失败逐字上报。本作用域还以空段落按名遮蔽 project-memory 层的全局使用策略（`project-memory:usage`）——该策略面向控制器与 worker，本作用域携带自己的记忆面而不是两份文本。其他任何代理作用域都看不到这些段落与工具。宿主还跨组合出的会话模型面强制设计 allowlist：呈现钉死为原生，除显式启用的用户 memory（`memory_search`、`memory_read`、`memory_append`）外，每个继承的部署工具都从面上隐藏，并由单调守卫拒绝该作用域携带的任何其他执行——包括路由器同层的 `project_*` 白名单，其 schema 作为已记录的残余保持可见。Remote 面本身保持宿主面，绝不回答模型。
 
 #### Token 影响
 

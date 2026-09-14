@@ -22,7 +22,24 @@ import type { AssertionStatus, MemoryNote, MemoryReceiptStore, MemorySpec, NoteK
 /** Cordis plugin name. */
 export const name = 'project-memory'
 /** Services required by the project-memory plugin. */
-export const inject = ['tools']
+export const inject = ['tools', 'systemPrompt']
+
+/**
+ * The prompt section name carrying the memory usage policy. Deployments with
+ * a configured Vault mount it on the global prompt layer; consumers that
+ * compose their own memory guidance (the Shadow conversation host) suppress
+ * it on their scope by shadowing this exact name.
+ */
+export const MEMORY_USAGE_SECTION_NAME = 'project-memory:usage'
+
+/** The usage-policy text registered under {@link MEMORY_USAGE_SECTION_NAME}. */
+export const MEMORY_USAGE_SECTION = `This deployment carries project memory — bounded, append-only notes over the operator's vault, addressed as scope 'project' (this workspace's own notes) and scope 'user' (the user-wide namespace).
+
+- At the start of a task, search project memory once (memory_search) for prior context about the work; read a full note (memory_read) only when an excerpt is not enough.
+- After your work on a task is accepted, append one short project note (memory_append, scope 'project') summarizing what was done and the outcome, with yourself as the source. A note you write is an observation — never a confirmed preference.
+- Record the human's own preferences in scope 'user' only when the human explicitly asks to keep them.
+- Never copy transcripts, secrets, credentials, or environment dumps into a note; keep notes short and name where the full detail lives.
+- Report every memory failure verbatim — an unavailable vault, a read-only deployment, a rejected or conflicting note — and continue the task without memory.`
 
 /** Load configuration for the project-memory plugin. */
 export interface Config {
@@ -356,6 +373,15 @@ export function apply(ctx: Context, config: Config): () => void {
         ctx.logger.error('project-memory: receipt rehydration failed', error)
       })
     }),
+    // The usage policy joins the global prompt layer only when a Vault is
+    // configured — the "when enabled" of the memory design. Unconfigured
+    // deployments keep memory tools that honestly report MEMORY_UNAVAILABLE
+    // and a prompt that does not teach them.
+    ...spec.vaultRoot === undefined ? [] : [ctx.systemPrompt.section({
+      name: MEMORY_USAGE_SECTION_NAME,
+      order: 40,
+      text: MEMORY_USAGE_SECTION,
+    })],
   ]
   try {
     for (const definition of createMemoryTools(service, spec, receipts)) {

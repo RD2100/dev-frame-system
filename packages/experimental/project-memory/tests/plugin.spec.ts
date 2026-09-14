@@ -272,3 +272,29 @@ describe('memory tool dispatch', () => {
     expect(JSON.stringify(result.error)).toContain('calling agent')
   })
 })
+
+describe('the usage-policy prompt section', () => {
+  it('joins the global prompt layer only when a Vault is configured', async () => {
+    const configured = await boot({ workspaceId: 'ws-alpha', vaultRoot: makeVault() })
+    const withVault = await configured.systemPrompt.assemble()
+    const section = withVault.sections.find(candidate => candidate.name === 'project-memory:usage')
+    expect(section?.text).toContain('search project memory once')
+    expect(section?.text).toContain('After your work on a task is accepted')
+
+    const bare = await boot({ workspaceId: 'ws-alpha' })
+    const withoutVault = await bare.systemPrompt.assemble()
+    expect(withoutVault.sections.find(candidate => candidate.name === 'project-memory:usage')).toBeUndefined()
+  })
+
+  it('leaves with the plugin fiber so unmounting the layer removes the guidance', async () => {
+    const ctx = new Context()
+    CONTEXTS.push(ctx)
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    const fiber = ctx.plugin(projectMemory, { workspaceId: 'ws-alpha', vaultRoot: makeVault() })
+    await fiber.await()
+    expect((await ctx.systemPrompt.assemble()).sections.some(candidate => candidate.name === 'project-memory:usage')).toBe(true)
+    await fiber.dispose()
+    expect((await ctx.systemPrompt.assemble()).sections.some(candidate => candidate.name === 'project-memory:usage')).toBe(false)
+  })
+})

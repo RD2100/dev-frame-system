@@ -27,7 +27,7 @@ export { ProjectMemoryService, type ProjectMemoryReceipts } from './memory.ts'
 // The Cordis loader resolves the package name to this entry and reads the
 // plugin-protocol exports `name`, `inject`, `Config`, and `apply` by their
 // exact names; `createMemoryTools` is the testable tool factory behind them.
-export { apply, Config, createMemoryTools, inject, name } from './plugin.ts'
+export { apply, Config, createMemoryTools, inject, MEMORY_USAGE_SECTION, MEMORY_USAGE_SECTION_NAME, name } from './plugin.ts'
 export {
   NOTE_SCHEMA_VERSION,
   type AssertionStatus,

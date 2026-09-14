@@ -128,6 +128,12 @@ function shadowSetup(router: ShadowRouter, selection: ModelSelection, fresh: boo
     if (memoryTools.length === MEMORY_TOOL_NAMES.length) {
       agentCtx.systemPrompt.section({ name: SHADOW_MEMORY_PROMPT_SECTION, order: 11, text: SHADOW_MEMORY_PROMPT })
     }
+    // The project-memory usage policy is controller-and-worker guidance
+    // (recall at task start, append the accepted summary). The Shadow keeps
+    // user-scope memory with its own section above, so it shadows the global
+    // section by name — this scope carries its own memory face instead of
+    // both texts.
+    agentCtx.systemPrompt.section({ name: 'project-memory:usage', order: 11, text: '' })
     agentCtx.systemPrompt.variable('cwd', () => SHADOW_CWD_VARIABLE)
     if (fresh) installModelSelection(agentCtx, { current: selection, assembled: undefined })
   }

@@ -563,6 +563,33 @@ describe('the Shadow conversation host tool allowlist', () => {
     }
   })
 
+  it('shadows the global memory usage policy with its own scoped section', async () => {
+    const b = await bench({
+      designation: 'session-shadow',
+      globalTools: [...MEMORY_TOOL_STUBS],
+      script: () => [textResponse('Routing, not doing.')],
+    })
+    // The project-memory layer's global usage policy teaches controller and
+    // worker behavior; the designated scope replaces it with its own memory
+    // guidance instead of carrying both.
+    b.ctx.systemPrompt.section({
+      name: 'project-memory:usage',
+      order: 40,
+      text: 'CONTROLLER-MEMORY-POLICY: search at task start and append the accepted summary.',
+    })
+    try {
+      await b.host.ensure()
+      await b.host.postMessage('Remember something.')
+      const agent = await b.host.ensure()
+      await agent.whenIdle()
+      const request = JSON.stringify(b.adapter.requests[0])
+      expect(request).toContain('Memory holds durable facts only')
+      expect(request).not.toContain('CONTROLLER-MEMORY-POLICY')
+    } finally {
+      await b.dispose()
+    }
+  })
+
   it('denies execution outside the allowlist on the designated scope through the executor', async () => {
     const b = await bench({
       designation: 'session-shadow',
