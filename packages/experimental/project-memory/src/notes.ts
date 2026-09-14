@@ -256,11 +256,12 @@ export function parseNote(contents: string): NoteParseResult {
  * @returns `true` when both record the same note content.
  */
 export function sameNoteContent(existing: MemoryNote, candidate: MemoryNote): boolean {
-  const sameEntities = (existing.entities === undefined && candidate.entities === undefined) ||
-    (existing.entities !== undefined &&
-      candidate.entities !== undefined &&
-      existing.entities.length === candidate.entities.length &&
-      existing.entities.every((tag, index) => tag === candidate.entities[index]))
+  const existingTags = existing.entities
+  const candidateTags = candidate.entities
+  const sameEntities = existingTags === undefined || candidateTags === undefined
+    ? existingTags === undefined && candidateTags === undefined
+    : existingTags.length === candidateTags.length &&
+      existingTags.every((tag, index) => tag === candidateTags[index])
   return (
     existing.noteId === candidate.noteId &&
     existing.namespace === candidate.namespace &&
