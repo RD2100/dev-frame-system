@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Perspective discovery phase result (paper-research fixture, perspectives.md)",
+  "description": "Validates the structured result object the perspective-discovery phase returns alongside its perspectives.md artifact. artifactPath must equal the artifact name the phase declares in team.yml (the core's runtime enforces the same exact match); perspectives are required because distinct perspectives are the phase's whole product.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifactPath", "summary", "perspectives"],
+  "properties": {
+    "artifactPath": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Exactly the artifact name the phase declares in team.yml; the runtime writes the reply body there and rejects any other value.",
+      "pattern": "^perspectives\\.md$"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Structured Chinese summary of perspectives.md: the discovered perspectives and the coverage self-assessment."
+    },
+    "openQuestions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Questions the scouting noticed but did not expand; mirrors the phase result contract's optional openQuestions field."
+    },
+    "perspectives": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "why"],
+        "properties": {
+          "title": { "type": "string" },
+          "why": { "type": "string" }
+        }
+      }
+    }
+  }
+}

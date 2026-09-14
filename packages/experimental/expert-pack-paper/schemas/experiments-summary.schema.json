@@ -1,0 +1,171 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Experiment execution phase result (paper team, experiments.md)",
+  "description": "Validates the structured result object the experiments phase returns alongside its experiments.md artifact. artifactPath must equal the artifact name the phase declares in team.yml (the core's runtime enforces the same exact match). failures and deviations are required so the honest-reporting discipline is machine-checkable: an uneventful run still declares them as empty arrays, while a run that omits them fails the contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifactPath", "summary", "experiments", "failures", "deviations"],
+  "properties": {
+    "artifactPath": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Exactly the artifact name the phase declares in team.yml; the runtime writes the reply body there and rejects any other value.",
+      "pattern": "^experiments\\.md$"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Structured Chinese summary of experiments.md: the overall verdict across the experiments (which hypotheses are supported, refuted, or inconclusive) and the main deviations from method.md."
+    },
+    "experiments": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/experiment"
+      }
+    },
+    "failures": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/failure"
+      },
+      "description": "Failed runs, crashed seeds, and anomalous metrics with how each was handled; empty only when the run recorded none, never when some were skipped."
+    },
+    "deviations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/deviation"
+      },
+      "description": "Departures from method.md's declared design; empty only when execution matched the design exactly. The human final gate sees every deviation."
+    },
+    "openQuestions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Questions the execution surfaced that the design or the results cannot answer; mirrors the open questions of experiments.md."
+    }
+  },
+  "definitions": {
+    "experiment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "hypothesis", "configuration", "metrics", "outcome"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Experiment identifier as used in experiments.md and cited by the paper's claims, e.g. \"E1\"."
+        },
+        "hypothesis": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The H1/H0 statement from method.md this experiment tests, verbatim or closely quoted."
+        },
+        "configuration": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Reproduction record: dataset version, random seeds, hyperparameters, environment and dependency versions."
+        },
+        "metrics": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/metric"
+          }
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["supports-h1", "refutes-h1", "inconclusive"],
+          "description": "The honest verdict for this experiment as actually observed; never adjusted toward the expected result."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Short interpretation or caveats for this experiment beyond the metrics."
+        }
+      }
+    },
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Metric name as declared in method.md."
+        },
+        "value": {
+          "oneOf": [
+            {
+              "type": "number",
+              "description": "The measured value when the metric is scalar."
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "The measured value in textual form when the metric is not scalar."
+            }
+          ],
+          "description": "The measured value; never fabricated or smoothed."
+        },
+        "test": {
+          "type": "string",
+          "description": "The statistical test applied to this metric, as declared in method.md."
+        },
+        "pValue": {
+          "type": "number",
+          "description": "The p-value after the declared multiple-comparison correction, when a test applies."
+        },
+        "correction": {
+          "type": "string",
+          "description": "The multiple-comparison correction applied, as declared in method.md."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Caveats such as an interval estimate or an anomalous condition observed for this metric."
+        }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "handling"],
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What failed or looked anomalous: the run, seed, or metric."
+        },
+        "handling": {
+          "type": "string",
+          "minLength": 1,
+          "description": "How it was handled: rerun, quarantined, or carried into the outcome honestly."
+        }
+      }
+    },
+    "deviation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "description", "reason"],
+      "properties": {
+        "from": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The method.md section or clause this execution departed from."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What was actually done instead."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why the declared design could not be followed."
+        }
+      }
+    }
+  }
+}

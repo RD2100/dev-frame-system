@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-实验组包含不属于任何正式发布的原型能力：它们运行在真实 harness 上，但约定可能变更，也不提供支持承诺。本组包含 Agent Teams、跨 realm Inspector、代码执行 seam 的 CPython 子进程后端，以及预览部署使用的浏览器 worker 运行时与镜像打包器。用这些包来尝试未发布的能力；它们没有稳定性承诺，已发布产品不得依赖它们。
+实验组包含不属于任何正式发布的原型能力：它们运行在真实 harness 上，但约定可能变更，也不提供支持承诺。本组包含 Agent Teams、基于角色数据包的专家团队流水线、跨 realm Inspector、代码执行 seam 的 CPython 子进程后端，以及预览部署使用的浏览器 worker 运行时与镜像打包器。用这些包来尝试未发布的能力；它们没有稳定性承诺，已发布产品不得依赖它们。
 
 ## 目录
 
@@ -33,6 +33,9 @@ kind: "package-group"
 | [`code-runtime-python`](code-runtime-python/README.zh.md) | 代码执行 seam 的 CPython 子进程后端 | `ctx.codeRuntime` |
 | [`devframe`](devframe/README.zh.md) | 实验性单项目控制器的共享契约 | — |
 | [`devframe-profile`](devframe-profile/README.zh.md) | 挂载 DevFrame 栈的显式源码 checkout Web profile 层 | — |
+| [`expert-pack-dev`](expert-pack-dev/README.zh.md) | expert-team 核心的软件开发数据包：六个中文为主的专家人设（产品经理、架构师、技术主管、工程师、测试、评审）、双人工关口的六阶段层级团队、结果 JSON Schema 与验收检查单技能 | 数据包，不使用 ctx key |
+| [`expert-pack-paper`](expert-pack-paper/README.zh.md) | expert-team 核心的论文研究数据包：四个中文为主的专家人设、四阶段人工关口流水线、审稿检查单技能与阶段结果 JSON Schema | 数据包，不使用 ctx key |
+| [`expert-team`](expert-team/README.zh.md) | 专家团队核心：响亮失败的包挂载、带人工关口的流水线编排、角色派生的阶段子代理，以及五个模型工具 | `ctx.expertTeam` |
 | [`inspector`](inspector/README.zh.md) | 用于 Host 调试、Client Runtime 检查、网络采集与 Cordis 树的跨 realm CDP hub | `ctx.inspector` |
 | [`agent-evidence`](agent-evidence/README.zh.md) | 代理工作的追加式证据台账：任务/Goal 绑定回执、提交回执与验证快照 | `ctx.agentEvidence` |
 | [`agent-reliability`](agent-reliability/README.zh.md) | 进程树停止、准入切断、不确定调用对账与刷写屏障，集于一个服务 | `ctx.agentReliability` |

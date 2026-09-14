@@ -1,0 +1,107 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Revision phase result (paper team, revision-plan.md)",
+  "description": "Validates the structured result object the revision phase returns alongside its revision-plan.md artifact, which carries both the point-by-point response table and the complete revised manuscript that supersedes draft.md. artifactPath must equal the artifact name the phase declares in team.yml (the core's runtime enforces the same exact match); responses are required so every comment from the three reviews is answered on the record, and declined comments stay visible to the human final gate.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifactPath", "summary", "responses", "supersedes"],
+  "properties": {
+    "artifactPath": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Exactly the artifact name the phase declares in team.yml; the runtime writes the reply body there and rejects any other value.",
+      "pattern": "^revision-plan\\.md$"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Structured Chinese summary of the revision: how many comments were adopted, partially adopted, or declined per review, and what the unresolved disagreements are."
+    },
+    "responses": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/response"
+      },
+      "description": "One entry per comment from the three reviews; empty only when all three reviews returned no comments."
+    },
+    "supersedes": {
+      "type": "string",
+      "pattern": "^draft\\.md$",
+      "description": "The previous draft this revision replaces; the artifact carries the complete revised manuscript, not a patch."
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/citation"
+      },
+      "description": "Optional: citation keys carried into the revised manuscript, reusing the draft's keys; one entry per key whose claims changed in the revision."
+    },
+    "openQuestions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "The unresolved disagreements (declined or partially adopted comments with their reasons) and any items the human final gate must decide; mirrors the artifact's remaining-disagreements section. Empty only when every comment was adopted and nothing needs the gate's attention."
+    }
+  },
+  "definitions": {
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commentRef", "review", "disposition", "response"],
+      "properties": {
+        "commentRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The comment id as numbered by the reviewer, e.g. \"M1\", \"S3\", \"W2\"."
+        },
+        "review": {
+          "type": "string",
+          "enum": ["review-methodology", "review-statistics", "review-writing"],
+          "description": "Which review the commented artifact came from."
+        },
+        "disposition": {
+          "type": "string",
+          "enum": ["adopted", "partially-adopted", "declined"],
+          "description": "The writer's disposition; declined and partially-adopted responses carry the disagreement the human final gate adjudicates."
+        },
+        "response": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What was changed and where in the revised manuscript, or the full reason for declining; a declined reason must be strong enough for the human gate to adjudicate."
+        },
+        "appliedTo": {
+          "type": "string",
+          "description": "The revised manuscript section the change landed in; expected for adopted and partially-adopted responses."
+        }
+      }
+    },
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "claim", "source"],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^\\[[^\\]]+\\]$",
+          "description": "Citation key exactly as it appears in the revised manuscript, e.g. \"[1]\", \"[Vaswani2017]\", or an experiment id like \"[E1]\"."
+        },
+        "claim": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The claim this source supports after the revision."
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifying string of the cited work as available from the reviewed materials (title, authors, year, venue or URL), or the experiment id in experiments.md when the claim is experiment-grounded."
+        },
+        "retractionChecked": {
+          "type": "boolean",
+          "description": "True only when this work's retraction status was actually verified upstream; unverifiable status stays false."
+        }
+      }
+    }
+  }
+}

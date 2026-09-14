@@ -1,0 +1,16 @@
+team: code-builders
+title: 软件构建专家团
+mode: hierarchical
+entry: plan
+phases:
+  - id: plan
+    expert: planner
+    input: 需求描述与项目约束
+    output:
+      artifact: plan.md
+  - id: implement
+    expert: implementer
+    depends_on:
+      - plan
+    output:
+      artifact: patch.diff

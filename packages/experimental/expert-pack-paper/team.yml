@@ -1,0 +1,40 @@
+# 论文研究专家团数据包（M1 范围：前四个阶段）。
+# 本文件是纯数据：字段契约由 @deepseek-ai/dsh-experimental-expert-team 的目录加载器
+# 在挂载时校验（唯一阶段 id、专家引用存在、depends_on 无环且只指向更早阶段、
+# entry 一致、被引用的 schema 文件存在），校验失败即挂载失败。
+# gate 的唯一合法取值是 human-review；产物写入 <artifactsDir>/<runId>/。
+team: paper
+title: 论文研究专家团
+mode: pipeline
+entry: perspective-discovery
+phases:
+  - id: perspective-discovery
+    expert: topic-scout
+    input: 运行请求给出的研究主题，以及可选的范围约束与既有项目记忆笔记的检索结果
+    output:
+      artifact: perspectives.md
+  - id: literature-review
+    expert: literature-reviewer
+    depends_on:
+      - perspective-discovery
+    input: perspectives.md 中列出的研究视角与研究主题
+    output:
+      artifact: survey.md
+      schema: schemas/survey-summary.schema.json
+    gate: human-review
+  - id: idea-selection
+    expert: idea-selector
+    depends_on:
+      - literature-review
+    input: survey.md 及其研究缺口（gaps）分析与开放问题清单
+    output:
+      artifact: research-questions.md
+      schema: schemas/research-questions-summary.schema.json
+    gate: human-review
+  - id: method-design
+    expert: method-designer
+    depends_on:
+      - idea-selection
+    input: 经人类关口选定的研究问题（research-questions.md 中被批准的候选）
+    output:
+      artifact: method.md

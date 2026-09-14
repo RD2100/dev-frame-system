@@ -662,6 +662,21 @@ export interface CommandGoalBindingConfig {
    * Optional continuation round cap frozen into every start binding.
    */
   readonly maxGoalRounds?: number
+  /**
+   * Run the full reliability stop chain behind `/devframe-stop`: after the
+   * stop-requested binding lands, admission closes, owned jobs and captured
+   * processes drain within the stop grace, the session state flushes, and
+   * the writer releases only after the confirmed chain. Omitted resolves to
+   * `false` — the vocabulary-only stop face — so deployments turn the chain
+   * on deliberately (the writer-release adapter is host-injected).
+   */
+  readonly stopChain?: boolean
+  /**
+   * Positive drain bound handed to the stop chain's job and process waits.
+   * Omitted resolves to 2000 ms. Values beyond the platform timer cap fail
+   * loud at the first chain run through the reliability stop's own contract.
+   */
+  readonly stopGraceMs?: number
 }
 ```
 
@@ -763,7 +778,35 @@ export interface ProjectControllerConfig {
 }
 ```
 
-Source: [`packages/experimental/project-controller/src/controller.ts:57`](../packages/experimental/project-controller/src/controller.ts)
+Source: [`packages/experimental/project-controller/src/controller.ts:58`](../packages/experimental/project-controller/src/controller.ts)
+
+<a id="deepseek-aidsh-experimental-project-controllercompletion-consumer"></a>
+
+## `@deepseek-ai/dsh-experimental-project-controller/completion-consumer`
+
+Requires: `tools` · `agents` · `goals` · `sessions` · `sessionProjections` · `projectController` · `agentBindings` · `workspaceRegistry` · `worktreeRegistry`
+
+```ts config-catalog
+/** Host-approved whole-Goal checks and bounded execution settings. */
+export interface Config {
+  /** Absolute existing checks ledger path. */
+  requiredChecksPath: string
+  /** Existing approved whole-Goal checkset digest. */
+  requiredChecksDigest: string
+  /** Deployment-selected Git executable. */
+  gitExecutable: string
+  /** Per-Git-process timeout. */
+  gitTimeoutMs: number
+  /** Per-Git-process output limit. */
+  gitMaxOutputBytes: number
+  /** Per-check timeout. */
+  checkTimeoutMs: number
+  /** Per-check output limit. */
+  checkMaxOutputBytes: number
+}
+```
+
+Source: [`packages/experimental/project-controller/src/completion-consumer.ts:26`](../packages/experimental/project-controller/src/completion-consumer.ts)
 
 <a id="deepseek-aidsh-experimental-project-controllerconsumer"></a>
 
@@ -785,7 +828,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/experimental/project-controller/src/consumer.ts:23`](../packages/experimental/project-controller/src/consumer.ts)
+Source: [`packages/experimental/project-controller/src/consumer.ts:24`](../packages/experimental/project-controller/src/consumer.ts)
 
 <a id="deepseek-aidsh-experimental-project-controllerdelivery-consumer"></a>
 
@@ -810,12 +853,40 @@ export interface Config {
   gitMaxOutputBytes: number
   /** Per-check-process timeout. */
   checkTimeoutMs: number
-  /** Per-check-process output cap. */
+  /** Per-check-process output cap and complete evidence-result byte limit. */
   checkMaxOutputBytes: number
+  /** Host-registered commit paths per task bounding what project_commit may commit. */
+  commitPathsByTask?: Record<string, string[]>
 }
 ```
 
-Source: [`packages/experimental/project-controller/src/delivery-consumer.ts:31`](../packages/experimental/project-controller/src/delivery-consumer.ts)
+Source: [`packages/experimental/project-controller/src/delivery-consumer.ts:32`](../packages/experimental/project-controller/src/delivery-consumer.ts)
+
+<a id="deepseek-aidsh-experimental-shadow-bridge"></a>
+
+## `@deepseek-ai/dsh-experimental-shadow-bridge`
+
+Requires: `agents` · `storageDomain`
+
+```ts config-catalog
+/**
+ * Plugin config. Both fields are required with no defaults — a composition
+ * row without them fails the load (`misconfiguration fails loud`), and the
+ * schemastery schema owns every constraint (positive safe integers).
+ */
+export interface ShadowBridgeConfig {
+  /**
+   * Positive safe integer: milliseconds between two safety-net reconciliation
+   * polls. The `shadow/delivery-received` event carries live transitions, so
+   * this bounds only how long a delivery the event path missed may wait.
+   */
+  intervalMs: number
+  /** Positive safe integer: upper bound in characters on one forwarded follow-up text. */
+  followupMaxChars: number
+}
+```
+
+Source: [`packages/experimental/shadow-bridge/src/index.ts:31`](../packages/experimental/shadow-bridge/src/index.ts)
 
 <a id="deepseek-aidsh-experimental-shadow-router"></a>
 
@@ -836,12 +907,12 @@ export interface ShadowRouterConfig {
   controllerProfile?: string
   /**
    * Session id the host composition declares as its Shadow. The router
-   * performs the real {@link ShadowRouter.markShadow} invocation itself at
-   * the earliest resolvable point: immediately when that agent is already
-   * live at activation, otherwise when it is created. An id that never
-   * becomes live installs nothing (fail-closed, same as unconfigured);
-   * marking is idempotent; disposal cleanup stays with the existing
-   * `agent/disposed` effect.
+   * performs the real `markShadow` invocation itself at the earliest
+   * resolvable point: immediately when that agent is already live at
+   * activation, otherwise when it is created. An id that never becomes live
+   * installs nothing (fail-closed, same as unconfigured); marking is
+   * idempotent; disposal cleanup stays with the existing `agent/disposed`
+   * effect.
    */
   shadowSessionId?: string
   /** Per-workspace limit of pending (queued, not yet received) deliveries. */
@@ -853,7 +924,7 @@ export interface ShadowRouterConfig {
 }
 ```
 
-Source: [`packages/experimental/shadow-router/src/service.ts:55`](../packages/experimental/shadow-router/src/service.ts)
+Source: [`packages/experimental/shadow-router/src/service.ts:59`](../packages/experimental/shadow-router/src/service.ts)
 
 <a id="deepseek-aidsh-experimental-tool-agent-team"></a>
 
@@ -1777,7 +1848,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/llm/plugin-package-inventory-deepseek/src/index.ts:31`](../packages/llm/plugin-package-inventory-deepseek/src/index.ts)
+Source: [`packages/llm/plugin-package-inventory-deepseek/src/index.ts:30`](../packages/llm/plugin-package-inventory-deepseek/src/index.ts)
 
 <a id="deepseek-aidsh-pwsh-local"></a>
 
@@ -3571,8 +3642,10 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-experimental-agent-reliability` ([`packages/experimental/agent-reliability/src/index.ts`](../packages/experimental/agent-reliability/src/index.ts))
 - `@deepseek-ai/dsh-experimental-agent-worktree` — requires `tools` · `workspaceRegistry` · `worktreeRegistry` · `systemPrompt` ([`packages/experimental/agent-worktree/src/index.ts`](../packages/experimental/agent-worktree/src/index.ts))
 - `@deepseek-ai/dsh-experimental-client-ui-agent-team` ([`packages/experimental/client-ui-agent-team/src/index.ts`](../packages/experimental/client-ui-agent-team/src/index.ts))
+- `@deepseek-ai/dsh-experimental-client-ui-shadow-entry` ([`packages/experimental/client-ui-shadow-entry/src/index.ts`](../packages/experimental/client-ui-shadow-entry/src/index.ts))
 - `@deepseek-ai/dsh-experimental-project-controller/task-consumer` — requires `tools` · `agents` · `sessions` · `sessionProjections` · `projectController` · `agentBindings` · `workspaceRegistry` · `worktreeRegistry` ([`packages/experimental/project-controller/src/task-consumer.ts`](../packages/experimental/project-controller/src/task-consumer.ts))
 - `@deepseek-ai/dsh-experimental-session-identity` — requires `sessions` · `storageDomain` ([`packages/experimental/session-identity/src/index.ts`](../packages/experimental/session-identity/src/index.ts))
+- `@deepseek-ai/dsh-experimental-shadow-controller` ([`packages/experimental/shadow-controller/src/index.ts`](../packages/experimental/shadow-controller/src/index.ts))
 - `@deepseek-ai/dsh-fs-e2b` — requires `e2b` ([`packages/e2b/fs-e2b/src/index.ts`](../packages/e2b/fs-e2b/src/index.ts))
 - `@deepseek-ai/dsh-fs-observation-policy` ([`packages/fs/fs-observation-policy/src/index.ts`](../packages/fs/fs-observation-policy/src/index.ts))
 - `@deepseek-ai/dsh-goal-round-driver` — requires `agents` · `goals` · `sessions` ([`packages/goal/goal-round-driver/src/index.ts`](../packages/goal/goal-round-driver/src/index.ts))
@@ -3591,7 +3664,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-storage` ([`packages/storage/storage/src/index.ts`](../packages/storage/storage/src/index.ts))
 - `@deepseek-ai/dsh-subagent` ([`packages/subagent/subagent/src/index.ts`](../packages/subagent/subagent/src/index.ts))
 - `@deepseek-ai/dsh-subprocess-local` ([`packages/subprocess/subprocess-local/src/index.ts`](../packages/subprocess/subprocess-local/src/index.ts))
-- `@deepseek-ai/dsh-terminal` ([`packages/terminal/terminal/src/index.ts`](../packages/terminal/terminal/src/index.ts))
+- `@deepseek-ai/dsh-terminal` — requires `terminalOwnership` ([`packages/terminal/terminal/src/index.ts`](../packages/terminal/terminal/src/index.ts))
 - `@deepseek-ai/dsh-tool-ask-user` — requires `tools` · `userQuestions` ([`packages/interaction/tool-ask-user/src/index.ts`](../packages/interaction/tool-ask-user/src/index.ts))
 - `@deepseek-ai/dsh-tool-call-timeout-policy` — requires `tools` ([`packages/guard/timeout-policy/src/index.ts`](../packages/guard/timeout-policy/src/index.ts))
 - `@deepseek-ai/dsh-tool-cordis` — requires `tools` · `systemPrompt` · `dynamicCordisRunner` · `cordisInspect` ([`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts))
@@ -3610,6 +3683,7 @@ Abstract service classes — a deployment loads a concrete implementation packag
 - `@deepseek-ai/dsh-code-runtime` — abstract `CodeRuntime` ([`packages/code-runtime/code-runtime/src/index.ts`](../packages/code-runtime/code-runtime/src/index.ts))
 - `@deepseek-ai/dsh-compaction` — abstract `CompactionEngine` ([`packages/compaction/compaction/src/index.ts`](../packages/compaction/compaction/src/index.ts))
 - `@deepseek-ai/dsh-credentials` — abstract `CredentialProvider` ([`packages/credentials/credentials/src/index.ts`](../packages/credentials/credentials/src/index.ts))
+- `@deepseek-ai/dsh-experimental-shadow-routing` — abstract `ShadowRouter` ([`packages/experimental/shadow-routing/src/index.ts`](../packages/experimental/shadow-routing/src/index.ts))
 - `@deepseek-ai/dsh-file-reference` — abstract `FileReferenceService` ([`packages/context/file-reference/src/index.ts`](../packages/context/file-reference/src/index.ts))
 - `@deepseek-ai/dsh-fs` — abstract `FileSystem` ([`packages/fs/fs/src/index.ts`](../packages/fs/fs/src/index.ts))
 - `@deepseek-ai/dsh-host-directory-picker` — abstract `DirectoryPicker` ([`packages/host/directory-picker/src/index.ts`](../packages/host/directory-picker/src/index.ts))
@@ -3646,8 +3720,11 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 - `@deepseek-ai/dsh-experimental-agent-team-web-profile` ([`packages/experimental/agent-team-web-profile/src/index.ts`](../packages/experimental/agent-team-web-profile/src/index.ts))
 - `@deepseek-ai/dsh-experimental-devframe` ([`packages/experimental/devframe/src/index.ts`](../packages/experimental/devframe/src/index.ts))
 - `@deepseek-ai/dsh-experimental-devframe-profile` ([`packages/experimental/devframe-profile/src/index.ts`](../packages/experimental/devframe-profile/src/index.ts))
+- `@deepseek-ai/dsh-experimental-expert-pack-paper` ([`packages/experimental/expert-pack-paper/src/index.ts`](../packages/experimental/expert-pack-paper/src/index.ts))
+- `@deepseek-ai/dsh-experimental-expert-team` ([`packages/experimental/expert-team/src/index.ts`](../packages/experimental/expert-team/src/index.ts))
 - `@deepseek-ai/dsh-experimental-project-contracts` ([`packages/experimental/project-contracts/src/index.ts`](../packages/experimental/project-contracts/src/index.ts))
 - `@deepseek-ai/dsh-experimental-project-memory` ([`packages/experimental/project-memory/src/index.ts`](../packages/experimental/project-memory/src/index.ts))
+- `@deepseek-ai/dsh-experimental-shadow-web-profile` ([`packages/experimental/shadow-web-profile/src/index.ts`](../packages/experimental/shadow-web-profile/src/index.ts))
 - `@deepseek-ai/dsh-experimental-webworker-packer` ([`packages/experimental/webworker-packer/src/index.ts`](../packages/experimental/webworker-packer/src/index.ts))
 - `@deepseek-ai/dsh-experimental-webworker-runtime` ([`packages/experimental/webworker-runtime/src/index.ts`](../packages/experimental/webworker-runtime/src/index.ts))
 - `@deepseek-ai/dsh-home-paths` ([`packages/util/home-paths/src/index.ts`](../packages/util/home-paths/src/index.ts))

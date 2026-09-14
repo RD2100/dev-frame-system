@@ -1,0 +1,58 @@
+# 软件开发专家团数据包（M3 范围：六阶段层级团队）。
+# 本文件是纯数据：字段契约由 @deepseek-ai/dsh-experimental-expert-team 的目录加载器
+# 在挂载时校验（唯一阶段 id、专家引用存在、depends_on 无环且只指向更早阶段、
+# entry 一致、被引用的 schema 文件存在、专家工具允许列表非空且不命名插件自身工具），
+# 校验失败即挂载失败。gate 的唯一合法取值是 human-review；产物写入 <artifactsDir>/<runId>/。
+# mode 为 hierarchical：目录加载器完整校验本文件，挂载即成功；但核心包对层级团队的
+# 运行编排尚未落地（expert_team_run 以 EXPERT_TEAM_MODE_UNSUPPORTED 拒绝），
+# 见包 README 的已知限制。
+team: dev
+title: 软件开发专家团
+mode: hierarchical
+entry: prd
+phases:
+  - id: prd
+    expert: product-manager
+    input: 运行请求给出的原始需求描述，以及可选的约束、目标用户与既有项目记忆笔记的检索结果
+    output:
+      artifact: prd.md
+      schema: schemas/prd-summary.schema.json
+    gate: human-review
+  - id: architecture
+    expert: architect
+    depends_on:
+      - prd
+    input: prd.md 中的用户故事、功能范围、验收标准与非目标
+    output:
+      artifact: design.md
+      schema: schemas/design-summary.schema.json
+  - id: task-breakdown
+    expert: tech-lead
+    depends_on:
+      - architecture
+    input: design.md 中的模块划分、接口契约、数据结构与风险清单
+    output:
+      artifact: tasks.md
+  - id: implementation
+    expert: engineer
+    depends_on:
+      - task-breakdown
+    input: tasks.md 中的任务、验收标准与依赖关系，以及运行目录内 design.md 的接口契约
+    output:
+      artifact: implementation-log.md
+  - id: testing
+    expert: qa
+    depends_on:
+      - implementation
+    input: implementation-log.md 记录的实现内容、tasks.md 的验收标准与运行目录内的代码
+    output:
+      artifact: test-report.md
+      schema: schemas/test-report-summary.schema.json
+  - id: review
+    expert: code-reviewer
+    depends_on:
+      - testing
+    input: 运行目录内的代码与 implementation-log.md，以及 test-report.md 的测试结论与缺陷清单
+    output:
+      artifact: review.md
+    gate: human-review

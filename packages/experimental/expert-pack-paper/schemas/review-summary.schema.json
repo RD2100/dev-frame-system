@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Three-pass review phase result (paper team, review-methodology.md | review-statistics.md | review-writing.md)",
+  "description": "Validates the structured result object each of the three review phases returns alongside its review artifact. The three phases share this schema, so artifactPath accepts exactly the three declared artifact names, while the core's runtime additionally enforces the exact per-phase match (review-methodology for review-methodology, and so on). comments and verdict are required so the revision phase receives an enumerated, actionable comment list; an uneventful review declares an empty comments array rather than omitting the field.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifactPath", "summary", "comments", "verdict"],
+  "properties": {
+    "artifactPath": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Exactly the artifact name the phase declares in team.yml; the shared schema accepts the three review artifact names and the runtime enforces the per-phase exact match.",
+      "pattern": "^review-(methodology|statistics|writing)\\.md$"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Structured Chinese summary of the review: the main findings, their severities, and the overall judgment with its reason."
+    },
+    "comments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/comment"
+      },
+      "description": "The enumerated review comments, one entry per numbered comment in the artifact body; empty only when the reviewer found nothing to report."
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["accept-as-is", "minor-revision", "major-revision"],
+      "description": "The reviewer's overall judgment as stated in the artifact's overall-verdict section."
+    },
+    "openQuestions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Items outside this reviewer's lane, unverifiable findings, and decisions that need the human final gate; every question-severity finding lands here or as a comment."
+    }
+  },
+  "definitions": {
+    "comment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "severity", "location", "finding", "suggestion"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The comment id as numbered in the artifact body (M-prefixed for methodology, S-prefixed for statistics, W-prefixed for writing)."
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["major", "minor", "question"],
+          "description": "major blocks the claim it targets, minor is a bounded fix, question marks an unverifiable or out-of-lane item."
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The draft.md section, sentence, table, or number the comment targets."
+        },
+        "finding": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the problem is, grounded in the upstream artifacts; never an impression without a locatable basis."
+        },
+        "suggestion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The actionable modification the writer can apply; never a rewrite of the paper and never an empty 'should be strengthened'."
+        }
+      }
+    }
+  }
+}

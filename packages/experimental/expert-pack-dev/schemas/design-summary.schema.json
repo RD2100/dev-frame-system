@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Architecture phase result (dev team, design.md)",
+  "description": "Validates the structured result object the architecture phase returns alongside its design.md artifact. artifactPath must equal the artifact name the phase declares in team.yml (the core's runtime enforces the same exact match); openQuestions are required with at least one entry because the design's risk list and unresolved decisions are the machine-checkable part of the architect's contract — the task breakdown consumes them.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifactPath", "summary", "openQuestions"],
+  "properties": {
+    "artifactPath": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Exactly the artifact name the phase declares in team.yml; the runtime writes the reply body there and rejects any other value.",
+      "pattern": "^design\\.md$"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Structured Chinese summary of design.md: the module decomposition with dependency directions, the key interface contracts and data-structure invariants, the main technology choices with their reasons, and the top risks."
+    },
+    "openQuestions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Design decisions that need human input, constraints that could not be confirmed from the materials, and risks whose mitigation is uncertain; mirrors the design's open questions section, and no risk is silently marked resolved."
+    }
+  }
+}

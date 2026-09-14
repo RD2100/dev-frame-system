@@ -1,0 +1,18 @@
+team: paper-research
+title: 论文研究专家团
+mode: pipeline
+entry: perspective-discovery
+phases:
+  - id: perspective-discovery
+    expert: topic-scout
+    input: 研究主题与已有材料笔记
+    output:
+      artifact: perspectives.md
+      schema: schemas/perspectives.schema.json
+  - id: literature-review
+    expert: literature-reviewer
+    depends_on:
+      - perspective-discovery
+    output:
+      artifact: survey.md
+    gate: human-review

@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Paper writing phase result (paper team, draft.md)",
+  "description": "Validates the structured result object the writing phase returns alongside its draft.md artifact. artifactPath must equal the artifact name the phase declares in team.yml (the core's runtime enforces the same exact match); citations are required because the writer's citation discipline is the machine-checkable part of the contract, and unsupportedClaims is required (possibly empty) so untraceable claims are declared rather than silently kept or dropped.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifactPath", "summary", "citations", "unsupportedClaims"],
+  "properties": {
+    "artifactPath": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Exactly the artifact name the phase declares in team.yml; the runtime writes the reply body there and rejects any other value.",
+      "pattern": "^draft\\.md$"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Structured Chinese summary of draft.md: the paper's main claims, how strongly the experiment results support them, and the stated limitations."
+    },
+    "citations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/citation"
+      },
+      "description": "One entry per citation key the draft uses; refs carried over from survey.md keep the survey's keys, experiment-grounded claims cite the experiment id in the same bracket form."
+    },
+    "unsupportedClaims": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/unsupportedClaim"
+      },
+      "description": "Claims the draft states that neither a citation key nor an experiment id supports; empty only when every claim traces. Each entry mirrors an explicit not-traced marker in the draft."
+    },
+    "openQuestions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Open items the writer could not resolve from the upstream artifacts; mirrors the draft's open questions."
+    }
+  },
+  "definitions": {
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "claim", "source"],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^\\[[^\\]]+\\]$",
+          "description": "Citation key exactly as it appears in draft.md, e.g. \"[1]\", \"[Vaswani2017]\", or an experiment id like \"[E1]\"; one key is used for one work or experiment throughout the artifact."
+        },
+        "claim": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The specific claim in draft.md that this source supports."
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifying string of the cited work as available from the reviewed materials (title, authors, year, venue or URL), or the experiment id in experiments.md when the claim is experiment-grounded."
+        },
+        "retractionChecked": {
+          "type": "boolean",
+          "description": "True only when this work's retraction status was actually verified upstream; unverifiable status stays false."
+        }
+      }
+    },
+    "unsupportedClaim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim", "treatment"],
+      "properties": {
+        "claim": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The claim as stated in draft.md."
+        },
+        "treatment": {
+          "type": "string",
+          "minLength": 1,
+          "description": "How the draft marks it: the explicit not-traced annotation, or why the claim is kept despite lacking a source."
+        }
+      }
+    }
+  }
+}

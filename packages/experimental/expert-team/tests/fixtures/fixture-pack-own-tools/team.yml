@@ -1,0 +1,9 @@
+team: own-tools-guard
+title: 自有工具守护测试团
+mode: pipeline
+entry: gate-keeper
+phases:
+  - id: gate-keeper
+    expert: gate-keeper
+    output:
+      artifact: gate.md

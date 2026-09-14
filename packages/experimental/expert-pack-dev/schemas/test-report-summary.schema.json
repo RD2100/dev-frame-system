@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Testing phase result (dev team, test-report.md)",
+  "description": "Validates the structured result object the testing phase returns alongside its test-report.md artifact. artifactPath must equal the artifact name the phase declares in team.yml (the core's runtime enforces the same exact match); openQuestions stay optional because a run whose plan executed fully and found nothing open legitimately has none — but coverage limits and environment constraints belong here when they exist.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifactPath", "summary"],
+  "properties": {
+    "artifactPath": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Exactly the artifact name the phase declares in team.yml; the runtime writes the reply body there and rejects any other value.",
+      "pattern": "^test-report\\.md$"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Structured Chinese summary of test-report.md: which acceptance criteria were covered, the pass/fail/not-executed counts with their evidence, and the main defects by severity."
+    },
+    "openQuestions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Acceptance criteria no test covered (with the reason), environment limits, and defects that could not be reproduced; empty only when the plan executed fully and left nothing unverified."
+    }
+  }
+}
