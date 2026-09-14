@@ -527,6 +527,42 @@ describe('the Shadow conversation host tool allowlist', () => {
     }
   })
 
+  it('teaches the memory tools only when the deployment mounts the whole trio', async () => {
+    const enabled = await bench({
+      designation: 'session-shadow',
+      globalTools: [...MEMORY_TOOL_STUBS],
+      script: () => [textResponse('Routing, not doing.')],
+    })
+    try {
+      await enabled.host.ensure()
+      await enabled.host.postMessage('Remember that I prefer concise reports.')
+      const agent = await enabled.host.ensure()
+      await agent.whenIdle()
+      const request = JSON.stringify(enabled.adapter.requests[0])
+      expect(request).toContain('Memory holds durable facts only')
+    } finally {
+      await enabled.dispose()
+    }
+
+    const bare = await bench({
+      designation: 'session-shadow',
+      script: () => [textResponse('Routing, not doing.')],
+    })
+    try {
+      await bare.host.ensure()
+      await bare.host.postMessage('Remember something.')
+      const agent = await bare.host.ensure()
+      await agent.whenIdle()
+      const request = JSON.stringify(bare.adapter.requests[0])
+      // Without the memory tools the guidance and their names stay out of the
+      // request entirely — the persona never promises a tool the face lacks.
+      expect(request).not.toContain('Memory holds durable facts only')
+      expect(request).not.toContain('memory_search')
+    } finally {
+      await bare.dispose()
+    }
+  })
+
   it('denies execution outside the allowlist on the designated scope through the executor', async () => {
     const b = await bench({
       designation: 'session-shadow',

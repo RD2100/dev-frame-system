@@ -62,7 +62,7 @@ const page = await ctx.remote.shadow.readConversation({})
 ### 你会得到什么
 
 - `ctx.shadowController` 服务与诚实的 `readStatus()` 方法、三个写入面、两个对话面。
-- `ctx.shadowAgent` 对话宿主（`./shadow-agent` 入口）：指定会话的创建/恢复、四个对话工具、人设段落、设计工具 allowlist 强制、面向无 cwd persona 模板的 scoped 诚实 cwd 变量，以及有界对话读取。
+- `ctx.shadowAgent` 对话宿主（`./shadow-agent` 入口）：指定会话的创建/恢复、四个对话工具、人设段落、设计工具 allowlist 强制、部署挂载记忆工具时的记忆使用指引、面向无 cwd persona 模板的 scoped 诚实 cwd 变量，以及有界对话读取。
 - 生成的 `@deepseek-ai/dsh-experimental-shadow-controller/remote` Client 产物，以及携带状态、写入与对话词汇的 `./types` 子路径。
 
 -----
@@ -73,14 +73,14 @@ const page = await ctx.remote.shadow.readConversation({})
 <details>
 <summary>实现细节——点击展开</summary>
 
-`ShadowController` 以服务键 `shadowController`、Remote 命名空间 `shadow` 继承 `TypertRemoteService`；`ShadowAgent`（同包 `./shadow-agent` 入口）是键为 `shadowAgent` 的普通 Service，注入 agents 注册表。每个 `@Remote` 方法都由装饰器注册；typert 生成器在 `lib/` 下产出宿主 face 与 Client contribution。项目写入调用 `ctx.get('shadowRouter')` 与路由器的宿主桥，并以每次操作铸造的 `randomUUID()` 请求 id。`ShadowAgent.ensure()` 从路由器快照解析指定会话 id，按原样复用存活会话（绝不拥有另一行的生命周期），等待完整应用就绪，然后经 `ctx.agents` 恢复持久会话或创建它；工厂 setup 组合作用域世界——四个对话工具（`installShadowConversationTools`）、人设段落、会话模型面上的设计工具 allowlist（原生呈现钉死、继承工具收敛到显式启用的 memory 访问、以及单调执行守卫）、面向无 cwd persona 模板的 scoped 诚实 cwd 变量，以及全新会话上的宿主默认模型选择。只有本宿主创建或恢复的会话才随它释放。
+`ShadowController` 以服务键 `shadowController`、Remote 命名空间 `shadow` 继承 `TypertRemoteService`；`ShadowAgent`（同包 `./shadow-agent` 入口）是键为 `shadowAgent` 的普通 Service，注入 agents 注册表。每个 `@Remote` 方法都由装饰器注册；typert 生成器在 `lib/` 下产出宿主 face 与 Client contribution。项目写入调用 `ctx.get('shadowRouter')` 与路由器的宿主桥，并以每次操作铸造的 `randomUUID()` 请求 id。`ShadowAgent.ensure()` 从路由器快照解析指定会话 id，按原样复用存活会话（绝不拥有另一行的生命周期），等待完整应用就绪，然后经 `ctx.agents` 恢复持久会话或创建它；工厂 setup 组合作用域世界——四个对话工具（`installShadowConversationTools`）、人设段落、会话模型面上的设计工具 allowlist（原生呈现钉死、继承工具收敛到显式启用的 memory 访问、以及单调执行守卫）、部署挂载完整记忆三件套时的记忆指引段落（对先前上下文的引用先搜索一次、只追加人类要求保留的内容、失败逐字上报）、面向无 cwd persona 模板的 scoped 诚实 cwd 变量，以及全新会话上的宿主默认模型选择。只有本宿主创建或恢复的会话才随它释放。
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `ShadowController` 服务：读取、三个写入面与两个对话面 |
 | [`src/shadow-agent.ts`](src/shadow-agent.ts) | `ShadowAgent` 对话宿主：创建/恢复、投递、有界对话读取 |
 | [`src/shadow-tools.ts`](src/shadow-tools.ts) | 覆盖路由器宿主桥的四个对话工具 |
-| [`src/shadow-prompt.ts`](src/shadow-prompt.ts) | Shadow 人设段落 |
+| [`src/shadow-prompt.ts`](src/shadow-prompt.ts) | Shadow 人设段落与条件性的记忆指引段落 |
 | [`src/types.ts`](src/types.ts) | Client 安全的状态、写入与对话词汇（仅类型） |
 | [`lib/typert.host.js`](lib/typert.host.js) | 生成的宿主 FaceModel 与严格结果编解码器 |
 | [`lib/typert.remote-client.js`](lib/typert.remote-client.js) | 生成的 Client contribution，挂载 `ctx.remote.shadow` |
@@ -106,15 +106,15 @@ const page = await ctx.remote.shadow.readConversation({})
 
 #### 模型看到什么
 
-对话宿主给指定的 Shadow 会话一个模型可见面：一个作用域人设段落（`experimental:shadow`——人类的全局代理、人类 → 影子 → 项目总控 → worker 的层级，以及诚实规则）与四个工具——`shadow_open_project`、`shadow_message_controller`、`shadow_release_project` 与 `shadow_status`——其 schema 只携带任务概念，其执行运行路由器的宿主桥。deployment persona 的 `{{cwd}}` 引用仅在本作用域内解析为宿主的诚实 cwd 变量（"not fixed — you are the Shadow: you route work across authorized projects and never do project work yourself"）。其他任何代理作用域都看不到该段落与工具。宿主还跨组合出的会话模型面强制设计 allowlist：呈现钉死为原生，除显式启用的用户 memory（`memory_search`、`memory_read`、`memory_append`）外，每个继承的部署工具都从面上隐藏，并由单调守卫拒绝该作用域携带的任何其他执行——包括路由器同层的 `project_*` 白名单，其 schema 作为已记录的残余保持可见。Remote 面本身保持宿主面，绝不回答模型。
+对话宿主给指定的 Shadow 会话一个模型可见面：一个作用域人设段落（`experimental:shadow`——人类的全局代理、人类 → 影子 → 项目总控 → worker 的层级，以及诚实规则）与四个工具——`shadow_open_project`、`shadow_message_controller`、`shadow_release_project` 与 `shadow_status`——其 schema 只携带任务概念，其执行运行路由器的宿主桥。deployment persona 的 `{{cwd}}` 引用仅在本作用域内解析为宿主的诚实 cwd 变量（"not fixed — you are the Shadow: you route work across authorized projects and never do project work yourself"）。当部署挂载完整记忆三件套时，再增加一个作用域段落（`experimental:shadow-memory`）教其使用：对先前上下文的引用先搜索一次、只追加人类要求保留的内容且以人为来源、每次记忆失败逐字上报。其他任何代理作用域都看不到这些段落与工具。宿主还跨组合出的会话模型面强制设计 allowlist：呈现钉死为原生，除显式启用的用户 memory（`memory_search`、`memory_read`、`memory_append`）外，每个继承的部署工具都从面上隐藏，并由单调守卫拒绝该作用域携带的任何其他执行——包括路由器同层的 `project_*` 白名单，其 schema 作为已记录的残余保持可见。Remote 面本身保持宿主面，绝不回答模型。
 
 #### Token 影响
 
-指定会话的每次请求都携带一次人设段落与四个工具 schema，叠加在对话自身历史之上；每次对话工具调用追加一轮结果。
+指定会话的每次请求都携带一次人设段落与四个工具 schema，叠加在对话自身历史之上；挂载记忆三件套时，记忆指引段落与三个记忆工具 schema 一并进入同一前缀。每次对话或记忆工具调用追加一轮结果。
 
 #### KV Cache 影响
 
-人设段落与四个工具 schema 进入指定会话的提示词；由于会话持久化，它们在该对话的整个生命周期占据该前缀。其他会话不受影响。
+人设段落与四个工具 schema 进入指定会话的提示词；由于会话持久化，它们在该对话的整个生命周期占据该前缀（挂载记忆时还包括记忆段落与 schema）。其他会话不受影响。
 
 ## 已知限制与推迟事项
 

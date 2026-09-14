@@ -30,7 +30,7 @@ import type {} from '@deepseek-ai/dsh-session-persistence'
 import { Service } from '@deepseek-ai/cordis'
 import type { ShadowRouter } from '@deepseek-ai/dsh-experimental-shadow-routing'
 import { installShadowConversationTools, SHADOW_CONVERSATION_TOOL_NAMES } from './shadow-tools.ts'
-import { SHADOW_PROMPT, SHADOW_PROMPT_SECTION } from './shadow-prompt.ts'
+import { SHADOW_MEMORY_PROMPT, SHADOW_MEMORY_PROMPT_SECTION, SHADOW_PROMPT, SHADOW_PROMPT_SECTION } from './shadow-prompt.ts'
 import type { ShadowConversationMessage, ShadowConversationPage } from './types.ts'
 
 /** Default bound on one conversation read. */
@@ -104,8 +104,9 @@ function enabledMemoryTools(agentCtx: Context): string[] {
 /**
  * Compose one Shadow agent's scoped world inside the factory setup: the four
  * conversational tools, the persona section, the design tool allowlist over
- * the session's model face, the scoped honest cwd variable, and, on a fresh
- * session, the host default model selection.
+ * the session's model face, the memory guidance when the deployment mounts
+ * the memory tools, the scoped honest cwd variable, and, on a fresh session,
+ * the host default model selection.
  */
 function shadowSetup(router: ShadowRouter, selection: ModelSelection, fresh: boolean) {
   return (agentCtx: Context): void => {
@@ -117,9 +118,16 @@ function shadowSetup(router: ShadowRouter, selection: ModelSelection, fresh: boo
     // the face or hand the Shadow arbitrary program execution), inherited
     // tools hidden except explicitly enabled memory access, and execution
     // denied for anything else the scope ends up carrying.
+    const memoryTools = enabledMemoryTools(agentCtx)
     agentCtx.tools.presentAs('native')
-    agentCtx.tools.restrict({ allow: enabledMemoryTools(agentCtx) })
+    agentCtx.tools.restrict({ allow: memoryTools })
     agentCtx.tools.guard(shadowAllowlistGuard)
+    // The memory guidance names the whole trio, so it joins the scope only
+    // when the deployment mounted all of it — a partial probe gets silence
+    // rather than a promise about tools that are not there.
+    if (memoryTools.length === MEMORY_TOOL_NAMES.length) {
+      agentCtx.systemPrompt.section({ name: SHADOW_MEMORY_PROMPT_SECTION, order: 11, text: SHADOW_MEMORY_PROMPT })
+    }
     agentCtx.systemPrompt.variable('cwd', () => SHADOW_CWD_VARIABLE)
     if (fresh) installModelSelection(agentCtx, { current: selection, assembled: undefined })
   }

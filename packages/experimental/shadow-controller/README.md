@@ -62,7 +62,7 @@ const page = await ctx.remote.shadow.readConversation({})
 ### What you get
 
 - The `ctx.shadowController` service with the honest `readStatus()` method, the three write faces, and the two conversation faces.
-- The `ctx.shadowAgent` conversation host (`./shadow-agent` entry): create-or-restore of the designated session, the four conversational tools, the persona section, the design tool allowlist enforcement, the scoped honest cwd variable for cwd-less persona templates, and the bounded conversation read.
+- The `ctx.shadowAgent` conversation host (`./shadow-agent` entry): create-or-restore of the designated session, the four conversational tools, the persona section, the design tool allowlist enforcement, the memory guidance when the deployment mounts the memory tools, the scoped honest cwd variable for cwd-less persona templates, and the bounded conversation read.
 - The generated `@deepseek-ai/dsh-experimental-shadow-controller/remote` Client artifact and the `./types` subpath carrying the status, write, and conversation vocabulary.
 
 -----
@@ -73,14 +73,14 @@ const page = await ctx.remote.shadow.readConversation({})
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-`ShadowController` extends `TypertRemoteService` under the service key `shadowController` and the Remote namespace `shadow`; `ShadowAgent` (same package, `./shadow-agent` entry) is an ordinary Service under `shadowAgent` that injects the agents registry. Every `@Remote` method is decorator-registered; the typert generator emits the host face and the Client contribution under `lib/`. The project writes call `ctx.get('shadowRouter')` and the router's host bridges with a `randomUUID()` request id minted per action. `ShadowAgent.ensure()` resolves the designated session id from the router's snapshot, reuses a live session as found (never owning another row's lifecycle), awaits the complete application, then resumes the persisted session or creates it through `ctx.agents`; the factory setup composes the scoped world — the four conversational tools (`installShadowConversationTools`), the persona section, the design tool allowlist over the session's model face (native presentation pin, inherited tools restricted to explicitly enabled memory access, and the monotonic execution guard), the scoped honest cwd variable for cwd-less persona templates, and, on a fresh session, the host default model selection. Only a session this host created or resumed is disposed with it.
+`ShadowController` extends `TypertRemoteService` under the service key `shadowController` and the Remote namespace `shadow`; `ShadowAgent` (same package, `./shadow-agent` entry) is an ordinary Service under `shadowAgent` that injects the agents registry. Every `@Remote` method is decorator-registered; the typert generator emits the host face and the Client contribution under `lib/`. The project writes call `ctx.get('shadowRouter')` and the router's host bridges with a `randomUUID()` request id minted per action. `ShadowAgent.ensure()` resolves the designated session id from the router's snapshot, reuses a live session as found (never owning another row's lifecycle), awaits the complete application, then resumes the persisted session or creates it through `ctx.agents`; the factory setup composes the scoped world — the four conversational tools (`installShadowConversationTools`), the persona section, the design tool allowlist over the session's model face (native presentation pin, inherited tools restricted to explicitly enabled memory access, and the monotonic execution guard), the memory-guidance section when the deployment mounts the whole memory trio (search on prior-context references, append only what the human asks to keep, report failures verbatim), the scoped honest cwd variable for cwd-less persona templates, and, on a fresh session, the host default model selection. Only a session this host created or resumed is disposed with it.
 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `ShadowController` service: the read, the three write faces, and the two conversation faces |
 | [`src/shadow-agent.ts`](src/shadow-agent.ts) | `ShadowAgent` conversation host: create-or-restore, post, bounded conversation read |
 | [`src/shadow-tools.ts`](src/shadow-tools.ts) | The four conversational tools over the router's host bridges |
-| [`src/shadow-prompt.ts`](src/shadow-prompt.ts) | The Shadow persona section |
+| [`src/shadow-prompt.ts`](src/shadow-prompt.ts) | The Shadow persona section and the conditional memory-guidance section |
 | [`src/types.ts`](src/types.ts) | Client-safe status, write, and conversation vocabulary (types only) |
 | [`lib/typert.host.js`](lib/typert.host.js) | Generated host FaceModel with the strict result codecs |
 | [`lib/typert.remote-client.js`](lib/typert.remote-client.js) | Generated Client contribution mounting `ctx.remote.shadow` |
@@ -106,15 +106,15 @@ const page = await ctx.remote.shadow.readConversation({})
 
 #### What the model sees
 
-The conversation host gives the designated Shadow session a model-visible face: one scoped persona section (`experimental:shadow` — the human's global agent, the human → Shadow → project-controller → worker hierarchy, and the honesty rules) and four tools — `shadow_open_project`, `shadow_message_controller`, `shadow_release_project`, and `shadow_status` — whose schemas carry only task concepts and whose executions run the router's host bridges. The deployment persona's `{{cwd}}` reference resolves, in this scope only, to the host's honest cwd variable ("not fixed — you are the Shadow: you route work across authorized projects and never do project work yourself"). No other agent scope sees the section or the tools. The host also enforces the design allowlist over the composed session's model face: the presentation is pinned native, every inherited deployment tool except explicitly enabled user memory (`memory_search`, `memory_read`, `memory_append`) is hidden from the face, and a monotonic guard denies the execution of anything else the scope carries — including the router's same-layer `project_*` whitelist, whose schemas stay visible as a documented residual. The Remote faces themselves stay host-plane and never answer a model.
+The conversation host gives the designated Shadow session a model-visible face: one scoped persona section (`experimental:shadow` — the human's global agent, the human → Shadow → project-controller → worker hierarchy, and the honesty rules) and four tools — `shadow_open_project`, `shadow_message_controller`, `shadow_release_project`, and `shadow_status` — whose schemas carry only task concepts and whose executions run the router's host bridges. The deployment persona's `{{cwd}}` reference resolves, in this scope only, to the host's honest cwd variable ("not fixed — you are the Shadow: you route work across authorized projects and never do project work yourself"). When the deployment mounts the whole memory trio, one more scoped section (`experimental:shadow-memory`) teaches their use: search once on prior-context references, append only what the human asks to keep with the human as the source, and report every memory failure verbatim. No other agent scope sees the sections or the tools. The host also enforces the design allowlist over the composed session's model face: the presentation is pinned native, every inherited deployment tool except explicitly enabled user memory (`memory_search`, `memory_read`, `memory_append`) is hidden from the face, and a monotonic guard denies the execution of anything else the scope carries — including the router's same-layer `project_*` whitelist, whose schemas stay visible as a documented residual. The Remote faces themselves stay host-plane and never answer a model.
 
 #### Token effect
 
-Every request in the designated session carries the persona section and the four tool schemas once, on top of the conversation's own history; each conversational tool call appends one result turn.
+Every request in the designated session carries the persona section and the four tool schemas once, on top of the conversation's own history; when the memory trio is mounted, the memory-guidance section and the three memory tool schemas join that same prefix. Each conversational or memory tool call appends one result turn.
 
 #### KV Cache effect
 
-The persona section and the four tool schemas enter the designated session's prompt; because the session persists, they occupy that prefix for the conversation's whole life. Other sessions are untouched.
+The persona section and the four tool schemas enter the designated session's prompt; because the session persists, they occupy that prefix for the conversation's whole life (plus the memory section and schemas, when mounted). Other sessions are untouched.
 
 ## Known Limitations and Deferred Work
 
