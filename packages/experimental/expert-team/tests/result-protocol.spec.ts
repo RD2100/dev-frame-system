@@ -172,6 +172,7 @@ describe('briefing composition', () => {
       upstream: [{ phaseId: 'earlier', artifact: 'earlier.md', relativePath: 'earlier.md' }],
       upstreamPaths: new Map([['earlier', '/run/dir/earlier.md']]),
       input: '大模型推理加速',
+      supersededOpenQuestions: [],
       schemaText: '{"type":"object"}',
     })
     expect(briefing).toContain('# 阶段任务：perspective-discovery（团队「论文研究专家团」）')
@@ -191,6 +192,7 @@ describe('briefing composition', () => {
       upstream: [],
       upstreamPaths: new Map(),
       input: '主题',
+      supersededOpenQuestions: [],
     })
     expect(briefing).not.toContain('## 阶段输入')
     expect(briefing).not.toContain('## 上游产物')

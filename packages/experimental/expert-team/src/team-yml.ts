@@ -110,7 +110,7 @@ function parsePhases(value: unknown): readonly PhaseDef[] {
     if (!isPlainRecord(item)) {
       throw packInvalid(`${scope} must be a mapping`)
     }
-    requireExactKeys(INVALID, scope, item, ['id', 'expert', 'output'], ['depends_on', 'input', 'gate'])
+    requireExactKeys(INVALID, scope, item, ['id', 'expert', 'output'], ['depends_on', 'input', 'gate', 'supersedes'])
     const id = requireKebabId(INVALID, `${scope} id`, item.id)
     if (ids.has(id)) {
       throw packInvalid(`duplicate phase id: ${id}`)
@@ -120,6 +120,9 @@ function parsePhases(value: unknown): readonly PhaseDef[] {
     const dependsOn = item.depends_on === undefined
       ? []
       : requireStringList(INVALID, `${scope} depends_on`, item.depends_on, MAX_DEPENDS, MAX_ID_BYTES)
+    const supersedes = item.supersedes === undefined
+      ? []
+      : requireStringList(INVALID, `${scope} supersedes`, item.supersedes, MAX_DEPENDS, MAX_ID_BYTES)
     const input = item.input === undefined
       ? undefined
       : requireScalar(INVALID, `${scope} input`, item.input, MAX_INPUT_BYTES)
@@ -129,6 +132,7 @@ function parsePhases(value: unknown): readonly PhaseDef[] {
       id,
       expert,
       dependsOn,
+      supersedes,
       ...(input === undefined ? {} : { input }),
       output,
       ...(gate === undefined ? {} : { gate }),
@@ -143,6 +147,17 @@ function parsePhases(value: unknown): readonly PhaseDef[] {
           `team.yml phases[${index}] depends_on must reference an earlier phase, got: ${dep}`,
           'EXPERT_TEAM_PHASE_CYCLE',
         )
+      }
+    }
+    if (phase.supersedes !== undefined) {
+      for (const sup of phase.supersedes) {
+        const supIndex = indexOf.get(sup)
+        if (supIndex === undefined || supIndex >= index) {
+          throw new ExpertTeamError(
+            `team.yml phases[${index}] supersedes must reference an earlier phase, got: ${sup}`,
+            'EXPERT_TEAM_PHASE_CYCLE',
+          )
+        }
       }
     }
   }

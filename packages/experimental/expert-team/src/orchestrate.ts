@@ -67,6 +67,8 @@ interface MutablePhaseState {
   attempts: number
   artifact?: ArtifactRef | undefined
   error?: string | undefined
+  openQuestions?: readonly string[] | undefined
+  userQuestions?: readonly string[] | undefined
   reviews?: GateReview[] | undefined
 }
 
@@ -78,6 +80,7 @@ interface RunRecord {
   input: string
   status: TeamRunStatus
   createdAt: string
+  version: number
   states: MutablePhaseState[]
   /** Serializes every mutating span on this run; see {@link TeamOrchestrator.withRunGate}. */
   gate: Promise<unknown>
@@ -163,6 +166,7 @@ export class TeamOrchestrator {
       input,
       status: 'running',
       createdAt: new Date().toISOString(),
+      version: 0,
       states: team.def.phases.map(phase => ({ phaseId: phase.id, status: 'pending', attempts: 0 })),
       gate: Promise.resolve(),
     }
@@ -255,7 +259,7 @@ export class TeamOrchestrator {
       } catch (error: unknown) {
         await this.settleInfraFailure(record, error)
       }
-      record.status = this.parkRun(state, phase)
+      record.status = this.parkRun(state, phase, record)
       await this.persist(record)
       return this.snapshot(record)
     })
@@ -284,9 +288,10 @@ export class TeamOrchestrator {
 
   /**
    * Execute the run's phases in declaration order to the next park point.
-   * Because the pack format restricts `depends_on` to earlier phases,
-   * declaration order is a topological order; M1 executes it serially even
-   * where the DAG would allow parallelism.
+   * Declaration order is a topological order because depends_on references
+   * only earlier phases; each phase drives only after its predecessors'
+   * artifacts are committed. Parallel DAG (concurrent phases with independent
+   * dependencies) is deferred to a future milestone.
    */
   private async advance(record: RunRecord): Promise<void> {
     try {
@@ -294,18 +299,16 @@ export class TeamOrchestrator {
       for (const [index, phase] of phases.entries()) {
         const state = record.states[index]
         if (state === undefined) {
-          // Index-parallel by construction (`states` is built per phase); a
-          // divergence is a programmer error, and the loud failure names it.
           throw new ExpertTeamError(`run state missing for phase ${phase.id}`, 'EXPERT_TEAM_CATALOG_INVALID')
         }
         if (state.status === 'done') continue
         if (state.status === 'gate-pending' || state.status === 'failed') {
-          record.status = this.parkRun(state, phase)
+          record.status = this.parkRun(state, phase, record)
           await this.persist(record)
           return
         }
         await this.drivePhase(record, index, phase)
-        record.status = this.parkRun(state, phase)
+        record.status = this.parkRun(state, phase, record)
         if (record.status !== 'running') {
           await this.persist(record)
           return
@@ -320,16 +323,43 @@ export class TeamOrchestrator {
   }
 
   /**
-   * Drive one phase through the runtime: mark it running, collect the
-   * declared upstream artifacts (all done, or the run would have parked
-   * earlier), and record the outcome on the phase state.
+   * Collect open questions from the run's done phases whose ids appear in
+   * any of the given phase's `supersedes` list, returning a deduplicated
+   * array preserving the order the superseded phases appear in the team
+   * declaration.
+   */
+  private collectSupersededOpenQuestions(record: RunRecord, phase: PhaseDef): string[] {
+    const seen = new Set<string>()
+    const questions: string[] = []
+    for (const supersededId of phase.supersedes ?? []) {
+      const stateIndex = record.states.findIndex(s => s.phaseId === supersededId)
+      if (stateIndex < 0) continue
+      const state = record.states[stateIndex]
+      const phaseDef = record.team.def.phases[stateIndex]
+      if (state === undefined || phaseDef === undefined || state.artifact === undefined || phaseDef.supersedes === undefined) continue
+      for (const q of state.openQuestions ?? []) {
+        if (seen.has(q)) continue
+        seen.add(q)
+        questions.push(q)
+      }
+    }
+    return questions
+  }
+
+  /**
+   * Drive one phase through the runtime: verify dependencies are satisfied,
+   * mark it running, collect upstream artifacts, forward open questions from
+   * superseded phases, and record the outcome on the phase state.
    */
   private async drivePhase(record: RunRecord, index: number, phase: PhaseDef, revision?: RevisionReason): Promise<void> {
     const state = record.states[index]
     if (state === undefined) {
       throw new ExpertTeamError(`run state missing for phase ${phase.id}`, 'EXPERT_TEAM_CATALOG_INVALID')
     }
+    if (state.status === 'done') return // superseded phase already replaced
     state.status = 'running'
+    state.openQuestions = undefined
+    state.userQuestions = undefined
     await this.persist(record)
     const upstream: ArtifactRef[] = []
     const upstreamPaths = new Map<string, string>()
@@ -344,6 +374,7 @@ export class TeamOrchestrator {
       upstream.push(dep.artifact)
       upstreamPaths.set(depId, join(record.runDir, dep.artifact.artifact))
     }
+    const supersededOpenQuestions = this.collectSupersededOpenQuestions(record, phase)
     const outcome = await this.runtime.executePhase({
       team: record.team,
       phase,
@@ -352,6 +383,7 @@ export class TeamOrchestrator {
       input: record.input,
       runId: record.runId,
       runDir: record.runDir,
+      supersededOpenQuestions,
       ...(revision === undefined ? {} : { revision }),
     })
     state.attempts += outcome.attempts
@@ -369,11 +401,21 @@ export class TeamOrchestrator {
       relativePath: phase.output.artifact,
       ...(phase.output.schema === undefined ? {} : { schema: phase.output.schema }),
     }
+    // Forward open questions from the result for downstream consumption.
+    if (outcome.result.openQuestions !== undefined && outcome.result.openQuestions.length > 0) {
+      state.openQuestions = [...outcome.result.openQuestions]
+    }
+    // When the phase declares a gate, surface the artifact summary as the
+    // human reviewer's entry question.
+    if (phase.gate !== undefined) {
+      state.userQuestions = [`请审阅 ${phase.output.artifact} 并给出 approve 或 reject 决定。`]
+    }
     await this.persist(record)
   }
 
   /** The run status implied by one phase's settled state. */
-  private parkRun(state: MutablePhaseState, phase: PhaseDef): TeamRunStatus {
+  private parkRun(state: MutablePhaseState, phase: PhaseDef, record: RunRecord): TeamRunStatus {
+    record.version += 1
     if (state.status === 'gate-pending') return 'waiting-approval'
     if (state.status === 'failed') return phase.gate !== undefined ? 'waiting-approval' : 'failed'
     return 'running'
@@ -433,6 +475,8 @@ export class TeamOrchestrator {
       attempts: state.attempts,
       ...(state.artifact === undefined ? {} : { artifact: state.artifact }),
       ...(state.error === undefined ? {} : { error: state.error }),
+      ...(state.openQuestions === undefined || state.openQuestions.length === 0 ? {} : { openQuestions: [...state.openQuestions] }),
+      ...(state.userQuestions === undefined || state.userQuestions.length === 0 ? {} : { userQuestions: [...state.userQuestions] }),
       ...(state.reviews === undefined ? {} : { reviews: [...state.reviews] }),
     }))
     return {
@@ -442,6 +486,7 @@ export class TeamOrchestrator {
       status: record.status,
       createdAt: record.createdAt,
       phases,
+      ...(record.version === 0 ? {} : { version: record.version }),
     }
   }
 

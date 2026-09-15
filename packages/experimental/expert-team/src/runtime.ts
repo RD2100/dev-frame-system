@@ -62,6 +62,8 @@ export interface PhaseExecutionRequest {
   readonly runId: RunId
   /** The existing run directory the artifact is written into. */
   readonly runDir: string
+  /** Open questions forwarded from superseded phases, in supersede-list order. */
+  readonly supersededOpenQuestions: readonly string[]
   /** When the phase is re-driven (gate rejection), the human's reason. */
   readonly revision?: RevisionReason
 }
@@ -238,6 +240,7 @@ export class ExpertRuntime {
       upstream: request.upstream,
       upstreamPaths: request.upstreamPaths,
       input: request.input,
+      supersededOpenQuestions: request.supersededOpenQuestions,
       ...(request.phase.output.schema === undefined
         ? {}
         : { schemaText: await this.loadSchemaText(request.team.packDir, request.phase.output.schema) }),

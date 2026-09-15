@@ -222,14 +222,20 @@ describe('expert team through a real Loader composition', () => {
     expect(fixture?.entry).toBe('perspective-discovery')
     expect(fixture?.phases[1]).toMatchObject({ id: 'literature-review', gate: 'human-review' })
 
-    // The shipped data pack, validated by the same mount: the M1 pipeline
-    // with its two human gates between the four phases.
+    // The shipped data pack, validated by the same mount: the M2 pipeline
+    // with ten phases, three parallel review stages, and two human gates.
     expect(paper?.entry).toBe('perspective-discovery')
     expect(paper?.phases.map(phase => [phase.id, phase.expert, phase.dependsOn, phase.artifact, phase.gate])).toEqual([
       ['perspective-discovery', 'topic-scout', [], 'perspectives.md', undefined],
       ['literature-review', 'literature-reviewer', ['perspective-discovery'], 'survey.md', 'human-review'],
       ['idea-selection', 'idea-selector', ['literature-review'], 'research-questions.md', 'human-review'],
       ['method-design', 'method-designer', ['idea-selection'], 'method.md', undefined],
+      ['experiments', 'experimenter', ['method-design'], 'experiments.md', undefined],
+      ['writing', 'writer', ['experiments'], 'draft.md', undefined],
+      ['review-methodology', 'reviewer-1', ['writing'], 'review-methodology.md', undefined],
+      ['review-statistics', 'reviewer-2', ['writing'], 'review-statistics.md', undefined],
+      ['review-writing', 'reviewer-3', ['writing'], 'review-writing.md', undefined],
+      ['revision', 'writer', ['review-methodology', 'review-statistics', 'review-writing'], 'revision-plan.md', 'human-review'],
     ])
     // The pack owns its roster and may grow experts without this suite; the
     // four M1 reference experts must all mount.
@@ -274,15 +280,17 @@ describe('expert team through a real Loader composition', () => {
     expect(await readFile(join(runDir, 'survey.md'), 'utf8')).toContain('补全了引用')
   })
 
-  it('answers consult_expert against the shipped pack without touching the pipeline', async () => {
+  it('answers a consultation through expert_team_run without touching the pipeline', async () => {
     const b = await boot([textResponse('STORM 先发散再收敛。')])
-    const result = await b.execute('consult_expert', {
-      team: 'paper',
+    const result = await b.execute('expert_team_run', {
       expert: 'topic-scout',
+      team: 'paper',
       question: '什么是 STORM？',
     })
     expect(result.isError, textOf(result)).toBe(false)
-    expect(JSON.parse(textOf(result))).toEqual({ answer: 'STORM 先发散再收敛。', truncated: false })
+    const parsed = JSON.parse(textOf(result))
+    expect(parsed.answer).toBe('STORM 先发散再收敛。')
+    expect(parsed.truncated).toBe(false)
     expect(JSON.stringify(b.adapter.requests[0])).toContain('什么是 STORM？')
     // The consult ran outside any run: the artifacts root is still empty.
     await expect(readdir(b.artifactsDir)).resolves.toEqual([])

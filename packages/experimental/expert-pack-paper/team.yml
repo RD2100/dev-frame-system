@@ -1,7 +1,8 @@
-# 论文研究专家团数据包（M1 范围：前四个阶段）。
+# 论文研究专家团数据包（M2：十个阶段，含并行三审与 supersedes 修订）。
 # 本文件是纯数据：字段契约由 @deepseek-ai/dsh-experimental-expert-team 的目录加载器
 # 在挂载时校验（唯一阶段 id、专家引用存在、depends_on 无环且只指向更早阶段、
-# entry 一致、被引用的 schema 文件存在），校验失败即挂载失败。
+# supersedes 无环且只指向更早阶段、entry 一致、被引用的 schema 文件存在），
+# 校验失败即挂载失败。
 # gate 的唯一合法取值是 human-review；产物写入 <artifactsDir>/<runId>/。
 team: paper
 title: 论文研究专家团
@@ -38,3 +39,56 @@ phases:
     input: 经人类关口选定的研究问题（research-questions.md 中被批准的候选）
     output:
       artifact: method.md
+  - id: experiments
+    expert: experimenter
+    depends_on:
+      - method-design
+    input: method.md 的实验设计与数据集约定，以及可检索的既有项目记忆笔记
+    output:
+      artifact: experiments.md
+      schema: schemas/experiments-summary.schema.json
+  - id: writing
+    expert: writer
+    depends_on:
+      - experiments
+    input: experiments.md 的实验结果与失败、偏离记录；实验设计见运行目录内的 method.md
+    output:
+      artifact: draft.md
+      schema: schemas/draft-summary.schema.json
+  - id: review-methodology
+    expert: reviewer-1
+    depends_on:
+      - writing
+    input: draft.md；对照材料见运行目录内的 method.md 与 experiments.md
+    output:
+      artifact: review-methodology.md
+      schema: schemas/review-summary.schema.json
+  - id: review-statistics
+    expert: reviewer-2
+    depends_on:
+      - writing
+    input: draft.md；统计方案基准与实验记录见运行目录内的 method.md 与 experiments.md
+    output:
+      artifact: review-statistics.md
+      schema: schemas/review-summary.schema.json
+  - id: review-writing
+    expert: reviewer-3
+    depends_on:
+      - writing
+    input: draft.md；术语与论断对照见运行目录内的 survey.md
+    output:
+      artifact: review-writing.md
+      schema: schemas/review-summary.schema.json
+  - id: revision
+    expert: writer
+    depends_on:
+      - review-methodology
+      - review-statistics
+      - review-writing
+    supersedes:
+      - writing
+    input: 三份审稿意见 review-methodology.md、review-statistics.md、review-writing.md；前稿见运行目录内的 draft.md
+    output:
+      artifact: revision-plan.md
+      schema: schemas/revision-plan-summary.schema.json
+    gate: human-review

@@ -30,9 +30,9 @@ export const inject = ['tools', 'systemPrompt', 'agents', 'agentLoop']
 export const EXPERT_TEAM_USAGE_SECTION = `This deployment mounts expert teams: human-gated expert pipelines over pack-defined personas.
 
 - Call expert_team_list once when a task could be a team run, and pick the team by its phases and gates.
-- expert_team_run drives the whole pipeline phase by phase and returns when the run parks — a human gate (waiting-approval), completion, or a failure. Report the parked state honestly; do not paraphrase a gate as finished.
+- expert_team_run drives the whole pipeline phase by phase when you pass team+input; it returns when the run parks — a human gate (waiting-approval), completion, or a failure. Report the parked state honestly; do not paraphrase a gate as finished.
+- expert_team_run also handles consultations: pass expert+question (and optionally team) to ask one expert outside any pipeline — one bounded answer with the expert's persona and tool allowlist.
 - When a run is waiting-approval, the human decision is the reviewer's, not yours: ask the reviewer, then expert_team_approve with their decision and their own words as the comment. A rejection returns the artifact to the phase expert for revision.
-- consult_expert answers one question outside any run; prefer it when a full pipeline is not wanted.
 - Artifacts are files under the run directory; reference them by path instead of restating their content.`
 
 /** Loader configuration for the expert-team plugin; both fields required. */

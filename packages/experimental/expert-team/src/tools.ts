@@ -1,5 +1,5 @@
 /**
- * The five model tools of the expert-team plugin, bound to one
+ * The four model tools of the expert-team plugin, bound to one
  * {@link TeamOrchestrator}. The schemas are authored in the tool-schema DSL
  * (`defineTool` compiles them into the enforced JSON-Schema subset; required
  * properties are marked on the property, never in a sibling `required`
@@ -11,7 +11,9 @@
 
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition, ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { TeamOrchestrator } from './orchestrate.ts'
+import { ExpertTeamError } from './errors.ts'
 import type { GateDecision, GateReview, PhaseState, PhaseStatus, TeamMode, TeamRun, TeamRunStatus } from './types.ts'
 
 /**
@@ -24,7 +26,6 @@ export const EXPERT_TEAM_TOOL_NAMES: readonly string[] = [
   'expert_team_run',
   'expert_team_status',
   'expert_team_approve',
-  'consult_expert',
 ]
 
 /** One recorded gate review, projected for the tool output. */
@@ -49,6 +50,8 @@ interface PhaseDto {
   readonly attempts: number
   readonly artifact?: ArtifactDto
   readonly error?: string
+  readonly openQuestions?: string[]
+  readonly userQuestions?: string[]
   readonly reviews?: ReviewDto[]
 }
 
@@ -60,6 +63,7 @@ interface RunDto {
   readonly status: TeamRunStatus
   readonly createdAt: string
   readonly phases: PhaseDto[]
+  readonly version?: number
 }
 
 /** Project one gate review into the lossless-JSON DTO the output schema declares. */
@@ -86,6 +90,8 @@ function phaseDto(state: PhaseState): PhaseDto {
       },
     }),
     ...(state.error === undefined ? {} : { error: state.error }),
+    ...(state.openQuestions === undefined || state.openQuestions.length === 0 ? {} : { openQuestions: [...state.openQuestions] }),
+    ...(state.userQuestions === undefined || state.userQuestions.length === 0 ? {} : { userQuestions: [...state.userQuestions] }),
     ...(state.reviews === undefined ? {} : { reviews: state.reviews.map(reviewDto) }),
   }
 }
@@ -99,6 +105,7 @@ function runDto(run: TeamRun): RunDto {
     status: run.status,
     createdAt: run.createdAt,
     phases: run.phases.map(phaseDto),
+    ...(run.version === undefined || run.version === 0 ? {} : { version: run.version }),
   }
 }
 
@@ -110,33 +117,35 @@ function runDto(run: TeamRun): RunDto {
  */
 const RUN_OUTPUT_SCHEMA = {
   type: 'object',
-  additionalProperties: false,
+  additionalProperties: true,
   properties: {
-    runId: { type: 'string', required: true, description: 'Opaque run id; pass it back to expert_team_status and expert_team_approve.' },
-    teamId: { type: 'string', required: true },
-    mode: { type: 'string', required: true, enum: ['pipeline', 'hierarchical'] },
-    status: { type: 'string', required: true, enum: ['running', 'waiting-approval', 'completed', 'failed'], description: "'waiting-approval' means a human gate is parked; expert_team_approve records the decision." },
-    createdAt: { type: 'string', required: true },
+    runId: { type: 'string', description: 'Opaque run id; pass it back to expert_team_status and expert_team_approve.' },
+    teamId: { type: 'string' },
+    mode: { type: 'string', enum: ['pipeline', 'hierarchical'] },
+    status: { type: 'string', enum: ['running', 'waiting-approval', 'completed', 'failed'], description: "'waiting-approval' means a human gate is parked; expert_team_approve records the decision." },
+    createdAt: { type: 'string' },
+    version: { type: 'integer', description: 'Monotonically advancing run version; incremented after each park point.' },
     phases: {
       type: 'array',
-      required: true,
       items: {
         type: 'object',
         additionalProperties: false,
         properties: {
-          phaseId: { type: 'string', required: true },
-          status: { type: 'string', required: true, enum: ['pending', 'running', 'gate-pending', 'done', 'failed'] },
-          attempts: { type: 'integer', required: true, description: 'Delegation attempts so far, including result-contract retries.' },
+          phaseId: { type: 'string' },
+          status: { type: 'string', enum: ['pending', 'running', 'gate-pending', 'done', 'failed'] },
+          attempts: { type: 'integer', description: 'Delegation attempts so far, including result-contract retries.' },
           artifact: {
             type: 'object',
             additionalProperties: false,
             properties: {
-              phaseId: { type: 'string', required: true },
-              artifact: { type: 'string', required: true },
-              relativePath: { type: 'string', required: true, description: 'Artifact path relative to the run directory <artifactsDir>/<runId>/.' },
+              phaseId: { type: 'string' },
+              artifact: { type: 'string' },
+              relativePath: { type: 'string', description: 'Artifact path relative to the run directory <artifactsDir>/<runId>/.' },
               schema: { type: 'string' },
             },
           },
+          openQuestions: { type: 'array', items: { type: 'string' }, description: 'Open questions carried forward from superseded phases this phase consumed.' },
+          userQuestions: { type: 'array', items: { type: 'string' }, description: 'Questions for the human reviewer; present when status is gate-pending.' },
           error: { type: 'string', description: 'Failure detail when the phase status is failed.' },
           reviews: {
             type: 'array',
@@ -144,15 +153,17 @@ const RUN_OUTPUT_SCHEMA = {
               type: 'object',
               additionalProperties: false,
               properties: {
-                decision: { type: 'string', required: true, enum: ['approved', 'rejected'] },
+                decision: { type: 'string', enum: ['approved', 'rejected'] },
                 comment: { type: 'string' },
-                at: { type: 'string', required: true },
+                at: { type: 'string' },
               },
             },
           },
         },
       },
     },
+    answer: { type: 'string', description: 'The consultation answer; present only for consultations.' },
+    truncated: { type: 'boolean', description: 'True when the consultation answer was cut to the return byte bound.' },
   },
 } as const satisfies ValueSchemaSpec
 
@@ -246,15 +257,43 @@ export function createExpertTeamTools(orchestrator: TeamOrchestrator): ToolDefin
     }),
     defineTool({
       name: 'expert_team_run',
-      description: 'Start one expert-team run: the pipeline executes phase by phase, deriving a subagent per phase, and returns when the run parks — at a human gate (waiting-approval), on completion, or on a failure. The input is the run request, for example the research topic.',
+      description: 'Start one expert-team run (pipeline or consultation). Pass `team` and `input` to drive the full pipeline; it returns when the run parks — at a human gate (waiting-approval), on completion, or on a failure. Pass only `expert` and `question` to consult one expert outside any pipeline: one bounded answer with the expert\'s persona and tool allowlist. Artifacts are files under the run directory.',
       parameters: {
-        team: { type: 'string', required: true, description: 'Team id from expert_team_list.' },
-        input: { type: 'string', required: true, description: 'The free-form run request the entry phase starts from.' },
+        team: { type: 'string', description: 'Team id from expert_team_list; omit for a consultation.' },
+        input: { type: 'string', description: 'The free-form run request the entry phase starts from; required when `team` is set.' },
+        expert: { type: 'string', description: 'Expert id from expert_team_list; required for consultation, ignored for pipeline runs.' },
+        question: { type: 'string', description: 'The consultation question; required when `expert` is set without `team`.' },
       },
-      output: { schema: RUN_OUTPUT_SCHEMA, render: renderJson },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            ...(RUN_OUTPUT_SCHEMA.properties),
+            answer: { type: 'string', description: 'The consultation answer; present only for consultations.' },
+            truncated: { type: 'boolean', description: 'True when the consultation answer was cut to the return byte bound.' },
+          },
+        },
+        render(_args: unknown, value: unknown): { readonly type: 'text'; readonly text: string }[] {
+          return [{ type: 'text', text: JSON.stringify(value) }]
+        },
+      },
       isConcurrencySafe: () => false,
       async execute(args) {
-        return runDto(await orchestrator.startRun(args.team, args.input))
+        // Consultation mode (expert ± team + question) takes priority over
+        // pipeline mode so a bare expert+question never hits the input check.
+        if (args.expert !== undefined) {
+          const teamId = args.team ?? orchestrator.listTeams()[0]?.team ?? ''
+          if (teamId === '') {
+            throw new ExpertTeamError('no team mounted for consultation', 'EXPERT_TEAM_TEAM_MISSING')
+          }
+          const consult = await orchestrator.consult(teamId, args.expert, args.question ?? '')
+          return { answer: consult.answer, truncated: consult.truncated } as unknown as Record<string, JsonValue>
+        }
+        if (args.team === undefined) {
+          throw new ExpertTeamError('either team+input or expert+question is required', 'EXPERT_TEAM_CONFIG_INVALID')
+        }
+        return runDto(await orchestrator.startRun(args.team, args.input ?? '')) as unknown as Record<string, JsonValue>
       },
     }),
     defineTool({
@@ -266,7 +305,7 @@ export function createExpertTeamTools(orchestrator: TeamOrchestrator): ToolDefin
       output: { schema: RUN_OUTPUT_SCHEMA, render: renderJson },
       isConcurrencySafe: () => true,
       async execute(args) {
-        return runDto(orchestrator.getRun(args.run_id))
+        return runDto(orchestrator.getRun(args.run_id)) as unknown as Record<string, JsonValue>
       },
     }),
     defineTool({
@@ -280,31 +319,7 @@ export function createExpertTeamTools(orchestrator: TeamOrchestrator): ToolDefin
       output: { schema: RUN_OUTPUT_SCHEMA, render: renderJson },
       isConcurrencySafe: () => false,
       async execute(args) {
-        return runDto(await orchestrator.approve(args.run_id, args.decision, args.comment))
-      },
-    }),
-    defineTool({
-      name: 'consult_expert',
-      description: 'Consult one expert of a mounted team outside any pipeline: one bounded answer to one question, with the expert\'s persona and tool allowlist and no artifacts, no run state, no phase side effects. Use it for a single expert opinion when a full run is not wanted.',
-      parameters: {
-        team: { type: 'string', required: true, description: 'Team id from expert_team_list.' },
-        expert: { type: 'string', required: true, description: 'Expert id of that team.' },
-        question: { type: 'string', required: true, description: 'The question, delivered verbatim to the expert.' },
-      },
-      output: {
-        schema: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            answer: { type: 'string', required: true },
-            truncated: { type: 'boolean', required: true, description: 'True when the answer was cut to the return byte bound.' },
-          },
-        },
-        render: renderJson,
-      },
-      isConcurrencySafe: () => false,
-      async execute(args) {
-        return await orchestrator.consult(args.team, args.expert, args.question)
+        return runDto(await orchestrator.approve(args.run_id, args.decision, args.comment)) as unknown as Record<string, JsonValue>
       },
     }),
   ]

@@ -208,6 +208,7 @@ describe('pipeline orchestration', () => {
           status: 'gate-pending',
           attempts: 1,
           artifact: { phaseId: 'literature-review', artifact: 'survey.md', relativePath: 'survey.md' },
+          userQuestions: ['请审阅 survey.md 并给出 approve 或 reject 决定。'],
         },
       ])
 
@@ -416,8 +417,14 @@ describe('orchestration failures', () => {
         () => b.execute('expert_team_run', { team: 'paper-research', input: '主题' }),
         'EXPERT_TEAM_TOOL_MISSING',
       )
+      // consult_expert was folded into expert_team_run: the removed tool
+      // name is no longer registered, so the framework rejects it directly.
+      const consultResult = await b.execute('consult_expert', { team: 'paper-research', expert: 'topic-scout', question: '？' })
+      expect(consultResult.isError, textOf(consultResult)).toBe(true)
+      expect(consultResult.error?.info?.name).toBe('ToolNotFoundError')
+      // Consultation mode through expert_team_run also fails with the plugin error.
       await expectToolErrorCode(
-        () => b.execute('consult_expert', { team: 'paper-research', expert: 'topic-scout', question: '？' }),
+        () => b.execute('expert_team_run', { team: 'paper-research', expert: 'topic-scout', question: '？' }),
         'EXPERT_TEAM_TOOL_MISSING',
       )
       // Nothing was created: no run directories exist.
@@ -526,10 +533,10 @@ describe('orchestration failures', () => {
     }
   })
 
-  it('answers consult_expert outside any run without touching run state', async () => {
+  it('answers a consultation through expert_team_run without touching run state', async () => {
     const b = await bench({ script: [textResponse('STORM 是一种先发散再收敛的预写作方法。')] })
     try {
-      const result = await b.execute('consult_expert', {
+      const result = await b.execute('expert_team_run', {
         team: 'paper-research',
         expert: 'topic-scout',
         question: '什么是 STORM？',
@@ -553,7 +560,6 @@ describe('orchestration failures', () => {
       expect(b.ctx.tools.get('expert_team_run')).toBeDefined()
       expect(b.ctx.tools.get('expert_team_status')).toBeDefined()
       expect(b.ctx.tools.get('expert_team_approve')).toBeDefined()
-      expect(b.ctx.tools.get('consult_expert')).toBeDefined()
       expect(b.ctx.get('expertTeam')).toBeDefined()
     } finally {
       // Dispose the plugin fiber alone: the unmount must remove exactly the

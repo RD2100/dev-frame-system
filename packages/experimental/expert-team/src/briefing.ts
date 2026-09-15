@@ -24,6 +24,8 @@ export interface PhaseBriefingInput {
   readonly upstreamPaths: ReadonlyMap<string, string>
   /** The run request's free-form input (for example, the research topic). */
   readonly input: string
+  /** Open questions forwarded from phases this phase supersedes, in supersede-list order. */
+  readonly supersededOpenQuestions: readonly string[]
   /** The pack schema's JSON text when the phase declares one; absent otherwise. */
   readonly schemaText?: string
 }
@@ -48,11 +50,15 @@ export function composePhaseBriefing(request: PhaseBriefingInput): string {
     sections.push(['## 阶段输入', '', phase.input].join('\n'))
   }
   if (request.upstream.length > 0) {
-    const lines = request.upstream.map(ref => {
+    const lines = request.upstream.map((ref) => {
       const path = request.upstreamPaths.get(ref.phaseId)
       return `- ${ref.phaseId} 的产物 ${ref.artifact}：${path ?? '(路径缺失)' }`
     })
     sections.push(['## 上游产物', '', '用读取类工具阅读以下上游产物后再开始工作：', '', ...lines].join('\n'))
+  }
+  if (request.supersededOpenQuestions.length > 0) {
+    const items = request.supersededOpenQuestions.map((q, i) => `${i + 1}. ${q}`)
+    sections.push(['## 遗留未决问题', '', '以下问题来自本阶段 supersedes 的前序阶段，请在产出中回应或更新状态：', '', ...items].join('\n'))
   }
   if (expert.handoffChecks !== undefined && expert.handoffChecks.length > 0) {
     const checks = expert.handoffChecks.map((check, index) => `${index + 1}. ${check}`)

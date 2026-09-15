@@ -71,6 +71,15 @@ export interface PhaseDef {
    * construction.
    */
   readonly dependsOn: readonly string[]
+  /**
+   * Optional phase ids this phase supersedes: when any superseded phase has
+   * run, this phase's artifact replaces it downstream and the superseded
+   * phase's open questions are forwarded. Used for revision phases that
+   * rewrite an earlier artifact in place.
+   */
+  readonly supersedes?: readonly string[]
+  /** Optional version label distinguishing iterations of the same phase id across runs. */
+  readonly version?: string
   /** Optional free-form input descriptor for the phase. */
   readonly input?: string
   /** The artifact the phase must produce. */
@@ -154,6 +163,10 @@ export interface PhaseState {
   readonly artifact?: ArtifactRef
   /** Failure detail when the status is `failed`. */
   readonly error?: string
+  /** Open questions carried forward from superseded phases that this phase consumed. */
+  readonly openQuestions?: readonly string[]
+  /** Questions a human reviewer needs to answer when the phase is gate-pending; absent otherwise. */
+  readonly userQuestions?: readonly string[]
   /** Human gate reviews recorded so far, in order. */
   readonly reviews?: readonly GateReview[]
 }
@@ -172,6 +185,8 @@ export interface TeamRun {
   readonly createdAt: string
   /** Per-phase state, in the team's declaration order. */
   readonly phases: readonly PhaseState[]
+  /** Monotonically advancing run version; incremented after each park point. */
+  readonly version?: number
 }
 
 /**
