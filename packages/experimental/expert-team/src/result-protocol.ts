@@ -167,13 +167,16 @@ export function parseConsultAnswer(answer: string): { readonly answer: string; r
 
 /** Truncate one string to at most `maxBytes` UTF-8 bytes without splitting a code point. */
 function truncateAtCodePoint(value: string, maxBytes: number): string {
-  let end = value.length
-  while (end > 0 && Buffer.byteLength(value.slice(0, end), 'utf8') > maxBytes) {
-    // Walk back over one UTF-16 code unit; surrogate halves are re-checked
-    // against the byte budget, so the loop always terminates below length.
+  const bytes = Buffer.from(value, 'utf8')
+  if (bytes.length <= maxBytes) return value
+  // The first excluded byte is a continuation byte (0b10xxxxxx) exactly when
+  // the cut lands mid-character, so stepping back over continuation bytes
+  // reaches the last code point boundary at or before the budget.
+  let end = maxBytes
+  while (end > 0 && ((bytes[end] ?? 0) & 0xc0) === 0x80) {
     end -= 1
   }
-  return value.slice(0, end)
+  return bytes.toString('utf8', 0, end)
 }
 
 /** Every entry a non-empty single-line string. */
