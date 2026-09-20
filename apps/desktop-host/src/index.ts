@@ -350,12 +350,13 @@ export async function runDesktopHost(
   const ctx = await boot('dsh desktop', rootConfig, structuredClone(composition.patches), (hostCtx) => {
     current = hostCtx
     hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, environment)
-    provideCmdline(hostCtx, { args: [], exit: () => {} })
+    provideCmdline(hostCtx, { args: ['--no-open'], exit: () => {} })
   })
   current = ctx
   const connection = ctx.get('connection')
   const clientModules = ctx.get('clientModules')
   const gateway = ctx.get('typertGateway')
+  const webServerService = ctx.get('webServer') as undefined | { readonly port: number }
   if (connection === undefined || clientModules === undefined || gateway === undefined) {
     await ctx.fiber.dispose()
     throw new Error('dsh desktop: composition did not provide connection, typertGateway, and clientModules')
@@ -398,7 +399,9 @@ export async function runDesktopHost(
           ? await streams.fetch(request)
           : url.pathname.startsWith('/api/')
             ? await api.fetch(request)
-            : await assets.fetch(request)
+            : url.pathname.startsWith('/plugins/') && webServerService !== undefined
+              ? ((await fetch(`http://127.0.0.1:${String(webServerService.port)}${url.pathname}${url.search}`, { method: request.method, headers: request.headers, body: request.body, signal: controller.signal } satisfies RequestInit)) as Response)
+              : await assets.fetch(request)
         await writeResponse(encodeDesktopResponseStart(command.streamId, {
           status: response.status,
           headers: [...response.headers.entries()],
