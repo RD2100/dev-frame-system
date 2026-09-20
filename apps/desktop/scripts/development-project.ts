@@ -160,12 +160,61 @@ ${authorizedRoots.map(root => `      - ${root}`).join('\n')}
   config:
     roleToolPolicies:
       controller:
-        inheritedTools: ['pwsh', 'read', 'write', 'edit', 'read_image', 'glob', 'grep', 'todo_write', 'job_kill', 'job_list', 'job_output']
+        inheritedTools: ['pwsh', 'read', 'write', 'edit', 'read_image', 'glob', 'grep', 'todo_write', 'job_kill', 'job_list', 'job_output', 'project_task', 'project_integrate', 'agent_dispatch', 'worktree_create', 'worktree_list', 'worktree_prune', 'worktree_remove', 'worktree_status', 'create_goal', 'get_goal', 'update_goal']
       lead:
-        inheritedTools: ['read', 'write', 'edit', 'read_image', 'glob', 'grep']
+        inheritedTools: ['read', 'write', 'edit', 'read_image', 'glob', 'grep', 'agent_dispatch', 'project_evidence', 'project_review']
       worker:
-        inheritedTools: ['pwsh', 'read', 'write', 'edit', 'read_image', 'glob', 'grep']
+        inheritedTools: ['pwsh', 'read', 'write', 'edit', 'read_image', 'glob', 'grep', 'project_deliver', 'project_commit']
+    # Lead plugin scopes are pinned during the Stage B provisioning smoke once
+    # the task pluginId convention is confirmed (v2 fixes one pluginId).
     leadPluginScopes: {}
+# Shadow todo board v2: mounts the project-controller task loop beside the
+# DevFrame profile so Shadow-sent work drives a real task board (the same
+# overlay the shadow-loop example carries, minus the request-budget consumer;
+# see docs/working/shadow-todo-board-v2-plan.zh.md).
+- insert:
+    # Append-only evidence ledger (ctx.agentEvidence): task/Goal binding
+    # receipts, submission receipts, and verification snapshots.
+    - id: agent-evidence
+      name: '@deepseek-ai/dsh-experimental-agent-evidence'
+    # The project task board service (ctx.projectController): task lifecycle,
+    # the request budget, and the integration gate. It exposes no tool itself;
+    # the consumer rows below mount the tool faces.
+    - id: project-controller
+      name: '@deepseek-ai/dsh-experimental-project-controller'
+      config:
+        maxActiveTasks: 2
+        requestBudget: 64
+    # Integration tool face: project_integrate, for the root controller.
+    - id: project-controller-consumer
+      name: '@deepseek-ai/dsh-experimental-project-controller/consumer'
+      config:
+        requiredChecksPath: !!js dshHomePath('required-checks.json')
+        gitExecutable: git
+        gitTimeoutMs: 60000
+        gitMaxOutputBytes: 10485760
+    # Task tool face: project_task (plan/start), for the root controller.
+    # Takes no config; planning and start derive authority from the live Goal
+    # binding, the hierarchy bindings, and the registered worktrees.
+    - id: project-controller-task-consumer
+      name: '@deepseek-ai/dsh-experimental-project-controller/task-consumer'
+    # Delivery tool faces: project_deliver/project_commit for Workers,
+    # project_evidence/project_review for their independent plugin leads.
+    # requiredChecksByTask/commitPathsByTask stay empty: the host registers
+    # each task's approved checkset (git-diff-check in its Worker worktree)
+    # and commit scope at approval time via the dynamic registry.
+    - id: project-controller-delivery-consumer
+      name: '@deepseek-ai/dsh-experimental-project-controller/delivery-consumer'
+      config:
+        repairLimit: 3
+        requiredChecksPath: !!js dshHomePath('required-checks.json')
+        requiredChecksByTask: {}
+        gitExecutable: git
+        gitTimeoutMs: 60000
+        gitMaxOutputBytes: 10485760
+        checkTimeoutMs: 600000
+        checkMaxOutputBytes: 1048576
+        commitPathsByTask: {}
 # Web Shadow entry card: the devframe-profile overlay does not carry this
 # row (it ships in the separate shadow-web-profile layer for web), so the
 # Desktop profile inserts it here.
@@ -234,6 +283,15 @@ export function prepareDevelopmentProject(options: DevelopmentProjectOptions): s
     const devframeRoot = resolve(options.cliDir, '..', '..')
     const dshHome = process.env.DSH_HOME ?? join(homedir(), '.dsh')
     const webModules = join(dshHome, 'profiles', 'web', 'node_modules')
+    // Third-party community plugins already installed in the web profile; the
+    // desktop dev profile links them from there so both surfaces ship the same
+    // plugin set. External packages, not repo assets.
+    const externalWebPlugins: ReadonlyArray<string> = [
+      'dsh-usage-monitor',
+      'dsh-codex-sidebar',
+      'dsh-external-agents',
+      'dsh-model-switch',
+    ]
     const devframeLinks: ReadonlyArray<readonly [string, string]> = [
       ['@deepseek-ai/dsh-experimental-devframe-profile', 'packages/experimental/devframe-profile'],
       ['@deepseek-ai/dsh-experimental-agent-dispatch', 'packages/experimental/agent-dispatch'],
@@ -247,6 +305,9 @@ export function prepareDevelopmentProject(options: DevelopmentProjectOptions): s
       ['werift', join(webModules, 'werift')],
       ['@dsh-mobile/e2e-tunnel', join(webModules, '@dsh-mobile', 'e2e-tunnel')],
 
+      // Web-profile third-party plugins, linked (not vendored) from webModules.
+      ...externalWebPlugins.map(name => [name, join(webModules, name)] as const),
+
       ['@deepseek-ai/dsh-experimental-expert-pack-dev', 'packages/experimental/expert-pack-dev'],
       ['@deepseek-ai/dsh-experimental-expert-pack-paper', 'packages/experimental/expert-pack-paper'],
       ['@deepseek-ai/dsh-experimental-expert-team', 'packages/experimental/expert-team'],
@@ -255,6 +316,10 @@ export function prepareDevelopmentProject(options: DevelopmentProjectOptions): s
       ['@deepseek-ai/dsh-experimental-shadow-controller', 'packages/experimental/shadow-controller'],
       ['@deepseek-ai/dsh-experimental-shadow-router', 'packages/experimental/shadow-router'],
       ['@deepseek-ai/dsh-experimental-shadow-bridge', 'packages/experimental/shadow-bridge'],
+      ['@deepseek-ai/dsh-experimental-agent-evidence', 'packages/experimental/agent-evidence'],
+      ['@deepseek-ai/dsh-experimental-project-controller', 'packages/experimental/project-controller'],
+      ['@deepseek-ai/dsh-experimental-project-contracts', 'packages/experimental/project-contracts'],
+      ['@deepseek-ai/dsh-experimental-devframe', 'packages/experimental/devframe'],
       ['@deepseek-ai/dsh-worktree-registry', 'packages/workflow/worktree-registry'],
       ['js-yaml', 'node_modules/js-yaml'],
     ]
@@ -294,6 +359,15 @@ export function prepareDevelopmentProject(options: DevelopmentProjectOptions): s
       }
     }
     devframeManifest.dependencies['@dsh-mobile/pairing'] = '0.1.15'
+    // Read the third-party plugin versions from their installed web-profile
+    // manifests so a web-profile upgrade flows through without editing this script.
+    for (const external of externalWebPlugins) {
+      const linked = readManifest(join(webModules, external, 'package.json'))
+      if (typeof linked.version !== 'string' || linked.version === '') {
+        throw new Error(`desktop development: web-profile ${external} package.json has no version`)
+      }
+      devframeManifest.dependencies[external] = linked.version
+    }
 
     const bundles = devframeManifest.dsh.profile.bundles
     if (!bundles.includes('@deepseek-ai/dsh-experimental-devframe-profile')) {
@@ -301,6 +375,9 @@ export function prepareDevelopmentProject(options: DevelopmentProjectOptions): s
     }
     if (!bundles.includes('@dsh-mobile/pairing')) {
       bundles.push('@dsh-mobile/pairing')
+    }
+    for (const external of externalWebPlugins) {
+      if (!bundles.includes(external)) bundles.push(external)
     }
     writeFileSync(devframeManifestPath, `${JSON.stringify(devframeManifest, undefined, 2)}\n`)
     // Machine-specific deployment narrowing for the Desktop dev profile

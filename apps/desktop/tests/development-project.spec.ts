@@ -113,6 +113,10 @@ describe('desktop development project', () => {
       ['packages/experimental/shadow-controller', '1.0.0'],
       ['packages/experimental/shadow-router', '1.0.0'],
       ['packages/experimental/shadow-bridge', '0.1.2-alpha.4'],
+      ['packages/experimental/agent-evidence', '0.1.6-alpha.1'],
+      ['packages/experimental/project-controller', '0.1.6-alpha.1'],
+      ['packages/experimental/project-contracts', '0.1.6-alpha.1'],
+      ['packages/experimental/devframe', '0.1.6-alpha.1'],
       ['packages/workflow/worktree-registry', '8.8.8'],
     ]
     for (const [relative, version] of experimental) {
@@ -127,6 +131,11 @@ describe('desktop development project', () => {
       mkdirSync(join(dshHome, 'profiles', 'web', 'node_modules', pkg), { recursive: true })
     }
     mkdirSync(join(dshHome, 'profiles', 'web', 'node_modules', '@dsh-mobile', 'e2e-tunnel'), { recursive: true })
+    // The external web-profile plugins the dev overlay links from webModules.
+    for (const mod of ['dsh-usage-monitor', 'dsh-codex-sidebar', 'dsh-external-agents', 'dsh-model-switch']) {
+      mkdirSync(join(dshHome, 'profiles', 'web', 'node_modules', mod), { recursive: true })
+      writeFileSync(join(dshHome, 'profiles', 'web', 'node_modules', mod, 'package.json'), '{"name":"@deepseek-ai/x","version":"9.9.9"}\n')
+    }
     for (const mod of ['@deepseek-ai/schemastery', '@dsh-mobile/e2e-tunnel', 'qrcode', 'tweetnacl', 'werift', 'ws']) {
       mkdirSync(join(dependencies, mod), { recursive: true })
     }
@@ -151,12 +160,35 @@ describe('desktop development project', () => {
       expect(manifest.dependencies['@deepseek-ai/dsh-experimental-devframe-profile']).toBe('7.7.7')
       expect(manifest.dependencies['@deepseek-ai/dsh-worktree-registry']).toBe('8.8.8')
       expect(manifest.dependencies['@deepseek-ai/dsh-experimental-shadow-bridge']).toBe('0.1.2-alpha.4')
+      expect(manifest.dependencies['@deepseek-ai/dsh-experimental-agent-evidence']).toBe('0.1.6-alpha.1')
+      expect(manifest.dependencies['@deepseek-ai/dsh-experimental-project-controller']).toBe('0.1.6-alpha.1')
+      expect(manifest.dependencies['@deepseek-ai/dsh-experimental-project-contracts']).toBe('0.1.6-alpha.1')
+      expect(manifest.dependencies['@deepseek-ai/dsh-experimental-devframe']).toBe('0.1.6-alpha.1')
+      expect(manifest.dependencies['dsh-usage-monitor']).toBe('9.9.9')
       expect(manifest.dependencies['@dsh-mobile/pairing']).toBe('0.1.15')
       const patch = readFileSync(join(project, 'cordis.patch.yml'), 'utf8')
       expect(patch).not.toContain('shadow-trial')
       expect(patch).not.toContain('cloudflaredPath')
       expect(patch).toContain(root.replaceAll('\\', '/'))
       expect(patch).not.toContain('D:/dsh-devframe')
+      // Shadow todo board v2 rows: the four project-controller faces are
+      // mounted, the request-budget consumer is not, and the hierarchy faces
+      // carry the project-loop tools.
+      expect(patch).toContain('id: agent-evidence')
+      expect(patch).toContain('id: project-controller')
+      expect(patch).toContain('id: project-controller-consumer')
+      expect(patch).toContain('id: project-controller-task-consumer')
+      expect(patch).toContain('id: project-controller-delivery-consumer')
+      expect(patch).not.toContain('project-controller-request-budget-consumer')
+      expect(patch).toContain("'project_task'")
+      expect(patch).toContain("'project_integrate'")
+      expect(patch).toContain("'agent_dispatch'")
+      expect(patch).toContain("'worktree_create'")
+      expect(patch).toContain("'create_goal'")
+      expect(patch).toContain("'project_evidence'")
+      expect(patch).toContain("'project_review'")
+      expect(patch).toContain("'project_deliver'")
+      expect(patch).toContain("'project_commit'")
     } finally {
       process.env.DSH_HOME = previousHome
       if (previousExtra === undefined) delete process.env.DSH_DESKTOP_EXTRA_AUTHORIZED_ROOT
