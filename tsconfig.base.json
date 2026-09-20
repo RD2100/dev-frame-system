@@ -256,6 +256,8 @@
       // the generated region, which emits only package roots and /invariant.
       "@deepseek-ai/dsh-experimental-shadow-controller/shadow-agent": ["./packages/experimental/shadow-controller/src/shadow-agent.ts"],
       "@deepseek-ai/dsh-experimental-client-ui-shadow-entry": ["./packages/experimental/client-ui-shadow-entry/src"],
+      "@deepseek-ai/dsh-experimental-client-ui-expert-team": ["./packages/experimental/client-ui-expert-team/src"],
+      "@deepseek-ai/dsh-experimental-client-ui-project-memory": ["./packages/experimental/client-ui-project-memory/src"],
       "@deepseek-ai/dsh-experimental-shadow-web-profile": ["./packages/experimental/shadow-web-profile/src"],
       "@deepseek-ai/dsh-experimental-command-goal-binding": ["./packages/experimental/command-goal-binding/src"],
       "@deepseek-ai/dsh-experimental-devframe": ["./packages/experimental/devframe/src"],

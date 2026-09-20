@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-19-desktop-host-materialize-profile-fallback.md
+2026-09-19-desktop-host-materialize-profile-fallback.md: e1811f931884e23271ccf4d9c93ceb360f8e43d9
+2026-09-19-desktop-host-materialize-profile-fallback.zh.md: 0ab08baa7d3f261f35867aa84399f346e1cd1577

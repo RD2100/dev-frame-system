@@ -28,6 +28,57 @@
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxmemorylibrarygateway--memorylibrarygateway"></a>
+
+### `ctx.memoryLibraryGateway` — `MemoryLibraryGateway`
+
+Host service backing the generated `ctx.remote.library` namespace.
+
+```ts cordis-catalog
+/**
+ * Read the current library status and file listing in one call.
+ * @returns availability metadata plus the accessible files; an unconfigured
+ *   vault yields an `UNAVAILABLE` status and an empty listing.
+ */
+@Remote('view') async view(): Promise<MemoryLibrarySnapshot>
+
+/**
+ * Inspect vault availability without touching any file.
+ * @returns the same status object the model tool reports.
+ */
+@Remote('status') status(): Promise<LibraryStatus>
+
+/**
+ * List the accessible library files with an optional depth cap.
+ * @param request - Listing options.
+ * @returns the sorted file metadata rows.
+ * @throws {@link ProjectMemoryError} with `MEMORY_UNAVAILABLE` when no vault
+ *   is configured or the vault is inaccessible.
+ */
+@Remote('list') async list(request: MemoryLibraryListRequest): Promise<readonly LibraryFile[]>
+
+/**
+ * Read one library file for preview, with its real absolute on-disk path.
+ * @param request - Relative path inside the vault (forward slashes).
+ * @returns the file content and the absolute copy/reference target.
+ * @throws {@link ProjectMemoryError} with the same codes as
+ *   {@link readLibraryFile}; the absolute path is computed only after the
+ *   path has passed the full containment and symlink validation.
+ */
+@Remote('read') async read(request: MemoryLibraryReadRequest): Promise<MemoryLibraryReadResult>
+
+/**
+ * Search the library by name and text content from the UI.
+ * @param request - Non-empty query and an optional result cap.
+ * @returns the bounded search hits.
+ * @throws {@link ProjectMemoryError} with the same codes as
+ *   {@link searchLibrary}.
+ */
+@Remote('search') async search(request: MemoryLibrarySearchRequest): Promise<readonly LibrarySearchResult[]>
+```
+
+Source: [`packages/experimental/project-memory/src/gateway.ts`](../../packages/experimental/project-memory/src/gateway.ts)
+
 <a id="ctxprojectmemory--projectmemoryservice"></a>
 
 ### `ctx.projectMemory` — `ProjectMemoryService`

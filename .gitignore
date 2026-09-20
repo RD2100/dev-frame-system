@@ -41,3 +41,5 @@ apps/web/dist/
 worktrees/
 .agents/worktrees/
 .typert-*/
+.desktop-build/
+.desktop-devframe-staging/

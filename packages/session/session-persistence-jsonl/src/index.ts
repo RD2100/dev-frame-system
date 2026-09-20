@@ -255,6 +255,69 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
   }
 
   /**
+   * Attach a project directory to a cwd-less persisted session: rewrite the
+   * stored header's `cwd` field and move the log under that project directory,
+   * so workspace-scoped surfaces (the deployment's designated Shadow
+   * conversation) can render the session. Strictly one-way (`undefined` →
+   * `cwd`), identity- and structure-checked, verification-gated, and refused
+   * on a torn tail. The caller owns any backup and must not hold the session
+   * live: this backend rewrites durable bytes under a cold id.
+   * @param id - the persisted session to relocate.
+   * @param cwd - absolute project directory to attach.
+   * @returns the relocated session header.
+   */
+  async attachSessionCwd(id: SessionId, cwd: string): Promise<SessionHeader> {
+    if (cwd.length === 0) throw new Error('cannot attach an empty project directory')
+    await this.ensureRootEncoding()
+    const oldPath = await this.findLog(id)
+    if (oldPath === undefined) throw new Error(`session "${id}" is not persisted`)
+    const bytes = await readFile(oldPath)
+    const scan = scanZstdFrames(bytes)
+    if (scan.tornStart !== undefined) {
+      throw new Error(`session "${id}" has a torn tail; repair it before attaching a cwd`)
+    }
+    const first = scan.frames[0]
+    if (first === undefined) throw new Error(`session "${id}" has no decodable frame`)
+    const decoder = createZstdFrameDecoder()
+    let firstPlaintext: Buffer
+    try {
+      // The decoder yields views into a reused buffer; copy before the decoder closes.
+      firstPlaintext = Buffer.from([...decoder.decode(bytes, [first])][0] as Buffer)
+    } finally {
+      decoder.close()
+    }
+    const stored = parseHeader(firstPlaintext.toString('utf8'))
+    if (stored === undefined) throw new Error(`session "${id}" has a malformed header`)
+    if (stored.meta.id !== id) throw new Error(`session "${id}" header identity mismatch`)
+    if (stored.meta.cwd !== undefined) {
+      throw new Error(`session "${id}" already carries a cwd; attaching a cwd is one-way`)
+    }
+    const headerText = JSON.stringify(toHeaderLine({ ...stored.meta, cwd }, stored.inheritedEventCount)) + '\n'
+    const nextFirst = this.compression === 'zstd'
+      ? await compressZstdFrame(headerText)
+      : Buffer.from(headerText, 'utf8')
+    const nextBytes = Buffer.concat([nextFirst, bytes.subarray(first.end)])
+    const target = logPath(this.root, cwd, id, this.compression)
+    await ensureDurableDirectoryWin32(dirname(target))
+    const tmp = await this.writeSyncedTempFile(target, nextBytes)
+    try {
+      await publishNewFileWin32(tmp, target)
+    } catch (error) {
+      await rm(tmp, { force: true })
+      throw error
+    }
+    // The log now lives under its attached project directory; remove the old
+    // file so findLog's duplicate detection never sees the id twice. A failed
+    // removal stays loud with the new path already published.
+    await rm(oldPath)
+    const relocated = (await this.list()).find(header => header.id === id)
+    if (relocated === undefined || relocated.cwd !== cwd) {
+      throw new Error(`session "${id}" failed verification after attaching its cwd`)
+    }
+    return relocated
+  }
+
+  /**
    * Read a session's stored artifact text verbatim: the durable file bytes
    * decoded from this backend's physical encoding (complete zstd frames
    * concatenated, or UTF-8 plaintext). The content is the exact JSONL text the

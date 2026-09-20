@@ -964,9 +964,14 @@ async function loadSchema(source: string): Promise<{ safeParse(value: unknown): 
   const path = join(root, 'schema.mjs')
   writeFileSync(path, source)
   const generated = await import(`${pathToFileURL(path).href}?test=${Date.now()}-${String(temporaryRoots.length)}`) as {
-    Root: { safeParse(value: unknown): { success: boolean } }
+    Root: unknown
   }
-  return generated.Root
+  // Non-generic declarations emit as lazy factories; invoke to reach the Zod schema.
+  const rootSchema = typeof generated.Root === 'function' ? (generated.Root as () => { safeParse(value: unknown): { success: boolean } })() : generated.Root
+  if (typeof rootSchema !== 'object' || rootSchema === null || typeof (rootSchema as { safeParse?: unknown }).safeParse !== 'function') {
+    throw new TypeError('emitted Root is neither a Zod schema nor a schema factory')
+  }
+  return rootSchema as { safeParse(value: unknown): { success: boolean } }
 }
 
 function distinct(values: readonly string[]): string[] {

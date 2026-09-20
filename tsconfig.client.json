@@ -79,6 +79,8 @@
     { "path": "./packages/client/ui-reference" },
     { "path": "./packages/client/ui-subagent" },
     { "path": "./packages/experimental/client-ui-agent-team" },
+    { "path": "./packages/experimental/client-ui-expert-team" },
+    { "path": "./packages/experimental/client-ui-project-memory" },
     { "path": "./packages/experimental/client-ui-shadow-entry" },
     { "path": "./packages/client/ui-jobs" },
     { "path": "./packages/client/ui-schedule" },

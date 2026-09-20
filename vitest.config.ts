@@ -300,6 +300,11 @@ export default defineConfig({
         // The Shadow browser entry binds its source-covered mount lifecycle to
         // the generated Shadow Remote contribution, which likewise exists only in lib.
         'packages/experimental/client-ui-shadow-entry/src/client/index.ts',
+        // The Expert-team and Library browser entries likewise bind their
+        // source-covered mount lifecycle to generated Remote contributions that
+        // exist only in lib.
+        'packages/experimental/client-ui-expert-team/src/client/index.ts',
+        'packages/experimental/client-ui-project-memory/src/client/index.ts',
         // Slash/command/input round: per-file gaps deferred with the same
         // client-lane debt. TODO(gui): cover and remove with the lane above.
         'packages/client/connection/src/client/fixture.ts',

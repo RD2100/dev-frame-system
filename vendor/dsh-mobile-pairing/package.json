@@ -1,0 +1,97 @@
+{
+  "name": "@dsh-mobile/pairing",
+  "version": "0.1.15",
+  "type": "module",
+  "description": "DSH Mobile Remote plugin: Host Gateway, Public Endpoint pairing, WebRTC Direct, encrypted Tunnel Fallback",
+  "license": "MIT",
+  "publishConfig": { "access": "public" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "vendor/dsh-mobile-pairing"
+  },
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "bin": {
+    "dsh-pair-mux": "./lib/mux-cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "platform": "web"
+    },
+    "compatibility": {
+      "dshReleases": {
+        "0.1.2-alpha.4": "compatible",
+        "0.1.2-rc.1": "compatible"
+      }
+    }
+  },
+  "files": [
+    "lib/**/*.js",
+    "lib/**/*.d.ts",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsdown --config tsdown.client.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json",
+    "test": "node --test test/*.test.mjs",
+    "fixtures:prepare": "node scripts/prepare-alpha4-fixtures.mjs",
+    "verify:packed": "node scripts/verify-packed-contract.mjs",
+    "check": "npm test && npm run build && npm run verify:packed && npm run typecheck"
+  },
+  "engines": {
+    "node": ">=22.19"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "workspace:^",
+    "@dsh-mobile/e2e-tunnel": "github:NOirBRight/dsh-e2e-tunnel#v0.1.5",
+    "qrcode": "^1.5.4",
+    "tweetnacl": "^1.0.3",
+    "werift": "^0.24.4",
+    "ws": "^8.18.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-host-webserver": "workspace:^",
+    "@deepseek-ai/dsh-settings": "workspace:^",
+    "react": "^18.2.0",
+    "@deepseek-ai/dsh-client-connection": "workspace:^"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-host-webserver": "workspace:^",
+    "@deepseek-ai/dsh-settings": "workspace:^",
+    "@types/node": "^22.0.0",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "~18.3.1",
+    "@types/ws": "^8.18.1",
+    "react": "^18.2.0",
+    "semver": "^7.7.4",
+    "tsdown": "^0.22.2",
+    "typescript": "^5.9.3",
+    "@deepseek-ai/dsh-client-connection": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-client-connection": {
+      "optional": true
+    }
+  }
+}

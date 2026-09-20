@@ -6,7 +6,7 @@
 
 ## 服务面
 
-`ctx.expertTeam` 是五个模型工具派发经过的编排器：`listTeams` 服务 `expert_team_list`，`startRun` 与 `getRun` 服务 `expert_team_run` 与 `expert_team_status`，`approve` 为 `expert_team_approve` 记录人工关口决定，`consult` 在任何运行之外回答 `consult_expert`。同一次运行上的并发决定经每次运行的串行门序列化。
+`ctx.expertTeam` 是四个模型工具派发经过的编排器：`listTeams` 服务 `expert_team_list`，`startRun` 与 `getRun` 服务 `expert_team_run` 与 `expert_team_status`，`approve` 为 `expert_team_approve` 记录人工关口决定。`expert_team_run` 还接受 `expert` 加 `question`，在运行之外执行一次有界咨询。同一次运行上的并发决定经每次运行的串行门序列化。
 
 ## 契约
 
@@ -14,7 +14,7 @@
 
 ## 边界
 
-五个工具经 loader 插件进入[工具](tools.zh.md)注册表，阶段子代理经代理注册表的 scoped-create 面派生而不是 [agent-hierarchy](agent-hierarchy.zh.md) 派发引擎——阶段会话是有界的角色，不是角色绑定的 worker。运行状态在每个提交点镜像到 `<artifactsDir>/<runId>/run-state.json`，但运行不跨进程恢复。把产物记入 project-memory 委托给数据包的工具允许清单；编排器自身从不调用记忆。
+四个工具经 loader 插件进入[工具](tools.zh.md)注册表，阶段子代理经代理注册表的 scoped-create 面派生。层级数据包复用该接缝，并通过可选的 session-identity 注册表记录 controller／lead／worker 绑定；它们不分配工作树，也不调用 [agent-hierarchy](agent-hierarchy.zh.md) 派发引擎。运行状态在每个提交点镜像到 `<artifactsDir>/<runId>/run-state.json`，但运行不跨进程恢复。把产物记入 project-memory 委托给数据包的工具允许清单；编排器自身从不调用记忆。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -28,7 +28,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.expertTeam` — `TeamOrchestrator`
 
-Orchestrates expert-team runs over the mounted catalog. One instance per mounted plugin, published as `ctx.expertTeam`; the model tools are its only consumers.
+Orchestrates expert-team runs over the mounted catalog. One instance per mounted plugin, published as `ctx.expertTeam`; the model tools and the read-only Host status gateway consume it.
 
 ```ts cordis-catalog
 /**
@@ -38,18 +38,18 @@ Orchestrates expert-team runs over the mounted catalog. One instance per mounted
 listTeams(): readonly ExpertTeamView[]
 
 /**
- * Start one run over a mounted pipeline team: mint the run id, create the
- * run directory, and execute phases to the first park point (a gate, a
- * terminal failure, or completion). Every phase expert's tool allowlist is
- * proven mounted before anything is created, so a pack naming an unmounted
- * tool fails without leaving a run behind.
+ * Start one run over a mounted pipeline or hierarchical team: mint the run
+ * id, create the run directory, and execute phases to the first park point
+ * (a gate, a terminal failure, or completion). Every phase expert's tool
+ * allowlist is proven mounted before anything is created, so a pack naming
+ * an unmounted tool fails without leaving a run behind.
  * @param teamId - Mounted team id.
  * @param input - Free-form run request text (for example, the research topic).
  * @returns the run snapshot at its first park point.
  * @throws {@link ExpertTeamError} with code `EXPERT_TEAM_TEAM_MISSING`
  *   when the team is not mounted, `EXPERT_TEAM_MODE_UNSUPPORTED` when the
- *   team is not a pipeline, or `EXPERT_TEAM_TOOL_MISSING` when a phase
- *   expert names an unmounted tool.
+ *   team declares an unsupported mode, or `EXPERT_TEAM_TOOL_MISSING` when a
+ *   phase expert names an unmounted tool.
  */
 async startRun(teamId: string, input: string): Promise<TeamRun>
 
@@ -64,22 +64,27 @@ getRun(runId: string): TeamRun
 
 /**
  * Record the human gate decision on a run's single parked phase and resume.
- * An approval marks the gated phase done and executes the remaining
- * pipeline to the next park point; a rejection re-drives the phase session
- * with the reviewer's comment before parking again. The whole span is
+ * An approval marks the gated phase done and executes the remaining phases
+ * to the next park point, and delivers a best-effort post-approval
+ * follow-up to the gated phase session so the persona's post-acceptance
+ * steps can fire in a real turn (a failed delivery is logged, never fatal);
+ * a rejection re-drives the phase session with the reviewer's comment
+ * before parking again and sends no follow-up. The whole span is
  * serialized against concurrent decisions.
  * @param runId - Raw run id as the model supplied it.
  * @param decision - The recorded decision.
  * @param comment - Optional reviewer comment; a rejection comment is the
- *   revision guidance the phase expert receives.
+ *   revision guidance the phase expert receives, and an approval comment
+ *   rides the acceptance follow-up.
  * @returns the run snapshot after the decision took effect.
  * @throws {@link ExpertTeamError} with code `EXPERT_TEAM_RUN_UNKNOWN` when
  *   the run is not live, or `EXPERT_TEAM_GATE_PENDING` when no gate awaits
- *   a decision or an approval targets a failed phase. An infrastructure
- *   failure while re-driving the phase (agent derivation, model selection,
- *   session creation) settles the run failed and propagates.
+ *   a decision or an approval targets a failed phase (no review is
+ *   recorded then). An infrastructure failure while re-driving the phase
+ *   (agent derivation, model selection, session creation) settles the run
+ *   failed and propagates.
  */
-async approve(runId: string, decision: GateDecision, comment?: string | undefined): Promise<TeamRun>
+async approve(runId: string, decision: GateDecision, comment?: string): Promise<TeamRun>
 
 /**
  * Consult one expert outside any pipeline: a single bounded turn with the
@@ -95,9 +100,70 @@ async consult(teamId: string, expertId: string, question: string): Promise<{ rea
 
 /** Dispose every derived agent session this orchestrator still owns. */
 async dispose(): Promise<void>
+
+/**
+ * Read the live process's run index for observability. The returned rows are
+ * detached snapshots; callers cannot mutate the orchestrator's index.
+ * @returns all runs known to this orchestrator, in first-seen order.
+ */
+listRuns(): readonly ExpertTeamRunView[]
 ```
 
-Types: [ExpertTeamView](../../packages/experimental/expert-team/README.zh.md) · [GateDecision](../../packages/experimental/expert-team/README.zh.md) · [TeamRun](../../packages/experimental/expert-team/README.zh.md)
+Types: [ExpertTeamRunView](../../packages/experimental/expert-team/README.zh.md) · [ExpertTeamView](../../packages/experimental/expert-team/README.zh.md) · [GateDecision](../../packages/experimental/expert-team/README.zh.md) · [TeamRun](../../packages/experimental/expert-team/README.zh.md)
 
 Source: [`packages/experimental/expert-team/src/orchestrate.ts`](../../packages/experimental/expert-team/src/orchestrate.ts)
+
+<a id="ctxexpertteamgateway--expertteamgateway"></a>
+
+### `ctx.expertTeamGateway` — `ExpertTeamGateway`
+
+Host service backing the generated `ctx.remote.expertTeam` namespace.
+
+```ts cordis-catalog
+/**
+ * Read the current catalog and live-process run index.
+ * @returns the mounted team metadata and detached run-history rows.
+ */
+@Remote('view') view(): ExpertTeamSnapshot
+
+/**
+ * Start one pipeline or hierarchical run from the UI.
+ * @param request - Team id and run input text.
+ * @returns the run snapshot at its first park point.
+ * @throws {@link ExpertTeamError} with the same codes as
+ *   {@link TeamOrchestrator.startRun}.
+ */
+@Remote('startRun') async startRun(request: ExpertTeamStartRunRequest): Promise<ExpertTeamRunDetail>
+
+/**
+ * Consult one expert outside any pipeline from the UI.
+ * @param request - Team id, expert id, and the caller's question.
+ * @returns the answer text and its truncation flag.
+ * @throws {@link ExpertTeamError} with `EXPERT_TEAM_TEAM_MISSING` /
+ *   `EXPERT_TEAM_EXPERT_MISSING` codes from the catalog lookups.
+ */
+@Remote('consult') async consult(request: ExpertTeamConsultRequest): Promise<ExpertTeamConsultResult>
+
+/**
+ * Record the human gate decision on a run's single parked phase and resume.
+ * @param request - Run id, the recorded decision, and an optional comment.
+ * @returns the run snapshot after the decision took effect.
+ * @throws {@link ExpertTeamError} with the same codes as
+ *   {@link TeamOrchestrator.approve}.
+ */
+@Remote('approve') async approve(request: ExpertTeamApproveRequest): Promise<ExpertTeamRunDetail>
+
+/**
+ * Read one live run's full snapshot, including per-phase gate state.
+ * @param request - Raw run id as the UI row displayed it.
+ * @returns the frozen run snapshot.
+ * @throws {@link ExpertTeamError} with code `EXPERT_TEAM_RUN_UNKNOWN` when
+ *   the id is malformed or not a live run of this process.
+ */
+@Remote('getRun') getRun(request: ExpertTeamRunRequest): ExpertTeamRunDetail
+```
+
+Types: [ExpertTeamApproveRequest](../../packages/experimental/expert-team/README.zh.md) · [ExpertTeamConsultRequest](../../packages/experimental/expert-team/README.zh.md) · [ExpertTeamConsultResult](../../packages/experimental/expert-team/README.zh.md) · [ExpertTeamRunDetail](../../packages/experimental/expert-team/README.zh.md) · [ExpertTeamRunRequest](../../packages/experimental/expert-team/README.zh.md) · [ExpertTeamSnapshot](../../packages/experimental/expert-team/README.zh.md) · [ExpertTeamStartRunRequest](../../packages/experimental/expert-team/README.zh.md)
+
+Source: [`packages/experimental/expert-team/src/gateway.ts`](../../packages/experimental/expert-team/src/gateway.ts)
 <!-- END GENERATED cordis-surface -->

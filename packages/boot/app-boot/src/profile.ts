@@ -998,6 +998,72 @@ export function resolveBundleDir(
 }
 
 /**
+ * Resolve one `dsh.profile.bundles` entry to its patch layer. A bundle without
+ * a `dsh.bundle` manifest fails loud — naming a bundle-less package as a layer
+ * is a misconfiguration, not "no patches".
+ * @param binName - the diagnostic prefix on thrown errors.
+ * @param packageName - the declared bundle package name.
+ * @param installAnchor - absolute path of the dsh app's package.json (first resolution anchor).
+ * @param profileDir - the owning profile directory (second resolution anchor).
+ * @returns the resolved bundle layer.
+ */
+function resolveBundleLayer(
+  binName: string,
+  packageName: string,
+  installAnchor: string,
+  profileDir: string,
+): ProfileLayer {
+  const packageDir = resolveBundleDir(binName, packageName, installAnchor, profileDir)
+  const bundleManifest = readManifestObject(
+    binName,
+    join(packageDir, 'package.json'),
+    'profile bundle manifest',
+  )
+  const bundle = isRecord(bundleManifest.dsh) ? bundleManifest.dsh.bundle : undefined
+  if (bundle === undefined) {
+    throw new Error(`${binName}: profile bundle ${JSON.stringify(packageName)} declares no dsh.bundle in its package.json`)
+  }
+  const declared = isRecord(bundle) ? bundle.patch : undefined
+  if (typeof declared !== 'string') {
+    throw new Error(
+      `${binName}: profile bundle ${JSON.stringify(packageName)} dsh.bundle.patch must be a non-empty string`,
+    )
+  }
+  const patchPath = resolveBundlePatchPath(binName, packageName, packageDir, declared)
+  return { packageName, packageDir, patchPath, patches: loadOverlayPatches(binName, patchPath) }
+}
+
+/**
+ * Load an already initialized profile directory without resolving it through
+ * the shared Harness home. Application-owned profiles (whose package project
+ * and lifecycle belong to that application) use this entry point.
+ * @param binName - the diagnostic prefix on thrown errors.
+ * @param dir - absolute profile package directory.
+ * @param installAnchor - absolute path of the owning dsh app's package.json.
+ * @param options - `userLayer: false` skips reading `cordis.patch.yml`.
+ * @returns the resolved bundle layers and optional user patch layer.
+ */
+export function loadProfileDirectory(
+  binName: string,
+  dir: string,
+  installAnchor: string,
+  options: { userLayer?: boolean } = {},
+): Profile {
+  const manifest = readProfileManifest(binName, dir)
+  const bundles = manifest.dsh?.profile?.bundles ?? []
+  const layers = bundles.map(packageName =>
+    resolveBundleLayer(binName, packageName, installAnchor, dir),
+  )
+  return resolveProfileFromLayers(
+    binName,
+    dir,
+    layers,
+    manifest.dsh?.profile?.patchReload ?? DEFAULT_PROFILE_PATCH_RELOAD,
+    options,
+  )
+}
+
+/**
  * Load a profile: resolve every `dsh.profile.bundles` entry to its patch
  * layer and parse the profile's own patch file. A listed bundle without a
  * `dsh.bundle` manifest fails loud — naming a bundle-less package as a layer
@@ -1028,32 +1094,33 @@ export function loadProfile(
   const manifest = normalizeShippedProfile(name, dir, readProfileManifest(binName, dir))
   // A hand-written profile manifest may omit the dsh section entirely.
   const bundles = manifest.dsh?.profile?.bundles ?? []
-  const patchReload = manifest.dsh?.profile?.patchReload ?? DEFAULT_PROFILE_PATCH_RELOAD
-  const layers = bundles.map((packageName): ProfileLayer => {
-    const packageDir = resolveBundleDir(binName, packageName, installAnchor, dir)
-    const bundleManifest = readManifestObject(
-      binName,
-      join(packageDir, 'package.json'),
-      'profile bundle manifest',
-    )
-    const bundle = isRecord(bundleManifest.dsh) ? bundleManifest.dsh.bundle : undefined
-    const declared = isRecord(bundle) ? bundle.patch : undefined
-    if (bundle === undefined) {
-      throw new Error(`${binName}: profile bundle ${JSON.stringify(packageName)} declares no dsh.bundle in its package.json`)
-    }
-    if (typeof declared !== 'string') {
-      throw new Error(
-        `${binName}: profile bundle ${JSON.stringify(packageName)} dsh.bundle.patch must be a non-empty string`,
-      )
-    }
-    const patchPath = resolveBundlePatchPath(binName, packageName, packageDir, declared)
-    return { packageName, packageDir, patchPath, patches: loadOverlayPatches(binName, patchPath) }
-  })
+  const layers = bundles.map(packageName =>
+    resolveBundleLayer(binName, packageName, installAnchor, dir),
+  )
+  return resolveProfileFromLayers(binName, dir, layers, manifest.dsh?.profile?.patchReload ?? DEFAULT_PROFILE_PATCH_RELOAD, options)
+}
+
+/**
+ * Assemble the profile value from resolved layers plus the optional user layer.
+ * @param binName - the diagnostic prefix on thrown errors.
+ * @param dir - the profile directory.
+ * @param layers - the resolved bundle layers in application order.
+ * @param patchReload - the profile's declared patch-reload mode.
+ * @param options - `userLayer: false` skips reading `cordis.patch.yml`.
+ * @returns the profile record.
+ */
+function resolveProfileFromLayers(
+  binName: string,
+  dir: string,
+  layers: ProfileLayer[],
+  patchReload: ProfilePatchReload,
+  options: { userLayer?: boolean },
+): Profile {
   const patchPath = join(dir, PROFILE_PATCH_FILENAME)
   const patches = options.userLayer !== false && existsSync(patchPath)
     ? loadOverlayPatches(binName, patchPath)
     : []
-  return { name, dir, layers, patchPath, patches, patchReload }
+  return { name: basename(dir), dir, layers, patchPath, patches, patchReload }
 }
 
 /**

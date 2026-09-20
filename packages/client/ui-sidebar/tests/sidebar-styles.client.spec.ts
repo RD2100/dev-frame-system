@@ -72,4 +72,10 @@ describe('SidebarRoot.module.css', () => {
     expect(declarations('.fallbackBrandName')?.get('font-size')).toBe('17px')
     expect(declarations('.fallbackBrandName')?.get('white-space')).toBe('nowrap')
   })
+
+  it('stacks additive footer actions above Settings', () => {
+    expect(css).toMatch(
+      /\.footerActions\s*\{\s*display:\s*flex;\s*flex-direction:\s*column;\s*}/,
+    )
+  })
 })

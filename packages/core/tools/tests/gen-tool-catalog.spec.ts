@@ -30,7 +30,7 @@ describe('gen-tool-catalog collectToolCatalog', () => {
       'cordis_inspect_query', 'cordis_inspect_self', 'cordis_run', 'cordis_stop',
       'cordis_undefine', 'create_goal', 'edit', 'exit_plan_mode', 'followup_task', 'get_goal', 'glob', 'grep',
       'interrupt_agent', 'interrupt_agent', 'job_kill', 'job_list', 'job_output',
-      'list_agents', 'list_agents', 'list_subagent_models', 'lsp', 'project_deliver', 'project_integrate', 'project_review', 'project_task', 'pwsh', 'pwsh', 'ralph',
+      'list_agents', 'list_agents', 'list_subagent_models', 'lsp', 'project_commit', 'project_deliver', 'project_evidence', 'project_goal_review', 'project_goal_verify', 'project_integrate', 'project_review', 'project_task', 'pwsh', 'pwsh', 'ralph',
       'read', 'read_image', 'run_code', 'schedule_create', 'schedule_delete',
       'schedule_list', 'send_message', 'send_message', 'session_event_read', 'session_event_search',
       'session_event_trace', 'session_search', 'session_trace', 'skill', 'spawn_teammate',

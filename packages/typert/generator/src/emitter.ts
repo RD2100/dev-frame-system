@@ -194,7 +194,7 @@ export class FaceModelEmitter {
     if (schemas.definitions.length > 0) lines.push('import { z } from \'zod\'', '')
     lines.push(...schemas.definitions)
     if (schemas.definitions.length > 0) lines.push('')
-    for (const schema of schemas.exports) lines.push(`export const ${schema.exportName} = ${schema.internalName}`)
+    for (const schema of schemas.exports) lines.push(`export const ${schema.exportName} = ${schema.internalName}()`)
     if (schemas.exports.length > 0) lines.push('')
     const model = JSON.stringify(runtimeModel, null, 2)
     lines.push('export const TYPERT = {')
@@ -202,7 +202,7 @@ export class FaceModelEmitter {
     lines.push(`  face: ${quote(this.face.face)},`)
     lines.push('  schemas: [')
     for (const schema of schemas.exports) {
-      lines.push(`    { name: ${quote(schema.exportName)}, schema: ${schema.exportName} },`)
+      lines.push(`    { name: ${quote(schema.exportName)}, schema: ${schema.internalName}(), create: ${schema.internalName} },`)
     }
     lines.push('  ],')
     lines.push('  invocations: [')
@@ -556,7 +556,8 @@ class SchemaEmitter {
   emit(): SchemaArtifact {
     const definitions = this.declarations.map(declaration => this.declarationDefinition(declaration))
     for (const boundary of this.boundaries) {
-      definitions.push(`const ${this.boundaryName(boundary.key)} = ${this.typeSchema(boundary.type)}`)
+      const name = this.boundaryName(boundary.key)
+      definitions.push(`let ${name}$value\nconst ${name} = () => (${name}$value ??= ${this.typeSchema(boundary.type)})`)
     }
     const exports = this.schemas.map((model): SchemaExport => ({
       model,
@@ -573,7 +574,7 @@ class SchemaEmitter {
   private declarationDefinition(declaration: TypeDeclarationModel): string {
     const name = this.schemaName(declaration.id)
     if (declaration.typeParameters.length === 0) {
-      return `const ${name} = ${this.declarationSchema(declaration, new Map())}`
+      return `let ${name}$value\nconst ${name} = () => (${name}$value ??= ${this.declarationSchema(declaration, new Map())})`
     }
     const parameters = declaration.typeParameters.map((parameter, index) =>
       [`type${String(index)}$schema`, parameter.id] as const)
@@ -655,7 +656,7 @@ class SchemaEmitter {
         if (node.arguments.length > 0) {
           this.fail(node.name, `non-generic declaration received ${String(node.arguments.length)} type arguments`)
         }
-        return `z.lazy(() => ${name})`
+        return `z.lazy(() => ${name}())`
       }
       const arguments_ = this.declarationArguments(node, declaration, substitutions)
       return `z.lazy(() => ${name}(${arguments_.join(', ')}))`
@@ -873,7 +874,8 @@ function strictCodec(boundary: RemoteBoundaryModel, schema: string): string {
     '{',
     '  mode: \'strict\',',
     `  typeSymbol: ${quote(boundary.typeSymbol)},`,
-    `  schema: ${schema},`,
+    `  schema: ${schema}(),`,
+    `  create: ${schema},`,
     '}',
   ].join('\n')
 }

@@ -902,7 +902,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'expertTeam',
     summary: 'Orchestrates expert-team runs over the mounted catalog.',
-    description: 'Orchestrates expert-team runs over the mounted catalog. One instance per mounted plugin, published as `ctx.expertTeam`; the model tools are its only consumers.',
+    description: 'Orchestrates expert-team runs over the mounted catalog. One instance per mounted plugin, published as `ctx.expertTeam`; the model tools and the read-only Host status gateway consume it.',
     methods: [
       {
         signature: 'listTeams(): readonly ExpertTeamView[]',
@@ -912,10 +912,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async startRun(teamId: string, input: string): Promise<TeamRun>',
-        description: 'Start one run over a mounted pipeline team: mint the run id, create the run directory, and execute phases to the first park point (a gate, a terminal failure, or completion). Every phase expert\'s tool allowlist is proven mounted before anything is created, so a pack naming an unmounted tool fails without leaving a run behind.',
+        description: 'Start one run over a mounted pipeline or hierarchical team: mint the run id, create the run directory, and execute phases to the first park point (a gate, a terminal failure, or completion). Every phase expert\'s tool allowlist is proven mounted before anything is created, so a pack naming an unmounted tool fails without leaving a run behind.',
         parameters: [{ name: 'teamId', description: 'Mounted team id.' }, { name: 'input', description: 'Free-form run request text (for example, the research topic).' }],
         returns: 'the run snapshot at its first park point.',
-        throws: ['{@link ExpertTeamError} with code `EXPERT_TEAM_TEAM_MISSING` when the team is not mounted, `EXPERT_TEAM_MODE_UNSUPPORTED` when the team is not a pipeline, or `EXPERT_TEAM_TOOL_MISSING` when a phase expert names an unmounted tool.'],
+        throws: ['{@link ExpertTeamError} with code `EXPERT_TEAM_TEAM_MISSING` when the team is not mounted, `EXPERT_TEAM_MODE_UNSUPPORTED` when the team declares an unsupported mode, or `EXPERT_TEAM_TOOL_MISSING` when a phase expert names an unmounted tool.'],
       },
       {
         signature: 'getRun(runId: string): TeamRun',
@@ -925,11 +925,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['{@link ExpertTeamError} with code `EXPERT_TEAM_RUN_UNKNOWN` when the id is malformed or not a live run of this process.'],
       },
       {
-        signature: 'async approve(runId: string, decision: GateDecision, comment?: string | undefined): Promise<TeamRun>',
-        description: 'Record the human gate decision on a run\'s single parked phase and resume. An approval marks the gated phase done and executes the remaining pipeline to the next park point; a rejection re-drives the phase session with the reviewer\'s comment before parking again. The whole span is serialized against concurrent decisions.',
-        parameters: [{ name: 'runId', description: 'Raw run id as the model supplied it.' }, { name: 'decision', description: 'The recorded decision.' }, { name: 'comment', description: 'Optional reviewer comment; a rejection comment is the revision guidance the phase expert receives.' }],
+        signature: 'async approve(runId: string, decision: GateDecision, comment?: string): Promise<TeamRun>',
+        description: 'Record the human gate decision on a run\'s single parked phase and resume. An approval marks the gated phase done and executes the remaining phases to the next park point, and delivers a best-effort post-approval follow-up to the gated phase session so the persona\'s post-acceptance steps can fire in a real turn (a failed delivery is logged, never fatal); a rejection re-drives the phase session with the reviewer\'s comment before parking again and sends no follow-up. The whole span is serialized against concurrent decisions.',
+        parameters: [{ name: 'runId', description: 'Raw run id as the model supplied it.' }, { name: 'decision', description: 'The recorded decision.' }, { name: 'comment', description: 'Optional reviewer comment; a rejection comment is the revision guidance the phase expert receives, and an approval comment rides the acceptance follow-up.' }],
         returns: 'the run snapshot after the decision took effect.',
-        throws: ['{@link ExpertTeamError} with code `EXPERT_TEAM_RUN_UNKNOWN` when the run is not live, or `EXPERT_TEAM_GATE_PENDING` when no gate awaits a decision or an approval targets a failed phase. An infrastructure failure while re-driving the phase (agent derivation, model selection, session creation) settles the run failed and propagates.'],
+        throws: ['{@link ExpertTeamError} with code `EXPERT_TEAM_RUN_UNKNOWN` when the run is not live, or `EXPERT_TEAM_GATE_PENDING` when no gate awaits a decision or an approval targets a failed phase (no review is recorded then). An infrastructure failure while re-driving the phase (agent derivation, model selection, session creation) settles the run failed and propagates.'],
       },
       {
         signature: 'async consult(teamId: string, expertId: string, question: string): Promise<{ readonly answer: string; readonly truncated: boolean }>',
@@ -942,6 +942,53 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'async dispose(): Promise<void>',
         description: 'Dispose every derived agent session this orchestrator still owns.',
         parameters: [],
+      },
+      {
+        signature: 'listRuns(): readonly ExpertTeamRunView[]',
+        description: 'Read the live process\'s run index for observability. The returned rows are detached snapshots; callers cannot mutate the orchestrator\'s index.',
+        parameters: [],
+        returns: 'all runs known to this orchestrator, in first-seen order.',
+      },
+    ],
+  },
+  {
+    key: 'expertTeamGateway',
+    summary: 'Host service backing the generated `ctx.remote.expertTeam` namespace.',
+    description: 'Host service backing the generated `ctx.remote.expertTeam` namespace.',
+    methods: [
+      {
+        signature: '@Remote(\'view\') view(): ExpertTeamSnapshot',
+        description: 'Read the current catalog and live-process run index.',
+        parameters: [],
+        returns: 'the mounted team metadata and detached run-history rows.',
+      },
+      {
+        signature: '@Remote(\'startRun\') async startRun(request: ExpertTeamStartRunRequest): Promise<ExpertTeamRunDetail>',
+        description: 'Start one pipeline or hierarchical run from the UI.',
+        parameters: [{ name: 'request', description: 'Team id and run input text.' }],
+        returns: 'the run snapshot at its first park point.',
+        throws: ['{@link ExpertTeamError} with the same codes as {@link TeamOrchestrator.startRun}.'],
+      },
+      {
+        signature: '@Remote(\'consult\') async consult(request: ExpertTeamConsultRequest): Promise<ExpertTeamConsultResult>',
+        description: 'Consult one expert outside any pipeline from the UI.',
+        parameters: [{ name: 'request', description: 'Team id, expert id, and the caller\'s question.' }],
+        returns: 'the answer text and its truncation flag.',
+        throws: ['{@link ExpertTeamError} with `EXPERT_TEAM_TEAM_MISSING` / `EXPERT_TEAM_EXPERT_MISSING` codes from the catalog lookups.'],
+      },
+      {
+        signature: '@Remote(\'approve\') async approve(request: ExpertTeamApproveRequest): Promise<ExpertTeamRunDetail>',
+        description: 'Record the human gate decision on a run\'s single parked phase and resume.',
+        parameters: [{ name: 'request', description: 'Run id, the recorded decision, and an optional comment.' }],
+        returns: 'the run snapshot after the decision took effect.',
+        throws: ['{@link ExpertTeamError} with the same codes as {@link TeamOrchestrator.approve}.'],
+      },
+      {
+        signature: '@Remote(\'getRun\') getRun(request: ExpertTeamRunRequest): ExpertTeamRunDetail',
+        description: 'Read one live run\'s full snapshot, including per-phase gate state.',
+        parameters: [{ name: 'request', description: 'Raw run id as the UI row displayed it.' }],
+        returns: 'the frozen run snapshot.',
+        throws: ['{@link ExpertTeamError} with code `EXPERT_TEAM_RUN_UNKNOWN` when the id is malformed or not a live run of this process.'],
       },
     ],
   },
@@ -1322,6 +1369,46 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Select a provider by the file\'s extension and run one query. Selection is per-query and order-independent; no match throws `LspError` `LSP_UNAVAILABLE`.',
         parameters: [{ name: 'request', description: 'the normalized query.' }, { name: 'signal', description: 'optional cancellation forwarded to the selected provider.' }],
         returns: 'the normalized, closed-union result.',
+      },
+    ],
+  },
+  {
+    key: 'memoryLibraryGateway',
+    summary: 'Host service backing the generated `ctx.remote.library` namespace.',
+    description: 'Host service backing the generated `ctx.remote.library` namespace.',
+    methods: [
+      {
+        signature: '@Remote(\'view\') async view(): Promise<MemoryLibrarySnapshot>',
+        description: 'Read the current library status and file listing in one call.',
+        parameters: [],
+        returns: 'availability metadata plus the accessible files; an unconfigured vault yields an `UNAVAILABLE` status and an empty listing.',
+      },
+      {
+        signature: '@Remote(\'status\') status(): Promise<LibraryStatus>',
+        description: 'Inspect vault availability without touching any file.',
+        parameters: [],
+        returns: 'the same status object the model tool reports.',
+      },
+      {
+        signature: '@Remote(\'list\') async list(request: MemoryLibraryListRequest): Promise<readonly LibraryFile[]>',
+        description: 'List the accessible library files with an optional depth cap.',
+        parameters: [{ name: 'request', description: 'Listing options.' }],
+        returns: 'the sorted file metadata rows.',
+        throws: ['{@link ProjectMemoryError} with `MEMORY_UNAVAILABLE` when no vault is configured or the vault is inaccessible.'],
+      },
+      {
+        signature: '@Remote(\'read\') async read(request: MemoryLibraryReadRequest): Promise<MemoryLibraryReadResult>',
+        description: 'Read one library file for preview, with its real absolute on-disk path.',
+        parameters: [{ name: 'request', description: 'Relative path inside the vault (forward slashes).' }],
+        returns: 'the file content and the absolute copy/reference target.',
+        throws: ['{@link ProjectMemoryError} with the same codes as {@link readLibraryFile}; the absolute path is computed only after the path has passed the full containment and symlink validation.'],
+      },
+      {
+        signature: '@Remote(\'search\') async search(request: MemoryLibrarySearchRequest): Promise<readonly LibrarySearchResult[]>',
+        description: 'Search the library by name and text content from the UI.',
+        parameters: [{ name: 'request', description: 'Non-empty query and an optional result cap.' }],
+        returns: 'the bounded search hits.',
+        throws: ['{@link ProjectMemoryError} with the same codes as {@link searchLibrary}.'],
       },
     ],
   },
@@ -4282,8 +4369,40 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface EpochHeader {\n    config: LlmCallConfig;\n    adapterDefaults?: LlmCallConfigAdapterDefaults;\n    system?: string;\n    tools?: ToolSchema[];\n}',
   },
   {
+    name: 'ExpertTeamApproveRequest',
+    declaration: 'export interface ExpertTeamApproveRequest {\n    readonly runId: string;\n    readonly decision: GateDecision;\n    readonly comment?: string;\n}',
+  },
+  {
+    name: 'ExpertTeamConsultRequest',
+    declaration: 'export interface ExpertTeamConsultRequest {\n    readonly teamId: string;\n    readonly expertId: string;\n    readonly question: string;\n}',
+  },
+  {
+    name: 'ExpertTeamConsultResult',
+    declaration: 'export interface ExpertTeamConsultResult {\n    readonly answer: string;\n    readonly truncated: boolean;\n}',
+  },
+  {
+    name: 'ExpertTeamRunDetail',
+    declaration: 'export type ExpertTeamRunDetail = TeamRun;',
+  },
+  {
+    name: 'ExpertTeamRunRequest',
+    declaration: 'export interface ExpertTeamRunRequest {\n    readonly runId: string;\n}',
+  },
+  {
+    name: 'ExpertTeamRunView',
+    declaration: 'export interface ExpertTeamRunView {\n    readonly runId: string;\n    readonly teamId: string;\n    readonly mode: TeamMode;\n    readonly status: TeamRunStatus;\n    readonly createdAt: string;\n    readonly completedAt?: string;\n}',
+  },
+  {
+    name: 'ExpertTeamSnapshot',
+    declaration: 'export interface ExpertTeamSnapshot {\n    readonly teams: readonly ExpertTeamView[];\n    readonly runs: readonly ExpertTeamRunView[];\n}',
+  },
+  {
+    name: 'ExpertTeamStartRunRequest',
+    declaration: 'export interface ExpertTeamStartRunRequest {\n    readonly teamId: string;\n    readonly input: string;\n}',
+  },
+  {
     name: 'ExpertTeamView',
-    declaration: 'export interface ExpertTeamView {\n    readonly team: string;\n    readonly title: string;\n    readonly mode: TeamMode;\n    readonly entry: string;\n    readonly experts: readonly {\n        readonly id: string;\n        readonly name: string;\n        readonly role: string;\n        readonly tools: string[];\n    }[];\n    readonly phases: readonly {\n        readonly id: string;\n        readonly expert: string;\n        readonly dependsOn: string[];\n        readonly artifact: string;\n        readonly gate?: string;\n    }[];\n}',
+    declaration: 'export interface ExpertTeamView {\n    readonly team: string;\n    readonly title: string;\n    readonly mode: TeamMode;\n    readonly entry: string;\n    readonly experts: readonly {\n        readonly id: string;\n        readonly name: string;\n        readonly role: string;\n        readonly tools: string[];\n        readonly hierarchyRole?: string;\n    }[];\n    readonly phases: readonly {\n        readonly id: string;\n        readonly expert: string;\n        readonly dependsOn: string[];\n        readonly artifact: string;\n        readonly gate?: string;\n        readonly hierarchyRole?: string;\n    }[];\n}',
   },
   {
     name: 'FiberState',
@@ -4578,6 +4697,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type LandingOutcome = \'landed\' | \'assigned\' | \'skipped\';',
   },
   {
+    name: 'LibraryFile',
+    declaration: 'export interface LibraryFile {\n    readonly relativePath: string;\n    readonly size: number;\n    readonly mtimeMs: number;\n}',
+  },
+  {
+    name: 'LibrarySearchResult',
+    declaration: 'export interface LibrarySearchResult {\n    readonly relativePath: string;\n    readonly matchType: \'name\' | \'content\' | \'both\';\n    readonly excerpt: string;\n    readonly line?: number;\n}',
+  },
+  {
+    name: 'LibraryStatus',
+    declaration: 'export interface LibraryStatus {\n    readonly status: \'AVAILABLE\' | \'UNAVAILABLE\';\n    readonly vaultRoot?: string;\n    readonly realPath?: string;\n    readonly fileCount?: number;\n    readonly totalSizeBytes?: number;\n    readonly reason?: string;\n}',
+  },
+  {
     name: 'LlmAdapter',
     declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
   },
@@ -4684,6 +4815,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ManualCompactAgentContext',
     declaration: 'export interface ManualCompactAgentContext extends CompactionAgentContext {\n    runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>;\n}',
+  },
+  {
+    name: 'MemoryLibraryListRequest',
+    declaration: 'export interface MemoryLibraryListRequest {\n    readonly maxDepth?: number;\n}',
+  },
+  {
+    name: 'MemoryLibraryReadRequest',
+    declaration: 'export interface MemoryLibraryReadRequest {\n    readonly relativePath: string;\n}',
+  },
+  {
+    name: 'MemoryLibraryReadResult',
+    declaration: 'export interface MemoryLibraryReadResult {\n    readonly relativePath: string;\n    readonly absolutePath: string;\n    readonly content: string;\n}',
+  },
+  {
+    name: 'MemoryLibrarySearchRequest',
+    declaration: 'export interface MemoryLibrarySearchRequest {\n    readonly query: string;\n    readonly maxResults?: number;\n}',
+  },
+  {
+    name: 'MemoryLibrarySnapshot',
+    declaration: 'export interface MemoryLibrarySnapshot {\n    readonly status: LibraryStatus;\n    readonly files: readonly LibraryFile[];\n}',
   },
   {
     name: 'Message',
@@ -4831,7 +4982,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'PhaseState',
-    declaration: 'export interface PhaseState {\n    readonly phaseId: string;\n    readonly status: PhaseStatus;\n    readonly attempts: number;\n    readonly artifact?: ArtifactRef;\n    readonly error?: string;\n    readonly reviews?: readonly GateReview[];\n}',
+    declaration: 'export interface PhaseState {\n    readonly phaseId: string;\n    readonly status: PhaseStatus;\n    readonly attempts: number;\n    readonly artifact?: ArtifactRef;\n    readonly error?: string;\n    readonly openQuestions?: readonly string[];\n    readonly userQuestions?: readonly string[];\n    readonly reviews?: readonly GateReview[];\n}',
   },
   {
     name: 'PhaseStatus',
@@ -5951,7 +6102,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeamRun',
-    declaration: 'export interface TeamRun {\n    readonly runId: RunId;\n    readonly teamId: string;\n    readonly mode: TeamMode;\n    readonly status: TeamRunStatus;\n    readonly createdAt: string;\n    readonly phases: readonly PhaseState[];\n}',
+    declaration: 'export interface TeamRun {\n    readonly runId: RunId;\n    readonly teamId: string;\n    readonly mode: TeamMode;\n    readonly status: TeamRunStatus;\n    readonly createdAt: string;\n    readonly phases: readonly PhaseState[];\n    readonly version?: number;\n}',
   },
   {
     name: 'TeamRunStatus',

@@ -208,6 +208,10 @@ export function expectedDshPackageFiles(manifest: PackageManifest): readonly str
     ...exportDefault(manifest, './delivery-consumer') === './lib/delivery-consumer.js' ? ['lib/delivery-consumer.js'] : [],
     ...exportDefault(manifest, './completion-consumer') === './lib/completion-consumer.js' ? ['lib/completion-consumer.js'] : [],
     ...exportDefault(manifest, './request-budget-consumer') === './lib/request-budget-consumer.js' ? ['lib/request-budget-consumer.js'] : [],
+    // The Loader mounts the shadow agent row and the PTY ownership seam by
+    // subpath name; each ships its own bundle beside the service bundle.
+    ...exportDefault(manifest, './shadow-agent') === './lib/shadow-agent.js' ? ['lib/shadow-agent.js'] : [],
+    ...exportDefault(manifest, './ownership') === './lib/ownership.js' ? ['lib/ownership.js'] : [],
     ...extras,
     // Subpaths whose runtime default is the tsc-emitted tree (lib/types/*.js —
     // browser-safe source channels rehomed off src so plain Node can import
