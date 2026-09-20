@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Code review phase result (dev team, review.md)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifactPath", "summary", "verdict"],
+  "properties": {
+    "artifactPath": {
+      "type": "string",
+      "pattern": "^review\\.md$"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["approved", "needs-changes", "rejected"]
+    },
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "codeQuality": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "score": { "type": "integer", "minimum": 1, "maximum": 5 },
+            "notes": { "type": "string" }
+          }
+        },
+        "security": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "score": { "type": "integer", "minimum": 1, "maximum": 5 },
+            "notes": { "type": "string" }
+          }
+        },
+        "maintainability": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "score": { "type": "integer", "minimum": 1, "maximum": 5 },
+            "notes": { "type": "string" }
+          }
+        },
+        "performance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "score": { "type": "integer", "minimum": 1, "maximum": 5 },
+            "notes": { "type": "string" }
+          }
+        },
+        "testing": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "score": { "type": "integer", "minimum": 1, "maximum": 5 },
+            "notes": { "type": "string" }
+          }
+        }
+      }
+    },
+    "recommendations": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "openQuestions": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

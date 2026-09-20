@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Implementation phase result (dev team, implementation.md)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifactPath", "summary", "completedTasks", "blockedTasks"],
+  "properties": {
+    "artifactPath": {
+      "type": "string",
+      "pattern": "^implementation\\.md$"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "completedTasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["taskId", "summary"],
+        "properties": {
+          "taskId": { "type": "string", "pattern": "^TASK-\\d+$" },
+          "summary": { "type": "string", "minLength": 1 },
+          "filesChanged": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "blockedTasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["taskId", "reason"],
+        "properties": {
+          "taskId": { "type": "string", "pattern": "^TASK-\\d+$" },
+          "reason": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "openQuestions": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}
