@@ -5,11 +5,13 @@ entry: plan
 phases:
   - id: plan
     expert: planner
+    hierarchy-role: controller
     input: 需求描述与项目约束
     output:
       artifact: plan.md
   - id: implement
     expert: implementer
+    hierarchy-role: worker
     depends_on:
       - plan
     output:

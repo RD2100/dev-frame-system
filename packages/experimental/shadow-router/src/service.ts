@@ -75,6 +75,14 @@ export interface ShadowRouterConfig {
    * effect.
    */
   shadowSessionId?: string
+  /**
+   * Absolute project directory attached to a cwd-less designated session at
+   * activation, so the designated Shadow conversation stays renderable by
+   * workspace-scoped surfaces (the Desktop client renders a cwd-less session
+   * as a fresh conversation). Optional: when unset and the designated session
+   * turns out cwd-less, Shadow leaves it untouched and reports the mismatch.
+   */
+  designatedCwd?: string
   /** Per-workspace limit of pending (queued, not yet received) deliveries. */
   maxPendingDeliveries?: number
   /** Maximum message text length in characters. */
@@ -83,8 +91,8 @@ export interface ShadowRouterConfig {
   statusPageSize?: number
 }
 
-/** The config shape after schemastery applied the defaults; `shadowSessionId` keeps its optional face. */
-type ResolvedConfig = Omit<Required<ShadowRouterConfig>, 'shadowSessionId'> & Pick<ShadowRouterConfig, 'shadowSessionId'>
+/** The config shape after schemastery applied the defaults; `shadowSessionId` and `designatedCwd` keep their optional faces. */
+type ResolvedConfig = Omit<Required<ShadowRouterConfig>, 'shadowSessionId' | 'designatedCwd'> & Pick<ShadowRouterConfig, 'shadowSessionId' | 'designatedCwd'>
 
 /** The states that still admit deliveries. */
 const ADMITTING_STATES: readonly ShadowBindingState[] = ['ready']
@@ -132,6 +140,9 @@ export class ShadowRouter extends ShadowRouterContract {
     // Optional face: schemastery omits an absent key and validates a present
     // string, so the declared id reaches the constructor only when configured.
     shadowSessionId: z.string(),
+    // Same optional face as the designation: absent is a valid "leave the
+    // session untouched" state, present must survive the trimmed check below.
+    designatedCwd: z.string(),
     maxPendingDeliveries: z.number().default(16),
     maxMessageChars: z.number().default(20_000),
     statusPageSize: z.number().default(20),
@@ -150,6 +161,13 @@ export class ShadowRouter extends ShadowRouterContract {
   private authorizedRoots: readonly string[] = []
   /** Session ids of host-designated Shadow sessions, mapped to their tool disposer. */
   private readonly shadowAgents = new Map<SessionId, () => void>()
+  /**
+   * Host-reported designation problem, cleared by a successful repair or a
+   * re-read after the designated session became cwd-bearing. Read surfaces
+   * fold it into {@link ShadowRouterStatus.designIssue} so client entries can
+   * fail closed instead of opening a conversation that renders as fresh.
+   */
+  private designIssue: ShadowRouterStatus['designIssue'] = undefined
   private tail: Promise<unknown> = Promise.resolve()
 
   /**
@@ -175,6 +193,12 @@ export class ShadowRouter extends ShadowRouterContract {
     if (this.config.shadowSessionId !== undefined
       && (this.config.shadowSessionId.length === 0 || this.config.shadowSessionId !== this.config.shadowSessionId.trim())) {
       throw new ShadowRouterError('shadowSessionId must be a non-empty trimmed string when configured', 'SHADOW_INVALID_CONFIG')
+    }
+    if (this.config.designatedCwd !== undefined
+      && (this.config.designatedCwd.length === 0
+        || this.config.designatedCwd !== this.config.designatedCwd.trim()
+        || !isAbsolute(this.config.designatedCwd))) {
+      throw new ShadowRouterError('designatedCwd must be a non-empty absolute path when configured', 'SHADOW_INVALID_CONFIG')
     }
   }
 
@@ -878,10 +902,30 @@ export class ShadowRouter extends ShadowRouterContract {
    * controller, so it carries no Shadow-caller gate and no page bounds.
    * @returns the aggregate status snapshot.
    */
+  /**
+   * Report a host-side designation problem (for example, the designated
+   * session is cwd-less and no repair applied). The report is sticky until a
+   * later repair clears it; `readStatus` folds it into `designIssue`.
+   * @param issue - The problem the host observed.
+   */
+  reportDesignIssue(issue: NonNullable<ShadowRouterStatus['designIssue']>): void {
+    this.designIssue = issue
+  }
+
+  /**
+   * Clear a previously reported designation problem after a successful repair.
+   */
+  clearDesignIssue(): void {
+    this.designIssue = undefined
+  }
+
   readStatus(): ShadowRouterStatus {
     const configured = this.config.shadowSessionId
+    const designatedCwd = this.config.designatedCwd
     return {
       ...(configured === undefined ? {} : { shadowSessionId: configured }),
+      ...(designatedCwd === undefined ? {} : { designatedCwd }),
+      ...(this.designIssue === undefined ? {} : { designIssue: this.designIssue }),
       shadowLive: configured !== undefined && this.shadowAgents.has(SessionId(configured)),
       authorizedRoots: [...this.authorizedRoots],
       bindings: this.listBindings().map(record => ({

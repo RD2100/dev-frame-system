@@ -73,6 +73,7 @@
   height: 36px;
   padding: 0;
   border-radius: 50%;
+  corner-shape: round;
 }
 
 /* The management affordance beside the trigger: an icon button that opens a

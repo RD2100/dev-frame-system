@@ -1,8 +1,18 @@
 {
   "name": "@deepseek-ai/dsh-experimental-shadow-routing",
   "description": "Service Definition for the shadow routing seam (ctx.shadowRouter): the abstract router contract, branded ids, binding/delivery records, stable error codes, and the shadow/delivery-received event",
-  "version": "0.1.2-alpha.4",
-  "private": true,
+  "version": "0.1.6-alpha.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/experimental/shadow-routing"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": "^22.19 || >=24"
+  },
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",

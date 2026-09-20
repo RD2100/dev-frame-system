@@ -59,6 +59,10 @@ export class PollLoop {
     if (this.disposed) return
     this.timer = setTimeout(() => {
       this.timer = undefined
+      // `clearTimeout()` cannot cancel a callback that has already entered
+      // the event queue. Re-checking here keeps disposal quiescent even in
+      // that narrow boundary race.
+      if (this.disposed) return
       this.active = this.drive()
     }, this.deps.intervalMs)
   }

@@ -34,8 +34,8 @@ kind: "package-group"
 | [`devframe`](devframe/README.zh.md) | 实验性单项目控制器的共享契约 | — |
 | [`devframe-profile`](devframe-profile/README.zh.md) | 挂载 DevFrame 栈的显式源码 checkout Web profile 层 | — |
 | [`expert-pack-dev`](expert-pack-dev/README.zh.md) | expert-team 核心的软件开发数据包：六个中文为主的专家人设（产品经理、架构师、技术主管、工程师、测试、评审）、双人工关口的六阶段层级团队、结果 JSON Schema 与验收检查单技能 | 数据包，不使用 ctx key |
-| [`expert-pack-paper`](expert-pack-paper/README.zh.md) | expert-team 核心的论文研究数据包：四个中文为主的专家人设、四阶段人工关口流水线、审稿检查单技能与阶段结果 JSON Schema | 数据包，不使用 ctx key |
-| [`expert-team`](expert-team/README.zh.md) | 专家团队核心：响亮失败的包挂载、带人工关口的流水线编排、角色派生的阶段子代理，以及五个模型工具 | `ctx.expertTeam` |
+| [`expert-pack-paper`](expert-pack-paper/README.zh.md) | expert-team 核心的论文研究数据包：十个中文为主的专家人设、含并行评审与修订的十阶段流水线、评审技能与阶段结果 JSON Schema | 数据包，不使用 ctx key |
+| [`expert-team`](expert-team/README.zh.md) | 专家团队核心：响亮失败的包挂载、带人工关口的流水线编排、角色派生的阶段子代理、四个模型工具与只读 Web 状态 Remote | `ctx.expertTeam` |
 | [`inspector`](inspector/README.zh.md) | 用于 Host 调试、Client Runtime 检查、网络采集与 Cordis 树的跨 realm CDP hub | `ctx.inspector` |
 | [`agent-evidence`](agent-evidence/README.zh.md) | 代理工作的追加式证据台账：任务/Goal 绑定回执、提交回执与验证快照 | `ctx.agentEvidence` |
 | [`agent-reliability`](agent-reliability/README.zh.md) | 进程树停止、准入切断、不确定调用对账与刷写屏障，集于一个服务 | `ctx.agentReliability` |
@@ -47,6 +47,7 @@ kind: "package-group"
 | [`shadow-controller`](shadow-controller/README.zh.md) | Shadow 路由器聚合状态的只读 Remote 拥有者，供宿主状态面板调用 | `ctx.shadowController` |
 | [`shadow-web-profile`](shadow-web-profile/README.zh.md) | 常驻 Shadow 入口卡片的显式源码 checkout Web 层 | — |
 | [`client-ui-shadow-entry`](client-ui-shadow-entry/README.zh.md) | 设置按钮上方的常驻 Web Shadow 入口卡片与诚实状态面板 | — |
+| [`client-ui-expert-team`](client-ui-expert-team/README.zh.md) | 展示已挂载团队与运行历史状态的常驻 Web 专家团队入口卡片 | — |
 | [`tool-agent-team`](tool-agent-team/README.zh.md) | 让模型创建、发消息与协调 teammate 的十个工具 | 按作用域注册工具到 `ctx.tools` |
 | [`webworker-packer`](webworker-packer/README.zh.md) | 构建浏览器 worker 预览所消费的 gzip 压缩 VFS 镜像 | 库与 CLI，不使用 ctx key |
 | [`webworker-runtime`](webworker-runtime/README.zh.md) | 在专用浏览器 worker 中运行 harness 插件树 | 库与 worker 入口，不使用 ctx key |

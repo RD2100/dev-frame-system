@@ -528,4 +528,30 @@ describe('the safety-net loop', () => {
     await sleep(20)
     expect(runs).toBe(0)
   })
+
+  it('does not start a timer callback that was queued before disposal', async () => {
+    const callbacks: Array<() => void> = []
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout').mockImplementation((handler) => {
+      if (typeof handler !== 'function') throw new TypeError('test timer callback must be callable')
+      callbacks.push(handler)
+      return 1 as unknown as ReturnType<typeof setTimeout>
+    })
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout').mockImplementation(() => undefined)
+    try {
+      let runs = 0
+      const loop = new PollLoop({
+        intervalMs: 1,
+        run: async () => { runs += 1 },
+        log: () => {},
+      })
+      loop.start()
+      const disposal = loop.dispose()
+      callbacks[0]?.()
+      await disposal
+      expect(runs).toBe(0)
+    } finally {
+      clearTimeoutSpy.mockRestore()
+      setTimeoutSpy.mockRestore()
+    }
+  })
 })

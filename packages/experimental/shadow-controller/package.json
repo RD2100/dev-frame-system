@@ -1,12 +1,17 @@
 {
   "name": "@deepseek-ai/dsh-experimental-shadow-controller",
   "description": "Remote owner of the Shadow router status snapshot, the panel write faces, and the persistent Shadow conversation host",
-  "version": "0.1.2-alpha.4",
-  "private": true,
+  "version": "0.1.6-alpha.1",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
     "directory": "packages/experimental/shadow-controller"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": "^22.19 || >=24"
   },
   "type": "module",
   "main": "lib/index.js",

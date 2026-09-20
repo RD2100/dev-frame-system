@@ -59,8 +59,11 @@ function bench(
   const onOpenConversation = vi.fn(async () => {})
   // useStatus is the bound selector hook produced by InjectFace from the
   // hooks compartment; the bench wires it to the real store.
-  const useStatus = (selector: (s: ShadowStatusSnapshot) => ShadowStatusSnapshot) =>
-    useSyncExternalStore(controller.store.subscribe, () => selector(controller.store.getSnapshot()))
+  const useStatus = <S,>(selector: (s: ShadowStatusSnapshot) => S): S =>
+    useSyncExternalStore(
+      listener => controller.store.subscribe(listener),
+      () => selector(controller.store.getSnapshot()),
+    )
   // Pre-load the status so the first render sees a settled snapshot.
   const ready = controller.refresh()
   const props: ShadowCardProps = {
@@ -216,5 +219,16 @@ describe('the sidebar Shadow entry card', () => {
     await act(async () => { await Promise.resolve() })
     fireEvent.click(screen.getByRole('button', { name: '管理' }))
     expect(screen.getByText('未授权任何根目录。')).not.toBeNull()
+  })
+
+  it('fails closed on a designation issue: shows the issue copy and does not open', async () => {
+    const b = bench({ ok: true, value: { ...ONLINE_VIEW, designIssue: 'designated-session-missing-cwd' } })
+    const { container } = render(<ShadowCard {...b.props} />)
+    await act(async () => { await Promise.resolve() })
+    expect(container.querySelector('[data-shadow-phase="issue"]')).not.toBeNull()
+    expect(container.querySelector('[data-shadow-detail]')?.textContent).toContain('缺少工作区')
+    // The trigger must not open a conversation that would render as fresh.
+    fireEvent.click(screen.getByRole('button', { name: '打开影子对话' }))
+    expect(b.onOpenConversation).not.toHaveBeenCalled()
   })
 })

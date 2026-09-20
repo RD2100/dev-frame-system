@@ -1,5 +1,5 @@
 ---
-description: "Private DevFrame profile layer over the web profile, for source-checkout users who want the hierarchy stack: session identity, shadow routing, project memory, goal binding, and dispatch."
+description: "Private DevFrame profile layer over the web profile, for source-checkout users who want the hierarchy stack plus expert-team orchestration and its Web Expert center entry."
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-experimental-devframe-profile` is a private profile layer that mounts the DevFrame stack over the web profile (`dsh-base` + `dsh-web-app`). Its patch inserts the console logger exporter, the session-identity, shadow-router, shadow-controller, Shadow conversation host, project-memory, and command-goal-binding rows plus the three-role agent-hierarchy policy and the agent-dispatch consumption face. Add it explicitly to an initialized source-checkout profile; official releases exclude this package.
+`dsh-experimental-devframe-profile` is a private profile layer that mounts the DevFrame stack over the web profile (`dsh-base` + `dsh-web-app`). Its patch inserts the console logger exporter, session identity, Shadow routing and conversation, project memory, goal binding, agent hierarchy, agent dispatch, expert-team with the shipped paper and development packs, and the resident Web Expert center entry. Add it explicitly to an initialized source-checkout profile; official releases exclude this package.
 
 ## Table of Contents
 
@@ -35,11 +35,11 @@ pnpm dsh --profile web --patch ./packages/experimental/devframe-profile/cordis.p
 
 The profile must already contain the web bundle layers, whose webserver row this layer leaves untouched. A deployment narrows the safe machine-neutral defaults through a later `--patch` overlay (authorizedRoots, vaultRoot, shadowSessionId, workspace identity), not by editing this file.
 
-This layer's patch inserts its nine rows; it does not target existing rows. Do not also mount these rows through their own package layers (for example `dsh plugin --profile <name> add @deepseek-ai/dsh-experimental-project-memory`): two inserts of one row id fail the boot with a duplicate-id loader error. Narrow a row's defaults with a later id-targeted `--patch` entry (`- id: project-memory, config: …`) instead — a patch entry replaces the target row's whole configuration, with the last write winning per row; the [base bundle README](../../bundle/base/README.md) owns the override semantics.
+This layer's patch inserts its eleven rows; it does not target existing rows. Do not also mount these rows through their own package layers (for example `dsh plugin --profile <name> add @deepseek-ai/dsh-experimental-project-memory`): two inserts of one row id fail the boot with a duplicate-id loader error. Narrow a row's defaults with a later id-targeted `--patch` entry (`- id: project-memory, config: …`) instead — a patch entry replaces the target row's whole configuration, with the last write winning per row; the [base bundle README](../../bundle/base/README.md) owns the override semantics.
 
 ### What you get
 
-The layer inserts the identity, routing, status, conversation, memory, and goal-binding rows with unconfigured, read-only defaults: shadow-router installs no `project_*` tools until authorized roots are declared, the Shadow conversation host stays inert until a `shadowSessionId` is declared, and project-memory keeps its tools read-only until a real vaultRoot is supplied. The hierarchy row starts the worker face empty (fail closed) and preallocates no lead plugin scopes; the dispatch row mounts the `agent_dispatch` consumption face; the logger-console row exports the host process's plugin logger output to stdout.
+The layer inserts the identity, routing, status, conversation, memory, goal-binding, hierarchy, dispatch, expert-team, and Web-entry rows with unconfigured, read-only defaults: shadow-router installs no `project_*` tools until authorized roots are declared, the Shadow conversation host stays inert until a `shadowSessionId` is declared, and project-memory keeps its tools read-only until a real vaultRoot is supplied. Expert-team mounts the paper and development catalogs and writes run mirrors under `dshHomePath('expert-team-runs')`; the browser entry reads that Host status through Remote, adds no tools or schemas, and lets the user stage an ordinary prompt for a selected expert. The hierarchy row starts the worker face empty (fail closed) and preallocates no lead plugin scopes; the dispatch row mounts the `agent_dispatch` consumption face; the logger-console row exports the host process's plugin logger output to stdout.
 
 ### Enabling Shadow
 
@@ -53,6 +53,10 @@ Every authorized root must be an existing absolute directory: a relative or miss
 
 Once the change applies, the declared session is marked when created — or immediately when it is already live — and its scope gains exactly the four tools `project_open`, `project_send`, `project_status`, and `project_stop`; every other scope resolves none of them.
 
+### Enabling expert mode
+
+The default patch mounts both shipped packs: the paper pipeline and the hierarchical development team. The Host registers `expert_team_list`, `expert_team_run`, `expert_team_status`, and `expert_team_approve`; `expert_team_run` also handles a bounded single-expert consultation through its `expert` plus `question` form. In a Web profile the resident Expert center entry appears in the sidebar footer, lists the mounted experts, shows the latest live-process runs, and lets the user summon an expert into a new blank conversation with an editable prompt. Starting a run and approving a human gate remain model/Host operations.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -61,7 +65,7 @@ Once the change applies, the declared session is marked when created — or imme
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied after the web bundle layers, the patch inserts the nine rows above with their safe defaults; it configures nothing else.
+The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied after the web bundle layers, the patch inserts the eleven rows above with their safe defaults; it configures nothing else.
 
 | File | Role |
 |---|---|
@@ -89,11 +93,11 @@ The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied
 
 #### What the model sees
 
-The model-visible faces belong to the mounted packages: the `project_*` tools to shadow-router, the memory tools to project-memory, `/devframe-start` and its goal commands to command-goal-binding, and `agent_dispatch` to agent-dispatch. This bundle changes composition only; it adds no prompt text or tool schema of its own.
+The model-visible faces belong to the mounted packages: the `project_*` tools to shadow-router, the memory tools to project-memory, `/devframe-start` and its goal commands to command-goal-binding, `agent_dispatch` to agent-dispatch, and the four expert-team tools to expert-team. The Web Expert center adds no tool or schema; a prompt staged by its summon action reaches the model only as ordinary user input after the user submits it.
 
 #### Token effect
 
-The bundle adds whatever prompt text and schemas the nine mounted rows contribute; it adds none itself.
+The bundle adds whatever prompt text and schemas the eleven mounted rows contribute; it adds none itself.
 
 #### KV Cache effect
 
@@ -105,7 +109,7 @@ The bundle's composition is prefix-stable while its patch and the mounted rows' 
 
 - **Source-checkout only** — this private package is not present in official npm, CLI, Web, or Python release payloads.
 - **Web profile required** — the patch depends on row ids supplied by the web bundle layers; it is not a standalone profile.
-- **Fail-closed defaults** — shadow-router, project-memory, and the worker tool face stay inert until a deployment configures them; this layer ships no preconfigured roots, vault, or scopes.
+- **Fail-closed defaults** — shadow-router, project-memory, and the worker tool face stay inert until a deployment configures them; this layer ships no preconfigured roots, vault, or scopes. Expert-team itself is mounted with source-checkout packs and a DSH-home artifact mirror, while memory remains unavailable until a Vault root is supplied.
 
 <a id="dev-note"></a>
 ### Dev Note

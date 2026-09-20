@@ -16,6 +16,7 @@ export type ShadowPhase =
   | 'disabled'
   | 'configured'
   | 'online'
+  | 'issue'
 
 /** The display model the card renders. */
 export interface ShadowCardModel {
@@ -52,6 +53,16 @@ function presentView(view: ShadowStatusView): ShadowCardModel {
   // authorizes; only the session fact is absent.
   if (view.shadowSessionId === undefined) {
     return { phase: 'disabled', shadowSessionId: null, authorizedRoots: view.authorizedRoots, error: null }
+  }
+  // The designated session cannot be rendered by workspace-scoped surfaces;
+  // report the issue instead of opening a conversation that shows fresh.
+  if (view.designIssue !== undefined) {
+    return {
+      phase: 'issue',
+      shadowSessionId: view.shadowSessionId,
+      authorizedRoots: view.authorizedRoots,
+      error: null,
+    }
   }
   return {
     phase: view.shadowLive ? 'online' : 'configured',

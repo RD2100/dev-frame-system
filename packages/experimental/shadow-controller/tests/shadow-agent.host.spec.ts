@@ -8,7 +8,7 @@
  * survives restarts through session persistence.
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -22,7 +22,8 @@ import AgentHierarchy, { type AgentHierarchyConfigInput } from '../../agent-hier
 import ShadowRouter from '@deepseek-ai/dsh-experimental-shadow-router'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { SessionId, SessionSeq, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import Storage from '@deepseek-ai/dsh-storage'
@@ -88,6 +89,8 @@ interface Bench {
 interface BenchOptions {
   /** Router designation; omit to compose the fail-closed router. */
   designation?: string
+  /** Router designatedCwd; with a designation, the host attaches it to a cwd-less designated session. */
+  designatedCwd?: string
   /** Mount JSONL session persistence (default true). */
   persistence?: boolean
   /** Mount the default-model service (default true). */
@@ -159,6 +162,7 @@ async function bench(options: BenchOptions = {}, existingRoot?: string): Promise
     await ctx.plugin(ShadowRouter, {
       authorizedRoots: [root],
       ...(options.designation === undefined ? {} : { shadowSessionId: options.designation }),
+      ...(options.designatedCwd === undefined ? {} : { designatedCwd: options.designatedCwd }),
     })
     const adapter = new MockAdapter([...(options.script?.(projectDirs) ?? [])])
     ctx.llm.registerAdapter(['mock'], adapter)
@@ -464,6 +468,105 @@ describe('the Shadow conversation host', () => {
     } finally {
       await b.dispose()
     }
+  })
+
+  it('attaches the designated cwd to a cwd-less designated session on start', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-agent-attach-'))
+    // First boot with an unrelated designation: persist a cwd-less session
+    // directly through the backend — exactly the shape the incident produced,
+    // a designated id that predates the deployment's workspace config.
+    const first = await bench({ designation: 'session-unused' }, root)
+    try {
+      await first.ctx.sessionPersistence.create({
+        version: SESSION_FORMAT_VERSION,
+        id: SessionId('session-orphan'),
+        createdAt: 1000,
+        isSeeded: false,
+      })
+      await first.ctx.sessionPersistence.append(SessionId('session-orphan'), [
+        { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
+      ] as SessionEvent[])
+      const stored = (await first.ctx.sessionPersistence.list()).find(header => header.id === 'session-orphan')
+      expect(stored?.cwd).toBeUndefined()
+    } finally {
+      await first.dispose()
+    }
+    // Second boot designates that cwd-less session with a designatedCwd: the
+    // host attaches the cwd before restoring, so the same session id and
+    // history stay intact under the attached project directory.
+    const second = await bench({ designation: 'session-orphan', designatedCwd: '/projects/shadow' }, root)
+    try {
+      const agent = await second.host.ensure()
+      expect(agent.id).toBe('session-orphan')
+      const stored = (await second.ctx.sessionPersistence.list()).find(header => header.id === 'session-orphan')
+      expect(stored?.cwd).toBe('/projects/shadow')
+    } finally {
+      await second.dispose()
+    }
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('reports a designation issue when the cwd-less session has no designatedCwd to attach', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-agent-issue-unconfigured-'))
+    const first = await bench({ designation: 'session-unused' }, root)
+    try {
+      await first.ctx.sessionPersistence.create({
+        version: SESSION_FORMAT_VERSION,
+        id: SessionId('session-orphan'),
+        createdAt: 1000,
+        isSeeded: false,
+      })
+      await first.ctx.sessionPersistence.append(SessionId('session-orphan'), [
+        { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
+      ] as SessionEvent[])
+    } finally {
+      await first.dispose()
+    }
+    // Second boot designates the cwd-less session but configures no
+    // designatedCwd: the host cannot repair, so it reports the designation
+    // issue instead of silently opening a fresh-looking conversation.
+    const second = await bench({ designation: 'session-orphan' }, root)
+    try {
+      const agent = await second.host.ensure()
+      expect(agent.id).toBe('session-orphan')
+      const status = (second.ctx.get('shadowRouter') as unknown as { readStatus(): { designIssue?: 'designated-session-missing-cwd' } }).readStatus()
+      expect(status.designIssue).toBe('designated-session-missing-cwd')
+    } finally {
+      await second.dispose()
+    }
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('reports a designation issue when attaching the cwd fails', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-agent-issue-attach-fail-'))
+    const first = await bench({ designation: 'session-unused' }, root)
+    try {
+      await first.ctx.sessionPersistence.create({
+        version: SESSION_FORMAT_VERSION,
+        id: SessionId('session-orphan'),
+        createdAt: 1000,
+        isSeeded: false,
+      })
+      await first.ctx.sessionPersistence.append(SessionId('session-orphan'), [
+        { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
+      ] as SessionEvent[])
+    } finally {
+      await first.dispose()
+    }
+    const second = await bench({ designation: 'session-orphan', designatedCwd: '/projects/shadow' }, root)
+    try {
+      vi.spyOn(
+        second.ctx.sessionPersistence as unknown as { attachSessionCwd: () => Promise<unknown> },
+        'attachSessionCwd',
+      ).mockRejectedValue(new Error('boom'))
+      const agent = await second.host.ensure()
+      expect(agent.id).toBe('session-orphan')
+      const status = (second.ctx.get('shadowRouter') as unknown as { readStatus(): { designIssue?: 'designated-session-missing-cwd' } }).readStatus()
+      expect(status.designIssue).toBe('designated-session-missing-cwd')
+    } finally {
+      await second.dispose()
+    }
+    await rm(root, { recursive: true, force: true })
   })
 })
 

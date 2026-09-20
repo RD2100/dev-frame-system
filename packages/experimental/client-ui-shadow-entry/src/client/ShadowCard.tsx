@@ -38,6 +38,7 @@ const PHASE_LABELS: Record<ShadowPhase, ShadowKey> = {
   disabled: 'status.disabled',
   configured: 'status.configured',
   online: 'status.online',
+  issue: 'status.issue',
 }
 
 /** Honest one-line detail per phase; `loading`, `error`, and `online` add none. */
@@ -45,6 +46,7 @@ const PHASE_DETAILS: Partial<Record<ShadowPhase, ShadowKey>> = {
   unmounted: 'detail.unmounted',
   disabled: 'status.disabled',
   configured: 'detail.configured',
+  issue: 'detail.issue',
 }
 
 /** Viewport margin kept between the portaled menu and the window edges. */
@@ -123,7 +125,11 @@ export function ShadowCard({
           data-shadow-active={shadowCurrent || undefined}
           aria-pressed={shadowCurrent}
           aria-label={t('trigger.aria')}
-          onClick={() => { void onOpenConversation() }}
+          onClick={() => {
+            // Fail closed on a designation issue: opening the cwd-less
+            // session would render as a fresh conversation, hiding the fault.
+            if (model.phase !== 'issue') void onOpenConversation()
+          }}
         >
           <IconBranchOutline16 size={wide ? 16 : 18} />
           {wide && <span className={css.triggerLabel}>{t('trigger.label')}</span>}
@@ -181,7 +187,7 @@ export function ShadowCard({
                   <div className={css.menuLabel} role="presentation">{t('manage.group.controller')}</div>
                   <div className={css.menuItem} role="menuitem" tabIndex={0}>
                     <span className={css.menuLabelText}>{t('manage.controller.profile')}</span>
-                    <span className={css.menuValue}>standard</span>
+                    <span className={css.menuValue}>{t('manage.controller.value')}</span>
                   </div>
                 </div>
               </div>,

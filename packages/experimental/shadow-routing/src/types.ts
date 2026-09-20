@@ -252,6 +252,20 @@ export interface ShadowRouterStatus {
   readonly shadowSessionId?: string
   /** Whether the designated session is currently marked as the Shadow. */
   readonly shadowLive: boolean
+  /**
+   * Project directory attached to a cwd-less designated session at activation,
+   * absent when unconfigured. Shadow consumes it to make the designated
+   * conversation renderable by workspace-scoped surfaces.
+   */
+  readonly designatedCwd?: string
+  /**
+   * A designated session cannot be made renderable, present only when the
+   * host knows the designated session is cwd-less but no repair applied:
+   * either no `designatedCwd` is configured or the one-way attach failed.
+   * Client surfaces must fail closed (show the issue instead of opening a
+   * conversation that would render as a fresh session).
+   */
+  readonly designIssue?: 'designated-session-missing-cwd'
   /** Canonical authorized roots resolved at load, in configuration order. */
   readonly authorizedRoots: readonly string[]
   /** Every binding in stable (createdAt, workspaceId) order. */

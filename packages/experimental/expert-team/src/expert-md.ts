@@ -44,6 +44,8 @@ const MAX_NAME_BYTES = 128
 const MAX_ROLE_BYTES = 256
 /** Maximum UTF-8 bytes of the goal line. */
 const MAX_GOAL_BYTES = 512
+/** Maximum UTF-8 bytes of the hierarchy role value. */
+const MAX_HIERARCHY_ROLE_BYTES = 32
 
 /**
  * Parse one expert definition file strictly.
@@ -89,7 +91,7 @@ export function parseExpertMd(fileName: string, contents: string): ExpertDef {
     'front matter',
     meta,
     ['id', 'team', 'name', 'role', 'goal', 'tools'],
-    ['skills', 'handoff-checks'],
+    ['hierarchy-role', 'skills', 'handoff-checks'],
   )
   const id = requireKebabId('EXPERT_TEAM_EXPERT_INVALID', 'front matter id', meta.id)
   const stem = fileName.slice(0, -3)
@@ -110,6 +112,15 @@ export function parseExpertMd(fileName: string, contents: string): ExpertDef {
   const handoffChecks = meta['handoff-checks'] === undefined
     ? undefined
     : requireStringList('EXPERT_TEAM_EXPERT_INVALID', 'front matter handoff-checks', meta['handoff-checks'], MAX_CHECKS, MAX_CHECK_BYTES)
+  const hierarchyRole = meta['hierarchy-role'] === undefined
+    ? undefined
+    : (() => {
+      const raw = requireScalar('EXPERT_TEAM_EXPERT_INVALID', 'front matter hierarchy-role', meta['hierarchy-role'], MAX_HIERARCHY_ROLE_BYTES)
+      if (raw !== 'controller' && raw !== 'lead' && raw !== 'worker') {
+        throw expertInvalid(`front matter hierarchy-role must be 'controller', 'lead', or 'worker', got: ${raw}`)
+      }
+      return raw
+    })()
   const bodyLines = lines.slice(close + 1)
   // One blank line separates the front matter from the body; tolerate its
   // absence so a body starting immediately after `---` still parses.
@@ -128,6 +139,7 @@ export function parseExpertMd(fileName: string, contents: string): ExpertDef {
     role,
     goal,
     tools,
+    ...(hierarchyRole === undefined ? {} : { hierarchyRole }),
     ...(skills === undefined ? {} : { skills }),
     ...(handoffChecks === undefined ? {} : { handoffChecks }),
     persona,

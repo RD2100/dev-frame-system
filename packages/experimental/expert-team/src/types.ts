@@ -36,6 +36,13 @@ export interface ExpertDef {
   /** One-line goal statement: what the expert optimizes for. */
   readonly goal: string
   /**
+   * Hierarchy role: controller (entry point), lead (delegates to workers),
+   * or worker (executes delegated work). When absent the expert runs with
+   * no hierarchy binding; the runtime applies no role-tool policy beyond
+   * the expert's own allowlist.
+   */
+  readonly hierarchyRole?: 'controller' | 'lead' | 'worker'
+  /**
    * Tool-name allowlist. The delegation layer must not expose any tool
    * outside it to a subagent running this expert.
    */
@@ -65,6 +72,12 @@ export interface PhaseDef {
   readonly id: string
   /** Expert id that executes the phase; must be defined by the same pack. */
   readonly expert: string
+  /**
+   * Hierarchy role of the phase's expert: controller (team entry point),
+   * lead (delegates to workers), or worker (executes delegated work).
+   * Absent means the phase participates in pipeline mode only.
+   */
+  readonly hierarchyRole?: 'controller' | 'lead' | 'worker' | undefined
   /**
    * Ids of the phases this phase consumes, each referencing a phase declared
    * earlier in the list. Backward-only references make the graph acyclic by

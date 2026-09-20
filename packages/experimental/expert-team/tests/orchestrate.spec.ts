@@ -20,7 +20,12 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import AgentBindingRegistry from '@deepseek-ai/dsh-experimental-session-identity'
+import Storage from '@deepseek-ai/dsh-storage'
+import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
+import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { RESULT_FENCE_OPEN } from '../src/index.ts'
 import * as expertTeam from '../src/index.ts'
@@ -67,6 +72,8 @@ interface BenchOptions {
   script: Parameters<typeof MockAdapter.prototype.stream>[0] extends never ? never : readonly unknown[]
   /** Register the deployment tools the fixture experts allowlist. */
   stubTools?: boolean
+  /** Extra tool names to register beyond the default stub set. */
+  extraTools?: readonly string[]
   /** Mount the default-model service (default true). */
   defaultModel?: boolean
   /** Extra packs to mount beside the pipeline fixture. */
@@ -87,6 +94,9 @@ async function bench(options: BenchOptions): Promise<Bench> {
   if (options.stubTools !== false) {
     ctx.tools.register(namedTool('web_search'))
     ctx.tools.register(namedTool('read_file'))
+  }
+  for (const tool of options.extraTools ?? []) {
+    ctx.tools.register(namedTool(tool))
   }
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
@@ -136,7 +146,14 @@ function textOf(result: ToolExecutionResult): string {
 function runOf(result: ToolExecutionResult): {
   runId: string
   status: string
-  phases: Array<{ phaseId: string; status: string; attempts: number; error?: string; reviews?: unknown; artifact?: { artifact: string } }>
+  phases: Array<{
+    phaseId: string
+    status: string
+    attempts: number
+    error?: string
+    reviews?: Array<{ decision: string; at: string; comment?: string }>
+    artifact?: { artifact: string }
+  }>
   reviews?: unknown
 } {
   expect(result.isError, textOf(result)).toBe(false)
@@ -254,10 +271,13 @@ describe('pipeline orchestration', () => {
 
       // The decision history is recorded, and approving again fails loud.
       const finalState = JSON.parse(await readFile(join(runDir, 'run-state.json'), 'utf8')) as TeamRun
-      expect(finalState.phases[1]?.reviews).toEqual([
-        { decision: 'rejected', comment: '第三节的引用缺失', at: expect.any(String) },
-        { decision: 'approved', at: expect.any(String) },
-      ])
+      const reviews = finalState.phases[1]?.reviews
+      expect(reviews).toHaveLength(2)
+      expect(reviews?.[0]?.decision).toBe('rejected')
+      expect(reviews?.[0]?.comment).toBe('第三节的引用缺失')
+      expect(typeof reviews?.[0]?.at).toBe('string')
+      expect(reviews?.[1]?.decision).toBe('approved')
+      expect(typeof reviews?.[1]?.at).toBe('string')
       await expectToolErrorCode(
         () => b.execute('expert_team_approve', { run_id: started.runId, decision: 'approved' }),
         'EXPERT_TEAM_GATE_PENDING',
@@ -325,7 +345,10 @@ describe('post-approval follow-up', () => {
       expect(approved.phases.map(phase => phase.status)).toEqual(['done', 'done'])
       const persisted = JSON.parse(await readFile(join(b.artifactsDir, run.runId, 'run-state.json'), 'utf8')) as TeamRun
       expect(persisted.status).toBe('completed')
-      expect(persisted.phases[1]?.reviews).toEqual([{ decision: 'approved', at: expect.any(String) }])
+      const reviews = persisted.phases[1]?.reviews
+      expect(reviews).toHaveLength(1)
+      expect(reviews?.[0]?.decision).toBe('approved')
+      expect(typeof reviews?.[0]?.at).toBe('string')
     } finally {
       await b.dispose()
     }
@@ -385,7 +408,11 @@ describe('orchestration failures', () => {
       expect(rejected.status).toBe('waiting-approval')
       expect(rejected.phases[1]?.status).toBe('gate-pending')
       expect(rejected.phases[1]?.attempts).toBe(4)
-      expect(rejected.phases[1]?.reviews).toEqual([{ decision: 'rejected', comment: '先按契约补结果对象', at: expect.any(String) }])
+      const reviews = rejected.phases[1]?.reviews
+      expect(reviews).toHaveLength(1)
+      expect(reviews?.[0]?.decision).toBe('rejected')
+      expect(reviews?.[0]?.comment).toBe('先按契约补结果对象')
+      expect(typeof reviews?.[0]?.at).toBe('string')
       const revisionRequest = JSON.stringify(b.adapter.requests[4])
       expect(revisionRequest).toContain('先按契约补结果对象')
       expect(revisionRequest).toContain('阶段任务：literature-review')
@@ -394,19 +421,126 @@ describe('orchestration failures', () => {
     }
   })
 
-  it('rejects a hierarchical team and an empty input at run start', async () => {
+  it('accepts a hierarchical team at run start', async () => {
     const b = await bench({ script: [], extraPacks: [fixturePath('fixture-pack-hierarchical')] })
     try {
       await expectToolErrorCode(
         () => b.execute('expert_team_run', { team: 'code-builders', input: '需求' }),
-        'EXPERT_TEAM_MODE_UNSUPPORTED',
-      )
-      await expectToolErrorCode(
-        () => b.execute('expert_team_run', { team: 'paper-research', input: '   ' }),
-        'EXPERT_TEAM_CONFIG_INVALID',
+        'EXPERT_TEAM_TOOL_MISSING',
       )
     } finally {
       await b.dispose()
+    }
+  })
+
+  it('runs a hierarchical team through controller and worker phases', async () => {
+    const b = await bench({
+      script: [
+        phaseReply('# 实施计划\n\n- 步骤1：搭建框架\n- 步骤2：实现核心逻辑', {
+          artifactPath: 'plan.md',
+          summary: '计划完成，包含两个实施步骤',
+        }),
+        phaseReply('# 实现补丁\n\n- 新增模块入口\n- 绑定核心接口', {
+          artifactPath: 'patch.diff',
+          summary: '补丁完成，覆盖计划中的核心改动',
+        }),
+      ],
+      extraPacks: [fixturePath('fixture-pack-hierarchical')],
+      extraTools: ['edit_file'],
+    })
+    try {
+      const run = runOf(await b.execute('expert_team_run', { team: 'code-builders', input: '需求' }))
+      expect(run.status).toBe('completed')
+      expect(run.phases).toHaveLength(2)
+      expect(run.phases[0]?.status).toBe('done')
+      expect(run.phases[0]?.artifact?.artifact).toBe('plan.md')
+      expect(run.phases[1]?.status).toBe('done')
+      expect(run.phases[1]?.artifact?.artifact).toBe('patch.diff')
+
+      // Durable artifacts: reply bodies landed, each with one trailing newline.
+      const runDir = join(b.artifactsDir, run.runId)
+      const planContent = await readFile(join(runDir, 'plan.md'), 'utf8')
+      expect(planContent).toContain('实施计划')
+      expect(planContent).toMatch(/核心逻辑\n$/u)
+      const patchContent = await readFile(join(runDir, 'patch.diff'), 'utf8')
+      expect(patchContent).toContain('实现补丁')
+      expect(patchContent).toMatch(/核心接口\n$/u)
+
+      // Mirrored run state.
+      const persisted = JSON.parse(await readFile(join(runDir, 'run-state.json'), 'utf8')) as TeamRun
+      expect(persisted.status).toBe('completed')
+      expect(persisted.phases.map(p => p.status)).toEqual(['done', 'done'])
+    } finally {
+      await b.dispose()
+    }
+  })
+
+  it('records hierarchy bindings when agentBindings is mounted', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-expert-team-hierarchy-'))
+    ROOTS.push(root)
+    const ctx = new Context()
+    CONTEXTS.push(ctx)
+    await mountAgentLoopTestDependencies(ctx)
+    ctx.tools.register(namedTool('read_file'))
+    ctx.tools.register(namedTool('edit_file'))
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentLoop, { agents: [] })
+    // Mount storage-backed binding registry so the runtime's best-effort
+    // bind path has a real target.
+    const storageRoot = join(root, 'storage')
+    await mkdir(storageRoot, { recursive: true })
+    await ctx.plugin(Storage)
+    await ctx.plugin(StorageJson, { root: storageRoot })
+    await ctx.plugin(StorageDomain, { backend: 'json' })
+    await ctx.plugin(AgentBindingRegistry)
+
+    const artifactsDir = join(root, 'artifacts')
+    await mkdir(artifactsDir, { recursive: true })
+    const adapter = new MockAdapter([
+      phaseReply('# 实施计划\n\n- 步骤1：搭建框架', {
+        artifactPath: 'plan.md',
+        summary: '计划完成',
+      }),
+      phaseReply('# 实现补丁\n\n- 新增模块入口', {
+        artifactPath: 'patch.diff',
+        summary: '补丁完成',
+      }),
+    ] as never)
+    ctx.llm.registerAdapter(['mock'], adapter)
+    await ctx.plugin(AgentDefaultModelConfig, { provider: 'mock', model: 'mock' })
+    const pluginFiber = ctx.plugin(expertTeam, {
+      packs: [fixturePath('fixture-pack-hierarchical')],
+      artifactsDir,
+    })
+    await pluginFiber.await()
+    const driver = (await ctx.agents.create({
+      sessionId: SessionId('hierarchy-driver'),
+      agentOptions: { provider: 'mock', model: 'mock' },
+    })).agent
+    try {
+      const run = runOf(await ctx.tools.execute({
+        callId: ToolCallId('hierarchy-test-run'),
+        name: 'expert_team_run',
+        arguments: { team: 'code-builders', input: '需求' },
+        agent: driver,
+        signal: new AbortController().signal,
+      }))
+      expect(run.status).toBe('completed')
+
+      // The binding registry should carry two records: the controller phase
+      // (plan) with no parent, and the worker phase (implement) whose parent
+      // is the controller's session.
+      const bindings = ctx.agentBindings.list()
+      expect(bindings).toHaveLength(2)
+      const planBinding = bindings.find(b => b.taskId === 'plan')
+      const implementBinding = bindings.find(b => b.taskId === 'implement')
+      expect(planBinding?.role).toBe('controller')
+      expect(planBinding?.parentSessionId).toBeUndefined()
+      expect(implementBinding?.role).toBe('worker')
+      expect(implementBinding?.parentSessionId).toBe(planBinding?.agentId)
+      expect(implementBinding?.pluginId).toBe('expert-team')
+    } finally {
+      await ctx.fiber.dispose()
     }
   })
 
@@ -442,7 +576,8 @@ describe('orchestration failures', () => {
         'EXPERT_TEAM_MODEL_MISSING',
       )
       // The started run settled to failed instead of staying 'running'.
-      const runDirs = await readdir(b.artifactsDir)
+      const entries = await readdir(b.artifactsDir)
+      const runDirs = entries.filter(name => name !== 'run-index.json')
       expect(runDirs).toHaveLength(1)
       const persisted = JSON.parse(
         await readFile(join(b.artifactsDir, runDirs[0] ?? '', 'run-state.json'), 'utf8'),
@@ -467,7 +602,8 @@ describe('orchestration failures', () => {
         'EXPERT_TEAM_SKILL_MISSING',
       )
       // The started run settled failed instead of staying 'running'.
-      const runDirs = await readdir(b.artifactsDir)
+      const entries = await readdir(b.artifactsDir)
+      const runDirs = entries.filter(name => name !== 'run-index.json')
       expect(runDirs).toHaveLength(1)
       const persisted = JSON.parse(
         await readFile(join(b.artifactsDir, runDirs[0] ?? '', 'run-state.json'), 'utf8'),
@@ -485,6 +621,7 @@ describe('orchestration failures', () => {
       // Hand-built context: this unit pins the failure path of `apply` only;
       // the successful mount face is covered by the real composition suites.
       const ctx = {
+        reflect: { provide: () => {} },
         provide: (name: string) => () => { throw new Error(`disposal of ${name} exploded`) },
         systemPrompt: { section: () => () => disposed.push('usage section') },
         effect: () => () => disposed.push('derived session disposal'),
@@ -553,7 +690,27 @@ describe('orchestration failures', () => {
     }
   })
 
-  it('unmounts cleanly and removes the service and the five tools', async () => {
+  it('publishes the status and execution Remote beside the four model tools', async () => {
+    const b = await bench({ script: [] })
+    try {
+      const gateway = b.ctx.get('expertTeamGateway')
+      expect(gateway).toBeDefined()
+      if (gateway === undefined) throw new Error('expertTeamGateway was not published')
+      expect(remoteMethods(gateway)).toEqual([
+        { method: 'view', invocation: { kind: 'direct' } },
+        { method: 'startRun', invocation: { kind: 'direct' } },
+        { method: 'consult', invocation: { kind: 'direct' } },
+        { method: 'approve', invocation: { kind: 'direct' } },
+        { method: 'getRun', invocation: { kind: 'direct' } },
+      ])
+      expect(gateway.view().teams.map(team => team.team)).toEqual(['paper-research'])
+      expect(gateway.view().runs).toEqual([])
+    } finally {
+      await b.dispose()
+    }
+  })
+
+  it('unmounts cleanly and removes the service, Remote, and four tools', async () => {
     const b = await bench({ script: [] })
     try {
       expect(b.ctx.tools.get('expert_team_list')).toBeDefined()
@@ -561,6 +718,7 @@ describe('orchestration failures', () => {
       expect(b.ctx.tools.get('expert_team_status')).toBeDefined()
       expect(b.ctx.tools.get('expert_team_approve')).toBeDefined()
       expect(b.ctx.get('expertTeam')).toBeDefined()
+      expect(b.ctx.get('expertTeamGateway')).toBeDefined()
     } finally {
       // Dispose the plugin fiber alone: the unmount must remove exactly the
       // plugin's contributions, not the shared test dependencies.
@@ -568,5 +726,6 @@ describe('orchestration failures', () => {
     }
     expect(b.ctx.tools.get('expert_team_list')).toBeUndefined()
     expect(b.ctx.get('expertTeam')).toBeUndefined()
+    expect(b.ctx.get('expertTeamGateway')).toBeUndefined()
   })
 })

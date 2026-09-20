@@ -1,7 +1,7 @@
 /**
  * Cordis plugin wiring for the expert-team core: one loadable row that mounts
  * the configured packs fail-loud at load, provides `ctx.expertTeam`, and
- * registers the five model tools on `ctx.tools`. Misconfiguration (packs
+ * registers the four model tools on `ctx.tools`. Misconfiguration (packs
  * below the minimum, a pack that fails validation) fails the load — a
  * half-mounted expert team is worse than an absent one.
  * @module @deepseek-ai/dsh-experimental-expert-team/plugin
@@ -12,6 +12,7 @@ import z from '@deepseek-ai/schemastery'
 import { resolve, isAbsolute } from 'node:path'
 import { ExpertCatalog } from './catalog.ts'
 import { validateExpertTeamConfig } from './config.ts'
+import { ExpertTeamGateway } from './gateway.ts'
 import { TeamOrchestrator } from './orchestrate.ts'
 import { ExpertRuntime } from './runtime.ts'
 import { createExpertTeamTools } from './tools.ts'
@@ -56,14 +57,16 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     /** The expert-team orchestrator over the mounted packs. */
     expertTeam: TeamOrchestrator
+    /** Read-only Host Remote owner for the expert-team sidebar surface. */
+    expertTeamGateway: ExpertTeamGateway
   }
 }
 
 /**
  * Mount the expert-team plugin: validate config, load the pack catalog (every
  * pack problem fails the load), construct the runtime and orchestrator,
- * provide `ctx.expertTeam`, register the five tools, and register the static
- * usage section. Disposal removes the tools, the section, the service, and
+ * provide `ctx.expertTeam`, register the four tools, and register the static
+ * usage section. Disposal removes the tools, the section, the services, and
  * every agent session the orchestrator derived.
  * @param ctx - The mounting context.
  * @param config - Schema-validated loader config.
@@ -73,6 +76,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const catalog = await ExpertCatalog.load(spec)
   const runtime = new ExpertRuntime(ctx, catalog)
   const orchestrator = new TeamOrchestrator(catalog, runtime, resolveArtifactsRoot(spec.artifactsDir))
+  // Service construction registers the gateway on the current plugin fiber;
+  // its registration therefore unwinds with the same fiber as the core.
+  new ExpertTeamGateway(ctx, orchestrator)
   const disposers: Array<{ readonly label: string; readonly dispose: () => unknown }> = [
     { label: 'expertTeam service', dispose: ctx.provide('expertTeam', orchestrator) },
     { label: 'usage prompt section', dispose: ctx.systemPrompt.section({ name: 'expert-team:usage', order: 45, text: EXPERT_TEAM_USAGE_SECTION }) },

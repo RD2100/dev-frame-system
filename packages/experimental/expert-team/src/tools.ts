@@ -66,6 +66,40 @@ interface RunDto {
   readonly version?: number
 }
 
+/** One expert entry in the list-tool output. */
+interface TeamListExpertDto {
+  readonly id: string
+  readonly name: string
+  readonly role: string
+  readonly tools: string[]
+  readonly hierarchyRole?: string
+}
+
+/** One phase entry in the list-tool output. */
+interface TeamListPhaseDto {
+  readonly id: string
+  readonly expert: string
+  readonly dependsOn: string[]
+  readonly artifact: string
+  readonly hierarchyRole?: string
+  readonly gate?: string
+}
+
+/** The mounted-team list returned by expert_team_list. */
+interface TeamListDto {
+  readonly team: string
+  readonly title: string
+  readonly mode: TeamMode
+  readonly entry: string
+  readonly experts: TeamListExpertDto[]
+  readonly phases: TeamListPhaseDto[]
+}
+
+/** The canonical value returned by expert_team_list. */
+interface TeamListOutput {
+  readonly teams: TeamListDto[]
+}
+
 /** Project one gate review into the lossless-JSON DTO the output schema declares. */
 function reviewDto(review: GateReview): ReviewDto {
   return {
@@ -173,7 +207,7 @@ function renderJson(_args: unknown, value: unknown): { readonly type: 'text'; re
 }
 
 /**
- * Build the five expert-team tool definitions bound to one orchestrator.
+ * Build the four expert-team tool definitions bound to one orchestrator.
  * @param orchestrator - The mounted orchestrator the tools dispatch to.
  * @returns the registry-ready tool definitions.
  */
@@ -210,6 +244,7 @@ export function createExpertTeamTools(orchestrator: TeamOrchestrator): ToolDefin
                         name: { type: 'string', required: true },
                         role: { type: 'string', required: true },
                         tools: { type: 'array', required: true, items: { type: 'string' } },
+                        hierarchyRole: { type: 'string', description: "Hierarchy role when set: 'controller', 'lead', or 'worker'." },
                       },
                     },
                   },
@@ -224,6 +259,7 @@ export function createExpertTeamTools(orchestrator: TeamOrchestrator): ToolDefin
                         expert: { type: 'string', required: true },
                         dependsOn: { type: 'array', required: true, items: { type: 'string' } },
                         artifact: { type: 'string', required: true },
+                        hierarchyRole: { type: 'string', description: "Hierarchy role when set: 'controller', 'lead', or 'worker'." },
                         gate: { type: 'string', description: "Present when the phase parks for human review ('human-review')." },
                       },
                     },
@@ -236,23 +272,29 @@ export function createExpertTeamTools(orchestrator: TeamOrchestrator): ToolDefin
         render: renderJson,
       },
       isConcurrencySafe: () => true,
-      async execute() {
-        return {
-          teams: orchestrator.listTeams().map(team => ({
-            team: team.team,
-            title: team.title,
-            mode: team.mode,
-            entry: team.entry,
-            experts: team.experts.map(expert => ({ id: expert.id, name: expert.name, role: expert.role, tools: expert.tools })),
-            phases: team.phases.map(phase => ({
-              id: phase.id,
-              expert: phase.expert,
-              dependsOn: phase.dependsOn,
-              artifact: phase.artifact,
-              ...(phase.gate === undefined ? {} : { gate: phase.gate }),
-            })),
+      execute() {
+        const teams: TeamListDto[] = orchestrator.listTeams().map(team => ({
+          team: team.team,
+          title: team.title,
+          mode: team.mode,
+          entry: team.entry,
+          experts: team.experts.map((expert): TeamListExpertDto => ({
+            id: expert.id,
+            name: expert.name,
+            role: expert.role,
+            tools: [...expert.tools],
+            ...(expert.hierarchyRole === undefined ? {} : { hierarchyRole: expert.hierarchyRole }),
           })),
-        }
+          phases: team.phases.map((phase): TeamListPhaseDto => ({
+            id: phase.id,
+            expert: phase.expert,
+            dependsOn: [...phase.dependsOn],
+            artifact: phase.artifact,
+            ...(phase.hierarchyRole === undefined ? {} : { hierarchyRole: phase.hierarchyRole }),
+            ...(phase.gate === undefined ? {} : { gate: phase.gate }),
+          })),
+        }))
+        return Promise.resolve({ teams } as TeamListOutput)
       },
     }),
     defineTool({
@@ -288,7 +330,7 @@ export function createExpertTeamTools(orchestrator: TeamOrchestrator): ToolDefin
             throw new ExpertTeamError('no team mounted for consultation', 'EXPERT_TEAM_TEAM_MISSING')
           }
           const consult = await orchestrator.consult(teamId, args.expert, args.question ?? '')
-          return { answer: consult.answer, truncated: consult.truncated } as unknown as Record<string, JsonValue>
+          return { answer: consult.answer, truncated: consult.truncated }
         }
         if (args.team === undefined) {
           throw new ExpertTeamError('either team+input or expert+question is required', 'EXPERT_TEAM_CONFIG_INVALID')
@@ -304,8 +346,8 @@ export function createExpertTeamTools(orchestrator: TeamOrchestrator): ToolDefin
       },
       output: { schema: RUN_OUTPUT_SCHEMA, render: renderJson },
       isConcurrencySafe: () => true,
-      async execute(args) {
-        return runDto(orchestrator.getRun(args.run_id)) as unknown as Record<string, JsonValue>
+      execute(args) {
+        return Promise.resolve(runDto(orchestrator.getRun(args.run_id)) as unknown as Record<string, JsonValue>)
       },
     }),
     defineTool({

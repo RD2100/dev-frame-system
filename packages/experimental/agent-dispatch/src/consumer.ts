@@ -391,7 +391,11 @@ export async function apply(ctx: Context, config?: {
 
   ctx.systemPrompt.section({
     name: 'tool:agent-dispatch',
-    order: ctx.systemPrompt.getSectionOrder('TOOL_AGENT_DISPATCH'),
+    // Older official runtimes predate the TOOL_AGENT_DISPATCH placement; keep
+    // the repository's 2850 slot when the host cannot name it.
+    order: Number.isFinite(ctx.systemPrompt.getSectionOrder('TOOL_AGENT_DISPATCH'))
+      ? ctx.systemPrompt.getSectionOrder('TOOL_AGENT_DISPATCH')
+      : 2850,
     text: GUIDANCE,
   })
 

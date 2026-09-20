@@ -21,6 +21,7 @@
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { LoadedTeam } from './catalog.ts'
 import type { ExpertCatalog } from './catalog.ts'
 import type { RevisionReason } from './briefing.ts'
@@ -32,6 +33,23 @@ import type { ArtifactRef, GateDecision, GateReview, PhaseDef, PhaseState, Phase
 
 /** The run-state file name inside every run directory. */
 const RUN_STATE_FILE = 'run-state.json'
+/** The run-index file name at the artifacts root. */
+const RUN_INDEX_FILE = 'run-index.json'
+
+/** One entry in the run index: lightweight metadata for observability. */
+interface RunIndexEntry {
+  readonly runId: string
+  readonly teamId: string
+  readonly mode: TeamMode
+  readonly status: TeamRunStatus
+  readonly createdAt: string
+  readonly completedAt?: string
+}
+
+/** The persisted run index shape. */
+interface RunIndex {
+  readonly runs: readonly RunIndexEntry[]
+}
 
 /** One orchestrator-owned view of a mounted team, shaped for `expert_team_list`. */
 export interface ExpertTeamView {
@@ -49,6 +67,7 @@ export interface ExpertTeamView {
     readonly name: string
     readonly role: string
     readonly tools: string[]
+    readonly hierarchyRole?: string
   }[]
   /** The team's phases, in declaration order. */
   readonly phases: readonly {
@@ -57,7 +76,24 @@ export interface ExpertTeamView {
     readonly dependsOn: string[]
     readonly artifact: string
     readonly gate?: string
+    readonly hierarchyRole?: string
   }[]
+}
+
+/** Lightweight run-history row exposed to host status surfaces. */
+export interface ExpertTeamRunView {
+  /** Opaque run id. */
+  readonly runId: string
+  /** Mounted team id. */
+  readonly teamId: string
+  /** Orchestration mode declared by the team. */
+  readonly mode: TeamMode
+  /** Current lifecycle status. */
+  readonly status: TeamRunStatus
+  /** ISO-8601 instant the run started. */
+  readonly createdAt: string
+  /** ISO-8601 instant the run reached a terminal status, when known. */
+  readonly completedAt?: string
 }
 
 /** Mutable per-phase run state; {@link TeamOrchestrator.snapshot} is the published, frozen form. */
@@ -88,12 +124,20 @@ interface RunRecord {
 
 /**
  * Orchestrates expert-team runs over the mounted catalog. One instance per
- * mounted plugin, published as `ctx.expertTeam`; the model tools are its only
- * consumers.
+ * mounted plugin, published as `ctx.expertTeam`; the model tools and the
+ * read-only Host status gateway consume it.
  */
 export class TeamOrchestrator {
   /** Live runs of this process, keyed by run id string. */
   private readonly runs = new Map<string, RunRecord>()
+  /** In-memory run index for observability; mirrored to disk at each commit. */
+  private readonly runIndex = new Map<string, RunIndexEntry>()
+  /**
+   * Serializes run-index file replacements. Run state is process-local, so a
+   * process-local tail is the correct boundary; without it, two concurrent
+   * runs can replace the file with snapshots that lose one another's entry.
+   */
+  private runIndexWriteTail: Promise<void> = Promise.resolve()
 
   constructor(
     private readonly catalog: ExpertCatalog,
@@ -117,6 +161,7 @@ export class TeamOrchestrator {
         name: expert.name,
         role: expert.role,
         tools: [...expert.tools],
+        ...(expert.hierarchyRole === undefined ? {} : { hierarchyRole: expert.hierarchyRole }),
       })),
       phases: team.def.phases.map(phase => ({
         id: phase.id,
@@ -124,31 +169,43 @@ export class TeamOrchestrator {
         dependsOn: [...phase.dependsOn],
         artifact: phase.output.artifact,
         ...(phase.gate === undefined ? {} : { gate: phase.gate }),
+        ...(phase.hierarchyRole === undefined ? {} : { hierarchyRole: phase.hierarchyRole }),
       })),
     }))
   }
 
   /**
-   * Start one run over a mounted pipeline team: mint the run id, create the
-   * run directory, and execute phases to the first park point (a gate, a
-   * terminal failure, or completion). Every phase expert's tool allowlist is
-   * proven mounted before anything is created, so a pack naming an unmounted
-   * tool fails without leaving a run behind.
+   * Start one run over a mounted pipeline or hierarchical team: mint the run
+   * id, create the run directory, and execute phases to the first park point
+   * (a gate, a terminal failure, or completion). Every phase expert's tool
+   * allowlist is proven mounted before anything is created, so a pack naming
+   * an unmounted tool fails without leaving a run behind.
    * @param teamId - Mounted team id.
    * @param input - Free-form run request text (for example, the research topic).
    * @returns the run snapshot at its first park point.
    * @throws {@link ExpertTeamError} with code `EXPERT_TEAM_TEAM_MISSING`
    *   when the team is not mounted, `EXPERT_TEAM_MODE_UNSUPPORTED` when the
-   *   team is not a pipeline, or `EXPERT_TEAM_TOOL_MISSING` when a phase
-   *   expert names an unmounted tool.
+   *   team declares an unsupported mode, or `EXPERT_TEAM_TOOL_MISSING` when a
+   *   phase expert names an unmounted tool.
    */
   async startRun(teamId: string, input: string): Promise<TeamRun> {
     const team = this.catalog.getTeam(teamId)
-    if (team.def.mode !== 'pipeline') {
+    const mode: unknown = team.def.mode
+    if (mode !== 'pipeline' && mode !== 'hierarchical') {
       throw new ExpertTeamError(
-        `team ${teamId} declares mode "${team.def.mode}", which this runtime does not orchestrate yet`,
+        `team ${teamId} declares mode "${String(mode)}", which this runtime does not orchestrate yet`,
         'EXPERT_TEAM_MODE_UNSUPPORTED',
       )
+    }
+    // Hierarchical teams must enter through their controller phase.
+    if (mode === 'hierarchical') {
+      const entryPhase = team.def.phases.find(phase => phase.id === team.def.entry)
+      if (entryPhase?.hierarchyRole !== 'controller') {
+        throw new ExpertTeamError(
+          `hierarchical team ${teamId} entry phase ${team.def.entry} must declare hierarchyRole: controller`,
+          'EXPERT_TEAM_CATALOG_INVALID',
+        )
+      }
     }
     for (const phase of team.def.phases) {
       this.runtime.requireMountedTools(this.catalog.getExpert(team.def.team, phase.expert))
@@ -189,8 +246,8 @@ export class TeamOrchestrator {
 
   /**
    * Record the human gate decision on a run's single parked phase and resume.
-   * An approval marks the gated phase done and executes the remaining
-   * pipeline to the next park point, and delivers a best-effort post-approval
+   * An approval marks the gated phase done and executes the remaining phases
+   * to the next park point, and delivers a best-effort post-approval
    * follow-up to the gated phase session so the persona's post-acceptance
    * steps can fire in a real turn (a failed delivery is logged, never fatal);
    * a rejection re-drives the phase session with the reviewer's comment
@@ -209,7 +266,7 @@ export class TeamOrchestrator {
    *   (agent derivation, model selection, session creation) settles the run
    *   failed and propagates.
    */
-  async approve(runId: string, decision: GateDecision, comment?: string | undefined): Promise<TeamRun> {
+  async approve(runId: string, decision: GateDecision, comment?: string): Promise<TeamRun> {
     const record = this.requireRun(runId)
     return await this.withRunGate(record, async () => {
       const parked = this.findParkedGate(record)
@@ -284,6 +341,15 @@ export class TeamOrchestrator {
   /** Dispose every derived agent session this orchestrator still owns. */
   async dispose(): Promise<void> {
     await this.runtime.dispose()
+  }
+
+  /**
+   * Read the live process's run index for observability. The returned rows are
+   * detached snapshots; callers cannot mutate the orchestrator's index.
+   * @returns all runs known to this orchestrator, in first-seen order.
+   */
+  listRuns(): readonly ExpertTeamRunView[] {
+    return [...this.runIndex.values()].map(entry => ({ ...entry }))
   }
 
   /**
@@ -375,6 +441,7 @@ export class TeamOrchestrator {
       upstreamPaths.set(depId, join(record.runDir, dep.artifact.artifact))
     }
     const supersededOpenQuestions = this.collectSupersededOpenQuestions(record, phase)
+    const parentAgent = this.resolveParentAgent(record, phase)
     const outcome = await this.runtime.executePhase({
       team: record.team,
       phase,
@@ -385,6 +452,7 @@ export class TeamOrchestrator {
       runDir: record.runDir,
       supersededOpenQuestions,
       ...(revision === undefined ? {} : { revision }),
+      parentAgent,
     })
     state.attempts += outcome.attempts
     if (!outcome.ok) {
@@ -440,6 +508,35 @@ export class TeamOrchestrator {
     throw error
   }
 
+  /** For hierarchical teams, find the controller or lead agent that dispatches
+   *  this worker phase by walking the dependency graph to the nearest completed
+   *  parent with a hierarchy role. Returns undefined when no parent is found
+   *  (the phase runs without a dispatch binding). */
+  private resolveParentAgent(record: RunRecord, phase: PhaseDef): Agent | undefined {
+    if (record.team.def.mode !== 'hierarchical') return undefined
+    if (phase.hierarchyRole === undefined || phase.hierarchyRole === 'controller') return undefined
+    const visited = new Set<string>()
+    const queue = [...phase.dependsOn]
+    while (queue.length > 0) {
+      const depId = queue.shift()
+      if (depId === undefined) continue
+      if (visited.has(depId)) continue
+      visited.add(depId)
+      const depIndex = record.team.def.phases.findIndex(p => p.id === depId)
+      if (depIndex < 0) continue
+      const depPhase = record.team.def.phases[depIndex]
+      const depState = record.states[depIndex]
+      if (depPhase === undefined || depState === undefined) continue
+      if (depState.status !== 'done') continue
+      if (depPhase.hierarchyRole === 'controller' || depPhase.hierarchyRole === 'lead') {
+        const parentAgent = this.runtime.getPhaseAgent(record.runId, depId)
+        if (parentAgent !== undefined) return parentAgent
+      }
+      queue.push(...depPhase.dependsOn)
+    }
+    return undefined
+  }
+
   /** The first parked phase of a run, or `undefined` when none is parked. */
   private findParkedGate(record: RunRecord): { readonly state: MutablePhaseState; readonly phase: PhaseDef } | undefined {
     for (const [index, phase] of record.team.def.phases.entries()) {
@@ -490,10 +587,32 @@ export class TeamOrchestrator {
     }
   }
 
-  /** Mirror the run state to `<runDir>/run-state.json` at one commit point. */
+  /** Mirror the run state to `<runDir>/run-state.json` and update the run index. */
   private async persist(record: RunRecord): Promise<void> {
     const body = `${JSON.stringify(this.snapshot(record), null, 2)}\n`
     await writeFileAtomic(join(record.runDir, RUN_STATE_FILE), body, { mode: 0o600 })
+    await this.updateRunIndex(record)
+  }
+
+  /** Append or update one entry in the run index and mirror to `<artifactsDir>/run-index.json`. */
+  private async updateRunIndex(record: RunRecord): Promise<void> {
+    const entry: RunIndexEntry = {
+      runId: String(record.runId),
+      teamId: record.team.def.team,
+      mode: record.team.def.mode,
+      status: record.status,
+      createdAt: record.createdAt,
+      ...(record.status === 'completed' || record.status === 'failed' ? { completedAt: new Date().toISOString() } : {}),
+    }
+    this.runIndex.set(String(record.runId), entry)
+    const write = this.runIndexWriteTail.then(async () => {
+      const index: RunIndex = { runs: [...this.runIndex.values()] }
+      await writeFileAtomic(join(this.artifactsDir, RUN_INDEX_FILE), `${JSON.stringify(index, null, 2)}\n`, { mode: 0o600 })
+    })
+    // A failed replacement must not poison later index writes. The failed
+    // operation remains visible to its caller, while the tail stays usable.
+    this.runIndexWriteTail = write.then(() => undefined, () => undefined)
+    await write
   }
 
   /**

@@ -9,8 +9,11 @@
     { "path": "../../../vendor/cordis" },
     { "path": "../../../vendor/schemastery" },
     { "path": "../../core/agent" },
+    { "path": "../../core/agent-default-model" },
     { "path": "../../core/session" },
     { "path": "../../core/tools" },
+    { "path": "../project-contracts" },
+    { "path": "../session-identity" },
     { "path": "../../llm/llm" },
     { "path": "../../util/atomic-write" },
     { "path": "../../util/brand" }

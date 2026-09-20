@@ -1,5 +1,5 @@
 ---
-description: "叠加在 Web profile 之上的私有 DevFrame profile 层，供源码 checkout 用户使用层级栈：会话身份、影子路由、项目记忆、目标绑定与派发。"
+description: "叠加在 Web profile 之上的私有 DevFrame profile 层，供源码 checkout 用户使用层级栈、专家团队编排与 Web 专家中心入口。"
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-`dsh-experimental-devframe-profile` 是把 DevFrame 栈挂载到 Web profile（`dsh-base` + `dsh-web-app`）之上的私有 profile 层。它的 patch 插入 console 日志导出器，以及 session-identity、shadow-router、shadow-controller、Shadow 对话宿主、project-memory、command-goal-binding 六行，外加三角色 agent-hierarchy 策略与 agent-dispatch 消费面。必须把本包显式加入已初始化的源码 checkout profile；正式发布排除本包。
+`dsh-experimental-devframe-profile` 是把 DevFrame 栈挂载到 Web profile（`dsh-base` + `dsh-web-app`）之上的私有 profile 层。它的 patch 插入 console 日志导出器、会话身份、Shadow 路由与对话、项目记忆、目标绑定、agent hierarchy、agent dispatch、带论文与开发数据包的 expert-team，以及常驻 Web 专家中心入口。必须把本包显式加入已初始化的源码 checkout profile；正式发布排除本包。
 
 ## 目录
 
@@ -35,11 +35,11 @@ pnpm dsh --profile web --patch ./packages/experimental/devframe-profile/cordis.p
 
 profile 必须已包含 Web bundle 层；本层不动其 webserver 行。部署通过后续 `--patch` overlay 收窄安全的机器中立默认值（authorizedRoots、vaultRoot、shadowSessionId、workspace 身份），而不是编辑本文件。
 
-本层的 patch 以 insert 方式加入九行，不指向既有行。不要同时通过这些行自带的包层挂载同一行（例如 `dsh plugin --profile <name> add @deepseek-ai/dsh-experimental-project-memory`）：两个 patch 列表重复插入同一行 id 会让启动以重复行 id 错误失败。收窄某行的默认值时，改用后续按 id 指向的 `--patch` 条目（`- id: project-memory, config: …`）——patch 条目替换目标行的整个配置，每行以最后一次写入为准；覆盖语义由[基础 bundle README](../../bundle/base/README.zh.md) 拥有。
+本层的 patch 以 insert 方式加入十一行，不指向既有行。不要同时通过这些行自带的包层挂载同一行（例如 `dsh plugin --profile <name> add @deepseek-ai/dsh-experimental-project-memory`）：两个 patch 列表重复插入同一行 id 会让启动以重复行 id 错误失败。收窄某行的默认值时，改用后续按 id 指向的 `--patch` 条目（`- id: project-memory, config: …`）——patch 条目替换目标行的整个配置，每行以最后一次写入为准；覆盖语义由[基础 bundle README](../../bundle/base/README.zh.md) 拥有。
 
 ### 你得到什么
 
-本层插入身份、路由、状态、对话、记忆与目标绑定各行，默认值全部未配置、只读：shadow-router 在声明授权根之前不安装任何 `project_*` 工具；Shadow 对话宿主在声明 `shadowSessionId` 之前保持惰性；project-memory 在提供真实 vaultRoot 之前保持工具只读。hierarchy 行的 worker 面初始为空（fail closed），不预分配 lead 插件范围；dispatch 行挂载 `agent_dispatch` 消费面；logger-console 行把宿主进程的插件日志输出导出到 stdout。
+本层插入身份、路由、状态、对话、记忆、目标绑定、hierarchy、dispatch、expert-team 与 Web 入口各行，默认值全部未配置、只读：shadow-router 在声明授权根之前不安装任何 `project_*` 工具；Shadow 对话宿主在声明 `shadowSessionId` 之前保持惰性；project-memory 在提供真实 vaultRoot 之前保持工具只读。expert-team 挂载论文与开发数据包，并把运行镜像写到 `dshHomePath('expert-team-runs')`；浏览器入口经 Remote 读取宿主状态，不增加工具或 schema，并允许用户为选定专家暂存普通提示。hierarchy 行的 worker 面初始为空（fail closed），不预分配 lead 插件范围；dispatch 行挂载 `agent_dispatch` 消费面；logger-console 行把宿主进程的插件日志输出导出到 stdout。
 
 ### 启用 Shadow
 
@@ -53,6 +53,10 @@ profile 必须已包含 Web bundle 层；本层不动其 webserver 行。部署�
 
 变更生效后，被声明的会话在创建时被标记——若其已存活则立即标记——其作用域恰好获得 `project_open`、`project_send`、`project_status`、`project_stop` 四个工具；其他作用域一个也解析不到。
 
+### 启用专家模式
+
+默认 patch 同时挂载两个 shipped 数据包：论文流水线与层级软件开发团队。宿主注册 `expert_team_list`、`expert_team_run`、`expert_team_status` 与 `expert_team_approve`；`expert_team_run` 还通过 `expert` 加 `question` 形态处理一次有界的单专家咨询。Web profile 中，常驻专家中心入口出现在侧栏页脚，列出已挂载专家、显示当前进程最近的运行，并允许用户把专家召唤到新的空白对话中且编辑预填提示。启动运行与批准人工关口仍属于模型／宿主操作。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -61,7 +65,7 @@ profile 必须已包含 Web bundle 层；本层不动其 webserver 行。部署�
 <details>
 <summary>实现内部——点击展开</summary>
 
-本包的运行时内容是 [`cordis.patch.yml`](cordis.patch.yml)。在 Web bundle 层之后应用时，patch 按安全默认值插入上述九行；不配置其他内容。
+本包的运行时内容是 [`cordis.patch.yml`](cordis.patch.yml)。在 Web bundle 层之后应用时，patch 按安全默认值插入上述十一行；不配置其他内容。
 
 | 文件 | 角色 |
 |---|---|
@@ -89,11 +93,11 @@ profile 必须已包含 Web bundle 层；本层不动其 webserver 行。部署�
 
 #### 模型看到什么
 
-模型可见面归被挂载的包所有：`project_*` 工具归 shadow-router，记忆工具归 project-memory，`/devframe-start` 及其 goal 命令归 command-goal-binding，`agent_dispatch` 归 agent-dispatch。本包只改变组合；自身不新增提示词文本或工具 schema。
+模型可见面归被挂载的包所有：`project_*` 工具归 shadow-router，记忆工具归 project-memory，`/devframe-start` 及其 goal 命令归 command-goal-binding，`agent_dispatch` 归 agent-dispatch，四个专家团队工具归 expert-team。Web 专家中心不新增工具或 schema；召唤操作预填的提示只有在用户提交后才会作为普通用户输入到达模型。
 
 #### Token 影响
 
-本包加入九行被挂载行贡献的提示词文本与 schema；自身不加入任何。
+本包加入十一行被挂载行贡献的提示词文本与 schema；自身不加入任何。
 
 #### KV Cache 影响
 
@@ -104,7 +108,7 @@ profile 必须已包含 Web bundle 层；本层不动其 webserver 行。部署�
 
 - **仅源码 checkout**——本私有包不出现在官方 npm、CLI、Web 或 Python 发布载荷中。
 - **需要 Web profile**——patch 依赖 Web bundle 层提供的行 id；它不是独立 profile。
-- **默认 fail closed**——shadow-router、project-memory 与 worker 工具面在部署配置前保持惰性；本层不发布预配置的根、vault 或范围。
+- **默认 fail closed**——shadow-router、project-memory 与 worker 工具面在部署配置前保持惰性；本层不发布预配置的根、vault 或范围。expert-team 使用源码 checkout 数据包与 DSH home 运行镜像挂载，而 memory 仍要提供 Vault 根后才可用。
 
 <a id="dev-note"></a>
 ### 开发备注

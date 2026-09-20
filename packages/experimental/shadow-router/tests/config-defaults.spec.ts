@@ -24,4 +24,54 @@ describe('shadow-router config defaults', () => {
       await h.dispose()
     }
   })
+
+  it('accepts an absolute designatedCwd and surfaces it in readStatus', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-designated-cwd-'))
+    const h = await harness(root, {
+      authorizedRoots: [root],
+      shadowSessionId: 'session-shadow',
+      designatedCwd: '/projects/shadow',
+    })
+    try {
+      expect(h.router.readStatus().designatedCwd).toBe('/projects/shadow')
+    } finally {
+      await h.dispose()
+    }
+  })
+
+  it('rejects a relative or blank designatedCwd at load', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-designated-cwd-bad-'))
+    await expect(harness(root, {
+      authorizedRoots: [root],
+      shadowSessionId: 'session-shadow',
+      designatedCwd: 'relative/path',
+    })).rejects.toThrow('designatedCwd must be a non-empty absolute path')
+    await expect(harness(root, {
+      authorizedRoots: [root],
+      shadowSessionId: 'session-shadow',
+      designatedCwd: '   ',
+    })).rejects.toThrow('designatedCwd must be a non-empty absolute path')
+  })
+
+  it('folds a reported designation issue into readStatus and clears it on repair', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-design-issue-'))
+    const h = await harness(root, {
+      authorizedRoots: [root],
+      shadowSessionId: 'session-shadow',
+      designatedCwd: '/projects/shadow',
+    })
+    try {
+      const service = h.router as unknown as {
+        reportDesignIssue(issue: 'designated-session-missing-cwd'): void
+        clearDesignIssue(): void
+      }
+      expect(h.router.readStatus().designIssue).toBeUndefined()
+      service.reportDesignIssue('designated-session-missing-cwd')
+      expect(h.router.readStatus().designIssue).toBe('designated-session-missing-cwd')
+      service.clearDesignIssue()
+      expect(h.router.readStatus().designIssue).toBeUndefined()
+    } finally {
+      await h.dispose()
+    }
+  })
 })

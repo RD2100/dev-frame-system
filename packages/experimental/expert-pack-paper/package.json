@@ -1,12 +1,17 @@
 {
   "name": "@deepseek-ai/dsh-experimental-expert-pack-paper",
-  "description": "Paper-research data pack for the expert-team plugin: four Chinese-primary expert personas, a four-phase human-gated pipeline (perspective discovery, literature review, research-question selection, method design), acceptance handoff checks, a review-checklist skill, and phase-result JSON Schemas mounted through the core's Config.packs",
-  "version": "0.1.2-alpha.4",
-  "private": true,
+  "description": "Paper-research data pack for the expert-team plugin: ten Chinese-primary expert personas, a ten-phase human-gated pipeline with parallel review and revision, acceptance handoff checks, review skills, and phase-result JSON Schemas mounted through the core's Config.packs",
+  "version": "0.1.6-alpha.1",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
     "directory": "packages/experimental/expert-pack-paper"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": "^22.19 || >=24"
   },
   "type": "module",
   "main": "lib/index.js",
@@ -19,8 +24,12 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/index.js",
-    "lib/types/**/*.d.ts"
+    "lib/**/*.js",
+    "lib/types/**/*.d.ts",
+    "experts/**",
+    "skills/**",
+    "team.yml",
+    "schemas/**"
   ],
   "license": "MIT",
   "peerDependencies": {

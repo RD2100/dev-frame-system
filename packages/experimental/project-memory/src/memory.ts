@@ -30,9 +30,9 @@ import {
 import { screenNoteBody } from './screen.ts'
 import {
   ensureNamespaceDir,
-  MEMORY_DIR,
   namespaceOf,
   noteRelativePath,
+  resolveNamespaceDir,
   resolveNoteFilePath,
 } from './vault.ts'
 import type {
@@ -96,6 +96,22 @@ function wrapFsFailure(label: string, code: 'MEMORY_WRITE_FAILED' | 'MEMORY_UNAV
     )
   }
   return new ProjectMemoryError(`${label} failed on the vault filesystem`, code, { cause: error })
+}
+
+/** Keep append's established write-failure result for an occupied directory path. */
+function mapAppendPathFailure(error: unknown): unknown {
+  if (
+    error instanceof ProjectMemoryError &&
+    error.code === 'MEMORY_PATH_REJECTED' &&
+    error.message.includes('not a directory')
+  ) {
+    return new ProjectMemoryError(
+      'memory namespace path cannot be used for append',
+      'MEMORY_WRITE_FAILED',
+      { cause: error },
+    )
+  }
+  return error
 }
 
 /** Sleep between bounded retries. */
@@ -331,13 +347,19 @@ export class ProjectMemoryService {
     // Entity filter: canonicalized the same way as append-time tags, so the
     // filter matches regardless of the caller's casing or spacing.
     const entityFilter = canonicalizeEntities(request.entity === undefined ? [] : [request.entity])[0]
-    const dir = join(rootReal, MEMORY_DIR, ...namespace.split('/'))
+    const namespaceDir = await resolveNamespaceDir(rootReal, namespace)
+    if (!namespaceDir.exists) return { hits: [], truncated: false, coverageComplete: true }
+    const dir = namespaceDir.path
     let entries: string[]
     try {
       entries = await readdir(dir)
-    } catch {
-      // The subtree is created lazily by the first append; no notes exist yet.
-      return { hits: [], truncated: false, coverageComplete: true }
+    } catch (error: unknown) {
+      if (fsErrorCode(error) === 'ENOENT') {
+        // A namespace can disappear between the guarded directory lookup and
+        // readdir; that is the same lazy-empty state, not a permission error.
+        return { hits: [], truncated: false, coverageComplete: true }
+      }
+      throw new ProjectMemoryError('memory namespace directory could not be read', 'MEMORY_UNAVAILABLE', { cause: error })
     }
     const noteFiles = entries.filter(name => name.endsWith('.md')).sort((left, right) => left.localeCompare(right))
     const coverageComplete = noteFiles.length <= this.spec.limits.maxCandidateFiles
@@ -347,9 +369,18 @@ export class ProjectMemoryService {
     const superseded = new Set<NoteId>()
     const complete: { readonly meta: MemoryNoteMeta; readonly body: string }[] = []
     for (const name of candidates) {
-      const contents = await this.readNoteFile(join(dir, name))
+      const match = /^(?<noteId>[0-9a-f]{64})\.md$/u.exec(name)
+      if (match?.groups?.noteId === undefined) continue
+      const candidateId = NoteId(match.groups.noteId)
+      const target = await resolveNoteFilePath(rootReal, namespace, candidateId)
+      if (!target.exists) continue
+      const contents = await this.readNoteFile(target.path)
       const parsed = parseNote(contents)
       if (!parsed.ok) continue
+      // A valid file at a managed path must still identify that path and
+      // namespace; otherwise an unreceipted copied note could be recalled
+      // under the wrong identity.
+      if (parsed.meta.noteId !== candidateId || parsed.meta.namespace !== namespace) continue
       const receipt = await this.readReceipt(parsed.meta.noteId)
       const verified = this.verifyReceipt(contents, receipt, noteRelativePath(namespace, parsed.meta.noteId))
       if (verified === false) continue
@@ -422,6 +453,9 @@ export class ProjectMemoryService {
           ? `malformed note file: ${parsed.failure.detail}`
           : parsed.failure.detail,
       }
+    }
+    if (parsed.meta.noteId !== noteId || parsed.meta.namespace !== namespace) {
+      return { status: 'memory_changed', reason: 'note metadata does not match the requested path' }
     }
     const note: MemoryNote = { ...parsed.meta, body: parsed.body }
     return { status: 'found', note, verified }
@@ -504,7 +538,12 @@ export class ProjectMemoryService {
           'MEMORY_RECEIPT_FAILED',
         )
       }
-      const target = await resolveNoteFilePath(rootReal, namespace, noteId)
+      let target
+      try {
+        target = await resolveNoteFilePath(rootReal, namespace, noteId)
+      } catch (error: unknown) {
+        throw mapAppendPathFailure(error)
+      }
       if (!target.exists) return { status: 'memory_missing', noteId, relativePath }
       const contents = await this.readNoteFile(target.path)
       if (digestTag(contents) !== receipt.digest) return { status: 'memory_changed', noteId, relativePath }
@@ -520,7 +559,12 @@ export class ProjectMemoryService {
     // Evaluate the derived path, then create exclusively; one re-evaluation
     // covers the lost-race window between check and create.
     for (let evaluation = 0; evaluation < 2; evaluation += 1) {
-      const target = await resolveNoteFilePath(rootReal, namespace, noteId)
+      let target
+      try {
+        target = await resolveNoteFilePath(rootReal, namespace, noteId)
+      } catch (error: unknown) {
+        throw mapAppendPathFailure(error)
+      }
       if (target.exists) {
         const [contents, parsed] = await this.readExistingForAppend(target.path)
         if (!parsed.ok) return { status: 'incomplete_note', noteId, relativePath }

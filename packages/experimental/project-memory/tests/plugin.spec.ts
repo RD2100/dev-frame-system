@@ -298,3 +298,69 @@ describe('the usage-policy prompt section', () => {
     expect((await ctx.systemPrompt.assemble()).sections.some(candidate => candidate.name === 'project-memory:usage')).toBe(false)
   })
 })
+
+describe('library tool dispatch', () => {
+  /** Boot with one vault file so list/read/search have real content. */
+  async function bootWithLibraryFile(): Promise<{ ctx: Context; vaultRoot: string }> {
+    const vaultRoot = makeVault()
+    const ctx = await boot({
+      workspaceId: 'ws-alpha',
+      vaultRoot,
+      writeEnabled: false,
+    })
+    const { mkdirSync, writeFileSync } = await import('node:fs')
+    mkdirSync(join(vaultRoot, 'projects', 'alpha'), { recursive: true })
+    writeFileSync(join(vaultRoot, 'projects', 'alpha', 'notes.md'), 'The deploy script lives in scripts/deploy.ps1.')
+    return { ctx, vaultRoot }
+  }
+
+  it('reports library status, lists, reads, and searches through the registry', async () => {
+    const { ctx } = await bootWithLibraryFile()
+
+    const status = await dispatch(ctx, 'library_status', {}, 20)
+    expect(status.isError).toBe(false)
+    if (status.isError) return
+    expect(status.value).toMatchObject({ status: 'AVAILABLE', fileCount: 1 })
+
+    const list = await dispatch(ctx, 'library_list', {}, 21)
+    expect(list.isError).toBe(false)
+    if (list.isError) return
+    const listed = list.value as Array<{ relativePath: string }>
+    expect(listed).toContainEqual(expect.objectContaining({ relativePath: 'projects/alpha/notes.md' }))
+
+    const read = await dispatch(ctx, 'library_read', { relative_path: 'projects/alpha/notes.md' }, 22)
+    expect(read.isError).toBe(false)
+    if (read.isError) return
+    const readValue = read.value as { relativePath: string; content: string }
+    expect(readValue.content).toContain('deploy script')
+
+    const search = await dispatch(ctx, 'library_search', { query: 'deploy' }, 23)
+    expect(search.isError).toBe(false)
+    if (search.isError) return
+    const hits = search.value as Array<{ relativePath: string; matchType: string; excerpt: string }>
+    expect(hits[0]).toMatchObject({ relativePath: 'projects/alpha/notes.md', matchType: 'content' })
+    expect(hits[0]?.excerpt).toContain('deploy script')
+  })
+
+  it('rejects a traversal read with the stable path code', async () => {
+    const { ctx } = await bootWithLibraryFile()
+    const result = await dispatch(ctx, 'library_read', { relative_path: '../escape.md' }, 24)
+    expect(result.isError).toBe(true)
+    if (!result.isError) return
+    expect(JSON.stringify(result.error)).toContain('MEMORY_PATH_REJECTED')
+  })
+
+  it('keeps library tools registered but fail-closed when no vault is configured', async () => {
+    const ctx = await boot({ workspaceId: 'ws-alpha' })
+
+    const status = await dispatch(ctx, 'library_status', {}, 25)
+    expect(status.isError).toBe(false)
+    if (status.isError) return
+    expect(status.value).toMatchObject({ status: 'UNAVAILABLE' })
+
+    const list = await dispatch(ctx, 'library_list', {}, 26)
+    expect(list.isError).toBe(true)
+    if (!list.isError) return
+    expect(JSON.stringify(list.error)).toContain('MEMORY_UNAVAILABLE')
+  })
+})

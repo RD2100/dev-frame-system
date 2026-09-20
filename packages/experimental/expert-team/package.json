@@ -1,12 +1,17 @@
 {
   "name": "@deepseek-ai/dsh-experimental-expert-team",
-  "description": "Expert-team core plugin: fail-loud pack mounting with strict expert-md and team.yml validation (the expert catalog), phase orchestration with human-review gates, and the five model tools (list, run, status, approve, consult)",
-  "version": "0.1.2-alpha.4",
-  "private": true,
+  "description": "Expert-team core plugin: fail-loud pack mounting with strict expert-md and team.yml validation (the expert catalog), phase orchestration with human-review gates, four model tools, and a read-only Web Remote status surface",
+  "version": "0.1.6-alpha.1",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
     "directory": "packages/experimental/expert-team"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": "^22.19 || >=24"
   },
   "type": "module",
   "main": "lib/index.js",
@@ -16,27 +21,59 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./typert": {
+      "types": "./lib/typert.host.d.ts",
+      "default": "./lib/typert.host.js"
+    },
+    "./remote": {
+      "types": "./lib/typert.remote-client.d.ts",
+      "default": "./lib/typert.remote-client.js"
+    },
+    "./client": {
+      "types": "./lib/types/client.d.ts",
+      "default": "./lib/client.js"
+    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
+  "dsh": {
+    "client": {
+      "platform": "web"
+    }
+  },
   "files": [
     "lib/index.js",
-    "lib/types/**/*.d.ts"
+    "lib/client.js",
+    "lib/types/**/*.d.ts",
+    "lib/typert.host.js",
+    "lib/typert.host.d.ts",
+    "lib/typert.remote-client.js",
+    "lib/typert.remote-client.d.ts"
   ],
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/dsh-llm": "workspace:^",
-    "@deepseek-ai/schemastery": "workspace:^",
     "ajv": "^8.20.0",
-    "js-yaml": "^4.2.0"
+    "js-yaml": "^4.2.0",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",
+    "@deepseek-ai/dsh-agent-default-model": "workspace:^",
     "@deepseek-ai/dsh-atomic-write": "workspace:^",
     "@deepseek-ai/dsh-brand": "workspace:^",
+    "@deepseek-ai/dsh-experimental-project-contracts": "workspace:^",
+    "@deepseek-ai/dsh-experimental-session-identity": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
-    "@deepseek-ai/dsh-tools": "workspace:^"
+    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/dsh-typert-protocol": "workspace:^",
+    "@deepseek-ai/schemastery": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-experimental-session-identity": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
@@ -48,11 +85,14 @@
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:^",
     "@deepseek-ai/dsh-atomic-write": "workspace:^",
     "@deepseek-ai/dsh-brand": "workspace:^",
+    "@deepseek-ai/dsh-experimental-project-contracts": "workspace:^",
+    "@deepseek-ai/dsh-experimental-session-identity": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:^",
     "@deepseek-ai/dsh-session-projection": "workspace:^",
     "@deepseek-ai/dsh-system-prompt": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/dsh-typert-protocol": "workspace:^",
     "@types/js-yaml": "^4.0.9"
   }
 }

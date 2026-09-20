@@ -322,6 +322,21 @@ describe('pack cross validation via loadTeamYml', () => {
     }
   })
 
+  it('rejects two controller phases even when they name the same expert', async () => {
+    const dir = await copyFixturePack('fixture-pack')
+    try {
+      const contents = await readFile(join(dir, 'team.yml'), 'utf8')
+      const hierarchical = contents
+        .replace('mode: pipeline', 'mode: hierarchical')
+        .replace('expert: topic-scout', 'expert: topic-scout\n    hierarchy-role: controller')
+        .replace('expert: literature-reviewer', 'expert: topic-scout\n    hierarchy-role: controller')
+      await writeFile(join(dir, 'team.yml'), hierarchical)
+      await expectErrorCode(() => loadTeamYml(dir, ['topic-scout', 'literature-reviewer']), 'EXPERT_TEAM_CATALOG_INVALID')
+    } finally {
+      await removeDir(dir)
+    }
+  })
+
   it('rejects missing, non-file, and escaping schema references', async () => {
     const dir = await copyFixturePack('fixture-pack')
     try {

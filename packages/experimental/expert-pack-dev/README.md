@@ -44,11 +44,11 @@ The core validates `team.yml` and the expert files fail-loud at load: unique pha
 | `prd` | `product-manager` | — (entry) | `prd.md` | `human-review` |
 | `architecture` | `architect` | `prd` | `design.md` | — |
 | `task-breakdown` | `tech-lead` | `architecture` | `tasks.md` | — |
-| `implementation` | `engineer` | `task-breakdown` | `implementation-log.md` | — |
-| `testing` | `qa` | `implementation` | `test-report.md` | — |
+| `implementation` | `engineer` | `task-breakdown` | `implementation.md` | — |
+| `testing` | `qa` | `implementation` | `test-results.md` | — |
 | `review` | `code-reviewer` | `testing` | `review.md` | `human-review` |
 
-A rejected gate returns the artifact to the owning expert with the reviewer's comments for revision. Each downstream expert verifies the handoff checks in its frontmatter before accepting upstream material: `architect` verifies the PRD's acceptance criteria are independently decidable, `tech-lead` verifies the design contracts are complete enough to decompose, `engineer` verifies the task boundaries and finished dependencies, `qa` verifies every task has an acceptance criterion, and `code-reviewer` verifies the test report is evidence-backed. The `prd`, `architecture`, and `testing` phases return a structured result object validated by [schemas/prd-summary.schema.json](schemas/prd-summary.schema.json), [schemas/design-summary.schema.json](schemas/design-summary.schema.json), and [schemas/test-report-summary.schema.json](schemas/test-report-summary.schema.json); the three schema-less phases return a free summary. The implementation phase's declared artifact is its implementation log — the code the engineer writes with its file tools lands beside it in the run directory.
+A rejected gate returns the artifact to the owning expert with the reviewer's comments for revision. Each downstream expert verifies the handoff checks in its frontmatter before accepting upstream material: `architect` verifies the PRD's acceptance criteria are independently decidable, `tech-lead` verifies the design contracts are complete enough to decompose, `engineer` verifies the task boundaries and finished dependencies, `qa` verifies every task has an acceptance criterion, and `code-reviewer` verifies the test report is evidence-backed. All six phases return a structured result object validated by their corresponding schemas under [`schemas/`](schemas/); the implementation phase's declared artifact is `implementation.md`, while code the engineer writes with its file tools lands beside that artifact in the run directory.
 
 ### Skills, tools, and memory
 
@@ -75,11 +75,14 @@ A pack is a directory contract, not a library: the core's catalog loader reads t
 | [`experts/code-reviewer.md`](experts/code-reviewer.md) | Review persona: correctness, maintainability, test coverage, security |
 | [`schemas/prd-summary.schema.json`](schemas/prd-summary.schema.json) | Draft-07 validation of the prd result object |
 | [`schemas/design-summary.schema.json`](schemas/design-summary.schema.json) | Draft-07 validation of the architecture result object |
-| [`schemas/test-report-summary.schema.json`](schemas/test-report-summary.schema.json) | Draft-07 validation of the testing result object |
+| [`schemas/tasks-summary.schema.json`](schemas/tasks-summary.schema.json) | Draft-07 validation of the task-breakdown result object |
+| [`schemas/implementation-summary.schema.json`](schemas/implementation-summary.schema.json) | Draft-07 validation of the implementation result object |
+| [`schemas/test-results-summary.schema.json`](schemas/test-results-summary.schema.json) | Draft-07 validation of the testing result object |
+| [`schemas/review-summary.schema.json`](schemas/review-summary.schema.json) | Draft-07 validation of the code-review result object |
 | [`skills/acceptance-checklist/SKILL.md`](skills/acceptance-checklist/SKILL.md) | The acceptance-checklist skill, shaped like a Claude Code skill |
 | [`skills/acceptance-checklist/references/checklist.md`](skills/acceptance-checklist/references/checklist.md) | The checklist items the skill applies |
 
-Expert files are YAML frontmatter plus a Chinese-primary persona body. The frontmatter keys (`id`, `team`, `name`, `role`, `goal`, `tools`, optional `skills` and `handoff-checks`) are the load-time contract, and the `tools` allowlist bounds what the phase subagent may call. The result-object schemas validate `{ artifactPath, summary, openQuestions? }`: the prd and design schemas require open questions (the PRD gate and the task breakdown need the unresolved items surfaced) while the test-report schema keeps them optional (a run whose plan executed fully legitimately has none); all three keep the shared shape standalone.
+Expert files are YAML frontmatter plus a Chinese-primary persona body. The frontmatter keys (`id`, `team`, `name`, `role`, `goal`, `tools`, optional `skills` and `handoff-checks`) are the load-time contract, and the `tools` allowlist bounds what the phase subagent may call. Each phase-result schema validates the shared `{ artifactPath, summary, openQuestions? }` result shape together with its phase-specific constraints; the schemas remain standalone so the catalog can validate every referenced file inside the pack.
 
 ### Invariant
 
@@ -96,11 +99,11 @@ No runtime invariant companion is published: the pack is data consumed through t
 
 #### What the model sees
 
-The pack registers no tools, prompt sections, or session events of its own; the core's five tools — `expert_team_list`, `expert_team_run`, `expert_team_status`, `expert_team_approve`, and `consult_expert` — are the only model-visible additions and are owned by the core package. During a run, each phase's subagent request carries the persona body of the phase expert verbatim (Chinese-primary), references to the upstream artifacts, and the phase result schema for the three schema-gated phases; the `tools` frontmatter allowlist bounds the subagent's callable tools, and `consult_expert` rides the same personas outside any run. The engineer's and qa's allowlists include `pwsh`, so those phase sessions run shell commands with the run directory as their working directory.
+The pack registers no tools, prompt sections, or session events of its own; the core's four tools — `expert_team_list`, `expert_team_run`, `expert_team_status`, and `expert_team_approve` — are the only model-visible additions and are owned by the core package. `expert_team_run` also accepts `expert` plus `question` for a bounded consultation outside a run. During a run, each phase's subagent request carries the persona body of the phase expert verbatim (Chinese-primary), references to the upstream artifacts, and its phase result schema; the `tools` frontmatter allowlist bounds the subagent's callable tools. The engineer's and qa's allowlists include `pwsh`, so those phase sessions run shell commands with the run directory as their working directory.
 
 #### Token effect
 
-Zero while no run is active. During a run, each phase request adds its persona (a few KiB), the upstream artifact references, and — for the three schema-gated phases — the result schema; each phase result and the engineer's accepted memory note appends a bounded JSON after the reusable prefix.
+Zero while no run is active. During a run, each phase request adds its persona (a few KiB), the upstream artifact references, and its result schema; each phase result and the engineer's accepted memory note appends a bounded JSON after the reusable prefix.
 
 #### KV Cache effect
 
@@ -112,7 +115,7 @@ Pack files are static, so within a phase the persona and schema sit in the stabl
 
 These limits are current pack constraints, not a task backlog.
 
-- **Hierarchical execution is not driven yet.** The catalog fully validates this pack — mounting succeeds and every phase and expert passes the load-time contract — but pipeline-mode execution of a hierarchical team is not yet driven: `expert_team_run` refuses a hierarchical team with `EXPERT_TEAM_MODE_UNSUPPORTED`. The core's hierarchical execution seam (gates mapped onto the agent-hierarchy dispatch engine) lands with M3; until then the phase table above is the contract a future run will drive, not a driven path.
+- **Hierarchical execution uses scoped-create, not agent-dispatch.** The six phases execute in declaration/topological order through the core's scoped-create seam. When `session-identity` is mounted, controller, lead, and worker sessions are recorded with their parent bindings and delegation depth; the expert-team runtime does not allocate worktrees or call the `agent_dispatch` tool. Independent phases remain serial.
 - **The pack is data only.** Orchestration, gate approval, schema validation, and memory recording are owned by the expert-team core; the pack cannot run alone, and its execution evidence lives in the core's catalog tests against this pack.
 - **Tool faces require mounted tools.** `engineer` and `qa` name `pwsh`, and the engineer additionally names `read_image`, `todo_write`, and `memory_append`: a deployment without those tools fails the run loud with `EXPERT_TEAM_TOOL_MISSING`, while a mounted-but-unconfigured vault degrades to `MEMORY_UNAVAILABLE` and no note, reported honestly; guaranteed per-artifact memory writes belong to the core.
 - **Chinese-primary personas.** Persona bodies pin model behavior in Chinese while schema descriptions are English; a deployment wanting English-first personas must fork the pack.
@@ -123,6 +126,6 @@ These limits are current pack constraints, not a task backlog.
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-The core's pinned phase briefing tells every phase expert it has no file-writing tool (`你没有写文件的工具，不要尝试写盘`); the engineer's allowlist carries `write`/`edit`, so driving the implementation phase requires the core to condition that line on the allowlist. Until then the conflict is dormant: hierarchical teams are not executed (see Known Limitations).
+The core's phase briefing describes the actual output contract and tells a phase not to use tools outside its allowlist. The engineer's allowlist includes `write`/`edit`, so implementation code may be changed inside the run directory; the runtime still validates and persists `implementation.md` from the reply contract before the phase is accepted.
 
 </details>

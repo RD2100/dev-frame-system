@@ -64,7 +64,7 @@ export function composePhaseBriefing(request: PhaseBriefingInput): string {
     const checks = expert.handoffChecks.map((check, index) => `${index + 1}. ${check}`)
     sections.push(['## handoff 核查清单', '', '开始产出前逐项核查，未通过就停在阶段开始并说明原因：', '', ...checks].join('\n'))
   }
-  sections.push(composeOutputContract(phase, request.schemaText))
+  sections.push(composeOutputContract(phase, expert, request.schemaText))
   return sections.join('\n\n')
 }
 
@@ -73,14 +73,17 @@ export function composePhaseBriefing(request: PhaseBriefingInput): string {
  * JSON result protocol, and the schema text when the phase declares one. The
  * wording is pinned — the orchestrator parses exactly this protocol.
  */
-function composeOutputContract(phase: PhaseDef, schemaText: string | undefined): string {
+function composeOutputContract(phase: PhaseDef, expert: ExpertDef, schemaText: string | undefined): string {
   const schemaSection = schemaText === undefined
     ? []
     : ['', '本阶段的结果对象必须同时通过以下 JSON Schema 校验（schema 全文）：', '', '```json', schemaText, '```']
+  const fileGuidance = expert.tools.includes('write') || expert.tools.includes('edit')
+    ? '你可以使用允许的文件工具修改运行目录内的代码；阶段产物仍以本回复正文为准，不要用文件工具改写该产物。'
+    : '你没有写文件的工具，不要尝试写盘。'
   return [
     '## 输出契约',
     '',
-    `把本阶段产物写成 Markdown 回复正文；运行器会把正文写入运行目录下的 ${phase.output.artifact}（你没有写文件的工具，不要尝试写盘）。`,
+    `把本阶段产物写成 Markdown 回复正文；运行器会把正文写入运行目录下的 ${phase.output.artifact}。${fileGuidance}`,
     '',
     `在回复的最末尾，用一个 ${RESULT_FENCE_OPEN} 围栏代码块给出阶段结果对象，围栏块之后不要再输出任何内容。结果对象字段：`,
     '',

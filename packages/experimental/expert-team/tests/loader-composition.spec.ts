@@ -42,6 +42,8 @@ function fixturePath(name: string): string {
 
 /** Absolute path of the shipped paper data pack (sibling package). */
 const PAPER_PACK = fileURLToPath(new URL('../../expert-pack-paper', import.meta.url))
+/** Absolute path of the shipped dev data pack (sibling package). */
+const DEV_PACK = fileURLToPath(new URL('../../expert-pack-dev', import.meta.url))
 
 let root: string | undefined
 const contexts: Context[] = []
@@ -176,6 +178,73 @@ async function boot(script: readonly unknown[]): Promise<Composition> {
   }
 }
 
+/** Write a cordis.yml that mounts paper, dev, and hierarchical fixture packs. */
+async function writeMultiPackConfig(): Promise<string> {
+  const configPath = join(root as string, 'cordis.yml')
+  await writeFile(configPath, [
+    "- name: '@deepseek-ai/dsh-session'",
+    "- name: '@deepseek-ai/dsh-llm'",
+    "- name: '@deepseek-ai/dsh-session-persistence-jsonl'",
+    '  config:',
+    `    root: ${JSON.stringify(join(root as string, 'sessions'))}`,
+    '    compression: none',
+    "- name: '@deepseek-ai/dsh-session-projection'",
+    "- name: '@deepseek-ai/dsh-system-prompt'",
+    "- name: '@deepseek-ai/dsh-tools'",
+    "- name: '@deepseek-ai/dsh-agent'",
+    "- name: '@deepseek-ai/dsh-agent-loop'",
+    '  config:',
+    '    agents: []',
+    "- name: '@deepseek-ai/dsh-agent-default-model'",
+    '  config:',
+    '    provider: mock',
+    '    model: mock',
+    "- name: '@deepseek-ai/dsh-experimental-expert-team'",
+    '  config:',
+    '    packs:',
+    `      - ${JSON.stringify(fixturePath('fixture-pack'))}`,
+    `      - ${JSON.stringify(PAPER_PACK)}`,
+    `      - ${JSON.stringify(fixturePath('fixture-pack-hierarchical'))}`,
+    `      - ${JSON.stringify(DEV_PACK)}`,
+    `    artifactsDir: ${JSON.stringify(join(root as string, 'artifacts'))}`,
+    '',
+  ].join('\n'))
+  return configPath
+}
+
+/** Boot the composition with paper + dev packs mounted. */
+async function bootMultiPack(script: readonly unknown[]): Promise<Composition> {
+  root = await mkdtemp(join(tmpdir(), 'dsh-expert-team-multi-'))
+  await mkdir(join(root, 'artifacts'), { recursive: true })
+  const configPath = await writeMultiPackConfig()
+  const ctx = await loadComposition(configPath)
+  const adapter = new MockAdapter([...script] as never)
+  ctx.llm.registerAdapter(['mock'], adapter)
+  for (const tool of ['web_search', 'read_file', 'edit_file', 'read', 'grep', 'glob', 'memory_search']) {
+    ctx.tools.register(namedTool(tool))
+  }
+  const driver = (await ctx.agents.create({
+    sessionId: SessionId('multi-driver'),
+    agentOptions: { provider: 'mock', model: 'mock' },
+  })).agent
+  let callCount = 0
+  return {
+    ctx,
+    artifactsDir: join(root, 'artifacts'),
+    adapter,
+    async execute(name, args) {
+      callCount += 1
+      return await ctx.tools.execute({
+        callId: ToolCallId(`multi-${callCount}-${name}`),
+        name,
+        arguments: args,
+        signal: new AbortController().signal,
+        agent: driver,
+      })
+    },
+  }
+}
+
 /** The model-facing text of one tool result. */
 function textOf(result: ToolExecutionResult): string {
   return result.content.flatMap(block => block.type === 'text' && typeof block.text === 'string' ? [block.text] : []).join('')
@@ -209,7 +278,11 @@ const PERSPECTIVES_RESULT = {
 describe('expert team through a real Loader composition', () => {
   it('mounts the fixture pack and the shipped paper pack with their full phase chains', async () => {
     const b = await boot([])
-    const listed = JSON.parse(textOf(await b.execute('expert_team_list', {}))) as unknown as {
+    const rawResult = await b.execute('expert_team_list', {})
+    if (rawResult.isError) {
+      console.log('TOOL ERROR:', JSON.stringify(rawResult.error, null, 2))
+    }
+    const listed = JSON.parse(textOf(rawResult)) as unknown as {
       teams: Array<{
         team: string
         entry: string
@@ -288,11 +361,53 @@ describe('expert team through a real Loader composition', () => {
       question: '什么是 STORM？',
     })
     expect(result.isError, textOf(result)).toBe(false)
-    const parsed = JSON.parse(textOf(result))
+    const parsed = JSON.parse(textOf(result)) as { answer: string; truncated: boolean }
     expect(parsed.answer).toBe('STORM 先发散再收敛。')
     expect(parsed.truncated).toBe(false)
     expect(JSON.stringify(b.adapter.requests[0])).toContain('什么是 STORM？')
     // The consult ran outside any run: the artifacts root is still empty.
     await expect(readdir(b.artifactsDir)).resolves.toEqual([])
+  })
+
+  it('mounts both paper and dev packs together and lists both teams', async () => {
+    const b = await bootMultiPack([])
+    const listed = JSON.parse(textOf(await b.execute('expert_team_list', {}))) as {
+      teams: Array<{ team: string; entry: string; phases: { id: string; artifact: string; gate?: string; hierarchyRole?: string }[] }>
+    }
+    const paper = listed.teams.find(team => team.team === 'paper')
+    const dev = listed.teams.find(team => team.team === 'dev')
+    expect(paper).toBeDefined()
+    expect(dev).toBeDefined()
+    expect(paper?.entry).toBe('perspective-discovery')
+    expect(dev?.entry).toBe('prd')
+    expect(dev?.phases[0]).toMatchObject({ id: 'prd', artifact: 'prd.md', gate: 'human-review', hierarchyRole: 'controller' })
+    expect(dev?.phases[1]).toMatchObject({ id: 'architecture', artifact: 'design.md', hierarchyRole: 'lead' })
+    expect(dev?.phases[2]).toMatchObject({ id: 'task-breakdown', artifact: 'tasks.md', hierarchyRole: 'lead' })
+    expect(dev?.phases[3]).toMatchObject({ id: 'implementation', artifact: 'implementation.md', hierarchyRole: 'worker' })
+    expect(dev?.phases[4]).toMatchObject({ id: 'testing', artifact: 'test-results.md', hierarchyRole: 'worker' })
+    expect(dev?.phases[5]).toMatchObject({ id: 'code-review', artifact: 'review.md', hierarchyRole: 'lead', gate: 'human-review' })
+  })
+
+  it('executes a hierarchical dev-team phase alongside mounted paper pack', async () => {
+    const b = await bootMultiPack([
+      phaseReply('# 实施计划\n\n- 步骤1：搭建框架', {
+        artifactPath: 'plan.md',
+        summary: '计划完成',
+      }),
+      phaseReply('# 实现补丁\n\n- 新增模块入口', {
+        artifactPath: 'patch.diff',
+        summary: '补丁完成',
+      }),
+    ])
+    try {
+      const run = runOf(await b.execute('expert_team_run', { team: 'code-builders', input: '需求' }))
+      expect(run.status).toBe('completed')
+      expect(run.phases.map(p => p.status)).toEqual(['done', 'done'])
+      const runDir = join(b.artifactsDir, run.runId)
+      expect(await readFile(join(runDir, 'plan.md'), 'utf8')).toContain('实施计划')
+      expect(await readFile(join(runDir, 'patch.diff'), 'utf8')).toContain('实现补丁')
+    } finally {
+      await b.ctx.fiber.dispose()
+    }
   })
 })

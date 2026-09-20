@@ -9,8 +9,8 @@
 # vaultRoot, shadowSessionId, workspace identity), not by editing this file.
 # shadow-router: fail-closed until configured — no authorized roots, no
 # declared Shadow session, so no project_* tools install anywhere.
-# project-memory: unconfigured Vault keeps the tools read-only
-# (MEMORY_UNAVAILABLE) until a real vaultRoot is supplied.
+# project-memory: unconfigured Vault keeps reads unavailable and appends
+# disabled until a real vaultRoot is supplied and writes are explicitly enabled.
 # command-goal-binding: binds the launch directory as the goal worktree;
 # /devframe-start executes the required checks below as real subprocesses.
 - insert:
@@ -75,5 +75,29 @@
           worker:
             inheritedTools: []
         leadPluginScopes: {}
+    # Agent dispatch: its worktree-registry service dependency is mounted by
+    # the web-app bundle layer (and headless/sdk/acp equivalents), which
+    # precedes this layer in the profile composition, so the service is live
+    # before this row activates.
     - id: agent-dispatch
       name: '@deepseek-ai/dsh-experimental-agent-dispatch'
+    # Expert mode: the shipped paper and development packs are mounted as
+    # source-checkout data, while run artifacts stay under the DSH home. A
+    # later deployment overlay may replace the pack list or artifact root.
+    - id: expert-team
+      name: '@deepseek-ai/dsh-experimental-expert-team'
+      config:
+        packs:
+          - !!js process.cwd() + '/packages/experimental/expert-pack-paper'
+          - !!js process.cwd() + '/packages/experimental/expert-pack-dev'
+        artifactsDir: !!js dshHomePath('expert-team-runs')
+    # Browser-only presentation of the same Host Remote; the package root is
+    # inert in headless compositions and its /client export is selected by the
+    # Web loader.
+    - id: ui-expert-team
+      name: '@deepseek-ai/dsh-experimental-client-ui-expert-team'
+    # Browser-only Library page over the read-only Vault; the package root is
+    # inert in headless compositions and its /client export is selected by the
+    # Web loader.
+    - id: ui-project-memory
+      name: '@deepseek-ai/dsh-experimental-client-ui-project-memory'

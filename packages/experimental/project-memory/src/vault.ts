@@ -82,6 +82,18 @@ function rejectPath(detail: string): ProjectMemoryError {
   return new ProjectMemoryError(`vault path rejected: ${detail}`, 'MEMORY_PATH_REJECTED')
 }
 
+/** Read a Node filesystem error code without trusting an untyped boundary. */
+function fsErrorCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined
+  const code = (error as { readonly code?: unknown }).code
+  return typeof code === 'string' ? code : undefined
+}
+
+/** Preserve filesystem inspection failures instead of treating them as absence. */
+function unavailable(detail: string, error: unknown): ProjectMemoryError {
+  return new ProjectMemoryError(`vault path could not be inspected: ${detail}`, 'MEMORY_UNAVAILABLE', { cause: error })
+}
+
 /** `true` when `child` (both real, normalized) is strictly inside `root`. */
 function isInsideRoot(child: string, root: string): boolean {
   const separator = root.endsWith('\\') || root.endsWith('/') ? '' : '\\'
@@ -100,13 +112,57 @@ async function assertNoSymlinkComponents(rootReal: string, components: readonly 
     let stats
     try {
       stats = await lstat(current)
-    } catch {
-      return
+    } catch (error: unknown) {
+      if (fsErrorCode(error) === 'ENOENT') return
+      throw unavailable(`component "${component}" is not readable`, error)
     }
     if (stats.isSymbolicLink()) {
       throw rejectPath(`unexpected symlink or reparse component "${component}"`)
     }
+    if (!stats.isDirectory()) {
+      throw rejectPath(`path component "${component}" is not a directory`)
+    }
   }
+}
+
+/**
+ * Resolve one namespace directory without following a symlink or reparse
+ * point. Missing directories are normal because the memory subtree is lazy;
+ * all other inspection failures stay explicit.
+ * @param rootReal - Realpath of the Vault root.
+ * @param namespace - Relative namespace directory.
+ * @returns the absolute directory path and whether it exists.
+ */
+export async function resolveNamespaceDir(
+  rootReal: string,
+  namespace: MemoryNamespace,
+): Promise<{ readonly path: string; readonly exists: boolean }> {
+  const components = [MEMORY_DIR, ...namespace.split('/')]
+  await assertNoSymlinkComponents(rootReal, components)
+  const path = join(rootReal, ...components)
+  let stats
+  try {
+    stats = await lstat(path)
+  } catch (error: unknown) {
+    if (fsErrorCode(error) === 'ENOENT') return { path, exists: false }
+    throw unavailable('namespace directory is not readable', error)
+  }
+  if (stats.isSymbolicLink()) {
+    throw rejectPath('namespace directory is a symlink or reparse point')
+  }
+  if (!stats.isDirectory()) {
+    throw rejectPath('namespace path is not a directory')
+  }
+  let real: string
+  try {
+    real = await realpath(path)
+  } catch (error: unknown) {
+    throw unavailable('namespace directory realpath could not be read', error)
+  }
+  if (!isInsideRoot(real, rootReal)) {
+    throw rejectPath('namespace directory resolves outside the vault root')
+  }
+  return { path, exists: true }
 }
 
 /**
@@ -124,18 +180,26 @@ export async function resolveNoteFilePath(
   noteId: NoteId,
 ): Promise<{ readonly path: string; readonly exists: boolean }> {
   const components = [MEMORY_DIR, ...namespace.split('/')]
-  await assertNoSymlinkComponents(rootReal, components)
+  const namespaceDir = await resolveNamespaceDir(rootReal, namespace)
   const path = join(rootReal, ...components, `${noteId}.md`)
+  if (!namespaceDir.exists) return { path, exists: false }
   let stats
   try {
     stats = await lstat(path)
-  } catch {
-    return { path, exists: false }
+  } catch (error: unknown) {
+    if (fsErrorCode(error) === 'ENOENT') return { path, exists: false }
+    throw unavailable(`note file "${noteId}.md" is not readable`, error)
   }
   if (stats.isSymbolicLink()) {
     throw rejectPath(`note file "${noteId}.md" is a symlink or reparse point`)
   }
-  const real = await realpath(path)
+  if (!stats.isFile()) throw rejectPath(`note path "${noteId}.md" is not a regular file`)
+  let real: string
+  try {
+    real = await realpath(path)
+  } catch (error: unknown) {
+    throw unavailable(`note file "${noteId}.md" realpath could not be read`, error)
+  }
   if (!isInsideRoot(real, rootReal)) {
     throw rejectPath('resolved note path escapes the vault root')
   }
@@ -155,10 +219,13 @@ export async function resolveNoteFilePath(
 export async function ensureNamespaceDir(rootReal: string, namespace: MemoryNamespace): Promise<string> {
   const components = [MEMORY_DIR, ...namespace.split('/')]
   const dir = join(rootReal, ...components)
+  // Check both sides of mkdir: a pre-existing link must fail closed, and a
+  // link planted while the recursive create is in flight must not become a
+  // silent escape into a different subtree.
+  await assertNoSymlinkComponents(rootReal, components)
   await mkdir(dir, { recursive: true })
-  const real = await realpath(dir)
-  if (!isInsideRoot(real, rootReal)) {
-    throw rejectPath('namespace directory resolves outside the vault root')
-  }
-  return dir
+  await assertNoSymlinkComponents(rootReal, components)
+  const resolved = await resolveNamespaceDir(rootReal, namespace)
+  if (!resolved.exists) throw new ProjectMemoryError('namespace directory was not created', 'MEMORY_WRITE_FAILED')
+  return resolved.path
 }

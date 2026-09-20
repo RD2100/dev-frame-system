@@ -8,16 +8,16 @@ import * as yaml from 'js-yaml'
 import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 
 describe('DevFrame profile bundle', () => {
-  it('declares a private parseable layer mounting the nine DevFrame rows', () => {
+  it('declares a publishable parseable layer mounting the twelve DevFrame rows', () => {
     const root = fileURLToPath(new URL('..', import.meta.url))
     const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as {
       private?: boolean
-      publishConfig?: unknown
+      publishConfig?: { access?: string }
       dependencies?: Record<string, string>
       dsh?: { bundle?: { patch?: string } }
     }
-    expect(manifest.private).toBe(true)
-    expect(manifest.publishConfig).toBeUndefined()
+    expect(manifest.private).toBeUndefined()
+    expect(manifest.publishConfig?.access).toBe('public')
     expect(manifest.dsh?.bundle?.patch).toBe('./cordis.patch.yml')
     expect(manifest.dependencies).toMatchObject({
       '@deepseek-ai/dsh-experimental-agent-dispatch': 'workspace:^',
@@ -27,6 +27,9 @@ describe('DevFrame profile bundle', () => {
       '@deepseek-ai/dsh-experimental-session-identity': 'workspace:^',
       '@deepseek-ai/dsh-experimental-shadow-controller': 'workspace:^',
       '@deepseek-ai/dsh-experimental-shadow-router': 'workspace:^',
+      '@deepseek-ai/dsh-experimental-client-ui-expert-team': 'workspace:^',
+      '@deepseek-ai/dsh-experimental-expert-team': 'workspace:^',
+      '@deepseek-ai/dsh-worktree-registry': 'workspace:^',
     })
 
     const parsed = yaml.load(
@@ -46,10 +49,16 @@ describe('DevFrame profile bundle', () => {
       'command-goal-binding',
       'agent-hierarchy',
       'agent-dispatch',
+      'expert-team',
+      'ui-expert-team',
+      'ui-project-memory',
     ])
     expect(inserted.find(row => row.id === 'shadow-controller')?.name).toBe('@deepseek-ai/dsh-experimental-shadow-controller')
     expect(inserted.find(row => row.id === 'shadow-agent')?.name).toBe('@deepseek-ai/dsh-experimental-shadow-controller/shadow-agent')
     expect(inserted.find(row => row.id === 'project-memory')?.name).toBe('@deepseek-ai/dsh-experimental-project-memory')
+    // worktree-registry is not patched here: the web-app bundle layer (which
+    // precedes this layer in the profile composition) supplies the service.
+    expect(inserted.find(row => row.id === 'worktree-registry')).toBeUndefined()
     expect(inserted.find(row => row.id === 'agent-dispatch')?.name).toBe('@deepseek-ai/dsh-experimental-agent-dispatch')
   })
 })

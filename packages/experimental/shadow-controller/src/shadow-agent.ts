@@ -1,4 +1,4 @@
-/**
+﻿/**
  * The Shadow conversation host: one persistent agent session that IS the
  * deployment's designated Shadow. At startup — and again on demand, because a
  * failed or raced startup must not poison later calls — the host creates or
@@ -25,7 +25,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
-import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 import { Service } from '@deepseek-ai/cordis'
 import type { ShadowRouter } from '@deepseek-ai/dsh-experimental-shadow-routing'
@@ -303,6 +303,46 @@ export class ShadowAgent extends Service {
       ...(selection.reasoningEffort === undefined ? {} : { reasoningEffort: selection.reasoningEffort }),
     }
     const persistence = this.ctx.get('sessionPersistence')
+    // The designated session may predate this deployment's workspace
+    // configuration and sit on disk without a cwd. Workspace-scoped surfaces
+    // (the Desktop client) render a cwd-less session as a fresh conversation,
+    // so attach the deployment's designated cwd before restoring it — a
+    // one-way durable repair that keeps the same session id and history. An
+    // unconfigured designatedCwd leaves the disk untouched and reports the
+    // mismatch instead of guessing. (This backend-specific seam is probed, not
+    // promised: only the JSONL backend ships attachSessionCwd.)
+    const attachable = persistence as { attachSessionCwd?: (id: SessionId, cwd: string) => Promise<SessionHeader> } | undefined
+    const stored = persistence === undefined
+      ? undefined
+      : (await persistence.list()).find(header => header.id === id)
+    // A designated session without a cwd cannot be rendered by workspace-
+    // scoped surfaces (the Desktop client shows a fresh conversation). Repair
+    // it one-way when the backend and config allow; otherwise report the
+    // designation problem so client entries fail closed instead of opening a
+    // conversation that renders as fresh.
+    if (stored !== undefined && stored.cwd === undefined) {
+      const designatedCwd = router.readStatus().designatedCwd
+      // The designation-issue seam is host-plane (the routing contract stays
+      // model-facing read-only); the composed router service implements it.
+      const routerHost = router as unknown as {
+        reportDesignIssue(issue: 'designated-session-missing-cwd'): void
+        clearDesignIssue(): void
+      }
+      if (attachable?.attachSessionCwd !== undefined && designatedCwd !== undefined) {
+        try {
+          await attachable.attachSessionCwd(id, designatedCwd)
+          routerHost.clearDesignIssue()
+          this.ctx.logger.info(`the designated Shadow session "${id}" was cwd-less; attached cwd "${designatedCwd}"`)
+        } catch (error: unknown) {
+          routerHost.reportDesignIssue('designated-session-missing-cwd')
+          this.ctx.logger.warn(
+            `could not attach cwd "${designatedCwd}" to the designated Shadow session "${id}": ${error instanceof Error ? error.message : String(error)}`,
+          )
+        }
+      } else {
+        routerHost.reportDesignIssue('designated-session-missing-cwd')
+      }
+    }
     if (persistence !== undefined) {
       try {
         const handle = await this.ctx.agents.resume({
@@ -319,9 +359,18 @@ export class ShadowAgent extends Service {
         if (exists) throw error
       }
     }
+    // A fresh designated session carries the designatedCwd when configured,
+    // falling back to the first authorized root. The desktop client's
+    // conversation surface stays input-enabled for a cwd-less empty session
+    // only when a workspace chip can render, and the Shadow routes across
+    // roots without doing project work itself.
+    const status = router.readStatus()
+    const roots = status.authorizedRoots
+    const preferredCwd = status.designatedCwd ?? roots[0]
     const handle = await this.ctx.agents.create({
       sessionId: id,
       agentOptions,
+      ...(preferredCwd === undefined ? {} : { meta: { cwd: preferredCwd } }),
       setup: shadowSetup(router, selection, true),
     })
     this.owned = handle

@@ -1,8 +1,18 @@
 {
   "name": "@deepseek-ai/dsh-experimental-command-goal-binding",
   "description": "Human /goal-complete slash command composing the DevFrame completion admission over the live native Goal service",
-  "version": "0.1.2-alpha.4",
-  "private": true,
+  "version": "0.1.6-alpha.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/experimental/command-goal-binding"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": "^22.19 || >=24"
+  },
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",

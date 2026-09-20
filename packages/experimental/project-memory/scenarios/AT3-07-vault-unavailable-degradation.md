@@ -11,7 +11,7 @@ kind: "acceptance-scenario-draft"
 
 ## 目标
 
-验证 Vault 各不可用形态下的显式退化：未配置/缺失/非目录的 Vault 对三个工具稳定 `MEMORY_UNAVAILABLE`；只读 Vault 读路径不受影响而追加稳定失败（permanent 不重试）；访问中途移除 Vault 产生显式错误而非伪成功；回执 seam 失败时文件保持未确认、无 `created`。宿主侧断言两种任务形态：编码任务带 memory 警告照常完成，memory-only 任务保持 failed/blocked。
+验证 Vault 各不可用形态下的显式退化：未配置/缺失/非目录的 Vault 对搜索/读取稳定 `MEMORY_UNAVAILABLE`，只读配置下追加稳定 `MEMORY_APPEND_DISABLED`；只读 Vault 读路径不受影响而追加稳定写失败（permanent 不重试）；访问中途移除 Vault 产生显式错误而非伪成功；回执 seam 失败时文件保持未确认、无 `created`。宿主侧断言两种任务形态：编码任务带 memory 警告照常完成，memory-only 任务保持 failed/blocked。
 
 ## 前提（宿主集成）
 
@@ -27,8 +27,8 @@ kind: "acceptance-scenario-draft"
 
 ## 剧本（replay 步骤）
 
-1. 未配置：A 实例 `memory_search`/`memory_read`/`memory_append` 各一次 → 全部 `MEMORY_UNAVAILABLE`（`requireVaultRoot` 在任何文件访问前拒绝，服务不创建 Vault 根）。
-2. 缺失/非目录：B 实例同上两次 → `MEMORY_UNAVAILABLE`（stat 失败与非目录两个分支各一次）。
+1. 未配置：A 实例 `memory_search`/`memory_read`/`memory_append` 各一次 → 前两者 `MEMORY_UNAVAILABLE`，后者 `MEMORY_APPEND_DISABLED`（shipped 默认关闭写入；服务不创建 Vault 根）。
+2. 缺失/非目录：B 实例搜索/读取各一次 → `MEMORY_UNAVAILABLE`（stat 失败与非目录两个分支各一次）；若显式开启写入，追加同样在根检查处报告 `MEMORY_UNAVAILABLE`。
 3. 只读 Vault：C 实例先追加一条合法 note（`created`），随后把命名空间目录置为拒绝写入（平台能力允许时用真实只读手段，否则宿主 fault 注入 EACCES 形失败）→ 追加第二条立即 `MEMORY_WRITE_FAILED`（permanent 不消耗重试），既有文件与目录内容不变；同期的 `memory_search`/`memory_read` 正常返回既有 note——只读退化只废写路径。
 4. 中途移除：D 实例追加一条合法 note 后，宿主删除 Vault 根 → 再次 `memory_search` → `MEMORY_UNAVAILABLE`；`memory_append` → `MEMORY_UNAVAILABLE`（根检查先失败）或 bounded 重试后 `MEMORY_WRITE_FAILED`（根检查竞态窗口内的目录创建失败），以实际序列为准，两者都是显式错误。
 5. 回执 seam 失败：C 实例追加合法 note 且宿主 fault 令 `receipts.write` 抛错 → `MEMORY_RECEIPT_FAILED`，无 `created` 返回；note 文件留在磁盘但保持未确认，后续 `memory_read` 该 id → `found` 且 `verified: null`（无回执），不伪称已确认；seam 恢复后同 `sourceRef` 重试 → `already_exists` 并补交回执（文件本就存在，不重建）。
@@ -36,7 +36,7 @@ kind: "acceptance-scenario-draft"
 
 ## 可观察通过标准（对应 AT3-07）
 
-- 各不可用形态稳定显式：`MEMORY_UNAVAILABLE` / `MEMORY_WRITE_FAILED` / `MEMORY_RECEIPT_FAILED` 按子案出现，无隐藏回退、无默认目录重建。
+- 各不可用形态稳定显式：`MEMORY_UNAVAILABLE` / `MEMORY_APPEND_DISABLED` / `MEMORY_WRITE_FAILED` / `MEMORY_RECEIPT_FAILED` 按子案出现，无隐藏回退、无默认目录重建。
 - 失败保存不报成功：步骤 4–5 无 `created` 结果、无成功声明事件，文件层面无覆盖或改写。
 - 编码任务可带警告完成：步骤 6 编码任务结果为成功且恰含 memory 警告；memory-only 任务保持 failed/blocked。
 

@@ -6,15 +6,19 @@
  * session through — followed by `agent.followup()` plus `await agent.whenIdle()`
  * to drive one turn. It is deliberately NOT the agent-hierarchy dispatch
  * engine: a pipeline phase needs a persona-scoped session with a bounded tool
- * face, no worktree, and no role binding; hierarchical mode (deferred) is the
- * seam that would map gates onto dispatch instead. Deriving through the
- * registry keeps this package a plain plugin over existing loop behavior —
- * no new execution loop.
+ * face, no worktree, and no role binding; hierarchical mode reuses the same
+ * scoped-create face but seeds session metadata and binds the agent in the
+ * hierarchy role registry so the parent-child relationship is durable. For
+ * hierarchical teams, the parent-child relationship is recorded in the binding
+ * registry through `agentBindings.bindAgent`; tool enforcement stays with the
+ * expert allowlist. Deriving through the registry keeps this package a plain
+ * plugin over existing loop behavior — no new execution loop.
  *
  * Per phase, the runtime owns the bounded retry loop over the result
- * contract. A phase expert has no write tool by design, so the runtime
- * persists the artifact body from the expert's reply and re-drives the same
- * session on a contract failure — revisions stay in context.
+ * contract. The runtime persists the artifact body from the expert's reply;
+ * pack-owned write/edit tools may also change files inside the run directory,
+ * but they cannot replace the declared artifact contract. On a contract
+ * failure the same session is re-driven, so revisions stay in context.
  * @module @deepseek-ai/dsh-experimental-expert-team/runtime
  */
 
@@ -23,7 +27,16 @@ import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentHandle, ModelSelection } from '@deepseek-ai/dsh-agent'
+// Loads the default-model Context augmentation used by requireDefaultModel().
+import type {} from '@deepseek-ai/dsh-agent-default-model'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
+import type { PluginId, TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
+// Loads the session-identity Context augmentation (`ctx.agentBindings`)
+// into this program; the binding registry is optional in environments
+// without agent-hierarchy (tests) and is used for best-effort hierarchy
+// role recording.
+import type {} from '@deepseek-ai/dsh-experimental-session-identity'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
@@ -66,6 +79,9 @@ export interface PhaseExecutionRequest {
   readonly supersededOpenQuestions: readonly string[]
   /** When the phase is re-driven (gate rejection), the human's reason. */
   readonly revision?: RevisionReason
+  /** Parent agent for hierarchical worker dispatch; undefined for pipeline mode
+   *  or for controller/lead phases. */
+  readonly parentAgent?: Agent | undefined
 }
 
 /** How one phase execution ended. */
@@ -192,7 +208,7 @@ export class ExpertRuntime {
    * @param phase - The gated phase whose session receives the follow-up.
    * @param comment - The reviewer comment, when the decision carried one.
    */
-  async notifyGateAccepted(runId: RunId, phase: PhaseDef, comment?: string | undefined): Promise<void> {
+  async notifyGateAccepted(runId: RunId, phase: PhaseDef, comment?: string): Promise<void> {
     const sessionId = SessionId(`expert-team-${String(runId)}-${phase.id}`)
     const live = this.ctx.agents.get(sessionId)
     if (live === undefined) return
@@ -222,17 +238,48 @@ export class ExpertRuntime {
   }
 
   /**
+   * Get the live phase agent by run id and phase id, if the runtime still
+   * owns it.
+   * @param runId - The owning expert-team run id.
+   * @param phaseId - The phase whose derived session is requested.
+   * @returns the live agent, or undefined after the phase session is retired.
+   */
+  getPhaseAgent(runId: RunId, phaseId: string): Agent | undefined {
+    const sessionId = SessionId(`expert-team-${String(runId)}-${phaseId}`)
+    return this.owned.get(String(sessionId))?.agent
+  }
+
+  /**
    * Reuse the live phase session or derive it. Reuse is what makes a gate
    * rejection a revision: the same session re-drives with the human's comment
    * in context. A fresh derivation always receives the full briefing, even
    * when a revision was requested (a fresh session has no context to revise).
+   * For hierarchical teams, the new agent is bound in the hierarchy role
+   * registry after creation so the parent-child relationship is durable.
    */
   private async derivePhaseAgent(request: PhaseExecutionRequest, expert: ExpertDef): Promise<Agent> {
     const sessionId = SessionId(`expert-team-${String(request.runId)}-${request.phase.id}`)
     const live = this.ctx.agents.get(sessionId)
     if (live !== undefined) return live
-    const handle = await this.createExpertAgent(sessionId, request.team.packDir, expert, request.runDir)
+    const parentAgent = request.parentAgent
+    const handle = await this.createExpertAgent(sessionId, request.team.packDir, expert, request.runDir, parentAgent)
     this.owned.set(String(sessionId), handle)
+    // Bind the phase agent in the hierarchy role registry for hierarchical teams.
+    // The binding is best-effort: environments without agentBindings (most tests)
+    // skip silently; real deployments always mount it.
+    if (request.team.def.mode === 'hierarchical' && request.phase.hierarchyRole !== undefined) {
+      const bindings = this.ctx.get('agentBindings')
+      if (bindings !== undefined) {
+        await bindings.bind({
+          agentId: sessionId,
+          sessionId,
+          role: request.phase.hierarchyRole,
+          ...(parentAgent === undefined ? {} : { parentSessionId: parentAgent.id }),
+          taskId: brandString<TaskId>(request.phase.id),
+          pluginId: 'expert-team' as PluginId,
+        })
+      }
+    }
     handle.agent.followup(this.pluginMessage(composePhaseBriefing({
       team: request.team.def,
       phase: request.phase,
@@ -255,9 +302,17 @@ export class ExpertRuntime {
    * (the decision is enforced where execution happens), and native
    * presentation — a persona-driven expert must not have its face collapsed
    * into a PTC transport. The run directory is the session's durable cwd: it
-   * is where every referenced artifact lives.
+   * is where every referenced artifact lives. For hierarchical teams, the
+   * parent agent seeds the session header so the hierarchy role binding can
+   * track the parent-child relationship.
    */
-  private async createExpertAgent(sessionId: SessionId, packDir: string, expert: ExpertDef, cwd?: string): Promise<AgentHandle> {
+  private async createExpertAgent(
+    sessionId: SessionId,
+    packDir: string,
+    expert: ExpertDef,
+    cwd?: string,
+    parentAgent?: Agent,
+  ): Promise<AgentHandle> {
     const selection = this.requireDefaultModel()
     const allow = new Set<string>(expert.tools)
     const setup = async (agentCtx: Context): Promise<void> => {
@@ -276,9 +331,15 @@ export class ExpertRuntime {
           : `tool "${exec.name}" is outside expert ${expert.id}'s tool allowlist`,
       )
     }
+    const meta: Record<string, unknown> = {}
+    if (cwd !== undefined) meta.cwd = cwd
+    if (parentAgent !== undefined) {
+      meta.parentSession = parentAgent.id
+      meta.delegationDepth = (parentAgent.session.header.delegationDepth ?? 0) + 1
+    }
     return await this.ctx.agents.create({
       sessionId,
-      ...cwd === undefined ? {} : { meta: { cwd } },
+      ...(Object.keys(meta).length > 0 ? { meta } : {}),
       agentOptions: {
         provider: selection.provider,
         model: selection.model,

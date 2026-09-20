@@ -80,4 +80,14 @@ describe('the Shadow card presentation fold', () => {
     expect(model.phase).toBe('online')
     expect(model).not.toHaveProperty('projects')
   })
+
+  it('reads a designation issue as the issue phase while keeping the session facts', () => {
+    const model = presentShadowStatus(snapshotOf({
+      view: { ...READY_VIEW, designIssue: 'designated-session-missing-cwd' },
+    }))
+    expect(model.phase).toBe('issue')
+    expect(model.shadowSessionId).toBe('session-shadow')
+    expect(model.authorizedRoots).toEqual(['D:/projects'])
+    expect(model.error).toBeNull()
+  })
 })

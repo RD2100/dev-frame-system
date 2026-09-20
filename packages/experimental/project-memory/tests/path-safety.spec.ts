@@ -87,6 +87,20 @@ describe('AT3-04: traversal, unauthorized namespaces, and escape probes', () => 
     }
   })
 
+  it('does not treat a malformed namespace path as an empty search result', async () => {
+    const h = await makeHarness()
+    try {
+      // A regular file at the managed subtree makes the namespace path
+      // unusable. Search must surface that state instead of hiding it as
+      // "no notes", which would make a broken Vault look healthy.
+      await writeFile(join(h.vaultRoot, 'devframe-memory'), 'occupied', 'utf8')
+      await expect(h.service.search({ scope: 'project', query: 'anything' }))
+        .rejects.toMatchObject({ code: 'MEMORY_PATH_REJECTED' })
+    } finally {
+      await h.dispose()
+    }
+  })
+
   it('fails the append explicitly and writes nothing when exclusive create cannot proceed', async () => {
     const h = await makeHarness()
     try {

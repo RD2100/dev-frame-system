@@ -1,8 +1,18 @@
 {
   "name": "@deepseek-ai/dsh-experimental-project-contracts",
   "description": "Shared type vocabulary for the pluginized DSH agent hierarchy: roles, task states, branded ids, binding and task records, persistence seams, and stable error types",
-  "version": "0.1.2-alpha.4",
-  "private": true,
+  "version": "0.1.6-alpha.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/experimental/project-contracts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": "^22.19 || >=24"
+  },
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",

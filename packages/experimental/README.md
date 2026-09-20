@@ -34,8 +34,8 @@ The experimental group contains prototype capabilities that are not part of any 
 | [`devframe`](devframe/README.md) | Shared contracts for the experimental single-project controller | — |
 | [`devframe-profile`](devframe-profile/README.md) | Explicit source-checkout Web profile layer mounting the DevFrame stack | — |
 | [`expert-pack-dev`](expert-pack-dev/README.md) | Software-development data pack for the expert-team core: six Chinese-primary expert personas (product-manager, architect, tech-lead, engineer, qa, code-reviewer), a hierarchical six-phase team with two human gates, result JSON Schemas, and an acceptance-checklist skill | data pack — no ctx key |
-| [`expert-pack-paper`](expert-pack-paper/README.md) | Paper-research data pack for the expert-team core: four Chinese-primary expert personas, a four-phase human-gated pipeline, a review-checklist skill, and phase-result JSON Schemas | data pack — no ctx key |
-| [`expert-team`](expert-team/README.md) | Expert-team core: fail-loud pack mounting, pipeline orchestration with human-review gates, persona-derived phase subagents, and the five model tools | `ctx.expertTeam` |
+| [`expert-pack-paper`](expert-pack-paper/README.md) | Paper-research data pack for the expert-team core: ten Chinese-primary expert personas, a ten-phase pipeline with parallel review and revision, review skills, and phase-result JSON Schemas | data pack — no ctx key |
+| [`expert-team`](expert-team/README.md) | Expert-team core: fail-loud pack mounting, pipeline orchestration with human-review gates, persona-derived phase subagents, four model tools, and a read-only Web status Remote | `ctx.expertTeam` |
 | [`inspector`](inspector/README.md) | Cross-realm CDP hub for Host debugging, Client Runtime inspection, network capture, and Cordis trees | `ctx.inspector` |
 | [`agent-evidence`](agent-evidence/README.md) | Append-only evidence ledger for agent work: task/Goal binding receipts, submission receipts, and verification snapshots | `ctx.agentEvidence` |
 | [`agent-reliability`](agent-reliability/README.md) | Process-tree stop, admission cutoff, uncertain-call reconciliation, and the flush barrier as one service | `ctx.agentReliability` |
@@ -47,6 +47,7 @@ The experimental group contains prototype capabilities that are not part of any 
 | [`shadow-controller`](shadow-controller/README.md) | Read-only Remote owner of the Shadow router status snapshot for host status surfaces | `ctx.shadowController` |
 | [`shadow-web-profile`](shadow-web-profile/README.md) | Explicit source-checkout Web layer for the resident Shadow entry card | — |
 | [`client-ui-shadow-entry`](client-ui-shadow-entry/README.md) | Resident Web Shadow entry card above Settings with the honest status panel | — |
+| [`client-ui-expert-team`](client-ui-expert-team/README.md) | Resident Web expert-team entry card with mounted-team and run-history status | — |
 | [`tool-agent-team`](tool-agent-team/README.md) | Ten tools that let the model create, message, and coordinate teammates | registers scoped tools on `ctx.tools` |
 | [`webworker-packer`](webworker-packer/README.md) | Builds the gzip-compressed VFS image consumed by the browser worker preview | library and CLI — no ctx key |
 | [`webworker-runtime`](webworker-runtime/README.md) | Runs the harness plugin tree inside a dedicated browser worker | library and worker entry — no ctx key |

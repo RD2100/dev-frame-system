@@ -1,9 +1,9 @@
 /**
  * The DevFrame profile layer through a REAL Loader composition: a cordis.yml
- * carrying the nine patch rows' full content (the console logger exporter,
+ * carrying the eleven patch rows' full content (the console logger exporter,
  * session identity, shadow router, the shadow status controller, the Shadow
  * conversation host, project memory, command goal binding, the three-role
- * hierarchy policy, and dispatch) over
+ * hierarchy policy, dispatch, expert-team, and its Web entry) over
  * the necessary base stack is
  * booted by the actual Loader, so the mount face under test is the one the
  * shipped `--patch` invocation uses. The assertions are the ones the static
@@ -17,7 +17,7 @@
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -50,7 +50,12 @@ import AgentHierarchy from '@deepseek-ai/dsh-experimental-agent-hierarchy'
 import * as agentDispatch from '@deepseek-ai/dsh-experimental-agent-dispatch'
 import * as commandGoalBinding from '@deepseek-ai/dsh-experimental-command-goal-binding'
 import * as projectMemory from '@deepseek-ai/dsh-experimental-project-memory'
+import * as expertTeam from '../../expert-team/src/index.ts'
 import ConsoleExporter from '../../../../vendor/logger-console/src/index.ts'
+
+// The browser-only package is typechecked and bundled by the client build;
+// this Host-face composition only needs an inert loader entry for its row.
+const expertTeamUi = { apply(): void {} }
 
 let root: string | undefined
 const contexts: Context[] = []
@@ -63,7 +68,7 @@ afterEach(async () => {
 
 /**
  * Write the cordis.yml under test: the base stack every DevFrame row needs
- * plus the eight rows' full patch content. The row configs mirror
+ * plus the eleven rows' full patch content. The row configs mirror
  * `cordis.patch.yml`, with the two documented deviations a composition test
  * needs: project-memory names a Vault root that does not exist (load
  * succeeds, every call fails closed) and the `!!js process.cwd()` defaults
@@ -132,6 +137,14 @@ async function writeCompositionConfig(): Promise<string> {
     '        inheritedTools: []',
     '    leadPluginScopes: {}',
     "- name: '@deepseek-ai/dsh-experimental-agent-dispatch'",
+    "- name: '@deepseek-ai/dsh-experimental-expert-team'",
+    '  config:',
+    `    packs: ${JSON.stringify([
+      resolve(import.meta.dirname, '../../expert-pack-paper'),
+      resolve(import.meta.dirname, '../../expert-pack-dev'),
+    ])}`,
+    `    artifactsDir: ${JSON.stringify(join(root as string, 'expert-artifacts'))}`,
+    "- name: '@deepseek-ai/dsh-experimental-client-ui-expert-team'",
     '',
   ].join('\n'))
   return configPath
@@ -170,6 +183,8 @@ async function loadComposition(): Promise<Context> {
     ['@deepseek-ai/dsh-experimental-command-goal-binding', commandGoalBinding],
     ['@deepseek-ai/dsh-experimental-agent-hierarchy', AgentHierarchy],
     ['@deepseek-ai/dsh-experimental-agent-dispatch', agentDispatch],
+    ['@deepseek-ai/dsh-experimental-expert-team', expertTeam],
+    ['@deepseek-ai/dsh-experimental-client-ui-expert-team', expertTeamUi],
   ])
   ctx.loader.internal = {
     version: 'v2',
@@ -214,7 +229,7 @@ async function boot(): Promise<{ ctx: Context; agent: Agent }> {
 }
 
 describe('the DevFrame profile layer through a real Loader composition', () => {
-  it('mounts all eight rows: every service, the memory tools, and agent_dispatch are live', async () => {
+  it('mounts all eleven rows: expert mode, memory tools, and agent_dispatch are live', async () => {
     const { ctx } = await boot()
 
     expect(ctx.agentBindings).toBeDefined()
@@ -232,11 +247,17 @@ describe('the DevFrame profile layer through a real Loader composition', () => {
     expect(ctx.reflect.get('agentHierarchy')).toBeDefined()
     expect(ctx.reflect.get('commandGoalBinding')).toBeDefined()
     expect(ctx.agentDispatch).toBeDefined()
+    expect(ctx.expertTeam).toBeDefined()
+    expect(ctx.expertTeamGateway).toBeDefined()
 
     expect(ctx.tools.get('memory_search')).toBeDefined()
     expect(ctx.tools.get('memory_read')).toBeDefined()
     expect(ctx.tools.get('memory_append')).toBeDefined()
     expect(ctx.tools.get('agent_dispatch')).toBeDefined()
+    expect(ctx.tools.get('expert_team_list')).toBeDefined()
+    expect(ctx.tools.get('expert_team_run')).toBeDefined()
+    expect(ctx.tools.get('expert_team_status')).toBeDefined()
+    expect(ctx.tools.get('expert_team_approve')).toBeDefined()
   })
 
   it('keeps the Shadow whitelist closed until the host designates a Shadow', async () => {

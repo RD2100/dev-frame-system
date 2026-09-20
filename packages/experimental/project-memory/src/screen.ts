@@ -29,10 +29,6 @@ interface ScreeningRule {
 }
 
 /**
- * The fixed rule set. Patterns are deliberately conservative against
- * incidental prose but catch the common credential shapes verbatim.
- */
-/**
  * The fixed rule set, ordered most-specific first so a known credential
  * shape is reported by its own rule instead of the generic assignment
  * pattern. Patterns are deliberately conservative against incidental prose

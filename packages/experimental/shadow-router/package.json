@@ -1,8 +1,18 @@
 {
   "name": "@deepseek-ai/dsh-experimental-shadow-router",
   "description": "Cordis service routing user intent between independent project roots: a durable controller-binding store, cross-root delivery persistence with distinct received and completed states, and the four model-facing project tools behind a Shadow-only whitelist",
-  "version": "0.1.2-alpha.4",
-  "private": true,
+  "version": "0.1.6-alpha.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/experimental/shadow-router"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": "^22.19 || >=24"
+  },
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
@@ -21,7 +31,6 @@
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/dsh-experimental-shadow-routing": "workspace:^",
-    "@deepseek-ai/schemastery": "workspace:^",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
@@ -33,7 +42,8 @@
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-storage-domain": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
-    "@deepseek-ai/dsh-workspace": "workspace:^"
+    "@deepseek-ai/dsh-workspace": "workspace:^",
+    "@deepseek-ai/schemastery": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",

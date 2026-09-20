@@ -11,6 +11,7 @@ import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -24,6 +25,9 @@ export const inject = ['remote', 'slots', 'locale', 'sessions']
 
 function registerUi(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'client-ui-shadow-entry: dictionaries')
+  // The Host and browser project references merge different `Context.sessions`
+  // faces; the browser face is the contract used by this entry.
+  // oxlint-disable-next-line typescript/no-unnecessary-type-assertion -- the project-reference compiler needs the explicit browser face.
   const sessions = ctx.sessions as unknown as ISessions
   // The designated conversation is a dedicated surface, not a browsable
   // session: every status read classifies its id as internal so the session
@@ -34,7 +38,12 @@ function registerUi(ctx: ClientContext): void {
   const classifyDesignation = (designated: string | undefined): void => {
     if (designated === undefined) return
     releaseDesignation?.()
-    releaseDesignation = sessions.markInternal(designated as SessionId)
+    try {
+      releaseDesignation = sessions.markInternal(designated as SessionId)
+    } catch {
+      // The Desktop client's sessions face does not expose markInternal; the
+      // designated session simply stays visible in the list.
+    }
   }
   ctx.effect(() => () => { releaseDesignation?.() }, 'client-ui-shadow-entry: designated session classification')
   const controller = new ShadowStatusController(async () => {
@@ -54,7 +63,10 @@ function registerUi(ctx: ClientContext): void {
     // session records no cwd and the create RPC would refuse to adopt it.
     onOpenConversation: async () => {
       const status = await ctx.remote.shadow.readStatus()
-      const sessionId =  status.ok ? status.value.shadowSessionId : undefined
+      // A designation issue means the session cannot render as history;
+      // fail closed rather than opening a fresh-looking conversation.
+      if (!status.ok || status.value.designIssue !== undefined) return
+      const sessionId = status.value.shadowSessionId
       if (sessionId === undefined) return
       if (!sessions.list.getSnapshot().ids.includes(sessionId as SessionId)) {
         await sessions.refresh()

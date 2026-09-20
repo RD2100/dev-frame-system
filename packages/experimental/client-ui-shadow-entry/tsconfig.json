@@ -6,6 +6,7 @@
   },
   "include": ["src"],
   "references": [
+    { "path": "../../api/session-controller/tsconfig.client.json" },
     { "path": "../../../vendor/cordis" },
     { "path": "../../api/remotes/tsconfig.client.json" },
     { "path": "../../client/locale" },
@@ -13,9 +14,11 @@
     { "path": "../../client/ui-primitives" },
     { "path": "../../client/ui-renderer" },
     { "path": "../../client/ui-sidebar" },
+    { "path": "../../client/ui-session" },
     { "path": "../../client/ui-slots" },
     { "path": "../shadow-controller" },
     { "path": "../shadow-routing" },
+    { "path": "../../core/session" },
     { "path": "../../typert/protocol" }
   ]
 }

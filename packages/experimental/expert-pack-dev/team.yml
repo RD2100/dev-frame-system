@@ -1,11 +1,9 @@
-# 软件开发专家团数据包（M3 范围：六阶段层级团队）。
+# 软件开发专家团数据包（M3：hierarchical 模式，六个声明阶段）。
 # 本文件是纯数据：字段契约由 @deepseek-ai/dsh-experimental-expert-team 的目录加载器
 # 在挂载时校验（唯一阶段 id、专家引用存在、depends_on 无环且只指向更早阶段、
-# entry 一致、被引用的 schema 文件存在、专家工具允许列表非空且不命名插件自身工具），
-# 校验失败即挂载失败。gate 的唯一合法取值是 human-review；产物写入 <artifactsDir>/<runId>/。
-# mode 为 hierarchical：目录加载器完整校验本文件，挂载即成功；但核心包对层级团队的
-# 运行编排尚未落地（expert_team_run 以 EXPERT_TEAM_MODE_UNSUPPORTED 拒绝），
-# 见包 README 的已知限制。
+# hierarchy-role 唯一 controller 且为 entry 阶段、被引用的 schema 文件存在），
+# 校验失败即挂载失败。
+# gate 的唯一合法取值是 human-review；产物写入 <artifactsDir>/<runId>/。
 team: dev
 title: 软件开发专家团
 mode: hierarchical
@@ -13,46 +11,55 @@ entry: prd
 phases:
   - id: prd
     expert: product-manager
-    input: 运行请求给出的原始需求描述，以及可选的约束、目标用户与既有项目记忆笔记的检索结果
+    hierarchy-role: controller
+    input: 运行请求给出的用户需求与业务背景
     output:
       artifact: prd.md
       schema: schemas/prd-summary.schema.json
     gate: human-review
   - id: architecture
     expert: architect
+    hierarchy-role: lead
     depends_on:
       - prd
-    input: prd.md 中的用户故事、功能范围、验收标准与非目标
+    input: prd.md 中经人类关口批准的需求范围与优先级
     output:
       artifact: design.md
       schema: schemas/design-summary.schema.json
   - id: task-breakdown
     expert: tech-lead
+    hierarchy-role: lead
     depends_on:
       - architecture
-    input: design.md 中的模块划分、接口契约、数据结构与风险清单
+    input: design.md 的系统架构与技术约束
     output:
       artifact: tasks.md
+      schema: schemas/tasks-summary.schema.json
   - id: implementation
     expert: engineer
+    hierarchy-role: worker
     depends_on:
       - task-breakdown
-    input: tasks.md 中的任务、验收标准与依赖关系，以及运行目录内 design.md 的接口契约
+    input: tasks.md 中分配到的任务清单与验收标准；设计文档见运行目录内的 design.md
     output:
-      artifact: implementation-log.md
+      artifact: implementation.md
+      schema: schemas/implementation-summary.schema.json
   - id: testing
     expert: qa
+    hierarchy-role: worker
     depends_on:
       - implementation
-    input: implementation-log.md 记录的实现内容、tasks.md 的验收标准与运行目录内的代码
+    input: implementation.md 的实现结果与 tasks.md 的验收标准
     output:
-      artifact: test-report.md
-      schema: schemas/test-report-summary.schema.json
-  - id: review
+      artifact: test-results.md
+      schema: schemas/test-results-summary.schema.json
+  - id: code-review
     expert: code-reviewer
+    hierarchy-role: lead
     depends_on:
       - testing
-    input: 运行目录内的代码与 implementation-log.md，以及 test-report.md 的测试结论与缺陷清单
+    input: implementation.md 与 test-results.md；设计文档见运行目录内的 design.md
     output:
       artifact: review.md
+      schema: schemas/review-summary.schema.json
     gate: human-review

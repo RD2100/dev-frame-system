@@ -34,7 +34,13 @@ class RemoteStub extends Service {
 }
 
 async function bench(
-  options: { registrationFailure?: boolean; readFailure?: boolean; sessionIdMissing?: boolean; sessionNotListed?: boolean } = {},
+  options: {
+    registrationFailure?: boolean
+    readFailure?: boolean
+    sessionIdMissing?: boolean
+    sessionNotListed?: boolean
+    designIssue?: boolean
+  } = {},
 ): Promise<{
   ctx: Context
   fiber: ReturnType<Context['plugin']>
@@ -73,6 +79,7 @@ async function bench(
             shadowLive: true,
             authorizedRoots: ['D:/projects'],
             bindings: [],
+            ...(options.designIssue === true ? { designIssue: 'designated-session-missing-cwd' as const } : {}),
           },
         })
     },
@@ -152,6 +159,16 @@ describe('ui-shadow-entry browser plugin', () => {
     const face = (b.entry()!.inject as unknown as () => { onOpenConversation: () => Promise<void> })()
     await expect(face.onOpenConversation()).resolves.toBeUndefined()
     expect(b.calls).toEqual(['shadow/readStatus', 'sessions/refresh', 'sessions/open:session-shadow'])
+  })
+
+  it('fails closed without opening when the designation has an issue', async () => {
+    const b = await bench({ designIssue: true })
+    const face = (b.entry()!.inject as unknown as () => { onOpenConversation: () => Promise<void> })()
+    await expect(face.onOpenConversation()).resolves.toBeUndefined()
+    // The open verb reads status once and suppresses the open: the cwd-less
+    // session never renders as a fresh conversation.
+    expect(b.calls).toEqual(['shadow/readStatus'])
+    expect(b.calls).not.toContain('sessions/open:session-shadow')
   })
 
   it('classifies the designated session as internal so the session list grows no row', async () => {

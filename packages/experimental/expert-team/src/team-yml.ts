@@ -110,7 +110,7 @@ function parsePhases(value: unknown): readonly PhaseDef[] {
     if (!isPlainRecord(item)) {
       throw packInvalid(`${scope} must be a mapping`)
     }
-    requireExactKeys(INVALID, scope, item, ['id', 'expert', 'output'], ['depends_on', 'input', 'gate', 'supersedes'])
+    requireExactKeys(INVALID, scope, item, ['id', 'expert', 'output'], ['depends_on', 'input', 'gate', 'hierarchy-role', 'supersedes'])
     const id = requireKebabId(INVALID, `${scope} id`, item.id)
     if (ids.has(id)) {
       throw packInvalid(`duplicate phase id: ${id}`)
@@ -123,6 +123,15 @@ function parsePhases(value: unknown): readonly PhaseDef[] {
     const supersedes = item.supersedes === undefined
       ? []
       : requireStringList(INVALID, `${scope} supersedes`, item.supersedes, MAX_DEPENDS, MAX_ID_BYTES)
+    const hierarchyRole = item['hierarchy-role'] === undefined
+      ? undefined
+      : (() => {
+        const raw = requireScalar(INVALID, `${scope} hierarchy-role`, item['hierarchy-role'], MAX_ID_BYTES)
+        if (raw !== 'controller' && raw !== 'lead' && raw !== 'worker') {
+          throw packInvalid(`${scope} hierarchy-role must be 'controller', 'lead', or 'worker', got: ${raw}`)
+        }
+        return raw
+      })()
     const input = item.input === undefined
       ? undefined
       : requireScalar(INVALID, `${scope} input`, item.input, MAX_INPUT_BYTES)
@@ -131,6 +140,7 @@ function parsePhases(value: unknown): readonly PhaseDef[] {
     phases.push({
       id,
       expert,
+      hierarchyRole,
       dependsOn,
       supersedes,
       ...(input === undefined ? {} : { input }),
@@ -264,6 +274,7 @@ export async function loadTeamYml(packDir: string, expertIds: readonly string[])
   })
   const def = parseTeamYml(contents)
   const experts = new Set(expertIds)
+  const controllerPhases: string[] = []
   for (const phase of def.phases) {
     if (!experts.has(phase.expert)) {
       throw new ExpertTeamError(
@@ -271,9 +282,42 @@ export async function loadTeamYml(packDir: string, expertIds: readonly string[])
         'EXPERT_TEAM_EXPERT_MISSING',
       )
     }
+    if (phase.hierarchyRole === 'controller') {
+      controllerPhases.push(phase.id)
+    }
     if (phase.output.schema !== undefined) {
       await requireSchemaFile(packDir, phase.id, phase.output.schema)
     }
+  }
+  if (controllerPhases.length > 1) {
+    throw new ExpertTeamError(
+      `team.yml declares multiple controller phases (${controllerPhases.join(', ')}); a team must have exactly one controller`,
+      'EXPERT_TEAM_CATALOG_INVALID',
+    )
+  }
+  if (controllerPhases.length === 1) {
+    const entryPhase = def.phases.find(phase => phase.id === def.entry)
+    if (entryPhase === undefined || entryPhase.hierarchyRole !== 'controller') {
+      throw new ExpertTeamError(
+        `team.yml entry phase ${def.entry} must declare hierarchyRole: controller`,
+        'EXPERT_TEAM_CATALOG_INVALID',
+      )
+    }
+  }
+  // Hierarchical teams must declare exactly one controller; pipeline teams
+  // must not declare any hierarchy roles.
+  const hasAnyRole = def.phases.some(phase => phase.hierarchyRole !== undefined)
+  if (def.mode === 'pipeline' && hasAnyRole) {
+    throw new ExpertTeamError(
+      'team.yml mode is pipeline but one or more phases declare hierarchyRole; hierarchy roles are only valid in hierarchical mode',
+      'EXPERT_TEAM_CATALOG_INVALID',
+    )
+  }
+  if (def.mode === 'hierarchical' && controllerPhases.length === 0) {
+    throw new ExpertTeamError(
+      'team.yml mode is hierarchical but no phase declares hierarchyRole: controller; a hierarchical team must have exactly one controller',
+      'EXPERT_TEAM_CATALOG_INVALID',
+    )
   }
   return def
 }

@@ -50,3 +50,24 @@ export {
   type MemorySearchResult,
   type MemorySpec,
 } from './types.ts'
+export {
+  getLibraryStatus,
+  listLibraryFiles,
+  readLibraryFile,
+  searchLibrary,
+  type LibraryFile,
+  type LibrarySearchMatch,
+  type LibrarySearchResult,
+  type LibraryStatus,
+  type ListLibraryOptions,
+  type SearchLibraryOptions,
+} from './library.ts'
+export { MemoryLibraryGateway } from './gateway.ts'
+export type {
+  MemoryLibraryListRequest,
+  MemoryLibraryReadRequest,
+  MemoryLibraryReadResult,
+  MemoryLibrarySearchRequest,
+  MemoryLibrarySnapshot,
+} from './client.ts'
+

@@ -44,11 +44,11 @@ artifactsDir: ./dev-artifacts
 | `prd` | `product-manager` | —（entry） | `prd.md` | `human-review` |
 | `architecture` | `architect` | `prd` | `design.md` | — |
 | `task-breakdown` | `tech-lead` | `architecture` | `tasks.md` | — |
-| `implementation` | `engineer` | `task-breakdown` | `implementation-log.md` | — |
-| `testing` | `qa` | `implementation` | `test-report.md` | — |
+| `implementation` | `engineer` | `task-breakdown` | `implementation.md` | — |
+| `testing` | `qa` | `implementation` | `test-results.md` | — |
 | `review` | `code-reviewer` | `testing` | `review.md` | `human-review` |
 
-关口驳回时，产物带评审批注回流到所属专家修订。每位下游专家在接受上游材料前先核对各自 frontmatter 里的交接检查项：`architect` 核查 PRD 的验收标准可独立判定，`tech-lead` 核查设计契约完整到可以分解，`engineer` 核查任务边界与依赖已完成，`qa` 核查每个任务都有验收标准，`code-reviewer` 核查测试报告有证据支撑。`prd`、`architecture` 与 `testing` 三个阶段返回经 [schemas/prd-summary.schema.json](schemas/prd-summary.schema.json)、[schemas/design-summary.schema.json](schemas/design-summary.schema.json) 与 [schemas/test-report-summary.schema.json](schemas/test-report-summary.schema.json) 校验的结构化结果对象；三个无 schema 的阶段返回自由摘要。实现阶段声明的产物是它的实现日志——工程师用文件工具写出的代码落在运行目录内日志的旁边。
+关口驳回时，产物带评审批注回流到所属专家修订。每位下游专家在接受上游材料前先核对各自 frontmatter 里的交接检查项：`architect` 核查 PRD 的验收标准可独立判定，`tech-lead` 核查设计契约完整到可以分解，`engineer` 核查任务边界与依赖已完成，`qa` 核查每个任务都有验收标准，`code-reviewer` 核查测试报告有证据支撑。六个阶段都返回经各自 [`schemas/`](schemas/) 下 schema 校验的结构化结果对象；实现阶段声明的产物是 `implementation.md`，工程师用文件工具写出的代码落在运行目录内该产物的旁边。
 
 ### 技能、工具与记忆
 
@@ -75,11 +75,14 @@ artifactsDir: ./dev-artifacts
 | [`experts/code-reviewer.md`](experts/code-reviewer.md) | 评审人设：正确性、可维护性、测试覆盖、安全 |
 | [`schemas/prd-summary.schema.json`](schemas/prd-summary.schema.json) | prd 阶段结果对象的 draft-07 校验 |
 | [`schemas/design-summary.schema.json`](schemas/design-summary.schema.json) | architecture 阶段结果对象的 draft-07 校验 |
-| [`schemas/test-report-summary.schema.json`](schemas/test-report-summary.schema.json) | testing 阶段结果对象的 draft-07 校验 |
+| [`schemas/tasks-summary.schema.json`](schemas/tasks-summary.schema.json) | task-breakdown 阶段结果对象的 draft-07 校验 |
+| [`schemas/implementation-summary.schema.json`](schemas/implementation-summary.schema.json) | implementation 阶段结果对象的 draft-07 校验 |
+| [`schemas/test-results-summary.schema.json`](schemas/test-results-summary.schema.json) | testing 阶段结果对象的 draft-07 校验 |
+| [`schemas/review-summary.schema.json`](schemas/review-summary.schema.json) | code-review 阶段结果对象的 draft-07 校验 |
 | [`skills/acceptance-checklist/SKILL.md`](skills/acceptance-checklist/SKILL.md) | 验收检查单技能，与 Claude Code 技能同构 |
 | [`skills/acceptance-checklist/references/checklist.md`](skills/acceptance-checklist/references/checklist.md) | 技能应用的检查条目 |
 
-专家文件是 YAML frontmatter 加中文为主的人设正文。frontmatter 键（`id`、`team`、`name`、`role`、`goal`、`tools`，可选 `skills` 与 `handoff-checks`）是加载时契约，`tools` 允许列表约束阶段 subagent 可调用的工具。结果对象 schema 校验 `{ artifactPath, summary, openQuestions? }`：prd 与 design schema 要求 openQuestions（PRD 关口与任务分解都需要看到未决事项），test-report schema 将其保持可选（计划全部执行完的运行可以没有）；三个 schema 都各自独立可用。
+专家文件是 YAML frontmatter 加中文为主的人设正文。frontmatter 键（`id`、`team`、`name`、`role`、`goal`、`tools`，可选 `skills` 与 `handoff-checks`）是加载时契约，`tools` 允许列表约束阶段 subagent 可调用的工具。每个阶段结果 schema 都校验共同的 `{ artifactPath, summary, openQuestions? }` 形态及本阶段的专属约束；各 schema 保持独立，因此目录加载器可以校验数据包内每个被引用的文件。
 
 ### 不变量
 
@@ -96,11 +99,11 @@ artifactsDir: ./dev-artifacts
 
 #### 模型看到什么
 
-本包自身不注册任何工具、提示词段落或会话事件；核心包的五个工具——`expert_team_list`、`expert_team_run`、`expert_team_status`、`expert_team_approve` 与 `consult_expert`——是唯一的模型可见新增，归核心包拥有。运行期间，每个阶段的 subagent 请求逐字携带该阶段专家的人设正文（中文为主）、上游产物引用，以及三个带 schema 阶段的结果 schema；frontmatter 的 `tools` 允许列表约束 subagent 可调用的工具，`consult_expert` 在流水线之外复用同一批人设。engineer 与 qa 的允许列表包含 `pwsh`，这两个阶段的会话以运行目录为工作目录执行 shell 命令。
+本包自身不注册任何工具、提示词段落或会话事件；核心包的四个工具——`expert_team_list`、`expert_team_run`、`expert_team_status` 与 `expert_team_approve`——是唯一的模型可见新增，归核心包拥有。`expert_team_run` 还接受 `expert` 加 `question`，在运行之外进行有界咨询。运行期间，每个阶段的 subagent 请求逐字携带该阶段专家的人设正文（中文为主）、上游产物引用与本阶段结果 schema；frontmatter 的 `tools` 允许列表约束 subagent 可调用的工具。engineer 与 qa 的允许列表包含 `pwsh`，这两个阶段的会话以运行目录为工作目录执行 shell 命令。
 
 #### Token 影响
 
-无运行时为零。运行期间，每个阶段请求加入其人设（几 KiB）、上游产物引用，以及三个带 schema 阶段的结果 schema；每个阶段结果与工程师被接受的记忆笔记在可复用前缀之后追加一条有界 JSON。
+无运行时为零。运行期间，每个阶段请求加入其人设（几 KiB）、上游产物引用与本阶段结果 schema；每个阶段结果与工程师被接受的记忆笔记在可复用前缀之后追加一条有界 JSON。
 
 #### KV Cache 影响
 
@@ -112,7 +115,7 @@ artifactsDir: ./dev-artifacts
 
 这些限制是数据包的当前约束，不是任务清单。
 
-- **层级执行尚未驱动。** 目录加载器完整校验本数据包——挂载成功，每个阶段与专家都通过加载时契约——但对层级团队的流水线式执行尚未驱动：`expert_team_run` 以 `EXPERT_TEAM_MODE_UNSUPPORTED` 拒绝层级团队。核心包的层级执行接缝（把关口映射到 agent-hierarchy 派工引擎）随 M3 落地；在此之前，上表是未来运行将要驱动的契约，不是已驱动的路径。
+- **层级执行使用 scoped-create，而不是 agent-dispatch。** 六个阶段经核心包的 scoped-create 接缝按声明／拓扑顺序执行。挂载 `session-identity` 时，controller、lead 与 worker 会话会带父级绑定与派发深度记录；expert-team 运行时不分配工作树，也不调用 `agent_dispatch` 工具。相互独立的阶段仍按串行执行。
 - **本包只有数据。** 编排、关口批准、schema 校验与记忆写入都归 expert-team 核心包拥有；数据包无法单独运行，其执行证据在核心包针对本包的目录测试里。
 - **工具面要求已挂载的工具。** `engineer` 与 `qa` 命名 `pwsh`，engineer 还命名 `read_image`、`todo_write` 与 `memory_append`：缺少这些工具的部署以 `EXPERT_TEAM_TOOL_MISSING` 响亮失败，而已挂载但未配置 vault 时退化为 `MEMORY_UNAVAILABLE` 无笔记并如实报告；按产物保证的记忆写入归核心包。
 - **中文为主的人设。** 人设正文用中文约束模型行为，而 schema 描述是英文；想要英文为主人设的部署必须派生本数据包。
@@ -123,6 +126,6 @@ artifactsDir: ./dev-artifacts
 <details>
 <summary>维护者的工作上下文——点击展开</summary>
 
-核心包固定的阶段简报告诉每位阶段专家"你没有写文件的工具，不要尝试写盘"；而 engineer 的允许列表携带 `write`/`edit`，驱动实现阶段需要核心包把这一句按允许列表做条件化。在此之前该冲突处于休眠：层级团队不被执行（见已知限制）。
+核心包的阶段简报描述实际产物契约，并要求阶段不要调用允许列表之外的工具。engineer 的允许列表包含 `write`/`edit`，因此实现代码可以在运行目录内修改；运行时仍会在阶段接受前校验回复契约，并从该契约持久化 `implementation.md`。
 
 </details>

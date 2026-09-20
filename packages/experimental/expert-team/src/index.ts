@@ -2,7 +2,7 @@
  * Public entry of `@deepseek-ai/dsh-experimental-expert-team`: the expert-team
  * plugin — strict pack file parsing and mounting (the expert catalog half)
  * plus the orchestration half (phase subagent derivation, pipeline execution
- * with human gates, run state) and the five model tools, all wired by the
+ * with human gates, run state) and the four model tools, all wired by the
  * loader plugin in `./plugin.ts`.
  * @module @deepseek-ai/dsh-experimental-expert-team
  */
@@ -19,7 +19,10 @@ export type { PhaseResult, SplitPhaseReply } from './result-protocol.ts'
 export { composePhaseBriefing, composeRevisionMessage, composeConsultMessage, composeGateAcceptanceMessage } from './briefing.ts'
 export type { RevisionReason } from './briefing.ts'
 export { ExpertRuntime, type PhaseExecutionOutcome, type PhaseExecutionRequest } from './runtime.ts'
-export { TeamOrchestrator, type ExpertTeamView } from './orchestrate.ts'
+export { TeamOrchestrator } from './orchestrate.ts'
+export { ExpertTeamGateway } from './gateway.ts'
+export type { ExpertTeamRunView, ExpertTeamSnapshot } from './client.ts'
+export type { ExpertTeamView } from './client.ts'
 export { createExpertTeamTools } from './tools.ts'
 // The Cordis loader resolves the package name to this entry and reads the
 // plugin-protocol exports `name`, `inject`, `Config`, and `apply` by their
