@@ -1,0 +1,54 @@
+# Desktop overlay for the DevFrame profile bundle (D1 dependency-closure fix).
+#
+# The devframe-profile bundle (cordis.patch.yml) evaluates three path
+# expressions against the launching process cwd:
+#   - command-goal-binding.workspaceRoot          = process.cwd()
+#   - command-goal-binding.checks[0].cwd          = process.cwd()
+#   - expert-team.packs[]                         = process.cwd() + '/packages/experimental/expert-pack-*'
+# In the Desktop host those resolve to the Electron launch directory, which
+# contains neither the workspace nor the source-checkout expert packs, so the
+# plugin rows fail loud at load and the Desktop fails to boot.
+#
+# This overlay is the "later deployment overlay" the profile anticipated. The
+# D5 staging script must substitute the absolute paths below and apply this
+# file as the project profile's user patch layer (projectDir/cordis.patch.yml)
+# — or merge the rows into the Desktop composition — BEFORE first load.
+#
+# Substitution tokens (kept invalid on purpose so a missing substitution
+# fails validation instead of silently mounting nothing):
+#   <DSH_WORKSPACE_ROOT>   absolute goal-worktree directory; the D5 default is
+#                          dshHomePath('devframe', 'workspace'), the deployment
+#                          may point it at the user's real worktree.
+#   <PACK_PAPER_DIR>       absolute packaged directory of
+#                          @deepseek-ai/dsh-experimental-expert-pack-paper.
+#   <PACK_DEV_DIR>         absolute packaged directory of
+#                          @deepseek-ai/dsh-experimental-expert-pack-dev.
+
+# command-goal-binding: replace the whole config (a patch replaces the row's
+# whole `config`), keeping every field the profile sets and fixing the two
+# launch-cwd expressions.
+- id: command-goal-binding
+  config:
+    workspaceId: default
+    workspaceRoot: <DSH_WORKSPACE_ROOT>
+    requiredChecksPath: !!js dshHomePath('required-checks.json')
+    maxAttempts: 3
+    maxGoalRounds: 8
+    taskIds: ['devframe-goal']
+    checks:
+      version: 1
+      checks:
+        - checkId: git-diff-check
+          executable: git
+          arguments: ['diff', '--check']
+          cwd: <DSH_WORKSPACE_ROOT>
+
+# expert-team: keep the profile's artifact root (already DSH-home anchored) and
+# replace the source-checkout pack paths with the packaged data-pack
+# directories installed beside the profile bundle.
+- id: expert-team
+  config:
+    packs:
+      - <PACK_PAPER_DIR>
+      - <PACK_DEV_DIR>
+    artifactsDir: !!js dshHomePath('expert-team-runs')
