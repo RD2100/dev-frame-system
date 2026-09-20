@@ -203,6 +203,9 @@ ${authorizedRoots.map(root => `      - ${root}`).join('\n')}
     # requiredChecksByTask/commitPathsByTask stay empty: the host registers
     # each task's approved checkset (git-diff-check in its Worker worktree)
     # and commit scope at approval time via the dynamic registry.
+    # defaultCommitPaths pins the scope of the first-round acceptance task
+    # (which edits this file); a general task→scope mapping is deferred with
+    # the multi-task mechanism (see docs/working/shadow-todo-board-v2-plan.zh.md §7).
     - id: project-controller-delivery-consumer
       name: '@deepseek-ai/dsh-experimental-project-controller/delivery-consumer'
       config:
@@ -215,6 +218,7 @@ ${authorizedRoots.map(root => `      - ${root}`).join('\n')}
         checkTimeoutMs: 600000
         checkMaxOutputBytes: 1048576
         commitPathsByTask: {}
+        defaultCommitPaths: ['packages/experimental/project-controller/src/index.ts']
 # Web Shadow entry card: the devframe-profile overlay does not carry this
 # row (it ships in the separate shadow-web-profile layer for web), so the
 # Desktop profile inserts it here.

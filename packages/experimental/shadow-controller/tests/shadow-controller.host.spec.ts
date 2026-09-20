@@ -32,6 +32,7 @@ interface RecordedWrites {
 function routerStub(status: ShadowRouterStatus, writes?: Partial<RecordedWrites>, records?: ShadowBindingRecord[]): ShadowRouter {
   return {
     readStatus: () => status,
+    listBindings: () => records ?? [],
     openProjectForHost: writes?.openProjectForHost ?? (async () => ({}) as ProjectOpenResult),
     sendToProjectForHost: writes?.sendToProjectForHost ?? (async () => ({}) as ProjectSendResult),
     releaseProjectForHost: writes?.releaseProjectForHost ?? (async () => ({}) as ProjectStopResult),
@@ -78,6 +79,7 @@ describe('the shadow Remote namespace a host status surface calls', () => {
       { method: 'readConversation', invocation: { kind: 'direct' } },
       { method: 'approveTask', invocation: { kind: 'direct' } },
       { method: 'rejectTask', invocation: { kind: 'direct' } },
+      { method: 'readBoard', invocation: { kind: 'direct' } },
     ])
   })
 
@@ -205,7 +207,25 @@ interface AgentDouble {
  * The controller, the delivery registry, and the ledger store are stubbed so
  * approveTask's state transitions and registrations are observable.
  */
-function approvalFixture(taskId: string, options?: { taskState?: string; registry?: boolean; bindingState?: ShadowBindingState }) {
+function approvalFixture(taskId: string, options?: {
+  taskState?: string
+  registry?: boolean
+  bindingState?: ShadowBindingState
+  defaultCommitPaths?: readonly string[]
+  listTasks?: () => ReadonlyArray<{
+    taskId: string
+    pluginId: string
+    title: string
+    state: string
+    worktreeId?: string
+    createdAt?: string
+    updatedAt?: string
+    blockedReason?: string
+    nextAction?: string
+    wakeCondition?: string
+  }>
+  branchStatus?: () => Promise<{ directoryExists: boolean; branch?: string }>
+}) {
   const taskIdStr = taskId
   const pluginId = 'devframe-goal'
   const controllerCwd = mkdtempSync(join(tmpdir(), 'shadow-wt-controller-'))
@@ -237,10 +257,15 @@ function approvalFixture(taskId: string, options?: { taskState?: string; registr
   ]
   const assign = vi.fn(async (_taskId: string, _assignee: string, opts: { beforePersist: () => void }) => { opts.beforePersist(); return { state: 'assigned' } })
   const startDevelopment = vi.fn(async (_taskId: string, opts: { beforePersist: () => void }) => { opts.beforePersist(); return { state: 'developing' } })
-  const find = vi.fn((_id: string) => options?.taskState === undefined
-    ? undefined
-    : { taskId: taskIdStr, title: 'Refactor the board', pluginId, state: options.taskState })
+  // The find double follows the live task state: a blocked re-approval moves
+  // it to assigned through resume, which the authority re-resolution observes.
+  let liveTaskState = options?.taskState
+  const find = vi.fn((_id: string) => (options?.listTasks?.() ?? []).find(task => task.taskId === _id)
+    ?? (liveTaskState === undefined
+      ? undefined
+      : { taskId: taskIdStr, title: 'Refactor the board', pluginId, state: liveTaskState }))
   const block = vi.fn(async (_taskId: string, detail: unknown) => { void detail; return { state: 'blocked' } })
+  const resume = vi.fn(async (_taskId: string) => { liveTaskState = 'assigned'; return { state: 'assigned' } })
   const registerTask = vi.fn()
   const host = hostStub()
   const record: ShadowBindingRecord = {
@@ -269,17 +294,24 @@ function approvalFixture(taskId: string, options?: { taskState?: string; registr
   })
   ctx.provide('sessionProjections', { stateOf: (_session: unknown, _key: string) => goalState })
   ctx.provide('workspaceRegistry', { list: () => [{ id: 'ws-goal' }] })
-  ctx.provide('worktreeRegistry', { list: (_workspaceId: string) => rows })
-  ctx.provide('projectController', { find, assign, startDevelopment, block })
+  ctx.provide('worktreeRegistry', {
+    list: (_workspaceId: string) => rows,
+    status: options?.branchStatus ?? (async () => ({ directoryExists: true, branch: 'feature/board' })),
+  })
+  ctx.provide('projectController', {
+    list: () => (options?.listTasks ?? (() => []))() as never,
+    find, assign, startDevelopment, block, resume,
+  })
   if (options?.registry ?? true) {
     ctx.provide('projectDeliveryRegistry', {
       ledgerPath: join(mkdtempSync(join(tmpdir(), 'shadow-ledger-')), 'ledger.json'),
+      ...(options?.defaultCommitPaths === undefined ? {} : { defaultCommitPaths: options.defaultCommitPaths }),
       registerTask,
       unregisterTask: vi.fn(),
     })
   }
   const controller = new ShadowController(ctx)
-  return { ctx, controller, host, assign, startDevelopment, registerTask, block, find, controllerAgent, workerAgent }
+  return { ctx, controller, host, assign, startDevelopment, registerTask, block, resume, find, controllerAgent, workerAgent }
 }
 
 describe('the host approve/reject board faces', () => {
@@ -300,16 +332,51 @@ describe('the host approve/reject board faces', () => {
       .rejects.toThrow('approveTask requires a ready workspace binding')
   })
 
-  it('fails loud when the task is not planned', async () => {
+  it('fails loud when the task is neither planned nor blocked', async () => {
     const { controller } = approvalFixture('task-1', { taskState: 'developing' })
     await expect(controller.approveTask({ workspaceId: wid('ws-1'), taskId: 'task-1' }))
-      .rejects.toThrow('project_task start requires a planned or assigned task')
+      .rejects.toThrow('approveTask requires a planned or blocked task')
+  })
+
+  it('re-approves a blocked task: resumes to assigned and starts without re-assigning', async () => {
+    const { controller, host, assign, startDevelopment, resume, registerTask } =
+      approvalFixture('task-1', { taskState: 'blocked' })
+    const postMessage = vi.spyOn(host, 'postMessage').mockResolvedValue({ messageId: 'msg' })
+    const result = await controller.approveTask({ workspaceId: wid('ws-1'), taskId: 'task-1' })
+    expect(result).toEqual({ taskId: 'task-1', state: 'developing' })
+    expect(resume).toHaveBeenCalledWith('task-1')
+    expect(assign).not.toHaveBeenCalled()
+    expect(startDevelopment).toHaveBeenCalledWith('task-1', { beforePersist: expect.any(Function) as () => void })
+    expect(registerTask).toHaveBeenCalledWith('task-1', { digest: expect.any(String) as string })
+    expect(postMessage).toHaveBeenCalledWith(expect.stringContaining('Approved task task-1') as string)
   })
 
   it('fails loud when the delivery registry is not mounted', async () => {
     const { controller } = approvalFixture('task-1', { taskState: 'planned', registry: false })
     await expect(controller.approveTask({ workspaceId: wid('ws-1'), taskId: 'task-1' }))
       .rejects.toThrow('approveTask requires the project delivery registry')
+  })
+
+  it('falls back to the deployment default commit scope when the request omits one', async () => {
+    const { controller, registerTask } = approvalFixture('task-1', {
+      taskState: 'planned', defaultCommitPaths: ['packages/alpha/src/index.ts'],
+    })
+    await controller.approveTask({ workspaceId: wid('ws-1'), taskId: 'task-1' })
+    expect(registerTask).toHaveBeenCalledWith('task-1', {
+      digest: expect.any(String) as string,
+      commitPaths: ['packages/alpha/src/index.ts'],
+    })
+  })
+
+  it('prefers a request commit scope over the deployment default', async () => {
+    const { controller, registerTask } = approvalFixture('task-1', {
+      taskState: 'planned', defaultCommitPaths: ['packages/alpha/src/index.ts'],
+    })
+    await controller.approveTask({ workspaceId: wid('ws-1'), taskId: 'task-1', commitPaths: ['packages/beta/src/index.ts'] })
+    expect(registerTask).toHaveBeenCalledWith('task-1', {
+      digest: expect.any(String) as string,
+      commitPaths: ['packages/beta/src/index.ts'],
+    })
   })
 
   it('rejects a planned task into blocked with the host reason and notifies', async () => {
@@ -325,5 +392,91 @@ describe('the host approve/reject board faces', () => {
     const { controller } = approvalFixture('task-1', { taskState: 'developing' })
     await expect(controller.rejectTask({ workspaceId: wid('ws-1'), taskId: 'task-1', reason: 'nope' }))
       .rejects.toThrow('rejectTask requires a planned task')
+  })
+})
+
+describe('the host board read face', () => {
+  it('answers mounted:false honestly while no project controller is mounted', async () => {
+    const ctx = new Context()
+    const controller = new ShadowController(ctx)
+    await expect(controller.readBoard()).resolves.toEqual({ mounted: false, bindings: [], tasks: [] })
+  })
+
+  it('keeps bindings empty while the project controller is mounted without a shadow router', async () => {
+    const ctx = new Context()
+    ctx.provide('projectController', { list: () => [] })
+    const controller = new ShadowController(ctx)
+    await expect(controller.readBoard()).resolves.toEqual({ mounted: true, bindings: [], tasks: [] })
+  })
+
+  it('projects the binding digest and every task in stable order', async () => {
+    const { controller } = approvalFixture('task-1', {
+      listTasks: () => [
+        // The controller list is already in stable (createdAt, taskId) order;
+        // the board projects it verbatim and never re-sorts.
+        { taskId: 'task-2', pluginId: 'devframe-goal', title: 'Ship the fix', state: 'integrated', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-03T00:00:00.000Z' },
+        { taskId: 'task-1', pluginId: 'devframe-goal', title: 'Refactor the board', state: 'planned', createdAt: '2026-01-02T00:00:00.000Z', updatedAt: '2026-01-02T00:00:00.000Z' },
+      ],
+    })
+    const board = await controller.readBoard()
+    expect(board.mounted).toBe(true)
+    expect(board.bindings).toEqual([{
+      workspaceId: 'ws-1', state: 'ready', controllerSessionId: 'session-controller',
+    }])
+    expect(board.tasks.map(task => task.taskId)).toEqual(['task-2', 'task-1'])
+    expect(board.tasks[1]).toMatchObject({
+      taskId: 'task-1', pluginId: 'devframe-goal', title: 'Refactor the board', state: 'planned',
+      startReady: true,
+    })
+    expect(board.tasks[0]).toMatchObject({
+      taskId: 'task-2', state: 'integrated',
+    })
+    expect(board.tasks[0]?.startReady).toBeUndefined()
+  })
+
+  it('derives startReady false when the start authority cannot resolve', async () => {
+    // The fixture's Goal admits only task-1; a planned task-other cannot be
+    // admitted, so the board reports it not ready without advancing state.
+    const { controller } = approvalFixture('task-1', {
+      listTasks: () => [
+        { taskId: 'task-other', pluginId: 'devframe-goal', title: 'Not admitted', state: 'planned', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+      ],
+    })
+    const board = await controller.readBoard()
+    expect(board.tasks[0]?.startReady).toBe(false)
+  })
+
+  it('reads the worker worktree branch for a developing task', async () => {
+    const status = vi.fn(async () => ({ directoryExists: true, branch: 'feature/board' }))
+    const { controller } = approvalFixture('task-1', {
+      listTasks: () => [
+        { taskId: 'task-1', pluginId: 'devframe-goal', title: 'Building', state: 'developing', worktreeId: 'wt-worker', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+      ],
+      branchStatus: status,
+    })
+    const board = await controller.readBoard()
+    expect(board.tasks[0]?.branch).toBe('feature/board')
+    expect(status).toHaveBeenCalledWith('wt-worker')
+  })
+
+  it('reports null branch when the worktree status read fails', async () => {
+    const { controller } = approvalFixture('task-1', {
+      listTasks: () => [
+        { taskId: 'task-1', pluginId: 'devframe-goal', title: 'Building', state: 'developing', worktreeId: 'wt-worker', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+      ],
+      branchStatus: async () => { throw new Error('git is unavailable') },
+    })
+    const board = await controller.readBoard()
+    expect(board.tasks[0]?.branch).toBeNull()
+  })
+
+  it('leaves branch absent for an assigned task without a registered worktree', async () => {
+    const { controller } = approvalFixture('task-1', {
+      listTasks: () => [
+        { taskId: 'task-1', pluginId: 'devframe-goal', title: 'Assigned', state: 'assigned', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+      ],
+    })
+    const board = await controller.readBoard()
+    expect(board.tasks[0]?.branch).toBeUndefined()
   })
 })

@@ -31,6 +31,9 @@ import type {
 import type {
   ShadowApproveTaskInput,
   ShadowApproveTaskResult,
+  ShadowBoardBinding,
+  ShadowBoardSnapshot,
+  ShadowBoardTask,
   ShadowConversationAccepted,
   ShadowConversationPage,
   ShadowConversationPostInput,
@@ -58,6 +61,9 @@ export type {
   ProjectStopResult,
   ShadowApproveTaskInput,
   ShadowApproveTaskResult,
+  ShadowBoardBinding,
+  ShadowBoardSnapshot,
+  ShadowBoardTask,
   ShadowConversationAccepted,
   ShadowConversationMessage,
   ShadowConversationPage,
@@ -185,8 +191,8 @@ export class ShadowController extends TypertRemoteService {
    * write-boundary drift re-checks. The Worker receives one briefing; the
    * designated Shadow session receives a structured message (best-effort: a
    * conversation-host failure does not fail an already-admitted start).
-   * A task that is not planned, or whose provisioning is incomplete, fails
-   * loud without advancing state.
+   * A task that is neither planned nor blocked, or whose provisioning is
+   * incomplete, fails loud without advancing state.
    * @param request - The workspace binding and the planned task id.
    * @returns the task's state after admission.
    */
@@ -196,8 +202,18 @@ export class ShadowController extends TypertRemoteService {
     const binding = router.findBinding(request.workspaceId)
     if (binding === undefined || binding.state !== 'ready') throw new Error('approveTask requires a ready workspace binding')
     const taskId = TaskId(request.taskId)
+    const task = this.ctx.projectController.find(taskId)
+    if (task === undefined || (task.state !== 'planned' && task.state !== 'blocked')) {
+      throw new Error('approveTask requires a planned or blocked task')
+    }
+    // Re-approving a blocked task resumes it first: the controller's assign
+    // admits only planned → assigned, while resume admits blocked → assigned
+    // and keeps the previous assignee (the recovery triple is cleared on the
+    // way out). Planned tasks keep the assign step below.
+    if (task.state === 'blocked') {
+      await this.ctx.projectController.resume(taskId)
+    }
     const authority = resolveTaskStartAuthority(this.ctx, this.ctx.agents.get(binding.controllerSessionId), taskId, () => false)
-    if (authority.task.state !== 'planned') throw new Error('approveTask requires a planned task')
     const registry = this.ctx.get('projectDeliveryRegistry')
     if (registry === undefined) throw new Error('approveTask requires the project delivery registry (delivery consumer mounted)')
     const cwd = await realpathNormalize(authority.source.path)
@@ -210,13 +226,17 @@ export class ShadowController extends TypertRemoteService {
     // The commit scope is host-optional: omitting it registers the checkset
     // only and keeps `project_commit` failing closed, because the desktop
     // board cannot enumerate a task's output files before the Worker writes
-    // them. Deployments that pin a scope pass it in the request.
+    // them. The deployment's `defaultCommitPaths` (when configured) supplies
+    // the scope; a request-scoped value wins over the deployment default.
+    const commitPaths = request.commitPaths ?? registry.defaultCommitPaths
     registry.registerTask(taskId, {
       digest: String(digest),
-      ...(request.commitPaths === undefined ? {} : { commitPaths: request.commitPaths }),
+      ...(commitPaths === undefined ? {} : { commitPaths }),
     })
     const unchanged = taskStartUnchanged(this.ctx, authority, () => false)
-    await this.ctx.projectController.assign(taskId, authority.worker.sessionId, { beforePersist: unchanged })
+    if (authority.task.state === 'planned') {
+      await this.ctx.projectController.assign(taskId, authority.worker.sessionId, { beforePersist: unchanged })
+    }
     unchanged()
     const started = await this.ctx.projectController.startDevelopment(taskId, { beforePersist: unchanged })
     unchanged()
@@ -252,6 +272,83 @@ export class ShadowController extends TypertRemoteService {
     this.boardNotify(`Rejected task ${String(taskId)}: ${task.title}.`)
     return { taskId: String(taskId), state: blocked.state }
   }
+
+  /**
+   * Read the whole task board: mount presence, the workspace binding digest,
+   * and every task folded from the controller's stable (createdAt, taskId)
+   * order. The read is side-effect free: `startReady` derives from the same
+   * start authority the approve face enforces (any resolution failure or
+   * missing authority reads false, so the board greys the approve action
+   * without advancing state), and `branch` comes from the worktree registry's
+   * live status observation. A deployment without a projectController answers
+   * the honest `mounted: false` empty board; a missing shadow router or
+   * worktree registry degrades the respective section rather than failing.
+   * @returns the board snapshot.
+   */
+  @Remote
+  async readBoard(): Promise<ShadowBoardSnapshot> {
+    const projectController = this.ctx.get('projectController')
+    if (projectController === undefined) return { mounted: false, bindings: [], tasks: [] }
+    const router = this.ctx.get('shadowRouter')
+    const bindings: ShadowBoardBinding[] = router === undefined
+      ? []
+      : router.listBindings().map(binding => ({
+        workspaceId: String(binding.workspaceId),
+        state: binding.state,
+        controllerSessionId: binding.controllerSessionId,
+      }))
+    const worktreeRegistry = this.ctx.get('worktreeRegistry')
+    const tasks: ShadowBoardTask[] = []
+    for (const record of projectController.list()) {
+      // Host-derived facts are computed before the row is folded: startReady
+      // for planned tasks, the live worker branch for assigned/developing.
+      let startReady: boolean | undefined
+      let branch: string | null | undefined
+      if (record.state === 'planned') {
+        // The start authority needs the live root controller of the task's
+        // workspace; try every binding's controller until one admits the task.
+        let ready = false
+        for (const binding of bindings) {
+          const agent = this.ctx.agents.get(binding.controllerSessionId)
+          if (agent === undefined) continue
+          try {
+            resolveTaskStartAuthority(this.ctx, agent, record.taskId, () => false)
+            ready = true
+            break
+          } catch {
+            // Not yet startable: the worker/lead/worktrees may still be
+            // provisioning, or the Goal has not admitted this task id.
+          }
+        }
+        startReady = ready
+      }
+      if ((record.state === 'assigned' || record.state === 'developing')
+        && worktreeRegistry !== undefined && record.worktreeId !== undefined) {
+        try {
+          branch = (await worktreeRegistry.status(record.worktreeId)).branch ?? null
+        } catch {
+          // A dangling or unreadable worktree is reported, not a board failure.
+          branch = null
+        }
+      }
+      const task: ShadowBoardTask = {
+        taskId: String(record.taskId),
+        pluginId: String(record.pluginId),
+        title: record.title,
+        state: record.state,
+        ...(record.blockedReason === undefined ? {} : { blockedReason: record.blockedReason }),
+        ...(record.nextAction === undefined ? {} : { nextAction: record.nextAction }),
+        ...(record.wakeCondition === undefined ? {} : { wakeCondition: record.wakeCondition }),
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+        ...(startReady === undefined ? {} : { startReady }),
+        ...(branch === undefined ? {} : { branch }),
+      }
+      tasks.push(task)
+    }
+    return { mounted: true, bindings, tasks }
+  }
+
   /**
    * Best-effort board notification into the designated Shadow session. The
    * conversation host owns the persistent session; a missing host or a

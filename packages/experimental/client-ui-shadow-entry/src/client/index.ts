@@ -5,9 +5,11 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { mountShadowEntryUi } from './mount.ts'
 
 export { inject } from './mount.ts'
-export type { ShadowCardFace } from './slots.ts'
+export type { BoardToggleFace, BoardViewFace, ShadowCardFace } from './slots.ts'
+export type { BoardToggleProps } from './BoardToggle.tsx'
+export type { BoardViewProps } from './BoardView.tsx'
 export type { ShadowCardProps } from './ShadowCard.tsx'
-export type { ShadowStatusSnapshot, ShadowStatusPort } from './shadow-store.ts'
+export type { ShadowBoardSnapshotState, ShadowStatusSnapshot, ShadowStatusPort } from './shadow-store.ts'
 export type { ShadowKey } from './locales.ts'
 
 /** Mount the generated Shadow Remote contribution and the sidebar entry card. */

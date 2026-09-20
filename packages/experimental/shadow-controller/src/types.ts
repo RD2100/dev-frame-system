@@ -7,6 +7,7 @@ import type {
   ShadowRouterStatus,
   ShadowStatusBinding,
 } from '@deepseek-ai/dsh-experimental-shadow-routing'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 
 export type {
   ProjectOpenResult,
@@ -105,4 +106,49 @@ export interface ShadowApproveTaskResult {
 export interface ShadowRejectTaskResult {
   readonly taskId: string
   readonly state: string
+}
+
+/** One workspace binding row projected for the task board. */
+export interface ShadowBoardBinding {
+  readonly workspaceId: string
+  /** Binding lifecycle state; the board highlights non-ready rows. */
+  readonly state: string
+  /** The controller session owning the binding; required in the record. */
+  readonly controllerSessionId: SessionId
+}
+
+/** One task row projected for the board, folded from the task record plus host-derived facts. */
+export interface ShadowBoardTask {
+  readonly taskId: string
+  readonly pluginId: string
+  readonly title: string
+  readonly state: string
+  readonly blockedReason?: string
+  readonly nextAction?: string
+  readonly wakeCondition?: string
+  readonly createdAt: string
+  readonly updatedAt: string
+  /**
+   * Host-derived readiness of a planned task to start: true only when the full
+   * start authority (live root controller, open Goal admitting the task,
+   * exactly one Worker and lead, three independent locked worktrees) resolves.
+   * Planned tasks only; any resolution failure or unavailable authority reads
+   * false, so the board greys the approve action without advancing state.
+   */
+  readonly startReady?: boolean
+  /**
+   * Current branch of the Worker worktree. Assigned/developing tasks only;
+   * absent when no worktree is registered or the registry read fails.
+   */
+  readonly branch?: string | null
+}
+
+/** The board snapshot read from the host: mount presence, binding digest, and the whole task board. */
+export interface ShadowBoardSnapshot {
+  /** Whether this deployment mounts a projectController at all; false answers an empty board. */
+  readonly mounted: boolean
+  /** Workspace binding digest in the router's stable order. */
+  readonly bindings: readonly ShadowBoardBinding[]
+  /** Whole board in stable (createdAt, taskId) order. */
+  readonly tasks: readonly ShadowBoardTask[]
 }

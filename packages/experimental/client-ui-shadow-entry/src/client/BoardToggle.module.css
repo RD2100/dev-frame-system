@@ -1,0 +1,18 @@
+/* Compact header action reopening the Shadow conversation from the board. */
+
+.toggle {
+  padding: 4px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #2563eb;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.toggle:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}

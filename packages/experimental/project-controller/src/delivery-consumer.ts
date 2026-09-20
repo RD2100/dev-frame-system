@@ -59,6 +59,14 @@ export interface ProjectDeliveryRegistry {
    */
   readonly ledgerPath: string
   /**
+   * Deployment-wide commit scope applied to any task whose approval carries no
+   * per-task scope: the host merges `request.commitPaths ?? this` at approval
+   * time, so a deployment can pin an output scope without the board knowing
+   * a task's future files. Absent when the deployment does not configure one,
+   * keeping `project_commit` failing closed for scope-less approvals.
+   */
+  readonly defaultCommitPaths?: readonly string[]
+  /**
    * Register or replace the delivery configuration of one task.
    * @param taskId - The task being approved.
    * @param registration - Approved checkset digest and optional commit scope.
@@ -94,6 +102,16 @@ export interface Config {
   checkMaxOutputBytes: number
   /** Host-registered commit paths per task bounding what project_commit may commit. */
   commitPathsByTask?: Record<string, string[]>
+  /**
+   * Deployment-wide commit scope applied to approvals without a per-task
+   * scope: the host merges `request.commitPaths ?? defaultCommitPaths` at
+   * approval time, letting a deployment pin an output scope the board need
+   * not know. Unlike `commitPathsByTask` (an apply-time static seed keyed by
+   * task id), this is an approval-time fallback for dynamically planned
+   * tasks; absent when the deployment does not configure one, keeping
+   * `project_commit` failing closed for scope-less approvals.
+   */
+  defaultCommitPaths?: string[] | undefined
 }
 /** Loader validation for deployment settings. */
 export const Config: z<Config> = z.object({
@@ -102,6 +120,10 @@ export const Config: z<Config> = z.object({
   gitExecutable: z.string().min(1), gitTimeoutMs: z.number().min(1), gitMaxOutputBytes: z.number().min(1),
   checkTimeoutMs: z.number().min(1), checkMaxOutputBytes: z.number().min(1),
   commitPathsByTask: z.dict(z.array(z.string())),
+  // Union with const(undefined) keeps an unconfigured deployment undefined
+  // (schemastery's bare array default is []), so apply still distinguishes
+  // "not configured" from an explicitly empty scope, which stays fail-loud.
+  defaultCommitPaths: z.union([z.array(z.string()), z.const(undefined)]),
 })
 const execFileAsync = promisify(execFile)
 const findingsSchema = validation.array(validation.object({
@@ -549,8 +571,17 @@ export function apply(ctx: Context, config: Config): void {
       throw new Error(`Invalid host commit path scope for task ${taskId}: ${(error as Error).message}`)
     }
   }
+  let defaultCommitPaths: readonly string[] | undefined
+  if (config.defaultCommitPaths !== undefined) {
+    try {
+      defaultCommitPaths = normalizeCommitPaths(config.defaultCommitPaths)
+    } catch (error) {
+      throw new Error(`Invalid host default commit path scope: ${(error as Error).message}`)
+    }
+  }
   const registry: ProjectDeliveryRegistry = {
     ledgerPath: config.requiredChecksPath,
+    ...(defaultCommitPaths === undefined ? {} : { defaultCommitPaths }),
     registerTask(taskId, registration) {
       if (registration.digest.length === 0 || registration.digest.trim() !== registration.digest) {
         throw new Error('Task delivery registration requires a trimmed checkset digest')

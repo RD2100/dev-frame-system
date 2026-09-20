@@ -16,6 +16,7 @@
     { "path": "../../client/ui-sidebar" },
     { "path": "../../client/ui-session" },
     { "path": "../../client/ui-slots" },
+    { "path": "../../client/ui-conversation" },
     { "path": "../shadow-controller" },
     { "path": "../shadow-routing" },
     { "path": "../../core/session" },

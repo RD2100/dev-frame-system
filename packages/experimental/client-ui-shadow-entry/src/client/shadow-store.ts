@@ -6,7 +6,10 @@
 
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { ShadowStatusView } from '@deepseek-ai/dsh-experimental-shadow-controller'
+import type {
+  ShadowBoardSnapshot,
+  ShadowStatusView,
+} from '@deepseek-ai/dsh-experimental-shadow-controller'
 
 /** One settled-or-pending status state backing the card. */
 export interface ShadowStatusSnapshot {
@@ -47,6 +50,53 @@ export class ShadowStatusController {
     this.store.update((state) => {
       if (result.ok) {
         state.view = result.value
+        state.error = undefined
+      } else {
+        state.error = result.error.message
+      }
+    })
+  }
+}
+
+/** One settled-or-pending board state backing the view. */
+export interface ShadowBoardSnapshotState {
+  /** The last good wire answer, until a failed read replaces it. */
+  board: ShadowBoardSnapshot | undefined
+  /** The last read failure, when the latest settled read failed. */
+  error: string | undefined
+}
+
+/** Transport face the view reads the Host board through. */
+export type ShadowBoardPort = () => Promise<RemoteResult<ShadowBoardSnapshot>>
+
+/** Publishes board reads through one snapshot store; the latest read wins. */
+export class ShadowBoardController {
+  /** Board snapshot consumed through a bound selector hook. */
+  readonly store: SnapshotStore<ShadowBoardSnapshotState> = createSnapshotStore({
+    board: undefined,
+    error: undefined,
+  })
+
+  private sequence = 0
+
+  /**
+   * @param port - The transport read; one call per refresh, never cached here.
+   */
+  constructor(private readonly port: ShadowBoardPort) {}
+
+  /**
+   * Issue one board read and publish its settled answer. A superseded read
+   * (one issued after it) never publishes: the latest issued read owns the
+   * store.
+   */
+  async refresh(): Promise<void> {
+    const ticket = this.sequence + 1
+    this.sequence = ticket
+    const result = await this.port()
+    if (ticket !== this.sequence) return
+    this.store.update((state) => {
+      if (result.ok) {
+        state.board = result.value
         state.error = undefined
       } else {
         state.error = result.error.message

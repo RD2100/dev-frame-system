@@ -179,6 +179,7 @@ describe('desktop development project', () => {
       expect(patch).toContain('id: project-controller-consumer')
       expect(patch).toContain('id: project-controller-task-consumer')
       expect(patch).toContain('id: project-controller-delivery-consumer')
+      expect(patch).toContain("defaultCommitPaths: ['packages/experimental/project-controller/src/index.ts']")
       expect(patch).not.toContain('project-controller-request-budget-consumer')
       expect(patch).toContain("'project_task'")
       expect(patch).toContain("'project_integrate'")

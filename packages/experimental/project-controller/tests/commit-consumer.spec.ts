@@ -59,7 +59,11 @@ class SilentAdapter extends LlmAdapter {
 
 const artifactName = 'worker-a-artifact.txt'
 
-async function load(options: { readonly jobs?: boolean; readonly seedChecks?: boolean } = {}) {
+async function load(options: {
+  readonly jobs?: boolean
+  readonly seedChecks?: boolean
+  readonly defaultCommitPaths?: readonly string[]
+} = {}) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-project-commit-loader-'))
   cleanups.push(() => rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 25 }))
   const ctx = new Context()
@@ -113,6 +117,7 @@ async function load(options: { readonly jobs?: boolean; readonly seedChecks?: bo
       gitTimeoutMs: 15_000, gitMaxOutputBytes: 1024 * 1024, checkTimeoutMs: 15_000, checkMaxOutputBytes: 1024 * 1024,
       commitPathsByTask: { 'task-a': [artifactName, 'second-artifact.txt', 'output', 'link/inner.txt'],
         'task-b': ['worker-b-artifact.txt'] },
+      ...(options.defaultCommitPaths === undefined ? {} : { defaultCommitPaths: [...options.defaultCommitPaths] }),
     },
   }
   const configPath = join(root, 'cordis.yml')
@@ -146,7 +151,11 @@ async function tool(f: Fixture, agent: Agent, name: string, args: object) {
     name, arguments: args, agent })
 }
 
-async function setup(options: { readonly jobs?: boolean; readonly seedChecks?: boolean } = {}) {
+async function setup(options: {
+  readonly jobs?: boolean
+  readonly seedChecks?: boolean
+  readonly defaultCommitPaths?: readonly string[]
+} = {}) {
   const loaded = await load(options)
   const { ctx, root } = loaded
   const exec = promisify(execFile)
@@ -658,5 +667,20 @@ describe('host delivery registry across plan, approval, and delivery', () => {
     expect(delivered.isError).toBe(true)
     expect(JSON.stringify(delivered)).toContain('Task has no host-approved checkset')
     expect(f.ctx.projectController.find(TaskId('task-a'))?.state).toBe('developing')
+  })
+
+  it('exposes the deployment default commit scope normalized on the registry', async () => {
+    const f = await setup({ seedChecks: false, defaultCommitPaths: [artifactName, 'second-artifact.txt'] })
+    expect(f.ctx.projectDeliveryRegistry.defaultCommitPaths).toEqual([artifactName, 'second-artifact.txt'])
+  })
+
+  it('keeps the registry default commit scope absent when the deployment omits it', async () => {
+    const f = await setup({ seedChecks: false })
+    expect(f.ctx.projectDeliveryRegistry.defaultCommitPaths).toBeUndefined()
+  })
+
+  it('fails loud when the deployment default commit scope is invalid', async () => {
+    await expect(setup({ defaultCommitPaths: [] }))
+      .rejects.toThrow('Invalid host default commit path scope: Project commit requires at least one commit path')
   })
 })
