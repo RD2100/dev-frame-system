@@ -7,6 +7,7 @@ import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-worktree-registry'
 import type {} from './controller.ts'
+import { resolveControllerAuthority, resolveTaskStartAuthority, taskStartUnchanged } from './start-authority.ts'
 
 /** Loader namespace name; the project controller service is mounted separately. */
 export const name = 'project-task-tool'
@@ -58,64 +59,25 @@ export function apply(ctx: Context): void {
       const agent = exec.agent
       const authority = () => {
         exec.signal.throwIfAborted()
-        if (stopped) throw new Error('project_task consumer is stopped')
-        if (agent === undefined || ctx.agents.get(agent.id) !== agent) throw new Error('project_task requires the actual live root controller')
-        const root = ctx.agentBindings.find(agent.session.id)
-        if (root?.role !== 'controller' || root.parentSessionId !== undefined || root.agentId !== agent.id
-          || root.sessionId !== agent.session.id || root.worktreeId === undefined || root.worktreePath === undefined
-          || agent.session.header.cwd !== root.worktreePath) throw new Error('project_task requires the registered root controller worktree')
-        const state = ctx.sessionProjections.stateOf(agent.session, 'devframe')
-        const goal = state?.bindings.at(-1)
-        if (state === undefined || state.failure !== null || goal?.lifecycle !== 'admission_open'
-          || (state.lifecycle !== null && state.lifecycle.binding.goalId === goal.goalId && state.lifecycle.state !== 'admission_open')
-          || String(goal.controllerSessionId) !== String(root.sessionId)
-          || !goal.taskIds.some(id => String(id) === String(taskId))) throw new Error('project_task requires the task in the current open Goal')
-        const rows = ctx.workspaceRegistry.list().flatMap(workspace => ctx.worktreeRegistry.list(workspace.id))
-        const target = rows.find(row => row.id === root.worktreeId)
-        if (target === undefined || target.path !== root.worktreePath || String(target.lockedBy) !== String(root.sessionId)
-          || String(target.workspaceId) !== String(goal.workspaceId)) throw new Error('project_task requires the controller writer lock in the Goal workspace')
-        return { root, rows, target }
+        return resolveControllerAuthority(ctx, agent, taskId, () => stopped)
       }
       const run = async () => {
-        const initial = authority()
         if (args.action === 'plan') {
           if (title === undefined || pluginId === undefined) throw new Error('project_task plan requires title and pluginId')
           const task = await ctx.projectController.createTask({ taskId, title, pluginId }, { beforePersist: authority })
           return { taskId: String(taskId), state: task.state, briefingQueued: false }
         }
-        const task = ctx.projectController.find(taskId)
-        if (task === undefined || (task.state !== 'planned' && task.state !== 'assigned')) throw new Error('project_task start requires a planned or assigned task; a started task cannot be re-briefed')
-        const workers = ctx.agentBindings.list().filter(binding => binding.role === 'worker' && binding.taskId === taskId && binding.pluginId === task.pluginId)
-        const worker = workers[0]
-        if (workers.length !== 1 || worker === undefined) throw new Error('project_task start requires exactly one registered task Worker')
-        const lead = worker.parentSessionId === undefined ? undefined : ctx.agentBindings.find(worker.parentSessionId)
-        const workerAgent = ctx.agents.get(worker.agentId)
-        const source = initial.rows.find(row => row.id === worker.worktreeId)
-        const reviewer = initial.rows.find(row => row.id === lead?.worktreeId)
-        if (lead?.role !== 'lead' || lead.parentSessionId !== initial.root.sessionId || lead.pluginId !== task.pluginId
-          || workerAgent === undefined || workerAgent.session.id !== worker.sessionId
-          || workerAgent.session.header.cwd !== worker.worktreePath
-          || source === undefined || reviewer === undefined || source.path !== worker.worktreePath || reviewer.path !== lead.worktreePath
-          || source.workspaceId !== initial.target.workspaceId || reviewer.workspaceId !== initial.target.workspaceId
-          || String(source.lockedBy) !== String(worker.sessionId) || String(reviewer.lockedBy) !== String(lead.sessionId)
-          || new Set([initial.target.id, source.id, reviewer.id]).size !== 3
-          || new Set([initial.target.path, source.path, reviewer.path]).size !== 3) throw new Error('project_task start requires independent registered controller, lead, and live Worker worktrees with writer locks')
-        const signature = JSON.stringify({ root: initial.root, target: initial.target, worker, lead, source, reviewer })
-        const unchanged = () => {
-          const current = authority()
-          const nextWorker = ctx.agentBindings.find(worker.sessionId)
-          const nextLead = ctx.agentBindings.find(lead.sessionId)
-          if (ctx.agents.get(worker.agentId) !== workerAgent || JSON.stringify({
-            root: current.root, target: current.target, worker: nextWorker, lead: nextLead,
-            source: current.rows.find(row => row.id === worker.worktreeId), reviewer: current.rows.find(row => row.id === lead.worktreeId),
-          }) !== signature) throw new Error('project_task ownership changed during start; inspect task state before retrying')
+        const start = resolveTaskStartAuthority(ctx, agent, taskId, () => stopped)
+        const unchanged = taskStartUnchanged(ctx, start, () => stopped)
+        if (start.task.state === 'planned') {
+          await ctx.projectController.assign(taskId, start.worker.sessionId, { beforePersist: unchanged })
+        } else if (start.task.assigneeSessionId !== start.worker.sessionId) {
+          throw new Error('project_task assigned Worker does not match the registered task Worker')
         }
-        if (task.state === 'planned') await ctx.projectController.assign(taskId, worker.sessionId, { beforePersist: unchanged })
-        else if (task.assigneeSessionId !== worker.sessionId) throw new Error('project_task assigned Worker does not match the registered task Worker')
         unchanged()
         const started = await ctx.projectController.startDevelopment(taskId, { beforePersist: unchanged })
         unchanged()
-        if (briefing !== undefined) workerAgent.followup(createUserMessage({ content: [{ type: 'text', text: briefing }], source: { kind: 'plugin', plugin: 'project-task' } }))
+        if (briefing !== undefined) start.workerAgent.followup(createUserMessage({ content: [{ type: 'text', text: briefing }], source: { kind: 'plugin', plugin: 'project-task' } }))
         return { taskId: String(taskId), state: started.state, briefingQueued: briefing !== undefined }
       }
       const previous = tails.get(String(taskId)) ?? Promise.resolve()

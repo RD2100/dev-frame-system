@@ -28,6 +28,52 @@ import { normalizeCommitPaths, registerProjectCommitTool } from './commit-consum
 export const name = 'project-delivery-tools'
 /** Services required to derive caller and evidence authority. */
 export const inject = ['tools', 'agents', 'sessions', 'sessionProjections', 'projectController', 'agentBindings', 'workspaceRegistry', 'worktreeRegistry']
+
+/** Host-approved delivery configuration registered for one task at approval time. */
+export interface TaskDeliveryRegistration {
+  /** Digest of the approved checkset persisted in the required-checks ledger. */
+  readonly digest: string
+  /**
+   * Host-registered commit-path scope for the task. Optional here: omitting
+   * it registers the checkset only and leaves `project_commit` failing
+   * closed (a task without a scope refuses), so a deployment that needs
+   * commits must always provide it.
+   */
+  readonly commitPaths?: readonly string[]
+}
+
+/**
+ * Host-updatable delivery registry (`ctx.projectDeliveryRegistry`): the
+ * runtime source of approved checksets and commit scopes the delivery tools
+ * read at call time. Seeded from deployment config; the host registers each
+ * task's approved checkset and commit scope at approval time, so plan-time
+ * registration and delivery-time reads can never race. Idempotent: a
+ * re-registration replaces the previous entry, unregistering an absent task
+ * is a no-op.
+ */
+export interface ProjectDeliveryRegistry {
+  /**
+   * Ledger path the registry's checksets are persisted under. The host saves
+   * an approved checkset through a store on this path before registering its
+   * digest, so the ledger and the live registry never diverge.
+   */
+  readonly ledgerPath: string
+  /**
+   * Register or replace the delivery configuration of one task.
+   * @param taskId - The task being approved.
+   * @param registration - Approved checkset digest and optional commit scope.
+   */
+  registerTask(taskId: TaskId, registration: TaskDeliveryRegistration): void
+  /** Drop the delivery configuration of one task. */
+  unregisterTask(taskId: TaskId): void
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    projectDeliveryRegistry: ProjectDeliveryRegistry
+  }
+}
+
 /** Explicit deployment settings; tools cannot choose identities, commands, or approval digests. */
 export interface Config {
   /** Shared Goal repair-round limit; omitted uses the DevFrame default. */
@@ -75,6 +121,10 @@ export function apply(ctx: Context, config: Config): void {
   ]
     .some(value => !Number.isSafeInteger(value) || value < 1)) throw new Error('Project delivery requires an absolute ledger and positive integer limits')
   const store = new FileRequiredChecksConfigStore({ path: config.requiredChecksPath })
+  // Live source of approved checksets: seeded from deployment config, then
+  // replaced per task by the host registry at approval time. Delivery and
+  // evidence read this map at call time, never the frozen config.
+  const checksByTask = new Map<string, string>(Object.entries(config.requiredChecksByTask))
   const failedSessions = new Set<string>()
   let stopped = false
   const tails = new Map<string, Promise<unknown>>()
@@ -203,7 +253,7 @@ export function apply(ctx: Context, config: Config): void {
         }
         const observed = await snapshot(initial.sourcePath, exec.signal)
         guard()
-        const rawDigest = config.requiredChecksByTask[String(taskId)]
+        const rawDigest = checksByTask.get(String(taskId))
         if (rawDigest === undefined) throw new Error('Task has no host-approved checkset')
         const digest = RequiredChecksDigest(rawDigest)
         const approved = await store.load(digest)
@@ -331,7 +381,7 @@ export function apply(ctx: Context, config: Config): void {
           : initial.state.verifications.findLast(item => item.deliveryId === delivery.deliveryId)
         const review = delivery === undefined ? undefined
           : initial.state.reviews.findLast(item => item.deliveryId === delivery.deliveryId)
-        const requiredChecksDigest = config.requiredChecksByTask[String(taskId)] ?? null
+        const requiredChecksDigest = checksByTask.get(String(taskId)) ?? null
         const result = {
           taskId: String(taskId), state: initial.task.state,
           goalId: String(initial.goal.goalId), goalRevision: initial.goal.goalRevision, requiredChecksDigest,
@@ -499,6 +549,23 @@ export function apply(ctx: Context, config: Config): void {
       throw new Error(`Invalid host commit path scope for task ${taskId}: ${(error as Error).message}`)
     }
   }
+  const registry: ProjectDeliveryRegistry = {
+    ledgerPath: config.requiredChecksPath,
+    registerTask(taskId, registration) {
+      if (registration.digest.length === 0 || registration.digest.trim() !== registration.digest) {
+        throw new Error('Task delivery registration requires a trimmed checkset digest')
+      }
+      checksByTask.set(String(taskId), registration.digest)
+      if (registration.commitPaths !== undefined) {
+        commitPaths.set(String(taskId), normalizeCommitPaths(registration.commitPaths))
+      }
+    },
+    unregisterTask(taskId) {
+      checksByTask.delete(String(taskId))
+      commitPaths.delete(String(taskId))
+    },
+  }
+  ctx.provide('projectDeliveryRegistry', registry)
   registerProjectCommitTool({
     tools: ctx.tools,
     registry: ctx.worktreeRegistry,

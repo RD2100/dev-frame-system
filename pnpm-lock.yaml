@@ -5837,6 +5837,15 @@ importers:
       '@deepseek-ai/dsh-agent-loop-testkit':
         specifier: workspace:^
         version: link:../../test-support/agent-loop-testkit
+      '@deepseek-ai/dsh-experimental-devframe':
+        specifier: workspace:^
+        version: link:../devframe
+      '@deepseek-ai/dsh-experimental-project-contracts':
+        specifier: workspace:^
+        version: link:../project-contracts
+      '@deepseek-ai/dsh-experimental-project-controller':
+        specifier: workspace:^
+        version: link:../project-controller
       '@deepseek-ai/dsh-experimental-session-identity':
         specifier: workspace:^
         version: link:../session-identity

@@ -13,5 +13,7 @@ export type { MainTreeMergeMarker, MainTreeMergeRequest, ProjectControllerConfig
 export { projectTasksDomainSpec, taskRecordSchema } from './spec.ts'
 export type { MainTreeIntegrationRecord, RequestBudgetUsage } from './spec.ts'
 export { goalCompletionGateEngaged, selectGoalCompletionEvidence } from './goal-completion-entry.ts'
+export { resolveControllerAuthority, resolveTaskStartAuthority, taskStartUnchanged } from './start-authority.ts'
+export type { GoalAuthority, TaskStartAuthority } from './start-authority.ts'
 export type { GoalCompletionGateInput } from './goal-completion-entry.ts'
 export { ProjectController as default } from './controller.ts'

@@ -59,7 +59,7 @@ class SilentAdapter extends LlmAdapter {
 
 const artifactName = 'worker-a-artifact.txt'
 
-async function load(options: { readonly jobs?: boolean } = {}) {
+async function load(options: { readonly jobs?: boolean; readonly seedChecks?: boolean } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-project-commit-loader-'))
   cleanups.push(() => rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 25 }))
   const ctx = new Context()
@@ -109,7 +109,7 @@ async function load(options: { readonly jobs?: boolean } = {}) {
       leadPluginScopes: { lead: ['plugin-a'] },
     },
     '@deepseek-ai/dsh-experimental-project-controller/delivery-consumer': {
-      requiredChecksPath, requiredChecksByTask: { 'task-a': String(digest) }, gitExecutable: 'git',
+      requiredChecksPath, requiredChecksByTask: options.seedChecks === false ? {} : { 'task-a': String(digest) }, gitExecutable: 'git',
       gitTimeoutMs: 15_000, gitMaxOutputBytes: 1024 * 1024, checkTimeoutMs: 15_000, checkMaxOutputBytes: 1024 * 1024,
       commitPathsByTask: { 'task-a': [artifactName, 'second-artifact.txt', 'output', 'link/inner.txt'],
         'task-b': ['worker-b-artifact.txt'] },
@@ -131,7 +131,7 @@ async function load(options: { readonly jobs?: boolean } = {}) {
   await ctx.loader.await()
   expect([...ctx.loader.entries()].filter(entry => entry.fiber === undefined && !entry.disabled)
     .map(entry => entry.options.name)).toEqual([])
-  return { ctx, root }
+  return { ctx, root, digest, store }
 }
 
 function execute(ctx: Context, agent: Agent, args: object) {
@@ -146,8 +146,9 @@ async function tool(f: Fixture, agent: Agent, name: string, args: object) {
     name, arguments: args, agent })
 }
 
-async function setup(options: { readonly jobs?: boolean } = {}) {
-  const { ctx, root } = await load(options)
+async function setup(options: { readonly jobs?: boolean; readonly seedChecks?: boolean } = {}) {
+  const loaded = await load(options)
+  const { ctx, root } = loaded
   const exec = promisify(execFile)
   const repo = join(root, 'repo')
   await mkdir(repo)
@@ -213,7 +214,7 @@ async function setup(options: { readonly jobs?: boolean } = {}) {
     const started = await execute(ctx, controller, { action: 'start', taskId })
     expect(started.isError, JSON.stringify(started)).not.toBe(true)
   }
-  return { ctx, root, repo, git, trees, controller, lead, workerA, workerB }
+  return { ...loaded, repo, git, trees, controller, lead, workerA, workerB }
 }
 
 /** Start one owned, unsettled background job; the caller settles it through the returned gate. */
@@ -599,5 +600,63 @@ describe('project commit consumer through the real Loader', () => {
     expect(state.deliveries[0]!.sourceCommit).toBe((await f.git(worktree, 'rev-parse', 'HEAD')).trim())
     expect(state.verifications).toHaveLength(1)
     expect(state.verifications[0]!.status).toBe('passed')
+  })
+})
+
+describe('host delivery registry across plan, approval, and delivery', () => {
+  it('refuses delivery for a task without a registered checkset', async () => {
+    const f = await setup({ seedChecks: false })
+    const delivered = await tool(f, f.workerA, 'project_deliver', { taskId: 'task-a' })
+    expect(delivered.isError).toBe(true)
+    expect(JSON.stringify(delivered)).toContain('Task has no host-approved checkset')
+    expect(f.ctx.projectController.find(TaskId('task-a'))?.state).toBe('developing')
+  })
+
+  it('registers checkset and commit scope at approval time and then delivers', async () => {
+    const f = await setup({ seedChecks: false })
+    f.ctx.projectDeliveryRegistry.registerTask(TaskId('task-a'), {
+      digest: String(f.digest), commitPaths: [artifactName],
+    })
+    const worktree = f.workerA.session.header.cwd!
+    await writeFile(join(worktree, artifactName), 'implemented\n')
+    const committed = await tool(f, f.workerA, 'project_commit', { taskId: 'task-a', paths: [artifactName] })
+    expect(committed.isError, JSON.stringify(committed)).not.toBe(true)
+    const delivered = await tool(f, f.workerA, 'project_deliver', { taskId: 'task-a' })
+    expect(delivered.isError, JSON.stringify(delivered)).not.toBe(true)
+    expect(f.ctx.projectController.find(TaskId('task-a'))?.state).toBe('reviewing')
+    const state = f.ctx.sessionProjections.stateOf(f.controller.session, 'devframe')!
+    expect(state.deliveries).toHaveLength(1)
+    expect(state.verifications).toHaveLength(1)
+    expect(state.verifications[0]!.status).toBe('passed')
+  })
+
+  it('rejects a registered checkset whose check cwd escapes the assigned Worker worktree', async () => {
+    const f = await setup({ seedChecks: false })
+    const wrong = await f.store.save({ version: 1, checks: [
+      { checkId: 'artifact', executable: process.execPath, cwd: join(f.root, 'worker-b'),
+        arguments: ['--input-type=module', '-e', ''] },
+    ] })
+    f.ctx.projectDeliveryRegistry.registerTask(TaskId('task-a'), {
+      digest: String(wrong), commitPaths: [artifactName],
+    })
+    const worktree = f.workerA.session.header.cwd!
+    await writeFile(join(worktree, artifactName), 'implemented\n')
+    const committed = await tool(f, f.workerA, 'project_commit', { taskId: 'task-a', paths: [artifactName] })
+    expect(committed.isError, JSON.stringify(committed)).not.toBe(true)
+    const delivered = await tool(f, f.workerA, 'project_deliver', { taskId: 'task-a' })
+    expect(delivered.isError).toBe(true)
+    expect(JSON.stringify(delivered)).toContain('Approved checks must execute in the assigned Worker worktree')
+  })
+
+  it('unregisters a task and refuses its delivery afterwards', async () => {
+    const f = await setup({ seedChecks: false })
+    f.ctx.projectDeliveryRegistry.registerTask(TaskId('task-a'), {
+      digest: String(f.digest), commitPaths: [artifactName],
+    })
+    f.ctx.projectDeliveryRegistry.unregisterTask(TaskId('task-a'))
+    const delivered = await tool(f, f.workerA, 'project_deliver', { taskId: 'task-a' })
+    expect(delivered.isError).toBe(true)
+    expect(JSON.stringify(delivered)).toContain('Task has no host-approved checkset')
+    expect(f.ctx.projectController.find(TaskId('task-a'))?.state).toBe('developing')
   })
 })

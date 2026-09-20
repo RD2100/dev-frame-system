@@ -76,3 +76,33 @@ export interface ShadowConversationPage {
   /** Pass back as `after` to read the next page. */
   readonly cursor: number
 }
+/** Host approve input: the workspace binding, the planned task id, and an optional commit-path scope. */
+export interface ShadowApproveTaskInput {
+  readonly workspaceId: ShadowWorkspaceId
+  readonly taskId: string
+  /**
+   * Optional host-registered commit-path scope for the task. Omitted means the
+   * checkset is registered but `project_commit` keeps failing closed until a
+   * deployment pins a scope.
+   */
+  readonly commitPaths?: readonly string[]
+}
+
+/** Host reject input: the workspace binding, the planned task id, and the reason. */
+export interface ShadowRejectTaskInput {
+  readonly workspaceId: ShadowWorkspaceId
+  readonly taskId: string
+  readonly reason: string
+}
+
+/** Approve receipt: the task's state after development admission. */
+export interface ShadowApproveTaskResult {
+  readonly taskId: string
+  readonly state: string
+}
+
+/** Reject receipt: the task's blocked state. */
+export interface ShadowRejectTaskResult {
+  readonly taskId: string
+  readonly state: string
+}

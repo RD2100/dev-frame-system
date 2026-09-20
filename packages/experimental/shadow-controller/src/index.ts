@@ -29,6 +29,8 @@ import type {
   ShadowRouter,
 } from '@deepseek-ai/dsh-experimental-shadow-routing'
 import type {
+  ShadowApproveTaskInput,
+  ShadowApproveTaskResult,
   ShadowConversationAccepted,
   ShadowConversationPage,
   ShadowConversationPostInput,
@@ -36,18 +38,31 @@ import type {
   ShadowProjectOpenInput,
   ShadowProjectReleaseInput,
   ShadowProjectSendInput,
+  ShadowRejectTaskInput,
+  ShadowRejectTaskResult,
   ShadowStatusView,
 } from './types.ts'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { ShadowAgent } from './shadow-agent.ts'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { TaskId } from '@deepseek-ai/dsh-experimental-project-contracts'
+import { FileRequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-devframe'
+import type { DevFrameRequiredChecksConfig } from '@deepseek-ai/dsh-experimental-devframe'
+import { resolveTaskStartAuthority, taskStartUnchanged } from '@deepseek-ai/dsh-experimental-project-controller'
+import type {} from '@deepseek-ai/dsh-experimental-project-controller/delivery-consumer'
+import { realpathNormalize } from '@deepseek-ai/dsh-workspace'
 
 export type {
   ProjectOpenResult,
   ProjectSendResult,
   ProjectStopResult,
+  ShadowApproveTaskInput,
+  ShadowApproveTaskResult,
   ShadowConversationAccepted,
   ShadowConversationMessage,
   ShadowConversationPage,
+  ShadowRejectTaskInput,
+  ShadowRejectTaskResult,
   ShadowConversationPostInput,
   ShadowConversationReadInput,
   ShadowProjectOpenInput,
@@ -160,6 +175,95 @@ export class ShadowController extends TypertRemoteService {
     return await this.requireConversationHost().readConversation(request)
   }
 
+  /**
+   * Approve a planned task for development from the board. Resolves the same
+   * start authority the `project_task start` tool enforces (live root
+   * controller, open Goal admitting the task, exactly one Worker and lead,
+   * three independent locked worktrees), persists the host-approved
+   * `git diff --check` checkset into the required-checks ledger, registers it
+   * with the delivery registry, then assigns and starts development under
+   * write-boundary drift re-checks. The Worker receives one briefing; the
+   * designated Shadow session receives a structured message (best-effort: a
+   * conversation-host failure does not fail an already-admitted start).
+   * A task that is not planned, or whose provisioning is incomplete, fails
+   * loud without advancing state.
+   * @param request - The workspace binding and the planned task id.
+   * @returns the task's state after admission.
+   */
+  @Remote
+  async approveTask(request: ShadowApproveTaskInput): Promise<ShadowApproveTaskResult> {
+    const router = this.requireRouter()
+    const binding = router.findBinding(request.workspaceId)
+    if (binding === undefined || binding.state !== 'ready') throw new Error('approveTask requires a ready workspace binding')
+    const taskId = TaskId(request.taskId)
+    const authority = resolveTaskStartAuthority(this.ctx, this.ctx.agents.get(binding.controllerSessionId), taskId, () => false)
+    if (authority.task.state !== 'planned') throw new Error('approveTask requires a planned task')
+    const registry = this.ctx.get('projectDeliveryRegistry')
+    if (registry === undefined) throw new Error('approveTask requires the project delivery registry (delivery consumer mounted)')
+    const cwd = await realpathNormalize(authority.source.path)
+    const checks: DevFrameRequiredChecksConfig = {
+      version: 1,
+      checks: [{ checkId: 'git-diff-check', executable: 'git', arguments: ['diff', '--check'], cwd }],
+    }
+    const store = new FileRequiredChecksConfigStore({ path: registry.ledgerPath })
+    const digest = await store.save(checks)
+    // The commit scope is host-optional: omitting it registers the checkset
+    // only and keeps `project_commit` failing closed, because the desktop
+    // board cannot enumerate a task's output files before the Worker writes
+    // them. Deployments that pin a scope pass it in the request.
+    registry.registerTask(taskId, {
+      digest: String(digest),
+      ...(request.commitPaths === undefined ? {} : { commitPaths: request.commitPaths }),
+    })
+    const unchanged = taskStartUnchanged(this.ctx, authority, () => false)
+    await this.ctx.projectController.assign(taskId, authority.worker.sessionId, { beforePersist: unchanged })
+    unchanged()
+    const started = await this.ctx.projectController.startDevelopment(taskId, { beforePersist: unchanged })
+    unchanged()
+    authority.workerAgent.followup(createUserMessage({
+      content: [{ type: 'text', text: `Task ${String(taskId)} "${authority.task.title}" is approved; start the work in your worktree now.` }],
+      source: { kind: 'plugin', plugin: 'shadow-board' },
+    }))
+    this.boardNotify(`Approved task ${String(taskId)}: ${authority.task.title}. The Worker is starting development.`)
+    return { taskId: String(taskId), state: started.state }
+  }
+
+  /**
+   * Reject a planned task from the board: block it with the host reason so
+   * the board shows the recovery triple instead of silently dropping the
+   * task. Only a planned task may be rejected; anything already started
+   * fails loud (recovery of active tasks uses the project tools).
+   * @param request - The workspace binding, the planned task id, and the reason.
+   * @returns the task's blocked state.
+   */
+  @Remote
+  async rejectTask(request: ShadowRejectTaskInput): Promise<ShadowRejectTaskResult> {
+    const router = this.requireRouter()
+    const binding = router.findBinding(request.workspaceId)
+    if (binding === undefined || binding.state !== 'ready') throw new Error('rejectTask requires a ready workspace binding')
+    const taskId = TaskId(request.taskId)
+    const task = this.ctx.projectController.find(taskId)
+    if (task === undefined || task.state !== 'planned') throw new Error('rejectTask requires a planned task')
+    const blocked = await this.ctx.projectController.block(taskId, {
+      blockedReason: request.reason,
+      nextAction: 'The user revises the task or its approval request',
+      wakeCondition: 'The user re-approves or revises the task',
+    })
+    this.boardNotify(`Rejected task ${String(taskId)}: ${task.title}.`)
+    return { taskId: String(taskId), state: blocked.state }
+  }
+  /**
+   * Best-effort board notification into the designated Shadow session. The
+   * conversation host owns the persistent session; a missing host or a
+   * post failure degrades silently because the state change it announces has
+   * already happened and must not fail with it.
+   * @param text - Structured notification text for the Shadow conversation.
+   */
+  private boardNotify(text: string): void {
+    const host = this.ctx.get('shadowAgent')
+    if (host === undefined) return
+    void host.postMessage(text).catch(() => {})
+  }
   /** The mounted router, or a loud honest failure for the project write faces. */
   private requireRouter(): ShadowRouter {
     const router = this.ctx.get('shadowRouter')

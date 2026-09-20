@@ -1,10 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { mkdtempSync } from 'node:fs'
 import { Context } from '@deepseek-ai/cordis'
 import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {
   ProjectOpenResult,
   ProjectSendResult,
   ProjectStopResult,
+  ShadowBindingRecord,
+  ShadowBindingState,
   ShadowRouter,
   ShadowRouterStatus,
 } from '@deepseek-ai/dsh-experimental-shadow-routing'
@@ -23,12 +29,13 @@ interface RecordedWrites {
   releaseProjectForHost: ReturnType<typeof vi.fn>
 }
 
-function routerStub(status: ShadowRouterStatus, writes?: Partial<RecordedWrites>): ShadowRouter {
+function routerStub(status: ShadowRouterStatus, writes?: Partial<RecordedWrites>, records?: ShadowBindingRecord[]): ShadowRouter {
   return {
     readStatus: () => status,
     openProjectForHost: writes?.openProjectForHost ?? (async () => ({}) as ProjectOpenResult),
     sendToProjectForHost: writes?.sendToProjectForHost ?? (async () => ({}) as ProjectSendResult),
     releaseProjectForHost: writes?.releaseProjectForHost ?? (async () => ({}) as ProjectStopResult),
+    findBinding: (workspaceId: ShadowBindingRecord['workspaceId']) => records?.find(binding => binding.workspaceId === workspaceId),
   } as unknown as ShadowRouter
 }
 
@@ -69,6 +76,8 @@ describe('the shadow Remote namespace a host status surface calls', () => {
       { method: 'releaseProject', invocation: { kind: 'direct' } },
       { method: 'postMessage', invocation: { kind: 'direct' } },
       { method: 'readConversation', invocation: { kind: 'direct' } },
+      { method: 'approveTask', invocation: { kind: 'direct' } },
+      { method: 'rejectTask', invocation: { kind: 'direct' } },
     ])
   })
 
@@ -179,5 +188,142 @@ describe('the shadow Remote namespace a host status surface calls', () => {
       .rejects.toThrow('this deployment has no shadow conversation host mounted')
     await expect(controller.readConversation({}))
       .rejects.toThrow('this deployment has no shadow conversation host mounted')
+  })
+})
+
+/** A live agent double: identity and session must line up with the binding rows. */
+interface AgentDouble {
+  id: string
+  session: { id: string; header: { cwd: string } }
+  followup?: ReturnType<typeof vi.fn>
+}
+
+/**
+ * Build a ctx whose authorities satisfy the full task-start admission: a live
+ * root controller on its locked worktree, an open Goal admitting the task, and
+ * exactly one Worker with its parent lead on two further locked worktrees.
+ * The controller, the delivery registry, and the ledger store are stubbed so
+ * approveTask's state transitions and registrations are observable.
+ */
+function approvalFixture(taskId: string, options?: { taskState?: string; registry?: boolean; bindingState?: ShadowBindingState }) {
+  const taskIdStr = taskId
+  const pluginId = 'devframe-goal'
+  const controllerCwd = mkdtempSync(join(tmpdir(), 'shadow-wt-controller-'))
+  const workerCwd = mkdtempSync(join(tmpdir(), 'shadow-wt-worker-'))
+  const leadCwd = mkdtempSync(join(tmpdir(), 'shadow-wt-lead-'))
+  const controllerAgent: AgentDouble = { id: 'agent-controller', session: { id: 'session-controller', header: { cwd: controllerCwd } } }
+  const workerAgent: AgentDouble = { id: 'agent-worker', session: { id: 'session-worker', header: { cwd: workerCwd } }, followup: vi.fn() }
+  const controllerBinding = {
+    role: 'controller' as const, parentSessionId: undefined, agentId: 'agent-controller',
+    sessionId: 'session-controller', worktreeId: 'wt-controller', worktreePath: controllerCwd, pluginId,
+  }
+  const workerBinding = {
+    role: 'worker' as const, parentSessionId: 'session-lead', agentId: 'agent-worker',
+    sessionId: 'session-worker', worktreeId: 'wt-worker', worktreePath: workerCwd, pluginId, taskId,
+  }
+  const leadBinding = {
+    role: 'lead' as const, parentSessionId: 'session-controller', agentId: 'agent-lead',
+    sessionId: 'session-lead', worktreeId: 'wt-lead', worktreePath: leadCwd, pluginId,
+  }
+  const goalState = {
+    failure: null,
+    lifecycle: null,
+    bindings: [{ lifecycle: 'admission_open', goalId: 'goal-1', controllerSessionId: 'session-controller', workspaceId: 'ws-goal', taskIds: [taskIdStr] }],
+  }
+  const rows = [
+    { id: 'wt-controller', path: controllerCwd, lockedBy: 'session-controller', workspaceId: 'ws-goal' },
+    { id: 'wt-worker', path: workerCwd, lockedBy: 'session-worker', workspaceId: 'ws-goal' },
+    { id: 'wt-lead', path: leadCwd, lockedBy: 'session-lead', workspaceId: 'ws-goal' },
+  ]
+  const assign = vi.fn(async (_taskId: string, _assignee: string, opts: { beforePersist: () => void }) => { opts.beforePersist(); return { state: 'assigned' } })
+  const startDevelopment = vi.fn(async (_taskId: string, opts: { beforePersist: () => void }) => { opts.beforePersist(); return { state: 'developing' } })
+  const find = vi.fn((_id: string) => options?.taskState === undefined
+    ? undefined
+    : { taskId: taskIdStr, title: 'Refactor the board', pluginId, state: options.taskState })
+  const block = vi.fn(async (_taskId: string, detail: unknown) => { void detail; return { state: 'blocked' } })
+  const registerTask = vi.fn()
+  const host = hostStub()
+  const record: ShadowBindingRecord = {
+    workspaceId: wid('ws-1'), canonicalPath: 'D:/repo', controllerSessionId: 'session-controller' as SessionId,
+    profileKey: 'devframe', bindingRevision: 1, requestId: 'req-1', state: options?.bindingState ?? 'ready',
+    createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+  }
+  const ctx = new Context()
+  ctx.provide('shadowRouter', routerStub({
+    shadowSessionId: 'session-shadow',
+    shadowLive: true,
+    authorizedRoots: ['D:/repo'],
+    bindings: [{
+      workspaceId: wid('ws-1'), canonicalPath: 'D:/repo', bindingRevision: 1, state: record.state,
+    }],
+  }, undefined, [record]))
+  ctx.provide('shadowAgent', host)
+  ctx.provide('agents', {
+    get: (id: string) => id === 'agent-controller' || id === 'session-controller' ? controllerAgent
+      : id === 'agent-worker' ? workerAgent : undefined,
+  })
+  ctx.provide('agentBindings', {
+    find: (sessionId: string) => sessionId === 'session-controller' ? controllerBinding
+      : sessionId === 'session-worker' ? workerBinding : sessionId === 'session-lead' ? leadBinding : undefined,
+    list: () => [controllerBinding, workerBinding, leadBinding],
+  })
+  ctx.provide('sessionProjections', { stateOf: (_session: unknown, _key: string) => goalState })
+  ctx.provide('workspaceRegistry', { list: () => [{ id: 'ws-goal' }] })
+  ctx.provide('worktreeRegistry', { list: (_workspaceId: string) => rows })
+  ctx.provide('projectController', { find, assign, startDevelopment, block })
+  if (options?.registry ?? true) {
+    ctx.provide('projectDeliveryRegistry', {
+      ledgerPath: join(mkdtempSync(join(tmpdir(), 'shadow-ledger-')), 'ledger.json'),
+      registerTask,
+      unregisterTask: vi.fn(),
+    })
+  }
+  const controller = new ShadowController(ctx)
+  return { ctx, controller, host, assign, startDevelopment, registerTask, block, find, controllerAgent, workerAgent }
+}
+
+describe('the host approve/reject board faces', () => {
+  it('approves a planned task: persists the checkset, registers, assigns, starts, briefs, and notifies', async () => {
+    const { controller, host, assign, startDevelopment, registerTask } = approvalFixture('task-1', { taskState: 'planned' })
+    const postMessage = vi.spyOn(host, 'postMessage').mockResolvedValue({ messageId: 'msg' })
+    const result = await controller.approveTask({ workspaceId: wid('ws-1'), taskId: 'task-1' })
+    expect(result).toEqual({ taskId: 'task-1', state: 'developing' })
+    expect(registerTask).toHaveBeenCalledWith('task-1', { digest: expect.any(String) as string })
+    expect(assign).toHaveBeenCalledWith('task-1', 'session-worker', { beforePersist: expect.any(Function) as () => void })
+    expect(startDevelopment).toHaveBeenCalledWith('task-1', { beforePersist: expect.any(Function) as () => void })
+    expect(postMessage).toHaveBeenCalledWith(expect.stringContaining('Approved task task-1') as string)
+  })
+
+  it('fails loud when the binding is not ready', async () => {
+    const { controller } = approvalFixture('task-1', { bindingState: 'provisioning' })
+    await expect(controller.approveTask({ workspaceId: wid('ws-1'), taskId: 'task-1' }))
+      .rejects.toThrow('approveTask requires a ready workspace binding')
+  })
+
+  it('fails loud when the task is not planned', async () => {
+    const { controller } = approvalFixture('task-1', { taskState: 'developing' })
+    await expect(controller.approveTask({ workspaceId: wid('ws-1'), taskId: 'task-1' }))
+      .rejects.toThrow('project_task start requires a planned or assigned task')
+  })
+
+  it('fails loud when the delivery registry is not mounted', async () => {
+    const { controller } = approvalFixture('task-1', { taskState: 'planned', registry: false })
+    await expect(controller.approveTask({ workspaceId: wid('ws-1'), taskId: 'task-1' }))
+      .rejects.toThrow('approveTask requires the project delivery registry')
+  })
+
+  it('rejects a planned task into blocked with the host reason and notifies', async () => {
+    const { controller, host, block } = approvalFixture('task-1', { taskState: 'planned' })
+    const postMessage = vi.spyOn(host, 'postMessage').mockResolvedValue({ messageId: 'msg' })
+    const result = await controller.rejectTask({ workspaceId: wid('ws-1'), taskId: 'task-1', reason: 'scope too wide' })
+    expect(result).toEqual({ taskId: 'task-1', state: 'blocked' })
+    expect(block).toHaveBeenCalledWith('task-1', expect.objectContaining({ blockedReason: 'scope too wide' }) as never)
+    expect(postMessage).toHaveBeenCalledWith(expect.stringContaining('Rejected task task-1') as string)
+  })
+
+  it('fails loud rejecting a task that is not planned', async () => {
+    const { controller } = approvalFixture('task-1', { taskState: 'developing' })
+    await expect(controller.rejectTask({ workspaceId: wid('ws-1'), taskId: 'task-1', reason: 'nope' }))
+      .rejects.toThrow('rejectTask requires a planned task')
   })
 })

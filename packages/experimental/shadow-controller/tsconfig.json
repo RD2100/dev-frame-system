@@ -20,6 +20,9 @@
     { "path": "../../storage/storage" },
     { "path": "../../storage/storage-domain" },
     { "path": "../../storage/storage-json" },
-    { "path": "../../workspace/workspace" }
+    { "path": "../../workspace/workspace" },
+    { "path": "../devframe" },
+    { "path": "../project-contracts" },
+    { "path": "../project-controller" }
   ]
 }
