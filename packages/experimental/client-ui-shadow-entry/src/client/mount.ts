@@ -7,7 +7,6 @@
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
-import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
@@ -31,8 +30,7 @@ function registerUi(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'client-ui-shadow-entry: dictionaries')
   // The Host and browser project references merge different `Context.sessions`
   // faces; the browser face is the contract used by this entry.
-  // oxlint-disable-next-line typescript/no-unnecessary-type-assertion -- the project-reference compiler needs the explicit browser face.
-  const sessions = ctx.sessions as unknown as ISessions
+  const sessions = ctx.sessions
   // The designated conversation is a dedicated surface, not a browsable
   // session: every status read classifies its id as internal so the session
   // list never grows a row for it, and a redeployed Host that designates
