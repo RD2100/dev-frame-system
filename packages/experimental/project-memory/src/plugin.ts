@@ -11,6 +11,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { MemoryLibraryGateway } from './gateway.ts'
+import { createLibraryTools } from './library-tools.ts'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { resolveMemorySpec } from './config.ts'
 import { NoteId } from './ids.ts'
@@ -75,6 +77,8 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     /** The bounded project-memory service built from this plugin's config. */
     projectMemory: ProjectMemoryService
+    /** Read-only Host Remote owner for the Library page surface. */
+    memoryLibraryGateway: MemoryLibraryGateway
   }
 }
 
@@ -166,7 +170,7 @@ export function createMemoryTools(service: ProjectMemoryService, spec: MemorySpe
                 additionalProperties: false,
                 properties: {
                   noteId: { type: 'string', required: true },
-                  excerpt: { type: 'string', required: true, description: 'Bounded excerpt around the first match; … marks a cut edge.' },
+                  excerpt: { type: 'string', required: true, description: 'Bounded excerpt around the first match; — marks a cut edge.' },
                   createdAt: { type: 'string', required: true },
                   kind: { type: 'string', required: true, enum: ['fact', 'preference', 'lesson', 'question'] },
                   status: { type: 'string', required: true, enum: ['confirmed', 'observed', 'inferred'] },
@@ -377,6 +381,11 @@ export function apply(ctx: Context, config: Config): () => void {
   }
   const receipts = createMemoryReceiptStore()
   const service = new ProjectMemoryService(spec, receipts)
+  // Service construction registers the gateway on the current plugin fiber;
+  // its registration therefore unwinds with the same fiber as the core. The
+  // gateway is mounted even without a Vault root and then reports the honest
+  // UNAVAILABLE status while staying fail-closed on every file operation.
+  new MemoryLibraryGateway(ctx, spec.vaultRoot)
   const disposers: Array<() => unknown> = [
     ctx.provide('projectMemory', service),
     ctx.on('agent/created', ({ agent }) => {
@@ -396,6 +405,11 @@ export function apply(ctx: Context, config: Config): () => void {
   ]
   try {
     for (const definition of createMemoryTools(service, spec, receipts)) {
+      disposers.push(ctx.tools.register(definition))
+    }
+    for (const definition of createLibraryTools({
+      ...spec.vaultRoot === undefined ? {} : { vaultRoot: spec.vaultRoot },
+    })) {
       disposers.push(ctx.tools.register(definition))
     }
   } catch (error: unknown) {

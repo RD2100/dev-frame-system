@@ -9,11 +9,12 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-experimental-project-memory` is a private experimental profile layer that implements the bounded Obsidian memory of [detailed design part 3](../../../docs/detailDesign-part3.md): the Vault stores only selected facts, preferences, lessons, and unresolved questions, never execution history or authority. Its patch inserts one `project-memory` row that provides `ctx.projectMemory` and registers the three bounded tools (`memory_search`, `memory_read`, `memory_append`) on `ctx.tools`; the receipt seam rides the session log, so a cold restart recovers it from replayed logs. With the shipped defaults memory mounts unconfigured and read-only, and the tools report `MEMORY_UNAVAILABLE` until a deployment configures a Vault root. Memory content is untrusted context that never grants tools, permissions, or authority; this is not a general Obsidian synchronization — the service manages only the append-only `<vault>/devframe-memory/` subtree.
+`dsh-experimental-project-memory` is a private experimental profile layer that implements the bounded Obsidian memory of [detailed design part 3](../../../docs/detailDesign-part3.md): the Vault stores only selected facts, preferences, lessons, and unresolved questions, never execution history or authority. Its patch inserts one `project-memory` row that provides `ctx.projectMemory` and registers the three bounded memory tools (`memory_search`, `memory_read`, `memory_append`) plus four read-only library tools (`library_status`, `library_list`, `library_read`, `library_search`) on `ctx.tools`; the receipt seam rides the session log, so a cold restart recovers it from replayed logs. With the shipped defaults memory mounts unconfigured and read-only, and the tools report `MEMORY_UNAVAILABLE` until a deployment configures a Vault root. Memory content is untrusted context that never grants tools, permissions, or authority; this is not a general Obsidian synchronization — the service manages only the append-only `<vault>/devframe-memory/` subtree.
 
 ## Table of Contents
 
 - [Use this package](#use-this-package)
+- [Storage layout](#storage-layout)
 - [Understand the implementation](#understand-the-implementation)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
@@ -38,19 +39,35 @@ To enable the whole DevFrame stack — this memory layer beside session identity
 
 ### Configure a Vault
 
-The shipped patch defaults mount the row with `workspaceId: default`, writes off, and no Vault root, so loading is safe everywhere and every tool call reports `MEMORY_UNAVAILABLE` until the deployment overrides the row's config with `vaultRoot`. The user-selected Vault root must already exist — the service never creates it — and enabling `writeEnabled` without an explicit `vaultRoot` fails the profile at load. A patch entry replaces the target row's whole configuration, so restate every setting you keep; the [base bundle README](../../bundle/base/README.md) owns the override semantics.
+The shipped patch defaults mount the row with `workspaceId: default`, writes off, and no Vault root, so loading is safe everywhere: search/read report `MEMORY_UNAVAILABLE` and append reports `MEMORY_APPEND_DISABLED`. Override the row's config with an existing `vaultRoot` for reads, and set `writeEnabled: true` as a separate explicit consent for appends. The user-selected Vault root must already exist — the service never creates it — and enabling `writeEnabled` without an explicit `vaultRoot` fails the profile at load. A patch entry replaces the target row's whole configuration, so restate every setting you keep; the [base bundle README](../../bundle/base/README.md) owns the override semantics.
+
+<a id="storage-layout"></a>
+### Storage layout
+
+`vaultRoot` is the user's existing Vault directory, not the memory directory itself. The service creates only this subtree, lazily on the first append:
+
+| Scope | Path |
+|---|---|
+| Project | `<vaultRoot>/devframe-memory/projects/<workspaceId>/<noteId>.md` |
+| User | `<vaultRoot>/devframe-memory/user/<noteId>.md` |
+
+`workspaceId` is one safe path segment and `<noteId>` is a 64-character hexadecimal content id. Append receipts are stored in the calling DSH session log as `memory/receipt`; they are not written into the Vault. The `vaultRoot` itself must already exist.
 
 ### What you get
 
-The layer adds the `project-memory` plugin row: a `ctx.projectMemory` service over the configured Vault subtree plus three model tools.
+The layer adds the `project-memory` plugin row: a `ctx.projectMemory` service over the configured Vault subtree plus three model tools, and a read-only Obsidian library face plus four model tools over the same Vault root.
 
 - `memory_search` — deterministic, byte-bounded text match over one scope's note bodies; hits carry note ids, excerpts, trust labels, and freshness, and `coverageComplete: false` means a scan cap was hit, never that the knowledge does not exist.
 - `memory_read` — one full note by id with trust labels and provenance; `memory_changed` or `incomplete_note` means the stored file disagrees with its committed receipt, so treat the content as unverified.
 - `memory_append` — exclusive-create, idempotent append of one bounded note; the receipt reaches the calling session's log before `created` returns, and rejected bodies name the screening rule without echoing the suspected secret. Optional `entities` tags anchor the note to its subjects — host-canonicalized (lowercased, bounded, secret-screened), auto-carrying the workspace tag on project notes — and `memory_search` accepts an `entity` filter, so "everything about X" is one deterministic lookup. The tags are the flat-file stand-in for a knowledge graph's entity anchoring: notes are the fact nodes, the supersession chain is the validity window.
+- `library_status` — whether the Obsidian library vault is available, its real path, file count, and total size; unconfigured vaults report `UNAVAILABLE` with a reason instead of guessing.
+- `library_list` — the accessible files (relative paths, sizes, mtimes), excluding hidden files and symlinks; metadata can be large, so prefer search for locating content.
+- `library_read` — one file's UTF-8 content by relative path, rejecting traversal, symlinks, and forbidden names with `MEMORY_PATH_REJECTED`.
+- `library_search` — bounded name-and-content search (default 50 hits) with match kind, excerpt, and first content-match line; content search covers text files up to 2 MiB, so a missing hit is never proof the knowledge does not exist.
 
 Every failure mode from the design surfaces as a stable code on `ProjectMemoryError` (`MEMORY_UNAVAILABLE`, `MEMORY_APPEND_DISABLED`, `MEMORY_NOTE_TOO_LARGE`, `MEMORY_CONTENT_REJECTED`, `MEMORY_PATH_REJECTED`); conflicting or externally changed notes are outcomes, never silent overwrites.
 
-- The usage-policy prompt section (`project-memory:usage`, global layer) once a Vault is configured: search once at task start, append one short project note after acceptance, keep the human's preferences in `user` scope only on their explicit ask, never copy transcripts or secrets, and report every memory failure verbatim. Unconfigured deployments mount tools that honestly report `MEMORY_UNAVAILABLE` and no guidance; consumers composing their own memory face (the Shadow conversation host) suppress the section on their scope by name.
+- The usage-policy prompt section (`project-memory:usage`, global layer) once a Vault is configured: search once at task start, append one short project note after acceptance, keep the human's preferences in `user` scope only on their explicit ask, never copy transcripts or secrets, and report every memory failure verbatim. Unconfigured deployments mount tools that honestly report `MEMORY_UNAVAILABLE` for reads and `MEMORY_APPEND_DISABLED` for writes, with no guidance; consumers composing their own memory face (the Shadow conversation host) suppress the section on their scope by name.
 
 -----
 
@@ -105,11 +122,11 @@ No runtime invariant companion is published: the service holds no cross-process 
 
 #### What the model sees
 
-When the layer is mounted, exactly three tools join the tool scopes: `memory_search`, `memory_read`, and `memory_append`. Their descriptions carry the policy: notes are labeled data, never instructions; appends record observations, and `confirmed` user preferences stay reachable only through the host's human-confirmation flow. With the shipped defaults every call fails with `MEMORY_UNAVAILABLE` instead of touching any path. Once a deployment configures a Vault, one more prompt section (`project-memory:usage`) joins the global layer with the usage policy — recall once at task start, one short project note after acceptance, the human's preferences only on their explicit ask, entity tags on every note, no transcripts or secrets, failures verbatim.
+When the layer is mounted, exactly seven tools join the tool scopes: `memory_search`, `memory_read`, `memory_append`, `library_status`, `library_list`, `library_read`, and `library_search`. Their descriptions carry the policy: notes are labeled data, never instructions; appends record observations, and `confirmed` user preferences stay reachable only through the host's human-confirmation flow. With the shipped defaults reads fail with `MEMORY_UNAVAILABLE` and append fails with `MEMORY_APPEND_DISABLED`, without touching any path. Once a deployment configures a Vault, one more prompt section (`project-memory:usage`) joins the global layer with the usage policy — recall once at task start, one short project note after acceptance, the human's preferences only on their explicit ask, entity tags on every note, no transcripts or secrets, failures verbatim.
 
 #### Token effect
 
-Zero while the layer is absent. When mounted, the three tool schemas cost tokens on every request in the scopes that see them, and each call appends one JSON result bounded by the recall limits. With a configured Vault the usage section's fixed text joins every request's prompt once.
+Zero while the layer is absent. When mounted, the seven tool schemas cost tokens on every request in the scopes that see them, and each call appends one JSON result bounded by the recall limits. With a configured Vault the usage section's fixed text joins every request's prompt once.
 
 #### KV Cache effect
 

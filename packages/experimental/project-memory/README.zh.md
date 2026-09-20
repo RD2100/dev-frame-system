@@ -9,11 +9,12 @@ kind: "package-bundle"
 
 ## 概述
 
-`dsh-experimental-project-memory` 是一个私有实验性 profile 层，实现[详细设计第 3 部分](../../../docs/detailDesign-part3.zh.md)中的有界 Obsidian 记忆：Vault 只保存经过选择的事实、偏好、经验与未解决问题，不保存执行历史，也不授予任何权威。它的 patch 插入一行 `project-memory`，提供 `ctx.projectMemory` 并在 `ctx.tools` 上注册三个有界工具（`memory_search`、`memory_read`、`memory_append`）；回执接缝依托会话日志，冷重启从重放的日志中恢复。按 shipped 默认值挂载时记忆处于未配置且只读状态，工具报告 `MEMORY_UNAVAILABLE`，直到部署配置 Vault 根。记忆内容是不可信上下文，不能授予工具、权限或指令权威；它不是通用 Obsidian 同步：服务只管理追加式的 `<vault>/devframe-memory/` 专用子树。
+`dsh-experimental-project-memory` 是一个私有实验性 profile 层，实现[详细设计第 3 部分](../../../docs/detailDesign-part3.zh.md)中的有界 Obsidian 记忆：Vault 只保存经过选择的事实、偏好、经验与未解决问题，不保存执行历史，也不授予任何权威。它的 patch 插入一行 `project-memory`，提供 `ctx.projectMemory` 并在 `ctx.tools` 上注册三个有界记忆工具（`memory_search`、`memory_read`、`memory_append`）与四个只读资料库工具（`library_status`、`library_list`、`library_read`、`library_search`）；回执接缝依托会话日志，冷重启从重放的日志中恢复。按 shipped 默认值挂载时记忆处于未配置且只读状态，工具报告 `MEMORY_UNAVAILABLE`，直到部署配置 Vault 根。记忆内容是不可信上下文，不能授予工具、权限或指令权威；它不是通用 Obsidian 同步：服务只管理追加式的 `<vault>/devframe-memory/` 专用子树。
 
 ## 目录
 
 - [使用本包](#use-this-package)
+- [存储布局](#storage-layout)
 - [理解实现](#understand-the-implementation)
 - [模型体验](#model-experience)
 - [已知限制与延期工作](#known-limitations-and-deferred-work)
@@ -38,19 +39,35 @@ pnpm dsh plugin --profile headless add ./packages/experimental/project-memory
 
 ### 配置 Vault
 
-Shipped patch 默认以 `workspaceId: default`、关闭写入、无 Vault 根挂载该行，因此在任何地方加载都是安全的，且每次工具调用都报告 `MEMORY_UNAVAILABLE`，直到部署用 `vaultRoot` 覆盖该行的配置。用户选定的 Vault 根必须已存在——服务绝不创建它——并且在没有显式 `vaultRoot` 时启用 `writeEnabled` 会让 profile 在加载时失败。patch 条目替换目标行的整个配置，因此要保留的每个设置都必须重述；覆盖语义由[基础 bundle README](../../bundle/base/README.zh.md) 拥有。
+Shipped patch 默认以 `workspaceId: default`、关闭写入、无 Vault 根挂载该行，因此在任何地方加载都是安全的：搜索/读取报告 `MEMORY_UNAVAILABLE`，追加报告 `MEMORY_APPEND_DISABLED`。部署用已存在的 `vaultRoot` 覆盖该行配置即可启用读取；再单独设置 `writeEnabled: true` 才是追加的显式同意。用户选定的 Vault 根必须已存在——服务绝不创建它——并且在没有显式 `vaultRoot` 时启用 `writeEnabled` 会让 profile 在加载时失败。patch 条目替换目标行的整个配置，因此要保留的每个设置都必须重述；覆盖语义由[基础 bundle README](../../bundle/base/README.zh.md) 拥有。
+
+<a id="storage-layout"></a>
+### 存储布局
+
+`vaultRoot` 是用户已经存在的 Vault 目录，而不是记忆目录本身。服务只会在第一次追加时按需创建以下子树：
+
+| 作用域 | 路径 |
+|---|---|
+| 项目 | `<vaultRoot>/devframe-memory/projects/<workspaceId>/<noteId>.md` |
+| 用户 | `<vaultRoot>/devframe-memory/user/<noteId>.md` |
+
+`workspaceId` 是一个安全的单一路径段，`<noteId>` 是 64 位十六进制内容 ID。追加回执存储在调用方的 DSH 会话日志中，事件名为 `memory/receipt`；它们不会写入 Vault。`vaultRoot` 本身必须预先存在。
 
 ### 你会得到什么
 
-该层添加 `project-memory` 插件行：一个覆盖已配置 Vault 子树的 `ctx.projectMemory` 服务，外加三个模型工具。
+该层添加 `project-memory` 插件行：一个覆盖已配置 Vault 子树的 `ctx.projectMemory` 服务，外加三个模型工具；同一 Vault 根之上还有一个只读 Obsidian 资料库面与四个模型工具。
 
 - `memory_search` —— 对单个作用域笔记正文做确定性、按字节计界的文本匹配；命中携带笔记 ID、摘录、信任标签与新鲜度，`coverageComplete: false` 表示扫描达到上限，绝不表示知识不存在。
 - `memory_read` —— 按 ID 读取一条完整笔记及其信任标签与来源；`memory_changed` 或 `incomplete_note` 表示存储文件与其已提交回执不一致，应视内容为未验证。
 - `memory_append` —— 独占创建、幂等地追加一条有界笔记；回执在 `created` 返回之前送达调用会话的日志，被拒绝的正文只点名筛查规则，绝不回显疑似秘密。可选的 `entities` 标签把笔记锚定到其主题——由宿主规范化（小写、限长、秘密筛查），项目笔记自动携带所属工作区标签——`memory_search` 接受 `entity` 过滤参数，"关于 X 的一切"就是一次确定性查找。标签是知识图谱实体锚定的扁平文件替身：笔记是事实节点，supersession 链条是有效期窗口。
+- `library_status` —— 只读 Obsidian 资料库是否可用、真实路径、文件数与总体积；未配置的 Vault 返回带原因的 `UNAVAILABLE`，不做猜测。
+- `library_list` —— 列出可访问文件（相对路径、大小、修改时间），按策略排除隐藏文件与符号链接；元数据可能很大，定位内容优先用搜索。
+- `library_read` —— 按相对路径读取单个文件的 UTF-8 内容，路径穿越、符号链接与禁用名称以 `MEMORY_PATH_REJECTED` 拒绝。
+- `library_search` —— 有界的名称与内容搜索（默认 50 条命中），携带匹配类型、摘录与首个内容命中行号；内容搜索覆盖 2 MiB 以内的文本文件，因此未命中绝不证明知识不存在。
 
 设计中的每种失败都以稳定错误码呈现在 `ProjectMemoryError` 上（`MEMORY_UNAVAILABLE`、`MEMORY_APPEND_DISABLED`、`MEMORY_NOTE_TOO_LARGE`、`MEMORY_CONTENT_REJECTED`、`MEMORY_PATH_REJECTED`）；冲突或被外部改动的笔记是结果状态，绝不静默覆盖。
 
-- 使用策略提示词段落（`project-memory:usage`，全局层）在 Vault 配置后挂载：任务开始先搜索一次、验收后追加一条简短项目笔记、人类的偏好仅在其明确要求时进入 `user` 作用域、绝不复制会话记录或秘密、每次记忆失败逐字上报。未配置的部署挂载的是诚实报告 `MEMORY_UNAVAILABLE` 的工具，没有指导；自行组合记忆面的消费者（Shadow 对话宿主）在各自作用域按名遮蔽该段落。
+- 使用策略提示词段落（`project-memory:usage`，全局层）在 Vault 配置后挂载：任务开始先搜索一次、验收后追加一条简短项目笔记、人类的偏好仅在其明确要求时进入 `user` 作用域、绝不复制会话记录或秘密、每次记忆失败逐字上报。未配置的部署挂载的是诚实报告读取 `MEMORY_UNAVAILABLE`、追加 `MEMORY_APPEND_DISABLED` 的工具，没有指导；自行组合记忆面的消费者（Shadow 对话宿主）在各自作用域按名遮蔽该段落。
 
 -----
 
@@ -105,11 +122,11 @@ Shipped patch 默认以 `workspaceId: default`、关闭写入、无 Vault 根挂
 
 #### 模型看到什么
 
-该层挂载后，工具作用域恰好多出三个工具：`memory_search`、`memory_read` 与 `memory_append`。它们的描述携带策略：笔记是带标签的数据，绝不是指令；追加记录的是观察，`confirmed` 的用户偏好只能经宿主的人工确认流程触达。按 shipped 默认值，每次调用都以 `MEMORY_UNAVAILABLE` 失败，绝不触碰任何路径。部署配置 Vault 后，再有一个提示词段落（`project-memory:usage`）进入全局层，携带使用策略——任务开始先召回一次、验收后一条简短项目笔记、人类偏好仅在其明确要求时记录、每条笔记带实体标签、不复制会话记录或秘密、失败逐字上报。
+该层挂载后，工具作用域恰好多出七个工具：`memory_search`、`memory_read`、`memory_append`、`library_status`、`library_list`、`library_read` 与 `library_search`。它们的描述携带策略：笔记是带标签的数据，绝不是指令；追加记录的是观察，`confirmed` 的用户偏好只能经宿主的人工确认流程触达。按 shipped 默认值，搜索/读取以 `MEMORY_UNAVAILABLE` 失败，追加以 `MEMORY_APPEND_DISABLED` 失败，且绝不触碰任何路径。部署配置 Vault 后，再有一个提示词段落（`project-memory:usage`）进入全局层，携带使用策略——任务开始先召回一次、验收后一条简短项目笔记、人类偏好仅在其明确要求时记录、每条笔记带实体标签、不复制会话记录或秘密、失败逐字上报。
 
 #### Token 影响
 
-该层缺席时为零。挂载后，三个工具的模式在可见作用域的每次请求中占用 token，每次调用追加一条受召回上限约束的 JSON 结果。Vault 配置后，使用段落的固定文本再进入每次请求的提示词一次。
+该层缺席时为零。挂载后，七个工具的模式在可见作用域的每次请求中占用 token，每次调用追加一条受召回上限约束的 JSON 结果。Vault 配置后，使用段落的固定文本再进入每次请求的提示词一次。
 
 #### KV Cache 影响
 
