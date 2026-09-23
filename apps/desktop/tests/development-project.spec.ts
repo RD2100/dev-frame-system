@@ -100,9 +100,11 @@ describe('desktop development project', () => {
     writeFileSync(join(host, 'lib', 'index.js'), '')
     const experimental: ReadonlyArray<readonly [string, string]> = [
       ['packages/experimental/devframe-profile', '7.7.7'],
+      ['packages/experimental/agent-team', '1.0.0'],
       ['packages/experimental/agent-dispatch', '1.0.0'],
       ['packages/experimental/agent-hierarchy', '1.0.0'],
       ['packages/experimental/command-goal-binding', '1.0.0'],
+      ['packages/experimental/client-ui-agent-team', '1.0.0'],
       ['packages/experimental/client-ui-expert-team', '1.0.0'],
       ['packages/experimental/client-ui-shadow-entry', '1.0.0'],
       ['packages/experimental/expert-pack-dev', '1.0.0'],
@@ -113,6 +115,7 @@ describe('desktop development project', () => {
       ['packages/experimental/shadow-controller', '1.0.0'],
       ['packages/experimental/shadow-router', '1.0.0'],
       ['packages/experimental/shadow-bridge', '0.1.2-alpha.4'],
+      ['packages/experimental/tool-agent-team', '1.0.0'],
       ['packages/experimental/agent-evidence', '0.1.6-alpha.1'],
       ['packages/experimental/project-controller', '0.1.6-alpha.1'],
       ['packages/experimental/project-contracts', '0.1.6-alpha.1'],
@@ -158,6 +161,9 @@ describe('desktop development project', () => {
         dependencies: Record<string, string>
       }
       expect(manifest.dependencies['@deepseek-ai/dsh-experimental-devframe-profile']).toBe('7.7.7')
+      expect(manifest.dependencies['@deepseek-ai/dsh-experimental-agent-team']).toBe('1.0.0')
+      expect(manifest.dependencies['@deepseek-ai/dsh-experimental-client-ui-agent-team']).toBe('1.0.0')
+      expect(manifest.dependencies['@deepseek-ai/dsh-experimental-tool-agent-team']).toBe('1.0.0')
       expect(manifest.dependencies['@deepseek-ai/dsh-worktree-registry']).toBe('8.8.8')
       expect(manifest.dependencies['@deepseek-ai/dsh-experimental-shadow-bridge']).toBe('0.1.2-alpha.4')
       expect(manifest.dependencies['@deepseek-ai/dsh-experimental-agent-evidence']).toBe('0.1.6-alpha.1')

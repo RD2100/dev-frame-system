@@ -298,9 +298,11 @@ export function prepareDevelopmentProject(options: DevelopmentProjectOptions): s
     ]
     const devframeLinks: ReadonlyArray<readonly [string, string]> = [
       ['@deepseek-ai/dsh-experimental-devframe-profile', 'packages/experimental/devframe-profile'],
+      ['@deepseek-ai/dsh-experimental-agent-team', 'packages/experimental/agent-team'],
       ['@deepseek-ai/dsh-experimental-agent-dispatch', 'packages/experimental/agent-dispatch'],
       ['@deepseek-ai/dsh-experimental-agent-hierarchy', 'packages/experimental/agent-hierarchy'],
       ['@deepseek-ai/dsh-experimental-command-goal-binding', 'packages/experimental/command-goal-binding'],
+      ['@deepseek-ai/dsh-experimental-client-ui-agent-team', 'packages/experimental/client-ui-agent-team'],
       ['@deepseek-ai/dsh-experimental-client-ui-expert-team', 'packages/experimental/client-ui-expert-team'],
       ['@deepseek-ai/dsh-experimental-client-ui-shadow-entry', 'packages/experimental/client-ui-shadow-entry'],
       ['@dsh-mobile/pairing', 'vendor/dsh-mobile-pairing'],
@@ -320,6 +322,7 @@ export function prepareDevelopmentProject(options: DevelopmentProjectOptions): s
       ['@deepseek-ai/dsh-experimental-shadow-controller', 'packages/experimental/shadow-controller'],
       ['@deepseek-ai/dsh-experimental-shadow-router', 'packages/experimental/shadow-router'],
       ['@deepseek-ai/dsh-experimental-shadow-bridge', 'packages/experimental/shadow-bridge'],
+      ['@deepseek-ai/dsh-experimental-tool-agent-team', 'packages/experimental/tool-agent-team'],
       ['@deepseek-ai/dsh-experimental-agent-evidence', 'packages/experimental/agent-evidence'],
       ['@deepseek-ai/dsh-experimental-project-controller', 'packages/experimental/project-controller'],
       ['@deepseek-ai/dsh-experimental-project-contracts', 'packages/experimental/project-contracts'],

@@ -13,6 +13,28 @@
 # disabled until a real vaultRoot is supplied and writes are explicitly enabled.
 # command-goal-binding: binds the launch directory as the goal worktree;
 # /devframe-start executes the required checks below as real subprocesses.
+# Agent Teams: the DevFrame profile carries the Team domain, scoped tools, and
+# browser action together. The overlapping global continuation controls are
+# disabled so one Agent scope has one owner for list/send/interrupt operations;
+# ordinary fresh and fork delegation remains available as one-shot tools.
+- id: tool-subagent-control
+  disabled: true
+
+- id: tool-subagent-list-agents
+  disabled: true
+
+- id: tool-subagent
+  config:
+    provider: spawn
+    toolName: subagent
+    backgroundMode: one-shot
+
+- id: tool-subagent-fork
+  config:
+    provider: fork
+    toolName: subagent_fork
+    backgroundMode: one-shot
+
 - insert:
     # Console exporter for the host process logger: the web composition mounts
     # no other exporter, so without this row every ctx.logger.warn/error —
@@ -101,3 +123,18 @@
     # Web loader.
     - id: ui-project-memory
       name: '@deepseek-ai/dsh-experimental-client-ui-project-memory'
+    - id: agent-team
+      name: '@deepseek-ai/dsh-experimental-agent-team'
+      config:
+        maxMembers: 8
+        maxTasks: 256
+        maxPendingMessagesPerMember: 64
+        maxMessageBytes: 65536
+        disposalTimeoutMs: 5000
+    - id: tool-agent-team
+      name: '@deepseek-ai/dsh-experimental-tool-agent-team'
+      config:
+        freshProvider: spawn
+        forkProvider: fork
+    - id: ui-agent-team
+      name: '@deepseek-ai/dsh-experimental-client-ui-agent-team'

@@ -8,7 +8,7 @@ import * as yaml from 'js-yaml'
 import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 
 describe('DevFrame profile bundle', () => {
-  it('declares a publishable parseable layer mounting the twelve DevFrame rows', () => {
+  it('declares a publishable parseable layer mounting the DevFrame and Agent Teams rows', () => {
     const root = fileURLToPath(new URL('..', import.meta.url))
     const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as {
       private?: boolean
@@ -20,13 +20,16 @@ describe('DevFrame profile bundle', () => {
     expect(manifest.publishConfig?.access).toBe('public')
     expect(manifest.dsh?.bundle?.patch).toBe('./cordis.patch.yml')
     expect(manifest.dependencies).toMatchObject({
+      '@deepseek-ai/dsh-experimental-agent-team': 'workspace:^',
       '@deepseek-ai/dsh-experimental-agent-dispatch': 'workspace:^',
       '@deepseek-ai/dsh-experimental-agent-hierarchy': 'workspace:^',
       '@deepseek-ai/dsh-experimental-command-goal-binding': 'workspace:^',
+      '@deepseek-ai/dsh-experimental-client-ui-agent-team': 'workspace:^',
       '@deepseek-ai/dsh-experimental-project-memory': 'workspace:^',
       '@deepseek-ai/dsh-experimental-session-identity': 'workspace:^',
       '@deepseek-ai/dsh-experimental-shadow-controller': 'workspace:^',
       '@deepseek-ai/dsh-experimental-shadow-router': 'workspace:^',
+      '@deepseek-ai/dsh-experimental-tool-agent-team': 'workspace:^',
       '@deepseek-ai/dsh-experimental-client-ui-expert-team': 'workspace:^',
       '@deepseek-ai/dsh-experimental-expert-team': 'workspace:^',
       '@deepseek-ai/dsh-worktree-registry': 'workspace:^',
@@ -52,6 +55,9 @@ describe('DevFrame profile bundle', () => {
       'expert-team',
       'ui-expert-team',
       'ui-project-memory',
+      'agent-team',
+      'tool-agent-team',
+      'ui-agent-team',
     ])
     expect(inserted.find(row => row.id === 'shadow-controller')?.name).toBe('@deepseek-ai/dsh-experimental-shadow-controller')
     expect(inserted.find(row => row.id === 'shadow-agent')?.name).toBe('@deepseek-ai/dsh-experimental-shadow-controller/shadow-agent')
@@ -60,5 +66,8 @@ describe('DevFrame profile bundle', () => {
     // precedes this layer in the profile composition) supplies the service.
     expect(inserted.find(row => row.id === 'worktree-registry')).toBeUndefined()
     expect(inserted.find(row => row.id === 'agent-dispatch')?.name).toBe('@deepseek-ai/dsh-experimental-agent-dispatch')
+    expect(inserted.find(row => row.id === 'agent-team')?.name).toBe('@deepseek-ai/dsh-experimental-agent-team')
+    expect(inserted.find(row => row.id === 'tool-agent-team')?.name).toBe('@deepseek-ai/dsh-experimental-tool-agent-team')
+    expect(inserted.find(row => row.id === 'ui-agent-team')?.name).toBe('@deepseek-ai/dsh-experimental-client-ui-agent-team')
   })
 })
