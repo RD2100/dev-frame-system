@@ -530,6 +530,44 @@ Depends on: `z` (`zod`)
 
 Source: [`packages/experimental/agent-hierarchy/src/config.ts:92`](../packages/experimental/agent-hierarchy/src/config.ts)
 
+<a id="deepseek-aidsh-experimental-agent-memory"></a>
+
+## `@deepseek-ai/dsh-experimental-agent-memory`
+
+Requires: `tools`
+
+```ts config-catalog
+/** Declarative configuration for the persistent memory service. */
+export interface AgentMemoryConfig {
+  /** Host-owned workspace identity used as the default project scope. */
+  readonly workspaceId: string
+  /** Default scope applied by model tools and automatic pre-step retrieval. */
+  readonly defaultScope?: MemoryScope
+  /** Default maximum UTF-8 bytes injected into one model request. */
+  readonly contextBudgetBytes?: number
+  /** Disable automatic model-context retrieval while retaining the API. */
+  readonly autoRetrieve?: boolean
+}
+
+/** The explicit address at which a memory is valid. Undefined fields are wildcards. */
+export interface MemoryScope {
+  /** Optional user identity that owns the memory record. */
+  readonly userId?: string
+  /** Workspace identity that contains the memory record. */
+  readonly workspaceId?: string
+  /** Optional project identity within the workspace. */
+  readonly projectId?: string
+  /** Repository identity associated with the record. */
+  readonly repository?: string
+  /** Branch identity associated with the record. */
+  readonly branch?: string
+  /** Task identity associated with the record. */
+  readonly taskId?: string
+}
+```
+
+Source: [`packages/experimental/agent-memory/src/service.ts:22`](../packages/experimental/agent-memory/src/service.ts)
+
 <a id="deepseek-aidsh-experimental-agent-team"></a>
 
 ## `@deepseek-ai/dsh-experimental-agent-team`

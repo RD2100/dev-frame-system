@@ -13,6 +13,7 @@ const source = z.object({
 }).strict()
 const status = z.enum(['candidate', 'active', 'conflicted', 'superseded', 'expired', 'archived', 'deleted'])
 
+/** Durable schema for one bounded task episode. */
 export const episodeSchema = z.object({
   id: z.string().min(1), scope, taskType: z.string().min(1), summary: z.string().min(1),
   actions: z.array(z.string()), decisions: z.array(z.string()), errors: z.array(z.string()),
@@ -21,6 +22,7 @@ export const episodeSchema = z.object({
   createdAt: z.string(), updatedAt: z.string(), status, authority: source.shape.type,
 }).strict() as z.ZodType<MemoryEpisode>
 
+/** Durable schema for one sourced semantic fact. */
 export const semanticSchema = z.object({
   id: z.string().min(1), scope, subject: z.string().min(1), predicate: z.string().min(1),
   object: z.string().min(1), statement: z.string().min(1), source,
@@ -28,6 +30,7 @@ export const semanticSchema = z.object({
   supersedes: z.array(z.string()).optional(), supersededBy: z.string().optional(), createdAt: z.string(), updatedAt: z.string(),
 }).strict() as z.ZodType<SemanticMemory>
 
+/** Durable schema for one procedural memory candidate or active procedure. */
 export const procedureSchema = z.object({
   id: z.string().min(1), name: z.string().min(1), trigger: z.array(z.string()),
   preconditions: z.array(z.string()), steps: z.array(z.string()),
@@ -35,11 +38,13 @@ export const procedureSchema = z.object({
   sourceRefs: z.array(z.string()), createdAt: z.string(), updatedAt: z.string(),
 }).strict() as z.ZodType<ProceduralMemory>
 
+/** Durable schema for one retrieval trace. */
 export const traceSchema = z.object({
   id: z.string().min(1), runId: z.string().min(1), query: z.string(), scope, retrieved: z.array(z.string()), injected: z.array(z.string()),
   created: z.array(z.string()), superseded: z.array(z.string()), scores: z.record(z.string(), z.number()), createdAt: z.string(),
 }).strict() as z.ZodType<MemoryTrace>
 
+/** Storage-domain declaration used by the memory service. */
 export const agentMemoryDomainSpec = defineDomain({
   name: 'agent_memory',
   version: 1,

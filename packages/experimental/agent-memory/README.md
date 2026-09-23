@@ -30,7 +30,11 @@ Mount the service in a composition that already provides the storage stack. The 
 ```yaml
 - name: '@deepseek-ai/dsh-storage'
 - name: '@deepseek-ai/dsh-storage-json'
+  config:
+    root: /var/lib/dsh/memory
 - name: '@deepseek-ai/dsh-storage-domain'
+  config:
+    backend: json
 - name: '@deepseek-ai/dsh-experimental-agent-memory'
   config:
     workspaceId: dsh

@@ -248,6 +248,7 @@
       "@deepseek-ai/dsh-experimental-project-controller/request-budget-consumer": ["./packages/experimental/project-controller/src/request-budget-consumer.ts"],
       "@deepseek-ai/dsh-experimental-agent-hierarchy": ["./packages/experimental/agent-hierarchy/src"],
       "@deepseek-ai/dsh-experimental-agent-dispatch": ["./packages/experimental/agent-dispatch/src"],
+      "@deepseek-ai/dsh-experimental-agent-memory": ["./packages/experimental/agent-memory/src"],
       "@deepseek-ai/dsh-experimental-shadow-routing": ["./packages/experimental/shadow-routing/src"],
       "@deepseek-ai/dsh-experimental-shadow-router": ["./packages/experimental/shadow-router/src"],
       "@deepseek-ai/dsh-experimental-shadow-controller": ["./packages/experimental/shadow-controller/src"],

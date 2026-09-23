@@ -30,7 +30,11 @@ kind: "package-reference"
 ```yaml
 - name: '@deepseek-ai/dsh-storage'
 - name: '@deepseek-ai/dsh-storage-json'
+  config:
+    root: /var/lib/dsh/memory
 - name: '@deepseek-ai/dsh-storage-domain'
+  config:
+    backend: json
 - name: '@deepseek-ai/dsh-experimental-agent-memory'
   config:
     workspaceId: dsh

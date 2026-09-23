@@ -18,6 +18,7 @@ declare module '@deepseek-ai/cordis' {
   interface Context { agentMemory: AgentMemoryService }
 }
 
+/** Declarative configuration for the persistent memory service. */
 export interface AgentMemoryConfig {
   /** Host-owned workspace identity used as the default project scope. */
   readonly workspaceId: string
@@ -29,6 +30,16 @@ export interface AgentMemoryConfig {
   readonly autoRetrieve?: boolean
 }
 
+const memoryScopeSchema: z<MemoryScope> = z.object({
+  userId: z.string(),
+  workspaceId: z.string(),
+  projectId: z.string(),
+  repository: z.string(),
+  branch: z.string(),
+  taskId: z.string(),
+})
+
+/** Default UTF-8 byte budget for one automatically assembled memory context. */
 export const DEFAULT_CONTEXT_BUDGET_BYTES = 12_000
 const AUTHORITY_RANK: Record<Authority, number> = {
   unknown: 0, agent_inference: 1, tool_result: 2, official_documentation: 3, test_result: 4, source_code: 5, user_explicit: 6,
@@ -91,7 +102,7 @@ export class AgentMemoryService extends Service {
   static inject = ['tools']
   static Config: z<AgentMemoryConfig> = z.object({
     workspaceId: z.string().required(),
-    defaultScope: z.any().default(undefined),
+    defaultScope: memoryScopeSchema,
     contextBudgetBytes: z.number().default(DEFAULT_CONTEXT_BUDGET_BYTES),
     autoRetrieve: z.boolean().default(true),
   })
@@ -150,7 +161,11 @@ export class AgentMemoryService extends Service {
   /** Whether this instance has an opened durable backend. */
   get available(): boolean { return this.unavailable === undefined && this.domain !== undefined }
 
-  /** Record one task episode. */
+  /**
+   * Record one task episode.
+   * @param input - Bounded task facts and their memory scope.
+   * @returns The durable episode row.
+   */
   async recordEpisode(input: EpisodeInput): Promise<MemoryEpisode> {
     this.requireAvailable()
     const scope = ensureScope(input.scope, this.config.workspaceId)
@@ -169,7 +184,11 @@ export class AgentMemoryService extends Service {
     return this.episodes.get(row.id) as MemoryEpisode
   }
 
-  /** Upsert one semantic fact, superseding stronger old facts or marking equal conflicts. */
+  /**
+   * Upsert one semantic fact, superseding weaker old facts or marking equal conflicts.
+   * @param input - Sourced fact fields and their memory scope.
+   * @returns The durable fact row and its resolved lifecycle status.
+   */
   async upsertFact(input: SemanticInput): Promise<SemanticMemory> {
     this.requireAvailable()
     const scope = ensureScope(input.scope, this.config.workspaceId)
@@ -216,7 +235,12 @@ export class AgentMemoryService extends Service {
     return this.facts.get(id) as SemanticMemory
   }
 
-  /** Register or version a procedure; candidates remain candidates until explicitly promoted. */
+  /**
+   * Register or version a procedure; candidates remain candidates until explicitly promoted.
+   * @param input - Procedure steps, trigger, and scope.
+   * @param status - Lifecycle status assigned to the new procedure.
+   * @returns The durable procedure row.
+   */
   async registerProcedure(input: ProcedureInput, status: MemoryStatus = 'candidate'): Promise<ProceduralMemory> {
     this.requireAvailable()
     const scope = ensureScope(input.scope, this.config.workspaceId)
@@ -227,7 +251,11 @@ export class AgentMemoryService extends Service {
     return this.procedures.get(row.id) as ProceduralMemory
   }
 
-  /** Retrieve ranked semantic, procedural, and episodic context under a byte budget. */
+  /**
+   * Retrieve ranked semantic, procedural, and episodic context under a byte budget.
+   * @param request - Query, scope, and optional budget for the retrieval.
+   * @returns Ranked context, rendered text, and its durable trace id.
+   */
   async retrieveContext(request: RetrieveRequest): Promise<MemoryContext> {
     this.requireAvailable()
     const scope = ensureScope(request.scope, this.config.workspaceId)
@@ -271,7 +299,11 @@ export class AgentMemoryService extends Service {
     return { items, text: items.length === 0 ? '' : `${contextHeader}${items.map(item => `- ${item.text}`).join('\n')}`, traceId: trace.id, truncated }
   }
 
-  /** Delete a memory item immediately; deleted ids are absent from retrieval. */
+  /**
+   * Delete a memory item immediately; deleted ids are absent from retrieval.
+   * @param id - Durable memory identifier to delete.
+   * @returns Whether a row existed and was deleted.
+   */
   async forget(id: string): Promise<boolean> {
     this.requireAvailable()
     if (id.startsWith('ep_')) return await this.delete(this.episodesTable, this.episodes, id)
@@ -281,10 +313,18 @@ export class AgentMemoryService extends Service {
     throw new AgentMemoryError('unknown memory id', 'MEMORY_INVALID_REQUEST')
   }
 
-  /** Read-only trace inspection for diagnostics and evaluation. */
+  /**
+   * Read-only trace inspection for diagnostics and evaluation.
+   * @param id - Durable retrieval trace identifier.
+   * @returns The trace row, or undefined when it is unknown.
+   */
   inspectTrace(id: string): MemoryTrace | undefined { return this.traces.get(id) }
 
-  /** Return candidates for future consolidation without mutating active memory. */
+  /**
+   * Return candidates for future consolidation without mutating active memory.
+   * @param scope - Scope whose repeated episodes should be considered.
+   * @returns Candidate procedure summaries backed by episode ids.
+   */
   consolidate(scope: MemoryScope): readonly ConsolidationCandidate[] {
     const scoped = [...this.episodes.values()].filter(item => item.status === 'active' && scopeMatch(item.scope, ensureScope(scope, this.config.workspaceId)))
     const groups = new Map<string, MemoryEpisode[]>()

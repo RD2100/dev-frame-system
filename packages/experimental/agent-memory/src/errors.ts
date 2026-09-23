@@ -7,6 +7,7 @@ export type AgentMemoryErrorCode =
   | 'MEMORY_PERSISTENCE'
   | 'MEMORY_CONFLICT'
 
+/** Stable error raised when a memory request cannot be accepted or persisted. */
 export class AgentMemoryError extends Error {
   override readonly name = 'AgentMemoryError'
   constructor(message: string, readonly code: AgentMemoryErrorCode, options?: { cause?: unknown }) {
