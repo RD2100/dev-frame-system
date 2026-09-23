@@ -43,6 +43,7 @@ describe('semantic lifecycle and forgetting', () => {
     const h = await harness()
     try {
       const weak = await h.ctx.agentMemory.upsertFact({ scope: { workspaceId: 'ws-alpha' }, subject: 'API', predicate: 'timeout', object: '30s', statement: 'API timeout is 30s.', source: { type: 'agent_inference', ref: 'old' } })
+      expect(weak.status).toBe('candidate')
       const strong = await h.ctx.agentMemory.upsertFact({ scope: { workspaceId: 'ws-alpha' }, subject: 'API', predicate: 'timeout', object: '60s', statement: 'API timeout is 60s.', source: { type: 'source_code', ref: 'config.ts' } })
       expect(strong.status).toBe('active')
       expect((await h.ctx.agentMemory.retrieveContext({ query: 'API timeout', scope: { workspaceId: 'ws-alpha' } })).items.map(item => item.id)).toEqual([strong.id])
@@ -52,8 +53,8 @@ describe('semantic lifecycle and forgetting', () => {
 
       const strongestFirst = await h.ctx.agentMemory.upsertFact({ scope: { workspaceId: 'ws-alpha' }, subject: 'API', predicate: 'retry', object: '5', statement: 'API retries 5 times.', source: { type: 'source_code', ref: 'retry.ts' } })
       const weakerAfter = await h.ctx.agentMemory.upsertFact({ scope: { workspaceId: 'ws-alpha' }, subject: 'API', predicate: 'retry', object: '2', statement: 'API retries 2 times.', source: { type: 'agent_inference', ref: 'guess' } })
-      expect(weakerAfter.status).toBe('superseded')
-      expect(weakerAfter.supersededBy).toBe(strongestFirst.id)
+      expect(weakerAfter.status).toBe('candidate')
+      expect(weakerAfter.supersededBy).toBeUndefined()
       const retryContext = await h.ctx.agentMemory.retrieveContext({ query: 'retries 5', scope: { workspaceId: 'ws-alpha' } })
       expect(retryContext.items.map(item => item.id)).toContain(strongestFirst.id)
       expect(retryContext.items.map(item => item.id)).not.toContain(weakerAfter.id)

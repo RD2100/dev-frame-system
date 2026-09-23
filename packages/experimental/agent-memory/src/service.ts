@@ -178,29 +178,30 @@ export class AgentMemoryService extends Service {
     const statement = ensureText(input.statement, 'statement')
     const source = { ...input.source, ref: ensureText(input.source.ref, 'source.ref') }
     const authority = source.type
-    const candidates = [...this.facts.values()].filter(f => f.status === 'active' && sameScope(f.scope, scope) && normalize(f.subject) === normalize(subject) && normalize(f.predicate) === normalize(predicate))
-    const duplicate = candidates.find(f => normalize(f.object) === normalize(object) && normalize(f.statement) === normalize(statement))
+    const sameFacts = [...this.facts.values()].filter(f => (f.status === 'active' || f.status === 'candidate') && sameScope(f.scope, scope) && normalize(f.subject) === normalize(subject) && normalize(f.predicate) === normalize(predicate))
+    const duplicate = sameFacts.find(f => normalize(f.object) === normalize(object) && normalize(f.statement) === normalize(statement))
     if (duplicate !== undefined) return duplicate
     const id = `sem_${randomUUID()}`
     const created = now()
-    let status: MemoryStatus = 'active'
+    let status: MemoryStatus = authority === 'agent_inference' ? 'candidate' : 'active'
     const supersedes: string[] = []
     let supersededBy: string | undefined
+    const candidates = sameFacts.filter(f => f.status === 'active')
     const stronger = candidates.filter(f => AUTHORITY_RANK[authority] > AUTHORITY_RANK[f.authority])
     const equal = candidates.filter(f => AUTHORITY_RANK[authority] === AUTHORITY_RANK[f.authority])
     const existingStronger = candidates.filter(f => AUTHORITY_RANK[authority] < AUTHORITY_RANK[f.authority])
-    if (existingStronger.length > 0) {
+    if (status === 'active' && existingStronger.length > 0) {
       status = 'superseded'
       const strongestExisting = [...existingStronger].sort((left, right) =>
         AUTHORITY_RANK[right.authority] - AUTHORITY_RANK[left.authority] || left.id.localeCompare(right.id),
       )[0]
       supersededBy = strongestExisting?.id
-    } else if (stronger.length > 0) {
+    } else if (status === 'active' && stronger.length > 0) {
       for (const previous of stronger) { await this.changeFact(previous, { status: 'superseded', supersededBy: id }); supersedes.push(previous.id) }
-    } else if (equal.length > 0) {
+    } else if (status === 'active' && equal.length > 0) {
       status = 'conflicted'
       for (const previous of equal) await this.changeFact(previous, { status: 'conflicted' })
-    } else {
+    } else if (status === 'active') {
       for (const previous of candidates) { await this.changeFact(previous, { status: 'superseded', supersededBy: id }); supersedes.push(previous.id) }
     }
     const row = semanticSchema.parse({
