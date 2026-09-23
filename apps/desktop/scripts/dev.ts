@@ -85,6 +85,7 @@ async function main(): Promise<void> {
   if (!values['skip-build']) {
     await runPackageScript('build', REPOSITORY_ROOT)
     await runPackageScript('build', APP_ROOT)
+    await runPackageScript('build', join(REPOSITORY_ROOT, 'apps', 'desktop-host'))
   }
   for (const path of [
     join(APP_ROOT, 'lib', 'main.js'),

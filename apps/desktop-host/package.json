@@ -6,6 +6,9 @@
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc -b && tsdown"
+  },
   "files": [
     "lib/index.js",
     "config/desktop.cordis.patch.yml"
