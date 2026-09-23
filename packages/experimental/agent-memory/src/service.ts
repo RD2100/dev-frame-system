@@ -185,9 +185,17 @@ export class AgentMemoryService extends Service {
     const created = now()
     let status: MemoryStatus = 'active'
     const supersedes: string[] = []
+    let supersededBy: string | undefined
     const stronger = candidates.filter(f => AUTHORITY_RANK[authority] > AUTHORITY_RANK[f.authority])
     const equal = candidates.filter(f => AUTHORITY_RANK[authority] === AUTHORITY_RANK[f.authority])
-    if (stronger.length > 0) {
+    const existingStronger = candidates.filter(f => AUTHORITY_RANK[authority] < AUTHORITY_RANK[f.authority])
+    if (existingStronger.length > 0) {
+      status = 'superseded'
+      const strongestExisting = [...existingStronger].sort((left, right) =>
+        AUTHORITY_RANK[right.authority] - AUTHORITY_RANK[left.authority] || left.id.localeCompare(right.id),
+      )[0]
+      supersededBy = strongestExisting?.id
+    } else if (stronger.length > 0) {
       for (const previous of stronger) { await this.changeFact(previous, { status: 'superseded', supersededBy: id }); supersedes.push(previous.id) }
     } else if (equal.length > 0) {
       status = 'conflicted'
@@ -198,7 +206,8 @@ export class AgentMemoryService extends Service {
     const row = semanticSchema.parse({
       id, scope, subject, predicate, object, statement, source,
       confidence: input.confidence ?? 0.5, authority, status, validFrom: created,
-      ...(supersedes.length > 0 ? { supersedes } : {}), createdAt: created, updatedAt: created,
+      ...(supersedes.length > 0 ? { supersedes } : {}),
+      ...(supersededBy === undefined ? {} : { supersededBy }), createdAt: created, updatedAt: created,
     })
     await this.put(this.factsTable, id, row)
     this.facts.set(id, immutable({ ...row, source: { ...row.source }, scope: { ...row.scope } }))

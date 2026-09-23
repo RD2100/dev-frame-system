@@ -50,6 +50,14 @@ describe('semantic lifecycle and forgetting', () => {
       expect(duplicate.id).toBe(strong.id)
       expect(weak.id).not.toBe(strong.id)
 
+      const strongestFirst = await h.ctx.agentMemory.upsertFact({ scope: { workspaceId: 'ws-alpha' }, subject: 'API', predicate: 'retry', object: '5', statement: 'API retries 5 times.', source: { type: 'source_code', ref: 'retry.ts' } })
+      const weakerAfter = await h.ctx.agentMemory.upsertFact({ scope: { workspaceId: 'ws-alpha' }, subject: 'API', predicate: 'retry', object: '2', statement: 'API retries 2 times.', source: { type: 'agent_inference', ref: 'guess' } })
+      expect(weakerAfter.status).toBe('superseded')
+      expect(weakerAfter.supersededBy).toBe(strongestFirst.id)
+      const retryContext = await h.ctx.agentMemory.retrieveContext({ query: 'retries 5', scope: { workspaceId: 'ws-alpha' } })
+      expect(retryContext.items.map(item => item.id)).toContain(strongestFirst.id)
+      expect(retryContext.items.map(item => item.id)).not.toContain(weakerAfter.id)
+
       await h.ctx.agentMemory.upsertFact({ scope: { workspaceId: 'ws-alpha', projectId: 'conflict' }, subject: 'mode', predicate: 'default', object: 'a', statement: 'mode defaults to a', source: { type: 'test_result', ref: 'a' } })
       const b = await h.ctx.agentMemory.upsertFact({ scope: { workspaceId: 'ws-alpha', projectId: 'conflict' }, subject: 'mode', predicate: 'default', object: 'b', statement: 'mode defaults to b', source: { type: 'test_result', ref: 'b' } })
       expect(b.status).toBe('conflicted')
