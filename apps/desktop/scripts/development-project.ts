@@ -160,11 +160,11 @@ ${authorizedRoots.map(root => `      - ${root}`).join('\n')}
   config:
     roleToolPolicies:
       controller:
-        inheritedTools: ['pwsh', 'read', 'write', 'edit', 'read_image', 'glob', 'grep', 'todo_write', 'job_kill', 'job_list', 'job_output', 'project_task', 'project_integrate', 'agent_dispatch', 'worktree_create', 'worktree_list', 'worktree_prune', 'worktree_remove', 'worktree_status', 'create_goal', 'get_goal', 'update_goal']
+        inheritedTools: ['agent_dispatch', 'browser_click', 'browser_fill', 'browser_open', 'browser_snapshot', 'browser_tabs', 'delegate_worker', 'expert_team_approve', 'expert_team_list', 'expert_team_run', 'expert_team_status', 'generate_image', 'library_list', 'library_read', 'library_search', 'library_status', 'memory_append', 'memory_read', 'memory_search', 'project_commit', 'project_deliver', 'project_evidence', 'project_integrate', 'project_review', 'project_task', 'subagent_claude_code', 'subagent_codex', 'worker_antigravity', 'worker_cursor']
       lead:
-        inheritedTools: ['read', 'write', 'edit', 'read_image', 'glob', 'grep', 'agent_dispatch', 'project_evidence', 'project_review']
+        inheritedTools: ['agent_dispatch', 'project_evidence', 'project_review']
       worker:
-        inheritedTools: ['pwsh', 'read', 'write', 'edit', 'read_image', 'glob', 'grep', 'project_deliver', 'project_commit']
+        inheritedTools: ['project_deliver', 'project_commit']
     # Lead plugin scopes are pinned during the Stage B provisioning smoke once
     # the task pluginId convention is confirmed (v2 fixes one pluginId).
     leadPluginScopes: {}

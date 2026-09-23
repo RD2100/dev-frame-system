@@ -53,7 +53,7 @@ const context = await ctx.agentMemory.retrieveContext({
 <a id="memory-lifecycle"></a>
 ## 记忆生命周期
 
-语义事实带有来源和权威级别。同一作用域、主体与谓词下，更强来源会替代 active 的弱来源。相同权威的不同结论会把所有竞争事实标记为 `conflicted`；召回会排除冲突、被替代、过期、归档和删除的记录。推断事实默认是 `candidate`，直到更强来源将其晋升。`memory_forget` 会永久删除一条记录。程序注册默认是 `candidate`，`consolidate` 只从重复情节提出候选，不自动晋升。
+语义事实带有来源和权威级别。同一作用域、主体与谓词下，更强来源会替代 active 的弱来源。相同权威的不同结论会把所有竞争事实标记为 `conflicted`；召回会排除冲突、被替代、过期、归档和删除的记录。推断事实默认是 `candidate`；更强来源的事实可用一条 active 记录取代其结论。`memory_forget` 会永久删除一条记录。程序注册默认是 `candidate`，`consolidate` 只从重复情节提出候选，不自动晋升。
 
 每次召回都会写入追踪，记录选中的 ID、分数、注入 ID 与原始查询。作用域比较要求所有给出的作用域部分一致；不同工作区会在服务边界被拒绝。
 
