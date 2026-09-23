@@ -53,7 +53,7 @@ The model-facing tools are `memory_retrieve`, `memory_record_episode`, `memory_u
 <a id="memory-lifecycle"></a>
 ## Memory lifecycle
 
-Semantic facts carry provenance and authority. A stronger source supersedes weaker active facts for the same scoped subject and predicate. Equal-authority disagreement marks all competing facts as `conflicted`; retrieval excludes conflicted, superseded, expired, archived, and deleted rows. `memory_forget` permanently removes one row. Procedure registration defaults to `candidate`, and `consolidate` only proposes candidates from repeated episodes.
+Semantic facts carry provenance and authority. A stronger source supersedes weaker active facts for the same scoped subject and predicate. Equal-authority disagreement marks all competing facts as `conflicted`; retrieval excludes conflicted, superseded, expired, archived, and deleted rows. Inferred facts default to `candidate` until promoted by a stronger source. `memory_forget` permanently removes one row. Procedure registration defaults to `candidate`, and `consolidate` only proposes candidates from repeated episodes.
 
 Every retrieval writes a trace containing selected ids, scores, injected ids, and the originating query. Scope comparison permits a global or project record to be reused only when every supplied scope component agrees; a different workspace is rejected at the service boundary.
 

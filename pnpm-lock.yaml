@@ -4775,6 +4775,9 @@ importers:
       '@deepseek-ai/dsh-experimental-agent-hierarchy':
         specifier: workspace:^
         version: link:../agent-hierarchy
+      '@deepseek-ai/dsh-experimental-agent-team':
+        specifier: workspace:^
+        version: link:../agent-team
       '@deepseek-ai/dsh-experimental-command-goal-binding':
         specifier: workspace:^
         version: link:../command-goal-binding
@@ -4900,6 +4903,40 @@ importers:
       '@deepseek-ai/dsh-subagent':
         specifier: workspace:^
         version: link:../../subagent/subagent
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:^
+        version: link:../../core/tools
+
+  packages/experimental/agent-memory:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:^
+        version: link:../../core/agent
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:^
+        version: link:../../core/llm
+      '@deepseek-ai/dsh-storage':
+        specifier: workspace:^
+        version: link:../../storage/storage
+      '@deepseek-ai/dsh-storage-domain':
+        specifier: workspace:^
+        version: link:../../storage/storage-domain
+      '@deepseek-ai/dsh-storage-json':
+        specifier: workspace:^
+        version: link:../../storage/storage-json
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:^
+        version: link:../../core/system-prompt
       '@deepseek-ai/dsh-tools':
         specifier: workspace:^
         version: link:../../core/tools
@@ -5452,6 +5489,9 @@ importers:
       '@deepseek-ai/dsh-experimental-shadow-router':
         specifier: workspace:^
         version: link:../shadow-router
+      '@deepseek-ai/dsh-experimental-tool-agent-team':
+        specifier: workspace:^
+        version: link:../tool-agent-team
       '@deepseek-ai/dsh-worktree-registry':
         specifier: workspace:^
         version: link:../../workflow/worktree-registry
@@ -5949,6 +5989,9 @@ importers:
       '@deepseek-ai/dsh-workspace':
         specifier: workspace:^
         version: link:../../workspace/workspace
+      '@deepseek-ai/dsh-worktree-registry':
+        specifier: workspace:^
+        version: link:../../workflow/worktree-registry
 
   packages/experimental/shadow-routing:
     devDependencies:
