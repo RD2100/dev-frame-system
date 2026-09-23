@@ -4,6 +4,7 @@
   "include": ["src"],
   "references": [
     { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/schemastery" },
     { "path": "../../core/agent" },
     { "path": "../../llm/llm" },
     { "path": "../../core/tools" },

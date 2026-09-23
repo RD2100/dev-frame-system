@@ -1,6 +1,7 @@
 /** Persistent agent memory service and context assembler. */
 import { randomUUID } from 'node:crypto'
 import { Service, type Context } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
 import type { KvTable, Domain } from '@deepseek-ai/dsh-storage-domain'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
@@ -88,6 +89,11 @@ function renderedProcedure(item: ProceduralMemory): string { return `[procedure 
  */
 export class AgentMemoryService extends Service {
   static inject = ['tools']
+  static Config: z<AgentMemoryConfig> = z.object({
+    workspaceId: z.string().required(),
+    contextBudgetBytes: z.number().default(DEFAULT_CONTEXT_BUDGET_BYTES),
+    autoRetrieve: z.boolean().default(true),
+  })
 
   private readonly config: Required<Pick<AgentMemoryConfig, 'workspaceId' | 'contextBudgetBytes' | 'autoRetrieve'>> & Pick<AgentMemoryConfig, 'defaultScope'>
   private domain?: Domain<typeof agentMemoryDomainSpec>
