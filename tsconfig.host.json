@@ -301,6 +301,7 @@
     { "path": "./packages/jobs/jobs-local" },
     { "path": "./packages/jobs/tool-jobs" },
     { "path": "./packages/experimental/agent-team" },
+    { "path": "./packages/experimental/agent-memory" },
     { "path": "./packages/experimental/project-contracts" },
     { "path": "./packages/experimental/session-identity" },
     { "path": "./packages/experimental/shadow-routing" },

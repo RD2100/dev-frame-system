@@ -88,8 +88,9 @@ describe('context budget and graceful degradation', () => {
     try {
       await h.ctx.agentMemory.recordEpisode({ scope: { workspaceId: 'ws-alpha' }, taskType: 'budget', summary: 'first long memory item' })
       await h.ctx.agentMemory.recordEpisode({ scope: { workspaceId: 'ws-alpha' }, taskType: 'budget', summary: 'second long memory item' })
-      const context = await h.ctx.agentMemory.retrieveContext({ query: 'budget memory', scope: { workspaceId: 'ws-alpha' }, budgetBytes: 35 })
-      expect(Buffer.byteLength(context.items.map(item => item.text).join(''), 'utf8')).toBeLessThanOrEqual(35)
+      const context = await h.ctx.agentMemory.retrieveContext({ query: 'budget memory', scope: { workspaceId: 'ws-alpha' }, budgetBytes: 120 })
+      expect(Buffer.byteLength(context.text, 'utf8')).toBeLessThanOrEqual(120)
+      expect(context.items.length).toBeGreaterThan(0)
       expect(context.truncated).toBe(true)
     } finally {
       await h.dispose()
