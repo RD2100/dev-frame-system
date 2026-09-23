@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/working/desktop-product-delivery.md
-desktop-product-delivery.md: fd6039d112b3af5f7d275dfcdb678f09719e45ba
-desktop-product-delivery.zh.md: 7d15e887f052256b9a1ac4fe61e6ef1169e72568
+desktop-product-delivery.md: 622811d1afbf81e4bdfdd364d30045f2f3191f3c
+desktop-product-delivery.zh.md: 15c8d08a53a970a6fffc59b9b5ac8f70f0b80ad0

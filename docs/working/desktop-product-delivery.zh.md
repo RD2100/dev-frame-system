@@ -57,14 +57,14 @@ description: Desktop 插件接入、专家中心、技能与 MCP、Obsidian 资�
 | ID | 工作包 | 依赖 | 状态 | 负责人 |
 | --- | --- | --- | --- | --- |
 | D0 | 需求、依据、任务与交接文档 | 无 | 文档格式检查通过 | 总控 |
-| D1 | 插件依赖与 Desktop 可安装产物检查、隔离打包路径 | D0 | 开发中 | Luna max / Kierkegaard / 01a0aa94-f848-7891-ab1d-e033c0cb0e23 |
-| D2 | 专家中心交互缺口与可运行召唤流程 | D0 | 开发中 | Luna max / Dewey / 01a0aa94-f920-77a1-bb92-b1c915752a86 |
-| D3 | Obsidian 资料库基础：文件列表、读取、搜索与路径状态 | D0 | 开发中 | Luna max / Pascal / 01a0aa94-fa61-7022-847f-8a441dd750b2 |
-| D4 | 技能/MCP 管理与定时任务的现有能力核对、适配方案 | D0 | 开发中 | Luna max / Archimedes / 01a0aa94-fb9a-7df3-b32b-04f8b0adfc1c |
-| D5 | Desktop 集成、构建、真实加载与升级兼容验收 | D1–D4 | 已验收：官方 0.1.6 headless 装载 + RPC 实测通过 | Luna max / Parfit / 01a0aa96-62e5-75d0-a94b-6f88bcb2ff8b |
-| D6 | 资料库页面与 Memory Remote：目录、预览、搜索、路径和引用 | D3 | 待服务接口 | 待分配 Luna max |
-| D7 | 技能与连接器管理页面、官方服务接入 | D4 | 待复用审计 | 待分配 Luna max |
-| D8 | 定时任务模板、持久化运行记录与重启恢复 | D4 | 待调度能力核对 | 待分配 Luna max |
+| D1 | 插件依赖与 Desktop 可安装产物检查、隔离打包路径 | D0 | 已完成：依赖闭包与打包路径验收 | Luna max / Kierkegaard / 01a0aa94-f848-7891-ab1d-e033c0cb0e23 |
+| D2 | 专家中心交互缺口与可运行召唤流程 | D0 | 已完成：专家中心召唤与审批流程验收 | Luna max / Dewey / 01a0aa94-f920-77a1-bb92-b1c915752a86 |
+| D3 | Obsidian 资料库基础：文件列表、读取、搜索与路径状态 | D0 | 已完成：资料库 Host 服务、工具与页面接线验收 | Luna max / Pascal / 01a0aa94-fa61-7022-847f-8a441dd750b2 |
+| D4 | 技能/MCP 管理与定时任务的现有能力核对、适配方案 | D0 | 已完成：Skill/MCP/定时任务复用审计 | Luna max / Archimedes / 01a0aa94-fb9a-7df3-b32b-04f8b0adfc1c |
+| D5 | Desktop 集成、构建、真实加载与升级兼容验收 | D1–D4 | 已验收：Host 启动、profile/RPC 复核；Electron UI e2e 待验证 | Luna max / Parfit / 01a0aa96-62e5-75d0-a94b-6f88bcb2ff8b |
+| D6 | 资料库页面与 Memory Remote：目录、预览、搜索、路径和引用 | D3 | 已实现：library Remote 与只读页面；Electron UI e2e 待验证 | 待分配 Luna max |
+| D7 | 技能与连接器管理页面、官方服务接入 | D4 | 审计完成；管理页面待实现 | 待分配 Luna max |
+| D8 | 定时任务模板、持久化运行记录与重启恢复 | D4 | 审计完成；持久化定时任务中心待实现 | 待分配 Luna max |
 
 ## 协作与验收 <a id="delivery"></a>
 
@@ -90,8 +90,16 @@ description: Desktop 插件接入、专家中心、技能与 MCP、Obsidian 资�
 - 2026-09-17：D3 接线完成。总控决策：library 按记忆工具既有模式注册为模型工具（与 D6 的 UI Remote 分离，同 expert-team 模式）。新增 `src/library-tools.ts`（`library_status`/`library_list`/`library_read`/`library_search`，绑定 vaultRoot，未配置时 status 诚实报 UNAVAILABLE、其余 MEMORY_UNAVAILABLE fail-closed），plugin.ts 注册。验证：project-memory 全套 100/100（新增 plugin.spec 3 项分派测试：status/list/read/search 端到端、穿越读 MEMORY_PATH_REJECTED、未配置 fail-closed），tsc 0、oxlint 0；中英 README 同步（工具数 3→7）。
 - 2026-09-17：D5 验收通过。staging profile（bundles `[dsh-base, dsh-web-app, dsh-experimental-devframe-profile]`，overlay 注入 packs/workspaceRoot/artifactsDir）经官方 desktop-host `runDesktopHost` 装载，全部行激活，并在桌面传输上应答一次 Remote。开发仓库兼容修复：typert generator 输出记忆化惰性 schema 工厂 + `schema`/`create` 双字段 strict codec（官方 0.1.6 loader 的 `requireStrictCodec` 强制要求 `create`；generator lib 重建、host bundle 全量重生成）；agent-dispatch 在宿主缺少 `TOOL_AGENT_DISPATCH` 时回退仓库 2850 的 prompt section 序位；staging profile patch（部署层）补 `@deepseek-ai/dsh-worktree-registry`——官方 0.1.6 的 bundle 不含该包；开发仓库 web-app bundle 自带，故 devframe-profile 层不得重复该行（重复会让真实 web 服务以 `duplicate loader entry id: worktree-registry` 启动失败，已将该行移至部署层）；cordis-catalog LINK_MAP 补充 gateway 新增签名涉及的 6 个类型并重生成 `api-catalog.ts`。官方旁侧副本实测：`--dump-config` 组合通过；unary RPC `/api/expertTeam/view` 返回完整快照（2 团队 / 15 专家），HTTP 200，帧序列 start/data/end 干净；重启后 manifest 文件不变且响应指纹一致；版本报告 dsh 0.1.6-alpha.1、DevFrame 插件 0.1.2-alpha.4；不含 devframe-profile 的 profile 无任何 DevFrame 行（禁用语义）。生成器套件全绿：schema-emitter 65/65、type-model 43/43（快照刷新）、cordis-catalog 3/3；tool-catalog 期望同步（接线后的 project-controller 暴露 4 个 `project_*` 工具）；DevFrame 域 660 项通过（2 项 loader 超时抖动重跑即绿）；oxlint 0 错误、tsc -b 0。脚本：`.desktop-devframe-staging/verify-load.mts`、`verify-restart.mts`。全仓 `vitest run` 另暴露既有的范围外漂移（docs 子系统 README 索引行、packed-session fixture 迁移、sdk-minimal allowlist），本次交付未触碰。
 - 2026-09-17：D5 跟进（web 可用性）。桌面入口整合为单一「DSH」图标，点击打开 DevFrame web 工作台（`apps/cli web` + devframe-profile patch + 部署 overlay；服务在 `127.0.0.1:3080`）。启动暴露：先前加进 devframe-profile patch 的 worktree-registry 行与开发仓库 web-app bundle 的行重复，导致真实 web 启动失败（`duplicate loader entry id: worktree-registry`）。修复：将该行移至 staging profile patch（部署层——官方 0.1.6 的 bundle 确实缺该包、staging 需要；devframe-profile 层保持干净）。staging 复验全绿（verify-load run13：boot OK、无 pending、RPC 200、2 团队 / 15 专家）；web 服务重启后 `status=running`，界面 HTTP 200 可访问。
-- 2026-09-18：影子入口点击后打开新对话而非影子历史（用户反馈「点击影子后，显示的是一个新对话」）。根因：指定影子会话（session-0e48cb66-32d0-413f-a034-904e8997f6d5）以无 cwd 持久化（存于 `_no-cwd` 目录），工作区作用域表面（Desktop 客户端）把无 cwd 会话渲染为新对话。修复 B（持久化补写）：`session-persistence-jsonl` 新增 `attachSessionCwd(id, cwd)`——受限单向重写（仅 undefined→cwd；拒绝 torn 尾、非空 cwd、未知 id），重写首帧 header 并迁移会话目录，写后重列验证；shadow-agent ensureOnce 在 resume 前检测无 cwd 的指定会话并按配置调用。部署 overlay（`C:\Users\25313\.dsh\profiles\web\devframe-deployment.yml`）现设置 `designatedCwd: 'D:/shadow-trial'`（与会话实际内容一致——修正了此前 `meta.cwd` 取首个授权根的做法，后者会把历史重写到 `D:/dsh-devframe`）。修复 C（fail-closed 兜底）：`ShadowRouterStatus` 增加 `designIssue?: 'designated-session-missing-cwd'`；router 服务暴露 `reportDesignIssue`/`clearDesignIssue`（修复前保持置位）；客户端 presenter 增加 issue 相位，ShadowCard 显示「影子会话缺少工作区 / Shadow session lacks a workspace」并拒绝打开——损坏的指定不会打开任何渲染为新对话的会话。验证：涉及包 403 项测试通过（attach-cwd 4、shadow-agent +3、config-defaults +3、client-ui-shadow-entry 18、session-persistence-jsonl 262），`pnpm run typecheck` 与 `pnpm run lint` 全绿（0 错误）；全量失败归类见 `docs/working/d6-shadow-open-fix-plan.md`。用户侧生效需重启桌面客户端（host 进程），shadow-agent 启动时自动补写 cwd。
+- 2026-09-24：当前源码与定向证据表明 D1–D4 已完成：依赖与打包、专家中心召唤、资料库基础、Skill/MCP/定时任务审计均已有实现或已接受的审计依据；下方已对账表格中陈旧的“开发中”状态。
+- 2026-09-24：已在当前 DevFrame overlay profile 上复核 D5 Host 启动；profile 组合、Host typecheck/lint，以及 Shadow/Agent Teams/Memory 定向检查通过。
+- 2026-09-24：D5 剩余发布门槛是真实 Electron renderer 流程：重建 desktop host，执行“Shadow 对话 → controller 规划 → 看板卡片 → 批准”并保留运行证据；本记录不把它标为通过。
+- 2026-09-24：D6 Host Remote 与只读资料库页面已经实现并挂载；D7 管理页面和 D8 持久化定时任务中心在审计后仍未实现，列为后续范围。
 
 ## Dev Note
 
 本文是本次开发的动态工作记录；结束后归档交接，稳定的使用说明归入对应包文档。此前聊天关于记忆未启用、定时任务已具备和源码标志的概括需要实际配置与运行证据核对，不能作为新实现的事实依据。
+- 2026-09-18：D8 客户端交付——远程（手机配对）已在桌面端可用。移动配对插件原先等待不存在的 webServer，现改为等待 connection，并把远程路由注册到 connection.fetch；运行客户端已验证设置页 Quick Tunnel、二维码与状态接口，用户可从 DSH → 设置 → 远程扫码配对。
+- 2026-09-18：桌面端影子入口已修复。客户端工作区注册、指定会话工作区、无 BOM 的 workspace.json，以及新建会话 cwd 均已对齐；运行验证表明点击影子后进入指定会话、输入框可用，模型供应商余额问题仍属于用户侧配置。
+
+- 2026-09-18：影子侧栏图标位置已修复。footer actions 改为换行布局，已构建的 renderer CSS 同步更新；运行验证表明按钮位于侧栏底部，点击后影子状态为 online，输入框可用。一次启动时曾出现 host request pipe 不可用，需按日志与锁文件排查。
+- 2026-09-18：影子入口打开新对话的问题已修复。无 cwd 的指定会话可由 shadow-agent 按 designatedCwd 单向补写并迁移；失败时 Router 与 UI 显示缺少工作区并拒绝打开。相关 403 项测试、typecheck 与 lint 均通过；用户需重启桌面客户端使 Host 执行补写。
