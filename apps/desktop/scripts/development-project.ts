@@ -160,7 +160,7 @@ ${authorizedRoots.map(root => `      - ${root}`).join('\n')}
   config:
     roleToolPolicies:
       controller:
-        inheritedTools: ['agent_dispatch', 'browser_click', 'browser_fill', 'browser_open', 'browser_snapshot', 'browser_tabs', 'delegate_worker', 'expert_team_approve', 'expert_team_list', 'expert_team_run', 'expert_team_status', 'generate_image', 'library_list', 'library_read', 'library_search', 'library_status', 'memory_append', 'memory_read', 'memory_search', 'project_commit', 'project_deliver', 'project_evidence', 'project_integrate', 'project_review', 'project_task', 'subagent_claude_code', 'subagent_codex', 'worker_antigravity', 'worker_cursor']
+        inheritedTools: ['agent_dispatch', 'browser_click', 'browser_fill', 'browser_open', 'browser_snapshot', 'browser_tabs', 'expert_team_approve', 'expert_team_list', 'expert_team_run', 'expert_team_status', 'generate_image', 'library_list', 'library_read', 'library_search', 'library_status', 'memory_append', 'memory_read', 'memory_search', 'project_commit', 'project_deliver', 'project_evidence', 'project_integrate', 'project_review', 'project_task', 'subagent_claude_code', 'subagent_codex', 'worker_antigravity', 'worker_cursor']
       lead:
         inheritedTools: ['agent_dispatch', 'project_evidence', 'project_review']
       worker:

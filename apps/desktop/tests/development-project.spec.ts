@@ -190,7 +190,7 @@ describe('desktop development project', () => {
       expect(patch).toContain("'project_task'")
       expect(patch).toContain("'project_integrate'")
       expect(patch).toContain("'agent_dispatch'")
-      expect(patch).toContain("'delegate_worker'")
+      expect(patch).not.toContain("'delegate_worker'")
       expect(patch).toContain("'project_evidence'")
       expect(patch).toContain("'project_review'")
       expect(patch).toContain("'project_deliver'")
