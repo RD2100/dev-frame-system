@@ -76,6 +76,11 @@ describe('semantic lifecycle and forgetting', () => {
       expect(await h.ctx.agentMemory.forget(row.id)).toBe(true)
       expect((await h.ctx.agentMemory.retrieveContext({ query: 'temporary fact', scope: { workspaceId: 'ws-alpha' } })).items).toHaveLength(0)
       await expect(h.ctx.agentMemory.recordEpisode({ scope: { workspaceId: 'ws-alpha' }, taskType: 'secret', summary: 'api key = abc' })).rejects.toBeInstanceOf(AgentMemoryError)
+      await expect(h.ctx.agentMemory.recordEpisode({ scope: { workspaceId: 'ws-alpha' }, taskType: 'secret', summary: 'safe', resultSummary: 'access token = abc' })).rejects.toMatchObject({ code: 'MEMORY_CONTENT_REJECTED' })
+      await expect(h.ctx.agentMemory.recordEpisode({ scope: { workspaceId: 'ws-alpha' }, taskType: 'secret', summary: 'safe', artifacts: ['password = abc'] })).rejects.toMatchObject({ code: 'MEMORY_CONTENT_REJECTED' })
+      await expect(h.ctx.agentMemory.recordEpisode({ scope: { workspaceId: 'ws-alpha' }, taskType: 'secret', summary: 'safe', sourceRefs: ['private_key.pem'] })).rejects.toMatchObject({ code: 'MEMORY_CONTENT_REJECTED' })
+      await expect(h.ctx.agentMemory.registerProcedure({ scope: { workspaceId: 'ws-alpha' }, name: 'safe', trigger: ['safe'], steps: ['safe'], sourceRefs: ['api_key.txt'] })).rejects.toMatchObject({ code: 'MEMORY_CONTENT_REJECTED' })
+      await expect(h.ctx.agentMemory.retrieveContext({ query: 'password = abc', scope: { workspaceId: 'ws-alpha' } })).rejects.toMatchObject({ code: 'MEMORY_CONTENT_REJECTED' })
     } finally {
       await h.dispose()
     }

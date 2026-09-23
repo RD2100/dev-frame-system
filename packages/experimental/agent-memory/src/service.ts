@@ -76,8 +76,11 @@ function scoreText(query: string, text: string): number {
 function ensureText(value: string, field: string): string {
   const trimmed = value.trim()
   if (trimmed.length === 0) throw new AgentMemoryError(`${field} must not be empty`, 'MEMORY_INVALID_REQUEST')
-  if (SECRET_PATTERN.test(trimmed)) throw new AgentMemoryError(`${field} looks like a credential and was rejected`, 'MEMORY_CONTENT_REJECTED')
-  return trimmed
+  return rejectCredential(trimmed, field)
+}
+function rejectCredential(value: string, field: string): string {
+  if (SECRET_PATTERN.test(value)) throw new AgentMemoryError(`${field} looks like a credential and was rejected`, 'MEMORY_CONTENT_REJECTED')
+  return value
 }
 function ensureScope(scope: MemoryScope, workspaceId: string): MemoryScope {
   if (scope.workspaceId !== undefined && scope.workspaceId !== workspaceId) {
@@ -176,7 +179,10 @@ export class AgentMemoryService extends Service {
       actions: [...(input.actions ?? [])].map(action => ensureText(action, 'action')),
       decisions: [...(input.decisions ?? [])].map(decision => ensureText(decision, 'decision')),
       errors: [...(input.errors ?? [])].map(error => ensureText(error, 'error')),
-      result: input.result ?? 'unknown', resultSummary: input.resultSummary ?? '', artifacts: [...(input.artifacts ?? [])], sourceRefs: [...(input.sourceRefs ?? [])],
+      result: input.result ?? 'unknown',
+      resultSummary: rejectCredential(input.resultSummary ?? '', 'resultSummary'),
+      artifacts: [...(input.artifacts ?? [])].map(artifact => rejectCredential(artifact, 'artifact')),
+      sourceRefs: [...(input.sourceRefs ?? [])].map(sourceRef => rejectCredential(sourceRef, 'sourceRef')),
       createdAt: created, updatedAt: created, status: 'active', authority: input.authority ?? 'agent_inference',
     })
     await this.put(this.episodesTable, row.id, row)
@@ -245,7 +251,7 @@ export class AgentMemoryService extends Service {
     this.requireAvailable()
     const scope = ensureScope(input.scope, this.config.workspaceId)
     const created = now()
-    const row = procedureSchema.parse({ id: `proc_${randomUUID()}`, name: ensureText(input.name, 'name'), trigger: input.trigger.map(value => ensureText(value, 'trigger')), preconditions: (input.preconditions ?? []).map(value => ensureText(value, 'precondition')), steps: input.steps.map(value => ensureText(value, 'step')), successCriteria: (input.successCriteria ?? []).map(value => ensureText(value, 'successCriteria')), failureConditions: (input.failureConditions ?? []).map(value => ensureText(value, 'failureCondition')), version: 1, status, scope, sourceRefs: [...(input.sourceRefs ?? [])], createdAt: created, updatedAt: created })
+    const row = procedureSchema.parse({ id: `proc_${randomUUID()}`, name: ensureText(input.name, 'name'), trigger: input.trigger.map(value => ensureText(value, 'trigger')), preconditions: (input.preconditions ?? []).map(value => ensureText(value, 'precondition')), steps: input.steps.map(value => ensureText(value, 'step')), successCriteria: (input.successCriteria ?? []).map(value => ensureText(value, 'successCriteria')), failureConditions: (input.failureConditions ?? []).map(value => ensureText(value, 'failureCondition')), version: 1, status, scope, sourceRefs: [...(input.sourceRefs ?? [])].map(sourceRef => rejectCredential(sourceRef, 'sourceRef')), createdAt: created, updatedAt: created })
     await this.put(this.proceduresTable, row.id, row)
     this.procedures.set(row.id, immutable({ ...row, scope: { ...row.scope } }))
     return this.procedures.get(row.id) as ProceduralMemory
@@ -293,7 +299,7 @@ export class AgentMemoryService extends Service {
       items.push({ id: candidate.id, kind: candidate.kind, text: candidate.text, score: candidate.score, reason: candidate.reason })
       used += separatorBytes + lineBytes
     }
-    const trace = traceSchema.parse({ id: `trace_${randomUUID()}`, runId: request.runId ?? randomUUID(), query: request.query, scope, retrieved: candidates.map(item => item.id), injected: items.map(item => item.id), created: [], superseded: [], scores: Object.fromEntries(candidates.map(item => [item.id, item.score])), createdAt: now() })
+    const trace = traceSchema.parse({ id: `trace_${randomUUID()}`, runId: request.runId ?? randomUUID(), query: rejectCredential(request.query, 'query'), scope, retrieved: candidates.map(item => item.id), injected: items.map(item => item.id), created: [], superseded: [], scores: Object.fromEntries(candidates.map(item => [item.id, item.score])), createdAt: now() })
     await this.put(this.tracesTable, trace.id, trace)
     this.traces.set(trace.id, immutable({ ...trace, scope: { ...trace.scope }, scores: { ...trace.scores } }))
     return { items, text: items.length === 0 ? '' : `${contextHeader}${items.map(item => `- ${item.text}`).join('\n')}`, traceId: trace.id, truncated }
