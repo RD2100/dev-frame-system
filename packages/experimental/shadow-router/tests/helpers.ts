@@ -8,6 +8,8 @@
  */
 
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -23,6 +25,8 @@ import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import * as StorageSqlite from '@deepseek-ai/dsh-storage-sqlite'
 import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
+import SubprocessLocal from '@deepseek-ai/dsh-subprocess-local'
+import GitWorktreeRegistry from '@deepseek-ai/dsh-worktree-registry'
 import { MockAdapter } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import ShadowRouter, { shadowRouterDomainSpec } from '../src/index.ts'
@@ -43,6 +47,8 @@ export interface Harness {
   worker: Agent
   /** Create one real directory under the root and return its path. */
   makeProjectDir: (name: string) => Promise<string>
+  /** Create one initialized Git project under the root and return its path. */
+  makeGitProjectDir: (name: string) => Promise<string>
   /** Stop the context but keep the root on disk, so a spec can reopen it. */
   close: () => Promise<void>
   /** Stop the context and delete the temp root. */
@@ -57,7 +63,17 @@ export const HARNESS_BACKENDS: readonly HarnessBackend[] = ['json', 'sqlite']
 export interface HarnessOptions {
   /** Storage backend name; defaults to the suite's json medium. */
   backend?: HarnessBackend
+  /**
+   * Optional composition additions applied BEFORE the router mounts. The
+   * router's init runs the provisioner boot sweep, so surfaces like
+   * `agentDefaultModel` must exist before `ctx.plugin(ShadowRouter)`.
+   */
+  provide?: (ctx: Context) => void
+  /** Mount the real local-git worktree registry for linked-worktree checks. */
+  worktreeRegistry?: boolean
 }
+
+const runGit = promisify(execFile)
 
 /**
  * Boot the real composition over a directory.
@@ -83,7 +99,12 @@ export async function harness(root?: string, routerConfig: ShadowRouterConfig = 
     await ctx.plugin(StorageDomain, { backend })
     await ctx.plugin(JsonlSessionPersistence, { root: join(resolved, 'session-logs') })
     await ctx.plugin(WorkspaceRegistry)
+    if (options.worktreeRegistry === true) {
+      await ctx.plugin(SubprocessLocal)
+      await ctx.plugin(GitWorktreeRegistry)
+    }
     await ctx.plugin(AgentBindingRegistry)
+    options.provide?.(ctx)
     await ctx.plugin(ShadowRouter, routerConfig)
     ctx.llm.registerAdapter(['mock'], new MockAdapter([]))
     shadow = ctx.agentLoop.create(SessionId('session-shadow'), { provider: 'mock', model: 'mock' })
@@ -104,6 +125,15 @@ export async function harness(root?: string, routerConfig: ShadowRouterConfig = 
     async makeProjectDir(name: string) {
       const dir = join(resolved, name)
       await mkdir(dir, { recursive: true })
+      return dir
+    },
+    async makeGitProjectDir(name: string) {
+      const dir = join(resolved, name)
+      await mkdir(dir, { recursive: true })
+      await runGit('git', ['init', '-b', 'main', dir])
+      await runGit('git', ['-C', dir, 'config', 'user.email', 'shadow-router@test.local'])
+      await runGit('git', ['-C', dir, 'config', 'user.name', 'Shadow Router Tests'])
+      await runGit('git', ['-C', dir, 'commit', '--allow-empty', '-m', 'init'])
       return dir
     },
     async close() {

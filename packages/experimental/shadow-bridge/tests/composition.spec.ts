@@ -59,7 +59,11 @@ interface Boot {
  *   must fail the boot.
  * @returns the booted context, its scripted adapter, and the disposer.
  */
-async function boot(root: string, bridgeConfig: Record<string, unknown> = { intervalMs: 5, followupMaxChars: 4000 }): Promise<Boot> {
+async function boot(
+  root: string,
+  bridgeConfig: Record<string, unknown> = { intervalMs: 5, followupMaxChars: 4000 },
+  model?: { provider: string; model: string },
+): Promise<Boot> {
   const ctx = new Context()
   let closed = false
   const close = async (): Promise<void> => {
@@ -69,6 +73,11 @@ async function boot(root: string, bridgeConfig: Record<string, unknown> = { inte
   }
   const adapter = new MockAdapter(Array.from({ length: MOCK_RESPONSES }, () => () => textResponse('ack')))
   try {
+    // The router's init runs the provisioner boot sweep, so the default model
+    // must exist before the Loader mounts the composition rows.
+    if (model !== undefined) {
+      ctx.provide('agentDefaultModel', { currentSelection: () => model } as never)
+    }
     const modules = new Map<string, unknown>([
       ['@deepseek-ai/dsh-llm', LlmRuntime],
       ['@deepseek-ai/dsh-session', SessionStore],
@@ -344,6 +353,46 @@ describe('the shadow delivery bridge through a real Loader composition', () => {
       })
       expect(texts[0]).toContain(`[Shadow delivery msg-send-open-auth-1 for workspace ${opened.workspaceId}]`)
       expect(texts[0]).toContain('Verify the open path authorizes the run.')
+    } finally {
+      for (const instance of boots.reverse()) await instance.close()
+      await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 25 })
+    }
+  })
+
+  it('boot sweep provisions the controller after a restart so the delivery forwards', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-bridge-sweep-'))
+    const boots: Boot[] = []
+    try {
+      const projectDir = join(root, 'project-sweep')
+      await mkdir(projectDir)
+      // First process: a host open provisions the controller session and
+      // materializes it; no agent is live in this process.
+      const first = await boot(root)
+      boots.push(first)
+      await createShadow(first.ctx)
+      const opened = await first.ctx.shadowRouter.openProjectForHost({ path: projectDir, requestId: 'sweep-open-1' })
+      expect(opened.state).toBe('ready')
+      await first.close()
+
+      // Restart with the default model: the provisioner boot sweep resumes the
+      // ready binding's controller (no manual agents.resume), so a host send
+      // forwards into the live controller and lands in its session log.
+      const second = await boot(root, { intervalMs: 5, followupMaxChars: 4000 }, { provider: 'mock', model: 'mock' })
+      boots.push(second)
+      await createShadow(second.ctx)
+      const send = await second.ctx.shadowRouter.sendToProjectForHost({
+        workspaceId: opened.workspaceId,
+        text: 'Verify the sweep provisions the controller.',
+        requestId: 'sweep-send-1',
+      })
+      expect(send).toMatchObject({ messageId: 'msg-sweep-send-1', status: 'received' })
+      const texts = await vi.waitFor(() => {
+        const rows = userMessageTexts(second.ctx, opened.controllerSessionId)
+        expect(rows).toHaveLength(1)
+        return rows
+      })
+      expect(texts[0]).toContain('[Shadow delivery msg-sweep-send-1')
+      expect(texts[0]).toContain('Verify the sweep provisions the controller.')
     } finally {
       for (const instance of boots.reverse()) await instance.close()
       await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 25 })

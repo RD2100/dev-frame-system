@@ -4,7 +4,9 @@
  * riding the designated Shadow's authority — never bypassing validation.
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { Context } from '@deepseek-ai/cordis'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -173,6 +175,128 @@ describe('shadow-router host write bridges', () => {
       })
       expect(again.bindingRevision).toBe(2)
       expect(h.router.listDeliveries(first.workspaceId)).toHaveLength(0)
+    } finally {
+      await h.dispose()
+    }
+  })
+})
+
+/**
+ * The host-side provisioner: a cold restore brings every ready controller
+ * session live so the bridge's forwarding gate can resolve it. Resume goes
+ * through `prepare`, while a fresh in-process open creates the live agent in
+ * its factory setup. These specs run the real agent loop; a resumed controller emits
+ * `agent/created` exactly once per live incarnation.
+ */
+describe('shadow-router host-side controller provisioner', () => {
+  const withDefaultModel = { provide: (ctx: Context) => ctx.provide(
+    'agentDefaultModel',
+    { currentSelection: () => ({ provider: 'mock', model: 'mock' }) } as never,
+  ) }
+
+  it('resumes every ready controller on the boot sweep after a cold restore', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-provisioner-'))
+    let h = await harness(root, { authorizedRoots: [root], shadowSessionId: 'session-shadow' }, withDefaultModel)
+    try {
+      const dir = await h.makeProjectDir('provisioned-project')
+      const opened = await h.router.openProjectForHost({ path: dir, requestId: 'provision-1' })
+      expect(opened.state).toBe('ready')
+      // First process: the host factory creates the controller agent before
+      // the open returns, so the fresh binding is immediately live.
+      expect(h.ctx.agents.get(opened.controllerSessionId)).toBeDefined()
+    } finally {
+      await h.close()
+    }
+    // Second process over the same root: the boot sweep resumes the restored
+    // ready binding's controller from the durable log.
+    h = await harness(root, { authorizedRoots: [root], shadowSessionId: 'session-shadow' }, withDefaultModel)
+    try {
+      const row = h.router.readStatus().bindings[0]
+      expect(row?.state).toBe('ready')
+      const binding = h.router.findBinding(row!.workspaceId)
+      await vi.waitFor(() => {
+        expect(h.ctx.agents.get(binding!.controllerSessionId)).toBeDefined()
+      })
+    } finally {
+      await h.dispose()
+    }
+  })
+
+  it('leaves an already-live controller untouched on a host open after restore', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-provisioner-repeat-'))
+    let h = await harness(root, { authorizedRoots: [root], shadowSessionId: 'session-shadow' }, withDefaultModel)
+    let controllerSessionId: SessionId
+    let dir: string
+    try {
+      dir = await h.makeProjectDir('repeat-project')
+      const first = await h.router.openProjectForHost({ path: dir, requestId: 'provision-repeat-1' })
+      controllerSessionId = first.controllerSessionId
+    } finally {
+      await h.close()
+    }
+    h = await harness(root, { authorizedRoots: [root], shadowSessionId: 'session-shadow' }, withDefaultModel)
+    try {
+      const controller = h.ctx.agents.get(controllerSessionId)
+      expect(controller).toBeDefined()
+      let created = 0
+      const off = h.ctx.on('agent/created', () => { created += 1 })
+      try {
+        // Replay and a fresh open both land on the same live incarnation; the
+        // sweep already resumed it, so neither open re-resumes.
+        await h.router.openProjectForHost({ path: dir, requestId: 'provision-repeat-1' })
+        await h.router.openProjectForHost({ path: dir, requestId: 'provision-repeat-2' })
+        expect(created).toBe(0)
+        expect(h.ctx.agents.get(controllerSessionId)).toBe(controller)
+      } finally {
+        off()
+      }
+    } finally {
+      await h.dispose()
+    }
+  })
+
+  it('binds a fresh controller to a registered linked worktree before ready', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-provisioner-worktree-'))
+    const h = await harness(root, { authorizedRoots: [root], shadowSessionId: 'session-shadow' }, {
+      provide: withDefaultModel.provide,
+      worktreeRegistry: true,
+    })
+    try {
+      const dir = await h.makeGitProjectDir('linked-project')
+      const opened = await h.router.openProjectForHost({ path: dir, requestId: 'provision-worktree-1' })
+      const controller = h.ctx.agents.get(opened.controllerSessionId)
+      const binding = h.ctx.agentBindings.find(opened.controllerSessionId)
+      const rows = h.ctx.worktreeRegistry.list(opened.workspaceId)
+      expect(controller).toBeDefined()
+      expect(rows).toHaveLength(1)
+      expect(binding).toMatchObject({
+        role: 'controller',
+        worktreeId: rows[0]?.id,
+        worktreePath: rows[0]?.path,
+        branch: rows[0]?.branch,
+      })
+      expect(rows[0]?.lockedBy).toBe(opened.controllerSessionId)
+      expect(controller?.session.header.cwd).toBe(rows[0]?.path)
+    } finally {
+      await h.dispose()
+    }
+  })
+
+  it('keeps the open usable when the composition declares no default model', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-shadow-router-provisioner-nomodel-'))
+    const h = await harness(root, { authorizedRoots: [root], shadowSessionId: 'session-shadow' })
+    try {
+      // No agentDefaultModel provided: the provisioner logs loud and skips; the
+      // open itself and the recorded run still land, and the delivery channel
+      // stays usable for a later provisioner.
+      const dir = await h.makeProjectDir('nomodel-project')
+      const opened = await h.router.openProjectForHost({ path: dir, requestId: 'provision-nomodel-1' })
+      expect(opened.state).toBe('ready')
+      expect(h.ctx.agents.get(opened.controllerSessionId)).toBeUndefined()
+      const sent = await h.router.sendToProjectForHost({
+        workspaceId: opened.workspaceId, text: 'work while offline', requestId: 'provision-nomodel-send',
+      })
+      expect(sent.status).toBe('received')
     } finally {
       await h.dispose()
     }

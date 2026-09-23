@@ -35,6 +35,7 @@ import { FileRequiredChecksConfigStore } from '@deepseek-ai/dsh-experimental-dev
 import { createCommittedWorktree, drainWorktreeFixtures, executionFor } from '../../devframe/tests/completion-fixtures.ts'
 import * as commandGoalBinding from '../src/index.ts'
 import { GoalBindingComposition } from '../src/composition.ts'
+import { devFrameStateOf } from '../src/host-evidence.ts'
 import { renderCompletionSuccess, renderFinalMergeIncomplete } from '../src/command.ts'
 const execFileAsync = promisify(execFile)
 
@@ -297,6 +298,28 @@ async function tamperWorktree(root: string): Promise<void> {
 }
 
 describe('/goal-complete host command composition', { timeout: 30_000 }, () => {
+  it('provisions a Shadow controller through the host Goal seam', async () => {
+    const fixture = await createCommittedWorktree()
+    const test = await boot({ workspaceId: WORKSPACE_ID, workspaceRoot: fixture.root })
+
+    await test.composition.provisionShadowGoal({
+      agent: test.agent,
+      workspaceId: String(WORKSPACE_ID),
+      worktreePath: fixture.root,
+      objective: 'Shadow project host seam',
+    })
+
+    const state = devFrameStateOf(test.ctx, test.session)
+    const binding = state.bindings.at(-1)
+    expect(binding).toMatchObject({
+      lifecycle: 'admission_open',
+      workspaceId: WORKSPACE_ID,
+      controllerSessionId: test.session.id,
+      taskIds: [TaskId('devframe-goal')],
+    })
+    expect(test.ctx.goals.get(test.agent)?.phase).toBe('active')
+  })
+
   it('completes the current goal through real dispatch and records the receipt', async () => {
     const fixture = await createCommittedWorktree()
     const test = await boot({ workspaceId: WORKSPACE_ID, workspaceRoot: fixture.root })

@@ -123,7 +123,7 @@ export function createHostGoalBinding(
   resolved: ResolvedCommandGoalBindingConfig,
   requiredChecks: RequiredChecksConfigStore,
 ): GoalBindingComposition {
-  return new GoalBindingComposition(ctx, resolved, {
+  const composition = new GoalBindingComposition(ctx, resolved, {
     requiredChecks,
     goalCompletionIntegrations: controllerSessionId =>
       ctx.get('projectController')?.integrationReceipts(controllerSessionId) ?? [],
@@ -134,4 +134,16 @@ export function createHostGoalBinding(
     },
     stop: resolveHostStopAdapters(ctx, resolved),
   })
+  // Shadow-router consumes this host-owned seam when it provisions a linked
+  // project controller. Keep the Goal journal and authorization capability in
+  // this composition; routing only supplies the live agent and workspace facts.
+  ctx.provide('shadowGoalProvisioner', {
+    provision: (request: {
+      readonly agent: import('@deepseek-ai/dsh-agent').Agent
+      readonly workspaceId: string
+      readonly worktreePath: string
+      readonly objective: string
+    }) => composition.provisionShadowGoal(request),
+  })
+  return composition
 }

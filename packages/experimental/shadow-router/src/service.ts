@@ -22,16 +22,20 @@
 
 import { createHash, randomUUID } from 'node:crypto'
 import { realpath, stat } from 'node:fs/promises'
-import { isAbsolute, sep } from 'node:path'
+import { dirname, isAbsolute, join, sep } from 'node:path'
 import z from '@deepseek-ai/schemastery'
 import { Service, type Context } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import { GoalId } from '@deepseek-ai/dsh-goal'
 import { SessionId, type Session } from '@deepseek-ai/dsh-session'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 // Loads the session-identity Context augmentation so `ctx.agentBindings` types the controller-role bind.
 import type {} from '@deepseek-ai/dsh-experimental-session-identity'
+import { WorktreeLockHolder } from '@deepseek-ai/dsh-worktree-registry'
+import type { Worktree, WorktreeRegistry } from '@deepseek-ai/dsh-worktree-registry'
+import type {} from '@deepseek-ai/dsh-worktree-registry'
 // Loads the shadow-routing Context augmentation (the `ctx.shadowRouter` key and the
 // `shadow/delivery-received` event) and supplies the implemented contract.
 import { AcceptanceHash, ShadowMessageId, ShadowRequestId, ShadowRouter as ShadowRouterContract, ShadowRouterError } from '@deepseek-ai/dsh-experimental-shadow-routing'
@@ -161,6 +165,10 @@ export class ShadowRouter extends ShadowRouterContract {
   private authorizedRoots: readonly string[] = []
   /** Session ids of host-designated Shadow sessions, mapped to their tool disposer. */
   private readonly shadowAgents = new Map<SessionId, () => void>()
+  /** Worktree rows reserved for controller sessions before their first bind. */
+  private readonly controllerWorktrees = new Map<SessionId, Worktree>()
+  /** Handles for fresh controller agents; the owning Cordis fiber disposes them. */
+  private readonly controllerHandles = new Map<SessionId, AgentHandle>()
   /**
    * Host-reported designation problem, cleared by a successful repair or a
    * re-read after the designated session became cwd-bearing. Read surfaces
@@ -225,7 +233,21 @@ export class ShadowRouter extends ShadowRouterContract {
       .sort(([, left], [, right]) => left.createdAt.localeCompare(right.createdAt) || left.requestId.localeCompare(right.requestId))) {
       this.requests.set(id, Object.freeze({ ...record }))
     }
+    this.ctx.logger.info(`shadow: router boot bindings=${this.bindings.size} deliveries=${this.deliveries.size} requests=${this.requests.size}`)
     await this.reconcileProvisioningOnRestore()
+    // Host-side provisioner boot sweep: every ready binding that carries an
+    // authorized open run gets its controller session brought live, so the
+    // bridge's forwarding gate can resolve it after a restart. The v1 bridge
+    // never creates or resumes agents (README); this is the adopted host duty.
+    // A resume failure is logged and leaves the binding's deliveries `received`
+    // for a later unit — the sweep never fails the router boot.
+    for (const record of this.bindings.values()) {
+      this.ctx.logger.info(`shadow: provisioner sweep sees ${record.workspaceId} state=${record.state} goal=${record.activeGoalId ?? 'none'}`)
+      if (record.state === 'ready' && record.activeGoalId !== undefined) {
+        const agent = await this.ensureControllerLive(record)
+        if (agent !== undefined) await this.ensureControllerGoal(record, agent)
+      }
+    }
     this.ctx.effect(() => this.ctx.on('agent/disposed', ({ agent }) => {
       const dispose = this.shadowAgents.get(agent.id)
       if (dispose !== undefined) {
@@ -284,8 +306,9 @@ export class ShadowRouter extends ShadowRouterContract {
       if (record.state !== 'reserving' && record.state !== 'provisioning') continue
       const session = this.ctx.sessions.get(record.controllerSessionId)
       if (session === undefined) continue
-      if (session.header.cwd === undefined || !samePath(session.header.cwd, record.canonicalPath)) {
-        await this.markNeedsAttention(record, `controller session "${record.controllerSessionId}" cwd does not match the binding's canonical root`)
+      const expectedPath = this.controllerWorktreePath(record) ?? record.canonicalPath
+      if (session.header.cwd === undefined || !samePath(session.header.cwd, expectedPath)) {
+        await this.markNeedsAttention(record, `controller session "${record.controllerSessionId}" cwd does not match the binding's worktree`)
         continue
       }
       await this.completeProvisioning(record)
@@ -672,8 +695,117 @@ export class ShadowRouter extends ShadowRouterContract {
     // request, or a later host `setActiveGoal` never re-mints one here, so the
     // durable revision may sit one past the receipt's. The hash pads the
     // `open-<revision>` shape past the declared 8-char acceptance floor.
-    if (opened.state === 'ready') await this.establishHostOpenRun(WorkspaceId(opened.workspaceId), opened.bindingRevision)
+    if (opened.state === 'ready') {
+      await this.establishHostOpenRun(WorkspaceId(opened.workspaceId), opened.bindingRevision)
+      // Host-side provisioner: the v1 bridge forwards into live controllers
+      // only and never creates or resumes one (README), so this bridge adopts
+      // the host duty of bringing the provisioned controller session live.
+      // Best effort by design: a resume failure is logged and leaves any
+      // `received` delivery for a later unit; the open itself already landed.
+      const binding = this.findBinding(WorkspaceId(opened.workspaceId))
+      if (binding !== undefined) {
+        const agent = await this.ensureControllerLive(binding)
+        if (agent !== undefined) await this.ensureControllerGoal(binding, agent)
+      }
+    }
     return opened
+  }
+
+  /**
+   * Bring one ready binding's controller session live in the agent registry so
+   * the bridge's forwarding gate can resolve it. Runs at most once per session:
+   * an already-live controller is left untouched, and a binding without an
+   * authorized open run has nothing to deliver against yet. The deployment's
+   * default model selection applies (the same entry point fresh Shadow sessions
+   * use); a composition without one logs loud and leaves the controller
+   * offline. A resume failure never fails the open — the delivery stays
+   * `received` and a later unit (or a repeated open) retries it.
+   * @param record - The ready controller binding to provision.
+   */
+  private async ensureControllerLive(record: ShadowBindingRecord): Promise<Agent | undefined> {
+    const id = record.controllerSessionId
+    this.ctx.logger.info(`shadow: provisioner check ${id} liveAgent=${this.ctx.agents.get(id) !== undefined} liveSession=${this.ctx.sessions.get(id) !== undefined} defaultModel=${this.ctx.get('agentDefaultModel') !== undefined}`)
+    const live = this.ctx.agents.get(id)
+    if (live !== undefined) return live
+    // A live session with no agent behind it cannot gain one in this process:
+    // both create and resume go through `prepare`, which refuses live sessions.
+    // The open that provisioned it runs in the same process, so the live case
+    // is the normal first-run shape — the next host restart's boot sweep
+    // provisions it from the durable log. The cold-restore case (no live
+    // session) resumes right here.
+    if (this.ctx.sessions.get(id) !== undefined) return undefined
+    // The shadow-router package does not depend on the agent-default-model
+    // service type, so the service value is declared structurally here; the
+    // selection shape matches what fresh Shadow sessions use (shadow-agent).
+    const defaultModel = this.ctx.get('agentDefaultModel') as
+      | {
+        readonly currentSelection: () => {
+          readonly provider: string
+          readonly model: string
+          readonly reasoningEffort?: ReasoningEffortId
+        }
+      }
+      | undefined
+    if (defaultModel === undefined) {
+      this.ctx.logger.warn(`shadow: no default model; controller "${id}" stays offline`)
+      return
+    }
+    try {
+      const resumePromise = this.ctx.agents.resume({
+        resumeSessionId: id,
+        agentOptions: defaultModel.currentSelection(),
+      })
+      const timeout = new Promise<never>((_, reject) => {
+        const timer = setTimeout(() => reject(new Error('resume timed out after 20s')), 20000)
+        resumePromise.finally(() => clearTimeout(timer))
+      })
+      await Promise.race([resumePromise, timeout])
+      this.ctx.logger.info(`shadow: controller "${id}" is live for workspace "${record.workspaceId}"`)
+      return this.ctx.agents.get(id)
+    } catch (error: unknown) {
+      this.ctx.logger.warn(`shadow: controller "${id}" could not be resumed: ${error instanceof Error ? error.message : String(error)}`)
+      return undefined
+    }
+  }
+
+  /**
+   * Restore the current Goal admission for a live controller when the host
+   * exposes the optional project provisioner. The router keeps this seam
+   * structural so the routing package does not own DevFrame's Goal journal.
+   * @param record - The ready Shadow binding selecting the project workspace.
+   * @param agent - The exact live controller Agent.
+   */
+  private async ensureControllerGoal(record: ShadowBindingRecord, agent: Agent): Promise<void> {
+    const provisioner = this.ctx.get('shadowGoalProvisioner') as
+      | { provision(request: { agent: Agent; workspaceId: string; worktreePath: string; objective: string }): Promise<void> }
+      | undefined
+    if (provisioner === undefined) return
+    const worktreePath = this.controllerWorktreePath(record)
+    if (worktreePath === undefined) {
+      this.ctx.logger.warn(`shadow: controller "${record.controllerSessionId}" has no registered worktree; Goal admission is deferred`)
+      return
+    }
+    let provisioned = false
+    await provisioner.provision({
+      agent,
+      workspaceId: String(record.workspaceId),
+      worktreePath,
+      objective: `Shadow project ${record.canonicalPath}`,
+    }).then(() => { provisioned = true }).catch((error: unknown) => {
+      this.ctx.logger.warn(`shadow: controller "${record.controllerSessionId}" Goal admission failed: ${error instanceof Error ? error.message : String(error)}`)
+    })
+    if (!provisioned) return
+    const projectController = this.ctx.get('projectController') as
+      | { readonly lifecycle?: string; startProject?: () => unknown }
+      | undefined
+    if (projectController?.lifecycle === 'stopped') projectController.startProject?.()
+  }
+
+  /** Resolve the controller worktree path from the durable role or reservation. */
+  private controllerWorktreePath(record: ShadowBindingRecord): string | undefined {
+    const bound = this.ctx.agentBindings.find(record.controllerSessionId)
+    if (bound?.worktreePath !== undefined) return bound.worktreePath
+    return this.controllerWorktrees.get(record.controllerSessionId)?.path
   }
 
   /**
@@ -1071,10 +1203,11 @@ export class ShadowRouter extends ShadowRouterContract {
   private async reconcileReserved(record: ShadowBindingRecord): Promise<ShadowBindingRecord> {
     const session = this.ctx.sessions.get(record.controllerSessionId)
     if (session !== undefined) {
-      if (session.header.cwd === undefined || !samePath(session.header.cwd, record.canonicalPath)) {
+      const expectedPath = this.controllerWorktreePath(record) ?? record.canonicalPath
+      if (session.header.cwd === undefined || !samePath(session.header.cwd, expectedPath)) {
         return await this.markNeedsAttention(
           record,
-          `controller session "${record.controllerSessionId}" cwd does not match the binding's canonical root`,
+          `controller session "${record.controllerSessionId}" cwd does not match the binding's worktree`,
         )
       }
       return await this.completeProvisioning(record)
@@ -1125,10 +1258,54 @@ export class ShadowRouter extends ShadowRouterContract {
    */
   private async createControllerSession(record: ShadowBindingRecord): Promise<Session> {
     await this.persistBinding({ ...record, state: 'provisioning', updatedAt: new Date().toISOString() })
+    const worktree = await this.ensureControllerWorktree(record)
+    const cwd = worktree?.path ?? record.canonicalPath
+    const defaultModel = this.ctx.get('agentDefaultModel') as
+      | {
+        readonly currentSelection: () => {
+          readonly provider: string
+          readonly model: string
+          readonly reasoningEffort?: ReasoningEffortId
+        }
+      }
+      | undefined
     try {
-      return this.ctx.sessions.create(record.controllerSessionId, {
-        meta: { cwd: record.canonicalPath, agentPreset: this.config.controllerProfile },
-      })
+      let session: Session
+      if (defaultModel !== undefined) {
+        // Fresh controller identities have no persisted Session to resume yet.
+        // Create the agent through the factory so the setup transaction can
+        // bind the worktree before `agent/created` installs role tools.
+        const handle = await this.ctx.agents.create({
+          sessionId: record.controllerSessionId,
+          meta: { cwd, agentPreset: this.config.controllerProfile },
+          agentOptions: defaultModel.currentSelection(),
+          setup: async (agentCtx) => {
+            const agent = agentCtx.agent
+            if (agent === undefined) throw new Error('controller factory setup did not expose an Agent')
+            await this.ctx.agentBindings.bindPreparedSession(agent.session, {
+              role: 'controller',
+              ...(worktree === undefined ? {} : { worktree: {
+                worktreeId: worktree.id,
+                worktreePath: worktree.path,
+                branch: worktree.branch,
+              } }),
+            })
+          },
+        })
+        this.controllerHandles.set(record.controllerSessionId, handle)
+        session = handle.agent.session
+      } else {
+        session = this.ctx.sessions.create(record.controllerSessionId, {
+          meta: { cwd, agentPreset: this.config.controllerProfile },
+        })
+      }
+      // A provisioned controller session must survive the process: the backend
+      // materializes lazily (an append flushes the file), so a fresh controller
+      // with no agent behind it would otherwise never reach disk and a restart
+      // could not resume it. Flush the header-only artifact right away.
+      const persistence = this.ctx.get('sessionPersistence')
+      if (persistence !== undefined) await persistence.ensureMaterialized(session)
+      return session
     } catch (error: unknown) {
       await this.markFailed(record, `the session store rejected the controller creation: ${String(error)}`)
       throw new ShadowRouterError(
@@ -1139,10 +1316,84 @@ export class ShadowRouter extends ShadowRouterContract {
     }
   }
 
+  /**
+   * Create or recover the linked worktree that owns a controller's writes.
+   * A deployment without the optional worktree provider keeps the legacy root
+   * session path so plain directory projects remain openable; when the provider
+   * is present, a failed Git create is visible and leaves Goal admission closed.
+   * @param record - The reserved Shadow binding selecting the workspace.
+   * @returns The registered and locked worktree, or `undefined` when the host
+   *   has no worktree provider or the project is not a Git repository.
+   */
+  private async ensureControllerWorktree(record: ShadowBindingRecord): Promise<Worktree | undefined> {
+    const existing = this.controllerWorktrees.get(record.controllerSessionId)
+    if (existing !== undefined) return existing
+    const registry = this.ctx.get('worktreeRegistry') as WorktreeRegistry | undefined
+    if (registry === undefined) return undefined
+    try {
+      const bound = this.ctx.agentBindings.find(record.controllerSessionId)
+      const rows = registry.list(record.workspaceId)
+      if (bound?.worktreeId !== undefined) {
+        const restored = rows.find(row => row.id === bound.worktreeId)
+        if (restored !== undefined) {
+          const holder = WorktreeLockHolder(String(record.controllerSessionId))
+          const locked = restored.lockedBy === undefined
+            ? await registry.bind(restored.id, holder)
+            : restored
+          if (locked.lockedBy !== undefined && locked.lockedBy !== holder) {
+            throw new Error(`registered worktree "${locked.id}" is locked by another controller`)
+          }
+          this.controllerWorktrees.set(record.controllerSessionId, locked)
+          return locked
+        }
+      }
+      const path = join(dirname(record.canonicalPath), `.dsh-shadow-controller-${String(record.workspaceId)}`)
+      const found = rows.find(row => samePath(row.path, path))
+      if (found !== undefined) {
+        const holder = WorktreeLockHolder(String(record.controllerSessionId))
+        const locked = found.lockedBy === undefined
+          ? await registry.bind(found.id, holder)
+          : found
+        if (locked.lockedBy !== undefined && locked.lockedBy !== holder) {
+          throw new Error(`registered worktree "${locked.id}" is locked by another controller`)
+        }
+        this.controllerWorktrees.set(record.controllerSessionId, locked)
+        return locked
+      }
+      const created = await registry.create({
+        workspaceId: record.workspaceId,
+        path,
+        branch: `shadow-controller-${String(record.workspaceId)}`,
+      })
+      const locked = await registry.bind(created.id, WorktreeLockHolder(String(record.controllerSessionId)))
+      this.controllerWorktrees.set(record.controllerSessionId, locked)
+      return locked
+    } catch (error: unknown) {
+      this.ctx.logger.warn(`shadow: controller worktree for "${record.workspaceId}" unavailable: ${error instanceof Error ? error.message : String(error)}`)
+      return undefined
+    }
+  }
+
   /** Finish provisioning: persist the controller role and only then `ready`. */
   private async completeProvisioning(record: ShadowBindingRecord): Promise<ShadowBindingRecord> {
     try {
-      await this.ctx.agentBindings.bind({ agentId: record.controllerSessionId, role: 'controller' })
+      const worktree = this.controllerWorktrees.get(record.controllerSessionId)
+        ?? await this.ensureControllerWorktree(record)
+      if (worktree === undefined && this.ctx.get('worktreeRegistry') !== undefined) {
+        return await this.markNeedsAttention(
+          record,
+          `the controller worktree for "${record.controllerSessionId}" could not be registered`,
+        )
+      }
+      await this.ctx.agentBindings.bind({
+        agentId: record.controllerSessionId,
+        role: 'controller',
+        ...(worktree === undefined ? {} : { worktree: {
+          worktreeId: worktree.id,
+          worktreePath: worktree.path,
+          branch: worktree.branch,
+        } }),
+      })
     } catch (error: unknown) {
       return await this.markNeedsAttention(
         record,

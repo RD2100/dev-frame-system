@@ -18,7 +18,7 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type { GoalId } from '@deepseek-ai/dsh-goal/types'
 import { AgentEvidenceJournal } from '@deepseek-ai/dsh-experimental-agent-evidence'
-import { ControllerSessionId, GoalBindingController, GoalServicePort, MemoryGoalBindingStore, createHumanAuthorization } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
+import { ControllerSessionId, GoalBindingController, GoalServicePort, MemoryGoalBindingStore, TaskId, createHumanAuthorization } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
 import type {
   CompleteGoalRequest,
   CompletionAdmissionVerdict,
@@ -29,7 +29,6 @@ import type {
   GoalBindingStore,
   GoalBudgetInput,
   GoalResultBinding,
-  TaskId,
 } from '@deepseek-ai/dsh-experimental-devframe/controller/goal-binding'
 import { selectGoalCompletionEvidence } from '@deepseek-ai/dsh-experimental-project-controller'
 import type { MainTreeIntegrationRecord } from '@deepseek-ai/dsh-experimental-project-controller'
@@ -214,6 +213,8 @@ export class GoalBindingComposition extends Service {
   readonly evidenceJournal: AgentEvidenceJournal
 
   private readonly controllers = new Map<string, GoalBindingController>()
+  /** Host-provisioned project bindings keyed by controller and workspace. */
+  private readonly provisionedControllers = new Map<string, GoalBindingController>()
   /** Host-supplied durable integration rows for the final-merge completion gate. */
   private readonly goalCompletionIntegrations: (controllerSessionId: Session['id']) => readonly MainTreeIntegrationRecord[]
   private readonly goalCompletionGuard: NonNullable<GoalBindingCompositionStores['goalCompletionGuard']>
@@ -332,6 +333,53 @@ export class GoalBindingComposition extends Service {
       budget: request.budget,
       ...(request.maxGoalRounds === undefined ? {} : { maxGoalRounds: request.maxGoalRounds }),
       authorization: createHumanAuthorization(request.confirmationId),
+    })
+  }
+
+  /**
+   * Provision the minimum durable DevFrame admission needed by a Shadow
+   * project controller. This is a host-owned seam: it computes the source
+   * fingerprint and approved-check digest, starts the native Goal through the
+   * same GoalBindingController used by `/devframe-start`, and lands role,
+   * binding, and verification evidence on the controller Session. Repeated
+   * opens reuse an existing open projection and perform no second native Goal
+   * create. The request is never model supplied.
+   * @param request - Live controller, workspace identity, linked worktree, and
+   *   host-selected objective.
+   */
+  async provisionShadowGoal(request: {
+    readonly agent: Agent
+    readonly workspaceId: string
+    readonly worktreePath: string
+    readonly objective: string
+  }): Promise<void> {
+    const workspaceId = request.workspaceId as WorkspaceId
+    const existing = devFrameStateOf(this.ctx, request.agent.session).bindings.at(-1)
+    if (existing?.lifecycle === 'admission_open' && String(existing.workspaceId) === String(workspaceId)) return
+    const current = this.ctx.goals.get(request.agent)
+    if (current !== undefined && current.phase !== 'complete') {
+      throw new Error(`controller already has an unfinished native Goal "${current.id}"`)
+    }
+    const computed = await computeSourceFingerprint({ worktreePath: request.worktreePath })
+    const snapshotId = makeSnapshotId(`snapshot-shadow-${computed.headCommit}-${computed.stateHash}`)
+    const requiredChecksDigest = await this.requiredChecksStore.save(this.config.checks)
+    const binding = await (await this.controllerForWorkspace(request.agent, workspaceId)).start({
+      objective: request.objective,
+      taskIds: [TaskId('devframe-goal')],
+      acceptanceHash: acceptanceHashOf(request.objective, this.config.checks),
+      sourceFingerprint: computed.fingerprint,
+      snapshotId,
+      budget: { maxAttempts: this.config.maxAttempts },
+      authorization: createHumanAuthorization(`shadow-open:${request.workspaceId}:${Date.now()}`),
+      ...(this.config.maxGoalRounds === undefined ? {} : { maxGoalRounds: this.config.maxGoalRounds }),
+    })
+    await landRolePolicyIfAbsent(this.ctx, this.journal, request.agent.session, workspaceId)
+    await landGoalBinding(this.journal, request.agent.session, binding)
+    await this.evidenceJournal.recordVerification({
+      session: request.agent.session,
+      binding: resultTupleOf(binding),
+      requiredChecksDigest,
+      requiredChecksStore: this.requiredChecksStore,
     })
   }
 
@@ -1112,6 +1160,28 @@ export class GoalBindingComposition extends Service {
         },
       })
       this.controllers.set(agent.id, controller)
+    }
+    return controller
+  }
+
+  /** Build or reuse a controller for one host-provisioned workspace identity. */
+  private async controllerForWorkspace(agent: Agent, workspaceId: WorkspaceId): Promise<GoalBindingController> {
+    const key = `${agent.id}\u0000${String(workspaceId)}`
+    let controller = this.provisionedControllers.get(key)
+    if (controller === undefined) {
+      controller = new GoalBindingController({
+        workspaceId,
+        controllerSessionId: ControllerSessionId(agent.id),
+        goals: new GoalServicePort({ goals: this.ctx.goals, agent }),
+        store: this.bindingStore,
+        repairLimit: this.config.repairLimit,
+        repairAdmissions: {
+          admit: (identity, cause, repairLimit, options) =>
+            this.journal.admitRepair(agent.session, { identity, cause, repairLimit }, options),
+          state: (identity, repairLimit) => this.journal.repairRoundState(agent.session, identity, repairLimit),
+        },
+      })
+      this.provisionedControllers.set(key, controller)
     }
     return controller
   }
