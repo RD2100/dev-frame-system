@@ -895,10 +895,20 @@ export interface Config {
   checkMaxOutputBytes: number
   /** Host-registered commit paths per task bounding what project_commit may commit. */
   commitPathsByTask?: Record<string, string[]>
+  /**
+   * Deployment-wide commit scope applied to approvals without a per-task
+   * scope: the host merges `request.commitPaths ?? defaultCommitPaths` at
+   * approval time, letting a deployment pin an output scope the board need
+   * not know. Unlike `commitPathsByTask` (an apply-time static seed keyed by
+   * task id), this is an approval-time fallback for dynamically planned
+   * tasks; absent when the deployment does not configure one, keeping
+   * `project_commit` failing closed for scope-less approvals.
+   */
+  defaultCommitPaths?: string[] | undefined
 }
 ```
 
-Source: [`packages/experimental/project-controller/src/delivery-consumer.ts:32`](../packages/experimental/project-controller/src/delivery-consumer.ts)
+Source: [`packages/experimental/project-controller/src/delivery-consumer.ts:86`](../packages/experimental/project-controller/src/delivery-consumer.ts)
 
 <a id="deepseek-aidsh-experimental-shadow-bridge"></a>
 
@@ -953,6 +963,14 @@ export interface ShadowRouterConfig {
    * effect.
    */
   shadowSessionId?: string
+  /**
+   * Absolute project directory attached to a cwd-less designated session at
+   * activation, so the designated Shadow conversation stays renderable by
+   * workspace-scoped surfaces (the Desktop client renders a cwd-less session
+   * as a fresh conversation). Optional: when unset and the designated session
+   * turns out cwd-less, Shadow leaves it untouched and reports the mismatch.
+   */
+  designatedCwd?: string
   /** Per-workspace limit of pending (queued, not yet received) deliveries. */
   maxPendingDeliveries?: number
   /** Maximum message text length in characters. */
@@ -962,7 +980,7 @@ export interface ShadowRouterConfig {
 }
 ```
 
-Source: [`packages/experimental/shadow-router/src/service.ts:59`](../packages/experimental/shadow-router/src/service.ts)
+Source: [`packages/experimental/shadow-router/src/service.ts:63`](../packages/experimental/shadow-router/src/service.ts)
 
 <a id="deepseek-aidsh-experimental-tool-agent-team"></a>
 
@@ -3680,6 +3698,8 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-experimental-agent-reliability` ([`packages/experimental/agent-reliability/src/index.ts`](../packages/experimental/agent-reliability/src/index.ts))
 - `@deepseek-ai/dsh-experimental-agent-worktree` — requires `tools` · `workspaceRegistry` · `worktreeRegistry` · `systemPrompt` ([`packages/experimental/agent-worktree/src/index.ts`](../packages/experimental/agent-worktree/src/index.ts))
 - `@deepseek-ai/dsh-experimental-client-ui-agent-team` ([`packages/experimental/client-ui-agent-team/src/index.ts`](../packages/experimental/client-ui-agent-team/src/index.ts))
+- `@deepseek-ai/dsh-experimental-client-ui-expert-team` ([`packages/experimental/client-ui-expert-team/src/index.ts`](../packages/experimental/client-ui-expert-team/src/index.ts))
+- `@deepseek-ai/dsh-experimental-client-ui-project-memory` ([`packages/experimental/client-ui-project-memory/src/index.ts`](../packages/experimental/client-ui-project-memory/src/index.ts))
 - `@deepseek-ai/dsh-experimental-client-ui-shadow-entry` ([`packages/experimental/client-ui-shadow-entry/src/index.ts`](../packages/experimental/client-ui-shadow-entry/src/index.ts))
 - `@deepseek-ai/dsh-experimental-project-controller/task-consumer` — requires `tools` · `agents` · `sessions` · `sessionProjections` · `projectController` · `agentBindings` · `workspaceRegistry` · `worktreeRegistry` ([`packages/experimental/project-controller/src/task-consumer.ts`](../packages/experimental/project-controller/src/task-consumer.ts))
 - `@deepseek-ai/dsh-experimental-session-identity` — requires `sessions` · `storageDomain` ([`packages/experimental/session-identity/src/index.ts`](../packages/experimental/session-identity/src/index.ts))
@@ -3758,6 +3778,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 - `@deepseek-ai/dsh-experimental-agent-team-web-profile` ([`packages/experimental/agent-team-web-profile/src/index.ts`](../packages/experimental/agent-team-web-profile/src/index.ts))
 - `@deepseek-ai/dsh-experimental-devframe` ([`packages/experimental/devframe/src/index.ts`](../packages/experimental/devframe/src/index.ts))
 - `@deepseek-ai/dsh-experimental-devframe-profile` ([`packages/experimental/devframe-profile/src/index.ts`](../packages/experimental/devframe-profile/src/index.ts))
+- `@deepseek-ai/dsh-experimental-expert-pack-dev` ([`packages/experimental/expert-pack-dev/src/index.ts`](../packages/experimental/expert-pack-dev/src/index.ts))
 - `@deepseek-ai/dsh-experimental-expert-pack-paper` ([`packages/experimental/expert-pack-paper/src/index.ts`](../packages/experimental/expert-pack-paper/src/index.ts))
 - `@deepseek-ai/dsh-experimental-expert-team` ([`packages/experimental/expert-team/src/index.ts`](../packages/experimental/expert-team/src/index.ts))
 - `@deepseek-ai/dsh-experimental-project-contracts` ([`packages/experimental/project-contracts/src/index.ts`](../packages/experimental/project-contracts/src/index.ts))
