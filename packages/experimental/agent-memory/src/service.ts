@@ -234,8 +234,11 @@ export class AgentMemoryService extends Service {
     const candidates: Array<ContextItem & { authority: number }> = []
     for (const fact of this.facts.values()) {
       if (fact.status !== 'active' || !scopeMatch(fact.scope, scope)) continue
-      const score = scoreText(request.query, `${fact.subject} ${fact.predicate} ${fact.object} ${fact.statement}`) + AUTHORITY_RANK[fact.authority] / 20
-      if (score > 0) candidates.push({ id: fact.id, kind: 'semantic', text: renderedFact(fact), score, reason: `scope match; authority ${fact.authority}`, authority: AUTHORITY_RANK[fact.authority] })
+      const lexicalScore = scoreText(request.query, `${fact.subject} ${fact.predicate} ${fact.object} ${fact.statement}`)
+      if (lexicalScore > 0) {
+        const score = lexicalScore + AUTHORITY_RANK[fact.authority] / 20
+        candidates.push({ id: fact.id, kind: 'semantic', text: renderedFact(fact), score, reason: `scope match; authority ${fact.authority}`, authority: AUTHORITY_RANK[fact.authority] })
+      }
     }
     for (const procedure of this.procedures.values()) {
       if (procedure.status !== 'active' || !scopeMatch(procedure.scope, scope)) continue
