@@ -400,7 +400,7 @@ export async function runDesktopHost(
           : url.pathname.startsWith('/api/')
             ? await api.fetch(request)
             : url.pathname.startsWith('/plugins/') && webServerService !== undefined
-              ? ((await fetch(`http://127.0.0.1:${String(webServerService.port)}${url.pathname}${url.search}`, { method: request.method, headers: request.headers, body: request.body, signal: controller.signal } satisfies RequestInit)) as Response)
+              ? await fetch(`http://127.0.0.1:${String(webServerService.port)}${url.pathname}${url.search}`, { method: request.method, headers: request.headers, body: request.body, signal: controller.signal } satisfies RequestInit)
               : await assets.fetch(request)
         await writeResponse(encodeDesktopResponseStart(command.streamId, {
           status: response.status,
