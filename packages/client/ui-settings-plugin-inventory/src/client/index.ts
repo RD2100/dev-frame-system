@@ -2,6 +2,7 @@
 
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls the 'settings.agentPreset' LocaleNamespaceMap merge, whose
@@ -10,9 +11,15 @@ import type {} from '@deepseek-ai/dsh-client-ui-agent-preset/client'
 // Inline-safe shared fold: shipped ids map to dictionary keys in one home.
 import { presetDisplayText } from '@deepseek-ai/dsh-agent-presets/display'
 import { PluginInventorySettingsTab, type PluginInventorySettingsTabInjected } from './PluginInventorySettingsTab.tsx'
+import { SkillConnectorSettingsTab, type SkillConnectorSettingsTabInjected } from './SkillConnectorSettingsTab.tsx'
 import { en, zh, type PluginInventoryLocaleKey } from './locales.ts'
 
 export type { PluginInventorySettingsTabInjected, PluginInventorySettingsTabProps } from './PluginInventorySettingsTab.tsx'
+export type {
+  SkillConnectorSettingsTabInjected,
+  SkillConnectorSettingsTabProps,
+  SkillConnectorSkillList,
+} from './SkillConnectorSettingsTab.tsx'
 export type { PluginInventoryLocaleKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -26,7 +33,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 export const NS = 'settings.pluginInventory'
 
 /** Services required by the Settings registration and generated Remote face. */
-export const inject = ['slots', 'locale', 'remote', 'remote.pluginInventory']
+export const inject = [
+  'slots', 'locale', 'remote', 'remote.pluginInventory', 'remote.skills', 'sessions',
+]
 
 /** Contribute the lazy inventory tab to the Plugins settings section. */
 export function apply(ctx: ClientContext): void {
@@ -37,6 +46,15 @@ export function apply(ctx: ClientContext): void {
     const result = await ctx.remote.pluginInventory.list()
     if (!result.ok) {
       throw new Error(`pluginInventory.list failed: ${result.error.code}: ${result.error.message}`)
+    }
+    return result.value
+  }
+  const listSkills: SkillConnectorSettingsTabInjected['listSkills'] = async () => {
+    const sessionId = ctx.sessions.list.getSnapshot().current
+    if (sessionId === undefined || ctx.sessions.subagentAddress(sessionId) !== undefined) return undefined
+    const result = await ctx.remote.skills.list({ sessionId })
+    if (!result.ok) {
+      throw new Error(`skills/list failed: ${result.error.code}: ${result.error.message}`)
     }
     return result.value
   }
@@ -55,4 +73,12 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: injected,
   }, PluginInventorySettingsTab))
+  ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
+    name: 'settings.plugins.tab',
+    id: 'skill-connectors',
+    order: 20,
+    label: () => t('capabilitiesTab'),
+    locale: NS,
+    inject: (): SkillConnectorSettingsTabInjected => ({ listInventory: list, listSkills }),
+  }, SkillConnectorSettingsTab))
 }

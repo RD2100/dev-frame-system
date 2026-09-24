@@ -33,6 +33,11 @@ async function bench() {
   const list = vi.fn<() => Promise<ListResult>>()
     .mockResolvedValue({ ok: true, value: EMPTY })
   ctx.provide('remote.pluginInventory', { list })
+  ctx.provide('remote.skills', { list: vi.fn() })
+  ctx.provide('sessions', {
+    list: { getSnapshot: () => ({ current: undefined }) },
+    subagentAddress: () => undefined,
+  })
   return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, list }
 }
 
@@ -49,7 +54,9 @@ describe('ui-settings-plugin-inventory browser plugin', () => {
   })
 
   it('declares only the services used by the Settings Remote contribution', () => {
-    expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.pluginInventory'])
+    expect(inject).toEqual([
+      'slots', 'locale', 'remote', 'remote.pluginInventory', 'remote.skills', 'sessions',
+    ])
   })
 
   it('registers a localized tab without reading the Remote eagerly', async () => {
@@ -57,7 +64,7 @@ describe('ui-settings-plugin-inventory browser plugin', () => {
     declare(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
 
-    const entry = b.slots.entries('settings.plugins.tab')[0]!
+    const entry = b.slots.entries('settings.plugins.tab').find(item => item.options.id === 'all')!
     expect(entry.component).toBe(PluginInventorySettingsTab)
     expect(entry.options).toMatchObject({ id: 'all', order: 10 })
     expect(entry.locale).toBe(NS)
@@ -69,6 +76,7 @@ describe('ui-settings-plugin-inventory browser plugin', () => {
     expect(b.list).toHaveBeenCalledOnce()
     b.list.mockResolvedValueOnce({ ok: false, error: { code: 'REMOTE_ERROR', message: 'unavailable' } })
     await expect(injected.list()).rejects.toThrow('pluginInventory.list failed: REMOTE_ERROR: unavailable')
+    expect(b.slots.entries('settings.plugins.tab')).toHaveLength(2)
 
     // Shipped preset names resolve over the agent-preset dictionaries the
     // real plugin registers; user-authored metadata stays untranslated.
@@ -85,15 +93,16 @@ describe('ui-settings-plugin-inventory browser plugin', () => {
     expect(b.slots.entries('settings.plugins.tab')).toHaveLength(0)
 
     const stop = declare(b.slots)
-    await vi.waitFor(() => { expect(b.slots.entries('settings.plugins.tab')).toHaveLength(1) })
+    await vi.waitFor(() => { expect(b.slots.entries('settings.plugins.tab')).toHaveLength(2) })
     b.locale.setLocale('en')
-    expect(resolveSlotLabel(b.slots.entries('settings.plugins.tab')[0]!.options.label)).toBe('Plugin list')
+    const entries = b.slots.entries('settings.plugins.tab')
+    expect(resolveSlotLabel(entries.find(item => item.options.id === 'all')!.options.label)).toBe('Plugin list')
 
     stop()
     expect(b.slots.entries('settings.plugins.tab')).toHaveLength(0)
     declare(b.slots)
     await vi.waitFor(() => {
-      expect(b.slots.entries('settings.plugins.tab')[0]?.component).toBe(PluginInventorySettingsTab)
+      expect(b.slots.entries('settings.plugins.tab').find(item => item.options.id === 'all')?.component).toBe(PluginInventorySettingsTab)
     })
 
     await fiber.dispose()

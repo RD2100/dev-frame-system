@@ -9,7 +9,9 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-client-ui-settings-plugin-inventory` 向 Web 设置的「插件」分区贡献只读的**插件列表**标签页。该标签页在首次被选择时懒调用 `ctx.remote.pluginInventory.list()`，并把清单分成两个可折叠分组渲染。Agent 预设组在前、默认展开：一个只改显示的切换器胶囊覆盖 roster、初始停在默认预设，每个组合行是一张紧凑折叠卡片，携带其启停状态——含宿主无法求值的 disabled 门对应的 `conditional`——出处事实收在折叠里。全局组随后且默认收起，组头带条目计数与失败计数；展开后失败行浮在最前，全局停用但被至少一个预设启用的条目就地标记为预设提供——详情列出启用它的预设——而不是读作单纯的已停用。搜索同时过滤两组、强制撑开收起的分组，并指出未选中预设里的匹配。加载、空结果、无匹配与通用失败状态只属于已挂载组件，读取失败后可以重试，且不会暴露传输细节；没有 roster 时标签页只渲染全局平面并保持展开。
+`dsh-client-ui-settings-plugin-inventory` 向 Web 设置的「插件」分区贡献两个只读标签页。**插件列表**在首次被选择时懒调用 `ctx.remote.pluginInventory.list()`，把清单按作用域分成两个可折叠分组。**技能与连接器**复用这个清单 Remote，并调用官方 `ctx.remote.skills.list()` 读取当前会话的技能目录。页面展示可搜索的技能元数据与 MCP/连接器 Loader 条目，提供「刷新」重新取得当前快照，并标明 profile 或 Agent 预设是配置拥有方。页面没有启用、添加、编辑、测试或移除控件；这些修改属于 profile 组合界面。
+
+插件列表保留原有的作用域视图：Agent 预设组在前且默认展开，全局组随后收起；搜索过滤两组，通用失败不会泄露传输细节。技能与连接器标签页在选中会话时报告真实的会话目录；没有当前会话时会说明技能为何不可用，同时仍展示全局连接器状态。
 
 ## 目录
 
@@ -26,6 +28,8 @@ kind: "package-reference"
 ## 使用本包
 
 打开设置中的「插件」分区并选择**插件列表**标签页，即可查看宿主的插件清单。插件激活期间不会读取 Remote——首次选择该标签页时才挂载组件，并通过 `api-remotes` 懒调用 `ctx.remote.pluginInventory.list()`。
+
+选择**技能与连接器**即可查看 profile 拥有的能力状态。技能通过当前会话调用 `ctx.remote.skills.list()`；MCP 与连接器条目来自宿主插件清单，并带有 Loader 阶段、有效启用状态与预设作用域。搜索框可过滤任一面板，「刷新」会重新读取两份快照。页面保持只读；需要修改状态时请编辑负责组合该能力的 profile 或 Agent 预设。
 
 ### 阅读卡片
 
@@ -51,11 +55,11 @@ kind: "package-reference"
 
 ### 注册
 
-浏览器插件注册一个 id 为 `all` 的本地化 `settings.plugins.tab` 贡献；「插件」分区拥有导航入口与标签栏。注册使用 `ctx.slots.inject()`，因此能跟随标签 slot 的延迟声明、重新声明、本地化变化与 teardown，而无需 import 分区拥有方。
+浏览器插件注册 id 为 `all` 与 `skill-connectors` 的本地化 `settings.plugins.tab` 贡献；「插件」分区拥有导航入口与标签栏。注册使用 `ctx.slots.inject()`，因此能跟随标签 slot 的延迟声明、重新声明、本地化变化与 teardown，而无需 import 分区拥有方。能力标签页注入官方 `remote.skills` 及会话列表，并用选中的当前会话寻址 Remote。
 
 ### 渲染
 
-行 key 按作用域限定（`global:`、`preset:<id>:<index>`），因此同一模块出现在两个作用域时保持各自的展开状态；条目 id 只在行声明了它时作为详情展示，代码不按字符串形状对它分类。预设提供标记在客户端推导：一个全局条目在全局被停用、且至少一个预设行对同一模块标识实际启用时才携带它，因此被所有预设关掉（或仅条件声明）的模块保持单纯的已停用，而不是夸大提供关系。
+行 key 按作用域限定（`global:`、`preset:<id>:<index>`），因此同一模块出现在两个作用域时保持各自的展开状态；条目 id 只在行声明了它时作为详情展示，代码不按字符串形状对它分类。预设提供标记在客户端推导：一个全局条目在全局被停用、且至少一个预设行对同一模块标识实际启用时才携带它，因此被所有预设关掉（或仅条件声明）的模块保持单纯的已停用，而不是夸大提供关系。能力标签页从选中会话投影技能元数据，并过滤模块标识中命名为 MCP 或 connector 的清单行；两个投影都保留 profile 或预设作为写入拥有方。
 
 </details>
 
@@ -70,6 +74,7 @@ kind: "package-reference"
 - [ui-settings](../ui-settings/README.zh.md)——声明 `settings.plugins.tab` 的领域底座。
 - [api-remotes](../../api/remotes/README.zh.md)——`pluginInventory.list()` 背后的 Remote BFF 表面。
 - [plugin-inventory](../../host/plugin-inventory/README.zh.md)——本标签页所渲染的宿主侧只读 Loader 投影。
+- [session-controller](../../api/session-controller/README.zh.md)——能力标签页所使用的按会话寻址技能目录。
 
 -----
 
@@ -89,7 +94,8 @@ kind: "package-reference"
 
 这些限制定义清单视图的新鲜度与触达范围；它们是当前包约束。
 
-- **每次 Settings 挂载或重试只读取一份快照**：标签页不订阅 Loader 变化，也不会在重连后自动重新读取；切换标签页会保留当前快照，重新打开 Settings 则会取得新快照。
+- **每次 Settings 挂载或刷新只读取一份快照**：标签页不订阅 Loader 或技能变化，也不会在重连后自动读取；切换标签页会保留当前快照，刷新或重新打开 Settings 才会取得新快照。
+- **技能按会话寻址**：没有选中的当前会话时，宿主无法回答工作区与预设相关的技能目录；页面会如实说明，而不会猜测另一个会话的结果。
 - **两个平面都只读**：标签页展示全局与预设的启停状态但都不修改；写回自定义预设组合文件的启停控件是刻意留作后续的工作。
 
 <a id="dev-note"></a>
