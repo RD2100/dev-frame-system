@@ -45,15 +45,18 @@ function desktopDevFramePackageDirs(): string[] {
     const value = JSON.parse(readFileSync(manifest, 'utf8')) as { name?: unknown }
     if (typeof value.name === 'string') packages.set(value.name, directory)
   }
-  const hostManifest = JSON.parse(readFileSync(join(REPOSITORY_ROOT, 'apps/desktop-host/package.json'), 'utf8')) as Record<string, unknown>
+  const runtimeManifests = [
+    join(REPOSITORY_ROOT, 'apps/cli/package.json'),
+    join(REPOSITORY_ROOT, 'apps/desktop-host/package.json'),
+  ].map(path => JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>)
   const pending = [
     ...DESKTOP_DEVFRAME_ROOT_PACKAGES,
-    ...['dependencies', 'optionalDependencies', 'peerDependencies'].flatMap(section => {
-      const dependencies = hostManifest[section]
+    ...runtimeManifests.flatMap(manifest => ['dependencies', 'optionalDependencies', 'peerDependencies'].flatMap((section) => {
+      const dependencies = manifest[section]
       return dependencies !== null && typeof dependencies === 'object' && !Array.isArray(dependencies)
         ? Object.keys(dependencies).filter(name => name.startsWith('@deepseek-ai/dsh-experimental-'))
         : []
-    }),
+    })),
   ]
   const selected = new Set<string>()
   while (pending.length > 0) {
@@ -69,7 +72,11 @@ function desktopDevFramePackageDirs(): string[] {
       for (const dependency of Object.keys(dependencies)) if (packages.has(dependency)) pending.push(dependency)
     }
   }
-  return [...selected].map(name => packages.get(name) as string).sort()
+  return [...selected].map((name) => {
+    const directory = packages.get(name)
+    if (directory === undefined) throw new Error(`desktop package: selected DevFrame package ${name} disappeared`)
+    return directory
+  }).sort()
 }
 
 /** Fixed platform and architecture identifiers exposed by package scripts. */
