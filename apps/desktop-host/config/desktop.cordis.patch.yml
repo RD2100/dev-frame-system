@@ -11,9 +11,28 @@
     - credentials
   config: {}
 
+# The production runtime carries the DevFrame profile and its data packs as
+# local tarballs. Resolve those packs from the active profile's installed
+# modules; the development overlay uses workspace paths separately.
+- id: expert-team
+  config:
+    packs:
+      - !!js process.cwd() + '/node_modules/@deepseek-ai/dsh-experimental-expert-pack-paper'
+      - !!js process.cwd() + '/node_modules/@deepseek-ai/dsh-experimental-expert-pack-dev'
+    artifactsDir: !!js dshHomePath('expert-team-runs')
+
 - insert:
     - id: directory-picker-native
       name: '@deepseek-ai/dsh-host-directory-picker-native'
 
     - id: ui-directory-picker-native
       name: '@deepseek-ai/dsh-client-ui-directory-picker-native'
+
+    - id: shadow-bridge
+      name: '@deepseek-ai/dsh-experimental-shadow-bridge'
+      config:
+        intervalMs: 60000
+        followupMaxChars: 12000
+
+    - id: ui-shadow-entry
+      name: '@deepseek-ai/dsh-experimental-client-ui-shadow-entry'

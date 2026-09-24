@@ -1,7 +1,7 @@
 /** Build one release target with matching Electron, Node.js, and dsh architecture. */
 
 import { spawn } from 'node:child_process'
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 import { join, resolve } from 'node:path'
 import {
@@ -26,6 +26,51 @@ const DESKTOP_UPLOAD_CREDENTIAL_ENV_NAMES = new Set([
   'DOWNLOAD_PROD_COS_SECRET_ID',
   'DOWNLOAD_PROD_COS_SECRET_KEY',
 ])
+
+/** Profile and UI entries that are not reachable from a Host import. */
+const DESKTOP_DEVFRAME_ROOT_PACKAGES = [
+  '@deepseek-ai/dsh-experimental-client-ui-shadow-entry',
+  '@deepseek-ai/dsh-experimental-devframe-profile',
+] as const
+
+/** Resolve every experimental package in the Desktop DevFrame dependency closure. */
+function desktopDevFramePackageDirs(): string[] {
+  const experimentalRoot = join(REPOSITORY_ROOT, 'packages', 'experimental')
+  const packages = new Map<string, string>()
+  for (const entry of readdirSync(experimentalRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const directory = join(experimentalRoot, entry.name)
+    const manifest = join(directory, 'package.json')
+    if (!existsSync(manifest)) continue
+    const value = JSON.parse(readFileSync(manifest, 'utf8')) as { name?: unknown }
+    if (typeof value.name === 'string') packages.set(value.name, directory)
+  }
+  const hostManifest = JSON.parse(readFileSync(join(REPOSITORY_ROOT, 'apps/desktop-host/package.json'), 'utf8')) as Record<string, unknown>
+  const pending = [
+    ...DESKTOP_DEVFRAME_ROOT_PACKAGES,
+    ...['dependencies', 'optionalDependencies', 'peerDependencies'].flatMap(section => {
+      const dependencies = hostManifest[section]
+      return dependencies !== null && typeof dependencies === 'object' && !Array.isArray(dependencies)
+        ? Object.keys(dependencies).filter(name => name.startsWith('@deepseek-ai/dsh-experimental-'))
+        : []
+    }),
+  ]
+  const selected = new Set<string>()
+  while (pending.length > 0) {
+    const name = pending.pop()
+    if (name === undefined || selected.has(name)) continue
+    const directory = packages.get(name)
+    if (directory === undefined) throw new Error(`desktop package: DevFrame package ${name} is not under packages/experimental`)
+    selected.add(name)
+    const manifest = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')) as Record<string, unknown>
+    for (const section of ['dependencies', 'optionalDependencies', 'peerDependencies'] as const) {
+      const dependencies = manifest[section]
+      if (dependencies === null || typeof dependencies !== 'object' || Array.isArray(dependencies)) continue
+      for (const dependency of Object.keys(dependencies)) if (packages.has(dependency)) pending.push(dependency)
+    }
+  }
+  return [...selected].map(name => packages.get(name) as string).sort()
+}
 
 /** Fixed platform and architecture identifiers exposed by package scripts. */
 export type DesktopPackageTargetName = 'mac-arm64' | 'mac-x64' | 'win-x64'
@@ -297,6 +342,9 @@ async function main(): Promise<void> {
     '--pack-destination',
     buildPaths.packedDsh,
   ], buildEnv, REPOSITORY_ROOT)
+  for (const directory of desktopDevFramePackageDirs()) {
+    await runPnpm(['--dir', directory, 'pack', '--pack-destination', buildPaths.packedDsh], buildEnv, REPOSITORY_ROOT)
+  }
   await runPnpm(['run', 'release:pack', '--family', 'vendor', '--out', buildPaths.packedVendor], buildEnv, REPOSITORY_ROOT)
   rmSync(buildPaths.packedLandlock, { recursive: true, force: true })
   mkdirSync(buildPaths.packedLandlock, { recursive: true })
