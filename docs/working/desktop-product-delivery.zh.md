@@ -96,6 +96,7 @@ description: Desktop 插件接入、专家中心、技能与 MCP、Obsidian 资�
 - 2026-09-24：D7 已交付 Skill 安装/启停/卸载控件，以及 MCP 添加/编辑/测试/启停/移除控件。Host 从 `$DSH_HOME/storages/mcp-servers.json` 恢复并原子持久化 MCP 配置；投影会隐藏 `env` 与 `headers`。Host、UI 与 Typert 生成定向检查通过。
 - 2026-09-24：D8 已交付会话级 Schedule overlay、8 个模型工具、模板、暂停/恢复/立即运行/历史、成功/失败/取消结果回执、可重启投影，以及经生成 Schedule Remote 接入的任务中心变更控件。冷重启 Electron e2e 尚未执行。
 - 2026-09-24：发布收口修复了一个真实冷启动阻塞：DevFrame profile 不再重复插入 `ui-schedule` loader 行，而是启用 `web-app` 已提供的行；staging Host boot verifier 现在可以到达 `boot OK` 并观察到 Schedule 服务。受影响 UI 包的客户端 session 契约转换已对齐，根级 `pnpm run typecheck` 通过。本版本仍需在同一 revision 上完成完整 Electron 点击/重启运行、模型驱动的 Shadow 规划（提供方计费仍阻塞）以及打包安装/升级 dry-run 证据。
+- 2026-09-24：在重建 Web artifact 后通过 Electron CDP 打开设置→插件，已看到 Skill/MCP 管理控件；通过页面安装的临时 Skill 成功落盘，持久化 MCP 投影也验证了前端不显示 `env`。临时 Skill 已在验证后清理。官方 staging 旁侧副本仍是缺少 DevFrame 包闭包的旧 workspace，安装先后在 `agent-dispatch` 及其他 DevFrame 包处失败；这是 artifact 重建/闭包问题，不是当前 `development-project.ts` 缺依赖。Desktop package preparation 的 Host、Client、Web 和 Desktop Host 构建现在通过；下一处阻塞是仓库版本族不一致（`0.1.2-alpha.4` 与 `0.1.6-alpha.1` 混用）。
 
 ## Dev Note
 
