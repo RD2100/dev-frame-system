@@ -60,7 +60,7 @@ describe('ScheduleTaskCenter', () => {
   it('shows resume for paused records and reports Remote failures without leaking details', async () => {
     const resume = vi.fn<ScheduleTaskCenterProps['schedule']['resume']>().mockResolvedValue({
       ok: false,
-      error: { code: 'failed', message: 'private transport detail' },
+      error: { code: 'gateway/internal', message: 'private transport detail' },
     })
     render(<ScheduleTaskCenter {...props({ ...ACTIVE, paused: true }, { resume })} />)
     fireEvent.click(screen.getByRole('button', { name: en['center.action.resume'] }))
