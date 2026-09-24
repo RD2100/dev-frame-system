@@ -34,6 +34,9 @@ describe('DevFrame profile bundle', () => {
       '@deepseek-ai/dsh-experimental-client-ui-expert-team': 'workspace:^',
       '@deepseek-ai/dsh-experimental-expert-team': 'workspace:^',
       '@deepseek-ai/dsh-worktree-registry': 'workspace:^',
+      '@deepseek-ai/dsh-client-ui-schedule': 'workspace:^',
+      '@deepseek-ai/dsh-schedule': 'workspace:^',
+      '@deepseek-ai/dsh-time-context': 'workspace:^',
     })
 
     const parsed = yaml.load(
@@ -59,6 +62,9 @@ describe('DevFrame profile bundle', () => {
       'agent-team',
       'tool-agent-team',
       'ui-agent-team',
+      'time-context',
+      'schedule',
+      'ui-schedule',
     ])
     expect(inserted.find(row => row.id === 'shadow-controller')?.name).toBe('@deepseek-ai/dsh-experimental-shadow-controller')
     expect(inserted.find(row => row.id === 'shadow-agent')?.name).toBe('@deepseek-ai/dsh-experimental-shadow-controller/shadow-agent')

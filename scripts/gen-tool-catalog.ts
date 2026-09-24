@@ -500,7 +500,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
     dir: 'schedule',
     source: 'packages/schedule/schedule/src/tools.ts',
     requires: ['ctx.tools', 'ctx.sessions', 'Session persistence', 'a future live root Agent'],
-    writes: ['tool/call', 'schedule/change create or delete', 'tool/result'],
+    writes: ['tool/call', 'schedule/change lifecycle, dispatch, and execution result', 'tool/result'],
     async mount(ctx) {
       await ctx.plugin(SessionStore)
       const session = ctx.sessions.create(SessionId('tool-catalog-schedule'))

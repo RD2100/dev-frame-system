@@ -138,3 +138,11 @@
         forkProvider: fork
     - id: ui-agent-team
       name: '@deepseek-ai/dsh-experimental-client-ui-agent-team'
+    # Durable session-local reminders and their browser task center. The
+    # time-context provider is required by absolute/local schedule selectors.
+    - id: time-context
+      name: '@deepseek-ai/dsh-time-context'
+    - id: schedule
+      name: '@deepseek-ai/dsh-schedule'
+    - id: ui-schedule
+      name: '@deepseek-ai/dsh-client-ui-schedule'

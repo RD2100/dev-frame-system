@@ -1115,7 +1115,7 @@ create、edit、pause 和 resume 要求直接来自人类的根权限；complete
 
 ### `schedule_create`
 
-在当前会话中创建一条提醒。请提供非空 prompt 和恰好一个 selector：正的安全整数 after_seconds 延时；作为严格带偏移日期时间或本地日期／时间对象的 at；或不小于 300 的安全整数 every_seconds。固定速率提醒始终与创建时刻对齐，会跳过错过的发生时点，并把每条逾期规则的最新一个发生时点合并到一个批次中。交付模式是 session-local：只有此会话处于 live 状态时，提醒才会准时运行；否则提醒会进入 overdue 状态，直至会话恢复。
+在当前会话中创建一条提醒。请提供非空 prompt 和恰好一个 selector：正的安全整数 after_seconds 延时；作为严格带偏移日期时间或本地日期／时间对象的 at；或不小于 300 的安全整数 every_seconds。固定速率提醒始终与创建时刻对齐，会跳过错过的发生时点，并把每条逾期规则的最新一个发生时点合并到一个批次中。可选 dedupe_key 会让重复的活动创建请求返回已有提醒。交付模式是 session-local：只有此会话处于 live 状态时，提醒才会准时运行；否则提醒会进入 overdue 状态，直至会话恢复。
 
 ```json
 {
@@ -1132,6 +1132,10 @@ create、edit、pause 和 resume 要求直接来自人类的根权限；complete
     "every_seconds": {
       "type": "number",
       "description": "Fixed-rate safe-integer interval in seconds, at least 300."
+    },
+    "dedupe_key": {
+      "type": "string",
+      "description": "Optional non-empty key that makes active repeated creates idempotent."
     },
     "at": {
       "oneOf": [
@@ -1168,7 +1172,7 @@ create、edit、pause 和 resume 要求直接来自人类的根权限；complete
 }
 ```
 
-来源：[`packages/schedule/schedule/src/tools.ts`](../packages/schedule/schedule/src/tools.ts)
+来源： [`packages/schedule/schedule/src/tools.ts`](../packages/schedule/schedule/src/tools.ts)
 
 ### `schedule_delete`
 
@@ -1189,7 +1193,20 @@ create、edit、pause 和 resume 要求直接来自人类的根权限；complete
 }
 ```
 
-来源：[`packages/schedule/schedule/src/tools.ts`](../packages/schedule/schedule/src/tools.ts)
+来源： [`packages/schedule/schedule/src/tools.ts`](../packages/schedule/schedule/src/tools.ts)
+
+### `schedule_history`
+
+按事件顺序列出 Schedule 的创建、暂停、恢复、分发、执行结果和删除历史。
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+来源： [`packages/schedule/schedule/src/tools.ts`](../packages/schedule/schedule/src/tools.ts)
 
 ### `schedule_list`
 
@@ -1202,9 +1219,85 @@ create、edit、pause 和 resume 要求直接来自人类的根权限；complete
 }
 ```
 
-来源：[`packages/schedule/schedule/src/tools.ts`](../packages/schedule/schedule/src/tools.ts)
+来源： [`packages/schedule/schedule/src/tools.ts`](../packages/schedule/schedule/src/tools.ts)
 
-仅在选择启用的 Schedule 插件加载后创建的 live 根 Agent scope 内注册。版本 1 接受 after_seconds、显式绝对 at 和有界固定速率 every_seconds，并披露 session-local 交付；管理读取与变更必须通过共享的 Session 持久化 barrier。
+### `schedule_pause`
+
+按 id 暂停一条活动提醒。规则会持久保留，之后可以恢复。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Exact session-local schedule id."
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+来源： [`packages/schedule/schedule/src/tools.ts`](../packages/schedule/schedule/src/tools.ts)
+
+### `schedule_resume`
+
+按 id 恢复一条已暂停提醒。已经逾期的目标可以立即交付。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Exact session-local schedule id."
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+来源： [`packages/schedule/schedule/src/tools.ts`](../packages/schedule/schedule/src/tools.ts)
+
+### `schedule_run`
+
+按 id 立即排队一条提醒，并在持久历史中记录分发。已暂停的提醒必须先恢复。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Exact session-local schedule id."
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+来源： [`packages/schedule/schedule/src/tools.ts`](../packages/schedule/schedule/src/tools.ts)
+
+### `schedule_templates`
+
+列出内置任务中心模板。模板只是建议；schedule_create 会持久化选定的规则。
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+来源： [`packages/schedule/schedule/src/tools.ts`](../packages/schedule/schedule/src/tools.ts)
+
+仅在选择启用 Schedule 插件加载后创建的 live 根 Agent scope 内注册。版本 1 接受 after_seconds、显式绝对 at 和有界固定速率 every_seconds，并披露 session-local 交付；管理读取与变更必须通过共享的 Session 持久化 barrier。
 
 <a id="deepseek-aidsh-tool-lsp"></a>
 

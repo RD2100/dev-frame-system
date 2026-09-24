@@ -102,15 +102,15 @@ afterEach(async () => {
 describe('Schedule tool protocol', () => {
   it('registers three exclusive generic tools and disposes them together', async () => {
     const test = await harness()
-    expect(['schedule_create', 'schedule_list', 'schedule_delete'].map(name => test.ctx.tools.get(name)?.name))
-      .toEqual(['schedule_create', 'schedule_list', 'schedule_delete'])
+    expect(['schedule_create', 'schedule_list', 'schedule_delete', 'schedule_pause', 'schedule_resume', 'schedule_run', 'schedule_history', 'schedule_templates'].map(name => test.ctx.tools.get(name)?.name))
+      .toEqual(['schedule_create', 'schedule_list', 'schedule_delete', 'schedule_pause', 'schedule_resume', 'schedule_run', 'schedule_history', 'schedule_templates'])
     const outputSchema = test.ctx.tools.get('schedule_create')?.output.schema as {
       oneOf?: Array<{ properties?: { code?: { const?: string }; operation?: { enum?: string[] } } }>
     }
     const persistenceError = outputSchema.oneOf?.find(schema =>
       schema.properties?.code?.const === 'persistence_uncertain')
-    expect(persistenceError?.properties?.operation?.enum).toEqual(['create', 'list', 'delete'])
-    for (const name of ['schedule_create', 'schedule_list', 'schedule_delete']) {
+    expect(persistenceError?.properties?.operation?.enum).toEqual(['create', 'list', 'delete', 'pause', 'resume', 'run', 'history'])
+    for (const name of ['schedule_create', 'schedule_list', 'schedule_delete', 'schedule_pause', 'schedule_resume', 'schedule_run', 'schedule_history', 'schedule_templates']) {
       expect(test.ctx.tools.executionMode({ signal, callId: ToolCallId(name), name, arguments: {}, agent: test.agent }))
         .toEqual({ kind: 'exclusive' })
     }

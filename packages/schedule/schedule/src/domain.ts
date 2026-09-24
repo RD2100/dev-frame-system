@@ -13,10 +13,15 @@ import type {
   LocalAtInput,
   OneShotScheduleRecord,
   ScheduleChange,
+  ScheduleDedupeKey,
+  ScheduleHistoryEntry,
   ScheduleId as ScheduleIdType,
   ScheduleRecord,
   ScheduleView,
 } from './types.ts'
+
+/** Browser-safe task-center templates shared with the model tool catalog. */
+export { SCHEDULE_TEMPLATES } from './types.ts'
 
 /** Durable Schedule protocol version implemented by this package. */
 export const SCHEDULE_CHANGE_VERSION = 1 as const
@@ -110,6 +115,15 @@ export interface EveryOccurrence {
  */
 export function ScheduleId(value: string): ScheduleIdType {
   return value as ScheduleIdType
+}
+
+/**
+ * Brand one validated human-selected deduplication key without changing its JSON value.
+ * @param value - Stable key supplied by the caller.
+ * @returns The same value carrying the ScheduleDedupeKey brand.
+ */
+export function ScheduleDedupeKey(value: string): ScheduleDedupeKey {
+  return value as ScheduleDedupeKey
 }
 
 /** Whether an unknown value is a non-array object. */
@@ -383,8 +397,33 @@ function resolveLocalInstant(parts: CalendarParts, timeZone: string): number {
 }
 
 /** Decode the exact v1 after record shape. */
+interface RecordMetadata {
+  readonly dedupeKey?: ScheduleDedupeKey
+  readonly paused?: true
+}
+
+/** Decode optional task-center metadata shared by all record variants. */
+function decodeRecordMetadata(value: Record<string, unknown>, required: readonly string[]): RecordMetadata {
+  const expected = [...required, 'dedupeKey', 'paused']
+  if (!hasExactKeys(value, expected.filter(key => key in value))) {
+    throw new ScheduleLogError('schedule record contains unknown fields')
+  }
+  const dedupe = value['dedupeKey']
+  if (dedupe !== undefined && (typeof dedupe !== 'string' || dedupe.length === 0 || dedupe.trim() !== dedupe)) {
+    throw new ScheduleLogError('dedupeKey must be a non-empty string without surrounding whitespace')
+  }
+  const paused = value['paused']
+  if (paused !== undefined && paused !== true) {
+    throw new ScheduleLogError('paused must be true when present')
+  }
+  return {
+    ...(dedupe === undefined ? {} : { dedupeKey: dedupe as ScheduleDedupeKey }),
+    ...(paused === undefined ? {} : { paused: true as const }),
+  }
+}
+
 function decodeAfterRecord(value: unknown): AfterScheduleRecord {
-  if (!isRecord(value) || !hasExactKeys(value, ['id', 'kind', 'prompt', 'afterSeconds', 'scheduledAt'])) {
+  if (!isRecord(value) || !hasExactKeys(value, ['id', 'kind', 'prompt', 'afterSeconds', 'scheduledAt', ...(value['dedupeKey'] === undefined ? [] : ['dedupeKey']), ...(value['paused'] === undefined ? [] : ['paused'])])) {
     throw new ScheduleLogError('after schedule must contain exactly id, kind, prompt, afterSeconds, and scheduledAt')
   }
   const prompt = value['prompt']
@@ -401,12 +440,13 @@ function decodeAfterRecord(value: unknown): AfterScheduleRecord {
     prompt,
     afterSeconds: afterSeconds as number,
     scheduledAt: decodeInstant(value['scheduledAt']),
+    ...decodeRecordMetadata(value, ['id', 'kind', 'prompt', 'afterSeconds', 'scheduledAt']),
   })
 }
 
 /** Decode the exact v1 absolute one-shot record shape. */
 function decodeAtRecord(value: unknown): AtScheduleRecord {
-  if (!isRecord(value) || !hasExactKeys(value, ['id', 'kind', 'prompt', 'scheduledAt'])) {
+  if (!isRecord(value) || !hasExactKeys(value, ['id', 'kind', 'prompt', 'scheduledAt', ...(value['dedupeKey'] === undefined ? [] : ['dedupeKey']), ...(value['paused'] === undefined ? [] : ['paused'])])) {
     throw new ScheduleLogError('at schedule must contain exactly id, kind, prompt, and scheduledAt')
   }
   const prompt = value['prompt']
@@ -418,13 +458,14 @@ function decodeAtRecord(value: unknown): AtScheduleRecord {
     kind: 'at',
     prompt,
     scheduledAt: decodeInstant(value['scheduledAt']),
+    ...decodeRecordMetadata(value, ['id', 'kind', 'prompt', 'scheduledAt']),
   })
 }
 
 /** Decode the exact v1 fixed-rate record shape. */
 function decodeEveryRecord(value: unknown): EveryScheduleRecord {
   if (!isRecord(value)
-    || !hasExactKeys(value, ['id', 'kind', 'prompt', 'everySeconds', 'scheduledAt'])) {
+    || !hasExactKeys(value, ['id', 'kind', 'prompt', 'everySeconds', 'scheduledAt', ...(value['dedupeKey'] === undefined ? [] : ['dedupeKey']), ...(value['paused'] === undefined ? [] : ['paused'])])) {
     throw new ScheduleLogError('every schedule must contain exactly id, kind, prompt, everySeconds, and scheduledAt')
   }
   const prompt = value['prompt']
@@ -444,6 +485,7 @@ function decodeEveryRecord(value: unknown): EveryScheduleRecord {
     prompt,
     everySeconds: everySeconds as number,
     scheduledAt: decodeInstant(value['scheduledAt']),
+    ...decodeRecordMetadata(value, ['id', 'kind', 'prompt', 'everySeconds', 'scheduledAt']),
   })
 }
 
@@ -488,6 +530,26 @@ export function decodeScheduleChange(value: unknown): ScheduleChange {
         id: decodeId(value['id']),
       })
     }
+    case 'pause': {
+      if (!hasExactKeys(value, ['version', 'operation', 'id'])) {
+        throw new ScheduleLogError('schedule pause must contain exactly version, operation, and id')
+      }
+      return Object.freeze({
+        version: SCHEDULE_CHANGE_VERSION,
+        operation: 'pause',
+        id: decodeId(value['id']),
+      })
+    }
+    case 'resume': {
+      if (!hasExactKeys(value, ['version', 'operation', 'id'])) {
+        throw new ScheduleLogError('schedule resume must contain exactly version, operation, and id')
+      }
+      return Object.freeze({
+        version: SCHEDULE_CHANGE_VERSION,
+        operation: 'resume',
+        id: decodeId(value['id']),
+      })
+    }
     case 'dispatch': {
       if (hasExactKeys(value, ['version', 'operation', 'id'])) {
         return Object.freeze({
@@ -506,8 +568,29 @@ export function decodeScheduleChange(value: unknown): ScheduleChange {
       }
       throw new ScheduleLogError('schedule dispatch must contain id and optional acceptedAt only')
     }
+    case 'result': {
+      if (!hasExactKeys(value, ['version', 'operation', 'id', 'outcome'])
+        && !hasExactKeys(value, ['version', 'operation', 'id', 'outcome', 'error'])) {
+        throw new ScheduleLogError('schedule result must contain version, operation, id, outcome, and optional error')
+      }
+      const outcome = value['outcome']
+      if (outcome !== 'success' && outcome !== 'failure' && outcome !== 'cancelled') {
+        throw new ScheduleLogError('schedule result outcome must be success, failure, or cancelled')
+      }
+      const error = value['error']
+      if (error !== undefined && typeof error !== 'string') {
+        throw new ScheduleLogError('schedule result error must be a string')
+      }
+      return Object.freeze({
+        version: SCHEDULE_CHANGE_VERSION,
+        operation: 'result',
+        id: decodeId(value['id']),
+        outcome,
+        ...(error === undefined ? {} : { error }),
+      })
+    }
     default:
-      throw new ScheduleLogError('schedule/change operation must be create, delete, or dispatch')
+      throw new ScheduleLogError('schedule/change operation must be create, delete, pause, resume, dispatch, or result')
   }
 }
 
@@ -555,6 +638,7 @@ type DecodedDispatch = Extract<ScheduleChange, { operation: 'dispatch' }>
 
 /** Apply one decoded dispatch to its exact active record. */
 function dispatchedRecord(record: ScheduleRecord, change: DecodedDispatch): ScheduleRecord | undefined {
+  if (record.paused) throw new ScheduleLogError(`schedule dispatch targets paused id ${JSON.stringify(record.id)}`)
   const hasAcceptedAt = 'acceptedAt' in change
   if (record.kind !== 'every') {
     if (hasAcceptedAt) throw new ScheduleLogError('one-shot dispatch must not contain acceptedAt')
@@ -589,6 +673,10 @@ export function applyScheduleChanges(
         if (seen.has(change.schedule.id)) {
           throw new ScheduleLogError(`schedule id ${JSON.stringify(change.schedule.id)} was reused`)
         }
+        if (change.schedule.dedupeKey !== undefined
+          && [...active.values()].some(record => record.dedupeKey === change.schedule.dedupeKey)) {
+          throw new ScheduleLogError(`schedule dedupeKey ${JSON.stringify(change.schedule.dedupeKey)} is already active`)
+        }
         seen.add(change.schedule.id)
         active.set(change.schedule.id, change.schedule)
         break
@@ -597,6 +685,29 @@ export function applyScheduleChanges(
           throw new ScheduleLogError(`schedule delete targets inactive id ${JSON.stringify(change.id)}`)
         }
         break
+      case 'pause': {
+        const record = active.get(change.id)
+        if (record === undefined) {
+          throw new ScheduleLogError(`schedule pause targets inactive id ${JSON.stringify(change.id)}`)
+        }
+        if (record.paused) {
+          throw new ScheduleLogError(`schedule pause targets already paused id ${JSON.stringify(change.id)}`)
+        }
+        active.set(change.id, Object.freeze({ ...record, paused: true }))
+        break
+      }
+      case 'resume': {
+        const record = active.get(change.id)
+        if (record === undefined) {
+          throw new ScheduleLogError(`schedule resume targets inactive id ${JSON.stringify(change.id)}`)
+        }
+        if (!record.paused) {
+          throw new ScheduleLogError(`schedule resume targets active id ${JSON.stringify(change.id)}`)
+        }
+        const { paused: _paused, ...resumed } = record
+        active.set(change.id, Object.freeze(resumed))
+        break
+      }
       case 'dispatch': {
         const record = active.get(change.id)
         if (record === undefined) {
@@ -607,6 +718,9 @@ export function applyScheduleChanges(
         else active.set(change.id, next)
         break
       }
+      case 'result':
+        // Results describe execution and intentionally do not mutate the active rule.
+        break
       /* v8 ignore next 3 -- decodeScheduleChange returns a closed operation union. */
       default: {
         const unreachable: never = change
@@ -793,9 +907,41 @@ export function createEveryScheduleRecord(
 export function scheduleView(record: ScheduleRecord, now: number): ScheduleView {
   return Object.freeze({
     ...record,
-    state: now >= Date.parse(record.scheduledAt) ? 'overdue' : 'scheduled',
+    state: record.paused ? 'paused' : now >= Date.parse(record.scheduledAt) ? 'overdue' : 'scheduled',
     deliveryMode: 'session-local',
   })
+}
+
+/**
+ * Fold durable lifecycle and dispatch entries without changing active state.
+ * @param events - Complete ordered session log or candidate-extended log.
+ * @param inheritedEventCount - Inherited prefix length excluded from child ownership.
+ * @returns Frozen history in durable event order.
+ */
+export function foldScheduleHistory(
+  events: readonly SessionEvent[],
+  inheritedEventCount: SessionLogOffsetType = SessionLogOffset(0),
+): readonly ScheduleHistoryEntry[] {
+  if (!Number.isSafeInteger(inheritedEventCount)
+    || inheritedEventCount < 0
+    || inheritedEventCount > events.length) {
+    throw new ScheduleLogError('schedule inheritedEventCount must be within the supplied event log')
+  }
+  const entries: ScheduleHistoryEntry[] = []
+  for (const event of events.slice(inheritedEventCount)) {
+    if (event.type !== 'schedule/change') continue
+    const change = decodeScheduleChange(event.data)
+    const occurredAt = new Date(event.time).toISOString()
+    entries.push(Object.freeze({
+      id: change.operation === 'create' ? change.schedule.id : change.id,
+      operation: change.operation,
+      occurredAt,
+      ...(change.operation === 'result'
+        ? { result: Object.freeze({ outcome: change.outcome, ...(change.error === undefined ? {} : { error: change.error }) }) }
+        : {}),
+    }))
+  }
+  return Object.freeze(entries)
 }
 
 /**

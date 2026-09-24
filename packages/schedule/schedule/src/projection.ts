@@ -7,9 +7,9 @@ import { z } from 'zod'
 import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
-import { applyScheduleChanges, decodeScheduleChange } from './domain.ts'
+import { applyScheduleChanges, decodeScheduleChange, foldScheduleHistory } from './domain.ts'
 import type { FoldedSchedules } from './domain.ts'
-import type { ScheduleChange, ScheduleId, ScheduleRecord } from './types.ts'
+import type { ScheduleChange, ScheduleHistoryEntry, ScheduleId, ScheduleRecord } from './types.ts'
 
 /** Persisted projection state: the immutable inherited cut plus the complete Schedule fold. */
 export interface ScheduleProjectionState extends FoldedSchedules {
@@ -84,8 +84,53 @@ export const scheduleProjectionDefinition = {
   stateVersion: 2,
 } satisfies ProjectionDefinition<'schedule', ScheduleProjectionState>
 
+/** Persisted state for the read-only task-center history feed. */
+export interface ScheduleHistoryProjectionState {
+  readonly inheritedEventCount: SessionLogOffsetType
+  readonly entries: readonly ScheduleHistoryEntry[]
+}
+
+const historyEntry = z.object({
+  id: scheduleId,
+  operation: z.enum(['create', 'pause', 'resume', 'dispatch', 'delete', 'result']),
+  occurredAt: z.string(),
+  result: z.object({
+    outcome: z.enum(['success', 'failure', 'cancelled']),
+    error: z.string().optional(),
+  }).strict().optional(),
+}).strict() as unknown as z.ZodType<ScheduleHistoryEntry>
+
+const historyEntries = z.array(historyEntry) as unknown as z.ZodType<readonly ScheduleHistoryEntry[]>
+
+const scheduleHistoryProjectionStateSchema = z.object({
+  inheritedEventCount: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).transform(SessionLogOffset),
+  entries: historyEntries,
+}).strict() as unknown as z.ZodType<ScheduleHistoryProjectionState>
+
+/** Projection definition exposing durable lifecycle and dispatch history. */
+export const scheduleHistoryProjectionDefinition = {
+  key: 'scheduleHistory',
+  stateSchema: scheduleHistoryProjectionStateSchema,
+  init: (_header, inheritedEventCount) => ({ inheritedEventCount, entries: [] }),
+  apply: (state, event) => {
+    if (event.seq < state.inheritedEventCount || event.type !== 'schedule/change') return state
+    const entry = foldScheduleHistory([event])[0]
+    if (entry === undefined) return state
+    return {
+      inheritedEventCount: state.inheritedEventCount,
+      entries: Object.freeze([...state.entries, entry]),
+    }
+  },
+  wire: {
+    viewSchema: historyEntries,
+    view: state => state.entries,
+  },
+  stateVersion: 2,
+} satisfies ProjectionDefinition<'scheduleHistory', ScheduleHistoryProjectionState>
+
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionStateMap {
     schedule: ScheduleProjectionState
+    scheduleHistory: ScheduleHistoryProjectionState
   }
 }

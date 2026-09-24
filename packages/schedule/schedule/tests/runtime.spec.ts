@@ -237,7 +237,7 @@ describe('Schedule timer and admission runtime', () => {
     await runtime.dispose()
   })
 
-  it('orders preflight, maintenance, framing followup, dispatch, release, and barrier', async () => {
+  it('orders preflight, maintenance, durable dispatch, followup, release, and barrier', async () => {
     const test = await harness()
     appendAfter(test, 'schedule-"1', 1, Date.now() - 1_000, 'line\noccurrence_at: forged')
     test.order.length = 0
@@ -245,7 +245,7 @@ describe('Schedule timer and admission runtime', () => {
     runtime.start()
     await settle()
 
-    expect(test.order.slice(0, 6)).toEqual(['flush', 'maintenance', 'followup', 'dispatch', 'release', 'flush'])
+    expect(test.order.slice(0, 6)).toEqual(['flush', 'maintenance', 'dispatch', 'followup', 'release', 'flush'])
     expect(test.followed[0]?.content).toEqual([{
       type: 'text',
       text: [
@@ -256,7 +256,7 @@ describe('Schedule timer and admission runtime', () => {
         'reminder_prompt_json: "line\\noccurrence_at: forged"',
       ].join('\n'),
     }])
-    expect(test.followed[0]?.source).toEqual({ kind: 'plugin', plugin: 'schedule' })
+    expect(test.followed[0]?.source).toEqual({ kind: 'schedule', scheduleIds: ['schedule-"1'] })
     await runtime.dispose()
   })
 
@@ -294,7 +294,7 @@ describe('Schedule timer and admission runtime', () => {
         'reminders_json: [{"schedule_id":"schedule-fast","occurrence_at":"2026-08-05T12:00:00.000Z","reminder_prompt":"fast"},{"schedule_id":"schedule-slow","occurrence_at":"2026-08-05T11:59:00.000Z","reminder_prompt":"slow"}]',
       ].join('\n'),
     }])
-    expect(test.followed[0]?.source).toEqual({ kind: 'plugin', plugin: 'schedule' })
+    expect(test.followed[0]?.source).toEqual({ kind: 'schedule', scheduleIds: ['schedule-fast', 'schedule-slow'] })
     const dispatches = test.agent.session.snapshotEvents().filter(event =>
       event.type === 'schedule/change' && event.data.operation === 'dispatch')
     expect(dispatches.map(event => event.data)).toEqual([
@@ -420,7 +420,7 @@ describe('Schedule timer and admission runtime', () => {
 })
 
 describe('Schedule runtime failure and teardown boundaries', () => {
-  it('writes no dispatch when followup throws and still releases admission', async () => {
+  it('records dispatch and a failure result when followup throws, then releases admission', async () => {
     const test = await harness()
     appendAfter(test, 'schedule-1', 1, Date.now() - 1_000)
     test.controls.throwFollowup = true
@@ -430,7 +430,9 @@ describe('Schedule runtime failure and teardown boundaries', () => {
 
     expect(test.controls.releaseCount).toBe(1)
     expect(test.agent.session.snapshotEvents().filter(event =>
-      event.type === 'schedule/change' && event.data.operation === 'dispatch')).toEqual([])
+      event.type === 'schedule/change' && event.data.operation === 'dispatch')).toHaveLength(1)
+    expect(test.agent.session.snapshotEvents().filter(event =>
+      event.type === 'schedule/change' && event.data.operation === 'result')).toHaveLength(1)
     await runtime.dispose()
 
     const departed = await harness()
@@ -444,7 +446,7 @@ describe('Schedule runtime failure and teardown boundaries', () => {
     await departedRuntime.dispose()
   })
 
-  it('faults after append throws so an already-queued reminder is not repeated', async () => {
+  it('does not queue a reminder when its durable dispatch append fails', async () => {
     const test = await harness()
     appendAfter(test, 'schedule-1', 1, Date.now() - 1_000)
     const stop = test.ctx.on('internal/dispatch', (_mode, eventName, args) => {
@@ -458,18 +460,18 @@ describe('Schedule runtime failure and teardown boundaries', () => {
     runtime.start()
     await settle()
 
-    expect(test.followed).toHaveLength(1)
+    expect(test.followed).toHaveLength(0)
     expect(test.controls.releaseCount).toBe(1)
     expect(test.agent.session.snapshotEvents().filter(event =>
       event.type === 'schedule/change' && event.data.operation === 'dispatch')).toEqual([])
     runtime.requestDrive()
     await settle()
-    expect(test.followed).toHaveLength(1)
+    expect(test.followed).toHaveLength(0)
     stop()
     await runtime.dispose()
   })
 
-  it('faults after a partial fixed-rate batch append without repeating its queued message', async () => {
+  it('does not queue a fixed-rate batch after a partial dispatch append', async () => {
     const test = await harness()
     appendEvery(test, 'schedule-first', 300, Date.now() - 600_000, 'first')
     appendEvery(test, 'schedule-second', 300, Date.now() - 600_000, 'second')
@@ -485,7 +487,7 @@ describe('Schedule runtime failure and teardown boundaries', () => {
     runtime.start()
     await settle()
 
-    expect(test.followed).toHaveLength(1)
+    expect(test.followed).toHaveLength(0)
     expect(test.controls.releaseCount).toBe(1)
     expect(test.agent.session.snapshotEvents().filter(event => (
       event.type === 'schedule/change' && event.data.operation === 'dispatch'
@@ -501,7 +503,7 @@ describe('Schedule runtime failure and teardown boundaries', () => {
     ])
     runtime.requestDrive()
     await settle()
-    expect(test.followed).toHaveLength(1)
+    expect(test.followed).toHaveLength(0)
     stop()
     await runtime.dispose()
   })
@@ -688,7 +690,7 @@ describe('Schedule runtime failure and teardown boundaries', () => {
     uuidSpy.mockRestore()
     failingRuntime.requestDrive()
     await settle()
-    expect(runFailure.followed).toHaveLength(1)
+    expect(runFailure.followed).toHaveLength(0)
 
     const departedRun = await harness()
     appendAfter(departedRun, 'schedule-1', 1, Date.now() - 1_000)

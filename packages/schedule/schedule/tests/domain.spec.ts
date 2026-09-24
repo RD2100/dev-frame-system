@@ -86,7 +86,7 @@ describe('version-1 Schedule decoding and folding', () => {
   it.each([
     null,
     { version: 2, operation: 'delete', id: 'schedule-1' },
-    { version: 1, operation: 'pause', id: 'schedule-1' },
+    { version: 1, operation: 'result', id: 'schedule-1', outcome: 'maybe' },
     { version: 1, operation: 'delete', id: 'schedule-1', extra: true },
     { version: 1, operation: 'dispatch', id: '' },
     { version: 1, operation: 'dispatch', id: ' schedule-1' },

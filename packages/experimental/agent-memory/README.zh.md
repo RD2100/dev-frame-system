@@ -90,8 +90,15 @@ const context = await ctx.agentMemory.retrieveContext({
 
 插件配置不变时，工具模式和静态来源标记保持前缀稳定。召回上下文位于正常请求历史之后，只随相关记忆变化。
 
-<a id="known-limitations-and-deferred-work"></a>
+##### 召回上下文标记
+
+```markdown
+memory_context: <bounded facts, episodes, procedures, and trace id>
+```
+
 ## 已知限制与延期工作
+
+<a id="known-limitations-and-deferred-work"></a>
 
 - 召回使用确定性的词法匹配。Embedding 和向量索引留待实测证明召回需要后加入。
 - 未启用从任意模型输出自动提取情节；调用方要记录有界的结构化情节。

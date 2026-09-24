@@ -3,15 +3,17 @@
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-schedule/client'
 import { ScheduleCatalogAction } from './ScheduleCatalogAction.tsx'
+import { ScheduleTaskCenter } from './ScheduleTaskCenter.tsx'
 import { en, NS, zh, type ScheduleCatalogKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** Read-only active Schedule catalog copy. */
+    /** Schedule catalog and task-center copy. */
     'schedule.catalog': ScheduleCatalogKey
   }
 }
@@ -31,5 +33,15 @@ export function apply(ctx: ClientContext): void {
       order: 10,
       locale: NS,
     }, ScheduleCatalogAction),
+  )
+  ctx.slots.inject(
+    'settings.section',
+    () => ctx.slots.register({
+      name: 'settings.section',
+      id: 'schedule',
+      order: 30,
+      label: () => ctx.locale.bind(NS)('center.nav'),
+      locale: NS,
+    }, ScheduleTaskCenter),
   )
 }

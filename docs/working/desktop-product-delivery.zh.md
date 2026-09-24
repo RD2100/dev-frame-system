@@ -61,10 +61,10 @@ description: Desktop 插件接入、专家中心、技能与 MCP、Obsidian 资�
 | D2 | 专家中心交互缺口与可运行召唤流程 | D0 | 已完成：专家中心召唤与审批流程验收 | Luna max / Dewey / 01a0aa94-f920-77a1-bb92-b1c915752a86 |
 | D3 | Obsidian 资料库基础：文件列表、读取、搜索与路径状态 | D0 | 已完成：资料库 Host 服务、工具与页面接线验收 | Luna max / Pascal / 01a0aa94-fa61-7022-847f-8a441dd750b2 |
 | D4 | 技能/MCP 管理与定时任务的现有能力核对、适配方案 | D0 | 已完成：Skill/MCP/定时任务复用审计 | Luna max / Archimedes / 01a0aa94-fb9a-7df3-b32b-04f8b0adfc1c |
-| D5 | Desktop 集成、构建、真实加载与升级兼容验收 | D1–D4 | 已验收：Host 启动、profile/RPC 复核；Electron UI e2e 待验证 | Luna max / Parfit / 01a0aa96-62e5-75d0-a94b-6f88bcb2ff8b |
-| D6 | 资料库页面与 Memory Remote：目录、预览、搜索、路径和引用 | D3 | 已实现：library Remote 与只读页面；Electron UI e2e 待验证 | 待分配 Luna max |
-| D7 | 技能与连接器管理页面、官方服务接入 | D4 | 审计完成；管理页面待实现 | 待分配 Luna max |
-| D8 | 定时任务模板、持久化运行记录与重启恢复 | D4 | 审计完成；持久化定时任务中心待实现 | 待分配 Luna max |
+| D5 | Desktop 集成、构建、真实加载与升级兼容验收 | D1–D4 | Host 启动和 Electron 页面已复核；模型驱动的影子看板流程受提供方计费阻塞 | Luna max / Parfit / 01a0aa96-62e5-75d0-a94b-6f88bcb2ff8b |
+| D6 | 资料库页面与 Memory Remote：目录、预览、搜索、路径和引用 | D3 | 已实现并挂载；Electron 资料库与 Memory 页面可读取；修改与完整 e2e 证据仍有限 | 待分配 Luna max |
+| D7 | 技能与连接器管理页面、官方服务接入 | D4 | 只读目录页已完成；安装、启停与 MCP 增删改测需要管理后端 | 待分配 Luna max |
+| D8 | 定时任务模板、持久化运行记录与重启恢复 | D4 | Schedule 工具、模板、暂停/恢复/立即运行/历史、结果回执、投影和只读任务中心已挂载；页面变更控件与冷重启 e2e 仍待做 | 待分配 Luna max |
 
 ## 协作与验收 <a id="delivery"></a>
 
@@ -91,9 +91,10 @@ description: Desktop 插件接入、专家中心、技能与 MCP、Obsidian 资�
 - 2026-09-17：D5 验收通过。staging profile（bundles `[dsh-base, dsh-web-app, dsh-experimental-devframe-profile]`，overlay 注入 packs/workspaceRoot/artifactsDir）经官方 desktop-host `runDesktopHost` 装载，全部行激活，并在桌面传输上应答一次 Remote。开发仓库兼容修复：typert generator 输出记忆化惰性 schema 工厂 + `schema`/`create` 双字段 strict codec（官方 0.1.6 loader 的 `requireStrictCodec` 强制要求 `create`；generator lib 重建、host bundle 全量重生成）；agent-dispatch 在宿主缺少 `TOOL_AGENT_DISPATCH` 时回退仓库 2850 的 prompt section 序位；staging profile patch（部署层）补 `@deepseek-ai/dsh-worktree-registry`——官方 0.1.6 的 bundle 不含该包；开发仓库 web-app bundle 自带，故 devframe-profile 层不得重复该行（重复会让真实 web 服务以 `duplicate loader entry id: worktree-registry` 启动失败，已将该行移至部署层）；cordis-catalog LINK_MAP 补充 gateway 新增签名涉及的 6 个类型并重生成 `api-catalog.ts`。官方旁侧副本实测：`--dump-config` 组合通过；unary RPC `/api/expertTeam/view` 返回完整快照（2 团队 / 15 专家），HTTP 200，帧序列 start/data/end 干净；重启后 manifest 文件不变且响应指纹一致；版本报告 dsh 0.1.6-alpha.1、DevFrame 插件 0.1.2-alpha.4；不含 devframe-profile 的 profile 无任何 DevFrame 行（禁用语义）。生成器套件全绿：schema-emitter 65/65、type-model 43/43（快照刷新）、cordis-catalog 3/3；tool-catalog 期望同步（接线后的 project-controller 暴露 4 个 `project_*` 工具）；DevFrame 域 660 项通过（2 项 loader 超时抖动重跑即绿）；oxlint 0 错误、tsc -b 0。脚本：`.desktop-devframe-staging/verify-load.mts`、`verify-restart.mts`。全仓 `vitest run` 另暴露既有的范围外漂移（docs 子系统 README 索引行、packed-session fixture 迁移、sdk-minimal allowlist），本次交付未触碰。
 - 2026-09-17：D5 跟进（web 可用性）。桌面入口整合为单一「DSH」图标，点击打开 DevFrame web 工作台（`apps/cli web` + devframe-profile patch + 部署 overlay；服务在 `127.0.0.1:3080`）。启动暴露：先前加进 devframe-profile patch 的 worktree-registry 行与开发仓库 web-app bundle 的行重复，导致真实 web 启动失败（`duplicate loader entry id: worktree-registry`）。修复：将该行移至 staging profile patch（部署层——官方 0.1.6 的 bundle 确实缺该包、staging 需要；devframe-profile 层保持干净）。staging 复验全绿（verify-load run13：boot OK、无 pending、RPC 200、2 团队 / 15 专家）；web 服务重启后 `status=running`，界面 HTTP 200 可访问。
 - 2026-09-24：当前源码与定向证据表明 D1–D4 已完成：依赖与打包、专家中心召唤、资料库基础、Skill/MCP/定时任务审计均已有实现或已接受的审计依据；下方已对账表格中陈旧的“开发中”状态。
-- 2026-09-24：已在当前 DevFrame overlay profile 上复核 D5 Host 启动；profile 组合、Host typecheck/lint，以及 Shadow/Agent Teams/Memory 定向检查通过。
-- 2026-09-24：D5 剩余发布门槛是真实 Electron renderer 流程：重建 desktop host，执行“Shadow 对话 → controller 规划 → 看板卡片 → 批准”并保留运行证据；本记录不把它标为通过。
-- 2026-09-24：D6 Host Remote 与只读资料库页面已经实现并挂载；D7 管理页面和 D8 持久化定时任务中心在审计后仍未实现，列为后续范围。
+- 2026-09-24：已在 DevFrame overlay profile 上复核 D5 Host 启动和真实 Electron 页面。专家、Memory、Agent Team 与影子页面可加载；提供方计费问题阻塞模型驱动的影子规划和看板审批证据。
+- 2026-09-24：D6 Host Remote 与只读资料库页面已经实现并挂载；Electron 资料库与 Memory 页面可读取当前投影。
+- 2026-09-24：D7 已交付带搜索和刷新的只读 Skill/连接器目录。官方服务没有安装、启停或 MCP 增删改测 Remote，因此这些动作明确延期到管理后端。
+- 2026-09-24：D8 已交付会话级 Schedule overlay、8 个模型工具、模板、暂停/恢复/立即运行/历史、成功/失败/取消结果回执、可重启投影和只读任务中心。浏览器变更控件与冷重启 Electron 证据仍延期。
 
 ## Dev Note
 

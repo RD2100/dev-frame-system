@@ -53,6 +53,9 @@
                          "@deepseek-ai/dsh-experimental-shadow-controller":  "workspace:^",
                          "@deepseek-ai/dsh-experimental-shadow-router":  "workspace:^",
                          "@deepseek-ai/dsh-experimental-tool-agent-team":  "workspace:^",
+                         "@deepseek-ai/dsh-client-ui-schedule":  "workspace:^",
+                         "@deepseek-ai/dsh-schedule":  "workspace:^",
+                         "@deepseek-ai/dsh-time-context":  "workspace:^",
                          "@deepseek-ai/dsh-worktree-registry":  "workspace:^"
                      },
     "peerDependencies":  {

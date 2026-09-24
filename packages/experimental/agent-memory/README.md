@@ -90,8 +90,15 @@ The tool schemas and the fixed retrieval message add a small prompt cost. Retrie
 
 The tool schemas and static source marker are prefix-stable while the plugin configuration remains unchanged. Retrieved context is appended after the normal request history and changes only when relevant memory changes.
 
-<a id="known-limitations-and-deferred-work"></a>
+##### Retrieved context marker
+
+```markdown
+memory_context: <bounded facts, episodes, procedures, and trace id>
+```
+
 ## Known Limitations and Deferred Work
+
+<a id="known-limitations-and-deferred-work"></a>
 
 - Retrieval uses deterministic lexical matching. Embeddings and vector indexes are deferred until measured recall needs them.
 - Automatic episode extraction from arbitrary model output is not enabled; callers record bounded structured episodes.

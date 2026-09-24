@@ -42,13 +42,13 @@ function dueDecision(folded: FoldedSchedules, now: number): DueDecision {
 
   const oneShot = indexed
     .filter((entry): entry is { record: OneShotScheduleRecord; index: number } =>
-      entry.record.kind !== 'every' && Date.parse(entry.record.scheduledAt) <= now)
+      entry.record.kind !== 'every' && !entry.record.paused && Date.parse(entry.record.scheduledAt) <= now)
     .sort(byTargetThenCreate)[0]?.record
   if (oneShot !== undefined) return { kind: 'one-shot', record: oneShot }
 
   const every = indexed
     .filter((entry): entry is { record: EveryScheduleRecord; index: number } =>
-      entry.record.kind === 'every' && Date.parse(entry.record.scheduledAt) <= now)
+      entry.record.kind === 'every' && !entry.record.paused && Date.parse(entry.record.scheduledAt) <= now)
     .sort(byTargetThenCreate)
   if (every.length > 0) {
     return {
@@ -62,6 +62,7 @@ function dueDecision(folded: FoldedSchedules, now: number): DueDecision {
   }
 
   const target = folded.active.reduce<number | undefined>((selected, record) => {
+    if (record.paused) return selected
     const candidate = Date.parse(record.scheduledAt)
     return candidate > now && (selected === undefined || candidate < selected) ? candidate : selected
   }, undefined)
@@ -261,21 +262,9 @@ export class ScheduleRuntime {
           if (decision.target !== undefined) this.arm(decision.target, decisionNow)
           return Promise.resolve(false)
         }
-        try {
-          const text = decision.kind === 'one-shot'
-            ? renderReminderFraming(decision.record)
-            : renderEveryReminderBatchFraming(decision.reminders)
-          const message = createUserMessage({
-            content: [{ type: 'text', text }],
-            source: { kind: 'plugin', plugin: 'schedule' },
-          })
-          this.agent.followup(message)
-        } catch (error: unknown) {
-          if (this.isLive()) {
-            this.ctx.logger.warn(`schedule: framing or followup failed for agent "${this.agent.id}": ${renderThrown(error)}`)
-          }
-          return Promise.resolve(false)
-        }
+        const ids = decision.kind === 'one-shot'
+          ? [decision.record.id]
+          : decision.reminders.map(reminder => reminder.record.id)
         try {
           if (decision.kind === 'one-shot') {
             this.agent.session.append('schedule/change', {
@@ -298,6 +287,31 @@ export class ScheduleRuntime {
           this.clearTimer()
           this.ctx.logger.warn(`schedule: dispatch append failed for agent "${this.agent.id}": ${renderThrown(error)}`)
           return Promise.resolve(false)
+        }
+        try {
+          const text = decision.kind === 'one-shot'
+            ? renderReminderFraming(decision.record)
+            : renderEveryReminderBatchFraming(decision.reminders)
+          const message = createUserMessage({
+            content: [{ type: 'text', text }],
+            source: { kind: 'schedule', scheduleIds: ids },
+          })
+          this.agent.followup(message)
+        } catch (error: unknown) {
+          try {
+            for (const id of ids) this.agent.session.append('schedule/change', {
+              version: 1,
+              operation: 'result',
+              id,
+              outcome: 'failure',
+              error: renderThrown(error).slice(0, 240),
+            })
+          } catch (resultError: unknown) {
+            this.ctx.logger.warn(`schedule: followup failure result append failed: ${renderThrown(resultError)}`)
+          }
+          if (this.isLive()) {
+            this.ctx.logger.warn(`schedule: framing or followup failed for agent "${this.agent.id}": ${renderThrown(error)}`)
+          }
         }
         return Promise.resolve(true)
       })

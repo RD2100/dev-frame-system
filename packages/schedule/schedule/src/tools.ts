@@ -5,6 +5,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView } from '@deepseek-ai/dsh-tools'
@@ -13,13 +14,19 @@ import {
   createAfterScheduleRecord,
   createAtScheduleRecord,
   createEveryScheduleRecord,
+  foldScheduleHistory,
   foldScheduleEvents,
   MIN_EVERY_INTERVAL_SECONDS,
+  renderEveryReminderBatchFraming,
+  renderReminderFraming,
+  resolveEveryOccurrence,
   ScheduleId,
+  ScheduleDedupeKey,
   ScheduleInputError,
   ScheduleLogError,
   scheduleView,
 } from './domain.ts'
+import { SCHEDULE_TEMPLATES } from './types.ts'
 import { flushSchedulePersistence } from './persistence.ts'
 import { runScheduleTransaction } from './transaction.ts'
 import type {
@@ -32,6 +39,11 @@ import type {
   ScheduleListValue,
   SchedulePersistenceOperation,
   ScheduleRecord,
+  ScheduleHistoryValue,
+  SchedulePauseValue,
+  ScheduleResumeValue,
+  ScheduleRunValue,
+  ScheduleTemplateValue,
   ScheduleToolError,
 } from './types.ts'
 
@@ -39,8 +51,9 @@ const SHARED_VIEW_PROPERTIES = {
   id: { type: 'string', required: true },
   prompt: { type: 'string', required: true },
   scheduledAt: { type: 'string', required: true },
-  state: { type: 'string', required: true, enum: ['scheduled', 'overdue'] },
+  state: { type: 'string', required: true, enum: ['scheduled', 'overdue', 'paused'] },
   deliveryMode: { type: 'string', required: true, const: 'session-local' },
+  dedupeKey: { type: 'string' },
 } as const
 
 const AFTER_VIEW_SCHEMA = {
@@ -104,7 +117,7 @@ const PERSISTENCE_ERROR_SCHEMA = {
   properties: {
     code: { type: 'string', required: true, const: 'persistence_uncertain' },
     message: { type: 'string', required: true },
-    operation: { type: 'string', required: true, enum: ['create', 'list', 'delete'] },
+    operation: { type: 'string', required: true, enum: ['create', 'list', 'delete', 'pause', 'resume', 'run', 'history'] },
     id: { type: 'string' },
   },
 } as const
@@ -144,12 +157,81 @@ const DELETE_OUTPUT_SCHEMA = {
   ],
 } as const
 
+const ACTION_OUTPUT_SCHEMA = {
+  oneOf: [
+    { type: 'object', additionalProperties: false, properties: {
+      id: { type: 'string', required: true }, paused: { type: 'boolean', required: true, const: true },
+    } },
+    { type: 'object', additionalProperties: false, properties: {
+      id: { type: 'string', required: true }, paused: { type: 'boolean', required: true, const: false },
+      code: { type: 'string', required: true, enum: ['schedule_not_found', 'schedule_already_paused'] },
+    } },
+    ...ERROR_SCHEMAS,
+  ],
+} as const
+
+const RESUME_OUTPUT_SCHEMA = {
+  oneOf: [
+    { type: 'object', additionalProperties: false, properties: {
+      id: { type: 'string', required: true }, resumed: { type: 'boolean', required: true, const: true },
+    } },
+    { type: 'object', additionalProperties: false, properties: {
+      id: { type: 'string', required: true }, resumed: { type: 'boolean', required: true, const: false },
+      code: { type: 'string', required: true, enum: ['schedule_not_found', 'schedule_already_active'] },
+    } },
+    ...ERROR_SCHEMAS,
+  ],
+} as const
+
+const RUN_OUTPUT_SCHEMA = {
+  oneOf: [
+    { type: 'object', additionalProperties: false, properties: {
+      id: { type: 'string', required: true }, started: { type: 'boolean', required: true, const: true },
+    } },
+    { type: 'object', additionalProperties: false, properties: {
+      id: { type: 'string', required: true }, started: { type: 'boolean', required: true, const: false },
+      code: { type: 'string', required: true, enum: ['schedule_not_found', 'schedule_paused'] },
+    } },
+    ...ERROR_SCHEMAS,
+  ],
+} as const
+
+const HISTORY_OUTPUT_SCHEMA = {
+  oneOf: [
+    { type: 'array', items: {
+      type: 'object', additionalProperties: false, properties: {
+        id: { type: 'string', required: true },
+        operation: { type: 'string', required: true, enum: ['create', 'pause', 'resume', 'dispatch', 'delete', 'result'] },
+        occurredAt: { type: 'string', required: true },
+        result: { type: 'object', additionalProperties: false, properties: {
+          outcome: { type: 'string', required: true, enum: ['success', 'failure', 'cancelled'] },
+          error: { type: 'string' },
+        } },
+      },
+    } },
+    ...ERROR_SCHEMAS,
+  ],
+} as const
+
+const TEMPLATE_OUTPUT_SCHEMA = {
+  type: 'array', items: {
+    type: 'object', additionalProperties: false, properties: {
+      id: { type: 'string', required: true }, label: { type: 'string', required: true },
+      description: { type: 'string', required: true },
+      rule: { type: 'object', additionalProperties: false, properties: {
+        afterSeconds: { type: 'integer' }, everySeconds: { type: 'integer' },
+      } },
+    },
+  },
+} as const
+
 const CREATE_DESCRIPTION =
   'Create one reminder in the current session. Supply a non-empty prompt and exactly one selector: '
   + 'a positive safe-integer after_seconds delay, at as a strict offset date-time or local '
   + `date/time object, or safe-integer every_seconds of at least ${MIN_EVERY_INTERVAL_SECONDS}. `
   + 'Fixed-rate reminders stay creation-aligned, skip missed occurrences, and batch one latest '
   + 'occurrence per overdue rule. '
+  + 'An optional dedupe_key makes repeated active creates return the existing reminder. '
   + 'Delivery is session-local: the reminder runs on time only while this session '
   + 'is live and otherwise becomes overdue until the session is resumed.'
 
@@ -160,6 +242,22 @@ const LIST_DESCRIPTION =
 const DELETE_DESCRIPTION =
   'Delete one active reminder in the current session by the exact id returned by schedule_create '
   + 'or schedule_list. Unknown or already-finished ids return deleted false.'
+
+const PAUSE_DESCRIPTION =
+  'Pause one active reminder by id. The rule stays durable and can be resumed later.'
+
+const RESUME_DESCRIPTION =
+  'Resume one paused reminder by id. An overdue target is eligible for immediate delivery.'
+
+const RUN_DESCRIPTION =
+  'Queue one reminder immediately by id and record its dispatch in the durable history. '
+  + 'Paused reminders remain paused until resumed.'
+
+const HISTORY_DESCRIPTION =
+  'List durable Schedule creation, pause, resume, dispatch, result, and delete history in event order.'
+
+const TEMPLATES_DESCRIPTION =
+  'List built-in task-center templates. Templates are suggestions; schedule_create persists the selected rule.'
 
 /** Deterministic model content for every canonical Schedule value. */
 function renderValue(_args: unknown, value: unknown): ContentBlock[] {
@@ -255,12 +353,14 @@ function validateCreateArgs(args: {
   after_seconds?: number
   at?: AtInput
   every_seconds?: number
+  dedupe_key?: string
 }): ScheduleToolError | undefined {
   const keys = Object.keys(args as unknown as Record<string, unknown>)
   if (keys.some(key => key !== 'prompt'
     && key !== 'after_seconds'
     && key !== 'at'
-    && key !== 'every_seconds')
+    && key !== 'every_seconds'
+    && key !== 'dedupe_key')
     || Number(args.after_seconds !== undefined)
     + Number(args.at !== undefined)
     + Number(args.every_seconds !== undefined) !== 1) {
@@ -285,16 +385,20 @@ function validateCreateArgs(args: {
       message: `every_seconds must be at least ${MIN_EVERY_INTERVAL_SECONDS}.`,
     }
   }
+  if (args.dedupe_key !== undefined
+    && (args.dedupe_key.length === 0 || args.dedupe_key.trim() !== args.dedupe_key)) {
+    return { code: 'invalid_rule', message: 'dedupe_key must be non-empty without surrounding whitespace.' }
+  }
   return undefined
 }
 
 /**
- * Register all three Schedule tools in one exact agent scope.
+ * Register all Schedule tools in one exact agent scope.
  * @param rootCtx - Global service context owning sessions and durability.
  * @param toolCtx - Exact agent-scoped context receiving the definitions.
  * @param agent - Exact live owner whose session the tools mutate.
- * @param onDurableChange - Called after every successful preflight and again after a create or actual delete barrier succeeds.
- * @returns Idempotent aggregate disposer for the three registrations.
+ * @param onDurableChange - Called after every successful preflight and again after a durable mutation barrier succeeds.
+ * @returns Idempotent aggregate disposer for the registrations.
  */
 export function registerScheduleTools(
   rootCtx: Context,
@@ -331,6 +435,10 @@ export function registerScheduleTools(
           type: 'number',
           description: `Fixed-rate safe-integer interval in seconds, at least ${MIN_EVERY_INTERVAL_SECONDS}.`,
         },
+        dedupe_key: {
+          type: 'string',
+          description: 'Optional non-empty key that makes active repeated creates idempotent.',
+        },
         at: {
           description: 'Absolute target as strict offset RFC 3339 or local date/time with an explicit IANA zone.',
           oneOf: [
@@ -358,6 +466,11 @@ export function registerScheduleTools(
           notifyDurableChange()
           const folded = foldForTool(agent)
           if (isToolError(folded)) return folded
+          const dedupeKey = args.dedupe_key === undefined ? undefined : ScheduleDedupeKey(args.dedupe_key)
+          if (dedupeKey !== undefined) {
+            const existing = folded.active.find(record => record.dedupeKey === dedupeKey)
+            if (existing !== undefined) return scheduleView(existing, Date.now())
+          }
           const id = allocateScheduleId(folded)
           let record: ScheduleRecord
           try {
@@ -375,6 +488,9 @@ export function registerScheduleTools(
             }
           } catch (error: unknown) {
             return error instanceof ScheduleInputError ? inputError(error) : internalError()
+          }
+          if (dedupeKey !== undefined) {
+            record = Object.freeze({ ...record, dedupeKey })
           }
           const cancelledBeforeAppend = cancellationPlaceholder(exec.signal)
           if (cancelledBeforeAppend !== undefined) return cancelledBeforeAppend
@@ -452,6 +568,189 @@ export function registerScheduleTools(
         })
       },
       presentCall: args => present('Delete reminder', 'other', args.id),
+    })))
+
+    disposers.push(toolCtx.tools.register(defineTool({
+      name: 'schedule_pause',
+      description: PAUSE_DESCRIPTION,
+      parameters: {
+        id: { type: 'string', required: true, description: 'Exact session-local schedule id.' },
+      },
+      output: { schema: ACTION_OUTPUT_SCHEMA, render: renderValue },
+      async execute(args, exec): Promise<SchedulePauseValue> {
+        if (args.id.length === 0 || args.id.trim() !== args.id) {
+          return { code: 'invalid_rule', message: 'schedule_pause id must be non-empty without surrounding whitespace.' }
+        }
+        const id = ScheduleId(args.id)
+        if (exec.agent !== agent) return internalError()
+        return runCancellableScheduleTransaction(agent, exec.signal, async () => {
+          const uncertain = await preflight(rootCtx, agent, 'pause', id)
+          if (uncertain !== undefined) return uncertain
+          notifyDurableChange()
+          const folded = foldForTool(agent)
+          if (isToolError(folded)) return folded
+          const record = folded.active.find(entry => entry.id === id)
+          if (record === undefined) return { id, paused: false, code: 'schedule_not_found' }
+          if (record.paused) return { id, paused: false, code: 'schedule_already_paused' }
+          const cancelledBeforeAppend = cancellationPlaceholder(exec.signal)
+          if (cancelledBeforeAppend !== undefined) return cancelledBeforeAppend
+          try {
+            agent.session.append('schedule/change', { version: 1, operation: 'pause', id })
+          } catch {
+            return internalError()
+          }
+          const barrier = await preflight(rootCtx, agent, 'pause', id)
+          if (barrier !== undefined) return barrier
+          notifyDurableChange()
+          return { id, paused: true }
+        })
+      },
+      presentCall: args => present('Pause reminder', 'other', args.id),
+    })))
+
+    disposers.push(toolCtx.tools.register(defineTool({
+      name: 'schedule_resume',
+      description: RESUME_DESCRIPTION,
+      parameters: {
+        id: { type: 'string', required: true, description: 'Exact session-local schedule id.' },
+      },
+      output: { schema: RESUME_OUTPUT_SCHEMA, render: renderValue },
+      async execute(args, exec): Promise<ScheduleResumeValue> {
+        if (args.id.length === 0 || args.id.trim() !== args.id) {
+          return { code: 'invalid_rule', message: 'schedule_resume id must be non-empty without surrounding whitespace.' }
+        }
+        const id = ScheduleId(args.id)
+        if (exec.agent !== agent) return internalError()
+        return runCancellableScheduleTransaction(agent, exec.signal, async () => {
+          const uncertain = await preflight(rootCtx, agent, 'resume', id)
+          if (uncertain !== undefined) return uncertain
+          notifyDurableChange()
+          const folded = foldForTool(agent)
+          if (isToolError(folded)) return folded
+          const record = folded.active.find(entry => entry.id === id)
+          if (record === undefined) return { id, resumed: false, code: 'schedule_not_found' }
+          if (!record.paused) return { id, resumed: false, code: 'schedule_already_active' }
+          const cancelledBeforeAppend = cancellationPlaceholder(exec.signal)
+          if (cancelledBeforeAppend !== undefined) return cancelledBeforeAppend
+          try {
+            agent.session.append('schedule/change', { version: 1, operation: 'resume', id })
+          } catch {
+            return internalError()
+          }
+          const barrier = await preflight(rootCtx, agent, 'resume', id)
+          if (barrier !== undefined) return barrier
+          notifyDurableChange()
+          return { id, resumed: true }
+        })
+      },
+      presentCall: args => present('Resume reminder', 'other', args.id),
+    })))
+
+    disposers.push(toolCtx.tools.register(defineTool({
+      name: 'schedule_run',
+      description: RUN_DESCRIPTION,
+      parameters: {
+        id: { type: 'string', required: true, description: 'Exact session-local schedule id.' },
+      },
+      output: { schema: RUN_OUTPUT_SCHEMA, render: renderValue },
+      async execute(args, exec): Promise<ScheduleRunValue> {
+        if (args.id.length === 0 || args.id.trim() !== args.id) {
+          return { code: 'invalid_rule', message: 'schedule_run id must be non-empty without surrounding whitespace.' }
+        }
+        const id = ScheduleId(args.id)
+        if (exec.agent !== agent) return internalError()
+        return runCancellableScheduleTransaction(agent, exec.signal, async () => {
+          const uncertain = await preflight(rootCtx, agent, 'run', id)
+          if (uncertain !== undefined) return uncertain
+          notifyDurableChange()
+          const folded = foldForTool(agent)
+          if (isToolError(folded)) return folded
+          const record = folded.active.find(entry => entry.id === id)
+          if (record === undefined) return { id, started: false, code: 'schedule_not_found' }
+          if (record.paused) return { id, started: false, code: 'schedule_paused' }
+          const now = Date.now()
+          let acceptedAt: string | undefined
+          let text: string
+          try {
+            if (record.kind === 'every') {
+              const acceptedAtEpoch = Math.max(now, Date.parse(record.scheduledAt))
+              acceptedAt = new Date(acceptedAtEpoch).toISOString()
+              const occurrence = resolveEveryOccurrence(record, acceptedAtEpoch)
+              text = renderEveryReminderBatchFraming([{ record, occurrenceAt: occurrence.occurrenceAt }])
+            } else {
+              text = renderReminderFraming(record)
+            }
+          } catch {
+            return internalError()
+          }
+          const cancelledBeforeAppend = cancellationPlaceholder(exec.signal)
+          if (cancelledBeforeAppend !== undefined) return cancelledBeforeAppend
+          try {
+            agent.session.append('schedule/change', acceptedAt === undefined
+              ? { version: 1, operation: 'dispatch', id }
+              : { version: 1, operation: 'dispatch', id, acceptedAt })
+          } catch {
+            return internalError()
+          }
+          try {
+            agent.followup(createUserMessage({
+              content: [{ type: 'text', text }],
+              source: { kind: 'schedule', scheduleIds: [id] },
+            }))
+          } catch (error: unknown) {
+            try {
+              agent.session.append('schedule/change', {
+                version: 1,
+                operation: 'result',
+                id,
+                outcome: 'failure',
+                error: (error instanceof Error ? error.message : String(error)).slice(0, 240),
+              })
+            } catch {
+              // The dispatch is already durable; the failure receipt is best effort.
+            }
+            return internalError()
+          }
+          const barrier = await preflight(rootCtx, agent, 'run', id)
+          if (barrier !== undefined) return barrier
+          notifyDurableChange()
+          return { id, started: true }
+        })
+      },
+      presentCall: args => present('Run reminder now', 'other', args.id),
+    })))
+
+    disposers.push(toolCtx.tools.register(defineTool({
+      name: 'schedule_history',
+      description: HISTORY_DESCRIPTION,
+      parameters: {},
+      output: { schema: HISTORY_OUTPUT_SCHEMA, render: renderValue },
+      async execute(_args, exec): Promise<ScheduleHistoryValue> {
+        if (exec.agent !== agent) return internalError()
+        return runCancellableScheduleTransaction(agent, exec.signal, async () => {
+          const uncertain = await preflight(rootCtx, agent, 'history')
+          if (uncertain !== undefined) return uncertain
+          notifyDurableChange()
+          try {
+            return [...foldScheduleHistory(agent.session.ownEvents())]
+          } catch (error: unknown) {
+            return error instanceof ScheduleLogError ? corruptLogError() : internalError()
+          }
+        })
+      },
+      presentCall: () => present('Schedule history', 'read'),
+    })))
+
+    disposers.push(toolCtx.tools.register(defineTool({
+      name: 'schedule_templates',
+      description: TEMPLATES_DESCRIPTION,
+      parameters: {},
+      output: { schema: TEMPLATE_OUTPUT_SCHEMA, render: renderValue },
+      execute(_args, exec): Promise<ScheduleTemplateValue> {
+        if (exec.agent !== agent) return Promise.resolve([])
+        return Promise.resolve([...SCHEDULE_TEMPLATES])
+      },
+      presentCall: () => present('Schedule templates', 'read'),
     })))
   } catch (error) {
     for (const dispose of disposers.reverse()) dispose()
