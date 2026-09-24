@@ -63,7 +63,7 @@ description: Desktop 插件接入、专家中心、技能与 MCP、Obsidian 资�
 | D4 | 技能/MCP 管理与定时任务的现有能力核对、适配方案 | D0 | 已完成：Skill/MCP/定时任务复用审计 | Luna max / Archimedes / 01a0aa94-fb9a-7df3-b32b-04f8b0adfc1c |
 | D5 | Desktop 集成、构建、真实加载与升级兼容验收 | D1–D4 | Host 启动和 Electron 页面已复核；模型驱动的影子看板流程受提供方计费阻塞 | Luna max / Parfit / 01a0aa96-62e5-75d0-a94b-6f88bcb2ff8b |
 | D6 | 资料库页面与 Memory Remote：目录、预览、搜索、路径和引用 | D3 | 已实现并挂载；Electron 资料库与 Memory 页面可读取；修改与完整 e2e 证据仍有限 | 待分配 Luna max |
-| D7 | 技能与连接器管理页面、官方服务接入 | D4 | 只读目录页已完成；安装、启停与 MCP 增删改测需要管理后端 | 待分配 Luna max |
+| D7 | 技能与连接器管理页面、官方服务接入 | D4 | 只读目录与实时 MCP 增删改测 Remote 已完成；Skill 安装/启停与 MCP 重启持久化仍延期 | 总控 |
 | D8 | 定时任务模板、持久化运行记录与重启恢复 | D4 | Schedule 工具、模板、暂停/恢复/立即运行/历史、结果回执、投影和只读任务中心已挂载；页面变更控件与冷重启 e2e 仍待做 | 待分配 Luna max |
 
 ## 协作与验收 <a id="delivery"></a>
@@ -93,7 +93,7 @@ description: Desktop 插件接入、专家中心、技能与 MCP、Obsidian 资�
 - 2026-09-24：当前源码与定向证据表明 D1–D4 已完成：依赖与打包、专家中心召唤、资料库基础、Skill/MCP/定时任务审计均已有实现或已接受的审计依据；下方已对账表格中陈旧的“开发中”状态。
 - 2026-09-24：已在 DevFrame overlay profile 上复核 D5 Host 启动和真实 Electron 页面。专家、Memory、Agent Team 与影子页面可加载；提供方计费问题阻塞模型驱动的影子规划和看板审批证据。
 - 2026-09-24：D6 Host Remote 与只读资料库页面已经实现并挂载；Electron 资料库与 Memory 页面可读取当前投影。
-- 2026-09-24：D7 已交付带搜索和刷新的只读 Skill/连接器目录。官方服务没有安装、启停或 MCP 增删改测 Remote，因此这些动作明确延期到管理后端。
+- 2026-09-24：D7 已交付带搜索和刷新的 Skill/连接器目录，以及基于 Cordis Loader 的 MCP 列表、创建、更新、删除和测试 Remote。Skill 安装/启停与 MCP 重启持久化仍延期。
 - 2026-09-24：D8 已交付会话级 Schedule overlay、8 个模型工具、模板、暂停/恢复/立即运行/历史、成功/失败/取消结果回执、可重启投影和只读任务中心。浏览器变更控件与冷重启 Electron 证据仍延期。
 
 ## Dev Note
