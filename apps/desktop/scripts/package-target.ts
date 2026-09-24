@@ -51,7 +51,7 @@ function desktopDevFramePackageDirs(): string[] {
   ].map(path => JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>)
   const pending = [
     ...DESKTOP_DEVFRAME_ROOT_PACKAGES,
-    ...runtimeManifests.flatMap(manifest => ['dependencies', 'optionalDependencies', 'peerDependencies'].flatMap((section) => {
+    ...runtimeManifests.flatMap(manifest => ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'].flatMap((section) => {
       const dependencies = manifest[section]
       return dependencies !== null && typeof dependencies === 'object' && !Array.isArray(dependencies)
         ? Object.keys(dependencies).filter(name => name.startsWith('@deepseek-ai/dsh-experimental-'))

@@ -180,15 +180,6 @@ importers:
       '@deepseek-ai/dsh-cordis-client-runner':
         specifier: workspace:^
         version: link:../../packages/extensions/cordis-client-runner
-      '@deepseek-ai/dsh-experimental-agent-evidence':
-        specifier: workspace:^
-        version: link:../../packages/experimental/agent-evidence
-      '@deepseek-ai/dsh-experimental-project-controller':
-        specifier: workspace:^
-        version: link:../../packages/experimental/project-controller
-      '@deepseek-ai/dsh-experimental-shadow-bridge':
-        specifier: workspace:^
-        version: link:../../packages/experimental/shadow-bridge
       '@deepseek-ai/dsh-fs-local':
         specifier: workspace:^
         version: link:../../packages/fs/fs-local
@@ -373,6 +364,9 @@ importers:
       '@deepseek-ai/dsh-deepseek-llm-api-extensions':
         specifier: workspace:^
         version: link:../../packages/llm/deepseek-llm-api-extensions
+      '@deepseek-ai/dsh-experimental-agent-evidence':
+        specifier: workspace:^
+        version: link:../../packages/experimental/agent-evidence
       '@deepseek-ai/dsh-experimental-agent-team':
         specifier: workspace:^
         version: link:../../packages/experimental/agent-team
@@ -385,6 +379,12 @@ importers:
       '@deepseek-ai/dsh-experimental-devframe-profile':
         specifier: workspace:^
         version: link:../../packages/experimental/devframe-profile
+      '@deepseek-ai/dsh-experimental-project-controller':
+        specifier: workspace:^
+        version: link:../../packages/experimental/project-controller
+      '@deepseek-ai/dsh-experimental-shadow-bridge':
+        specifier: workspace:^
+        version: link:../../packages/experimental/shadow-bridge
       '@deepseek-ai/dsh-experimental-tool-agent-team':
         specifier: workspace:^
         version: link:../../packages/experimental/tool-agent-team
@@ -569,6 +569,19 @@ importers:
       '@deepseek-ai/dsh-cmdline':
         specifier: workspace:^
         version: link:../../packages/boot/cmdline
+      '@deepseek-ai/dsh-host-directory-picker-native':
+        specifier: workspace:^
+        version: link:../../packages/host/directory-picker-native
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: workspace:^
+        version: link:../../packages/host/webserver
+      '@deepseek-ai/dsh-launch-environment':
+        specifier: workspace:^
+        version: link:../../packages/util/launch-environment
+      '@deepseek-ai/dsh-web-frontend':
+        specifier: workspace:^
+        version: link:../web
+    devDependencies:
       '@deepseek-ai/dsh-experimental-agent-dispatch':
         specifier: workspace:^
         version: link:../../packages/experimental/agent-dispatch
@@ -611,6 +624,9 @@ importers:
       '@deepseek-ai/dsh-experimental-session-identity':
         specifier: workspace:^
         version: link:../../packages/experimental/session-identity
+      '@deepseek-ai/dsh-experimental-shadow-bridge':
+        specifier: workspace:^
+        version: link:../../packages/experimental/shadow-bridge
       '@deepseek-ai/dsh-experimental-shadow-controller':
         specifier: workspace:^
         version: link:../../packages/experimental/shadow-controller
@@ -620,18 +636,6 @@ importers:
       '@deepseek-ai/dsh-experimental-shadow-routing':
         specifier: workspace:^
         version: link:../../packages/experimental/shadow-routing
-      '@deepseek-ai/dsh-host-directory-picker-native':
-        specifier: workspace:^
-        version: link:../../packages/host/directory-picker-native
-      '@deepseek-ai/dsh-host-webserver':
-        specifier: workspace:^
-        version: link:../../packages/host/webserver
-      '@deepseek-ai/dsh-launch-environment':
-        specifier: workspace:^
-        version: link:../../packages/util/launch-environment
-      '@deepseek-ai/dsh-web-frontend':
-        specifier: workspace:^
-        version: link:../web
       '@deepseek-ai/dsh-worktree-registry':
         specifier: workspace:^
         version: link:../../packages/workflow/worktree-registry

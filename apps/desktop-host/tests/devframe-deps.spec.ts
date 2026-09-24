@@ -10,15 +10,18 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { composeEntries, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
 
 const MANIFEST = resolve(import.meta.dirname, '../package.json')
 
 interface Manifest {
   readonly dependencies?: Record<string, string>
+  readonly devDependencies?: Record<string, string>
 }
 
 const REQUIRED = [
   '@deepseek-ai/dsh-experimental-project-contracts',
+  '@deepseek-ai/dsh-experimental-shadow-bridge',
   '@deepseek-ai/dsh-experimental-session-identity',
   '@deepseek-ai/dsh-experimental-devframe',
   '@deepseek-ai/dsh-experimental-agent-evidence',
@@ -53,17 +56,60 @@ function read(): Manifest {
 
 describe('desktop-host DevFrame dependency closure', () => {
   it('declares every §C row', () => {
-    const deps = read().dependencies ?? {}
+    const deps = { ...read().dependencies, ...read().devDependencies }
     for (const name of REQUIRED) expect(deps[name], name).toBe('workspace:^')
   })
 
   it('does not redeclare self-contained libs or the profile bundle', () => {
-    const deps = read().dependencies ?? {}
+    const deps = { ...read().dependencies, ...read().devDependencies }
     for (const name of FORBIDDEN) expect(deps[name], name).toBeUndefined()
   })
 
   it('lists worktree-registry exactly once (no duplicate loader entry)', () => {
-    const deps = read().dependencies ?? {}
+    const deps = { ...read().dependencies, ...read().devDependencies }
     expect(Object.keys(deps).filter(name => name === '@deepseek-ai/dsh-worktree-registry')).toHaveLength(1)
+  })
+
+  it('mounts the production project-controller faces without inventing a project root or commit scope', () => {
+    const overlay = resolve(import.meta.dirname, '../config/desktop.cordis.patch.yml')
+    const rows = composeEntries([loadOverlayPatches('dsh desktop', overlay)])
+    const byId = new Map(rows.flatMap(row => typeof row.id === 'string' ? [[row.id, row] as const] : []))
+    expect([...byId.keys()]).toEqual(expect.arrayContaining([
+      'agent-evidence',
+      'project-controller',
+      'project-controller-consumer',
+      'project-controller-task-consumer',
+      'project-controller-delivery-consumer',
+    ]))
+    expect(byId.get('project-controller')).toMatchObject({
+      name: '@deepseek-ai/dsh-experimental-project-controller',
+      config: { maxActiveTasks: 2, requestBudget: 64 },
+    })
+    expect(byId.get('project-controller-consumer')).toMatchObject({
+      name: '@deepseek-ai/dsh-experimental-project-controller/consumer',
+      config: {
+        gitExecutable: 'git',
+        gitTimeoutMs: 60000,
+        gitMaxOutputBytes: 10485760,
+      },
+    })
+    expect(byId.get('project-controller-delivery-consumer')).toMatchObject({
+      name: '@deepseek-ai/dsh-experimental-project-controller/delivery-consumer',
+      config: {
+        repairLimit: 3,
+        requiredChecksByTask: {},
+        commitPathsByTask: {},
+        checkTimeoutMs: 600000,
+        checkMaxOutputBytes: 1048576,
+      },
+    })
+    for (const id of ['project-controller', 'project-controller-consumer', 'project-controller-task-consumer', 'project-controller-delivery-consumer']) {
+      const config = byId.get(id)?.config as Record<string, unknown> | undefined
+      if (config !== undefined) {
+        expect(config).not.toHaveProperty('workspaceRoot')
+        expect(config).not.toHaveProperty('authorizedRoots')
+        expect(config).not.toHaveProperty('defaultCommitPaths')
+      }
+    }
   })
 })

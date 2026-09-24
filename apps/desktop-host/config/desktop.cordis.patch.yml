@@ -34,5 +34,76 @@
         intervalMs: 60000
         followupMaxChars: 12000
 
+    # Production task board: keep the same project-controller service and
+    # consumer faces as the development overlay, but do not invent a
+    # workspace root, Shadow authorized root, or default commit scope here.
+    # Shadow provisioning supplies the live project/worktree authority, and
+    # an approval must supply any commit scope before a Worker can commit.
+    - id: agent-evidence
+      name: '@deepseek-ai/dsh-experimental-agent-evidence'
+
+    - id: project-controller
+      name: '@deepseek-ai/dsh-experimental-project-controller'
+      config:
+        maxActiveTasks: 2
+        requestBudget: 64
+
+    - id: project-controller-consumer
+      name: '@deepseek-ai/dsh-experimental-project-controller/consumer'
+      config:
+        requiredChecksPath: !!js dshHomePath('required-checks.json')
+        gitExecutable: git
+        gitTimeoutMs: 60000
+        gitMaxOutputBytes: 10485760
+
+    - id: project-controller-task-consumer
+      name: '@deepseek-ai/dsh-experimental-project-controller/task-consumer'
+
+    - id: project-controller-delivery-consumer
+      name: '@deepseek-ai/dsh-experimental-project-controller/delivery-consumer'
+      config:
+        repairLimit: 3
+        requiredChecksPath: !!js dshHomePath('required-checks.json')
+        requiredChecksByTask: {}
+        gitExecutable: git
+        gitTimeoutMs: 60000
+        gitMaxOutputBytes: 10485760
+        checkTimeoutMs: 600000
+        checkMaxOutputBytes: 1048576
+        commitPathsByTask: {}
+
     - id: ui-shadow-entry
       name: '@deepseek-ai/dsh-experimental-client-ui-shadow-entry'
+
+    - id: agent-evidence
+      name: '@deepseek-ai/dsh-experimental-agent-evidence'
+
+    - id: project-controller
+      name: '@deepseek-ai/dsh-experimental-project-controller'
+      config:
+        maxActiveTasks: 2
+        requestBudget: 64
+
+    - id: project-controller-consumer
+      name: '@deepseek-ai/dsh-experimental-project-controller/consumer'
+      config:
+        requiredChecksPath: !!js dshHomePath('required-checks.json')
+        gitExecutable: git
+        gitTimeoutMs: 60000
+        gitMaxOutputBytes: 10485760
+
+    - id: project-controller-task-consumer
+      name: '@deepseek-ai/dsh-experimental-project-controller/task-consumer'
+
+    - id: project-controller-delivery-consumer
+      name: '@deepseek-ai/dsh-experimental-project-controller/delivery-consumer'
+      config:
+        repairLimit: 3
+        requiredChecksPath: !!js dshHomePath('required-checks.json')
+        requiredChecksByTask: {}
+        gitExecutable: git
+        gitTimeoutMs: 60000
+        gitMaxOutputBytes: 10485760
+        checkTimeoutMs: 600000
+        checkMaxOutputBytes: 1048576
+        commitPathsByTask: {}

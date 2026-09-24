@@ -12,7 +12,7 @@ The general dsh release family excludes `packages/experimental`, while the Deskt
 
 Desktop packaging adds a product-specific experimental closure after packing the general dsh family. The closure starts at the DevFrame profile, the Shadow browser entry, and experimental dependencies declared by the Desktop Host, then follows local dependency, optional-dependency, and peer-dependency edges. The package-set descriptor requires the DevFrame profile, and the generated runtime manifest activates `dsh-base`, `dsh-web-app`, and `dsh-experimental-devframe-profile`.
 
-The Desktop Host overlay supplies the Shadow bridge and browser entry and replaces Expert Team source-checkout pack paths with the installed `expert-pack-paper` and `expert-pack-dev` package directories. The general dsh release family remains unchanged and continues to exclude experimental packages for non-Desktop consumers.
+The Desktop Host overlay supplies the Shadow bridge and browser entry, mounts the project-controller task/integration/delivery faces and agent-evidence, and replaces Expert Team source-checkout pack paths with the installed `expert-pack-paper` and `expert-pack-dev` package directories. Experimental names stay out of the published CLI and Host runtime dependency surfaces; Desktop's generated runtime manifest supplies the local closure. The general dsh release family remains unchanged and continues to exclude experimental packages for non-Desktop consumers.
 
 ## Alternatives considered
 
@@ -24,7 +24,7 @@ The Desktop Host overlay supplies the Shadow bridge and browser entry and replac
 
 ## Consequences
 
-Desktop preparation packs the transitive DevFrame closure and fails loudly when a required local package is missing. The production profile now activates DevFrame services and UI rows, and Expert Team reads data from installed package paths. The Desktop package is larger and still requires a complete package preparation run; general dsh package consumers do not receive the experimental closure.
+Desktop preparation packs the transitive DevFrame closure and fails loudly when a required local package is missing. The production profile now activates DevFrame services, UI rows, and project workflow faces, and Expert Team reads data from installed package paths. Project faces remain inert until a deployment supplies a real workspace and Shadow binding. The Desktop package is larger and still requires a complete package preparation run; general dsh package consumers do not receive the experimental closure.
 
 ## Testing
 

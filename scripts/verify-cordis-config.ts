@@ -241,10 +241,17 @@ function validateAppResolution(): string[] {
   const shipped = new Set(globSync('*.cordis.yml', { cwd: resolve(root, 'apps/cli/config') })
     .map(file => `apps/cli/config/${file}`))
   const appReferences = pluginReferences.filter(reference => shipped.has(reference.file) || appOverlayFiles.has(reference.file))
+  const shippedReferences = appReferences.filter(reference => !appOverlayFiles.has(reference.file))
+  const overlayReferences = appReferences.filter(reference => appOverlayFiles.has(reference.file))
   violations.push(...missingPluginDependencies(
-    appReferences,
+    shippedReferences,
     appDependencies,
     'apps/cli/package.json dependencies or a bundle manifest',
+  ))
+  violations.push(...missingPluginDependencies(
+    overlayReferences,
+    { ...appDependencies, ...appManifest.devDependencies },
+    'apps/cli/package.json dependencies, devDependencies, or a bundle manifest',
   ))
   const appTestReferences = pluginReferences.filter(reference => reference.file.startsWith('apps/cli/tests/'))
   violations.push(...missingPluginDependencies(

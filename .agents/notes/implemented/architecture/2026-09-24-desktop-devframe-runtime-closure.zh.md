@@ -12,7 +12,7 @@ Status: implemented
 
 Desktop 打包在通用 dsh 发布族之后增加产品专用的 experimental 闭包。闭包从 DevFrame profile、Shadow 浏览器入口和 Desktop Host 声明的 experimental 依赖开始，递归跟踪本地 dependencies、optionalDependencies 和 peerDependencies。package-set 描述强制包含 DevFrame profile，生成的运行时 manifest 激活 `dsh-base`、`dsh-web-app` 和 `dsh-experimental-devframe-profile`。
 
-Desktop Host overlay 提供 Shadow bridge 和浏览器入口，并把 Expert Team 的源码目录改为已安装的 `expert-pack-paper` 与 `expert-pack-dev` 包目录。通用 dsh 发布族保持不变，继续为非 Desktop 消费者排除 experimental 包。
+Desktop Host overlay 提供 Shadow bridge 和浏览器入口，挂载 project-controller 的任务/集成/交付 face 与 agent-evidence，并把 Expert Team 的源码目录改为已安装的 `expert-pack-paper` 与 `expert-pack-dev` 包目录。experimental 名称不再进入发布 CLI 与 Host 的 runtime dependency surface；Desktop 生成的运行时 manifest 提供本地闭包。通用 dsh 发布族保持不变，继续为非 Desktop 消费者排除 experimental 包。
 
 ## 备选方案
 
@@ -24,7 +24,7 @@ Desktop Host overlay 提供 Shadow bridge 和浏览器入口，并把 Expert Tea
 
 ## 后果
 
-Desktop preparation 会打包 DevFrame 的传递闭包，缺少本地包时立即失败。生产 profile 现在激活 DevFrame 服务和 UI 行，Expert Team 从已安装的包路径读取数据。Desktop 包体积会增大，仍需完整执行 package preparation；通用 dsh 包消费者不会得到 experimental 闭包。
+Desktop preparation 会打包 DevFrame 的传递闭包，缺少本地包时立即失败。生产 profile 现在激活 DevFrame 服务、UI 行和 project workflow face，Expert Team 从已安装的包路径读取数据。项目 face 要等部署提供真实 workspace 和 Shadow binding 才会运行。Desktop 包体积会增大，仍需完整执行 package preparation；通用 dsh 包消费者不会得到 experimental 闭包。
 
 ## 测试
 

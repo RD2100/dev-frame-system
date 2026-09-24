@@ -27,6 +27,10 @@
     "@deepseek-ai/dsh-host-webserver": "workspace:^",
     "@deepseek-ai/dsh-launch-environment": "workspace:^",
     "@deepseek-ai/dsh-web-frontend": "workspace:^",
+    "@deepseek-ai/cordis-plugin-logger-console": "workspace:^"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-experimental-shadow-bridge": "workspace:^",
     "@deepseek-ai/dsh-experimental-project-contracts": "workspace:^",
     "@deepseek-ai/dsh-experimental-session-identity": "workspace:^",
     "@deepseek-ai/dsh-experimental-devframe": "workspace:^",
@@ -44,7 +48,6 @@
     "@deepseek-ai/dsh-experimental-client-ui-project-memory": "workspace:^",
     "@deepseek-ai/dsh-experimental-expert-pack-dev": "workspace:^",
     "@deepseek-ai/dsh-experimental-expert-pack-paper": "workspace:^",
-    "@deepseek-ai/dsh-worktree-registry": "workspace:^",
-    "@deepseek-ai/cordis-plugin-logger-console": "workspace:^"
+    "@deepseek-ai/dsh-worktree-registry": "workspace:^"
   }
 }
