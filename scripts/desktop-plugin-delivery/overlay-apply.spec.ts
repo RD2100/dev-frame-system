@@ -36,10 +36,20 @@ async function overlay(substitute: boolean): Promise<PatchOptions[]> {
   return yaml.load(text, { schema: entryListSchema }) as PatchOptions[]
 }
 
-/** Compose exactly as the desktop host does: empty base <- bundle insert <- overlay. */
+/**
+ * Compose the profile over the Web/base rows it patches, then the deployment
+ * overlay. The profile disables and reconfigures four rows supplied by the
+ * base bundle before inserting its own rows.
+ */
 async function compose(overlayRows: PatchOptions[], warn: (...args: unknown[]) => void): Promise<PatchOptions[]> {
   const bundle = await parsePatch(PROFILE_PATCH)
-  const base = applyEntryPatches([], bundle, warn)
+  const baseRows: Parameters<typeof applyEntryPatches>[0] = [
+    { id: 'tool-subagent-control', name: '@deepseek-ai/dsh-tool-subagent-control' },
+    { id: 'tool-subagent-list-agents', name: '@deepseek-ai/dsh-tool-subagent-control/list-agents' },
+    { id: 'tool-subagent', name: '@deepseek-ai/dsh-tool-subagent' },
+    { id: 'tool-subagent-fork', name: '@deepseek-ai/dsh-tool-subagent' },
+  ]
+  const base = applyEntryPatches(baseRows, bundle, warn)
   return applyEntryPatches(base, overlayRows, warn)
 }
 
@@ -102,7 +112,8 @@ describe('the D1 Desktop overlay', () => {
     const composed = await compose(await overlay(true), warn)
 
     const inserted = bundle.flatMap(row => row.insert ?? [])
-    expect(composed.length).toBe(inserted.length)
+    // The four patched Web/base rows survive beside the profile's inserts.
+    expect(composed.length).toBe(4 + inserted.length)
     for (const row of inserted) {
       if (row.id !== undefined && row.id !== 'command-goal-binding' && row.id !== 'expert-team') {
         expect(composed.some(candidate => candidate.id === row.id), `row ${row.id} must survive`).toBe(true)

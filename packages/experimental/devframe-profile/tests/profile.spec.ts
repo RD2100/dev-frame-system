@@ -20,6 +20,7 @@ describe('DevFrame profile bundle', () => {
     expect(manifest.publishConfig?.access).toBe('public')
     expect(manifest.dsh?.bundle?.patch).toBe('./cordis.patch.yml')
     expect(manifest.dependencies).toMatchObject({
+      '@deepseek-ai/cordis-plugin-logger-console': 'workspace:^',
       '@deepseek-ai/dsh-experimental-agent-team': 'workspace:^',
       '@deepseek-ai/dsh-experimental-agent-dispatch': 'workspace:^',
       '@deepseek-ai/dsh-experimental-agent-hierarchy': 'workspace:^',

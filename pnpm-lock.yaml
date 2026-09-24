@@ -5453,6 +5453,9 @@ importers:
 
   packages/experimental/devframe-profile:
     dependencies:
+      '@deepseek-ai/cordis-plugin-logger-console':
+        specifier: workspace:^
+        version: link:../../../vendor/logger-console
       '@deepseek-ai/dsh-experimental-agent-dispatch':
         specifier: workspace:^
         version: link:../agent-dispatch
