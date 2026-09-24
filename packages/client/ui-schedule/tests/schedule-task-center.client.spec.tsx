@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ScheduleId, ScheduleRecord } from '@deepseek-ai/dsh-schedule/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { ScheduleTaskCenter, type ScheduleTaskCenterProps } from '../src/client/ScheduleTaskCenter.tsx'
 import { en } from '../src/client/locales.ts'
 
@@ -60,7 +61,7 @@ describe('ScheduleTaskCenter', () => {
   it('shows resume for paused records and reports Remote failures without leaking details', async () => {
     const resume = vi.fn<ScheduleTaskCenterProps['schedule']['resume']>().mockResolvedValue({
       ok: false,
-      error: { code: 'gateway/internal', message: 'private transport detail' },
+      error: new RemoteError('gateway/internal', 'private transport detail', {}),
     })
     render(<ScheduleTaskCenter {...props({ ...ACTIVE, paused: true }, { resume })} />)
     fireEvent.click(screen.getByRole('button', { name: en['center.action.resume'] }))
