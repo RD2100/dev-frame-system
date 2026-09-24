@@ -73,6 +73,8 @@ describe('desktop-host DevFrame dependency closure', () => {
   it('mounts the production project-controller faces without inventing a project root or commit scope', () => {
     const overlay = resolve(import.meta.dirname, '../config/desktop.cordis.patch.yml')
     const rows = composeEntries([loadOverlayPatches('dsh desktop', overlay)])
+    const ids = rows.flatMap(row => typeof row.id === 'string' ? [row.id] : [])
+    expect(new Set(ids).size).toBe(ids.length)
     const byId = new Map(rows.flatMap(row => typeof row.id === 'string' ? [[row.id, row] as const] : []))
     expect([...byId.keys()]).toEqual(expect.arrayContaining([
       'agent-evidence',

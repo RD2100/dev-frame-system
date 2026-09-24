@@ -28,4 +28,4 @@ Desktop preparation 会打包 DevFrame 的传递闭包，缺少本地包时立�
 
 ## 测试
 
-Desktop package-set、profile 和 package-target 测试通过；Desktop 与 Desktop Host TypeScript 构建通过；Cordis 配置检查通过。通用 dsh release verifier 报告 247 个成员均为 `0.1.6-alpha.1`。完整 Windows package preparation 已进入 tarball 阶段，但嵌套 Node 进程解析不到 `pnpm` 时仍受环境影响。
+Desktop package-set、profile 和 package-target 测试通过；Desktop 与 Desktop Host TypeScript 构建通过；Cordis 配置检查通过。通用 dsh release verifier 报告 247 个成员均为 `0.1.6-alpha.1`，vendor verifier 接受独立命名的 mobile-pairing 包，DevFrame preflight 也成功打包两个专家数据包。release 子进程助手会解析 Windows `pnpm.cmd` shim，使嵌套 pack 命令与 Unix 使用同一门禁。完整 Windows package preparation 仍需在打包运行时上完成一次 Electron 运行。

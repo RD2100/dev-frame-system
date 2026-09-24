@@ -28,4 +28,4 @@ Desktop preparation packs the transitive DevFrame closure and fails loudly when 
 
 ## Testing
 
-Desktop package-set, profile, and package-target tests pass; Desktop and Desktop Host TypeScript builds pass; Cordis configuration verification passes. The general dsh release verifier reports 247 members at `0.1.6-alpha.1`. Full Windows package preparation reached the tarball stage but remains environment-sensitive when nested Node processes cannot resolve the `pnpm` command.
+Desktop package-set, profile, and package-target tests pass; Desktop and Desktop Host TypeScript builds pass; Cordis configuration verification passes. The general dsh release verifier reports 247 members at `0.1.6-alpha.1`, the vendor verifier accepts the independently named mobile-pairing package, and the DevFrame preflight packs both expert data packages. Release subprocess helpers resolve Windows `pnpm.cmd` shims so nested pack commands use the same gate as Unix runs. Full Windows package preparation still needs a complete Electron run on the packaged runtime.

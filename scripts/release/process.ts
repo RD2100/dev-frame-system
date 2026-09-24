@@ -21,6 +21,16 @@ export interface CommandResult {
   readonly stderr: string
 }
 
+/** Resolve pnpm's Windows command shim for child processes that do not search PATHEXT. */
+function executable(command: string): string {
+  return process.platform === 'win32' && command === 'pnpm' ? 'pnpm.cmd' : command
+}
+
+/** Node requires a shell to launch Windows `.cmd` shims from synchronous and async children. */
+function useShell(command: string): boolean {
+  return process.platform === 'win32' && command === 'pnpm'
+}
+
 /**
  * Run a command and capture its output without judging the exit status.
  * @param command - executable name.
@@ -29,7 +39,7 @@ export interface CommandResult {
  * @returns The exit status and captured streams.
  */
 export function attempt(command: string, args: readonly string[], options: RunOptions = {}): CommandResult {
-  const result = spawnSync(command, [...args], { cwd: options.cwd, env: options.env, encoding: 'utf8' })
+  const result = spawnSync(executable(command), [...args], { cwd: options.cwd, env: options.env, encoding: 'utf8', shell: useShell(command) })
   if (result.error !== undefined) throw result.error
   return { status: result.status, stdout: result.stdout, stderr: result.stderr }
 }
@@ -43,10 +53,11 @@ export function attempt(command: string, args: readonly string[], options: RunOp
  * @returns The exit status and captured streams.
  */
 export function attemptEchoed(command: string, args: readonly string[], options: RunOptions = {}): CommandResult {
-  const result = spawnSync(command, [...args], {
+  const result = spawnSync(executable(command), [...args], {
     cwd: options.cwd,
     env: options.env,
     encoding: 'utf8',
+    shell: useShell(command),
     stdio: ['inherit', 'pipe', 'pipe'],
   })
   if (result.error !== undefined) throw result.error
@@ -81,7 +92,7 @@ export function capture(command: string, args: readonly string[], options: RunOp
  */
 export function runConcurrent(command: string, args: readonly string[], options: RunOptions = {}): Promise<void> {
   return new Promise((resolveRun, rejectRun) => {
-    const child = spawn(command, [...args], { cwd: options.cwd, env: options.env, stdio: 'inherit' })
+    const child = spawn(executable(command), [...args], { cwd: options.cwd, env: options.env, stdio: 'inherit', shell: useShell(command) })
     child.once('error', rejectRun)
     child.once('close', (status, signal) => {
       if (status === 0) resolveRun()

@@ -49,6 +49,11 @@ describe('release families', () => {
     expect(members.map(member => member.name)).not.toContain('@deepseek-ai/dsh-experimental-agent-team')
   })
 
+  it('accepts the independently versioned mobile pairing vendor package', () => {
+    const members = releaseFamily('vendor').members(resolve(import.meta.dirname, '../..'))
+    expect(members.map(member => member.name)).toContain('@dsh-mobile/pairing')
+  })
+
   it('bumps private dsh packages without adding release tags', () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-release-version-'))
     roots.push(root)
