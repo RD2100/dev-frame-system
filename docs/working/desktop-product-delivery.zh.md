@@ -95,6 +95,7 @@ description: Desktop 插件接入、专家中心、技能与 MCP、Obsidian 资�
 - 2026-09-24：D6 Host Remote 与只读资料库页面已经实现并挂载；Electron 资料库与 Memory 页面可读取当前投影。
 - 2026-09-24：D7 已交付 Skill 安装/启停/卸载控件，以及 MCP 添加/编辑/测试/启停/移除控件。Host 从 `$DSH_HOME/storages/mcp-servers.json` 恢复并原子持久化 MCP 配置；投影会隐藏 `env` 与 `headers`。Host、UI 与 Typert 生成定向检查通过。
 - 2026-09-24：D8 已交付会话级 Schedule overlay、8 个模型工具、模板、暂停/恢复/立即运行/历史、成功/失败/取消结果回执、可重启投影，以及经生成 Schedule Remote 接入的任务中心变更控件。冷重启 Electron e2e 尚未执行。
+- 2026-09-24：发布收口修复了一个真实冷启动阻塞：DevFrame profile 不再重复插入 `ui-schedule` loader 行，而是启用 `web-app` 已提供的行；staging Host boot verifier 现在可以到达 `boot OK` 并观察到 Schedule 服务。受影响 UI 包的客户端 session 契约转换已对齐，根级 `pnpm run typecheck` 通过。本版本仍需在同一 revision 上完成完整 Electron 点击/重启运行、模型驱动的 Shadow 规划（提供方计费仍阻塞）以及打包安装/升级 dry-run 证据。
 
 ## Dev Note
 

@@ -95,6 +95,7 @@ Each increment reports changed files, test commands and exit results, missing ve
 - 2026-09-24: D6 Host Remote and the read-only library page are implemented and mounted; the Electron library and Memory pages render their current projections.
 - 2026-09-24: D7 now ships Skill install/enable/disable/uninstall controls and MCP add/edit/test/enable/disable/remove controls. Host MCP configuration is restored from and atomically persisted to `$DSH_HOME/storages/mcp-servers.json`; projections redact `env` and `headers`. Focused Host, UI, and Typert generation checks pass.
 - 2026-09-24: D8 now ships the session-local Schedule overlay, eight model tools, templates, pause/resume/run/history, outcome receipts for success/failure/cancellation, restart-safe projections, and task-center mutation controls through the generated Schedule Remote. Cold-restart Electron e2e remains unexecuted.
+- 2026-09-24: Release follow-up fixed a real cold-boot blocker: the DevFrame profile no longer inserts a duplicate `ui-schedule` loader row and instead enables the row supplied by `web-app`; the staging Host boot verifier now reaches `boot OK` and observes the Schedule services. Client session-contract casts were aligned across the affected UI packages, and the root `pnpm run typecheck` passes. The remaining release evidence is a full Electron click/restart run on this exact revision, model-backed Shadow planning (provider billing still blocks it), and packaged install/upgrade dry-run.
 
 ## Dev Note
 
