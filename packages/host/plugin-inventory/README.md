@@ -1,5 +1,5 @@
 ---
-description: "Read-only projection of the current Cordis Loader plugin state with each agent preset's composition beside it: the pluginInventory service and its pluginInventory/list Remote for web GUI host clients."
+description: "Loader inventory plus user Skill and MCP management Remotes for web GUI host clients."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Clients and settings pages can show what is currently composed in the host: calling `pluginInventory/list` returns the current non-group Loader entries in Loader order — entry id, module specifier, effective enablement, and root Fiber phase (`pending`, `loading`, `active`, `failed`, or `unloading`, or `null` when an entry has no live root Fiber). When an agent-preset roster is composed, the snapshot also carries one group per preset — id, trust, display name, default marking, health, and flattened composition rows — because a deployment that mounts the roster runs its model-facing plugins there rather than on the Loader's own entries. The snapshot is point-in-time: the Loader is the sole lifecycle authority, and this package owns no cache, history, provenance model, event stream, or mutation path. Client packages consume the Remote through the explicit [`api-remotes`](../../api/remotes/README.md) assembly rather than importing the Host implementation.
+Clients and settings pages can inspect the host with `pluginInventory/list`, manage user-owned Skills with `listSkills`, `installSkill`, `setSkillEnabled`, and `removeSkill`, and manage MCP clients with `listMcp`, `createMcp`, `updateMcp`, `setMcpEnabled`, `testMcpEntry`, and `removeMcp`. Loader inventory remains a point-in-time projection; user Skills live under `$DSH_HOME/skills`, while MCP configuration is persisted in `$DSH_HOME/storages/mcp-servers.json`. Client packages consume the Remote through the explicit [`api-remotes`](../../api/remotes/README.md) assembly rather than importing the Host implementation.
 
 ## Table of Contents
 
@@ -35,9 +35,9 @@ Each row is one non-group Loader entry: its entry id, the exact module specifier
 
 With a roster composed, `agentPresets` carries one group per preset in roster order: its id, whether the deployment ships it or the user owns it (`trust`, which clients use to localize shipped names), published display name, whether a session naming no preset composes it, and flattened plugin rows — entry id (null when the file row declares none), module specifier, effective enablement, the row's own `!!js` disabled expression when it carries one, and a root-fiber phase when the composition is live. A preset some session already composed answers from its newest standing generation — even when its file has since broken, because the mount is what those sessions run; one never composed since boot answers from its composition file with disabled gates evaluated against the Loader context, and reading never mounts a preset. `conditional` enablement marks a gate the Host could not evaluate, and a broken preset nothing composed stays listed with its reason and no rows. Without a roster the field is absent.
 
-### What you can and cannot do with it
+### Inventory and management
 
-The inventory is a snapshot for display and diagnostics: a client can render the roster, flag failed entries, and detect changes by comparing snapshots. It cannot enable, disable, add, or remove plugins, and it carries no history — a fiber that already failed and was removed is absent. Because the service reads the Loader on every call, the answer always reflects the current composition rather than a cached view.
+The inventory is a snapshot for display and diagnostics. Management methods only operate on user-owned Skills and MCP entries; profile and preset composition rows remain read-only. Skill content is authored as `SKILL.md` through the Remote, and MCP secrets are never returned in projections. MCP edits replace the fields shown by the form while preserving stored transport options such as `args`, `cwd`, `env`, `headers`, and retry settings. The MCP store is local DSH-home state written with private file and directory modes where the host filesystem supports them. Because the service reads the Loader on every call, the answer reflects current composition rather than a cached view.
 
 -----
 
@@ -49,7 +49,7 @@ The inventory is a snapshot for display and diagnostics: a client can render the
 
 ### Design concept
 
-The gateway is a direct projection with no second lifecycle truth: every `list()` call reads `ctx.loader.entries()` and maps each non-group entry to its public row. Cordis's internal plugin/status events already maintain `Entry.fiber` and `Fiber.state`, so a cache would only add another lifecycle truth to keep synchronized. The agent-preset roster is an optional peer resolved per call through `ctx.get('agentPresets')`: its `compositionInventory()` owns every preset read, and this package only maps root-fiber states onto the public phase vocabulary.
+The gateway keeps Loader state authoritative for inventory and live MCP mutations. User Skill files are validated at the managed-root boundary and rewritten with canonical invocation fields. MCP writes are serialized through an atomic temporary-file rename; startup restores persisted entries once before serving MCP reads or mutations. The agent-preset roster is an optional peer resolved per call through `ctx.get('agentPresets')`.
 
 ### The phase mapping
 
@@ -83,7 +83,7 @@ Read these when the inventory contract is not enough: how the Remote reaches cli
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as the host-side read-only Loader projection registers nothing model-facing.
+None, as this host-side management surface registers no model-facing content.
 
 #### KV Cache effect
 
@@ -97,7 +97,7 @@ None; this package neither assembles nor sends a provider request.
 These limits define what a point-in-time inventory cannot tell a client. They are current package constraints, not a task backlog.
 
 - **Point-in-time state only** — the result contains no durable failure history or subscription; a missing root Fiber is reported as `null`, regardless of why no live root exists.
-- **No provenance or mutation** — the service does not identify which bundle, profile, or override introduced an entry, and it cannot enable, disable, add, or remove plugins in either plane.
+- **Profile and preset rows remain read-only** — management is limited to user-owned Skill files and MCP entries created through this service.
 - **Presets appear only with a roster** — a deployment without `dsh-agent-presets` serves Loader entries alone; the `agentPresets` field is absent rather than empty.
 
 <a id="dev-note"></a>

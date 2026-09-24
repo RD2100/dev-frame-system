@@ -1,5 +1,5 @@
 ---
-description: "The read-only Web catalog for active Schedule reminders, for users choosing the surface and maintainers of its projection, timing, and accessibility behavior."
+description: "The Web Schedule task center and header catalog, including browser controls for active reminders."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package renders a read-only catalog of the current Session's active Schedule reminders in the Web header. It reads the complete `schedule` projection and issues no RPC or mutation. The browser derives status, local time, relative time, and ordering without adding those presentation values to durable state. The shipped Web bundle keeps the plugin disabled until the explicit Schedule overlay enables both the Host Schedule services and this client row.
+This package renders a header catalog and a Settings task center for active Schedule reminders. The task center reads all Session projections and uses the generated Schedule Remote to pause, resume, run now, and delete records. The header catalog remains a compact read-only presentation; browser-derived labels never enter durable state. The shipped Web bundle keeps the plugin disabled until the explicit Schedule overlay enables both the Host Schedule services and this client row.
 
 ## Table of Contents
 
@@ -47,7 +47,7 @@ Only the native trigger button enters the tab order. Enter and Space use normal 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The browser plugin contributes `schedule-catalog` to `conversation.session.header.actions` at order 10, after static Agent and Subagent context and before background Jobs. It reads `openState` through the standard Session hook and the complete value through `useProjection('schedule')`; popover visibility is its only local interaction state. The component portals the catalog to `document.body` and gives its trigger and panel refs to `useAnchoredPosition`, which publishes fixed coordinates after measuring the rendered panel, keeps a 5px gap below the trigger, clamps to a 16px viewport margin, and remeasures on resize, captured scroll, and panel resize. The catalog ref also makes pointer presses inside the portal part of the existing dismissal boundary. Browser formatting uses the viewing locale, time zone, and clock, while durable Schedule records remain unchanged.
+The browser plugin contributes `schedule-catalog` to `conversation.session.header.actions` and a `schedule` section to Settings. The task center sends session-addressed Remote calls and reloads its projection through the normal Session update path; action failures stay local to the page. The header component reads `openState` and `useProjection('schedule')`; its popover remains read-only and browser formatting never changes durable records.
 
 ### Source map
 
@@ -95,7 +95,7 @@ These limits define the current Schedule catalog. They are current package const
 
 - **Active records only** — terminal delete and dispatch transitions remove rows; the ordinary transcript remains the only reminder-delivery history.
 - **Browser-derived time** — local and relative labels use the viewing browser's current locale, time zone, and clock. They are presentation values, not durable Schedule facts.
-- **Read-only surface** — creating and deleting reminders remain with the Schedule tools; the catalog has no mutation, retry, acknowledgement, toast, or delivery-receipt semantics.
+- **Header catalog is read-only** — creation remains with Schedule tools; pause, resume, run now, and delete are available in the Settings task center.
 - **Open Session required** — a failed open hides even a tentative cached value because strict Session replay remains authoritative.
 
 <a id="dev-note"></a>

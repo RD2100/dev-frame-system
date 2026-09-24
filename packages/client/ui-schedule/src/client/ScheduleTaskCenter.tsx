@@ -1,22 +1,24 @@
+import { useState, type ReactNode } from 'react'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { ClientRemote, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import { SCHEDULE_TEMPLATES } from '@deepseek-ai/dsh-schedule/client'
-import type { ScheduleHistoryEntry, ScheduleRecord } from '@deepseek-ai/dsh-schedule/client'
-import type { PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ScheduleHistoryEntry, ScheduleId, ScheduleRecord } from '@deepseek-ai/dsh-schedule/client'
+import type { InjectFace, PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'
 import css from './ScheduleTaskCenter.module.css'
 
 /** Props for the root settings task-center section. */
 export type ScheduleTaskCenterProps =
-  PropsRuntime<'settings.section'> & PropsLocale<typeof NS>
+  PropsRuntime<'settings.section'> & PropsLocale<typeof NS> & InjectFace<{ readonly schedule: ClientRemote['schedule'] }>
 
 interface ActiveRow {
-  readonly sessionId: string
+  readonly sessionId: SessionId
   readonly sessionTitle: string
   readonly record: ScheduleRecord
 }
 
 interface HistoryRow {
-  readonly sessionId: string
+  readonly sessionId: SessionId
   readonly sessionTitle: string
   readonly entry: ScheduleHistoryEntry
 }
@@ -75,18 +77,51 @@ function collectRows(
   return { active, history }
 }
 
-/**
- * Read-only settings task center backed by host Session projections.
- * Schedule mutation remains model-scoped because the client Remote contract
- * has no schedule namespace; this page never invents local task state.
- */
-export function ScheduleTaskCenter({ useSessions, t }: ScheduleTaskCenterProps) {
+type ScheduleAction = 'pause' | 'resume' | 'run' | 'delete'
+
+/** Settings task center backed by host Session projections and Schedule Remotes. */
+export function ScheduleTaskCenter({ useSessions, schedule, t }: ScheduleTaskCenterProps) {
   const rows = collectRows(useSessions(state => state))
   const now = Date.now()
+  const [pending, setPending] = useState<string | undefined>()
+  const [actionError, setActionError] = useState(false)
+
+  const runAction = async (action: ScheduleAction, sessionId: SessionId, id: ScheduleId): Promise<void> => {
+    const key = `${sessionId}:${id}:${action}`
+    setPending(key)
+    setActionError(false)
+    try {
+      const result = await schedule[action]({ sessionId, id })
+      if (!result.ok) throw new Error(result.error.message)
+    } catch {
+      setActionError(true)
+    } finally {
+      setPending(current => current === key ? undefined : current)
+    }
+  }
+
+  const actionButton = (action: ScheduleAction, sessionId: SessionId, id: ScheduleId): ReactNode => {
+    const key = `${sessionId}:${id}:${action}`
+    const label = t(`center.action.${action}` as const)
+    return (
+      <button
+        type="button"
+        className={css.actionButton}
+        data-schedule-action={action}
+        disabled={pending !== undefined}
+        aria-label={label}
+        onClick={() => { void runAction(action, sessionId, id) }}
+      >
+        {pending === key ? t('center.working') : label}
+      </button>
+    )
+  }
+
   return (
     <section className={css.section} aria-labelledby="schedule-center-title">
       <h2 id="schedule-center-title" className={css.title}>{t('center.title')}</h2>
-      <p className={css.description}>{t('center.readOnly')}</p>
+      <p className={css.description}>{t('center.description')}</p>
+      {actionError ? <p className={css.actionError} role="alert">{t('center.actionError')}</p> : null}
       <section className={css.group} aria-labelledby="schedule-center-templates">
         <h3 id="schedule-center-templates" className={css.heading}>{t('center.templates')}</h3>
         <ul className={css.list}>
@@ -119,6 +154,11 @@ export function ScheduleTaskCenter({ useSessions, t }: ScheduleTaskCenterProps) 
                     <span>{sessionTitle}</span>
                     <span>{record.kind}</span>
                     <time dateTime={record.scheduledAt}>{record.scheduledAt}</time>
+                  </div>
+                  <div className={css.actions}>
+                    {actionButton(record.paused ? 'resume' : 'pause', sessionId, record.id)}
+                    {actionButton('run', sessionId, record.id)}
+                    {actionButton('delete', sessionId, record.id)}
                   </div>
                 </li>
               ))}

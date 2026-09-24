@@ -1,5 +1,5 @@
 ---
-description: "dsh Web 客户端设置中按作用域分组的只读插件清单标签页：Agent 预设组合在前，全局平面收在折叠分组里，搜索跨两组。"
+description: "dsh Web 客户端设置中的插件清单，以及用户 Skill 与 MCP 管理标签页。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-client-ui-settings-plugin-inventory` 向 Web 设置的「插件」分区贡献两个只读标签页。**插件列表**在首次被选择时懒调用 `ctx.remote.pluginInventory.list()`，把清单按作用域分成两个可折叠分组。**技能与连接器**复用这个清单 Remote，并调用官方 `ctx.remote.skills.list()` 读取当前会话的技能目录。页面展示可搜索的技能元数据与 MCP/连接器 Loader 条目，提供「刷新」重新取得当前快照，并标明 profile 或 Agent 预设是配置拥有方。页面没有启用、添加、编辑、测试或移除控件；这些修改属于 profile 组合界面。
+`dsh-client-ui-settings-plugin-inventory` 向 Web 设置的「插件」分区贡献插件清单和用户能力管理标签页。**插件列表**在首次被选择时懒调用 `ctx.remote.pluginInventory.list()`，把清单按作用域分成两个可折叠分组。**技能与连接器**复用这个清单 Remote，并调用官方 `ctx.remote.skills.list()` 读取当前会话的技能目录；页面还可安装、启停、卸载用户 Skill，以及添加、编辑、测试、启停、移除 MCP 客户端。页面展示可搜索的技能元数据与 MCP/连接器 Loader 条目，提供「刷新」重新取得当前快照，并标明 profile 或 Agent 预设是配置拥有方。
 
 插件列表保留原有的作用域视图：Agent 预设组在前且默认展开，全局组随后收起；搜索过滤两组，通用失败不会泄露传输细节。技能与连接器标签页在选中会话时报告真实的会话目录；没有当前会话时会说明技能为何不可用，同时仍展示全局连接器状态。
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 
 打开设置中的「插件」分区并选择**插件列表**标签页，即可查看宿主的插件清单。插件激活期间不会读取 Remote——首次选择该标签页时才挂载组件，并通过 `api-remotes` 懒调用 `ctx.remote.pluginInventory.list()`。
 
-选择**技能与连接器**即可查看 profile 拥有的能力状态。技能通过当前会话调用 `ctx.remote.skills.list()`；MCP 与连接器条目来自宿主插件清单，并带有 Loader 阶段、有效启用状态与预设作用域。搜索框可过滤任一面板，「刷新」会重新读取两份快照。页面保持只读；需要修改状态时请编辑负责组合该能力的 profile 或 Agent 预设。
+选择**技能与连接器**即可查看并管理用户能力。当前会话的有效技能通过 `ctx.remote.skills.list()` 读取；用户 Skill 的安装、启停和卸载调用 Host 管理 Remote。MCP 与连接器条目来自宿主插件清单，带有 Loader 阶段和有效启用状态；页面提供添加、编辑、测试、启停和移除。搜索框可过滤任一面板，「刷新」会重新读取四份快照。profile 或 Agent 预设组合行仍由其配置拥有方管理。
 
 ### 阅读卡片
 
@@ -51,7 +51,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-该标签页是宿主拥有快照的只读投影；插件激活期间不执行任何 Remote 读取，首次选择时才取快照。
+插件激活期间不执行 Remote 读取，首次选择时才取得快照。修改操作调用生成的管理 Remote，随后重新读取快照，因此页面不自行维护本地真源。
 
 ### 注册
 
@@ -73,7 +73,7 @@ kind: "package-reference"
 - [ui-settings-plugins](../ui-settings-plugins/README.zh.md)——本标签页注册进的「插件」分区。
 - [ui-settings](../ui-settings/README.zh.md)——声明 `settings.plugins.tab` 的领域底座。
 - [api-remotes](../../api/remotes/README.zh.md)——`pluginInventory.list()` 背后的 Remote BFF 表面。
-- [plugin-inventory](../../host/plugin-inventory/README.zh.md)——本标签页所渲染的宿主侧只读 Loader 投影。
+- [plugin-inventory](../../host/plugin-inventory/README.zh.md)——本标签页使用的宿主侧 Loader 清单与用户能力管理 Remote。
 - [session-controller](../../api/session-controller/README.zh.md)——能力标签页所使用的按会话寻址技能目录。
 
 -----
@@ -96,7 +96,7 @@ kind: "package-reference"
 
 - **每次 Settings 挂载或刷新只读取一份快照**：标签页不订阅 Loader 或技能变化，也不会在重连后自动读取；切换标签页会保留当前快照，刷新或重新打开 Settings 才会取得新快照。
 - **技能按会话寻址**：没有选中的当前会话时，宿主无法回答工作区与预设相关的技能目录；页面会如实说明，而不会猜测另一个会话的结果。
-- **两个平面都只读**：标签页展示全局与预设的启停状态但都不修改；写回自定义预设组合文件的启停控件是刻意留作后续的工作。
+- **profile 与预设组合只读**：标签页管理用户 Skill 文件与 MCP 条目，不修改部署拥有的组合行。
 
 <a id="dev-note"></a>
 ### 开发备注
@@ -108,4 +108,4 @@ kind: "package-reference"
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。本包只持有一个只读 Settings contribution。
+**运行时不变式：** 不发布伴生入口。本包只持有一个 Settings contribution；管理写入限制在 Host 拥有的用户 Skill 与 MCP 表面。

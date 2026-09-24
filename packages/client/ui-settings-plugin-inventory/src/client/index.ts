@@ -1,8 +1,10 @@
-/** Read-only Host plugin inventory registered into Web Settings. */
+/** Host plugin inventory and user capability management registered into Web Settings. */
 
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
+import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls the 'settings.agentPreset' LocaleNamespaceMap merge, whose
@@ -24,7 +26,7 @@ export type { PluginInventoryLocaleKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** Read-only Host plugin inventory copy. */
+    /** Host plugin, Skill, and MCP management copy. */
     'settings.pluginInventory': PluginInventoryLocaleKey
   }
 }
@@ -50,12 +52,60 @@ export function apply(ctx: ClientContext): void {
     return result.value
   }
   const listSkills: SkillConnectorSettingsTabInjected['listSkills'] = async () => {
-    const sessionId = ctx.sessions.list.getSnapshot().current
-    if (sessionId === undefined || ctx.sessions.subagentAddress(sessionId) !== undefined) return undefined
+    // The aggregate client face can merge a legacy SessionStore declaration;
+    // this package consumes the published ISessions contract explicitly.
+    const sessions = ctx.sessions as unknown as ISessions
+    const sessionId = sessions.list.getSnapshot().current
+    if (sessionId === undefined || sessions.subagentAddress(sessionId) !== undefined) return undefined
     const result = await ctx.remote.skills.list({ sessionId })
     if (!result.ok) {
       throw new Error(`skills/list failed: ${result.error.code}: ${result.error.message}`)
     }
+    return result.value
+  }
+  const listManagedSkills: SkillConnectorSettingsTabInjected['listManagedSkills'] = async () => {
+    const result = await ctx.remote.pluginInventory.listSkills()
+    if (!result.ok) throw new Error(`pluginInventory.listSkills failed: ${result.error.code}: ${result.error.message}`)
+    return result.value
+  }
+  const installSkill: SkillConnectorSettingsTabInjected['installSkill'] = async (request) => {
+    const result = await ctx.remote.pluginInventory.installSkill(request)
+    if (!result.ok) throw new Error(`pluginInventory.installSkill failed: ${result.error.code}: ${result.error.message}`)
+    return result.value
+  }
+  const setSkillEnabled: SkillConnectorSettingsTabInjected['setSkillEnabled'] = async (request) => {
+    const result = await ctx.remote.pluginInventory.setSkillEnabled(request)
+    if (!result.ok) throw new Error(`pluginInventory.setSkillEnabled failed: ${result.error.code}: ${result.error.message}`)
+    return result.value
+  }
+  const removeSkill: SkillConnectorSettingsTabInjected['removeSkill'] = async (name) => {
+    const result = await ctx.remote.pluginInventory.removeSkill({ name })
+    if (!result.ok) throw new Error(`pluginInventory.removeSkill failed: ${result.error.code}: ${result.error.message}`)
+  }
+  const listMcp: SkillConnectorSettingsTabInjected['listMcp'] = async () => {
+    const result = await ctx.remote.pluginInventory.listMcp()
+    if (!result.ok) throw new Error(`pluginInventory.listMcp failed: ${result.error.code}: ${result.error.message}`)
+    return result.value
+  }
+  const createMcp: SkillConnectorSettingsTabInjected['createMcp'] = async (config) => {
+    const result = await ctx.remote.pluginInventory.createMcp({ config })
+    if (!result.ok) throw new Error(`pluginInventory.createMcp failed: ${result.error.code}: ${result.error.message}`)
+  }
+  const updateMcp: SkillConnectorSettingsTabInjected['updateMcp'] = async (entryId, config) => {
+    const result = await ctx.remote.pluginInventory.updateMcp({ entryId, config })
+    if (!result.ok) throw new Error(`pluginInventory.updateMcp failed: ${result.error.code}: ${result.error.message}`)
+  }
+  const removeMcp: SkillConnectorSettingsTabInjected['removeMcp'] = async (entryId) => {
+    const result = await ctx.remote.pluginInventory.removeMcp({ entryId })
+    if (!result.ok) throw new Error(`pluginInventory.removeMcp failed: ${result.error.code}: ${result.error.message}`)
+  }
+  const setMcpEnabled: SkillConnectorSettingsTabInjected['setMcpEnabled'] = async (entryId, enabled) => {
+    const result = await ctx.remote.pluginInventory.setMcpEnabled({ entryId, enabled })
+    if (!result.ok) throw new Error(`pluginInventory.setMcpEnabled failed: ${result.error.code}: ${result.error.message}`)
+  }
+  const testMcpEntry: SkillConnectorSettingsTabInjected['testMcpEntry'] = async (entryId) => {
+    const result = await ctx.remote.pluginInventory.testMcpEntry({ entryId })
+    if (!result.ok) throw new Error(`pluginInventory.testMcpEntry failed: ${result.error.code}: ${result.error.message}`)
     return result.value
   }
   // Resolved per call over ui-agent-preset's dictionaries, so a language
@@ -79,6 +129,19 @@ export function apply(ctx: ClientContext): void {
     order: 20,
     label: () => t('capabilitiesTab'),
     locale: NS,
-    inject: (): SkillConnectorSettingsTabInjected => ({ listInventory: list, listSkills }),
+    inject: (): SkillConnectorSettingsTabInjected => ({
+      listInventory: list,
+      listSkills,
+      listManagedSkills,
+      installSkill,
+      setSkillEnabled,
+      removeSkill,
+      listMcp,
+      createMcp,
+      updateMcp,
+      removeMcp,
+      setMcpEnabled,
+      testMcpEntry,
+    }),
   }, SkillConnectorSettingsTab))
 }

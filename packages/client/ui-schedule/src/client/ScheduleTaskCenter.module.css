@@ -24,6 +24,12 @@
   font-size: 13px;
 }
 
+.actionError {
+  margin: 0;
+  color: var(--ds-color-state-error, #b91c1c);
+  font-size: 13px;
+}
+
 .group {
   display: grid;
   gap: 8px;
@@ -64,4 +70,30 @@
 .metadata {
   flex-wrap: wrap;
   justify-content: flex-start;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.actionButton {
+  border: 1px solid var(--ds-color-border, #e5e7eb);
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.actionButton:hover:not(:disabled) {
+  background: var(--ds-color-bg-hover, #f3f4f6);
+}
+
+.actionButton:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }

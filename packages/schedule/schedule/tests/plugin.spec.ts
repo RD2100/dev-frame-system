@@ -6,6 +6,7 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as toolSchedule from '../src/index.ts'
 
@@ -42,6 +43,12 @@ describe('Schedule plugin composition', () => {
     const ctx = await harness()
     const existing = await ctx.agents.create({ sessionId: SessionId('schedule-existing') })
     const plugin = await ctx.plugin(toolSchedule)
+    expect(remoteMethods(ctx.schedule)).toEqual(expect.arrayContaining([
+      { method: 'pause', invocation: { kind: 'direct' } },
+      { method: 'resume', invocation: { kind: 'direct' } },
+      { method: 'run', invocation: { kind: 'direct' } },
+      { method: 'delete', invocation: { kind: 'direct' } },
+    ]))
     expect(ctx.tools.get('schedule_create', existing.agent)).toBeUndefined()
     expect(ctx.tools.get('schedule_create')).toBeUndefined()
 

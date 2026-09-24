@@ -12,6 +12,7 @@ import type {} from '@deepseek-ai/dsh-session-projection'
 import { scheduleHistoryProjectionDefinition, scheduleProjectionDefinition } from './projection.ts'
 import { ScheduleRuntime } from './runtime.ts'
 import { registerScheduleTools } from './tools.ts'
+import { ScheduleGateway } from './gateway.ts'
 import type { ScheduleId } from './types.ts'
 
 export type * from './types.ts'
@@ -36,6 +37,7 @@ export {
   scheduleView,
 } from './domain.ts'
 export { registerScheduleTools } from './tools.ts'
+export { ScheduleGateway } from './gateway.ts'
 
 /** Cordis function-plugin name. */
 export const name = 'schedule'
@@ -46,13 +48,20 @@ type OwnerCleanup = () => void | Promise<void>
 
 /** Install Schedule only for root agents published after this plugin loads. */
 export function apply(ctx: Context): void {
+  ctx.plugin(ScheduleGateway)
   ctx.inject(['sessionProjections'], (projectionCtx) => {
     projectionCtx.sessionProjections.register(scheduleProjectionDefinition)
     projectionCtx.sessionProjections.register(scheduleHistoryProjectionDefinition)
   })
 
   const runtimes = new Map<Agent, OwnerCleanup>()
+  const runtimeByAgent = new Map<Agent, ScheduleRuntime>()
   const pending = new Map<Session, { turn: number; ids: Set<ScheduleId> }>()
+  const stopRequested = ctx.on('schedule/request-drive', (sessionId) => {
+    const agent = ctx.agents.get(sessionId)
+    if (agent === undefined) return
+    runtimeByAgent.get(agent)?.requestDrive()
+  })
 
   /** Record the terminal outcome for one automatically queued reminder turn. */
   const appendOutcomes = (session: Session, ids: readonly ScheduleId[], outcome: 'success' | 'failure' | 'cancelled', error?: string): void => {
@@ -120,20 +129,24 @@ export function apply(ctx: Context): void {
             await runtime.dispose()
           } finally {
             if (runtimes.get(agent) === cleanup) runtimes.delete(agent)
+            runtimeByAgent.delete(agent)
           }
         }
       }, 'schedule.runtime()')
       runtimes.set(agent, cleanup)
+      runtimeByAgent.set(agent, runtime)
     })
 
     return async () => {
       stopping = true
+      stopRequested()
       stopOutcomes()
       stopDiscarded()
       pending.clear()
       stopCreated()
       const cleanups = [...runtimes.values()]
       runtimes.clear()
+      runtimeByAgent.clear()
       await Promise.allSettled(cleanups.map(cleanup => Promise.resolve(cleanup())))
     }
   }, 'schedule.lifecycle()')

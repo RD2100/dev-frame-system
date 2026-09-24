@@ -1,5 +1,5 @@
 ---
-description: "面向用户与维护者的活动 Schedule 提醒只读 Web 目录说明，用于选择该界面并理解其 projection、时间与无障碍行为。"
+description: "Web Schedule 任务中心与头部目录说明，包含活动提醒的浏览器控制。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包在 Web 会话头部渲染当前 Session 活动 Schedule 提醒的只读目录。它读取完整的 `schedule` projection，不发 RPC，也不执行 mutation。浏览器派生状态、本地时间、相对时间与排序，不把这些呈现值加入持久状态。随附 Web bundle 默认禁用该插件，只有显式 Schedule overlay 才会同时启用 Host Schedule 服务与此客户端 row。
+本包在 Web 会话头部渲染 Schedule 目录，并在设置中提供任务中心。任务中心读取全部 Session projection，通过生成的 Schedule Remote 暂停、恢复、立即运行或删除任务；头部目录仍是紧凑的只读呈现。浏览器派生的时间标签不会写入持久状态。随附 Web bundle 默认禁用该插件，只有显式 Schedule overlay 才会同时启用 Host Schedule 服务与此客户端 row。
 
 ## 目录
 
@@ -47,7 +47,7 @@ dsh web --patch apps/cli/config/examples/schedule/cordis.yml
 <details>
 <summary>实现细节——点击展开</summary>
 
-浏览器插件以顺序 10 向 `conversation.session.header.actions` 贡献 `schedule-catalog`，位于静态 Agent 与 Subagent 上下文之后、后台 Jobs 之前。它通过标准 Session hook 读取 `openState`，通过 `useProjection('schedule')` 读取完整值；弹层开合是它唯一的本地交互状态。组件把目录 portal 到 `document.body`，并将触发器与面板 ref 交给 `useAnchoredPosition`；该 hook 在测量已渲染面板后发布 fixed 坐标，使面板位于触发器下方 5px、钳制在 16px 视口边距内，并在 resize、捕获阶段 scroll 与面板 resize 时重新测量。目录 ref 也让 portal 内的指针按下继续属于既有 dismissal 边界之内。浏览器格式化使用查看方的 locale、时区与时钟，持久 Schedule 记录保持不变。
+浏览器插件以顺序 10 向 `conversation.session.header.actions` 贡献 `schedule-catalog`，并向设置贡献 `schedule` 分区。任务中心发送按 Session 寻址的 Remote 调用，并通过正常的 Session 更新路径重新读取 projection；操作失败只显示在当前页面。头部组件仍读取 `openState` 与 `useProjection('schedule')`，只读弹层不会改变持久记录。
 
 ### 源码地图
 
@@ -95,7 +95,7 @@ dsh web --patch apps/cli/config/examples/schedule/cordis.yml
 
 - **仅含活动记录**——终结性的 delete 与 dispatch 转换会移除对应行；普通 transcript 仍是唯一的提醒交付历史。
 - **浏览器派生时间**——本地时间与相对时间标签使用查看方浏览器当前的 locale、时区与时钟。它们是呈现值，不是持久 Schedule 事实。
-- **只读界面**——创建与删除提醒仍由 Schedule 工具负责；目录没有 mutation、Retry、acknowledgement、Toast 或交付回执语义。
+- **头部目录只读**——创建仍由 Schedule 工具负责；暂停、恢复、立即运行和删除在设置任务中心提供。
 - **要求 Session 打开成功**——打开失败时，即使存在暂定缓存值也会隐藏，因为严格 Session 回放仍是权威。
 
 <a id="dev-note"></a>

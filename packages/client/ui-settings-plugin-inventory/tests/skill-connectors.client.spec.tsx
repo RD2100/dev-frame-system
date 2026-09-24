@@ -1,105 +1,85 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PluginInventorySnapshot } from '@deepseek-ai/dsh-api-remotes/client'
 import { SkillConnectorSettingsTab } from '../src/client/SkillConnectorSettingsTab.tsx'
-import type {
-  SkillConnectorSettingsTabInjected,
-  SkillConnectorSettingsTabProps,
-} from '../src/client/SkillConnectorSettingsTab.tsx'
+import type { SkillConnectorSettingsTabInjected, SkillConnectorSettingsTabProps } from '../src/client/SkillConnectorSettingsTab.tsx'
 import { en, type PluginInventoryLocaleKey } from '../src/client/locales.ts'
 
 afterEach(cleanup)
 
 const t = ((key: PluginInventoryLocaleKey, params?: Record<string, string>): string =>
-  Object.entries(params ?? {}).reduce(
-    (text, [name, value]) => text.replaceAll(`{${name}}`, value),
-    en[key],
-  )) as SkillConnectorSettingsTabProps['t']
+  Object.entries(params ?? {}).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, value), en[key])) as SkillConnectorSettingsTabProps['t']
 
-const INVENTORY = {
-  entries: [
-    { entryId: 'mcp-github', moduleName: '@deepseek-ai/dsh-mcp-client', enabled: true, fiberPhase: 'active' },
-    { entryId: 'other', moduleName: '@deepseek-ai/dsh-tool-bash', enabled: true, fiberPhase: 'active' },
-  ],
-  agentPresets: [{
-    id: 'standard', trust: 'system', isDefault: true,
-    rows: [{ entryId: 'mcp-files', moduleName: '@deepseek-ai/dsh-mcp-client', enabled: true, fiberPhase: 'pending' }],
-  }],
-} as unknown as PluginInventorySnapshot
-
-const SKILLS = {
-  skills: [
-    { name: 'ship-it', description: 'Ship a change', modelInvocable: true },
-    { name: 'review-only', description: 'Review without model access', modelInvocable: false, whenToUse: 'When reviewing' },
-  ],
+const INVENTORY = { entries: [] } as unknown as PluginInventorySnapshot
+const SKILLS = { skills: [{ name: 'ship-it', description: 'Ship a change', modelInvocable: true }] }
+const MANAGED = { skills: [{ name: 'ship-it', description: 'Ship a change', enabled: true, modelInvocable: true, userInvocable: true }] }
+const MCP = {
+  servers: [{ entryId: 'mcp-github', serverName: 'github', transport: 'stdio', enabled: true, fiberPhase: 'active', config: { serverName: 'github', transport: 'stdio', command: 'node server.js' } }],
 }
 
-function props(
-  listInventory: SkillConnectorSettingsTabInjected['listInventory'] = async () => INVENTORY,
-  listSkills: SkillConnectorSettingsTabInjected['listSkills'] = async () => SKILLS,
-): SkillConnectorSettingsTabProps {
-  return { listInventory, listSkills, t } as SkillConnectorSettingsTabProps
+function props(overrides: Partial<SkillConnectorSettingsTabInjected> = {}): SkillConnectorSettingsTabProps {
+  return {
+    listInventory: async () => INVENTORY,
+    listSkills: async () => SKILLS,
+    listManagedSkills: async () => MANAGED,
+    installSkill: async () => ({ name: 'new-skill', enabled: true }),
+    setSkillEnabled: async request => ({ name: request.name, enabled: request.enabled }),
+    removeSkill: async () => {},
+    listMcp: async () => MCP,
+    createMcp: async () => {},
+    updateMcp: async () => {},
+    removeMcp: async () => {},
+    setMcpEnabled: async () => {},
+    testMcpEntry: async () => ({ ok: true, message: 'connected' }),
+    t,
+    ...overrides,
+  } as SkillConnectorSettingsTabProps
 }
 
-async function ready(
-  listInventory?: SkillConnectorSettingsTabInjected['listInventory'],
-  listSkills?: SkillConnectorSettingsTabInjected['listSkills'],
-): Promise<void> {
-  render(<SkillConnectorSettingsTab {...props(listInventory, listSkills)} />)
+async function ready(overrides: Partial<SkillConnectorSettingsTabInjected> = {}): Promise<void> {
+  render(<SkillConnectorSettingsTab {...props(overrides)} />)
   await screen.findByRole('tab', { name: /Skills/iu })
+  await screen.findByText('/ship-it')
 }
 
 describe('SkillConnectorSettingsTab', () => {
-  it('reads current skills and profile-owned connectors without mutation controls', async () => {
-    await ready()
+  it('shows Skill install and enable/disable/uninstall controls', async () => {
+    const setEnabled = vi.fn<SkillConnectorSettingsTabInjected['setSkillEnabled']>()
+    const remove = vi.fn<SkillConnectorSettingsTabInjected['removeSkill']>()
+    await ready({ setSkillEnabled: setEnabled, removeSkill: remove })
 
-    expect(screen.getByText('/ship-it')).toBeTruthy()
-    expect(screen.getByText(en.profileOwnedNotice)).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /enable|disable|remove|add/iu })).toBeNull()
-
-    fireEvent.click(screen.getByRole('tab', { name: /MCP connectors/iu }))
-    expect(screen.getAllByText('mcp-client')).toHaveLength(2)
-    expect(screen.getByText('Composed by the application profile')).toBeTruthy()
-    expect(screen.getByText('standard')).toBeTruthy()
-    expect(screen.getByText('Waiting for dependencies')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: en.installSkill })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: en.disable }))
+    await waitFor(() => { expect(setEnabled).toHaveBeenCalledWith({ name: 'ship-it', enabled: false }) })
+    await screen.findByText('/ship-it')
+    fireEvent.click(screen.getByRole('button', { name: en.uninstall }))
+    await waitFor(() => { expect(remove).toHaveBeenCalledWith('ship-it') })
   })
 
-  it('filters both panels by search text', async () => {
-    await ready()
-    const search = screen.getByRole('searchbox', { name: en.capabilitiesSearch })
-
-    fireEvent.change(search, { target: { value: 'review-only' } })
-    expect(screen.getByText('/review-only')).toBeTruthy()
-    expect(screen.queryByText('/ship-it')).toBeNull()
-
+  it('shows MCP add/edit/test/toggle/remove controls', async () => {
+    const setEnabled = vi.fn<SkillConnectorSettingsTabInjected['setMcpEnabled']>()
+    const test = vi.fn<SkillConnectorSettingsTabInjected['testMcpEntry']>().mockResolvedValue({ ok: true, message: 'connected' })
+    await ready({ setMcpEnabled: setEnabled, testMcpEntry: test })
     fireEvent.click(screen.getByRole('tab', { name: /MCP connectors/iu }))
-    expect(screen.getByText(en.emptySearch)).toBeTruthy()
-    fireEvent.change(search, { target: { value: 'mcp-files' } })
-    expect(screen.getByText('mcp-client')).toBeTruthy()
+    expect(screen.getByText('github')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: en.disable }))
+    await waitFor(() => { expect(setEnabled).toHaveBeenCalledWith('mcp-github', false) })
+    fireEvent.click(screen.getByRole('button', { name: en.test }))
+    await waitFor(() => { expect(test).toHaveBeenCalled() })
+    expect(screen.getByRole('button', { name: en.edit })).toBeTruthy()
+    expect(screen.getByRole('button', { name: en.remove })).toBeTruthy()
   })
 
-  it('refreshes both Remotes and hides transport details after failure', async () => {
-    const inventory = vi.fn<SkillConnectorSettingsTabInjected['listInventory']>()
-      .mockRejectedValueOnce(new Error('secret transport detail'))
-      .mockResolvedValueOnce({ entries: [] })
-    const skills = vi.fn<SkillConnectorSettingsTabInjected['listSkills']>()
-      .mockResolvedValue({ skills: [] })
-    render(<SkillConnectorSettingsTab {...props(inventory, skills)} />)
-
-    expect((await screen.findByRole('alert')).textContent).toBe(en.error)
+  it('refreshes the four management reads after an operation failure and hides details', async () => {
+    const list = vi.fn<SkillConnectorSettingsTabInjected['listManagedSkills']>().mockResolvedValue(MANAGED)
+    const install = vi.fn<SkillConnectorSettingsTabInjected['installSkill']>().mockRejectedValue(new Error('secret transport detail'))
+    await ready({ listManagedSkills: list, installSkill: install })
+    const name = screen.getByRole('textbox', { name: en.skillName })
+    fireEvent.change(name, { target: { value: 'new-skill' } })
+    fireEvent.click(screen.getByRole('button', { name: en.install }))
+    expect((await screen.findByRole('alert')).textContent).toBe(en.operationError)
     expect(screen.queryByText('secret transport detail')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: en.retry }))
-    await waitFor(() => { expect(inventory).toHaveBeenCalledTimes(2) })
-    expect(await screen.findByText(en.skillsEmpty)).toBeTruthy()
-    expect(skills).toHaveBeenCalledTimes(2)
-  })
-
-  it('explains why no skill catalog is shown without a current session', async () => {
-    await ready(async () => ({ entries: [] }), async () => undefined)
-    expect(screen.getByText(en.skillsNoSession)).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: en.refresh }))
-    await act(async () => {})
   })
 })

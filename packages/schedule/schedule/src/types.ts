@@ -6,9 +6,40 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type {} from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 
 /** Stable reminder identity that is unique and never reused within one session. */
 export type ScheduleId = Branded<'ScheduleId'>
+
+/** Browser request addressing one Schedule record in one Session. */
+export interface ScheduleSessionRequest {
+  readonly sessionId: SessionId
+  readonly id: ScheduleId
+}
+
+/** Result of pausing one Schedule record. */
+export interface SchedulePauseRemoteValue {
+  readonly id: ScheduleId
+  readonly paused: true
+}
+
+/** Result of resuming one Schedule record. */
+export interface ScheduleResumeRemoteValue {
+  readonly id: ScheduleId
+  readonly resumed: true
+}
+
+/** Result of deleting one Schedule record. */
+export interface ScheduleDeleteRemoteValue {
+  readonly id: ScheduleId
+  readonly deleted: true
+}
+
+/** Result of queuing one immediate Schedule delivery. */
+export interface ScheduleRunRemoteValue {
+  readonly id: ScheduleId
+  readonly started: true
+}
 
 /** Stable human-selected key used to make a create request idempotent. */
 export type ScheduleDedupeKey = Branded<'ScheduleDedupeKey'>

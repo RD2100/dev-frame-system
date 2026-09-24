@@ -6,6 +6,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-schedule/client'
 import { ScheduleCatalogAction } from './ScheduleCatalogAction.tsx'
 import { ScheduleTaskCenter } from './ScheduleTaskCenter.tsx'
@@ -19,7 +21,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Required services for locale registration and header-slot contribution. */
-export const inject = ['slots', 'locale']
+export const inject = ['slots', 'locale', 'remote', 'remote.schedule']
 
 /** Register the dictionaries and Session-header catalog action. */
 export function apply(ctx: ClientContext): void {
@@ -42,6 +44,7 @@ export function apply(ctx: ClientContext): void {
       order: 30,
       label: () => ctx.locale.bind(NS)('center.nav'),
       locale: NS,
+      inject: (): { readonly schedule: ClientRemote['schedule'] } => ({ schedule: ctx.remote.schedule }),
     }, ScheduleTaskCenter),
   )
 }

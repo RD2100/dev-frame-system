@@ -20,6 +20,7 @@ async function baseContext(): Promise<Context> {
   await ctx.plugin(SlotRegistry).await()
   ctx.provide('connection', { api: { settings: {} }, isLoopback: false } as never)
   ctx.provide('remote', { $on: () => () => {} } as never)
+  ctx.provide('remote.schedule', { pause: async () => ({ ok: true }), resume: async () => ({ ok: true }), run: async () => ({ ok: true }), delete: async () => ({ ok: true }) } as never)
   ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   await ctx.plugin({ inject: localeInject, apply: applyLocale }).await()
   return ctx
@@ -36,7 +37,7 @@ function declareHeader(ctx: Context): () => void {
 
 describe('ui-schedule browser half', () => {
   it('declares only the services used by registration', () => {
-    expect(inject).toEqual(['slots', 'locale'])
+    expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.schedule'])
   })
 
   it('waits for the header declaration, orders between static context and Jobs, and tears down', async () => {

@@ -62,9 +62,9 @@ These tasks define user-authorized development, not implemented features. Concur
 | D3 | Obsidian library foundation: file listing, reading, search, path status | D0 | Complete: library Host service, tools, and UI handoff accepted | Luna max / Pascal / 01a0aa94-fa61-7022-847f-8a441dd750b2 |
 | D4 | Existing skill/MCP management and scheduling audit, adaptation plan | D0 | Complete: Skill/MCP/schedule reuse audit accepted | Luna max / Archimedes / 01a0aa94-fb9a-7df3-b32b-04f8b0adfc1c |
 | D5 | Desktop integration, build, actual loading, upgrade compatibility acceptance | D1–D4 | Host boot and Electron surfaces rechecked; model-backed Shadow board flow remains blocked by provider billing | Luna max / Parfit / 01a0aa96-62e5-75d0-a94b-6f88bcb2ff8b |
-| D6 | Library page and Memory Remote: listing, preview, search, paths, references | D3 | Implemented and mounted; Electron library and Memory pages are readable; mutation/e2e evidence remains limited | Luna max assignment pending |
-| D7 | Skill and connector management pages integrated with official services | D4 | Read-only inventory plus live MCP CRUD/test Remotes complete; Skill install/enable/disable and MCP persistence remain deferred | Coordinator |
-| D8 | Scheduled-task templates, durable run history, restart recovery | D4 | Schedule tools, templates, pause/resume/run/history, outcome receipts, projections, and read-only task center mounted; UI mutation controls and cold-restart e2e remain | Luna max assignment pending |
+| D6 | Library page and Memory Remote: listing, preview, search, paths, references | D3 | Implemented and mounted; Electron library and Memory pages are readable; mutation/e2e evidence remains limited | Coordinator |
+| D7 | Skill and connector management pages integrated with official services | D4 | Skill install/enable/disable/uninstall and MCP add/edit/test/enable/disable/remove controls are wired to Host Remotes; MCP entries persist under DSH home; profile and preset composition remains read-only | Coordinator |
+| D8 | Scheduled-task templates, durable run history, restart recovery | D4 | Schedule tools, templates, pause/resume/run/history, outcome receipts, projections, and task-center mutation controls are mounted; cold-restart Electron e2e remains | Coordinator |
 
 ## Collaboration and acceptance <a id="delivery"></a>
 
@@ -93,8 +93,8 @@ Each increment reports changed files, test commands and exit results, missing ve
 - 2026-09-24: Current source and focused evidence mark D1–D4 complete: dependency and packaging, expert-center summon, library foundation, and Skill/MCP/schedule audit work have corresponding implementation or accepted audit evidence; stale "Developing" table states are reconciled below.
 - 2026-09-24: D5 Host boot and the real Electron renderer surfaces were rechecked with the DevFrame overlay. Expert, Memory, Agent Team, and Shadow pages load; provider billing blocks model-backed Shadow planning and board approval evidence.
 - 2026-09-24: D6 Host Remote and the read-only library page are implemented and mounted; the Electron library and Memory pages render their current projections.
-- 2026-09-24: D7 now ships the Skill/connector inventory with search and refresh plus live MCP list/create/update/remove/test Remotes backed by the Cordis Loader. Skill install/enable/disable and MCP persistence across restart remain deferred.
-- 2026-09-24: D8 now ships the session-local Schedule overlay, eight model tools, templates, pause/resume/run/history, outcome receipts for success/failure/cancellation, restart-safe projections, and a read-only task center. Browser mutation controls and cold-restart Electron evidence remain deferred.
+- 2026-09-24: D7 now ships Skill install/enable/disable/uninstall controls and MCP add/edit/test/enable/disable/remove controls. Host MCP configuration is restored from and atomically persisted to `$DSH_HOME/storages/mcp-servers.json`; projections redact `env` and `headers`. Focused Host, UI, and Typert generation checks pass.
+- 2026-09-24: D8 now ships the session-local Schedule overlay, eight model tools, templates, pause/resume/run/history, outcome receipts for success/failure/cancellation, restart-safe projections, and task-center mutation controls through the generated Schedule Remote. Cold-restart Electron e2e remains unexecuted.
 
 ## Dev Note
 

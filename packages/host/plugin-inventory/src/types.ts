@@ -1,4 +1,5 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
 /** Stable Loader-tree identity of one configured plugin entry. */
 export type PluginEntryId = Branded<'PluginEntryId'>
@@ -70,7 +71,7 @@ export interface PluginInventorySnapshot {
 }
 
 /** MCP transport configuration accepted by the management Remote. */
-export type McpServerConfig = Readonly<Record<string, unknown>>
+export type McpServerConfig = Readonly<Record<string, JsonValue>>
 
 /** A configured MCP Loader entry with secrets removed from its projection. */
 export interface McpServerEntry {
@@ -94,13 +95,19 @@ export interface McpCreateRequest {
 
 /** Update request for one MCP Loader entry. */
 export interface McpUpdateRequest {
-  readonly entryId: string
+  readonly entryId: PluginEntryId
   readonly config: McpServerConfig
 }
 
 /** Remove request for one MCP Loader entry. */
 export interface McpRemoveRequest {
-  readonly entryId: string
+  readonly entryId: PluginEntryId
+}
+
+/** Request to change one MCP client's effective Loader enablement. */
+export interface McpSetEnabledRequest {
+  readonly entryId: PluginEntryId
+  readonly enabled: boolean
 }
 
 /** Connectivity probe request. */
@@ -108,8 +115,53 @@ export interface McpTestRequest {
   readonly config: McpServerConfig
 }
 
+/** Probe a configured MCP client using its private stored transport values. */
+export interface McpTestEntryRequest {
+  readonly entryId: PluginEntryId
+}
+
 /** Result of an MCP connectivity probe. */
 export interface McpTestValue {
   readonly ok: boolean
   readonly message: string
+}
+
+/** A user-owned Skill discovered under the durable DSH home. */
+export interface SkillManagementEntry {
+  readonly name: string
+  readonly description: string
+  readonly enabled: boolean
+  readonly modelInvocable: boolean
+  readonly userInvocable: boolean
+  readonly whenToUse?: string
+}
+
+/** User-owned Skill management snapshot. */
+export interface SkillManagementSnapshot {
+  readonly skills: readonly SkillManagementEntry[]
+}
+
+/** Request to install a user-owned Skill from authored Markdown content. */
+export interface SkillInstallRequest {
+  readonly name: string
+  readonly description: string
+  readonly content: string
+  readonly whenToUse?: string
+}
+
+/** Request to change one user-owned Skill's invocation state. */
+export interface SkillSetEnabledRequest {
+  readonly name: string
+  readonly enabled: boolean
+}
+
+/** Request to remove one user-owned Skill. */
+export interface SkillRemoveRequest {
+  readonly name: string
+}
+
+/** Result returned after installing or changing a Skill. */
+export interface SkillManagementValue {
+  readonly name: string
+  readonly enabled: boolean
 }

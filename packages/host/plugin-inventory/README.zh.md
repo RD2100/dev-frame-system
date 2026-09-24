@@ -1,5 +1,5 @@
 ---
-description: "当前 Cordis Loader 插件状态的只读投影，并附带每个 Agent 预设的组合：面向 web GUI 宿主客户端的 pluginInventory 服务及其 pluginInventory/list Remote。"
+description: "面向 web GUI 宿主客户端的 Loader 清单，以及用户 Skill 与 MCP 管理 Remote。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-客户端与设置页可以展示宿主当前组合了什么：调用 `pluginInventory/list` 即按 Loader 顺序返回当前的非组条目——条目 id、模块标识、有效启用状态与根 Fiber 阶段（`pending`、`loading`、`active`、`failed` 或 `unloading`；条目没有存活根 Fiber 时为 `null`）。当部署组合了 Agent 预设 roster 时，快照还携带每个预设一组——id、trust、显示名、默认标记、健康状态与压平后的组合行——因为挂载 roster 的部署把模型侧插件运行在预设组合里，而不是 Loader 自己的条目上。该快照只表示调用当下：Loader 是唯一的生命周期权威，本包不拥有缓存、历史、来源模型、事件流或修改路径。Client 包通过显式的 [`api-remotes`](../../api/remotes/README.zh.md) 组合消费这个 Remote，而不导入 Host 实现。
+客户端与设置页可以调用 `pluginInventory/list` 查看清单，调用 `listSkills`、`installSkill`、`setSkillEnabled`、`removeSkill` 管理用户 Skill，调用 `listMcp`、`createMcp`、`updateMcp`、`setMcpEnabled`、`testMcpEntry`、`removeMcp` 管理 MCP。Loader 清单仍是调用当下的投影；用户 Skill 存放在 `$DSH_HOME/skills`，MCP 配置持久化到 `$DSH_HOME/storages/mcp-servers.json`。Client 包通过显式的 [`api-remotes`](../../api/remotes/README.zh.md) 组合消费这个 Remote，而不导入 Host 实现。
 
 ## 目录
 
@@ -35,9 +35,9 @@ kind: "package-reference"
 
 组合了 roster 时，`agentPresets` 按 roster 顺序携带每个预设一组：其 id、随部署内置还是用户自建（`trust`，客户端据此本地化内置预设名）、发布的显示名、未指名预设的会话是否组合它，以及压平后的插件行——条目 id（文件行未声明时为 null）、模块标识、有效启用状态、行自带的 `!!js` disabled 表达式（如有），以及组合存活时的根 Fiber 阶段。已有会话组合过的预设由其最新 standing 世代作答——即使其文件事后损坏也是如此，因为挂载才是这些会话实际运行的组合；开机以来从未被组合的预设由其组合文件作答，disabled 门用 Loader 上下文求值，且读取从不挂载预设。`conditional` 表示宿主无法求值的门；无人组合的坏预设保留在列表中，携带原因且没有行。没有 roster 时该字段缺席。
 
-### 你能用它做什么、不能做什么
+### 清单与管理
 
-该清单是供展示与诊断的快照：客户端可以渲染名单、标出失败条目，并通过比较快照检测变化。它不能启用、停用、添加或移除插件，也不携带历史——已经失败并被移除的 fiber 缺席。由于服务每次调用都读取 Loader，答案总是反映当前组合，而不是缓存视图。
+清单用于展示与诊断；管理方法只作用于用户自己的 Skill 与 MCP 条目，profile 和预设组合行仍为只读。Skill 内容通过 Remote 写入 `SKILL.md`，MCP 投影不会返回密钥。MCP 编辑只替换表单展示的字段，同时保留已存的 `args`、`cwd`、`env`、`headers` 与重试设置等传输选项。MCP 存储属于 DSH home 的本地状态，在宿主文件系统支持时使用私有文件与目录权限写入。由于服务每次调用都读取 Loader，答案反映当前组合，而不是缓存视图。
 
 -----
 
@@ -49,7 +49,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-网关是一层没有第二个生命周期真源的直接投影：每次 `list()` 调用都读取 `ctx.loader.entries()`，并把每个非组条目映射为公共行。Cordis 内部的 plugin/status 事件已经维护了 `Entry.fiber` 与 `Fiber.state`，因此再加缓存只会多出一个需要同步的生命周期真源。Agent 预设 roster 是每次调用经 `ctx.get('agentPresets')` 解析的可选伙伴：所有预设读取都由它的 `compositionInventory()` 负责，本包只把根 Fiber 状态映射到公共阶段词汇。
+网关让 Loader 作为清单与实时 MCP 状态的权威。用户 Skill 文件在受控根目录边界内校验，并用规范的调用字段重写；MCP 写入通过临时文件原子改名并串行化，启动时在提供 MCP 读取或修改前恢复持久条目。Agent 预设 roster 仍由每次调用的 `ctx.get('agentPresets')` 可选解析。
 
 ### 阶段映射
 
@@ -83,7 +83,7 @@ Typert 生成由 `./typert` 与 `./remote` 导出的 Host 和 Client Remote 产�
 <a id="model-experience"></a>
 ## 模型体验
 
-无。这个仅限 Host 的只读 Loader 投影不注册任何面向模型的内容。
+无。这个 Host 管理面不注册面向模型的内容。
 
 #### KV Cache 影响
 
@@ -97,7 +97,7 @@ Typert 生成由 `./typert` 与 `./remote` 导出的 Host 和 Client Remote 产�
 这些限制说明一个点时刻清单无法告诉客户端什么。它们是当前包约束，不是任务积压。
 
 - **仅表示调用当下**——结果不包含持久的失败历史或订阅；只要不存在存活的根 Fiber，就会报告 `null`，而不区分其原因。
-- **无来源与修改能力**——服务不识别条目由哪个 bundle、profile 或 override 引入，也不能在任一平面启用、停用、添加或移除插件。
+- **profile 与预设行仍只读**——管理范围限定为用户 Skill 文件与本服务创建的 MCP 条目。
 - **预设仅随 roster 出现**——未装 `dsh-agent-presets` 的部署只提供 Loader 条目；`agentPresets` 字段缺席而非为空。
 
 <a id="dev-note"></a>

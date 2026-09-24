@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-schedule` gives your session durable reminders: ask the model to remind you later, and the reminder comes back as an ordinary follow-up message in the same conversation. You can schedule a one-time reminder after a delay or at an absolute time, or a repeating reminder on a fixed interval, and you can list what is still pending or cancel a reminder. Reminders survive restarts: an already-live idle agent can deliver due work immediately, while a closed or cold session keeps it overdue until a future live root agent resumes the session. Delivery stays inside the session, with no email, SMS, or push notification. It is an opt-in Web capability; load the Schedule overlay to enable the reminder tools and read-only active-reminder catalog. Ordinary and search sidebar rows also show a non-interactive alarm when their best-effort list projection is known to be non-empty; the alarm does not promise a live runtime.
+`dsh-schedule` gives your session durable reminders: ask the model to remind you later, and the reminder comes back as an ordinary follow-up message in the same conversation. You can schedule a one-time reminder after a delay or at an absolute time, or a repeating reminder on a fixed interval, and you can list what is still pending or cancel a reminder. Reminders survive restarts: an already-live idle agent can deliver due work immediately, while a closed or cold session keeps it overdue until a future live root agent resumes the session. Delivery stays inside the session, with no email, SMS, or push notification. The Host also exposes session-addressed Schedule Remotes for pause, resume, run-now, and delete controls used by the Web task center. It is an opt-in Web capability; load the Schedule overlay to enable the reminder tools and task center.
 
 ## Table of Contents
 
@@ -218,7 +218,7 @@ These limits describe when Schedule does not fit your use case or needs special 
 - **Latest-only catch-up** — an overdue Every record contributes only its latest due occurrence, so Schedule never replays a missed backlog.
 - **Narrow crash duplicate window** — a crash after synchronous follow-up admission but before the dispatch checkpoint can repeat the reminder; the package does not claim model completion, user acknowledgement, or exactly-once effects.
 - **Load-order boundary** — the plugin does not scan or adopt Agents that were already live when it loaded.
-- **Catalog is read-only current state** — the optional Web surface has no history, mutation, retry, or acknowledgement semantics; terminal records disappear and delivery remains ordinary conversation output.
+- **Header catalog is read-only current state** — the optional header surface has no history or mutation controls; the Settings task center owns browser pause, resume, run-now, and delete actions while delivery remains ordinary conversation output.
 
 <a id="dev-note"></a>
 ### Dev Note
