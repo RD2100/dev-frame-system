@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-agent-memory",
   "description": "Persistent episodic, semantic, and procedural memory with scoped retrieval, lifecycle controls, and trace records",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.6-alpha.1",
   "repository": { "type": "git", "url": "git+https://github.com/deepseek-ai/deepseek-harness.git", "directory": "packages/experimental/agent-memory" },
   "private": true,
   "type": "module",

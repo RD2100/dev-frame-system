@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-composition-smoke",
   "description": "Composition smoke for the web client: mounts one feature plugin over the jsdom bench's real slot/renderer/session stack and asserts the assembled surface",
-  "version": "0.1.2-alpha.4",
+  "version": "0.1.6-alpha.1",
   "publishConfig": {
     "access": "public"
   },

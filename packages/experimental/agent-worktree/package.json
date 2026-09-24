@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-agent-worktree",
   "description": "Per-agent worktree capability seam over ctx.worktreeRegistry: single-writer bindings plus the worktree_create/worktree_status/worktree_remove tools for agent sessions",
-  "version": "0.1.2-alpha.4",
+  "version": "0.1.6-alpha.1",
   "private": true,
   "repository": {
     "type": "git",
