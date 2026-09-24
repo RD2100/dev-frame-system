@@ -68,3 +68,48 @@ export interface PluginInventorySnapshot {
    */
   readonly agentPresets?: readonly AgentPresetPluginGroup[]
 }
+
+/** MCP transport configuration accepted by the management Remote. */
+export type McpServerConfig = Readonly<Record<string, unknown>>
+
+/** A configured MCP Loader entry with secrets removed from its projection. */
+export interface McpServerEntry {
+  readonly entryId: PluginEntryId
+  readonly serverName: string
+  readonly transport: 'stdio' | 'streamable-http' | 'unknown'
+  readonly enabled: boolean
+  readonly fiberPhase: PluginFiberPhase
+  readonly config: McpServerConfig
+}
+
+/** MCP management snapshot. */
+export interface McpInventorySnapshot {
+  readonly servers: readonly McpServerEntry[]
+}
+
+/** Create request for one MCP Loader entry. */
+export interface McpCreateRequest {
+  readonly config: McpServerConfig
+}
+
+/** Update request for one MCP Loader entry. */
+export interface McpUpdateRequest {
+  readonly entryId: string
+  readonly config: McpServerConfig
+}
+
+/** Remove request for one MCP Loader entry. */
+export interface McpRemoveRequest {
+  readonly entryId: string
+}
+
+/** Connectivity probe request. */
+export interface McpTestRequest {
+  readonly config: McpServerConfig
+}
+
+/** Result of an MCP connectivity probe. */
+export interface McpTestValue {
+  readonly ok: boolean
+  readonly message: string
+}

@@ -1,6 +1,7 @@
 /** Read-only projection of the current Cordis Loader plugin entries. */
 
 import type { Context, FiberState } from '@deepseek-ai/cordis'
+import type { Entry } from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 // Type-only: the optional agent-preset roster resolved through `ctx.get`.
 import type {} from '@deepseek-ai/dsh-agent-presets'
@@ -13,6 +14,12 @@ import type {
   PluginFiberPhase,
   PluginInventoryEntry,
   PluginInventorySnapshot,
+  McpCreateRequest,
+  McpInventorySnapshot,
+  McpRemoveRequest,
+  McpTestRequest,
+  McpTestValue,
+  McpUpdateRequest,
 } from './types.ts'
 
 export type * from './types.ts'
@@ -86,6 +93,104 @@ export class PluginInventoryGateway extends TypertRemoteService {
       }),
     )
     return { entries, agentPresets }
+  }
+
+  /**
+   * List configured MCP clients and redact credentials before returning them.
+   * @returns the current MCP Loader entries.
+   */
+  @Remote('listMcp')
+  listMcp(): McpInventorySnapshot {
+    return { servers: [...this.ctx.loader.entries()].filter(isMcpEntry).map(projectMcpEntry) }
+  }
+
+  /**
+   * Add one MCP client to the live Loader tree.
+   * @param request - validated MCP transport configuration.
+   * @returns the created Loader entry id.
+   */
+  @Remote('createMcp')
+  async createMcp(request: McpCreateRequest): Promise<{ entryId: PluginEntryId }> {
+    const config = validateMcpConfig(request.config)
+    const entryId = await this.ctx.loader.create({
+      name: MCP_MODULE,
+      config,
+    })
+    return { entryId: pluginEntryId(entryId) }
+  }
+
+  /**
+   * Replace one MCP client configuration and restart its fiber.
+   * @param request - entry id and replacement configuration.
+   */
+  @Remote('updateMcp')
+  async updateMcp(request: McpUpdateRequest): Promise<void> {
+    const entry = this.ctx.loader.resolve(request.entryId)
+    if (!isMcpEntry(entry)) throw new Error(`pluginInventory: entry "${request.entryId}" is not an MCP client`)
+    await this.ctx.loader.update(request.entryId, { config: validateMcpConfig(request.config) })
+  }
+
+  /**
+   * Remove one MCP client from the live Loader tree.
+   * @param request - MCP Loader entry id.
+   */
+  @Remote('removeMcp')
+  async removeMcp(request: McpRemoveRequest): Promise<void> {
+    const entry = this.ctx.loader.resolve(request.entryId)
+    if (!isMcpEntry(entry)) throw new Error(`pluginInventory: entry "${request.entryId}" is not an MCP client`)
+    await this.ctx.loader.remove(request.entryId)
+  }
+
+  /**
+   * Probe an MCP configuration by mounting and immediately disposing it.
+   * @param request - transport configuration to probe.
+   * @returns connection and tool-discovery outcome.
+   */
+  @Remote('testMcp')
+  async testMcp(request: McpTestRequest): Promise<McpTestValue> {
+    const config = validateMcpConfig(request.config)
+    let entryId: string | undefined
+    try {
+      entryId = await this.ctx.loader.create({ name: MCP_MODULE, config: { ...config, failOnStartupError: true } })
+      return { ok: true, message: 'MCP server connected and tool discovery completed' }
+    } catch (error: unknown) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    } finally {
+      if (entryId !== undefined) await this.ctx.loader.remove(entryId)
+    }
+  }
+}
+
+const MCP_MODULE = '@deepseek-ai/dsh-mcp-client'
+
+function isMcpEntry(entry: { options: { name: string; group?: boolean | null } }): boolean {
+  return entry.options.group !== true && entry.options.name === MCP_MODULE
+}
+
+function validateMcpConfig(config: Record<string, unknown>): Record<string, unknown> {
+  if (typeof config !== 'object' || config === null || Array.isArray(config)) throw new TypeError('MCP config must be an object')
+  if (config.transport !== 'stdio' && config.transport !== 'streamable-http') throw new TypeError('MCP config transport must be stdio or streamable-http')
+  if (typeof config.serverName !== 'string' || !/^[A-Za-z0-9_-]{1,32}$/u.test(config.serverName)) throw new TypeError('MCP serverName must match [A-Za-z0-9_-]{1,32}')
+  if (config.transport === 'stdio' && typeof config.command !== 'string') throw new TypeError('stdio MCP config requires command')
+  if (config.transport === 'streamable-http' && typeof config.url !== 'string') throw new TypeError('streamable-http MCP config requires url')
+  return { ...config }
+}
+
+function projectMcpEntry(entry: Entry): import('./types.ts').McpServerEntry {
+  const config = entry.options.config && typeof entry.options.config === 'object' ? entry.options.config as Record<string, unknown> : {}
+  const safeConfig = { ...config }
+  for (const key of ['env', 'headers']) {
+    if (safeConfig[key] && typeof safeConfig[key] === 'object') {
+      safeConfig[key] = Object.fromEntries(Object.keys(safeConfig[key] as object).map(name => [name, '••••••']))
+    }
+  }
+  return {
+    entryId: pluginEntryId(entry.id),
+    serverName: typeof config.serverName === 'string' ? config.serverName : entry.id,
+    transport: config.transport === 'stdio' || config.transport === 'streamable-http' ? config.transport : 'unknown',
+    enabled: !entry.disabled,
+    fiberPhase: entry.fiber === undefined ? null : FIBER_PHASE[entry.fiber.state],
+    config: safeConfig,
   }
 }
 

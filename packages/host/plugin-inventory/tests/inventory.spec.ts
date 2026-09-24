@@ -40,6 +40,11 @@ describe('PluginInventoryGateway', () => {
     })
     expect(remoteMethods(inventory)).toEqual([
       { method: 'list', invocation: { kind: 'direct' } },
+      { method: 'listMcp', invocation: { kind: 'direct' } },
+      { method: 'createMcp', invocation: { kind: 'direct' } },
+      { method: 'updateMcp', invocation: { kind: 'direct' } },
+      { method: 'removeMcp', invocation: { kind: 'direct' } },
+      { method: 'testMcp', invocation: { kind: 'direct' } },
     ])
   })
 
