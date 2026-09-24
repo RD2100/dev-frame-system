@@ -44,7 +44,7 @@ describe('DevFrame profile bundle', () => {
       { schema: entryListSchema },
     )
     expect(Array.isArray(parsed)).toBe(true)
-    const patches = parsed as { insert?: { id?: string; name?: string }[] }[]
+    const patches = parsed as { id?: string; disabled?: boolean; insert?: { id?: string; name?: string }[] }[]
     const inserted = patches.flatMap(patch => patch.insert ?? [])
     expect(inserted.map(row => row.id)).toEqual([
       'logger-console',
@@ -64,8 +64,8 @@ describe('DevFrame profile bundle', () => {
       'ui-agent-team',
       'time-context',
       'schedule',
-      'ui-schedule',
     ])
+    expect(patches.find(patch => patch.id === 'ui-schedule')).toMatchObject({ disabled: false })
     expect(inserted.find(row => row.id === 'shadow-controller')?.name).toBe('@deepseek-ai/dsh-experimental-shadow-controller')
     expect(inserted.find(row => row.id === 'shadow-agent')?.name).toBe('@deepseek-ai/dsh-experimental-shadow-controller/shadow-agent')
     expect(inserted.find(row => row.id === 'project-memory')?.name).toBe('@deepseek-ai/dsh-experimental-project-memory')

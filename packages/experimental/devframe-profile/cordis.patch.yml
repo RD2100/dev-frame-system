@@ -144,5 +144,9 @@
       name: '@deepseek-ai/dsh-time-context'
     - id: schedule
       name: '@deepseek-ai/dsh-schedule'
-    - id: ui-schedule
-      name: '@deepseek-ai/dsh-client-ui-schedule'
+    # The web-app bundle preallocates this browser row disabled so the
+    # schedule surface stays inert when the Host schedule service is absent.
+    # Enable that existing row here instead of inserting a second entry with
+    # the same id; Include rejects duplicate loader ids during cold boot.
+- id: ui-schedule
+  disabled: false
