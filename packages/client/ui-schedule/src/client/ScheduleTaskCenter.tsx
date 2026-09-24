@@ -1,8 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { ClientRemote, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
-import { SCHEDULE_TEMPLATES } from '@deepseek-ai/dsh-schedule/client'
-import type { ScheduleHistoryEntry, ScheduleId, ScheduleRecord } from '@deepseek-ai/dsh-schedule/client'
+import type { ScheduleHistoryEntry, ScheduleId, ScheduleRecord, ScheduleTemplate } from '@deepseek-ai/dsh-schedule/client'
 import type { InjectFace, PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'
 import css from './ScheduleTaskCenter.module.css'
@@ -25,6 +24,23 @@ interface HistoryRow {
 
 const EMPTY_RECORDS: readonly ScheduleRecord[] = []
 const EMPTY_HISTORY: readonly ScheduleHistoryEntry[] = []
+
+// Keep browser presentation metadata local to this feature. Runtime imports from
+// another feature package would create a cross-plugin client bundle edge.
+const SCHEDULE_TEMPLATES: readonly ScheduleTemplate[] = Object.freeze([
+  Object.freeze({
+    id: 'follow-up',
+    label: 'Follow up',
+    description: 'One reminder after one hour.',
+    rule: Object.freeze({ afterSeconds: 3_600 }),
+  }),
+  Object.freeze({
+    id: 'daily-check',
+    label: 'Daily check',
+    description: 'Repeat every 24 hours.',
+    rule: Object.freeze({ everySeconds: 86_400 }),
+  }),
+])
 
 function statusLabel(record: ScheduleRecord, now: number, t: TranslateNS<typeof NS>): string {
   if (record.paused) return t('status.paused')
