@@ -27,17 +27,15 @@ const EMPTY_HISTORY: readonly ScheduleHistoryEntry[] = []
 
 // Keep browser presentation metadata local to this feature. Runtime imports from
 // another feature package would create a cross-plugin client bundle edge.
-const SCHEDULE_TEMPLATES: readonly ScheduleTemplate[] = Object.freeze([
+type ScheduleTemplateDefinition = Pick<ScheduleTemplate, 'id' | 'rule'>
+
+const SCHEDULE_TEMPLATES: readonly ScheduleTemplateDefinition[] = Object.freeze([
   Object.freeze({
     id: 'follow-up',
-    label: 'Follow up',
-    description: 'One reminder after one hour.',
     rule: Object.freeze({ afterSeconds: 3_600 }),
   }),
   Object.freeze({
     id: 'daily-check',
-    label: 'Daily check',
-    description: 'Repeat every 24 hours.',
     rule: Object.freeze({ everySeconds: 86_400 }),
   }),
 ])

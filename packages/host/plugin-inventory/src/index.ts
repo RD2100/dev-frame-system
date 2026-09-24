@@ -170,7 +170,11 @@ export class PluginInventoryGateway extends TypertRemoteService {
     await this.persistMcpStore()
   }
 
-  /** Enable or disable one MCP client and persist the choice across restarts. */
+  /**
+   * Enable or disable one MCP client and persist the choice across restarts.
+   * @param request - MCP entry id and desired enabled state.
+   * @returns A promise that settles after the Loader and durable store agree.
+   */
   @Remote('setMcpEnabled')
   async setMcpEnabled(request: McpSetEnabledRequest): Promise<void> {
     await this.ensureMcpRestored()
@@ -199,7 +203,11 @@ export class PluginInventoryGateway extends TypertRemoteService {
     }
   }
 
-  /** Probe an existing MCP entry without sending redacted credentials to the client. */
+  /**
+   * Probe an existing MCP entry without sending redacted credentials to the client.
+   * @param request - MCP entry id to probe.
+   * @returns Connection and tool-discovery outcome.
+   */
   @Remote('testMcpEntry')
   async testMcpEntry(request: McpTestEntryRequest): Promise<McpTestValue> {
     await this.ensureMcpRestored()
@@ -212,7 +220,10 @@ export class PluginInventoryGateway extends TypertRemoteService {
     })
   }
 
-  /** List user-owned Skills in the durable DSH home. */
+  /**
+   * List user-owned Skills in the durable DSH home.
+   * @returns The managed Skill metadata visible to the settings client.
+   */
   @Remote('listSkills')
   async listSkills(): Promise<SkillManagementSnapshot> {
     const skillsRoot = join(this.dshHome, 'skills')
@@ -234,7 +245,11 @@ export class PluginInventoryGateway extends TypertRemoteService {
     return { skills }
   }
 
-  /** Install one user-owned Skill under the DSH home. */
+  /**
+   * Install one user-owned Skill under the DSH home.
+   * @param request - Skill metadata and Markdown content to install.
+   * @returns The installed Skill name and enabled state.
+   */
   @Remote('installSkill')
   async installSkill(request: SkillInstallRequest): Promise<SkillManagementValue> {
     const name = validateSkillName(request.name)
@@ -259,7 +274,11 @@ export class PluginInventoryGateway extends TypertRemoteService {
     return { name, enabled: true }
   }
 
-  /** Enable or disable both model and user invocation for one Skill. */
+  /**
+   * Enable or disable both model and user invocation for one Skill.
+   * @param request - Skill name and desired enabled state.
+   * @returns The updated Skill name and enabled state.
+   */
   @Remote('setSkillEnabled')
   async setSkillEnabled(request: SkillSetEnabledRequest): Promise<SkillManagementValue> {
     const name = validateSkillName(request.name)
@@ -270,7 +289,11 @@ export class PluginInventoryGateway extends TypertRemoteService {
     return { name, enabled: request.enabled }
   }
 
-  /** Remove one user-owned Skill directory. */
+  /**
+   * Remove one user-owned Skill directory.
+   * @param request - Skill name to remove.
+   * @returns The removed Skill name and confirmation marker.
+   */
   @Remote('removeSkill')
   async removeSkill(request: SkillRemoveRequest): Promise<{ name: string; removed: true }> {
     const name = validateSkillName(request.name)

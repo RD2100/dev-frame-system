@@ -4,6 +4,75 @@ English | [中文](schedule.zh.md)
 
 Schedule owns durable reminders that return to the original live Session as ordinary later conversation turns. The [durable Schedule Agent Note](../../.agents/notes/implemented/feature/2026-08-05-durable-web-schedule.md) owns persistence, lifecycle, and active-state presentation, [conversational delivery](../../.agents/notes/implemented/simplification/2026-08-09-conversational-schedule-delivery.md) owns the no-receipt boundary, the [explicit time-zone boundary](../../.agents/notes/implemented/simplification/2026-08-09-explicit-schedule-time-zone.md) owns browser-local interpretation, and [bounded fixed-rate Schedule](../../.agents/notes/implemented/simplification/2026-08-09-bounded-fixed-rate-schedule.md) owns recurrence. This page records the durable and model-facing shapes from [`packages/schedule/schedule/src/types.ts`](../../packages/schedule/schedule/src/types.ts); the [package README](../../packages/schedule/schedule/README.md) owns composition, tool behavior, and the exact reminder framing.
 
+<!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
+
+<a id="cordis-surface"></a>
+
+## Cordis API
+
+Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+
+<a id="ctxschedule--schedulegateway"></a>
+
+### `ctx.schedule` — `ScheduleGateway`
+
+Host Remote owner for browser Schedule mutations.
+
+```ts cordis-catalog
+/**
+ * Pause one active Schedule record.
+ * @param request - Session and Schedule id to pause.
+ * @returns The paused Schedule id and confirmation marker.
+ */
+@Remote('pause') pause(request: ScheduleSessionRequest): Promise<SchedulePauseRemoteValue>
+
+/**
+ * Resume one paused Schedule record.
+ * @param request - Session and Schedule id to resume.
+ * @returns The resumed Schedule id and confirmation marker.
+ */
+@Remote('resume') resume(request: ScheduleSessionRequest): Promise<ScheduleResumeRemoteValue>
+
+/**
+ * Delete one active Schedule record.
+ * @param request - Session and Schedule id to delete.
+ * @returns The deleted Schedule id and confirmation marker.
+ */
+@Remote('delete') delete(request: ScheduleSessionRequest): Promise<ScheduleDeleteRemoteValue>
+
+/**
+ * Queue one immediate delivery for an active Schedule record.
+ * @param request - Session and Schedule id to run immediately.
+ * @returns The Schedule id and delivery acceptance marker.
+ */
+@Remote('run') run(request: ScheduleSessionRequest): Promise<ScheduleRunRemoteValue>
+```
+
+Source: [`packages/schedule/schedule/src/gateway.ts`](../../packages/schedule/schedule/src/gateway.ts)
+
+<a id="schedule-events"></a>
+
+### `schedule/*` events
+
+<a id="schedulerequest-drive--emit"></a>
+
+#### `schedule/request-drive` — emit
+
+Wake the exact Schedule runtime after a browser mutation.
+
+```ts cordis-catalog
+/** Wake the exact Schedule runtime after a browser mutation.
+ * @mode emit
+ * @param sessionId - Session whose Schedule runtime must recalculate.
+ */
+'schedule/request-drive'(sessionId: SessionId): void
+```
+
+Types: [SessionId](core.md)
+
+Source: [`packages/schedule/schedule/src/gateway.ts`](../../packages/schedule/schedule/src/gateway.ts)
+<!-- END GENERATED cordis-surface -->
+
 ## Durable records
 
 `ScheduleId` is a [branded id](core.md#branded-ids), unique and never reused within one Session. Version 1 supports a positive safe-integer `after_seconds` delay, an explicit absolute `at` target, or a safe-integer `every_seconds` interval of at least five minutes. Creation canonicalizes every first target into a four-digit-year RFC 3339 UTC `scheduledAt`; an `after` record retains its submitted delay, an `at` record stores only the resulting instant, and an `every` record retains its fixed interval and next target.

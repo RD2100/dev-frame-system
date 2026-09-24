@@ -131,6 +131,55 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'agentMemory',
+    summary: 'Persistent memory service.',
+    description: 'Persistent memory service. Storage is optional at activation so a missing or unavailable backend degrades to explicit MEMORY_UNAVAILABLE errors while the host agent continues its ordinary task.',
+    methods: [
+      {
+        signature: 'async recordEpisode(input: EpisodeInput): Promise<MemoryEpisode>',
+        description: 'Record one task episode.',
+        parameters: [{ name: 'input', description: 'Bounded task facts and their memory scope.' }],
+        returns: 'The durable episode row.',
+      },
+      {
+        signature: 'async upsertFact(input: SemanticInput): Promise<SemanticMemory>',
+        description: 'Upsert one semantic fact, superseding weaker old facts or marking equal conflicts.',
+        parameters: [{ name: 'input', description: 'Sourced fact fields and their memory scope.' }],
+        returns: 'The durable fact row and its resolved lifecycle status.',
+      },
+      {
+        signature: 'async registerProcedure(input: ProcedureInput, status: MemoryStatus = \'candidate\'): Promise<ProceduralMemory>',
+        description: 'Register or version a procedure; candidates remain candidates until explicitly promoted.',
+        parameters: [{ name: 'input', description: 'Procedure steps, trigger, and scope.' }, { name: 'status', description: 'Lifecycle status assigned to the new procedure.' }],
+        returns: 'The durable procedure row.',
+      },
+      {
+        signature: 'async retrieveContext(request: RetrieveRequest): Promise<MemoryContext>',
+        description: 'Retrieve ranked semantic, procedural, and episodic context under a byte budget.',
+        parameters: [{ name: 'request', description: 'Query, scope, and optional budget for the retrieval.' }],
+        returns: 'Ranked context, rendered text, and its durable trace id.',
+      },
+      {
+        signature: 'async forget(id: string): Promise<boolean>',
+        description: 'Delete a memory item immediately; deleted ids are absent from retrieval.',
+        parameters: [{ name: 'id', description: 'Durable memory identifier to delete.' }],
+        returns: 'Whether a row existed and was deleted.',
+      },
+      {
+        signature: 'inspectTrace(id: string): MemoryTrace | undefined',
+        description: 'Read-only trace inspection for diagnostics and evaluation.',
+        parameters: [{ name: 'id', description: 'Durable retrieval trace identifier.' }],
+        returns: 'The trace row, or undefined when it is unknown.',
+      },
+      {
+        signature: 'consolidate(scope: MemoryScope): readonly ConsolidationCandidate[]',
+        description: 'Return candidates for future consolidation without mutating active memory.',
+        parameters: [{ name: 'scope', description: 'Scope whose repeated episodes should be considered.' }],
+        returns: 'Candidate procedure summaries backed by episode ids.',
+      },
+    ],
+  },
+  {
     key: 'agentPresets',
     summary: 'Registry over the deployment\'s agent presets.',
     description: 'Registry over the deployment\'s agent presets.\n\nDiscovery is unmemoized: `list()` and `resolve()` re-read the roots on every call so a preset authored while the process runs is visible immediately, and a preset deleted underneath a picker disappears from the next read.',
@@ -1495,6 +1544,33 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'projectDeliveryRegistry',
+    summary: 'Host-updatable delivery registry (`ctx.projectDeliveryRegistry`): the runtime source of approved checksets and commit scopes the delivery tools read at call time.',
+    description: 'Host-updatable delivery registry (`ctx.projectDeliveryRegistry`): the runtime source of approved checksets and commit scopes the delivery tools read at call time. Seeded from deployment config; the host registers each task\'s approved checkset and commit scope at approval time, so plan-time registration and delivery-time reads can never race. Idempotent: a re-registration replaces the previous entry, unregistering an absent task is a no-op.',
+    methods: [
+      {
+        signature: 'readonly ledgerPath: string',
+        description: 'Ledger path the registry\'s checksets are persisted under. The host saves an approved checkset through a store on this path before registering its digest, so the ledger and the live registry never diverge.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly defaultCommitPaths?: readonly string[]',
+        description: 'Deployment-wide commit scope applied to any task whose approval carries no per-task scope: the host merges `request.commitPaths ?? this` at approval time, so a deployment can pin an output scope without the board knowing a task\'s future files. Absent when the deployment does not configure one, keeping `project_commit` failing closed for scope-less approvals.',
+        parameters: [],
+      },
+      {
+        signature: 'registerTask(taskId: TaskId, registration: TaskDeliveryRegistration): void',
+        description: 'Register or replace the delivery configuration of one task.',
+        parameters: [{ name: 'taskId', description: 'The task being approved.' }, { name: 'registration', description: 'Approved checkset digest and optional commit scope.' }],
+      },
+      {
+        signature: 'unregisterTask(taskId: TaskId): void',
+        description: 'Drop the delivery configuration of one task.',
+        parameters: [{ name: 'taskId', description: 'The task whose delivery configuration is removed.' }],
+      },
+    ],
+  },
+  {
     key: 'sandbox',
     summary: 'Abstract process-sandbox service.',
     description: 'Abstract process-sandbox service. confine must return enforcing argv or fail closed at wrap or runner-execution time; silent unconfined passthrough is forbidden. Functional probes arbitrate multi-runner chains and may be skipped for a sole candidate, whose own refusal remains the fail-closed end.',
@@ -1533,6 +1609,37 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Read the session override without applying the deployment default.',
         parameters: [{ name: 'session', description: 'session whose log supplies the override.' }],
         returns: 'the last logged mode, or `undefined` without one.',
+      },
+    ],
+  },
+  {
+    key: 'schedule',
+    summary: 'Host Remote owner for browser Schedule mutations.',
+    description: 'Host Remote owner for browser Schedule mutations.',
+    methods: [
+      {
+        signature: '@Remote(\'pause\') pause(request: ScheduleSessionRequest): Promise<SchedulePauseRemoteValue>',
+        description: 'Pause one active Schedule record.',
+        parameters: [{ name: 'request', description: 'Session and Schedule id to pause.' }],
+        returns: 'The paused Schedule id and confirmation marker.',
+      },
+      {
+        signature: '@Remote(\'resume\') resume(request: ScheduleSessionRequest): Promise<ScheduleResumeRemoteValue>',
+        description: 'Resume one paused Schedule record.',
+        parameters: [{ name: 'request', description: 'Session and Schedule id to resume.' }],
+        returns: 'The resumed Schedule id and confirmation marker.',
+      },
+      {
+        signature: '@Remote(\'delete\') delete(request: ScheduleSessionRequest): Promise<ScheduleDeleteRemoteValue>',
+        description: 'Delete one active Schedule record.',
+        parameters: [{ name: 'request', description: 'Session and Schedule id to delete.' }],
+        returns: 'The deleted Schedule id and confirmation marker.',
+      },
+      {
+        signature: '@Remote(\'run\') run(request: ScheduleSessionRequest): Promise<ScheduleRunRemoteValue>',
+        description: 'Queue one immediate delivery for an active Schedule record.',
+        parameters: [{ name: 'request', description: 'Session and Schedule id to run immediately.' }],
+        returns: 'The Schedule id and delivery acceptance marker.',
       },
     ],
   },
@@ -3513,6 +3620,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'options', description: 'the full request. A LOOP-built request carries the process-local {@link markAgentLoopRequest} identity and arrives deep-frozen (mutation throws): its content is a pure function of the session log (the reconstructability Agent Note), so listeners read it, never rewrite it. Hand-built calls do not carry that marker; their messages already obey the immutable creation contract.' }],
   },
   {
+    name: 'schedule/request-drive',
+    mode: 'emit',
+    signature: '\'schedule/request-drive\'(sessionId: SessionId): void',
+    summary: 'Wake the exact Schedule runtime after a browser mutation.',
+    description: 'Wake the exact Schedule runtime after a browser mutation.',
+    parameters: [{ name: 'sessionId', description: 'Session whose Schedule runtime must recalculate.' }],
+  },
+  {
     name: 'session-telemetry/record',
     mode: 'waterfall',
     signature: '\'session-telemetry/record\'(record: SessionTelemetryRecord, next: () => SessionTelemetryRecord): SessionTelemetryRecord',
@@ -3909,6 +4024,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AttachmentId = Branded<\'AttachmentId\'>;',
   },
   {
+    name: 'Authority',
+    declaration: 'export type Authority = \'source_code\' | \'user_explicit\' | \'official_documentation\' | \'test_result\' | \'tool_result\' | \'agent_inference\' | \'unknown\';',
+  },
+  {
     name: 'AuthorizationEntry',
     declaration: 'export interface AuthorizationEntry {\n    key: CredentialKey;\n    label: string;\n    methods: readonly AuthorizationMethod[];\n    inFlight: boolean;\n}',
   },
@@ -4085,6 +4204,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ConfinedSandboxMode = Exclude<SandboxMode, \'danger-full-access\'>;',
   },
   {
+    name: 'ConsolidationCandidate',
+    declaration: 'export interface ConsolidationCandidate {\n    readonly kind: \'semantic\' | \'procedural\';\n    readonly evidenceIds: readonly string[];\n    readonly summary: string;\n}',
+  },
+  {
     name: 'ContentBlockMap',
     declaration: 'export interface ContentBlockMap {\n    \'text\': TextBlock;\n    \'reasoning\': ReasoningBlock;\n    \'image\': ImageBlock;\n    \'tool-call\': ToolCallBlock;\n    \'tool-result\': ToolResultBlock;\n}',
   },
@@ -4095,6 +4218,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ContextFormed',
     declaration: 'export type ContextFormed = {\n    readonly form?: never;\n} | {\n    readonly form: \'instructions\';\n} | {\n    readonly form: \'catalog\';\n} | {\n    readonly form: \'snapshot\';\n    readonly sections: readonly ContextSnapshotSection[];\n} | {\n    readonly form: \'notice\';\n    readonly summary: string;\n} | {\n    readonly form: \'relay\';\n} | {\n    readonly form: \'recall\';\n};',
+  },
+  {
+    name: 'ContextItem',
+    declaration: 'export interface ContextItem {\n    readonly id: string;\n    readonly kind: MemoryKind;\n    readonly text: string;\n    readonly score: number;\n    readonly reason: string;\n}',
   },
   {
     name: 'ContextSnapshotSection',
@@ -4363,6 +4490,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'EncodedImageAttachment',
     declaration: 'export interface EncodedImageAttachment {\n    mediaType: ImageMediaType;\n    data: string;\n    name?: string;\n}',
+  },
+  {
+    name: 'EpisodeInput',
+    declaration: 'export interface EpisodeInput {\n    readonly scope: MemoryScope;\n    readonly taskType: string;\n    readonly summary: string;\n    readonly actions?: readonly string[];\n    readonly decisions?: readonly string[];\n    readonly errors?: readonly string[];\n    readonly result?: MemoryEpisode[\'result\'];\n    readonly resultSummary?: string;\n    readonly artifacts?: readonly string[];\n    readonly sourceRefs?: readonly string[];\n    readonly authority?: Authority;\n}',
   },
   {
     name: 'EpochHeader',
@@ -4698,7 +4829,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LibraryFile',
-    declaration: 'export interface LibraryFile {\n    readonly relativePath: string;\n    readonly size: number;\n    readonly mtimeMs: number;\n}',
+    declaration: 'export interface LibraryFile {\n    readonly relativePath: string;\n    readonly size: number;\n    readonly mtimeMs: number;\n    readonly kind?: \'fact\' | \'preference\';\n    readonly createdAt?: string;\n    readonly entities?: readonly string[];\n    readonly summary?: string;\n}',
   },
   {
     name: 'LibrarySearchResult',
@@ -4817,6 +4948,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ManualCompactAgentContext extends CompactionAgentContext {\n    runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>;\n}',
   },
   {
+    name: 'MemoryContext',
+    declaration: 'export interface MemoryContext {\n    readonly items: readonly ContextItem[];\n    readonly text: string;\n    readonly traceId: string;\n    readonly truncated: boolean;\n}',
+  },
+  {
+    name: 'MemoryEpisode',
+    declaration: 'export interface MemoryEpisode {\n    readonly id: string;\n    readonly scope: MemoryScope;\n    readonly taskType: string;\n    readonly summary: string;\n    readonly actions: readonly string[];\n    readonly decisions: readonly string[];\n    readonly errors: readonly string[];\n    readonly result: \'success\' | \'failure\' | \'partial\' | \'unknown\';\n    readonly resultSummary: string;\n    readonly artifacts: readonly string[];\n    readonly sourceRefs: readonly string[];\n    readonly createdAt: string;\n    readonly updatedAt: string;\n    readonly status: MemoryStatus;\n    readonly authority: Authority;\n}',
+  },
+  {
+    name: 'MemoryKind',
+    declaration: 'export type MemoryKind = \'episode\' | \'semantic\' | \'procedural\';',
+  },
+  {
     name: 'MemoryLibraryListRequest',
     declaration: 'export interface MemoryLibraryListRequest {\n    readonly maxDepth?: number;\n}',
   },
@@ -4835,6 +4978,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'MemoryLibrarySnapshot',
     declaration: 'export interface MemoryLibrarySnapshot {\n    readonly status: LibraryStatus;\n    readonly files: readonly LibraryFile[];\n}',
+  },
+  {
+    name: 'MemorySource',
+    declaration: 'export interface MemorySource {\n    readonly type: Authority;\n    readonly ref: string;\n    readonly hash?: string;\n    readonly timestamp?: string;\n    readonly creator?: string;\n}',
+  },
+  {
+    name: 'MemoryStatus',
+    declaration: 'export type MemoryStatus = \'candidate\' | \'active\' | \'conflicted\' | \'superseded\' | \'expired\' | \'archived\' | \'deleted\';',
+  },
+  {
+    name: 'MemoryTrace',
+    declaration: 'export interface MemoryTrace {\n    readonly id: string;\n    readonly runId: string;\n    readonly query: string;\n    readonly scope: MemoryScope;\n    readonly retrieved: readonly string[];\n    readonly injected: readonly string[];\n    readonly created: readonly string[];\n    readonly superseded: readonly string[];\n    readonly scores: Readonly<Record<string, number>>;\n    readonly createdAt: string;\n}',
   },
   {
     name: 'Message',
@@ -5037,6 +5192,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type PreToolDecision = {\n    kind: \'allow\';\n} | {\n    kind: \'deny\';\n    reason: string;\n} | {\n    kind: \'ask\';\n    reason?: string;\n};',
   },
   {
+    name: 'ProceduralMemory',
+    declaration: 'export interface ProceduralMemory {\n    readonly id: string;\n    readonly name: string;\n    readonly trigger: readonly string[];\n    readonly preconditions: readonly string[];\n    readonly steps: readonly string[];\n    readonly successCriteria: readonly string[];\n    readonly failureConditions: readonly string[];\n    readonly version: number;\n    readonly status: MemoryStatus;\n    readonly scope: MemoryScope;\n    readonly sourceRefs: readonly string[];\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
+  },
+  {
+    name: 'ProcedureInput',
+    declaration: 'export interface ProcedureInput {\n    readonly scope: MemoryScope;\n    readonly name: string;\n    readonly trigger: readonly string[];\n    readonly preconditions?: readonly string[];\n    readonly steps: readonly string[];\n    readonly successCriteria?: readonly string[];\n    readonly failureConditions?: readonly string[];\n    readonly sourceRefs?: readonly string[];\n}',
+  },
+  {
     name: 'ProjectionChangeListener',
     declaration: 'export type ProjectionChangeListener = (session: Session, key: Extract<keyof SessionProjectionMap, string>, value: unknown, seq: SessionSeq) => void;',
   },
@@ -5185,6 +5348,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ResumeAgentOptions {\n    readonly resumeSessionId: SessionId;\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
   },
   {
+    name: 'RetrieveRequest',
+    declaration: 'export interface RetrieveRequest {\n    readonly query: string;\n    readonly scope: MemoryScope;\n    readonly budgetBytes?: number;\n    readonly runId?: string;\n}',
+  },
+  {
     name: 'RunId',
     declaration: 'export type RunId = Branded<\'dsh.RunId\'>;',
   },
@@ -5221,12 +5388,36 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SaveTextSpill {\n    owner: SpillOwner;\n    source: SpillSource;\n    suggestedName: string;\n    content: string;\n}',
   },
   {
+    name: 'ScheduleDeleteRemoteValue',
+    declaration: 'export interface ScheduleDeleteRemoteValue {\n    readonly id: ScheduleId;\n    readonly deleted: true;\n}',
+  },
+  {
     name: 'ScheduledToolDispatch',
     declaration: 'export type ScheduledToolDispatch = {\n    kind: \'post-result\';\n    result: ToolExecutionResult;\n} | {\n    kind: \'final-result\';\n    result: ToolExecutionResult;\n};',
   },
   {
     name: 'ScheduledToolPreparation',
     declaration: 'export type ScheduledToolPreparation = {\n    kind: \'dispatch\';\n    exec: ToolRunContext;\n} | {\n    kind: \'post-result\';\n    exec: ToolRunContext;\n    result: ToolExecutionResult;\n} | {\n    kind: \'final-result\';\n    exec: ToolRunContext;\n    result: ToolExecutionResult;\n};',
+  },
+  {
+    name: 'ScheduleId',
+    declaration: 'export type ScheduleId = Branded<\'ScheduleId\'>;',
+  },
+  {
+    name: 'SchedulePauseRemoteValue',
+    declaration: 'export interface SchedulePauseRemoteValue {\n    readonly id: ScheduleId;\n    readonly paused: true;\n}',
+  },
+  {
+    name: 'ScheduleResumeRemoteValue',
+    declaration: 'export interface ScheduleResumeRemoteValue {\n    readonly id: ScheduleId;\n    readonly resumed: true;\n}',
+  },
+  {
+    name: 'ScheduleRunRemoteValue',
+    declaration: 'export interface ScheduleRunRemoteValue {\n    readonly id: ScheduleId;\n    readonly started: true;\n}',
+  },
+  {
+    name: 'ScheduleSessionRequest',
+    declaration: 'export interface ScheduleSessionRequest {\n    readonly sessionId: SessionId;\n    readonly id: ScheduleId;\n}',
   },
   {
     name: 'Scoped',
@@ -5255,6 +5446,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SearchResultView',
     declaration: 'export type SearchResultView = SearchMatchesResultView | SearchPathsResultView;',
+  },
+  {
+    name: 'SemanticInput',
+    declaration: 'export interface SemanticInput {\n    readonly scope: MemoryScope;\n    readonly subject: string;\n    readonly predicate: string;\n    readonly object: string;\n    readonly statement: string;\n    readonly source: MemorySource;\n    readonly confidence?: number;\n}',
+  },
+  {
+    name: 'SemanticMemory',
+    declaration: 'export interface SemanticMemory {\n    readonly id: string;\n    readonly scope: MemoryScope;\n    readonly subject: string;\n    readonly predicate: string;\n    readonly object: string;\n    readonly statement: string;\n    readonly source: MemorySource;\n    readonly confidence: number;\n    readonly authority: Authority;\n    readonly status: MemoryStatus;\n    readonly validFrom: string;\n    readonly validUntil?: string;\n    readonly supersedes?: readonly string[];\n    readonly supersededBy?: string;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
   },
   {
     name: 'SendTeamMessageRequest',
@@ -6079,6 +6278,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TableValueOf',
     declaration: 'export type TableValueOf<S extends DomainSpec, N extends keyof S[\'tables\']> = S[\'tables\'][N] extends DomainTableSpec<string, infer V> ? V : never;',
+  },
+  {
+    name: 'TaskDeliveryRegistration',
+    declaration: 'export interface TaskDeliveryRegistration {\n    readonly digest: string;\n    readonly commitPaths?: readonly string[];\n}',
   },
   {
     name: 'TeamId',

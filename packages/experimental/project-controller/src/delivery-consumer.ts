@@ -72,7 +72,10 @@ export interface ProjectDeliveryRegistry {
    * @param registration - Approved checkset digest and optional commit scope.
    */
   registerTask(taskId: TaskId, registration: TaskDeliveryRegistration): void
-  /** Drop the delivery configuration of one task. */
+  /**
+   * Drop the delivery configuration of one task.
+   * @param taskId - The task whose delivery configuration is removed.
+   */
   unregisterTask(taskId: TaskId): void
 }
 

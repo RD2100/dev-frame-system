@@ -28,6 +28,66 @@ The three tools join the [tools](tools.md) registry through the bundle layer, an
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxagentmemory--agentmemoryservice"></a>
+
+### `ctx.agentMemory` — `AgentMemoryService`
+
+Persistent memory service. Storage is optional at activation so a missing or unavailable backend degrades to explicit MEMORY_UNAVAILABLE errors while the host agent continues its ordinary task.
+
+```ts cordis-catalog
+/**
+ * Record one task episode.
+ * @param input - Bounded task facts and their memory scope.
+ * @returns The durable episode row.
+ */
+async recordEpisode(input: EpisodeInput): Promise<MemoryEpisode>
+
+/**
+ * Upsert one semantic fact, superseding weaker old facts or marking equal conflicts.
+ * @param input - Sourced fact fields and their memory scope.
+ * @returns The durable fact row and its resolved lifecycle status.
+ */
+async upsertFact(input: SemanticInput): Promise<SemanticMemory>
+
+/**
+ * Register or version a procedure; candidates remain candidates until explicitly promoted.
+ * @param input - Procedure steps, trigger, and scope.
+ * @param status - Lifecycle status assigned to the new procedure.
+ * @returns The durable procedure row.
+ */
+async registerProcedure(input: ProcedureInput, status: MemoryStatus = 'candidate'): Promise<ProceduralMemory>
+
+/**
+ * Retrieve ranked semantic, procedural, and episodic context under a byte budget.
+ * @param request - Query, scope, and optional budget for the retrieval.
+ * @returns Ranked context, rendered text, and its durable trace id.
+ */
+async retrieveContext(request: RetrieveRequest): Promise<MemoryContext>
+
+/**
+ * Delete a memory item immediately; deleted ids are absent from retrieval.
+ * @param id - Durable memory identifier to delete.
+ * @returns Whether a row existed and was deleted.
+ */
+async forget(id: string): Promise<boolean>
+
+/**
+ * Read-only trace inspection for diagnostics and evaluation.
+ * @param id - Durable retrieval trace identifier.
+ * @returns The trace row, or undefined when it is unknown.
+ */
+inspectTrace(id: string): MemoryTrace | undefined
+
+/**
+ * Return candidates for future consolidation without mutating active memory.
+ * @param scope - Scope whose repeated episodes should be considered.
+ * @returns Candidate procedure summaries backed by episode ids.
+ */
+consolidate(scope: MemoryScope): readonly ConsolidationCandidate[]
+```
+
+Source: [`packages/experimental/agent-memory/src/service.ts`](../../packages/experimental/agent-memory/src/service.ts)
+
 <a id="ctxmemorylibrarygateway--memorylibrarygateway"></a>
 
 ### `ctx.memoryLibraryGateway` — `MemoryLibraryGateway`

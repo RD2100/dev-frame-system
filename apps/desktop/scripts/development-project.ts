@@ -133,14 +133,6 @@ function buildDevFrameDeploymentPatch(paths: DevFramePatchPaths): string {
     controllerProfile: 'standard'
     authorizedRoots:
 ${authorizedRoots.map(root => `      - ${root}`).join('\n')}
-# Shadow closed-loop: forwards received work deliveries into the bound
-# controllers' live agents (same overlay the web profile carries).
-- insert:
-    - id: shadow-bridge
-      name: '@deepseek-ai/dsh-experimental-shadow-bridge'
-      config:
-        intervalMs: 60000
-        followupMaxChars: 12000
 - id: command-goal-binding
   config:
     workspaceId: dsh-devframe
@@ -168,64 +160,6 @@ ${authorizedRoots.map(root => `      - ${root}`).join('\n')}
     # Lead plugin scopes are pinned during the Stage B provisioning smoke once
     # the task pluginId convention is confirmed (v2 fixes one pluginId).
     leadPluginScopes: {}
-# Shadow todo board v2: mounts the project-controller task loop beside the
-# DevFrame profile so Shadow-sent work drives a real task board (the same
-# overlay the shadow-loop example carries, minus the request-budget consumer;
-# see docs/working/shadow-todo-board-v2-plan.zh.md).
-- insert:
-    # Append-only evidence ledger (ctx.agentEvidence): task/Goal binding
-    # receipts, submission receipts, and verification snapshots.
-    - id: agent-evidence
-      name: '@deepseek-ai/dsh-experimental-agent-evidence'
-    # The project task board service (ctx.projectController): task lifecycle,
-    # the request budget, and the integration gate. It exposes no tool itself;
-    # the consumer rows below mount the tool faces.
-    - id: project-controller
-      name: '@deepseek-ai/dsh-experimental-project-controller'
-      config:
-        maxActiveTasks: 2
-        requestBudget: 64
-    # Integration tool face: project_integrate, for the root controller.
-    - id: project-controller-consumer
-      name: '@deepseek-ai/dsh-experimental-project-controller/consumer'
-      config:
-        requiredChecksPath: !!js dshHomePath('required-checks.json')
-        gitExecutable: git
-        gitTimeoutMs: 60000
-        gitMaxOutputBytes: 10485760
-    # Task tool face: project_task (plan/start), for the root controller.
-    # Takes no config; planning and start derive authority from the live Goal
-    # binding, the hierarchy bindings, and the registered worktrees.
-    - id: project-controller-task-consumer
-      name: '@deepseek-ai/dsh-experimental-project-controller/task-consumer'
-    # Delivery tool faces: project_deliver/project_commit for Workers,
-    # project_evidence/project_review for their independent plugin leads.
-    # requiredChecksByTask/commitPathsByTask stay empty: the host registers
-    # each task's approved checkset (git-diff-check in its Worker worktree)
-    # and commit scope at approval time via the dynamic registry.
-    # defaultCommitPaths pins the scope of the first-round acceptance task
-    # (which edits this file); a general task→scope mapping is deferred with
-    # the multi-task mechanism (see docs/working/shadow-todo-board-v2-plan.zh.md §7).
-    - id: project-controller-delivery-consumer
-      name: '@deepseek-ai/dsh-experimental-project-controller/delivery-consumer'
-      config:
-        repairLimit: 3
-        requiredChecksPath: !!js dshHomePath('required-checks.json')
-        requiredChecksByTask: {}
-        gitExecutable: git
-        gitTimeoutMs: 60000
-        gitMaxOutputBytes: 10485760
-        checkTimeoutMs: 600000
-        checkMaxOutputBytes: 1048576
-        commitPathsByTask: {}
-        defaultCommitPaths: ['packages/experimental/project-controller/src/index.ts']
-# Web Shadow entry card: the devframe-profile overlay does not carry this
-# row (it ships in the separate shadow-web-profile layer for web), so the
-# Desktop profile inserts it here.
-- insert:
-    - id: ui-shadow-entry
-      name: '@deepseek-ai/dsh-experimental-client-ui-shadow-entry'
-
 # DSH Mobile pairing (remote access): same row the web profile carries, so
 # the Desktop client keeps the remote-access surface.
 - id: dsh-mobile-pairing

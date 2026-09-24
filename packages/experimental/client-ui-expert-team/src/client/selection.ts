@@ -32,6 +32,7 @@ const EMPTY_SELECTION: ExpertSelectionState = { target: null, sessionId: undefin
 
 /** Coordinates catalog actions with the existing new-session and input flows. */
 export class ExpertSelectionController {
+  /** Snapshot store consumed by the session-scoped expert chip. */
   readonly store = createSnapshotStore<ExpertSelectionState>(EMPTY_SELECTION)
 
   private pendingDraft: string | undefined
@@ -97,7 +98,10 @@ export class ExpertSelectionController {
     this.store.set(EMPTY_SELECTION)
   }
 
-  /** Build the face consumed by the session-scoped chip registration. */
+  /**
+   * Build the face consumed by the session-scoped chip registration.
+   * @returns The injected selection state and clear action.
+   */
   injected(): ExpertSelectionInjected {
     return { hooks: { expertSelection: this.store }, clear: () => { this.clear() } }
   }

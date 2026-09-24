@@ -1,7 +1,8 @@
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { composeEntries, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
 import { prepareDevelopmentProject } from '../scripts/development-project.ts'
 import { DESKTOP_HOST_PROTOCOL_VERSION } from '../src/host-protocol.ts'
 import type { DesktopRelease } from '../src/release.ts'
@@ -177,16 +178,26 @@ describe('desktop development project', () => {
       expect(patch).not.toContain('cloudflaredPath')
       expect(patch).toContain(root.replaceAll('\\', '/'))
       expect(patch).not.toContain('D:/dsh-devframe')
-      // Shadow todo board v2 rows: the four project-controller faces are
-      // mounted, the request-budget consumer is not, and the hierarchy faces
-      // carry the project-loop tools.
-      expect(patch).toContain('id: agent-evidence')
-      expect(patch).toContain('id: project-controller')
-      expect(patch).toContain('id: project-controller-consumer')
-      expect(patch).toContain('id: project-controller-task-consumer')
-      expect(patch).toContain('id: project-controller-delivery-consumer')
-      expect(patch).toContain("defaultCommitPaths: ['packages/experimental/project-controller/src/index.ts']")
+      // Host-owned rows are mounted by desktop.cordis.patch.yml. Keeping them
+      // out of this generated machine patch leaves one loader row per id after
+      // the development and production layers are composed.
+      for (const id of [
+        'shadow-bridge',
+        'ui-shadow-entry',
+        'agent-evidence',
+        'project-controller',
+        'project-controller-consumer',
+        'project-controller-task-consumer',
+        'project-controller-delivery-consumer',
+      ]) expect(patch).not.toContain(`id: ${id}`)
       expect(patch).not.toContain('project-controller-request-budget-consumer')
+      const rows = composeEntries([
+        loadOverlayPatches('dsh desktop', resolve(import.meta.dirname, '../../../packages/experimental/devframe-profile/cordis.patch.yml')),
+        loadOverlayPatches('dsh desktop', join(project, 'cordis.patch.yml')),
+        loadOverlayPatches('dsh desktop', resolve(import.meta.dirname, '../../desktop-host/config/desktop.cordis.patch.yml')),
+      ])
+      const ids = rows.flatMap(row => typeof row.id === 'string' ? [row.id] : [])
+      expect(new Set(ids).size).toBe(ids.length)
       expect(patch).toContain("'project_task'")
       expect(patch).toContain("'project_integrate'")
       expect(patch).toContain("'agent_dispatch'")

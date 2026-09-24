@@ -249,4 +249,27 @@ list(): readonly TaskRecord[]
 Types: [Agent](core.md) · [IntegrationGitObservation](../../packages/experimental/project-controller/README.md) · [IntegrationGitOptions](../../packages/experimental/project-controller/README.md) · [MainTreeIntegrationRecord](../../packages/experimental/project-controller/README.md) · [MainTreeMergeRequest](../../packages/experimental/project-controller/README.md) · [SessionId](core.md) · [TaskMutationOptions](../../packages/experimental/project-controller/README.md) · [WorkspaceId](workspace.md)
 
 Source: [`packages/experimental/project-controller/src/controller.ts`](../../packages/experimental/project-controller/src/controller.ts)
+
+<a id="ctxprojectdeliveryregistry--projectdeliveryregistry"></a>
+
+### `ctx.projectDeliveryRegistry` — `ProjectDeliveryRegistry`
+
+Host-updatable delivery registry (`ctx.projectDeliveryRegistry`): the runtime source of approved checksets and commit scopes the delivery tools read at call time. Seeded from deployment config; the host registers each task's approved checkset and commit scope at approval time, so plan-time registration and delivery-time reads can never race. Idempotent: a re-registration replaces the previous entry, unregistering an absent task is a no-op.
+
+```ts cordis-catalog
+/**
+ * Register or replace the delivery configuration of one task.
+ * @param taskId - The task being approved.
+ * @param registration - Approved checkset digest and optional commit scope.
+ */
+registerTask(taskId: TaskId, registration: TaskDeliveryRegistration): void
+
+/**
+ * Drop the delivery configuration of one task.
+ * @param taskId - The task whose delivery configuration is removed.
+ */
+unregisterTask(taskId: TaskId): void
+```
+
+Source: [`packages/experimental/project-controller/src/delivery-consumer.ts`](../../packages/experimental/project-controller/src/delivery-consumer.ts)
 <!-- END GENERATED cordis-surface -->

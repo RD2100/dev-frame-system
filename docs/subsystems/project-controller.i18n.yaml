@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/project-controller.md
-project-controller.md: e985b121f0388aa841173d29a14fc89528fe1025
-project-controller.zh.md: e1782c5f13212428f8861d986a91259905971bd2
+project-controller.md: 4b9ee02800395602b07c4d6183c44d526fc62b53
+project-controller.zh.md: a08d074b9b475a46a7d57c06de9c1da761909577

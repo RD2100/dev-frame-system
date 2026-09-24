@@ -283,8 +283,8 @@ export function SkillConnectorSettingsTab({
                 <h4>{editingMcp === undefined ? t('addMcp') : t('editMcp')}</h4>
                 <input aria-label={t('mcpServerName')} placeholder={t('mcpServerName')} value={mcpForm.serverName} onChange={(event) => { const next = event.currentTarget.value; setMcpForm(value => ({ ...value, serverName: next })) }} />
                 <select aria-label={t('mcpTransport')} value={mcpForm.transport} onChange={(event) => { const next = event.currentTarget.value as Transport; setMcpForm(value => ({ ...value, transport: next })) }}>
-                  <option value="stdio">stdio</option>
-                  <option value="streamable-http">streamable-http</option>
+                  <option value="stdio">{t('mcpTransportStdio')}</option>
+                  <option value="streamable-http">{t('mcpTransportHttp')}</option>
                 </select>
                 {mcpForm.transport === 'stdio'
                   ? <input aria-label={t('mcpCommand')} placeholder={t('mcpCommand')} value={mcpForm.command} onChange={(event) => { const next = event.currentTarget.value; setMcpForm(value => ({ ...value, command: next })) }} />

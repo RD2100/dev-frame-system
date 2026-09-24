@@ -50,7 +50,11 @@ export class ScheduleGateway extends TypertRemoteService {
     super(ctx, 'schedule')
   }
 
-  /** Pause one active Schedule record. */
+  /**
+   * Pause one active Schedule record.
+   * @param request - Session and Schedule id to pause.
+   * @returns The paused Schedule id and confirmation marker.
+   */
   @Remote('pause')
   pause(request: ScheduleSessionRequest): Promise<SchedulePauseRemoteValue> {
     return this.mutate(request, (agent, id) => {
@@ -63,7 +67,11 @@ export class ScheduleGateway extends TypertRemoteService {
     })
   }
 
-  /** Resume one paused Schedule record. */
+  /**
+   * Resume one paused Schedule record.
+   * @param request - Session and Schedule id to resume.
+   * @returns The resumed Schedule id and confirmation marker.
+   */
   @Remote('resume')
   resume(request: ScheduleSessionRequest): Promise<ScheduleResumeRemoteValue> {
     return this.mutate(request, (agent, id) => {
@@ -76,7 +84,11 @@ export class ScheduleGateway extends TypertRemoteService {
     })
   }
 
-  /** Delete one active Schedule record. */
+  /**
+   * Delete one active Schedule record.
+   * @param request - Session and Schedule id to delete.
+   * @returns The deleted Schedule id and confirmation marker.
+   */
   @Remote('delete')
   delete(request: ScheduleSessionRequest): Promise<ScheduleDeleteRemoteValue> {
     return this.mutate(request, (agent, id) => {
@@ -87,7 +99,11 @@ export class ScheduleGateway extends TypertRemoteService {
     })
   }
 
-  /** Queue one immediate delivery for an active Schedule record. */
+  /**
+   * Queue one immediate delivery for an active Schedule record.
+   * @param request - Session and Schedule id to run immediately.
+   * @returns The Schedule id and delivery acceptance marker.
+   */
   @Remote('run')
   run(request: ScheduleSessionRequest): Promise<ScheduleRunRemoteValue> {
     return this.mutate(request, (agent, id) => {

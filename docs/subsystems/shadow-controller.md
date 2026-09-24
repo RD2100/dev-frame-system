@@ -108,6 +108,47 @@ Host service backing the generated `ctx.remote.shadow` namespace. The read never
  * @returns the page of conversation rows plus the continuation cursor.
  */
 @Remote async readConversation(request: ShadowConversationReadInput): Promise<ShadowConversationPage>
+
+/**
+ * Approve a planned task for development from the board. Resolves the same
+ * start authority the `project_task start` tool enforces (live root
+ * controller, open Goal admitting the task, exactly one Worker and lead,
+ * three independent locked worktrees), persists the host-approved
+ * `git diff --check` checkset into the required-checks ledger, registers it
+ * with the delivery registry, then assigns and starts development under
+ * write-boundary drift re-checks. The Worker receives one briefing; the
+ * designated Shadow session receives a structured message (best-effort: a
+ * conversation-host failure does not fail an already-admitted start).
+ * A task that is neither planned nor blocked, or whose provisioning is
+ * incomplete, fails loud without advancing state.
+ * @param request - The workspace binding and the planned task id.
+ * @returns the task's state after admission.
+ */
+@Remote async approveTask(request: ShadowApproveTaskInput): Promise<ShadowApproveTaskResult>
+
+/**
+ * Reject a planned task from the board: block it with the host reason so
+ * the board shows the recovery triple instead of silently dropping the
+ * task. Only a planned task may be rejected; anything already started
+ * fails loud (recovery of active tasks uses the project tools).
+ * @param request - The workspace binding, the planned task id, and the reason.
+ * @returns the task's blocked state.
+ */
+@Remote async rejectTask(request: ShadowRejectTaskInput): Promise<ShadowRejectTaskResult>
+
+/**
+ * Read the whole task board: mount presence, the workspace binding digest,
+ * and every task folded from the controller's stable (createdAt, taskId)
+ * order. The read is side-effect free: `startReady` derives from the same
+ * start authority the approve face enforces (any resolution failure or
+ * missing authority reads false, so the board greys the approve action
+ * without advancing state), and `branch` comes from the worktree registry's
+ * live status observation. A deployment without a projectController answers
+ * the honest `mounted: false` empty board; a missing shadow router or
+ * worktree registry degrades the respective section rather than failing.
+ * @returns the board snapshot.
+ */
+@Remote async readBoard(): Promise<ShadowBoardSnapshot>
 ```
 
 Source: [`packages/experimental/shadow-controller/src/index.ts`](../../packages/experimental/shadow-controller/src/index.ts)

@@ -4,6 +4,75 @@
 
 Schedule 拥有持久提醒；这些提醒会作为普通的后续对话轮次返回原 live Session。[持久 Schedule Agent Note](../../.agents/notes/implemented/feature/2026-08-05-durable-web-schedule.zh.md) 负责持久化、生命周期与活动状态呈现，[对话式交付](../../.agents/notes/implemented/simplification/2026-08-09-conversational-schedule-delivery.zh.md) 负责无回执边界，[显式时区边界](../../.agents/notes/implemented/simplification/2026-08-09-explicit-schedule-time-zone.zh.md) 负责浏览器本地解释，[有界固定速率 Schedule](../../.agents/notes/implemented/simplification/2026-08-09-bounded-fixed-rate-schedule.zh.md) 负责重复调度。本页记录 [`packages/schedule/schedule/src/types.ts`](../../packages/schedule/schedule/src/types.ts) 中的持久数据形状和面向模型的数据形状；[包 README](../../packages/schedule/schedule/README.zh.md) 负责组合、工具行为与确切的提醒 framing。
 
+<!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
+
+<a id="cordis-surface"></a>
+
+## Cordis API
+
+Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+
+<a id="ctxschedule--schedulegateway"></a>
+
+### `ctx.schedule` — `ScheduleGateway`
+
+Host Remote owner for browser Schedule mutations.
+
+```ts cordis-catalog
+/**
+ * Pause one active Schedule record.
+ * @param request - Session and Schedule id to pause.
+ * @returns The paused Schedule id and confirmation marker.
+ */
+@Remote('pause') pause(request: ScheduleSessionRequest): Promise<SchedulePauseRemoteValue>
+
+/**
+ * Resume one paused Schedule record.
+ * @param request - Session and Schedule id to resume.
+ * @returns The resumed Schedule id and confirmation marker.
+ */
+@Remote('resume') resume(request: ScheduleSessionRequest): Promise<ScheduleResumeRemoteValue>
+
+/**
+ * Delete one active Schedule record.
+ * @param request - Session and Schedule id to delete.
+ * @returns The deleted Schedule id and confirmation marker.
+ */
+@Remote('delete') delete(request: ScheduleSessionRequest): Promise<ScheduleDeleteRemoteValue>
+
+/**
+ * Queue one immediate delivery for an active Schedule record.
+ * @param request - Session and Schedule id to run immediately.
+ * @returns The Schedule id and delivery acceptance marker.
+ */
+@Remote('run') run(request: ScheduleSessionRequest): Promise<ScheduleRunRemoteValue>
+```
+
+Source: [`packages/schedule/schedule/src/gateway.ts`](../../packages/schedule/schedule/src/gateway.ts)
+
+<a id="schedule-events"></a>
+
+### `schedule/*` events
+
+<a id="schedulerequest-drive--emit"></a>
+
+#### `schedule/request-drive` — emit
+
+Wake the exact Schedule runtime after a browser mutation.
+
+```ts cordis-catalog
+/** Wake the exact Schedule runtime after a browser mutation.
+ * @mode emit
+ * @param sessionId - Session whose Schedule runtime must recalculate.
+ */
+'schedule/request-drive'(sessionId: SessionId): void
+```
+
+Types: [SessionId](core.zh.md)
+
+Source: [`packages/schedule/schedule/src/gateway.ts`](../../packages/schedule/schedule/src/gateway.ts)
+<!-- END GENERATED cordis-surface -->
+
 ## 持久记录
 
 `ScheduleId` 是[品牌化 id](core.zh.md#branded-ids)，在单个 Session 内唯一且绝不复用。版本 1 支持正的安全整数 `after_seconds` 延时、显式的绝对 `at` 目标，或至少五分钟的安全整数 `every_seconds` 间隔。创建操作会将每个初始目标规范化为使用四位年份的 RFC 3339 UTC `scheduledAt`；`after` 记录会保留提交的延时，`at` 记录只存储结果时点，`every` 记录则保留固定间隔和下一个目标。

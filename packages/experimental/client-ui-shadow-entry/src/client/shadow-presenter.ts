@@ -140,7 +140,12 @@ export const BOARD_COLUMNS: readonly BoardColumnId[] = [
   'backlog', 'toConfirm', 'building', 'toReview', 'submitted', 'done',
 ]
 
-/** Project the board's wire snapshot into the display model. */
+/**
+ * Project the board's wire snapshot into the display model.
+ * @param snapshot - Current board state from the Shadow Remote.
+ * @param now - Current epoch milliseconds used for task age and deadlines.
+ * @returns The localized-independent board presentation model.
+ */
 export function presentShadowBoard(snapshot: ShadowBoardSnapshotState, now: number): ShadowBoardModel {
   if (snapshot.error !== undefined) {
     return { phase: 'error', error: snapshot.error, bindings: [], columns: BOARD_COLUMNS, tasks: [], triage: [] }

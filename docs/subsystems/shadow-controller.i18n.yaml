@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/shadow-controller.md
-shadow-controller.md: d480112784753ce31c349639d13677c67cd23ce4
-shadow-controller.zh.md: 71cd124c610b56b468b3aa37e9d675ba85c2edf5
+shadow-controller.md: cae33c2098a9a6ffd387c7ff670dafb2791d51f8
+shadow-controller.zh.md: 9d313d0eebf87e100eac372e958f266bad04c14d
