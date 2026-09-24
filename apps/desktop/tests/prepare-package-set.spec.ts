@@ -34,6 +34,8 @@ describe('desktop package-set selection', () => {
         dependencies: { '@deepseek-ai/dsh': '^1.0.0' },
       })],
       ['@deepseek-ai/dsh-experimental-devframe-profile', packed('@deepseek-ai/dsh-experimental-devframe-profile')],
+      ['@deepseek-ai/dsh-experimental-shadow-bridge', packed('@deepseek-ai/dsh-experimental-shadow-bridge')],
+      ['@deepseek-ai/dsh-experimental-client-ui-shadow-entry', packed('@deepseek-ai/dsh-experimental-client-ui-shadow-entry')],
       ['@deepseek-ai/dsh-base', packed('@deepseek-ai/dsh-base', {
         peerDependencies: { '@deepseek-ai/cordis': '^1.0.0' },
       })],
@@ -46,7 +48,9 @@ describe('desktop package-set selection', () => {
       '@deepseek-ai/dsh',
       '@deepseek-ai/dsh-base',
       '@deepseek-ai/dsh-desktop-host',
+      '@deepseek-ai/dsh-experimental-client-ui-shadow-entry',
       '@deepseek-ai/dsh-experimental-devframe-profile',
+      '@deepseek-ai/dsh-experimental-shadow-bridge',
       '@deepseek-ai/platform-package',
     ])
   })
@@ -85,6 +89,12 @@ describe('desktop package-set selection', () => {
 })
 
 describe('desktop package-set --out ownership guard', () => {
+  it('accepts the Desktop target package-set directory', () => {
+    expect(() => {
+      assertPackageSetOutLocation(resolve(import.meta.dirname, '..', '.desktop-build', 'targets', 'win-x64', 'package-set'), false)
+    }).not.toThrow()
+  })
+
   it('accepts an output under the system temp directory', () => {
     expect(() => {
       assertPackageSetOutLocation(join(tmpdir(), 'desktop-package-set', 'out'), false)

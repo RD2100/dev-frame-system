@@ -29,6 +29,11 @@ import { resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
 
 const DSH_PACKAGE = '@deepseek-ai/dsh'
 const ROOT_PACKAGES = [DSH_PACKAGE, DESKTOP_HOST_PACKAGE, DESKTOP_DEVFRAME_PROFILE_PACKAGE] as const
+/** Production Host overlay entries that are loaded directly but are not profile dependencies. */
+const DESKTOP_OVERLAY_PACKAGES = [
+  '@deepseek-ai/dsh-experimental-shadow-bridge',
+  '@deepseek-ai/dsh-experimental-client-ui-shadow-entry',
+] as const
 const APP_ROOT = resolve(import.meta.dirname, '..')
 const REPOSITORY_ROOT = resolve(APP_ROOT, '..', '..')
 
@@ -76,7 +81,7 @@ export function selectDesktopPackageClosure(
       if (available.has(dependency)) visit(dependency)
     }
   }
-  for (const name of ROOT_PACKAGES) {
+  for (const name of [...ROOT_PACKAGES, ...DESKTOP_OVERLAY_PACKAGES]) {
     if (!available.has(name)) throw new Error(`desktop package set: packed inputs omit ${name}`)
     visit(name)
   }
@@ -142,7 +147,7 @@ function isWithin(child: string, parent: string): boolean {
  */
 export function assertPackageSetOutLocation(output: string, allowOutsideWorkspace: boolean): void {
   const resolved = resolve(output)
-  const workspaceRoot = resolve(join(REPOSITORY_ROOT, '.desktop-build'))
+  const workspaceRoot = resolve(join(APP_ROOT, '.desktop-build'))
   const confined = isWithin(resolved, workspaceRoot) || isWithin(resolved, resolve(tmpdir()))
   if (!confined && !allowOutsideWorkspace) {
     throw new Error(
