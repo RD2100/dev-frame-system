@@ -98,6 +98,7 @@ description: Desktop 插件接入、专家中心、技能与 MCP、Obsidian 资�
 - 2026-09-24：发布收口修复了一个真实冷启动阻塞：DevFrame profile 不再重复插入 `ui-schedule` loader 行，而是启用 `web-app` 已提供的行；staging Host boot verifier 现在可以到达 `boot OK` 并观察到 Schedule 服务。受影响 UI 包的客户端 session 契约转换已对齐，根级 `pnpm run typecheck` 通过。本版本仍需在同一 revision 上完成完整 Electron 点击/重启运行、模型驱动的 Shadow 规划（提供方计费仍阻塞）以及打包安装/升级 dry-run 证据。
 - 2026-09-24：在重建 Web artifact 后通过 Electron CDP 打开设置→插件，已看到 Skill/MCP 管理控件；通过页面安装的临时 Skill 成功落盘，持久化 MCP 投影也验证了前端不显示 `env`。临时 Skill 已在验证后清理。官方 staging 旁侧副本仍是缺少 DevFrame 包闭包的旧 workspace，安装先后在 `agent-dispatch` 及其他 DevFrame 包处失败；这是 artifact 重建/闭包问题，不是当前 `development-project.ts` 缺依赖。Desktop package preparation 的 Host、Client、Web 和 Desktop Host 构建现在通过；下一处阻塞是仓库版本族不一致（`0.1.2-alpha.4` 与 `0.1.6-alpha.1` 混用）。
 - 2026-09-24：当前 revision 的 Electron 证据已覆盖两次启动和一次重启：重建后的 UI 显示 Skill/MCP 控件，临时 Skill 在重启后仍存在并随后通过 UI 卸载，MCP 重启后仍存在且为停用状态，敏感信息已隐藏，Schedule 页面成功加载模板。补齐本地完整包闭包后，官方 staging verifier 也到达 `boot OK`、干净的 `start/data/end` 传输帧、RPC 200、2 团队/15 专家快照和 `dispose OK`；旧旁侧 workspace 本身仍不能作为包闭包来源。Schedule 浏览器 bundle 已修复跨插件运行时导入，因此 Host/Client/Web/Desktop Host preparation 在版本族校验前通过。
+- 2026-09-24：隔离 Schedule 验收使用临时 JSONL session 驱动真实 `ScheduleGateway`：暂停、恢复和删除均返回成功 Remote 结果；新 Context 从同一日志加载后只保留预期 active 记录，事件顺序为 `create, pause, resume, create, delete`。Schedule 工具/插件重启测试 26/26 通过，浏览器任务中心测试 6/6 通过。Electron 若创建 active task 会修改用户 session 或调用模型，因此未安全执行，桌面证据仍标记 UI 变更按钮未点击。
 
 ## Dev Note
 
