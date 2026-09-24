@@ -8,6 +8,7 @@ import type {} from '@deepseek-ai/dsh-experimental-agent-team/remote'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
+import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -30,7 +31,7 @@ export const inject = ['sessions', 'remote', 'slots', 'locale']
 
 function registerUi(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'client-ui-agent-team: dictionaries')
-  const sessions = ctx.sessions
+  const sessions = ctx.sessions as unknown as ISessions
   const leadSessionId = (sessionId: SessionId): SessionId => {
     const address = sessions.binding(sessionId)?.session.getSnapshot().subagent?.address
     return address?.parentSessionId ?? sessionId

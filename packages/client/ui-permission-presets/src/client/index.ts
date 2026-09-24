@@ -15,6 +15,7 @@
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { SessionFace } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: the settings slot types (this package registers a General row).
@@ -85,7 +86,7 @@ function optionsOf(value: PermissionSelect, t: (key: string) => string): SelectO
  */
 export function apply(ctx: ClientContext): void {
   const command = ctx.get('commandUi') as CommandUiContract
-  const sessions = ctx.sessions
+  const sessions = ctx.sessions as unknown as ISessions
   // This optional bundle and ui-conversation can load independently, so each
   // owns the same safety copy under its own locale namespace.
   /* jscpd:ignore-start */

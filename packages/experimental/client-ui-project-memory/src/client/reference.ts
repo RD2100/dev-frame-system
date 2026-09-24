@@ -1,6 +1,7 @@
 /** Conversation-reference action for the Library page. */
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 
 /**
  * Append a library path reference into the current conversation composer.
@@ -19,10 +20,11 @@ export class LibraryReferenceController {
    *   exists and the reference could not be placed.
    */
   reference(line: string): boolean {
-    const sessions = this.ctx.sessions.list.getSnapshot()
+    const sessionsApi = this.ctx.sessions as unknown as ISessions
+    const sessions = sessionsApi.list.getSnapshot()
     const current = sessions.current
     if (current === undefined) return false
-    const scope = this.ctx.sessions.scope(current)
+    const scope = sessionsApi.scope(current)
     if (scope === undefined) return false
     const input = this.ctx.conversation.input.for(scope)
     const existing = input.state.getSnapshot().draft

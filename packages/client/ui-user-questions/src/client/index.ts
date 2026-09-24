@@ -58,7 +58,7 @@ async function answerQuestion(
   next: ClientQuestionNext,
   registerPendingInteraction: PendingInteractionPublisher<PendingQuestion>,
 ): Promise<ClientQuestionAnswer> {
-  const sessionId = (ctx.sessions as ISessions).scopeOf(owner)
+  const sessionId = (ctx.sessions as unknown as ISessions).scopeOf(owner)
   if (sessionId === undefined) return next()
   const pending = new PendingQuestion(sessionId, request.questions, request.signal)
   const completed = Promise.withResolvers<void>()

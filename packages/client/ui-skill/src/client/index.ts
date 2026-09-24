@@ -33,6 +33,7 @@
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { SkillEntry } from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
+import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { InputTriggerServiceContract, InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
@@ -72,7 +73,7 @@ export function apply(ctx: ClientContext): void {
   ))
 
   const skills = ctx.remote.skills
-  const sessions = ctx.sessions
+  const sessions = ctx.sessions as unknown as ISessions
   // Session-keyed catalog cache; single-flight per key. Plugin-closure state:
   // the fiber effect below is its teardown boundary.
   const fetches = new Map<SessionId, CatalogFetch>()

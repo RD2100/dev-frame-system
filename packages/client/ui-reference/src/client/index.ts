@@ -40,7 +40,7 @@ export const inject = [
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-reference: dictionaries')
   const t = ctx.locale.bind(NS)
-  const sessions = ctx.get('sessions') as ISessions
+  const sessions = ctx.get('sessions') as unknown as ISessions
   const source: InputTriggerSource = {
     trigger: '@',
     name: 'reference',
