@@ -40,6 +40,8 @@ interface ComWorld {
   registered: number
   unregistered: number
   uninitialized: number
+  /** Lengths of every `koffi.view` call; must stay empty (Electron forbids external buffers). */
+  viewCalls: number[]
 }
 
 function comWorld(overrides: Partial<ComWorld> = {}): ComWorld {
@@ -48,7 +50,7 @@ function comWorld(overrides: Partial<ComWorld> = {}): ComWorld {
     hasThreadDpi: true, supportedDpiContexts: [-4], enumThrows: false,
     path: 'C:\\选中\\directory',
     titles: [], options: [], dpiContexts: [], freed: [], released: [], posted: [],
-    registered: 0, unregistered: 0, uninitialized: 0,
+    registered: 0, unregistered: 0, uninitialized: 0, viewCalls: [],
     ...overrides,
   }
 }
@@ -127,15 +129,21 @@ function installFakeKoffi(world: ComWorld): void {
       proto: (declaration: string) => ({ declaration }),
       pointer: (type: unknown) => type,
       sizeof: (type: string) => { void type; return FAKE_POINTER_SIZE },
-      view: (value: unknown, len: number): ArrayBuffer => {
-        const bytes = Buffer.alloc(len)
-        bytes.write((value as FakePtr).text as string, 'utf16le')
-        return bytes.buffer
+      view: (_value: unknown, len: number): never => {
+        // The bindings must not create an external buffer: Electron (the
+        // desktop host and its dialog worker run electron-as-node) forbids
+        // them, and the attempt is a fatal process death, not an exception.
+        world.viewCalls.push(len)
+        throw new Error('koffi.view must not be used: Electron forbids external buffers')
       },
       register: (fn: (hwnd: unknown, lparam: unknown) => number) => { world.registered += 1; return { fn } },
       unregister: () => { world.unregistered += 1 },
-      decode: (value: unknown, offsetOrType: unknown): unknown => {
-        if (offsetOrType === 'str16') return (value as FakePtr).text
+      decode: (value: unknown, offsetOrType: unknown, type?: unknown): unknown => {
+        // decode(address, 'char16_t', -1): the NUL-terminated UTF-16 read.
+        if (offsetOrType === 'char16_t') {
+          if (type !== -1) throw new Error(`decode('char16_t') only supports the -1 terminator read, received ${String(type)}`)
+          return (value as FakePtr).text
+        }
         if (typeof offsetOrType === 'number') {
           // Vtable slot read: offsets must be multiples of the fake width.
           if (offsetOrType % FAKE_POINTER_SIZE !== 0) throw new Error(`vtable offset ${offsetOrType} is not pointer-aligned`)
@@ -175,14 +183,30 @@ describe('loadWin32DialogBindings over the fake COM world', () => {
     expect(world.titles).toEqual(['选择工作区目录'])
     expect(world.options).toHaveLength(1)
     expect(showing).toHaveBeenCalledWith(31337)
+    expect(world.viewCalls).toEqual([])
     expect(world.freed).toHaveLength(1)
     expect(world.released).toEqual(['item', 'dialog'])
     expect(world.uninitialized).toBe(1)
   })
 
+  it('reads the selected path without an external buffer (Electron-fatal koffi.view)', async () => {
+    // The desktop host and its dialog worker run electron-as-node, and
+    // Electron forbids the external ArrayBuffers koffi.view creates: the
+    // attempt is a fatal N-API error that kills the worker before it can
+    // report, surfacing as "folder dialog worker exited before reporting a
+    // result". The read path must go through koffi.decode instead.
+    const world = comWorld()
+    installFakeKoffi(world)
+    const bindings = await (await loadBindingsModule()).loadWin32DialogBindings()
+    expect(runFolderDialog(bindings, 'Pick', vi.fn())).toBe('C:\\选中\\directory')
+    expect(world.viewCalls).toEqual([])
+  })
+
   it('reads a UTF-16 path whose BMP code unit has a zero low byte (U+5F00 开)', async () => {
-    // 开 = U+5F00 → UTF-16LE bytes 00 5F. A scan that treats any zero low
-    // byte as NUL truncates here and returns the nonexistent ...\安卓.
+    // 开 = U+5F00 → UTF-16LE bytes 00 5F. The former byte-scan truncation is
+    // gone with the scan itself (koffi decodes code units natively), but the
+    // fixture keeps guarding the case: any future byte-wise read of the
+    // dialog result must still return 安卓开发, not the nonexistent ...\安卓.
     const world = comWorld({ path: 'C:\\fixture\\安卓开发' })
     installFakeKoffi(world)
     const bindings = await (await loadBindingsModule()).loadWin32DialogBindings()

@@ -1,6 +1,7 @@
 # Agent Note: Win32 folder-picker paths stop truncating at U+XX00 code units
 
 Status: implemented
+Archived: 2026-10-01
 
 English | [中文](2026-08-23-win32-utf16-nul-truncation.zh.md)
 

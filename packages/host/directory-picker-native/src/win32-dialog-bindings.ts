@@ -21,26 +21,27 @@ interface Koffi {
   proto(declaration: string): unknown
   pointer(type: unknown): unknown
   call(pointer: unknown, proto: unknown, ...args: unknown[]): unknown
+  /** Read a value out of native memory; with `('char16_t', -1)` read a NUL-terminated UTF-16 string. */
   decode(value: unknown, offsetOrType: unknown, type?: unknown): unknown
   register(fn: (...args: unknown[]) => unknown, type: unknown): unknown
   unregister(callback: unknown): void
   sizeof(type: string): number
-  view(ref: unknown, len: number): ArrayBuffer
 }
 
 /**
- * Read a NUL-terminated UTF-16 string at a native address. koffi's
- * `_Out_ void **` out-params surface a raw address, and
- * `koffi.decode(addr, 'str16')` would dereference it as a pointer — crash
- * on real Windows — so view the memory directly instead.
+ * Read the NUL-terminated UTF-16 string at a native address. `koffi.decode`
+ * copies the characters natively up to the string's own terminator: no
+ * external ArrayBuffer is created, and a code unit with a zero low byte
+ * (U+XX00, e.g. 开) never terminates the read. The previous
+ * `koffi.view` buffer was fatal under Electron runtimes (the desktop host and
+ * its dialog worker run electron-as-node, and Electron forbids the external
+ * buffers `view` creates) — the worker died silently on every selection.
+ * @param koffi - the loaded koffi module.
+ * @param address - the string's native address.
+ * @returns the decoded string.
  */
 function readUtf16(koffi: Koffi, address: unknown): string {
-  const bytes = Buffer.from(koffi.view(address, 32768))
-  let end = 0
-  // UTF-16LE NUL is two zero bytes. A single zero low byte is a valid BMP
-  // code unit (U+XX00, e.g. 开 = U+5F00) and must not terminate the scan.
-  while (end + 1 < bytes.length && !(bytes[end] === 0 && bytes[end + 1] === 0)) end += 2
-  return bytes.toString('utf16le', 0, end)
+  return koffi.decode(address, 'char16_t', -1) as string
 }
 
 const COINIT_APARTMENTTHREADED = 0x2

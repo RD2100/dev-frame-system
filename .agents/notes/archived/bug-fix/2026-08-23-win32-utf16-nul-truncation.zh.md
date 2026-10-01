@@ -1,6 +1,7 @@
 # Agent Note: Win32 目录选择器路径不再在 U+XX00 码元处截断
 
 Status: implemented
+Archived: 2026-10-01
 
 [English](2026-08-23-win32-utf16-nul-truncation.md) | 中文
 
