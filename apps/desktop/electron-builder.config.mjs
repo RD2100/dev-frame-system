@@ -68,6 +68,11 @@ export function createElectronBuilderConfig(
       { from: join(buildPaths.dsh, 'node_modules'), to: 'dsh/node_modules', filter: ['**/*'] },
     ],
     asarUnpack: [
+      // The desktop host spawns the bundled dsh runtime as a plain Node.js
+      // child through real filesystem paths, and that tree carries native
+      // modules and a hash-verified runtime inventory: the whole dsh tree
+      // must be real files outside the asar, not only its native artifacts.
+      '**/dsh/**/*',
       '**/*.{node,dylib,dll,so,exe}',
       '**/*.so.*',
       '**/spawn-helper',
