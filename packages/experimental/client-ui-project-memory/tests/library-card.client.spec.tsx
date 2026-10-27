@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
-/** The Library trigger sits quiet in the sidebar; clicking it opens a modal
- * that browses/searches files, previews content, copies paths, and references
- * files in conversation — an unconfigured vault stays an honest empty state. */
+/** The Library tab loads on mount and browses/searches files, previews content,
+ * copies paths, and references files in conversation. An unconfigured vault
+ * stays an honest empty state. */
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import type {
   LibraryFile,
   LibrarySearchResult,
+  MemoryLibraryReadRequest,
   MemoryLibraryReadResult,
   MemoryLibrarySnapshot,
 } from '@deepseek-ai/dsh-experimental-project-memory/client'
@@ -63,7 +64,11 @@ function face(overrides: Partial<LibraryCardFace> = {}): LibraryCardFace {
   return {
     load: vi.fn(async (): Promise<RemoteResult<MemoryLibrarySnapshot>> => ok(SNAPSHOT)),
     list: vi.fn(async (): Promise<RemoteResult<readonly LibraryFile[]>> => ok(FILES)),
-    read: vi.fn(async (): Promise<RemoteResult<MemoryLibraryReadResult>> => ok(PREVIEW)),
+    read: vi.fn(async ({ relativePath }: MemoryLibraryReadRequest): Promise<RemoteResult<MemoryLibraryReadResult>> => ok({
+      ...PREVIEW,
+      relativePath,
+      absolutePath: relativePath === PREVIEW.relativePath ? PREVIEW.absolutePath : 'D:\\vault\\welcome.md',
+    })),
     search: vi.fn(async (): Promise<RemoteResult<readonly LibrarySearchResult[]>> => ok(HITS)),
     reference: vi.fn(() => true),
     ...overrides,
@@ -72,7 +77,6 @@ function face(overrides: Partial<LibraryCardFace> = {}): LibraryCardFace {
 
 function props(actions: LibraryCardFace): LibraryCardProps {
   return {
-    wide: true,
     t,
     useSessions: unusedHook,
     useSessionPendingInteraction: unusedHook,
@@ -85,55 +89,44 @@ async function settle(): Promise<void> {
   await act(async () => { await Promise.resolve() })
 }
 
-/** Click the sidebar trigger and wait for the snapshot load to settle. */
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolvePromise) => { resolve = resolvePromise })
+  return { promise, resolve }
+}
+
+/** Wait for the mount-time snapshot read to settle. */
 async function openLibrary(): Promise<void> {
-  fireEvent.click(screen.getByRole('button', { name: '打开记忆库' }))
   await settle()
 }
 
 afterEach(cleanup)
 
-describe('the library trigger', () => {
-  it('renders only the trigger button on mount and does not call load', () => {
+describe('the library capability-center page', () => {
+  it('loads and renders the page directly when mounted', async () => {
     const actions = face()
     render(<LibraryCard {...props(actions)} />)
-
-    expect(actions.load).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: '打开记忆库' })).not.toBeNull()
-    // Modal content is not rendered until the trigger is clicked.
-    expect(screen.queryByRole('dialog')).toBeNull()
-    expect(screen.queryByRole('textbox', { name: '搜索记忆库' })).toBeNull()
-  })
-
-  it('opens the modal and loads the snapshot when the trigger is clicked', async () => {
-    const actions = face()
-    render(<LibraryCard {...props(actions)} />)
-
     await openLibrary()
 
-    expect(actions.load).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('dialog')).not.toBeNull()
+    expect(actions.load).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('textbox', { name: '搜索记忆库' })).not.toBeNull()
     expect(screen.getByText('记忆库管理')).not.toBeNull()
     expect(screen.getByText('2 个文件')).not.toBeNull()
     expect(screen.getByRole('button', { name: 'welcome.md' })).not.toBeNull()
     expect(screen.getByRole('button', { name: 'projects/devframe.md' })).not.toBeNull()
   })
 
-  it('closes the modal when the close button is clicked', async () => {
+  it('does not expose a page-level close action', async () => {
     const actions = face()
     render(<LibraryCard {...props(actions)} />)
 
     await openLibrary()
-    expect(screen.getByRole('dialog')).not.toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: '关闭' }))
-    await settle()
-
-    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByRole('button', { name: /关闭/ })).toBeNull()
   })
 })
 
-describe('the library modal', () => {
+describe('the library page', () => {
   it('stays an honest empty state when the vault is not configured', async () => {
     const actions = face({ load: vi.fn(async () => ok(UNAVAILABLE)) })
     render(<LibraryCard {...props(actions)} />)
@@ -141,6 +134,7 @@ describe('the library modal', () => {
 
     expect(screen.getByText('当前部署未配置 Vault 目录，记忆库不可用。')).not.toBeNull()
     expect(screen.queryByRole('textbox', { name: '搜索记忆库' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '全部' })).toBeNull()
   })
 
   it('reports a Remote load failure', async () => {
@@ -189,6 +183,35 @@ describe('the library modal', () => {
     await settle()
 
     expect(screen.getByText('没有匹配的文件。')).not.toBeNull()
+  })
+
+  it('keeps the latest search result when an earlier request finishes last', async () => {
+    const first = deferred<RemoteResult<readonly LibrarySearchResult[]>>()
+    const second = deferred<RemoteResult<readonly LibrarySearchResult[]>>()
+    const search = vi.fn()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    const actions = face({ search })
+    render(<LibraryCard {...props(actions)} />)
+    await openLibrary()
+
+    const textbox = screen.getByRole('textbox', { name: '搜索记忆库' })
+    fireEvent.change(textbox, { target: { value: 'first' } })
+    fireEvent.click(screen.getByRole('button', { name: '搜索' }))
+    fireEvent.change(textbox, { target: { value: 'second' } })
+    fireEvent.click(screen.getByRole('button', { name: '搜索' }))
+    expect(search).toHaveBeenNthCalledWith(1, { query: 'first' })
+    expect(search).toHaveBeenNthCalledWith(2, { query: 'second' })
+
+    await act(async () => {
+      second.resolve(ok([{ ...HITS[0]!, excerpt: 'second response' }]))
+    })
+    await act(async () => {
+      first.resolve(ok([{ ...HITS[0]!, excerpt: 'stale first response' }]))
+    })
+
+    expect(screen.getByText('second response')).not.toBeNull()
+    expect(screen.queryByText('stale first response')).toBeNull()
   })
 
   it('previews a file with its content and real absolute path', async () => {
@@ -267,6 +290,44 @@ describe('the library modal', () => {
 
     expect(reference).toHaveBeenCalledWith('@vault:D:\\vault\\projects\\devframe.md')
     expect(screen.getByRole('status').textContent).toContain('已引用')
+  })
+
+  it('references the file on the selected card without using a previous preview', async () => {
+    const reference = vi.fn(() => true)
+    const actions = face({
+      load: vi.fn(async () => ok({ ...SNAPSHOT, files: [FILES[0]!], status: { ...SNAPSHOT.status, fileCount: 1 } })),
+      reference,
+    })
+    render(<LibraryCard {...props(actions)} />)
+    await openLibrary()
+
+    const card = screen.getByRole('button', { name: 'welcome.md' }).parentElement
+    if (card === null) throw new Error('file card was not rendered')
+    fireEvent.click(within(card).getByRole('button', { name: '引用' }))
+    await settle()
+
+    expect(actions.read).toHaveBeenCalledWith({ relativePath: 'welcome.md' })
+    expect(reference).toHaveBeenCalledWith('@vault:D:\\vault\\welcome.md')
+    expect(screen.getByRole('status').textContent).toContain('已引用')
+  })
+
+  it('reports when a file cannot be read for direct reference', async () => {
+    const actions = face({
+      load: vi.fn(async () => ok({ ...SNAPSHOT, files: [FILES[0]!], status: { ...SNAPSHOT.status, fileCount: 1 } })),
+      read: vi.fn(async (): Promise<RemoteResult<MemoryLibraryReadResult>> => ({
+        ok: false,
+        error: new RemoteError('gateway/internal', 'path rejected', {}),
+      })),
+    })
+    render(<LibraryCard {...props(actions)} />)
+    await openLibrary()
+
+    const card = screen.getByRole('button', { name: 'welcome.md' }).parentElement
+    if (card === null) throw new Error('file card was not rendered')
+    fireEvent.click(within(card).getByRole('button', { name: '引用' }))
+    await settle()
+
+    expect(screen.getByRole('status').textContent).toContain('无法引用')
   })
 
   it('reports when no conversation can receive the reference', async () => {

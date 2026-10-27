@@ -1,4 +1,4 @@
-/** Browser entry binding the generated Library Remote to its sidebar card. */
+/** Browser entry binding the generated Library Remote to its capability-center tab. */
 
 import memoryLibraryRemote from '@deepseek-ai/dsh-experimental-project-memory/remote'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'

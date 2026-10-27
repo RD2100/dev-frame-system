@@ -1,8 +1,7 @@
 /**
  * The Library page browser plugin through its REAL mount face: the Remote
- * contribution is mounted by `ctx.remote.$mount`, the sidebar footer action
- * seat is registered under `project-library` at order 25 (between the
- * expert-team seat at 20 and the Shadow seat at 30), the NS dictionary is
+ * contribution is mounted by `ctx.remote.$mount`, the `library` key is
+ * registered in the capability-center tab seat, the NS dictionary is
  * registered, and the composed disposer tears both halves down. Failures in
  * the Client registration dispose the Remote namespace before rethrowing.
  * @module tests/mount
@@ -13,6 +12,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings-plugin-inventory/client'
 import type {} from '@deepseek-ai/dsh-experimental-project-memory/remote'
 import type { TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import { LibraryCard, type LibraryCardFace } from '../src/client/LibraryCard.tsx'
@@ -63,7 +63,7 @@ async function bench(options: { registrationFailure?: boolean } = {}) {
   await ctx.plugin(SlotRegistry).await()
   ctx.slots.register({
     name: 'root',
-    children: { 'sidebar.footer.action': { kind: 'list', scope: 'root' } },
+    children: { 'capabilities.center.tab': { kind: 'keyed', scope: 'root' } },
   } as never, () => null)
   if (options.registrationFailure === true) {
     vi.spyOn(ctx.slots, 'inject').mockImplementationOnce(() => { throw new Error('slot registration failed') })
@@ -79,23 +79,23 @@ async function bench(options: { registrationFailure?: boolean } = {}) {
   } else {
     await fiber.await()
   }
-  const entry = () => ctx.slots.entries('sidebar.footer.action')
+  const entry = () => ctx.slots.entries('capabilities.center.tab')
     .find(candidate => candidate.component === LibraryCard)
   return { ctx, fiber, activation, remote, entry }
 }
 
 describe('ui-library browser plugin', () => {
-  it('registers the NS dictionary and one disposable sidebar action', async () => {
+  it('registers the NS dictionary and one disposable library tab', async () => {
     const b = await bench()
     expect(inject).toEqual(['remote', 'slots', 'locale'])
     expect(b.entry()).toMatchObject({
-      options: { id: 'project-library', order: 25 },
+      options: { key: 'library' },
       locale: NS,
     })
     expect(b.remote.mount).toHaveBeenCalledOnce()
     expect(b.remote.mount).toHaveBeenCalledWith(REMOTE)
     b.ctx.locale.setLocale('zh')
-    expect(b.ctx.locale.bind(NS)('trigger.label', {})).toBe(zh['trigger.label'])
+    expect(b.ctx.locale.bind(NS)('center.title', {})).toBe(zh['center.title'])
 
     const face = (b.entry()!.inject as unknown as () => LibraryCardFace)()
     expect(typeof face.load).toBe('function')

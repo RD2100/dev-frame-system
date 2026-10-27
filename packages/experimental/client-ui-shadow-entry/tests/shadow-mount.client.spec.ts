@@ -161,6 +161,20 @@ describe('ui-shadow-entry browser plugin', () => {
     expect(b.calls).toEqual(['shadow/readStatus', 'sessions/refresh', 'sessions/open:session-shadow'])
   })
 
+  it('reopens the same designated conversation on every click', async () => {
+    const b = await bench()
+    const face = (b.entry()!.inject as unknown as () => { onOpenConversation: () => Promise<void> })()
+    await face.onOpenConversation()
+    await face.onOpenConversation()
+    expect(b.calls).toEqual([
+      'shadow/readStatus',
+      'sessions/open:session-shadow',
+      'shadow/readStatus',
+      'sessions/open:session-shadow',
+    ])
+    await b.fiber.dispose()
+  })
+
   it('fails closed without opening when the designation has an issue', async () => {
     const b = await bench({ designIssue: true })
     const face = (b.entry()!.inject as unknown as () => { onOpenConversation: () => Promise<void> })()

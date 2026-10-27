@@ -1,15 +1,12 @@
-/** Library page sidebar entry dictionaries. */
+/** Library page dictionaries. */
 
-/** Locale namespace owned by the Library Web UI. */
+/** Locale namespace owned by the Library page. */
 export const NS = 'library'
 
 /** Simplified Chinese Library messages. */
 export const zh = {
-  'trigger.label': '记忆库',
-  'trigger.aria': '打开记忆库',
   'center.title': '记忆库管理',
   refresh: '刷新记忆库',
-  close: '关闭',
   loading: '正在读取记忆库…',
   'status.error': '读取失败',
   'status.unavailable': '记忆库未配置',
@@ -38,6 +35,7 @@ export const zh = {
   'reference': '引用到对话',
   'reference.inserted': '已引用',
   'reference.noSession': '没有可引用的会话',
+  'reference.failed': '读取文件失败，无法引用。',
 } satisfies Record<string, string>
 
 /** Translation keys owned by the library namespace. */
@@ -45,18 +43,15 @@ export type LibraryKey = keyof typeof zh
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** Library sidebar entry copy. */
+    /** Library page copy. */
     'library': LibraryKey
   }
 }
 
 /** English Library messages, checked against the Chinese key set. */
 export const en: Record<LibraryKey, string> = {
-  'trigger.label': 'Library',
-  'trigger.aria': 'Open library',
   'center.title': 'Library manager',
   refresh: 'Refresh library',
-  close: 'Close',
   loading: 'Reading the library…',
   'status.error': 'Read failed',
   'status.unavailable': 'Library is not configured',
@@ -85,4 +80,5 @@ export const en: Record<LibraryKey, string> = {
   'reference': 'Reference in conversation',
   'reference.inserted': 'Referenced',
   'reference.noSession': 'No conversation to reference',
+  'reference.failed': 'The file could not be read and was not referenced.',
 }

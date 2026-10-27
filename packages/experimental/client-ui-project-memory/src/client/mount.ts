@@ -1,4 +1,4 @@
-/** Browser registration for the Library Remote and the sidebar Library page. */
+/** Browser registration for the Library Remote and its capability-center page. */
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
@@ -6,7 +6,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
-import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings-plugin-inventory/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-experimental-project-memory/remote'
 import type { TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
@@ -27,23 +27,19 @@ function registerUi(ctx: ClientContext): void {
     search: request => ctx.remote.library.search(request),
     reference: line => references.reference(line),
   }
-  ctx.slots.inject(
-    'sidebar.footer.action',
-    () => ctx.slots.register({
-      name: 'sidebar.footer.action',
-      id: 'project-library',
-      order: 25,
-      locale: NS,
-      inject: () => face,
-    }, LibraryCard),
-  )
+  ctx.slots.inject('capabilities.center.tab', () => ctx.slots.register({
+    name: 'capabilities.center.tab',
+    key: 'library',
+    locale: NS,
+    inject: () => face,
+  }, LibraryCard))
 }
 
 /**
- * Mount the generated Remote contribution and then register the sidebar card.
+ * Mount the generated Remote contribution and then register the Library tab.
  * @param ctx - Client context carrying Remote, slot, and locale services.
  * @param contribution - Generated Library Remote descriptors.
- * @returns disposer for both the card registration and Remote namespace.
+ * @returns disposer for both the tab registration and Remote namespace.
  */
 export async function mountLibraryUi(
   ctx: ClientContext,

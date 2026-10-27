@@ -1,13 +1,12 @@
-﻿/** Library trigger and browse surface for the read-only Obsidian Vault. */
+﻿/** Library capability-center page for the read-only Obsidian Vault. */
 
-import { useCallback, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import {
   IconCloseOutline16,
   IconDatabaseOutline16,
   IconLinkOutline16,
   IconRefreshOutline16,
   IconSearchOutline16,
-  Modal,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -37,8 +36,8 @@ export interface LibraryCardFace {
   reference: (line: string) => boolean
 }
 
-/** Full props composed by the sidebar footer-action slot. */
-export type LibraryCardProps = PropsRuntime<'sidebar.footer.action'> & InjectFace<LibraryCardFace> & PropsLocale<typeof NS>
+/** Full props composed by the capabilities-center tab slot. */
+export type LibraryCardProps = PropsRuntime<'capabilities.center.tab'> & InjectFace<LibraryCardFace> & PropsLocale<typeof NS>
 
 /** Minimal file identity a row resolves to a preview read. */
 interface FileRef {
@@ -62,8 +61,8 @@ interface LibraryPaneProps {
   readonly onOpenFile: (file: FileRef) => void
   readonly onClosePreview: () => void
   readonly onCopyPath: (path: string) => void
-  readonly onReference: () => void
-  readonly onClose: () => void
+  readonly onReferenceFile: (file: FileRef) => void
+  readonly onReferencePreview: () => void
   readonly t: LibraryCardProps['t']
 }
 
@@ -72,13 +71,8 @@ function valueOf<T>(result: RemoteResult<T>): T | null {
   return result.ok ? result.value : null
 }
 
-/**
- * Library trigger button in the sidebar foot; opens a modal with the full
- * browse/search/preview surface. The snapshot loads on demand when the
- * trigger is first opened, not on sidebar mount.
- */
-export function LibraryCard({ wide, t, load: loadSnapshot, read, search, reference: referenceLine }: LibraryCardProps): ReactNode {
-  const [open, setOpen] = useState(false)
+/** Load the library page when its capability-center tab mounts. */
+export function LibraryCard({ t, load: loadSnapshot, read, search, reference: referenceLine }: LibraryCardProps): ReactNode {
   const [loading, setLoading] = useState(false)
   const [snapshot, setSnapshot] = useState<MemoryLibrarySnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -90,37 +84,55 @@ export function LibraryCard({ wide, t, load: loadSnapshot, read, search, referen
   const [copied, setCopied] = useState(false)
   const [hint, setHint] = useState<LibraryKey | null>(null)
   const requestSequence = useRef(0)
+  const previewSequence = useRef(0)
+  const searchSequence = useRef(0)
+  const referenceSequence = useRef(0)
+  const copySequence = useRef(0)
+  const mounted = useRef(false)
 
   const load = useCallback(async () => {
     const sequence = ++requestSequence.current
     setLoading(true)
     setError(null)
     const result = await loadSnapshot()
-    if (sequence !== requestSequence.current) return
+    if (!mounted.current || sequence !== requestSequence.current) return
     setLoading(false)
     if (result.ok) {
+      previewSequence.current++
+      searchSequence.current++
+      copySequence.current++
       setSnapshot(result.value)
       setPreview(null)
       setResults(null)
+      setSearching(false)
+      setCopied(false)
     } else {
       setError(result.error.message)
     }
   }, [loadSnapshot])
 
-  const openModal = useCallback(() => {
-    setOpen(true)
+  useEffect(() => {
+    mounted.current = true
     void load()
+    return () => {
+      mounted.current = false
+      requestSequence.current++
+      previewSequence.current++
+      searchSequence.current++
+      referenceSequence.current++
+      copySequence.current++
+    }
   }, [load])
 
-  const closeModal = useCallback(() => {
-    setOpen(false)
-  }, [])
-
   const openFile = useCallback(async (file: FileRef) => {
+    const sequence = ++previewSequence.current
+    copySequence.current++
     setPreviewError(null)
+    setPreview(null)
     setCopied(false)
     setHint(null)
     const result = await read({ relativePath: file.relativePath })
+    if (!mounted.current || sequence !== previewSequence.current) return
     if (result.ok) {
       setPreview(result.value)
     } else {
@@ -130,86 +142,99 @@ export function LibraryCard({ wide, t, load: loadSnapshot, read, search, referen
   }, [read])
 
   const runSearch = useCallback(async () => {
+    const sequence = ++searchSequence.current
     const text = query.trim()
     setHint(null)
     if (text === '') {
+      setSearching(false)
       setResults(null)
       return
     }
+    setError(null)
     setSearching(true)
     const result = await search({ query: text })
+    if (!mounted.current || sequence !== searchSequence.current) return
     setSearching(false)
     setResults(valueOf(result))
     if (!result.ok) setError(result.error.message)
   }, [search, query])
 
+  const changeQuery = useCallback((value: string) => {
+    searchSequence.current++
+    setSearching(false)
+    setQuery(value)
+    if (value.trim() === '') setResults(null)
+  }, [])
+
+  const closePreview = useCallback(() => {
+    previewSequence.current++
+    copySequence.current++
+    setPreview(null)
+    setCopied(false)
+    setPreviewError(null)
+  }, [])
+
   const copyPath = useCallback(async (path: string) => {
+    const sequence = ++copySequence.current
     setCopied(false)
     setHint(null)
     try {
       await navigator.clipboard.writeText(path)
+      if (!mounted.current || sequence !== copySequence.current) return
       setCopied(true)
     } catch {
+      if (!mounted.current || sequence !== copySequence.current) return
       setHint('copyPath.failed')
     }
   }, [])
 
-  const reference = useCallback(() => {
+  const insertReference = useCallback((absolutePath: string) => {
+    referenceSequence.current++
     setHint(null)
-    if (preview === null) return
     // A machine-parseable marker the model can resolve with its file tools.
-    const line = `@vault:${preview.absolutePath}`
+    const line = `@vault:${absolutePath}`
     if (referenceLine(line)) setHint('reference.inserted')
     else setHint('reference.noSession')
-  }, [referenceLine, preview])
+  }, [referenceLine])
 
-  const fileCount = snapshot?.status.status === 'AVAILABLE' ? snapshot.status.fileCount : undefined
+  const referenceFile = useCallback(async (file: FileRef) => {
+    const sequence = ++referenceSequence.current
+    setHint(null)
+    const result = await read({ relativePath: file.relativePath })
+    if (!mounted.current || sequence !== referenceSequence.current) return
+    if (!result.ok) {
+      setHint('reference.failed')
+      return
+    }
+    insertReference(result.value.absolutePath)
+  }, [insertReference, read])
+
+  const referencePreview = useCallback(() => {
+    if (preview !== null) insertReference(preview.absolutePath)
+  }, [insertReference, preview])
 
   return (
-    <>
-      <div className={css.root} data-library-entry>
-        <button
-          type="button"
-          className={css.trigger}
-          aria-expanded={open}
-          aria-label={t('trigger.aria')}
-          onClick={openModal}
-        >
-          <IconDatabaseOutline16 size={wide ? 16 : 18} />
-          {wide && <span className={css.triggerLabel}>{t('trigger.label')}</span>}
-          {wide && fileCount !== undefined && <span className={css.count}>{t('fileCount', { count: fileCount })}</span>}
-        </button>
-      </div>
-      <Modal
-        open={open}
-        onClose={closeModal}
-        title={t('center.title')}
-        headless
-        className={css.centerModal as string}
-      >
-        <LibraryPane
-          loading={loading}
-          snapshot={snapshot}
-          error={error}
-          query={query}
-          results={results}
-          searching={searching}
-          preview={preview}
-          previewError={previewError}
-          copied={copied}
-          hint={hint}
-          onRefresh={() => { void load() }}
-          onQueryChange={setQuery}
-          onSearch={() => { void runSearch() }}
-          onOpenFile={(file) => { void openFile(file) }}
-          onClosePreview={() => { setPreview(null) }}
-          onCopyPath={(path) => { void copyPath(path) }}
-          onReference={reference}
-          onClose={closeModal}
-          t={t}
-        />
-      </Modal>
-    </>
+    <LibraryPane
+      loading={loading}
+      snapshot={snapshot}
+      error={error}
+      query={query}
+      results={results}
+      searching={searching}
+      preview={preview}
+      previewError={previewError}
+      copied={copied}
+      hint={hint}
+      onRefresh={() => { void load() }}
+      onQueryChange={changeQuery}
+      onSearch={() => { void runSearch() }}
+      onOpenFile={(file) => { void openFile(file) }}
+      onClosePreview={closePreview}
+      onCopyPath={(path) => { void copyPath(path) }}
+      onReferenceFile={(file) => { void referenceFile(file) }}
+      onReferencePreview={referencePreview}
+      t={t}
+    />
   )
 }
 
@@ -240,13 +265,17 @@ export function LibraryPane(props: LibraryPaneProps): ReactNode {
     loading, snapshot, error, query, results, searching,
     preview, previewError, copied, hint,
     onRefresh, onQueryChange, onSearch, onOpenFile,
-    onClosePreview, onCopyPath, onReference, onClose, t,
+    onClosePreview, onCopyPath, onReferenceFile, onReferencePreview, t,
   } = props
 
   const status = snapshot?.status.status
   const allFiles = snapshot?.files ?? []
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
+
+  useEffect(() => {
+    setSelectedPath(null)
+  }, [snapshot])
 
   // Filter files by kind
   const files = useMemo(() => {
@@ -272,13 +301,13 @@ export function LibraryPane(props: LibraryPaneProps): ReactNode {
   return (
     <div className={css.pane}>
       <div className={css.paneHeader}>
-        <div className={css.paneTitle}>{t('center.title')}</div>
+        <div className={css.paneHeading}>
+          <h2 className={css.paneTitle}>{t('center.title')}</h2>
+          {status === 'AVAILABLE' && snapshot !== null && <span className={css.paneCount}>{t('fileCount', { count: snapshot.status.fileCount })}</span>}
+        </div>
         <div className={css.paneActions}>
           <button type="button" className={css.iconBtn} onClick={onRefresh} aria-label={t('refresh')}>
             <IconRefreshOutline16 size={16} />
-          </button>
-          <button type="button" className={css.iconBtn} onClick={onClose} aria-label={t('close')}>
-            <IconCloseOutline16 size={16} />
           </button>
         </div>
       </div>
@@ -302,29 +331,31 @@ export function LibraryPane(props: LibraryPaneProps): ReactNode {
         <button type="button" className={css.searchBtn} onClick={onSearch} disabled={searching}>{searching ? t('loading') : t('search.action')}</button>
       </div>
 
-      <div className={css.filterTabs}>
-        <button
-          type="button"
-          className={`${css.filterTab} ${kindFilter === 'all' ? css.filterTabActive : ''}`}
-          onClick={() => { setKindFilter('all') }}
-        >
-          {t('filter.all')}
-        </button>
-        <button
-          type="button"
-          className={`${css.filterTab} ${kindFilter === 'fact' ? css.filterTabActive : ''}`}
-          onClick={() => { setKindFilter('fact') }}
-        >
-          {t('filter.fact')}
-        </button>
-        <button
-          type="button"
-          className={`${css.filterTab} ${kindFilter === 'preference' ? css.filterTabActive : ''}`}
-          onClick={() => { setKindFilter('preference') }}
-        >
-          {t('filter.preference')}
-        </button>
-      </div>
+      {status === 'AVAILABLE' && (
+        <div className={css.filterTabs}>
+          <button
+            type="button"
+            className={`${css.filterTab} ${kindFilter === 'all' ? css.filterTabActive : ''}`}
+            onClick={() => { setKindFilter('all') }}
+          >
+            {t('filter.all')}
+          </button>
+          <button
+            type="button"
+            className={`${css.filterTab} ${kindFilter === 'fact' ? css.filterTabActive : ''}`}
+            onClick={() => { setKindFilter('fact') }}
+          >
+            {t('filter.fact')}
+          </button>
+          <button
+            type="button"
+            className={`${css.filterTab} ${kindFilter === 'preference' ? css.filterTabActive : ''}`}
+            onClick={() => { setKindFilter('preference') }}
+          >
+            {t('filter.preference')}
+          </button>
+        </div>
+      )}
 
       <div className={css.bodyArea}>
         <div className={css.cardArea}>
@@ -411,7 +442,7 @@ export function LibraryPane(props: LibraryPaneProps): ReactNode {
                               className={css.cardActionBtn}
                               onClick={(e: ReactMouseEvent) => {
                                 e.stopPropagation()
-                                onReference()
+                                onReferenceFile({ relativePath: file.relativePath })
                               }}
                             >
                               {t('card.reference')}
@@ -448,7 +479,7 @@ export function LibraryPane(props: LibraryPaneProps): ReactNode {
                     <IconLinkOutline16 size={14} />
                     {copied ? t('copyPath.copied') : t('copyPath')}
                   </button>
-                  <button type="button" className={css.actionBtn} onClick={onReference}>
+                  <button type="button" className={css.actionBtn} onClick={onReferencePreview}>
                     {t('reference')}
                   </button>
                 </div>
