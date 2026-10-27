@@ -15,13 +15,14 @@
  * @module tests/loader-composition
  */
 
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
+import * as yaml from 'js-yaml'
 import { Context } from '@deepseek-ai/cordis'
-import Include from '@deepseek-ai/cordis-plugin-include'
+import Include, { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
@@ -76,6 +77,10 @@ afterEach(async () => {
  */
 async function writeCompositionConfig(): Promise<string> {
   const configPath = join(root as string, 'cordis.yml')
+  const patches = yaml.load(await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8'), {
+    schema: entryListSchema,
+  }) as { insert?: { id?: string; name?: string; config?: unknown }[] }[]
+  const hierarchy = patches.flatMap(patch => patch.insert ?? []).find(row => row.id === 'agent-hierarchy')!
   await writeFile(configPath, [
     "- name: '@deepseek-ai/dsh-llm'",
     "- name: '@deepseek-ai/dsh-session'",
@@ -126,16 +131,7 @@ async function writeCompositionConfig(): Promise<string> {
     '      version: 1',
     '      checks:',
     `        - { checkId: git-diff-check, executable: git, arguments: ['diff', '--check'], cwd: ${JSON.stringify(root)} }`,
-    "- name: '@deepseek-ai/dsh-experimental-agent-hierarchy'",
-    '  config:',
-    '    roleToolPolicies:',
-    '      controller:',
-    '        inheritedTools: !!js "[...(process.platform === \'win32\' ? [\'pwsh\'] : [\'bash\']), \'read\', \'write\', \'edit\', \'read_image\', \'str_replace_editor\', \'glob\', \'grep\', \'web_fetch\', \'web_search\', \'skill\', \'todo_write\', \'job_kill\', \'job_list\', \'job_output\', \'subagent\', \'subagent_fork\', \'interrupt_agent\', \'send_message\', \'list_agents\', \'workflow\', \'worktree_create\', \'worktree_list\', \'worktree_prune\', \'worktree_remove\', \'worktree_status\', \'create_goal\', \'get_goal\', \'update_goal\', \'ralph\', \'ralph-loop\', \'cordis_define\', \'cordis_inspect_list\', \'cordis_inspect_query\', \'cordis_inspect_self\', \'cordis_run\', \'cordis_stop\', \'cordis_undefine\', \'agent_dispatch\']"',
-    '      lead:',
-    '        inheritedTools: !!js "[...(process.platform === \'win32\' ? [\'pwsh\'] : [\'bash\']), \'read\', \'write\', \'edit\', \'read_image\', \'str_replace_editor\', \'glob\', \'grep\', \'web_fetch\', \'web_search\', \'skill\', \'todo_write\', \'job_kill\', \'job_list\', \'job_output\', \'subagent\', \'subagent_fork\', \'interrupt_agent\', \'send_message\', \'list_agents\', \'workflow\', \'worktree_create\', \'worktree_list\', \'worktree_prune\', \'worktree_remove\', \'worktree_status\', \'create_goal\', \'get_goal\', \'update_goal\', \'ralph\', \'ralph-loop\', \'cordis_define\', \'cordis_inspect_list\', \'cordis_inspect_query\', \'cordis_inspect_self\', \'cordis_run\', \'cordis_stop\', \'cordis_undefine\', \'agent_dispatch\']"',
-    '      worker:',
-    '        inheritedTools: []',
-    '    leadPluginScopes: {}',
+    yaml.dump([{ name: hierarchy.name, config: hierarchy.config }], { schema: entryListSchema }).trimEnd(),
     "- name: '@deepseek-ai/dsh-experimental-agent-dispatch'",
     "- name: '@deepseek-ai/dsh-experimental-expert-team'",
     '  config:',
@@ -229,6 +225,23 @@ async function boot(): Promise<{ ctx: Context; agent: Agent }> {
 }
 
 describe('the DevFrame profile layer through a real Loader composition', () => {
+  it.each(['controller', 'lead'] as const)('publishes a bound %s using the shipped hierarchy policy without optional providers', async (role) => {
+    const { ctx } = await boot()
+    const handle = await ctx.agents.create({
+      sessionId: SessionId(`loader-bound-${role}`),
+      meta: { cwd: root },
+      async setup(agentCtx) {
+        await ctx.agentBindings.bindPreparedSession(agentCtx.agent!.session, { role })
+      },
+    })
+    expect(ctx.agentHierarchy.roleOf(handle.agent)).toBe(role)
+    for (const name of ctx.agentHierarchy.config.roleToolPolicies[role].inheritedTools) {
+      expect(ctx.tools.get(name, handle.agent), name).toBeDefined()
+    }
+    expect(ctx.tools.get('browser_open', handle.agent)).toBeUndefined()
+    expect(ctx.tools.get('subagent_codex', handle.agent)).toBeUndefined()
+  })
+
   it('mounts all eleven rows: expert mode, memory tools, and agent_dispatch are live', async () => {
     const { ctx } = await boot()
 

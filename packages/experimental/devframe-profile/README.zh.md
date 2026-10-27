@@ -41,6 +41,8 @@ profile 必须已包含 Web bundle 层；本层不动其 webserver 行。部署�
 
 本层插入身份、路由、状态、对话、记忆、目标绑定、hierarchy、dispatch、Agent Teams、expert-team 与 Web 入口各行，默认值全部未配置、只读：shadow-router 在声明授权根之前不安装任何 `project_*` 工具；Shadow 对话宿主在声明 `shadowSessionId` 之前保持惰性；project-memory 在提供真实 vaultRoot 之前保持工具只读。Agent Teams 提供 Lead 创建 teammate、持久互发消息、等待与中断、共享任务板，以及 Web roster／操作面板；Team 工具与全局 continuable-child 工具分别负责 Team 协作和一次性委派。expert-team 挂载论文与开发数据包，并把运行镜像写到 `dshHomePath('expert-team-runs')`；浏览器入口经 Remote 读取宿主状态，不增加工具或 schema，并允许用户为选定专家暂存普通提示。hierarchy 行的 worker 面初始为空（fail closed），不预分配 lead 插件范围；dispatch 行挂载 `agent_dispatch` 消费面；logger-console 行把宿主进程的插件日志输出导出到 stdout。
 
+controller 和 lead 只继承本层提供的全局工具。部署挂载额外全局工具提供方时，通过后续 overlay 替换完整的 `agent-hierarchy` 配置；[Desktop overlay](../../../apps/desktop-host/config/desktop.cordis.patch.yml) 加入其 project-controller 工具。可选浏览器、图像生成和外部 worker 工具必须先挂载提供方，才能加入继承允许列表。Agent 局部工具仍由各自的作用域注册拥有。
+
 ### 启用 Shadow
 
 本层插入的 shadow-router 行刻意不带 config：没有授权根、没有声明的 Shadow 会话时，router 不在任何作用域安装 `project_*` 工具，[profile-entry spec](../shadow-router/tests/profile-entry.spec.ts) 锁定了这一 fail-closed 默认。三步把该行变成生效条目：

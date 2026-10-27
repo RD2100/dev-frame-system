@@ -26,6 +26,7 @@ describe('DevFrame profile bundle', () => {
       '@deepseek-ai/dsh-experimental-agent-hierarchy': 'workspace:^',
       '@deepseek-ai/dsh-experimental-command-goal-binding': 'workspace:^',
       '@deepseek-ai/dsh-experimental-client-ui-agent-team': 'workspace:^',
+      '@deepseek-ai/dsh-experimental-client-ui-shadow-entry': 'workspace:^',
       '@deepseek-ai/dsh-experimental-project-memory': 'workspace:^',
       '@deepseek-ai/dsh-experimental-session-identity': 'workspace:^',
       '@deepseek-ai/dsh-experimental-shadow-controller': 'workspace:^',
