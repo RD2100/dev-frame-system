@@ -43,3 +43,6 @@ worktrees/
 .typert-*/
 .desktop-build/
 .desktop-devframe-staging/
+debug.log
+artifacts/
+scripts/tmp-*

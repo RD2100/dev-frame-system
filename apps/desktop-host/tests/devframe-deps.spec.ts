@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { composeEntries, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
+import type { AgentHierarchyConfig } from '@deepseek-ai/dsh-experimental-agent-hierarchy'
 
 const MANIFEST = resolve(import.meta.dirname, '../package.json')
 
@@ -55,6 +56,29 @@ function read(): Manifest {
 }
 
 describe('desktop-host DevFrame dependency closure', () => {
+  it('leaves the Shadow designation to the deployment', () => {
+    const profile = loadOverlayPatches('dsh desktop', resolve(import.meta.dirname, '../../../packages/experimental/devframe-profile/cordis.patch.yml'))
+    const overlay = loadOverlayPatches('dsh desktop', resolve(import.meta.dirname, '../config/desktop.cordis.patch.yml'))
+    const shadow = composeEntries([profile, overlay]).find(row => row.id === 'shadow-router')
+    expect(shadow?.config ?? {}).toEqual({})
+  })
+
+  it('extends the profile hierarchy policy only with its mounted project-controller tools', () => {
+    const profile = loadOverlayPatches('dsh desktop', resolve(import.meta.dirname, '../../../packages/experimental/devframe-profile/cordis.patch.yml'))
+    const overlay = loadOverlayPatches('dsh desktop', resolve(import.meta.dirname, '../config/desktop.cordis.patch.yml'))
+    const base = composeEntries([profile]).find(row => row.id === 'agent-hierarchy')!.config as AgentHierarchyConfig
+    const desktop = composeEntries([profile, overlay]).find(row => row.id === 'agent-hierarchy')!.config as AgentHierarchyConfig
+    const projectTools = ['project_commit', 'project_deliver', 'project_evidence', 'project_integrate', 'project_review', 'project_task']
+    for (const role of ['controller', 'lead'] as const) {
+      expect(desktop.roleToolPolicies[role].inheritedTools).toEqual([
+        ...base.roleToolPolicies[role].inheritedTools,
+        ...projectTools,
+      ])
+    }
+    expect(desktop.roleToolPolicies.worker.inheritedTools).toEqual([])
+    expect(desktop.leadPluginScopes).toEqual({})
+  })
+
   it('declares every §C row', () => {
     const deps = { ...read().dependencies, ...read().devDependencies }
     for (const name of REQUIRED) expect(deps[name], name).toBe('workspace:^')

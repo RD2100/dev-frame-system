@@ -267,8 +267,11 @@ export function checkExperimentalManifest({ dir, manifest }: WorkspaceManifest):
   if (manifest.name?.startsWith(experimentalPackageNamePrefix) !== true) {
     errors.push(`${label}: experimental package name must start with ${JSON.stringify(experimentalPackageNamePrefix)}`)
   }
-  if (manifest.private !== true) errors.push(`${label}: experimental package must set "private": true`)
-  if (manifest.publishConfig !== undefined) errors.push(`${label}: experimental package must omit publishConfig`)
+  const publishedPlugin = manifest.private !== true && manifest.publishConfig?.access === 'public'
+  if (!publishedPlugin) {
+    if (manifest.private !== true) errors.push(`${label}: experimental package must set "private": true or publish publicly as a plugin`)
+    if (manifest.publishConfig !== undefined) errors.push(`${label}: private experimental package must omit publishConfig`)
+  }
   return errors
 }
 

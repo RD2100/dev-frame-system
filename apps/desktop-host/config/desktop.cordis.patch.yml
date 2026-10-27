@@ -21,6 +21,17 @@
       - !!js process.cwd() + '/node_modules/@deepseek-ai/dsh-experimental-expert-pack-dev'
     artifactsDir: !!js dshHomePath('expert-team-runs')
 
+- id: agent-hierarchy
+  config:
+    roleToolPolicies:
+      controller:
+        inheritedTools: ['agent_dispatch', 'expert_team_approve', 'expert_team_list', 'expert_team_run', 'expert_team_status', 'library_list', 'library_read', 'library_search', 'library_status', 'memory_append', 'memory_read', 'memory_search', 'project_commit', 'project_deliver', 'project_evidence', 'project_integrate', 'project_review', 'project_task']
+      lead:
+        inheritedTools: ['agent_dispatch', 'expert_team_approve', 'expert_team_list', 'expert_team_run', 'expert_team_status', 'library_list', 'library_read', 'library_search', 'library_status', 'memory_append', 'memory_read', 'memory_search', 'project_commit', 'project_deliver', 'project_evidence', 'project_integrate', 'project_review', 'project_task']
+      worker:
+        inheritedTools: []
+    leadPluginScopes: {}
+
 - insert:
     - id: directory-picker-native
       name: '@deepseek-ai/dsh-host-directory-picker-native'

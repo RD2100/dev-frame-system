@@ -25,14 +25,26 @@ describe('experimental workspace constraints', () => {
     ])
   })
 
-  it('requires private manifests without publication metadata', () => {
+  it('allows an explicitly public experimental plugin manifest', () => {
     expect(checkExperimentalManifest(experimental)).toEqual([])
     expect(checkExperimentalManifest({
       ...experimental,
       manifest: { ...experimental.manifest, private: false, publishConfig: { access: 'public' } },
+    })).toEqual([])
+  })
+
+  it('requires private manifests without publication metadata', () => {
+    expect(checkExperimentalManifest({
+      ...experimental,
+      manifest: { ...experimental.manifest, private: false },
     })).toEqual([
-      '@deepseek-ai/dsh-experimental-prototype: experimental package must set "private": true',
-      '@deepseek-ai/dsh-experimental-prototype: experimental package must omit publishConfig',
+      '@deepseek-ai/dsh-experimental-prototype: experimental package must set "private": true or publish publicly as a plugin',
+    ])
+    expect(checkExperimentalManifest({
+      ...experimental,
+      manifest: { ...experimental.manifest, private: true, publishConfig: { access: 'public' } },
+    })).toEqual([
+      '@deepseek-ai/dsh-experimental-prototype: private experimental package must omit publishConfig',
     ])
   })
 

@@ -1,0 +1,65 @@
+DSH 使用 CPA OpenAI Basis Points 配置
+======================================
+
+一、先确认
+
+1. CPA 服务正在运行。
+2. 全局代理保持开启。
+3. CPA 地址：
+   http://127.0.0.1:8317/v1
+
+二、在 DSH 中配置
+
+打开：设置 → 模型 → 添加自定义提供方
+
+Provider ID：
+cpa-basispoints
+
+显示名称：
+CPA Basis Points
+
+Base URL：
+http://127.0.0.1:8317/v1
+
+API 协议：
+openai-responses
+
+模型：
+gpt-6-astra-basispoints
+
+API Key：
+复制下面命令的输出结果，粘贴到 API Key 输入框：
+
+Get-Content C:\Users\25313\CLIProxyAPI\client-api-key.txt
+
+三、保存后使用
+
+1. 点击保存。
+2. 点击“获取可用模型”或刷新模型目录。
+3. 新建一个 DSH 会话。
+4. 在模型选择器中选择：
+
+   gpt-6-astra-basispoints
+
+5. 正常输入问题即可。
+
+测试问题：
+
+请只回复：DSH_CPA_OK
+
+四、重要注意事项
+
+- Base URL 必须是 http://127.0.0.1:8317/v1
+- 不要填写 /v1/responses，DSH 会自动处理请求路径。
+- API 协议选择 OpenAI Responses，不是 Chat Completions。
+- API Key 使用本机 client-api-key.txt 的内容，不是 OpenAI 官方 API Key。
+- DSH 和 CPA 必须运行在同一台电脑上。
+- 全局代理关闭后，Basis Points 可能返回 403。
+- 如果模型不显示，刷新模型目录或新建会话。
+
+五、如果 CPA 停止
+
+在 PowerShell 执行：
+
+cd C:\Users\25313\CLIProxyAPI
+.\cli-proxy-api.exe -config .\config.yaml
