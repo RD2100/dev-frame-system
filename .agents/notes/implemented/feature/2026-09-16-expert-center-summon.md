@@ -22,7 +22,7 @@ Expert cards expose a hover- and focus-visible `Summon` action. The detail surfa
 
 ## Consequences
 
-The reference card and detail interactions now have a complete, reversible user path into the existing Conversation surface. A successful handoff produces a blank Session with a visible expert chip and draft; submitting it uses the existing model-facing expert-team tools. A missing Workspace leaves the selection staged until the normal Session flow can produce a blank Session. Skills and Connectors remain display-only because their data sources are still absent.
+The reference card and detail interactions now have a complete, reversible user path into the existing Conversation surface. A successful handoff produces a blank Session with a visible expert chip and draft; submitting it uses the existing model-facing expert-team tools. A missing Workspace leaves the selection staged until the normal Session flow can produce a blank Session.
 
 ## Testing
 

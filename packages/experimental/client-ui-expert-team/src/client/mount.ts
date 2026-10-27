@@ -1,4 +1,4 @@
-/** Browser registration for the expert-team Remote and sidebar Expert center. */
+/** Browser registration for the expert-team Remote and sidebar Capability center. */
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
@@ -42,6 +42,7 @@ function registerUi(ctx: ClientContext): void {
       id: 'expert-team',
       order: 20,
       locale: NS,
+      children: { 'capabilities.center.tab': { kind: 'keyed', scope: 'root' } },
       inject: () => face,
     }, ExpertTeamCard),
   )

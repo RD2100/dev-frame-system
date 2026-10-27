@@ -5182,6 +5182,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-session':
         specifier: workspace:^
         version: link:../../client/ui-session
+      '@deepseek-ai/dsh-client-ui-settings-plugin-inventory':
+        specifier: workspace:^
+        version: link:../../client/ui-settings-plugin-inventory
       '@deepseek-ai/dsh-client-ui-sidebar':
         specifier: workspace:^
         version: link:../../client/ui-sidebar
@@ -5237,9 +5240,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-session':
         specifier: workspace:^
         version: link:../../client/ui-session
-      '@deepseek-ai/dsh-client-ui-sidebar':
+      '@deepseek-ai/dsh-client-ui-settings-plugin-inventory':
         specifier: workspace:^
-        version: link:../../client/ui-sidebar
+        version: link:../../client/ui-settings-plugin-inventory
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: workspace:^
         version: link:../../client/ui-slots
@@ -5490,6 +5493,9 @@ importers:
       '@deepseek-ai/dsh-experimental-client-ui-project-memory':
         specifier: workspace:^
         version: link:../client-ui-project-memory
+      '@deepseek-ai/dsh-experimental-client-ui-shadow-entry':
+        specifier: workspace:^
+        version: link:../client-ui-shadow-entry
       '@deepseek-ai/dsh-experimental-command-goal-binding':
         specifier: workspace:^
         version: link:../command-goal-binding

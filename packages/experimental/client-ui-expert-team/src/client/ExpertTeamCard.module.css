@@ -106,8 +106,17 @@
 }
 
 .centerTabs {
-  flex: none;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
   gap: 4px;
+}
+
+.tabContent {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
 }
 
 .centerTab {

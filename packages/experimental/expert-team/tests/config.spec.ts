@@ -21,6 +21,14 @@ describe('valid config', () => {
     expect(validated).not.toBe(config)
     expect(validated.packs).not.toBe(config.packs)
   })
+
+  it('resolves an installed data-pack package name independently of cwd', () => {
+    const validated = validateExpertTeamConfig({
+      packs: ['@deepseek-ai/dsh-experimental-expert-pack-paper'],
+      artifactsDir: 'artifacts',
+    })
+    expect(validated.packs[0]).toMatch(/[\\/]expert-pack-paper$/u)
+  })
 })
 
 describe('invalid packs', () => {

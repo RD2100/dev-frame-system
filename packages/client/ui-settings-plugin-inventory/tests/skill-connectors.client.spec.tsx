@@ -2,9 +2,17 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PluginInventorySnapshot } from '@deepseek-ai/dsh-api-remotes/client'
-import { SkillConnectorSettingsTab } from '../src/client/SkillConnectorSettingsTab.tsx'
-import type { SkillConnectorSettingsTabInjected, SkillConnectorSettingsTabProps } from '../src/client/SkillConnectorSettingsTab.tsx'
+import type { McpInventorySnapshot, PluginEntryId, PluginInventorySnapshot } from '@deepseek-ai/dsh-api-remotes/client'
+import {
+  ConnectorsCapabilityCenterTab,
+  SkillConnectorSettingsTab,
+  SkillsCapabilityCenterTab,
+} from '../src/client/SkillConnectorSettingsTab.tsx'
+import type {
+  CapabilityCenterTabProps,
+  SkillConnectorSettingsTabInjected,
+  SkillConnectorSettingsTabProps,
+} from '../src/client/SkillConnectorSettingsTab.tsx'
 import { en, type PluginInventoryLocaleKey } from '../src/client/locales.ts'
 
 afterEach(cleanup)
@@ -15,8 +23,15 @@ const t = ((key: PluginInventoryLocaleKey, params?: Record<string, string>): str
 const INVENTORY = { entries: [] } as unknown as PluginInventorySnapshot
 const SKILLS = { skills: [{ name: 'ship-it', description: 'Ship a change', modelInvocable: true }] }
 const MANAGED = { skills: [{ name: 'ship-it', description: 'Ship a change', enabled: true, modelInvocable: true, userInvocable: true }] }
-const MCP = {
-  servers: [{ entryId: 'mcp-github', serverName: 'github', transport: 'stdio', enabled: true, fiberPhase: 'active', config: { serverName: 'github', transport: 'stdio', command: 'node server.js' } }],
+const MCP: McpInventorySnapshot = {
+  servers: [{
+    entryId: 'mcp-github' as PluginEntryId,
+    serverName: 'github',
+    transport: 'stdio',
+    enabled: true,
+    fiberPhase: 'active',
+    config: { serverName: 'github', transport: 'stdio', command: 'node server.js' },
+  }],
 }
 
 function props(overrides: Partial<SkillConnectorSettingsTabInjected> = {}): SkillConnectorSettingsTabProps {
@@ -36,6 +51,10 @@ function props(overrides: Partial<SkillConnectorSettingsTabInjected> = {}): Skil
     t,
     ...overrides,
   } as SkillConnectorSettingsTabProps
+}
+
+function capabilityProps(overrides: Partial<SkillConnectorSettingsTabInjected> = {}): CapabilityCenterTabProps {
+  return props(overrides)
 }
 
 async function ready(overrides: Partial<SkillConnectorSettingsTabInjected> = {}): Promise<void> {
@@ -61,15 +80,72 @@ describe('SkillConnectorSettingsTab', () => {
   it('shows MCP add/edit/test/toggle/remove controls', async () => {
     const setEnabled = vi.fn<SkillConnectorSettingsTabInjected['setMcpEnabled']>()
     const test = vi.fn<SkillConnectorSettingsTabInjected['testMcpEntry']>().mockResolvedValue({ ok: true, message: 'connected' })
-    await ready({ setMcpEnabled: setEnabled, testMcpEntry: test })
+    const listMcp = vi.fn<SkillConnectorSettingsTabInjected['listMcp']>().mockResolvedValue(MCP)
+    await ready({ setMcpEnabled: setEnabled, testMcpEntry: test, listMcp })
     fireEvent.click(screen.getByRole('tab', { name: /MCP connectors/iu }))
     expect(screen.getByText('github')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: en.disable }))
     await waitFor(() => { expect(setEnabled).toHaveBeenCalledWith('mcp-github', false) })
+    await screen.findByText('github')
+    listMcp.mockClear()
     fireEvent.click(screen.getByRole('button', { name: en.test }))
     await waitFor(() => { expect(test).toHaveBeenCalled() })
+    await waitFor(() => { expect(listMcp).toHaveBeenCalledOnce() })
+    expect(screen.getByRole('status').textContent).toBe('connected')
     expect(screen.getByRole('button', { name: en.edit })).toBeTruthy()
     expect(screen.getByRole('button', { name: en.remove })).toBeTruthy()
+  })
+
+  it('mounts Skills as a fixed capability-center page without nested tabs', async () => {
+    render(<SkillsCapabilityCenterTab {...capabilityProps()} />)
+
+    expect(await screen.findByText('/ship-it')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: en.installSkill })).toBeTruthy()
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.queryByRole('heading', { name: en.addMcp })).toBeNull()
+  })
+
+  it('loads only Skill data in the fixed Skills page', async () => {
+    const listInventory = vi.fn<SkillConnectorSettingsTabInjected['listInventory']>().mockRejectedValue(new Error('inventory unavailable'))
+    const listMcp = vi.fn<SkillConnectorSettingsTabInjected['listMcp']>().mockRejectedValue(new Error('connector unavailable'))
+    const listSkills = vi.fn<SkillConnectorSettingsTabInjected['listSkills']>().mockResolvedValue(SKILLS)
+    render(<SkillsCapabilityCenterTab {...capabilityProps({ listInventory, listMcp, listSkills })} />)
+
+    expect(await screen.findByText('/ship-it')).toBeTruthy()
+    expect(listInventory).not.toHaveBeenCalled()
+    expect(listMcp).not.toHaveBeenCalled()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('reports an unavailable current-session catalog without inventing entries', async () => {
+    const listSkills = vi.fn<SkillConnectorSettingsTabInjected['listSkills']>().mockResolvedValue(undefined)
+    render(<SkillsCapabilityCenterTab {...capabilityProps({ listSkills })} />)
+
+    expect(await screen.findByText(en.skillsNoSession)).toBeTruthy()
+    expect(listSkills).toHaveBeenCalledOnce()
+    expect(screen.queryByText('/undefined')).toBeNull()
+  })
+
+  it('mounts Connectors as a fixed capability-center page without nested tabs', async () => {
+    render(<ConnectorsCapabilityCenterTab {...capabilityProps()} />)
+
+    expect(await screen.findByText('github')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: en.addMcp })).toBeTruthy()
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.queryByRole('heading', { name: en.installSkill })).toBeNull()
+  })
+
+  it('loads only MCP data in the fixed Connectors page', async () => {
+    const listInventory = vi.fn<SkillConnectorSettingsTabInjected['listInventory']>().mockRejectedValue(new Error('inventory unavailable'))
+    const listSkills = vi.fn<SkillConnectorSettingsTabInjected['listSkills']>().mockRejectedValue(new Error('session unavailable'))
+    const listManagedSkills = vi.fn<SkillConnectorSettingsTabInjected['listManagedSkills']>().mockRejectedValue(new Error('skills unavailable'))
+    render(<ConnectorsCapabilityCenterTab {...capabilityProps({ listInventory, listSkills, listManagedSkills })} />)
+
+    expect(await screen.findByText('github')).toBeTruthy()
+    expect(listInventory).not.toHaveBeenCalled()
+    expect(listSkills).not.toHaveBeenCalled()
+    expect(listManagedSkills).not.toHaveBeenCalled()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('refreshes the four management reads after an operation failure and hides details', async () => {

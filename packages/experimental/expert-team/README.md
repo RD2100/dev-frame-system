@@ -26,13 +26,13 @@ English | [中文](README.zh.md)
 
 ### Mount the plugin
 
-The plugin mounts as a plain `cordis.yml` row. Both config fields are required with no defaults: `packs` is at least one team-pack directory, and `artifactsDir` is the runtime artifacts root a run writes under (`<artifactsDir>/<runId>/`; a repo-relative path resolves against the process working directory). A pack that fails validation — missing `team.yml`, a malformed expert file, a forward or unknown `depends_on`, a missing schema or skill file, a duplicated team id — fails the load instead of half-mounting.
+The plugin mounts as a plain `cordis.yml` row. Both config fields are required with no defaults: `packs` is at least one team-pack directory or installed package name, and `artifactsDir` is the runtime artifacts root a run writes under (`<artifactsDir>/<runId>/`; a repo-relative path resolves against the process working directory). Package references resolve from the installed expert-team dependency closure, so a published profile does not depend on the caller's working directory. A pack that fails validation — missing `team.yml`, a malformed expert file, a forward or unknown `depends_on`, a missing schema or skill file, a duplicated team id — fails the load instead of half-mounting.
 
 ```yaml
 - name: '@deepseek-ai/dsh-experimental-expert-team'
   config:
     packs:
-      - ./packages/experimental/expert-pack-paper
+      - '@deepseek-ai/dsh-experimental-expert-pack-paper'
     artifactsDir: ./research-artifacts
 ```
 

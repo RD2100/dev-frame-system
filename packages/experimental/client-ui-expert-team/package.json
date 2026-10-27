@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-experimental-client-ui-expert-team",
-  "description": "Web Expert center catalog with new-session summon actions, live run history, and reserved skill and connector tabs",
+  "description": "Capability center with expert, skill, connector, and library tabs",
   "version": "0.1.6-alpha.1",
   "repository": {
     "type": "git",
@@ -64,7 +64,13 @@
     "@deepseek-ai/dsh-client-ui-sidebar": "workspace:^",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@deepseek-ai/dsh-experimental-expert-team": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-settings-plugin-inventory": "workspace:^",
     "@deepseek-ai/dsh-typert-protocol": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-client-ui-settings-plugin-inventory": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
@@ -80,6 +86,7 @@
     "@deepseek-ai/dsh-client-ui-sidebar": "workspace:^",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@deepseek-ai/dsh-client-ui-workspace": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-settings-plugin-inventory": "workspace:^",
     "@deepseek-ai/dsh-experimental-expert-team": "workspace:^",
     "@deepseek-ai/dsh-typert-protocol": "workspace:^",
     "@types/react": "~18.3.1",

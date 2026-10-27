@@ -26,13 +26,13 @@ kind: "package-reference"
 
 ### 挂载插件
 
-本插件作为普通 `cordis.yml` 行挂载。两个配置字段都必填且无默认值：`packs` 是至少一个团队数据包目录，`artifactsDir` 是运行产物的根（运行写在 `<artifactsDir>/<runId>/` 下；仓库相对路径按进程工作目录解析）。任何校验失败的包——缺失 `team.yml`、畸形专家文件、前向或未知的 `depends_on`、缺失 schema 或技能文件、重复团队 id——都让加载失败，而不是半挂载。
+本插件作为普通 `cordis.yml` 行挂载。两个配置字段都必填且无默认值：`packs` 是至少一个团队数据包目录或已安装的数据包名称，`artifactsDir` 是运行产物的根（运行写在 `<artifactsDir>/<runId>/` 下；仓库相对路径按进程工作目录解析）。数据包名称从已安装的 expert-team 依赖闭包解析，因此已发布 profile 不依赖调用方的启动目录。任何校验失败的包——缺失 `team.yml`、畸形专家文件、前向或未知的 `depends_on`、缺失 schema 或技能文件、重复团队 id——都让加载失败，而不是半挂载。
 
 ```yaml
 - name: '@deepseek-ai/dsh-experimental-expert-team'
   config:
     packs:
-      - ./packages/experimental/expert-pack-paper
+      - '@deepseek-ai/dsh-experimental-expert-pack-paper'
     artifactsDir: ./research-artifacts
 ```
 

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-client-ui-settings-plugin-inventory` 向 Web 设置的「插件」分区贡献插件清单和用户能力管理标签页。**插件列表**在首次被选择时懒调用 `ctx.remote.pluginInventory.list()`，把清单按作用域分成两个可折叠分组。**技能与连接器**复用这个清单 Remote，并调用官方 `ctx.remote.skills.list()` 读取当前会话的技能目录；页面还可安装、启停、卸载用户 Skill，以及添加、编辑、测试、启停、移除 MCP 客户端。页面展示可搜索的技能元数据与 MCP/连接器 Loader 条目，提供「刷新」重新取得当前快照，并标明 profile 或 Agent 预设是配置拥有方。
+`dsh-client-ui-settings-plugin-inventory` 向 Web 设置贡献插件清单与管理标签页，并向能力中心贡献独立的技能和连接器页面。**插件列表**在首次被选择时懒调用 `ctx.remote.pluginInventory.list()`，把清单按作用域分成两个可折叠分组。**技能与连接器**读取用户 Skill 与 MCP 客户端，并提供安装、启停、卸载、测试、编辑和移除操作。页面提供「刷新」重新取得管理快照，并标明 profile 或 Agent 预设是配置拥有方。
 
 插件列表保留原有的作用域视图：Agent 预设组在前且默认展开，全局组随后收起；搜索过滤两组，通用失败不会泄露传输细节。技能与连接器标签页在选中会话时报告真实的会话目录；没有当前会话时会说明技能为何不可用，同时仍展示全局连接器状态。
 
@@ -27,7 +27,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-打开设置中的「插件」分区并选择**插件列表**标签页，即可查看宿主的插件清单。插件激活期间不会读取 Remote——首次选择该标签页时才挂载组件，并通过 `api-remotes` 懒调用 `ctx.remote.pluginInventory.list()`。
+打开设置中的「插件」分区并选择**插件列表**标签页，即可查看宿主的插件清单。插件激活期间不会读取 Remote——首次选择该标签页时才挂载组件，并通过 `api-remotes` 懒调用 `ctx.remote.pluginInventory.list()`。能力中心也会把同一管理功能显示为独立的技能和连接器页面。
 
 选择**技能与连接器**即可查看并管理用户能力。当前会话的有效技能通过 `ctx.remote.skills.list()` 读取；用户 Skill 的安装、启停和卸载调用 Host 管理 Remote。MCP 与连接器条目来自宿主插件清单，带有 Loader 阶段和有效启用状态；页面提供添加、编辑、测试、启停和移除。搜索框可过滤任一面板，「刷新」会重新读取四份快照。profile 或 Agent 预设组合行仍由其配置拥有方管理。
 
@@ -55,7 +55,7 @@ kind: "package-reference"
 
 ### 注册
 
-浏览器插件注册 id 为 `all` 与 `skill-connectors` 的本地化 `settings.plugins.tab` 贡献；「插件」分区拥有导航入口与标签栏。注册使用 `ctx.slots.inject()`，因此能跟随标签 slot 的延迟声明、重新声明、本地化变化与 teardown，而无需 import 分区拥有方。能力标签页注入官方 `remote.skills` 及会话列表，并用选中的当前会话寻址 Remote。
+浏览器插件注册 id 为 `all` 与 `skill-connectors` 的本地化 `settings.plugins.tab` 贡献，以及 key 为 `skills` 与 `connectors` 的 `capabilities.center.tab` 贡献。各自的分区拥有导航；两种注册都使用 `ctx.slots.inject()` 和相同的 Host 回调。管理页读取官方 `remote.skills` 与当前会话列表，再用选中的当前会话寻址 Remote。
 
 ### 渲染
 
@@ -94,7 +94,7 @@ kind: "package-reference"
 
 这些限制定义清单视图的新鲜度与触达范围；它们是当前包约束。
 
-- **每次 Settings 挂载或刷新只读取一份快照**：标签页不订阅 Loader 或技能变化，也不会在重连后自动读取；切换标签页会保留当前快照，刷新或重新打开 Settings 才会取得新快照。
+- **每个管理页挂载或刷新时读取一份快照**：页面不订阅 Loader 或技能变化，也不会在重连后自动读取；刷新或重新打开页面才会取得新快照。
 - **技能按会话寻址**：没有选中的当前会话时，宿主无法回答工作区与预设相关的技能目录；页面会如实说明，而不会猜测另一个会话的结果。
 - **profile 与预设组合只读**：标签页管理用户 Skill 文件与 MCP 条目，不修改部署拥有的组合行。
 
@@ -108,4 +108,4 @@ kind: "package-reference"
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。本包只持有一个 Settings contribution；管理写入限制在 Host 拥有的用户 Skill 与 MCP 表面。
+**运行时不变式：** 不发布伴生入口。Settings 与能力中心 contribution 使用 Host 拥有的用户 Skill 与 MCP 管理表面。

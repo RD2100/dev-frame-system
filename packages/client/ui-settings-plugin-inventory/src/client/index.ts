@@ -1,4 +1,4 @@
-/** Host plugin inventory and user capability management registered into Web Settings. */
+/** Host plugin inventory and user capability management for Web Settings and the capability center. */
 
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
@@ -13,8 +13,15 @@ import type {} from '@deepseek-ai/dsh-client-ui-agent-preset/client'
 // Inline-safe shared fold: shipped ids map to dictionary keys in one home.
 import { presetDisplayText } from '@deepseek-ai/dsh-agent-presets/display'
 import { PluginInventorySettingsTab, type PluginInventorySettingsTabInjected } from './PluginInventorySettingsTab.tsx'
-import { SkillConnectorSettingsTab, type SkillConnectorSettingsTabInjected } from './SkillConnectorSettingsTab.tsx'
+import {
+  ConnectorsCapabilityCenterTab,
+  SkillConnectorSettingsTab,
+  SkillsCapabilityCenterTab,
+  type SkillConnectorSettingsTabInjected,
+} from './SkillConnectorSettingsTab.tsx'
 import { en, zh, type PluginInventoryLocaleKey } from './locales.ts'
+
+export type { CapabilityCenterTabOwnerProps } from './capability-slots.ts'
 
 export type { PluginInventorySettingsTabInjected, PluginInventorySettingsTabProps } from './PluginInventorySettingsTab.tsx'
 export type {
@@ -34,12 +41,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** Dictionary namespace owned by this plugin. */
 export const NS = 'settings.pluginInventory'
 
-/** Services required by the Settings registration and generated Remote face. */
+/** Services required by the Settings and capability-center registrations. */
 export const inject = [
   'slots', 'locale', 'remote', 'remote.pluginInventory', 'remote.skills', 'sessions',
 ]
 
-/** Contribute the lazy inventory tab to the Plugins settings section. */
+/** Contribute the lazy inventory tab and capability management pages. */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-plugin-inventory: dictionaries')
 
@@ -114,6 +121,20 @@ export function apply(ctx: ClientContext): void {
   const presetName: PluginInventorySettingsTabInjected['presetName'] = preset =>
     presetDisplayText(preset, agentPresetCopy).name
   const injected = (): PluginInventorySettingsTabInjected => ({ list, presetName })
+  const skillConnectorInjected = (): SkillConnectorSettingsTabInjected => ({
+    listInventory: list,
+    listSkills,
+    listManagedSkills,
+    installSkill,
+    setSkillEnabled,
+    removeSkill,
+    listMcp,
+    createMcp,
+    updateMcp,
+    removeMcp,
+    setMcpEnabled,
+    testMcpEntry,
+  })
 
   ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
     name: 'settings.plugins.tab',
@@ -129,19 +150,18 @@ export function apply(ctx: ClientContext): void {
     order: 20,
     label: () => t('capabilitiesTab'),
     locale: NS,
-    inject: (): SkillConnectorSettingsTabInjected => ({
-      listInventory: list,
-      listSkills,
-      listManagedSkills,
-      installSkill,
-      setSkillEnabled,
-      removeSkill,
-      listMcp,
-      createMcp,
-      updateMcp,
-      removeMcp,
-      setMcpEnabled,
-      testMcpEntry,
-    }),
+    inject: skillConnectorInjected,
   }, SkillConnectorSettingsTab))
+  ctx.slots.inject('capabilities.center.tab', () => ctx.slots.register({
+    name: 'capabilities.center.tab',
+    key: 'skills',
+    locale: NS,
+    inject: skillConnectorInjected,
+  }, SkillsCapabilityCenterTab))
+  ctx.slots.inject('capabilities.center.tab', () => ctx.slots.register({
+    name: 'capabilities.center.tab',
+    key: 'connectors',
+    locale: NS,
+    inject: skillConnectorInjected,
+  }, ConnectorsCapabilityCenterTab))
 }

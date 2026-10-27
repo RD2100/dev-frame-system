@@ -74,6 +74,7 @@ function face(overrides: Partial<ExpertTeamCardFace> = {}): ExpertTeamCardFace {
 function props(actions: ExpertTeamCardFace): ExpertTeamCardProps {
   return {
     wide: true,
+    renderSlot: (_name, _owner, options) => options?.fallback,
     t,
     useSessions: unusedHook,
     useSessionPendingInteraction: unusedHook,
@@ -112,8 +113,10 @@ describe('the expert center catalog', () => {
     render(<ExpertTeamCard {...props(actions)} />)
     await settle()
 
-    fireEvent.click(screen.getByRole('button', { name: '打开专家模式' }))
-    expect(screen.getByRole('dialog', { name: '专家中心' })).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '打开能力中心' }))
+    expect(screen.getByRole('dialog', { name: '能力中心' })).not.toBeNull()
+    expect(screen.getAllByRole('tab')).toHaveLength(4)
+    expect(screen.queryByRole('button', { name: '打开记忆库' })).toBeNull()
     expect(screen.getByRole('main', { name: '专家目录' })).not.toBeNull()
     expect(screen.getByText('课题侦察员')).not.toBeNull()
     expect(screen.getByText('架构师')).not.toBeNull()
@@ -123,11 +126,34 @@ describe('the expert center catalog', () => {
     expect(actions.load).toHaveBeenCalledTimes(2)
   })
 
+  it('links each tab to its panel and supports roving arrow-key focus', async () => {
+    render(<ExpertTeamCard {...props(face())} />)
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: '打开能力中心' }))
+
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs.filter(tab => (tab as HTMLButtonElement).tabIndex === 0)).toHaveLength(1)
+    for (const tab of tabs) {
+      const panelId = tab.getAttribute('aria-controls')
+      const panel = panelId === null ? null : document.getElementById(panelId)
+      expect(panel?.getAttribute('aria-labelledby')).toBe(tab.id)
+    }
+
+    const experts = screen.getByRole('tab', { name: '专家' })
+    const skills = screen.getByRole('tab', { name: '技能' })
+    fireEvent.keyDown(experts, { key: 'ArrowRight' })
+    expect(skills.getAttribute('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(skills)
+
+    fireEvent.keyDown(skills, { key: 'End' })
+    expect(screen.getByRole('tab', { name: '记忆库' }).getAttribute('aria-selected')).toBe('true')
+  })
+
   it('filters cards by search text and shows the selected expert details', async () => {
     const actions = face()
     render(<ExpertTeamCard {...props(actions)} />)
     await settle()
-    fireEvent.click(screen.getByRole('button', { name: '打开专家模式' }))
+    fireEvent.click(screen.getByRole('button', { name: '打开能力中心' }))
 
     fireEvent.change(screen.getByRole('textbox', { name: '搜索专家' }), { target: { value: '架构' } })
     expect(screen.getByText('架构师')).not.toBeNull()
@@ -144,7 +170,7 @@ describe('the expert center catalog', () => {
     const actions = face()
     render(<ExpertTeamCard {...props(actions)} />)
     await settle()
-    fireEvent.click(screen.getByRole('button', { name: '打开专家模式' }))
+    fireEvent.click(screen.getByRole('button', { name: '打开能力中心' }))
 
     const cardSummons = screen.getAllByRole('button', { name: '召唤' })
     expect(cardSummons).toHaveLength(3)
@@ -153,9 +179,9 @@ describe('the expert center catalog', () => {
       expect.objectContaining({ expertId: 'topic-scout', expertName: '课题侦察员' }),
       expect.stringContaining('课题侦察员'),
     )
-    expect(screen.queryByRole('dialog', { name: '专家中心' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: '能力中心' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: '打开专家模式' }))
+    fireEvent.click(screen.getByRole('button', { name: '打开能力中心' }))
     fireEvent.click(screen.getByRole('button', { name: /架构师/ }))
     expect(screen.getByRole('button', { name: '启动流水线' })).not.toBeNull()
     expect(screen.getByRole('button', { name: '召唤专家' })).not.toBeNull()
@@ -170,7 +196,7 @@ describe('the expert center catalog', () => {
     const actions = face()
     render(<ExpertTeamCard {...props(actions)} />)
     await settle()
-    fireEvent.click(screen.getByRole('button', { name: '打开专家模式' }))
+    fireEvent.click(screen.getByRole('button', { name: '打开能力中心' }))
     fireEvent.click(screen.getByRole('button', { name: /架构师/ }))
 
     const input = screen.getByRole('textbox', { name: '任务或问题' })
@@ -188,7 +214,7 @@ describe('the expert center catalog', () => {
     const actions = face({ consult })
     render(<ExpertTeamCard {...props(actions)} />)
     await settle()
-    fireEvent.click(screen.getByRole('button', { name: '打开专家模式' }))
+    fireEvent.click(screen.getByRole('button', { name: '打开能力中心' }))
     fireEvent.click(screen.getByRole('button', { name: /架构师/ }))
 
     const input = screen.getByRole('textbox', { name: '任务或问题' })
@@ -209,7 +235,7 @@ describe('the expert center catalog', () => {
     const actions = face({ consult })
     render(<ExpertTeamCard {...props(actions)} />)
     await settle()
-    fireEvent.click(screen.getByRole('button', { name: '打开专家模式' }))
+    fireEvent.click(screen.getByRole('button', { name: '打开能力中心' }))
     fireEvent.click(screen.getByRole('button', { name: /架构师/ }))
 
     const input = screen.getByRole('textbox', { name: '任务或问题' })
@@ -237,7 +263,7 @@ describe('the expert center catalog', () => {
     const actions = face({ getRun, approve, load })
     render(<ExpertTeamCard {...props(actions)} />)
     await settle()
-    fireEvent.click(screen.getByRole('button', { name: '打开专家模式' }))
+    fireEvent.click(screen.getByRole('button', { name: '打开能力中心' }))
 
     fireEvent.click(screen.getByRole('button', { name: '审批' }))
     await settle()
@@ -264,7 +290,7 @@ describe('the expert center catalog', () => {
     const actions = face({ approve, load })
     render(<ExpertTeamCard {...props(actions)} />)
     await settle()
-    fireEvent.click(screen.getByRole('button', { name: '打开专家模式' }))
+    fireEvent.click(screen.getByRole('button', { name: '打开能力中心' }))
     fireEvent.click(screen.getByRole('button', { name: '审批' }))
     await settle()
 
@@ -273,27 +299,51 @@ describe('the expert center catalog', () => {
     expect(approve).toHaveBeenCalledWith({ runId: 'run-1', decision: 'rejected', comment: '补充验收标准' })
   })
 
-  it('switches to the honest placeholder for skills and connectors', async () => {
+  it('reports unavailable capability tabs when no provider is mounted', async () => {
     const actions = face()
     render(<ExpertTeamCard {...props(actions)} />)
     await settle()
-    fireEvent.click(screen.getByRole('button', { name: '打开专家模式' }))
+    fireEvent.click(screen.getByRole('button', { name: '打开能力中心' }))
 
-    fireEvent.click(screen.getByRole('tab', { name: '打开技能目录' }))
-    expect(screen.getByText('技能目录')).not.toBeNull()
-    expect(screen.getByText('技能目录尚未接入当前专家中心。')).not.toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: '技能' }))
+    expect(screen.getByRole('heading', { name: '技能' })).not.toBeNull()
+    expect(screen.getByText('当前部署未启用技能。')).not.toBeNull()
     expect(screen.queryByRole('textbox', { name: '搜索专家' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('tab', { name: '打开连接器目录' }))
-    expect(screen.getByText('连接器目录')).not.toBeNull()
-    expect(screen.getByText('连接器目录尚未接入当前专家中心。')).not.toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: '连接器' }))
+    expect(screen.getByRole('heading', { name: '连接器' })).not.toBeNull()
+    expect(screen.getByText('当前部署未启用连接器。')).not.toBeNull()
+
+    fireEvent.click(screen.getByRole('tab', { name: '记忆库' }))
+    expect(screen.getByText('当前部署未启用记忆库。')).not.toBeNull()
+  })
+
+  it('dispatches each capability tab to its registered content and returns to the expert catalog', async () => {
+    const renderSlot = vi.fn<ExpertTeamCardProps['renderSlot']>((_slot, _owner, options) => (
+      <p>{options?.entryKey}</p>
+    ))
+    render(<ExpertTeamCard {...props(face())} renderSlot={renderSlot} />)
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: '打开能力中心' }))
+
+    for (const [label, key] of [['技能', 'skills'], ['连接器', 'connectors'], ['记忆库', 'library']] as const) {
+      fireEvent.click(screen.getByRole('tab', { name: label }))
+      expect(screen.getByRole('tabpanel', { name: label }).textContent).toBe(key)
+      expect(renderSlot).toHaveBeenLastCalledWith('capabilities.center.tab', {}, expect.objectContaining({ entryKey: key }))
+      expect(screen.queryByRole('textbox', { name: '搜索专家' })).toBeNull()
+    }
+
+    fireEvent.click(screen.getByRole('tab', { name: '专家' }))
+    expect(screen.getByRole('main', { name: '专家目录' })).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '关闭能力中心' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('sorts by name and filters by the selected team', async () => {
     const actions = face()
     render(<ExpertTeamCard {...props(actions)} />)
     await settle()
-    fireEvent.click(screen.getByRole('button', { name: '打开专家模式' }))
+    fireEvent.click(screen.getByRole('button', { name: '打开能力中心' }))
 
     fireEvent.click(screen.getByRole('button', { name: '软件开发专家团', pressed: false }))
     expect(screen.queryByText('课题侦察员')).toBeNull()
@@ -309,9 +359,9 @@ describe('the expert center catalog', () => {
     const actions = face({ load })
     render(<ExpertTeamCard {...props(actions)} />)
     await settle()
-    fireEvent.click(screen.getByRole('button', { name: '打开专家模式' }))
+    fireEvent.click(screen.getByRole('button', { name: '打开能力中心' }))
     expect(screen.getByRole('alert').textContent).toContain('offline')
-    fireEvent.click(screen.getByRole('button', { name: '关闭专家中心' }))
-    expect(screen.queryByRole('dialog', { name: '专家中心' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '关闭能力中心' }))
+    expect(screen.queryByRole('dialog', { name: '能力中心' })).toBeNull()
   })
 })

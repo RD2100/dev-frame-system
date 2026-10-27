@@ -17,6 +17,7 @@ import {
   IconSearchOutline16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from './capability-slots.ts'
 import css from './PluginInventorySettingsTab.module.css'
 
 /** Read-only list result used by the current-session Skill Remote. */
@@ -58,7 +59,12 @@ export type SkillConnectorSettingsTabProps =
   & PropsLocale<'settings.pluginInventory'>
   & InjectFace<SkillConnectorSettingsTabInjected>
 
-type Panel = 'skills' | 'connectors'
+/** Props supplied to a fixed Skills or Connectors capability-center page. */
+export type CapabilityCenterTabProps =
+  PropsRuntime<'capabilities.center.tab'>
+  & PropsLocale<'settings.pluginInventory'>
+  & InjectFace<SkillConnectorSettingsTabInjected>
+
 type Transport = 'stdio' | 'streamable-http'
 
 interface McpFormState {
@@ -73,9 +79,21 @@ type ViewState =
   | { readonly status: 'error' }
   | {
     readonly status: 'ready'
+    readonly panel: 'all'
     readonly inventory: PluginInventorySnapshot
     readonly skills: SkillConnectorSkillList | undefined
     readonly managedSkills: SkillManagementSnapshot
+    readonly mcp: McpInventorySnapshot
+  }
+  | {
+    readonly status: 'ready'
+    readonly panel: 'skills'
+    readonly skills: SkillConnectorSkillList | undefined
+    readonly managedSkills: SkillManagementSnapshot
+  }
+  | {
+    readonly status: 'ready'
+    readonly panel: 'connectors'
     readonly mcp: McpInventorySnapshot
   }
 
@@ -95,8 +113,15 @@ function configForForm(form: McpFormState): McpServerConfig {
     : { serverName: form.serverName.trim(), transport: 'streamable-http', url: form.url.trim() }
 }
 
-/** Browser-safe Skill and MCP management page backed by Host Remotes. */
-export function SkillConnectorSettingsTab({
+type FixedPanel = 'skills' | 'connectors'
+
+type SkillConnectorManagementPageProps =
+  InjectFace<SkillConnectorSettingsTabInjected>
+  & PropsLocale<'settings.pluginInventory'>
+  & { readonly fixedPanel?: FixedPanel }
+
+/** Shared management content used by the Settings and fixed capability pages. */
+function SkillConnectorManagementPage({
   listInventory,
   listSkills,
   listManagedSkills,
@@ -110,10 +135,11 @@ export function SkillConnectorSettingsTab({
   setMcpEnabled,
   testMcpEntry,
   t,
-}: SkillConnectorSettingsTabProps): ReactNode {
+  fixedPanel,
+}: SkillConnectorManagementPageProps): ReactNode {
   const sectionId = useId()
   const [request, setRequest] = useState(0)
-  const [panel, setPanel] = useState<Panel>('skills')
+  const [panel, setPanel] = useState<FixedPanel>(fixedPanel ?? 'skills')
   const [query, setQuery] = useState('')
   const [state, setState] = useState<ViewState>({ status: 'loading' })
   const [pending, setPending] = useState<string | undefined>()
@@ -126,20 +152,30 @@ export function SkillConnectorSettingsTab({
   useEffect(() => {
     let current = true
     void Promise.resolve().then(async () => {
+      if (fixedPanel === 'skills') {
+        const [skills, managedSkills] = await Promise.all([listSkills(), listManagedSkills()])
+        if (current) setState({ status: 'ready', panel: 'skills', skills, managedSkills })
+        return
+      }
+      if (fixedPanel === 'connectors') {
+        const mcp = await listMcp()
+        if (current) setState({ status: 'ready', panel: 'connectors', mcp })
+        return
+      }
       const [inventory, skills, managedSkills, mcp] = await Promise.all([
         listInventory(), listSkills(), listManagedSkills(), listMcp(),
       ])
-      if (current) setState({ status: 'ready', inventory, skills, managedSkills, mcp })
+      if (current) setState({ status: 'ready', panel: 'all', inventory, skills, managedSkills, mcp })
     }).catch(() => {
       if (current) setState({ status: 'error' })
     })
     return () => { current = false }
-  }, [listInventory, listSkills, listManagedSkills, listMcp, request])
+  }, [fixedPanel, listInventory, listSkills, listManagedSkills, listMcp, request])
 
-  const refresh = (): void => {
+  const refresh = (preserveOperationMessage = false): void => {
     setState({ status: 'loading' })
     setOperationError(false)
-    setOperationMessage(undefined)
+    if (!preserveOperationMessage) setOperationMessage(undefined)
     setRequest(value => value + 1)
   }
 
@@ -149,7 +185,7 @@ export function SkillConnectorSettingsTab({
     setOperationMessage(undefined)
     try {
       await operation()
-      refresh()
+      refresh(true)
     } catch {
       setOperationError(true)
     } finally {
@@ -184,16 +220,21 @@ export function SkillConnectorSettingsTab({
 
   const snapshot = state.status === 'ready' ? state : undefined
   const normalizedQuery = query.trim().toLocaleLowerCase()
+  const managedSkillsSnapshot = snapshot !== undefined && 'managedSkills' in snapshot
+    ? snapshot.managedSkills.skills
+    : undefined
   const managedSkills = useMemo(
-    () => (snapshot?.managedSkills.skills ?? []).filter(skill => normalizedQuery === '' || skillSearchText(skill).includes(normalizedQuery)),
-    [normalizedQuery, snapshot?.managedSkills.skills],
+    () => (managedSkillsSnapshot ?? []).filter(skill => normalizedQuery === '' || skillSearchText(skill).includes(normalizedQuery)),
+    [normalizedQuery, managedSkillsSnapshot],
   )
+  const mcpSnapshot = snapshot !== undefined && 'mcp' in snapshot ? snapshot.mcp.servers : undefined
   const mcpServers = useMemo(
-    () => (snapshot?.mcp.servers ?? []).filter(server => normalizedQuery === '' || mcpSearchText(server).includes(normalizedQuery)),
-    [normalizedQuery, snapshot?.mcp.servers],
+    () => (mcpSnapshot ?? []).filter(server => normalizedQuery === '' || mcpSearchText(server).includes(normalizedQuery)),
+    [normalizedQuery, mcpSnapshot],
   )
-  const sessionSkills = snapshot?.skills?.skills ?? []
-  const sessionSkillMissing = snapshot !== undefined && snapshot.skills === undefined
+  const sessionSkillList = snapshot !== undefined && 'skills' in snapshot ? snapshot.skills : undefined
+  const sessionSkills = sessionSkillList?.skills ?? []
+  const sessionSkillMissing = snapshot !== undefined && 'skills' in snapshot && sessionSkillList === undefined
 
   const beginEditMcp = (server: McpServerEntry): void => {
     const config = server.config
@@ -213,7 +254,7 @@ export function SkillConnectorSettingsTab({
           <h3 className={css.capabilityHeading}>{t('capabilitiesTitle')}</h3>
           <p className={css.capabilityIntro}>{t('capabilitiesIntro')}</p>
         </div>
-        <button type="button" className={css.refreshButton} onClick={refresh} disabled={state.status === 'loading' || pending !== undefined}>
+        <button type="button" className={css.refreshButton} onClick={() => { refresh() }} disabled={state.status === 'loading' || pending !== undefined}>
           <IconRefreshOutline16 size={14} aria-hidden="true" />
           {t('refresh')}
         </button>
@@ -225,7 +266,7 @@ export function SkillConnectorSettingsTab({
       {state.status === 'error' ? (
         <div className={css.failure}>
           <p role="alert">{t('error')}</p>
-          <button type="button" onClick={refresh}>{t('retry')}</button>
+          <button type="button" onClick={() => { refresh() }}>{t('retry')}</button>
         </div>
       ) : null}
       {snapshot !== undefined ? (
@@ -235,16 +276,18 @@ export function SkillConnectorSettingsTab({
             <span className={css.visuallyHidden}>{t('capabilitiesSearch')}</span>
             <input type="search" value={query} placeholder={t('capabilitiesSearch')} aria-label={t('capabilitiesSearch')} onChange={(event) => { setQuery(event.currentTarget.value) }} />
           </label>
-          <div className={css.capabilityTabs} role="tablist" aria-label={t('capabilitiesTabs')}>
-            <button type="button" role="tab" aria-selected={panel === 'skills'} aria-controls={`${sectionId}-skills`} className={css.capabilityTab} data-active={panel === 'skills' ? 'true' : undefined} onClick={() => { setPanel('skills') }}>
-              {t('skillsTab')} <span>{String(managedSkills.length)}</span>
-            </button>
-            <button type="button" role="tab" aria-selected={panel === 'connectors'} aria-controls={`${sectionId}-connectors`} className={css.capabilityTab} data-active={panel === 'connectors' ? 'true' : undefined} onClick={() => { setPanel('connectors') }}>
-              {t('connectorsTab')} <span>{String(mcpServers.length)}</span>
-            </button>
-          </div>
+          {fixedPanel === undefined ? (
+            <div className={css.capabilityTabs} role="tablist" aria-label={t('capabilitiesTabs')}>
+              <button type="button" role="tab" aria-selected={panel === 'skills'} aria-controls={`${sectionId}-skills`} className={css.capabilityTab} data-active={panel === 'skills' ? 'true' : undefined} onClick={() => { setPanel('skills') }}>
+                {t('skillsTab')} <span>{String(managedSkills.length)}</span>
+              </button>
+              <button type="button" role="tab" aria-selected={panel === 'connectors'} aria-controls={`${sectionId}-connectors`} className={css.capabilityTab} data-active={panel === 'connectors' ? 'true' : undefined} onClick={() => { setPanel('connectors') }}>
+                {t('connectorsTab')} <span>{String(mcpServers.length)}</span>
+              </button>
+            </div>
+          ) : null}
           {panel === 'skills' ? (
-            <section id={`${sectionId}-skills`} role="tabpanel" aria-label={t('skillsTab')}>
+            <section id={fixedPanel === undefined ? `${sectionId}-skills` : undefined} role={fixedPanel === undefined ? 'tabpanel' : undefined} aria-label={t('skillsTab')}>
               <form className={css.managementForm} onSubmit={submitSkill}>
                 <h4>{t('installSkill')}</h4>
                 <input aria-label={t('skillName')} placeholder={t('skillName')} value={skillForm.name} onChange={(event) => { const next = event.currentTarget.value; setSkillForm(value => ({ ...value, name: next })) }} />
@@ -278,7 +321,7 @@ export function SkillConnectorSettingsTab({
               {sessionSkills.length > 0 ? <p className={css.status}>{t('sessionSkills')}: {sessionSkills.map(skill => `/${skill.name}`).join(', ')}</p> : null}
             </section>
           ) : (
-            <section id={`${sectionId}-connectors`} role="tabpanel" aria-label={t('connectorsTab')}>
+            <section id={fixedPanel === undefined ? `${sectionId}-connectors` : undefined} role={fixedPanel === undefined ? 'tabpanel' : undefined} aria-label={t('connectorsTab')}>
               <form className={css.managementForm} onSubmit={submitMcp}>
                 <h4>{editingMcp === undefined ? t('addMcp') : t('editMcp')}</h4>
                 <input aria-label={t('mcpServerName')} placeholder={t('mcpServerName')} value={mcpForm.serverName} onChange={(event) => { const next = event.currentTarget.value; setMcpForm(value => ({ ...value, serverName: next })) }} />
@@ -322,4 +365,28 @@ export function SkillConnectorSettingsTab({
       ) : null}
     </div>
   )
+}
+
+/** Complete two-panel management page shown in the Plugins settings section.
+ * @param props - Settings owner props, localized copy, and Host callbacks.
+ * @returns The complete Skills and Connectors management page.
+ */
+export function SkillConnectorSettingsTab(props: SkillConnectorSettingsTabProps): ReactNode {
+  return <SkillConnectorManagementPage {...props} />
+}
+
+/** User-owned Skill management page contributed to the capability center.
+ * @param props - Capability owner props, localized copy, and Host callbacks.
+ * @returns The fixed Skills management page.
+ */
+export function SkillsCapabilityCenterTab(props: CapabilityCenterTabProps): ReactNode {
+  return <SkillConnectorManagementPage {...props} fixedPanel="skills" />
+}
+
+/** MCP connector management page contributed to the capability center.
+ * @param props - Capability owner props, localized copy, and Host callbacks.
+ * @returns The fixed Connectors management page.
+ */
+export function ConnectorsCapabilityCenterTab(props: CapabilityCenterTabProps): ReactNode {
+  return <SkillConnectorManagementPage {...props} fixedPanel="connectors" />
 }

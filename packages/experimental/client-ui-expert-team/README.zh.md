@@ -1,5 +1,5 @@
 ---
-description: "专家中心 Web 入口：提供可搜索目录、新会话召唤操作、当前进程运行记录，以及预留的技能和连接器入口。"
+description: "能力中心：提供专家目录、技能与连接器管理，以及只读记忆库。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-experimental-client-ui-expert-team` 是[专家团队核心](../expert-team/README.zh.md)的常驻 Web 入口。它挂载生成的 `ctx.remote.expertTeam` 命名空间，并向侧栏的 `sidebar.footer.action` 座位注册触发器。触发器打开包含“专家”“技能”“连接器”三个入口的专家中心。“专家”页把宿主快照中的已挂载专家投影为可搜索、可按团队筛选、可按名称排序的卡片，并提供详情、召唤与当前进程运行记录操作；召唤会在新的空白对话中预选专家并填入可编辑提示。详情视图区分「启动流水线」与「召唤专家（咨询模式）」两个直接执行按钮，分别调用 `startRun` 与 `consult` Remote 方法，绕过草稿预填路径；等待审批的运行行可展开读取关口问题并记录通过/驳回决定。其他两个入口会明确说明数据源尚未接入。正式发布排除本包，只能从源码 checkout 使用。
+`dsh-experimental-client-ui-expert-team` 是[专家团队核心](../expert-team/README.zh.md)的常驻 Web 入口。它挂载生成的 `ctx.remote.expertTeam` 命名空间，并向侧栏的 `sidebar.footer.action` 座位注册触发器。触发器打开包含“专家”“技能”“连接器”“记忆库”四个选项卡的能力中心。“专家”页把宿主快照中的已挂载专家投影为可搜索、可按团队筛选、可按名称排序的卡片，并提供详情、召唤与当前进程运行记录操作；召唤会在新的空白对话中预选专家并填入可编辑提示。详情视图区分「启动流水线」与「召唤专家（咨询模式）」两个直接执行按钮，分别调用 `startRun` 与 `consult` Remote 方法，绕过草稿预填路径；等待审批的运行行可展开读取关口问题并记录通过/驳回决定。其他选项卡展示已挂载的技能、连接器和记忆库管理页面；提供方缺失时明确显示不可用状态。本包作为客户端插件发布，只依赖 DSH 的公开客户端插槽和 Remote 契约。
 
 ## 目录
 
@@ -25,9 +25,9 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-### 安装到 DevFrame Web profile
+### 安装到 DSH Web profile
 
-[DevFrame profile 层](../devframe-profile/README.zh.md)已经挂载带论文与开发数据包的宿主核心以及本浏览器入口。手动组合时，在宿主挂载 `@deepseek-ai/dsh-experimental-expert-team`，在 Web 侧挂载本包；本包根入口在 headless 组合中为空操作，Web loader 会按 `dsh.client` 清单选择它的 `/client` 导出。
+把本客户端插件、Host 侧 expert-team 以及数据包插件一起加入 profile 的依赖集合。在 Host 行的 `packs` 中使用已安装的数据包名称，例如 `@deepseek-ai/dsh-experimental-expert-pack-paper`；expert-team 会从自身安装闭包解析这些名称，因此组合不依赖启动目录或源码 checkout。本包根入口在 headless 组合中为空操作，Web loader 会按 `dsh.client` 清单选择它的 `/client` 导出。
 
 ### 你会得到什么
 
@@ -35,7 +35,7 @@ kind: "package-reference"
 - 已挂载团队中的完整专家目录，可按名称、角色、id 或团队搜索，并按团队筛选、按综合或名称排序。
 - 卡片和详情操作会打开正常的新会话流程、选中专家并填入可编辑提示；只有用户提交后提示才会发送。
 - 选中专家后的详情视图，展示所属团队、运行模式、绑定阶段、关口与声明工具；未选中详情时，卡片网格会使用可用宽度。
-- 技能与连接器入口会显示明确的“尚未接入”说明，不展示无效控件或伪造目录。
+- 技能与连接器选项卡复用宿主支持的管理页面，记忆库通过原有 Remote 浏览已配置的 Vault。
 - 最近运行区域展示当前进程最近六条记录，并提供显式刷新与关闭操作。Remote 读取失败会显示错误，而不会被替换成伪造状态。
 
 -----
@@ -46,7 +46,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-浏览器入口（`src/client/index.ts`）挂载生成的专家团队 Remote contribution，并交给 [`mountExpertTeamUi`](src/client/mount.ts)。挂载过程注册英文与中文的 `expert-team` 字典，注入侧栏条目（id `expert-team`，order 20），并注入会话级 `conversation.input.left` 专家标签。卡片读取 `ctx.remote.expertTeam.view()` 后把召唤选择交给 `ExpertSelectionController`；控制器调用 `uiWorkspace.startSession()`，等待空白会话到达，再通过 `ctx.conversation.input` 写入预填提示。宿主 gateway 额外暴露 `startRun`、`consult`、`approve` 与 `getRun`：详情视图直接启动流水线或咨询单个专家，等待审批的运行行通过 `getRun` 拉取完整快照、通过 `approve` 记录带可选批注的人类决定。客户端把返回的专家展平用于搜索、筛选、排序、详情和示例问题渲染；过期读取、选择状态与产品文案分别由对应的客户端界面负责。
+浏览器入口（`src/client/index.ts`）挂载生成的专家团队 Remote contribution，并交给 [`mountExpertTeamUi`](src/client/mount.ts)。挂载过程注册英文与中文的 `expert-team` 字典，注入声明了键控子插槽 `capabilities.center.tab` 的侧栏条目（id `expert-team`，order 20），并注入会话级 `conversation.input.left` 专家标签。卡片读取 `ctx.remote.expertTeam.view()` 后把召唤选择交给 `ExpertSelectionController`；控制器调用 `uiWorkspace.startSession()`，等待空白会话到达，再通过 `ctx.conversation.input` 写入预填提示。宿主 gateway 额外暴露 `startRun`、`consult`、`approve` 与 `getRun`：详情视图直接启动流水线或咨询单个专家，等待审批的运行行通过 `getRun` 拉取完整快照、通过 `approve` 记录带可选批注的人类决定。客户端把返回的专家展平用于搜索、筛选、排序、详情和示例问题渲染；过期读取、选择状态与产品文案分别由对应的客户端界面负责。
 
 | 文件 | 职责 |
 |---|---|
@@ -67,15 +67,17 @@ kind: "package-reference"
 ## 延伸阅读
 
 - [专家团队核心](../expert-team/README.zh.md)——数据包加载、编排、关口与宿主 Remote 的拥有者。
-- [DevFrame profile](../devframe-profile/README.zh.md)——同时挂载宿主与浏览器行的源码 checkout Web 组合。
-- [实验包](../README.zh.md)——孵化状态与发布排除。
+- [技能与连接器管理](../../client/ui-settings-plugin-inventory/README.zh.md)——由宿主支持的 Skill 与 MCP 管理页面。
+- [记忆库页面](../client-ui-project-memory/README.zh.md)——只读 Vault 浏览与对话引用。
+- [DevFrame profile](../devframe-profile/README.zh.md)——更大范围栈的可选源码组合。
+- [实验包](../README.zh.md)——孵化状态与包边界。
 
 -----
 
 <a id="model-experience"></a>
 ## 模型体验
 
-### 专家团队专家中心
+### 能力中心
 
 #### 模型看到什么
 
@@ -98,7 +100,7 @@ kind: "package-reference"
 - **只展示已挂载目录**——“专家”页只包含宿主 Remote 返回的团队与专家；“技能”和“连接器”已有可见入口，但对应 Remote 数据源尚未接入。
 - **仅有当前进程历史**——宿主 Remote 投影编排器当前内存中的运行索引。`run-index.json` 仍是检查镜像，不是跨进程恢复来源。
 - **刷新是显式的**——卡片在挂载、打开或点击刷新时读取；不订阅每次运行状态变化。
-- **仅限源码 checkout**——正式 CLI、Web、npm 与 Python 发布负载排除此私有包。
+- **提供方可选**——四个页面由各自插件提供。只安装中心包时，未安装的技能、连接器或记忆库页面会显示文档规定的不可用状态。
 
 <a id="dev-note"></a>
 ### 开发备注

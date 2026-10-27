@@ -103,12 +103,18 @@ describe('ui-expert-team browser plugin', () => {
       options: { id: 'expert-selection', order: -20 },
       locale: NS,
     })
+    const capability = () => null
+    const disposeTab = b.ctx.slots.register({
+      name: 'capabilities.center.tab', key: 'library',
+    }, capability)
+    expect(b.ctx.slots.entries('capabilities.center.tab')).toHaveLength(1)
     expect(b.remote.mount).toHaveBeenCalledOnce()
     expect(b.remote.mount).toHaveBeenCalledWith(REMOTE)
     b.ctx.locale.setLocale('zh')
     expect(b.ctx.locale.bind(NS)('trigger.label', {})).toBe(zh['trigger.label'])
 
     await b.fiber.dispose()
+    disposeTab()
     expect(b.card()).toBeUndefined()
     expect(b.chip()).toBeUndefined()
     expect(b.remote.disposeMount).toHaveBeenCalledOnce()

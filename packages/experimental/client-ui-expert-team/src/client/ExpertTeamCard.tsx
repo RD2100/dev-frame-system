@@ -1,22 +1,25 @@
-/** Expert-center trigger and catalog surface for mounted expert teams. */
+/** Capability-center navigation and the mounted expert-team catalog. */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from 'react'
 import {
   Button,
   IconAgentPresetOutline16,
   IconCloseOutline16,
+  IconDatabaseOutline16,
   IconLinkOutline16,
   IconQueueOutline14,
   IconRefreshOutline16,
   IconSearchOutline16,
   IconSendOutline14,
   IconSkillOutline16,
+  IconSparkle16,
   Input,
   Modal,
   StateDot,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-ui-settings-plugin-inventory/client'
 import type {
   ExpertTeamApproveRequest,
   ExpertTeamConsultRequest,
@@ -52,8 +55,10 @@ export interface ExpertTeamCardFace {
 /** Full props composed by the sidebar footer-action slot. */
 export type ExpertTeamCardProps =
   PropsRuntime<'sidebar.footer.action'> & InjectFace<ExpertTeamCardFace> & PropsLocale<typeof NS>
+  & PropsRenderSlots<'capabilities.center.tab'>
 
-type CenterTab = 'experts' | 'skills' | 'connectors'
+type CenterTab = 'experts' | 'skills' | 'connectors' | 'library'
+const CENTER_TABS: readonly CenterTab[] = ['experts', 'skills', 'connectors', 'library']
 type SortMode = 'recommended' | 'name'
 
 interface ExpertRecord {
@@ -61,7 +66,7 @@ interface ExpertRecord {
   readonly expert: ExpertTeamView['experts'][number]
 }
 
-interface ExpertCenterProps {
+interface ExpertCenterProps extends PropsRenderSlots<'capabilities.center.tab'> {
   readonly loading: boolean
   readonly snapshot: ExpertTeamSnapshot | null
   readonly error: string | null
@@ -145,7 +150,7 @@ const SUGGESTION_KEYS = [
 ] as const satisfies readonly ExpertTeamKey[]
 
 /** Render the resident expert-center trigger and catalog surface. */
-export function ExpertTeamCard({ wide, load, summon, startRun, consult, approve, getRun, t }: ExpertTeamCardProps) {
+export function ExpertTeamCard({ wide, load, summon, startRun, consult, approve, getRun, renderSlot, t }: ExpertTeamCardProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [snapshot, setSnapshot] = useState<ExpertTeamSnapshot | null>(null)
@@ -193,7 +198,7 @@ export function ExpertTeamCard({ wide, load, summon, startRun, consult, approve,
             void refresh()
           }}
         >
-          <IconAgentPresetOutline16 size={wide ? 16 : 18} />
+          <IconSparkle16 size={wide ? 16 : 18} />
           {wide && <span className={css.triggerLabel}>{t('trigger.label')}</span>}
           {wide && activeRuns > 0 && <span className={css.count}>{activeRuns}</span>}
         </button>
@@ -219,6 +224,7 @@ export function ExpertTeamCard({ wide, load, summon, startRun, consult, approve,
           onConsult={consult}
           onApprove={approve}
           onGetRun={getRun}
+          renderSlot={renderSlot}
           t={t}
         />
       </Modal>
@@ -238,9 +244,12 @@ function ExpertCenter({
   onConsult,
   onApprove,
   onGetRun,
+  renderSlot,
   t,
 }: ExpertCenterProps) {
   const [tab, setTab] = useState<CenterTab>('experts')
+  const tabPrefix = useId()
+  const tabRefs = useRef(new Map<CenterTab, HTMLButtonElement>())
   const [query, setQuery] = useState('')
   const [teamFilter, setTeamFilter] = useState('all')
   const [sort, setSort] = useState<SortMode>('recommended')
@@ -277,31 +286,60 @@ function ExpertCenter({
   }, [selected, selectedKey])
 
   const runs = snapshot?.runs.slice(-6).reverse() ?? []
+  const tabId = (key: CenterTab) => `${tabPrefix}-${key}`
+  const panelId = `${tabPrefix}-${tab}-panel`
+  const focusTab = (key: CenterTab) => {
+    setTab(key)
+    tabRefs.current.get(key)?.focus()
+  }
 
   return (
     <div className={css.center} data-expert-center>
       <header className={css.centerHeader}>
         <nav className={css.centerTabs} aria-label={t('center.navigation')} role="tablist">
           <CenterTabButton
+            id={tabId('experts')}
+            panelId={`${tabPrefix}-experts-panel`}
+            tab="experts"
+            onFocusTab={focusTab}
+            buttonRefs={tabRefs}
             active={tab === 'experts'}
             icon={<IconAgentPresetOutline16 size={16} />}
             label={t('center.tab.experts')}
             onClick={() => { setTab('experts') }}
-            t={t}
           />
           <CenterTabButton
+            id={tabId('skills')}
+            panelId={`${tabPrefix}-skills-panel`}
+            tab="skills"
+            onFocusTab={focusTab}
+            buttonRefs={tabRefs}
             active={tab === 'skills'}
             icon={<IconSkillOutline16 size={16} />}
             label={t('center.tab.skills')}
             onClick={() => { setTab('skills') }}
-            t={t}
           />
           <CenterTabButton
+            id={tabId('connectors')}
+            panelId={`${tabPrefix}-connectors-panel`}
+            tab="connectors"
+            onFocusTab={focusTab}
+            buttonRefs={tabRefs}
             active={tab === 'connectors'}
             icon={<IconLinkOutline16 size={16} />}
             label={t('center.tab.connectors')}
             onClick={() => { setTab('connectors') }}
-            t={t}
+          />
+          <CenterTabButton
+            id={tabId('library')}
+            panelId={`${tabPrefix}-library-panel`}
+            tab="library"
+            onFocusTab={focusTab}
+            buttonRefs={tabRefs}
+            active={tab === 'library'}
+            icon={<IconDatabaseOutline16 size={16} />}
+            label={t('center.tab.library')}
+            onClick={() => { setTab('library') }}
           />
         </nav>
         <div className={css.headerActions}>
@@ -321,112 +359,162 @@ function ExpertCenter({
         </div>
       </header>
 
-      {tab === 'experts'
-        ? (
-          <>
-            <div className={css.catalogToolbar}>
-              <div className={css.filters} role="group" aria-label={t('center.teamFilter')}>
-                <FilterButton active={teamFilter === 'all'} label={t('center.all')} onClick={() => { setTeamFilter('all') }} />
-                {teams.map(team => (
-                  <FilterButton
-                    key={team.team}
-                    active={teamFilter === team.team}
-                    label={team.title}
-                    onClick={() => { setTeamFilter(team.team) }}
-                  />
-                ))}
+      <div
+        id={panelId}
+        className={css.tabContent}
+        role="tabpanel"
+        aria-labelledby={tabId(tab)}
+        tabIndex={0}
+      >
+        {tab === 'experts'
+          ? (
+            <>
+              <div className={css.catalogToolbar}>
+                <div className={css.filters} role="group" aria-label={t('center.teamFilter')}>
+                  <FilterButton active={teamFilter === 'all'} label={t('center.all')} onClick={() => { setTeamFilter('all') }} />
+                  {teams.map(team => (
+                    <FilterButton
+                      key={team.team}
+                      active={teamFilter === team.team}
+                      label={team.title}
+                      onClick={() => { setTeamFilter(team.team) }}
+                    />
+                  ))}
+                </div>
+                <div className={css.sorts} role="group" aria-label={t('center.sortLabel')}>
+                  <span className={css.sortLabel}>{t('center.sortLabel')}</span>
+                  <FilterButton active={sort === 'recommended'} label={t('center.sort.recommended')} onClick={() => { setSort('recommended') }} />
+                  <FilterButton active={sort === 'name'} label={t('center.sort.name')} onClick={() => { setSort('name') }} />
+                </div>
               </div>
-              <div className={css.sorts} role="group" aria-label={t('center.sortLabel')}>
-                <span className={css.sortLabel}>{t('center.sortLabel')}</span>
-                <FilterButton active={sort === 'recommended'} label={t('center.sort.recommended')} onClick={() => { setSort('recommended') }} />
-                <FilterButton active={sort === 'name'} label={t('center.sort.name')} onClick={() => { setSort('name') }} />
-              </div>
-            </div>
-            {error !== null && <div className={css.error} role="alert">{t('center.readError', { message: error })}</div>}
-            {snapshot === null && loading
-              ? <div className={css.centerNotice}>{t('center.loading')}</div>
-              : snapshot === null
-                ? <div className={css.centerNotice}>{t('center.empty')}</div>
-                : (
-                  <>
-                    <div className={css.catalogSummary}>
-                      <div>
-                        <h1>{t('center.catalogTitle')}</h1>
-                        <p>{t('center.summary', { teams: teams.length, experts: records.length })}</p>
+              {error !== null && <div className={css.error} role="alert">{t('center.readError', { message: error })}</div>}
+              {snapshot === null && loading
+                ? <div className={css.centerNotice}>{t('center.loading')}</div>
+                : snapshot === null
+                  ? <div className={css.centerNotice}>{t('center.empty')}</div>
+                  : (
+                    <>
+                      <div className={css.catalogSummary}>
+                        <div>
+                          <h1>{t('center.catalogTitle')}</h1>
+                          <p>{t('center.summary', { teams: teams.length, experts: records.length })}</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon={<IconRefreshOutline16 size={14} />}
+                          aria-label={t('center.refresh')}
+                          disabled={loading}
+                          onClick={onRefresh}
+                        >
+                          {t('center.refreshLabel')}
+                        </Button>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={<IconRefreshOutline16 size={14} />}
-                        aria-label={t('center.refresh')}
-                        disabled={loading}
-                        onClick={onRefresh}
-                      >
-                        {t('center.refreshLabel')}
-                      </Button>
-                    </div>
-                    <div className={css.catalogBody} data-detail-open={selected !== undefined || undefined}>
-                      <main className={css.catalogList} aria-label={t('center.catalogTitle')}>
-                        {filtered.length === 0
-                          ? <div className={css.centerNotice}>{t('center.noMatch')}</div>
-                          : <div className={css.cardGrid}>
-                            {filtered.map(record => (
-                              <ExpertCard
-                                key={expertKey(record)}
-                                record={record}
-                                selected={expertKey(record) === selectedKey}
-                                onSelect={() => { setSelectedKey(expertKey(record)) }}
-                                onSummon={() => {
-                                  const target = expertTarget(record)
-                                  onSummon(target, summonPrompt(target, t))
-                                }}
-                                t={t}
-                              />
-                            ))}
-                          </div>}
-                        <RunSection
-                          runs={runs}
-                          onRefresh={onRefresh}
-                          onApprove={onApprove}
-                          onGetRun={onGetRun}
-                          loading={loading}
-                          t={t}
-                        />
-                      </main>
-                      {selected !== undefined && (
-                        <ExpertDetail
-                          record={selected}
-                          onClose={() => { setSelectedKey(null) }}
-                          onStartRun={onStartRun}
-                          onConsult={onConsult}
-                          t={t}
-                        />
-                      )}
-                    </div>
-                  </>
-                )}
-          </>
-        )
-        : <CatalogPlaceholder tab={tab} t={t} />}
+                      <div className={css.catalogBody} data-detail-open={selected !== undefined || undefined}>
+                        <main className={css.catalogList} aria-label={t('center.catalogTitle')}>
+                          {filtered.length === 0
+                            ? <div className={css.centerNotice}>{t('center.noMatch')}</div>
+                            : <div className={css.cardGrid}>
+                              {filtered.map(record => (
+                                <ExpertCard
+                                  key={expertKey(record)}
+                                  record={record}
+                                  selected={expertKey(record) === selectedKey}
+                                  onSelect={() => { setSelectedKey(expertKey(record)) }}
+                                  onSummon={() => {
+                                    const target = expertTarget(record)
+                                    onSummon(target, summonPrompt(target, t))
+                                  }}
+                                  t={t}
+                                />
+                              ))}
+                            </div>}
+                          <RunSection
+                            runs={runs}
+                            onRefresh={onRefresh}
+                            onApprove={onApprove}
+                            onGetRun={onGetRun}
+                            loading={loading}
+                            t={t}
+                          />
+                        </main>
+                        {selected !== undefined && (
+                          <ExpertDetail
+                            record={selected}
+                            onClose={() => { setSelectedKey(null) }}
+                            onStartRun={onStartRun}
+                            onConsult={onConsult}
+                            t={t}
+                          />
+                        )}
+                      </div>
+                    </>
+                  )}
+            </>
+          )
+          : (
+            renderSlot('capabilities.center.tab', {}, {
+              entryKey: tab,
+              fallback: <CatalogPlaceholder tab={tab} t={t} />,
+            })
+          )}
+      </div>
+      {CENTER_TABS.filter(key => key !== tab).map(key => (
+        <div
+          key={key}
+          id={`${tabPrefix}-${key}-panel`}
+          role="tabpanel"
+          aria-labelledby={tabId(key)}
+          tabIndex={-1}
+          hidden
+        />
+      ))}
     </div>
   )
 }
 
-function CenterTabButton({ active, icon, label, onClick, t }: {
+function CenterTabButton({ id, panelId, tab, onFocusTab, buttonRefs, active, icon, label, onClick }: {
+  id: string
+  panelId: string
+  tab: CenterTab
+  onFocusTab: (tab: CenterTab) => void
+  buttonRefs: MutableRefObject<Map<CenterTab, HTMLButtonElement>>
   active: boolean
   icon: ReactNode
   label: string
   onClick: () => void
-  t: ExpertTeamCardProps['t']
 }) {
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const currentIndex = CENTER_TABS.indexOf(tab)
+    const nextIndex = event.key === 'ArrowRight'
+      ? (currentIndex + 1) % CENTER_TABS.length
+      : event.key === 'ArrowLeft'
+        ? (currentIndex - 1 + CENTER_TABS.length) % CENTER_TABS.length
+        : event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? CENTER_TABS.length - 1
+            : -1
+    const next = CENTER_TABS[nextIndex]
+    if (next === undefined || next === tab) return
+    event.preventDefault()
+    onFocusTab(next)
+  }
   return (
     <button
+      ref={(element) => {
+        if (element === null) buttonRefs.current.delete(tab)
+        else buttonRefs.current.set(tab, element)
+      }}
+      id={id}
       type="button"
       className={css.centerTab}
       data-active={active || undefined}
       role="tab"
       aria-selected={active}
-      aria-label={t('center.openTab', { tab: label })}
+      aria-controls={panelId}
+      tabIndex={active ? 0 : -1}
+      onKeyDown={handleKeyDown}
       onClick={onClick}
     >
       {icon}
@@ -800,15 +888,16 @@ function RunRow({ run, onApprove, onGetRun, onRefresh, t }: {
 }
 
 function CatalogPlaceholder({ tab, t }: { tab: Exclude<CenterTab, 'experts'>; t: ExpertTeamCardProps['t'] }) {
-  const copy = tab === 'skills'
-    ? { icon: <IconSkillOutline16 size={28} />, title: t('center.skills.title'), description: t('center.skills.description') }
-    : { icon: <IconLinkOutline16 size={28} />, title: t('center.connectors.title'), description: t('center.connectors.description') }
+  const icons = {
+    skills: <IconSkillOutline16 size={28} />,
+    connectors: <IconLinkOutline16 size={28} />,
+    library: <IconDatabaseOutline16 size={28} />,
+  }
   return (
     <main className={css.placeholder}>
-      <div className={css.placeholderIcon}>{copy.icon}</div>
-      <h1>{copy.title}</h1>
-      <p>{copy.description}</p>
-      <span>{t('center.comingSoon')}</span>
+      <div className={css.placeholderIcon}>{icons[tab]}</div>
+      <h1>{t(`center.tab.${tab}`)}</h1>
+      <p>{t('center.unavailable', { tab: t(`center.tab.${tab}`) })}</p>
     </main>
   )
 }

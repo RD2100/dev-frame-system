@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-client-ui-settings-plugin-inventory` contributes an inventory tab and a management tab to Web Settings. **Plugin list** lazily calls `ctx.remote.pluginInventory.list()` and renders the Loader inventory in two collapsible groups. **Skills & connectors** reads user-owned Skills and MCP clients through the Host management Remote, and exposes forms and row actions for install, enable, disable, test, edit, and remove. Refresh reloads all four snapshots; profile and Agent preset composition rows remain read-only.
+`dsh-client-ui-settings-plugin-inventory` contributes an inventory tab and a management tab to Web Settings, plus separate Skills and Connectors pages to the capability center. **Plugin list** lazily calls `ctx.remote.pluginInventory.list()` and renders the Loader inventory in two collapsible groups. **Skills & connectors** reads user-owned Skills and MCP clients through the Host management Remote, and exposes forms and row actions for install, enable, disable, test, edit, and remove. Refresh reloads the management snapshots; profile and Agent preset composition rows remain read-only.
 
 The Plugin list tab retains the existing scoped view: the agent-preset group comes first, open by default, and the global group follows collapsed. Search filters both groups and generic failures never expose transport details. The Skills & connectors tab reports the real current Session catalog when a Session is selected; with no current Session it says why the Skill list is unavailable while still showing global connector state.
 
@@ -27,7 +27,7 @@ The Plugin list tab retains the existing scoped view: the agent-preset group com
 <a id="use-this-package"></a>
 ## Use this package
 
-Open the Plugins section in Settings and select the **Plugin list** tab to inspect the Host's plugin inventory. The tab reads no Remote during plugin activation — selecting it for the first time mounts the component and lazily calls `ctx.remote.pluginInventory.list()` through `api-remotes`.
+Open the Plugins section in Settings and select the **Plugin list** tab to inspect the Host's plugin inventory. The tab reads no Remote during plugin activation — selecting it for the first time mounts the component and lazily calls `ctx.remote.pluginInventory.list()` through `api-remotes`. The capability center also exposes the same manager as separate Skills and Connectors pages.
 
 Select **Skills & connectors** to manage user-owned capabilities. The page installs authored `SKILL.md` content, toggles and uninstalls user Skills, and adds, edits, tests, toggles, and removes MCP clients. Use the search field to filter either panel and **Refresh** to reload current snapshots. Profile and Agent preset composition remains display-only.
 
@@ -55,7 +55,7 @@ The tab performs no Remote read during plugin activation and takes its snapshots
 
 ### Registration
 
-The browser plugin registers localized `settings.plugins.tab` contributions with ids `all` and `skill-connectors`; the Plugins section owns the navigation entry and tab chrome. Registration uses `ctx.slots.inject()`, so it follows late tab declaration, redeclaration, locale changes, and teardown without importing the section owner. The capability tab injects the official `remote.skills` face and session list, then addresses the Remote with the selected current Session.
+The browser plugin registers localized `settings.plugins.tab` contributions with ids `all` and `skill-connectors`, and keyed `capabilities.center.tab` contributions for `skills` and `connectors`. Each owning section supplies its own navigation; both registrations use `ctx.slots.inject()` and the same Host callbacks. The manager reads the official `remote.skills` face and current Session list, then addresses the Remote with the selected current Session.
 
 ### Rendering
 
@@ -94,7 +94,7 @@ None; this package neither assembles nor sends a provider request.
 
 These limits define the freshness and reach of the inventory view; they are current package constraints.
 
-- **One snapshot per Settings mount or refresh** — the tab does not subscribe to Loader or Skill changes or automatically refetch after reconnect; switching tabs preserves the current snapshot, while Refresh or reopening Settings obtains a new one.
+- **One snapshot per management-page mount or refresh** — the pages do not subscribe to Loader or Skill changes or automatically refetch after reconnect; Refresh or reopening the page obtains a new snapshot.
 - **Skills are Session-addressed** — without a selected current Session the Host cannot answer a workspace and preset-specific Skill catalog, so the page reports that state instead of guessing from a different Session.
 - **Profile and preset composition is read-only** — the tab manages user-owned Skill files and MCP entries while leaving deployment-owned composition rows unchanged.
 
@@ -108,4 +108,4 @@ None.
 
 </details>
 
-**Runtime invariant:** No companion is published. This package owns a Settings contribution whose management writes stay within the Host-owned user Skill and MCP surfaces.
+**Runtime invariant:** No companion is published. Settings and capability-center contributions use the Host-owned user Skill and MCP management surfaces.
