@@ -1,0 +1,32 @@
+# {{PROJECT_NAME}} — Evidence Specification
+
+evidence_spec_version: 1
+
+# 全局证据要求
+global_required_files:
+  - PACK_MANIFEST.md
+  - PACK_MANIFEST_VERIFY.md
+  - VALIDATION_RESULT.json
+  - BLOCKED_ITEMS_STATUS.json
+  - smoke_report.txt
+
+# 授权阶段证据要求
+authorization_evidence:
+  required_files:
+    - GPT_REVIEW_PROMPT.md
+    - POST_REVIEW_ROUTE.json
+    - SAFETY_CHECK.md
+
+# 执行闭合阶段证据要求
+execution_closure_evidence:
+  required_files:
+    - UNIFIED_DIFF.patch
+    - COMMAND_LOG.md
+    - TEST_OUTPUT.txt
+    - DECISION_LEDGER_APPEND.jsonl
+
+# Hash 排除规则
+hash_exclusions:
+  - PACK_MANIFEST.md
+  - PACK_MANIFEST_VERIFY.md
+  - VALIDATION_RESULT.json

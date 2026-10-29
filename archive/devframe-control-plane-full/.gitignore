@@ -1,0 +1,46 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Private workspace
+private/
+workspace/
+
+# Evidence packs (may contain user data)
+evidence_packs/
+
+# Browser profiles (cookies, sessions)
+browser_profile/
+chrome-cdp-profile/
+
+# Sessions and cookies
+sessions/
+cookies/
+
+# Document files (may contain real papers)
+*.docx
+*.pdf
+
+# Archives (may contain user evidence)
+*.zip
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.eggs/
+*.egg-info/

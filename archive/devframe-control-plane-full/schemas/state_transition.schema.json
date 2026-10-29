@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "StateTransition",
+  "description": "DevFrame Control Plane state transition schema",
+  "type": "object",
+  "required": ["current_stage", "status"],
+  "properties": {
+    "current_stage": {
+      "type": "string",
+      "description": "Current pipeline stage identifier"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["initialized", "planned", "in_progress", "completed", "blocked", "failed"],
+      "description": "Current stage status"
+    },
+    "next_stage": {
+      "type": "string",
+      "description": "Next stage to transition to"
+    },
+    "blocked_items": {
+      "type": "object",
+      "description": "Items that are blocked from modification",
+      "properties": {
+        "production_promotion_approved": {"type": "boolean"},
+        "broader_real_chain_testing_unblocked": {"type": "boolean"},
+        "hardcoded_driver_replacement_approved": {"type": "boolean"},
+        "guard_removal_approved": {"type": "boolean"},
+        "evidence_cleanup_approved": {"type": "boolean"}
+      }
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date",
+      "description": "ISO date when stage started"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date",
+      "description": "ISO date when stage completed"
+    }
+  }
+}

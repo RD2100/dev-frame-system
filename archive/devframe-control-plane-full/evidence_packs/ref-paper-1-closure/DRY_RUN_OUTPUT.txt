@@ -1,0 +1,10 @@
+Pipeline: reference_paper_review
+Stages: 7
+  1. project_init [bootstrap] depends=[] review=no-review
+  2. load_input [execution] depends=['project_init'] review=no-review
+  3. paper_review [execution] depends=['load_input'] review=no-review
+  4. build_evidence_pack [execution] depends=['paper_review'] review=no-review
+  5. pre_submission_check [safety_check] depends=['build_evidence_pack'] review=no-review
+  6. submission_dry_run [submission] depends=['pre_submission_check'] review=no-review
+  7. closure [execution_closure] depends=['submission_dry_run'] review=GPT
+DRY-RUN COMPLETE — all stages valid. submission=off

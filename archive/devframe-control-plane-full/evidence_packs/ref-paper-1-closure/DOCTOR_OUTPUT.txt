@@ -1,0 +1,10 @@
+  PASS: CURRENT_STATE.yaml
+  PASS: schemas/pipeline.schema.json
+  PASS: schemas/state_transition.schema.json
+  PASS: schemas/evidence_spec.schema.json
+  PASS: schemas/context_handoff.schema.json
+  PASS: templates/code_project
+  PASS: templates/paper_iteration
+  PASS: templates/context_handoff
+  PASS: .gitignore covers .env
+Doctor: 9/9 checks passed

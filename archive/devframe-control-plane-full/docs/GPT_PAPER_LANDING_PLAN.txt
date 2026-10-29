@@ -1,0 +1,155 @@
+结论先说：现在不能直接宣称 REF-PAPER-1 已经“跑通论文项目落地”，因为它目前只验证了 pipeline 解析和 dry-run。真正要落地，需要把 7 个 stage 从“声明存在”推进到“由框架实际执行并产出 evidence”。
+推荐把这次任务定义为：
+YAMLtask_name: "REF-PAPER-2: Reference Paper Pipeline Real Execution"repo: "devframe-control-plane"性质: "synthetic-only / dry-run submission / no live CDP / no real paper"目标: "让 reference_paper_review.yaml 从 dry-run 进入最小真实执行闭环"
+
+一、总体执行顺序
+YAMLexecution_order:  1: "补齐 stage handler 或等价执行入口"  2: "创建 synthetic paper input"  3: "执行 paper_review stage"  4: "生成标准 evidence pack"  5: "运行 pre_submission_check"  6: "通过 submission_adapter 做 dry-run submission"  7: "生成 FLOW_OUTCOME 和 closure report"  8: "运行整条 reference pipeline"  9: "提交 closure evidence 给 GPT 审查"
+核心原则是：所有产物都必须能追溯到 pipeline_run_id，不能再由 agent 手写 closure 伪装成框架输出。
+
+二、是否需要修改现有代码
+需要。因为当前状态只是：
+YAMLcurrent_verified:  reference_paper_review_yaml: "7 stages parsed, all valid"  runner: "dry-run verified"not_yet_verified:  paper_review_actual_execution: no  evidence_pack_builder: no  pre_submission_check_in_pipeline: no  submission_adapter_real_dry_run_stage: no  flow_outcome_framework_generated: no
+所以需要做的是 最小实现，不是重写架构。
+建议新增或完善以下能力：
+YAMLrequired_code_changes:  devframe_control_plane:    - "为 reference_paper_review.yaml 的每个 stage 增加最小 handler"    - "新增 synthetic paper loader"    - "新增 deterministic paper reviewer，用固定规则输出 CSSCI 9 维度审查"    - "新增 evidence pack builder，自动生成 manifest、SHA256、ZIP"    - "接入 agent-acceptance 的 pre-submission checker 或调用其脚本"    - "submission_adapter dry-run 产出 SUBMISSION_RESULT.json"    - "runner 自动生成 FLOW_OUTCOME.json 和 CLOSURE_REPORT.yaml"  agent_acceptance:    - "不应新增大功能"    - "只在必要时复用 paper contracts、schema、bypass checker"    - "不要把执行逻辑放回 agent-acceptance"  dev_frame_opencode:    - "本轮不需要动"
+
+三、每个 stage 的具体执行计划
+Stage 1：load_input
+目标
+创建一个完全虚构的 synthetic paper，不能使用真实论文、用户论文、博士论文或 CSSCI 稿件。
+建议命令
+Bashdevframe init paper_iteration /tmp/ref-paper-testdevframe run --pipeline pipelines/reference_paper_review.yaml --stage load_input
+如果当前 CLI 不支持 --stage，则先实现 stage-level execution；如果暂不实现单 stage 执行，也可以：
+Bashdevframe run --pipeline pipelines/reference_paper_review.yaml --execute --until load_input
+没有这些参数时，先补 CLI，不要写临时脚本绕过。
+输入
+YAMLinput:  template_dir: "templates/paper_iteration"  target_dir: "/tmp/ref-paper-test"  synthetic_only: true
+输出文件
+YAMLoutputs:  - "/tmp/ref-paper-test/PAPER_PROFILE.yaml"  - "/tmp/ref-paper-test/PAPER_STATE.yaml"  - "/tmp/ref-paper-test/PAPER_LEDGER.md"  - "/tmp/ref-paper-test/input/SYNTHETIC_PAPER.md"  - "/tmp/ref-paper-test/input/SYNTHETIC_REFERENCES.yaml"  - "/tmp/ref-paper-test/run/PIPELINE_RUN_ID.txt"
+synthetic paper 内容要求
+YAMLsynthetic_paper_requirements:  contains_real_user_paper: false  contains_private_data: false  length: "500-1000 Chinese characters"  field: "教育学虚构议题"  references:    - "全部标记为 synthetic"    - "不得伪装为真实 CSSCI 文献"
+验收标准
+YAMLacceptance:  - "SYNTHETIC_PAPER.md 存在"  - "文件内明确 synthetic_only: true"  - "无真实用户内容"  - "PAPER_STATE.yaml 记录当前 stage=load_input_completed"
+
+Stage 2：paper_review
+目标
+执行一个确定性的、可复核的 CSSCI 9 维度审查，不调用外部 LLM，不调用真实数据库，不做真实引用检索。
+建议命令
+Bashdevframe run --pipeline pipelines/reference_paper_review.yaml --stage paper_review
+或整条运行：
+Bashdevframe run --pipeline pipelines/reference_paper_review.yaml --execute
+执行逻辑
+这一阶段不应该让 agent 自由发挥，而应该由框架内置最小 deterministic reviewer。
+9 个维度：
+YAMLcssci_review_dimensions:  - problem_awareness  - theoretical_contribution  - literature_dialogue  - conceptual_precision  - structural_coherence  - argument_depth  - journal_fit  - academic_expression  - citation_reliability
+输出文件
+YAMLoutputs:  - "/tmp/ref-paper-test/review/REVIEW_REPORT.md"  - "/tmp/ref-paper-test/review/DIMENSION_SCORES.yaml"  - "/tmp/ref-paper-test/review/CITATION_CHECK_RESULT.yaml"  - "/tmp/ref-paper-test/review/REVIEW_ISSUES.yaml"
+CITATION_CHECK_RESULT.yaml 要求
+因为是 synthetic-only，不能假装引用已被真实核验。
+YAMLcitation_check_result:  verification_mode: "synthetic_only"  real_database_checked: false  all_references_marked_synthetic: true  fabricated_real_citation_detected: false  unverified_real_citation_present: false
+验收标准
+YAMLacceptance:  - "REVIEW_REPORT.md 覆盖 9 个维度"  - "DIMENSION_SCORES.yaml 每个维度都有 score + rationale"  - "CITATION_CHECK_RESULT.yaml 明确 synthetic_only"  - "不得声称 CNKI / Web of Science / CSSCI 真实核验"
+
+Stage 3：build_evidence_pack
+目标
+由框架构建 evidence pack，不能手写 ZIP。
+推荐命令
+Bashdevframe pack build \  --project /tmp/ref-paper-test \  --task-type paper_contract_design \  --run-id <PIPELINE_RUN_ID> \  --output /tmp/ref-paper-test/evidence/ref-paper-review-pack.zip
+如果 devframe pack build 还不存在，本阶段就必须新增它。不能再用：
+Bashzip ...python build_pack.py
+这类临时路径。
+Evidence Pack 必须包含
+YAMLrequired_pack_files:  - "GPT_REVIEW_PROMPT.md"  - "PACK_MANIFEST.md"  - "PRE_SUBMISSION_CHECK.yaml"  - "SAFETY_ATTESTATION.md"  - "PIPELINE_PROVENANCE.yaml"  - "RUNNER_OUTPUT.txt"  - "STATE_MACHINE_RESULT.json"  - "FLOW_OUTCOME.json"  - "PAPER_PROFILE.yaml"  - "PAPER_STATE.yaml"  - "SYNTHETIC_PAPER.md"  - "REVIEW_REPORT.md"  - "DIMENSION_SCORES.yaml"  - "CITATION_CHECK_RESULT.yaml"  - "SUBMISSION_RESULT.json"  - "CLOSURE_REPORT.yaml"
+PACK_MANIFEST.md 要求
+YAMLmanifest_requirements:  - "列出 ZIP 内全部文件"  - "ZIP 内不能有 manifest 未列文件"  - "每个文件有 path、role、sha256"  - "manifest_valid: true 只能由 builder 生成"
+验收标准
+YAMLacceptance:  - "ZIP 与 manifest 双向一致"  - "所有 SHA256 可复算"  - "包含实际产物，不是 summary-only pack"  - "pack builder 输出 BUILD_PACK_OUTPUT.txt"
+
+Stage 4：pre_submission_check
+目标
+在提交 GPT 前，本地先失败。本阶段必须运行：
+
+
+manifest/ZIP 一致性检查
+
+
+summary-only 检查
+
+
+schema 检查
+
+
+bypass checker
+
+
+safety attestation 检查
+
+
+pipeline provenance 检查
+
+
+推荐命令
+Bashdevframe pack validate /tmp/ref-paper-test/evidence/ref-paper-review-pack.zip
+同时调用 agent-acceptance 的 checker：
+Bashpython /path/to/agent-acceptance/check_submission_bypass.py \  --pack /tmp/ref-paper-test/evidence/ref-paper-review-pack.zip
+更理想的是 control-plane 通过配置调用，而不是 agent 手动调用。
+输出文件
+YAMLoutputs:  - "/tmp/ref-paper-test/evidence/PRE_SUBMISSION_CHECK.yaml"  - "/tmp/ref-paper-test/evidence/BYPASS_CHECK_RESULT.yaml"  - "/tmp/ref-paper-test/evidence/MANIFEST_VALIDATION_RESULT.yaml"
+PRE_SUBMISSION_CHECK.yaml 至少包含
+YAMLpre_submission_check:  result: "pass | fail"  manifest_valid: true  zip_manifest_bidirectional_match: true  actual_deliverables_present: true  summary_only_pack_detected: false  bypass_detected: false  pipeline_provenance_present: true  safety_attestation_present: true  local_validation_output_present: true  blocking_issues: []
+验收标准
+YAMLacceptance:  - "PRE_SUBMISSION_CHECK.yaml result=pass"  - "bypass_detected=false"  - "无 ad-hoc Playwright 脚本"  - "无 submit_to_gpt.py"  - "无手写 FLOW_OUTCOME"
+
+Stage 5：submission_dry_run
+目标
+通过 submission_adapter 做 dry-run submission，证明提交链路走的是框架，而不是手写 Playwright。
+推荐命令
+Bashdevframe run \  --pipeline pipelines/reference_paper_review.yaml \  --with-submission \  --dry-run
+或者：
+Bashdevframe submit \  --pack /tmp/ref-paper-test/evidence/ref-paper-review-pack.zip \  --mode dry-run
+如果 devframe submit 不存在，可以先不加新命令，但 runner 的 --with-submission --dry-run 必须实际调用 submission_adapter.submit()。
+输出文件
+YAMLoutputs:  - "/tmp/ref-paper-test/submission/SUBMISSION_RESULT.json"  - "/tmp/ref-paper-test/submission/SUBMISSION_REQUEST.json"
+SUBMISSION_RESULT.json 要求
+YAMLsubmission_result:  mode: "dry_run"  adapter: "submission_adapter"  live_cdp_used: false  playwright_bridge_used: false  submitted_to_gpt: false  pack_path: "/tmp/ref-paper-test/evidence/ref-paper-review-pack.zip"  status: "dry_run_success"
+验收标准
+YAMLacceptance:  - "submission_adapter 被调用"  - "live_cdp_used=false"  - "没有直接 Playwright 调用"  - "没有真实 GPT 提交"
+
+Stage 6：closure
+目标
+由框架生成 FLOW_OUTCOME 和 closure report。不能手写。
+推荐命令
+Bashdevframe run \  --pipeline pipelines/reference_paper_review.yaml \  --execute \  --with-submission \  --dry-run
+或：
+Bashdevframe close --run-id <PIPELINE_RUN_ID>
+如果 devframe close 不存在，暂不强求，但 runner 必须在最后 stage 自动生成 closure 文件。
+输出文件
+YAMLoutputs:  - "/tmp/ref-paper-test/closure/FLOW_OUTCOME.json"  - "/tmp/ref-paper-test/closure/CLOSURE_REPORT.yaml"  - "/tmp/ref-paper-test/closure/STATE_MACHINE_RESULT.json"  - "/tmp/ref-paper-test/closure/PIPELINE_RUN_SUMMARY.md"
+FLOW_OUTCOME.json 必须包含
+YAMLflow_outcome_required:  pipeline_run_id: "<id>"  pipeline_path: "pipelines/reference_paper_review.yaml"  task_type: "paper_iteration"  synthetic_only: true  stages:    load_input: "completed"    paper_review: "completed"    build_evidence_pack: "completed"    pre_submission_check: "completed"    submission_dry_run: "completed"    closure: "completed"  evidence_pack_path: "<zip>"  pre_submission_check_result: "pass"  submission_mode: "dry_run"  live_cdp_used: false  bypass_detected: false  final_status: "completed"
+验收标准
+YAMLacceptance:  - "FLOW_OUTCOME.json 由 runner 生成"  - "CLOSURE_REPORT.yaml 由 runner 生成"  - "所有 stage completed"  - "state_machine 通过"  - "pipeline provenance 完整"
+
+四、推荐最终命令流
+理想命令流应压缩成这样：
+Bash# 1. 初始化 synthetic paper 项目devframe init paper_iteration /tmp/ref-paper-test# 2. 执行 reference pipeline，全程 synthetic + dry-run submissiondevframe run \  --pipeline pipelines/reference_paper_review.yaml \  --project /tmp/ref-paper-test \  --with-submission \  --dry-run# 3. 验证 evidence packdevframe pack validate /tmp/ref-paper-test/evidence/ref-paper-review-pack.zip# 4. 查看 closurecat /tmp/ref-paper-test/closure/FLOW_OUTCOME.jsoncat /tmp/ref-paper-test/closure/CLOSURE_REPORT.yaml
+如果当前 CLI 不支持 --project、pack validate，则本次任务就应补齐这些最小命令或等价入口。
+
+五、依赖关系
+YAMLdependencies:  load_input:    depends_on:      - "paper_iteration template"  paper_review:    depends_on:      - "load_input"      - "PAPER-A1 contracts"      - "synthetic reviewer rules"  build_evidence_pack:    depends_on:      - "paper_review outputs"      - "pack builder"      - "gpt review prompt template"  pre_submission_check:    depends_on:      - "built evidence pack"      - "manifest"      - "check_submission_bypass.py"      - "paper_evidence_pack.schema.json if applicable"  submission_dry_run:    depends_on:      - "pre_submission_check pass"      - "submission_adapter"  closure:    depends_on:      - "all previous stages completed"      - "state_machine validation"
+
+六、整体验收标准
+最终 REF-PAPER-2 必须满足：
+YAMLacceptance_criteria:  execution:    - "reference_paper_review.yaml 不只是 dry-run parse，而是实际完成所有 stage"    - "paper_review stage 产出 REVIEW_REPORT.md、CITATION_CHECK_RESULT.yaml、DIMENSION_SCORES.yaml"    - "submission_dry_run stage 通过 submission_adapter，而非临时脚本"  evidence:    - "evidence pack 由框架 builder 生成"    - "PACK_MANIFEST 与 ZIP 双向一致"    - "PRE_SUBMISSION_CHECK.yaml result=pass"    - "FLOW_OUTCOME.json 由框架生成"    - "CLOSURE_REPORT.yaml 由框架生成"  safety:    - "synthetic_only=true"    - "不处理真实论文"    - "不启用 live CDP"    - "不出现 ad-hoc Playwright 脚本"    - "不出现 submit_to_gpt.py"    - "不删除、移动、重命名、伪造 evidence"  provenance:    - "存在 pipeline_run_id"    - "每个产物可追溯到 stage"    - "runner output 存档"    - "state_machine result 存档"    - "submission_adapter result 存档"
+
+七、主要风险点
+YAMLrisks:  runner_capability_gap:    level: "high"    description: "runner 目前可能只支持 dry-run，不支持真实 stage handler。"    mitigation: "先实现最小 stage handler，不追求通用复杂执行器。"  evidence_pack_builder_absent:    level: "high"    description: "如果没有标准 builder，agent 会再次手写 ZIP。"    mitigation: "优先实现 devframe pack build / validate。"  schema_boundary_confusion:    level: "medium"    description: "paper_evidence_pack.schema 与 gpt_review_result.schema 作用可能混淆。"    mitigation: "前者验证论文证据包，后者验证 GPT 回复结果。"  fake_citation_risk:    level: "medium"    description: "synthetic review 可能不小心写成真实引用核验。"    mitigation: "所有 citation 输出必须标记 synthetic_only，real_database_checked=false。"  bypass_regression:    level: "high"    description: "agent 可能再次写 submit_to_gpt.py。"    mitigation: "pre_submission_check 必须运行 check_submission_bypass.py。"  over_scope_live_cdp:    level: "high"    description: "playwright_bridge LIVE mode 已集成，agent 可能想直接试。"    mitigation: "本轮明确 no live CDP，SUBMISSION_RESULT 必须 live_cdp_used=false。"  closure_manual_fabrication:    level: "high"    description: "FLOW_OUTCOME / CLOSURE_REPORT 可能被手写。"    mitigation: "文件中必须带 generated_by: devframe_runner 和 pipeline_run_id。"
+
+八、建议拆成两个连续任务
+不要一口气要求 agent 完成“全部论文项目落地”。建议拆成：
+YAMLtask_1:  name: "REF-PAPER-2A: Implement Reference Pipeline Stage Execution"  focus:    - "load_input"    - "paper_review"    - "closure 最小 runner 输出"  no_submission: truetask_2:  name: "REF-PAPER-2B: Evidence Pack Builder and Submission Dry-Run Integration"  focus:    - "build_evidence_pack"    - "pre_submission_check"    - "submission_adapter dry-run"    - "final FLOW_OUTCOME"
+如果你希望尽快得到一个完整闭环，也可以合并为一个任务，但风险是范围偏大，容易再次出现半成品 evidence pack。
+
+九、最终推荐
+YAMLrecommended_next_action:  repo: "devframe-control-plane"  task: "REF-PAPER-2A"  type: "implementation"  goal: "先让 reference_paper_review.yaml 的 load_input + paper_review + closure 三个核心 stage 真实执行，产出 synthetic paper review evidence。"  after_accepted:    next_task: "REF-PAPER-2B"    goal: "加入标准 evidence pack builder、pre-submission gate、submission_adapter dry-run。"
+一句话概括：不要直接追求 live GPT 审查，也不要继续停留在 dry-run parse。下一步要让 reference pipeline 真正生成 synthetic paper review 产物，并且所有产物必须由 devframe runner / builder / adapter 生成。

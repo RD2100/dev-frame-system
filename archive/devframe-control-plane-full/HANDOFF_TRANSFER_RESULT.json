@@ -1,0 +1,23 @@
+{
+  "review_run_id": "live-handoff-transfer-20260606",
+  "target": "https://chatgpt.com/c/6a22dc07-18a4-83a3-a922-7c9ab770db3d",
+  "handoff_file": "HANDOFF.md",
+  "handoff_size_bytes": 16835,
+  "timestamp": "2026-06-05T23:26:11Z",
+  "steps": {
+    "verify_handoff": true,
+    "cdp_connect": true,
+    "navigate": true,
+    "file_attach": true,
+    "prompt_send": true,
+    "reply_captured": true
+  },
+  "handoff_verified": true,
+  "reply_size_chars": 1079,
+  "safety": {
+    "no_cookie_export": true,
+    "no_session_export": true,
+    "no_state_mutation": true,
+    "no_guard_modification": true
+  }
+}

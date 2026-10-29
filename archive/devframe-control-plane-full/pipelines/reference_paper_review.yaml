@@ -1,0 +1,115 @@
+pipeline_id: reference_paper_review
+version: 1
+description: >
+  Reference paper review pipeline — 从 init paper_iteration 到 closure evidence
+  的端到端快乐路径。所有 stage 经由框架组件执行，不手写脚本，不绕过 adapter。
+  synthetic_only: true
+  contains_real_user_paper: false
+
+global_invariants:
+  guard_removal_approved: false
+  evidence_cleanup_approved: false
+
+stages:
+  - id: project_init
+    type: bootstrap
+    description: "Initialize paper_iteration project from template"
+    depends_on: []
+    requires_gpt_acceptance: false
+    generates:
+      - PAPER_PROFILE.yaml
+      - PAPER_STATE.yaml
+      - PAPER_LEDGER.md
+      - PAPER_NEXT_TASK.md
+      - PAPER_REVIEW_SPEC.md
+      - PAPER_SAFETY.md
+
+  - id: load_input
+    type: execution
+    description: "Load synthetic paper content (not real user paper)"
+    depends_on: [project_init]
+    requires_gpt_acceptance: false
+    input_source: synthetic_fixture
+    generates:
+      - SYNTHETIC_PAPER.md
+      - PAPER_TASK_INPUT.yaml
+      - PRIVACY_ATTESTATION.yaml
+      - REDACTION_REPORT.yaml
+
+  - id: paper_review
+    type: execution
+    description: "Run synthetic paper review (CSSCI dimensions, citation check)"
+    depends_on: [load_input]
+    requires_gpt_acceptance: false
+    review_dimensions:
+      - problem_awareness
+      - theoretical_contribution
+      - literature_dialogue
+      - conceptual_precision
+      - structural_coherence
+      - argument_depth
+      - journal_fit
+      - academic_expression
+      - citation_reliability
+    generates:
+      - REVIEW_REPORT.md
+      - CITATION_CHECK_RESULT.yaml
+      - DIMENSION_SCORES.yaml
+      - PAPER_TASK_OUTPUT.yaml
+
+  - id: build_evidence_pack
+    type: execution
+    description: "Build evidence pack from actual deliverables (not summary-only)"
+    depends_on: [paper_review]
+    requires_gpt_acceptance: false
+    generates:
+      - PACK_MANIFEST.md
+      - evidence_pack.zip
+
+  - id: pre_submission_check
+    type: safety_check
+    description: "Run bypass detection + evidence integrity + manifest consistency"
+    depends_on: [build_evidence_pack]
+    requires_gpt_acceptance: false
+    checks:
+      - check_submission_bypass
+      - manifest_zip_consistency
+      - no_summary_only_pack
+      - pipeline_provenance_present
+      - paper_task_directory_validator
+      - paper_task_evidence_pack_validator
+
+  - id: submission_dry_run
+    type: submission
+    description: "Dry-run submission via submission_adapter (no real GPT send)"
+    depends_on: [pre_submission_check]
+    requires_gpt_acceptance: false
+    submission_mode: dry_run
+
+  - id: closure
+    type: execution_closure
+    description: "Generate FLOW_OUTCOME and closure report via framework"
+    depends_on: [submission_dry_run]
+    requires_gpt_acceptance: true
+    evidence_spec:
+      required_files:
+        - REVIEW_REPORT.md
+        - CITATION_CHECK_RESULT.yaml
+        - DIMENSION_SCORES.yaml
+        - PACK_MANIFEST.md
+        - PAPER_TASK_INPUT.yaml
+        - PAPER_TASK_OUTPUT.yaml
+        - PRIVACY_ATTESTATION.yaml
+        - REDACTION_REPORT.yaml
+        - PRE_SUBMISSION_CHECK.yaml
+        - PAPER_TASK_VALIDATION.directory.json
+        - PAPER_TASK_VALIDATION.zip.json
+        - SUBMISSION_RESULT.json
+        - FLOW_OUTCOME.json
+        - TEST_OUTPUT.txt
+        - SAFETY_ATTESTATION.md
+
+recovery_policy:
+  max_retries_per_stage: 2
+  cooldown_seconds: 10
+  on_exhausted: human_required

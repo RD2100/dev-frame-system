@@ -1,0 +1,31 @@
+project: devframe-control-plane
+release: v0.1.0-rc
+status: released_rc
+feature_complete: true
+context_handoff_protocol: standardized
+t3_status: accepted
+current_stage: T3_handoff_solidification
+handoff_flow_standardized: true
+next_stage: T4_multi_conversation_sync
+next_stage_description: "Multi-conversation sync — manage multiple handoff targets"
+tests:
+  latest_reported: "55/55 PASS"
+doctor:
+  latest_reported: "9/9 PASS"
+safety:
+  guard_removal_approved: false
+  evidence_cleanup_approved: false
+requires_separate_authorization:
+  - live_cdp_execution
+  - gpt_submission
+  - state_mutation
+  - current_route_modification
+  - real_user_data_processing
+recommended_next:
+  - release_documentation_polish
+  - optional_h5_synthetic_post_release_hardening
+  - dev_frame_opencode_real_integration
+  - paper_workflow_expansion_design
+blocked_items:
+  guard_removal_approved: false
+  evidence_cleanup_approved: false

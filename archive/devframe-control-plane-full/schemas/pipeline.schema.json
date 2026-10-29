@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PipelineDefinition",
+  "description": "DevFrame Control Plane pipeline definition schema",
+  "type": "object",
+  "required": ["pipeline_id", "version", "stages"],
+  "properties": {
+    "pipeline_id": {
+      "type": "string",
+      "description": "Unique pipeline identifier"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Pipeline version number"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable pipeline description"
+    },
+    "global_invariants": {
+      "type": "object",
+      "description": "Blocked items that must remain false throughout the pipeline",
+      "properties": {
+        "guard_removal_approved": {"type": "boolean", "const": false},
+        "evidence_cleanup_approved": {"type": "boolean", "const": false}
+      }
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "type"],
+        "properties": {
+          "id": {"type": "string"},
+          "type": {"type": "string", "enum": ["authorization", "execution_closure", "audit", "planning", "bootstrap"]},
+          "depends_on": {"type": "string"},
+          "description": {"type": "string"},
+          "requires_gpt_acceptance": {"type": "boolean"},
+          "allowed_changes": {"type": "array"},
+          "evidence_spec": {
+            "type": "object",
+            "properties": {
+              "required_files": {"type": "array", "items": {"type": "string"}},
+              "required_assertions": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        }
+      }
+    },
+    "recovery_policy": {
+      "type": "object",
+      "properties": {
+        "max_retries_per_stage": {"type": "integer", "default": 3},
+        "cooldown_seconds": {"type": "integer", "default": 30},
+        "on_exhausted": {"type": "string", "enum": ["human_required", "stop", "skip"]}
+      }
+    }
+  }
+}
